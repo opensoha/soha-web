@@ -19,6 +19,7 @@ jobs:
         with:
           repository: opensoha/soha-contracts
           path: soha-contracts
+          token: ${{ secrets.OPENSOHA_CI_TOKEN || github.token }}
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
