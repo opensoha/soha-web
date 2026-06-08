@@ -1,0 +1,60 @@
+name: web-release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout web
+        uses: actions/checkout@v4
+        with:
+          path: soha-web
+      - name: Checkout contracts
+        uses: actions/checkout@v4
+        with:
+          repository: opensoha/soha-contracts
+          path: soha-contracts
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: soha-web/package-lock.json
+      - name: Install
+        working-directory: soha-web
+        run: npm ci
+      - name: Test
+        working-directory: soha-web
+        run: npm test
+      - name: Build
+        working-directory: soha-web
+        run: npm run build
+      - name: Package dist
+        working-directory: soha-web
+        run: |
+          test -f dist/index.html
+          tar -C dist -czf "../soha-web-dist-${GITHUB_REF_NAME}.tar.gz" .
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: soha-web-dist-${{ github.ref_name }}
+          path: soha-web-dist-${{ github.ref_name }}.tar.gz
+          if-no-files-found: error
+      - name: Publish GitHub release asset
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          asset="soha-web-dist-${GITHUB_REF_NAME}.tar.gz"
+          if gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" "${asset}" --repo "${GITHUB_REPOSITORY}" --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" "${asset}" --repo "${GITHUB_REPOSITORY}" --title "soha-web ${GITHUB_REF_NAME}" --generate-notes
+          fi
