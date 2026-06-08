@@ -1,0 +1,38 @@
+name: web-ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout web
+        uses: actions/checkout@v4
+        with:
+          path: soha-web
+      - name: Checkout contracts
+        uses: actions/checkout@v4
+        with:
+          repository: opensoha/soha-contracts
+          path: soha-contracts
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: soha-web/package-lock.json
+      - name: Install
+        working-directory: soha-web
+        run: npm ci
+      - name: Typecheck
+        working-directory: soha-web
+        run: npm run typecheck
+      - name: Test
+        working-directory: soha-web
+        run: npm test
+      - name: Build
+        working-directory: soha-web
+        run: npm run build
