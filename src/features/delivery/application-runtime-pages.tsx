@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { App, Button, Card, Descriptions, Form, Input, Modal, Popconfirm, Select, Space, Switch, Tabs, Tag, Tooltip, Typography } from 'antd'
+import { Alert, App, Button, Card, Descriptions, Form, Input, Modal, Popconfirm, Select, Space, Switch, Tabs, Tag, Tooltip, Typography } from 'antd'
 import { ArrowRightOutlined, CloudUploadOutlined, DeleteOutlined, EditOutlined, LinkOutlined, MinusCircleOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined, RocketOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -10,6 +10,7 @@ import { PodTerminal } from '@/components/pod-terminal'
 import { ResourceMetricsPanel } from '@/components/resource-metrics-panel'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
 import { StatusTag } from '@/components/status-tag'
+import { useClusterCapabilityForCluster } from '@/features/platform/cluster-capabilities'
 import { buildClusterScopedPath } from '@/features/platform/platform-scope-query'
 import { api } from '@/services/api-client'
 import { countReleaseDagNodes } from '@/components/release-flow-dag-definition'
@@ -440,6 +441,7 @@ export function ApplicationDetailPage() {
   const selectedDeliveryBinding = bindings.find((item) => item.applicationEnvironmentId === selectedDeliveryBindingId) ?? bindings[0]
   const enabledTargets = selectedDeliveryBinding?.targets?.filter((item) => item.enabled) ?? []
   const selectedDeliveryTarget = selectedDeliveryBinding?.targets?.find((item) => item.id === selectedTargetId) ?? enabledTargets[0] ?? selectedDeliveryBinding?.targets?.[0]
+  const deliveryActionsCapability = useClusterCapabilityForCluster('delivery.actions', 'zh_CN', selectedDeliveryTarget?.clusterId)
   const selectedBuildSource = runtime?.application.buildSources?.find((item) => item.id === selectedBuildSourceId)
     ?? selectedDeliveryBinding?.buildSource
     ?? runtime?.application.buildSources?.find((item) => item.isDefault)
@@ -470,6 +472,8 @@ export function ApplicationDetailPage() {
     managementState.setEditingBinding(binding)
     managementState.setBindingModalVisible(true)
   }
+  const deliveryTargetActionsDisabled = deliveryActionsCapability.status !== 'unknown' && deliveryActionsCapability.status !== 'available'
+  const deliveryTargetCapabilityReason = deliveryTargetActionsDisabled ? deliveryActionsCapability.reason : ''
   const triggerDeliveryAction = async (action: ApplicationDeliveryActionKind) => {
     try {
       const values = await deliveryForm.validateFields()
@@ -486,6 +490,7 @@ export function ApplicationDetailPage() {
   const deployDisabledReason = disabledReason([
     !selectedDeliveryBinding && '无环境绑定',
     !selectedDeliveryTarget && '无 target',
+    deliveryTargetCapabilityReason,
     !effectiveImageTag && '缺少 imageTag/defaultTag',
     !canTriggerRelease && '缺少发布权限',
   ])
@@ -493,6 +498,7 @@ export function ApplicationDetailPage() {
     !selectedDeliveryBinding && '无环境绑定',
     !selectedDeliveryTarget && '无 target',
     !selectedDeliveryBinding?.workflowTemplate && '无 workflow template',
+    deliveryTargetCapabilityReason,
     !effectiveImageTag && '缺少 imageTag/defaultTag',
     !canTriggerBuild && '缺少构建权限',
     !canTriggerWorkflow && '缺少工作流权限',
@@ -502,6 +508,7 @@ export function ApplicationDetailPage() {
     !selectedDeliveryTarget && '无 target',
     !selectedDeliveryBinding?.workflowTemplate && '无 workflow template',
     validationNodeCount === 0 && '无验证节点',
+    deliveryTargetCapabilityReason,
     !canTriggerWorkflow && '缺少工作流权限',
   ])
 
@@ -614,6 +621,14 @@ export function ApplicationDetailPage() {
             </Form.Item>
           </div>
           <div className="soha-application-delivery-actions__footer">
+            {deliveryTargetCapabilityReason ? (
+              <Alert
+                showIcon
+                type="warning"
+                title="当前目标集群限制交付写入"
+                description={deliveryTargetCapabilityReason}
+              />
+            ) : null}
             <Space wrap>
               <Tag>{selectedDeliveryBinding?.workflowTemplateName || selectedDeliveryBinding?.workflowTemplate?.name || '未绑定 workflow'}</Tag>
               <Tag>{selectedDeliveryBinding?.targetCount ?? 0} targets</Tag>

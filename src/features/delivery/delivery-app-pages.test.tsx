@@ -6,7 +6,16 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ApplicationsPage, ExecutionTasksPage, ReleaseBundlesPage, WorkflowsPage } from './delivery-app-pages'
+import {
+  ApplicationsPage,
+  ExecutionTasksPage,
+  ReleaseBundlesPage,
+  WorkflowsPage,
+  buildApprovalPolicyPayload,
+  buildBuildTemplatePayload,
+  type ApprovalPolicyFormValues,
+  type BuildTemplateFormValues,
+} from './delivery-app-pages'
 import { defaultBuildSources } from './application-management-pages'
 import { ReleaseBoardPage } from './delivery-catalog-pages'
 
@@ -403,6 +412,56 @@ describe('ApplicationsPage workspace layout', () => {
         config: { contextDir: '.', dockerfilePath: 'Dockerfile', builderKind: 'docker' },
       },
     ])
+  })
+
+  it('builds typed build template payloads without form-only text fields', () => {
+    const values = {
+      key: 'node-docker',
+      name: 'Node Docker',
+      builderKind: 'docker',
+      dockerfileTemplate: 'FROM node:22',
+      buildCommandsText: '\n npm ci \n npm run build \n',
+      variableSchemaText: '{"imageTag":{"type":"string"}}',
+      defaultVariablesText: '{"imageTag":"main"}',
+      enabled: true,
+    } satisfies BuildTemplateFormValues
+
+    expect(buildBuildTemplatePayload(values)).toEqual({
+      key: 'node-docker',
+      name: 'Node Docker',
+      builderKind: 'docker',
+      dockerfileTemplate: 'FROM node:22',
+      buildCommands: ['npm ci', 'npm run build'],
+      variableSchema: { imageTag: { type: 'string' } },
+      defaultVariables: { imageTag: 'main' },
+      enabled: true,
+    })
+  })
+
+  it('builds typed approval policy payloads with normalized numbers and roles', () => {
+    const values = {
+      key: 'prod-gate',
+      name: 'Production Gate',
+      mode: 'multi',
+      requiredApprovals: '2',
+      slaMinutes: '45',
+      approverRolesText: ' release-manager, ops-lead, ',
+      changeWindowText: '{"timezone":"Asia/Shanghai"}',
+      metadataText: '{"risk":"high"}',
+      enabled: true,
+    } satisfies ApprovalPolicyFormValues
+
+    expect(buildApprovalPolicyPayload(values)).toEqual({
+      key: 'prod-gate',
+      name: 'Production Gate',
+      mode: 'multi',
+      requiredApprovals: 2,
+      slaMinutes: 45,
+      approverRoles: ['release-manager', 'ops-lead'],
+      changeWindow: { timezone: 'Asia/Shanghai' },
+      metadata: { risk: 'high' },
+      enabled: true,
+    })
   })
 
   it('shows Gateway approval drilldown context on workflow list', async () => {

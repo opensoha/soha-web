@@ -3,10 +3,14 @@ import type {
   CreateVirtualMachineInput,
   VirtualMachineDetail,
   VirtualizationCluster,
+  VirtualizationClusterConfig,
+  VirtualizationClusterCredential,
   VirtualizationClusterInput,
   VirtualizationImageInput,
   VirtualizationOperation,
   VirtualizationPage,
+  VirtualizationPayloadMap,
+  VirtualizationVmProviderParams,
 } from './virtualization-types'
 
 export const STATUS_COLORS: Record<string, string> = {
@@ -195,10 +199,10 @@ export function normalizePage<T>(data: VirtualizationPage<T> | T[] | undefined, 
   return data ?? { items: [], total: 0, page: fallbackPage, pageSize: fallbackPageSize }
 }
 
-export function compactRecord(values: Record<string, unknown>) {
+export function compactRecord<T extends VirtualizationPayloadMap>(values: T): T {
   return Object.fromEntries(
     Object.entries(values).filter(([, value]) => value !== undefined && value !== '' && value !== null),
-  )
+  ) as T
 }
 
 export function stringifyRaw(value: VirtualMachineDetail['providerRaw'] | undefined) {
@@ -332,7 +336,7 @@ export interface VirtualMachineFormValues extends CreateVirtualMachineInput {
 }
 
 export function buildCreateVmPayload(values: VirtualMachineFormValues): CreateVirtualMachineInput {
-  const providerParams = compactRecord({
+  const providerParams = compactRecord<VirtualizationVmProviderParams>({
     storage: values.pveStorage,
     bridge: values.pveBridge,
     iso: values.pveIso,
@@ -368,8 +372,8 @@ export function buildImagePayload(values: VirtualizationImageInput): Virtualizat
 
 export function buildClusterPayload(values: VirtualizationClusterFormValues): VirtualizationClusterInput {
   const provider = values.provider ?? 'kubevirt'
-  const config: Record<string, unknown> = {}
-  const credential: Record<string, unknown> = {}
+  const config: VirtualizationClusterConfig = {}
+  const credential: VirtualizationClusterCredential = {}
   if (values.region) config.region = values.region
   if (values.description) config.description = values.description
   if (provider === 'pve') {

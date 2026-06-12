@@ -4,13 +4,13 @@ import type { VirtualizationOperation } from './virtualization-types'
 
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'canceled', 'callback_timeout'])
 
-export function useTaskStream(taskId: string | null) {
+export function useTaskStream(taskId: string | null, enabled = true) {
   const [task, setTask] = useState<VirtualizationOperation | null>(null)
   const [status, setStatus] = useState<'idle' | 'streaming' | 'done' | 'error'>('idle')
   const sourceRef = useRef<EventSource | null>(null)
 
   useEffect(() => {
-    if (!taskId) {
+    if (!enabled || !taskId) {
       setTask(null)
       setStatus('idle')
       return
@@ -56,7 +56,7 @@ export function useTaskStream(taskId: string | null) {
       sourceRef.current?.close()
       sourceRef.current = null
     }
-  }, [taskId])
+  }, [enabled, taskId])
 
   return { task, status }
 }

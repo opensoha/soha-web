@@ -52,6 +52,7 @@ import { useI18n } from '@/i18n'
 import { StatusTag } from '@/components/status-tag'
 import { YamlDraftDiffEditor } from '@/components/yaml-draft-diff-editor'
 import { hasAllowedAction } from '@/features/auth/permission-snapshot'
+import { capabilityActionTooltip, useClusterCapability } from '@/features/platform/cluster-capabilities'
 import { buildClusterScopedPath } from '@/features/platform/platform-scope-query'
 import { api } from '@/services/api-client'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
@@ -181,6 +182,8 @@ interface CRDApiGroupSummary {
 
 interface CRDResourceEditorModalProps {
   crd: CRD
+  customResourceCapabilityReason?: string
+  customResourceMutationsDisabled?: boolean
   mode: 'create' | 'edit'
   onClose: () => void
   open: boolean
@@ -316,6 +319,8 @@ function formatResourceAge(createdAt?: string, ageSeconds?: number) {
 
 function CRDResourceEditorModal({
   crd,
+  customResourceCapabilityReason,
+  customResourceMutationsDisabled = false,
   mode,
   onClose,
   open,
@@ -453,10 +458,19 @@ function CRDResourceEditorModal({
               }}
               onApply={() => applyMutation.mutate()}
               saveDisabled={!draftStorageKey}
-              applyDisabled={!draft.trim() || applyMutation.isPending}
+              applyDisabled={customResourceMutationsDisabled || !draft.trim() || applyMutation.isPending}
               applying={applyMutation.isPending}
             />
           </div>
+          {customResourceCapabilityReason ? (
+            <Alert
+              showIcon
+              type="warning"
+              style={{ marginTop: 12 }}
+              title={localeCode === 'zh_CN' ? '当前连接模式限制自定义资源写入' : 'Custom resource writes limited'}
+              description={customResourceCapabilityReason}
+            />
+          ) : null}
           <div style={{ marginTop: 12, textAlign: 'right' }}>
             <Button onClick={onClose}>{t('common.cancel', 'Cancel')}</Button>
           </div>
@@ -470,6 +484,7 @@ function CRDKindWorkspace({ crd }: { crd: CRD }) {
   const { t, localeCode } = useI18n()
   const { clusterId, namespace } = usePlatformScopeStore()
   const queryClient = useQueryClient()
+  const customResourcesCapability = useClusterCapability('custom.resources', localeCode)
   const [createOpen, setCreateOpen] = useState(false)
   const [editingResource, setEditingResource] = useState<CRDResourceInstance | null>(null)
   const [deletingKey, setDeletingKey] = useState<string | null>(null)
@@ -480,13 +495,15 @@ function CRDKindWorkspace({ crd }: { crd: CRD }) {
 
   const selectedScopeNamespace = isNamespacedCRD(crd) ? (namespace ?? '') : null
   const selectedListQueryKey = ['crd-resources', clusterId, crd.name, selectedScopeNamespace ?? '__cluster__']
+  const customResourceMutationsDisabled = customResourcesCapability.status !== 'unknown' && customResourcesCapability.status !== 'available'
+  const customResourceCapabilityReason = customResourceMutationsDisabled ? customResourcesCapability.reason : ''
 
   const resourcesQuery = useQuery({
     queryKey: selectedListQueryKey,
     queryFn: () => api.get<ApiResponse<CRDResourceInstance[]>>(
       buildCustomResourceCollectionPath(clusterId!, crd, namespace),
     ),
-    enabled: !!clusterId,
+    enabled: !!clusterId && !customResourcesCapability.isLoading && !customResourceMutationsDisabled,
   })
 
   const deleteMutation = useMutation({
@@ -520,6 +537,9 @@ function CRDKindWorkspace({ crd }: { crd: CRD }) {
     [crd.group, crd.kind, crd.version, normalizedKeyword, rawResources],
   )
   const densityLabel = localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'
+  const createCustomResourceLabel = t('common.create', 'Create')
+  const editCustomResourceLabel = t('common.edit', 'Edit')
+  const deleteCustomResourceLabel = t('common.delete', 'Delete')
 
   const resourceColumns: TableColumnsType<CRDResourceInstance> = [
     {
@@ -576,8 +596,9 @@ function CRDKindWorkspace({ crd }: { crd: CRD }) {
           <Space size={2} className="soha-row-action-icons">
             <ManagementIconButton
               icon={<EditOutlined />}
-              aria-label={t('common.edit', 'Edit')}
-              tooltip={t('common.edit', 'Edit')}
+              aria-label={editCustomResourceLabel}
+              disabled={customResourceMutationsDisabled}
+              tooltip={capabilityActionTooltip(editCustomResourceLabel, customResourcesCapability)}
               onClick={() => setEditingResource(record)}
             />
             <Popconfirm
@@ -599,9 +620,10 @@ function CRDKindWorkspace({ crd }: { crd: CRD }) {
               <ManagementIconButton
                 danger
                 icon={<DeleteOutlined />}
-                aria-label={t('common.delete', 'Delete')}
+                aria-label={deleteCustomResourceLabel}
+                disabled={customResourceMutationsDisabled}
                 loading={deletingKey === resourceKey}
-                tooltip={t('common.delete', 'Delete')}
+                tooltip={capabilityActionTooltip(deleteCustomResourceLabel, customResourcesCapability)}
               />
             </Popconfirm>
           </Space>
@@ -612,8 +634,16 @@ function CRDKindWorkspace({ crd }: { crd: CRD }) {
 
   const instanceToolbar = (
     <ManagementTableToolbar>
-      <Button autoInsertSpace={false} size="small" type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
-        {t('common.create', 'Create')}
+      <Button
+        autoInsertSpace={false}
+        size="small"
+        type="primary"
+        icon={<PlusOutlined />}
+        disabled={customResourceMutationsDisabled}
+        title={customResourceCapabilityReason}
+        onClick={() => setCreateOpen(true)}
+      >
+        {createCustomResourceLabel}
       </Button>
       <ManagementDensityButton
         aria-label={densityLabel}
@@ -660,16 +690,16 @@ function CRDKindWorkspace({ crd }: { crd: CRD }) {
             ]}
           />
           <Alert
-            type="info"
+            type={customResourceMutationsDisabled ? 'warning' : 'info'}
             showIcon
             title={isNamespacedCRD(crd)
               ? t('page.extensions.crd.namespacedTitle', 'Namespaced custom resources')
               : t('page.extensions.crd.clusterTitle', 'Cluster-scoped custom resources')}
-            description={isNamespacedCRD(crd)
-              ? (namespace
-                  ? t('page.extensions.crd.namespacedDesc', `The lower table is filtered by namespace ${namespace}. Clear the namespace selector to inspect all namespaces for this CRD.`)
-                  : t('page.extensions.crd.namespacedAllDesc', 'The lower table spans all namespaces for this CRD because no namespace filter is active.'))
-              : t('page.extensions.crd.clusterDesc', 'The lower table ignores the namespace selector because the selected CRD is cluster-scoped.')}
+            description={customResourceCapabilityReason || (isNamespacedCRD(crd)
+                ? (namespace
+                    ? t('page.extensions.crd.namespacedDesc', `The lower table is filtered by namespace ${namespace}. Clear the namespace selector to inspect all namespaces for this CRD.`)
+                    : t('page.extensions.crd.namespacedAllDesc', 'The lower table spans all namespaces for this CRD because no namespace filter is active.'))
+                : t('page.extensions.crd.clusterDesc', 'The lower table ignores the namespace selector because the selected CRD is cluster-scoped.'))}
         />
       </Space>
     </Card>
@@ -685,7 +715,7 @@ function CRDKindWorkspace({ crd }: { crd: CRD }) {
         columnSettingPlacement="header"
         shellClassName="soha-management-table-shell"
         columns={resourceColumns}
-        dataSource={filteredResources}
+        dataSource={customResourceMutationsDisabled ? [] : filteredResources}
         rowKey={(record) => `${record.namespace || '__cluster__'}:${record.name}`}
         loading={resourcesQuery.isLoading}
         paginationSummary={(
@@ -693,7 +723,16 @@ function CRDKindWorkspace({ crd }: { crd: CRD }) {
             {localeCode === 'zh_CN' ? `当前 ${filteredResources.length} / ${rawResources.length} 条` : `${filteredResources.length} / ${rawResources.length} items`}
           </Text>
         )}
-        empty={resourcesQuery.isError
+        empty={customResourceCapabilityReason
+          ? (
+            <Alert
+              type="warning"
+              showIcon
+              title={localeCode === 'zh_CN' ? '自定义资源实例不可用' : 'Custom resources unavailable'}
+              description={customResourceCapabilityReason}
+            />
+          )
+          : resourcesQuery.isError
           ? (
             <Alert
               type="warning"
@@ -713,6 +752,8 @@ function CRDKindWorkspace({ crd }: { crd: CRD }) {
         mode="create"
         open={createOpen}
         onClose={() => setCreateOpen(false)}
+        customResourceCapabilityReason={customResourceCapabilityReason}
+        customResourceMutationsDisabled={customResourceMutationsDisabled}
       />
 
       {editingResource ? (
@@ -722,6 +763,8 @@ function CRDKindWorkspace({ crd }: { crd: CRD }) {
           open={!!editingResource}
           resource={editingResource}
           onClose={() => setEditingResource(null)}
+          customResourceCapabilityReason={customResourceCapabilityReason}
+          customResourceMutationsDisabled={customResourceMutationsDisabled}
         />
       ) : null}
     </>
@@ -1082,6 +1125,7 @@ export function HelmReleasesPage() {
   const { clusterId, namespace } = usePlatformScopeStore()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const helmCapability = useClusterCapability('helm.releases', localeCode)
   const [searchKeyword, setSearchKeyword] = useState('')
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const [deletingReleaseKey, setDeletingReleaseKey] = useState<string | null>(null)
@@ -1128,6 +1172,8 @@ export function HelmReleasesPage() {
       ? (localeCode === 'zh_CN' ? '没有匹配的 Helm Release' : 'No matching Helm releases')
       : t('page.extensions.helm.empty', 'No Helm releases in the current scope.')
   const densityLabel = localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'
+  const helmMutationsDisabled = helmCapability.status !== 'unknown' && helmCapability.status !== 'available'
+  const helmCapabilityReason = helmMutationsDisabled ? helmCapability.reason : ''
 
   const columns: TableColumnsType<HelmRelease> = [
     {
@@ -1160,6 +1206,8 @@ export function HelmReleasesPage() {
         const releaseKey = `${record.namespace}/${record.name}`
         const canUpdate = hasAllowedAction(record.allowedActions, 'update')
         const canDelete = hasAllowedAction(record.allowedActions, 'delete')
+        const editValuesLabel = localeCode === 'zh_CN' ? '编辑并比对 values.yaml' : 'Edit and compare values.yaml'
+        const deleteReleaseLabel = localeCode === 'zh_CN' ? '删除 Helm Release' : 'Delete Helm release'
         return (
           <Space size={2} className="soha-row-action-icons" onClick={(event) => event.stopPropagation()}>
             <ManagementIconButton
@@ -1171,8 +1219,9 @@ export function HelmReleasesPage() {
             {canUpdate ? (
               <ManagementIconButton
                 icon={<EditOutlined />}
-                aria-label={localeCode === 'zh_CN' ? '编辑并比对 values.yaml' : 'Edit and compare values.yaml'}
-                tooltip={localeCode === 'zh_CN' ? '编辑并比对 values.yaml' : 'Edit and compare values.yaml'}
+                aria-label={editValuesLabel}
+                disabled={helmMutationsDisabled}
+                tooltip={capabilityActionTooltip(editValuesLabel, helmCapability)}
                 onClick={() => navigate(buildHelmReleaseDetailPath(record.name, record.namespace, { tab: 'values', mode: 'edit' }))}
               />
             ) : null}
@@ -1189,9 +1238,10 @@ export function HelmReleasesPage() {
                 <ManagementIconButton
                   danger
                   icon={<DeleteOutlined />}
-                  aria-label={localeCode === 'zh_CN' ? '删除 Helm Release' : 'Delete Helm release'}
+                  aria-label={deleteReleaseLabel}
+                  disabled={helmMutationsDisabled}
                   loading={deletingReleaseKey === releaseKey}
-                  tooltip={localeCode === 'zh_CN' ? '删除 Helm Release' : 'Delete Helm release'}
+                  tooltip={capabilityActionTooltip(deleteReleaseLabel, helmCapability)}
                 />
               </Popconfirm>
             ) : null}
@@ -1208,6 +1258,15 @@ export function HelmReleasesPage() {
         searchKeyword={searchKeyword}
         setSearchKeyword={setSearchKeyword}
       />
+      {helmCapabilityReason ? (
+        <Alert
+          showIcon
+          type="warning"
+          style={{ marginBottom: 12 }}
+          title={localeCode === 'zh_CN' ? '当前连接模式限制 Helm 写入' : 'Helm writes limited'}
+          description={helmCapabilityReason}
+        />
+      ) : null}
       <AdminTable
         className="soha-platform-table"
         columnSettingIconOnly
@@ -1262,6 +1321,7 @@ export function HelmReleaseDetailPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const helmCapability = useClusterCapability('helm.releases', localeCode)
   const releaseName = params.releaseName as string
   const detailNamespace = searchParams.get('namespace') || namespace || ''
   const requestedTab = searchParams.get('tab') === 'history' ? 'history' : 'values'
@@ -1337,6 +1397,8 @@ export function HelmReleaseDetailPage() {
   const valuesOriginal = values?.original || values?.content || ''
   const canEditValues = Boolean((values?.editable || detail?.valuesEditable) && hasAllowedAction(values?.allowedActions ?? detail?.allowedActions, 'update'))
   const valuesChanged = valuesDraft !== valuesOriginal
+  const helmMutationsDisabled = helmCapability.status !== 'unknown' && helmCapability.status !== 'available'
+  const helmCapabilityReason = helmMutationsDisabled ? helmCapability.reason : ''
 
   const tabs: TabsProps['items'] = [
     {
@@ -1359,7 +1421,7 @@ export function HelmReleaseDetailPage() {
           onReset={() => setValuesDraft(valuesOriginal)}
           onApply={canEditValues ? () => updateValuesMutation.mutate() : undefined}
           applying={updateValuesMutation.isPending}
-          applyDisabled={!canEditValues || !valuesDraft.trim() || !valuesChanged || updateValuesMutation.isPending}
+          applyDisabled={helmMutationsDisabled || !canEditValues || !valuesDraft.trim() || !valuesChanged || updateValuesMutation.isPending}
           leftLabel={t('yamlDiffEditor.draftLabel', 'Values draft')}
           rightLabel={t('yamlDiffEditor.runtimeLabel', 'Helm runtime values')}
           editable={canEditValues}
@@ -1439,6 +1501,15 @@ export function HelmReleaseDetailPage() {
                 showIcon
                 title={localeCode === 'zh_CN' ? 'Release 描述' : 'Release Description'}
                 description={detail.description}
+              />
+            ) : null}
+            {helmCapabilityReason ? (
+              <Alert
+                style={{ marginTop: 16 }}
+                type="warning"
+                showIcon
+                title={localeCode === 'zh_CN' ? '当前连接模式限制 Helm 写入' : 'Helm writes limited'}
+                description={helmCapabilityReason}
               />
             ) : null}
           </Card>
@@ -1606,6 +1677,7 @@ export function HelmChartsPage() {
   const { clusterId, namespace } = usePlatformScopeStore()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const helmCapability = useClusterCapability('helm.releases', localeCode)
   const [installForm] = Form.useForm<HelmChartInstallFormValues>()
   const [searchKeyword, setSearchKeyword] = useState('')
   const [chartPage, setChartPage] = useState(1)
@@ -1654,6 +1726,9 @@ export function HelmChartsPage() {
   const activeChart = detail ?? selectedChart
   const activeVersion = selectedVersion || activeChart?.latestVersion || ''
   const canInstallActiveChart = hasAllowedAction(activeChart?.allowedActions, 'create')
+  const helmMutationsDisabled = helmCapability.status !== 'unknown' && helmCapability.status !== 'available'
+  const helmCapabilityReason = helmMutationsDisabled ? helmCapability.reason : ''
+  const installCapabilityAllowed = canInstallActiveChart && !helmMutationsDisabled
   const installHasRecoverableConflict = isHelmReleaseNameConflictError(installError)
 
   const valuesQuery = useQuery({
@@ -1774,7 +1849,7 @@ export function HelmChartsPage() {
   }
 
   const submitInstall = async () => {
-    if (!canInstallActiveChart) {
+    if (!installCapabilityAllowed) {
       setDrawerTabKey('install')
       return
     }
@@ -1900,7 +1975,8 @@ export function HelmChartsPage() {
                 autoInsertSpace={false}
                 icon={<CloudDownloadOutlined />}
                 size="small"
-                tooltip={installChartLabel}
+                disabled={helmMutationsDisabled}
+                tooltip={capabilityActionTooltip(installChartLabel, helmCapability)}
                 title={installChartLabel}
                 aria-label={installChartLabel}
                 onClick={(event) => {
@@ -1953,6 +2029,15 @@ export function HelmChartsPage() {
           setChartPage(1)
         }}
       />
+      {helmCapabilityReason ? (
+        <Alert
+          showIcon
+          type="warning"
+          style={{ marginBottom: 12 }}
+          title={localeCode === 'zh_CN' ? '当前连接模式限制 Helm 安装' : 'Helm installs limited'}
+          description={helmCapabilityReason}
+        />
+      ) : null}
       <AdminTable
         className="soha-platform-table"
         columnSettingIconOnly
@@ -2055,7 +2140,7 @@ export function HelmChartsPage() {
             <Button
               autoInsertSpace={false}
               icon={<CloudDownloadOutlined />}
-              disabled={!canInstallActiveChart}
+              disabled={!installCapabilityAllowed}
               loading={installMutation.isPending}
               type="primary"
               onClick={() => { void submitInstall() }}
@@ -2166,27 +2251,29 @@ export function HelmChartsPage() {
                   forceRender: true,
                   children: (
                     <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-                      {!canInstallActiveChart ? (
+                      {!installCapabilityAllowed ? (
                         <Alert
                           showIcon
                           type="warning"
-                          title={localeCode === 'zh_CN' ? '无安装权限' : 'Install permission required'}
-                          description={localeCode === 'zh_CN'
-                            ? '当前账号没有在所选集群创建 Helm Release 的权限。'
-                            : 'The current account cannot create Helm releases in the selected cluster.'}
+                          title={helmMutationsDisabled
+                            ? (localeCode === 'zh_CN' ? '当前连接模式限制 Helm 安装' : 'Helm installs limited')
+                            : (localeCode === 'zh_CN' ? '无安装权限' : 'Install permission required')}
+                          description={helmCapabilityReason || (localeCode === 'zh_CN'
+                              ? '当前账号没有在所选集群创建 Helm Release 的权限。'
+                              : 'The current account cannot create Helm releases in the selected cluster.')}
                         />
                       ) : null}
                       <Form form={installForm} layout="vertical" size="small">
                         <Form.Item name="releaseName" label="Release" rules={[{ required: true }]}>
-                          <Input disabled={!canInstallActiveChart || installMutation.isPending} />
+                          <Input disabled={!installCapabilityAllowed || installMutation.isPending} />
                         </Form.Item>
                         <Form.Item name="namespace" label={localeCode === 'zh_CN' ? '命名空间' : 'Namespace'} rules={[{ required: true }]}>
-                          <Input disabled={!canInstallActiveChart || installMutation.isPending} />
+                          <Input disabled={!installCapabilityAllowed || installMutation.isPending} />
                         </Form.Item>
                         <Form.Item name="version" label={localeCode === 'zh_CN' ? '版本' : 'Version'} rules={[{ required: true }]}>
                           <Select
                             showSearch
-                            disabled={!canInstallActiveChart || installMutation.isPending}
+                            disabled={!installCapabilityAllowed || installMutation.isPending}
                             options={versionOptions}
                             onChange={(value) => {
                               setSelectedVersion(value)
@@ -2195,20 +2282,20 @@ export function HelmChartsPage() {
                           />
                         </Form.Item>
                         <Form.Item name="repositoryUrl" label={localeCode === 'zh_CN' ? 'Chart 仓库 URL' : 'Chart Repository URL'} rules={[{ required: true }]}>
-                          <Input disabled={!canInstallActiveChart || installMutation.isPending} />
+                          <Input disabled={!installCapabilityAllowed || installMutation.isPending} />
                         </Form.Item>
                         <Form.Item name="chartName" label="Chart" rules={[{ required: true }]}>
-                          <Input disabled={!canInstallActiveChart || installMutation.isPending} />
+                          <Input disabled={!installCapabilityAllowed || installMutation.isPending} />
                         </Form.Item>
                         <Form.Item name="timeoutSeconds" label={localeCode === 'zh_CN' ? '超时秒数' : 'Timeout seconds'} rules={[{ required: true }]}>
-                          <InputNumber disabled={!canInstallActiveChart || installMutation.isPending} min={30} max={3600} step={30} style={{ width: '100%' }} />
+                          <InputNumber disabled={!installCapabilityAllowed || installMutation.isPending} min={30} max={3600} step={30} style={{ width: '100%' }} />
                         </Form.Item>
                         <Space size={16} wrap>
                           <Form.Item name="createNamespace" valuePropName="checked">
-                            <Checkbox disabled={!canInstallActiveChart || installMutation.isPending}>{localeCode === 'zh_CN' ? '创建命名空间' : 'Create namespace'}</Checkbox>
+                            <Checkbox disabled={!installCapabilityAllowed || installMutation.isPending}>{localeCode === 'zh_CN' ? '创建命名空间' : 'Create namespace'}</Checkbox>
                           </Form.Item>
                           <Form.Item name="wait" valuePropName="checked">
-                            <Checkbox disabled={!canInstallActiveChart || installMutation.isPending}>{localeCode === 'zh_CN' ? '等待资源就绪' : 'Wait for resources'}</Checkbox>
+                            <Checkbox disabled={!installCapabilityAllowed || installMutation.isPending}>{localeCode === 'zh_CN' ? '等待资源就绪' : 'Wait for resources'}</Checkbox>
                           </Form.Item>
                         </Space>
                       </Form>

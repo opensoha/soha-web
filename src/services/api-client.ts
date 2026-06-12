@@ -6,6 +6,12 @@ import {
 } from '@/features/auth/auth-api'
 import { useAuthStore } from '@/stores/auth-store'
 import type { ErrorEnvelope } from '@/types'
+import {
+  ApiError,
+  createApiErrorFromResponse,
+  createNetworkApiError,
+  emitApiError,
+} from './api-error'
 
 function normalizeResponseBody<T>(body: unknown): T {
   if (body && typeof body === 'object' && 'items' in body && !('data' in body)) {
@@ -14,101 +20,150 @@ function normalizeResponseBody<T>(body: unknown): T {
   return body as T
 }
 
-class ApiError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-  ) {
-    super(message)
-    this.name = 'ApiError'
-  }
-}
-
 async function refreshToken(): Promise<boolean> {
   return refreshAuthSession()
 }
 
-async function request<T>(
-  path: string,
-  options: RequestInit = {},
-): Promise<T> {
-  const accessToken = getStoredAccessToken()
+function getRequestMethod(options: RequestInit) {
+  return options.method?.toUpperCase() ?? 'GET'
+}
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string>),
+function buildRequestHeaders(options: RequestInit, accessToken: string | null) {
+  const headers = new Headers(options.headers)
+  if (!headers.has('Content-Type') && options.body && !(options.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json')
   }
-
   if (accessToken) {
-    headers['Authorization'] = `Bearer ${accessToken}`
+    headers.set('Authorization', `Bearer ${accessToken}`)
   }
+  return headers
+}
 
-  let res = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    credentials: options.credentials ?? 'include',
-    headers,
-  })
+async function fetchApi(path: string, options: RequestInit, accessToken: string | null) {
+  const headers = buildRequestHeaders(options, accessToken)
+  const method = getRequestMethod(options)
+
+  try {
+    return await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      credentials: options.credentials ?? 'include',
+      headers,
+    })
+  } catch (cause) {
+    const error = createNetworkApiError(path, method, cause)
+    emitApiError(error)
+    throw error
+  }
+}
+
+async function parseJsonSafely<T>(response: Response): Promise<T | undefined> {
+  try {
+    return (await response.json()) as T
+  } catch {
+    return undefined
+  }
+}
+
+function responseRequestId(response: Response) {
+  return (
+    response.headers.get('x-request-id') ||
+    response.headers.get('x-correlation-id') ||
+    response.headers.get('x-trace-id') ||
+    undefined
+  )
+}
+
+async function parseJsonStrictly<T>(response: Response, path: string, method: string): Promise<T> {
+  try {
+    return (await response.json()) as T
+  } catch (cause) {
+    const reason = cause instanceof Error && cause.message ? `: ${cause.message}` : ''
+    const error = new ApiError(response.status, `Invalid JSON response${reason}`, {
+      cause,
+      method,
+      path,
+      requestId: responseRequestId(response),
+    })
+    emitApiError(error)
+    throw error
+  }
+}
+
+async function throwApiError(response: Response, path: string, method: string): Promise<never> {
+  const body = await parseJsonSafely<ErrorEnvelope>(response)
+  const error = createApiErrorFromResponse(response, body, { method, path })
+  if (error.status === 401) {
+    clearAuthSession()
+  }
+  emitApiError(error)
+  throw error
+}
+
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const accessToken = getStoredAccessToken()
+  const method = getRequestMethod(options)
+
+  let res = await fetchApi(path, options, accessToken)
 
   if (res.status === 401 && accessToken) {
     const refreshed = await refreshToken()
     if (refreshed) {
       const { accessToken: newToken } = useAuthStore.getState()
-      headers['Authorization'] = `Bearer ${newToken}`
-      res = await fetch(`${API_BASE_URL}${path}`, {
-        ...options,
-        credentials: options.credentials ?? 'include',
-        headers,
-      })
+      res = await fetchApi(path, options, newToken)
     }
   }
 
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ message: res.statusText })) as ErrorEnvelope
-    const message =
-      typeof body.message === 'string'
-        ? body.message
-        : typeof body.error === 'string'
-          ? body.error
-          : body.error?.message || res.statusText
-    throw new ApiError(res.status, message)
+    await throwApiError(res, path, method)
   }
 
   if (res.status === 204) return undefined as T
-  const body = await res.json()
+  const body = await parseJsonStrictly<unknown>(res, path, method)
   return normalizeResponseBody<T>(body)
 }
 
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown) =>
-    request<T>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
-  put: <T>(path: string, body?: unknown) =>
-    request<T>(path, { method: 'PUT', body: body ? JSON.stringify(body) : undefined }),
-  patch: <T>(path: string, body?: unknown) =>
-    request<T>(path, { method: 'PATCH', body: body ? JSON.stringify(body) : undefined }),
-  delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
-  upload: <T>(path: string, formData: FormData) => {
-    const { accessToken } = useAuthStore.getState()
-    const headers: Record<string, string> = {}
-    if (accessToken) {
-      headers['Authorization'] = `Bearer ${accessToken}`
-    }
-    return fetch(`${API_BASE_URL}${path}`, {
+    request<T>(path, {
       method: 'POST',
-      credentials: 'include',
-      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }),
+  put: <T>(path: string, body?: unknown) =>
+    request<T>(path, {
+      method: 'PUT',
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }),
+  patch: <T>(path: string, body?: unknown) =>
+    request<T>(path, {
+      method: 'PATCH',
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }),
+  delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  upload: async <T>(path: string, formData: FormData) => {
+    const { accessToken } = useAuthStore.getState()
+    const options: RequestInit = {
+      method: 'POST',
       body: formData,
-    }).then(async (res) => {
-      if (!res.ok) {
-        if (res.status === 401) {
-          clearAuthSession()
-        }
-        const body = await res.json().catch(() => ({ message: res.statusText })) as { message?: string; error?: string | { message?: string } }
-        const message = typeof body.message === 'string' ? body.message : typeof body.error === 'string' ? body.error : (body.error as { message?: string })?.message || res.statusText
-        throw new ApiError(res.status, message)
+    }
+
+    let res = await fetchApi(path, options, accessToken)
+    if (res.status === 401 && accessToken) {
+      const refreshed = await refreshToken()
+      if (refreshed) {
+        const { accessToken: newToken } = useAuthStore.getState()
+        res = await fetchApi(path, options, newToken)
       }
-      const body = await res.json()
-      return normalizeResponseBody<T>(body)
-    })
+    }
+
+    if (!res.ok) {
+      await throwApiError(res, path, 'POST')
+    }
+
+    if (res.status === 204) return undefined as T
+    const body = await parseJsonStrictly<unknown>(res, path, 'POST')
+    return normalizeResponseBody<T>(body)
   },
 }
+
+export { ApiError }

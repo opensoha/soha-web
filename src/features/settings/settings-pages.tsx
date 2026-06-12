@@ -2686,8 +2686,8 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
             ),
           }}
           onFinish={(values) => {
-            let inputSchema: Record<string, unknown> = {};
-            let outputSchema: Record<string, unknown> = {};
+            let inputSchema: Record<string, unknown>;
+            let outputSchema: Record<string, unknown>;
             try {
               inputSchema = values.inputSchemaText
                 ? JSON.parse(String(values.inputSchemaText))

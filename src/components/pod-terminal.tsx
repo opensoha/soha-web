@@ -137,7 +137,7 @@ export function PodTerminal({
     terminalRef.current = terminal
     fitAddonRef.current = fitAddon
 
-    let ticketedURL = ''
+    let ticketedURL: string
     try {
       ticketedURL = await withStreamTicket(terminalURL)
     } catch {

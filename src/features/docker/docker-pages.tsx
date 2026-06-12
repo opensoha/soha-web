@@ -7,6 +7,7 @@ import { CloudServerOutlined, DeleteOutlined, DockerOutlined, EditOutlined, File
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
+import { useWorkbenchModuleEnabled } from '@/features/modules/module-status'
 import { formatDateTime } from '@/utils/time'
 import { AdminTable } from '@/components/admin-table'
 import {
@@ -24,7 +25,7 @@ import '@/features/virtualization/virtualization-workbench.css'
 import { dockerApi } from './docker-api'
 import { DockerProjectLogsPanel, DockerProjectTerminalPanel, DockerProjectVolumesPanel } from './docker-runtime-panels'
 import './docker-pages.css'
-import type { DockerContainerStartInput, DockerHost, DockerHostInput, DockerListParams, DockerOperation, DockerOperationLog, DockerPage, DockerPortMapping, DockerPortMappingInput, DockerProject, DockerProjectInput, DockerQuickCreateHostInput, DockerService, DockerTemplate, DockerTemplateInput } from './docker-types'
+import type { DockerContainerPortInput, DockerContainerStartInput, DockerHost, DockerHostInput, DockerListParams, DockerOperation, DockerOperationLog, DockerPage, DockerPayloadMap, DockerPortMapping, DockerPortMappingInput, DockerProject, DockerProjectInput, DockerQuickCreateHostInput, DockerService, DockerTemplate, DockerTemplateInput } from './docker-types'
 
 const { Text } = Typography
 const { TextArea } = Input
@@ -104,6 +105,7 @@ const VIRTUALIZATION_PROVIDER_LABELS: Record<string, string> = {
   pve: 'PVE',
 }
 
+type DockerProjectPortDisplay = Partial<DockerContainerPortInput>
 type AdminTableProps = ComponentProps<typeof AdminTable>
 
 const DOCKER_PAGINATION_SUMMARY: NonNullable<AdminTableProps['paginationSummary']> = (total, range) => {
@@ -144,14 +146,14 @@ function formatBytes(value?: number) {
   return `${size >= 10 || index === 0 ? size.toFixed(0) : size.toFixed(1)} ${units[index]}`
 }
 
-function configTextValue(config: Record<string, unknown> | undefined, key: string) {
+function configTextValue(config: DockerPayloadMap | undefined, key: string) {
   const value = config?.[key]
   if (typeof value === 'string') return value.trim() || '-'
   if (typeof value === 'number' || typeof value === 'boolean') return String(value)
   return '-'
 }
 
-function configArrayCount(config: Record<string, unknown> | undefined, key: string) {
+function configArrayCount(config: DockerPayloadMap | undefined, key: string) {
   const value = config?.[key]
   return Array.isArray(value) ? value.length : 0
 }
@@ -181,12 +183,15 @@ function numberValue(value: unknown) {
   return undefined
 }
 
+function isDockerContainerPortItem(item: unknown): item is DockerContainerPortInput {
+  return Boolean(item && typeof item === 'object' && !Array.isArray(item))
+}
+
 function projectPortItems(record: DockerProject) {
   const config = record.config ?? {}
   const rawPorts = Array.isArray(config.ports) ? config.ports : []
   const ports = rawPorts
-    .map((item) => item && typeof item === 'object' ? item as Record<string, unknown> : undefined)
-    .filter((item): item is Record<string, unknown> => Boolean(item))
+    .filter(isDockerContainerPortItem)
   if (ports.length > 0) {
     return ports
   }
@@ -207,7 +212,7 @@ function projectPortItems(record: DockerProject) {
   }]
 }
 
-function formatProjectPortItem(item: Record<string, unknown>) {
+function formatProjectPortItem(item: DockerProjectPortDisplay) {
   const hostPort = numberValue(item.hostPort)
   const containerPort = numberValue(item.containerPort)
   const protocol = stringValue(item.protocol) || 'tcp'
@@ -268,7 +273,7 @@ function virtualizationItems<T>(data: VirtualizationPage<T> | T[] | undefined): 
   return Array.isArray(data) ? data : data.items ?? []
 }
 
-function stringConfigValue(config: Record<string, unknown> | undefined, key: string) {
+function stringConfigValue(config: { [key: string]: unknown } | undefined, key: string) {
   const value = config?.[key]
   return typeof value === 'string' ? value.trim() : ''
 }
@@ -351,17 +356,20 @@ function operationActionLabel(action: string) {
 
 function useDockerPermissions() {
   const permissionSnapshotQuery = usePermissionSnapshot()
+  const { moduleEnabled: dockerModuleEnabled } = useWorkbenchModuleEnabled('docker')
   const snapshot = permissionSnapshotQuery.data?.data
+  const hasDockerPermission = (key: string) => dockerModuleEnabled && hasPermission(snapshot, key)
   return {
-    canManageHosts: hasPermission(snapshot, 'docker.hosts.manage'),
-    canManageProjects: hasPermission(snapshot, 'docker.projects.manage'),
-    canDeployProjects: hasPermission(snapshot, 'docker.projects.deploy'),
-    canViewServices: hasPermission(snapshot, 'docker.services.view'),
-    canManageServices: hasPermission(snapshot, 'docker.services.manage'),
-    canViewPorts: hasPermission(snapshot, 'docker.ports.view'),
-    canManagePorts: hasPermission(snapshot, 'docker.ports.manage'),
-    canManageTemplates: hasPermission(snapshot, 'docker.templates.manage'),
-    canManageOperations: hasPermission(snapshot, 'docker.operations.manage'),
+    dockerModuleEnabled,
+    canManageHosts: hasDockerPermission('docker.hosts.manage'),
+    canManageProjects: hasDockerPermission('docker.projects.manage'),
+    canDeployProjects: hasDockerPermission('docker.projects.deploy'),
+    canViewServices: hasDockerPermission('docker.services.view'),
+    canManageServices: hasDockerPermission('docker.services.manage'),
+    canViewPorts: hasDockerPermission('docker.ports.view'),
+    canManagePorts: hasDockerPermission('docker.ports.manage'),
+    canManageTemplates: hasDockerPermission('docker.templates.manage'),
+    canManageOperations: hasDockerPermission('docker.operations.manage'),
   }
 }
 
@@ -510,9 +518,10 @@ function DrawerFooter({ form, loading, onCancel, submitLabel = '提交' }: { for
 }
 
 function useDockerOptions() {
-  const hostsQuery = useQuery({ queryKey: ['docker', 'hosts', 'options'], queryFn: () => dockerApi.hosts({ page: 1, pageSize: 200 }) })
-  const projectsQuery = useQuery({ queryKey: ['docker', 'projects', 'options'], queryFn: () => dockerApi.projects({ page: 1, pageSize: 200 }) })
-  const servicesQuery = useQuery({ queryKey: ['docker', 'services', 'options'], queryFn: () => dockerApi.services({ page: 1, pageSize: 300 }) })
+  const { moduleEnabled: dockerModuleEnabled } = useWorkbenchModuleEnabled('docker')
+  const hostsQuery = useQuery({ enabled: dockerModuleEnabled, queryKey: ['docker', 'hosts', 'options'], queryFn: () => dockerApi.hosts({ page: 1, pageSize: 200 }) })
+  const projectsQuery = useQuery({ enabled: dockerModuleEnabled, queryKey: ['docker', 'projects', 'options'], queryFn: () => dockerApi.projects({ page: 1, pageSize: 200 }) })
+  const servicesQuery = useQuery({ enabled: dockerModuleEnabled, queryKey: ['docker', 'services', 'options'], queryFn: () => dockerApi.services({ page: 1, pageSize: 300 }) })
   const hosts = normalizePage(hostsQuery.data?.data, 1, 200).items
   const projects = normalizePage(projectsQuery.data?.data, 1, 200).items
   const services = normalizePage(servicesQuery.data?.data, 1, 300).items
@@ -582,7 +591,7 @@ export function buildQuickHostPayload(values: QuickCreateHostFormValues): Docker
   })
 }
 
-function buildProjectPayload(values: DockerProjectInput): DockerProjectInput {
+export function buildProjectPayload(values: DockerProjectInput): DockerProjectInput {
   return compactRecord({
     ...values,
     composeContent: values.composeContent || DEFAULT_COMPOSE,
@@ -646,7 +655,7 @@ export function buildContainerStartPayload(values: ContainerStartFormValues): Do
   })
 }
 
-function buildTemplatePayload(values: DockerTemplateInput): DockerTemplateInput {
+export function buildTemplatePayload(values: DockerTemplateInput): DockerTemplateInput {
   return compactRecord({
     ...values,
     templateKind: values.templateKind || 'compose',
@@ -683,12 +692,13 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [quickDrawerOpen, setQuickDrawerOpen] = useState(false)
   const [editing, setEditing] = useState<DockerHost | null>(null)
-  const { canManageHosts } = useDockerPermissions()
-  const provisionOptions = useVirtualizationProvisionOptions(canManageHosts)
+  const { dockerModuleEnabled, canManageHosts } = useDockerPermissions()
+  const { moduleEnabled: virtualizationModuleEnabled } = useWorkbenchModuleEnabled('virtualization')
+  const provisionOptions = useVirtualizationProvisionOptions(canManageHosts && virtualizationModuleEnabled)
   const selectedProvisionConnectionID = Form.useWatch('virtualizationConnectionId', quickForm)
   const queryClient = useQueryClient()
   const { message } = App.useApp()
-  const hostsQuery = useQuery({ queryKey: ['docker', 'hosts', filters], queryFn: () => dockerApi.hosts(filters) })
+  const hostsQuery = useQuery({ enabled: dockerModuleEnabled, queryKey: ['docker', 'hosts', filters], queryFn: () => dockerApi.hosts(filters) })
   const createMutation = useMutation({
     mutationFn: (values: HostFormValues) => editing ? dockerApi.updateHost(editing.id, buildHostPayload(values)) : dockerApi.createHost(buildHostPayload(values)),
     onSuccess: () => {
@@ -841,8 +851,7 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
             <Form.Item name="virtualizationConnectionId" label="虚拟化连接" rules={[{ required: true }]}>
               <Select
                 allowClear
-                showSearch
-                optionFilterProp="label"
+                showSearch={{ optionFilterProp: 'label' }}
                 loading={provisionOptions.loading}
                 options={quickConnectionOptions}
                 placeholder="选择 PVE 或 KubeVirt 连接"
@@ -852,8 +861,7 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
             <Form.Item name="imageId" label="镜像 / 模板" rules={[{ required: true }]}>
               <Select
                 allowClear
-                showSearch
-                optionFilterProp="label"
+                showSearch={{ optionFilterProp: 'label' }}
                 disabled={!selectedProvisionConnectionID}
                 loading={provisionOptions.loading}
                 options={quickImageOptions}
@@ -862,7 +870,7 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
               />
             </Form.Item>
             <Form.Item name="flavorId" label="规格">
-              <Select allowClear showSearch optionFilterProp="label" loading={provisionOptions.loading} options={quickFlavorOptions} placeholder="选择规格或手动填写资源" />
+              <Select allowClear showSearch={{ optionFilterProp: 'label' }} loading={provisionOptions.loading} options={quickFlavorOptions} placeholder="选择规格或手动填写资源" />
             </Form.Item>
             <Form.Item name="architecture" label="架构"><Select options={ARCHITECTURE_OPTIONS} /></Form.Item>
             <Form.Item name="network" label={selectedProvisionProvider === 'kubevirt' ? '网络' : 'PVE 网桥'}>
@@ -895,11 +903,11 @@ function ProjectsTable({ embedded = false, sourceKind = 'compose' as DockerProje
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [containerDrawerOpen, setContainerDrawerOpen] = useState(false)
   const [editing, setEditing] = useState<DockerProject | null>(null)
-  const { canManageProjects, canDeployProjects, canManagePorts } = useDockerPermissions()
+  const { dockerModuleEnabled, canManageProjects, canDeployProjects, canManagePorts } = useDockerPermissions()
   const { hosts, hostOptions } = useDockerOptions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
-  const projectsQuery = useQuery({ queryKey: ['docker', 'projects', filters], queryFn: () => dockerApi.projects(filters) })
+  const projectsQuery = useQuery({ enabled: dockerModuleEnabled, queryKey: ['docker', 'projects', filters], queryFn: () => dockerApi.projects(filters) })
   const saveMutation = useMutation({
     mutationFn: (values: DockerProjectInput) => editing ? dockerApi.updateProject(editing.id, buildProjectPayload(values)) : dockerApi.createProject(buildProjectPayload(values)),
     onSuccess: () => {
@@ -973,7 +981,7 @@ function ProjectsTable({ embedded = false, sourceKind = 'compose' as DockerProje
             onFinish={(values) => setFilters((current) => ({ ...current, ...values, sourceKind, page: 1 }))}
           >
             <ManagementQueryField grow minWidth={260} width={360} name="search" label="关键词"><Input allowClear prefix={<SearchOutlined />} placeholder="项目、Slug 或来源" /></ManagementQueryField>
-            <ManagementQueryField minWidth={180} width={220} name="hostId" label="主机"><Select allowClear showSearch optionFilterProp="label" placeholder="全部主机" options={hostOptions} /></ManagementQueryField>
+            <ManagementQueryField minWidth={180} width={220} name="hostId" label="主机"><Select allowClear showSearch={{ optionFilterProp: 'label' }} placeholder="全部主机" options={hostOptions} /></ManagementQueryField>
             <ManagementQueryField minWidth={132} width={150} name="status" label="状态"><Select allowClear placeholder="全部" options={['draft', 'defined', 'running', 'stopped', 'failed'].map((item) => ({ value: item, label: item }))} /></ManagementQueryField>
             <ManagementQueryField minWidth={150} width={180} name="environment" label="环境"><Input allowClear placeholder="dev / test" /></ManagementQueryField>
           </ManagementQueryPanel>
@@ -1003,7 +1011,7 @@ function ProjectsTable({ embedded = false, sourceKind = 'compose' as DockerProje
         <Form form={form} layout="vertical" onFinish={(values) => saveMutation.mutate(values)}>
           <Form.Item name="name" label="名称" rules={[{ required: true }]}><Input /></Form.Item>
           <div className="grid gap-3 md:grid-cols-2">
-            <Form.Item name="hostId" label="Docker 主机" rules={[{ required: true }]}><Select showSearch optionFilterProp="label" options={hostOptions} /></Form.Item>
+            <Form.Item name="hostId" label="Docker 主机" rules={[{ required: true }]}><Select showSearch={{ optionFilterProp: 'label' }} options={hostOptions} /></Form.Item>
             <Form.Item name="slug" label="Slug"><Input /></Form.Item>
             <Form.Item name="environment" label="环境"><Input /></Form.Item>
             <Form.Item name="owner" label="负责人"><Input /></Form.Item>
@@ -1028,7 +1036,7 @@ function ProjectsTable({ embedded = false, sourceKind = 'compose' as DockerProje
         <Form form={containerForm} layout="vertical" onFinish={(values) => containerStartMutation.mutate(values)}>
           <Form.Item name="name" label="容器名称" rules={[{ required: true }]}><Input placeholder="preview-api" /></Form.Item>
           <div className="grid gap-3 md:grid-cols-2">
-            <Form.Item name="hostId" label="Docker 主机" rules={[{ required: true }]}><Select showSearch optionFilterProp="label" options={hostOptions} onChange={applyContainerHostDefaults} /></Form.Item>
+            <Form.Item name="hostId" label="Docker 主机" rules={[{ required: true }]}><Select showSearch={{ optionFilterProp: 'label' }} options={hostOptions} onChange={applyContainerHostDefaults} /></Form.Item>
             <Form.Item name="image" label="镜像" rules={[{ required: true }]}><Input placeholder="nginx:alpine" /></Form.Item>
             <Form.Item name="architecture" label="架构"><Select options={ARCHITECTURE_OPTIONS} /></Form.Item>
             <Form.Item name="restartPolicy" label="重启策略"><Select options={['unless-stopped', 'always', 'on-failure', 'no'].map((item) => ({ value: item, label: item }))} /></Form.Item>
@@ -1118,11 +1126,11 @@ function ProjectsTable({ embedded = false, sourceKind = 'compose' as DockerProje
 function ServicesTable({ embedded = false, fixedProjectId }: { embedded?: boolean; fixedProjectId?: string }) {
   const [filters, setFilters] = useState<DockerFilterState>({ page: 1, pageSize: embedded ? 5 : 10, projectId: fixedProjectId })
   const [filterForm] = Form.useForm<DockerFilterState>()
-  const { canManageServices } = useDockerPermissions()
+  const { dockerModuleEnabled, canManageServices } = useDockerPermissions()
   const { hostOptions, projectOptions } = useDockerOptions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
-  const servicesQuery = useQuery({ queryKey: ['docker', 'services', filters], queryFn: () => dockerApi.services(filters) })
+  const servicesQuery = useQuery({ enabled: dockerModuleEnabled, queryKey: ['docker', 'services', filters], queryFn: () => dockerApi.services(filters) })
   const actionMutation = useMutation({
     mutationFn: ({ id, action }: { id: string; action: string }) => dockerApi.serviceAction(id, action),
     onSuccess: (_response, variables) => { message.success(`${variables.action} 任务已提交`); refreshDocker(queryClient) },
@@ -1172,8 +1180,8 @@ function ServicesTable({ embedded = false, fixedProjectId }: { embedded?: boolea
             onFinish={(values) => setFilters((current) => ({ ...current, ...values, projectId: fixedProjectId, page: 1 }))}
           >
             <ManagementQueryField grow minWidth={260} width={360} name="search" label="关键词"><Input allowClear prefix={<SearchOutlined />} placeholder="服务、镜像或容器" /></ManagementQueryField>
-            <ManagementQueryField minWidth={180} width={220} name="hostId" label="主机"><Select allowClear showSearch optionFilterProp="label" placeholder="全部主机" options={hostOptions} /></ManagementQueryField>
-            {!fixedProjectId ? <ManagementQueryField minWidth={180} width={220} name="projectId" label="项目"><Select allowClear showSearch optionFilterProp="label" placeholder="全部项目" options={projectOptions} /></ManagementQueryField> : null}
+            <ManagementQueryField minWidth={180} width={220} name="hostId" label="主机"><Select allowClear showSearch={{ optionFilterProp: 'label' }} placeholder="全部主机" options={hostOptions} /></ManagementQueryField>
+            {!fixedProjectId ? <ManagementQueryField minWidth={180} width={220} name="projectId" label="项目"><Select allowClear showSearch={{ optionFilterProp: 'label' }} placeholder="全部项目" options={projectOptions} /></ManagementQueryField> : null}
             <ManagementQueryField minWidth={132} width={150} name="status" label="状态"><Select allowClear placeholder="全部" options={['defined', 'running', 'exited', 'failed', 'unknown'].map((item) => ({ value: item, label: item }))} /></ManagementQueryField>
           </ManagementQueryPanel>
         </div>
@@ -1202,11 +1210,11 @@ function PortsTable({ embedded = false, fixedHostId, fixedProjectId }: { embedde
   const [form] = Form.useForm<DockerPortFormValues>()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editing, setEditing] = useState<DockerPortMapping | null>(null)
-  const { canManagePorts } = useDockerPermissions()
+  const { dockerModuleEnabled, canManagePorts } = useDockerPermissions()
   const { hostOptions, projectOptions, serviceOptions } = useDockerOptions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
-  const portsQuery = useQuery({ queryKey: ['docker', 'ports', filters], queryFn: () => dockerApi.ports(filters) })
+  const portsQuery = useQuery({ enabled: dockerModuleEnabled, queryKey: ['docker', 'ports', filters], queryFn: () => dockerApi.ports(filters) })
   const saveMutation = useMutation({
     mutationFn: (values: DockerPortFormValues) => editing ? dockerApi.updatePort(editing.id, buildPortPayload(values)) : dockerApi.createPort(buildPortPayload(values)),
     onSuccess: () => {
@@ -1253,8 +1261,8 @@ function PortsTable({ embedded = false, fixedHostId, fixedProjectId }: { embedde
             onFinish={(values) => setFilters((current) => ({ ...current, ...values, hostId: fixedHostId, projectId: fixedProjectId, page: 1 }))}
           >
             <ManagementQueryField grow minWidth={260} width={360} name="search" label="关键词"><Input allowClear prefix={<SearchOutlined />} placeholder="名称、访问地址或负责人" /></ManagementQueryField>
-            {!fixedHostId ? <ManagementQueryField minWidth={180} width={220} name="hostId" label="主机"><Select allowClear showSearch optionFilterProp="label" placeholder="全部主机" options={hostOptions} /></ManagementQueryField> : null}
-            {!fixedProjectId ? <ManagementQueryField minWidth={180} width={220} name="projectId" label="项目"><Select allowClear showSearch optionFilterProp="label" placeholder="全部项目" options={projectOptions} /></ManagementQueryField> : null}
+            {!fixedHostId ? <ManagementQueryField minWidth={180} width={220} name="hostId" label="主机"><Select allowClear showSearch={{ optionFilterProp: 'label' }} placeholder="全部主机" options={hostOptions} /></ManagementQueryField> : null}
+            {!fixedProjectId ? <ManagementQueryField minWidth={180} width={220} name="projectId" label="项目"><Select allowClear showSearch={{ optionFilterProp: 'label' }} placeholder="全部项目" options={projectOptions} /></ManagementQueryField> : null}
             <ManagementQueryField minWidth={132} width={150} name="status" label="状态"><Select allowClear placeholder="全部" options={['active', 'reserved', 'released', 'expired'].map((item) => ({ value: item, label: item }))} /></ManagementQueryField>
           </ManagementQueryPanel>
         </div>
@@ -1282,7 +1290,7 @@ function PortsTable({ embedded = false, fixedHostId, fixedProjectId }: { embedde
         <Form form={form} layout="vertical" onFinish={(values) => saveMutation.mutate(values)}>
           <Form.Item name="name" label="名称" rules={[{ required: true }]}><Input /></Form.Item>
           <div className="grid gap-3 md:grid-cols-2">
-            <Form.Item name="hostId" label="Docker 主机" rules={[{ required: true }]} hidden={Boolean(fixedHostId)}><Select showSearch optionFilterProp="label" options={hostOptions} /></Form.Item>
+            <Form.Item name="hostId" label="Docker 主机" rules={[{ required: true }]} hidden={Boolean(fixedHostId)}><Select showSearch={{ optionFilterProp: 'label' }} options={hostOptions} /></Form.Item>
             <Form.Item name="hostIp" label="监听 IP"><Input placeholder="0.0.0.0" /></Form.Item>
             <Form.Item name="hostPort" label="主机端口" rules={[{ required: true }]}><InputNumber min={1} max={65535} className="w-full" /></Form.Item>
             <Form.Item name="containerPort" label="容器端口" rules={[{ required: true }]}><InputNumber min={1} max={65535} className="w-full" /></Form.Item>
@@ -1290,8 +1298,8 @@ function PortsTable({ embedded = false, fixedHostId, fixedProjectId }: { embedde
             <Form.Item name="exposureScope" label="暴露范围"><Select options={['internal', 'vpn', 'public'].map((item) => ({ value: item, label: item }))} /></Form.Item>
             <Form.Item name="status" label="状态"><Select options={['active', 'reserved', 'released', 'expired'].map((item) => ({ value: item, label: item }))} /></Form.Item>
             <Form.Item name="owner" label="负责人"><Input /></Form.Item>
-            <Form.Item name="projectId" label="项目" hidden={Boolean(fixedProjectId)}><Select allowClear showSearch optionFilterProp="label" options={projectOptions} /></Form.Item>
-            <Form.Item name="serviceId" label="服务"><Select allowClear showSearch optionFilterProp="label" options={serviceOptions} /></Form.Item>
+            <Form.Item name="projectId" label="项目" hidden={Boolean(fixedProjectId)}><Select allowClear showSearch={{ optionFilterProp: 'label' }} options={projectOptions} /></Form.Item>
+            <Form.Item name="serviceId" label="服务"><Select allowClear showSearch={{ optionFilterProp: 'label' }} options={serviceOptions} /></Form.Item>
           </div>
           <div className="grid gap-3 md:grid-cols-[1fr_160px_120px]">
             <Form.Item name="domainName" label="访问域名"><Input placeholder="preview.internal.example.com" /></Form.Item>
@@ -1332,15 +1340,15 @@ function ContainerManagementPage() {
 function ProjectDetailWorkspace() {
   const { projectId } = useParams()
   const resolvedProjectId = projectId ?? ''
-  const { canViewServices, canManageServices, canViewPorts } = useDockerPermissions()
+  const { dockerModuleEnabled, canViewServices, canManageServices, canViewPorts } = useDockerPermissions()
   const [runtimeServiceName, setRuntimeServiceName] = useState('')
   const projectQuery = useQuery({
-    enabled: Boolean(resolvedProjectId),
+    enabled: dockerModuleEnabled && Boolean(resolvedProjectId),
     queryKey: ['docker', 'projects', resolvedProjectId],
     queryFn: () => dockerApi.project(resolvedProjectId),
   })
   const detailServicesQuery = useQuery({
-    enabled: Boolean(resolvedProjectId && (canViewServices || canManageServices)),
+    enabled: dockerModuleEnabled && Boolean(resolvedProjectId && (canViewServices || canManageServices)),
     queryKey: ['docker', 'project-services', resolvedProjectId],
     queryFn: () => dockerApi.services({ projectId: resolvedProjectId, page: 1, pageSize: 100 }),
   })
@@ -1433,6 +1441,7 @@ function ProjectDetailWorkspace() {
       label: '日志',
       children: (
         <DockerProjectLogsPanel
+          enabled={canViewServices}
           projectId={resolvedProjectId}
           projectName={project?.name}
           serviceName={runtimeServiceName}
@@ -1447,6 +1456,7 @@ function ProjectDetailWorkspace() {
       label: 'Shell',
       children: (
         <DockerProjectTerminalPanel
+          enabled={canManageServices}
           projectId={resolvedProjectId}
           projectName={project?.name}
           serviceName={runtimeServiceName}
@@ -1461,6 +1471,7 @@ function ProjectDetailWorkspace() {
       label: '卷文件',
       children: (
         <DockerProjectVolumesPanel
+          enabled={canViewServices}
           projectId={resolvedProjectId}
           projectName={project?.name}
           serviceName={runtimeServiceName}
@@ -1501,10 +1512,10 @@ function TemplatesTable() {
   const [form] = Form.useForm<DockerTemplateInput>()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editing, setEditing] = useState<DockerTemplate | null>(null)
-  const { canManageTemplates } = useDockerPermissions()
+  const { dockerModuleEnabled, canManageTemplates } = useDockerPermissions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
-  const templatesQuery = useQuery({ queryKey: ['docker', 'templates', filters], queryFn: () => dockerApi.templates(filters) })
+  const templatesQuery = useQuery({ enabled: dockerModuleEnabled, queryKey: ['docker', 'templates', filters], queryFn: () => dockerApi.templates(filters) })
   const saveMutation = useMutation({
     mutationFn: (values: DockerTemplateInput) => editing ? dockerApi.updateTemplate(editing.id, buildTemplatePayload(values)) : dockerApi.createTemplate(buildTemplatePayload(values)),
     onSuccess: () => {
@@ -1580,7 +1591,7 @@ function OperationsTable({ embedded = false, initialPreset = 'all' as OperationP
   const [filters, setFilters] = useState<DockerFilterState>({ page: 1, pageSize: embedded ? 6 : 10 })
   const [filterForm] = Form.useForm<DockerFilterState>()
   const [selectedOperation, setSelectedOperation] = useState<DockerOperation | null>(null)
-  const { canManageOperations } = useDockerPermissions()
+  const { dockerModuleEnabled, canManageOperations } = useDockerPermissions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const presetFilter = useMemo<DockerFilterState>(() => {
@@ -1592,8 +1603,8 @@ function OperationsTable({ embedded = false, initialPreset = 'all' as OperationP
     return {}
   }, [preset])
   const queryFilters = { ...filters, ...presetFilter }
-  const operationsQuery = useQuery({ queryKey: ['docker', 'operations', queryFilters], queryFn: () => dockerApi.operations(queryFilters) })
-  const logsQuery = useQuery({ queryKey: ['docker', 'operations', selectedOperation?.id, 'logs'], queryFn: () => dockerApi.operationLogs(selectedOperation?.id ?? ''), enabled: Boolean(selectedOperation?.id) })
+  const operationsQuery = useQuery({ enabled: dockerModuleEnabled, queryKey: ['docker', 'operations', queryFilters], queryFn: () => dockerApi.operations(queryFilters) })
+  const logsQuery = useQuery({ queryKey: ['docker', 'operations', selectedOperation?.id, 'logs'], queryFn: () => dockerApi.operationLogs(selectedOperation?.id ?? ''), enabled: dockerModuleEnabled && Boolean(selectedOperation?.id) })
   const cancelMutation = useMutation({ mutationFn: dockerApi.cancelOperation, onSuccess: () => { message.success('任务已取消'); refreshDocker(queryClient) } })
   const retryMutation = useMutation({ mutationFn: dockerApi.retryOperation, onSuccess: () => { message.success('重试任务已提交'); refreshDocker(queryClient) } })
   const page = normalizePage(operationsQuery.data?.data, filters.page ?? 1, filters.pageSize ?? 10)
@@ -1666,7 +1677,8 @@ function OperationsTable({ embedded = false, initialPreset = 'all' as OperationP
 }
 
 export function DockerOverviewPage() {
-  const overviewQuery = useQuery({ queryKey: ['docker', 'overview'], queryFn: dockerApi.overview })
+  const { dockerModuleEnabled, canManageProjects } = useDockerPermissions()
+  const overviewQuery = useQuery({ enabled: dockerModuleEnabled, queryKey: ['docker', 'overview'], queryFn: dockerApi.overview })
   const overview = overviewQuery.data?.data
   const stats = overview?.stats ?? {}
   const hostSummary = overview?.hostSummary ?? {}
@@ -1683,9 +1695,9 @@ export function DockerOverviewPage() {
           <div className="soha-vrt-title-row"><DockerOutlined /><h1>Docker 工作台</h1><Badge status={badgeStatusForTone(overviewTone)} text={overviewTone === 'danger' ? '存在异常任务' : overviewTone === 'warning' ? '任务处理中' : overviewTone === 'success' ? '运行中' : '未接入'} /></div>
           <div className="soha-vrt-commandbar-meta"><span>主机 {stats.hostCount ?? 0}</span><span>项目 {stats.projectCount ?? 0}</span><span>服务 {stats.serviceCount ?? 0}</span><span>端口 {stats.portMappingCount ?? 0}</span></div>
         </div>
-        <div className="soha-vrt-commandbar-actions"><Link to="/docker/projects"><Button type="primary" icon={<PlusOutlined />}>创建 Compose 项目</Button></Link></div>
+        {canManageProjects ? <div className="soha-vrt-commandbar-actions"><Link to="/docker/projects"><Button type="primary" icon={<PlusOutlined />}>创建 Compose 项目</Button></Link></div> : null}
       </div>
-      {overviewQuery.isError ? <Alert type="error" showIcon message="Docker 总览加载失败" /> : null}
+      {overviewQuery.isError ? <Alert type="error" showIcon title="Docker 总览加载失败" /> : null}
       <div className="soha-vrt-metric-grid">
         <MetricCard label="在线主机" value={stats.onlineHostCount ?? 0} helper={`总计 ${stats.hostCount ?? 0}`} tone={(stats.onlineHostCount ?? 0) > 0 ? 'success' : 'default'} />
         <MetricCard label="运行项目" value={stats.runningProjectCount ?? 0} helper={`总计 ${stats.projectCount ?? 0}`} tone="success" />

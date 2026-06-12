@@ -5,13 +5,16 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ManagementDetailHeader, ManagementState } from '@/components/management-list'
 import { BooleanTag } from '@/components/status-tag'
-import { ResourceMetaOverview, useResourceYAMLState } from '@/features/platform/configuration-detail-pages'
+import {
+  ResourceMetaOverview,
+  useResourceYAMLState,
+} from '@/features/platform/configuration-detail-pages'
+import { useClusterCapability } from '@/features/platform/cluster-capabilities'
 import { api } from '@/services/api-client'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { useI18n } from '@/i18n'
 import type {
   ApiResponse,
-  Cluster,
   ClusterRoleBindingDetail,
   ClusterRoleDetail,
   RoleBindingDetail,
@@ -30,16 +33,7 @@ const K8sYamlEditor = lazy(async () => {
 function useResolvedNamespace() {
   const [searchParams] = useSearchParams()
   const { namespace } = usePlatformScopeStore()
-  return (namespace && namespace !== '') ? namespace : (searchParams.get('namespace') || '')
-}
-
-function useCurrentCluster() {
-  const { clusterId } = usePlatformScopeStore()
-  return useQuery({
-    queryKey: ['clusters'],
-    queryFn: () => api.get<ApiResponse<Cluster[]>>('/clusters'),
-    enabled: !!clusterId,
-  })
+  return namespace && namespace !== '' ? namespace : searchParams.get('namespace') || ''
 }
 
 function renderStringList(values: string[] | undefined, emptyLabel: string) {
@@ -48,7 +42,9 @@ function renderStringList(values: string[] | undefined, emptyLabel: string) {
   }
   return (
     <div className="soha-tag-list">
-      {values.map((value) => <Tag key={value}>{value}</Tag>)}
+      {values.map((value) => (
+        <Tag key={value}>{value}</Tag>
+      ))}
     </div>
   )
 }
@@ -68,16 +64,22 @@ function renderRuleSummaries(values: string[] | undefined, emptyLabel: string) {
   )
 }
 
-function yamlUnsupportedDescription(localeCode: 'zh_CN' | 'en_US') {
+function yamlUnavailableDescription(localeCode: 'zh_CN' | 'en_US') {
   return localeCode === 'zh_CN'
-    ? '当前 agent 集群暂不支持 YAML 查看、编辑或删除。'
-    : 'YAML view, edit, and delete are not supported for agent-connected clusters yet.'
+    ? '当前资源没有可用 YAML 路径。'
+    : 'This resource does not expose a YAML path.'
 }
 
-function useClusterConnectionMode() {
-  const { clusterId } = usePlatformScopeStore()
-  const clustersQuery = useCurrentCluster()
-  return (clustersQuery.data?.data ?? []).find((item) => item.id === clusterId)?.connectionMode || ''
+function yamlCapabilityUnavailableDescription(
+  localeCode: 'zh_CN' | 'en_US',
+  reason: string | undefined,
+) {
+  if (reason) {
+    return reason
+  }
+  return localeCode === 'zh_CN'
+    ? '当前集群连接模式暂不支持 YAML 查看与应用。'
+    : 'The current cluster connection mode does not support YAML view and apply yet.'
 }
 
 interface RBACDetailPageProps<T> {
@@ -86,7 +88,6 @@ interface RBACDetailPageProps<T> {
   detailDescription: string
   detailTitle: string
   emptyDescription: string
-  isAgentCluster: boolean
   localeCode: 'zh_CN' | 'en_US'
   namespace?: string
   resourceName: string
@@ -102,7 +103,6 @@ function RBACDetailPage<T>({
   detailDescription,
   detailTitle,
   emptyDescription,
-  isAgentCluster,
   localeCode,
   namespace = '',
   resourceName,
@@ -112,10 +112,20 @@ function RBACDetailPage<T>({
   yamlTitle,
 }: RBACDetailPageProps<T>) {
   const navigate = useNavigate()
-  const yamlState = useResourceYAMLState(yamlPath, yamlResourceKey, resourceName, namespace)
+  const yamlApplyCapability = useClusterCapability('resource.yaml.apply', localeCode)
+  const yamlApplyDisabledReason = yamlApplyCapability.disabled
+    ? yamlApplyCapability.reason
+    : undefined
+  const yamlEditorPath =
+    yamlPath && !yamlApplyCapability.isLoading && !yamlApplyCapability.disabled ? yamlPath : null
+  const yamlState = useResourceYAMLState(yamlEditorPath, yamlResourceKey, resourceName, namespace)
 
   if (!detail) {
-    return <div className="soha-page"><ManagementState kind="not-found" description={emptyDescription} /></div>
+    return (
+      <div className="soha-page">
+        <ManagementState kind="not-found" description={emptyDescription} />
+      </div>
+    )
   }
 
   return (
@@ -123,7 +133,11 @@ function RBACDetailPage<T>({
       <ManagementDetailHeader
         title={detailTitle}
         description={detailDescription}
-        actions={<Button onClick={() => navigate(backPath)}>{localeCode === 'zh_CN' ? '返回列表' : 'Back to list'}</Button>}
+        actions={
+          <Button onClick={() => navigate(backPath)}>
+            {localeCode === 'zh_CN' ? '返回列表' : 'Back to list'}
+          </Button>
+        }
       />
       <Tabs
         defaultActiveKey="overview"
@@ -136,10 +150,29 @@ function RBACDetailPage<T>({
           {
             key: 'yaml',
             label: yamlTitle,
-            children: isAgentCluster || !yamlPath ? (
-              <ManagementState kind="unsupported" description={yamlUnsupportedDescription(localeCode)} />
+            children: !yamlPath ? (
+              <ManagementState
+                kind="unsupported"
+                description={yamlUnavailableDescription(localeCode)}
+              />
+            ) : yamlApplyCapability.isLoading ? (
+              <ManagementState kind="loading" />
+            ) : yamlApplyCapability.disabled ? (
+              <ManagementState
+                kind="unsupported"
+                description={yamlCapabilityUnavailableDescription(
+                  localeCode,
+                  yamlApplyDisabledReason,
+                )}
+              />
             ) : (
-              <Suspense fallback={<Card className="soha-detail-card"><Spin size="large" /></Card>}>
+              <Suspense
+                fallback={
+                  <Card className="soha-detail-card">
+                    <Spin size="large" />
+                  </Card>
+                }
+              >
                 <div style={{ height: 620 }}>
                   <K8sYamlEditor
                     value={yamlState.draft}
@@ -148,7 +181,10 @@ function RBACDetailPage<T>({
                     onSave={() => void 0}
                     onApply={() => yamlState.applyMutation.mutate()}
                     saveDisabled
-                    applyDisabled={!yamlPath || !yamlState.draft.trim()}
+                    applyDisabled={
+                      !yamlEditorPath || !yamlState.draft.trim() || yamlApplyCapability.disabled
+                    }
+                    applyDisabledReason={yamlApplyDisabledReason}
                     applying={yamlState.applyMutation.isPending}
                   />
                 </div>
@@ -167,10 +203,14 @@ export function PlatformAccessControlServiceAccountDetailPage() {
   const name = params.name as string
   const namespace = useResolvedNamespace()
   const { clusterId } = usePlatformScopeStore()
-  const isAgentCluster = useClusterConnectionMode() === 'agent'
-
-  const detailPath = clusterId && namespace ? `/clusters/${clusterId}/access-control/serviceaccounts/${name}/detail?namespace=${encodeURIComponent(namespace)}` : null
-  const yamlPath = clusterId && namespace ? `/clusters/${clusterId}/access-control/serviceaccounts/${name}/yaml?namespace=${encodeURIComponent(namespace)}` : null
+  const detailPath =
+    clusterId && namespace
+      ? `/clusters/${clusterId}/access-control/serviceaccounts/${name}/detail?namespace=${encodeURIComponent(namespace)}`
+      : null
+  const yamlPath =
+    clusterId && namespace
+      ? `/clusters/${clusterId}/access-control/serviceaccounts/${name}/yaml?namespace=${encodeURIComponent(namespace)}`
+      : null
   const detailQuery = useQuery({
     queryKey: ['serviceaccounts', 'detail', name, namespace],
     queryFn: () => api.get<ApiResponse<ServiceAccountDetail>>(detailPath!),
@@ -179,7 +219,11 @@ export function PlatformAccessControlServiceAccountDetailPage() {
   const detail = detailQuery.data?.data
 
   if (detailQuery.isLoading) {
-    return <div className="flex items-center justify-center h-64"><Spin size="large" /></div>
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Spin size="large" />
+      </div>
+    )
   }
 
   return (
@@ -187,9 +231,14 @@ export function PlatformAccessControlServiceAccountDetailPage() {
       backPath="/platform-access-control/serviceaccounts"
       detail={detail}
       detailTitle={`ServiceAccount: ${name}`}
-      detailDescription={localeCode === 'zh_CN' ? '查看 ServiceAccount 的引用对象、自动挂载与 YAML。' : 'Inspect ServiceAccount references, automount setting, and YAML.'}
-      emptyDescription={localeCode === 'zh_CN' ? 'ServiceAccount 未找到' : 'ServiceAccount not found'}
-      isAgentCluster={isAgentCluster}
+      detailDescription={
+        localeCode === 'zh_CN'
+          ? '查看 ServiceAccount 的引用对象、自动挂载与 YAML。'
+          : 'Inspect ServiceAccount references, automount setting, and YAML.'
+      }
+      emptyDescription={
+        localeCode === 'zh_CN' ? 'ServiceAccount 未找到' : 'ServiceAccount not found'
+      }
       localeCode={localeCode}
       namespace={namespace}
       resourceName={name}
@@ -202,9 +251,30 @@ export function PlatformAccessControlServiceAccountDetailPage() {
             labels={item.labels}
             annotations={item.annotations}
             extra={[
-              { key: localeCode === 'zh_CN' ? 'Secrets' : 'Secrets', value: renderStringList(item.secrets, localeCode === 'zh_CN' ? '暂无关联 Secrets' : 'No secrets') },
-              { key: localeCode === 'zh_CN' ? '镜像拉取密钥' : 'Image Pull Secrets', value: renderStringList(item.imagePullSecrets, localeCode === 'zh_CN' ? '暂无 imagePullSecrets' : 'No image pull secrets') },
-              { key: localeCode === 'zh_CN' ? '自动挂载 Token' : 'Automount Token', value: <BooleanTag value={item.automountServiceAccountToken} trueLabel={localeCode === 'zh_CN' ? '是' : 'Yes'} falseLabel={localeCode === 'zh_CN' ? '否' : 'No'} /> },
+              {
+                key: localeCode === 'zh_CN' ? 'Secrets' : 'Secrets',
+                value: renderStringList(
+                  item.secrets,
+                  localeCode === 'zh_CN' ? '暂无关联 Secrets' : 'No secrets',
+                ),
+              },
+              {
+                key: localeCode === 'zh_CN' ? '镜像拉取密钥' : 'Image Pull Secrets',
+                value: renderStringList(
+                  item.imagePullSecrets,
+                  localeCode === 'zh_CN' ? '暂无 imagePullSecrets' : 'No image pull secrets',
+                ),
+              },
+              {
+                key: localeCode === 'zh_CN' ? '自动挂载 Token' : 'Automount Token',
+                value: (
+                  <BooleanTag
+                    value={item.automountServiceAccountToken}
+                    trueLabel={localeCode === 'zh_CN' ? '是' : 'Yes'}
+                    falseLabel={localeCode === 'zh_CN' ? '否' : 'No'}
+                  />
+                ),
+              },
             ]}
           />
         </>
@@ -222,9 +292,14 @@ export function PlatformAccessControlRoleDetailPage() {
   const name = params.name as string
   const namespace = useResolvedNamespace()
   const { clusterId } = usePlatformScopeStore()
-  const isAgentCluster = useClusterConnectionMode() === 'agent'
-  const detailPath = clusterId && namespace ? `/clusters/${clusterId}/access-control/roles/${name}/detail?namespace=${encodeURIComponent(namespace)}` : null
-  const yamlPath = clusterId && namespace ? `/clusters/${clusterId}/access-control/roles/${name}/yaml?namespace=${encodeURIComponent(namespace)}` : null
+  const detailPath =
+    clusterId && namespace
+      ? `/clusters/${clusterId}/access-control/roles/${name}/detail?namespace=${encodeURIComponent(namespace)}`
+      : null
+  const yamlPath =
+    clusterId && namespace
+      ? `/clusters/${clusterId}/access-control/roles/${name}/yaml?namespace=${encodeURIComponent(namespace)}`
+      : null
   const detailQuery = useQuery({
     queryKey: ['roles', 'detail', name, namespace],
     queryFn: () => api.get<ApiResponse<RoleDetail>>(detailPath!),
@@ -233,7 +308,11 @@ export function PlatformAccessControlRoleDetailPage() {
   const detail = detailQuery.data?.data
 
   if (detailQuery.isLoading) {
-    return <div className="flex items-center justify-center h-64"><Spin size="large" /></div>
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Spin size="large" />
+      </div>
+    )
   }
 
   return (
@@ -241,9 +320,12 @@ export function PlatformAccessControlRoleDetailPage() {
       backPath="/platform-access-control/roles"
       detail={detail}
       detailTitle={`Role: ${name}`}
-      detailDescription={localeCode === 'zh_CN' ? '查看 Role 的规则摘要与 YAML。' : 'Inspect Role rule summaries and YAML.'}
+      detailDescription={
+        localeCode === 'zh_CN'
+          ? '查看 Role 的规则摘要与 YAML。'
+          : 'Inspect Role rule summaries and YAML.'
+      }
       emptyDescription={localeCode === 'zh_CN' ? 'Role 未找到' : 'Role not found'}
-      isAgentCluster={isAgentCluster}
       localeCode={localeCode}
       namespace={namespace}
       resourceName={name}
@@ -255,12 +337,16 @@ export function PlatformAccessControlRoleDetailPage() {
             createdAt={item.createdAt}
             labels={item.labels}
             annotations={item.annotations}
-            extra={[
-              { key: localeCode === 'zh_CN' ? '规则数' : 'Rules', value: item.rules },
-            ]}
+            extra={[{ key: localeCode === 'zh_CN' ? '规则数' : 'Rules', value: item.rules }]}
           />
-          <Card className="soha-detail-card" title={localeCode === 'zh_CN' ? '规则摘要' : 'Rule Summaries'}>
-            {renderRuleSummaries(item.ruleSummaries, localeCode === 'zh_CN' ? '暂无规则摘要' : 'No rule summaries')}
+          <Card
+            className="soha-detail-card"
+            title={localeCode === 'zh_CN' ? '规则摘要' : 'Rule Summaries'}
+          >
+            {renderRuleSummaries(
+              item.ruleSummaries,
+              localeCode === 'zh_CN' ? '暂无规则摘要' : 'No rule summaries',
+            )}
           </Card>
         </>
       )}
@@ -277,9 +363,14 @@ export function PlatformAccessControlRoleBindingDetailPage() {
   const name = params.name as string
   const namespace = useResolvedNamespace()
   const { clusterId } = usePlatformScopeStore()
-  const isAgentCluster = useClusterConnectionMode() === 'agent'
-  const detailPath = clusterId && namespace ? `/clusters/${clusterId}/access-control/rolebindings/${name}/detail?namespace=${encodeURIComponent(namespace)}` : null
-  const yamlPath = clusterId && namespace ? `/clusters/${clusterId}/access-control/rolebindings/${name}/yaml?namespace=${encodeURIComponent(namespace)}` : null
+  const detailPath =
+    clusterId && namespace
+      ? `/clusters/${clusterId}/access-control/rolebindings/${name}/detail?namespace=${encodeURIComponent(namespace)}`
+      : null
+  const yamlPath =
+    clusterId && namespace
+      ? `/clusters/${clusterId}/access-control/rolebindings/${name}/yaml?namespace=${encodeURIComponent(namespace)}`
+      : null
   const detailQuery = useQuery({
     queryKey: ['rolebindings', 'detail', name, namespace],
     queryFn: () => api.get<ApiResponse<RoleBindingDetail>>(detailPath!),
@@ -288,7 +379,11 @@ export function PlatformAccessControlRoleBindingDetailPage() {
   const detail = detailQuery.data?.data
 
   if (detailQuery.isLoading) {
-    return <div className="flex items-center justify-center h-64"><Spin size="large" /></div>
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Spin size="large" />
+      </div>
+    )
   }
 
   return (
@@ -296,9 +391,12 @@ export function PlatformAccessControlRoleBindingDetailPage() {
       backPath="/platform-access-control/rolebindings"
       detail={detail}
       detailTitle={`RoleBinding: ${name}`}
-      detailDescription={localeCode === 'zh_CN' ? '查看 RoleBinding 的 subject 与 YAML。' : 'Inspect RoleBinding subjects and YAML.'}
+      detailDescription={
+        localeCode === 'zh_CN'
+          ? '查看 RoleBinding 的 subject 与 YAML。'
+          : 'Inspect RoleBinding subjects and YAML.'
+      }
       emptyDescription={localeCode === 'zh_CN' ? 'RoleBinding 未找到' : 'RoleBinding not found'}
-      isAgentCluster={isAgentCluster}
       localeCode={localeCode}
       namespace={namespace}
       resourceName={name}
@@ -311,7 +409,13 @@ export function PlatformAccessControlRoleBindingDetailPage() {
           annotations={item.annotations}
           extra={[
             { key: 'RoleRef', value: item.roleRef },
-            { key: localeCode === 'zh_CN' ? 'Subjects' : 'Subjects', value: renderStringList(item.subjects, localeCode === 'zh_CN' ? '暂无主体' : 'No subjects') },
+            {
+              key: localeCode === 'zh_CN' ? 'Subjects' : 'Subjects',
+              value: renderStringList(
+                item.subjects,
+                localeCode === 'zh_CN' ? '暂无主体' : 'No subjects',
+              ),
+            },
           ]}
         />
       )}
@@ -327,9 +431,12 @@ export function PlatformAccessControlClusterRoleDetailPage() {
   const params = useParams()
   const name = params.name as string
   const { clusterId } = usePlatformScopeStore()
-  const isAgentCluster = useClusterConnectionMode() === 'agent'
-  const detailPath = clusterId ? `/clusters/${clusterId}/access-control/clusterroles/${name}/detail` : null
-  const yamlPath = clusterId ? `/clusters/${clusterId}/access-control/clusterroles/${name}/yaml` : null
+  const detailPath = clusterId
+    ? `/clusters/${clusterId}/access-control/clusterroles/${name}/detail`
+    : null
+  const yamlPath = clusterId
+    ? `/clusters/${clusterId}/access-control/clusterroles/${name}/yaml`
+    : null
   const detailQuery = useQuery({
     queryKey: ['clusterroles', 'detail', name],
     queryFn: () => api.get<ApiResponse<ClusterRoleDetail>>(detailPath!),
@@ -338,7 +445,11 @@ export function PlatformAccessControlClusterRoleDetailPage() {
   const detail = detailQuery.data?.data
 
   if (detailQuery.isLoading) {
-    return <div className="flex items-center justify-center h-64"><Spin size="large" /></div>
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Spin size="large" />
+      </div>
+    )
   }
 
   return (
@@ -346,9 +457,12 @@ export function PlatformAccessControlClusterRoleDetailPage() {
       backPath="/platform-access-control/clusterroles"
       detail={detail}
       detailTitle={`ClusterRole: ${name}`}
-      detailDescription={localeCode === 'zh_CN' ? '查看 ClusterRole 的规则摘要与 YAML。' : 'Inspect ClusterRole rule summaries and YAML.'}
+      detailDescription={
+        localeCode === 'zh_CN'
+          ? '查看 ClusterRole 的规则摘要与 YAML。'
+          : 'Inspect ClusterRole rule summaries and YAML.'
+      }
       emptyDescription={localeCode === 'zh_CN' ? 'ClusterRole 未找到' : 'ClusterRole not found'}
-      isAgentCluster={isAgentCluster}
       localeCode={localeCode}
       resourceName={name}
       renderOverview={(item) => (
@@ -361,11 +475,20 @@ export function PlatformAccessControlClusterRoleDetailPage() {
             annotations={item.annotations}
             extra={[
               { key: localeCode === 'zh_CN' ? '规则数' : 'Rules', value: item.rules },
-              { key: localeCode === 'zh_CN' ? '聚合规则' : 'Aggregation', value: item.aggregationRules },
+              {
+                key: localeCode === 'zh_CN' ? '聚合规则' : 'Aggregation',
+                value: item.aggregationRules,
+              },
             ]}
           />
-          <Card className="soha-detail-card" title={localeCode === 'zh_CN' ? '规则摘要' : 'Rule Summaries'}>
-            {renderRuleSummaries(item.ruleSummaries, localeCode === 'zh_CN' ? '暂无规则摘要' : 'No rule summaries')}
+          <Card
+            className="soha-detail-card"
+            title={localeCode === 'zh_CN' ? '规则摘要' : 'Rule Summaries'}
+          >
+            {renderRuleSummaries(
+              item.ruleSummaries,
+              localeCode === 'zh_CN' ? '暂无规则摘要' : 'No rule summaries',
+            )}
           </Card>
         </>
       )}
@@ -381,9 +504,12 @@ export function PlatformAccessControlClusterRoleBindingDetailPage() {
   const params = useParams()
   const name = params.name as string
   const { clusterId } = usePlatformScopeStore()
-  const isAgentCluster = useClusterConnectionMode() === 'agent'
-  const detailPath = clusterId ? `/clusters/${clusterId}/access-control/clusterrolebindings/${name}/detail` : null
-  const yamlPath = clusterId ? `/clusters/${clusterId}/access-control/clusterrolebindings/${name}/yaml` : null
+  const detailPath = clusterId
+    ? `/clusters/${clusterId}/access-control/clusterrolebindings/${name}/detail`
+    : null
+  const yamlPath = clusterId
+    ? `/clusters/${clusterId}/access-control/clusterrolebindings/${name}/yaml`
+    : null
   const detailQuery = useQuery({
     queryKey: ['clusterrolebindings', 'detail', name],
     queryFn: () => api.get<ApiResponse<ClusterRoleBindingDetail>>(detailPath!),
@@ -392,7 +518,11 @@ export function PlatformAccessControlClusterRoleBindingDetailPage() {
   const detail = detailQuery.data?.data
 
   if (detailQuery.isLoading) {
-    return <div className="flex items-center justify-center h-64"><Spin size="large" /></div>
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Spin size="large" />
+      </div>
+    )
   }
 
   return (
@@ -400,9 +530,14 @@ export function PlatformAccessControlClusterRoleBindingDetailPage() {
       backPath="/platform-access-control/clusterrolebindings"
       detail={detail}
       detailTitle={`ClusterRoleBinding: ${name}`}
-      detailDescription={localeCode === 'zh_CN' ? '查看 ClusterRoleBinding 的 subject 与 YAML。' : 'Inspect ClusterRoleBinding subjects and YAML.'}
-      emptyDescription={localeCode === 'zh_CN' ? 'ClusterRoleBinding 未找到' : 'ClusterRoleBinding not found'}
-      isAgentCluster={isAgentCluster}
+      detailDescription={
+        localeCode === 'zh_CN'
+          ? '查看 ClusterRoleBinding 的 subject 与 YAML。'
+          : 'Inspect ClusterRoleBinding subjects and YAML.'
+      }
+      emptyDescription={
+        localeCode === 'zh_CN' ? 'ClusterRoleBinding 未找到' : 'ClusterRoleBinding not found'
+      }
       localeCode={localeCode}
       resourceName={name}
       renderOverview={(item) => (
@@ -414,7 +549,13 @@ export function PlatformAccessControlClusterRoleBindingDetailPage() {
           annotations={item.annotations}
           extra={[
             { key: 'RoleRef', value: item.roleRef },
-            { key: localeCode === 'zh_CN' ? 'Subjects' : 'Subjects', value: renderStringList(item.subjects, localeCode === 'zh_CN' ? '暂无主体' : 'No subjects') },
+            {
+              key: localeCode === 'zh_CN' ? 'Subjects' : 'Subjects',
+              value: renderStringList(
+                item.subjects,
+                localeCode === 'zh_CN' ? '暂无主体' : 'No subjects',
+              ),
+            },
           ]}
         />
       )}

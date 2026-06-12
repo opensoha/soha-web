@@ -144,6 +144,7 @@ export function PodLogViewer({
   active = true,
   containerOptions,
   onContainerChange,
+  streamingDisabledReason,
 }: {
   clusterId?: string | null
   namespace?: string | null
@@ -152,6 +153,7 @@ export function PodLogViewer({
   active?: boolean
   containerOptions?: Array<{ value: string; label: string }>
   onContainerChange?: (value: string) => void
+  streamingDisabledReason?: string
 }) {
   const { t, localeCode } = useI18n()
   const [lines, setLines] = useState<string[]>([])
@@ -184,14 +186,14 @@ export function PodLogViewer({
   }, [clusterId, container, historyLines, namespace, podName, previous, sinceSeconds])
 
   const streamURL = useMemo(() => {
-    if (!clusterId || !namespace || previous) return ''
+    if (!clusterId || !namespace || previous || streamingDisabledReason) return ''
     return buildLogStreamURL({
       clusterId,
       namespace,
       podName,
       container,
     })
-  }, [clusterId, container, namespace, podName, previous])
+  }, [clusterId, container, namespace, podName, previous, streamingDisabledReason])
 
   const disconnect = useCallback(() => {
     connectionRunRef.current += 1
@@ -249,7 +251,7 @@ export function PodLogViewer({
   }, [logsPath])
 
   const scheduleReconnect = useCallback(() => {
-    if (previous || !active || reconnectTimerRef.current != null) return
+    if (previous || streamingDisabledReason || !active || reconnectTimerRef.current != null) return
     const attempt = reconnectAttemptRef.current
     const delay = RECONNECT_DELAYS_MS[Math.min(attempt, RECONNECT_DELAYS_MS.length - 1)]
     reconnectAttemptRef.current += 1
@@ -257,15 +259,21 @@ export function PodLogViewer({
       reconnectTimerRef.current = null
       connect()
     }, delay)
-  }, [active, previous])
+  }, [active, previous, streamingDisabledReason])
 
   const connect = useCallback(async () => {
-    if (!streamURL) return
+    if (!streamURL) {
+      if (streamingDisabledReason && !previous) {
+        setConnectionState('connected')
+        startPollingSync()
+      }
+      return
+    }
     disconnect()
     const runId = connectionRunRef.current + 1
     connectionRunRef.current = runId
     setConnectionState('connecting')
-    let ticketedURL = ''
+    let ticketedURL: string
     try {
       ticketedURL = await withStreamTicket(streamURL)
     } catch {
@@ -316,7 +324,7 @@ export function PodLogViewer({
       startPollingSync()
       scheduleReconnect()
     }
-  }, [disconnect, localeCode, previous, scheduleReconnect, startPollingSync, streamURL, t])
+  }, [disconnect, previous, scheduleReconnect, startPollingSync, streamURL, streamingDisabledReason])
 
   useEffect(() => {
     if (!clusterId || !namespace || !active) return
@@ -419,10 +427,15 @@ export function PodLogViewer({
       return
     }
     reconnectAttemptRef.current = 0
+    if (streamingDisabledReason) {
+      void fetchSnapshot(historyLines)
+      startPollingSync()
+      return
+    }
     disconnect()
     setConnectionState('connecting')
     connect()
-  }, [connect, disconnect, lines, previous])
+  }, [connect, disconnect, fetchSnapshot, historyLines, lines, previous, startPollingSync, streamingDisabledReason])
 
   if (!clusterId || !namespace) {
     return <ManagementState compact kind="select-scope" title={t('podLogViewer.notReady', 'Select a valid cluster and namespace before opening live logs')} />
@@ -444,6 +457,12 @@ export function PodLogViewer({
               ? (localeCode === 'zh_CN' ? '历史日志' : 'Historical logs')
               : (localeCode === 'zh_CN' ? '当前日志' : 'Current logs')}
           </Tag>
+          {streamingDisabledReason ? (
+            <>
+              <Tag color="orange">{localeCode === 'zh_CN' ? '轮询' : 'Polling'}</Tag>
+              <Text type="secondary" style={{ fontSize: 12 }}>{streamingDisabledReason}</Text>
+            </>
+          ) : null}
         </Space>
         <Space className="soha-log-toolbar-group soha-log-toolbar-actions">
           {containerOptions && containerOptions.length > 0 ? (

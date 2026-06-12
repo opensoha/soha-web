@@ -1,3 +1,56 @@
+export type DockerPayloadPrimitive = string | number | boolean | null
+
+export type DockerPayloadValue = DockerPayloadPrimitive | DockerPayloadMap | DockerPayloadValue[] | undefined
+
+export interface DockerPayloadMap {
+  [key: string]: DockerPayloadValue
+}
+
+export type DockerLabels = DockerPayloadMap
+
+export interface DockerHostConfig extends DockerPayloadMap {
+  virtualizationTaskId?: string
+  virtualizationTaskStatus?: string
+  virtualizationProvider?: string
+}
+
+export interface DockerQuickCreateHostConfig extends DockerHostConfig {
+  providerParams?: DockerPayloadMap
+  providerExtra?: DockerPayloadMap
+  providerExtraJSON?: DockerPayloadMap
+}
+
+export interface DockerProjectConfig extends DockerPayloadMap {
+  sourceKind?: string
+  serviceName?: string
+  image?: string
+  architecture?: string
+  platform?: string
+  ports?: DockerContainerPortInput[]
+  volumes?: DockerContainerVolumeInput[]
+  environmentVariables?: DockerContainerEnvironmentVariableInput[]
+  resources?: DockerContainerResourceInput
+  containerPort?: number
+  hostIp?: string
+  hostPort?: number
+  protocol?: string
+  exposureScope?: string
+  domainName?: string
+  domainScheme?: string
+  domainTlsEnabled?: boolean
+  command?: string
+  entrypoint?: string
+  imagePullPolicy?: string
+  restartPolicy?: string
+}
+
+export type DockerServiceConfig = DockerProjectConfig
+export type DockerContainerStartConfig = DockerProjectConfig
+export type DockerPortMappingConfig = DockerPayloadMap
+export type DockerTemplateVariables = DockerPayloadMap
+export type DockerOperationPayload = DockerPayloadMap
+export type DockerOperationResult = DockerPayloadMap
+
 export interface DockerPage<T> {
   items: T[]
   total: number
@@ -47,8 +100,8 @@ export interface DockerHost {
   diskBytes?: number
   availablePortStart?: number
   availablePortEnd?: number
-  labels?: Record<string, unknown>
-  config?: Record<string, unknown>
+  labels?: DockerLabels
+  config?: DockerHostConfig
   lastHeartbeatAt?: string
   createdAt?: string
   updatedAt?: string
@@ -74,8 +127,8 @@ export interface DockerHostInput {
   diskBytes?: number
   availablePortStart?: number
   availablePortEnd?: number
-  labels?: Record<string, unknown>
-  config?: Record<string, unknown>
+  labels?: DockerLabels
+  config?: DockerHostConfig
 }
 
 export interface DockerQuickCreateHostInput {
@@ -96,7 +149,8 @@ export interface DockerQuickCreateHostInput {
   availablePortStart?: number
   availablePortEnd?: number
   ttlSeconds?: number
-  config?: Record<string, unknown>
+  labels?: DockerLabels
+  config?: DockerQuickCreateHostConfig
 }
 
 export interface DockerProject {
@@ -118,8 +172,8 @@ export interface DockerProject {
   ttlSeconds?: number
   expiresAt?: string
   lastDeployedAt?: string
-  labels?: Record<string, unknown>
-  config?: Record<string, unknown>
+  labels?: DockerLabels
+  config?: DockerProjectConfig
   createdAt?: string
   updatedAt?: string
 }
@@ -140,6 +194,8 @@ export interface DockerProjectInput {
   desiredState?: string
   templateId?: string
   ttlSeconds?: number
+  labels?: DockerLabels
+  config?: DockerProjectConfig
 }
 
 export interface DockerProjectRuntimeLogs {
@@ -199,13 +255,13 @@ export interface DockerService {
   memoryBytes?: number
   networkRxBytes?: number
   networkTxBytes?: number
-  config?: Record<string, unknown>
+  config?: DockerServiceConfig
   lastSeenAt?: string
   createdAt?: string
   updatedAt?: string
 }
 
-export interface DockerContainerPortInput {
+export interface DockerContainerPortInput extends DockerPayloadMap {
   name?: string
   hostIp?: string
   hostPort: number
@@ -217,7 +273,7 @@ export interface DockerContainerPortInput {
   domainTlsEnabled?: boolean
 }
 
-export interface DockerContainerVolumeInput {
+export interface DockerContainerVolumeInput extends DockerPayloadMap {
   name?: string
   type?: string
   source: string
@@ -226,12 +282,12 @@ export interface DockerContainerVolumeInput {
   subPath?: string
 }
 
-export interface DockerContainerEnvironmentVariableInput {
+export interface DockerContainerEnvironmentVariableInput extends DockerPayloadMap {
   name: string
   value?: string
 }
 
-export interface DockerContainerResourceInput {
+export interface DockerContainerResourceInput extends DockerPayloadMap {
   cpus?: number
   memoryBytes?: number
   memoryReservationBytes?: number
@@ -264,8 +320,8 @@ export interface DockerContainerStartInput {
   owner?: string
   team?: string
   ttlSeconds?: number
-  labels?: Record<string, unknown>
-  config?: Record<string, unknown>
+  labels?: DockerLabels
+  config?: DockerContainerStartConfig
 }
 
 export interface DockerPortMapping {
@@ -286,7 +342,7 @@ export interface DockerPortMapping {
   accessUrl?: string
   owner?: string
   expiresAt?: string
-  config?: Record<string, unknown>
+  config?: DockerPortMappingConfig
   createdAt?: string
   updatedAt?: string
 }
@@ -308,7 +364,7 @@ export interface DockerPortMappingInput {
   accessUrl?: string
   owner?: string
   expiresAt?: string
-  config?: Record<string, unknown>
+  config?: DockerPortMappingConfig
 }
 
 export interface DockerTemplate {
@@ -318,7 +374,7 @@ export interface DockerTemplate {
   templateKind?: string
   composeContent?: string
   envContent?: string
-  variables?: Record<string, unknown>
+  variables?: DockerTemplateVariables
   enabled?: boolean
   createdAt?: string
   updatedAt?: string
@@ -330,7 +386,7 @@ export interface DockerTemplateInput {
   templateKind?: string
   composeContent?: string
   envContent?: string
-  variables?: Record<string, unknown>
+  variables?: DockerTemplateVariables
   enabled?: boolean
 }
 
@@ -346,8 +402,8 @@ export interface DockerOperation {
   attemptCount?: number
   maxRetries?: number
   timeoutSeconds?: number
-  payload?: Record<string, unknown>
-  result?: Record<string, unknown>
+  payload?: DockerOperationPayload
+  result?: DockerOperationResult
   startedAt?: string
   lastHeartbeatAt?: string
   finishedAt?: string
@@ -360,7 +416,7 @@ export interface DockerOperationLog {
   operationId: string
   logLevel?: string
   message: string
-  payload?: Record<string, unknown>
+  payload?: DockerOperationPayload
   createdAt?: string
 }
 

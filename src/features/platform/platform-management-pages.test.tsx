@@ -50,7 +50,9 @@ vi.mock('@/services/api-client', () => ({
 
 vi.mock('@/components/platform-scope-toolbar', () => ({
   PlatformScopeToolbar: () => <div data-testid="scope-toolbar">scope-toolbar</div>,
-  ResourceWorkspaceScopeBar: () => <div data-testid="resource-workspace-scopebar">resource-workspace-scopebar</div>,
+  ResourceWorkspaceScopeBar: () => (
+    <div data-testid="resource-workspace-scopebar">resource-workspace-scopebar</div>
+  ),
 }))
 
 vi.mock('@/components/admin-table', () => ({
@@ -80,7 +82,9 @@ vi.mock('@/components/admin-table', () => ({
       {toolbarExtra ? <div data-testid="toolbar-extra">{toolbarExtra}</div> : null}
       {paginationSummary ? (
         <div data-testid="pagination-summary">
-          {typeof paginationSummary === 'function' ? paginationSummary(dataSource.length, [1, dataSource.length]) : paginationSummary}
+          {typeof paginationSummary === 'function'
+            ? paginationSummary(dataSource.length, [1, dataSource.length])
+            : paginationSummary}
         </div>
       ) : null}
       <div data-testid="row-count">{dataSource.length}</div>
@@ -88,9 +92,12 @@ vi.mock('@/components/admin-table', () => ({
       {dataSource.map((record, rowIndex) => (
         <div key={`${record.name || 'row'}-${rowIndex}`} data-testid={`row-${rowIndex}`}>
           {columns.map((column, columnIndex) => {
-            const key = typeof column.dataIndex === 'string' ? column.dataIndex : `col-${columnIndex}`
-            const value = typeof column.dataIndex === 'string' ? record[column.dataIndex] : undefined
-            const content = typeof column.render === 'function' ? column.render(value, record, rowIndex) : value
+            const key =
+              typeof column.dataIndex === 'string' ? column.dataIndex : `col-${columnIndex}`
+            const value =
+              typeof column.dataIndex === 'string' ? record[column.dataIndex] : undefined
+            const content =
+              typeof column.render === 'function' ? column.render(value, record, rowIndex) : value
             return (
               <div key={`${key}-${columnIndex}`} data-testid={`cell-${rowIndex}-${columnIndex}`}>
                 {content == null ? '' : content}
@@ -116,7 +123,10 @@ function setNativeInputValue(element: HTMLInputElement, value: string) {
   descriptor?.set?.call(element, value)
 }
 
-async function renderWithProviders(node: ReactNode, route = '/platform-access-control/serviceaccounts') {
+async function renderWithProviders(
+  node: ReactNode,
+  route = '/platform-access-control/serviceaccounts',
+) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   containers.push(container)
@@ -224,7 +234,10 @@ describe('platform RBAC list pages', () => {
       ],
     })
 
-    const container = await renderWithProviders(<PlatformAccessControlClusterRolesPage />, '/platform-access-control/clusterroles')
+    const container = await renderWithProviders(
+      <PlatformAccessControlClusterRolesPage />,
+      '/platform-access-control/clusterroles',
+    )
 
     expect(container.textContent).not.toContain('命名空间筛选不会影响结果')
   })
@@ -232,13 +245,32 @@ describe('platform RBAC list pages', () => {
   it('filters role bindings by local search input', async () => {
     setResponses({
       '/clusters/cluster-a/access-control/rolebindings?namespace=team-a': [
-        { name: 'viewer-binding', namespace: 'team-a', roleRef: 'Role/viewer', subjects: ['User:alice'], ageSeconds: 60, allowedActions: ['view'] },
-        { name: 'editor-binding', namespace: 'team-a', roleRef: 'Role/editor', subjects: ['User:bob'], ageSeconds: 120, allowedActions: ['view'] },
+        {
+          name: 'viewer-binding',
+          namespace: 'team-a',
+          roleRef: 'Role/viewer',
+          subjects: ['User:alice'],
+          ageSeconds: 60,
+          allowedActions: ['view'],
+        },
+        {
+          name: 'editor-binding',
+          namespace: 'team-a',
+          roleRef: 'Role/editor',
+          subjects: ['User:bob'],
+          ageSeconds: 120,
+          allowedActions: ['view'],
+        },
       ],
     })
 
-    const container = await renderWithProviders(<PlatformAccessControlRoleBindingsPage />, '/platform-access-control/rolebindings')
-    const input = container.querySelector('input[placeholder="搜索 RoleBindings"]') as HTMLInputElement | null
+    const container = await renderWithProviders(
+      <PlatformAccessControlRoleBindingsPage />,
+      '/platform-access-control/rolebindings',
+    )
+    const input = container.querySelector(
+      'input[placeholder="搜索 RoleBindings"]',
+    ) as HTMLInputElement | null
     if (!input) {
       throw new Error('search input not found')
     }
@@ -259,7 +291,14 @@ describe('platform RBAC list pages', () => {
   it('keeps RBAC search controls in a query card and summarizes results in pagination', async () => {
     setResponses({
       '/clusters/cluster-a/access-control/serviceaccounts?namespace=team-a': [
-        { name: 'default', namespace: 'team-a', secrets: 0, imagePullSecrets: 0, ageSeconds: 60, allowedActions: ['view'] },
+        {
+          name: 'default',
+          namespace: 'team-a',
+          secrets: 0,
+          imagePullSecrets: 0,
+          ageSeconds: 60,
+          allowedActions: ['view'],
+        },
       ],
     })
 
@@ -268,11 +307,13 @@ describe('platform RBAC list pages', () => {
     expect(container.querySelector('[data-testid="table-title"]')).toBeNull()
     expect(container.querySelector('[data-testid="toolbar"]')).toBeNull()
     expect(container.querySelector('input[placeholder="搜索 ServiceAccounts"]')).not.toBeNull()
-    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain('当前 1 / 1 条')
-
-    const headerButtons = Array.from(container.querySelectorAll('[data-testid="header-extra"] button')).map((button) =>
-      button.textContent?.trim() || button.getAttribute('aria-label'),
+    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
+      '当前 1 / 1 条',
     )
+
+    const headerButtons = Array.from(
+      container.querySelectorAll('[data-testid="header-extra"] button'),
+    ).map((button) => button.textContent?.trim() || button.getAttribute('aria-label'))
     expect(headerButtons).toEqual(['新增', '切换表格密度', '刷新'])
   })
 
@@ -290,7 +331,10 @@ describe('platform RBAC list pages', () => {
       ],
     })
 
-    const container = await renderWithProviders(<PlatformAccessControlRoleBindingsPage />, '/platform-access-control/rolebindings')
+    const container = await renderWithProviders(
+      <PlatformAccessControlRoleBindingsPage />,
+      '/platform-access-control/rolebindings',
+    )
 
     expect(container.textContent).toContain('User alice')
     expect(container.textContent).toContain('Group platform')
@@ -300,13 +344,75 @@ describe('platform RBAC list pages', () => {
   it('hides destructive actions when delete is not allowed', async () => {
     setResponses({
       '/clusters/cluster-a/access-control/clusterrolebindings?namespace=team-a': [
-        { name: 'viewer-binding', roleRef: 'ClusterRole/viewer', subjects: ['User:alice'], ageSeconds: 60, allowedActions: ['view'] },
+        {
+          name: 'viewer-binding',
+          roleRef: 'ClusterRole/viewer',
+          subjects: ['User:alice'],
+          ageSeconds: 60,
+          allowedActions: ['view'],
+        },
       ],
     })
 
-    const container = await renderWithProviders(<PlatformAccessControlClusterRoleBindingsPage />, '/platform-access-control/clusterrolebindings')
+    const container = await renderWithProviders(
+      <PlatformAccessControlClusterRoleBindingsPage />,
+      '/platform-access-control/clusterrolebindings',
+    )
 
     expect(container.textContent).not.toContain('删除')
+    expect(container.querySelector('button[aria-label="删除"]')).toBeNull()
+  })
+
+  it('uses the capability matrix to disable RBAC YAML create and delete actions', async () => {
+    const unsupportedReason = 'Agent mode cannot apply RBAC YAML'
+    setResponses({
+      '/clusters': [
+        {
+          id: 'cluster-a',
+          name: 'Agent Cluster',
+          region: 'dev',
+          environment: 'test',
+          labels: {},
+          connectionMode: 'agent',
+          version: 'v1.30.0',
+          health: { status: 'healthy' },
+        },
+      ],
+      '/clusters/capabilities': [
+        {
+          key: 'resource.yaml.apply',
+          label: 'YAML apply and delete',
+          category: 'configuration',
+          requiredScopes: ['cluster', 'namespace'],
+          riskLevel: 'mutate',
+          requiresApproval: true,
+          direct: { status: 'available' },
+          agent: {
+            status: 'unsupported',
+            reason: unsupportedReason,
+          },
+        },
+      ],
+      '/clusters/cluster-a/access-control/serviceaccounts?namespace=team-a': [
+        {
+          name: 'default',
+          namespace: 'team-a',
+          secrets: 0,
+          imagePullSecrets: 0,
+          ageSeconds: 60,
+          allowedActions: ['delete'],
+        },
+      ],
+    })
+
+    const container = await renderWithProviders(<PlatformAccessControlServiceAccountsPage />)
+
+    expect(container.textContent).toContain(unsupportedReason)
+    const createButton = Array.from(
+      container.querySelectorAll('[data-testid="header-extra"] button'),
+    ).find((button) => button.textContent?.trim() === '新增')
+    expect(createButton).toBeInstanceOf(HTMLButtonElement)
+    expect((createButton as HTMLButtonElement).disabled).toBe(true)
     expect(container.querySelector('button[aria-label="删除"]')).toBeNull()
   })
 })
@@ -339,24 +445,47 @@ describe('platform configuration list pages', () => {
   it('keeps configuration query controls in a separate card and summarizes results in pagination', async () => {
     setResponses({
       '/clusters/cluster-a/configuration/configmaps?namespace=team-a': [
-        { name: 'app-config', namespace: 'team-a', dataEntries: 2, binaryEntries: 0, immutable: false, ageSeconds: 60 },
-        { name: 'platform-config', namespace: 'team-a', dataEntries: 1, binaryEntries: 0, immutable: false, ageSeconds: 120 },
+        {
+          name: 'app-config',
+          namespace: 'team-a',
+          dataEntries: 2,
+          binaryEntries: 0,
+          immutable: false,
+          ageSeconds: 60,
+        },
+        {
+          name: 'platform-config',
+          namespace: 'team-a',
+          dataEntries: 1,
+          binaryEntries: 0,
+          immutable: false,
+          ageSeconds: 120,
+        },
       ],
     })
 
-    const container = await renderWithProviders(<ConfigurationConfigMapsPage />, '/configuration/configmaps')
+    const container = await renderWithProviders(
+      <ConfigurationConfigMapsPage />,
+      '/configuration/configmaps',
+    )
 
     expect(container.querySelector('[data-testid="table-title"]')).toBeNull()
     expect(container.querySelector('[data-testid="toolbar"]')).toBeNull()
-    expect(container.querySelector('input[placeholder="搜索 ConfigMaps 名称 / 命名空间"]')).not.toBeNull()
-    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain('当前 2 / 2 条')
-
-    const headerButtons = Array.from(container.querySelectorAll('[data-testid="header-extra"] button')).map((button) =>
-      button.textContent?.trim() || button.getAttribute('aria-label'),
+    expect(
+      container.querySelector('input[placeholder="搜索 ConfigMaps 名称 / 命名空间"]'),
+    ).not.toBeNull()
+    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
+      '当前 2 / 2 条',
     )
+
+    const headerButtons = Array.from(
+      container.querySelectorAll('[data-testid="header-extra"] button'),
+    ).map((button) => button.textContent?.trim() || button.getAttribute('aria-label'))
     expect(headerButtons).toEqual(['新增', '切换表格密度', '刷新'])
 
-    const input = container.querySelector('input[placeholder="搜索 ConfigMaps 名称 / 命名空间"]') as HTMLInputElement | null
+    const input = container.querySelector(
+      'input[placeholder="搜索 ConfigMaps 名称 / 命名空间"]',
+    ) as HTMLInputElement | null
     if (!input) {
       throw new Error('config search input not found')
     }
@@ -370,7 +499,9 @@ describe('platform configuration list pages', () => {
     })
 
     expect(container.querySelector('[data-testid="row-count"]')?.textContent).toBe('1')
-    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain('当前 1 / 2 条')
+    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
+      '当前 1 / 2 条',
+    )
     expect(container.textContent).toContain('app-config')
     expect(container.textContent).not.toContain('platform-config')
   })
@@ -404,8 +535,26 @@ describe('platform network port forward page', () => {
   it('uses the management query card and keeps create before utility actions', async () => {
     setResponses({
       '/clusters/cluster-a/network/port-forwards': [
-        { sessionId: 'session-a', namespace: 'team-a', targetKind: 'Pod', targetName: 'api', localPort: 8080, remotePort: 80, status: 'active', createdAt: '2026-06-02T00:00:00Z' },
-        { sessionId: 'session-b', namespace: 'team-a', targetKind: 'Service', targetName: 'web', localPort: 8081, remotePort: 80, status: 'stopped', createdAt: '2026-06-02T00:01:00Z' },
+        {
+          sessionId: 'session-a',
+          namespace: 'team-a',
+          targetKind: 'Pod',
+          targetName: 'api',
+          localPort: 8080,
+          remotePort: 80,
+          status: 'active',
+          createdAt: '2026-06-02T00:00:00Z',
+        },
+        {
+          sessionId: 'session-b',
+          namespace: 'team-a',
+          targetKind: 'Service',
+          targetName: 'web',
+          localPort: 8081,
+          remotePort: 80,
+          status: 'stopped',
+          createdAt: '2026-06-02T00:01:00Z',
+        },
       ],
     })
 
@@ -413,15 +562,21 @@ describe('platform network port forward page', () => {
 
     expect(container.querySelector('[data-testid="table-title"]')).toBeNull()
     expect(container.querySelector('[data-testid="toolbar"]')).toBeNull()
-    expect(container.querySelector('input[placeholder="搜索会话 / Namespace / 目标 / 状态 / 端口"]')).not.toBeNull()
-    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain('当前 2 / 2 条')
-
-    const headerButtons = Array.from(container.querySelectorAll('[data-testid="header-extra"] button')).map((button) =>
-      button.textContent?.trim() || button.getAttribute('aria-label'),
+    expect(
+      container.querySelector('input[placeholder="搜索会话 / Namespace / 目标 / 状态 / 端口"]'),
+    ).not.toBeNull()
+    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
+      '当前 2 / 2 条',
     )
+
+    const headerButtons = Array.from(
+      container.querySelectorAll('[data-testid="header-extra"] button'),
+    ).map((button) => button.textContent?.trim() || button.getAttribute('aria-label'))
     expect(headerButtons).toEqual(['新建 Port Forward', '切换表格密度', '刷新'])
 
-    const input = container.querySelector('input[placeholder="搜索会话 / Namespace / 目标 / 状态 / 端口"]') as HTMLInputElement | null
+    const input = container.querySelector(
+      'input[placeholder="搜索会话 / Namespace / 目标 / 状态 / 端口"]',
+    ) as HTMLInputElement | null
     if (!input) {
       throw new Error('port forward search input not found')
     }
@@ -435,8 +590,66 @@ describe('platform network port forward page', () => {
     })
 
     expect(container.querySelector('[data-testid="row-count"]')?.textContent).toBe('1')
-    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain('当前 1 / 2 条')
+    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
+      '当前 1 / 2 条',
+    )
     expect(container.textContent).toContain('Pod/api')
     expect(container.textContent).not.toContain('Service/web')
+  })
+
+  it('shows the agent port-forward pending note without disabling registration', async () => {
+    setResponses({
+      '/clusters': [
+        {
+          id: 'cluster-a',
+          name: 'Agent Cluster',
+          connectionMode: 'agent',
+          region: 'dev',
+          environment: 'test',
+          labels: {},
+          version: 'v1.30.0',
+          health: { status: 'healthy' },
+        },
+      ],
+      '/clusters/capabilities': [
+        {
+          key: 'port.forward',
+          label: 'Port forwarding',
+          category: 'network',
+          direct: { status: 'available' },
+          agent: {
+            status: 'partial',
+            notes: [
+              'agent-mode requests are persisted as pending until the agent tunnel protocol attaches them',
+            ],
+          },
+        },
+      ],
+      '/clusters/cluster-a/network/port-forwards': [
+        {
+          sessionId: 'session-a',
+          namespace: 'team-a',
+          targetKind: 'Pod',
+          targetName: 'api',
+          localPort: 8080,
+          remotePort: 80,
+          status: 'pending',
+          createdAt: '2026-06-02T00:00:00Z',
+        },
+      ],
+    })
+
+    const container = await renderWithProviders(<NetworkPortForwardPage />, '/network/port-forward')
+    const createButton = Array.from(
+      container.querySelectorAll('[data-testid="header-extra"] button'),
+    ).find((button) => button.textContent?.trim() === '新建 Port Forward') as
+      | HTMLButtonElement
+      | undefined
+
+    expect(container.textContent).toContain(
+      'agent-mode requests are persisted as pending until the agent tunnel protocol attaches them',
+    )
+    expect(createButton?.disabled).toBe(false)
+    expect(container.textContent).toContain('pending')
   })
 })

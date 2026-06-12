@@ -40,6 +40,8 @@ const testState = vi.hoisted(() => ({
   detailWithoutWorkflow: false,
   detailWithoutValidationNodes: false,
   detailWithoutImageTagDefaults: false,
+  deliveryActionsAgentStatus: 'available' as 'available' | 'partial' | 'unsupported',
+  deliveryClusterConnectionMode: 'direct_kubeconfig',
   apiGet: vi.fn(async (path: string) => {
     if (path === '/applications') {
       return {
@@ -103,7 +105,25 @@ const testState = vi.hoisted(() => ({
       return { data: [{ id: 'wf-template-1', key: 'release-dag', name: 'Release DAG', enabled: true, definition: workflowDefinition, createdAt: '2026-05-01T00:00:00Z', updatedAt: '2026-05-10T00:00:00Z' }] }
     }
     if (path === '/clusters') {
-      return { data: [{ id: 'cluster-a', name: 'cluster-a', status: 'ready', createdAt: '2026-05-01T00:00:00Z', updatedAt: '2026-05-10T00:00:00Z' }] }
+      return { data: [{ id: 'cluster-a', name: 'cluster-a', connectionMode: testState.deliveryClusterConnectionMode, status: 'ready', createdAt: '2026-05-01T00:00:00Z', updatedAt: '2026-05-10T00:00:00Z' }] }
+    }
+    if (path === '/clusters/capabilities') {
+      return {
+        data: [
+          {
+            key: 'delivery.actions',
+            label: 'Delivery actions',
+            category: 'delivery',
+            direct: { status: 'available' },
+            agent: {
+              status: testState.deliveryActionsAgentStatus,
+              notes: testState.deliveryActionsAgentStatus === 'available'
+                ? []
+                : ['build actions remain available; deploy, build-deploy, verification, and rollback against agent-connected targets require delivery runner parity'],
+            },
+          },
+        ],
+      }
     }
     if (path === '/applications/app-1/runtime') {
       const defaultTag = testState.detailWithoutImageTagDefaults ? undefined : 'latest'
@@ -533,6 +553,8 @@ describe('ApplicationDetailPage workbench', () => {
     testState.detailWithoutWorkflow = false
     testState.detailWithoutValidationNodes = false
     testState.detailWithoutImageTagDefaults = false
+    testState.deliveryActionsAgentStatus = 'available'
+    testState.deliveryClusterConnectionMode = 'direct_kubeconfig'
     vi.mocked(api.post).mockClear()
     class ResizeObserverMock {
       observe() {}
@@ -695,6 +717,30 @@ describe('ApplicationDetailPage workbench', () => {
       targetId: 'target-1',
       imageTag: expect.any(String),
     }))
+  })
+
+  it('disables target delivery actions for agent clusters without delivery runner parity', async () => {
+    testState.deliveryClusterConnectionMode = 'agent'
+    testState.deliveryActionsAgentStatus = 'partial'
+
+    const container = await renderWithProviders(<ApplicationDetailPage />)
+    const buildButton = findButton(container, '构建')
+    const deployButton = findButton(container, '部署')
+    const buildDeployButton = findButton(container, '构建并部署')
+    const verifyButton = findButton(container, '运行验证')
+
+    expect(container.textContent).toContain('delivery runner parity')
+    expect(buildButton.disabled).toBe(false)
+    expect(deployButton.disabled).toBe(true)
+    expect(buildDeployButton.disabled).toBe(true)
+    expect(verifyButton.disabled).toBe(true)
+
+    await act(async () => {
+      deployButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(api.post).not.toHaveBeenCalledWith('/applications/app-1/delivery-actions', expect.anything())
   })
 
   it('disables build and deploy when workflow template is missing', async () => {

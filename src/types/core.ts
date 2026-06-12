@@ -4,14 +4,10 @@ export type {
   AuthProvider,
   AuthResult,
   AuthTokens,
+  ErrorEnvelope,
   LoginOptions,
   StreamTicket,
 } from '@opensoha/contracts/gen/ts/sohaapi'
-
-export type ErrorEnvelope = {
-  message?: string
-  error?: string | { code?: string; message?: string; request_id?: string }
-}
 
 export type WorkspaceType = 'application' | 'resource' | 'system'
 export type BusinessWorkspaceType = Exclude<WorkspaceType, 'system'>

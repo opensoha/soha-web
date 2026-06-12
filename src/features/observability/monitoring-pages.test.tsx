@@ -7,7 +7,35 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PermissionSnapshot } from '@/types'
-import { AlertIntegrationsPage, AlertsPage, EventsPage, NotificationsPage } from './monitoring-pages'
+import {
+  AlertIntegrationsPage,
+  AlertsPage,
+  EventsPage,
+  NotificationsPage,
+  buildAlertIntegrationPayload,
+  buildAlertIntegrationTestPayload,
+  buildNotificationChannelPayload,
+  buildNotificationPolicyPayload,
+  buildNotificationRoutePayload,
+  buildNotificationSilencePayload,
+  buildNotificationTemplatePayload,
+  type AlertIntegrationFormValues,
+  type AlertIntegrationTestFormValues,
+  type NotificationChannelFormValues,
+  type NotificationPolicyFormValues,
+  type NotificationRouteFormValues,
+  type NotificationSilenceFormValues,
+  type NotificationTemplateFormValues,
+} from './monitoring-pages'
+
+interface TestResponseMap {
+  [path: string]: unknown
+}
+
+interface TestTableRecord {
+  id?: unknown
+  [key: string]: unknown
+}
 
 const testState = vi.hoisted(() => ({
   snapshot: {
@@ -15,7 +43,7 @@ const testState = vi.hoisted(() => ({
     visibleMenuIds: [],
     visibleMenus: [],
   } as PermissionSnapshot,
-  responses: {} as Record<string, unknown>,
+  responses: {} as TestResponseMap,
 }))
 
 const apiGetMock = vi.hoisted(() => vi.fn((path: string) => Promise.resolve({ data: testState.responses[path] ?? [] })))
@@ -52,7 +80,7 @@ vi.mock('@/components/admin-table', () => ({
       {headerExtra ? <div>{headerExtra}</div> : null}
       {toolbarExtra ? <div>{toolbarExtra}</div> : null}
       <div>{`rows:${dataSource.length}`}</div>
-      {(dataSource as Array<Record<string, unknown>>).map((record, rowIndex) => (
+      {(dataSource as TestTableRecord[]).map((record, rowIndex) => (
         <div key={String(record.id ?? rowIndex)} data-testid={`row-${rowIndex}`}>
           {columns.map((column, columnIndex) => {
             const dataIndex = column?.dataIndex
@@ -232,6 +260,147 @@ async function clickElementByText(text: string) {
   })
   await flushAsyncWork()
 }
+
+describe('observability monitoring payload builders', () => {
+  it('builds alert integration upsert payload without leaking JSON text fields', () => {
+    const values = {
+      id: 'am-main',
+      name: 'Alertmanager Main',
+      integrationType: 'alertmanager_v1',
+      description: 'primary source',
+      token: 'rotated-token',
+      labelMapping: '{"clusterId":"cluster","namespace":"namespace"}',
+      dedupeConfig: '{"fingerprintLabels":["alertname","cluster"]}',
+      enabled: true,
+    } satisfies AlertIntegrationFormValues
+
+    const payload = buildAlertIntegrationPayload(values)
+
+    expect(payload).toEqual({
+      id: 'am-main',
+      name: 'Alertmanager Main',
+      integrationType: 'alertmanager_v1',
+      description: 'primary source',
+      token: 'rotated-token',
+      labelMapping: { clusterId: 'cluster', namespace: 'namespace' },
+      dedupeConfig: { fingerprintLabels: ['alertname', 'cluster'] },
+      enabled: true,
+    })
+    expect(payload.labelMapping).not.toBe(values.labelMapping)
+    expect(payload.dedupeConfig).not.toBe(values.dedupeConfig)
+  })
+
+  it('builds alert integration test payload with parsed sample payload', () => {
+    const values = {
+      integrationType: 'generic_json',
+      labelMapping: '{"service":"service"}',
+      dedupeConfig: '{"fingerprintLabels":["title","service"]}',
+      payload: '{"source":"external","alerts":[{"title":"CPU High","severity":"warning"}]}',
+    } satisfies AlertIntegrationTestFormValues
+
+    expect(buildAlertIntegrationTestPayload(values)).toEqual({
+      integrationType: 'generic_json',
+      labelMapping: { service: 'service' },
+      dedupeConfig: { fingerprintLabels: ['title', 'service'] },
+      payload: { source: 'external', alerts: [{ title: 'CPU High', severity: 'warning' }] },
+    })
+  })
+
+  it('builds notification policy payload from form-only JSON and list fields', () => {
+    const values = {
+      name: 'Critical Pager',
+      matchers: '{"severity":"critical"}',
+      processorChain: ['template_render', 'webhook_update'],
+      channelRefs: ['channel-slack'],
+      oncallRef: 'schedule-primary',
+      sendResolved: true,
+      cooldownSeconds: 300,
+      enabled: true,
+    } satisfies NotificationPolicyFormValues
+
+    const payload = buildNotificationPolicyPayload(values)
+
+    expect(payload).toEqual({
+      name: 'Critical Pager',
+      matchers: { severity: 'critical' },
+      processorChain: ['template_render', 'webhook_update'],
+      channelRefs: ['channel-slack'],
+      oncallRef: 'schedule-primary',
+      sendResolved: true,
+      cooldownSeconds: 300,
+      enabled: true,
+    })
+    expect(payload.matchers).not.toBe(values.matchers)
+  })
+
+  it('builds notification template and channel payloads with typed JSON config', () => {
+    const templateValues = {
+      name: 'Webhook Body',
+      templateType: 'generic_json',
+      contentType: 'application/json',
+      bodyTemplate: '{"alert":"{{ .alert.title }}"}',
+      headers: '{"X-Soha":"true"}',
+      queryParams: '{"dryRun":"false"}',
+      samplePayload: '{"alert":{"title":"CPU High"}}',
+      enabled: true,
+    } satisfies NotificationTemplateFormValues
+    const channelValues = {
+      name: 'Ops Webhook',
+      channelType: 'webhook',
+      config: '{"url":"https://hooks.local/ops","method":"POST"}',
+      enabled: false,
+    } satisfies NotificationChannelFormValues
+
+    expect(buildNotificationTemplatePayload(templateValues)).toEqual({
+      name: 'Webhook Body',
+      templateType: 'generic_json',
+      contentType: 'application/json',
+      bodyTemplate: '{"alert":"{{ .alert.title }}"}',
+      headers: { 'X-Soha': 'true' },
+      queryParams: { dryRun: 'false' },
+      samplePayload: { alert: { title: 'CPU High' } },
+      enabled: true,
+    })
+    expect(buildNotificationChannelPayload(channelValues)).toEqual({
+      name: 'Ops Webhook',
+      channelType: 'webhook',
+      config: { url: 'https://hooks.local/ops', method: 'POST' },
+      enabled: false,
+    })
+  })
+
+  it('builds notification route and silence payloads without raw matcher text', () => {
+    const routeValues = {
+      name: 'Critical Route',
+      matchers: '{"severity":"critical","team":"platform"}',
+      channelIds: 'channel-slack, channel-email',
+      enabled: true,
+    } satisfies NotificationRouteFormValues
+    const silenceValues = {
+      name: 'Maintenance',
+      matchers: '{"service":"checkout"}',
+      reason: 'planned maintenance',
+      startsAt: '2026-05-06T10:00:00Z',
+      endsAt: '2026-05-06T11:00:00Z',
+      enabled: true,
+    } satisfies NotificationSilenceFormValues
+
+    expect(buildNotificationRoutePayload(routeValues)).toEqual({
+      name: 'Critical Route',
+      matchers: { severity: 'critical', team: 'platform' },
+      channelIds: ['channel-slack', 'channel-email'],
+      enabled: true,
+    })
+    expect(buildNotificationSilencePayload(silenceValues)).toEqual({
+      name: 'Maintenance',
+      matchers: { service: 'checkout' },
+      reason: 'planned maintenance',
+      startsAt: '2026-05-06T10:00:00.000Z',
+      endsAt: '2026-05-06T11:00:00.000Z',
+      enabled: true,
+    })
+  })
+})
 
 describe('observability monitoring pages', () => {
   beforeAll(() => {

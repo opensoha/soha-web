@@ -10,16 +10,31 @@ import { getAIWorkbenchPathForMode } from '@/features/copilot/workbench-navigati
 import { api } from '@/services/api-client'
 import type { ApiResponse } from '@/types'
 import { formatDateTime } from '@/utils/time'
+import type { ObservabilityJsonValue, ObservabilityPayloadMap } from '@/features/observability/observability-types'
 
 const { Paragraph } = Typography
+
+type AlertRulePayloadMap = ObservabilityPayloadMap
+type HealingRunResult = ObservabilityPayloadMap
+type AlertDeliveryMetadata = ObservabilityPayloadMap
+
+interface AlertNotificationPreviewItem {
+  [key: string]: ObservabilityJsonValue | undefined
+  channelId?: string
+  templateId?: string
+  url?: string
+  method?: string
+  contentType?: string
+  body?: string
+}
 
 interface AlertRule {
   id: string
   name: string
   ruleType: string
-  datasourceSelector?: Record<string, unknown>
-  querySpec?: Record<string, unknown>
-  thresholdSpec?: Record<string, unknown>
+  datasourceSelector?: AlertRulePayloadMap
+  querySpec?: AlertRulePayloadMap
+  thresholdSpec?: AlertRulePayloadMap
   forSeconds: number
   groupBy?: string[]
   labels?: Record<string, string>
@@ -49,7 +64,7 @@ interface HealingRun {
   workflowRunId?: string
   workflowStatus?: string
   workflowSummary?: string
-  result?: Record<string, unknown>
+  result?: HealingRunResult
   startedAt?: string
   completedAt?: string
   createdAt: string
@@ -91,7 +106,7 @@ interface AlertDeliveryLog {
   channelId?: string
   status: string
   summary?: string
-  metadata?: Record<string, unknown>
+  metadata?: AlertDeliveryMetadata
   createdAt: string
 }
 
@@ -141,7 +156,7 @@ function useAlertEventDetailController(eventId: string, enabled: boolean) {
   })
   const previewQuery = useQuery({
     queryKey: ['alert-event-detail-preview', eventId, ruleQuery.data?.data?.notificationPolicyId ?? ''],
-    queryFn: () => api.get<ApiResponse<Array<Record<string, unknown>>>>(`/notification-policies/${encodeURIComponent(ruleQuery.data?.data?.notificationPolicyId ?? '')}/preview?eventId=${encodeURIComponent(eventId)}`),
+    queryFn: () => api.get<ApiResponse<AlertNotificationPreviewItem[]>>(`/notification-policies/${encodeURIComponent(ruleQuery.data?.data?.notificationPolicyId ?? '')}/preview?eventId=${encodeURIComponent(eventId)}`),
     enabled: enabled && Boolean(eventId && ruleQuery.data?.data?.notificationPolicyId),
   })
   const deliveryLogsQuery = useQuery({
@@ -358,7 +373,7 @@ function AlertEventDetailBody({ detail, inDrawer = false }: { detail: AlertEvent
                   { title: '渠道', dataIndex: 'channelId', render: (value: string) => value || '-' },
                   { title: '状态', dataIndex: 'status', render: (value: string) => <StatusTag value={value} /> },
                   { title: '摘要', dataIndex: 'summary', render: (value: string) => value || '-' },
-                  { title: '元数据', dataIndex: 'metadata', render: (value: Record<string, unknown>) => <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{stringifyPayload(value)}</pre> },
+                  { title: '元数据', dataIndex: 'metadata', render: (value: AlertDeliveryMetadata) => <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{stringifyPayload(value)}</pre> },
                 ]}
               />
             ),

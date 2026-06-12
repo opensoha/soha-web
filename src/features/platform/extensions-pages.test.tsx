@@ -5,10 +5,10 @@ import type { ReactNode } from 'react'
 import { App as AntdApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot } from 'react-dom/client'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { I18nProvider } from '@/i18n'
-import { CRDPage, HelmChartsPage, HelmReleasesPage } from './extensions-pages'
+import { CRDApiGroupDetailPage, CRDPage, HelmChartsPage, HelmReleasesPage } from './extensions-pages'
 
 const testState = vi.hoisted(() => ({
   normalizePath: (path: string) => {
@@ -28,23 +28,27 @@ const testState = vi.hoisted(() => ({
   },
 }))
 
+const apiGetMock = vi.hoisted(() =>
+  vi.fn((path: string) => {
+    const responseKey = path in testState.responses ? path : testState.normalizePath(path)
+    if (!(responseKey in testState.responses)) {
+      return Promise.resolve({ data: [] })
+    }
+    const payload = testState.responses[responseKey]
+    if (payload instanceof Error) {
+      return Promise.reject(payload)
+    }
+    return Promise.resolve({ data: payload })
+  }),
+)
+
 vi.mock('@/stores/platform-scope-store', () => ({
   usePlatformScopeStore: () => testState.scope,
 }))
 
 vi.mock('@/services/api-client', () => ({
   api: {
-    get: vi.fn((path: string) => {
-      const responseKey = path in testState.responses ? path : testState.normalizePath(path)
-      if (!(responseKey in testState.responses)) {
-        return Promise.resolve({ data: [] })
-      }
-      const payload = testState.responses[responseKey]
-      if (payload instanceof Error) {
-        return Promise.reject(payload)
-      }
-      return Promise.resolve({ data: payload })
-    }),
+    get: apiGetMock,
     post: vi.fn(),
     put: vi.fn(),
     delete: vi.fn(),
@@ -181,6 +185,16 @@ async function renderWithProviders(node: ReactNode, route = '/extensions') {
   })
 
   return container
+}
+
+async function renderExtensionsRoutes(route = '/extensions') {
+  return renderWithProviders(
+    <Routes>
+      <Route path="/extensions" element={<CRDPage />} />
+      <Route path="/extensions/apis/:groupName" element={<CRDApiGroupDetailPage />} />
+    </Routes>,
+    route,
+  )
 }
 
 describe('CRD catalog page', () => {
@@ -321,6 +335,117 @@ describe('CRD catalog page', () => {
     expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain('当前 1 / 2 条')
     expect(container.textContent).toContain('cert-manager')
     expect(container.textContent).not.toContain('ingress-nginx')
+  })
+
+  it('disables Helm release write actions when the capability matrix marks agent writes partial', async () => {
+    setResponses({
+      '/clusters': [
+        {
+          id: 'cluster-a',
+          name: 'Agent Cluster',
+          connectionMode: 'agent',
+          region: 'dev',
+          environment: 'test',
+          labels: {},
+          version: 'v1.30.0',
+          health: { status: 'healthy' },
+        },
+      ],
+      '/clusters/capabilities': [
+        {
+          key: 'helm.releases',
+          label: 'Helm releases',
+          category: 'helm',
+          direct: { status: 'available' },
+          agent: {
+            status: 'partial',
+            notes: ['release list, detail, history, and values read are available through the agent; install, values update, and delete remain direct-only'],
+          },
+        },
+      ],
+      '/clusters/cluster-a/helm/releases?namespace=team-a': [
+        {
+          name: 'ingress-nginx',
+          namespace: 'team-a',
+          chart: 'ingress-nginx-4.12.0',
+          revision: '3',
+          status: 'deployed',
+          appVersion: '1.12.0',
+          ageSeconds: 60,
+          allowedActions: ['update', 'delete'],
+        },
+      ],
+    })
+
+    const container = await renderWithProviders(<HelmReleasesPage />, '/helm/releases')
+
+    const editButton = container.querySelector('button[aria-label="编辑并比对 values.yaml"]') as HTMLButtonElement | null
+    const deleteButton = container.querySelector('button[aria-label="删除 Helm Release"]') as HTMLButtonElement | null
+    const viewButton = container.querySelector('button[aria-label="查看 values.yaml"]') as HTMLButtonElement | null
+
+    expect(container.textContent).toContain('install, values update, and delete remain direct-only')
+    expect(editButton?.disabled).toBe(true)
+    expect(deleteButton?.disabled).toBe(true)
+    expect(viewButton?.disabled).toBe(false)
+  })
+
+  it('keeps CRD discovery visible but blocks custom-resource instance calls for agent partial support', async () => {
+    setResponses({
+      '/clusters': [
+        {
+          id: 'cluster-a',
+          name: 'Agent Cluster',
+          connectionMode: 'agent',
+          region: 'dev',
+          environment: 'test',
+          labels: {},
+          version: 'v1.30.0',
+          health: { status: 'healthy' },
+        },
+      ],
+      '/clusters/capabilities': [
+        {
+          key: 'custom.resources',
+          label: 'Custom resources',
+          category: 'extensions',
+          direct: { status: 'available' },
+          agent: {
+            status: 'partial',
+            notes: ['CRD discovery is available through the agent; custom-resource list, YAML, create, apply, and delete remain direct-only'],
+          },
+        },
+      ],
+      '/clusters/cluster-a/extensions/crds': [
+        {
+          name: 'widgets.example.io',
+          group: 'example.io',
+          kind: 'Widget',
+          plural: 'widgets',
+          version: 'v1',
+          versions: ['v1'],
+          scope: 'Namespaced',
+        },
+      ],
+      '/clusters/cluster-a/extensions/crds/widgets.example.io/resources?namespace=team-a&version=v1': [
+        { name: 'should-not-load', namespace: 'team-a', kind: 'Widget', apiVersion: 'example.io/v1' },
+      ],
+    })
+
+    const container = await renderExtensionsRoutes('/extensions/apis/example.io')
+
+    await act(async () => {
+      await Promise.resolve()
+      await new Promise((resolve) => window.setTimeout(resolve, 20))
+    })
+
+    expect(apiGetMock.mock.calls.map(([path]) => path)).toContain('/clusters')
+    expect(apiGetMock.mock.calls.map(([path]) => path)).toContain('/clusters/capabilities')
+    expect(container.textContent).toContain('widgets.example.io')
+    expect(container.textContent).toContain('custom-resource list, YAML, create, apply, and delete remain direct-only')
+    expect(container.textContent).not.toContain('should-not-load')
+    const createButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.trim() === '创建') as HTMLButtonElement | undefined
+    expect(createButton?.disabled).toBe(true)
   })
 
   it('renders Helm charts from the backend catalog and filters within the table shell', async () => {

@@ -33,20 +33,14 @@ import type { ApiResponse } from '@/types'
 import './observability-pages.css'
 import { useNavigate } from 'react-router-dom'
 import { AlertEventDetailDrawer } from '@/features/observability/alert-event-detail'
+import {
+  emptyPayloadMap,
+  parseObservabilityJson as safeParseJson,
+  toText,
+  type ObservabilityPayloadMap,
+} from '@/features/observability/observability-types'
 
 const { Text } = Typography
-
-function safeParseJson(raw: string, fallback: any) {
-  const text = raw.trim()
-  if (!text) return fallback
-  const parsed = JSON.parse(text)
-  if (Array.isArray(fallback)) {
-    if (Array.isArray(parsed)) return parsed
-    throw new Error('需要合法 JSON 数组')
-  }
-  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed
-  throw new Error('需要合法 JSON 对象')
-}
 
 function prettyJson(value: unknown) {
   if (value == null) return ''
@@ -72,7 +66,7 @@ function parseIsoTime(value: unknown, fieldName: string) {
   return date.toISOString()
 }
 
-function shortJson(value?: Record<string, unknown>) {
+function shortJson(value?: ObservabilityPayloadMap) {
   if (!value || Object.keys(value).length === 0) return '{}'
   return JSON.stringify(value)
 }
@@ -116,8 +110,8 @@ interface AlertIntegration {
   token?: string
   tokenPreview?: string
   webhookPath?: string
-  labelMapping?: Record<string, unknown>
-  dedupeConfig?: Record<string, unknown>
+  labelMapping?: AlertIntegrationLabelMapping
+  dedupeConfig?: AlertIntegrationDedupeConfig
   enabled: boolean
   status: string
   lastError?: string
@@ -126,11 +120,51 @@ interface AlertIntegration {
   updatedAt?: string
 }
 
+export type AlertIntegrationLabelMapping = ObservabilityPayloadMap
+export type AlertIntegrationDedupeConfig = ObservabilityPayloadMap
+export type AlertIntegrationPayload = ObservabilityPayloadMap
+
+export interface AlertIntegrationFormValues {
+  id?: string
+  name?: string
+  integrationType?: string
+  description?: string
+  token?: string
+  labelMapping?: string
+  dedupeConfig?: string
+  enabled?: boolean
+}
+
+export interface AlertIntegrationTestFormValues {
+  integrationType?: string
+  labelMapping?: string
+  dedupeConfig?: string
+  payload?: string
+}
+
+export interface AlertIntegrationUpsertPayload {
+  id: string
+  name: string
+  integrationType: string
+  description: string
+  token: string
+  labelMapping: AlertIntegrationLabelMapping
+  dedupeConfig: AlertIntegrationDedupeConfig
+  enabled: boolean
+}
+
+export interface AlertIntegrationTestPayload {
+  integrationType: string
+  labelMapping: AlertIntegrationLabelMapping
+  dedupeConfig: AlertIntegrationDedupeConfig
+  payload: AlertIntegrationPayload
+}
+
 interface AlertIntegrationTestResult {
   integrationType: string
   source: string
   acceptedCount: number
-  alerts: Array<Record<string, unknown>>
+  alerts: AlertIntegrationPayload[]
   summary?: string
 }
 
@@ -142,6 +176,28 @@ const alertIntegrationTypeOptions = [
 
 function alertIntegrationTypeLabel(value?: string) {
   return alertIntegrationTypeOptions.find((item) => item.value === value)?.label || value || '-'
+}
+
+export function buildAlertIntegrationPayload(values: AlertIntegrationFormValues): AlertIntegrationUpsertPayload {
+  return {
+    id: toText(values.id),
+    name: toText(values.name),
+    integrationType: toText(values.integrationType),
+    description: toText(values.description),
+    token: toText(values.token),
+    labelMapping: safeParseJson(toText(values.labelMapping || '{}'), emptyPayloadMap()),
+    dedupeConfig: safeParseJson(toText(values.dedupeConfig || '{}'), emptyPayloadMap()),
+    enabled: Boolean(values.enabled),
+  }
+}
+
+export function buildAlertIntegrationTestPayload(values: AlertIntegrationTestFormValues): AlertIntegrationTestPayload {
+  return {
+    integrationType: toText(values.integrationType),
+    labelMapping: safeParseJson(toText(values.labelMapping || '{}'), emptyPayloadMap()),
+    dedupeConfig: safeParseJson(toText(values.dedupeConfig || '{}'), emptyPayloadMap()),
+    payload: safeParseJson(toText(values.payload || '{}'), emptyPayloadMap()),
+  }
 }
 
 function alertIntegrationSamplePayload(type: string) {
@@ -423,8 +479,8 @@ export function AlertIntegrationsPage() {
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const canManageIntegrations = hasPermission(permissionSnapshotQuery.data?.data, 'observe.alert-integrations.manage')
-  const [editorForm] = Form.useForm<Record<string, unknown>>()
-  const [testForm] = Form.useForm<Record<string, unknown>>()
+  const [editorForm] = Form.useForm<AlertIntegrationFormValues>()
+  const [testForm] = Form.useForm<AlertIntegrationTestFormValues>()
   const [editorOpen, setEditorOpen] = useState(false)
   const [testOpen, setTestOpen] = useState(false)
   const [editingIntegration, setEditingIntegration] = useState<AlertIntegration | null>(null)
@@ -437,7 +493,7 @@ export function AlertIntegrationsPage() {
   })
 
   const createIntegration = useMutation({
-    mutationFn: (payload: Record<string, unknown>) => api.post<ApiResponse<AlertIntegration>>('/alert-integrations', payload),
+    mutationFn: (payload: AlertIntegrationUpsertPayload) => api.post<ApiResponse<AlertIntegration>>('/alert-integrations', payload),
     onSuccess: (payload) => {
       message.success('告警集成已创建')
       queryClient.invalidateQueries({ queryKey: ['alert-integrations'] })
@@ -452,7 +508,7 @@ export function AlertIntegrationsPage() {
   })
 
   const updateIntegration = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) => api.put<ApiResponse<AlertIntegration>>(`/alert-integrations/${id}`, payload),
+    mutationFn: ({ id, payload }: { id: string; payload: AlertIntegrationUpsertPayload }) => api.put<ApiResponse<AlertIntegration>>(`/alert-integrations/${id}`, payload),
     onSuccess: (payload) => {
       message.success('告警集成已更新')
       queryClient.invalidateQueries({ queryKey: ['alert-integrations'] })
@@ -467,7 +523,7 @@ export function AlertIntegrationsPage() {
   })
 
   const testIntegration = useMutation({
-    mutationFn: (payload: Record<string, unknown>) => api.post<ApiResponse<AlertIntegrationTestResult>>('/alert-integrations/test', payload),
+    mutationFn: (payload: AlertIntegrationTestPayload) => api.post<ApiResponse<AlertIntegrationTestResult>>('/alert-integrations/test', payload),
     onSuccess: (payload) => {
       setTestResult(payload.data ?? null)
       message.success('Payload 已归一化')
@@ -523,18 +579,9 @@ export function AlertIntegrationsPage() {
     })
   }
 
-  function submitEditor(values: Record<string, unknown>) {
+  function submitEditor(values: AlertIntegrationFormValues) {
     try {
-      const payload = {
-        id: values.id,
-        name: values.name,
-        integrationType: values.integrationType,
-        description: values.description || '',
-        token: values.token || '',
-        labelMapping: safeParseJson(String(values.labelMapping || '{}'), {}),
-        dedupeConfig: safeParseJson(String(values.dedupeConfig || '{}'), {}),
-        enabled: Boolean(values.enabled),
-      }
+      const payload = buildAlertIntegrationPayload(values)
       if (editingIntegration?.id) {
         updateIntegration.mutate({ id: editingIntegration.id, payload })
         return
@@ -545,14 +592,9 @@ export function AlertIntegrationsPage() {
     }
   }
 
-  function submitTest(values: Record<string, unknown>) {
+  function submitTest(values: AlertIntegrationTestFormValues) {
     try {
-      testIntegration.mutate({
-        integrationType: values.integrationType,
-        labelMapping: safeParseJson(String(values.labelMapping || '{}'), {}),
-        dedupeConfig: safeParseJson(String(values.dedupeConfig || '{}'), {}),
-        payload: safeParseJson(String(values.payload || '{}'), {}),
-      })
+      testIntegration.mutate(buildAlertIntegrationTestPayload(values))
     } catch (error) {
       message.error(error instanceof Error ? error.message : '测试失败')
     }
@@ -939,7 +981,7 @@ interface NotificationChannel {
   id: string
   name: string
   channelType: string
-  config?: Record<string, unknown>
+  config?: NotificationChannelConfig
   enabled: boolean
   createdAt?: string
   updatedAt?: string
@@ -948,7 +990,7 @@ interface NotificationChannel {
 interface NotificationRoute {
   id: string
   name: string
-  matchers?: Record<string, unknown>
+  matchers?: NotificationMatchers
   channelIds?: string[]
   enabled: boolean
   createdAt?: string
@@ -958,7 +1000,7 @@ interface NotificationRoute {
 interface Silence {
   id: string
   name: string
-  matchers?: Record<string, unknown>
+  matchers?: NotificationMatchers
   reason?: string
   startsAt: string
   endsAt: string
@@ -970,7 +1012,7 @@ interface Silence {
 interface NotificationPolicy {
   id: string
   name: string
-  matchers?: Record<string, unknown>
+  matchers?: NotificationMatchers
   processorChain?: string[]
   channelRefs?: string[]
   oncallRef?: string
@@ -985,13 +1027,165 @@ interface NotificationTemplate {
   templateType: string
   contentType: string
   bodyTemplate?: string
-  headers?: Record<string, unknown>
-  queryParams?: Record<string, unknown>
-  samplePayload?: Record<string, unknown>
+  headers?: NotificationTemplateHeaders
+  queryParams?: NotificationTemplateQueryParams
+  samplePayload?: NotificationTemplateSamplePayload
   enabled: boolean
 }
 
-function resolveChannelEndpoint(config?: Record<string, unknown>) {
+export type NotificationMatchers = ObservabilityPayloadMap
+export type NotificationChannelConfig = ObservabilityPayloadMap
+export type NotificationTemplateHeaders = ObservabilityPayloadMap
+export type NotificationTemplateQueryParams = ObservabilityPayloadMap
+export type NotificationTemplateSamplePayload = ObservabilityPayloadMap
+type NotificationPreviewItem = ObservabilityPayloadMap
+
+export interface NotificationPolicyFormValues {
+  name?: string
+  matchers?: string
+  processorChain?: unknown
+  channelRefs?: unknown
+  oncallRef?: string
+  sendResolved?: boolean
+  cooldownSeconds?: number
+  enabled?: boolean
+}
+
+export interface NotificationTemplateFormValues {
+  name?: string
+  templateType?: string
+  contentType?: string
+  bodyTemplate?: string
+  headers?: string
+  queryParams?: string
+  samplePayload?: string
+  enabled?: boolean
+}
+
+export interface NotificationChannelFormValues {
+  name?: string
+  channelType?: string
+  config?: string
+  enabled?: boolean
+}
+
+export interface NotificationRouteFormValues {
+  name?: string
+  matchers?: string
+  channelIds?: unknown
+  enabled?: boolean
+}
+
+export interface NotificationSilenceFormValues {
+  name?: string
+  matchers?: string
+  reason?: string
+  startsAt?: string
+  endsAt?: string
+  enabled?: boolean
+}
+
+export interface NotificationPolicyPayload {
+  name: string
+  matchers: NotificationMatchers
+  processorChain: string[]
+  channelRefs: string[]
+  oncallRef: string
+  sendResolved: boolean
+  cooldownSeconds: number
+  enabled: boolean
+}
+
+export interface NotificationTemplatePayload {
+  name: string
+  templateType: string
+  contentType: string
+  bodyTemplate: string
+  headers: NotificationTemplateHeaders
+  queryParams: NotificationTemplateQueryParams
+  samplePayload: NotificationTemplateSamplePayload
+  enabled: boolean
+}
+
+export interface NotificationChannelPayload {
+  name: string
+  channelType: string
+  config: NotificationChannelConfig
+  enabled: boolean
+}
+
+export interface NotificationRoutePayload {
+  name: string
+  matchers: NotificationMatchers
+  channelIds: string[]
+  enabled: boolean
+}
+
+export interface NotificationSilencePayload {
+  name: string
+  matchers: NotificationMatchers
+  reason: string
+  startsAt: string
+  endsAt: string
+  enabled: boolean
+}
+
+export function buildNotificationPolicyPayload(values: NotificationPolicyFormValues): NotificationPolicyPayload {
+  return {
+    name: toText(values.name),
+    matchers: safeParseJson(toText(values.matchers || '{}'), emptyPayloadMap()),
+    processorChain: splitList(values.processorChain),
+    channelRefs: splitList(values.channelRefs),
+    oncallRef: toText(values.oncallRef),
+    sendResolved: Boolean(values.sendResolved),
+    cooldownSeconds: Number(values.cooldownSeconds || 0),
+    enabled: Boolean(values.enabled),
+  }
+}
+
+export function buildNotificationTemplatePayload(values: NotificationTemplateFormValues): NotificationTemplatePayload {
+  return {
+    name: toText(values.name),
+    templateType: toText(values.templateType),
+    contentType: toText(values.contentType),
+    bodyTemplate: toText(values.bodyTemplate),
+    headers: safeParseJson(toText(values.headers || '{}'), emptyPayloadMap()),
+    queryParams: safeParseJson(toText(values.queryParams || '{}'), emptyPayloadMap()),
+    samplePayload: safeParseJson(toText(values.samplePayload || '{}'), emptyPayloadMap()),
+    enabled: Boolean(values.enabled),
+  }
+}
+
+export function buildNotificationChannelPayload(values: NotificationChannelFormValues): NotificationChannelPayload {
+  return {
+    name: toText(values.name),
+    channelType: toText(values.channelType),
+    config: safeParseJson(toText(values.config || '{}'), emptyPayloadMap()),
+    enabled: Boolean(values.enabled),
+  }
+}
+
+export function buildNotificationRoutePayload(values: NotificationRouteFormValues): NotificationRoutePayload {
+  return {
+    name: toText(values.name),
+    matchers: safeParseJson(toText(values.matchers || '{}'), emptyPayloadMap()),
+    channelIds: splitList(values.channelIds),
+    enabled: Boolean(values.enabled),
+  }
+}
+
+export function buildNotificationSilencePayload(values: NotificationSilenceFormValues): NotificationSilencePayload {
+  return {
+    name: toText(values.name),
+    matchers: safeParseJson(toText(values.matchers || '{}'), emptyPayloadMap()),
+    reason: toText(values.reason),
+    startsAt: parseIsoTime(values.startsAt, '开始时间'),
+    endsAt: parseIsoTime(values.endsAt, '结束时间'),
+    enabled: Boolean(values.enabled),
+  }
+}
+
+function resolveChannelEndpoint(config?: NotificationChannelConfig) {
   const keys = ['url', 'webhookUrl', 'webhook_url', 'endpoint']
   for (const key of keys) {
     const value = config?.[key]
@@ -1002,7 +1196,7 @@ function resolveChannelEndpoint(config?: Record<string, unknown>) {
   return '-'
 }
 
-function stringifyRouteMatchers(matchers?: Record<string, unknown>) {
+function stringifyRouteMatchers(matchers?: NotificationMatchers) {
   if (!matchers || Object.keys(matchers).length === 0) {
     return '{}'
   }
@@ -1014,11 +1208,11 @@ export function NotificationsPage() {
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const canManageNotifications = hasPermission(permissionSnapshotQuery.data?.data, 'observe.notifications.manage')
-  const [policyForm] = Form.useForm<Record<string, unknown>>()
-  const [templateForm] = Form.useForm<Record<string, unknown>>()
-  const [channelForm] = Form.useForm<Record<string, unknown>>()
-  const [routeForm] = Form.useForm<Record<string, unknown>>()
-  const [silenceForm] = Form.useForm<Record<string, unknown>>()
+  const [policyForm] = Form.useForm<NotificationPolicyFormValues>()
+  const [templateForm] = Form.useForm<NotificationTemplateFormValues>()
+  const [channelForm] = Form.useForm<NotificationChannelFormValues>()
+  const [routeForm] = Form.useForm<NotificationRouteFormValues>()
+  const [silenceForm] = Form.useForm<NotificationSilenceFormValues>()
   const [policyOpen, setPolicyOpen] = useState(false)
   const [templateOpen, setTemplateOpen] = useState(false)
   const [channelOpen, setChannelOpen] = useState(false)
@@ -1032,7 +1226,7 @@ export function NotificationsPage() {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewPolicy, setPreviewPolicy] = useState<NotificationPolicy | null>(null)
   const [previewEventId, setPreviewEventId] = useState<string>('')
-  const [previewItems, setPreviewItems] = useState<Array<Record<string, unknown>>>([])
+  const [previewItems, setPreviewItems] = useState<NotificationPreviewItem[]>([])
 
   const channelsQuery = useQuery({
     queryKey: ['notification-channels'],
@@ -1068,7 +1262,7 @@ export function NotificationsPage() {
   })
 
   const createPolicy = useMutation({
-    mutationFn: (payload: Record<string, unknown>) => api.post('/notification-policies', payload),
+    mutationFn: (payload: NotificationPolicyPayload) => api.post('/notification-policies', payload),
     onSuccess: () => {
       message.success('通知策略已保存')
       queryClient.invalidateQueries({ queryKey: ['notification-policies'] })
@@ -1078,7 +1272,7 @@ export function NotificationsPage() {
     onError: (err: Error) => message.error(err.message),
   })
   const updatePolicy = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) => api.put(`/notification-policies/${id}`, payload),
+    mutationFn: ({ id, payload }: { id: string; payload: NotificationPolicyPayload }) => api.put(`/notification-policies/${id}`, payload),
     onSuccess: () => {
       message.success('通知策略已更新')
       queryClient.invalidateQueries({ queryKey: ['notification-policies'] })
@@ -1088,7 +1282,7 @@ export function NotificationsPage() {
     onError: (err: Error) => message.error(err.message),
   })
   const createTemplate = useMutation({
-    mutationFn: (payload: Record<string, unknown>) => api.post('/notification-templates', payload),
+    mutationFn: (payload: NotificationTemplatePayload) => api.post('/notification-templates', payload),
     onSuccess: () => {
       message.success('通知模板已保存')
       queryClient.invalidateQueries({ queryKey: ['notification-templates'] })
@@ -1098,7 +1292,7 @@ export function NotificationsPage() {
     onError: (err: Error) => message.error(err.message),
   })
   const updateTemplate = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) => api.put(`/notification-templates/${id}`, payload),
+    mutationFn: ({ id, payload }: { id: string; payload: NotificationTemplatePayload }) => api.put(`/notification-templates/${id}`, payload),
     onSuccess: () => {
       message.success('通知模板已更新')
       queryClient.invalidateQueries({ queryKey: ['notification-templates'] })
@@ -1108,7 +1302,7 @@ export function NotificationsPage() {
     onError: (err: Error) => message.error(err.message),
   })
   const createChannel = useMutation({
-    mutationFn: (payload: Record<string, unknown>) => api.post('/notification-channels', payload),
+    mutationFn: (payload: NotificationChannelPayload) => api.post('/notification-channels', payload),
     onSuccess: () => {
       message.success('通知渠道已保存')
       queryClient.invalidateQueries({ queryKey: ['notification-channels'] })
@@ -1118,7 +1312,7 @@ export function NotificationsPage() {
     onError: (err: Error) => message.error(err.message),
   })
   const updateChannel = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) => api.put(`/notification-channels/${id}`, payload),
+    mutationFn: ({ id, payload }: { id: string; payload: NotificationChannelPayload }) => api.put(`/notification-channels/${id}`, payload),
     onSuccess: () => {
       message.success('通知渠道已更新')
       queryClient.invalidateQueries({ queryKey: ['notification-channels'] })
@@ -1128,7 +1322,7 @@ export function NotificationsPage() {
     onError: (err: Error) => message.error(err.message),
   })
   const createRoute = useMutation({
-    mutationFn: (payload: Record<string, unknown>) => api.post('/alert-routes', payload),
+    mutationFn: (payload: NotificationRoutePayload) => api.post('/alert-routes', payload),
     onSuccess: () => {
       message.success('路由规则已保存')
       queryClient.invalidateQueries({ queryKey: ['notification-routes'] })
@@ -1139,7 +1333,7 @@ export function NotificationsPage() {
     onError: (err: Error) => message.error(err.message),
   })
   const updateRoute = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) => api.put(`/alert-routes/${id}`, payload),
+    mutationFn: ({ id, payload }: { id: string; payload: NotificationRoutePayload }) => api.put(`/alert-routes/${id}`, payload),
     onSuccess: () => {
       message.success('路由规则已更新')
       queryClient.invalidateQueries({ queryKey: ['notification-routes'] })
@@ -1150,7 +1344,7 @@ export function NotificationsPage() {
     onError: (err: Error) => message.error(err.message),
   })
   const createSilence = useMutation({
-    mutationFn: (payload: Record<string, unknown>) => api.post('/alert-silences', payload),
+    mutationFn: (payload: NotificationSilencePayload) => api.post('/alert-silences', payload),
     onSuccess: () => {
       message.success('静默规则已保存')
       queryClient.invalidateQueries({ queryKey: ['notification-silences'] })
@@ -1160,7 +1354,7 @@ export function NotificationsPage() {
     onError: (err: Error) => message.error(err.message),
   })
   const updateSilence = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) => api.put(`/alert-silences/${id}`, payload),
+    mutationFn: ({ id, payload }: { id: string; payload: NotificationSilencePayload }) => api.put(`/alert-silences/${id}`, payload),
     onSuccess: () => {
       message.success('静默规则已更新')
       queryClient.invalidateQueries({ queryKey: ['notification-silences'] })
@@ -1170,7 +1364,7 @@ export function NotificationsPage() {
     onError: (err: Error) => message.error(err.message),
   })
   const previewMutation = useMutation({
-    mutationFn: ({ policyId, eventId }: { policyId: string; eventId: string }) => api.get<ApiResponse<Array<Record<string, unknown>>>>(`/notification-policies/${policyId}/preview?eventId=${encodeURIComponent(eventId)}`),
+    mutationFn: ({ policyId, eventId }: { policyId: string; eventId: string }) => api.get<ApiResponse<NotificationPreviewItem[]>>(`/notification-policies/${policyId}/preview?eventId=${encodeURIComponent(eventId)}`),
     onSuccess: (payload) => {
       setPreviewItems(payload.data ?? [])
       setPreviewOpen(true)
@@ -1192,7 +1386,7 @@ export function NotificationsPage() {
   const channelColumns: ColumnsType<NotificationChannel> = [
     { title: '名称', dataIndex: 'name' },
     { title: '类型', dataIndex: 'channelType', render: (value: string) => <Tag>{value}</Tag> },
-    { title: 'Endpoint', dataIndex: 'config', ellipsis: true, render: (value: Record<string, unknown>) => resolveChannelEndpoint(value) },
+    { title: 'Endpoint', dataIndex: 'config', ellipsis: true, render: (value: NotificationChannelConfig) => resolveChannelEndpoint(value) },
     {
       ...tableColumnPresets.status,
       title: '状态',
@@ -1218,7 +1412,7 @@ export function NotificationsPage() {
 
   const routeColumns: ColumnsType<NotificationRoute> = [
     { title: '名称', dataIndex: 'name' },
-    { title: '匹配规则', dataIndex: 'matchers', render: (value: Record<string, unknown>) => <Text code>{stringifyRouteMatchers(value)}</Text> },
+    { title: '匹配规则', dataIndex: 'matchers', render: (value: NotificationMatchers) => <Text code>{stringifyRouteMatchers(value)}</Text> },
     {
       title: '接收器',
       dataIndex: 'channelIds',
@@ -1252,7 +1446,7 @@ export function NotificationsPage() {
 
   const silenceColumns: ColumnsType<Silence> = [
     { title: '名称', dataIndex: 'name' },
-    { title: '匹配器', dataIndex: 'matchers', render: (value: Record<string, unknown>) => <Text code>{shortJson(value)}</Text> },
+    { title: '匹配器', dataIndex: 'matchers', render: (value: NotificationMatchers) => <Text code>{shortJson(value)}</Text> },
     { title: '原因', dataIndex: 'reason', render: (value: string) => value || '-' },
     { ...tableColumnPresets.datetime, title: '开始时间', dataIndex: 'startsAt', render: (value: string) => formatDateTime(value) },
     { ...tableColumnPresets.datetime, title: '结束时间', dataIndex: 'endsAt', render: (value: string) => formatDateTime(value) },
@@ -1430,18 +1624,9 @@ export function NotificationsPage() {
     })
   }
 
-  function submitPolicy(values: Record<string, unknown>) {
+  function submitPolicy(values: NotificationPolicyFormValues) {
     try {
-      const payload = {
-        name: values.name,
-        matchers: safeParseJson(String(values.matchers || '{}'), {}),
-        processorChain: splitList(values.processorChain),
-        channelRefs: splitList(values.channelRefs),
-        oncallRef: String(values.oncallRef || ''),
-        sendResolved: Boolean(values.sendResolved),
-        cooldownSeconds: Number(values.cooldownSeconds || 0),
-        enabled: Boolean(values.enabled),
-      }
+      const payload = buildNotificationPolicyPayload(values)
       if (editingPolicy?.id) {
         updatePolicy.mutate({ id: editingPolicy.id, payload })
         return
@@ -1452,18 +1637,9 @@ export function NotificationsPage() {
     }
   }
 
-  function submitTemplate(values: Record<string, unknown>) {
+  function submitTemplate(values: NotificationTemplateFormValues) {
     try {
-      const payload = {
-        name: values.name,
-        templateType: values.templateType,
-        contentType: values.contentType,
-        bodyTemplate: values.bodyTemplate,
-        headers: safeParseJson(String(values.headers || '{}'), {}),
-        queryParams: safeParseJson(String(values.queryParams || '{}'), {}),
-        samplePayload: safeParseJson(String(values.samplePayload || '{}'), {}),
-        enabled: Boolean(values.enabled),
-      }
+      const payload = buildNotificationTemplatePayload(values)
       if (editingTemplate?.id) {
         updateTemplate.mutate({ id: editingTemplate.id, payload })
         return
@@ -1474,14 +1650,9 @@ export function NotificationsPage() {
     }
   }
 
-  function submitChannel(values: Record<string, unknown>) {
+  function submitChannel(values: NotificationChannelFormValues) {
     try {
-      const payload = {
-        name: values.name,
-        channelType: values.channelType,
-        config: safeParseJson(String(values.config || '{}'), {}),
-        enabled: Boolean(values.enabled),
-      }
+      const payload = buildNotificationChannelPayload(values)
       if (editingChannel?.id) {
         updateChannel.mutate({ id: editingChannel.id, payload })
         return
@@ -1492,14 +1663,9 @@ export function NotificationsPage() {
     }
   }
 
-  function submitRoute(values: Record<string, unknown>) {
+  function submitRoute(values: NotificationRouteFormValues) {
     try {
-      const payload = {
-        name: values.name,
-        matchers: safeParseJson(String(values.matchers || '{}'), {}),
-        channelIds: splitList(values.channelIds),
-        enabled: Boolean(values.enabled),
-      }
+      const payload = buildNotificationRoutePayload(values)
       if (editingRoute?.id) {
         updateRoute.mutate({ id: editingRoute.id, payload })
         return
@@ -1510,16 +1676,9 @@ export function NotificationsPage() {
     }
   }
 
-  function submitSilence(values: Record<string, unknown>) {
+  function submitSilence(values: NotificationSilenceFormValues) {
     try {
-      const payload = {
-        name: values.name,
-        matchers: safeParseJson(String(values.matchers || '{}'), {}),
-        reason: values.reason,
-        startsAt: parseIsoTime(values.startsAt, '开始时间'),
-        endsAt: parseIsoTime(values.endsAt, '结束时间'),
-        enabled: Boolean(values.enabled),
-      }
+      const payload = buildNotificationSilencePayload(values)
       if (editingSilence?.id) {
         updateSilence.mutate({ id: editingSilence.id, payload })
         return
@@ -1700,7 +1859,7 @@ interface EventStreamEntry {
   clusterId?: string
   namespace?: string
   summary: string
-  payload?: Record<string, unknown>
+  payload?: ObservabilityPayloadMap
 }
 
 export function EventsPage() {
@@ -1719,7 +1878,7 @@ export function EventsPage() {
       title: 'Payload',
       dataIndex: 'payload',
       ellipsis: true,
-      render: (value: Record<string, unknown>) => {
+      render: (value: ObservabilityPayloadMap) => {
         if (!value || Object.keys(value).length === 0) {
           return '-'
         }

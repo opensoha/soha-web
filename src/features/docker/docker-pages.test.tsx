@@ -4,18 +4,31 @@ import type { ReactNode } from 'react'
 import { act } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot } from 'react-dom/client'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from 'antd'
-import { DockerHostsPage, DockerProjectsPage, buildContainerStartPayload, buildQuickHostPayload } from './docker-pages'
+import { DockerHostsPage, DockerProjectDetailPage, DockerProjectsPage, buildContainerStartPayload, buildProjectPayload, buildQuickHostPayload, buildTemplatePayload } from './docker-pages'
+import type { DockerContainerStartInput, DockerProjectInput, DockerQuickCreateHostInput, DockerTemplateInput } from './docker-types'
 
 const testState = vi.hoisted(() => ({
+  modules: {
+    docker: true,
+    virtualization: true,
+  },
   permissionSnapshot: {
     permissionKeys: ['docker.hosts.manage'],
     visibleMenuIds: [],
     visibleMenus: [],
   },
   apiGet: vi.fn(async (path: string) => {
+    if (path === '/modules') {
+      return {
+        data: [
+          { descriptor: { id: 'docker', name: 'Docker', defaultPath: '/docker' }, enabled: testState.modules.docker },
+          { descriptor: { id: 'virtualization', name: 'Virtualization', defaultPath: '/virtualization' }, enabled: testState.modules.virtualization },
+        ],
+      }
+    }
     if (path === '/docker/hosts?page=1&pageSize=10') {
       return { data: { items: [], total: 0, page: 1, pageSize: 10 } }
     }
@@ -24,6 +37,26 @@ const testState = vi.hoisted(() => ({
     }
     if (path === '/docker/projects?page=1&pageSize=200') {
       return { data: { items: [{ id: 'project-1', hostId: 'host-1', name: 'soha-orbstack-smoke', sourceKind: 'single_container' }], total: 1, page: 1, pageSize: 200 } }
+    }
+    if (path === '/docker/projects/project-1') {
+      return {
+        data: {
+          id: 'project-1',
+          hostId: 'host-1',
+          name: 'soha-orbstack-smoke',
+          slug: 'soha-orbstack-smoke',
+          sourceKind: 'single_container',
+          status: 'running',
+          config: {
+            image: 'nginx:alpine',
+            serviceName: 'web',
+            volumes: [{ target: '/usr/share/nginx/html' }],
+          },
+        },
+      }
+    }
+    if (path === '/docker/services?projectId=project-1&page=1&pageSize=100') {
+      return { data: { items: [{ id: 'service-1', name: 'web', projectId: 'project-1' }], total: 1, page: 1, pageSize: 100 } }
     }
     if (path === '/docker/services?page=1&pageSize=300') {
       return { data: { items: [], total: 0, page: 1, pageSize: 300 } }
@@ -98,7 +131,7 @@ vi.mock('@/services/api-client', () => ({
 let containers: HTMLDivElement[] = []
 let roots: Array<ReturnType<typeof createRoot>> = []
 
-async function renderWithProviders(node: ReactNode) {
+async function renderWithProviders(node: ReactNode, route = '/') {
   const container = document.createElement('div')
   document.body.appendChild(container)
   containers.push(container)
@@ -110,22 +143,40 @@ async function renderWithProviders(node: ReactNode) {
   await act(async () => {
     root.render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={[route]}>
           <App>{node}</App>
         </MemoryRouter>
       </QueryClientProvider>,
     )
   })
 
-  await flush()
+  await settleQueries(queryClient)
   return container
+}
+
+async function settleQueries(queryClient: QueryClient) {
+  let idleTicks = 0
+  for (let index = 0; index < 50; index += 1) {
+    await act(async () => {
+      await Promise.resolve()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    if (queryClient.isFetching() === 0 && queryClient.isMutating() === 0) {
+      idleTicks += 1
+      if (idleTicks >= 3) {
+        return
+      }
+    } else {
+      idleTicks = 0
+    }
+  }
 }
 
 async function flush() {
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    for (let index = 0; index < 8; index += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
   })
 }
 
@@ -142,6 +193,10 @@ async function clickButtonByText(text: string) {
 
 describe('docker pages', () => {
   beforeEach(() => {
+    testState.modules = {
+      docker: true,
+      virtualization: true,
+    }
     testState.permissionSnapshot = {
       permissionKeys: ['docker.hosts.manage'],
       visibleMenuIds: [],
@@ -181,7 +236,7 @@ describe('docker pages', () => {
   })
 
   it('builds quick host payload with virtualization resource ids and GiB sizing', () => {
-    expect(buildQuickHostPayload({
+    const payload = buildQuickHostPayload({
       name: 'docker-dev',
       architecture: 'arm64',
       virtualizationConnectionId: 'conn-pve',
@@ -195,7 +250,9 @@ describe('docker pages', () => {
       diskGiB: 80,
       availablePortStart: 20000,
       availablePortEnd: 39999,
-    })).toMatchObject({
+    }) satisfies DockerQuickCreateHostInput
+
+    expect(payload).toMatchObject({
       name: 'docker-dev',
       architecture: 'arm64',
       virtualizationConnectionId: 'conn-pve',
@@ -207,10 +264,34 @@ describe('docker pages', () => {
       memoryBytes: 8 * 1024 ** 3,
       diskBytes: 80 * 1024 ** 3,
     })
+    expect(payload).not.toHaveProperty('memoryGiB')
+    expect(payload).not.toHaveProperty('diskGiB')
+  })
+
+  it('builds compose project payload with typed labels and config', () => {
+    const payload = buildProjectPayload({
+      hostId: 'host-1',
+      name: 'preview-stack',
+      sourceKind: '',
+      status: '',
+      composeContent: '',
+      labels: { app: 'preview', managed: true },
+      config: { serviceName: 'web', image: 'nginx:alpine', ports: [{ hostPort: 18080, containerPort: 80 }] },
+    }) satisfies DockerProjectInput
+
+    expect(payload).toMatchObject({
+      hostId: 'host-1',
+      name: 'preview-stack',
+      sourceKind: 'inline_compose',
+      status: 'draft',
+      composeContent: expect.stringContaining('nginx:alpine'),
+      labels: { app: 'preview', managed: true },
+      config: { serviceName: 'web', image: 'nginx:alpine', ports: [{ hostPort: 18080, containerPort: 80 }] },
+    })
   })
 
   it('builds structured container start payload for quick Docker app launch', () => {
-    expect(buildContainerStartPayload({
+    const payload = buildContainerStartPayload({
       hostId: 'host-1',
       name: 'preview-api',
       image: 'nginx:alpine',
@@ -223,7 +304,11 @@ describe('docker pages', () => {
       volumes: [{ type: 'bind', source: '/data/preview', target: '/usr/share/nginx/html', readOnly: true }],
       environmentVariables: [{ name: 'APP_ENV', value: 'test' }],
       resources: { cpus: 0.5, memoryMiB: 512, memoryReservationMiB: 256 },
-    })).toMatchObject({
+      labels: { app: 'preview-api' },
+      config: { command: 'nginx -g daemon off;' },
+    }) satisfies DockerContainerStartInput
+
+    expect(payload).toMatchObject({
       hostId: 'host-1',
       architecture: 'arm64',
       containerPort: 80,
@@ -236,6 +321,26 @@ describe('docker pages', () => {
       volumes: [{ source: '/data/preview', target: '/usr/share/nginx/html', readOnly: true }],
       environmentVariables: [{ name: 'APP_ENV', value: 'test' }],
       resources: { cpus: 0.5, memoryBytes: 512 * 1024 ** 2, memoryReservationBytes: 256 * 1024 ** 2 },
+      labels: { app: 'preview-api' },
+      config: { command: 'nginx -g daemon off;' },
+    })
+    expect(payload).not.toHaveProperty('resources.memoryMiB')
+    expect(payload).not.toHaveProperty('resources.memoryReservationMiB')
+  })
+
+  it('builds template payload with typed variables', () => {
+    const payload = buildTemplatePayload({
+      name: 'nginx-compose',
+      templateKind: '',
+      enabled: undefined,
+      variables: { image: 'nginx:alpine', replicas: 1, tls: false },
+    }) satisfies DockerTemplateInput
+
+    expect(payload).toMatchObject({
+      name: 'nginx-compose',
+      templateKind: 'compose',
+      enabled: true,
+      variables: { image: 'nginx:alpine', replicas: 1, tls: false },
     })
   })
 
@@ -279,5 +384,50 @@ describe('docker pages', () => {
     expect(tabTexts).toEqual(['Compose', '单容器服务'])
     expect(document.body.textContent).toContain('端口映射')
     expect(document.body.textContent).toContain('127.0.0.1:18083 -> 80/tcp')
+  })
+
+  it('fails closed when the Docker module is disabled', async () => {
+    testState.modules = {
+      docker: false,
+      virtualization: true,
+    }
+    testState.permissionSnapshot = {
+      permissionKeys: ['docker.projects.view', 'docker.projects.manage', 'docker.projects.deploy', 'docker.services.view', 'docker.services.manage', 'docker.ports.manage'],
+      visibleMenuIds: [],
+      visibleMenus: [],
+    }
+
+    await renderWithProviders(<DockerProjectsPage />)
+
+    expect(testState.apiGet).toHaveBeenCalledWith('/modules')
+    expect(testState.apiGet).not.toHaveBeenCalledWith('/docker/projects?page=1&pageSize=10&sourceKind=compose')
+    expect(testState.apiGet).not.toHaveBeenCalledWith('/docker/hosts?page=1&pageSize=200')
+    expect(document.body.textContent).not.toContain('创建 Compose')
+    expect(document.body.textContent).not.toContain('快速启动')
+  })
+
+  it('hides Docker runtime tabs and does not fetch runtime data without service permissions', async () => {
+    testState.permissionSnapshot = {
+      permissionKeys: ['docker.projects.view'],
+      visibleMenuIds: [],
+      visibleMenus: [],
+    }
+
+    const container = await renderWithProviders(
+      <Routes>
+        <Route path="/docker/projects/:projectId" element={<DockerProjectDetailPage />} />
+      </Routes>,
+      '/docker/projects/project-1',
+    )
+
+    const tabTexts = Array.from(container.querySelectorAll('.ant-tabs-tab-btn')).map((node) => node.textContent?.trim()).filter(Boolean)
+    expect(tabTexts).toContain('信息')
+    expect(tabTexts).toContain('配置')
+    expect(tabTexts).not.toContain('日志')
+    expect(tabTexts).not.toContain('Shell')
+    expect(tabTexts).not.toContain('卷文件')
+    expect(testState.apiGet).toHaveBeenCalledWith('/docker/projects/project-1')
+    expect(testState.apiGet).not.toHaveBeenCalledWith('/docker/services?projectId=project-1&page=1&pageSize=100')
+    expect(testState.apiGet.mock.calls.some(([path]) => String(path).includes('/runtime/'))).toBe(false)
   })
 })

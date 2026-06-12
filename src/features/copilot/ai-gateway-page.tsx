@@ -101,6 +101,7 @@ import {
 import type {
   AIClient,
   AccessPolicy,
+  AccessPolicyUpsertPayload,
   ApprovalDecisionResult,
   ApprovalFilterState,
   ApprovalRequest,
@@ -110,6 +111,7 @@ import type {
   DrawerKind,
   DrawerState,
   GatewayAuditLog,
+  GatewayDrawerFormValues,
   GatewayManifest,
   GatewayTabKey,
   GatewayTool,
@@ -530,8 +532,8 @@ function PolicyConditionFields() {
 
 export function AIGatewayPage() {
   const { message } = App.useApp()
-  const [form] = Form.useForm()
-  const [decisionForm] = Form.useForm()
+  const [form] = Form.useForm<GatewayDrawerFormValues>()
+  const [decisionForm] = Form.useForm<{ comment?: string }>()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [drawer, setDrawer] = useState<DrawerState | null>(null)
@@ -729,7 +731,7 @@ export function AIGatewayPage() {
   const refreshAll = () => queryClient.invalidateQueries({ queryKey: ['ai-gateway'] })
 
   const upsertMutation = useMutation({
-    mutationFn: async (values: Record<string, any>) => {
+    mutationFn: async (values: GatewayDrawerFormValues) => {
       if (!drawer) return null
       const record = drawer.record as any
       switch (drawer.kind) {
@@ -787,7 +789,7 @@ export function AIGatewayPage() {
             expiresAt: values.expiresAt || undefined,
           })
         case 'access-policy': {
-          const payload = {
+          const payload: AccessPolicyUpsertPayload = {
             name: values.name,
             description: values.description,
             enabled: values.enabled === 'true',
@@ -1549,11 +1551,11 @@ export function AIGatewayPage() {
                       ) : governanceStatus.recommendations?.length ? (
                         <Space orientation="vertical" size={8} style={{ width: '100%' }}>
                           {governanceStatus.recommendations.map((item) => (
-                            <Alert key={item} type="warning" showIcon message={item} />
+                            <Alert key={item} type="warning" showIcon title={item} />
                           ))}
                         </Space>
                       ) : (
-                        <Alert type="success" showIcon message="AI Gateway governance controls are healthy" />
+                        <Alert type="success" showIcon title="AI Gateway governance controls are healthy" />
                       )}
                       <AdminTable shellClassName="soha-management-table-shell" columnSettingIconOnly columnSettingPlacement="header" rowKey="name" tableSize="small" columns={governanceHealthColumns} dataSource={governanceStatus.health.checks ?? []} loading={governanceQuery.isLoading} pagination={false} scroll={{ x: 860 }} />
                       <AdminTable shellClassName="soha-management-table-shell" columnSettingIconOnly columnSettingPlacement="header" rowKey="key" tableSize="small" columns={governanceCoverageColumns} dataSource={governanceCoverageRows(governanceStatus.policyCoverage)} pagination={false} scroll={{ x: 760 }} />
@@ -1664,7 +1666,7 @@ export function AIGatewayPage() {
         onCancel={() => setOneTimeToken(null)}
         footer={<Button type="primary" onClick={() => setOneTimeToken(null)}>关闭</Button>}
       >
-        <Alert type="warning" showIcon message="token 只展示一次；关闭后无法再次查看明文。" style={{ marginBottom: 12 }} />
+        <Alert type="warning" showIcon title="token 只展示一次；关闭后无法再次查看明文。" style={{ marginBottom: 12 }} />
         <Input.TextArea value={oneTimeToken?.value} autoSize={{ minRows: 3 }} readOnly />
         {oneTimeToken?.prefix ? <Text type="secondary">prefix: {oneTimeToken.prefix}</Text> : null}
       </Modal>
@@ -1848,7 +1850,7 @@ function renderDrawerFields(drawer: DrawerState, clients: AIClient[], manifest?:
     case 'service-token':
       return (
         <>
-          <Alert type="info" showIcon message={`服务账号：${(drawer.record as ServiceAccount).name}`} style={{ marginBottom: 12 }} />
+          <Alert type="info" showIcon title={`服务账号：${(drawer.record as ServiceAccount).name}`} style={{ marginBottom: 12 }} />
           <Form.Item name="name" label="名称" rules={[{ required: true }]}>
             <Input />
           </Form.Item>

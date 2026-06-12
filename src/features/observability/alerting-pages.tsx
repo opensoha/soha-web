@@ -24,20 +24,50 @@ import type { ReleaseDagDefinition } from '@/components/release-flow-dag-definit
 import './observability-pages.css'
 import { useNavigate, useParams } from 'react-router-dom'
 import { AlertEventDetailPageContent } from '@/features/observability/alert-event-detail'
+import {
+  emptyPayloadMap,
+  isObservabilityPayloadMap,
+  parseObservabilityJson as safeParseJson,
+  toText,
+  type ObservabilityPayloadMap,
+} from '@/features/observability/observability-types'
 
 const { Text, Paragraph } = Typography
+
+export type AlertRuleDatasourceSelector = ObservabilityPayloadMap
+export type AlertRuleQuerySpec = ObservabilityPayloadMap
+export type AlertRuleThresholdSpec = ObservabilityPayloadMap
+export type AlertRuleTestResult = ObservabilityPayloadMap
+export type HealingRunResult = ObservabilityPayloadMap
+export type OnCallRotationConfig = ObservabilityPayloadMap
+export type OnCallAssignmentMatchers = ObservabilityPayloadMap
+
+export interface AlertRuleTextMap {
+  [key: string]: string
+}
+
+export interface OnCallEscalationStepPayload extends ObservabilityPayloadMap {
+  scheduleId: string
+  delayMinutes: number
+  role: string
+  description: string
+}
+
+interface OnCallRotationOverrides {
+  [dateKey: string]: string[]
+}
 
 interface AlertRule {
   id: string
   name: string
   ruleType: string
-  datasourceSelector?: Record<string, unknown>
-  querySpec?: Record<string, unknown>
-  thresholdSpec?: Record<string, unknown>
+  datasourceSelector?: AlertRuleDatasourceSelector
+  querySpec?: AlertRuleQuerySpec
+  thresholdSpec?: AlertRuleThresholdSpec
   forSeconds: number
   groupBy?: string[]
-  labels?: Record<string, string>
-  annotations?: Record<string, string>
+  labels?: AlertRuleTextMap
+  annotations?: AlertRuleTextMap
   notificationPolicyId?: string
   healingPolicyIds?: string[]
   enabled: boolean
@@ -76,7 +106,7 @@ interface HealingRun {
   workflowRunId?: string
   workflowStatus?: string
   workflowSummary?: string
-  result?: Record<string, unknown>
+  result?: HealingRunResult
   startedAt?: string
   completedAt?: string
   createdAt: string
@@ -98,7 +128,7 @@ interface OnCallRotation {
   scheduleId: string
   name: string
   participants?: string[]
-  rotationConfig?: Record<string, unknown>
+  rotationConfig?: OnCallRotationConfig
   enabled: boolean
   createdAt: string
   updatedAt: string
@@ -107,7 +137,7 @@ interface OnCallRotation {
 interface OnCallEscalationPolicy {
   id: string
   name: string
-  steps?: Array<Record<string, unknown>>
+  steps?: OnCallEscalationStepPayload[]
   enabled: boolean
   createdAt: string
   updatedAt: string
@@ -124,7 +154,7 @@ interface OnCallAssignmentRule {
   severity?: string
   service?: string
   role?: string
-  matchers?: Record<string, unknown>
+  matchers?: OnCallAssignmentMatchers
   targetType: 'schedule' | 'escalation'
   targetRef: string
   routeOrder: number
@@ -163,7 +193,7 @@ interface OnCallTask {
   updatedAt: string
 }
 
-interface AlertRuleFormValues {
+export interface AlertRuleFormValues {
   id?: string
   name: string
   ruleType: string
@@ -179,7 +209,7 @@ interface AlertRuleFormValues {
   enabled: boolean
 }
 
-interface HealingPolicyFormValues {
+export interface HealingPolicyFormValues {
   id?: string
   name: string
   triggerMode: string
@@ -191,17 +221,121 @@ interface HealingPolicyFormValues {
   enabled: boolean
 }
 
-function safeParseJson(raw: string, fallback: any) {
-  const text = raw.trim()
-  if (!text) return fallback
-  const parsed = JSON.parse(text)
-  if (Array.isArray(fallback) && Array.isArray(parsed)) return parsed
-  if (!Array.isArray(fallback) && parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed
-  throw new Error('需要合法 JSON 对象')
+export interface AlertRulePayload {
+  id?: string
+  name: string
+  ruleType: string
+  datasourceSelector: AlertRuleDatasourceSelector
+  querySpec: AlertRuleQuerySpec
+  thresholdSpec: AlertRuleThresholdSpec
+  forSeconds: number
+  groupBy: string[]
+  labels: ObservabilityPayloadMap
+  annotations: ObservabilityPayloadMap
+  notificationPolicyId: string
+  healingPolicyIds: string[]
+  enabled: boolean
+}
+
+export interface HealingPolicyPayload {
+  id?: string
+  name: string
+  triggerMode: string
+  workflowTemplateId: string
+  approvalPolicyRef: string
+  cooldownSeconds: number
+  concurrencyKey: string
+  safetyWindowSeconds: number
+  definition: ReleaseDagDefinition
+  enabled: boolean
+}
+
+export interface OnCallScheduleFormValues {
+  name?: string
+  timeZone?: string
+  description?: string
+  enabled?: boolean
+}
+
+export interface OnCallSchedulePayload {
+  name: string
+  timeZone: string
+  description: string
+  enabled: boolean
+}
+
+export interface OnCallRotationPayload {
+  name: string
+  scheduleId: string
+  participants: string[]
+  rotationConfig: OnCallRotationConfig
+  enabled: boolean
+}
+
+export interface OnCallEscalationPolicyPayload {
+  name: string
+  steps: OnCallEscalationStepPayload[]
+  enabled: boolean
+}
+
+export interface OnCallAssignmentFormValues {
+  name?: string
+  integrationId?: string
+  integrationType?: string
+  businessLineId?: string
+  alertCategory?: string
+  alertName?: string
+  severity?: string
+  service?: string
+  role?: string
+  matchers?: string
+  targetType?: 'schedule' | 'escalation'
+  targetRef?: string
+  routeOrder?: number
+  groupBy?: unknown
+  priority?: number
+  enabled?: boolean
+}
+
+export interface OnCallAssignmentPayload {
+  name: string
+  integrationId: string
+  integrationType: string
+  businessLineId: string
+  alertCategory: string
+  alertName: string
+  severity: string
+  service: string
+  role: string
+  matchers: OnCallAssignmentMatchers
+  targetType: 'schedule' | 'escalation'
+  targetRef: string
+  routeOrder: number
+  groupBy: string[]
+  priority: number
+  enabled: boolean
 }
 
 function safeParseStringArray(raw: string) {
   return raw.split(',').map((item) => item.trim()).filter(Boolean)
+}
+
+function payloadMapFromField(value: unknown) {
+  if (typeof value === 'string') return safeParseJson(value, emptyPayloadMap())
+  if (isObservabilityPayloadMap(value)) return value
+  return emptyPayloadMap()
+}
+
+function stringListFromField(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean)
+  }
+  if (typeof value === 'string') return safeParseStringArray(value)
+  return []
+}
+
+function onCallTargetType(value: unknown): 'schedule' | 'escalation' {
+  return value === 'schedule' ? 'schedule' : 'escalation'
 }
 
 function prettyJson(value: unknown) {
@@ -210,10 +344,6 @@ function prettyJson(value: unknown) {
 }
 
 const ONCALL_DATE_FORMAT = 'YYYY-MM-DD'
-
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-}
 
 function normalizeParticipantList(value: unknown) {
   if (Array.isArray(value)) {
@@ -237,12 +367,12 @@ function normalizeParticipantList(value: unknown) {
   return []
 }
 
-function readRotationOverrides(rotationConfig?: Record<string, unknown>) {
+function readRotationOverrides(rotationConfig?: OnCallRotationConfig) {
   const rawOverrides = rotationConfig?.overrides
-  if (!isPlainRecord(rawOverrides)) return {}
-  return Object.entries(rawOverrides).reduce<Record<string, string[]>>((acc, [dateKey, value]) => {
+  if (!isObservabilityPayloadMap(rawOverrides)) return {}
+  return Object.entries(rawOverrides).reduce<OnCallRotationOverrides>((acc, [dateKey, value]) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return acc
-    const participants = isPlainRecord(value)
+    const participants = isObservabilityPayloadMap(value)
       ? normalizeParticipantList(value.participants ?? value.currentParticipants ?? value.currentParticipant)
       : normalizeParticipantList(value)
     if (participants.length > 0) {
@@ -252,8 +382,8 @@ function readRotationOverrides(rotationConfig?: Record<string, unknown>) {
   }, {})
 }
 
-function buildRotationConfigWithOverride(rotationConfig: Record<string, unknown> | undefined, dateKey: string, participants: string[]) {
-  const nextConfig = { ...(rotationConfig ?? {}) }
+export function buildRotationConfigWithOverride(rotationConfig: OnCallRotationConfig | undefined, dateKey: string, participants: string[]): OnCallRotationConfig {
+  const nextConfig: OnCallRotationConfig = { ...(rotationConfig ?? {}) }
   const overrides = { ...readRotationOverrides(rotationConfig) }
   if (participants.length > 0) {
     overrides[dateKey] = participants
@@ -329,7 +459,7 @@ function baseParticipantsForDate(rotation: OnCallRotation, date: Dayjs) {
 type OnCallBoardView = 'calendar' | 'timeline' | 'list'
 type OnCallRotationMode = 'daily' | 'weekly' | 'custom'
 
-interface OnCallRotationFormValues {
+export interface OnCallRotationFormValues {
   name: string
   scheduleId: string
   participants: string[]
@@ -346,7 +476,7 @@ interface OnCallEscalationStepFormValues {
   description?: string
 }
 
-interface OnCallEscalationPolicyFormValues {
+export interface OnCallEscalationPolicyFormValues {
   name: string
   steps: OnCallEscalationStepFormValues[]
   enabled: boolean
@@ -405,20 +535,20 @@ function formatParticipantSummary(participants: string[]) {
   return participants.length > 0 ? participants.join('、') : '未排班'
 }
 
-function rotationConfigShiftHours(rotationConfig?: Record<string, unknown>) {
+function rotationConfigShiftHours(rotationConfig?: OnCallRotationConfig) {
   const rotationMinutes = readPositiveNumber(rotationConfig?.rotationMinutes, 0)
   if (rotationMinutes > 0) return Number((rotationMinutes / 60).toFixed(2))
   return readPositiveNumber(rotationConfig?.shiftHours, 24)
 }
 
-function rotationModeFromConfig(rotationConfig?: Record<string, unknown>): OnCallRotationMode {
+function rotationModeFromConfig(rotationConfig?: OnCallRotationConfig): OnCallRotationMode {
   const shiftHours = rotationConfigShiftHours(rotationConfig)
   if (Math.abs(shiftHours - 24) < 0.001) return 'daily'
   if (Math.abs(shiftHours - 168) < 0.001) return 'weekly'
   return 'custom'
 }
 
-function rotationModeLabel(rotationConfig?: Record<string, unknown>) {
+function rotationModeLabel(rotationConfig?: OnCallRotationConfig) {
   const mode = rotationModeFromConfig(rotationConfig)
   if (mode === 'daily') return '每日轮换'
   if (mode === 'weekly') return '每周轮换'
@@ -451,8 +581,8 @@ function toOnCallRotationFormValues(record: OnCallRotation | null): OnCallRotati
   }
 }
 
-function buildRotationConfigFromForm(values: OnCallRotationFormValues, currentConfig?: Record<string, unknown>) {
-  const nextConfig = { ...(currentConfig ?? {}) }
+function buildRotationConfigFromForm(values: OnCallRotationFormValues, currentConfig?: OnCallRotationConfig): OnCallRotationConfig {
+  const nextConfig: OnCallRotationConfig = { ...(currentConfig ?? {}) }
   delete nextConfig.shiftHours
   delete nextConfig.rotationMinutes
   delete nextConfig.startAt
@@ -477,7 +607,7 @@ function defaultEscalationStep(): OnCallEscalationStepFormValues {
   return { scheduleId: '', delayMinutes: 0, role: '', description: '' }
 }
 
-function toOnCallEscalationStepFormValues(steps?: Array<Record<string, unknown>>) {
+function toOnCallEscalationStepFormValues(steps?: OnCallEscalationStepPayload[]) {
   if (!steps?.length) return [defaultEscalationStep()]
   return steps.map((step) => ({
     scheduleId: typeof step.scheduleId === 'string' ? step.scheduleId : '',
@@ -487,9 +617,9 @@ function toOnCallEscalationStepFormValues(steps?: Array<Record<string, unknown>>
   }))
 }
 
-function buildEscalationStepsFromForm(values: OnCallEscalationStepFormValues[], currentSteps?: Array<Record<string, unknown>>) {
+function buildEscalationStepsFromForm(values: OnCallEscalationStepFormValues[], currentSteps?: OnCallEscalationStepPayload[]): OnCallEscalationStepPayload[] {
   return values.map((step, index) => {
-    const current = isPlainRecord(currentSteps?.[index]) ? { ...currentSteps?.[index] } : {}
+    const current = isObservabilityPayloadMap(currentSteps?.[index]) ? { ...currentSteps?.[index] } : {}
     return {
       ...current,
       scheduleId: step.scheduleId || '',
@@ -500,24 +630,83 @@ function buildEscalationStepsFromForm(values: OnCallEscalationStepFormValues[], 
   })
 }
 
-function serializeRulePayload(values: Record<string, unknown> | Partial<AlertRuleFormValues> | Partial<AlertRule>) {
+export function buildAlertRulePayload(values: Partial<AlertRuleFormValues> | Partial<AlertRule>): AlertRulePayload {
   return {
-    id: values.id,
-    name: values.name || '',
-    ruleType: values.ruleType || 'metrics',
-    datasourceSelector: typeof values.datasourceSelector === 'string' ? safeParseJson(values.datasourceSelector, {}) : values.datasourceSelector ?? {},
-    querySpec: typeof values.querySpec === 'string' ? safeParseJson(values.querySpec, {}) : values.querySpec ?? {},
-    thresholdSpec: typeof values.thresholdSpec === 'string' ? safeParseJson(values.thresholdSpec, {}) : values.thresholdSpec ?? {},
+    id: typeof values.id === 'string' ? values.id : undefined,
+    name: toText(values.name),
+    ruleType: toText(values.ruleType || 'metrics'),
+    datasourceSelector: payloadMapFromField(values.datasourceSelector),
+    querySpec: payloadMapFromField(values.querySpec),
+    thresholdSpec: payloadMapFromField(values.thresholdSpec),
     forSeconds: Number(values.forSeconds ?? 0),
-    groupBy: Array.isArray(values.groupBy)
-      ? values.groupBy
-      : typeof values.groupBy === 'string'
-        ? safeParseStringArray(values.groupBy)
-        : [],
-    labels: typeof values.labels === 'string' ? safeParseJson(values.labels, {}) : values.labels ?? {},
-    annotations: typeof values.annotations === 'string' ? safeParseJson(values.annotations, {}) : values.annotations ?? {},
-    notificationPolicyId: values.notificationPolicyId || '',
-    healingPolicyIds: values.healingPolicyIds ?? [],
+    groupBy: stringListFromField(values.groupBy),
+    labels: payloadMapFromField(values.labels),
+    annotations: payloadMapFromField(values.annotations),
+    notificationPolicyId: toText(values.notificationPolicyId),
+    healingPolicyIds: stringListFromField(values.healingPolicyIds),
+    enabled: Boolean(values.enabled),
+  }
+}
+
+export function buildHealingPolicyPayload(values: HealingPolicyFormValues, definition: ReleaseDagDefinition): HealingPolicyPayload {
+  return {
+    id: typeof values.id === 'string' ? values.id : undefined,
+    name: toText(values.name),
+    triggerMode: toText(values.triggerMode),
+    workflowTemplateId: toText(values.workflowTemplateId),
+    approvalPolicyRef: toText(values.approvalPolicyRef),
+    cooldownSeconds: Number(values.cooldownSeconds ?? 0),
+    concurrencyKey: toText(values.concurrencyKey),
+    safetyWindowSeconds: Number(values.safetyWindowSeconds ?? 0),
+    definition,
+    enabled: Boolean(values.enabled),
+  }
+}
+
+export function buildOnCallSchedulePayload(values: OnCallScheduleFormValues): OnCallSchedulePayload {
+  return {
+    name: toText(values.name),
+    timeZone: toText(values.timeZone),
+    description: toText(values.description),
+    enabled: Boolean(values.enabled),
+  }
+}
+
+export function buildOnCallRotationPayload(values: OnCallRotationFormValues, currentConfig?: OnCallRotationConfig): OnCallRotationPayload {
+  return {
+    name: toText(values.name),
+    scheduleId: toText(values.scheduleId),
+    participants: normalizeParticipantList(values.participants),
+    rotationConfig: buildRotationConfigFromForm(values, currentConfig),
+    enabled: Boolean(values.enabled),
+  }
+}
+
+export function buildOnCallEscalationPolicyPayload(values: OnCallEscalationPolicyFormValues, currentSteps?: OnCallEscalationStepPayload[]): OnCallEscalationPolicyPayload {
+  return {
+    name: toText(values.name),
+    steps: buildEscalationStepsFromForm(values.steps ?? [], currentSteps),
+    enabled: Boolean(values.enabled),
+  }
+}
+
+export function buildOnCallAssignmentPayload(values: OnCallAssignmentFormValues): OnCallAssignmentPayload {
+  return {
+    name: toText(values.name),
+    integrationId: toText(values.integrationId),
+    integrationType: toText(values.integrationType),
+    businessLineId: toText(values.businessLineId),
+    alertCategory: toText(values.alertCategory),
+    alertName: toText(values.alertName),
+    severity: toText(values.severity),
+    service: toText(values.service),
+    role: toText(values.role),
+    matchers: payloadMapFromField(values.matchers),
+    targetType: onCallTargetType(values.targetType),
+    targetRef: toText(values.targetRef),
+    routeOrder: Number(values.routeOrder ?? 100),
+    groupBy: stringListFromField(values.groupBy),
+    priority: Number(values.priority ?? 100),
     enabled: Boolean(values.enabled),
   }
 }
@@ -531,7 +720,7 @@ export function AlertRulesPage() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<AlertRule | null>(null)
   const [testOpen, setTestOpen] = useState(false)
-  const [testResult, setTestResult] = useState<Record<string, unknown> | null>(null)
+  const [testResult, setTestResult] = useState<AlertRuleTestResult | null>(null)
   const [runsOpen, setRunsOpen] = useState(false)
   const [selectedRuleId, setSelectedRuleId] = useState<string>('')
 
@@ -554,7 +743,7 @@ export function AlertRulesPage() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (payload: Record<string, unknown>) => api.post('/alert-rules', payload),
+    mutationFn: (payload: AlertRulePayload) => api.post('/alert-rules', payload),
     onSuccess: () => {
       void message.success('告警规则已保存')
       void queryClient.invalidateQueries({ queryKey: ['alert-rules'] })
@@ -564,7 +753,7 @@ export function AlertRulesPage() {
     onError: (err: Error) => void message.error(err.message),
   })
   const updateMutation = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) => api.put(`/alert-rules/${id}`, payload),
+    mutationFn: ({ id, payload }: { id: string; payload: AlertRulePayload }) => api.put(`/alert-rules/${id}`, payload),
     onSuccess: () => {
       void message.success('告警规则已更新')
       void queryClient.invalidateQueries({ queryKey: ['alert-rules'] })
@@ -574,9 +763,9 @@ export function AlertRulesPage() {
     onError: (err: Error) => void message.error(err.message),
   })
   const testMutation = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) => api.post<ApiResponse<Record<string, unknown>>>(`/alert-rules/${id}/test`, payload),
-    onSuccess: (payload: ApiResponse<Record<string, unknown>>) => {
-      setTestResult(payload.data as Record<string, unknown>)
+    mutationFn: ({ id, payload }: { id: string; payload: AlertRulePayload }) => api.post<ApiResponse<AlertRuleTestResult>>(`/alert-rules/${id}/test`, payload),
+    onSuccess: (payload: ApiResponse<AlertRuleTestResult>) => {
+      setTestResult(payload.data ?? null)
       setTestOpen(true)
       void message.success('规则测试已执行')
     },
@@ -586,7 +775,7 @@ export function AlertRulesPage() {
   const ruleColumns: ColumnsType<AlertRule> = [
     { title: '名称', dataIndex: 'name' },
     { title: '类型', dataIndex: 'ruleType', render: (value: string) => <Tag>{value}</Tag> },
-    { title: '数据源', dataIndex: 'datasourceSelector', render: (value: Record<string, unknown>) => <Text code>{prettyJson(value)}</Text> },
+    { title: '数据源', dataIndex: 'datasourceSelector', render: (value: AlertRuleDatasourceSelector) => <Text code>{prettyJson(value)}</Text> },
     { title: '通知策略', dataIndex: 'notificationPolicyId', render: (value: string) => value || '-' },
     { title: '自愈策略', dataIndex: 'healingPolicyIds', render: (value: string[]) => <Space wrap>{(value ?? []).map((item) => <Tag key={item}>{item}</Tag>)}</Space> },
     { title: '持续(s)', dataIndex: 'forSeconds' },
@@ -607,7 +796,7 @@ export function AlertRulesPage() {
             icon={<PlayCircleOutlined />}
             onClick={() => {
               try {
-                testMutation.mutate({ id: record.id, payload: serializeRulePayload(record) })
+                testMutation.mutate({ id: record.id, payload: buildAlertRulePayload(record) })
               } catch (error) {
                 message.error(error instanceof Error ? error.message : '规则测试失败')
               }
@@ -669,21 +858,7 @@ export function AlertRulesPage() {
 
   function submit(values: AlertRuleFormValues) {
     try {
-      const payload = {
-        id: values.id,
-        name: values.name,
-        ruleType: values.ruleType,
-        datasourceSelector: safeParseJson(values.datasourceSelector, {}),
-        querySpec: safeParseJson(values.querySpec, {}),
-        thresholdSpec: safeParseJson(values.thresholdSpec, {}),
-        forSeconds: values.forSeconds,
-        groupBy: safeParseStringArray(values.groupBy),
-        labels: safeParseJson(values.labels, {}),
-        annotations: safeParseJson(values.annotations, {}),
-        notificationPolicyId: values.notificationPolicyId || '',
-        healingPolicyIds: values.healingPolicyIds ?? [],
-        enabled: values.enabled,
-      }
+      const payload = buildAlertRulePayload(values)
       if (editing?.id) {
         updateMutation.mutate({ id: editing.id, payload })
       } else {
@@ -750,7 +925,7 @@ export function AlertRulesPage() {
                 icon={<PlayCircleOutlined />}
                 onClick={() => {
                   try {
-                    testMutation.mutate({ id: editing.id, payload: serializeRulePayload(form.getFieldsValue() as AlertRuleFormValues) })
+                    testMutation.mutate({ id: editing.id, payload: buildAlertRulePayload(form.getFieldsValue() as AlertRuleFormValues) })
                   } catch (error) {
                     message.error(error instanceof Error ? error.message : '规则测试失败')
                   }
@@ -826,7 +1001,7 @@ export function HealingPage() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (payload: Record<string, unknown>) => api.post('/healing-policies', payload),
+    mutationFn: (payload: HealingPolicyPayload) => api.post('/healing-policies', payload),
     onSuccess: () => {
       void message.success('自愈策略已保存')
       void queryClient.invalidateQueries({ queryKey: ['healing-policies'] })
@@ -836,7 +1011,7 @@ export function HealingPage() {
     onError: (err: Error) => void message.error(err.message),
   })
   const updateMutation = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) => api.put(`/healing-policies/${id}`, payload),
+    mutationFn: ({ id, payload }: { id: string; payload: HealingPolicyPayload }) => api.put(`/healing-policies/${id}`, payload),
     onSuccess: () => {
       void message.success('自愈策略已更新')
       void queryClient.invalidateQueries({ queryKey: ['healing-policies'] })
@@ -921,18 +1096,7 @@ export function HealingPage() {
   }
 
   function submit(values: HealingPolicyFormValues) {
-    const payload = {
-      id: values.id,
-      name: values.name,
-      triggerMode: values.triggerMode,
-      workflowTemplateId: values.workflowTemplateId,
-      approvalPolicyRef: values.approvalPolicyRef,
-      cooldownSeconds: values.cooldownSeconds,
-      concurrencyKey: values.concurrencyKey,
-      safetyWindowSeconds: values.safetyWindowSeconds,
-      definition,
-      enabled: values.enabled,
-    }
+    const payload = buildHealingPolicyPayload(values, definition)
     if (editing?.id) {
       updateMutation.mutate({ id: editing.id, payload })
     } else {
@@ -1027,10 +1191,10 @@ export function OnCallSettingsPage() {
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const canManageOnCall = hasPermission(permissionSnapshotQuery.data?.data, 'observe.oncall.manage')
-  const [scheduleForm] = Form.useForm<Record<string, unknown>>()
+  const [scheduleForm] = Form.useForm<OnCallScheduleFormValues>()
   const [rotationForm] = Form.useForm<OnCallRotationFormValues>()
   const [policyForm] = Form.useForm<OnCallEscalationPolicyFormValues>()
-  const [assignmentForm] = Form.useForm<Record<string, unknown>>()
+  const [assignmentForm] = Form.useForm<OnCallAssignmentFormValues>()
   const [scheduleOpen, setScheduleOpen] = useState(false)
   const [rotationOpen, setRotationOpen] = useState(false)
   const [policyOpen, setPolicyOpen] = useState(false)
@@ -1062,42 +1226,42 @@ export function OnCallSettingsPage() {
   })
 
   const createSchedule = useMutation({
-    mutationFn: (payload: Record<string, unknown>) => api.post('/oncall/schedules', payload),
+    mutationFn: (payload: OnCallSchedulePayload) => api.post('/oncall/schedules', payload),
     onSuccess: () => { void message.success('排班已保存'); void queryClient.invalidateQueries({ queryKey: ['oncall-schedules'] }); setScheduleOpen(false); setEditingSchedule(null) },
     onError: (err: Error) => void message.error(err.message),
   })
   const updateSchedule = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) => api.put(`/oncall/schedules/${id}`, payload),
+    mutationFn: ({ id, payload }: { id: string; payload: OnCallSchedulePayload }) => api.put(`/oncall/schedules/${id}`, payload),
     onSuccess: () => { void message.success('排班已更新'); void queryClient.invalidateQueries({ queryKey: ['oncall-schedules'] }); setScheduleOpen(false); setEditingSchedule(null) },
     onError: (err: Error) => void message.error(err.message),
   })
   const createRotation = useMutation({
-    mutationFn: (payload: Record<string, unknown>) => api.post('/oncall/rotations', payload),
+    mutationFn: (payload: OnCallRotationPayload) => api.post('/oncall/rotations', payload),
     onSuccess: () => { void message.success('轮值已保存'); void queryClient.invalidateQueries({ queryKey: ['oncall-rotations'] }); setRotationOpen(false); setEditingRotation(null) },
     onError: (err: Error) => void message.error(err.message),
   })
   const updateRotation = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) => api.put(`/oncall/rotations/${id}`, payload),
+    mutationFn: ({ id, payload }: { id: string; payload: OnCallRotationPayload }) => api.put(`/oncall/rotations/${id}`, payload),
     onSuccess: () => { void message.success('轮值已更新'); void queryClient.invalidateQueries({ queryKey: ['oncall-rotations'] }); setRotationOpen(false); setEditingRotation(null) },
     onError: (err: Error) => void message.error(err.message),
   })
   const createPolicy = useMutation({
-    mutationFn: (payload: Record<string, unknown>) => api.post('/oncall/escalation-policies', payload),
+    mutationFn: (payload: OnCallEscalationPolicyPayload) => api.post('/oncall/escalation-policies', payload),
     onSuccess: () => { void message.success('升级链已保存'); void queryClient.invalidateQueries({ queryKey: ['oncall-escalation-policies'] }); setPolicyOpen(false); setEditingPolicy(null) },
     onError: (err: Error) => void message.error(err.message),
   })
   const updatePolicy = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) => api.put(`/oncall/escalation-policies/${id}`, payload),
+    mutationFn: ({ id, payload }: { id: string; payload: OnCallEscalationPolicyPayload }) => api.put(`/oncall/escalation-policies/${id}`, payload),
     onSuccess: () => { void message.success('升级链已更新'); void queryClient.invalidateQueries({ queryKey: ['oncall-escalation-policies'] }); setPolicyOpen(false); setEditingPolicy(null) },
     onError: (err: Error) => void message.error(err.message),
   })
   const createAssignment = useMutation({
-    mutationFn: (payload: Record<string, unknown>) => api.post('/oncall/routes', payload),
+    mutationFn: (payload: OnCallAssignmentPayload) => api.post('/oncall/routes', payload),
     onSuccess: () => { void message.success('分派规则已保存'); void queryClient.invalidateQueries({ queryKey: ['oncall-routes'] }); setAssignmentOpen(false); setEditingAssignment(null) },
     onError: (err: Error) => void message.error(err.message),
   })
   const updateAssignment = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) => api.put(`/oncall/routes/${id}`, payload),
+    mutationFn: ({ id, payload }: { id: string; payload: OnCallAssignmentPayload }) => api.put(`/oncall/routes/${id}`, payload),
     onSuccess: () => { void message.success('分派规则已更新'); void queryClient.invalidateQueries({ queryKey: ['oncall-routes'] }); setAssignmentOpen(false); setEditingAssignment(null) },
     onError: (err: Error) => void message.error(err.message),
   })
@@ -1133,7 +1297,7 @@ export function OnCallSettingsPage() {
     { title: '描述', dataIndex: 'description', render: (value: string) => value || '-' },
     { title: '启用', dataIndex: 'enabled', render: (value: boolean) => <BooleanTag value={value} trueLabel="启用" falseLabel="禁用" /> },
     { title: '更新时间', dataIndex: 'updatedAt', render: (value: string) => formatDateTime(value) },
-    { title: '操作', dataIndex: 'id', render: (_: string, record: OnCallSchedule) => canManageOnCall ? <ManagementIconButton aria-label="编辑排班" size="small" tooltip="编辑" icon={<EditOutlined />} onClick={() => { setEditingSchedule(record); scheduleForm.setFieldsValue({ ...record }); setScheduleOpen(true) }} /> : null },
+    { title: '操作', dataIndex: 'id', render: (_: string, record: OnCallSchedule) => canManageOnCall ? <ManagementIconButton aria-label="编辑排班" size="small" tooltip="编辑" icon={<EditOutlined />} onClick={() => { setEditingSchedule(record); scheduleForm.setFieldsValue({ name: record.name, timeZone: record.timeZone || '', description: record.description || '', enabled: record.enabled }); setScheduleOpen(true) }} /> : null },
   ]
 
   const rotationColumns: ColumnsType<OnCallRotation> = [
@@ -1147,7 +1311,7 @@ export function OnCallSettingsPage() {
 
   const escalationColumns: ColumnsType<OnCallEscalationPolicy> = [
     { title: '名称', dataIndex: 'name' },
-    { title: '步骤数', dataIndex: 'steps', render: (value: Array<Record<string, unknown>>) => value?.length ?? 0 },
+    { title: '步骤数', dataIndex: 'steps', render: (value: OnCallEscalationStepPayload[]) => value?.length ?? 0 },
     { title: '启用', dataIndex: 'enabled', render: (value: boolean) => <BooleanTag value={value} trueLabel="启用" falseLabel="禁用" /> },
     { title: '更新时间', dataIndex: 'updatedAt', render: (value: string) => formatDateTime(value) },
     { title: '操作', dataIndex: 'id', render: (_: string, record: OnCallEscalationPolicy) => canManageOnCall ? <ManagementIconButton aria-label="编辑升级策略" size="small" tooltip="编辑" icon={<EditOutlined />} onClick={() => { setEditingPolicy(record); policyForm.setFieldsValue({ name: record.name, steps: toOnCallEscalationStepFormValues(record.steps), enabled: record.enabled }); setPolicyOpen(true) }} /> : null },
@@ -1169,7 +1333,7 @@ export function OnCallSettingsPage() {
     {
       title: '匹配器',
       dataIndex: 'matchers',
-      render: (_: Record<string, unknown>, record: OnCallAssignmentRule) => (
+      render: (_: OnCallAssignmentMatchers | undefined, record: OnCallAssignmentRule) => (
         <Space wrap>
           {record.businessLineId ? <Tag>范围:{record.businessLineId}</Tag> : null}
           {record.service ? <Tag>服务:{record.service}</Tag> : null}
@@ -1200,8 +1364,8 @@ export function OnCallSettingsPage() {
     },
   ]
 
-  function submitSchedule(values: Record<string, unknown>) {
-    const payload = { ...values, enabled: Boolean(values.enabled) }
+  function submitSchedule(values: OnCallScheduleFormValues) {
+    const payload = buildOnCallSchedulePayload(values)
     if (editingSchedule?.id) {
       updateSchedule.mutate({ id: editingSchedule.id, payload })
       return
@@ -1210,13 +1374,7 @@ export function OnCallSettingsPage() {
   }
 
   function submitRotation(values: OnCallRotationFormValues) {
-    const payload = {
-      name: values.name,
-      scheduleId: values.scheduleId,
-      participants: values.participants ?? [],
-      rotationConfig: buildRotationConfigFromForm(values, editingRotation?.rotationConfig),
-      enabled: Boolean(values.enabled),
-    }
+    const payload = buildOnCallRotationPayload(values, editingRotation?.rotationConfig)
     if (editingRotation?.id) {
       updateRotation.mutate({ id: editingRotation.id, payload })
       return
@@ -1225,11 +1383,7 @@ export function OnCallSettingsPage() {
   }
 
   function submitPolicy(values: OnCallEscalationPolicyFormValues) {
-    const payload = {
-      name: values.name,
-      steps: buildEscalationStepsFromForm(values.steps ?? [], editingPolicy?.steps),
-      enabled: Boolean(values.enabled),
-    }
+    const payload = buildOnCallEscalationPolicyPayload(values, editingPolicy?.steps)
     if (editingPolicy?.id) {
       updatePolicy.mutate({ id: editingPolicy.id, payload })
       return
@@ -1264,26 +1418,9 @@ export function OnCallSettingsPage() {
     })
   }
 
-  function submitAssignment(values: Record<string, unknown>) {
+  function submitAssignment(values: OnCallAssignmentFormValues) {
     try {
-      const payload = {
-        name: values.name,
-        integrationId: values.integrationId || '',
-        integrationType: values.integrationType || '',
-        businessLineId: values.businessLineId || '',
-        alertCategory: values.alertCategory || '',
-        alertName: values.alertName || '',
-        severity: values.severity || '',
-        service: values.service || '',
-        role: values.role || '',
-        matchers: safeParseJson(String(values.matchers || '{}'), {}),
-        targetType: values.targetType || 'escalation',
-        targetRef: values.targetRef,
-        routeOrder: Number(values.routeOrder ?? 100),
-        groupBy: Array.isArray(values.groupBy) ? values.groupBy : [],
-        priority: Number(values.priority ?? 100),
-        enabled: Boolean(values.enabled),
-      }
+      const payload = buildOnCallAssignmentPayload(values)
       if (editingAssignment?.id) {
         updateAssignment.mutate({ id: editingAssignment.id, payload })
         return
@@ -1398,7 +1535,7 @@ export function OnCallSettingsPage() {
             <Select showSearch options={(schedulesQuery.data?.data ?? []).map((item) => ({ value: item.id, label: item.name }))} />
           </Form.Item>
           <Form.Item name="participants" label="参与人" rules={[{ required: true, message: '至少选择一个参与人' }]}>
-            <Select mode="multiple" showSearch optionFilterProp="label" options={userOptions} placeholder="选择参与人" />
+            <Select mode="multiple" showSearch={{ optionFilterProp: 'label' }} options={userOptions} placeholder="选择参与人" />
           </Form.Item>
           <Form.Item name="rotationMode" label="轮换节奏" rules={[{ required: true }]}>
             <Radio.Group
@@ -1572,7 +1709,7 @@ export function OnCallBoardPage() {
   })
 
   const updateRotationOverride = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) => api.put(`/oncall/rotations/${id}`, payload),
+    mutationFn: ({ id, payload }: { id: string; payload: OnCallRotationPayload }) => api.put(`/oncall/rotations/${id}`, payload),
     onSuccess: () => {
       void message.success('值班覆盖已保存')
       void queryClient.invalidateQueries({ queryKey: ['oncall-rotations'] })
@@ -1715,13 +1852,13 @@ export function OnCallBoardPage() {
         <>
           <Row gutter={16} className="soha-oncall-stats-row">
             <Col xs={24} sm={12} md={6}>
-              <Card><Statistic title="今日值班" value={formatParticipantSummary(todayAssignment.participants)} valueStyle={{ fontSize: 18 }} /></Card>
+              <Card><Statistic title="今日值班" value={formatParticipantSummary(todayAssignment.participants)} styles={{ content: { fontSize: 18 } }} /></Card>
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <Card><Statistic title="明日值班" value={formatParticipantSummary(tomorrowAssignment.participants)} valueStyle={{ fontSize: 18 }} /></Card>
+              <Card><Statistic title="明日值班" value={formatParticipantSummary(tomorrowAssignment.participants)} styles={{ content: { fontSize: 18 } }} /></Card>
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <Card><Statistic title="轮换节奏" value={selectedRotation ? rotationModeLabel(selectedRotation.rotationConfig) : '未配置'} valueStyle={{ fontSize: 18 }} /></Card>
+              <Card><Statistic title="轮换节奏" value={selectedRotation ? rotationModeLabel(selectedRotation.rotationConfig) : '未配置'} styles={{ content: { fontSize: 18 } }} /></Card>
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Card>
@@ -1819,7 +1956,7 @@ export function OnCallBoardPage() {
         title={drawerDate ? `${drawerDate.format('YYYY-MM-DD ddd')} 值班详情` : '值班详情'}
         open={Boolean(drawerDate)}
         onClose={() => setDrawerDate(null)}
-        width={420}
+        size={420}
       >
         {drawerDate && drawerAssignment ? (
           <Space orientation="vertical" size={16} style={{ width: '100%' }}>
@@ -1833,7 +1970,7 @@ export function OnCallBoardPage() {
               <Card size="small" title="当日班次">
                 <Timeline
                   items={shiftsForDate(selectedRotation, drawerDate).map((slot) => ({
-                    children: <Text>{slot.start} – {slot.end}　{slot.participant}</Text>,
+                    children: <Text>{slot.start} – {slot.end} {slot.participant}</Text>,
                   }))}
                 />
               </Card>
@@ -1859,8 +1996,7 @@ export function OnCallBoardPage() {
             <Select
               mode="multiple"
               allowClear
-              showSearch
-              optionFilterProp="label"
+              showSearch={{ optionFilterProp: 'label' }}
               placeholder="选择当日值班人员"
               options={onCallUserOptions(usersQuery.data?.data ?? [])}
             />

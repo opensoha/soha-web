@@ -1,6 +1,21 @@
 import { useDeferredValue, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { App, Button, Input, InputNumber, Modal, Popconfirm, Popover, Progress, Select, Space, Tag, Tooltip, Typography } from 'antd'
+import {
+  Alert,
+  App,
+  Button,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Popover,
+  Progress,
+  Select,
+  Space,
+  Tag,
+  Tooltip,
+  Typography,
+} from 'antd'
 import { DeleteOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -16,6 +31,10 @@ import {
 import { useResourceActions } from '@/components/resource-actions'
 import { BooleanTag } from '@/components/status-tag'
 import { hasAllowedAction } from '@/features/auth/permission-snapshot'
+import {
+  capabilityActionTooltip,
+  useClusterCapability,
+} from '@/features/platform/cluster-capabilities'
 import { buildClusterScopedPath } from '@/features/platform/platform-scope-query'
 import {
   CONFIGMAP_DEFAULT_TEMPLATE,
@@ -52,7 +71,7 @@ import { api } from '@/services/api-client'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { formatAgeSeconds, formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
-import type { ApiResponse, Cluster } from '@/types'
+import type { ApiResponse } from '@/types'
 import type {
   ClusterRoleBindingResource,
   ClusterRoleResource,
@@ -86,22 +105,36 @@ import './platform-pages.css'
 
 const { Text } = Typography
 
-function PlatformTableState({ description, kind }: { description: ReactNode; kind?: 'empty' | 'error' | 'select-scope' }) {
-  return <ManagementState bordered={false} compact description={description} kind={kind ?? 'empty'} />
+function PlatformTableState({
+  description,
+  kind,
+}: {
+  description: ReactNode
+  kind?: 'empty' | 'error' | 'select-scope'
+}) {
+  return (
+    <ManagementState bordered={false} compact description={description} kind={kind ?? 'empty'} />
+  )
 }
 
-function buildTableStateKind(clusterId: string | null | undefined, description: string): 'empty' | 'select-scope' {
-  return !clusterId || description.includes('请选择') || description.includes('Select a cluster') ? 'select-scope' : 'empty'
+function buildTableStateKind(
+  clusterId: string | null | undefined,
+  description: string,
+): 'empty' | 'select-scope' {
+  return !clusterId || description.includes('请选择') || description.includes('Select a cluster')
+    ? 'select-scope'
+    : 'empty'
 }
-
-
-
 
 function roleRefTag(value?: string) {
   if (!value) {
     return <Text type="secondary">-</Text>
   }
-  return <Text code className="soha-rbac-role-ref">{value}</Text>
+  return (
+    <Text code className="soha-rbac-role-ref">
+      {value}
+    </Text>
+  )
 }
 
 function renderRBACSubjectChips(subjects: string[] | undefined, emptyLabel: string) {
@@ -122,7 +155,7 @@ function renderRBACSubjectChips(subjects: string[] | undefined, emptyLabel: stri
       {overflow.length > 0 ? (
         <Popover
           placement="topLeft"
-          content={(
+          content={
             <div className="soha-rbac-subject-popover">
               {overflow.map((subject) => (
                 <Tag key={subject.label} className="soha-rbac-subject-chip">
@@ -130,7 +163,7 @@ function renderRBACSubjectChips(subjects: string[] | undefined, emptyLabel: stri
                 </Tag>
               ))}
             </div>
-          )}
+          }
         >
           <Tag className="soha-rbac-subject-chip">{`+${overflow.length}`}</Tag>
         </Popover>
@@ -139,7 +172,10 @@ function renderRBACSubjectChips(subjects: string[] | undefined, emptyLabel: stri
   )
 }
 
-function useRBACActionColumn<T extends Record<string, any>>(resourcePath: string, actionConfig?: RBACActionConfig<T>) {
+function useRBACActionColumn<T extends Record<string, any>>(
+  resourcePath: string,
+  actionConfig?: RBACActionConfig<T>,
+) {
   return useResourceActions<T>({
     resourcePath,
     resourceKind: actionConfig?.resourceKind ?? 'Resource',
@@ -153,7 +189,8 @@ function useScopedResourceQuery<T>(resourcePath: string) {
   const { clusterId, namespace } = usePlatformScopeStore()
   return useQuery({
     queryKey: ['platform-resource', resourcePath, clusterId, namespace],
-    queryFn: () => api.get<ApiResponse<T[]>>(buildClusterScopedPath(clusterId!, resourcePath, namespace)),
+    queryFn: () =>
+      api.get<ApiResponse<T[]>>(buildClusterScopedPath(clusterId!, resourcePath, namespace)),
     enabled: !!clusterId,
   })
 }
@@ -208,10 +245,12 @@ function ResourceTableCard<T extends Record<string, any>>({
   const effectiveColumns = actionConfig ? [...columns, actionColumn] : columns
   const scroll = actionConfig ? { x: 'max-content' as const } : undefined
   const effectiveEmptyDescription = !clusterId
-    ? (localeCode === 'zh_CN' ? '请选择集群' : 'Select a cluster')
+    ? localeCode === 'zh_CN'
+      ? '请选择集群'
+      : 'Select a cluster'
     : normalizedKeyword && rawItems.length > 0
       ? localize(localeCode, buildResourceSearchEmptyDescription(title))
-    : localize(localeCode, emptyDescription)
+      : localize(localeCode, emptyDescription)
   const densityLabel = localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'
 
   return (
@@ -219,16 +258,21 @@ function ResourceTableCard<T extends Record<string, any>>({
       {actionConfig ? modalNode : null}
       <ManagementQueryPanel
         onFinish={() => undefined}
-        actions={(
+        actions={
           <>
-            <Button autoInsertSpace={false} disabled={!searchKeyword.trim()} htmlType="button" onClick={() => setSearchKeyword('')}>
+            <Button
+              autoInsertSpace={false}
+              disabled={!searchKeyword.trim()}
+              htmlType="button"
+              onClick={() => setSearchKeyword('')}
+            >
               {localeCode === 'zh_CN' ? '重置' : 'Reset'}
             </Button>
             <Button autoInsertSpace={false} htmlType="submit" type="primary">
               {localeCode === 'zh_CN' ? '查询' : 'Search'}
             </Button>
           </>
-        )}
+        }
       >
         <ManagementQueryField label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}>
           <Input
@@ -239,7 +283,10 @@ function ResourceTableCard<T extends Record<string, any>>({
             value={searchKeyword}
             variant="filled"
             onChange={(event) => setSearchKeyword(event.target.value)}
-            placeholder={localize(localeCode, searchPlaceholder ?? buildResourceSearchPlaceholder(title))}
+            placeholder={localize(
+              localeCode,
+              searchPlaceholder ?? buildResourceSearchPlaceholder(title),
+            )}
           />
         </ManagementQueryField>
       </ManagementQueryPanel>
@@ -248,14 +295,14 @@ function ResourceTableCard<T extends Record<string, any>>({
         columnSettingIconOnly
         columnSettingPlacement="header"
         shellClassName="soha-management-table-shell"
-        headerExtra={(
+        headerExtra={
           <ManagementTableToolbar>
             {headerExtra}
             <ManagementDensityButton
               aria-label={densityLabel}
               title={densityLabel}
               tooltip={densityLabel}
-              onClick={() => setTableSize((current) => current === 'middle' ? 'small' : 'middle')}
+              onClick={() => setTableSize((current) => (current === 'middle' ? 'small' : 'middle'))}
             />
             <ManagementRefreshButton
               aria-label={localeCode === 'zh_CN' ? '刷新' : 'Refresh'}
@@ -269,17 +316,24 @@ function ResourceTableCard<T extends Record<string, any>>({
               }}
             />
           </ManagementTableToolbar>
-        )}
+        }
         columns={effectiveColumns}
         dataSource={clusterId ? filteredItems : []}
         rowKey={rowKey}
         loading={query.isLoading}
-        paginationSummary={(
+        paginationSummary={
           <Text className="soha-workload-table-summary" type="secondary">
-            {localeCode === 'zh_CN' ? `当前 ${filteredItems.length} / ${rawItems.length} 条` : `${filteredItems.length} / ${rawItems.length} items`}
+            {localeCode === 'zh_CN'
+              ? `当前 ${filteredItems.length} / ${rawItems.length} 条`
+              : `${filteredItems.length} / ${rawItems.length} items`}
           </Text>
-        )}
-        empty={<PlatformTableState description={effectiveEmptyDescription} kind={buildTableStateKind(clusterId, effectiveEmptyDescription)} />}
+        }
+        empty={
+          <PlatformTableState
+            description={effectiveEmptyDescription}
+            kind={buildTableStateKind(clusterId, effectiveEmptyDescription)}
+          />
+        }
         pageSize={10}
         tableSize={tableSize}
         scroll={scroll ?? { x: 'max-content' }}
@@ -342,15 +396,23 @@ function WorkloadReplicaTableEmpty({
 }) {
   const hasFilterMiss = totalCount > 0 && filteredCount === 0
   const resolvedTitle = !clusterId
-    ? (localeCode === 'zh_CN' ? '请选择集群' : 'Select a cluster')
+    ? localeCode === 'zh_CN'
+      ? '请选择集群'
+      : 'Select a cluster'
     : hasFilterMiss
       ? localize(localeCode, buildWorkloadReplicaSearchEmptyDescription(title))
       : localize(localeCode, emptyDescription)
   const description = !clusterId
-    ? (localeCode === 'zh_CN' ? '在顶部作用域选择集群后查看工作负载资源。' : 'Select a cluster in the header scope controls to inspect workload resources.')
+    ? localeCode === 'zh_CN'
+      ? '在顶部作用域选择集群后查看工作负载资源。'
+      : 'Select a cluster in the header scope controls to inspect workload resources.'
     : hasFilterMiss
-      ? (localeCode === 'zh_CN' ? '调整搜索条件后重试。' : 'Adjust the search term and try again.')
-      : (localeCode === 'zh_CN' ? '当前集群和命名空间范围内没有可展示的记录。' : 'No records are available for the selected cluster and namespace scope.')
+      ? localeCode === 'zh_CN'
+        ? '调整搜索条件后重试。'
+        : 'Adjust the search term and try again.'
+      : localeCode === 'zh_CN'
+        ? '当前集群和命名空间范围内没有可展示的记录。'
+        : 'No records are available for the selected cluster and namespace scope.'
 
   return (
     <ManagementState
@@ -366,12 +428,18 @@ function WorkloadReplicaTableEmpty({
 function renderReplicaReadyCell(ready: number | undefined, desired: number | undefined) {
   const readyCount = Math.max(0, Number.isFinite(ready) ? Number(ready) : 0)
   const desiredCount = Math.max(0, Number.isFinite(desired) ? Number(desired) : 0)
-  const percent = desiredCount > 0 ? Math.min(100, Math.round((readyCount / desiredCount) * 100)) : 0
+  const percent =
+    desiredCount > 0 ? Math.min(100, Math.round((readyCount / desiredCount) * 100)) : 0
   const isComplete = desiredCount === 0 || readyCount >= desiredCount
 
   return (
     <div className="soha-replica-progress-cell">
-      <Progress percent={percent} showInfo={false} size="small" status={isComplete ? 'success' : 'active'} />
+      <Progress
+        percent={percent}
+        showInfo={false}
+        size="small"
+        status={isComplete ? 'success' : 'active'}
+      />
       <Text type="secondary">{`${readyCount}/${desiredCount}`}</Text>
     </div>
   )
@@ -433,16 +501,21 @@ function WorkloadReplicaListPage<T extends { allowedActions?: string[] }>({
   const replicaQueryPanel = (
     <ManagementQueryPanel
       onFinish={() => undefined}
-      actions={(
+      actions={
         <>
-          <Button autoInsertSpace={false} disabled={!searchKeyword.trim()} htmlType="button" onClick={() => setSearchKeyword('')}>
+          <Button
+            autoInsertSpace={false}
+            disabled={!searchKeyword.trim()}
+            htmlType="button"
+            onClick={() => setSearchKeyword('')}
+          >
             {localeCode === 'zh_CN' ? '重置' : 'Reset'}
           </Button>
           <Button autoInsertSpace={false} htmlType="submit" type="primary">
             {localeCode === 'zh_CN' ? '查询' : 'Search'}
           </Button>
         </>
-      )}
+      }
     >
       <ManagementQueryField label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}>
         <Input
@@ -467,7 +540,9 @@ function WorkloadReplicaListPage<T extends { allowedActions?: string[] }>({
           className="mb-3"
           description={buildWorkloadReplicaErrorDescription(localeCode, query.error)}
           kind="error"
-          title={localeCode === 'zh_CN' ? '工作负载资源暂时不可用' : 'Workload resources unavailable'}
+          title={
+            localeCode === 'zh_CN' ? '工作负载资源暂时不可用' : 'Workload resources unavailable'
+          }
         />
       ) : null}
       {replicaQueryPanel}
@@ -480,21 +555,23 @@ function WorkloadReplicaListPage<T extends { allowedActions?: string[] }>({
         dataSource={clusterId ? filteredItems : []}
         rowKey={rowKey}
         loading={query.isLoading}
-        paginationSummary={(
+        paginationSummary={
           <Text className="soha-workload-table-summary" type="secondary">
-            {localeCode === 'zh_CN' ? `当前 ${filteredItems.length} / ${rawItems.length} 条` : `${filteredItems.length} / ${rawItems.length} items`}
+            {localeCode === 'zh_CN'
+              ? `当前 ${filteredItems.length} / ${rawItems.length} 条`
+              : `${filteredItems.length} / ${rawItems.length} items`}
           </Text>
-        )}
+        }
         pageSize={10}
         tableSize={tableSize}
         scroll={{ x: 'max-content' }}
-        headerExtra={(
+        headerExtra={
           <ManagementTableToolbar>
             <ManagementDensityButton
               aria-label={densityLabel}
               title={densityLabel}
               tooltip={densityLabel}
-              onClick={() => setTableSize((current) => current === 'middle' ? 'small' : 'middle')}
+              onClick={() => setTableSize((current) => (current === 'middle' ? 'small' : 'middle'))}
             />
             <ManagementRefreshButton
               aria-label={localeCode === 'zh_CN' ? '刷新' : 'Refresh'}
@@ -508,8 +585,8 @@ function WorkloadReplicaListPage<T extends { allowedActions?: string[] }>({
               }}
             />
           </ManagementTableToolbar>
-        )}
-        empty={(
+        }
+        empty={
           <WorkloadReplicaTableEmpty
             clusterId={clusterId}
             emptyDescription={emptyDescription}
@@ -518,7 +595,7 @@ function WorkloadReplicaListPage<T extends { allowedActions?: string[] }>({
             title={title}
             totalCount={rawItems.length}
           />
-        )}
+        }
       />
     </div>
   )
@@ -527,7 +604,9 @@ function WorkloadReplicaListPage<T extends { allowedActions?: string[] }>({
 function ResourceNameLink({ to, name }: { to: string; name: string }) {
   const navigate = useNavigate()
   return (
-    <Button type="text" onClick={() => navigate(to)}>{name}</Button>
+    <Button type="text" onClick={() => navigate(to)}>
+      {name}
+    </Button>
   )
 }
 
@@ -555,19 +634,13 @@ function RBACListPage<T extends { allowedActions?: string[] }>({
   const { localeCode } = useI18n()
   const { clusterId } = usePlatformScopeStore()
   const query = useScopedResourceQuery<T>(resourcePath)
-  const clustersQuery = useQuery({
-    queryKey: ['clusters'],
-    queryFn: () => api.get<ApiResponse<Cluster[]>>('/clusters'),
-    enabled: !!clusterId,
-  })
+  const yamlApplyCapability = useClusterCapability('resource.yaml.apply', localeCode)
   const [searchKeyword, setSearchKeyword] = useState('')
   const [createVisible, setCreateVisible] = useState(false)
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const deferredSearchKeyword = useDeferredValue(searchKeyword)
   const normalizedKeyword = normalizeSearchKeyword(deferredSearchKeyword)
   const rawItems = query.data?.data ?? []
-  const currentCluster = (clustersQuery.data?.data ?? []).find((item) => item.id === clusterId)
-  const isAgentCluster = currentCluster?.connectionMode === 'agent'
   const filteredItems = useMemo(
     () => rawItems.filter((item) => includesSearch(searchValues(item), normalizedKeyword)),
     [normalizedKeyword, rawItems, searchValues],
@@ -576,15 +649,20 @@ function RBACListPage<T extends { allowedActions?: string[] }>({
     ? {
         ...actionConfig,
         canDelete: (record: T) => {
-          if (isAgentCluster) return false
+          if (yamlApplyCapability.disabled) return false
           return actionConfig.canDelete ? actionConfig.canDelete(record) : true
         },
       }
     : undefined
   const shouldShowActions = effectiveActionConfig
-    ? rawItems.some((item) => effectiveActionConfig.canDelete ? effectiveActionConfig.canDelete(item) : true)
+    ? rawItems.some((item) =>
+        effectiveActionConfig.canDelete ? effectiveActionConfig.canDelete(item) : true,
+      )
     : false
-  const { column: actionColumn, modalNode } = useRBACActionColumn<T>(resourcePath, shouldShowActions ? effectiveActionConfig : undefined)
+  const { column: actionColumn, modalNode } = useRBACActionColumn<T>(
+    resourcePath,
+    shouldShowActions ? effectiveActionConfig : undefined,
+  )
 
   const effectiveColumns = shouldShowActions ? [...columns, actionColumn] : columns
   const effectiveEmptyDescription = !clusterId
@@ -592,12 +670,18 @@ function RBACListPage<T extends { allowedActions?: string[] }>({
     : normalizedKeyword && rawItems.length > 0
       ? localize(localeCode, buildRBACSearchEmptyDescription(title))
       : localize(localeCode, emptyDescription)
-  const createDisabled = !clusterId || isAgentCluster
+  const createDisabled = !clusterId || yamlApplyCapability.disabled
   const createDisabledReason = !clusterId
-    ? (localeCode === 'zh_CN' ? '请先选择集群。' : 'Select a cluster first.')
-    : isAgentCluster
-      ? (localeCode === 'zh_CN' ? 'agent 集群暂不支持 YAML 新增。' : 'YAML create is not supported for agent-connected clusters yet.')
+    ? localeCode === 'zh_CN'
+      ? '请先选择集群。'
+      : 'Select a cluster first.'
+    : yamlApplyCapability.disabled
+      ? yamlApplyCapability.reason ||
+        (localeCode === 'zh_CN'
+          ? '当前集群暂不支持 YAML 新增。'
+          : 'YAML create is not supported for the current cluster.')
       : ''
+  const capabilityNotice = yamlApplyCapability.reason
   const densityLabel = localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'
 
   return (
@@ -608,6 +692,15 @@ function RBACListPage<T extends { allowedActions?: string[] }>({
           description={buildRequestErrorDescription(localeCode, query.error)}
           kind="error"
           title={buildRBACErrorMessage(localeCode)}
+        />
+      ) : null}
+      {capabilityNotice ? (
+        <Alert
+          showIcon
+          type={yamlApplyCapability.disabled ? 'warning' : 'info'}
+          style={{ marginBottom: 12 }}
+          title={localeCode === 'zh_CN' ? 'YAML 操作能力' : 'YAML operation capability'}
+          description={capabilityNotice}
         />
       ) : null}
       {modalNode}
@@ -624,16 +717,21 @@ function RBACListPage<T extends { allowedActions?: string[] }>({
       ) : null}
       <ManagementQueryPanel
         onFinish={() => undefined}
-        actions={(
+        actions={
           <>
-            <Button autoInsertSpace={false} disabled={!searchKeyword.trim()} htmlType="button" onClick={() => setSearchKeyword('')}>
+            <Button
+              autoInsertSpace={false}
+              disabled={!searchKeyword.trim()}
+              htmlType="button"
+              onClick={() => setSearchKeyword('')}
+            >
               {localeCode === 'zh_CN' ? '重置' : 'Reset'}
             </Button>
             <Button autoInsertSpace={false} htmlType="submit" type="primary">
               {localeCode === 'zh_CN' ? '查询' : 'Search'}
             </Button>
           </>
-        )}
+        }
       >
         <ManagementQueryField label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}>
           <Input
@@ -644,7 +742,10 @@ function RBACListPage<T extends { allowedActions?: string[] }>({
             value={searchKeyword}
             variant="filled"
             onChange={(event) => setSearchKeyword(event.target.value)}
-            placeholder={localize(localeCode, searchPlaceholder ?? buildRBACSearchPlaceholder(title))}
+            placeholder={localize(
+              localeCode,
+              searchPlaceholder ?? buildRBACSearchPlaceholder(title),
+            )}
           />
         </ManagementQueryField>
       </ManagementQueryPanel>
@@ -657,20 +758,28 @@ function RBACListPage<T extends { allowedActions?: string[] }>({
         dataSource={clusterId ? filteredItems : []}
         rowKey={rowKey}
         loading={query.isLoading}
-        paginationSummary={(
+        paginationSummary={
           <Text className="soha-workload-table-summary" type="secondary">
-            {localeCode === 'zh_CN' ? `当前 ${filteredItems.length} / ${rawItems.length} 条` : `${filteredItems.length} / ${rawItems.length} items`}
+            {localeCode === 'zh_CN'
+              ? `当前 ${filteredItems.length} / ${rawItems.length} 条`
+              : `${filteredItems.length} / ${rawItems.length} items`}
           </Text>
-        )}
+        }
         pageSize={10}
         tableSize={tableSize}
         scroll={{ x: 'max-content' }}
-        headerExtra={(
+        headerExtra={
           <ManagementTableToolbar>
             {createConfig ? (
               <Tooltip title={createDisabled ? createDisabledReason : ''}>
                 <span>
-                  <Button autoInsertSpace={false} size="small" type="primary" disabled={createDisabled} onClick={() => setCreateVisible(true)}>
+                  <Button
+                    autoInsertSpace={false}
+                    size="small"
+                    type="primary"
+                    disabled={createDisabled}
+                    onClick={() => setCreateVisible(true)}
+                  >
                     {localeCode === 'zh_CN' ? '新增' : 'Create'}
                   </Button>
                 </span>
@@ -680,7 +789,7 @@ function RBACListPage<T extends { allowedActions?: string[] }>({
               aria-label={densityLabel}
               title={densityLabel}
               tooltip={densityLabel}
-              onClick={() => setTableSize((current) => current === 'middle' ? 'small' : 'middle')}
+              onClick={() => setTableSize((current) => (current === 'middle' ? 'small' : 'middle'))}
             />
             <ManagementRefreshButton
               aria-label={buildRBACRefreshLabel(localeCode)}
@@ -694,8 +803,13 @@ function RBACListPage<T extends { allowedActions?: string[] }>({
               }}
             />
           </ManagementTableToolbar>
-        )}
-        empty={<PlatformTableState description={effectiveEmptyDescription} kind={buildTableStateKind(clusterId, effectiveEmptyDescription)} />}
+        }
+        empty={
+          <PlatformTableState
+            description={effectiveEmptyDescription}
+            kind={buildTableStateKind(clusterId, effectiveEmptyDescription)}
+          />
+        }
       />
     </div>
   )
@@ -706,14 +820,26 @@ const configMapColumns: TableColumnsType<ConfigMapResource> = [
     title: 'Name',
     dataIndex: 'name',
     render: (value: string, record: ConfigMapResource) => (
-      <ResourceNameLink name={value} to={`/configuration/configmaps/${encodeURIComponent(value)}${buildNamespaceQuery(record.namespace)}`} />
+      <ResourceNameLink
+        name={value}
+        to={`/configuration/configmaps/${encodeURIComponent(value)}${buildNamespaceQuery(record.namespace)}`}
+      />
     ),
   },
   { title: 'Namespace', dataIndex: 'namespace' },
   { title: 'Data', dataIndex: 'dataEntries' },
   { title: 'Binary', dataIndex: 'binaryEntries' },
-  { title: 'Immutable', dataIndex: 'immutable', render: (value: boolean) => <BooleanTag value={value} /> },
-  { ...tableColumnPresets.datetime, title: 'Age', dataIndex: 'ageSeconds', render: (value: number) => formatAgeSeconds(value) },
+  {
+    title: 'Immutable',
+    dataIndex: 'immutable',
+    render: (value: boolean) => <BooleanTag value={value} />,
+  },
+  {
+    ...tableColumnPresets.datetime,
+    title: 'Age',
+    dataIndex: 'ageSeconds',
+    render: (value: number) => formatAgeSeconds(value),
+  },
 ]
 
 const secretColumns: TableColumnsType<SecretResource> = [
@@ -721,17 +847,31 @@ const secretColumns: TableColumnsType<SecretResource> = [
     title: 'Name',
     dataIndex: 'name',
     render: (value: string, record: SecretResource) => (
-      <ResourceNameLink name={value} to={`/configuration/secrets/${encodeURIComponent(value)}${buildNamespaceQuery(record.namespace)}`} />
+      <ResourceNameLink
+        name={value}
+        to={`/configuration/secrets/${encodeURIComponent(value)}${buildNamespaceQuery(record.namespace)}`}
+      />
     ),
   },
   { title: 'Namespace', dataIndex: 'namespace' },
   { title: 'Type', dataIndex: 'type', render: (value: string) => value || '-' },
   { title: 'Data', dataIndex: 'dataEntries' },
-  { title: 'Immutable', dataIndex: 'immutable', render: (value: boolean) => <BooleanTag value={value} /> },
-  { ...tableColumnPresets.datetime, title: 'Age', dataIndex: 'ageSeconds', render: (value: number) => formatAgeSeconds(value) },
+  {
+    title: 'Immutable',
+    dataIndex: 'immutable',
+    render: (value: boolean) => <BooleanTag value={value} />,
+  },
+  {
+    ...tableColumnPresets.datetime,
+    title: 'Age',
+    dataIndex: 'ageSeconds',
+    render: (value: number) => formatAgeSeconds(value),
+  },
 ]
 
-function buildReplicaSetColumns(localeCode: 'zh_CN' | 'en_US'): TableColumnsType<ReplicaSetResource> {
+function buildReplicaSetColumns(
+  localeCode: 'zh_CN' | 'en_US',
+): TableColumnsType<ReplicaSetResource> {
   return [
     {
       title: localeCode === 'zh_CN' ? '名称' : 'Name',
@@ -740,16 +880,27 @@ function buildReplicaSetColumns(localeCode: 'zh_CN' | 'en_US'): TableColumnsType
       render: renderWorkloadNameText,
       width: 240,
     },
-    { title: localeCode === 'zh_CN' ? '命名空间' : 'Namespace', dataIndex: 'namespace', width: 160 },
+    {
+      title: localeCode === 'zh_CN' ? '命名空间' : 'Namespace',
+      dataIndex: 'namespace',
+      width: 160,
+    },
     {
       title: 'Ready',
       dataIndex: 'readyReplicas',
       width: 190,
-      render: (_: number, record: ReplicaSetResource) => renderReplicaReadyCell(record.readyReplicas, record.desiredReplicas),
+      render: (_: number, record: ReplicaSetResource) =>
+        renderReplicaReadyCell(record.readyReplicas, record.desiredReplicas),
     },
     { title: 'Desired', dataIndex: 'desiredReplicas', width: 96 },
     { title: 'Available', dataIndex: 'availableReplicas', width: 110 },
-    { ...tableColumnPresets.datetime, title: 'Age', dataIndex: 'ageSeconds', width: 120, render: (value: number) => formatAgeSeconds(value) },
+    {
+      ...tableColumnPresets.datetime,
+      title: 'Age',
+      dataIndex: 'ageSeconds',
+      width: 120,
+      render: (value: number) => formatAgeSeconds(value),
+    },
   ]
 }
 
@@ -761,18 +912,32 @@ const hpaColumns: TableColumnsType<HorizontalPodAutoscalerResource> = [
   { title: 'Max', dataIndex: 'maxReplicas' },
   { title: 'Current', dataIndex: 'currentReplicas' },
   { title: 'Desired', dataIndex: 'desiredReplicas' },
-  { ...tableColumnPresets.datetime, title: 'Age', dataIndex: 'ageSeconds', render: (value: number) => formatAgeSeconds(value) },
+  {
+    ...tableColumnPresets.datetime,
+    title: 'Age',
+    dataIndex: 'ageSeconds',
+    render: (value: number) => formatAgeSeconds(value),
+  },
 ]
 
 const pdbColumns: TableColumnsType<PodDisruptionBudgetResource> = [
   { title: 'Name', dataIndex: 'name' },
   { title: 'Namespace', dataIndex: 'namespace' },
   { title: 'Min Available', dataIndex: 'minAvailable', render: (value: string) => value || '-' },
-  { title: 'Max Unavailable', dataIndex: 'maxUnavailable', render: (value: string) => value || '-' },
+  {
+    title: 'Max Unavailable',
+    dataIndex: 'maxUnavailable',
+    render: (value: string) => value || '-',
+  },
   { title: 'Healthy', dataIndex: 'currentHealthy' },
   { title: 'Desired', dataIndex: 'desiredHealthy' },
   { title: 'Allowed', dataIndex: 'disruptionsAllowed' },
-  { ...tableColumnPresets.datetime, title: 'Age', dataIndex: 'ageSeconds', render: (value: number) => formatAgeSeconds(value) },
+  {
+    ...tableColumnPresets.datetime,
+    title: 'Age',
+    dataIndex: 'ageSeconds',
+    render: (value: number) => formatAgeSeconds(value),
+  },
 ]
 
 const endpointSliceColumns: TableColumnsType<EndpointSliceResource> = [
@@ -780,31 +945,59 @@ const endpointSliceColumns: TableColumnsType<EndpointSliceResource> = [
   { title: 'Namespace', dataIndex: 'namespace' },
   { title: 'Address Type', dataIndex: 'addressType' },
   { title: 'Endpoints', dataIndex: 'endpoints' },
-  { title: 'Ports', dataIndex: 'ports', render: (value: string[] | undefined) => value?.join(', ') || '-' },
-  { ...tableColumnPresets.datetime, title: 'Age', dataIndex: 'ageSeconds', render: (value: number) => formatAgeSeconds(value) },
+  {
+    title: 'Ports',
+    dataIndex: 'ports',
+    render: (value: string[] | undefined) => value?.join(', ') || '-',
+  },
+  {
+    ...tableColumnPresets.datetime,
+    title: 'Age',
+    dataIndex: 'ageSeconds',
+    render: (value: number) => formatAgeSeconds(value),
+  },
 ]
 
 const networkPolicyColumns: TableColumnsType<NetworkPolicyResource> = [
   { title: 'Name', dataIndex: 'name' },
   { title: 'Namespace', dataIndex: 'namespace' },
-  { title: 'Policy Types', dataIndex: 'policyTypes', render: (value: string[] | undefined) => value?.map((item) => <Tag key={item}>{item}</Tag>) ?? '-' },
+  {
+    title: 'Policy Types',
+    dataIndex: 'policyTypes',
+    render: (value: string[] | undefined) =>
+      value?.map((item) => <Tag key={item}>{item}</Tag>) ?? '-',
+  },
   { title: 'Ingress Rules', dataIndex: 'ingressRules' },
   { title: 'Egress Rules', dataIndex: 'egressRules' },
-  { ...tableColumnPresets.datetime, title: 'Age', dataIndex: 'ageSeconds', render: (value: number) => formatAgeSeconds(value) },
+  {
+    ...tableColumnPresets.datetime,
+    title: 'Age',
+    dataIndex: 'ageSeconds',
+    render: (value: number) => formatAgeSeconds(value),
+  },
 ]
 
-function buildServiceAccountColumns(localeCode: 'zh_CN' | 'en_US'): TableColumnsType<ServiceAccountResource> {
+function buildServiceAccountColumns(
+  localeCode: 'zh_CN' | 'en_US',
+): TableColumnsType<ServiceAccountResource> {
   return [
     {
       title: localeCode === 'zh_CN' ? '名称' : 'Name',
       dataIndex: 'name',
       render: (value: string, record: ServiceAccountResource) => (
-        <ResourceNameLink name={value} to={buildRBACDetailPath('serviceaccounts', value, record.namespace)} />
+        <ResourceNameLink
+          name={value}
+          to={buildRBACDetailPath('serviceaccounts', value, record.namespace)}
+        />
       ),
     },
     { title: localeCode === 'zh_CN' ? '命名空间' : 'Namespace', dataIndex: 'namespace' },
     { title: localeCode === 'zh_CN' ? 'Secrets' : 'Secrets', dataIndex: 'secrets', width: 88 },
-    { title: localeCode === 'zh_CN' ? '镜像拉取密钥' : 'Image Pull Secrets', dataIndex: 'imagePullSecrets', width: 138 },
+    {
+      title: localeCode === 'zh_CN' ? '镜像拉取密钥' : 'Image Pull Secrets',
+      dataIndex: 'imagePullSecrets',
+      width: 138,
+    },
     {
       title: localeCode === 'zh_CN' ? '自动挂载 Token' : 'Automount Token',
       dataIndex: 'automountServiceAccountToken',
@@ -817,7 +1010,13 @@ function buildServiceAccountColumns(localeCode: 'zh_CN' | 'en_US'): TableColumns
         />
       ),
     },
-    { ...tableColumnPresets.datetime, title: 'Age', dataIndex: 'ageSeconds', width: 104, render: (value: number) => formatAgeSeconds(value) },
+    {
+      ...tableColumnPresets.datetime,
+      title: 'Age',
+      dataIndex: 'ageSeconds',
+      width: 104,
+      render: (value: number) => formatAgeSeconds(value),
+    },
   ]
 }
 
@@ -832,17 +1031,28 @@ function buildRoleColumns(localeCode: 'zh_CN' | 'en_US'): TableColumnsType<RoleR
     },
     { title: localeCode === 'zh_CN' ? '命名空间' : 'Namespace', dataIndex: 'namespace' },
     { title: localeCode === 'zh_CN' ? '规则数' : 'Rules', dataIndex: 'rules', width: 88 },
-    { ...tableColumnPresets.datetime, title: 'Age', dataIndex: 'ageSeconds', width: 104, render: (value: number) => formatAgeSeconds(value) },
+    {
+      ...tableColumnPresets.datetime,
+      title: 'Age',
+      dataIndex: 'ageSeconds',
+      width: 104,
+      render: (value: number) => formatAgeSeconds(value),
+    },
   ]
 }
 
-function buildRoleBindingColumns(localeCode: 'zh_CN' | 'en_US'): TableColumnsType<RoleBindingResource> {
+function buildRoleBindingColumns(
+  localeCode: 'zh_CN' | 'en_US',
+): TableColumnsType<RoleBindingResource> {
   return [
     {
       title: localeCode === 'zh_CN' ? '名称' : 'Name',
       dataIndex: 'name',
       render: (value: string, record: RoleBindingResource) => (
-        <ResourceNameLink name={value} to={buildRBACDetailPath('rolebindings', value, record.namespace)} />
+        <ResourceNameLink
+          name={value}
+          to={buildRBACDetailPath('rolebindings', value, record.namespace)}
+        />
       ),
     },
     { title: localeCode === 'zh_CN' ? '命名空间' : 'Namespace', dataIndex: 'namespace' },
@@ -855,7 +1065,8 @@ function buildRoleBindingColumns(localeCode: 'zh_CN' | 'en_US'): TableColumnsTyp
     {
       title: localeCode === 'zh_CN' ? '主体预览' : 'Subjects',
       dataIndex: 'subjects',
-      render: (value: string[] | undefined) => renderRBACSubjectChips(value, localeCode === 'zh_CN' ? '无主体' : 'No subjects'),
+      render: (value: string[] | undefined) =>
+        renderRBACSubjectChips(value, localeCode === 'zh_CN' ? '无主体' : 'No subjects'),
     },
     {
       title: localeCode === 'zh_CN' ? '主体数' : 'Subject Count',
@@ -863,34 +1074,77 @@ function buildRoleBindingColumns(localeCode: 'zh_CN' | 'en_US'): TableColumnsTyp
       width: 108,
       render: (value: string[] | undefined) => value?.length ?? 0,
     },
-    { ...tableColumnPresets.datetime, title: 'Age', dataIndex: 'ageSeconds', width: 104, render: (value: number) => formatAgeSeconds(value) },
+    {
+      ...tableColumnPresets.datetime,
+      title: 'Age',
+      dataIndex: 'ageSeconds',
+      width: 104,
+      render: (value: number) => formatAgeSeconds(value),
+    },
   ]
 }
 
 const ingressClassColumns: TableColumnsType<IngressClassResource> = [
   { title: 'Name', dataIndex: 'name' },
   { title: 'Controller', dataIndex: 'controller' },
-  { title: 'Default', dataIndex: 'isDefault', render: (value: boolean) => <BooleanTag value={value} trueLabel="Yes" falseLabel="No" /> },
-  { title: 'Parameters', dataIndex: 'parameters', render: (value: string | undefined) => value || '-' },
-  { ...tableColumnPresets.datetime, title: 'Age', dataIndex: 'ageSeconds', render: (value: number) => formatAgeSeconds(value) },
+  {
+    title: 'Default',
+    dataIndex: 'isDefault',
+    render: (value: boolean) => <BooleanTag value={value} trueLabel="Yes" falseLabel="No" />,
+  },
+  {
+    title: 'Parameters',
+    dataIndex: 'parameters',
+    render: (value: string | undefined) => value || '-',
+  },
+  {
+    ...tableColumnPresets.datetime,
+    title: 'Age',
+    dataIndex: 'ageSeconds',
+    render: (value: number) => formatAgeSeconds(value),
+  },
 ]
 
 const priorityClassColumns: TableColumnsType<PriorityClassResource> = [
   { title: 'Name', dataIndex: 'name' },
   { title: 'Value', dataIndex: 'value' },
-  { title: 'Global Default', dataIndex: 'globalDefault', render: (value: boolean) => <BooleanTag value={value} trueLabel="Yes" falseLabel="No" /> },
-  { title: 'Preemption', dataIndex: 'preemptionPolicy', render: (value: string | undefined) => value || '-' },
-  { title: 'Description', dataIndex: 'description', render: (value: string | undefined) => value || '-' },
-  { ...tableColumnPresets.datetime, title: 'Age', dataIndex: 'ageSeconds', render: (value: number) => formatAgeSeconds(value) },
+  {
+    title: 'Global Default',
+    dataIndex: 'globalDefault',
+    render: (value: boolean) => <BooleanTag value={value} trueLabel="Yes" falseLabel="No" />,
+  },
+  {
+    title: 'Preemption',
+    dataIndex: 'preemptionPolicy',
+    render: (value: string | undefined) => value || '-',
+  },
+  {
+    title: 'Description',
+    dataIndex: 'description',
+    render: (value: string | undefined) => value || '-',
+  },
+  {
+    ...tableColumnPresets.datetime,
+    title: 'Age',
+    dataIndex: 'ageSeconds',
+    render: (value: number) => formatAgeSeconds(value),
+  },
 ]
 
 const runtimeClassColumns: TableColumnsType<RuntimeClassResource> = [
   { title: 'Name', dataIndex: 'name' },
   { title: 'Handler', dataIndex: 'handler' },
-  { ...tableColumnPresets.datetime, title: 'Age', dataIndex: 'ageSeconds', render: (value: number) => formatAgeSeconds(value) },
+  {
+    ...tableColumnPresets.datetime,
+    title: 'Age',
+    dataIndex: 'ageSeconds',
+    render: (value: number) => formatAgeSeconds(value),
+  },
 ]
 
-function buildClusterRoleColumns(localeCode: 'zh_CN' | 'en_US'): TableColumnsType<ClusterRoleResource> {
+function buildClusterRoleColumns(
+  localeCode: 'zh_CN' | 'en_US',
+): TableColumnsType<ClusterRoleResource> {
   return [
     {
       title: localeCode === 'zh_CN' ? '名称' : 'Name',
@@ -900,12 +1154,24 @@ function buildClusterRoleColumns(localeCode: 'zh_CN' | 'en_US'): TableColumnsTyp
       ),
     },
     { title: localeCode === 'zh_CN' ? '规则数' : 'Rules', dataIndex: 'rules', width: 88 },
-    { title: localeCode === 'zh_CN' ? '聚合规则' : 'Aggregation', dataIndex: 'aggregationRules', width: 108 },
-    { ...tableColumnPresets.datetime, title: 'Age', dataIndex: 'ageSeconds', width: 104, render: (value: number) => formatAgeSeconds(value) },
+    {
+      title: localeCode === 'zh_CN' ? '聚合规则' : 'Aggregation',
+      dataIndex: 'aggregationRules',
+      width: 108,
+    },
+    {
+      ...tableColumnPresets.datetime,
+      title: 'Age',
+      dataIndex: 'ageSeconds',
+      width: 104,
+      render: (value: number) => formatAgeSeconds(value),
+    },
   ]
 }
 
-function buildClusterRoleBindingColumns(localeCode: 'zh_CN' | 'en_US'): TableColumnsType<ClusterRoleBindingResource> {
+function buildClusterRoleBindingColumns(
+  localeCode: 'zh_CN' | 'en_US',
+): TableColumnsType<ClusterRoleBindingResource> {
   return [
     {
       title: localeCode === 'zh_CN' ? '名称' : 'Name',
@@ -923,7 +1189,8 @@ function buildClusterRoleBindingColumns(localeCode: 'zh_CN' | 'en_US'): TableCol
     {
       title: localeCode === 'zh_CN' ? '主体预览' : 'Subjects',
       dataIndex: 'subjects',
-      render: (value: string[] | undefined) => renderRBACSubjectChips(value, localeCode === 'zh_CN' ? '无主体' : 'No subjects'),
+      render: (value: string[] | undefined) =>
+        renderRBACSubjectChips(value, localeCode === 'zh_CN' ? '无主体' : 'No subjects'),
     },
     {
       title: localeCode === 'zh_CN' ? '主体数' : 'Subject Count',
@@ -931,20 +1198,36 @@ function buildClusterRoleBindingColumns(localeCode: 'zh_CN' | 'en_US'): TableCol
       width: 108,
       render: (value: string[] | undefined) => value?.length ?? 0,
     },
-    { ...tableColumnPresets.datetime, title: 'Age', dataIndex: 'ageSeconds', width: 104, render: (value: number) => formatAgeSeconds(value) },
+    {
+      ...tableColumnPresets.datetime,
+      title: 'Age',
+      dataIndex: 'ageSeconds',
+      width: 104,
+      render: (value: number) => formatAgeSeconds(value),
+    },
   ]
 }
 
 const mutatingWebhookColumns: TableColumnsType<MutatingWebhookConfigurationResource> = [
   { title: 'Name', dataIndex: 'name' },
   { title: 'Webhooks', dataIndex: 'webhooks' },
-  { ...tableColumnPresets.datetime, title: 'Age', dataIndex: 'ageSeconds', render: (value: number) => formatAgeSeconds(value) },
+  {
+    ...tableColumnPresets.datetime,
+    title: 'Age',
+    dataIndex: 'ageSeconds',
+    render: (value: number) => formatAgeSeconds(value),
+  },
 ]
 
 const validatingWebhookColumns: TableColumnsType<ValidatingWebhookConfigurationResource> = [
   { title: 'Name', dataIndex: 'name' },
   { title: 'Webhooks', dataIndex: 'webhooks' },
-  { ...tableColumnPresets.datetime, title: 'Age', dataIndex: 'ageSeconds', render: (value: number) => formatAgeSeconds(value) },
+  {
+    ...tableColumnPresets.datetime,
+    title: 'Age',
+    dataIndex: 'ageSeconds',
+    render: (value: number) => formatAgeSeconds(value),
+  },
 ]
 
 function renderQuotaProgress(record: ResourceQuotaResource) {
@@ -959,17 +1242,41 @@ function renderQuotaProgress(record: ResourceQuotaResource) {
         const usedRaw = used[key] ?? '0'
         const hardNum = parseQuotaNumeric(hardRaw)
         const usedNum = parseQuotaNumeric(usedRaw)
-        const percent = hardNum && hardNum > 0 && usedNum != null
-          ? Math.min(100, Math.round((usedNum / hardNum) * 100))
-          : 0
+        const percent =
+          hardNum && hardNum > 0 && usedNum != null
+            ? Math.min(100, Math.round((usedNum / hardNum) * 100))
+            : 0
         return (
           <Tooltip key={key} title={`${key}: ${usedRaw} / ${hardRaw}`} placement="top">
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'rgba(0, 0, 0, 0.45)' }}>
-                <span style={{ maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{key}</span>
-                <span>{usedRaw} / {hardRaw}</span>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontSize: 11,
+                  color: 'rgba(0, 0, 0, 0.45)',
+                }}
+              >
+                <span
+                  style={{
+                    maxWidth: 140,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {key}
+                </span>
+                <span>
+                  {usedRaw} / {hardRaw}
+                </span>
               </div>
-              <Progress percent={percent} aria-label={`${key} quota usage`} showInfo={false} size="small" />
+              <Progress
+                percent={percent}
+                aria-label={`${key} quota usage`}
+                showInfo={false}
+                size="small"
+              />
             </div>
           </Tooltip>
         )
@@ -981,29 +1288,70 @@ function renderQuotaProgress(record: ResourceQuotaResource) {
 const resourceQuotaColumns: TableColumnsType<ResourceQuotaResource> = [
   { title: 'Namespace', dataIndex: 'namespace' },
   { title: 'Name', dataIndex: 'name' },
-  { title: 'Scopes', dataIndex: 'scopes', render: (value: string[] | undefined) => value?.join(', ') || '-' },
-  { title: 'Usage', dataIndex: 'hard', render: (_: unknown, record: ResourceQuotaResource) => renderQuotaProgress(record) },
-  { ...tableColumnPresets.datetime, title: 'Age', dataIndex: 'ageSeconds', render: (value: number) => formatAgeSeconds(value) },
+  {
+    title: 'Scopes',
+    dataIndex: 'scopes',
+    render: (value: string[] | undefined) => value?.join(', ') || '-',
+  },
+  {
+    title: 'Usage',
+    dataIndex: 'hard',
+    render: (_: unknown, record: ResourceQuotaResource) => renderQuotaProgress(record),
+  },
+  {
+    ...tableColumnPresets.datetime,
+    title: 'Age',
+    dataIndex: 'ageSeconds',
+    render: (value: number) => formatAgeSeconds(value),
+  },
 ]
 
 const limitRangeColumns: TableColumnsType<LimitRangeResource> = [
   { title: 'Namespace', dataIndex: 'namespace' },
   { title: 'Name', dataIndex: 'name' },
   { title: 'Limits', dataIndex: 'limits' },
-  { ...tableColumnPresets.datetime, title: 'Age', dataIndex: 'ageSeconds', render: (value: number) => formatAgeSeconds(value) },
+  {
+    ...tableColumnPresets.datetime,
+    title: 'Age',
+    dataIndex: 'ageSeconds',
+    render: (value: number) => formatAgeSeconds(value),
+  },
 ]
 
 const leaseColumns: TableColumnsType<LeaseResource> = [
   { title: 'Namespace', dataIndex: 'namespace' },
   { title: 'Name', dataIndex: 'name' },
-  { title: 'Holder', dataIndex: 'holderIdentity', render: (value: string | undefined) => value || '-' },
-  { title: 'Duration (s)', dataIndex: 'leaseDurationSeconds', render: (value: number | undefined) => (value == null ? '-' : String(value)) },
-  { title: 'Acquired', dataIndex: 'acquireTime', render: (value: string | undefined) => (value ? formatDateTime(value) : '-') },
-  { title: 'Renewed', dataIndex: 'renewTime', render: (value: string | undefined) => (value ? formatDateTime(value) : '-') },
-  { ...tableColumnPresets.datetime, title: 'Age', dataIndex: 'ageSeconds', render: (value: number) => formatAgeSeconds(value) },
+  {
+    title: 'Holder',
+    dataIndex: 'holderIdentity',
+    render: (value: string | undefined) => value || '-',
+  },
+  {
+    title: 'Duration (s)',
+    dataIndex: 'leaseDurationSeconds',
+    render: (value: number | undefined) => (value == null ? '-' : String(value)),
+  },
+  {
+    title: 'Acquired',
+    dataIndex: 'acquireTime',
+    render: (value: string | undefined) => (value ? formatDateTime(value) : '-'),
+  },
+  {
+    title: 'Renewed',
+    dataIndex: 'renewTime',
+    render: (value: string | undefined) => (value ? formatDateTime(value) : '-'),
+  },
+  {
+    ...tableColumnPresets.datetime,
+    title: 'Age',
+    dataIndex: 'ageSeconds',
+    render: (value: number) => formatAgeSeconds(value),
+  },
 ]
 
-function buildReplicationControllerColumns(localeCode: 'zh_CN' | 'en_US'): TableColumnsType<ReplicationControllerResource> {
+function buildReplicationControllerColumns(
+  localeCode: 'zh_CN' | 'en_US',
+): TableColumnsType<ReplicationControllerResource> {
   return [
     {
       title: localeCode === 'zh_CN' ? '名称' : 'Name',
@@ -1012,17 +1360,28 @@ function buildReplicationControllerColumns(localeCode: 'zh_CN' | 'en_US'): Table
       render: renderWorkloadNameText,
       width: 260,
     },
-    { title: localeCode === 'zh_CN' ? '命名空间' : 'Namespace', dataIndex: 'namespace', width: 160 },
+    {
+      title: localeCode === 'zh_CN' ? '命名空间' : 'Namespace',
+      dataIndex: 'namespace',
+      width: 160,
+    },
     {
       title: 'Ready',
       dataIndex: 'readyReplicas',
       width: 190,
-      render: (_: number, record: ReplicationControllerResource) => renderReplicaReadyCell(record.readyReplicas, record.desiredReplicas),
+      render: (_: number, record: ReplicationControllerResource) =>
+        renderReplicaReadyCell(record.readyReplicas, record.desiredReplicas),
     },
     { title: 'Desired', dataIndex: 'desiredReplicas', width: 96 },
     { title: 'Current', dataIndex: 'currentReplicas', width: 96 },
     { title: 'Available', dataIndex: 'availableReplicas', width: 110 },
-    { ...tableColumnPresets.datetime, title: 'Age', dataIndex: 'ageSeconds', width: 120, render: (value: number) => formatAgeSeconds(value) },
+    {
+      ...tableColumnPresets.datetime,
+      title: 'Age',
+      dataIndex: 'ageSeconds',
+      width: 120,
+      render: (value: number) => formatAgeSeconds(value),
+    },
   ]
 }
 
@@ -1035,8 +1394,14 @@ export function WorkloadsReplicaSetsPage() {
       resourcePath="workloads/replicasets"
       columns={buildReplicaSetColumns(localeCode)}
       rowKey={(record) => `${record.namespace}/${record.name}`}
-      emptyDescription={{ zh_CN: '当前范围没有 ReplicaSets', en_US: 'No replica sets in the current scope' }}
-      searchPlaceholder={{ zh_CN: '搜索 ReplicaSet / Namespace', en_US: 'Search replica set / namespace' }}
+      emptyDescription={{
+        zh_CN: '当前范围没有 ReplicaSets',
+        en_US: 'No replica sets in the current scope',
+      }}
+      searchPlaceholder={{
+        zh_CN: '搜索 ReplicaSet / Namespace',
+        en_US: 'Search replica set / namespace',
+      }}
       searchValues={(record) => [record.name, record.namespace]}
     />
   )
@@ -1051,8 +1416,14 @@ export function WorkloadsReplicationControllersPage() {
       resourcePath="workloads/replicationcontrollers"
       columns={buildReplicationControllerColumns(localeCode)}
       rowKey={(record) => `${record.namespace}/${record.name}`}
-      emptyDescription={{ zh_CN: '当前范围没有 ReplicationController', en_US: 'No replication controllers in the current scope' }}
-      searchPlaceholder={{ zh_CN: '搜索 ReplicationController / Namespace', en_US: 'Search replication controller / namespace' }}
+      emptyDescription={{
+        zh_CN: '当前范围没有 ReplicationController',
+        en_US: 'No replication controllers in the current scope',
+      }}
+      searchPlaceholder={{
+        zh_CN: '搜索 ReplicationController / Namespace',
+        en_US: 'Search replication controller / namespace',
+      }}
       searchValues={(record) => [record.name, record.namespace]}
       actionConfig={{
         resourceKind: 'ReplicationController',
@@ -1070,15 +1441,24 @@ export function ConfigurationConfigMapsPage() {
     <div className="soha-page">
       <ResourceTableCard<ConfigMapResource>
         columns={configMapColumns}
-        headerExtra={(
-          <Button autoInsertSpace={false} size="small" type="primary" icon={<PlusOutlined />} onClick={() => setCreateVisible(true)}>
+        headerExtra={
+          <Button
+            autoInsertSpace={false}
+            size="small"
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setCreateVisible(true)}
+          >
             {localeCode === 'zh_CN' ? '新增' : 'Create'}
           </Button>
-        )}
+        }
         resourcePath="configuration/configmaps"
         rowKey={(record) => `${record.namespace}/${record.name}`}
         title={{ zh_CN: 'ConfigMaps', en_US: 'ConfigMaps' }}
-        emptyDescription={{ zh_CN: '当前范围没有 ConfigMaps', en_US: 'No configmaps in the current scope' }}
+        emptyDescription={{
+          zh_CN: '当前范围没有 ConfigMaps',
+          en_US: 'No configmaps in the current scope',
+        }}
         actionConfig={{
           resourceKind: 'ConfigMap',
           getName: (record) => record.name,
@@ -1104,15 +1484,24 @@ export function ConfigurationSecretsPage() {
     <div className="soha-page">
       <ResourceTableCard<SecretResource>
         columns={secretColumns}
-        headerExtra={(
-          <Button autoInsertSpace={false} size="small" type="primary" icon={<PlusOutlined />} onClick={() => setCreateVisible(true)}>
+        headerExtra={
+          <Button
+            autoInsertSpace={false}
+            size="small"
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setCreateVisible(true)}
+          >
             {localeCode === 'zh_CN' ? '新增' : 'Create'}
           </Button>
-        )}
+        }
         resourcePath="configuration/secrets"
         rowKey={(record) => `${record.namespace}/${record.name}`}
         title={{ zh_CN: 'Secrets', en_US: 'Secrets' }}
-        emptyDescription={{ zh_CN: '当前范围没有 Secrets', en_US: 'No secrets in the current scope' }}
+        emptyDescription={{
+          zh_CN: '当前范围没有 Secrets',
+          en_US: 'No secrets in the current scope',
+        }}
         actionConfig={{
           resourceKind: 'Secret',
           getName: (record) => record.name,
@@ -1138,7 +1527,10 @@ export function ConfigurationResourceQuotasPage() {
       resourcePath="configuration/resourcequotas"
       columns={resourceQuotaColumns}
       rowKey={(record) => `${record.namespace}/${record.name}`}
-      emptyDescription={{ zh_CN: '当前范围没有 ResourceQuota', en_US: 'No resource quotas in the current scope' }}
+      emptyDescription={{
+        zh_CN: '当前范围没有 ResourceQuota',
+        en_US: 'No resource quotas in the current scope',
+      }}
       actionConfig={{
         resourceKind: 'ResourceQuota',
         getName: (record) => record.name,
@@ -1155,7 +1547,10 @@ export function ConfigurationLimitRangesPage() {
       resourcePath="configuration/limitranges"
       columns={limitRangeColumns}
       rowKey={(record) => `${record.namespace}/${record.name}`}
-      emptyDescription={{ zh_CN: '当前范围没有 LimitRange', en_US: 'No limit ranges in the current scope' }}
+      emptyDescription={{
+        zh_CN: '当前范围没有 LimitRange',
+        en_US: 'No limit ranges in the current scope',
+      }}
       actionConfig={{
         resourceKind: 'LimitRange',
         getName: (record) => record.name,
@@ -1172,7 +1567,10 @@ export function ConfigurationHPAPage() {
       resourcePath="configuration/hpas"
       columns={hpaColumns}
       rowKey={(record) => `${record.namespace}/${record.name}`}
-      emptyDescription={{ zh_CN: '当前范围没有 HPA', en_US: 'No HPA resources in the current scope' }}
+      emptyDescription={{
+        zh_CN: '当前范围没有 HPA',
+        en_US: 'No HPA resources in the current scope',
+      }}
     />
   )
 }
@@ -1184,7 +1582,10 @@ export function ConfigurationPodDisruptionBudgetsPage() {
       resourcePath="configuration/poddisruptionbudgets"
       columns={pdbColumns}
       rowKey={(record) => `${record.namespace}/${record.name}`}
-      emptyDescription={{ zh_CN: '当前范围没有 PodDisruptionBudgets', en_US: 'No pod disruption budgets in the current scope' }}
+      emptyDescription={{
+        zh_CN: '当前范围没有 PodDisruptionBudgets',
+        en_US: 'No pod disruption budgets in the current scope',
+      }}
     />
   )
 }
@@ -1196,7 +1597,10 @@ export function ConfigurationPriorityClassesPage() {
       resourcePath="configuration/priorityclasses"
       columns={priorityClassColumns}
       rowKey="name"
-      emptyDescription={{ zh_CN: '当前集群没有 PriorityClass', en_US: 'No priority classes in this cluster' }}
+      emptyDescription={{
+        zh_CN: '当前集群没有 PriorityClass',
+        en_US: 'No priority classes in this cluster',
+      }}
       actionConfig={{ resourceKind: 'PriorityClass', getName: (record) => record.name }}
     />
   )
@@ -1209,7 +1613,10 @@ export function ConfigurationRuntimeClassesPage() {
       resourcePath="configuration/runtimeclasses"
       columns={runtimeClassColumns}
       rowKey="name"
-      emptyDescription={{ zh_CN: '当前集群没有 RuntimeClass', en_US: 'No runtime classes in this cluster' }}
+      emptyDescription={{
+        zh_CN: '当前集群没有 RuntimeClass',
+        en_US: 'No runtime classes in this cluster',
+      }}
       actionConfig={{ resourceKind: 'RuntimeClass', getName: (record) => record.name }}
     />
   )
@@ -1239,8 +1646,14 @@ export function ConfigurationMutatingWebhooksPage() {
       resourcePath="configuration/mutatingwebhookconfigurations"
       columns={mutatingWebhookColumns}
       rowKey="name"
-      emptyDescription={{ zh_CN: '当前集群没有 MutatingWebhookConfiguration', en_US: 'No mutating webhook configurations in this cluster' }}
-      actionConfig={{ resourceKind: 'MutatingWebhookConfiguration', getName: (record) => record.name }}
+      emptyDescription={{
+        zh_CN: '当前集群没有 MutatingWebhookConfiguration',
+        en_US: 'No mutating webhook configurations in this cluster',
+      }}
+      actionConfig={{
+        resourceKind: 'MutatingWebhookConfiguration',
+        getName: (record) => record.name,
+      }}
     />
   )
 }
@@ -1252,8 +1665,14 @@ export function ConfigurationValidatingWebhooksPage() {
       resourcePath="configuration/validatingwebhookconfigurations"
       columns={validatingWebhookColumns}
       rowKey="name"
-      emptyDescription={{ zh_CN: '当前集群没有 ValidatingWebhookConfiguration', en_US: 'No validating webhook configurations in this cluster' }}
-      actionConfig={{ resourceKind: 'ValidatingWebhookConfiguration', getName: (record) => record.name }}
+      emptyDescription={{
+        zh_CN: '当前集群没有 ValidatingWebhookConfiguration',
+        en_US: 'No validating webhook configurations in this cluster',
+      }}
+      actionConfig={{
+        resourceKind: 'ValidatingWebhookConfiguration',
+        getName: (record) => record.name,
+      }}
     />
   )
 }
@@ -1265,7 +1684,10 @@ export function NetworkEndpointSlicesPage() {
       resourcePath="network/endpointslices"
       columns={endpointSliceColumns}
       rowKey={(record) => `${record.namespace}/${record.name}`}
-      emptyDescription={{ zh_CN: '当前范围没有 EndpointSlices', en_US: 'No endpoint slices in the current scope' }}
+      emptyDescription={{
+        zh_CN: '当前范围没有 EndpointSlices',
+        en_US: 'No endpoint slices in the current scope',
+      }}
     />
   )
 }
@@ -1277,7 +1699,10 @@ export function NetworkIngressClassesPage() {
       resourcePath="network/ingressclasses"
       columns={ingressClassColumns}
       rowKey="name"
-      emptyDescription={{ zh_CN: '当前集群没有 IngressClass', en_US: 'No ingress classes in this cluster' }}
+      emptyDescription={{
+        zh_CN: '当前集群没有 IngressClass',
+        en_US: 'No ingress classes in this cluster',
+      }}
       actionConfig={{ resourceKind: 'IngressClass', getName: (record) => record.name }}
     />
   )
@@ -1290,7 +1715,10 @@ export function NetworkPoliciesPage() {
       resourcePath="network/networkpolicies"
       columns={networkPolicyColumns}
       rowKey={(record) => `${record.namespace}/${record.name}`}
-      emptyDescription={{ zh_CN: '当前范围没有 NetworkPolicies', en_US: 'No network policies in the current scope' }}
+      emptyDescription={{
+        zh_CN: '当前范围没有 NetworkPolicies',
+        en_US: 'No network policies in the current scope',
+      }}
     />
   )
 }
@@ -1300,10 +1728,17 @@ export function NetworkPortForwardPage() {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const { clusterId, namespace } = usePlatformScopeStore()
+  const portForwardCapability = useClusterCapability('port.forward', localeCode)
   const [modalVisible, setModalVisible] = useState(false)
   const [searchKeyword, setSearchKeyword] = useState('')
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
-  const [form, setForm] = useState<{ targetKind: string; targetName: string; namespace: string; localPort: number; remotePort: number }>({
+  const [form, setForm] = useState<{
+    targetKind: string
+    targetName: string
+    namespace: string
+    localPort: number
+    remotePort: number
+  }>({
     targetKind: 'Pod',
     targetName: '',
     namespace: namespace || 'default',
@@ -1314,16 +1749,22 @@ export function NetworkPortForwardPage() {
   const listKey = ['port-forwards', clusterId]
   const query = useQuery({
     queryKey: listKey,
-    queryFn: () => api.get<ApiResponse<PortForwardSession[]>>(`/clusters/${clusterId}/network/port-forwards`),
+    queryFn: () =>
+      api.get<ApiResponse<PortForwardSession[]>>(`/clusters/${clusterId}/network/port-forwards`),
     enabled: !!clusterId,
   })
 
   const registerMutation = useMutation({
     mutationFn: (payload: typeof form) =>
-      api.post<ApiResponse<PortForwardSession>>(`/clusters/${clusterId}/network/port-forwards`, payload),
+      api.post<ApiResponse<PortForwardSession>>(
+        `/clusters/${clusterId}/network/port-forwards`,
+        payload,
+      ),
     onSuccess: () => {
       setModalVisible(false)
-      void message.success(localeCode === 'zh_CN' ? '已登记 Port Forward' : 'Port forward registered')
+      void message.success(
+        localeCode === 'zh_CN' ? '已登记 Port Forward' : 'Port forward registered',
+      )
       queryClient.invalidateQueries({ queryKey: listKey })
     },
     onError: (err: Error) => void message.error(err.message),
@@ -1343,32 +1784,67 @@ export function NetworkPortForwardPage() {
   const normalizedKeyword = normalizeSearchKeyword(deferredSearchKeyword)
   const rawItems = query.data?.data ?? []
   const filteredItems = useMemo(
-    () => rawItems.filter((item) => includesSearch([
-      item.sessionId,
-      item.namespace,
-      item.targetKind,
-      item.targetName,
-      item.status,
-      String(item.localPort),
-      String(item.remotePort),
-    ], normalizedKeyword)),
+    () =>
+      rawItems.filter((item) =>
+        includesSearch(
+          [
+            item.sessionId,
+            item.namespace,
+            item.targetKind,
+            item.targetName,
+            item.status,
+            String(item.localPort),
+            String(item.remotePort),
+          ],
+          normalizedKeyword,
+        ),
+      ),
     [normalizedKeyword, rawItems],
   )
   const effectiveEmpty = !clusterId
-    ? (localeCode === 'zh_CN' ? '请选择集群' : 'Select a cluster')
+    ? localeCode === 'zh_CN'
+      ? '请选择集群'
+      : 'Select a cluster'
     : normalizedKeyword && rawItems.length > 0
-      ? (localeCode === 'zh_CN' ? '没有匹配的 Port Forward' : 'No matching port forward sessions')
-      : (localeCode === 'zh_CN' ? '当前集群没有登记的 Port Forward' : 'No port forward sessions registered')
+      ? localeCode === 'zh_CN'
+        ? '没有匹配的 Port Forward'
+        : 'No matching port forward sessions'
+      : localeCode === 'zh_CN'
+        ? '当前集群没有登记的 Port Forward'
+        : 'No port forward sessions registered'
   const densityLabel = localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'
+  const portForwardUnsupported = portForwardCapability.status === 'unsupported'
+  const portForwardCapabilityReason = portForwardCapability.reason
+  const createPortForwardLabel = localeCode === 'zh_CN' ? '新建 Port Forward' : 'New Port Forward'
+  const stopPortForwardLabel = localeCode === 'zh_CN' ? '停止 Port Forward' : 'Stop port forward'
 
   const columns: TableColumnsType<PortForwardSession> = [
-    { title: localeCode === 'zh_CN' ? '会话' : 'Session', dataIndex: 'sessionId', render: (value: string) => <Text code>{value.slice(0, 8)}</Text> },
+    {
+      title: localeCode === 'zh_CN' ? '会话' : 'Session',
+      dataIndex: 'sessionId',
+      render: (value: string) => <Text code>{value.slice(0, 8)}</Text>,
+    },
     { title: 'Namespace', dataIndex: 'namespace' },
-    { title: localeCode === 'zh_CN' ? '目标' : 'Target', dataIndex: 'targetName', render: (_: unknown, record: PortForwardSession) => `${record.targetKind}/${record.targetName}` },
+    {
+      title: localeCode === 'zh_CN' ? '目标' : 'Target',
+      dataIndex: 'targetName',
+      render: (_: unknown, record: PortForwardSession) =>
+        `${record.targetKind}/${record.targetName}`,
+    },
     { title: localeCode === 'zh_CN' ? '本地端口' : 'Local', dataIndex: 'localPort' },
     { title: localeCode === 'zh_CN' ? '远端端口' : 'Remote', dataIndex: 'remotePort' },
-    { title: localeCode === 'zh_CN' ? '状态' : 'Status', dataIndex: 'status', render: (value: string) => <Tag color={value === 'active' ? 'green' : 'default'}>{value}</Tag> },
-    { title: localeCode === 'zh_CN' ? '创建时间' : 'Created', dataIndex: 'createdAt', render: (value: string) => formatDateTime(value) },
+    {
+      title: localeCode === 'zh_CN' ? '状态' : 'Status',
+      dataIndex: 'status',
+      render: (value: string) => (
+        <Tag color={value === 'active' ? 'green' : 'default'}>{value}</Tag>
+      ),
+    },
+    {
+      title: localeCode === 'zh_CN' ? '创建时间' : 'Created',
+      dataIndex: 'createdAt',
+      render: (value: string) => formatDateTime(value),
+    },
     {
       title: localeCode === 'zh_CN' ? '操作' : 'Actions',
       dataIndex: 'sessionId',
@@ -1378,19 +1854,27 @@ export function NetworkPortForwardPage() {
       render: (value: string) => (
         <Popconfirm
           title={localeCode === 'zh_CN' ? '确认停止该 Port Forward？' : 'Stop this port forward?'}
-          description={localeCode === 'zh_CN' ? '这只会停止 Soha 中登记的转发会话记录。' : 'This stops the registered forward session record in Soha.'}
+          description={
+            localeCode === 'zh_CN'
+              ? '这只会停止 Soha 中登记的转发会话记录。'
+              : 'This stops the registered forward session record in Soha.'
+          }
           okText={localeCode === 'zh_CN' ? '停止' : 'Stop'}
           cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
-          okButtonProps={{ danger: true, loading: stopMutation.isPending && stopMutation.variables === value }}
+          okButtonProps={{
+            danger: true,
+            loading: stopMutation.isPending && stopMutation.variables === value,
+          }}
           placement="topRight"
           onConfirm={() => stopMutation.mutate(value)}
         >
           <Tooltip title={localeCode === 'zh_CN' ? '停止' : 'Stop'}>
             <Button
-              aria-label={localeCode === 'zh_CN' ? '停止 Port Forward' : 'Stop port forward'}
+              aria-label={stopPortForwardLabel}
               size="small"
               type="text"
               danger
+              disabled={portForwardUnsupported}
               icon={<DeleteOutlined />}
               loading={stopMutation.isPending && stopMutation.variables === value}
             />
@@ -1404,16 +1888,21 @@ export function NetworkPortForwardPage() {
     <div className="soha-page">
       <ManagementQueryPanel
         onFinish={() => undefined}
-        actions={(
+        actions={
           <>
-            <Button autoInsertSpace={false} disabled={!searchKeyword.trim()} htmlType="button" onClick={() => setSearchKeyword('')}>
+            <Button
+              autoInsertSpace={false}
+              disabled={!searchKeyword.trim()}
+              htmlType="button"
+              onClick={() => setSearchKeyword('')}
+            >
               {localeCode === 'zh_CN' ? '重置' : 'Reset'}
             </Button>
             <Button autoInsertSpace={false} htmlType="submit" type="primary">
               {localeCode === 'zh_CN' ? '查询' : 'Search'}
             </Button>
           </>
-        )}
+        }
       >
         <ManagementQueryField label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}>
           <Input
@@ -1424,28 +1913,51 @@ export function NetworkPortForwardPage() {
             value={searchKeyword}
             variant="filled"
             onChange={(event) => setSearchKeyword(event.target.value)}
-            placeholder={localeCode === 'zh_CN' ? '搜索会话 / Namespace / 目标 / 状态 / 端口' : 'Search session / namespace / target / status / port'}
+            placeholder={
+              localeCode === 'zh_CN'
+                ? '搜索会话 / Namespace / 目标 / 状态 / 端口'
+                : 'Search session / namespace / target / status / port'
+            }
           />
         </ManagementQueryField>
       </ManagementQueryPanel>
+      {portForwardCapabilityReason ? (
+        <Alert
+          showIcon
+          type={portForwardUnsupported ? 'warning' : 'info'}
+          style={{ marginBottom: 12 }}
+          title={
+            localeCode === 'zh_CN' ? 'Port Forward 连接模式说明' : 'Port forward connection mode'
+          }
+          description={portForwardCapabilityReason}
+        />
+      ) : null}
       <AdminTable
         className="soha-platform-table"
         columnSettingIconOnly
         columnSettingPlacement="header"
         shellClassName="soha-management-table-shell"
-        headerExtra={(
+        headerExtra={
           <ManagementTableToolbar>
-            <Tooltip title={!clusterId ? (localeCode === 'zh_CN' ? '请先选择集群' : 'Select a cluster first') : ''}>
+            <Tooltip
+              title={
+                !clusterId
+                  ? localeCode === 'zh_CN'
+                    ? '请先选择集群'
+                    : 'Select a cluster first'
+                  : capabilityActionTooltip(createPortForwardLabel, portForwardCapability)
+              }
+            >
               <span>
                 <Button
                   autoInsertSpace={false}
                   size="small"
                   type="primary"
                   icon={<PlusOutlined />}
-                  disabled={!clusterId}
+                  disabled={!clusterId || portForwardUnsupported}
                   onClick={() => setModalVisible(true)}
                 >
-                  {localeCode === 'zh_CN' ? '新建 Port Forward' : 'New Port Forward'}
+                  {createPortForwardLabel}
                 </Button>
               </span>
             </Tooltip>
@@ -1453,7 +1965,7 @@ export function NetworkPortForwardPage() {
               aria-label={densityLabel}
               title={densityLabel}
               tooltip={densityLabel}
-              onClick={() => setTableSize((current) => current === 'middle' ? 'small' : 'middle')}
+              onClick={() => setTableSize((current) => (current === 'middle' ? 'small' : 'middle'))}
             />
             <ManagementRefreshButton
               aria-label={localeCode === 'zh_CN' ? '刷新' : 'Refresh'}
@@ -1467,20 +1979,27 @@ export function NetworkPortForwardPage() {
               }}
             />
           </ManagementTableToolbar>
-        )}
+        }
         columns={columns}
         dataSource={clusterId ? filteredItems : []}
         rowKey="sessionId"
         loading={query.isLoading}
-        paginationSummary={(
+        paginationSummary={
           <Text className="soha-workload-table-summary" type="secondary">
-            {localeCode === 'zh_CN' ? `当前 ${filteredItems.length} / ${rawItems.length} 条` : `${filteredItems.length} / ${rawItems.length} items`}
+            {localeCode === 'zh_CN'
+              ? `当前 ${filteredItems.length} / ${rawItems.length} 条`
+              : `${filteredItems.length} / ${rawItems.length} items`}
           </Text>
-        )}
+        }
         pageSize={10}
         tableSize={tableSize}
         scroll={{ x: 'max-content' }}
-        empty={<PlatformTableState description={effectiveEmpty} kind={!clusterId ? 'select-scope' : 'empty'} />}
+        empty={
+          <PlatformTableState
+            description={effectiveEmpty}
+            kind={!clusterId ? 'select-scope' : 'empty'}
+          />
+        }
       />
       <Modal
         title={localeCode === 'zh_CN' ? '新建 Port Forward' : 'New Port Forward'}
@@ -1504,19 +2023,39 @@ export function NetworkPortForwardPage() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
             <Text style={{ width: 96 }}>Namespace</Text>
-            <Input value={form.namespace} onChange={(event) => setForm((prev) => ({ ...prev, namespace: event.target.value }))} style={{ flex: 1 }} />
+            <Input
+              value={form.namespace}
+              onChange={(event) => setForm((prev) => ({ ...prev, namespace: event.target.value }))}
+              style={{ flex: 1 }}
+            />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
             <Text style={{ width: 96 }}>{localeCode === 'zh_CN' ? '目标名称' : 'Target name'}</Text>
-            <Input value={form.targetName} onChange={(event) => setForm((prev) => ({ ...prev, targetName: event.target.value }))} style={{ flex: 1 }} />
+            <Input
+              value={form.targetName}
+              onChange={(event) => setForm((prev) => ({ ...prev, targetName: event.target.value }))}
+              style={{ flex: 1 }}
+            />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
             <Text style={{ width: 96 }}>{localeCode === 'zh_CN' ? '本地端口' : 'Local port'}</Text>
-            <InputNumber value={form.localPort} min={1} max={65535} onChange={(v) => setForm((prev) => ({ ...prev, localPort: Number(v) || 0 }))} style={{ flex: 1 }} />
+            <InputNumber
+              value={form.localPort}
+              min={1}
+              max={65535}
+              onChange={(v) => setForm((prev) => ({ ...prev, localPort: Number(v) || 0 }))}
+              style={{ flex: 1 }}
+            />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
             <Text style={{ width: 96 }}>{localeCode === 'zh_CN' ? '远端端口' : 'Remote port'}</Text>
-            <InputNumber value={form.remotePort} min={1} max={65535} onChange={(v) => setForm((prev) => ({ ...prev, remotePort: Number(v) || 0 }))} style={{ flex: 1 }} />
+            <InputNumber
+              value={form.remotePort}
+              min={1}
+              max={65535}
+              onChange={(v) => setForm((prev) => ({ ...prev, remotePort: Number(v) || 0 }))}
+              style={{ flex: 1 }}
+            />
           </div>
         </Space>
       </Modal>
@@ -1532,7 +2071,10 @@ export function PlatformAccessControlServiceAccountsPage() {
       resourcePath="access-control/serviceaccounts"
       columns={buildServiceAccountColumns(localeCode)}
       rowKey={(record) => `${record.namespace}/${record.name}`}
-      emptyDescription={{ zh_CN: '当前范围没有 ServiceAccounts', en_US: 'No service accounts in the current scope' }}
+      emptyDescription={{
+        zh_CN: '当前范围没有 ServiceAccounts',
+        en_US: 'No service accounts in the current scope',
+      }}
       searchValues={(record) => [record.name, record.namespace]}
       createConfig={{
         kind: 'ServiceAccount',
@@ -1556,7 +2098,10 @@ export function PlatformAccessControlClusterRolesPage() {
       resourcePath="access-control/clusterroles"
       columns={buildClusterRoleColumns(localeCode)}
       rowKey="name"
-      emptyDescription={{ zh_CN: '当前集群没有 ClusterRole', en_US: 'No cluster roles in this cluster' }}
+      emptyDescription={{
+        zh_CN: '当前集群没有 ClusterRole',
+        en_US: 'No cluster roles in this cluster',
+      }}
       searchValues={(record) => [record.name]}
       createConfig={{
         kind: 'ClusterRole',
@@ -1604,7 +2149,10 @@ export function PlatformAccessControlClusterRoleBindingsPage() {
       resourcePath="access-control/clusterrolebindings"
       columns={buildClusterRoleBindingColumns(localeCode)}
       rowKey="name"
-      emptyDescription={{ zh_CN: '当前集群没有 ClusterRoleBinding', en_US: 'No cluster role bindings in this cluster' }}
+      emptyDescription={{
+        zh_CN: '当前集群没有 ClusterRoleBinding',
+        en_US: 'No cluster role bindings in this cluster',
+      }}
       searchValues={(record) => [record.name, record.roleRef, ...(record.subjects ?? [])]}
       createConfig={{
         kind: 'ClusterRoleBinding',
@@ -1628,8 +2176,16 @@ export function PlatformAccessControlRoleBindingsPage() {
       resourcePath="access-control/rolebindings"
       columns={buildRoleBindingColumns(localeCode)}
       rowKey={(record) => `${record.namespace}/${record.name}`}
-      emptyDescription={{ zh_CN: '当前范围没有 RoleBindings', en_US: 'No role bindings in the current scope' }}
-      searchValues={(record) => [record.name, record.namespace, record.roleRef, ...(record.subjects ?? [])]}
+      emptyDescription={{
+        zh_CN: '当前范围没有 RoleBindings',
+        en_US: 'No role bindings in the current scope',
+      }}
+      searchValues={(record) => [
+        record.name,
+        record.namespace,
+        record.roleRef,
+        ...(record.subjects ?? []),
+      ]}
       createConfig={{
         kind: 'RoleBinding',
         defaultTemplate: ROLE_BINDING_DEFAULT_TEMPLATE,

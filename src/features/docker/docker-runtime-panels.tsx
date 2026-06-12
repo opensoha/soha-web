@@ -22,6 +22,7 @@ interface DockerRuntimeServiceOption {
 }
 
 interface DockerRuntimePanelProps {
+  enabled: boolean
   projectId: string
   projectName?: string
   serviceName?: string
@@ -84,6 +85,7 @@ function runtimeServiceSelector({
 }
 
 export function DockerProjectLogsPanel({
+  enabled,
   projectId,
   projectName,
   serviceName,
@@ -97,9 +99,10 @@ export function DockerProjectLogsPanel({
   const [streaming, setStreaming] = useState(true)
   const [connectionState, setConnectionState] = useState<'idle' | 'connecting' | 'connected' | 'closed' | 'error'>('idle')
   const [lines, setLines] = useState<string[]>([])
+  const canReadRuntime = enabled && Boolean(projectId && serviceName)
 
   const logsQuery = useQuery({
-    enabled: Boolean(projectId && serviceName && !streaming),
+    enabled: canReadRuntime && !streaming,
     queryKey: ['docker', 'project-runtime-logs', projectId, serviceName, tailLines],
     queryFn: () => dockerApi.projectLogs(projectId, { serviceName, tailLines }),
   })
@@ -111,9 +114,9 @@ export function DockerProjectLogsPanel({
   }, [logsQuery.data])
 
   const streamURL = useMemo(() => {
-    if (!projectId || !serviceName) return ''
+    if (!canReadRuntime) return ''
     return dockerRuntimeWebSocketURL(projectId, 'logs/stream', { serviceName, tailLines })
-  }, [projectId, serviceName, tailLines])
+  }, [canReadRuntime, projectId, serviceName, tailLines])
 
   const closeStream = useCallback(() => {
     streamRunRef.current += 1
@@ -136,7 +139,7 @@ export function DockerProjectLogsPanel({
     setConnectionState('connecting')
     setLines([])
     void (async () => {
-      let ticketedURL = ''
+      let ticketedURL: string
       try {
         ticketedURL = await withStreamTicket(streamURL)
       } catch {
@@ -183,6 +186,14 @@ export function DockerProjectLogsPanel({
 
   const statusColor = connectionState === 'connected' ? 'green' : connectionState === 'error' ? 'red' : 'default'
 
+  if (!enabled) {
+    return (
+      <Card className="soha-docker-runtime-card" size="small">
+        <ManagementState compact kind="no-permission" title="运行时日志不可用" description="Docker 模块或当前权限不允许读取运行时日志。" />
+      </Card>
+    )
+  }
+
   if (serviceOptions.length === 0 && !servicesLoading) {
     return (
       <Card className="soha-docker-runtime-card" size="small">
@@ -198,16 +209,17 @@ export function DockerProjectLogsPanel({
       title="日志"
       extra={(
         <Space size={8} wrap>
-          {runtimeServiceSelector({ loading: servicesLoading, options: serviceOptions, serviceName, onChange: onServiceChange })}
+          {runtimeServiceSelector({ disabled: !enabled, loading: servicesLoading, options: serviceOptions, serviceName, onChange: onServiceChange })}
           <Select
+            disabled={!enabled}
             options={[100, 200, 500, 1000, 2000].map((value) => ({ label: `${value} 行`, value }))}
             popupMatchSelectWidth={false}
             size="small"
             value={tailLines}
             onChange={setTailLines}
           />
-          <Switch checked={streaming} checkedChildren="实时" size="small" unCheckedChildren="快照" onChange={setStreaming} />
-          <Button icon={<ReloadOutlined />} loading={logsQuery.isFetching} size="small" onClick={() => streaming ? setLines([]) : logsQuery.refetch()}>刷新</Button>
+          <Switch disabled={!enabled} checked={streaming} checkedChildren="实时" size="small" unCheckedChildren="快照" onChange={setStreaming} />
+          <Button disabled={!enabled} icon={<ReloadOutlined />} loading={logsQuery.isFetching} size="small" onClick={() => streaming ? setLines([]) : logsQuery.refetch()}>刷新</Button>
           <Button icon={<DownloadOutlined />} size="small" onClick={() => downloadText(`${projectName || projectId}-${serviceName || 'service'}.log`, lines.join('\n'))}>下载</Button>
         </Space>
       )}
@@ -230,6 +242,7 @@ export function DockerProjectLogsPanel({
 }
 
 export function DockerProjectTerminalPanel({
+  enabled,
   projectId,
   serviceName,
   serviceOptions,
@@ -244,11 +257,12 @@ export function DockerProjectTerminalPanel({
   const terminalRunRef = useRef(0)
   const [shell, setShell] = useState('/bin/sh')
   const [connectionState, setConnectionState] = useState<'idle' | 'connecting' | 'connected' | 'closed' | 'error'>('idle')
+  const canConnectRuntime = enabled && Boolean(projectId && serviceName)
 
   const terminalURL = useMemo(() => {
-    if (!projectId || !serviceName) return ''
+    if (!canConnectRuntime) return ''
     return dockerRuntimeWebSocketURL(projectId, 'terminal', { serviceName, shell })
-  }, [projectId, serviceName, shell])
+  }, [canConnectRuntime, projectId, serviceName, shell])
 
   const disposeTerminal = useCallback(() => {
     terminalRunRef.current += 1
@@ -269,7 +283,7 @@ export function DockerProjectTerminalPanel({
   }, [])
 
   const connect = useCallback(() => {
-    if (!containerRef.current || !terminalURL) {
+    if (!enabled || !containerRef.current || !terminalURL) {
       return
     }
     void (async () => {
@@ -277,7 +291,7 @@ export function DockerProjectTerminalPanel({
       const runId = terminalRunRef.current + 1
       terminalRunRef.current = runId
       setConnectionState('connecting')
-      let ticketedURL = ''
+      let ticketedURL: string
       try {
         ticketedURL = await withStreamTicket(terminalURL)
       } catch {
@@ -348,11 +362,25 @@ export function DockerProjectTerminalPanel({
       resizeObserverRef.current = new ResizeObserver(() => fitAddon.fit())
       resizeObserverRef.current.observe(containerRef.current)
     })()
+  }, [disposeTerminal, enabled, terminalURL])
+
+  useEffect(() => {
+    if (!terminalURL) {
+      disposeTerminal()
+    }
   }, [disposeTerminal, terminalURL])
 
   useEffect(() => disposeTerminal, [disposeTerminal])
 
   const statusColor = connectionState === 'connected' ? 'green' : connectionState === 'error' ? 'red' : 'default'
+
+  if (!enabled) {
+    return (
+      <Card className="soha-docker-runtime-card" size="small">
+        <ManagementState compact kind="no-permission" title="Shell 不可用" description="Docker 模块或当前权限不允许连接运行时 Shell。" />
+      </Card>
+    )
+  }
 
   return (
     <Card
@@ -361,15 +389,16 @@ export function DockerProjectTerminalPanel({
       title="Shell"
       extra={(
         <Space size={8} wrap>
-          {runtimeServiceSelector({ loading: servicesLoading, options: serviceOptions, serviceName, onChange: onServiceChange })}
+          {runtimeServiceSelector({ disabled: !enabled, loading: servicesLoading, options: serviceOptions, serviceName, onChange: onServiceChange })}
           <Select
+            disabled={!enabled}
             options={[{ value: '/bin/sh', label: 'sh' }, { value: '/bin/bash', label: 'bash' }]}
             popupMatchSelectWidth={false}
             size="small"
             value={shell}
             onChange={setShell}
           />
-          <Button disabled={!serviceName || connectionState === 'connecting'} size="small" type="primary" onClick={connect}>连接</Button>
+          <Button disabled={!enabled || !serviceName || connectionState === 'connecting'} size="small" type="primary" onClick={connect}>连接</Button>
           <Button icon={<DeleteOutlined />} size="small" onClick={disposeTerminal}>断开</Button>
         </Space>
       )}
@@ -386,6 +415,7 @@ export function DockerProjectTerminalPanel({
 }
 
 export function DockerProjectVolumesPanel({
+  enabled,
   projectId,
   serviceName,
   serviceOptions,
@@ -395,19 +425,20 @@ export function DockerProjectVolumesPanel({
   const [target, setTarget] = useState('')
   const [currentPath, setCurrentPath] = useState('/')
   const [previewPath, setPreviewPath] = useState('')
+  const canBrowseRuntime = enabled && Boolean(projectId && serviceName)
   const volumesQuery = useQuery({
-    enabled: Boolean(projectId && serviceName),
+    enabled: canBrowseRuntime,
     queryKey: ['docker', 'project-runtime-volumes', projectId, serviceName],
     queryFn: () => dockerApi.projectVolumes(projectId, { serviceName }),
   })
   const volumes = volumesQuery.data?.data ?? []
   const filesQuery = useQuery({
-    enabled: Boolean(projectId && serviceName && target),
+    enabled: canBrowseRuntime && Boolean(target),
     queryKey: ['docker', 'project-runtime-volume-files', projectId, serviceName, target, currentPath],
     queryFn: () => dockerApi.projectVolumeFiles(projectId, { serviceName, target, path: currentPath, limit: 300 }),
   })
   const fileQuery = useQuery({
-    enabled: Boolean(projectId && serviceName && target && previewPath),
+    enabled: canBrowseRuntime && Boolean(target && previewPath),
     queryKey: ['docker', 'project-runtime-volume-file', projectId, serviceName, target, previewPath],
     queryFn: () => dockerApi.projectVolumeFile(projectId, { serviceName, target, path: previewPath, limitBytes: 262144 }),
   })
@@ -441,6 +472,14 @@ export function DockerProjectVolumesPanel({
     setPreviewPath(entry.path)
   }
 
+  if (!enabled) {
+    return (
+      <Card className="soha-docker-runtime-card" size="small">
+        <ManagementState compact kind="no-permission" title="卷文件不可用" description="Docker 模块或当前权限不允许浏览运行时卷文件。" />
+      </Card>
+    )
+  }
+
   return (
     <Card
       className="soha-docker-runtime-card"
@@ -448,9 +487,9 @@ export function DockerProjectVolumesPanel({
       title="卷文件"
       extra={(
         <Space size={8} wrap>
-          {runtimeServiceSelector({ loading: servicesLoading, options: serviceOptions, serviceName, onChange: onServiceChange })}
+          {runtimeServiceSelector({ disabled: !enabled, loading: servicesLoading, options: serviceOptions, serviceName, onChange: onServiceChange })}
           <Select
-            disabled={volumes.length === 0}
+            disabled={!enabled || volumes.length === 0}
             loading={volumesQuery.isFetching}
             options={volumes.map((volume) => ({ label: volume.target, value: volume.target }))}
             placeholder="选择卷"
@@ -464,7 +503,7 @@ export function DockerProjectVolumesPanel({
               setPreviewPath('')
             }}
           />
-          <Button icon={<ReloadOutlined />} loading={filesQuery.isFetching || volumesQuery.isFetching} size="small" onClick={() => {
+          <Button disabled={!enabled} icon={<ReloadOutlined />} loading={filesQuery.isFetching || volumesQuery.isFetching} size="small" onClick={() => {
             volumesQuery.refetch()
             filesQuery.refetch()
           }}>刷新</Button>

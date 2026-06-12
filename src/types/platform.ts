@@ -4,13 +4,35 @@ export interface ClusterHealth {
   lastChecked?: string
 }
 
+export type ClusterConnectionMode = 'direct_kubeconfig' | 'agent' | string
+export type ClusterCapabilityStatus = 'available' | 'partial' | 'unsupported'
+export type ClusterCapabilityRiskLevel = 'read' | 'analyze' | 'mutate' | 'execute' | 'high'
+
+export interface ClusterCapabilityModeSupport {
+  status: ClusterCapabilityStatus
+  reason?: string
+  notes?: string[]
+}
+
+export interface ClusterCapabilityMatrixEntry {
+  key: string
+  label: string
+  category: string
+  requiredScopes?: string[]
+  riskLevel: ClusterCapabilityRiskLevel
+  requiresApproval: boolean
+  docsUrl?: string
+  direct: ClusterCapabilityModeSupport
+  agent: ClusterCapabilityModeSupport
+}
+
 export interface Cluster {
   id: string
   name: string
   region: string
   environment: string
   labels: Record<string, string>
-  connectionMode: string
+  connectionMode: ClusterConnectionMode
   version: string
   capabilities?: string[]
   health: ClusterHealth
@@ -52,6 +74,7 @@ export interface ClusterDetail {
   diagnostics: ClusterDiagnostics
   connection: ClusterConnectionDetail
   monitoring: ClusterMonitoringDetail
+  capabilityMatrix?: ClusterCapabilityMatrixEntry[]
 }
 
 export interface ResourceQuantity {

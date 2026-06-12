@@ -6,6 +6,19 @@ export default defineConfig({
   plugins: [react()],
   test: {
     fileParallelism: false,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html', 'json-summary'],
+      reportsDirectory: 'coverage',
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: ['src/**/*.d.ts', 'src/**/*.test.{ts,tsx}', 'src/vite-env.d.ts'],
+      thresholds: {
+        branches: 8,
+        functions: 10,
+        lines: 10,
+        statements: 10,
+      },
+    },
   },
   resolve: {
     alias: {
@@ -43,7 +56,11 @@ export default defineConfig({
           if (!id.includes('/node_modules/')) {
             return
           }
-          if (id.includes('monaco-editor') || id.includes('monaco-yaml') || id.includes('@monaco-editor')) {
+          if (
+            id.includes('monaco-editor') ||
+            id.includes('monaco-yaml') ||
+            id.includes('@monaco-editor')
+          ) {
             return 'monaco'
           }
           if (id.includes('@xterm')) {
@@ -62,11 +79,11 @@ export default defineConfig({
             return 'vchart-render'
           }
           if (
-            id.includes('@visactor/vdataset')
-            || id.includes('@visactor/vutils')
-            || id.includes('@visactor/vutils-extension')
-            || id.includes('@visactor/vscale')
-            || id.includes('@visactor/vlayouts')
+            id.includes('@visactor/vdataset') ||
+            id.includes('@visactor/vutils') ||
+            id.includes('@visactor/vutils-extension') ||
+            id.includes('@visactor/vscale') ||
+            id.includes('@visactor/vlayouts')
           ) {
             return 'vchart-runtime'
           }

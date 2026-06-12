@@ -1,3 +1,56 @@
+export type VirtualizationPayloadPrimitive = string | number | boolean | null
+
+export type VirtualizationPayloadValue =
+  | VirtualizationPayloadPrimitive
+  | VirtualizationPayloadMap
+  | VirtualizationPayloadValue[]
+  | undefined
+
+export interface VirtualizationPayloadMap {
+  [key: string]: VirtualizationPayloadValue
+}
+
+export interface VirtualizationVmProviderParams extends VirtualizationPayloadMap {
+  storage?: string
+  bridge?: string
+  iso?: string
+  ciuser?: string
+  sshkeys?: string
+  storageClass?: string
+  dataVolumeName?: string
+}
+
+export interface VirtualizationClusterConfig extends VirtualizationPayloadMap {
+  region?: string
+  description?: string
+  defaultNode?: string
+  defaultStorage?: string
+  defaultBridge?: string
+  backendUrl?: string
+  prometheusUrl?: string
+  prometheusBearerToken?: string
+  credentialSecretRef?: string
+}
+
+export interface VirtualizationClusterCredential extends VirtualizationPayloadMap {
+  tokenID?: string
+  tokenSecret?: string
+  ticket?: string
+  csrfToken?: string
+}
+
+export interface VirtualizationImageConfig extends VirtualizationPayloadMap {
+  description?: string
+  sourceKind?: string
+  sourceRef?: string
+  namespace?: string
+  storageClass?: string
+  url?: string
+}
+
+export type VirtualizationOperationPayload = VirtualizationPayloadMap
+export type VirtualizationProviderRaw = VirtualizationPayloadMap | string | null
+
 export interface VirtualizationConnectionHealth {
   total: number
   healthy: number
@@ -101,7 +154,7 @@ export interface CreateVirtualMachineInput {
   diskGiB?: number
   network?: string
   cloudInit?: string
-  providerParams?: Record<string, unknown>
+  providerParams?: VirtualizationVmProviderParams
   startAfterCreate?: boolean
 }
 
@@ -117,7 +170,7 @@ export interface VirtualizationCluster {
   enabled?: boolean
   verifyTls?: boolean
   credentialConfigured?: boolean
-  config?: Record<string, unknown>
+  config?: VirtualizationClusterConfig
   status?: string
   health?: string
   version?: string
@@ -139,8 +192,8 @@ export interface VirtualizationClusterInput {
   defaultNamespace?: string
   enabled?: boolean
   verifyTls?: boolean
-  credential?: Record<string, unknown>
-  config?: Record<string, unknown>
+  credential?: VirtualizationClusterCredential
+  config?: VirtualizationClusterConfig
   region?: string
   description?: string
 }
@@ -164,7 +217,7 @@ export interface VirtualizationImage {
   status?: string
   sizeGiB?: number
   description?: string
-  config?: Record<string, unknown>
+  config?: VirtualizationImageConfig
   createdAt?: string
   updatedAt?: string
   allowedActions?: string[]
@@ -181,7 +234,7 @@ export interface VirtualizationImageInput {
   osType?: string
   sizeGiB?: number
   description?: string
-  config?: Record<string, unknown>
+  config?: VirtualizationImageConfig
 }
 
 export interface VirtualizationFlavor {
@@ -235,7 +288,7 @@ export interface VirtualizationOperationLog {
   taskId: string
   logLevel?: string
   message: string
-  payload?: Record<string, unknown>
+  payload?: VirtualizationOperationPayload
   createdAt?: string
 }
 
@@ -259,7 +312,7 @@ export interface VirtualMachineDetail {
   vm: VirtualMachine
   connection?: VirtualizationCluster
   image?: VirtualizationImage
-  providerRaw?: Record<string, unknown> | string | null
+  providerRaw?: VirtualizationProviderRaw
   operations?: VirtualizationOperation[]
   logs?: VirtualizationOperationLog[]
 }

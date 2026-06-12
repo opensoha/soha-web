@@ -51,7 +51,9 @@ body,
 
 body {
   margin: 0;
-  font-family: 'Inter', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+  font-family:
+    'Inter', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue',
+    Arial, sans-serif;
   font-size: var(--soha-font-size);
   line-height: var(--soha-line-height);
   font-variant-numeric: tabular-nums;
@@ -71,6 +73,15 @@ body {
 a {
   color: var(--soha-primary);
   text-decoration: none;
+}
+
+.soha-error-boundary {
+  display: flex;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: var(--soha-bg-layout);
 }
 
 .soha-shell {
@@ -290,8 +301,11 @@ a {
 .soha-nav-system {
   flex: 0 0 auto;
   padding: 14px 12px 18px;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--soha-bg-surface) 94%, var(--soha-fill-weak) 6%) 0%, var(--soha-bg-surface) 100%);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--soha-bg-surface) 94%, var(--soha-fill-weak) 6%) 0%,
+    var(--soha-bg-surface) 100%
+  );
 }
 
 .soha-nav-system__header {
@@ -988,7 +1002,6 @@ a {
 /* ─── Branding Upload Zones ─── */
 
 @media (max-width: 768px) {
-
   .soha-header {
     display: block;
     height: auto;

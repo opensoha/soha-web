@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import Editor, { useMonaco } from '@monaco-editor/react'
 import { ReloadOutlined } from '@ant-design/icons'
-import { Button, Card, Space, Typography } from 'antd'
+import { Button, Card, Space, Tooltip, Typography } from 'antd'
 import { configureMonacoYaml, type MonacoYaml } from 'monaco-yaml'
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import YamlWorker from 'monaco-yaml/yaml.worker?worker'
@@ -43,6 +43,7 @@ export function K8sYamlEditor({
   onApply,
   saveDisabled,
   applyDisabled,
+  applyDisabledReason,
   applying,
   editorHeight = 620,
 }: {
@@ -53,6 +54,7 @@ export function K8sYamlEditor({
   onApply: () => void
   saveDisabled?: boolean
   applyDisabled?: boolean
+  applyDisabledReason?: string
   applying?: boolean
   editorHeight?: number | string
 }) {
@@ -107,12 +109,29 @@ export function K8sYamlEditor({
       <div className="soha-terminal-toolbar soha-yaml-toolbar">
         <Space className="soha-yaml-toolbar-meta" orientation="vertical" size={2}>
           <Text strong>{t('yamlEditor.title', 'Kubernetes YAML Editor')}</Text>
-          <Text type="secondary" style={{ fontSize: 12 }}>{t('yamlEditor.hint', 'Monaco + monaco-yaml with local schema assistance enabled')}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {t('yamlEditor.hint', 'Monaco + monaco-yaml with local schema assistance enabled')}
+          </Text>
+          {applyDisabledReason ? (
+            <Text type="danger" style={{ fontSize: 12 }}>
+              {applyDisabledReason}
+            </Text>
+          ) : null}
         </Space>
         <Space className="soha-yaml-toolbar-actions" wrap>
-          <Button variant="outlined" icon={<ReloadOutlined />} onClick={onReset}>{t('common.reset', 'Reset')}</Button>
-          <Button variant="outlined" onClick={onSave} disabled={saveDisabled}>{t('yamlEditor.saveDraft', 'Save Draft')}</Button>
-          <Button type="primary" onClick={onApply} loading={applying} disabled={applyDisabled}>{t('common.apply', 'Apply')}</Button>
+          <Button variant="outlined" icon={<ReloadOutlined />} onClick={onReset}>
+            {t('common.reset', 'Reset')}
+          </Button>
+          <Button variant="outlined" onClick={onSave} disabled={saveDisabled}>
+            {t('yamlEditor.saveDraft', 'Save Draft')}
+          </Button>
+          <Tooltip title={applyDisabledReason}>
+            <span>
+              <Button type="primary" onClick={onApply} loading={applying} disabled={applyDisabled}>
+                {t('common.apply', 'Apply')}
+              </Button>
+            </span>
+          </Tooltip>
         </Space>
       </div>
       <div className="soha-yaml-editor-shell" style={{ height: editorHeight }}>

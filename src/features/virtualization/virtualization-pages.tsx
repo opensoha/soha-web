@@ -43,6 +43,7 @@ import {
   WarningOutlined,
 } from '@ant-design/icons'
 import { hasAllowedAction, hasPermission, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
+import { useWorkbenchModuleEnabled } from '@/features/modules/module-status'
 import { getAIWorkbenchPathForMode } from '@/features/copilot/workbench-navigation'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
@@ -357,17 +358,21 @@ function pageTablePagination<T>(
 
 function useVirtualizationPermissions() {
   const permissionSnapshotQuery = usePermissionSnapshot()
+  const { moduleEnabled: virtualizationModuleEnabled } = useWorkbenchModuleEnabled('virtualization')
   const snapshot = permissionSnapshotQuery.data?.data
+  const hasManage = hasPermission(snapshot, 'virtualization.manage')
+  const hasVirtualizationPermission = (key: string) => virtualizationModuleEnabled && (hasPermission(snapshot, key) || hasManage)
   return {
-    canManage: hasPermission(snapshot, 'virtualization.manage'),
-    canManageVMs: hasPermission(snapshot, 'virtualization.vms.manage') || hasPermission(snapshot, 'virtualization.manage'),
-    canManageClusters: hasPermission(snapshot, 'virtualization.clusters.manage') || hasPermission(snapshot, 'virtualization.manage'),
-    canManageImages: hasPermission(snapshot, 'virtualization.images.manage') || hasPermission(snapshot, 'virtualization.manage'),
-    canManageFlavors: hasPermission(snapshot, 'virtualization.flavors.manage') || hasPermission(snapshot, 'virtualization.manage'),
-    canManageOperations: hasPermission(snapshot, 'virtualization.operations.manage') || hasPermission(snapshot, 'virtualization.manage'),
-    canSync: hasPermission(snapshot, 'virtualization.sync.manage') || hasPermission(snapshot, 'virtualization.manage'),
-    canViewMetrics: hasPermission(snapshot, 'virtualization.vms.metrics') || hasPermission(snapshot, 'virtualization.vms.view') || hasPermission(snapshot, 'virtualization.manage'),
-    canAccessConsole: hasPermission(snapshot, 'virtualization.vms.console') || hasPermission(snapshot, 'virtualization.vms.view') || hasPermission(snapshot, 'virtualization.manage'),
+    virtualizationModuleEnabled,
+    canManage: virtualizationModuleEnabled && hasManage,
+    canManageVMs: hasVirtualizationPermission('virtualization.vms.manage'),
+    canManageClusters: hasVirtualizationPermission('virtualization.clusters.manage'),
+    canManageImages: hasVirtualizationPermission('virtualization.images.manage'),
+    canManageFlavors: hasVirtualizationPermission('virtualization.flavors.manage'),
+    canManageOperations: hasVirtualizationPermission('virtualization.operations.manage'),
+    canSync: hasVirtualizationPermission('virtualization.sync.manage'),
+    canViewMetrics: virtualizationModuleEnabled && (hasPermission(snapshot, 'virtualization.vms.metrics') || hasManage),
+    canAccessConsole: virtualizationModuleEnabled && (hasPermission(snapshot, 'virtualization.vms.console') || hasManage),
   }
 }
 
@@ -411,10 +416,11 @@ function OperationsTable({
   const [selectedOperation, setSelectedOperation] = useState<VirtualizationOperation | null>(null)
   const [preset, setPreset] = useState<OperationFilterPreset>(initialPreset)
   const [selectedTaskRowKeys, setSelectedTaskRowKeys] = useState<React.Key[]>([])
-  const { canManageOperations } = useVirtualizationPermissions()
+  const { virtualizationModuleEnabled, canManageOperations } = useVirtualizationPermissions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const operationsQuery = useQuery({
+    enabled: virtualizationModuleEnabled,
     queryKey: ['virtualization', 'operations', assetType ?? 'all', parsedSearch.query],
     queryFn: () => virtualizationApi.operations({
       assetType: assetType ?? parsedSearch.query.assetType,
@@ -430,7 +436,7 @@ function OperationsTable({
   const logsQuery = useQuery({
     queryKey: ['virtualization', 'operations', selectedOperation?.id, 'logs'],
     queryFn: () => virtualizationApi.operationLogs(selectedOperation?.id ?? ''),
-    enabled: Boolean(selectedOperation?.id),
+    enabled: virtualizationModuleEnabled && Boolean(selectedOperation?.id),
   })
 
   useEffect(() => {
@@ -673,14 +679,14 @@ function OperationsTable({
 
 
 export function VirtualizationOverviewPage() {
-  const { canManageClusters, canManageOperations, canSync } = useVirtualizationPermissions()
+  const { virtualizationModuleEnabled, canManageClusters, canManageOperations, canSync } = useVirtualizationPermissions()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const { message } = App.useApp()
   const [syncTaskId, setSyncTaskId] = useState<string | null>(null)
   const [selectedOperation, setSelectedOperation] = useState<VirtualizationOperation | null>(null)
   const [selectedCluster, setSelectedCluster] = useState<VirtualizationCluster | null>(null)
-  const { task: syncTask, status: syncStreamStatus } = useTaskStream(syncTaskId)
+  const { task: syncTask, status: syncStreamStatus } = useTaskStream(syncTaskId, virtualizationModuleEnabled)
 
   useEffect(() => {
     if (syncStreamStatus === 'done') {
@@ -699,13 +705,14 @@ export function VirtualizationOverviewPage() {
   })
 
   const overviewQuery = useQuery({
+    enabled: virtualizationModuleEnabled,
     queryKey: ['virtualization', 'overview'],
     queryFn: virtualizationApi.overview,
   })
   const logsQuery = useQuery({
     queryKey: ['virtualization', 'operations', selectedOperation?.id, 'logs', 'overview'],
     queryFn: () => virtualizationApi.operationLogs(selectedOperation?.id ?? ''),
-    enabled: Boolean(selectedOperation?.id),
+    enabled: virtualizationModuleEnabled && Boolean(selectedOperation?.id),
   })
   const syncMutation = useMutation({
     mutationFn: virtualizationApi.syncAll,
@@ -1183,12 +1190,12 @@ export function VirtualizationVmsPage() {
   const [filterForm] = Form.useForm<VirtualizationListParams>()
   const [form] = Form.useForm<VirtualMachineFormValues>()
   const [pendingTaskId, setPendingTaskId] = useState<string | null>(null)
-  const { canManageVMs } = useVirtualizationPermissions()
+  const { virtualizationModuleEnabled, canManageVMs } = useVirtualizationPermissions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const createProvider = Form.useWatch('provider', form) ?? 'kubevirt'
   const createSourceMode = Form.useWatch('sourceMode', form) ?? (createProvider === 'pve' ? 'template_clone' : 'datasource_clone')
-  const { task: streamedTask, status: streamStatus } = useTaskStream(pendingTaskId)
+  const { task: streamedTask, status: streamStatus } = useTaskStream(pendingTaskId, virtualizationModuleEnabled)
 
   useEffect(() => {
     if (streamStatus === 'done') {
@@ -1205,12 +1212,13 @@ export function VirtualizationVmsPage() {
     },
   })
   const vmsQuery = useQuery({
+    enabled: virtualizationModuleEnabled,
     queryKey: ['virtualization', 'vms', filters],
     queryFn: () => virtualizationApi.vms(filters),
   })
-  const clustersQuery = useQuery({ queryKey: ['virtualization', 'clusters'], queryFn: virtualizationApi.clusters })
-  const imagesQuery = useQuery({ queryKey: ['virtualization', 'images', 'create-options'], queryFn: () => virtualizationApi.images() })
-  const flavorsQuery = useQuery({ queryKey: ['virtualization', 'flavors'], queryFn: virtualizationApi.flavors })
+  const clustersQuery = useQuery({ enabled: virtualizationModuleEnabled, queryKey: ['virtualization', 'clusters'], queryFn: virtualizationApi.clusters })
+  const imagesQuery = useQuery({ enabled: virtualizationModuleEnabled, queryKey: ['virtualization', 'images', 'create-options'], queryFn: () => virtualizationApi.images() })
+  const flavorsQuery = useQuery({ enabled: virtualizationModuleEnabled, queryKey: ['virtualization', 'flavors'], queryFn: virtualizationApi.flavors })
   const createMutation = useMutation({
     mutationFn: (values: VirtualMachineFormValues) => virtualizationApi.createVm(buildCreateVmPayload(values)),
     onSuccess: (response) => {
@@ -1264,7 +1272,7 @@ export function VirtualizationVmsPage() {
       width: 130,
       render: (_value, record) => {
         if (!canManageVMs) return null
-        const canPower = (action: string) => !record.allowedActions || hasAllowedAction(record.allowedActions, action)
+        const canPower = (action: string) => hasAllowedAction(record.allowedActions, action)
         return (
           <Space className="soha-row-action-icons">
             {canPower('start') ? <ManagementIconButton aria-label="启动虚拟机" size="small" tooltip="启动" icon={<PlayCircleOutlined />} onClick={() => powerMutation.mutate({ id: record.id, action: 'start' })} /> : null}
@@ -1482,7 +1490,7 @@ export function VirtualizationVmDetailPage() {
   const location = useLocation()
   const pathParts = location.pathname.split('/').filter(Boolean)
   const vmId = id ?? decodeURIComponent(pathParts[pathParts.length - 1] ?? '')
-  const { canViewMetrics, canAccessConsole } = useVirtualizationPermissions()
+  const { virtualizationModuleEnabled, canViewMetrics, canAccessConsole } = useVirtualizationPermissions()
   const [metricsRange, setMetricsRange] = useState(60)
   const [activeTab, setActiveTab] = useState(() => {
     const params = new URLSearchParams(location.search)
@@ -1494,7 +1502,7 @@ export function VirtualizationVmDetailPage() {
   const detailQuery = useQuery({
     queryKey: ['virtualization', 'vms', vmId, 'detail'],
     queryFn: () => virtualizationApi.vmDetail(vmId),
-    enabled: Boolean(vmId),
+    enabled: virtualizationModuleEnabled && Boolean(vmId),
   })
   const detail = detailQuery.data?.data
   const vm = detail?.vm
@@ -1516,7 +1524,7 @@ export function VirtualizationVmDetailPage() {
     queryKey: ['virtualization', 'vm-metrics', vmId, metricsRange],
     queryFn: () => virtualizationApi.vmMetrics(vmId, metricsRange, metricsRange <= 60 ? 60 : 300),
     refetchInterval: 30000,
-    enabled: Boolean(vmId) && isRunning,
+    enabled: virtualizationModuleEnabled && canViewMetrics && Boolean(vmId) && isRunning,
   })
 
   return (
@@ -1715,16 +1723,18 @@ export function VirtualizationClustersPage() {
   const [showNeverSynced, setShowNeverSynced] = useState(false)
   const [selectedConnectionOperation, setSelectedConnectionOperation] = useState<VirtualizationOperation | null>(null)
   const [selectedClusterRowKeys, setSelectedClusterRowKeys] = useState<React.Key[]>([])
-  const { canManageClusters, canSync } = useVirtualizationPermissions()
+  const { virtualizationModuleEnabled, canManageClusters, canSync } = useVirtualizationPermissions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const provider = Form.useWatch('provider', form) ?? 'kubevirt'
-  const clustersQuery = useQuery({ queryKey: ['virtualization', 'clusters'], queryFn: virtualizationApi.clusters })
+  const clustersQuery = useQuery({ enabled: virtualizationModuleEnabled, queryKey: ['virtualization', 'clusters'], queryFn: virtualizationApi.clusters })
   const clusterOperationsQuery = useQuery({
+    enabled: virtualizationModuleEnabled,
     queryKey: ['virtualization', 'operations', 'clusters-page'],
     queryFn: () => virtualizationApi.operations(),
   })
   const platformClustersQuery = useQuery({
+    enabled: virtualizationModuleEnabled && canManageClusters,
     queryKey: ['clusters'],
     queryFn: () => api.get<ApiResponse<Cluster[]>>('/clusters'),
   })
@@ -2056,15 +2066,16 @@ export function VirtualizationImagesPage() {
   const [filters, setFilters] = useState<VirtualizationListParams>({ page: 1, pageSize: 10 })
   const [filterForm] = Form.useForm<VirtualizationListParams>()
   const [form] = Form.useForm<VirtualizationImageInput>()
-  const { canManageImages } = useVirtualizationPermissions()
+  const { virtualizationModuleEnabled, canManageImages } = useVirtualizationPermissions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const imageProvider = Form.useWatch('provider', form) ?? 'kubevirt'
   const imagesQuery = useQuery({
+    enabled: virtualizationModuleEnabled,
     queryKey: ['virtualization', 'images', filters],
     queryFn: () => virtualizationApi.images(filters),
   })
-  const clustersQuery = useQuery({ queryKey: ['virtualization', 'clusters'], queryFn: virtualizationApi.clusters })
+  const clustersQuery = useQuery({ enabled: virtualizationModuleEnabled, queryKey: ['virtualization', 'clusters'], queryFn: virtualizationApi.clusters })
   const imagesPage = normalizePage(imagesQuery.data?.data, filters.page ?? 1, filters.pageSize ?? 10)
   const clusters = clustersQuery.data?.data ?? []
   const saveMutation = useMutation({
@@ -2119,14 +2130,21 @@ export function VirtualizationImagesPage() {
     {
       ...tableColumnPresets.action,
       title: '操作',
-      render: (_value, record) => canManageImages ? (
+      render: (_value, record) => {
+        const canUpdate = canManageImages && hasAllowedAction(record.allowedActions, 'update')
+        const canDelete = canManageImages && hasAllowedAction(record.allowedActions, 'delete')
+        if (!canUpdate && !canDelete) return null
+        return (
         <Space className="soha-row-action-icons">
-          <ManagementIconButton aria-label="编辑镜像" size="small" tooltip="编辑" icon={<EditOutlined />} onClick={() => openImageEditor(record)} />
-          <Popconfirm title="确认删除镜像入口？" onConfirm={() => deleteMutation.mutate(record.id)}>
-            <ManagementIconButton aria-label="删除镜像" size="small" tooltip="删除" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
+          {canUpdate ? <ManagementIconButton aria-label="编辑镜像" size="small" tooltip="编辑" icon={<EditOutlined />} onClick={() => openImageEditor(record)} /> : null}
+          {canDelete ? (
+            <Popconfirm title="确认删除镜像入口？" onConfirm={() => deleteMutation.mutate(record.id)}>
+              <ManagementIconButton aria-label="删除镜像" size="small" tooltip="删除" danger icon={<DeleteOutlined />} />
+            </Popconfirm>
+          ) : null}
         </Space>
-      ) : null,
+        )
+      },
     },
   ]
   return (
@@ -2240,10 +2258,10 @@ export function VirtualizationFlavorsPage() {
   const [flavorFilters, setFlavorFilters] = useState<{ enabled?: EnabledFilter; search?: string }>({ enabled: 'all' })
   const [filterForm] = Form.useForm<{ enabled?: EnabledFilter; search?: string }>()
   const [form] = Form.useForm<VirtualizationFlavorInput>()
-  const { canManageFlavors } = useVirtualizationPermissions()
+  const { virtualizationModuleEnabled, canManageFlavors } = useVirtualizationPermissions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
-  const flavorsQuery = useQuery({ queryKey: ['virtualization', 'flavors'], queryFn: virtualizationApi.flavors })
+  const flavorsQuery = useQuery({ enabled: virtualizationModuleEnabled, queryKey: ['virtualization', 'flavors'], queryFn: virtualizationApi.flavors })
   const flavors = flavorsQuery.data?.data ?? []
   const flavorRows = useMemo(() => {
     const search = flavorFilters.search?.trim().toLowerCase()
@@ -2291,14 +2309,21 @@ export function VirtualizationFlavorsPage() {
     {
       ...tableColumnPresets.action,
       title: '操作',
-      render: (_value, record) => canManageFlavors ? (
+      render: (_value, record) => {
+        const canUpdate = canManageFlavors && hasAllowedAction(record.allowedActions, 'update')
+        const canDelete = canManageFlavors && hasAllowedAction(record.allowedActions, 'delete')
+        if (!canUpdate && !canDelete) return null
+        return (
         <Space className="soha-row-action-icons">
-          <ManagementIconButton aria-label="编辑规格" size="small" tooltip="编辑" icon={<EditOutlined />} onClick={() => openEditor(record)} />
-          <Popconfirm title="确认删除规格？" onConfirm={() => deleteMutation.mutate(record.id)}>
-            <ManagementIconButton aria-label="删除规格" size="small" tooltip="删除" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
+          {canUpdate ? <ManagementIconButton aria-label="编辑规格" size="small" tooltip="编辑" icon={<EditOutlined />} onClick={() => openEditor(record)} /> : null}
+          {canDelete ? (
+            <Popconfirm title="确认删除规格？" onConfirm={() => deleteMutation.mutate(record.id)}>
+              <ManagementIconButton aria-label="删除规格" size="small" tooltip="删除" danger icon={<DeleteOutlined />} />
+            </Popconfirm>
+          ) : null}
         </Space>
-      ) : null,
+        )
+      },
     },
   ]
   return (

@@ -18,10 +18,16 @@ import {
   gatewayTimeRangeQuery,
   rateLimitModeOptions,
 } from './ai-gateway-page'
+import {
+  valuesToResourceScopes,
+  type GatewayAccessPolicyConditionFormValues,
+  type GatewayApprovalPolicyFormValues,
+  type GatewayResourceScopeFormValues,
+} from './ai-gateway-model'
 
 describe('AI Gateway policy condition helpers', () => {
   it('builds backend-supported approval routing from Console policy fields', () => {
-    expect(accessPolicyApprovalPolicyFromValues({
+    const values = {
       approvalMode: 'require_approval',
       approvalPolicyRef: 'delivery-standard',
       approvalRoutingMode: 'all',
@@ -33,7 +39,9 @@ describe('AI Gateway policy condition helpers', () => {
       approvalChangeWindowStartsAt: '2026-06-01T09:00:00Z',
       approvalChangeWindowEndsAt: '2026-06-01T18:00:00Z',
       approvalChangeWindowTimezone: 'Asia/Shanghai',
-    })).toEqual({
+    } satisfies GatewayApprovalPolicyFormValues
+
+    expect(accessPolicyApprovalPolicyFromValues(values)).toEqual({
       strategy: 'require_approval',
       approvalPolicyRef: 'delivery-standard',
       approvalMode: 'all',
@@ -49,11 +57,13 @@ describe('AI Gateway policy condition helpers', () => {
       },
     })
 
-    expect(accessPolicyApprovalPolicyFromValues({ approvalMode: 'none', approvalPolicyRef: 'ignored' })).toEqual({})
+    expect(
+      accessPolicyApprovalPolicyFromValues({ approvalMode: 'none', approvalPolicyRef: 'ignored' }),
+    ).toEqual({})
   })
 
   it('builds backend-supported conditions from Console policy fields', () => {
-    expect(accessPolicyConditionsFromValues({
+    const values = {
       rateLimitEnabled: true,
       rateLimitMode: 'gcra',
       rateLimitScope: 'actor_client_tool',
@@ -78,7 +88,9 @@ describe('AI Gateway policy condition helpers', () => {
       outputRedactionValuePatterns: ['token=[A-Za-z0-9_-]{16,}'],
       outputRedactionReplacement: '[OUTPUT]',
       outputRedactionPreserveFormat: true,
-    })).toEqual({
+    } satisfies GatewayAccessPolicyConditionFormValues
+
+    expect(accessPolicyConditionsFromValues(values)).toEqual({
       rateLimit: {
         mode: 'gcra',
         scope: 'actor_client_tool',
@@ -112,53 +124,69 @@ describe('AI Gateway policy condition helpers', () => {
     })
   })
 
+  it('builds typed resource scopes from Console scope fields', () => {
+    const values = {
+      scopeApplicationIds: ['app-a'],
+      scopeClusterIds: ['cluster-a'],
+      scopeNamespaces: ['prod', ''],
+    } satisfies GatewayResourceScopeFormValues
+
+    expect(valuesToResourceScopes(values)).toEqual({
+      applicationIds: ['app-a'],
+      clusterIds: ['cluster-a'],
+      namespaces: ['prod'],
+    })
+  })
+
   it('normalizes persisted conditions back into Console form values', () => {
-    expect(accessPolicyFormValuesFromRecord({
-      id: 'policy-1',
-      name: 'Delivery guardrail',
-      enabled: true,
-      subjectType: 'role',
-      subjectId: 'developer',
-      effect: 'allow',
-      approvalPolicy: {
-        strategy: 'require_approval',
-        approvalPolicyRef: 'delivery-standard',
-        approvalRouting: {
-          approvalMode: 'any',
-          candidateUserIds: ['release-owner'],
-          candidateRoles: ['release-manager'],
-          candidateTeams: ['security'],
-          onCallRef: 'sre-primary',
-          requiredApprovals: 2,
-          changeWindow: {
-            startsAt: '2026-06-01T09:00:00Z',
-            endsAt: '2026-06-01T18:00:00Z',
-            timezone: 'Asia/Shanghai',
+    expect(
+      accessPolicyFormValuesFromRecord({
+        id: 'policy-1',
+        name: 'Delivery guardrail',
+        enabled: true,
+        subjectType: 'role',
+        subjectId: 'developer',
+        effect: 'allow',
+        approvalPolicy: {
+          strategy: 'require_approval',
+          approvalPolicyRef: 'delivery-standard',
+          approvalRouting: {
+            approvalMode: 'any',
+            candidateUserIds: ['release-owner'],
+            candidateRoles: ['release-manager'],
+            candidateTeams: ['security'],
+            onCallRef: 'sre-primary',
+            requiredApprovals: 2,
+            changeWindow: {
+              startsAt: '2026-06-01T09:00:00Z',
+              endsAt: '2026-06-01T18:00:00Z',
+              timezone: 'Asia/Shanghai',
+            },
           },
         },
-      },
-      riskLevels: ['execute'],
-      conditions: {
-        rateLimit: { mode: 'token_bucket', scope: 'actor_client', maxCallsPerHour: 10, burst: 3 },
-        budget: { maxTokensPerDay: 10000, maxCostPerDay: 2.5 },
-        redactionPolicy: {
-          mode: 'mask',
-          target: 'input',
-          fields: ['metadata.token'],
-          secretTypes: ['openai'],
-          preserveFormat: true,
+        riskLevels: ['execute'],
+        conditions: {
+          rateLimit: { mode: 'token_bucket', scope: 'actor_client', maxCallsPerHour: 10, burst: 3 },
+          budget: { maxTokensPerDay: 10000, maxCostPerDay: 2.5 },
+          redactionPolicy: {
+            mode: 'mask',
+            target: 'input',
+            fields: ['metadata.token'],
+            secretTypes: ['openai'],
+            preserveFormat: true,
+          },
+          outputRedactionPolicy: {
+            fields: ['result.secret'],
+            secretTypes: ['openrouter'],
+            valuePatterns: ['token=[A-Za-z0-9_-]{16,}'],
+            replacement: '[OUTPUT]',
+            preserveFormat: true,
+          },
         },
-        outputRedactionPolicy: {
-          fields: ['result.secret'],
-          secretTypes: ['openrouter'],
-          valuePatterns: ['token=[A-Za-z0-9_-]{16,}'],
-          replacement: '[OUTPUT]',
-          preserveFormat: true,
-        },
-      },
-      createdAt: '2026-05-29T00:00:00Z',
-      updatedAt: '2026-05-29T00:00:00Z',
-    })).toMatchObject({
+        createdAt: '2026-05-29T00:00:00Z',
+        updatedAt: '2026-05-29T00:00:00Z',
+      }),
+    ).toMatchObject({
       approvalMode: 'require_approval',
       approvalPolicyRef: 'delivery-standard',
       approvalRoutingMode: 'any',
@@ -194,44 +222,60 @@ describe('AI Gateway policy condition helpers', () => {
 
   it('keeps sliding-window rate limits and agent tooling secret classifiers available', () => {
     expect(rateLimitModeOptions.map((item) => item.value)).toContain('sliding_window')
-    expect(gatewaySecretTypeOptions.map((item) => item.value)).toEqual(expect.arrayContaining([
-      'brave_search',
-      'serpapi',
-      'browserbase',
-      'exa',
-      'jina',
-      'unstructured',
-      'llama_cloud',
-      'helicone',
-      'dashscope',
-      'moonshot',
-      'zhipu',
-      'siliconflow',
-      'hunyuan',
-      'qianfan',
-      'volcengine',
-      'grafana',
-      'sentry',
-      'newrelic',
-      'azure_openai',
-      'azure_devops',
-      'datadog',
-      'pagerduty',
-      'posthog',
-      'splunk',
-      'elastic',
-      'terraform',
-    ]))
-    expect(accessPolicyConditionsFromValues({
-      rateLimitEnabled: true,
-      rateLimitMode: 'sliding_window',
-      rateLimitScope: 'actor_client',
-      rateLimitMaxCallsPerHour: 25,
-      redactionEnabled: true,
-      redactionMode: 'strict',
-      redactionTarget: 'both',
-      redactionSecretTypes: ['grafana', 'sentry', 'newrelic', 'azure_openai', 'azure_devops', 'datadog', 'pagerduty', 'posthog', 'splunk', 'elastic', 'terraform'],
-    })).toMatchObject({
+    expect(gatewaySecretTypeOptions.map((item) => item.value)).toEqual(
+      expect.arrayContaining([
+        'brave_search',
+        'serpapi',
+        'browserbase',
+        'exa',
+        'jina',
+        'unstructured',
+        'llama_cloud',
+        'helicone',
+        'dashscope',
+        'moonshot',
+        'zhipu',
+        'siliconflow',
+        'hunyuan',
+        'qianfan',
+        'volcengine',
+        'grafana',
+        'sentry',
+        'newrelic',
+        'azure_openai',
+        'azure_devops',
+        'datadog',
+        'pagerduty',
+        'posthog',
+        'splunk',
+        'elastic',
+        'terraform',
+      ]),
+    )
+    expect(
+      accessPolicyConditionsFromValues({
+        rateLimitEnabled: true,
+        rateLimitMode: 'sliding_window',
+        rateLimitScope: 'actor_client',
+        rateLimitMaxCallsPerHour: 25,
+        redactionEnabled: true,
+        redactionMode: 'strict',
+        redactionTarget: 'both',
+        redactionSecretTypes: [
+          'grafana',
+          'sentry',
+          'newrelic',
+          'azure_openai',
+          'azure_devops',
+          'datadog',
+          'pagerduty',
+          'posthog',
+          'splunk',
+          'elastic',
+          'terraform',
+        ],
+      }),
+    ).toMatchObject({
       rateLimit: {
         mode: 'sliding_window',
         scope: 'actor_client',
@@ -240,44 +284,88 @@ describe('AI Gateway policy condition helpers', () => {
       redactionPolicy: {
         mode: 'strict',
         target: 'both',
-        secretTypes: ['grafana', 'sentry', 'newrelic', 'azure_openai', 'azure_devops', 'datadog', 'pagerduty', 'posthog', 'splunk', 'elastic', 'terraform'],
+        secretTypes: [
+          'grafana',
+          'sentry',
+          'newrelic',
+          'azure_openai',
+          'azure_devops',
+          'datadog',
+          'pagerduty',
+          'posthog',
+          'splunk',
+          'elastic',
+          'terraform',
+        ],
       },
     })
-    expect(accessPolicyFormValuesFromRecord({
-      id: 'policy-2',
-      name: 'Observability guardrail',
-      enabled: true,
-      subjectType: 'user',
-      subjectId: 'sre',
-      effect: 'allow',
-      conditions: {
-        rateLimit: { mode: 'rolling_window', scope: 'actor_client', maxCallsPerMinute: 5 },
-        redactionPolicy: { secretTypes: ['grafana', 'sentry', 'newrelic', 'azure_openai', 'azure_devops', 'datadog', 'pagerduty', 'posthog', 'splunk', 'elastic', 'terraform'] },
-      },
-      createdAt: '2026-05-29T00:00:00Z',
-      updatedAt: '2026-05-29T00:00:00Z',
-    })).toMatchObject({
+    expect(
+      accessPolicyFormValuesFromRecord({
+        id: 'policy-2',
+        name: 'Observability guardrail',
+        enabled: true,
+        subjectType: 'user',
+        subjectId: 'sre',
+        effect: 'allow',
+        conditions: {
+          rateLimit: { mode: 'rolling_window', scope: 'actor_client', maxCallsPerMinute: 5 },
+          redactionPolicy: {
+            secretTypes: [
+              'grafana',
+              'sentry',
+              'newrelic',
+              'azure_openai',
+              'azure_devops',
+              'datadog',
+              'pagerduty',
+              'posthog',
+              'splunk',
+              'elastic',
+              'terraform',
+            ],
+          },
+        },
+        createdAt: '2026-05-29T00:00:00Z',
+        updatedAt: '2026-05-29T00:00:00Z',
+      }),
+    ).toMatchObject({
       rateLimitMode: 'sliding_window',
-      redactionSecretTypes: ['grafana', 'sentry', 'newrelic', 'azure_openai', 'azure_devops', 'datadog', 'pagerduty', 'posthog', 'splunk', 'elastic', 'terraform'],
+      redactionSecretTypes: [
+        'grafana',
+        'sentry',
+        'newrelic',
+        'azure_openai',
+        'azure_devops',
+        'datadog',
+        'pagerduty',
+        'posthog',
+        'splunk',
+        'elastic',
+        'terraform',
+      ],
     })
   })
 
   it('omits disabled condition groups before submit', () => {
-    expect(accessPolicyConditionsFromValues({
-      rateLimitEnabled: false,
-      budgetEnabled: false,
-      redactionEnabled: false,
-    })).toEqual({})
+    expect(
+      accessPolicyConditionsFromValues({
+        rateLimitEnabled: false,
+        budgetEnabled: false,
+        redactionEnabled: false,
+      }),
+    ).toEqual({})
   })
 
   it('does not submit output redaction policy without output match selectors', () => {
-    expect(accessPolicyConditionsFromValues({
-      redactionEnabled: true,
-      redactionMode: 'sanitize',
-      redactionTarget: 'input',
-      outputRedactionReplacement: '[OUTPUT]',
-      outputRedactionPreserveFormat: true,
-    })).toEqual({
+    expect(
+      accessPolicyConditionsFromValues({
+        redactionEnabled: true,
+        redactionMode: 'sanitize',
+        redactionTarget: 'input',
+        outputRedactionReplacement: '[OUTPUT]',
+        outputRedactionPreserveFormat: true,
+      }),
+    ).toEqual({
       redactionPolicy: {
         mode: 'sanitize',
         target: 'input',
@@ -298,26 +386,35 @@ describe('AI Gateway policy condition helpers', () => {
   })
 
   it('summarizes governance policy coverage rows for the Console status tab', () => {
-    expect(governanceCoverageRows({
-      accessPolicies: 4,
-      toolGrants: 3,
-      skillBindings: 2,
-      activeAccessPolicies: 3,
-      activeToolGrants: 2,
-      activeSkillBindings: 1,
-      budgetPolicies: 1,
-      rateLimitPolicies: 2,
-      redactionPolicies: 1,
-      resourceScopedAccessPolicies: 2,
-      resourceScopedToolGrants: 1,
-      budgetState: 'configured',
-      rateLimitState: 'configured',
-      redactionPolicyState: 'configured',
-      resourceScopeState: 'configured',
-    })).toEqual(expect.arrayContaining([
-      expect.objectContaining({ key: 'budget', configured: 1, total: 3, state: 'configured' }),
-      expect.objectContaining({ key: 'resource_scopes', configured: 3, total: 5, state: 'configured' }),
-    ]))
+    expect(
+      governanceCoverageRows({
+        accessPolicies: 4,
+        toolGrants: 3,
+        skillBindings: 2,
+        activeAccessPolicies: 3,
+        activeToolGrants: 2,
+        activeSkillBindings: 1,
+        budgetPolicies: 1,
+        rateLimitPolicies: 2,
+        redactionPolicies: 1,
+        resourceScopedAccessPolicies: 2,
+        resourceScopedToolGrants: 1,
+        budgetState: 'configured',
+        rateLimitState: 'configured',
+        redactionPolicyState: 'configured',
+        resourceScopeState: 'configured',
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'budget', configured: 1, total: 3, state: 'configured' }),
+        expect.objectContaining({
+          key: 'resource_scopes',
+          configured: 3,
+          total: 5,
+          state: 'configured',
+        }),
+      ]),
+    )
   })
 
   it('builds access policy drafts from governance coverage gaps', () => {
@@ -345,20 +442,24 @@ describe('AI Gateway policy condition helpers', () => {
       },
     })
 
-    const grantRow = governanceCoverageRows({ toolGrants: 1, activeToolGrants: 1 }).find((item) => item.key === 'tool_grants')
+    const grantRow = governanceCoverageRows({ toolGrants: 1, activeToolGrants: 1 }).find(
+      (item) => item.key === 'tool_grants',
+    )
     expect(governanceCoverageDrilldown(grantRow!)).toEqual({ tab: 'grants' })
   })
 
   it('maps structured governance recommendation actions to Console drilldowns', () => {
-    expect(governanceRecommendationDrilldownAction({
-      type: 'approval_sla',
-      severity: 'warning',
-      summary: 'approval needs attention',
-      action: 'resolve_gateway_approvals',
-      targetKind: 'approval_requests',
-      refs: ['approval-due'],
-      count: 1,
-    })).toEqual({
+    expect(
+      governanceRecommendationDrilldownAction({
+        type: 'approval_sla',
+        severity: 'warning',
+        summary: 'approval needs attention',
+        action: 'resolve_gateway_approvals',
+        targetKind: 'approval_requests',
+        refs: ['approval-due'],
+        count: 1,
+      }),
+    ).toEqual({
       label: '处理审批',
       target: {
         tab: 'approvals',
@@ -375,14 +476,16 @@ describe('AI Gateway policy condition helpers', () => {
         },
       },
     })
-    expect(governanceRecommendationDrilldownAction({
-      type: 'high_risk_guardrails',
-      severity: 'warning',
-      summary: 'guard high-risk tools',
-      action: 'create_high_risk_approval_guardrail',
-      targetKind: 'access_policies',
-      metadata: { policyTemplate: 'approval_guardrail' },
-    })).toMatchObject({
+    expect(
+      governanceRecommendationDrilldownAction({
+        type: 'high_risk_guardrails',
+        severity: 'warning',
+        summary: 'guard high-risk tools',
+        action: 'create_high_risk_approval_guardrail',
+        targetKind: 'access_policies',
+        metadata: { policyTemplate: 'approval_guardrail' },
+      }),
+    ).toMatchObject({
       label: '创建 policy',
       target: {
         tab: 'policies',
@@ -392,34 +495,43 @@ describe('AI Gateway policy condition helpers', () => {
         },
       },
     })
-    expect(governanceRecommendationDrilldownAction({
-      type: 'token_hygiene',
-      severity: 'warning',
-      summary: 'review tokens',
-      action: 'review_and_revoke_unused_tokens',
-      targetKind: 'tokens',
-      refs: ['pat-stale'],
-    })).toEqual({
+    expect(
+      governanceRecommendationDrilldownAction({
+        type: 'token_hygiene',
+        severity: 'warning',
+        summary: 'review tokens',
+        action: 'review_and_revoke_unused_tokens',
+        targetKind: 'tokens',
+        refs: ['pat-stale'],
+      }),
+    ).toEqual({
       label: '处理 token',
       target: { tab: 'tokens', tokenFilter: 'pat-stale' },
     })
-    expect(governanceRecommendationDrilldownAction({
-      type: 'token_hygiene',
-      severity: 'warning',
-      summary: 'review service tokens',
-      action: 'review_and_revoke_unused_tokens',
-      targetKind: 'tokens',
-      refs: ['2f8e9a9b-5c7f-45b2-a8f1-7dce47288f10'],
-      metadata: {
-        tokenRefs: [{
-          kind: 'service_account_token',
-          id: '2f8e9a9b-5c7f-45b2-a8f1-7dce47288f10',
-          tokenPrefix: 'soha_sat_stale',
-        }],
-      },
-    })).toEqual({
+    expect(
+      governanceRecommendationDrilldownAction({
+        type: 'token_hygiene',
+        severity: 'warning',
+        summary: 'review service tokens',
+        action: 'review_and_revoke_unused_tokens',
+        targetKind: 'tokens',
+        refs: ['2f8e9a9b-5c7f-45b2-a8f1-7dce47288f10'],
+        metadata: {
+          tokenRefs: [
+            {
+              kind: 'service_account_token',
+              id: '2f8e9a9b-5c7f-45b2-a8f1-7dce47288f10',
+              tokenPrefix: 'soha_sat_stale',
+            },
+          ],
+        },
+      }),
+    ).toEqual({
       label: '处理 token',
-      target: { tab: 'service-accounts', serviceTokenFilter: '2f8e9a9b-5c7f-45b2-a8f1-7dce47288f10' },
+      target: {
+        tab: 'service-accounts',
+        serviceTokenFilter: '2f8e9a9b-5c7f-45b2-a8f1-7dce47288f10',
+      },
     })
   })
 
@@ -435,7 +547,10 @@ describe('AI Gateway policy condition helpers', () => {
       valuePatternMatches: 1,
       secretClassifierMatches: 1,
       structuredSecretMatches: 1,
-      topTargets: [{ key: 'input', count: 1 }, { key: 'output', count: 1 }],
+      topTargets: [
+        { key: 'input', count: 1 },
+        { key: 'output', count: 1 },
+      ],
       topMatchTypes: [{ key: 'secret_classifier', count: 1 }],
       topClassifiers: [{ key: 'openai', count: 1 }],
       topFieldPaths: [{ key: 'metadata.apiToken', count: 1 }],
@@ -443,12 +558,27 @@ describe('AI Gateway policy condition helpers', () => {
       topTools: [{ key: 'k8s.pods.logs', count: 1 }],
     })
 
-    expect(rows).toEqual(expect.arrayContaining([
-      expect.objectContaining({ key: 'targets', count: 2 }),
-      expect.objectContaining({ key: 'classifiers', count: 1, items: [{ key: 'openai', count: 1 }] }),
-      expect.objectContaining({ key: 'policies', target: { tab: 'policies', policyFilter: 'policy-redaction' } }),
-      expect.objectContaining({ key: 'tools', target: { tab: 'audit', auditFilters: expect.objectContaining({ toolName: 'k8s.pods.logs' }) } }),
-    ]))
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'targets', count: 2 }),
+        expect.objectContaining({
+          key: 'classifiers',
+          count: 1,
+          items: [{ key: 'openai', count: 1 }],
+        }),
+        expect.objectContaining({
+          key: 'policies',
+          target: { tab: 'policies', policyFilter: 'policy-redaction' },
+        }),
+        expect.objectContaining({
+          key: 'tools',
+          target: {
+            tab: 'audit',
+            auditFilters: expect.objectContaining({ toolName: 'k8s.pods.logs' }),
+          },
+        }),
+      ]),
+    )
   })
 
   it('maps governance risk counts and approval queues for the Console status tab', () => {
@@ -458,22 +588,35 @@ describe('AI Gateway policy condition helpers', () => {
       'mutate:2',
     ])
 
-    const queueRows = governanceApprovalQueueRows({
-      dueSoon: 1,
-      stalePending: 2,
-      overdue: 1,
-      dueSoonRequestIds: ['approval-due'],
-      stalePendingRequestIds: ['approval-stale-1', 'approval-stale-2'],
-      overdueRequestIds: ['approval-overdue'],
-    }, {
-      pendingApproval: 2,
-      pendingApprovalClientIds: ['codex-local', 'ci-agent'],
-    })
+    const queueRows = governanceApprovalQueueRows(
+      {
+        dueSoon: 1,
+        stalePending: 2,
+        overdue: 1,
+        dueSoonRequestIds: ['approval-due'],
+        stalePendingRequestIds: ['approval-stale-1', 'approval-stale-2'],
+        overdueRequestIds: ['approval-overdue'],
+      },
+      {
+        pendingApproval: 2,
+        pendingApprovalClientIds: ['codex-local', 'ci-agent'],
+      },
+    )
     expect(queueRows).toEqual([
       { key: 'due_soon', label: 'Due soon approvals', count: 1, refs: ['approval-due'] },
-      { key: 'stale', label: 'Stale approvals', count: 2, refs: ['approval-stale-1', 'approval-stale-2'] },
+      {
+        key: 'stale',
+        label: 'Stale approvals',
+        count: 2,
+        refs: ['approval-stale-1', 'approval-stale-2'],
+      },
       { key: 'overdue', label: 'Overdue approvals', count: 1, refs: ['approval-overdue'] },
-      { key: 'pending_clients', label: 'Pending AI clients', count: 2, refs: ['codex-local', 'ci-agent'] },
+      {
+        key: 'pending_clients',
+        label: 'Pending AI clients',
+        count: 2,
+        refs: ['codex-local', 'ci-agent'],
+      },
     ])
     expect(governanceQueueDrilldown(queueRows[0], ' approval-due ')).toEqual({
       tab: 'approvals',
@@ -511,7 +654,13 @@ describe('AI Gateway policy condition helpers', () => {
       riskLevel: 'execute',
     })
 
-    expect(actions.map((item) => item.label)).toEqual(['查看审批', '查看 client', '查看 policy', '查看 grant', '查日志'])
+    expect(actions.map((item) => item.label)).toEqual([
+      '查看审批',
+      '查看 client',
+      '查看 policy',
+      '查看 grant',
+      '查日志',
+    ])
     expect(actions[0].target).toEqual({
       tab: 'approvals',
       approvalFilters: {
@@ -554,7 +703,12 @@ describe('AI Gateway policy condition helpers', () => {
       toolName: 'delivery.actions.trigger',
       riskLevel: 'execute',
     })
-    expect(grantGuardrailActions.map((item) => item.label)).toEqual(['查看 client', '查看 grant', '补 guardrail', '查日志'])
+    expect(grantGuardrailActions.map((item) => item.label)).toEqual([
+      '查看 client',
+      '查看 grant',
+      '补 guardrail',
+      '查日志',
+    ])
     expect(grantGuardrailActions[2].target).toMatchObject({
       tab: 'policies',
       grantFilter: 'grant-risk-open',
@@ -572,39 +726,45 @@ describe('AI Gateway policy condition helpers', () => {
 
   it('maps governance token findings to PAT filters and service-token revoke actions', () => {
     const rows = governanceTokenFindingRows({
-      expiredActive: [{
-        kind: 'service_account_token',
-        id: 'sat-expired',
-        name: 'deploy-runner',
-        ownerId: 'svc-delivery',
-        tokenPrefix: 'sat_abc',
-        severity: 'critical',
-        message: 'active token is expired',
-        expiresAt: '2026-05-01T00:00:00Z',
-        daysUntilDue: -29,
-      }],
-      expiringSoon: [{
-        kind: 'personal_access_token',
-        id: 'pat-soon',
-        name: 'local-codex',
-        ownerId: 'user-1',
-        tokenPrefix: 'pat_xyz',
-        severity: 'warning',
-        message: 'token expires soon',
-        expiresAt: '2026-06-01T00:00:00Z',
-        daysUntilDue: 2,
-      }],
+      expiredActive: [
+        {
+          kind: 'service_account_token',
+          id: 'sat-expired',
+          name: 'deploy-runner',
+          ownerId: 'svc-delivery',
+          tokenPrefix: 'sat_abc',
+          severity: 'critical',
+          message: 'active token is expired',
+          expiresAt: '2026-05-01T00:00:00Z',
+          daysUntilDue: -29,
+        },
+      ],
+      expiringSoon: [
+        {
+          kind: 'personal_access_token',
+          id: 'pat-soon',
+          name: 'local-codex',
+          ownerId: 'user-1',
+          tokenPrefix: 'pat_xyz',
+          severity: 'warning',
+          message: 'token expires soon',
+          expiresAt: '2026-06-01T00:00:00Z',
+          daysUntilDue: 2,
+        },
+      ],
       stale: [],
-      neverUsed: [{
-        kind: 'personal_access_token',
-        id: 'pat-never',
-        name: 'unused',
-        ownerId: 'user-2',
-        tokenPrefix: 'pat_unused',
-        severity: 'warning',
-        message: 'token has never been used',
-        staleDays: 90,
-      }],
+      neverUsed: [
+        {
+          kind: 'personal_access_token',
+          id: 'pat-never',
+          name: 'unused',
+          ownerId: 'user-2',
+          tokenPrefix: 'pat_unused',
+          severity: 'warning',
+          message: 'token has never been used',
+          staleDays: 90,
+        },
+      ],
     })
 
     expect(rows.map((item) => item.key)).toEqual([

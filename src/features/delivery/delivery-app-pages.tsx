@@ -51,6 +51,7 @@ import type {
 const { Text } = Typography
 type ColumnProps<T> = TableColumnsType<T>[number]
 type ApplicationBindingRow = NonNullable<DeliveryApplicationDetail['bindings']>[number]
+type JsonObject = Record<string, unknown>
 type ApplicationWorkspaceCard = {
   app: DeliveryApplication
   bindings: ReleaseBoardEntry[]
@@ -60,7 +61,57 @@ type ApplicationWorkspaceCard = {
   latestEnvironmentName: string
 }
 
-function parseJSONObject(raw: unknown, field: string) {
+export interface BuildTemplateFormValues {
+  key?: string
+  name?: string
+  description?: string
+  builderKind?: string
+  dockerfileTemplate?: string
+  buildCommandsText?: string
+  variableSchemaText?: string
+  defaultVariablesText?: string
+  enabled?: boolean
+}
+
+export interface BuildTemplatePayload {
+  key?: string
+  name?: string
+  description?: string
+  builderKind?: string
+  dockerfileTemplate?: string
+  buildCommands: string[]
+  variableSchema: JsonObject
+  defaultVariables: JsonObject
+  enabled?: boolean
+}
+
+export interface ApprovalPolicyFormValues {
+  key?: string
+  name?: string
+  description?: string
+  mode?: string
+  requiredApprovals?: number | string
+  slaMinutes?: number | string
+  approverRolesText?: string
+  changeWindowText?: string
+  metadataText?: string
+  enabled?: boolean
+}
+
+export interface ApprovalPolicyPayload {
+  key?: string
+  name?: string
+  description?: string
+  mode?: string
+  requiredApprovals: number
+  slaMinutes: number
+  approverRoles: string[]
+  changeWindow: JsonObject
+  metadata: JsonObject
+  enabled?: boolean
+}
+
+function parseJSONObject(raw: unknown, field: string): JsonObject {
   const value = typeof raw === 'string' ? raw.trim() : ''
   if (!value) return {}
   try {
@@ -71,6 +122,52 @@ function parseJSONObject(raw: unknown, field: string) {
     return parsed
   } catch {
     throw new Error(`${field} 需要是合法 JSON 对象`)
+  }
+}
+
+function splitLines(raw: unknown) {
+  return String(raw || '').split('\n').map((item) => item.trim()).filter(Boolean)
+}
+
+function splitCommaList(raw: unknown) {
+  return String(raw || '').split(',').map((item) => item.trim()).filter(Boolean)
+}
+
+function numberFromFormValue(raw: unknown, fallback: number) {
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw
+  if (typeof raw === 'string' && raw.trim()) {
+    const parsed = Number(raw)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return fallback
+}
+
+export function buildBuildTemplatePayload(values: BuildTemplateFormValues): BuildTemplatePayload {
+  return {
+    key: values.key,
+    name: values.name,
+    description: values.description,
+    builderKind: values.builderKind,
+    dockerfileTemplate: values.dockerfileTemplate,
+    buildCommands: splitLines(values.buildCommandsText),
+    variableSchema: parseJSONObject(values.variableSchemaText, '变量 Schema'),
+    defaultVariables: parseJSONObject(values.defaultVariablesText, '默认变量'),
+    enabled: values.enabled,
+  }
+}
+
+export function buildApprovalPolicyPayload(values: ApprovalPolicyFormValues): ApprovalPolicyPayload {
+  return {
+    key: values.key,
+    name: values.name,
+    description: values.description,
+    mode: values.mode,
+    requiredApprovals: numberFromFormValue(values.requiredApprovals, 1),
+    slaMinutes: numberFromFormValue(values.slaMinutes, 60),
+    approverRoles: splitCommaList(values.approverRolesText),
+    changeWindow: parseJSONObject(values.changeWindowText, 'Change Window'),
+    metadata: parseJSONObject(values.metadataText, 'Metadata'),
+    enabled: values.enabled,
   }
 }
 
@@ -533,7 +630,7 @@ export function BuildTemplatesPage() {
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const canManage = hasPermission(permissionSnapshotQuery.data?.data, 'delivery.build-templates.manage')
-  const [form] = Form.useForm<Record<string, unknown>>()
+  const [form] = Form.useForm<BuildTemplateFormValues>()
   const [modalVisible, setModalVisible] = useState(false)
   const [editing, setEditing] = useState<BuildTemplate | null>(null)
 
@@ -543,7 +640,7 @@ export function BuildTemplatesPage() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (values: Record<string, unknown>) => api.post('/build-templates', values),
+    mutationFn: (values: BuildTemplatePayload) => api.post('/build-templates', values),
     onSuccess: () => {
       message.success('构建模板创建成功')
       queryClient.invalidateQueries({ queryKey: ['build-templates'] })
@@ -552,7 +649,7 @@ export function BuildTemplatesPage() {
     onError: (err: Error) => message.error(err.message),
   })
   const updateMutation = useMutation({
-    mutationFn: ({ id, values }: { id: string; values: Record<string, unknown> }) => api.put(`/build-templates/${id}`, values),
+    mutationFn: ({ id, values }: { id: string; values: BuildTemplatePayload }) => api.put(`/build-templates/${id}`, values),
     onSuccess: () => {
       message.success('构建模板更新成功')
       queryClient.invalidateQueries({ queryKey: ['build-templates'] })
@@ -627,14 +724,9 @@ export function BuildTemplatesPage() {
           layout="vertical"
           initialValues={editing ? { ...editing, buildCommandsText: (editing.buildCommands ?? []).join('\n'), variableSchemaText: JSON.stringify(editing.variableSchema ?? {}, null, 2), defaultVariablesText: JSON.stringify(editing.defaultVariables ?? {}, null, 2) } : { enabled: true, builderKind: 'custom', variableSchemaText: '{}', defaultVariablesText: '{}' }}
           onFinish={(values) => {
-            let payload: Record<string, unknown>
+            let payload: BuildTemplatePayload
             try {
-              payload = {
-                ...values,
-                buildCommands: String(values.buildCommandsText || '').split('\n').map((item) => item.trim()).filter(Boolean),
-                variableSchema: parseJSONObject(values.variableSchemaText, '变量 Schema'),
-                defaultVariables: parseJSONObject(values.defaultVariablesText, '默认变量'),
-              }
+              payload = buildBuildTemplatePayload(values)
             } catch (err) {
               message.error((err as Error).message)
               return
@@ -1116,7 +1208,7 @@ export function ApprovalPoliciesPage() {
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const canManage = hasPermission(permissionSnapshotQuery.data?.data, 'delivery.approval-policies.manage')
-  const [form] = Form.useForm<Record<string, unknown>>()
+  const [form] = Form.useForm<ApprovalPolicyFormValues>()
   const [modalVisible, setModalVisible] = useState(false)
   const [editing, setEditing] = useState<ApprovalPolicy | null>(null)
 
@@ -1126,7 +1218,7 @@ export function ApprovalPoliciesPage() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (values: Record<string, unknown>) => api.post('/delivery/approval-policies', values),
+    mutationFn: (values: ApprovalPolicyPayload) => api.post('/delivery/approval-policies', values),
     onSuccess: () => {
       message.success('审批策略创建成功')
       queryClient.invalidateQueries({ queryKey: ['approval-policies'] })
@@ -1135,7 +1227,7 @@ export function ApprovalPoliciesPage() {
     onError: (err: Error) => message.error(err.message),
   })
   const updateMutation = useMutation({
-    mutationFn: ({ id, values }: { id: string; values: Record<string, unknown> }) => api.put(`/delivery/approval-policies/${id}`, values),
+    mutationFn: ({ id, values }: { id: string; values: ApprovalPolicyPayload }) => api.put(`/delivery/approval-policies/${id}`, values),
     onSuccess: () => {
       message.success('审批策略更新成功')
       queryClient.invalidateQueries({ queryKey: ['approval-policies'] })
@@ -1212,14 +1304,9 @@ export function ApprovalPoliciesPage() {
           layout="vertical"
           initialValues={editing ? { ...editing, approverRolesText: (editing.approverRoles ?? []).join(', '), changeWindowText: JSON.stringify(editing.changeWindow ?? {}, null, 2), metadataText: JSON.stringify(editing.metadata ?? {}, null, 2) } : { enabled: true, mode: 'single', requiredApprovals: 1, slaMinutes: 60, changeWindowText: '{}', metadataText: '{}' }}
           onFinish={(values) => {
-            let payload: Record<string, unknown>
+            let payload: ApprovalPolicyPayload
             try {
-              payload = {
-                ...values,
-                approverRoles: String(values.approverRolesText || '').split(',').map((item) => item.trim()).filter(Boolean),
-                changeWindow: parseJSONObject(values.changeWindowText, 'Change Window'),
-                metadata: parseJSONObject(values.metadataText, 'Metadata'),
-              }
+              payload = buildApprovalPolicyPayload(values)
             } catch (err) {
               message.error((err as Error).message)
               return

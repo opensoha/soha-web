@@ -1,4 +1,5 @@
 import { useLayoutEffect } from 'react'
+import { AppErrorBoundary } from './components/app-error-boundary'
 import { AppRouter } from './routes'
 import { usePreferencesStore } from './stores/preferences-store'
 import { applyAppTheme, DEFAULT_APP_THEME_ID, watchSystemThemeMode } from './theme/app-theme'
@@ -17,5 +18,9 @@ export default function App() {
     return watchSystemThemeMode(() => applyAppTheme(DEFAULT_APP_THEME_ID, themeMode))
   }, [themeMode])
 
-  return <AppRouter />
+  return (
+    <AppErrorBoundary>
+      <AppRouter />
+    </AppErrorBoundary>
+  )
 }

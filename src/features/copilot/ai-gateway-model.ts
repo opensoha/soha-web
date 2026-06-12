@@ -24,15 +24,319 @@ import type {
   ServiceAccountToken as ContractServiceAccountToken,
 } from '@opensoha/contracts/gen/ts/sohaapi'
 
-export type GatewayTimeRangeValue = readonly [
-  { toISOString: () => string } | null,
-  { toISOString: () => string } | null,
-] | null
+export type GatewayTimeRangeValue =
+  | readonly [{ toISOString: () => string } | null, { toISOString: () => string } | null]
+  | null
 
 export type RiskLevel = ContractRiskLevel
 export type GatewayEffect = 'allow' | 'deny'
-export type GatewaySectionKey = 'overview' | 'manifest' | 'clients' | 'tokens' | 'governance' | 'call-logs'
-export type GatewayTabKey = 'manifest' | 'clients' | 'tokens' | 'service-accounts' | 'grants' | 'policies' | 'bindings' | 'governance' | 'approvals' | 'audit'
+export type GatewaySectionKey =
+  | 'overview'
+  | 'manifest'
+  | 'clients'
+  | 'tokens'
+  | 'governance'
+  | 'call-logs'
+export type GatewayTabKey =
+  | 'manifest'
+  | 'clients'
+  | 'tokens'
+  | 'service-accounts'
+  | 'grants'
+  | 'policies'
+  | 'bindings'
+  | 'governance'
+  | 'approvals'
+  | 'audit'
+export type ApprovalStrategy =
+  | 'none'
+  | 'allow'
+  | 'deny'
+  | 'require_approval'
+  | 'require_human_confirm'
+  | 'dry_run_only'
+export type ApprovalRoutingMode = 'all' | 'any'
+
+export interface GatewayResourceScopes {
+  businessLineIds?: string[]
+  applicationIds?: string[]
+  applicationEnvironmentIds?: string[]
+  environmentIds?: string[]
+  clusterIds?: string[]
+  namespaces?: string[]
+  releaseBundleIds?: string[]
+  executionTaskIds?: string[]
+}
+
+export interface GatewayResourceScopeFormValues {
+  scopeBusinessLineIds?: string[]
+  scopeApplicationIds?: string[]
+  scopeApplicationEnvironmentIds?: string[]
+  scopeEnvironmentIds?: string[]
+  scopeClusterIds?: string[]
+  scopeNamespaces?: string[]
+  scopeReleaseBundleIds?: string[]
+  scopeExecutionTaskIds?: string[]
+}
+
+export interface GatewayApprovalChangeWindow {
+  startsAt?: string
+  endsAt?: string
+  timezone?: string
+}
+
+export interface GatewayApprovalRoutingPolicy {
+  approvalMode?: ApprovalRoutingMode | string
+  approvalType?: string
+  quorumMode?: string
+  decisionMode?: string
+  approverUsers?: string[]
+  approverUserIds?: string[]
+  candidateUsers?: string[]
+  candidateUserIds?: string[]
+  approvalUsers?: string[]
+  approvalUserIds?: string[]
+  userIds?: string[]
+  users?: string[]
+  approverRoles?: string[]
+  candidateRoles?: string[]
+  approvalRoles?: string[]
+  roles?: string[]
+  roleIds?: string[]
+  approverTeams?: string[]
+  candidateTeams?: string[]
+  approvalTeams?: string[]
+  teams?: string[]
+  teamIds?: string[]
+  groups?: string[]
+  groupIds?: string[]
+  onCallRef?: string
+  oncallRef?: string
+  onCall?: string
+  oncall?: string
+  dutyRef?: string
+  routeRef?: string
+  scheduleRef?: string
+  requiredApprovals?: number
+  minApprovals?: number
+  approvalQuorum?: number
+  quorum?: number
+  minApproverCount?: number
+  changeWindow?: GatewayApprovalChangeWindow
+  approvalWindow?: GatewayApprovalChangeWindow
+  window?: GatewayApprovalChangeWindow
+}
+
+export interface GatewayApprovalPolicy extends GatewayApprovalRoutingPolicy {
+  strategy?: ApprovalStrategy | string
+  mode?: string
+  approval?: string
+  state?: string
+  approvalPolicyRef?: string
+  approvalPolicyId?: string
+  deliveryApprovalPolicyId?: string
+  policyRef?: string
+  policyKey?: string
+  dryRunOnly?: boolean
+  requiresHumanConfirm?: boolean
+  humanConfirmRequired?: boolean
+  requiresApproval?: boolean
+  routing?: GatewayApprovalRoutingPolicy
+  approvalRouting?: GatewayApprovalRoutingPolicy
+  approvers?: GatewayApprovalRoutingPolicy
+  candidates?: GatewayApprovalRoutingPolicy
+  candidateApprovers?: GatewayApprovalRoutingPolicy
+}
+
+export interface GatewayRateLimitCondition {
+  mode?: string
+  algorithm?: string
+  strategy?: string
+  scope?: string
+  limitScope?: string
+  maxCallsPerMinute?: number
+  maxInvocationsPerMinute?: number
+  callsPerMinute?: number
+  rpm?: number
+  maxCallsPerHour?: number
+  maxInvocationsPerHour?: number
+  callsPerHour?: number
+  rph?: number
+  burst?: number
+  burstSize?: number
+  capacity?: number
+  bucketSize?: number
+  maxBurst?: number
+}
+
+export interface GatewayBudgetCondition {
+  scope?: string
+  limitScope?: string
+  maxCallsPerDay?: number
+  maxInvocationsPerDay?: number
+  maxDailyCalls?: number
+  dailyCalls?: number
+  dailyBudget?: number
+  maxTokensPerDay?: number
+  dailyTokens?: number
+  dailyTokenBudget?: number
+  maxCostPerDay?: number
+  dailyCost?: number
+  dailyCostBudget?: number
+}
+
+export interface GatewayRedactionPolicy {
+  mode?: string
+  strategy?: string
+  redactionMode?: string
+  action?: string
+  target?: string
+  appliesTo?: string
+  direction?: string
+  fields?: string[]
+  field?: string | string[]
+  paths?: string[]
+  path?: string | string[]
+  redactFields?: string[]
+  maskFields?: string[]
+  sensitiveFields?: string[]
+  allowFields?: string[]
+  allowedFields?: string[]
+  allowlist?: string[]
+  fieldAllowList?: string[]
+  fieldAllowlist?: string[]
+  secretTypes?: string[]
+  secretType?: string | string[]
+  classifiers?: string[]
+  classifier?: string | string[]
+  detect?: string[]
+  detectSecretTypes?: string[]
+  secretClassifiers?: string[]
+  valuePatterns?: string[]
+  valuePattern?: string | string[]
+  valueRegex?: string | string[]
+  valueRegexes?: string[]
+  regex?: string | string[]
+  regexes?: string[]
+  matchValues?: string[]
+  matchPatterns?: string[]
+  replacement?: string
+  replacementText?: string
+  redactionValue?: string
+  maskValue?: string
+  preserveFormat?: boolean
+  formatPreserving?: boolean
+  preserveShape?: boolean
+}
+
+export interface GatewayAccessPolicyConditions {
+  rateLimit?: GatewayRateLimitCondition
+  rate_limit?: GatewayRateLimitCondition
+  rateLimits?: GatewayRateLimitCondition
+  budget?: GatewayBudgetCondition
+  budgets?: GatewayBudgetCondition
+  budgetPolicy?: GatewayBudgetCondition
+  redactionPolicy?: GatewayRedactionPolicy
+  redaction?: GatewayRedactionPolicy
+  sensitiveDataRedaction?: GatewayRedactionPolicy
+  outputRedactionPolicy?: GatewayRedactionPolicy
+}
+
+export interface GatewayApprovalPolicyFormValues {
+  approvalMode?: ApprovalStrategy | string
+  approvalPolicyRef?: string
+  approvalRoutingMode?: ApprovalRoutingMode | string
+  approvalApproverUsers?: string[]
+  approvalApproverRoles?: string[]
+  approvalApproverTeams?: string[]
+  approvalOnCallRef?: string
+  approvalRequiredApprovals?: number | string
+  approvalChangeWindowStartsAt?: string
+  approvalChangeWindowEndsAt?: string
+  approvalChangeWindowTimezone?: string
+}
+
+export interface GatewayAccessPolicyConditionFormValues {
+  rateLimitEnabled?: boolean
+  rateLimitMode?: string
+  rateLimitScope?: string
+  rateLimitMaxCallsPerMinute?: number | string
+  rateLimitMaxCallsPerHour?: number | string
+  rateLimitBurst?: number | string
+  budgetEnabled?: boolean
+  budgetScope?: string
+  budgetMaxCallsPerDay?: number | string
+  budgetMaxTokensPerDay?: number | string
+  budgetMaxCostPerDay?: number | string
+  redactionEnabled?: boolean
+  redactionMode?: string
+  redactionTarget?: string
+  redactionFields?: string[]
+  redactionAllowFields?: string[]
+  redactionSecretTypes?: string[]
+  redactionValuePatterns?: string[]
+  redactionReplacement?: string
+  redactionPreserveFormat?: boolean
+  outputRedactionFields?: string[]
+  outputRedactionSecretTypes?: string[]
+  outputRedactionValuePatterns?: string[]
+  outputRedactionReplacement?: string
+  outputRedactionPreserveFormat?: boolean
+}
+
+export interface AccessPolicyFormValues
+  extends
+    GatewayResourceScopeFormValues,
+    GatewayApprovalPolicyFormValues,
+    GatewayAccessPolicyConditionFormValues {
+  name?: string
+  description?: string
+  enabled?: 'true' | 'false' | boolean | string
+  subjectType?: string
+  subjectId?: string
+  aiClientId?: string
+  effect?: GatewayEffect | string
+  toolPatterns?: string[]
+  skillIds?: string[]
+  riskLevels?: RiskLevel[]
+}
+
+export interface AccessPolicyUpsertPayload {
+  name?: string
+  description?: string
+  enabled: boolean
+  subjectType?: string
+  subjectId?: string
+  aiClientId?: string
+  effect?: GatewayEffect | string
+  toolPatterns: string[]
+  skillIds: string[]
+  riskLevels: RiskLevel[]
+  resourceScopes: GatewayResourceScopes
+  approvalPolicy: GatewayApprovalPolicy
+  conditions: GatewayAccessPolicyConditions
+}
+
+export interface GatewayDrawerFormValues extends AccessPolicyFormValues {
+  id?: string
+  kind?: string
+  status?: string
+  redirectUris?: string[]
+  allowedOrigins?: string[]
+  scopes?: string[]
+  permissionKeys?: string[]
+  expiresAt?: string
+  ownerUserId?: string
+  roleIds?: string[]
+  teamIds?: string[]
+  scopeGrantIds?: string[]
+  tokenId?: string
+  toolName?: string
+  riskLevel?: RiskLevel | string
+  requiresApproval?: 'true' | 'false' | boolean | string
+  skillId?: string
+  capabilityRefs?: string[]
+}
 
 export const gatewayMenuMeta: Record<GatewayTabKey, { description: string; title: string }> = {
   manifest: {
@@ -77,32 +381,33 @@ export const gatewayMenuMeta: Record<GatewayTabKey, { description: string; title
   },
 }
 
-export const gatewaySectionMeta: Record<GatewaySectionKey, { description: string; title: string }> = {
-  overview: {
-    title: '概览',
-    description: '汇总 AI Gateway 的能力入口、身份对象、授权策略和治理状态。',
-  },
-  manifest: {
-    title: '能力清单',
-    description: '查看当前身份可见的 MCP tools、resources、prompts 和 skills。',
-  },
-  clients: {
-    title: 'AI Clients',
-    description: '管理外部 IDE、CI、Agent 平台和 MCP 客户端注册入口。',
-  },
-  tokens: {
-    title: 'Tokens',
-    description: '聚合管理用户 login key、service accounts 与自动化调用 token。',
-  },
-  governance: {
-    title: 'Governance',
-    description: '管理 tool grants、access policies、skill bindings 与审批治理。',
-  },
-  'call-logs': {
-    title: '调用日志',
-    description: '查看谁通过 AI Gateway 调用了什么能力，以及每次调用的结果和上下文。',
-  },
-}
+export const gatewaySectionMeta: Record<GatewaySectionKey, { description: string; title: string }> =
+  {
+    overview: {
+      title: '概览',
+      description: '汇总 AI Gateway 的能力入口、身份对象、授权策略和治理状态。',
+    },
+    manifest: {
+      title: '能力清单',
+      description: '查看当前身份可见的 MCP tools、resources、prompts 和 skills。',
+    },
+    clients: {
+      title: 'AI Clients',
+      description: '管理外部 IDE、CI、Agent 平台和 MCP 客户端注册入口。',
+    },
+    tokens: {
+      title: 'Tokens',
+      description: '聚合管理用户 login key、service accounts 与自动化调用 token。',
+    },
+    governance: {
+      title: 'Governance',
+      description: '管理 tool grants、access policies、skill bindings 与审批治理。',
+    },
+    'call-logs': {
+      title: '调用日志',
+      description: '查看谁通过 AI Gateway 调用了什么能力，以及每次调用的结果和上下文。',
+    },
+  }
 
 export const gatewayTabSectionMap: Record<GatewayTabKey, GatewaySectionKey> = {
   manifest: 'manifest',
@@ -137,10 +442,15 @@ export function gatewaySectionFromPath(pathname: string): GatewaySectionKey {
 
 export function normalizeGatewayTabKey(value: string | null): GatewayTabKey | null {
   if (!value) return null
-  return Object.prototype.hasOwnProperty.call(gatewayTabSectionMap, value) ? (value as GatewayTabKey) : null
+  return Object.prototype.hasOwnProperty.call(gatewayTabSectionMap, value)
+    ? (value as GatewayTabKey)
+    : null
 }
 
-export function defaultGatewayTabForSection(section: GatewaySectionKey, focusedApprovalRequestId: string): GatewayTabKey {
+export function defaultGatewayTabForSection(
+  section: GatewaySectionKey,
+  focusedApprovalRequestId: string,
+): GatewayTabKey {
   if (focusedApprovalRequestId) return 'approvals'
   if (section === 'manifest') return 'manifest'
   if (section === 'clients') return 'clients'
@@ -185,7 +495,7 @@ export interface ToolGrant {
   effect: GatewayEffect
   riskLevel: RiskLevel
   permissionKeys?: string[]
-  resourceScopes?: Record<string, unknown>
+  resourceScopes?: GatewayResourceScopes
   requiresApproval: boolean
   expiresAt?: string
   createdAt: string
@@ -202,10 +512,10 @@ export interface AccessPolicy {
   effect: GatewayEffect
   toolPatterns?: string[]
   skillIds?: string[]
-  resourceScopes?: Record<string, unknown>
+  resourceScopes?: GatewayResourceScopes
   riskLevels?: RiskLevel[]
-  approvalPolicy?: Record<string, unknown>
-  conditions?: Record<string, unknown>
+  approvalPolicy?: GatewayApprovalPolicy
+  conditions?: GatewayAccessPolicyConditions
   createdAt: string
   updatedAt: string
 }
@@ -317,7 +627,14 @@ export interface GovernanceTokenFindingRow extends GovernanceTokenFinding {
 }
 
 export interface GovernanceCoverageRow {
-  key: 'access_policies' | 'tool_grants' | 'skill_bindings' | 'budget' | 'rate_limit' | 'redaction' | 'resource_scopes'
+  key:
+    | 'access_policies'
+    | 'tool_grants'
+    | 'skill_bindings'
+    | 'budget'
+    | 'rate_limit'
+    | 'redaction'
+    | 'resource_scopes'
   label: string
   state: string
   configured: number
@@ -423,7 +740,9 @@ export const approvalStrategyOptions = [
   { label: '仅 dry-run', value: 'dry_run_only' },
 ]
 
-export const approvalRequestStrategyOptions = approvalStrategyOptions.filter((item) => ['require_approval', 'require_human_confirm'].includes(item.value))
+export const approvalRequestStrategyOptions = approvalStrategyOptions.filter((item) =>
+  ['require_approval', 'require_human_confirm'].includes(item.value),
+)
 
 export const approvalRoutingModeOptions = [
   { label: '会签 all', value: 'all' },
@@ -582,7 +901,11 @@ export const gatewaySecretTypeOptions = [
 export const scopeFieldDefs = [
   { name: 'scopeBusinessLineIds', label: '范围 Key', key: 'businessLineIds' },
   { name: 'scopeApplicationIds', label: '应用', key: 'applicationIds' },
-  { name: 'scopeApplicationEnvironmentIds', label: '应用环境绑定', key: 'applicationEnvironmentIds' },
+  {
+    name: 'scopeApplicationEnvironmentIds',
+    label: '应用环境绑定',
+    key: 'applicationEnvironmentIds',
+  },
   { name: 'scopeEnvironmentIds', label: '环境 Tag', key: 'environmentIds' },
   { name: 'scopeClusterIds', label: '集群', key: 'clusterIds' },
   { name: 'scopeNamespaces', label: '命名空间', key: 'namespaces' },
@@ -593,7 +916,10 @@ export const scopeFieldDefs = [
 export function sortedRecordEntries(values?: Record<string, number>) {
   return Object.entries(values ?? {})
     .filter(([, value]) => Number.isFinite(value) && value > 0)
-    .sort(([leftKey, leftValue], [rightKey, rightValue]) => rightValue - leftValue || leftKey.localeCompare(rightKey))
+    .sort(
+      ([leftKey, leftValue], [rightKey, rightValue]) =>
+        rightValue - leftValue || leftKey.localeCompare(rightKey),
+    )
 }
 
 export function governanceRiskCountTags(values?: Record<string, number>) {
@@ -604,11 +930,12 @@ export function stringifyPayload(value: unknown) {
   return JSON.stringify(value ?? {}, null, 2)
 }
 
-export function scopeValuesFromRecord(scopes?: Record<string, unknown>) {
+export function scopeValuesFromRecord(scopes?: GatewayResourceScopes) {
   const out: Record<string, string[]> = {}
   scopeFieldDefs.forEach((field) => {
     const singularKey = field.key.replace(/s$/, '')
-    const value = scopes?.[field.key] ?? scopes?.[singularKey]
+    const values = scopes as Record<string, string[] | string | undefined> | undefined
+    const value = values?.[field.key] ?? values?.[singularKey]
     if (Array.isArray(value)) {
       out[field.name] = value.map((item) => String(item)).filter(Boolean)
     } else if (typeof value === 'string' && value) {
@@ -618,8 +945,10 @@ export function scopeValuesFromRecord(scopes?: Record<string, unknown>) {
   return out
 }
 
-export function approvalModeFromPolicy(policy?: Record<string, unknown>) {
-  const raw = String(policy?.strategy ?? policy?.mode ?? policy?.approval ?? policy?.state ?? '').trim()
+export function approvalModeFromPolicy(policy?: GatewayApprovalPolicy) {
+  const raw = String(
+    policy?.strategy ?? policy?.mode ?? policy?.approval ?? policy?.state ?? '',
+  ).trim()
   if (raw) {
     const normalized = raw.toLowerCase().replace(/[-\s]+/g, '_')
     if (approvalStrategyOptions.some((item) => item.value === normalized)) {
@@ -630,7 +959,8 @@ export function approvalModeFromPolicy(policy?: Record<string, unknown>) {
     }
   }
   if (policy?.dryRunOnly === true) return 'dry_run_only'
-  if (policy?.requiresHumanConfirm === true || policy?.humanConfirmRequired === true) return 'require_human_confirm'
+  if (policy?.requiresHumanConfirm === true || policy?.humanConfirmRequired === true)
+    return 'require_human_confirm'
   if (policy?.requiresApproval === true) return 'require_approval'
   return 'none'
 }
@@ -646,9 +976,10 @@ export function asRecord(value: unknown) {
   return {}
 }
 
-export function firstValue(record: Record<string, unknown>, ...keys: string[]) {
+export function firstValue(record: object | undefined, ...keys: string[]) {
+  const values = asRecord(record)
   for (const key of keys) {
-    const value = record[key]
+    const value = values[key]
     if (value !== undefined && value !== null && value !== '') {
       return value
     }
@@ -656,7 +987,7 @@ export function firstValue(record: Record<string, unknown>, ...keys: string[]) {
   return undefined
 }
 
-export function firstNumber(record: Record<string, unknown>, ...keys: string[]) {
+export function firstNumber(record: object | undefined, ...keys: string[]) {
   const value = firstValue(record, ...keys)
   if (typeof value === 'number' && Number.isFinite(value)) return value
   if (typeof value === 'string' && value.trim()) {
@@ -666,30 +997,55 @@ export function firstNumber(record: Record<string, unknown>, ...keys: string[]) 
   return undefined
 }
 
-export function firstString(record: Record<string, unknown>, ...keys: string[]) {
+export function firstString(record: object | undefined, ...keys: string[]) {
   const value = firstValue(record, ...keys)
   if (typeof value === 'string') return value.trim()
   if (typeof value === 'number' || typeof value === 'boolean') return String(value)
   return undefined
 }
 
-export function firstStringList(record: Record<string, unknown>, ...keys: string[]) {
+export function firstStringList(record: object | undefined, ...keys: string[]) {
   const value = firstValue(record, ...keys)
   if (Array.isArray(value)) {
     return value.map((item) => String(item).trim()).filter(Boolean)
   }
   if (typeof value === 'string' && value.trim()) {
-    return value.split(/[,\n]/).map((item) => item.trim()).filter(Boolean)
+    return value
+      .split(/[,\n]/)
+      .map((item) => item.trim())
+      .filter(Boolean)
   }
   return undefined
 }
 
 export function normalizeRateLimitMode(value?: string) {
-  const normalized = String(value ?? '').trim().toLowerCase().replace(/[-\s]+/g, '_')
-  if (['gcra', 'token_bucket', 'tokenbucket', 'leaky_bucket', 'leakybucket', 'strict', 'smooth'].includes(normalized)) {
+  const normalized = String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[-\s]+/g, '_')
+  if (
+    [
+      'gcra',
+      'token_bucket',
+      'tokenbucket',
+      'leaky_bucket',
+      'leakybucket',
+      'strict',
+      'smooth',
+    ].includes(normalized)
+  ) {
     return 'gcra'
   }
-  if (['sliding_window', 'slidingwindow', 'rolling_window', 'rollingwindow', 'audit_window', 'auditwindow'].includes(normalized)) {
+  if (
+    [
+      'sliding_window',
+      'slidingwindow',
+      'rolling_window',
+      'rollingwindow',
+      'audit_window',
+      'auditwindow',
+    ].includes(normalized)
+  ) {
     return 'sliding_window'
   }
   if (['fixed_window', 'fixedwindow', 'window', 'counter'].includes(normalized)) {
@@ -698,23 +1054,29 @@ export function normalizeRateLimitMode(value?: string) {
   return normalized || undefined
 }
 
-export function approvalPolicyValues(policy?: Record<string, unknown>) {
+export function approvalPolicyValues(policy?: GatewayApprovalPolicy): Record<string, unknown> {
   const source = asRecord(policy)
   const out: Record<string, unknown> = { ...source }
-  ;['routing', 'approvalRouting', 'approvers', 'candidates', 'candidateApprovers'].forEach((key) => {
-    Object.assign(out, asRecord(source[key]))
-  })
+  ;['routing', 'approvalRouting', 'approvers', 'candidates', 'candidateApprovers'].forEach(
+    (key) => {
+      Object.assign(out, asRecord(source[key]))
+    },
+  )
   return out
 }
 
 export function accessPolicyFormValuesFromRecord(record: AccessPolicy) {
   const conditions = asRecord(record.conditions)
   const approvalPolicy = approvalPolicyValues(record.approvalPolicy)
-  const changeWindow = asRecord(firstValue(approvalPolicy, 'changeWindow', 'approvalWindow', 'window'))
+  const changeWindow = asRecord(
+    firstValue(approvalPolicy, 'changeWindow', 'approvalWindow', 'window'),
+  )
   const changeWindowValues = { ...approvalPolicy, ...changeWindow }
   const rateLimit = asRecord(firstValue(conditions, 'rateLimit', 'rate_limit', 'rateLimits'))
   const budget = asRecord(firstValue(conditions, 'budget', 'budgets', 'budgetPolicy'))
-  const redactionPolicy = asRecord(firstValue(conditions, 'redactionPolicy', 'redaction', 'sensitiveDataRedaction'))
+  const redactionPolicy = asRecord(
+    firstValue(conditions, 'redactionPolicy', 'redaction', 'sensitiveDataRedaction'),
+  )
   const outputRedactionPolicy = asRecord(conditions.outputRedactionPolicy)
   const redactionMode = firstString(redactionPolicy, 'mode', 'strategy', 'redactionMode', 'action')
 
@@ -724,42 +1086,235 @@ export function accessPolicyFormValuesFromRecord(record: AccessPolicy) {
     skillIds: record.skillIds,
     riskLevels: record.riskLevels,
     approvalMode: approvalModeFromPolicy(record.approvalPolicy),
-    approvalPolicyRef: firstString(approvalPolicy, 'approvalPolicyRef', 'approvalPolicyId', 'deliveryApprovalPolicyId', 'policyRef', 'policyKey'),
-    approvalRoutingMode: firstString(approvalPolicy, 'approvalMode', 'approvalType', 'quorumMode', 'decisionMode') ?? 'all',
-    approvalApproverUsers: firstStringList(approvalPolicy, 'approverUsers', 'approverUserIds', 'candidateUsers', 'candidateUserIds', 'approvalUsers', 'approvalUserIds', 'userIds', 'users') ?? [],
-    approvalApproverRoles: firstStringList(approvalPolicy, 'approverRoles', 'candidateRoles', 'approvalRoles', 'roles', 'roleIds') ?? [],
-    approvalApproverTeams: firstStringList(approvalPolicy, 'approverTeams', 'candidateTeams', 'approvalTeams', 'teams', 'teamIds', 'groups', 'groupIds') ?? [],
-    approvalOnCallRef: firstString(approvalPolicy, 'onCallRef', 'oncallRef', 'onCall', 'oncall', 'dutyRef', 'routeRef', 'scheduleRef'),
-    approvalRequiredApprovals: firstNumber(approvalPolicy, 'requiredApprovals', 'minApprovals', 'approvalQuorum', 'quorum', 'minApproverCount'),
-    approvalChangeWindowStartsAt: firstString(changeWindowValues, 'startsAt', 'startAt', 'start', 'from', 'notBefore', 'beginAt'),
-    approvalChangeWindowEndsAt: firstString(changeWindowValues, 'endsAt', 'endAt', 'end', 'to', 'until', 'notAfter'),
+    approvalPolicyRef: firstString(
+      approvalPolicy,
+      'approvalPolicyRef',
+      'approvalPolicyId',
+      'deliveryApprovalPolicyId',
+      'policyRef',
+      'policyKey',
+    ),
+    approvalRoutingMode:
+      firstString(approvalPolicy, 'approvalMode', 'approvalType', 'quorumMode', 'decisionMode') ??
+      'all',
+    approvalApproverUsers:
+      firstStringList(
+        approvalPolicy,
+        'approverUsers',
+        'approverUserIds',
+        'candidateUsers',
+        'candidateUserIds',
+        'approvalUsers',
+        'approvalUserIds',
+        'userIds',
+        'users',
+      ) ?? [],
+    approvalApproverRoles:
+      firstStringList(
+        approvalPolicy,
+        'approverRoles',
+        'candidateRoles',
+        'approvalRoles',
+        'roles',
+        'roleIds',
+      ) ?? [],
+    approvalApproverTeams:
+      firstStringList(
+        approvalPolicy,
+        'approverTeams',
+        'candidateTeams',
+        'approvalTeams',
+        'teams',
+        'teamIds',
+        'groups',
+        'groupIds',
+      ) ?? [],
+    approvalOnCallRef: firstString(
+      approvalPolicy,
+      'onCallRef',
+      'oncallRef',
+      'onCall',
+      'oncall',
+      'dutyRef',
+      'routeRef',
+      'scheduleRef',
+    ),
+    approvalRequiredApprovals: firstNumber(
+      approvalPolicy,
+      'requiredApprovals',
+      'minApprovals',
+      'approvalQuorum',
+      'quorum',
+      'minApproverCount',
+    ),
+    approvalChangeWindowStartsAt: firstString(
+      changeWindowValues,
+      'startsAt',
+      'startAt',
+      'start',
+      'from',
+      'notBefore',
+      'beginAt',
+    ),
+    approvalChangeWindowEndsAt: firstString(
+      changeWindowValues,
+      'endsAt',
+      'endAt',
+      'end',
+      'to',
+      'until',
+      'notAfter',
+    ),
     approvalChangeWindowTimezone: firstString(changeWindowValues, 'timezone', 'timeZone', 'tz'),
     ...scopeValuesFromRecord(record.resourceScopes),
     rateLimitEnabled: Object.keys(rateLimit).length > 0,
-    rateLimitMode: normalizeRateLimitMode(firstString(rateLimit, 'mode', 'algorithm', 'strategy')) ?? 'counter',
+    rateLimitMode:
+      normalizeRateLimitMode(firstString(rateLimit, 'mode', 'algorithm', 'strategy')) ?? 'counter',
     rateLimitScope: firstString(rateLimit, 'scope', 'limitScope') ?? 'actor_client_tool',
-    rateLimitMaxCallsPerMinute: firstNumber(rateLimit, 'maxCallsPerMinute', 'maxInvocationsPerMinute', 'callsPerMinute', 'rpm'),
-    rateLimitMaxCallsPerHour: firstNumber(rateLimit, 'maxCallsPerHour', 'maxInvocationsPerHour', 'callsPerHour', 'rph'),
-    rateLimitBurst: firstNumber(rateLimit, 'burst', 'burstSize', 'capacity', 'bucketSize', 'maxBurst'),
+    rateLimitMaxCallsPerMinute: firstNumber(
+      rateLimit,
+      'maxCallsPerMinute',
+      'maxInvocationsPerMinute',
+      'callsPerMinute',
+      'rpm',
+    ),
+    rateLimitMaxCallsPerHour: firstNumber(
+      rateLimit,
+      'maxCallsPerHour',
+      'maxInvocationsPerHour',
+      'callsPerHour',
+      'rph',
+    ),
+    rateLimitBurst: firstNumber(
+      rateLimit,
+      'burst',
+      'burstSize',
+      'capacity',
+      'bucketSize',
+      'maxBurst',
+    ),
     budgetEnabled: Object.keys(budget).length > 0,
     budgetScope: firstString(budget, 'scope', 'limitScope') ?? 'actor_client',
-    budgetMaxCallsPerDay: firstNumber(budget, 'maxCallsPerDay', 'maxInvocationsPerDay', 'maxDailyCalls', 'dailyCalls', 'dailyBudget'),
-    budgetMaxTokensPerDay: firstNumber(budget, 'maxTokensPerDay', 'dailyTokens', 'dailyTokenBudget'),
+    budgetMaxCallsPerDay: firstNumber(
+      budget,
+      'maxCallsPerDay',
+      'maxInvocationsPerDay',
+      'maxDailyCalls',
+      'dailyCalls',
+      'dailyBudget',
+    ),
+    budgetMaxTokensPerDay: firstNumber(
+      budget,
+      'maxTokensPerDay',
+      'dailyTokens',
+      'dailyTokenBudget',
+    ),
     budgetMaxCostPerDay: firstNumber(budget, 'maxCostPerDay', 'dailyCost', 'dailyCostBudget'),
-    redactionEnabled: Object.keys(redactionPolicy).length > 0 || Object.keys(outputRedactionPolicy).length > 0,
+    redactionEnabled:
+      Object.keys(redactionPolicy).length > 0 || Object.keys(outputRedactionPolicy).length > 0,
     redactionMode: redactionMode ?? (Object.keys(redactionPolicy).length > 0 ? 'sanitize' : 'none'),
-    redactionTarget: firstString(redactionPolicy, 'target', 'appliesTo', 'direction') ?? (Object.keys(outputRedactionPolicy).length > 0 ? 'both' : 'input'),
-    redactionFields: firstStringList(redactionPolicy, 'fields', 'field', 'paths', 'path', 'redactFields', 'maskFields', 'sensitiveFields') ?? [],
-    redactionAllowFields: firstStringList(redactionPolicy, 'allowFields', 'allowedFields', 'allowlist', 'fieldAllowList', 'fieldAllowlist') ?? [],
-    redactionSecretTypes: firstStringList(redactionPolicy, 'secretTypes', 'secretType', 'classifiers', 'classifier', 'detect', 'detectSecretTypes', 'secretClassifiers') ?? [],
-    redactionValuePatterns: firstStringList(redactionPolicy, 'valuePatterns', 'valuePattern', 'valueRegex', 'valueRegexes', 'regex', 'regexes', 'matchValues', 'matchPatterns') ?? [],
-    redactionReplacement: firstString(redactionPolicy, 'replacement', 'replacementText', 'redactionValue', 'maskValue') ?? '[REDACTED]',
-    redactionPreserveFormat: Boolean(firstValue(redactionPolicy, 'preserveFormat', 'formatPreserving', 'preserveShape')),
-    outputRedactionFields: firstStringList(outputRedactionPolicy, 'fields', 'field', 'paths', 'path', 'redactFields', 'maskFields', 'sensitiveFields') ?? [],
-    outputRedactionSecretTypes: firstStringList(outputRedactionPolicy, 'secretTypes', 'secretType', 'classifiers', 'classifier', 'detect', 'detectSecretTypes', 'secretClassifiers') ?? [],
-    outputRedactionValuePatterns: firstStringList(outputRedactionPolicy, 'valuePatterns', 'valuePattern', 'valueRegex', 'valueRegexes', 'regex', 'regexes', 'matchValues', 'matchPatterns') ?? [],
-    outputRedactionReplacement: firstString(outputRedactionPolicy, 'replacement', 'replacementText', 'redactionValue', 'maskValue') ?? '[REDACTED]',
-    outputRedactionPreserveFormat: Boolean(firstValue(outputRedactionPolicy, 'preserveFormat', 'formatPreserving', 'preserveShape')),
+    redactionTarget:
+      firstString(redactionPolicy, 'target', 'appliesTo', 'direction') ??
+      (Object.keys(outputRedactionPolicy).length > 0 ? 'both' : 'input'),
+    redactionFields:
+      firstStringList(
+        redactionPolicy,
+        'fields',
+        'field',
+        'paths',
+        'path',
+        'redactFields',
+        'maskFields',
+        'sensitiveFields',
+      ) ?? [],
+    redactionAllowFields:
+      firstStringList(
+        redactionPolicy,
+        'allowFields',
+        'allowedFields',
+        'allowlist',
+        'fieldAllowList',
+        'fieldAllowlist',
+      ) ?? [],
+    redactionSecretTypes:
+      firstStringList(
+        redactionPolicy,
+        'secretTypes',
+        'secretType',
+        'classifiers',
+        'classifier',
+        'detect',
+        'detectSecretTypes',
+        'secretClassifiers',
+      ) ?? [],
+    redactionValuePatterns:
+      firstStringList(
+        redactionPolicy,
+        'valuePatterns',
+        'valuePattern',
+        'valueRegex',
+        'valueRegexes',
+        'regex',
+        'regexes',
+        'matchValues',
+        'matchPatterns',
+      ) ?? [],
+    redactionReplacement:
+      firstString(
+        redactionPolicy,
+        'replacement',
+        'replacementText',
+        'redactionValue',
+        'maskValue',
+      ) ?? '[REDACTED]',
+    redactionPreserveFormat: Boolean(
+      firstValue(redactionPolicy, 'preserveFormat', 'formatPreserving', 'preserveShape'),
+    ),
+    outputRedactionFields:
+      firstStringList(
+        outputRedactionPolicy,
+        'fields',
+        'field',
+        'paths',
+        'path',
+        'redactFields',
+        'maskFields',
+        'sensitiveFields',
+      ) ?? [],
+    outputRedactionSecretTypes:
+      firstStringList(
+        outputRedactionPolicy,
+        'secretTypes',
+        'secretType',
+        'classifiers',
+        'classifier',
+        'detect',
+        'detectSecretTypes',
+        'secretClassifiers',
+      ) ?? [],
+    outputRedactionValuePatterns:
+      firstStringList(
+        outputRedactionPolicy,
+        'valuePatterns',
+        'valuePattern',
+        'valueRegex',
+        'valueRegexes',
+        'regex',
+        'regexes',
+        'matchValues',
+        'matchPatterns',
+      ) ?? [],
+    outputRedactionReplacement:
+      firstString(
+        outputRedactionPolicy,
+        'replacement',
+        'replacementText',
+        'redactionValue',
+        'maskValue',
+      ) ?? '[REDACTED]',
+    outputRedactionPreserveFormat: Boolean(
+      firstValue(outputRedactionPolicy, 'preserveFormat', 'formatPreserving', 'preserveShape'),
+    ),
   }
 }
 
@@ -777,18 +1332,25 @@ export function normalizedStringList(value: unknown) {
   return value.map((item) => String(item).trim()).filter(Boolean)
 }
 
-export function compactObject<T extends Record<string, unknown>>(value: T) {
-  const out: Record<string, unknown> = {}
+export function compactObject<T extends Record<string, unknown>>(value: T): Partial<T> {
+  const out: Partial<T> = {}
   Object.entries(value).forEach(([key, item]) => {
     if (item === undefined || item === null || item === '') return
     if (Array.isArray(item) && item.length === 0) return
-    if (typeof item === 'object' && !Array.isArray(item) && Object.keys(item as Record<string, unknown>).length === 0) return
-    out[key] = item
+    if (
+      typeof item === 'object' &&
+      !Array.isArray(item) &&
+      Object.keys(item as Record<string, unknown>).length === 0
+    )
+      return
+    out[key as keyof T] = item as T[keyof T]
   })
   return out
 }
 
-export function accessPolicyApprovalPolicyFromValues(values: Record<string, unknown>) {
+export function accessPolicyApprovalPolicyFromValues(
+  values: GatewayApprovalPolicyFormValues,
+): GatewayApprovalPolicy {
   const strategy = firstString(values, 'approvalMode')
   if (!strategy || strategy === 'none') {
     return {}
@@ -803,21 +1365,26 @@ export function accessPolicyApprovalPolicyFromValues(values: Record<string, unkn
       endsAt: firstString(values, 'approvalChangeWindowEndsAt'),
       timezone: firstString(values, 'approvalChangeWindowTimezone'),
     })
-    Object.assign(approvalPolicy, compactObject({
-      approvalMode: firstString(values, 'approvalRoutingMode') ?? 'all',
-      approverUsers: normalizedStringList(values.approvalApproverUsers),
-      approverRoles: normalizedStringList(values.approvalApproverRoles),
-      approverTeams: normalizedStringList(values.approvalApproverTeams),
-      onCallRef: firstString(values, 'approvalOnCallRef'),
-      requiredApprovals: positiveNumber(values.approvalRequiredApprovals),
-      changeWindow: Object.keys(changeWindow).length > 0 ? changeWindow : undefined,
-    }))
+    Object.assign(
+      approvalPolicy,
+      compactObject({
+        approvalMode: firstString(values, 'approvalRoutingMode') ?? 'all',
+        approverUsers: normalizedStringList(values.approvalApproverUsers),
+        approverRoles: normalizedStringList(values.approvalApproverRoles),
+        approverTeams: normalizedStringList(values.approvalApproverTeams),
+        onCallRef: firstString(values, 'approvalOnCallRef'),
+        requiredApprovals: positiveNumber(values.approvalRequiredApprovals),
+        changeWindow: Object.keys(changeWindow).length > 0 ? changeWindow : undefined,
+      }),
+    )
   }
   return approvalPolicy
 }
 
-export function accessPolicyConditionsFromValues(values: Record<string, unknown>) {
-  const conditions: Record<string, unknown> = {}
+export function accessPolicyConditionsFromValues(
+  values: GatewayAccessPolicyConditionFormValues,
+): GatewayAccessPolicyConditions {
+  const conditions: GatewayAccessPolicyConditions = {}
   if (values.rateLimitEnabled) {
     const rateLimitMode = normalizeRateLimitMode(firstString(values, 'rateLimitMode')) ?? 'counter'
     const rateLimit = compactObject({
@@ -827,7 +1394,11 @@ export function accessPolicyConditionsFromValues(values: Record<string, unknown>
       maxCallsPerHour: positiveNumber(values.rateLimitMaxCallsPerHour),
       burst: rateLimitMode === 'gcra' ? positiveNumber(values.rateLimitBurst) : undefined,
     })
-    if (Object.keys(rateLimit).length > 1 || rateLimit.maxCallsPerMinute || rateLimit.maxCallsPerHour) {
+    if (
+      Object.keys(rateLimit).length > 1 ||
+      rateLimit.maxCallsPerMinute ||
+      rateLimit.maxCallsPerHour
+    ) {
       conditions.rateLimit = rateLimit
     }
   }
@@ -838,7 +1409,12 @@ export function accessPolicyConditionsFromValues(values: Record<string, unknown>
       maxTokensPerDay: positiveNumber(values.budgetMaxTokensPerDay),
       maxCostPerDay: positiveNumber(values.budgetMaxCostPerDay),
     })
-    if (Object.keys(budget).length > 1 || budget.maxCallsPerDay || budget.maxTokensPerDay || budget.maxCostPerDay) {
+    if (
+      Object.keys(budget).length > 1 ||
+      budget.maxCallsPerDay ||
+      budget.maxTokensPerDay ||
+      budget.maxCostPerDay
+    ) {
       conditions.budget = budget
     }
   }
@@ -860,7 +1436,11 @@ export function accessPolicyConditionsFromValues(values: Record<string, unknown>
     const outputRedactionFields = normalizedStringList(values.outputRedactionFields)
     const outputRedactionSecretTypes = normalizedStringList(values.outputRedactionSecretTypes)
     const outputRedactionValuePatterns = normalizedStringList(values.outputRedactionValuePatterns)
-    if (outputRedactionFields.length > 0 || outputRedactionSecretTypes.length > 0 || outputRedactionValuePatterns.length > 0) {
+    if (
+      outputRedactionFields.length > 0 ||
+      outputRedactionSecretTypes.length > 0 ||
+      outputRedactionValuePatterns.length > 0
+    ) {
       conditions.outputRedactionPolicy = compactObject({
         mode: 'sanitize',
         fields: outputRedactionFields,
@@ -874,10 +1454,13 @@ export function accessPolicyConditionsFromValues(values: Record<string, unknown>
   return conditions
 }
 
-export function valuesToResourceScopes(values: Record<string, unknown>) {
-  const scopes: Record<string, string[]> = {}
+export function valuesToResourceScopes(
+  values: GatewayResourceScopeFormValues,
+): GatewayResourceScopes {
+  const scopes: GatewayResourceScopes = {}
   scopeFieldDefs.forEach((field) => {
-    const value = values[field.name]
+    const formValues = values as Record<string, unknown>
+    const value = formValues[field.name]
     if (Array.isArray(value) && value.length) {
       scopes[field.key] = value.map((item) => String(item)).filter(Boolean)
     }
@@ -901,7 +1484,9 @@ export function gatewayTimeRangeQuery(value: GatewayTimeRangeValue) {
   }
 }
 
-export function governanceCoverageRows(coverage?: Partial<GovernancePolicyCoverage>): GovernanceCoverageRow[] {
+export function governanceCoverageRows(
+  coverage?: Partial<GovernancePolicyCoverage>,
+): GovernanceCoverageRow[] {
   const activeAccessPolicies = coverage?.activeAccessPolicies ?? 0
   const activeToolGrants = coverage?.activeToolGrants ?? 0
   const activeSkillBindings = coverage?.activeSkillBindings ?? 0
@@ -952,13 +1537,17 @@ export function governanceCoverageRows(coverage?: Partial<GovernancePolicyCovera
       key: 'resource_scopes',
       label: 'Resource scopes',
       state: coverage?.resourceScopeState ?? 'not_configured',
-      configured: (coverage?.resourceScopedAccessPolicies ?? 0) + (coverage?.resourceScopedToolGrants ?? 0),
+      configured:
+        (coverage?.resourceScopedAccessPolicies ?? 0) + (coverage?.resourceScopedToolGrants ?? 0),
       total: activeAccessPolicies + activeToolGrants,
     },
   ]
 }
 
-export function governanceApprovalQueueRows(approvals?: Partial<GovernanceApprovalSummary>, clients?: Partial<GovernanceClientSummary>): GovernanceQueueRow[] {
+export function governanceApprovalQueueRows(
+  approvals?: Partial<GovernanceApprovalSummary>,
+  clients?: Partial<GovernanceClientSummary>,
+): GovernanceQueueRow[] {
   return [
     {
       key: 'due_soon',
@@ -987,22 +1576,28 @@ export function governanceApprovalQueueRows(approvals?: Partial<GovernanceApprov
   ]
 }
 
-export function governanceTokenFindingRows(tokens?: Partial<GovernanceTokenSummary>): GovernanceTokenFindingRow[] {
+export function governanceTokenFindingRows(
+  tokens?: Partial<GovernanceTokenSummary>,
+): GovernanceTokenFindingRow[] {
   const groups = [
     { category: 'expiredActive', categoryLabel: 'Expired active', values: tokens?.expiredActive },
     { category: 'expiringSoon', categoryLabel: 'Expiring soon', values: tokens?.expiringSoon },
     { category: 'stale', categoryLabel: 'Stale', values: tokens?.stale },
     { category: 'neverUsed', categoryLabel: 'Never used', values: tokens?.neverUsed },
   ] as const
-  return groups.flatMap((group) => (group.values ?? []).map((item) => ({
-    ...item,
-    key: `${group.category}:${item.kind}:${item.id || item.tokenPrefix}`,
-    category: group.category,
-    categoryLabel: group.categoryLabel,
-  })))
+  return groups.flatMap((group) =>
+    (group.values ?? []).map((item) => ({
+      ...item,
+      key: `${group.category}:${item.kind}:${item.id || item.tokenPrefix}`,
+      category: group.category,
+      categoryLabel: group.categoryLabel,
+    })),
+  )
 }
 
-export function governanceRedactionRows(redaction?: Partial<GovernanceRedactionSummary>): GovernanceRedactionRow[] {
+export function governanceRedactionRows(
+  redaction?: Partial<GovernanceRedactionSummary>,
+): GovernanceRedactionRow[] {
   const firstPolicy = redaction?.topPolicies?.find((item) => item.key.trim())?.key ?? ''
   const firstTool = redaction?.topTools?.find((item) => item.key.trim())?.key ?? ''
   return [
@@ -1027,7 +1622,10 @@ export function governanceRedactionRows(redaction?: Partial<GovernanceRedactionS
     {
       key: 'field_paths',
       label: 'Field paths',
-      count: (redaction?.fieldMatches ?? 0) + (redaction?.sensitiveKeyMatches ?? 0) + (redaction?.structuredSecretMatches ?? 0),
+      count:
+        (redaction?.fieldMatches ?? 0) +
+        (redaction?.sensitiveKeyMatches ?? 0) +
+        (redaction?.structuredSecretMatches ?? 0),
       items: redaction?.topFieldPaths ?? [],
     },
     {
@@ -1042,7 +1640,9 @@ export function governanceRedactionRows(redaction?: Partial<GovernanceRedactionS
       label: 'Tools',
       count: redaction?.topTools?.reduce((sum, item) => sum + item.count, 0) ?? 0,
       items: redaction?.topTools ?? [],
-      target: firstTool ? { tab: 'audit', auditFilters: auditDrilldownFilters({ toolName: firstTool }) } : undefined,
+      target: firstTool
+        ? { tab: 'audit', auditFilters: auditDrilldownFilters({ toolName: firstTool }) }
+        : undefined,
     },
   ]
 }
@@ -1075,7 +1675,9 @@ export const governanceDefaultPolicyDraft = {
   outputRedactionPreserveFormat: false,
 }
 
-export function governancePolicyDraftForCoverage(row: GovernanceCoverageRow): Record<string, unknown> {
+export function governancePolicyDraftForCoverage(
+  row: GovernanceCoverageRow,
+): Record<string, unknown> {
   const draft: Record<string, unknown> = { ...governanceDefaultPolicyDraft }
   if (row.key === 'budget') {
     return {
@@ -1117,7 +1719,9 @@ export function governancePolicyDraftForCoverage(row: GovernanceCoverageRow): Re
 }
 
 export function governanceCoverageDrilldown(row: GovernanceCoverageRow): GovernanceDrilldownTarget {
-  if (['access_policies', 'budget', 'rate_limit', 'redaction', 'resource_scopes'].includes(row.key)) {
+  if (
+    ['access_policies', 'budget', 'rate_limit', 'redaction', 'resource_scopes'].includes(row.key)
+  ) {
     return {
       tab: 'policies',
       policyDraft: governancePolicyDraftForCoverage(row),
@@ -1133,20 +1737,47 @@ export function governanceCoverageRowForTemplate(template?: string): GovernanceC
     case 'budget':
       return { key: 'budget', label: 'Budget', state: 'not_configured', configured: 0, total: 0 }
     case 'rate_limit':
-      return { key: 'rate_limit', label: 'Rate limit', state: 'not_configured', configured: 0, total: 0 }
+      return {
+        key: 'rate_limit',
+        label: 'Rate limit',
+        state: 'not_configured',
+        configured: 0,
+        total: 0,
+      }
     case 'redaction':
-      return { key: 'redaction', label: 'Redaction', state: 'not_configured', configured: 0, total: 0 }
+      return {
+        key: 'redaction',
+        label: 'Redaction',
+        state: 'not_configured',
+        configured: 0,
+        total: 0,
+      }
     case 'resource_scopes':
     case 'resource_scope_guardrail':
-      return { key: 'resource_scopes', label: 'Resource scopes', state: 'not_configured', configured: 0, total: 0 }
+      return {
+        key: 'resource_scopes',
+        label: 'Resource scopes',
+        state: 'not_configured',
+        configured: 0,
+        total: 0,
+      }
     default:
-      return { key: 'access_policies', label: 'Access policies', state: 'not_configured', configured: 0, total: 0 }
+      return {
+        key: 'access_policies',
+        label: 'Access policies',
+        state: 'not_configured',
+        configured: 0,
+        total: 0,
+      }
   }
 }
 
-export function governanceRecommendationDrilldownAction(record: GovernanceRecommendationAction): GovernanceDrilldownAction | null {
+export function governanceRecommendationDrilldownAction(
+  record: GovernanceRecommendationAction,
+): GovernanceDrilldownAction | null {
   const firstRef = record.targetId || record.refs?.find((item) => item.trim()) || ''
-  const policyTemplate = typeof record.metadata?.policyTemplate === 'string' ? record.metadata.policyTemplate : ''
+  const policyTemplate =
+    typeof record.metadata?.policyTemplate === 'string' ? record.metadata.policyTemplate : ''
   if (record.targetKind === 'tokens') {
     const serviceTokenRef = serviceTokenRecommendationRef(record, firstRef)
     return {
@@ -1157,14 +1788,19 @@ export function governanceRecommendationDrilldownAction(record: GovernanceRecomm
     }
   }
   if (record.targetKind === 'approval_requests') {
-    return { label: '处理审批', target: { tab: 'approvals', approvalFilters: approvalDrilldownFilters(firstRef) } }
+    return {
+      label: '处理审批',
+      target: { tab: 'approvals', approvalFilters: approvalDrilldownFilters(firstRef) },
+    }
   }
   if (record.targetKind === 'access_policies' || record.action.startsWith('create_')) {
     return {
       label: '创建 policy',
       target: {
         tab: 'policies',
-        policyDraft: governancePolicyDraftForCoverage(governanceCoverageRowForTemplate(policyTemplate)),
+        policyDraft: governancePolicyDraftForCoverage(
+          governanceCoverageRowForTemplate(policyTemplate),
+        ),
       },
     }
   }
@@ -1174,7 +1810,10 @@ export function governanceRecommendationDrilldownAction(record: GovernanceRecomm
   return null
 }
 
-export function serviceTokenRecommendationRef(record: GovernanceRecommendationAction, preferredRef: string) {
+export function serviceTokenRecommendationRef(
+  record: GovernanceRecommendationAction,
+  preferredRef: string,
+) {
   const values = record.metadata?.tokenRefs
   const tokenRefs = Array.isArray(values) ? values : []
   let fallback = ''
@@ -1222,7 +1861,10 @@ export function auditDrilldownFilters(filters: Partial<AuditFilterState>): Audit
   }
 }
 
-export function governanceQueueDrilldown(row: GovernanceQueueRow, ref: string): GovernanceDrilldownTarget {
+export function governanceQueueDrilldown(
+  row: GovernanceQueueRow,
+  ref: string,
+): GovernanceDrilldownTarget {
   const value = ref.trim()
   if (row.key === 'pending_clients') {
     return {
@@ -1236,7 +1878,9 @@ export function governanceQueueDrilldown(row: GovernanceQueueRow, ref: string): 
   }
 }
 
-export function governanceTokenFindingDrilldown(record: GovernanceTokenFindingRow): GovernanceDrilldownTarget {
+export function governanceTokenFindingDrilldown(
+  record: GovernanceTokenFindingRow,
+): GovernanceDrilldownTarget {
   if (record.kind === 'service_account_token') {
     const tokenRef = record.id || record.tokenPrefix || record.name
     return {
@@ -1272,7 +1916,9 @@ export function approvalTrace(record: ApprovalRequest) {
     executionTaskId: relatedText(record, 'executionTaskId'),
     releaseBundleId: relatedText(record, 'releaseBundleId'),
     applicationId: relatedText(record, 'applicationId') || asText(record.toolInput?.applicationId),
-    applicationEnvironmentId: relatedText(record, 'applicationEnvironmentId') || asText(record.toolInput?.applicationEnvironmentId),
+    applicationEnvironmentId:
+      relatedText(record, 'applicationEnvironmentId') ||
+      asText(record.toolInput?.applicationEnvironmentId),
   }
 }
 
@@ -1283,7 +1929,9 @@ export function workflowTracePath(trace: ReturnType<typeof approvalTrace>) {
   })}`
 }
 
-export function governanceFindingDrilldownActions(record: GovernanceFinding): GovernanceDrilldownAction[] {
+export function governanceFindingDrilldownActions(
+  record: GovernanceFinding,
+): GovernanceDrilldownAction[] {
   const actions: GovernanceDrilldownAction[] = []
   if (record.approvalRequestId) {
     actions.push({
@@ -1311,7 +1959,11 @@ export function governanceFindingDrilldownActions(record: GovernanceFinding): Go
         policyFilter: record.policyId,
       },
     })
-    if (['high_risk_allow_without_approval', 'high_risk_allow_without_resource_scope'].includes(record.type)) {
+    if (
+      ['high_risk_allow_without_approval', 'high_risk_allow_without_resource_scope'].includes(
+        record.type,
+      )
+    ) {
       actions.push({
         label: '修复 policy',
         target: {
@@ -1319,12 +1971,17 @@ export function governanceFindingDrilldownActions(record: GovernanceFinding): Go
           policyFilter: record.policyId,
           policyDraft: {
             ...governanceDefaultPolicyDraft,
-            name: record.type === 'high_risk_allow_without_resource_scope' ? 'Gateway scoped high-risk guardrail' : 'Gateway high-risk approval guardrail',
+            name:
+              record.type === 'high_risk_allow_without_resource_scope'
+                ? 'Gateway scoped high-risk guardrail'
+                : 'Gateway high-risk approval guardrail',
             description: record.summary,
             toolPatterns: record.toolName ? [record.toolName] : [],
             riskLevels: record.riskLevel ? [record.riskLevel] : ['mutate', 'execute', 'high'],
-            scopeClusterIds: record.type === 'high_risk_allow_without_resource_scope' ? [] : undefined,
-            scopeNamespaces: record.type === 'high_risk_allow_without_resource_scope' ? [] : undefined,
+            scopeClusterIds:
+              record.type === 'high_risk_allow_without_resource_scope' ? [] : undefined,
+            scopeNamespaces:
+              record.type === 'high_risk_allow_without_resource_scope' ? [] : undefined,
           },
         },
       })
@@ -1338,7 +1995,11 @@ export function governanceFindingDrilldownActions(record: GovernanceFinding): Go
         grantFilter: record.grantId,
       },
     })
-    if (['high_risk_grant_without_approval', 'high_risk_grant_without_resource_scope'].includes(record.type)) {
+    if (
+      ['high_risk_grant_without_approval', 'high_risk_grant_without_resource_scope'].includes(
+        record.type,
+      )
+    ) {
       actions.push({
         label: '补 guardrail',
         target: {
@@ -1346,15 +2007,20 @@ export function governanceFindingDrilldownActions(record: GovernanceFinding): Go
           grantFilter: record.grantId,
           policyDraft: {
             ...governanceDefaultPolicyDraft,
-            name: record.type === 'high_risk_grant_without_resource_scope' ? 'Gateway scoped grant guardrail' : 'Gateway grant approval guardrail',
+            name:
+              record.type === 'high_risk_grant_without_resource_scope'
+                ? 'Gateway scoped grant guardrail'
+                : 'Gateway grant approval guardrail',
             description: record.summary,
             subjectType: record.subjectType || 'role',
             subjectId: record.subjectId || 'developer',
             aiClientId: record.aiClientId,
             toolPatterns: record.toolName ? [record.toolName] : [],
             riskLevels: record.riskLevel ? [record.riskLevel] : ['mutate', 'execute', 'high'],
-            scopeClusterIds: record.type === 'high_risk_grant_without_resource_scope' ? [] : undefined,
-            scopeNamespaces: record.type === 'high_risk_grant_without_resource_scope' ? [] : undefined,
+            scopeClusterIds:
+              record.type === 'high_risk_grant_without_resource_scope' ? [] : undefined,
+            scopeNamespaces:
+              record.type === 'high_risk_grant_without_resource_scope' ? [] : undefined,
           },
         },
       })

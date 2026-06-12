@@ -8,6 +8,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from 'antd'
 import { VirtualizationClustersPage, VirtualizationFlavorsPage, VirtualizationImagesPage, VirtualizationOperationsPage, VirtualizationOverviewPage, VirtualizationSyncPage, VirtualizationVmDetailPage, VirtualizationVmsPage, buildClusterPayload, buildCreateVmPayload } from './virtualization-pages'
+import type { CreateVirtualMachineInput, VirtualizationClusterInput } from './virtualization-types'
 
 vi.mock('@visactor/react-vchart', () => ({
   LineChart: () => null,
@@ -26,12 +27,22 @@ vi.mock('@/components/resource-metrics-panel', () => ({
 }))
 
 const testState = vi.hoisted(() => ({
+  modules: {
+    virtualization: true,
+  },
   permissionSnapshot: {
     permissionKeys: ['virtualization.vms.manage', 'virtualization.sync.manage', 'virtualization.clusters.manage', 'virtualization.operations.manage'],
     visibleMenuIds: [],
     visibleMenus: [],
   },
   apiGet: vi.fn(async (path: string) => {
+    if (path === '/modules') {
+      return {
+        data: [
+          { descriptor: { id: 'virtualization', name: 'Virtualization', defaultPath: '/virtualization' }, enabled: testState.modules.virtualization },
+        ],
+      }
+    }
     if (path === '/virtualization/vms?page=1&pageSize=10') {
       return { data: { items: [{ id: 'vm-1', name: 'build-vm', provider: 'kubevirt', status: 'running', flavorName: 'standard-2c4g', bootImageName: 'ubuntu-24.04', cpu: 2, memoryMiB: 4096, diskGiB: 40 }], total: 1, page: 1, pageSize: 10 } }
     }
@@ -45,6 +56,9 @@ const testState = vi.hoisted(() => ({
         ],
         logs: [{ id: 'log-vm', taskId: 'op-vm', logLevel: 'info', message: 'vm ready', createdAt: '2026-05-21T00:00:00Z' }],
       } }
+    }
+    if (path === '/virtualization/vms/vm-1/metrics?rangeMinutes=60&stepSeconds=60') {
+      return { data: { ready: true, series: [] } }
     }
     if (path === '/virtualization/overview') {
       return { data: {
@@ -170,13 +184,27 @@ async function renderWithProviders(node: ReactNode, route = '/virtualization/vms
     )
   })
 
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    await new Promise((resolve) => setTimeout(resolve, 0))
-  })
+  await settleQueries(queryClient)
 
   return container
+}
+
+async function settleQueries(queryClient: QueryClient) {
+  let idleTicks = 0
+  for (let index = 0; index < 50; index += 1) {
+    await act(async () => {
+      await Promise.resolve()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    if (queryClient.isFetching() === 0 && queryClient.isMutating() === 0) {
+      idleTicks += 1
+      if (idleTicks >= 3) {
+        return
+      }
+    } else {
+      idleTicks = 0
+    }
+  }
 }
 
 async function waitForText(text: string) {
@@ -207,6 +235,9 @@ function hasButtonByLabel(container: ParentNode, label: string) {
 
 describe('virtualization pages', () => {
   beforeEach(() => {
+    testState.modules = {
+      virtualization: true,
+    }
     testState.permissionSnapshot = {
       permissionKeys: ['virtualization.vms.manage', 'virtualization.sync.manage', 'virtualization.clusters.manage', 'virtualization.operations.manage'],
       visibleMenuIds: [],
@@ -346,11 +377,16 @@ describe('virtualization pages', () => {
       bootImageId: 'image-pvc',
       sourceMode: 'pvc_clone',
       startAfterCreate: true,
-    })
+      kubevirtStorageClass: 'fast-ssd',
+      kubevirtDataVolumeName: 'build-vm-root',
+    }) satisfies CreateVirtualMachineInput
 
     expect(payload.sourceMode).toBe('pvc_clone')
     expect(payload.sourceId).toBe('image-pvc')
     expect(payload.imageId).toBe('image-pvc')
+    expect(payload.providerParams).toMatchObject({ storageClass: 'fast-ssd', dataVolumeName: 'build-vm-root' })
+    expect(payload).not.toHaveProperty('kubevirtStorageClass')
+    expect(payload).not.toHaveProperty('kubevirtDataVolumeName')
   })
 
   it('builds provider connection config for PVE and KubeVirt runtime fields', () => {
@@ -363,9 +399,11 @@ describe('virtualization pages', () => {
       defaultBridge: 'vmbr0',
       tokenID: 'root@pam!soha',
       tokenSecret: 'secret',
-    })
+    }) satisfies VirtualizationClusterInput
     expect(pvePayload.config).toMatchObject({ defaultNode: 'pve-1', defaultStorage: 'local-lvm', defaultBridge: 'vmbr0' })
     expect(pvePayload.credential).toMatchObject({ tokenID: 'root@pam!soha', tokenSecret: 'secret' })
+    expect(pvePayload).not.toHaveProperty('tokenID')
+    expect(pvePayload).not.toHaveProperty('defaultNode')
 
     const kubevirtPayload = buildClusterPayload({
       provider: 'kubevirt',
@@ -373,9 +411,11 @@ describe('virtualization pages', () => {
       kubernetesClusterId: 'cluster-a',
       backendUrl: 'https://kube.example:6443',
       prometheusUrl: 'https://prometheus.example',
-    })
+    }) satisfies VirtualizationClusterInput
     expect(kubevirtPayload.config).toMatchObject({ backendUrl: 'https://kube.example:6443', prometheusUrl: 'https://prometheus.example' })
     expect(kubevirtPayload.endpoint).toBeUndefined()
+    expect(kubevirtPayload).not.toHaveProperty('backendUrl')
+    expect(kubevirtPayload).not.toHaveProperty('prometheusUrl')
   })
 
   it('renders VM detail with provider raw, operations, logs and AI investigation entry', async () => {
@@ -410,6 +450,58 @@ describe('virtualization pages', () => {
     expect(container.textContent).not.toContain('创建虚拟机')
     expect(container.textContent).not.toContain('启动')
     expect(container.textContent).not.toContain('停止')
+  })
+
+  it('does not load virtualization data or expose actions when the module is disabled', async () => {
+    testState.modules = {
+      virtualization: false,
+    }
+    testState.permissionSnapshot = {
+      permissionKeys: ['virtualization.manage', 'virtualization.vms.manage', 'virtualization.sync.manage', 'virtualization.clusters.manage', 'virtualization.operations.manage'],
+      visibleMenuIds: [],
+      visibleMenus: [],
+    }
+
+    const container = await renderWithProviders(<VirtualizationVmsPage />)
+
+    expect(testState.apiGet).toHaveBeenCalledWith('/modules')
+    expect(testState.apiGet).not.toHaveBeenCalledWith('/virtualization/vms?page=1&pageSize=10')
+    expect(testState.apiGet).not.toHaveBeenCalledWith('/virtualization/clusters')
+    expect(testState.apiGet).not.toHaveBeenCalledWith('/virtualization/images')
+    expect(testState.apiGet).not.toHaveBeenCalledWith('/virtualization/flavors')
+    expect(container.textContent).not.toContain('创建虚拟机')
+  })
+
+  it('requires explicit VM allowed actions for power and delete controls', async () => {
+    testState.permissionSnapshot = {
+      permissionKeys: ['virtualization.vms.manage'],
+      visibleMenuIds: [],
+      visibleMenus: [],
+    }
+
+    const container = await renderWithProviders(<VirtualizationVmsPage />)
+
+    expect(container.textContent).toContain('build-vm')
+    expect(hasButtonByLabel(container, '启动虚拟机')).toBe(false)
+    expect(hasButtonByLabel(container, '停止虚拟机')).toBe(false)
+    expect(hasButtonByLabel(container, '删除虚拟机')).toBe(false)
+  })
+
+  it('gates VM metrics query and console tab by dedicated permissions', async () => {
+    testState.permissionSnapshot = {
+      permissionKeys: ['virtualization.vms.view'],
+      visibleMenuIds: [],
+      visibleMenus: [],
+    }
+
+    const container = await renderWithProviders(<VirtualizationVmDetailPage />, '/virtualization/vms/vm-1')
+
+    expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/vms/vm-1/detail')
+    const tabTexts = Array.from(container.querySelectorAll('.ant-tabs-tab-btn')).map((node) => node.textContent?.trim()).filter(Boolean)
+    expect(tabTexts).toContain('Provider Raw')
+    expect(tabTexts).not.toContain('监控指标')
+    expect(tabTexts).not.toContain('控制台')
+    expect(testState.apiGet).not.toHaveBeenCalledWith('/virtualization/vms/vm-1/metrics?rangeMinutes=60&stepSeconds=60')
   })
 
   it('uses asset_sync filtering for the sync task page', async () => {
@@ -478,6 +570,26 @@ describe('virtualization pages', () => {
 
     expect(document.body.textContent).toContain('KubeVirt DataSource')
     expect(document.body.textContent).toContain('来源类型')
+  })
+
+  it('uses image and flavor allowed actions for row edit and delete controls', async () => {
+    testState.permissionSnapshot = {
+      permissionKeys: ['virtualization.images.view', 'virtualization.images.manage', 'virtualization.flavors.view', 'virtualization.flavors.manage'],
+      visibleMenuIds: [],
+      visibleMenus: [],
+    }
+
+    const imageContainer = await renderWithProviders(<VirtualizationImagesPage />, '/virtualization/images')
+    expect(imageContainer.textContent).toContain('ubuntu-24.04')
+    expect(imageContainer.textContent).toContain('新增镜像入口')
+    expect(hasButtonByLabel(imageContainer, '编辑镜像')).toBe(false)
+    expect(hasButtonByLabel(imageContainer, '删除镜像')).toBe(false)
+
+    const flavorContainer = await renderWithProviders(<VirtualizationFlavorsPage />, '/virtualization/flavors')
+    expect(flavorContainer.textContent).toContain('standard-2c4g')
+    expect(flavorContainer.textContent).toContain('新增规格')
+    expect(hasButtonByLabel(flavorContainer, '编辑规格')).toBe(false)
+    expect(hasButtonByLabel(flavorContainer, '删除规格')).toBe(false)
   })
 
   it('initializes operations view from abnormal query preset', async () => {
