@@ -613,7 +613,6 @@ describe('ApplicationDetailPage workbench', () => {
     expect(testState.apiGet).toHaveBeenCalledWith('/workflows?applicationId=app-1')
     expect(testState.apiGet).toHaveBeenCalledWith('/applications')
     expect(testState.apiGet).toHaveBeenCalledWith('/application-environments')
-    expect(testState.apiGet).not.toHaveBeenCalledWith('/delivery-environments')
     expect(testState.apiGet).toHaveBeenCalledWith('/workflow-templates')
     expect(testState.apiGet).toHaveBeenCalledWith('/clusters')
     expect(container.textContent).toContain('Checkout Platform')
@@ -642,6 +641,10 @@ describe('ApplicationDetailPage workbench', () => {
     expect(container.textContent).toContain('构建来源')
     expect(container.textContent).toContain('环境绑定')
     expect(container.textContent).toContain('新建绑定')
+    expect(container.textContent).toContain('模板健康')
+    expect(container.textContent).toContain('有验证节点')
+    expect(container.textContent).toContain('无回滚节点')
+    expect(container.textContent).toContain('DAG 正常')
     expect(container.textContent).toContain('app=checkout-api')
     expect(container.querySelector('.soha-application-runtime-settings-grid')).not.toBeNull()
 

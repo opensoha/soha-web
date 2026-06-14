@@ -76,7 +76,6 @@ export interface BlueprintEnvironmentBindingTemplate {
   businessLineId?: string
   strategyProfileId?: string
   promotionPolicyId?: string
-  approvalPolicyId?: string
   artifactPolicyId?: string
   workflowTemplateId?: string
   buildPolicy?: BuildPolicy
@@ -196,7 +195,6 @@ export interface ApplicationEnvironment {
   environmentKey?: string
   strategyProfileId?: string
   promotionPolicyId?: string
-  approvalPolicyId?: string
   artifactPolicyId?: string
   workflowTemplateId?: string
   workflowTemplate?: WorkflowTemplate
@@ -345,22 +343,6 @@ export interface ExecutionTask {
   startedAt?: string
   lastHeartbeatAt?: string
   finishedAt?: string
-  createdAt: string
-  updatedAt: string
-}
-
-export interface ApprovalPolicy {
-  id: string
-  key: string
-  name: string
-  description?: string
-  mode?: string
-  requiredApprovals: number
-  slaMinutes: number
-  approverRoles?: string[]
-  changeWindow?: Record<string, unknown>
-  enabled: boolean
-  metadata?: Record<string, unknown>
   createdAt: string
   updatedAt: string
 }

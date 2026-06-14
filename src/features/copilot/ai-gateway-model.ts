@@ -133,8 +133,6 @@ export interface GatewayApprovalPolicy extends GatewayApprovalRoutingPolicy {
   approval?: string
   state?: string
   approvalPolicyRef?: string
-  approvalPolicyId?: string
-  deliveryApprovalPolicyId?: string
   policyRef?: string
   policyKey?: string
   dryRunOnly?: boolean
@@ -1089,8 +1087,6 @@ export function accessPolicyFormValuesFromRecord(record: AccessPolicy) {
     approvalPolicyRef: firstString(
       approvalPolicy,
       'approvalPolicyRef',
-      'approvalPolicyId',
-      'deliveryApprovalPolicyId',
       'policyRef',
       'policyKey',
     ),

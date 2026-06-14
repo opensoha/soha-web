@@ -372,6 +372,9 @@ describe("access route authorization", () => {
 
   it("derives route workspace ownership for application, resource, and system routes", () => {
     expect(getRouteWorkspace(getRoute("applications"))).toBe("application");
+    expect(getRouteWorkspace(getRoute("delivery-onboarding"))).toBe("application");
+    expect(getRouteWorkspace(getRoute("delivery-testing"))).toBe("application");
+    expect(getRouteWorkspace(getRoute("delivery-analysis"))).toBe("application");
     expect(getRouteWorkspace(getRoute("workloads-pods"))).toBe("resource");
     expect(getRouteWorkspace(getRoute("system-menus"))).toBe("system");
   });
@@ -454,7 +457,7 @@ describe("access route authorization", () => {
     expect(applicationNav.map((item) => item.id)).toEqual([
       "builds",
     ]);
-    expect(applicationNav[0].section).toBe("deliver");
+    expect(applicationNav[0].section).toBe("delivery");
     expect(systemNav.map((item) => item.id)).toEqual(["system"]);
   });
 
@@ -471,8 +474,8 @@ describe("access route authorization", () => {
         {
           id: "release-board",
           path: "/release-board",
-          labelZh: "发布看板",
-          labelEn: "Release Board",
+          labelZh: "构建发布",
+          labelEn: "Build & Release",
           iconKey: "activity",
           section: "deliver",
           sortOrder: 1,
@@ -509,6 +512,67 @@ describe("access route authorization", () => {
     expect(deliveryNav.map((item) => item.id)).toEqual([
       "builds",
       "release-board",
+    ]);
+    expect(deliveryNav.map((item) => item.section)).toEqual([
+      "delivery",
+      "delivery",
+    ]);
+  });
+
+  it("groups delivery workbench menus by user task while accepting legacy backend sections", () => {
+    const snapshot = buildSnapshot({
+      permissionKeys: [
+        "workspace.application.view",
+        "delivery.applications.view",
+        "delivery.release-board.view",
+        "delivery.release-bundles.view",
+        "delivery.execution-tasks.view",
+        "delivery.workflows.view",
+        "delivery.releases.view",
+        "delivery.workflow-templates.view",
+      ],
+      visibleMenuIds: [
+        "builds",
+        "delivery-onboarding",
+        "release-board",
+        "delivery-testing",
+        "delivery-analysis",
+        "release-bundles",
+        "execution-tasks",
+        "workflows",
+        "releases",
+        "workflow-templates",
+      ],
+      visibleMenus: [
+        { id: "workflow-templates", path: "/workflow-templates", section: "deliver", sortOrder: 1 },
+        { id: "execution-tasks", path: "/delivery/execution-tasks", section: "deliver", sortOrder: 2 },
+        { id: "releases", path: "/releases", section: "deliver", sortOrder: 3 },
+        { id: "release-bundles", path: "/delivery/release-bundles", section: "deliver", sortOrder: 4 },
+        { id: "release-board", path: "/release-board", section: "deliver", sortOrder: 5 },
+        { id: "workflows", path: "/workflows", section: "deliver", sortOrder: 6 },
+        { id: "delivery-analysis", path: "/delivery/analysis", section: "deliver", sortOrder: 7 },
+        { id: "delivery-testing", path: "/delivery/testing", section: "deliver", sortOrder: 8 },
+        { id: "delivery-onboarding", path: "/delivery/onboarding", section: "deliver", sortOrder: 9 },
+        { id: "builds", path: "/applications", section: "deliver", sortOrder: 99 },
+      ],
+    });
+
+    const deliveryNav = filterSidebarNavByWorkbench(
+      filterSidebarNavByWorkspace(getAccessibleSidebarNav(snapshot), "application"),
+      "delivery",
+    );
+
+    expect(deliveryNav.map((item) => `${item.id}:${item.section}`)).toEqual([
+      "builds:delivery",
+      "delivery-onboarding:delivery",
+      "release-board:delivery",
+      "delivery-testing:delivery",
+      "delivery-analysis:delivery",
+      "release-bundles:delivery-records",
+      "execution-tasks:delivery-records",
+      "workflows:delivery-records",
+      "releases:delivery-records",
+      "workflow-templates:delivery-platform",
     ]);
   });
 

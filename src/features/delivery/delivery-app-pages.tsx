@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Key } from 'react'
-import { Alert, App, Button, Card, Collapse, Descriptions, Dropdown, Form, Input, Modal, Popconfirm, Select, Space, Switch, Tag, Timeline, Typography } from 'antd'
-import { ApiOutlined, CheckOutlined, CloseOutlined, DeleteOutlined, EditOutlined, FileTextOutlined, LinkOutlined, MoreOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
+import { Alert, App, Button, Card, Collapse, Descriptions, Dropdown, Form, Input, Modal, Popconfirm, Select, Space, Switch, Tabs, Tag, Timeline, Typography } from 'antd'
+import { ApiOutlined, CheckOutlined, CloseOutlined, DeleteOutlined, EditOutlined, FileTextOutlined, LinkOutlined, MoreOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined, RocketOutlined, SaveOutlined, StopOutlined } from '@ant-design/icons'
 import type { MenuProps, TableColumnsType } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -28,13 +28,12 @@ import {
   summarizeReleaseBundleStatus,
 } from '@/features/delivery/delivery-status'
 import {
-  ApplicationManagementModals,
+  ApplicationCenterModals,
   defaultBuildSources,
   splitApplicationGroups,
-  useApplicationManagementState,
-} from '@/features/delivery/application-management-pages'
+  useApplicationCenterState,
+} from '@/features/delivery/application-center-model'
 import type {
-  ApprovalPolicy,
   ApiResponse,
   BuildSource,
   BuildTemplate,
@@ -58,6 +57,7 @@ type ApplicationWorkspaceCard = {
   deliverySignal: { color: string; label: string }
   gateSignal: { color: string; label: string }
   activeTargets: number
+  serviceClues: number
   latestEnvironmentName: string
 }
 
@@ -70,6 +70,7 @@ export interface BuildTemplateFormValues {
   buildCommandsText?: string
   variableSchemaText?: string
   defaultVariablesText?: string
+  variables?: BuildTemplateVariableFormValue[]
   enabled?: boolean
 }
 
@@ -85,30 +86,27 @@ export interface BuildTemplatePayload {
   enabled?: boolean
 }
 
-export interface ApprovalPolicyFormValues {
+export interface BuildTemplateVariableFormValue {
   key?: string
-  name?: string
+  label?: string
+  type?: string
+  required?: boolean
+  defaultValue?: string
   description?: string
-  mode?: string
-  requiredApprovals?: number | string
-  slaMinutes?: number | string
-  approverRolesText?: string
-  changeWindowText?: string
-  metadataText?: string
-  enabled?: boolean
 }
 
-export interface ApprovalPolicyPayload {
-  key?: string
-  name?: string
+type BuildTemplateListItem = {
+  builderKind?: string
+  commandCount: number
   description?: string
-  mode?: string
-  requiredApprovals: number
-  slaMinutes: number
-  approverRoles: string[]
-  changeWindow: JsonObject
-  metadata: JsonObject
-  enabled?: boolean
+  enabled: boolean
+  id: string
+  isDraft?: boolean
+  key: string
+  name: string
+  template?: BuildTemplate
+  updatedAt?: string
+  variableCount: number
 }
 
 function parseJSONObject(raw: unknown, field: string): JsonObject {
@@ -129,17 +127,108 @@ function splitLines(raw: unknown) {
   return String(raw || '').split('\n').map((item) => item.trim()).filter(Boolean)
 }
 
-function splitCommaList(raw: unknown) {
-  return String(raw || '').split(',').map((item) => item.trim()).filter(Boolean)
+function trimFormString(raw: unknown) {
+  return String(raw ?? '').trim()
 }
 
-function numberFromFormValue(raw: unknown, fallback: number) {
-  if (typeof raw === 'number' && Number.isFinite(raw)) return raw
-  if (typeof raw === 'string' && raw.trim()) {
-    const parsed = Number(raw)
-    if (Number.isFinite(parsed)) return parsed
+function buildTemplateVariableSchema(variables: BuildTemplateVariableFormValue[] | undefined) {
+  const schema: JsonObject = {}
+  for (const item of variables ?? []) {
+    const key = trimFormString(item.key)
+    if (!key) continue
+    schema[key] = {
+      type: item.type || 'string',
+      title: trimFormString(item.label) || key,
+      description: trimFormString(item.description),
+      required: Boolean(item.required),
+    }
   }
-  return fallback
+  return schema
+}
+
+function buildTemplateDefaultVariables(variables: BuildTemplateVariableFormValue[] | undefined) {
+  const defaults: JsonObject = {}
+  for (const item of variables ?? []) {
+    const key = trimFormString(item.key)
+    if (!key) continue
+    const raw = item.defaultValue
+    if (raw === undefined || raw === '') continue
+    if (item.type === 'number') {
+      const parsed = Number(raw)
+      defaults[key] = Number.isFinite(parsed) ? parsed : raw
+      continue
+    }
+    if (item.type === 'boolean') {
+      defaults[key] = raw === 'true'
+      continue
+    }
+    defaults[key] = raw
+  }
+  return defaults
+}
+
+function extractBuildTemplateVariables(template: Pick<BuildTemplate, 'variableSchema' | 'defaultVariables'> | undefined): BuildTemplateVariableFormValue[] {
+  if (!template?.variableSchema || typeof template.variableSchema !== 'object' || Array.isArray(template.variableSchema)) return []
+  return Object.entries(template.variableSchema).map(([key, value]) => {
+    const spec = value && typeof value === 'object' && !Array.isArray(value) ? value as JsonObject : {}
+    const defaultValue = template.defaultVariables?.[key]
+    return {
+      key,
+      label: String(spec.title || spec.label || key),
+      type: String(spec.type || 'string'),
+      required: Boolean(spec.required),
+      defaultValue: defaultValue === undefined ? '' : String(defaultValue),
+      description: String(spec.description || ''),
+    }
+  })
+}
+
+function defaultBuildTemplateValues(key = `build-template-${Date.now().toString(36)}`): BuildTemplateFormValues {
+  return {
+    key,
+    name: '新建构建模板',
+    description: '',
+    builderKind: 'docker',
+    dockerfileTemplate: 'FROM node:22-alpine\nWORKDIR /app\nCOPY package*.json ./\nRUN npm ci\nCOPY . .\nRUN npm run build\n',
+    buildCommandsText: 'npm ci\nnpm run build',
+    variableSchemaText: '{}',
+    defaultVariablesText: '{}',
+    variables: [
+      { key: 'imageTag', label: '镜像 Tag', type: 'string', required: true, defaultValue: 'latest', description: '默认镜像标签' },
+    ],
+    enabled: true,
+  }
+}
+
+function buildTemplateToFormValues(template: BuildTemplate): BuildTemplateFormValues {
+  return {
+    key: template.key,
+    name: template.name,
+    description: template.description ?? '',
+    builderKind: template.builderKind ?? 'docker',
+    dockerfileTemplate: template.dockerfileTemplate ?? '',
+    buildCommandsText: (template.buildCommands ?? []).join('\n'),
+    variableSchemaText: JSON.stringify(template.variableSchema ?? {}, null, 2),
+    defaultVariablesText: JSON.stringify(template.defaultVariables ?? {}, null, 2),
+    variables: extractBuildTemplateVariables(template),
+    enabled: template.enabled,
+  }
+}
+
+function buildBuildTemplatePayloadFromDesigner(values: BuildTemplateFormValues): BuildTemplatePayload {
+  const variables = values.variables ?? []
+  const hasStructuredVariables = variables.some((item) => trimFormString(item.key))
+  return {
+    key: values.key,
+    name: values.name,
+    description: values.description,
+    builderKind: values.builderKind,
+    dockerfileTemplate: values.dockerfileTemplate,
+    buildCommands: splitLines(values.buildCommandsText),
+    variableSchema: hasStructuredVariables ? buildTemplateVariableSchema(variables) : parseJSONObject(values.variableSchemaText, '变量 Schema'),
+    defaultVariables: hasStructuredVariables ? buildTemplateDefaultVariables(variables) : parseJSONObject(values.defaultVariablesText, '默认变量'),
+    enabled: values.enabled,
+  }
 }
 
 export function buildBuildTemplatePayload(values: BuildTemplateFormValues): BuildTemplatePayload {
@@ -152,21 +241,6 @@ export function buildBuildTemplatePayload(values: BuildTemplateFormValues): Buil
     buildCommands: splitLines(values.buildCommandsText),
     variableSchema: parseJSONObject(values.variableSchemaText, '变量 Schema'),
     defaultVariables: parseJSONObject(values.defaultVariablesText, '默认变量'),
-    enabled: values.enabled,
-  }
-}
-
-export function buildApprovalPolicyPayload(values: ApprovalPolicyFormValues): ApprovalPolicyPayload {
-  return {
-    key: values.key,
-    name: values.name,
-    description: values.description,
-    mode: values.mode,
-    requiredApprovals: numberFromFormValue(values.requiredApprovals, 1),
-    slaMinutes: numberFromFormValue(values.slaMinutes, 60),
-    approverRoles: splitCommaList(values.approverRolesText),
-    changeWindow: parseJSONObject(values.changeWindowText, 'Change Window'),
-    metadata: parseJSONObject(values.metadataText, 'Metadata'),
     enabled: values.enabled,
   }
 }
@@ -207,6 +281,14 @@ function renderTargetSummary(targets?: ApplicationBindingRow['targets']) {
 function summarizeApplicationRole(app: DeliveryApplication) {
   const language = app.language ? app.language.toUpperCase() : 'APP'
   return language
+}
+
+function summarizeApplicationServiceClues(app: DeliveryApplication, bindings: ReleaseBoardEntry[]) {
+  const sourceIDs = new Set([
+    ...(app.buildSources ?? []).map((source) => source.id || source.name || source.type),
+    ...bindings.map((binding) => binding.buildSourceId || binding.buildSource?.id || binding.buildSource?.name).filter(Boolean),
+  ])
+  return Math.max(sourceIDs.size, app.buildSources?.length ?? 0)
 }
 
 function summarizeEnvironmentCoverage(bindings: ReleaseBoardEntry[]) {
@@ -359,7 +441,7 @@ function WorkflowGatewayTracePanel({ run }: { run: WorkflowRun }) {
 
 export function ApplicationsPage() {
   const navigate = useNavigate()
-  const managementState = useApplicationManagementState()
+  const managementState = useApplicationCenterState()
   const [activeGroup, setActiveGroup] = useState<string>('all')
   const [deleteConfirmApp, setDeleteConfirmApp] = useState<DeliveryApplication | null>(null)
 
@@ -388,6 +470,7 @@ export function ApplicationsPage() {
         deliverySignal: summarizeDeliveryBuildSignal(bindings, { completedLabel: '最近已构建' }),
         gateSignal: summarizeDeliveryValidationSignal(bindings, { readyLabel: '可验证' }),
         activeTargets: bindings.reduce((sum, item) => sum + (item.targets?.length ?? 0), 0),
+        serviceClues: summarizeApplicationServiceClues(app, bindings),
         latestEnvironmentName: summarizeEnvironmentCoverage(bindings),
       }
     })
@@ -408,6 +491,9 @@ export function ApplicationsPage() {
     managementState.setEditingApp(null)
     managementState.setBuildSources(defaultBuildSources())
     managementState.setAppModalVisible(true)
+  }
+  const openOnboarding = () => {
+    navigate('/delivery/onboarding')
   }
   const openEditApplication = (app: DeliveryApplication) => {
     managementState.setEditingApp(app)
@@ -430,16 +516,21 @@ export function ApplicationsPage() {
             </Tag>
           ))}
         </div>
-        <Button type="primary" icon={<PlusOutlined />} disabled={!managementState.canCreateApplication} onClick={openCreateApplication}>
-          新建应用
-        </Button>
+        <Space className="soha-application-center-toolbar__actions" size={8} wrap>
+          <Button icon={<RocketOutlined />} onClick={openOnboarding}>
+            接入应用/服务
+          </Button>
+          <Button type="primary" icon={<PlusOutlined />} disabled={!managementState.canCreateApplication} onClick={openCreateApplication}>
+            新建应用档案
+          </Button>
+        </Space>
       </div>
 
       {applicationsQuery.isLoading || releaseBoardQuery.isLoading ? (
         <ManagementState kind="loading" />
       ) : visibleApplicationCards.length > 0 ? (
         <div className="soha-application-card-list">
-          {visibleApplicationCards.map(({ app, bindings, deliverySignal, gateSignal, activeTargets, latestEnvironmentName }) => {
+          {visibleApplicationCards.map(({ app, bindings, deliverySignal, gateSignal, activeTargets, serviceClues, latestEnvironmentName }) => {
             const actionMenuItems: MenuProps['items'] = [
               ...(managementState.canUpdateApplication ? [{ key: 'edit', icon: <EditOutlined />, label: '编辑' }] : []),
               ...(managementState.canDeleteApplication ? [{ key: 'delete', danger: true, icon: <DeleteOutlined />, label: '删除' }] : []),
@@ -523,15 +614,19 @@ export function ApplicationsPage() {
 
                 <div className="soha-application-card__stats">
                   <div className="soha-application-card__stat">
-                    <span className="soha-application-card__stat-label">环境覆盖</span>
+                    <span className="soha-application-card__stat-label">服务线索</span>
+                    <span className="soha-application-card__stat-value">{serviceClues}</span>
+                  </div>
+                  <div className="soha-application-card__stat">
+                    <span className="soha-application-card__stat-label">环境</span>
                     <span className="soha-application-card__stat-value">{bindings.length || app.environmentCount || 0}</span>
                   </div>
                   <div className="soha-application-card__stat">
-                    <span className="soha-application-card__stat-label">部署目标</span>
+                    <span className="soha-application-card__stat-label">目标</span>
                     <span className="soha-application-card__stat-value">{activeTargets}</span>
                   </div>
                   <div className="soha-application-card__stat is-wide">
-                    <span className="soha-application-card__stat-label">环境描述</span>
+                    <span className="soha-application-card__stat-label">最近环境</span>
                     <span className="soha-application-card__stat-value">{latestEnvironmentName}</span>
                   </div>
                 </div>
@@ -544,7 +639,7 @@ export function ApplicationsPage() {
           <ManagementState bordered={false} compact title={activeGroup === 'all' ? '暂无应用' : '分组暂无应用'} description="" />
         </Card>
       )}
-      <ApplicationManagementModals state={managementState} />
+      <ApplicationCenterModals state={managementState} />
     </div>
   )
 }
@@ -630,129 +725,518 @@ export function BuildTemplatesPage() {
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const canManage = hasPermission(permissionSnapshotQuery.data?.data, 'delivery.build-templates.manage')
+  const [searchParams, setSearchParams] = useSearchParams()
   const [form] = Form.useForm<BuildTemplateFormValues>()
-  const [modalVisible, setModalVisible] = useState(false)
-  const [editing, setEditing] = useState<BuildTemplate | null>(null)
+  const [selectedTemplateId, setSelectedTemplateId] = useState('')
+  const [searchText, setSearchText] = useState('')
+  const [activeTabKey, setActiveTabKey] = useState('basic')
+  const [isDirty, setIsDirty] = useState(false)
+  const [formSnapshot, setFormSnapshot] = useState<BuildTemplateFormValues>({})
+  const suppressFormChangeRef = useRef(false)
 
   const templatesQuery = useQuery({
     queryKey: ['build-templates'],
     queryFn: () => api.get<ApiResponse<BuildTemplate[]>>('/build-templates'),
   })
+  const templates = templatesQuery.data?.data ?? []
+  const selectedTemplate = selectedTemplateId && selectedTemplateId !== 'new'
+    ? templates.find((item) => item.id === selectedTemplateId) ?? null
+    : null
+  const isNewDraft = selectedTemplateId === 'new'
+  const hasSelection = isNewDraft || !!selectedTemplate
 
   const createMutation = useMutation({
-    mutationFn: (values: BuildTemplatePayload) => api.post('/build-templates', values),
+    mutationFn: (values: BuildTemplatePayload) => api.post<ApiResponse<BuildTemplate>>('/build-templates', values),
     onSuccess: () => {
       message.success('构建模板创建成功')
       queryClient.invalidateQueries({ queryKey: ['build-templates'] })
-      setModalVisible(false)
     },
     onError: (err: Error) => message.error(err.message),
   })
   const updateMutation = useMutation({
-    mutationFn: ({ id, values }: { id: string; values: BuildTemplatePayload }) => api.put(`/build-templates/${id}`, values),
+    mutationFn: ({ id, values }: { id: string; values: BuildTemplatePayload }) => api.put<ApiResponse<BuildTemplate>>(`/build-templates/${id}`, values),
     onSuccess: () => {
       message.success('构建模板更新成功')
       queryClient.invalidateQueries({ queryKey: ['build-templates'] })
-      setModalVisible(false)
-      setEditing(null)
     },
     onError: (err: Error) => message.error(err.message),
   })
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/build-templates/${id}`),
-    onSuccess: () => {
+    onSuccess: (_payload, deletedId) => {
       message.success('构建模板已删除')
       queryClient.invalidateQueries({ queryKey: ['build-templates'] })
+      if (selectedTemplateId === deletedId) {
+        const nextTemplate = templates.find((item) => item.id !== deletedId)
+        if (nextTemplate) {
+          loadTemplate(nextTemplate)
+        } else {
+          form.resetFields()
+          setSelectedTemplateId('')
+          setFormSnapshot({})
+          setIsDirty(false)
+          updateTemplateSearchParam()
+        }
+      }
     },
     onError: (err: Error) => message.error(err.message),
   })
 
+  const updateTemplateSearchParam = useCallback((templateId?: string) => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current)
+      if (templateId) {
+        next.set('templateId', templateId)
+      } else {
+        next.delete('templateId')
+      }
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
+
+  const confirmDiscardChanges = useCallback(() => {
+    if (!isDirty) return true
+    return window.confirm('当前构建模板有未保存更改，确认放弃？')
+  }, [isDirty])
+
+  const applyFormValues = useCallback((values: BuildTemplateFormValues, dirtyAfterApply: boolean) => {
+    suppressFormChangeRef.current = true
+    setFormSnapshot(values)
+    form.setFieldsValue(values)
+    window.setTimeout(() => {
+      suppressFormChangeRef.current = false
+      setIsDirty(dirtyAfterApply)
+    }, 0)
+  }, [form])
+
+  const loadTemplate = useCallback((template: BuildTemplate, options?: { dirtyAfterLoad?: boolean; formOverrides?: BuildTemplateFormValues; tabKey?: string }) => {
+    const values = {
+      ...buildTemplateToFormValues(template),
+      ...options?.formOverrides,
+    }
+    setSelectedTemplateId(template.id)
+    setActiveTabKey(options?.tabKey ?? 'basic')
+    applyFormValues(values, Boolean(options?.dirtyAfterLoad))
+    updateTemplateSearchParam(template.id)
+  }, [applyFormValues, updateTemplateSearchParam])
+
+  useEffect(() => {
+    if (!templates.length) return
+    const queryTemplateId = searchParams.get('templateId')
+    const queryTemplate = queryTemplateId ? templates.find((item) => item.id === queryTemplateId) : undefined
+    if (queryTemplate && queryTemplate.id !== selectedTemplateId && !isDirty) {
+      loadTemplate(queryTemplate)
+      return
+    }
+    if (!selectedTemplateId) {
+      loadTemplate(queryTemplate ?? templates[0])
+    }
+  }, [isDirty, loadTemplate, searchParams, selectedTemplateId, templates])
+
+  useEffect(() => {
+    if (!isDirty) return undefined
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', beforeUnload)
+    return () => window.removeEventListener('beforeunload', beforeUnload)
+  }, [isDirty])
+
+  const listItems = useMemo<BuildTemplateListItem[]>(() => {
+    const fromValues = (values: BuildTemplateFormValues, id: string, isDraft: boolean, template?: BuildTemplate): BuildTemplateListItem => ({
+      id,
+      key: values.key || 'new-build-template',
+      name: values.name || '新建构建模板草稿',
+      description: values.description,
+      builderKind: values.builderKind || 'docker',
+      commandCount: splitLines(values.buildCommandsText).length,
+      variableCount: (values.variables ?? []).filter((item) => trimFormString(item.key)).length,
+      enabled: values.enabled !== false,
+      isDraft,
+      template,
+      updatedAt: template?.updatedAt,
+    })
+    const items = templates.map((template) => {
+      if (template.id === selectedTemplateId) {
+        return fromValues(formSnapshot, template.id, false, template)
+      }
+      return {
+        id: template.id,
+        key: template.key,
+        name: template.name,
+        description: template.description,
+        builderKind: template.builderKind || 'docker',
+        commandCount: template.buildCommands?.length ?? 0,
+        variableCount: Object.keys(template.variableSchema ?? {}).length,
+        enabled: template.enabled,
+        template,
+        updatedAt: template.updatedAt,
+      }
+    })
+    if (isNewDraft) {
+      return [fromValues(formSnapshot, 'new', true), ...items]
+    }
+    return items
+  }, [formSnapshot, isNewDraft, selectedTemplateId, templates])
+
+  const visibleListItems = useMemo(() => {
+    const keyword = searchText.trim().toLowerCase()
+    if (!keyword) return listItems
+    return listItems.filter((item) => [
+      item.name,
+      item.key,
+      item.description,
+      item.builderKind,
+    ].some((value) => String(value || '').toLowerCase().includes(keyword)))
+  }, [listItems, searchText])
+
+  const previewState = useMemo(() => {
+    if (!hasSelection) return { error: '', json: '' }
+    try {
+      return {
+        error: '',
+        json: JSON.stringify(buildBuildTemplatePayloadFromDesigner(formSnapshot), null, 2),
+      }
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : '构建模板预览生成失败',
+        json: '',
+      }
+    }
+  }, [formSnapshot, hasSelection])
+
+  const handleNewTemplate = () => {
+    if (!confirmDiscardChanges()) return
+    const values = defaultBuildTemplateValues()
+    setSelectedTemplateId('new')
+    setActiveTabKey('basic')
+    applyFormValues(values, true)
+    updateTemplateSearchParam()
+  }
+
+  const handleSelectListItem = (item: BuildTemplateListItem) => {
+    if (item.id === selectedTemplateId) return
+    if (!confirmDiscardChanges()) return
+    if (item.isDraft) {
+      setSelectedTemplateId('new')
+      return
+    }
+    if (item.template) {
+      loadTemplate(item.template)
+    }
+  }
+
+  const handleCancelChanges = () => {
+    if (selectedTemplate) {
+      loadTemplate(selectedTemplate)
+      return
+    }
+    const firstTemplate = templates[0]
+    if (firstTemplate) {
+      loadTemplate(firstTemplate)
+      return
+    }
+    form.resetFields()
+    setSelectedTemplateId('')
+    setFormSnapshot({})
+    setIsDirty(false)
+    updateTemplateSearchParam()
+  }
+
+  const handleSave = async () => {
+    try {
+      const values = await form.validateFields()
+      const payload = buildBuildTemplatePayloadFromDesigner(values)
+      if (selectedTemplate) {
+        await updateMutation.mutateAsync({ id: selectedTemplate.id, values: payload })
+        setFormSnapshot(values)
+        setIsDirty(false)
+        return
+      }
+      const created = await createMutation.mutateAsync(payload) as ApiResponse<BuildTemplate> | undefined
+      const createdTemplate = created?.data
+      setFormSnapshot(values)
+      setIsDirty(false)
+      if (createdTemplate?.id) {
+        setSelectedTemplateId(createdTemplate.id)
+        updateTemplateSearchParam(createdTemplate.id)
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        message.error(error.message)
+      }
+    }
+  }
+
+  const handleTemplateEnabledChange = (item: BuildTemplateListItem, enabled: boolean) => {
+    if (item.id !== selectedTemplateId) {
+      if (!confirmDiscardChanges()) return
+      if (item.template) {
+        loadTemplate(item.template, { dirtyAfterLoad: true, formOverrides: { enabled }, tabKey: 'basic' })
+      }
+      return
+    }
+    form.setFieldsValue({ enabled })
+    setFormSnapshot((current) => ({ ...current, enabled }))
+    setIsDirty(true)
+  }
+
+  const designerTabs = [
+    {
+      key: 'basic',
+      label: '基础信息',
+      children: (
+        <div className="soha-build-template-form-grid">
+          <Form.Item name="key" label="模板 Key" rules={[{ required: true, message: '请输入模板 Key' }]}>
+            <Input placeholder="docker-node" />
+          </Form.Item>
+          <Form.Item name="name" label="模板名称" rules={[{ required: true, message: '请输入模板名称' }]}>
+            <Input placeholder="Node Docker 标准构建" />
+          </Form.Item>
+          <Form.Item name="builderKind" label="Builder Kind">
+            <Select options={[
+              { value: 'docker', label: 'docker' },
+              { value: 'buildx', label: 'buildx' },
+              { value: 'kaniko', label: 'kaniko' },
+              { value: 'custom', label: 'custom' },
+            ]} />
+          </Form.Item>
+          <Form.Item className="soha-build-template-switch-field" name="enabled" label="启用" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+          <Form.Item className="soha-build-template-form-grid__wide" name="description" label="描述">
+            <Input.TextArea rows={3} placeholder="说明适用语言、构建器、缓存策略和制品输出约定" />
+          </Form.Item>
+        </div>
+      ),
+    },
+    {
+      key: 'dockerfile',
+      label: 'Dockerfile',
+      children: (
+        <div className="soha-build-template-editor-pane">
+          <Text type="secondary">维护平台推荐的 Dockerfile 草稿，应用接入时可按规范生成或落盘。</Text>
+          <Form.Item name="dockerfileTemplate" label="Dockerfile 模板">
+            <Input.TextArea className="soha-build-template-code-area" rows={18} spellCheck={false} />
+          </Form.Item>
+        </div>
+      ),
+    },
+    {
+      key: 'commands',
+      label: '构建命令',
+      children: (
+        <div className="soha-build-template-editor-pane">
+          <Text type="secondary">每行一条命令，执行器会按顺序生成构建步骤。</Text>
+          <Form.Item name="buildCommandsText" label="命令列表">
+            <Input.TextArea className="soha-build-template-code-area" rows={14} placeholder="npm ci&#10;npm run build" spellCheck={false} />
+          </Form.Item>
+        </div>
+      ),
+    },
+    {
+      key: 'variables',
+      label: '变量',
+      children: (
+        <Form.List name="variables">
+          {(fields, { add, remove }) => (
+            <div className="soha-build-template-variable-list">
+              <div className="soha-build-template-variable-list__toolbar">
+                <Text type="secondary">用结构化字段维护构建参数，保存时自动生成 variableSchema 和默认变量。</Text>
+                <Button icon={<PlusOutlined />} onClick={() => add({ key: '', label: '', type: 'string', required: false, defaultValue: '', description: '' })}>添加变量</Button>
+              </div>
+              {fields.length === 0 ? (
+                <ManagementState bordered={false} compact kind="empty" title="暂无变量" description="没有变量时，模板会使用高级预览里的兼容 JSON 配置。" />
+              ) : null}
+              {fields.map((field, index) => (
+                <div className="soha-build-template-variable-item" key={field.key}>
+                  <div className="soha-build-template-variable-item__head">
+                    <strong>{`变量 ${index + 1}`}</strong>
+                    <Button danger icon={<DeleteOutlined />} size="small" onClick={() => remove(field.name)}>删除</Button>
+                  </div>
+                  <div className="soha-build-template-form-grid">
+                    <Form.Item name={[field.name, 'key']} label="变量 Key" rules={[{ required: true, message: '请输入变量 Key' }]}>
+                      <Input placeholder="imageTag" />
+                    </Form.Item>
+                    <Form.Item name={[field.name, 'label']} label="显示名称">
+                      <Input placeholder="镜像 Tag" />
+                    </Form.Item>
+                    <Form.Item name={[field.name, 'type']} label="类型">
+                      <Select options={[
+                        { value: 'string', label: 'string' },
+                        { value: 'number', label: 'number' },
+                        { value: 'boolean', label: 'boolean' },
+                      ]} />
+                    </Form.Item>
+                    <Form.Item name={[field.name, 'defaultValue']} label="默认值">
+                      <Input placeholder="latest" />
+                    </Form.Item>
+                    <Form.Item className="soha-build-template-switch-field" name={[field.name, 'required']} label="必填" valuePropName="checked">
+                      <Switch />
+                    </Form.Item>
+                    <Form.Item className="soha-build-template-form-grid__wide" name={[field.name, 'description']} label="说明">
+                      <Input.TextArea rows={2} placeholder="变量用途、默认策略或允许值说明" />
+                    </Form.Item>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Form.List>
+      ),
+    },
+    {
+      key: 'advanced',
+      label: '高级预览',
+      children: (
+        <div className="soha-build-template-advanced">
+          <div className="soha-build-template-form-grid">
+            <Form.Item className="soha-build-template-form-grid__wide" name="variableSchemaText" label="兼容变量 Schema(JSON)">
+              <Input.TextArea rows={5} spellCheck={false} />
+            </Form.Item>
+            <Form.Item className="soha-build-template-form-grid__wide" name="defaultVariablesText" label="兼容默认变量(JSON)">
+              <Input.TextArea rows={5} spellCheck={false} />
+            </Form.Item>
+          </div>
+          {previewState.error ? <Text type="danger">{previewState.error}</Text> : null}
+          <pre className="soha-json-block soha-build-template-json-preview">
+            {previewState.error ? '请修正变量 JSON 后再查看完整 payload。' : previewState.json}
+          </pre>
+        </div>
+      ),
+    },
+  ]
+
   return (
-    <div className="soha-page">
-      <DeliveryTable
-        rowKey="id"
-        actions={canManage ? (
-          <Button icon={<PlusOutlined />} type="primary" onClick={() => { setEditing(null); setModalVisible(true) }}>
+    <div className="soha-page soha-build-template-page">
+      <div className="soha-build-template-toolbar">
+        <Space wrap>
+          <Button icon={<PlusOutlined />} type="primary" disabled={!canManage} onClick={handleNewTemplate}>
             新建模板
           </Button>
-        ) : null}
-        refreshing={templatesQuery.isFetching}
-        onRefresh={() => void templatesQuery.refetch()}
-        loading={templatesQuery.isLoading}
-        dataSource={templatesQuery.data?.data ?? []}
-        columns={[
-          { title: '名称', dataIndex: 'name' },
-          { title: 'Key', dataIndex: 'key' },
-          { title: 'Builder', dataIndex: 'builderKind' },
-          { title: '命令数', dataIndex: 'buildCommands', render: (value: string[]) => value?.length ?? 0 },
-          { title: '启用', dataIndex: 'enabled', render: (value: boolean) => <BooleanTag value={value} /> },
-          {
-            ...tableColumnPresets.action,
-            title: '操作',
-            dataIndex: 'id',
-            render: (_: unknown, record: BuildTemplate) => (
-              <Space className="soha-row-action-icons" size={2}>
-                {canManage ? (
-                  <ManagementIconButton
-                    aria-label="编辑构建模板"
-                    icon={<EditOutlined />}
-                    size="small"
-                    tooltip="编辑"
-                    onClick={() => { setEditing(record); setModalVisible(true) }}
-                  />
-                ) : null}
-                {canManage ? (
-                  <Popconfirm title="确认删除？" onConfirm={() => deleteMutation.mutate(record.id)} placement="topRight">
-                    <ManagementIconButton
-                      aria-label="删除构建模板"
-                      danger
-                      icon={<DeleteOutlined />}
-                      size="small"
-                      tooltip="删除"
-                    />
-                  </Popconfirm>
-                ) : null}
-              </Space>
-            ),
-          },
-        ]}
-      />
-      <Modal title={editing ? '编辑构建模板' : '新建构建模板'} open={modalVisible} onCancel={() => { setModalVisible(false); setEditing(null) }} footer={null} destroyOnHidden width={960}>
-        <Form
-          form={form}
-          key={editing?.id ?? 'build-template'}
-          layout="vertical"
-          initialValues={editing ? { ...editing, buildCommandsText: (editing.buildCommands ?? []).join('\n'), variableSchemaText: JSON.stringify(editing.variableSchema ?? {}, null, 2), defaultVariablesText: JSON.stringify(editing.defaultVariables ?? {}, null, 2) } : { enabled: true, builderKind: 'custom', variableSchemaText: '{}', defaultVariablesText: '{}' }}
-          onFinish={(values) => {
-            let payload: BuildTemplatePayload
-            try {
-              payload = buildBuildTemplatePayload(values)
-            } catch (err) {
-              message.error((err as Error).message)
-              return
-            }
-            if (editing) {
-              updateMutation.mutate({ id: editing.id, values: payload })
-            } else {
-              createMutation.mutate(payload)
-            }
-          }}
-        >
-          <Form.Item name="key" label="模板 Key" rules={[{ required: true, message: '请输入模板 Key' }]}><Input /></Form.Item>
-          <Form.Item name="name" label="模板名称" rules={[{ required: true, message: '请输入模板名称' }]}><Input /></Form.Item>
-          <Form.Item name="builderKind" label="Builder Kind"><Select options={[{ value: 'docker', label: 'docker' }, { value: 'buildx', label: 'buildx' }, { value: 'kaniko', label: 'kaniko' }, { value: 'custom', label: 'custom' }]} /></Form.Item>
-          <Form.Item name="description" label="描述"><Input /></Form.Item>
-          <Form.Item name="dockerfileTemplate" label="Dockerfile 模板"><Input.TextArea rows={8} /></Form.Item>
-          <Form.Item name="buildCommandsText" label="构建命令"><Input.TextArea rows={8} placeholder="one command per line" /></Form.Item>
-          <Form.Item name="variableSchemaText" label="变量 Schema(JSON)"><Input.TextArea rows={6} /></Form.Item>
-          <Form.Item name="defaultVariablesText" label="默认变量(JSON)"><Input.TextArea rows={6} /></Form.Item>
-          <Form.Item name="enabled" label="启用" valuePropName="checked"><Switch /></Form.Item>
-          <div className="soha-form-actions">
-            <Button onClick={() => setModalVisible(false)}>取消</Button>
-            <Button htmlType="submit" type="primary" loading={createMutation.isPending || updateMutation.isPending}>保存</Button>
+          <Button icon={<SaveOutlined />} disabled={!hasSelection || !canManage} loading={createMutation.isPending || updateMutation.isPending} onClick={() => void handleSave()}>
+            保存
+          </Button>
+          <Button disabled={!hasSelection || !isDirty} onClick={handleCancelChanges}>
+            取消更改
+          </Button>
+          <Popconfirm title="确认删除当前构建模板？" onConfirm={() => selectedTemplate && deleteMutation.mutate(selectedTemplate.id)}>
+            <Button danger icon={<DeleteOutlined />} disabled={!selectedTemplate || !canManage} loading={deleteMutation.isPending}>
+              删除
+            </Button>
+          </Popconfirm>
+        </Space>
+        <Space wrap>
+          {isDirty ? <Tag color="gold">未保存</Tag> : <Tag>已同步</Tag>}
+          <Button icon={<ReloadOutlined />} loading={templatesQuery.isFetching} onClick={() => { if (confirmDiscardChanges()) void templatesQuery.refetch() }}>
+            刷新
+          </Button>
+        </Space>
+      </div>
+
+      <div className="soha-build-template-workspace">
+        <aside className="soha-build-template-list">
+          <Input.Search
+            allowClear
+            value={searchText}
+            onChange={(event) => setSearchText(event.target.value)}
+            placeholder="搜索构建模板"
+          />
+          <div className="soha-build-template-list__items">
+            {templatesQuery.isLoading ? <ManagementState bordered={false} compact kind="loading" title="正在加载" /> : null}
+            {!templatesQuery.isLoading && visibleListItems.length === 0 ? (
+              <ManagementState bordered={false} compact kind="empty" title="暂无构建模板" description="新建模板后，可在右侧维护 Dockerfile、命令和变量。" />
+            ) : null}
+            {visibleListItems.map((item) => {
+              const isActive = item.id === selectedTemplateId
+              return (
+                <div
+                  className={`soha-build-template-list__item ${isActive ? 'is-active' : ''}`}
+                  key={item.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => handleSelectListItem(item)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      handleSelectListItem(item)
+                    }
+                  }}
+                >
+                  <span className="soha-build-template-list__item-head">
+                    <span className="soha-build-template-list__item-main">
+                      <strong>{item.name}</strong>
+                      <Text type="secondary">{item.key}</Text>
+                    </span>
+                    <span
+                      className="soha-build-template-list__item-actions"
+                      onClick={(event) => event.stopPropagation()}
+                      onKeyDown={(event) => event.stopPropagation()}
+                    >
+                      <Switch
+                        checked={item.enabled}
+                        disabled={!canManage}
+                        size="small"
+                        onChange={(checked) => handleTemplateEnabledChange(item, checked)}
+                      />
+                      <ManagementIconButton
+                        aria-label="编辑构建模板"
+                        icon={<EditOutlined />}
+                        size="small"
+                        tooltip="编辑"
+                        onClick={() => {
+                          handleSelectListItem(item)
+                          setActiveTabKey('basic')
+                        }}
+                      />
+                    </span>
+                  </span>
+                  <span className="soha-build-template-list__item-meta">
+                    <Tag>{item.builderKind || 'docker'}</Tag>
+                    <Tag>{`命令 ${item.commandCount}`}</Tag>
+                    <Tag>{`变量 ${item.variableCount}`}</Tag>
+                    <BooleanTag value={item.enabled} />
+                    {item.isDraft ? <Tag color="gold">草稿</Tag> : null}
+                  </span>
+                  <Text type="secondary" className="text-xs">{item.updatedAt ? formatDateTime(item.updatedAt) : '尚未保存'}</Text>
+                </div>
+              )
+            })}
           </div>
-        </Form>
-      </Modal>
+        </aside>
+
+        <main className="soha-build-template-designer">
+          {hasSelection ? (
+            <Form
+              className="soha-build-template-form"
+              disabled={!canManage}
+              form={form}
+              layout="vertical"
+              onValuesChange={(_changedValues, allValues) => {
+                if (suppressFormChangeRef.current) return
+                setFormSnapshot(allValues)
+                setIsDirty(true)
+              }}
+            >
+              <Tabs
+                activeKey={activeTabKey}
+                className="soha-build-template-tabs"
+                destroyOnHidden={false}
+                items={designerTabs}
+                onChange={setActiveTabKey}
+              />
+            </Form>
+          ) : (
+            <ManagementState
+              bordered={false}
+              kind="select-scope"
+              title="选择或新建构建模板"
+              description="左侧选择模板后，在右侧维护 Dockerfile、构建命令和变量。"
+            />
+          )}
+        </main>
+      </div>
     </div>
   )
 }
@@ -1198,141 +1682,6 @@ export function ExecutionTasksPage() {
         <Card className="soha-management-panel-card" size="small" title="Result">
           <pre className="soha-json-block">{JSON.stringify(selectedTask?.result ?? {}, null, 2)}</pre>
         </Card>
-      </Modal>
-    </div>
-  )
-}
-
-export function ApprovalPoliciesPage() {
-  const { message } = App.useApp()
-  const queryClient = useQueryClient()
-  const permissionSnapshotQuery = usePermissionSnapshot()
-  const canManage = hasPermission(permissionSnapshotQuery.data?.data, 'delivery.approval-policies.manage')
-  const [form] = Form.useForm<ApprovalPolicyFormValues>()
-  const [modalVisible, setModalVisible] = useState(false)
-  const [editing, setEditing] = useState<ApprovalPolicy | null>(null)
-
-  const policiesQuery = useQuery({
-    queryKey: ['approval-policies'],
-    queryFn: () => api.get<ApiResponse<ApprovalPolicy[]>>('/delivery/approval-policies'),
-  })
-
-  const createMutation = useMutation({
-    mutationFn: (values: ApprovalPolicyPayload) => api.post('/delivery/approval-policies', values),
-    onSuccess: () => {
-      message.success('审批策略创建成功')
-      queryClient.invalidateQueries({ queryKey: ['approval-policies'] })
-      setModalVisible(false)
-    },
-    onError: (err: Error) => message.error(err.message),
-  })
-  const updateMutation = useMutation({
-    mutationFn: ({ id, values }: { id: string; values: ApprovalPolicyPayload }) => api.put(`/delivery/approval-policies/${id}`, values),
-    onSuccess: () => {
-      message.success('审批策略更新成功')
-      queryClient.invalidateQueries({ queryKey: ['approval-policies'] })
-      setModalVisible(false)
-      setEditing(null)
-    },
-    onError: (err: Error) => message.error(err.message),
-  })
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/delivery/approval-policies/${id}`),
-    onSuccess: () => {
-      message.success('审批策略已删除')
-      queryClient.invalidateQueries({ queryKey: ['approval-policies'] })
-    },
-    onError: (err: Error) => message.error(err.message),
-  })
-
-  return (
-    <div className="soha-page">
-      <DeliveryTable
-        rowKey="id"
-        actions={canManage ? (
-          <Button icon={<PlusOutlined />} type="primary" onClick={() => { setEditing(null); setModalVisible(true) }}>
-            新建策略
-          </Button>
-        ) : null}
-        refreshing={policiesQuery.isFetching}
-        onRefresh={() => void policiesQuery.refetch()}
-        loading={policiesQuery.isLoading}
-        dataSource={policiesQuery.data?.data ?? []}
-        columns={[
-          { title: '名称', dataIndex: 'name' },
-          { title: 'Key', dataIndex: 'key' },
-          { title: '模式', dataIndex: 'mode', render: (value: string) => value || 'single' },
-          { title: '审批数', dataIndex: 'requiredApprovals' },
-          { title: 'SLA(min)', dataIndex: 'slaMinutes' },
-          { title: '角色', dataIndex: 'approverRoles', render: (value: string[]) => value?.join(', ') || '-' },
-          { title: '启用', dataIndex: 'enabled', render: (value: boolean) => <BooleanTag value={value} /> },
-          {
-            ...tableColumnPresets.action,
-            title: '操作',
-            dataIndex: 'id',
-            render: (_: unknown, record: ApprovalPolicy) => (
-              <Space className="soha-row-action-icons" size={2}>
-                {canManage ? (
-                  <ManagementIconButton
-                    aria-label="编辑审批策略"
-                    icon={<EditOutlined />}
-                    size="small"
-                    tooltip="编辑"
-                    onClick={() => { setEditing(record); setModalVisible(true) }}
-                  />
-                ) : null}
-                {canManage ? (
-                  <Popconfirm title="确认删除？" onConfirm={() => deleteMutation.mutate(record.id)} placement="topRight">
-                    <ManagementIconButton
-                      aria-label="删除审批策略"
-                      danger
-                      icon={<DeleteOutlined />}
-                      size="small"
-                      tooltip="删除"
-                    />
-                  </Popconfirm>
-                ) : null}
-              </Space>
-            ),
-          },
-        ]}
-      />
-      <Modal title={editing ? '编辑审批策略' : '新建审批策略'} open={modalVisible} onCancel={() => { setModalVisible(false); setEditing(null) }} footer={null} destroyOnHidden width={860}>
-        <Form
-          form={form}
-          key={editing?.id ?? 'approval-policy'}
-          layout="vertical"
-          initialValues={editing ? { ...editing, approverRolesText: (editing.approverRoles ?? []).join(', '), changeWindowText: JSON.stringify(editing.changeWindow ?? {}, null, 2), metadataText: JSON.stringify(editing.metadata ?? {}, null, 2) } : { enabled: true, mode: 'single', requiredApprovals: 1, slaMinutes: 60, changeWindowText: '{}', metadataText: '{}' }}
-          onFinish={(values) => {
-            let payload: ApprovalPolicyPayload
-            try {
-              payload = buildApprovalPolicyPayload(values)
-            } catch (err) {
-              message.error((err as Error).message)
-              return
-            }
-            if (editing) {
-              updateMutation.mutate({ id: editing.id, values: payload })
-            } else {
-              createMutation.mutate(payload)
-            }
-          }}
-        >
-          <Form.Item name="key" label="策略 Key" rules={[{ required: true, message: '请输入策略 Key' }]}><Input /></Form.Item>
-          <Form.Item name="name" label="策略名称" rules={[{ required: true, message: '请输入策略名称' }]}><Input /></Form.Item>
-          <Form.Item name="description" label="描述"><Input /></Form.Item>
-          <Form.Item name="mode" label="模式"><Select options={[{ value: 'single', label: 'single' }, { value: 'multi', label: 'multi' }, { value: 'all', label: 'all' }]} /></Form.Item>
-          <Form.Item name="requiredApprovals" label="需要审批数"><Input type="number" /></Form.Item>
-          <Form.Item name="slaMinutes" label="SLA(分钟)"><Input type="number" /></Form.Item>
-          <Form.Item name="approverRolesText" label="审批角色"><Input placeholder="release-manager, ops-lead" /></Form.Item>
-          <Form.Item name="changeWindowText" label="变更窗口(JSON)"><Input.TextArea rows={5} /></Form.Item>
-          <Form.Item name="metadataText" label="Metadata(JSON)"><Input.TextArea rows={5} /></Form.Item>
-          <Form.Item name="enabled" label="启用" valuePropName="checked"><Switch /></Form.Item>
-          <div className="soha-form-actions">
-            <Button onClick={() => setModalVisible(false)}>取消</Button>
-            <Button htmlType="submit" type="primary" loading={createMutation.isPending || updateMutation.isPending}>保存</Button>
-          </div>
-        </Form>
       </Modal>
     </div>
   )

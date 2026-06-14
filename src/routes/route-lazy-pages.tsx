@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import type { ReactNode } from "react";
-import { Navigate, useLocation, useParams } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { Spin } from "antd";
 import {
   getAIModelSettingsPath,
@@ -317,6 +317,18 @@ export const DeliveryBlueprintsPage = lazyNamed(
   () => import("@/features/delivery/delivery-blueprint-pages"),
   "DeliveryBlueprintsPage",
 );
+export const DeliveryOnboardingPage = lazyNamed(
+  () => import("@/features/delivery/delivery-workbench-pages"),
+  "DeliveryOnboardingPage",
+);
+export const DeliveryTestingPage = lazyNamed(
+  () => import("@/features/delivery/delivery-workbench-pages"),
+  "DeliveryTestingPage",
+);
+export const DeliveryAnalysisPage = lazyNamed(
+  () => import("@/features/delivery/delivery-workbench-pages"),
+  "DeliveryAnalysisPage",
+);
 export const ReleaseBundlesPage = lazyNamed(
   () => import("@/features/delivery/delivery-app-pages"),
   "ReleaseBundlesPage",
@@ -324,10 +336,6 @@ export const ReleaseBundlesPage = lazyNamed(
 export const ExecutionTasksPage = lazyNamed(
   () => import("@/features/delivery/delivery-app-pages"),
   "ExecutionTasksPage",
-);
-export const ApprovalPoliciesPage = lazyNamed(
-  () => import("@/features/delivery/delivery-app-pages"),
-  "ApprovalPoliciesPage",
 );
 export const ApplicationEnvironmentsPage = lazyNamed(
   () => import("@/features/delivery/delivery-catalog-pages"),
@@ -569,11 +577,6 @@ export function LazyPage({ children }: { children: ReactNode }) {
       {children}
     </Suspense>
   );
-}
-
-export function ApplicationManagementRedirect() {
-  const { applicationId } = useParams();
-  return <Navigate to={applicationId ? `/applications/${applicationId}` : "/applications"} replace />;
 }
 
 export function AIWorkbenchModeRedirect() {

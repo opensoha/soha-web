@@ -25,13 +25,14 @@ const DEFAULT_WORKSPACE_PATHS: Record<BusinessWorkspaceType, string> = {
 const RESOURCE_DEFAULT_ROLES = new Set(["admin", "ops", "readonly", "auditor"]);
 const APPLICATION_PATH_PREFIXES = [
   "/applications",
-  "/application-management",
   "/application-environments",
   "/build-templates",
+  "/delivery/onboarding",
+  "/delivery/testing",
+  "/delivery/analysis",
   "/delivery/blueprints",
   "/delivery/release-bundles",
   "/delivery/execution-tasks",
-  "/delivery/approval-policies",
   "/workflow-templates",
   "/release-board",
   "/workflows",
@@ -282,7 +283,6 @@ export function getRouteScopeMode(
     pathname.startsWith("/delivery/blueprints") ||
     pathname.startsWith("/delivery/release-bundles") ||
     pathname.startsWith("/delivery/execution-tasks") ||
-    pathname.startsWith("/delivery/approval-policies") ||
     pathname.startsWith("/workflow-templates") ||
     pathname.startsWith("/release-board") ||
     pathname.startsWith("/releases") ||
@@ -482,16 +482,37 @@ function sortRuntimeMenuTree(items: RuntimeMenuNode[]): RuntimeMenuNode[] {
 const APPLICATION_SECTION_ORDER: Record<string, number> = {
   builds: 10,
   applications: 10,
-  "application-management": 15,
-  "application-environments": 20,
+  "delivery-onboarding": 20,
   "release-board": 30,
-  workflows: 40,
-  releases: 50,
-  "build-templates": 60,
-  "approval-policies": 70,
-  "release-bundles": 80,
-  "execution-tasks": 90,
-  registries: 100,
+  "delivery-testing": 40,
+  "delivery-analysis": 50,
+  "release-bundles": 10,
+  "execution-tasks": 20,
+  workflows: 30,
+  releases: 40,
+  "delivery-blueprints": 10,
+  "build-templates": 20,
+  "workflow-templates": 30,
+  registries: 50,
+  "application-environments": 60,
+};
+
+const APPLICATION_MENU_SECTION_OVERRIDES: Record<string, string> = {
+  builds: "delivery",
+  applications: "delivery",
+  "delivery-onboarding": "delivery",
+  "release-board": "delivery",
+  "delivery-testing": "delivery",
+  "delivery-analysis": "delivery",
+  "release-bundles": "delivery-records",
+  "execution-tasks": "delivery-records",
+  workflows: "delivery-records",
+  releases: "delivery-records",
+  "delivery-blueprints": "delivery-platform",
+  "build-templates": "delivery-platform",
+  "workflow-templates": "delivery-platform",
+  registries: "delivery-platform",
+  "application-environments": "delivery-platform",
 };
 
 const SYSTEM_ROOT_ORDER: Record<string, number> = {
@@ -504,7 +525,13 @@ const SYSTEM_ROOT_ORDER: Record<string, number> = {
   settings: 30,
 };
 
-function deriveRuntimeMenuSection(node: RuntimeMenuNode): string {
+function deriveRuntimeMenuSection(
+  node: RuntimeMenuNode,
+  workspace: WorkspaceType | null,
+): string {
+  if (workspace === "application" && node.id in APPLICATION_MENU_SECTION_OVERRIDES) {
+    return APPLICATION_MENU_SECTION_OVERRIDES[node.id];
+  }
   return normalizeMenuSection(node.section || "");
 }
 
@@ -622,7 +649,7 @@ export function filterSidebarNavByWorkspace(
     }
     return {
       ...node,
-      section: deriveRuntimeMenuSection(node),
+      section: deriveRuntimeMenuSection(node, workspace),
       sortOrder: deriveRuntimeMenuSortOrder(node, workspace),
       workspace: workspace,
       workbenchId: node.route

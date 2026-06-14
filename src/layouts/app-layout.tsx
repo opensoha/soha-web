@@ -79,9 +79,12 @@ const AI_WORKBENCH_MENU_ENTRIES = [
   { key: 'ai-workbench-model-settings', iconKey: 'settings', label: 'AI 设置', path: '/ai-workbench/model-settings', permissionKey: 'settings.ai.view', legacyMenuIds: ['ai-workbench-tools'] },
 ] as const
 
-const SYSTEM_LOG_MENU_LABEL_OVERRIDES: Record<string, { en: string; legacyEn: string[]; legacyZh: string[]; zh: string }> = {
+const RUNTIME_MENU_LABEL_OVERRIDES: Record<string, { en: string; legacyEn: string[]; legacyZh: string[]; zh: string }> = {
   operations: { zh: '操作日志', en: 'Operation Logs', legacyZh: ['操作'], legacyEn: ['Operations'] },
   audit: { zh: '审计日志', en: 'Audit Logs', legacyZh: ['审计'], legacyEn: ['Audit'] },
+  'delivery-blueprints': { zh: '应用接入模板', en: 'Onboarding Templates', legacyZh: ['交付蓝图'], legacyEn: ['Delivery Blueprints'] },
+  'release-board': { zh: '构建发布', en: 'Build & Release', legacyZh: ['发布看板'], legacyEn: ['Release Board'] },
+  releases: { zh: '发布记录', en: 'Release Records', legacyZh: ['发布', '发布管理'], legacyEn: ['Releases', 'Release Management'] },
 }
 
 function canUseAIWorkbenchMenuEntry(
@@ -136,7 +139,7 @@ function findAIWorkbenchMenuKey(pathname: string, search: string) {
 }
 
 function resolveRuntimeMenuLabel(node: RuntimeMenuNode, localeCode: 'zh_CN' | 'en_US') {
-  const override = SYSTEM_LOG_MENU_LABEL_OVERRIDES[node.id]
+  const override = RUNTIME_MENU_LABEL_OVERRIDES[node.id]
   if (override) {
     if (localeCode === 'en_US') {
       const label = String(node.labelEn || '').trim()

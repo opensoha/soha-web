@@ -13,7 +13,11 @@ import { StatusTag } from '@/components/status-tag'
 import { useClusterCapabilityForCluster } from '@/features/platform/cluster-capabilities'
 import { buildClusterScopedPath } from '@/features/platform/platform-scope-query'
 import { api } from '@/services/api-client'
-import { countReleaseDagNodes } from '@/components/release-flow-dag-definition'
+import {
+  analyzeReleaseDagDefinition,
+  getDefaultReleaseDagNodeLabel,
+  isReleaseDagValidationNodeType,
+} from '@/components/release-flow-dag-definition'
 import {
   countRuntimeArtifacts,
   countWorkflowValidationNodes,
@@ -23,10 +27,10 @@ import {
   workflowTemplateValidationNodeCount,
 } from '@/features/delivery/delivery-status'
 import {
-  ApplicationManagementModals,
+  ApplicationCenterModals,
   summarizeBuildSource,
-  useApplicationManagementState,
-} from '@/features/delivery/application-management-pages'
+  useApplicationCenterState,
+} from '@/features/delivery/application-center-model'
 import type {
   ApiResponse,
   ApplicationDeliveryActionKind,
@@ -47,6 +51,7 @@ import type {
   ExecutionTask,
   ReleaseBundle,
   ReleaseRecord,
+  WorkflowTemplate,
   WorkflowRun,
   Pod,
   ResourceMetrics,
@@ -170,9 +175,71 @@ function summarizeReleaseBundle(bundle?: ReleaseBundle | null) {
   return `${bundle.status} · ${bundle.version}`
 }
 
-function workflowTemplateNodeCount(template?: DeliveryApplicationBindingSummary['workflowTemplate'] | null) {
-  if (!template) return 0
-  return countReleaseDagNodes(template.definition)
+function workflowTemplateDesignPath(templateId?: string) {
+  return templateId ? `/workflow-templates?templateId=${encodeURIComponent(templateId)}` : '/workflow-templates'
+}
+
+function releaseDagNodeLabel(type: Parameters<typeof getDefaultReleaseDagNodeLabel>[0]) {
+  return getDefaultReleaseDagNodeLabel(type)
+}
+
+function renderWorkflowTemplateAnalysisTags(template: WorkflowTemplate | undefined, requiresApproval?: boolean, hasTemplateRef = false) {
+  if (!template) {
+    if (hasTemplateRef) return <Tag color="red">模板缺失</Tag>
+    return <Tag color="orange">无模板</Tag>
+  }
+  const analysis = analyzeReleaseDagDefinition(template.definition)
+  return (
+    <Space wrap>
+      <Tag>{`${analysis.nodeCount} nodes`}</Tag>
+      <Tag color={analysis.validationNodeCount > 0 ? 'green' : 'orange'}>{analysis.validationNodeCount > 0 ? '有验证节点' : '无验证节点'}</Tag>
+      <Tag color={analysis.rollbackNodeCount > 0 ? 'green' : 'gold'}>{analysis.rollbackNodeCount > 0 ? '有回滚节点' : '无回滚节点'}</Tag>
+      {analysis.approvalNodeCount > 0 || requiresApproval ? <Tag color="gold">包含审批</Tag> : <Tag>无审批</Tag>}
+      <Tag color={analysis.isReleaseDagCompatible ? 'green' : 'red'}>{analysis.isReleaseDagCompatible ? 'DAG 正常' : 'DAG 异常'}</Tag>
+    </Space>
+  )
+}
+
+function renderWorkflowTemplateHealth(binding: DeliveryApplicationBindingSummary) {
+  return renderWorkflowTemplateAnalysisTags(binding.workflowTemplate, binding.requiresApproval, Boolean(binding.workflowTemplateId))
+}
+
+function renderEnvironmentBindingWorkflowHealth(
+  record: ApplicationEnvironment,
+  summary: DeliveryApplicationBindingSummary | undefined,
+  workflowTemplateMap: Record<string, WorkflowTemplate>,
+) {
+  const workflowTemplateId = summary?.workflowTemplateId || record.workflowTemplateId || ''
+  const template = summary?.workflowTemplate ?? workflowTemplateMap[workflowTemplateId]
+  const requiresApproval = summary?.requiresApproval ?? record.releasePolicy?.requiresApproval
+  return renderWorkflowTemplateAnalysisTags(template, requiresApproval, Boolean(workflowTemplateId))
+}
+
+function renderWorkflowTemplatePreview(template?: DeliveryApplicationBindingSummary['workflowTemplate'] | null) {
+  if (!template) {
+    return <ManagementState bordered={false} compact kind="not-configured" description="未绑定 DAG 模板" />
+  }
+  const analysis = analyzeReleaseDagDefinition(template.definition)
+  const nodes = analysis.definition.nodes.slice(0, 7)
+  return (
+    <div className="soha-workflow-template-mini-preview">
+      {nodes.map((node, index) => (
+        <div className="soha-workflow-template-mini-preview__step" key={node.id}>
+          {index > 0 ? <span className="soha-workflow-template-mini-preview__arrow">-&gt;</span> : null}
+          <span className={`soha-workflow-template-mini-preview__node ${isReleaseDagValidationNodeType(node.type) ? 'is-validation' : ''}`}>
+            <strong>{node.name}</strong>
+            <Text type="secondary">{releaseDagNodeLabel(node.type)}</Text>
+          </span>
+        </div>
+      ))}
+      {analysis.definition.nodes.length > nodes.length ? <Tag>{`+${analysis.definition.nodes.length - nodes.length}`}</Tag> : null}
+    </div>
+  )
+}
+
+function workflowTemplateValidationNodes(template?: DeliveryApplicationBindingSummary['workflowTemplate'] | null) {
+  if (!template) return []
+  return analyzeReleaseDagDefinition(template.definition).definition.nodes.filter((node) => isReleaseDagValidationNodeType(node.type))
 }
 
 function summarizeWorkflowRun(run?: WorkflowRun | null) {
@@ -280,7 +347,7 @@ export function ApplicationDetailPage() {
   const [serviceForm] = Form.useForm<ServiceFormValues>()
   const [deliveryForm] = Form.useForm<DeliveryActionFormValues>()
   const permissionSnapshotQuery = usePermissionSnapshot()
-  const managementState = useApplicationManagementState()
+  const managementState = useApplicationCenterState()
   const canManageServices = hasPermission(permissionSnapshotQuery.data?.data, 'delivery.application-services.manage')
   const canTriggerBuild = hasPermission(permissionSnapshotQuery.data?.data, 'delivery.builds.trigger')
   const canTriggerWorkflow = hasPermission(permissionSnapshotQuery.data?.data, 'delivery.workflows.trigger')
@@ -453,6 +520,10 @@ export function ApplicationDetailPage() {
   const runtimeTargetCount = bindings.reduce((sum, binding) => sum + (binding.targetCount || binding.targets?.length || 0), 0)
   const runtimeArtifactCount = countRuntimeArtifacts(detail, releaseBundleArtifactsQuery.data?.data, latestExecutionArtifactsQuery.data?.data)
   const validationNodeCount = workflowTemplateValidationNodeCount(selectedDeliveryBinding?.workflowTemplate)
+  const selectedWorkflowValidationNodes = workflowTemplateValidationNodes(selectedDeliveryBinding?.workflowTemplate)
+  const selectedWorkflowAnalysis = selectedDeliveryBinding?.workflowTemplate
+    ? analyzeReleaseDagDefinition(selectedDeliveryBinding.workflowTemplate.definition)
+    : null
   const bindingSummaryById = useMemo(
     () => Object.fromEntries(bindings.map((binding) => [binding.applicationEnvironmentId, binding])),
     [bindings],
@@ -747,6 +818,15 @@ export function ApplicationDetailPage() {
                     { title: '环境', dataIndex: 'environmentId', render: (value: string, record: ApplicationEnvironment) => record.environmentKey || value },
                     { title: '构建来源', dataIndex: 'buildPolicy', render: (value: ApplicationEnvironment['buildPolicy']) => value?.sourceId || '-' },
                     { title: '发布流程模板', dataIndex: 'workflowTemplateId', render: (value?: string) => managementState.workflowTemplateMap[value || '']?.name || value || '-' },
+                    {
+                      title: '模板健康',
+                      dataIndex: 'id',
+                      render: (value: string, record: ApplicationEnvironment) => renderEnvironmentBindingWorkflowHealth(
+                        record,
+                        bindingSummaryById[value],
+                        managementState.workflowTemplateMap,
+                      ),
+                    },
                     { title: '发布目标', dataIndex: 'targets', render: (targets: ApplicationEnvironment['targets']) => renderBindingTargets(targets) },
                     { title: '资源选择器', dataIndex: 'resourceSelector', render: (value: ApplicationEnvironment['resourceSelector']) => renderSelectorLabels(value) },
                     { title: '最近状态', dataIndex: 'id', render: (value: string) => <StatusTag value={summarizeBindingStatus(bindingSummaryById[value])} /> },
@@ -961,15 +1041,25 @@ export function ApplicationDetailPage() {
                 <Card className="soha-management-panel-card" title="DAG 模板">
                   <Space orientation="vertical" style={{ width: '100%' }} size={12}>
                     {bindings.length > 0 ? bindings.map((binding) => (
-                      <div className="soha-application-runtime-binding-row" key={binding.applicationEnvironmentId}>
-                        <div className="soha-application-runtime-binding-row__main">
-                          <strong>{binding.environmentName || binding.environmentKey || binding.environmentId}</strong>
-                          <Text type="secondary">{binding.workflowTemplate?.name || binding.workflowTemplateName || '未绑定工作流模板'}</Text>
+                      <div className="soha-application-runtime-binding-row soha-application-runtime-binding-row--stacked" key={binding.applicationEnvironmentId}>
+                        <div className="soha-application-runtime-binding-row__head">
+                          <div className="soha-application-runtime-binding-row__main">
+                            <strong>{binding.environmentName || binding.environmentKey || binding.environmentId}</strong>
+                            <Text type="secondary">{binding.workflowTemplate?.name || binding.workflowTemplateName || '未绑定工作流模板'}</Text>
+                          </div>
+                          <Space wrap>
+                            {renderWorkflowTemplateHealth(binding)}
+                            <Button
+                              icon={<LinkOutlined />}
+                              size="small"
+                              disabled={!binding.workflowTemplateId}
+                              onClick={() => navigate(workflowTemplateDesignPath(binding.workflowTemplateId))}
+                            >
+                              编辑模板
+                            </Button>
+                          </Space>
                         </div>
-                        <Space wrap>
-                          <Tag>{workflowTemplateNodeCount(binding.workflowTemplate)} nodes</Tag>
-                          <Tag>{binding.requiresApproval ? 'approval required' : 'no approval'}</Tag>
-                        </Space>
+                        {renderWorkflowTemplatePreview(binding.workflowTemplate)}
                       </div>
                     )) : <ManagementState bordered={false} compact description="尚未绑定 CI/CD DAG 模板" kind="not-configured" />}
                   </Space>
@@ -997,16 +1087,37 @@ export function ApplicationDetailPage() {
               <div className="soha-application-runtime-verification-grid">
                 <Card className="soha-management-panel-card" title="验证门禁">
                   <Descriptions column={1} items={[
-                    { key: 'workflowTemplate', label: 'Workflow Template', children: detail?.bindings?.[0]?.workflowTemplate?.name || detail?.bindings?.[0]?.workflowTemplateName || '-' },
-                    { key: 'workflowNodes', label: 'DAG 节点数', children: workflowTemplateNodeCount(detail?.bindings?.[0]?.workflowTemplate) },
-                    { key: 'approval', label: '审批要求', children: detail?.bindings?.[0]?.requiresApproval ? '需要审批' : '无需审批' },
-                    { key: 'releaseTarget', label: '当前目标', children: deliveryTargetSummary(detail?.bindings?.[0]?.targets?.[0]) },
+                    { key: 'workflowTemplate', label: 'Workflow Template', children: selectedDeliveryBinding?.workflowTemplate?.name || selectedDeliveryBinding?.workflowTemplateName || '-' },
+                    { key: 'workflowNodes', label: 'DAG 节点数', children: selectedWorkflowAnalysis?.nodeCount ?? 0 },
+                    { key: 'validationNodes', label: '验证节点数', children: selectedWorkflowValidationNodes.length },
+                    { key: 'approval', label: '审批要求', children: selectedDeliveryBinding?.requiresApproval ? '需要审批' : '无需审批' },
+                    { key: 'releaseTarget', label: '当前目标', children: deliveryTargetSummary(selectedDeliveryTarget) },
                   ]} />
+                </Card>
+                <Card className="soha-management-panel-card" title="DAG 验证节点">
+                  <Space orientation="vertical" style={{ width: '100%' }} size={10}>
+                    <Alert
+                      showIcon
+                      type={selectedWorkflowValidationNodes.length > 0 ? 'success' : 'warning'}
+                      title={selectedWorkflowValidationNodes.length > 0 ? 'verify 动作会执行下列验证节点' : '当前模板没有可执行的验证节点'}
+                    />
+                    {selectedWorkflowValidationNodes.length > 0 ? selectedWorkflowValidationNodes.map((node) => (
+                      <div className="soha-application-runtime-validation-node" key={node.id}>
+                        <span>
+                          <strong>{node.name}</strong>
+                          <Text type="secondary">{releaseDagNodeLabel(node.type)}</Text>
+                        </span>
+                        <Tag>{`${node.timeoutSeconds ?? 300}s`}</Tag>
+                      </div>
+                    )) : (
+                      <ManagementState bordered={false} compact kind="not-configured" description="支持 check_http、check_k8s_event、smoke_test、verify、check 类型节点。" />
+                    )}
+                  </Space>
                 </Card>
                 <Card className="soha-management-panel-card" title="测试入口">
                   <Space orientation="vertical" style={{ width: '100%' }}>
                     <Button type="primary" onClick={() => setActiveTab('settings')} disabled={!bindings[0]?.applicationEnvironmentId}>查看绑定配置</Button>
-                    <Button onClick={() => navigate('/workflow-templates')}>查看 DAG 模板</Button>
+                    <Button onClick={() => navigate(workflowTemplateDesignPath(selectedDeliveryBinding?.workflowTemplateId))}>查看 DAG 模板</Button>
                     <Button onClick={() => navigate('/delivery/release-bundles')}>查看交付物中心</Button>
                   </Space>
                 </Card>
@@ -1120,7 +1231,7 @@ export function ApplicationDetailPage() {
           </div>
         </Form>
       </Modal>
-      <ApplicationManagementModals state={managementState} />
+      <ApplicationCenterModals state={managementState} />
     </div>
   )
 }

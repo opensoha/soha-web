@@ -12,6 +12,7 @@ import {
   AlertsPage,
   EventsPage,
   NotificationsPage,
+  alertIntegrationSamplePayload,
   buildAlertIntegrationPayload,
   buildAlertIntegrationTestPayload,
   buildNotificationChannelPayload,
@@ -303,6 +304,29 @@ describe('observability monitoring payload builders', () => {
       labelMapping: { service: 'service' },
       dedupeConfig: { fingerprintLabels: ['title', 'service'] },
       payload: { source: 'external', alerts: [{ title: 'CPU High', severity: 'warning' }] },
+    })
+  })
+
+  it('builds typed alert integration sample payload JSON for the selected source type', () => {
+    const values = {
+      integrationType: 'grafana_alerting_v1',
+      labelMapping: '{}',
+      dedupeConfig: '{}',
+      payload: alertIntegrationSamplePayload('grafana_alerting_v1'),
+    } satisfies AlertIntegrationTestFormValues
+
+    expect(buildAlertIntegrationTestPayload(values)).toMatchObject({
+      integrationType: 'grafana_alerting_v1',
+      payload: {
+        receiver: 'soha',
+        title: 'Grafana alert',
+        alerts: [
+          {
+            labels: { alertname: 'LatencyHigh', rule_uid: 'rule-001', namespace: 'checkout' },
+            dashboardURL: 'https://grafana.example.com/d/checkout',
+          },
+        ],
+      },
     })
   })
 

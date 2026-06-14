@@ -7,7 +7,7 @@ describe('menu section schema helpers', () => {
   it('normalizes legacy display labels to canonical section keys', () => {
     expect(normalizeMenuSection('Dashboard')).toBe('platform')
     expect(normalizeMenuSection('observe')).toBe('ops')
-    expect(normalizeMenuSection('Delivery')).toBe('deliver')
+    expect(normalizeMenuSection('Delivery')).toBe('delivery')
     expect(normalizeMenuSection('control')).toBe('control')
   })
 
@@ -23,7 +23,7 @@ describe('menu section schema helpers', () => {
     ).toEqual([
       { value: 'platform', label: 'Dashboard' },
       { value: 'ops', label: 'Observe' },
-      { value: 'deliver', label: 'Delivery' },
+      { value: 'delivery', label: '应用交付' },
       { value: 'control', label: 'control' },
     ])
   })

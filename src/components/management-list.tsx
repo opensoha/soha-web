@@ -346,8 +346,8 @@ export function ManagementState({
       <Alert
         action={actions}
         description={resolvedDescription}
-        message={resolvedTitle}
         showIcon
+        title={resolvedTitle}
         type={preset.type}
       />
     </div>

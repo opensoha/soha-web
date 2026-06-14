@@ -1941,8 +1941,8 @@ function renderDrawerFields(drawer: DrawerState, clients: AIClient[], manifest?:
             {({ getFieldValue }) => approvalRoutingEnabled(getFieldValue('approvalMode')) ? (
               <>
                 <Divider plain>审批路由</Divider>
-                <Form.Item name="approvalPolicyRef" label="Delivery approval policy">
-                  <Input placeholder="例如 delivery-standard" />
+                <Form.Item name="approvalPolicyRef" label="Gateway approval policy ref">
+                  <Input placeholder="例如 gateway-standard" />
                 </Form.Item>
                 <Form.Item name="approvalRoutingMode" label="审批模式">
                   <Select options={approvalRoutingModeOptions} />

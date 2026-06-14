@@ -1,11 +1,13 @@
-export const MENU_SECTION_ORDER = ['platform', 'ops', 'deliver', 'catalog', 'admin'] as const
+export const MENU_SECTION_ORDER = ['platform', 'ops', 'delivery', 'delivery-records', 'delivery-platform', 'catalog', 'admin'] as const
 
 export type MenuSectionKey = (typeof MENU_SECTION_ORDER)[number]
 
 const MENU_SECTION_LABELS: Record<MenuSectionKey, { zh: string; en: string }> = {
   platform: { zh: 'Dashboard', en: 'Dashboard' },
   ops: { zh: 'Observe', en: 'Observe' },
-  deliver: { zh: 'Delivery', en: 'Delivery' },
+  delivery: { zh: '应用交付', en: 'Delivery' },
+  'delivery-records': { zh: '交付记录', en: 'Delivery Records' },
+  'delivery-platform': { zh: '平台配置', en: 'Platform Configuration' },
   catalog: { zh: 'Catalog', en: 'Catalog' },
   admin: { zh: 'Admin', en: 'Admin' },
 }
@@ -15,8 +17,13 @@ const MENU_SECTION_ALIASES: Record<string, MenuSectionKey> = {
   dashboard: 'platform',
   ops: 'ops',
   observe: 'ops',
-  deliver: 'deliver',
-  delivery: 'deliver',
+  deliver: 'delivery',
+  delivery: 'delivery',
+  'delivery-record': 'delivery-records',
+  'delivery-records': 'delivery-records',
+  records: 'delivery-records',
+  'delivery-platform': 'delivery-platform',
+  'platform-config': 'delivery-platform',
   catalog: 'catalog',
   admin: 'admin',
 }

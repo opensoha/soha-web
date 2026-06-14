@@ -1,9 +1,9 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { App, Button, Card, Descriptions, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Tag, Typography } from 'antd'
-import { ArrowRightOutlined, DeleteOutlined, EditOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined, SendOutlined } from '@ant-design/icons'
+import { ArrowRightOutlined, CopyOutlined, DeleteOutlined, EditOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined, SaveOutlined, SendOutlined } from '@ant-design/icons'
 import type { TableColumnsType } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   ManagementDetailHeader,
   ManagementIconButton,
@@ -15,7 +15,7 @@ import { useI18n } from '@/i18n'
 import {
   createDefaultReleaseDagDefinition,
   normalizeReleaseDagDefinition,
-  countReleaseDagNodes,
+  analyzeReleaseDagDefinition,
   type ReleaseDagDefinition,
 } from '@/components/release-flow-dag-definition'
 import { BooleanTag, StatusTag } from '@/components/status-tag'
@@ -104,11 +104,24 @@ const RELEASE_TEMPLATE_CATEGORY_OPTIONS = [
 
 const { Text } = Typography
 type ColumnProps<T> = TableColumnsType<T>[number]
+type WorkflowTemplateListItem = Omit<WorkflowTemplate, 'definition'> & { definition?: unknown }
 
 const ReleaseFlowDagEditor = lazy(async () => {
   const mod = await import('@/components/release-flow-dag-editor')
   return { default: mod.ReleaseFlowDagEditor }
 })
+
+function normalizeWorkflowTemplateDagDefinition(raw: unknown): ReleaseDagDefinition {
+  const definition = normalizeReleaseDagDefinition(raw)
+  return {
+    ...definition,
+    schemaVersion: 2,
+  }
+}
+
+function serializeWorkflowTemplateDagDefinition(raw: unknown) {
+  return JSON.stringify(normalizeWorkflowTemplateDagDefinition(raw))
+}
 
 function matchesBindingTarget(
   target: NonNullable<ApplicationEnvironment['targets']>[number] | undefined,
@@ -237,7 +250,6 @@ export function ApplicationEnvironmentsPage() {
     { title: '应用', dataIndex: 'applicationId', render: (value: string) => appNameMap[value] || value },
     { title: '环境', dataIndex: 'environmentId', render: (_: string, record: ApplicationEnvironment) => applicationEnvironmentLabel(record) },
     { title: '策略', dataIndex: 'strategyProfileId', render: (value: string) => value || '-' },
-    { title: '审批策略', dataIndex: 'approvalPolicyId', render: (value: string) => value || '-' },
     { title: '构建来源', dataIndex: 'buildPolicy', render: (value: ApplicationEnvironment['buildPolicy']) => value?.sourceId || '-' },
     { title: '动作', dataIndex: 'releasePolicy', render: (value: ApplicationEnvironment['releasePolicy']) => value?.actionKind || 'deploy' },
     { title: '发布流程模板', dataIndex: 'workflowTemplate', render: (_: WorkflowTemplate, record: ApplicationEnvironment) => record.workflowTemplate?.name || record.workflowTemplateId || '-' },
@@ -328,7 +340,6 @@ export function ApplicationEnvironmentsPage() {
               environmentId: normalizeEnvironmentFormValue(values.environmentId),
               strategyProfileId: values.strategyProfileId || '',
               promotionPolicyId: values.promotionPolicyId || '',
-              approvalPolicyId: values.approvalPolicyId || '',
               artifactPolicyId: values.artifactPolicyId || '',
               workflowTemplateId: values.workflowTemplateId,
               buildPolicy: {
@@ -375,7 +386,6 @@ export function ApplicationEnvironmentsPage() {
             environmentId: initialEnvironmentFormValue(editing),
             strategyProfileId: editing.strategyProfileId || '',
             promotionPolicyId: editing.promotionPolicyId || '',
-            approvalPolicyId: editing.approvalPolicyId || '',
             artifactPolicyId: editing.artifactPolicyId || '',
             workflowTemplateId: editing.workflowTemplateId,
             buildSourceId: editing.buildPolicy?.sourceId,
@@ -424,7 +434,6 @@ export function ApplicationEnvironmentsPage() {
           </Form.Item>
           <Form.Item name="strategyProfileId" label="发布策略 Profile"><Input placeholder="rolling-default / canary-prod" /></Form.Item>
           <Form.Item name="promotionPolicyId" label="晋级策略 Policy"><Input placeholder="promote-prod-only" /></Form.Item>
-          <Form.Item name="approvalPolicyId" label="审批策略 Policy"><Input placeholder="double-sign-prod" /></Form.Item>
           <Form.Item name="artifactPolicyId" label="制品策略 Policy"><Input placeholder="signed-sbom-required" /></Form.Item>
           <Form.Item name="refType" label="构建引用类型">
             <Select options={[{ value: 'branch', label: 'branch' }, { value: 'tag', label: 'tag' }]} />
@@ -853,7 +862,7 @@ export function ApplicationEnvironmentDetailPage() {
             { key: 'templateCategory', label: localeCode === 'zh_CN' ? '模板分类' : 'Template Category', children: binding.workflowTemplate?.category || '-' },
             { key: 'buildSource', label: localeCode === 'zh_CN' ? '构建来源' : 'Build Source', children: detail?.buildSource?.name || binding.buildPolicy?.sourceId || '-' },
             { key: 'strategyProfile', label: localeCode === 'zh_CN' ? '策略 Profile' : 'Strategy Profile', children: binding.strategyProfileId || '-' },
-            { key: 'approvalPolicy', label: localeCode === 'zh_CN' ? '审批策略' : 'Approval Policy', children: binding.approvalPolicyId || '-' },
+            { key: 'approvalGate', label: localeCode === 'zh_CN' ? '审批配置' : 'Approval Gate', children: localeCode === 'zh_CN' ? '由发布流程模板中的审批节点配置' : 'Configured by approval nodes in the workflow template' },
             { key: 'latestBundle', label: localeCode === 'zh_CN' ? '最新 Bundle' : 'Latest Bundle', children: <StatusTag value={detail?.latestBundle?.status || 'unknown'} /> },
             { key: 'latestTask', label: localeCode === 'zh_CN' ? '最新任务' : 'Latest Task', children: <StatusTag value={detail?.latestExecutionTask?.status || 'unknown'} /> },
             { key: 'latestBuild', label: localeCode === 'zh_CN' ? '最新 Build' : 'Latest Build', children: <StatusTag value={latestBuild?.status || 'unknown'} /> },
@@ -969,28 +978,94 @@ export function WorkflowTemplatesPage() {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [form] = Form.useForm<Record<string, unknown>>()
-  const [modalVisible, setModalVisible] = useState(false)
-  const [editing, setEditing] = useState<WorkflowTemplate | null>(null)
+  const [selectedTemplateId, setSelectedTemplateId] = useState('')
+  const [searchText, setSearchText] = useState('')
   const [editorDefinition, setEditorDefinition] = useState<ReleaseDagDefinition>(createDefaultReleaseDagDefinition())
+  const [editorInitialDefinition, setEditorInitialDefinition] = useState<ReleaseDagDefinition>(createDefaultReleaseDagDefinition())
+  const [isDirty, setIsDirty] = useState(false)
+  const [jsonPreviewVisible, setJsonPreviewVisible] = useState(false)
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false)
+  const [templateFormSnapshot, setTemplateFormSnapshot] = useState<Record<string, unknown>>({})
+  const suppressEditorChangeRef = useRef(false)
+  const suppressFormChangeRef = useRef(false)
+  const formDirtyRef = useRef(false)
+  const dagDirtyRef = useRef(false)
+  const savedDefinitionRef = useRef(serializeWorkflowTemplateDagDefinition(createDefaultReleaseDagDefinition()))
   const canManageWorkflowTemplates = hasPermission(permissionSnapshotQuery.data?.data, 'delivery.workflow-templates.manage')
 
   const { data, isFetching, isLoading, refetch } = useQuery({
     queryKey: ['workflow-templates'],
     queryFn: () => api.get<ApiResponse<WorkflowTemplate[]>>('/workflow-templates'),
   })
+  const bindingsQuery = useQuery({
+    queryKey: ['application-environments'],
+    queryFn: () => api.get<ApiResponse<ApplicationEnvironment[]>>('/application-environments'),
+  })
 
-  useEffect(() => {
-    if (!modalVisible) return
-    setEditorDefinition(normalizeReleaseDagDefinition(editing?.definition))
-  }, [editing, modalVisible])
+  const confirmDiscardChanges = useCallback(() => {
+    if (!isDirty) return true
+    return window.confirm(localeCode === 'zh_CN' ? '当前模板有未保存更改，确认放弃？' : 'This template has unsaved changes. Discard them?')
+  }, [isDirty, localeCode])
+
+  const updateTemplateSearchParam = useCallback((templateId?: string) => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current)
+      if (templateId) {
+        next.set('templateId', templateId)
+      } else {
+        next.delete('templateId')
+      }
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
+
+  const applyTemplateFormValues = useCallback((values: Record<string, unknown>, dirtyAfterApply: boolean) => {
+    suppressFormChangeRef.current = true
+    setTemplateFormSnapshot(values)
+    window.setTimeout(() => {
+      form.setFieldsValue(values)
+      window.setTimeout(() => {
+        suppressFormChangeRef.current = false
+        formDirtyRef.current = dirtyAfterApply
+        setIsDirty(dirtyAfterApply || dagDirtyRef.current)
+      }, 0)
+    }, 0)
+  }, [form])
+
+  const getTemplateFormValues = useCallback((template: WorkflowTemplate, overrides?: Record<string, unknown>) => ({
+    key: template.key,
+    name: template.name,
+    description: template.description,
+    category: template.category || 'release',
+    enabled: template.enabled,
+    ...overrides,
+  }), [])
+
+  const loadTemplate = useCallback((template: WorkflowTemplate, options?: { dirtyAfterLoad?: boolean; formOverrides?: Record<string, unknown>; openSettings?: boolean }) => {
+    const definition = normalizeWorkflowTemplateDagDefinition(template.definition)
+    const dirtyAfterLoad = Boolean(options?.dirtyAfterLoad)
+    suppressEditorChangeRef.current = true
+    setSelectedTemplateId(template.id)
+    setEditorDefinition(definition)
+    setEditorInitialDefinition(definition)
+    savedDefinitionRef.current = serializeWorkflowTemplateDagDefinition(definition)
+    formDirtyRef.current = dirtyAfterLoad
+    dagDirtyRef.current = false
+    setIsDirty(dirtyAfterLoad)
+    applyTemplateFormValues(getTemplateFormValues(template, options?.formOverrides), dirtyAfterLoad)
+    if (options?.openSettings) {
+      setSettingsModalOpen(true)
+    }
+    updateTemplateSearchParam(template.id)
+  }, [applyTemplateFormValues, getTemplateFormValues, updateTemplateSearchParam])
 
   const createMutation = useMutation({
     mutationFn: (values: Record<string, unknown>) => api.post('/workflow-templates', values),
     onSuccess: () => {
       message.success(localeCode === 'zh_CN' ? 'DAG 发布流程模板创建成功' : 'DAG release flow template created')
       queryClient.invalidateQueries({ queryKey: ['workflow-templates'] })
-      setModalVisible(false)
     },
     onError: (err: Error) => message.error(err.message),
   })
@@ -999,159 +1074,457 @@ export function WorkflowTemplatesPage() {
     onSuccess: () => {
       message.success(localeCode === 'zh_CN' ? 'DAG 发布流程模板更新成功' : 'DAG release flow template updated')
       queryClient.invalidateQueries({ queryKey: ['workflow-templates'] })
-      setModalVisible(false)
-      setEditing(null)
     },
     onError: (err: Error) => message.error(err.message),
   })
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/workflow-templates/${id}`),
-    onSuccess: () => {
+    onSuccess: (_payload, deletedId) => {
       message.success(localeCode === 'zh_CN' ? 'DAG 发布流程模板已删除' : 'DAG release flow template deleted')
       queryClient.invalidateQueries({ queryKey: ['workflow-templates'] })
+      if (selectedTemplateId === deletedId) {
+        const nextTemplate = (data?.data ?? []).find((item) => item.id !== deletedId)
+        if (nextTemplate) {
+          loadTemplate(nextTemplate)
+        } else {
+          form.resetFields()
+          setSelectedTemplateId('')
+          setEditorDefinition(createDefaultReleaseDagDefinition())
+          setEditorInitialDefinition(createDefaultReleaseDagDefinition())
+          setIsDirty(false)
+        }
+      }
     },
     onError: (err: Error) => message.error(err.message),
   })
 
+  const templates = data?.data ?? []
+  const selectedTemplate = selectedTemplateId && selectedTemplateId !== 'new'
+    ? templates.find((item) => item.id === selectedTemplateId) ?? null
+    : null
+  const isNewDraft = selectedTemplateId === 'new'
+  const hasSelection = isNewDraft || !!selectedTemplate
+  const dagAnalysis = useMemo(() => analyzeReleaseDagDefinition(editorDefinition), [editorDefinition])
+  const errorIssues = dagAnalysis.issues.filter((issue) => issue.severity === 'error')
+  const warningIssues = dagAnalysis.issues.filter((issue) => issue.severity === 'warning')
   const previewDefinition = useMemo(() => JSON.stringify(editorDefinition, null, 2), [editorDefinition])
+  const selectedTemplateUsages = useMemo(
+    () => (bindingsQuery.data?.data ?? []).filter((binding) => selectedTemplate?.id && binding.workflowTemplateId === selectedTemplate.id),
+    [bindingsQuery.data, selectedTemplate?.id],
+  )
+  const listTemplates = useMemo(() => {
+    const draftKey = String(templateFormSnapshot.key || '').trim()
+    const draftName = String(templateFormSnapshot.name || '').trim()
+    const draftCategory = String(templateFormSnapshot.category || 'release').trim()
+    if (!isNewDraft) return templates
+    return [
+      {
+        id: 'new',
+        key: draftKey || 'new-workflow-template',
+        name: draftName || (localeCode === 'zh_CN' ? '新建模板草稿' : 'New Template Draft'),
+        description: String(templateFormSnapshot.description || ''),
+        category: draftCategory || 'release',
+        enabled: templateFormSnapshot.enabled !== false,
+        definition: editorDefinition,
+        createdAt: '',
+        updatedAt: '',
+      },
+      ...templates,
+    ] as WorkflowTemplateListItem[]
+  }, [editorDefinition, isNewDraft, localeCode, templateFormSnapshot, templates])
 
-  const columns: ColumnProps<WorkflowTemplate>[] = [
-    { title: t('common.name', 'Name'), dataIndex: 'name' },
-    { title: 'Key', dataIndex: 'key' },
-    { title: localeCode === 'zh_CN' ? '分类' : 'Category', dataIndex: 'category', render: (value: string) => value || 'release' },
-    {
-      title: localeCode === 'zh_CN' ? '模式' : 'Mode',
-      dataIndex: 'definition',
-      render: (value: WorkflowTemplate['definition']) => normalizeReleaseDagDefinition(value).mode,
-    },
-    {
-      title: localeCode === 'zh_CN' ? '节点数' : 'Nodes',
-      dataIndex: 'definition',
-      render: (value: WorkflowTemplate['definition']) => countReleaseDagNodes(value),
-    },
-    { title: localeCode === 'zh_CN' ? '启用' : 'Enabled', dataIndex: 'enabled', render: (value: boolean) => <BooleanTag value={value} /> },
-    { ...tableColumnPresets.datetime, title: t('common.updatedAt', 'Updated At'), dataIndex: 'updatedAt', render: (value: string) => formatDateTime(value) },
-    {
-      ...tableColumnPresets.action,
-      title: t('common.actions', 'Actions'),
-      dataIndex: 'id',
-      render: (_: unknown, record: WorkflowTemplate) => (
-        <Space className="soha-row-action-icons" size={2}>
-          {canManageWorkflowTemplates ? (
-            <ManagementIconButton
-              aria-label="编辑工作流模板"
-              icon={<EditOutlined />}
-              size="small"
-              tooltip="编辑"
-              onClick={() => { setEditing(record); setModalVisible(true) }}
-            />
-          ) : null}
-          {canManageWorkflowTemplates ? (
-            <Popconfirm title="确认删除？" onConfirm={() => deleteMutation.mutate(record.id)}>
-              <ManagementIconButton
-                aria-label="删除工作流模板"
-                danger
-                icon={<DeleteOutlined />}
-                size="small"
-                tooltip="删除"
-              />
-            </Popconfirm>
-          ) : null}
-          {!canManageWorkflowTemplates ? '-' : null}
-        </Space>
-      ),
-    },
-  ]
+  const visibleTemplates = useMemo(() => {
+    const keyword = searchText.trim().toLowerCase()
+    if (!keyword) return listTemplates
+    return listTemplates.filter((item) => [
+      item.name,
+      item.key,
+      item.category,
+      item.description,
+    ].some((value) => String(value || '').toLowerCase().includes(keyword)))
+  }, [listTemplates, searchText])
+
+  useEffect(() => {
+    if (!templates.length) return
+    const queryTemplateId = searchParams.get('templateId')
+    const queryTemplate = queryTemplateId ? templates.find((item) => item.id === queryTemplateId) : undefined
+    if (queryTemplate && queryTemplate.id !== selectedTemplateId && !isDirty) {
+      loadTemplate(queryTemplate)
+      return
+    }
+    if (!selectedTemplateId) {
+      loadTemplate(queryTemplate ?? templates[0])
+    }
+  }, [isDirty, loadTemplate, searchParams, selectedTemplateId, templates])
+
+  useEffect(() => {
+    if (!isDirty) return undefined
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', beforeUnload)
+    return () => window.removeEventListener('beforeunload', beforeUnload)
+  }, [isDirty])
+
+  const handleSelectTemplate = (template: WorkflowTemplate) => {
+    if (template.id === selectedTemplateId) return
+    if (!confirmDiscardChanges()) return
+    loadTemplate(template)
+  }
+
+  const handleSelectTemplateListItem = (template: WorkflowTemplateListItem) => {
+    if (template.id === 'new') {
+      setSelectedTemplateId('new')
+      return
+    }
+    handleSelectTemplate(template as WorkflowTemplate)
+  }
+
+  const handleNewTemplate = () => {
+    if (!confirmDiscardChanges()) return
+    const definition = createDefaultReleaseDagDefinition()
+    const draftKey = `workflow-template-${Date.now().toString(36)}`
+    savedDefinitionRef.current = serializeWorkflowTemplateDagDefinition(definition)
+    suppressEditorChangeRef.current = true
+    setSelectedTemplateId('new')
+    setEditorDefinition(definition)
+    setEditorInitialDefinition(definition)
+    formDirtyRef.current = true
+    dagDirtyRef.current = true
+    setIsDirty(true)
+    applyTemplateFormValues({
+      key: draftKey,
+      name: localeCode === 'zh_CN' ? '新建模板' : 'New Template',
+      description: '',
+      category: 'release',
+      enabled: true,
+    }, true)
+    setSettingsModalOpen(true)
+    updateTemplateSearchParam()
+  }
+
+  const handleCopyTemplate = () => {
+    if (!hasSelection) return
+    const values = form.getFieldsValue()
+    const definition = normalizeWorkflowTemplateDagDefinition(editorDefinition)
+    savedDefinitionRef.current = serializeWorkflowTemplateDagDefinition(definition)
+    suppressEditorChangeRef.current = true
+    setSelectedTemplateId('new')
+    setEditorDefinition(definition)
+    setEditorInitialDefinition(definition)
+    formDirtyRef.current = true
+    dagDirtyRef.current = true
+    setIsDirty(true)
+    applyTemplateFormValues({
+      ...values,
+      key: `${String(values.key || 'workflow-template')}-copy`,
+      name: `${String(values.name || 'Workflow Template')} Copy`,
+      enabled: true,
+    }, true)
+    setSettingsModalOpen(true)
+    updateTemplateSearchParam()
+  }
+
+  const handleCancelChanges = () => {
+    if (selectedTemplate) {
+      loadTemplate(selectedTemplate)
+      return
+    }
+    const firstTemplate = templates[0]
+    if (firstTemplate) {
+      loadTemplate(firstTemplate)
+      return
+    }
+    form.resetFields()
+    setTemplateFormSnapshot({})
+    setSelectedTemplateId('')
+    setSettingsModalOpen(false)
+    setEditorDefinition(createDefaultReleaseDagDefinition())
+    setEditorInitialDefinition(createDefaultReleaseDagDefinition())
+    savedDefinitionRef.current = serializeWorkflowTemplateDagDefinition(createDefaultReleaseDagDefinition())
+    formDirtyRef.current = false
+    dagDirtyRef.current = false
+    setIsDirty(false)
+  }
+
+  const handleSave = async () => {
+    const errors = errorIssues.filter((issue) => issue.severity === 'error')
+    if (errors.length > 0) {
+      message.error(errors[0].message)
+      return
+    }
+    try {
+      const values = await form.validateFields()
+      const payload = {
+        ...values,
+        category: values.category || 'release',
+        definition: editorDefinition,
+      }
+      if (selectedTemplate) {
+        await updateMutation.mutateAsync({ id: selectedTemplate.id, values: payload })
+        setEditorInitialDefinition(editorDefinition)
+        savedDefinitionRef.current = serializeWorkflowTemplateDagDefinition(editorDefinition)
+        formDirtyRef.current = false
+        dagDirtyRef.current = false
+        setIsDirty(false)
+        setSettingsModalOpen(false)
+        return
+      }
+      const created = await createMutation.mutateAsync(payload) as ApiResponse<WorkflowTemplate> | undefined
+      const createdTemplate = created?.data
+      setEditorInitialDefinition(editorDefinition)
+      savedDefinitionRef.current = serializeWorkflowTemplateDagDefinition(editorDefinition)
+      formDirtyRef.current = false
+      dagDirtyRef.current = false
+      setIsDirty(false)
+      if (createdTemplate?.id) {
+        setSelectedTemplateId(createdTemplate.id)
+        setSettingsModalOpen(false)
+        updateTemplateSearchParam(createdTemplate.id)
+      }
+    } catch {
+      // antd Form and mutation handlers surface validation or API errors.
+    }
+  }
+
+  const handleEditorChange = useCallback((definition: ReleaseDagDefinition) => {
+    setEditorDefinition(definition)
+    if (suppressEditorChangeRef.current) {
+      suppressEditorChangeRef.current = false
+      return
+    }
+    const hasDagChanges = selectedTemplateId === 'new' || serializeWorkflowTemplateDagDefinition(definition) !== savedDefinitionRef.current
+    dagDirtyRef.current = hasDagChanges
+    setIsDirty(formDirtyRef.current || dagDirtyRef.current)
+  }, [selectedTemplateId])
+
+  const handleOpenTemplateSettings = (template: WorkflowTemplateListItem) => {
+    if (template.id === 'new') {
+      setSettingsModalOpen(true)
+      return
+    }
+    if (template.id !== selectedTemplateId) {
+      if (!confirmDiscardChanges()) return
+      loadTemplate(template as WorkflowTemplate, { openSettings: true })
+      return
+    }
+    setSettingsModalOpen(true)
+  }
+
+  const handleTemplateEnabledChange = (template: WorkflowTemplateListItem, enabled: boolean) => {
+    if (template.id === 'new') {
+    form.setFieldsValue({ enabled })
+    setTemplateFormSnapshot((current) => ({ ...current, enabled }))
+    formDirtyRef.current = true
+    setIsDirty(true)
+    return
+    }
+    if (template.id !== selectedTemplateId) {
+      if (!confirmDiscardChanges()) return
+      loadTemplate(template as WorkflowTemplate, { dirtyAfterLoad: true, formOverrides: { enabled } })
+      return
+    }
+    form.setFieldsValue({ enabled })
+    setTemplateFormSnapshot((current) => ({ ...current, enabled }))
+    formDirtyRef.current = true
+    setIsDirty(true)
+  }
 
   return (
-    <div className="soha-page">
-      <DeliveryTable
-        actions={canManageWorkflowTemplates ? (
-          <Button icon={<PlusOutlined />} type="primary" onClick={() => { setEditing(null); setModalVisible(true) }}>
+    <div className="soha-page soha-workflow-template-page">
+      <div className="soha-workflow-template-toolbar">
+        <Space wrap>
+          <Button icon={<PlusOutlined />} type="primary" disabled={!canManageWorkflowTemplates} onClick={handleNewTemplate}>
             {localeCode === 'zh_CN' ? '新建模板' : 'New Template'}
           </Button>
-        ) : null}
-        refreshing={isFetching}
-        onRefresh={() => void refetch()}
-        columns={columns}
-        dataSource={data?.data ?? []}
-        rowKey="id"
-        loading={isLoading}
-      />
+          <Button icon={<SaveOutlined />} disabled={!hasSelection || !canManageWorkflowTemplates} loading={createMutation.isPending || updateMutation.isPending} onClick={() => void handleSave()}>
+            {localeCode === 'zh_CN' ? '保存' : 'Save'}
+          </Button>
+          <Button disabled={!hasSelection || !isDirty} onClick={handleCancelChanges}>
+            {localeCode === 'zh_CN' ? '取消更改' : 'Discard'}
+          </Button>
+          <Button icon={<CopyOutlined />} disabled={!hasSelection || !canManageWorkflowTemplates} onClick={handleCopyTemplate}>
+            {localeCode === 'zh_CN' ? '复制模板' : 'Copy'}
+          </Button>
+          <Popconfirm
+            title={localeCode === 'zh_CN' ? '确认删除当前模板？' : 'Delete the selected template?'}
+            onConfirm={() => selectedTemplate && deleteMutation.mutate(selectedTemplate.id)}
+          >
+            <Button danger icon={<DeleteOutlined />} disabled={!selectedTemplate || !canManageWorkflowTemplates} loading={deleteMutation.isPending}>
+              {localeCode === 'zh_CN' ? '删除' : 'Delete'}
+            </Button>
+          </Popconfirm>
+        </Space>
+        <Space wrap>
+          {isDirty ? <Tag color="gold">{localeCode === 'zh_CN' ? '未保存' : 'Unsaved'}</Tag> : <Tag>{localeCode === 'zh_CN' ? '已同步' : 'Synced'}</Tag>}
+          <Button type={jsonPreviewVisible ? 'primary' : 'default'} onClick={() => setJsonPreviewVisible((value) => !value)}>JSON</Button>
+          <Button icon={<ReloadOutlined />} loading={isFetching} onClick={() => { if (confirmDiscardChanges()) void refetch() }}>
+            {t('common.refresh', 'Refresh')}
+          </Button>
+        </Space>
+      </div>
+
+      {jsonPreviewVisible && hasSelection ? (
+        <pre className="soha-json-block soha-workflow-template-json-panel">{previewDefinition}</pre>
+      ) : null}
+
       <Modal
-        title={editing ? (localeCode === 'zh_CN' ? '编辑 DAG 发布流程模板' : 'Edit DAG Release Flow Template') : (localeCode === 'zh_CN' ? '新建 DAG 发布流程模板' : 'New DAG Release Flow Template')}
-        open={modalVisible}
-        onCancel={() => { setModalVisible(false); setEditing(null) }}
-        footer={null}
-        width={1440}
-        destroyOnHidden
+        forceRender
+        okButtonProps={{ disabled: !hasSelection || !canManageWorkflowTemplates }}
+        okText={localeCode === 'zh_CN' ? '保存模板' : 'Save Template'}
+        open={settingsModalOpen && hasSelection}
+        title={localeCode === 'zh_CN' ? '模板设置' : 'Template Settings'}
+        width={560}
+        onCancel={() => setSettingsModalOpen(false)}
+        onOk={() => void handleSave()}
       >
         <Form
+          className="soha-workflow-template-settings-form"
           form={form}
-          key={editing?.id ?? 'new-workflow-template'}
           layout="vertical"
-          onFinish={(values) => {
-            const payload = {
-              ...values,
-              category: values.category || 'release',
-              definition: editorDefinition,
-            }
-            if (editing) {
-              updateMutation.mutate({ id: editing.id, values: payload })
-            } else {
-              createMutation.mutate(payload)
-            }
+          onValuesChange={(_changedValues, allValues) => {
+            if (suppressFormChangeRef.current) return
+            setTemplateFormSnapshot(allValues)
+            formDirtyRef.current = true
+            setIsDirty(true)
           }}
-          initialValues={editing ? { ...editing, category: editing.category || 'release' } : { enabled: true, category: 'release' }}
         >
-          <div className="soha-delivery-action-grid">
-            <div className="soha-delivery-action-block">
-              <Form.Item name="key" label={localeCode === 'zh_CN' ? '模板 Key' : 'Template Key'} rules={[{ required: true, message: localeCode === 'zh_CN' ? '请输入模板 Key' : 'Enter the template key' }]}>
-                <Input />
-              </Form.Item>
-            </div>
-            <div className="soha-delivery-action-block">
-              <Form.Item name="name" label={localeCode === 'zh_CN' ? '模板名称' : 'Template Name'} rules={[{ required: true, message: localeCode === 'zh_CN' ? '请输入模板名称' : 'Enter the template name' }]}>
-                <Input />
-              </Form.Item>
-            </div>
-            <div className="soha-delivery-action-block">
-              <Form.Item name="description" label={localeCode === 'zh_CN' ? '描述' : 'Description'}>
-                <Input />
-              </Form.Item>
-            </div>
-            <div className="soha-delivery-action-block">
-              <Form.Item name="category" label={localeCode === 'zh_CN' ? '分类' : 'Category'}>
-                <Select options={RELEASE_TEMPLATE_CATEGORY_OPTIONS} />
-              </Form.Item>
-              <Form.Item name="enabled" label={localeCode === 'zh_CN' ? '启用' : 'Enabled'} valuePropName="checked">
-                <Switch />
-              </Form.Item>
-            </div>
+          <Form.Item name="key" label={localeCode === 'zh_CN' ? '模板 Key' : 'Template Key'} rules={[{ required: true, message: localeCode === 'zh_CN' ? '请输入模板 Key' : 'Enter the template key' }]}>
+            <Input disabled={!canManageWorkflowTemplates} />
+          </Form.Item>
+          <Form.Item name="name" label={localeCode === 'zh_CN' ? '模板名称' : 'Template Name'} rules={[{ required: true, message: localeCode === 'zh_CN' ? '请输入模板名称' : 'Enter the template name' }]}>
+            <Input disabled={!canManageWorkflowTemplates} />
+          </Form.Item>
+          <Form.Item name="description" label={localeCode === 'zh_CN' ? '描述' : 'Description'}>
+            <Input disabled={!canManageWorkflowTemplates} />
+          </Form.Item>
+          <div className="soha-workflow-template-settings-form__grid">
+            <Form.Item name="category" label={localeCode === 'zh_CN' ? '分类' : 'Category'}>
+              <Select disabled={!canManageWorkflowTemplates} options={RELEASE_TEMPLATE_CATEGORY_OPTIONS} />
+            </Form.Item>
+            <Form.Item className="soha-workflow-template-settings-form__switch" name="enabled" label={localeCode === 'zh_CN' ? '启用' : 'Enabled'} valuePropName="checked">
+              <Switch disabled={!canManageWorkflowTemplates} />
+            </Form.Item>
           </div>
-
-          <Card className="soha-template-editor-card soha-management-panel-card" title={localeCode === 'zh_CN' ? 'DAG 编排画布' : 'DAG Composer'}>
-            <Suspense fallback={<ManagementState kind="loading" title={t('common.loading', 'Loading...')} />}>
-              <ReleaseFlowDagEditor
-                key={editing?.id ?? 'new-release-dag'}
-                initialDefinition={modalVisible ? normalizeReleaseDagDefinition(editing?.definition) : createDefaultReleaseDagDefinition()}
-                onChange={setEditorDefinition}
-              />
-            </Suspense>
-          </Card>
-
-          <Card className="soha-flow-stage-card soha-management-panel-card" title={localeCode === 'zh_CN' ? 'JSON 预览' : 'JSON Preview'}>
-            <pre className="soha-json-block">{previewDefinition}</pre>
-          </Card>
-
-          <div className="soha-form-actions">
-            <Button onClick={() => setModalVisible(false)}>{t('common.cancel', 'Cancel')}</Button>
-            <Button htmlType="submit" type="primary" loading={createMutation.isPending || updateMutation.isPending}>
-              {editing ? t('common.update', 'Update') : t('common.create', 'Create')}
-            </Button>
+          <div className="soha-workflow-template-status-tags">
+            <Tag>{`${localeCode === 'zh_CN' ? '节点' : 'Nodes'} ${dagAnalysis.nodeCount}`}</Tag>
+            <Tag color={dagAnalysis.validationNodeCount > 0 ? 'green' : 'default'}>{`${localeCode === 'zh_CN' ? '验证' : 'Verify'} ${dagAnalysis.validationNodeCount}`}</Tag>
+            <Tag color={dagAnalysis.rollbackNodeCount > 0 ? 'green' : 'gold'}>{`${localeCode === 'zh_CN' ? '回滚' : 'Rollback'} ${dagAnalysis.rollbackNodeCount}`}</Tag>
+            <Tag color={dagAnalysis.approvalNodeCount > 0 ? 'gold' : 'default'}>{`${localeCode === 'zh_CN' ? '审批' : 'Approval'} ${dagAnalysis.approvalNodeCount}`}</Tag>
+            <Tag color={dagAnalysis.isReleaseDagCompatible ? 'green' : 'red'}>{dagAnalysis.isReleaseDagCompatible ? 'release_dag compatible' : 'blocked'}</Tag>
+            <Tag color={selectedTemplateUsages.length > 0 ? 'gold' : 'default'}>
+              {localeCode === 'zh_CN' ? `影响 ${selectedTemplateUsages.length} 个环境` : `${selectedTemplateUsages.length} bindings`}
+            </Tag>
           </div>
+          {errorIssues.length > 0 ? (
+            <Text type="danger" className="text-xs">{errorIssues.map((issue) => issue.message).join(' / ')}</Text>
+          ) : warningIssues.length > 0 ? (
+            <Text type="warning" className="text-xs">{warningIssues.map((issue) => issue.message).join(' / ')}</Text>
+          ) : null}
+          {selectedTemplateUsages.length > 0 ? (
+            <details className="soha-workflow-template-impact-inline">
+              <summary>{localeCode === 'zh_CN' ? '查看绑定影响面' : 'Show binding impact'}</summary>
+              <div className="soha-workflow-template-impact-inline__body">
+                {selectedTemplateUsages.slice(0, 8).map((binding) => (
+                  <span className="soha-workflow-template-usage-chip" key={binding.id}>
+                    <Text>{binding.applicationId}</Text>
+                    <Tag>{applicationEnvironmentLabel(binding)}</Tag>
+                  </span>
+                ))}
+                {selectedTemplateUsages.length > 8 ? <Text type="secondary">{`+${selectedTemplateUsages.length - 8}`}</Text> : null}
+              </div>
+            </details>
+          ) : null}
         </Form>
       </Modal>
+
+      <div className="soha-workflow-template-workspace">
+        <aside className="soha-workflow-template-list">
+          <Input.Search
+            allowClear
+            value={searchText}
+            onChange={(event) => setSearchText(event.target.value)}
+            placeholder={localeCode === 'zh_CN' ? '搜索模板' : 'Search templates'}
+          />
+          <div className="soha-workflow-template-list__items">
+            {isLoading ? <ManagementState bordered={false} compact kind="loading" title={t('common.loading', 'Loading...')} /> : null}
+            {!isLoading && visibleTemplates.length === 0 ? (
+              <ManagementState bordered={false} compact kind="empty" description={localeCode === 'zh_CN' ? '暂无模板' : 'No templates'} />
+            ) : null}
+            {visibleTemplates.map((template) => {
+              const analysis = analyzeReleaseDagDefinition(template.definition)
+              const isActive = template.id === selectedTemplateId
+              const enabledValue = isActive ? templateFormSnapshot.enabled !== false : template.enabled
+              return (
+                <div
+                  className={`soha-workflow-template-list__item ${isActive ? 'is-active' : ''}`}
+                  key={template.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => handleSelectTemplateListItem(template)}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter' && event.key !== ' ') return
+                    event.preventDefault()
+                    handleSelectTemplateListItem(template)
+                  }}
+                >
+                  <span className="soha-workflow-template-list__item-head">
+                    <span className="soha-workflow-template-list__item-main">
+                      <strong>{template.name}</strong>
+                      <Text type="secondary">{template.key}</Text>
+                    </span>
+                    <span className="soha-workflow-template-list__item-actions" onClick={(event) => event.stopPropagation()}>
+                      <Switch
+                        checked={enabledValue}
+                        disabled={!canManageWorkflowTemplates}
+                        size="small"
+                        onChange={(checked) => handleTemplateEnabledChange(template, checked)}
+                      />
+                      <ManagementIconButton
+                        aria-label={localeCode === 'zh_CN' ? '编辑模板设置' : 'Edit template settings'}
+                        icon={<EditOutlined />}
+                        size="small"
+                        tooltip={localeCode === 'zh_CN' ? '设置' : 'Settings'}
+                        onClick={() => handleOpenTemplateSettings(template)}
+                      />
+                    </span>
+                  </span>
+                  <span className="soha-workflow-template-list__item-meta">
+                    <Tag>{template.category || 'release'}</Tag>
+                    <Tag>{`${analysis.nodeCount} nodes`}</Tag>
+                    {template.id === 'new' ? <Tag color="gold">{localeCode === 'zh_CN' ? '草稿' : 'Draft'}</Tag> : null}
+                  </span>
+                  <Text type="secondary" className="text-xs">{template.updatedAt ? formatDateTime(template.updatedAt) : (localeCode === 'zh_CN' ? '尚未保存' : 'Not saved')}</Text>
+                </div>
+              )
+            })}
+          </div>
+        </aside>
+
+        <main className="soha-workflow-template-designer">
+          {hasSelection ? (
+            <Suspense fallback={<ManagementState kind="loading" title={t('common.loading', 'Loading...')} />}>
+              <ReleaseFlowDagEditor
+                className="soha-workflow-template-dag-editor"
+                height="calc(100vh - 238px)"
+                initialDefinition={editorInitialDefinition}
+                key={selectedTemplateId || 'workflow-template-empty'}
+                layout="palette-right-floating-inspector"
+                onChange={handleEditorChange}
+                variant="embedded"
+              />
+            </Suspense>
+          ) : (
+            <ManagementState
+              bordered={false}
+              kind="select-scope"
+              title={localeCode === 'zh_CN' ? '选择或新建模板' : 'Select or create a template'}
+              description={localeCode === 'zh_CN' ? '左侧选择模板后在此编辑 DAG。' : 'Choose a template from the list to edit its DAG.'}
+            />
+          )}
+        </main>
+      </div>
     </div>
   )
 }

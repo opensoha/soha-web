@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   Background,
   Controls,
@@ -18,6 +18,7 @@ import {
 } from '@xyflow/react'
 import dagre from 'dagre'
 import { Button, Card, Input, InputNumber, Select, Space, Switch, Tag, Typography } from 'antd'
+import { CloseOutlined } from '@ant-design/icons'
 import '@xyflow/react/dist/style.css'
 import { ManagementState } from '@/components/management-list'
 import './release-flow-dag-editor.css'
@@ -38,6 +39,7 @@ const { Text } = Typography
 type DagTagColor = 'grey' | 'blue' | 'cyan' | 'green' | 'yellow' | 'purple' | 'pink' | 'red' | 'orange'
 type FlowNode = Node<ReleaseDagNodeData, 'releaseStep'>
 type FlowEdge = Edge<{ condition: ReleaseDagEdgeCondition }>
+type ReleaseFlowDagEditorLayout = 'default' | 'palette-right-floating-inspector'
 
 const DAG_NODE_TAG_COLORS: Record<DagTagColor, string> = {
   grey: 'default',
@@ -73,6 +75,24 @@ const EDGE_CONDITION_OPTIONS = [
   { value: 'success', label: '成功' },
   { value: 'failure', label: '失败' },
   { value: 'always', label: '总是' },
+]
+
+const APPROVAL_MODE_OPTIONS = [
+  { value: 'any', labelZh: '任一审批', labelEn: 'Any Approver' },
+  { value: 'all', labelZh: '全部会签', labelEn: 'All Approvers' },
+  { value: 'quorum', labelZh: '指定人数', labelEn: 'Quorum' },
+]
+
+const APPROVAL_TIMEOUT_OPTIONS = [
+  { value: 'block', labelZh: '阻断发布', labelEn: 'Block Release' },
+  { value: 'reject', labelZh: '自动驳回', labelEn: 'Auto Reject' },
+  { value: 'notify', labelZh: '只通知升级', labelEn: 'Notify Only' },
+]
+
+const APPROVAL_REJECT_ACTION_OPTIONS = [
+  { value: 'stop', labelZh: '终止流程', labelEn: 'Stop Flow' },
+  { value: 'rollback', labelZh: '进入回滚', labelEn: 'Rollback' },
+  { value: 'previous', labelZh: '回到上一节点', labelEn: 'Back to Previous' },
 ]
 
 const NODE_WIDTH = 260
@@ -134,6 +154,48 @@ function getEdgeConditionOptions(localeCode: 'zh_CN' | 'en_US') {
   return EDGE_CONDITION_OPTIONS
 }
 
+function localizedOptions(
+  options: Array<{ value: string; labelZh: string; labelEn: string }>,
+  localeCode: 'zh_CN' | 'en_US',
+) {
+  return options.map((item) => ({
+    value: item.value,
+    label: localeCode === 'zh_CN' ? item.labelZh : item.labelEn,
+  }))
+}
+
+function toConfigObject(value: unknown) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function toConfigStringList(value: unknown) {
+  if (!Array.isArray(value)) return []
+  return value.map((item) => String(item).trim()).filter(Boolean)
+}
+
+function splitConfigStringList(value: string) {
+  return value.split(',').map((item) => item.trim()).filter(Boolean)
+}
+
+function approvalModeLabel(value: unknown, localeCode: 'zh_CN' | 'en_US') {
+  const option = APPROVAL_MODE_OPTIONS.find((item) => item.value === String(value || 'any'))
+  if (!option) return String(value || 'any')
+  return localeCode === 'zh_CN' ? option.labelZh : option.labelEn
+}
+
+function approvalNodeSummary(node: ReleaseDagNodeDefinition, localeCode: 'zh_CN' | 'en_US') {
+  if (node.type !== 'manual_approval') return ''
+  const config = node.config ?? {}
+  const requiredApprovals = Math.max(1, Number(config.requiredApprovals ?? 1))
+  const roles = toConfigStringList(config.approverRoles)
+  const teams = toConfigStringList(config.approverTeams)
+  const users = toConfigStringList(config.approverUsers)
+  const actor = roles[0] ?? teams[0] ?? users[0] ?? (localeCode === 'zh_CN' ? '未配置审批人' : 'No approver')
+  if (localeCode === 'zh_CN') {
+    return `${approvalModeLabel(config.approvalMode, localeCode)} / ${requiredApprovals} 人 / ${actor}`
+  }
+  return `${approvalModeLabel(config.approvalMode, localeCode)} / ${requiredApprovals} / ${actor}`
+}
 
 function toFlowNode(node: ReleaseDagNodeDefinition): FlowNode {
   return {
@@ -219,6 +281,7 @@ function ReleaseStepNode({ data, selected }: NodeProps<FlowNode>) {
           <Tag color={option ? DAG_NODE_TAG_COLORS[option.color] : 'blue'}>{getDagNodeLabel(data.type, localeCode)}</Tag>
         </div>
         <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? `超时 ${data.timeoutSeconds ?? 300}s` : `timeout ${data.timeoutSeconds ?? 300}s`}</Text>
+        {data.type === 'manual_approval' ? <Text type="secondary" className="text-xs">{approvalNodeSummary(data, localeCode)}</Text> : null}
         {data.continueOnFailure ? <Text type="warning" className="text-xs">{localeCode === 'zh_CN' ? '失败继续' : 'Continue on failure'}</Text> : null}
       </div>
       <Handle type="source" position={Position.Bottom} />
@@ -254,20 +317,110 @@ function StepConfigInspector({
           <Input value={String(config.refValue ?? '')} placeholder="main / v1.0.0" onChange={(event) => patch('refValue', event.target.value)} />
         </>
       )
-    case 'manual_approval':
+    case 'manual_approval': {
+      const changeWindow = toConfigObject(config.changeWindow)
+      const patchChangeWindow = (key: string, value: unknown) => patch('changeWindow', { ...changeWindow, [key]: value })
       return (
-        <>
-          <Input
-            value={Array.isArray(config.approverRoles) ? config.approverRoles.join(', ') : ''}
-            placeholder="release-manager, ops-lead"
-            onChange={(event) => patch('approverRoles', event.target.value.split(',').map((item) => item.trim()).filter(Boolean))}
-          />
+        <div className="soha-dag-approval-config">
+          <div className="soha-dag-inspector-field">
+            <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '审批模式' : 'Approval Mode'}</Text>
+            <Select
+              style={FULL_WIDTH_STYLE}
+              value={String(config.approvalMode ?? 'any')}
+              options={localizedOptions(APPROVAL_MODE_OPTIONS, localeCode)}
+              onChange={(value) => patch('approvalMode', String(value))}
+            />
+          </div>
+          <div className="soha-dag-inspector-field">
+            <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '最少审批人数' : 'Required Approvals'}</Text>
+            <InputNumber
+              style={FULL_WIDTH_STYLE}
+              value={Number(config.requiredApprovals ?? 1)}
+              min={1}
+              step={1}
+              onChange={(value) => patch('requiredApprovals', Math.max(1, Number(value || 1)))}
+            />
+          </div>
+          <div className="soha-dag-inspector-field">
+            <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '候选用户' : 'Approver Users'}</Text>
+            <Input
+              value={toConfigStringList(config.approverUsers).join(', ')}
+              placeholder="release-owner, qa-owner"
+              onChange={(event) => patch('approverUsers', splitConfigStringList(event.target.value))}
+            />
+          </div>
+          <div className="soha-dag-inspector-field">
+            <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '候选角色' : 'Approver Roles'}</Text>
+            <Input
+              value={toConfigStringList(config.approverRoles).join(', ')}
+              placeholder="release-manager, ops-lead"
+              onChange={(event) => patch('approverRoles', splitConfigStringList(event.target.value))}
+            />
+          </div>
+          <div className="soha-dag-inspector-field">
+            <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '候选团队' : 'Approver Teams'}</Text>
+            <Input
+              value={toConfigStringList(config.approverTeams).join(', ')}
+              placeholder="qa, sre"
+              onChange={(event) => patch('approverTeams', splitConfigStringList(event.target.value))}
+            />
+          </div>
+          <div className="soha-dag-inspector-field">
+            <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '审批 SLA(分钟)' : 'Approval SLA(min)'}</Text>
+            <InputNumber
+              style={FULL_WIDTH_STYLE}
+              value={Number(config.slaMinutes ?? 60)}
+              min={1}
+              step={5}
+              onChange={(value) => patch('slaMinutes', Math.max(1, Number(value || 60)))}
+            />
+          </div>
+          <div className="soha-dag-inspector-field">
+            <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '超时动作' : 'Timeout Action'}</Text>
+            <Select
+              style={FULL_WIDTH_STYLE}
+              value={String(config.onTimeout ?? 'block')}
+              options={localizedOptions(APPROVAL_TIMEOUT_OPTIONS, localeCode)}
+              onChange={(value) => patch('onTimeout', String(value))}
+            />
+          </div>
+          <div className="soha-dag-inspector-field">
+            <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '驳回后动作' : 'Reject Action'}</Text>
+            <Select
+              style={FULL_WIDTH_STYLE}
+              value={String(config.rejectAction ?? 'stop')}
+              options={localizedOptions(APPROVAL_REJECT_ACTION_OPTIONS, localeCode)}
+              onChange={(value) => patch('rejectAction', String(value))}
+            />
+          </div>
           <div className="soha-step-inline">
             <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '必须审批' : 'Required approval'}</Text>
             <Switch checked={config.required !== false} onChange={(checked) => patch('required', checked)} />
           </div>
-        </>
+          <div className="soha-dag-approval-window">
+            <div className="soha-step-inline">
+              <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '启用变更窗口' : 'Change Window'}</Text>
+              <Switch checked={Boolean(changeWindow.enabled)} onChange={(checked) => patchChangeWindow('enabled', checked)} />
+            </div>
+            <Input
+              value={String(changeWindow.startsAt ?? '')}
+              placeholder={localeCode === 'zh_CN' ? '窗口开始，例如 09:00' : 'Start, e.g. 09:00'}
+              onChange={(event) => patchChangeWindow('startsAt', event.target.value)}
+            />
+            <Input
+              value={String(changeWindow.endsAt ?? '')}
+              placeholder={localeCode === 'zh_CN' ? '窗口结束，例如 18:00' : 'End, e.g. 18:00'}
+              onChange={(event) => patchChangeWindow('endsAt', event.target.value)}
+            />
+            <Input
+              value={String(changeWindow.timezone ?? 'Asia/Shanghai')}
+              placeholder="Asia/Shanghai"
+              onChange={(event) => patchChangeWindow('timezone', event.target.value)}
+            />
+          </div>
+        </div>
       )
+    }
     case 'deploy_update_image':
       return (
         <>
@@ -370,9 +523,17 @@ function StepConfigInspector({
 function ReleaseFlowDagEditorInner({
   initialDefinition,
   onChange,
+  variant = 'panel',
+  layout = 'default',
+  height,
+  className,
 }: {
   initialDefinition: ReleaseDagDefinition
   onChange: (definition: ReleaseDagDefinition) => void
+  variant?: 'panel' | 'embedded'
+  layout?: ReleaseFlowDagEditorLayout
+  height?: number | string
+  className?: string
 }) {
   const { localeCode } = useI18n()
   const edgeConditionOptions = useMemo(() => getEdgeConditionOptions(localeCode), [localeCode])
@@ -391,6 +552,13 @@ function ReleaseFlowDagEditorInner({
     })
   }, [edges, nodes, onChange])
 
+  useEffect(() => {
+    setNodes(initialDefinition.nodes.map(toFlowNode))
+    setEdges(initialDefinition.edges.map(toFlowEdge))
+    setSelectedNodeId(null)
+    setSelectedEdgeId(null)
+  }, [initialDefinition.edges, initialDefinition.nodes, setEdges, setNodes])
+
   const selectedNode = useMemo(
     () => nodes.find((node) => node.id === selectedNodeId),
     [nodes, selectedNodeId],
@@ -399,6 +567,7 @@ function ReleaseFlowDagEditorInner({
     () => edges.find((edge) => edge.id === selectedEdgeId),
     [edges, selectedEdgeId],
   )
+  const useFloatingInspector = layout === 'palette-right-floating-inspector'
 
   const addNode = useCallback((type: ReleaseDagNodeType) => {
     setNodes((current) => [...current, toFlowNode(createDagNode(type, { x: 120 + current.length * 24, y: 120 + current.length * 24 }))])
@@ -437,119 +606,202 @@ function ReleaseFlowDagEditorInner({
     }
   }, [selectedEdgeId, selectedNodeId, setEdges, setNodes])
 
+  const closeFloatingInspector = useCallback(() => {
+    setSelectedNodeId(null)
+    setSelectedEdgeId(null)
+  }, [])
+
+  const panel = (title: ReactNode, content: ReactNode, panelClassName = 'soha-dag-panel') => {
+    if (variant === 'embedded') {
+      return (
+        <section className={`${panelClassName} soha-dag-embedded-panel`}>
+          <div className="soha-dag-embedded-panel__head">{title}</div>
+          <div className="soha-dag-embedded-panel__body">{content}</div>
+        </section>
+      )
+    }
+    return <Card className={panelClassName} title={title}>{content}</Card>
+  }
+
+  const canvasStyle = height ? { height } : undefined
+  const inspectorTitle = selectedNode
+    ? (localeCode === 'zh_CN' ? '节点属性' : 'Node Properties')
+    : selectedEdge
+      ? (localeCode === 'zh_CN' ? '连线属性' : 'Edge Properties')
+      : (localeCode === 'zh_CN' ? '属性面板' : 'Inspector')
+  const selectedNodeOption = selectedNode ? DAG_NODE_OPTIONS.find((item) => item.value === selectedNode.data.type) : undefined
+  const nodeTypeEditor = selectedNode ? (
+    useFloatingInspector ? (
+      <div className="soha-dag-inspector-type">
+        <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '节点功能' : 'Node Function'}</Text>
+        <Tag color={selectedNodeOption ? DAG_NODE_TAG_COLORS[selectedNodeOption.color] : 'blue'}>
+          {getDagNodeLabel(selectedNode.data.type, localeCode)}
+        </Tag>
+      </div>
+    ) : (
+      <Select
+        style={FULL_WIDTH_STYLE}
+        value={selectedNode.data.type}
+        options={DAG_NODE_OPTIONS.map((item) => ({ value: item.value, label: getDagNodeLabel(item.value, localeCode) }))}
+        onChange={(value) => {
+          const nextType = String(value) as ReleaseDagNodeType
+          setNodes((current) => current.map((node) => node.id === selectedNode.id ? {
+            ...node,
+            data: {
+              ...node.data,
+              type: nextType,
+              config: createNodeConfig(nextType),
+            },
+          } : node))
+        }}
+      />
+    )
+  ) : null
+
+  const nodeInspectorFields = selectedNode ? (
+    <>
+      <Input
+        value={selectedNode.data.name}
+        onChange={(event) => setNodes((current) => current.map((node) => node.id === selectedNode.id ? { ...node, data: { ...node.data, name: event.target.value } } : node))}
+      />
+      {nodeTypeEditor}
+      <InputNumber
+        style={FULL_WIDTH_STYLE}
+        value={selectedNode.data.timeoutSeconds ?? 300}
+        min={30}
+        step={30}
+        onChange={(value) => setNodes((current) => current.map((node) => node.id === selectedNode.id ? { ...node, data: { ...node.data, timeoutSeconds: Number(value || 300) } } : node))}
+      />
+      <div className="soha-step-inline">
+        <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '失败继续' : 'Continue on Failure'}</Text>
+        <Switch
+          checked={Boolean(selectedNode.data.continueOnFailure)}
+          onChange={(checked) => setNodes((current) => current.map((node) => node.id === selectedNode.id ? { ...node, data: { ...node.data, continueOnFailure: checked } } : node))}
+        />
+      </div>
+      <StepConfigInspector
+        node={selectedNode.data}
+        onChange={(config) => setNodes((current) => current.map((node) => node.id === selectedNode.id ? { ...node, data: { ...node.data, config } } : node))}
+      />
+    </>
+  ) : null
+  const edgeInspectorFields = selectedEdge ? (
+    <>
+      <Select
+        style={FULL_WIDTH_STYLE}
+        value={selectedEdge.data?.condition || 'success'}
+        options={edgeConditionOptions}
+        onChange={(value) => {
+          const condition = String(value) as ReleaseDagEdgeCondition
+          setEdges((current) => current.map((edge) => edge.id === selectedEdge.id ? { ...edge, label: condition, data: { condition } } : edge))
+        }}
+      />
+      <Text type="secondary" className="text-xs">{`${selectedEdge.source} -> ${selectedEdge.target}`}</Text>
+    </>
+  ) : null
+  const activeInspectorFields = selectedNode ? nodeInspectorFields : edgeInspectorFields
+  const inspectorContent = activeInspectorFields ? (
+    <div className="soha-dag-inspector">
+      <Text strong>{inspectorTitle}</Text>
+      {activeInspectorFields}
+    </div>
+  ) : (
+    <ManagementState
+      bordered={false}
+      compact
+      kind="select-scope"
+      title={localeCode === 'zh_CN' ? '请选择节点或连线' : 'Select a node or edge'}
+      description={localeCode === 'zh_CN' ? '选择节点或连线后，可在这里编辑属性' : 'Select a node or edge to edit its properties here'}
+    />
+  )
+  const floatingInspector = useFloatingInspector && activeInspectorFields ? (
+    <div className="soha-dag-floating-inspector">
+      <div className="soha-dag-floating-inspector__head">
+        <Text strong>{inspectorTitle}</Text>
+        <Button
+          aria-label={localeCode === 'zh_CN' ? '关闭属性面板' : 'Close inspector'}
+          icon={<CloseOutlined />}
+          size="small"
+          type="text"
+          onClick={closeFloatingInspector}
+        />
+      </div>
+      <div className="soha-dag-inspector">
+        {activeInspectorFields}
+      </div>
+    </div>
+  ) : null
+  const palettePanel = panel(localeCode === 'zh_CN' ? '节点面板' : 'Node Palette', (
+    <>
+    <div className="soha-dag-palette">
+      {DAG_NODE_OPTIONS.map((item) => (
+        <Button key={item.value} onClick={() => addNode(item.value)}>
+          {getDagNodeLabel(item.value, localeCode)}
+        </Button>
+      ))}
+    </div>
+    <Space wrap>
+      <Button type="primary" onClick={applyAutoLayout}>{localeCode === 'zh_CN' ? '自动布局' : 'Auto Layout'}</Button>
+      <Button onClick={() => fitView({ padding: 0.2 })}>{localeCode === 'zh_CN' ? '适配视图' : 'Fit View'}</Button>
+      <Button type="text" danger disabled={!selectedNodeId && !selectedEdgeId} onClick={removeSelected}>
+        {localeCode === 'zh_CN' ? '删除选中' : 'Delete Selected'}
+      </Button>
+    </Space>
+    <Text type="secondary" className="text-xs">
+      {useFloatingInspector
+        ? (localeCode === 'zh_CN'
+          ? '节点可直接在画布中拖动。选择节点或连线后，在画布内编辑属性。'
+          : 'Drag nodes on the canvas. Select a node or edge to edit it inside the canvas.')
+        : (localeCode === 'zh_CN'
+          ? '节点可直接在画布中拖动。连线默认表示 `success`，右侧属性面板可以改成 `failure` 或 `always`。'
+          : 'Drag nodes directly on the canvas. Edges default to `success`, and the inspector can switch them to `failure` or `always`.')}
+    </Text>
+    </>
+  ))
+  const canvasPanel = panel(localeCode === 'zh_CN' ? 'DAG 画布' : 'DAG Canvas', (
+    <div className="soha-dag-canvas" style={canvasStyle}>
+      <ReactFlow<FlowNode, FlowEdge>
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={{ releaseStep: ReleaseStepNode } as const}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        onSelectionChange={({ nodes: activeNodes, edges: activeEdges }) => {
+          const activeNodeId = activeNodes[0]?.id ?? null
+          setSelectedNodeId(activeNodeId)
+          setSelectedEdgeId(activeNodeId ? null : activeEdges[0]?.id ?? null)
+        }}
+        fitView
+      >
+        <Background gap={20} size={1} />
+        <Controls />
+        <MiniMap />
+      </ReactFlow>
+      {floatingInspector}
+    </div>
+  ), 'soha-dag-canvas-card')
+  const inspectorPanel = panel(localeCode === 'zh_CN' ? '属性面板' : 'Inspector', inspectorContent)
+
   return (
-    <div className="soha-dag-editor-shell">
-      <Card className="soha-dag-panel" title={localeCode === 'zh_CN' ? '节点面板' : 'Node Palette'}>
-        <div className="soha-dag-palette">
-          {DAG_NODE_OPTIONS.map((item) => (
-            <Button key={item.value} onClick={() => addNode(item.value)}>
-              {getDagNodeLabel(item.value, localeCode)}
-            </Button>
-          ))}
-        </div>
-        <Space>
-          <Button type="primary" onClick={applyAutoLayout}>{localeCode === 'zh_CN' ? '自动布局' : 'Auto Layout'}</Button>
-          <Button onClick={() => fitView({ padding: 0.2 })}>{localeCode === 'zh_CN' ? '适配视图' : 'Fit View'}</Button>
-          <Button type="text" danger disabled={!selectedNodeId && !selectedEdgeId} onClick={removeSelected}>
-            {localeCode === 'zh_CN' ? '删除选中' : 'Delete Selected'}
-          </Button>
-        </Space>
-        <Text type="secondary" className="text-xs">
-          {localeCode === 'zh_CN'
-            ? '节点可直接在画布中拖动。连线默认表示 `success`，右侧属性面板可以改成 `failure` 或 `always`。'
-            : 'Drag nodes directly on the canvas. Edges default to `success`, and the inspector can switch them to `failure` or `always`.'}
-        </Text>
-      </Card>
-
-      <Card className="soha-dag-canvas-card" title={localeCode === 'zh_CN' ? 'DAG 画布' : 'DAG Canvas'}>
-        <div className="soha-dag-canvas">
-          <ReactFlow<FlowNode, FlowEdge>
-            nodes={nodes}
-            edges={edges}
-            nodeTypes={{ releaseStep: ReleaseStepNode } as const}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onSelectionChange={({ nodes: activeNodes, edges: activeEdges }) => {
-              setSelectedNodeId(activeNodes[0]?.id ?? null)
-              setSelectedEdgeId(activeEdges[0]?.id ?? null)
-            }}
-            fitView
-          >
-            <Background gap={20} size={1} />
-            <Controls />
-            <MiniMap />
-          </ReactFlow>
-        </div>
-      </Card>
-
-      <Card className="soha-dag-panel" title={localeCode === 'zh_CN' ? '属性面板' : 'Inspector'}>
-        {selectedNode ? (
-          <div className="soha-dag-inspector">
-            <Text strong>{localeCode === 'zh_CN' ? '节点属性' : 'Node Properties'}</Text>
-            <Input
-              value={selectedNode.data.name}
-              onChange={(event) => setNodes((current) => current.map((node) => node.id === selectedNode.id ? { ...node, data: { ...node.data, name: event.target.value } } : node))}
-            />
-            <Select
-              style={FULL_WIDTH_STYLE}
-              value={selectedNode.data.type}
-              options={DAG_NODE_OPTIONS.map((item) => ({ value: item.value, label: getDagNodeLabel(item.value, localeCode) }))}
-              onChange={(value) => {
-                const nextType = String(value) as ReleaseDagNodeType
-                setNodes((current) => current.map((node) => node.id === selectedNode.id ? {
-                  ...node,
-                  data: {
-                    ...node.data,
-                    type: nextType,
-                    config: createNodeConfig(nextType),
-                  },
-                } : node))
-              }}
-            />
-            <InputNumber
-              style={FULL_WIDTH_STYLE}
-              value={selectedNode.data.timeoutSeconds ?? 300}
-              min={30}
-              step={30}
-              onChange={(value) => setNodes((current) => current.map((node) => node.id === selectedNode.id ? { ...node, data: { ...node.data, timeoutSeconds: Number(value || 300) } } : node))}
-            />
-            <div className="soha-step-inline">
-              <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '失败继续' : 'Continue on Failure'}</Text>
-              <Switch
-                checked={Boolean(selectedNode.data.continueOnFailure)}
-                onChange={(checked) => setNodes((current) => current.map((node) => node.id === selectedNode.id ? { ...node, data: { ...node.data, continueOnFailure: checked } } : node))}
-              />
-            </div>
-            <StepConfigInspector
-              node={selectedNode.data}
-              onChange={(config) => setNodes((current) => current.map((node) => node.id === selectedNode.id ? { ...node, data: { ...node.data, config } } : node))}
-            />
-          </div>
-        ) : selectedEdge ? (
-          <div className="soha-dag-inspector">
-            <Text strong>{localeCode === 'zh_CN' ? '连线属性' : 'Edge Properties'}</Text>
-            <Select
-              style={FULL_WIDTH_STYLE}
-              value={selectedEdge.data?.condition || 'success'}
-              options={edgeConditionOptions}
-              onChange={(value) => {
-                const condition = String(value) as ReleaseDagEdgeCondition
-                setEdges((current) => current.map((edge) => edge.id === selectedEdge.id ? { ...edge, label: condition, data: { condition } } : edge))
-              }}
-            />
-            <Text type="secondary" className="text-xs">{`${selectedEdge.source} -> ${selectedEdge.target}`}</Text>
-          </div>
-        ) : (
-          <ManagementState
-            bordered={false}
-            compact
-            kind="select-scope"
-            title={localeCode === 'zh_CN' ? '请选择节点或连线' : 'Select a node or edge'}
-            description={localeCode === 'zh_CN' ? '选择节点或连线后，可在这里编辑属性' : 'Select a node or edge to edit its properties here'}
-          />
-        )}
-      </Card>
+    <div className={[
+      'soha-dag-editor-shell',
+      variant === 'embedded' ? 'soha-dag-editor-shell--embedded' : '',
+      layout === 'palette-right-floating-inspector' ? 'soha-dag-editor-shell--palette-right' : '',
+      className ?? '',
+    ].filter(Boolean).join(' ')}>
+      {layout === 'palette-right-floating-inspector' ? (
+        <>
+          {canvasPanel}
+          {palettePanel}
+        </>
+      ) : (
+        <>
+          {palettePanel}
+          {canvasPanel}
+          {inspectorPanel}
+        </>
+      )}
     </div>
   )
 }
@@ -557,13 +809,28 @@ function ReleaseFlowDagEditorInner({
 export function ReleaseFlowDagEditor({
   initialDefinition,
   onChange,
+  variant,
+  layout,
+  height,
+  className,
 }: {
   initialDefinition: ReleaseDagDefinition
   onChange: (definition: ReleaseDagDefinition) => void
+  variant?: 'panel' | 'embedded'
+  layout?: ReleaseFlowDagEditorLayout
+  height?: number | string
+  className?: string
 }) {
   return (
     <ReactFlowProvider>
-      <ReleaseFlowDagEditorInner initialDefinition={initialDefinition} onChange={onChange} />
+      <ReleaseFlowDagEditorInner
+        className={className}
+        height={height}
+        initialDefinition={initialDefinition}
+        layout={layout}
+        onChange={onChange}
+        variant={variant}
+      />
     </ReactFlowProvider>
   )
 }

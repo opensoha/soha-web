@@ -123,6 +123,59 @@ interface AlertIntegration {
 export type AlertIntegrationLabelMapping = ObservabilityPayloadMap
 export type AlertIntegrationDedupeConfig = ObservabilityPayloadMap
 export type AlertIntegrationPayload = ObservabilityPayloadMap
+export type AlertIntegrationType = 'alertmanager_v1' | 'grafana_alerting_v1' | 'generic_json'
+
+type AlertIntegrationLabelSet = Record<string, string>
+type AlertIntegrationAnnotationSet = Record<string, string>
+
+interface AlertIntegrationSampleAlert {
+  status: string
+  labels: AlertIntegrationLabelSet
+  annotations: AlertIntegrationAnnotationSet
+  startsAt: string
+  generatorURL?: string
+  dashboardURL?: string
+}
+
+interface AlertmanagerSamplePayload {
+  receiver: string
+  status: string
+  groupLabels: AlertIntegrationLabelSet
+  commonLabels: AlertIntegrationLabelSet
+  commonAnnotations: AlertIntegrationAnnotationSet
+  externalURL: string
+  alerts: AlertIntegrationSampleAlert[]
+}
+
+interface GrafanaSamplePayload {
+  receiver: string
+  status: string
+  title: string
+  message: string
+  commonLabels: AlertIntegrationLabelSet
+  commonAnnotations: AlertIntegrationAnnotationSet
+  externalURL: string
+  alerts: AlertIntegrationSampleAlert[]
+}
+
+interface GenericSampleAlert {
+  title: string
+  summary: string
+  severity: string
+  status: string
+  clusterId: string
+  namespace: string
+  labels: AlertIntegrationLabelSet
+  annotations: AlertIntegrationAnnotationSet
+  startsAt: string
+}
+
+interface GenericSamplePayload {
+  source: string
+  alerts: GenericSampleAlert[]
+}
+
+type AlertIntegrationSamplePayload = AlertmanagerSamplePayload | GrafanaSamplePayload | GenericSamplePayload
 
 export interface AlertIntegrationFormValues {
   id?: string
@@ -172,7 +225,7 @@ const alertIntegrationTypeOptions = [
   { value: 'alertmanager_v1', label: 'Alertmanager v1' },
   { value: 'grafana_alerting_v1', label: 'Grafana Alerting' },
   { value: 'generic_json', label: 'Generic Webhook' },
-]
+] satisfies Array<{ value: AlertIntegrationType; label: string }>
 
 function alertIntegrationTypeLabel(value?: string) {
   return alertIntegrationTypeOptions.find((item) => item.value === value)?.label || value || '-'
@@ -200,9 +253,9 @@ export function buildAlertIntegrationTestPayload(values: AlertIntegrationTestFor
   }
 }
 
-function alertIntegrationSamplePayload(type: string) {
+function buildAlertIntegrationSamplePayload(type: AlertIntegrationType | string, now = new Date().toISOString()): AlertIntegrationSamplePayload {
   if (type === 'alertmanager_v1') {
-    return prettyJson({
+    return {
       receiver: 'soha',
       status: 'firing',
       groupLabels: { alertname: 'HighCPU' },
@@ -214,14 +267,14 @@ function alertIntegrationSamplePayload(type: string) {
           status: 'firing',
           labels: { alertname: 'HighCPU', pod: 'checkout-api-0' },
           annotations: { description: 'checkout-api CPU 使用率超过阈值' },
-          startsAt: new Date().toISOString(),
+          startsAt: now,
           generatorURL: 'https://prometheus.example.com/graph',
         },
       ],
-    })
+    }
   }
   if (type === 'grafana_alerting_v1') {
-    return prettyJson({
+    return {
       receiver: 'soha',
       status: 'firing',
       title: 'Grafana alert',
@@ -234,13 +287,13 @@ function alertIntegrationSamplePayload(type: string) {
           status: 'firing',
           labels: { alertname: 'LatencyHigh', rule_uid: 'rule-001', namespace: 'checkout' },
           annotations: { description: 'p95 延迟超过阈值' },
-          startsAt: new Date().toISOString(),
+          startsAt: now,
           dashboardURL: 'https://grafana.example.com/d/checkout',
         },
       ],
-    })
+    }
   }
-  return prettyJson({
+  return {
     source: 'external-system',
     alerts: [
       {
@@ -252,10 +305,14 @@ function alertIntegrationSamplePayload(type: string) {
         namespace: 'checkout',
         labels: { service: 'checkout', role: 'ops' },
         annotations: { summary: '第三方系统告警' },
-        startsAt: new Date().toISOString(),
+        startsAt: now,
       },
     ],
-  })
+  }
+}
+
+export function alertIntegrationSamplePayload(type: AlertIntegrationType | string) {
+  return prettyJson(buildAlertIntegrationSamplePayload(type))
 }
 
 function buildWebhookURL(path?: string) {

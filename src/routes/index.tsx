@@ -606,14 +606,6 @@ export function AppRouter() {
             }
           />
           <Route
-            path="/application-management"
-            element={<RoutePages.ApplicationManagementRedirect />}
-          />
-          <Route
-            path="/application-management/:applicationId"
-            element={<RoutePages.ApplicationManagementRedirect />}
-          />
-          <Route
             path="/applications/:applicationId"
             element={
               <RoutePages.LazyPage>
@@ -628,14 +620,6 @@ export function AppRouter() {
                 <RoutePages.ApplicationWorkloadDetailPage />
               </RoutePages.LazyPage>
             }
-          />
-          <Route
-            path="/business-lines"
-            element={<Navigate to="/applications" replace />}
-          />
-          <Route
-            path="/delivery-environments"
-            element={<Navigate to="/applications" replace />}
           />
           <Route
             path="/application-environments"
@@ -670,6 +654,30 @@ export function AppRouter() {
             }
           />
           <Route
+            path="/delivery/onboarding"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.DeliveryOnboardingPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
+            path="/delivery/testing"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.DeliveryTestingPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
+            path="/delivery/analysis"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.DeliveryAnalysisPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
             path="/delivery/release-bundles"
             element={
               <RoutePages.LazyPage>
@@ -682,14 +690,6 @@ export function AppRouter() {
             element={
               <RoutePages.LazyPage>
                 <RoutePages.ExecutionTasksPage />
-              </RoutePages.LazyPage>
-            }
-          />
-          <Route
-            path="/delivery/approval-policies"
-            element={
-              <RoutePages.LazyPage>
-                <RoutePages.ApprovalPoliciesPage />
               </RoutePages.LazyPage>
             }
           />

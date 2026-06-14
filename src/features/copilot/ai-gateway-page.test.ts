@@ -29,7 +29,7 @@ describe('AI Gateway policy condition helpers', () => {
   it('builds backend-supported approval routing from Console policy fields', () => {
     const values = {
       approvalMode: 'require_approval',
-      approvalPolicyRef: 'delivery-standard',
+      approvalPolicyRef: 'gateway-standard',
       approvalRoutingMode: 'all',
       approvalApproverUsers: [' release-owner ', 'qa-owner'],
       approvalApproverRoles: ['release-manager'],
@@ -43,7 +43,7 @@ describe('AI Gateway policy condition helpers', () => {
 
     expect(accessPolicyApprovalPolicyFromValues(values)).toEqual({
       strategy: 'require_approval',
-      approvalPolicyRef: 'delivery-standard',
+      approvalPolicyRef: 'gateway-standard',
       approvalMode: 'all',
       approverUsers: ['release-owner', 'qa-owner'],
       approverRoles: ['release-manager'],
@@ -149,7 +149,7 @@ describe('AI Gateway policy condition helpers', () => {
         effect: 'allow',
         approvalPolicy: {
           strategy: 'require_approval',
-          approvalPolicyRef: 'delivery-standard',
+          approvalPolicyRef: 'gateway-standard',
           approvalRouting: {
             approvalMode: 'any',
             candidateUserIds: ['release-owner'],
@@ -188,7 +188,7 @@ describe('AI Gateway policy condition helpers', () => {
       }),
     ).toMatchObject({
       approvalMode: 'require_approval',
-      approvalPolicyRef: 'delivery-standard',
+      approvalPolicyRef: 'gateway-standard',
       approvalRoutingMode: 'any',
       approvalApproverUsers: ['release-owner'],
       approvalApproverRoles: ['release-manager'],

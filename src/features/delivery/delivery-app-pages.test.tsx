@@ -8,16 +8,20 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ApplicationsPage,
+  BuildTemplatesPage,
   ExecutionTasksPage,
   ReleaseBundlesPage,
   WorkflowsPage,
-  buildApprovalPolicyPayload,
   buildBuildTemplatePayload,
-  type ApprovalPolicyFormValues,
   type BuildTemplateFormValues,
 } from './delivery-app-pages'
-import { defaultBuildSources } from './application-management-pages'
+import { defaultBuildSources } from './application-center-model'
 import { ReleaseBoardPage } from './delivery-catalog-pages'
+import {
+  DeliveryAnalysisPage,
+  DeliveryOnboardingPage,
+  DeliveryTestingPage,
+} from './delivery-workbench-pages'
 
 const testState = vi.hoisted(() => ({
   permissionSnapshot: {
@@ -26,6 +30,7 @@ const testState = vi.hoisted(() => ({
       'delivery.application.create',
       'delivery.application.update',
       'delivery.application-environments.view',
+      'delivery.build-templates.manage',
       'delivery.release-board.view',
     ],
     visibleMenuIds: [],
@@ -92,6 +97,25 @@ const testState = vi.hoisted(() => ({
     if (path === '/workflow-templates') {
       return { data: [] }
     }
+    if (path === '/delivery/blueprints') {
+      return {
+        data: [
+          {
+            id: 'blueprint-1',
+            key: 'node-service',
+            name: 'Node Service',
+            description: 'Node.js service onboarding',
+            applicationDraft: { key: 'node-service', name: 'Node Service', group: 'frontend', language: 'node' },
+            buildSources: [],
+            environmentBindings: [],
+            files: [],
+            enabled: true,
+            createdAt: '2026-05-01T00:00:00Z',
+            updatedAt: '2026-05-08T12:00:00Z',
+          },
+        ],
+      }
+    }
     if (path === '/clusters') {
       return { data: [] }
     }
@@ -151,7 +175,24 @@ const testState = vi.hoisted(() => ({
       }
     }
     if (path === '/build-templates') {
-      return { data: [{ id: 'tpl-1', key: 'docker-node', name: 'Node Docker', enabled: true, createdAt: '2026-05-01T00:00:00Z', updatedAt: '2026-05-01T00:00:00Z' }] }
+      return {
+        data: [
+          {
+            id: 'tpl-1',
+            key: 'docker-node',
+            name: 'Node Docker',
+            description: 'Node standard docker build',
+            builderKind: 'docker',
+            dockerfileTemplate: 'FROM node:22',
+            buildCommands: ['npm ci', 'npm run build'],
+            variableSchema: { imageTag: { type: 'string', title: '镜像 Tag', required: true } },
+            defaultVariables: { imageTag: 'latest' },
+            enabled: true,
+            createdAt: '2026-05-01T00:00:00Z',
+            updatedAt: '2026-05-01T00:00:00Z',
+          },
+        ],
+      }
     }
     if (path === '/delivery/release-bundles') {
       return {
@@ -371,7 +412,8 @@ describe('ApplicationsPage workspace layout', () => {
   it('renders application-centered cards before the detailed table', async () => {
     const container = await renderWithProviders(<ApplicationsPage />)
 
-    expect(container.textContent).toContain('新建应用')
+    expect(container.textContent).toContain('接入应用/服务')
+    expect(container.textContent).toContain('新建应用档案')
     expect(container.textContent).toContain('ERP Front Main')
     expect(container.textContent).toContain('全部')
     expect(container.textContent).toContain('erp-front')
@@ -381,6 +423,8 @@ describe('ApplicationsPage workspace layout', () => {
     expect(container.textContent).toContain('门禁: 等待执行')
     expect(container.textContent).toContain('交付: 失败待处理')
     expect(container.textContent).toContain('门禁: 阻塞')
+    expect(container.textContent).toContain('服务线索')
+    expect(container.textContent).toContain('最近环境')
     expect(container.querySelector('.soha-application-card-list')).not.toBeNull()
     expect(container.querySelector('.soha-application-center-toolbar')).not.toBeNull()
     expect(container.querySelector('.soha-application-card__more')).not.toBeNull()
@@ -438,30 +482,28 @@ describe('ApplicationsPage workspace layout', () => {
     })
   })
 
-  it('builds typed approval policy payloads with normalized numbers and roles', () => {
-    const values = {
-      key: 'prod-gate',
-      name: 'Production Gate',
-      mode: 'multi',
-      requiredApprovals: '2',
-      slaMinutes: '45',
-      approverRolesText: ' release-manager, ops-lead, ',
-      changeWindowText: '{"timezone":"Asia/Shanghai"}',
-      metadataText: '{"risk":"high"}',
-      enabled: true,
-    } satisfies ApprovalPolicyFormValues
+  it('renders build templates as a left-list and right-designer workspace', async () => {
+    const container = await renderWithProviders(<BuildTemplatesPage />, '/build-templates')
 
-    expect(buildApprovalPolicyPayload(values)).toEqual({
-      key: 'prod-gate',
-      name: 'Production Gate',
-      mode: 'multi',
-      requiredApprovals: 2,
-      slaMinutes: 45,
-      approverRoles: ['release-manager', 'ops-lead'],
-      changeWindow: { timezone: 'Asia/Shanghai' },
-      metadata: { risk: 'high' },
-      enabled: true,
-    })
+    expect(testState.apiGet).toHaveBeenCalledWith('/build-templates')
+    expect(container.querySelector('.soha-build-template-workspace')).not.toBeNull()
+    expect(container.querySelector('.soha-build-template-list')).not.toBeNull()
+    expect(container.querySelector('.soha-build-template-designer')).not.toBeNull()
+    expect(container.textContent).toContain('新建模板')
+    expect(container.textContent).toContain('保存')
+    expect(container.textContent).toContain('取消更改')
+    expect(container.textContent).toContain('Node Docker')
+    expect(container.textContent).toContain('docker-node')
+    expect(container.textContent).toContain('命令 2')
+    expect(container.textContent).toContain('变量 1')
+    expect(container.textContent).toContain('基础信息')
+    expect(container.textContent).toContain('Dockerfile')
+    expect(container.textContent).toContain('构建命令')
+    expect(container.textContent).toContain('变量')
+    expect(container.textContent).toContain('高级预览')
+    expect(container.querySelector('.soha-admin-table-shell')).toBeNull()
+    expect(container.textContent).not.toContain('变量 Schema(JSON)')
+    expect(container.textContent).not.toContain('默认变量(JSON)')
   })
 
   it('shows Gateway approval drilldown context on workflow list', async () => {
@@ -531,5 +573,52 @@ describe('ApplicationsPage workspace layout', () => {
     expect(container.textContent).toContain('bundle-1')
     expect(container.textContent).toContain('registry.local/erp-front:1.2.3')
     expect(container.textContent).toContain('2.0.0-rc1')
+  })
+
+  it('renders application onboarding as a dual-mode workbench entry', async () => {
+    const container = await renderWithProviders(<DeliveryOnboardingPage />, '/delivery/onboarding')
+
+    expect(testState.apiGet).toHaveBeenCalledWith('/applications')
+    expect(testState.apiGet).toHaveBeenCalledWith('/delivery/blueprints')
+    expect(testState.apiGet).toHaveBeenCalledWith('/delivery/release-board')
+    expect(container.textContent).toContain('应用 / 服务接入')
+    expect(container.textContent).toContain('常规模式保持完整可用')
+    expect(container.textContent).toContain('接入对象边界')
+    expect(container.textContent).toContain('AI Gateway 接入辅助')
+    expect(container.textContent).toContain('服务组件')
+    expect(container.textContent).toContain('DeliveryDraft')
+    expect(container.textContent).toContain('接入新服务')
+    expect(container.textContent).toContain('待接入服务线索')
+    expect(container.textContent).toContain('ERP Front Main')
+  })
+
+  it('renders testing verification with candidate evidence and AI assist boundary', async () => {
+    const container = await renderWithProviders(<DeliveryTestingPage />, '/delivery/testing')
+
+    expect(testState.apiGet).toHaveBeenCalledWith('/delivery/release-bundles')
+    expect(testState.apiGet).toHaveBeenCalledWith('/delivery/execution-tasks')
+    expect(testState.apiGet).toHaveBeenCalledWith('/delivery/release-board')
+    expect(container.textContent).toContain('测试验证')
+    expect(container.textContent).toContain('候选版本')
+    expect(container.textContent).toContain('验证任务')
+    expect(container.textContent).toContain('AI Gateway 验证辅助')
+    expect(container.textContent).toContain('常规模式保持完整可用')
+    expect(container.textContent).toContain('1.2.3')
+    expect(container.textContent).toContain('可晋级')
+  })
+
+  it('renders issue analysis with failed task evidence and normal workflow links', async () => {
+    const container = await renderWithProviders(<DeliveryAnalysisPage />, '/delivery/analysis')
+
+    expect(testState.apiGet).toHaveBeenCalledWith('/delivery/execution-tasks')
+    expect(testState.apiGet).toHaveBeenCalledWith('/delivery/release-board')
+    expect(testState.apiGet).toHaveBeenCalledWith('/delivery/release-bundles')
+    expect(container.textContent).toContain('问题分析')
+    expect(container.textContent).toContain('失败任务')
+    expect(container.textContent).toContain('AI Gateway 故障分析')
+    expect(container.textContent).toContain('任务日志')
+    expect(container.textContent).toContain('task-failed')
+    expect(container.textContent).toContain('需处理')
+    expect(container.textContent).toContain('查看影响面')
   })
 })

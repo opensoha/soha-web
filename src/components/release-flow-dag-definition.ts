@@ -41,6 +41,67 @@ export interface ReleaseDagDefinition {
   edges: ReleaseDagEdgeDefinition[]
 }
 
+export type ReleaseDagSeverity = 'error' | 'warning'
+
+export interface ReleaseDagValidationIssue {
+  severity: ReleaseDagSeverity
+  message: string
+  nodeIds?: string[]
+  edgeIds?: string[]
+}
+
+export interface ReleaseDagAnalysis {
+  definition: ReleaseDagDefinition
+  nodeCount: number
+  edgeCount: number
+  validationNodeCount: number
+  rollbackNodeCount: number
+  approvalNodeCount: number
+  buildNodeCount: number
+  deployNodeCount: number
+  entryNodeIds: string[]
+  terminalNodeIds: string[]
+  isolatedNodeIds: string[]
+  invalidEdgeIds: string[]
+  duplicateNodeIds: string[]
+  selfLoopEdgeIds: string[]
+  hasCycle: boolean
+  isReleaseDagCompatible: boolean
+  issues: ReleaseDagValidationIssue[]
+}
+
+export const RELEASE_DAG_VALIDATION_NODE_TYPES = new Set<string>([
+  'check',
+  'check_http',
+  'check_k8s_event',
+  'smoke_test',
+  'verify',
+  'verification',
+  'test',
+  'quality_gate',
+])
+
+const RELEASE_DAG_ROLLBACK_NODE_TYPES = new Set<string>(['rollback_to_previous', 'rollback'])
+const RELEASE_DAG_APPROVAL_NODE_TYPES = new Set<string>(['manual_approval', 'approval'])
+const RELEASE_DAG_BUILD_NODE_TYPES = new Set<string>(['build'])
+const RELEASE_DAG_DEPLOY_NODE_TYPES = new Set<string>([
+  'deploy',
+  'deploy_update_image',
+  'restart_workload',
+  'scale_workload',
+  'delete_pod',
+  'evict_pod',
+  'wait_rollout',
+])
+
+export function normalizeReleaseDagNodeType(value: unknown) {
+  return String(value || '').trim().toLowerCase()
+}
+
+export function isReleaseDagValidationNodeType(value: unknown) {
+  return RELEASE_DAG_VALIDATION_NODE_TYPES.has(normalizeReleaseDagNodeType(value))
+}
+
 function createGraphId(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`
 }
@@ -85,7 +146,23 @@ export function createNodeConfig(type: ReleaseDagNodeType): Record<string, unkno
     case 'build':
       return { sourceRef: 'binding', refType: 'branch', refValue: '' }
     case 'manual_approval':
-      return { approverRoles: ['release-manager'], required: true }
+      return {
+        approvalMode: 'any',
+        approverRoles: ['release-manager'],
+        approverUsers: [],
+        approverTeams: [],
+        required: true,
+        requiredApprovals: 1,
+        slaMinutes: 60,
+        onTimeout: 'block',
+        rejectAction: 'stop',
+        changeWindow: {
+          enabled: false,
+          timezone: 'Asia/Shanghai',
+          startsAt: '',
+          endsAt: '',
+        },
+      }
     case 'deploy_update_image':
       return { targetRef: 'primary', imageTagSource: 'workflow_input' }
     case 'wait_rollout':
@@ -220,7 +297,7 @@ export function normalizeReleaseDagDefinition(raw: unknown): ReleaseDagDefinitio
   const value = raw as Record<string, unknown>
   const nodeItems = toArray(value.nodes)
   const edgeItems = toArray(value.edges)
-  if (nodeItems.length === 0) {
+  if (nodeItems.length === 0 && value.mode !== 'release_dag' && !('nodes' in value) && !('edges' in value)) {
     return normalizeLegacyDefinition(value)
   }
   return {
@@ -280,4 +357,125 @@ export function createDefaultReleaseDagDefinition(): ReleaseDagDefinition {
 
 export function countReleaseDagNodes(raw: unknown) {
   return normalizeReleaseDagDefinition(raw).nodes.length
+}
+
+function hasCycle(nodeIds: Set<string>, edges: ReleaseDagEdgeDefinition[]) {
+  const indegree = new Map<string, number>()
+  const adjacent = new Map<string, string[]>()
+  nodeIds.forEach((id) => {
+    indegree.set(id, 0)
+    adjacent.set(id, [])
+  })
+  edges.forEach((edge) => {
+    if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target) || edge.source === edge.target) return
+    adjacent.get(edge.source)?.push(edge.target)
+    indegree.set(edge.target, (indegree.get(edge.target) ?? 0) + 1)
+  })
+
+  const queue = Array.from(indegree.entries()).filter(([, degree]) => degree === 0).map(([id]) => id)
+  let visited = 0
+  while (queue.length > 0) {
+    const id = queue.shift()
+    if (!id) continue
+    visited += 1
+    adjacent.get(id)?.forEach((target) => {
+      const nextDegree = (indegree.get(target) ?? 0) - 1
+      indegree.set(target, nextDegree)
+      if (nextDegree === 0) queue.push(target)
+    })
+  }
+  return visited !== nodeIds.size
+}
+
+export function analyzeReleaseDagDefinition(raw: unknown): ReleaseDagAnalysis {
+  const definition = normalizeReleaseDagDefinition(raw)
+  const issues: ReleaseDagValidationIssue[] = []
+  const seenNodeIds = new Set<string>()
+  const duplicateNodeIds = Array.from(new Set(definition.nodes.flatMap((node) => {
+    if (seenNodeIds.has(node.id)) return [node.id]
+    seenNodeIds.add(node.id)
+    return []
+  })))
+  const nodeIds = new Set(definition.nodes.map((node) => node.id))
+  const invalidEdgeIds = definition.edges
+    .filter((edge) => !nodeIds.has(edge.source) || !nodeIds.has(edge.target))
+    .map((edge) => edge.id)
+  const selfLoopEdgeIds = definition.edges
+    .filter((edge) => edge.source === edge.target)
+    .map((edge) => edge.id)
+  const validEdges = definition.edges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target) && edge.source !== edge.target)
+  const incoming = new Map<string, number>()
+  const outgoing = new Map<string, number>()
+  definition.nodes.forEach((node) => {
+    incoming.set(node.id, 0)
+    outgoing.set(node.id, 0)
+  })
+  validEdges.forEach((edge) => {
+    outgoing.set(edge.source, (outgoing.get(edge.source) ?? 0) + 1)
+    incoming.set(edge.target, (incoming.get(edge.target) ?? 0) + 1)
+  })
+
+  const entryNodeIds = definition.nodes.filter((node) => (incoming.get(node.id) ?? 0) === 0).map((node) => node.id)
+  const terminalNodeIds = definition.nodes.filter((node) => (outgoing.get(node.id) ?? 0) === 0).map((node) => node.id)
+  const isolatedNodeIds = definition.nodes
+    .filter((node) => (incoming.get(node.id) ?? 0) === 0 && (outgoing.get(node.id) ?? 0) === 0)
+    .map((node) => node.id)
+  const cycleDetected = hasCycle(nodeIds, validEdges)
+
+  const validationNodeCount = definition.nodes.filter((node) => isReleaseDagValidationNodeType(node.type)).length
+  const rollbackNodeCount = definition.nodes.filter((node) => RELEASE_DAG_ROLLBACK_NODE_TYPES.has(normalizeReleaseDagNodeType(node.type))).length
+  const approvalNodeCount = definition.nodes.filter((node) => RELEASE_DAG_APPROVAL_NODE_TYPES.has(normalizeReleaseDagNodeType(node.type))).length
+  const buildNodeCount = definition.nodes.filter((node) => RELEASE_DAG_BUILD_NODE_TYPES.has(normalizeReleaseDagNodeType(node.type))).length
+  const deployNodeCount = definition.nodes.filter((node) => RELEASE_DAG_DEPLOY_NODE_TYPES.has(normalizeReleaseDagNodeType(node.type))).length
+
+  if (definition.nodes.length === 0) {
+    issues.push({ severity: 'error', message: '至少需要 1 个 DAG 节点' })
+  }
+  if (duplicateNodeIds.length > 0) {
+    issues.push({ severity: 'error', message: '节点 ID 不能重复', nodeIds: duplicateNodeIds })
+  }
+  if (invalidEdgeIds.length > 0) {
+    issues.push({ severity: 'error', message: '连线 source/target 必须指向存在的节点', edgeIds: invalidEdgeIds })
+  }
+  if (selfLoopEdgeIds.length > 0) {
+    issues.push({ severity: 'error', message: 'DAG 连线不能指向自身', edgeIds: selfLoopEdgeIds })
+  }
+  if (cycleDetected) {
+    issues.push({ severity: 'error', message: 'DAG 不能包含环路' })
+  }
+  if (isolatedNodeIds.length > 0) {
+    issues.push({ severity: 'warning', message: '存在孤立节点', nodeIds: isolatedNodeIds })
+  }
+  if (entryNodeIds.length === 0 && definition.nodes.length > 0) {
+    issues.push({ severity: 'warning', message: '未发现入口节点' })
+  }
+  if (terminalNodeIds.length === 0 && definition.nodes.length > 0) {
+    issues.push({ severity: 'warning', message: '未发现终点节点' })
+  }
+  if (validationNodeCount === 0) {
+    issues.push({ severity: 'warning', message: '未配置验证节点' })
+  }
+  if (rollbackNodeCount === 0) {
+    issues.push({ severity: 'warning', message: '未配置回滚节点' })
+  }
+
+  return {
+    definition,
+    nodeCount: definition.nodes.length,
+    edgeCount: definition.edges.length,
+    validationNodeCount,
+    rollbackNodeCount,
+    approvalNodeCount,
+    buildNodeCount,
+    deployNodeCount,
+    entryNodeIds,
+    terminalNodeIds,
+    isolatedNodeIds,
+    invalidEdgeIds,
+    duplicateNodeIds,
+    selfLoopEdgeIds,
+    hasCycle: cycleDetected,
+    isReleaseDagCompatible: definition.mode === 'release_dag' && !issues.some((issue) => issue.severity === 'error'),
+    issues,
+  }
 }

@@ -398,6 +398,7 @@ export function getAntdTheme(themeMode: ThemeMode | ResolvedThemeMode): ThemeCon
       Switch: {
         trackHeight: 24,
         trackMinWidth: 44,
+        handleSize: 20,
         innerMinMargin: 4,
         innerMaxMargin: 24,
       },

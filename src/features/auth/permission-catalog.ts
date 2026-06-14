@@ -71,8 +71,6 @@ export const consolePermissionGroups: PermissionCatalogGroup[] = [
       { value: "delivery.release-bundles.view", label: "查看版本包" },
       { value: "delivery.execution-tasks.view", label: "查看执行任务" },
       { value: "delivery.execution-tasks.manage", label: "管理执行任务" },
-      { value: "delivery.approval-policies.view", label: "查看审批策略" },
-      { value: "delivery.approval-policies.manage", label: "管理审批策略" },
       { value: "delivery.workflow-templates.view", label: "查看流程模板" },
       { value: "delivery.workflow-templates.manage", label: "管理流程模板" },
       { value: "delivery.release-board.view", label: "查看发布看板" },
