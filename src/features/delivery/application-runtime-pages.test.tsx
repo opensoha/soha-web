@@ -42,6 +42,7 @@ const testState = vi.hoisted(() => ({
   detailWithoutImageTagDefaults: false,
   deliveryActionsAgentStatus: 'available' as 'available' | 'partial' | 'unsupported',
   deliveryClusterConnectionMode: 'direct_kubeconfig',
+  lastDeliveryPlan: undefined as undefined | Record<string, unknown>,
   apiGet: vi.fn(async (path: string) => {
     if (path === '/applications') {
       return {
@@ -427,7 +428,13 @@ const testState = vi.hoisted(() => ({
     if (path === '/builds?applicationId=app-1') {
       return { items: [{ id: 'build-1', applicationId: 'app-1', sourceSystem: 'application', status: 'completed', createdAt: '2026-05-10T00:00:00Z' }] }
     }
+    if (path === '/builds') {
+      return { items: [{ id: 'build-1', applicationId: 'app-1', sourceSystem: 'application', status: 'completed', createdAt: '2026-05-10T00:00:00Z' }] }
+    }
     if (path === '/releases?applicationId=app-1') {
+      return { items: [{ id: 'release-1', applicationId: 'app-1', clusterId: 'cluster-a', namespace: 'checkout-test', deploymentName: 'checkout-api', status: 'completed', createdAt: '2026-05-10T00:00:00Z' }] }
+    }
+    if (path === '/releases') {
       return { items: [{ id: 'release-1', applicationId: 'app-1', clusterId: 'cluster-a', namespace: 'checkout-test', deploymentName: 'checkout-api', status: 'completed', createdAt: '2026-05-10T00:00:00Z' }] }
     }
     if (path === '/workflows?applicationId=app-1') {
@@ -450,9 +457,46 @@ const testState = vi.hoisted(() => ({
         ],
       }
     }
+    if (path === '/workflows') {
+      return {
+        items: [
+          {
+            id: 'workflow-1',
+            applicationId: 'app-1',
+            workflowName: 'release-dag',
+            status: 'completed',
+            steps: [],
+            nodeRuns: [
+              { nodeId: 'approval', name: '审批', type: 'manual_approval', status: 'completed' },
+              { nodeId: 'deploy', name: '更新镜像', type: 'deploy_update_image', status: 'completed' },
+            ],
+            metadata: { nodes: workflowDefinition.nodes },
+            createdAt: '2026-05-10T00:00:00Z',
+            updatedAt: '2026-05-10T00:00:00Z',
+          },
+        ],
+      }
+    }
     throw new Error(`Unhandled GET ${path}`)
   }),
 }))
+
+const defaultPermissionKeys = [
+  'delivery.applications.view',
+  'delivery.application.update',
+  'delivery.application-environments.manage',
+  'delivery.application-services.view',
+  'delivery.application-services.manage',
+  'delivery.builds.trigger',
+  'delivery.workflows.trigger',
+  'delivery.releases.trigger',
+]
+
+const readonlyPermissionKeys = [
+  'delivery.applications.view',
+  'delivery.application-environments.view',
+  'delivery.application-services.view',
+]
 
 vi.mock('@/features/auth/permission-snapshot', () => ({
   hasPermission: (snapshot: { permissionKeys?: string[] } | undefined, key: string) => snapshot?.permissionKeys?.includes(key) ?? false,
@@ -483,7 +527,55 @@ vi.mock('@/services/api-client', () => ({
       }
       return body
     },
-    post: vi.fn(async (path: string, body?: unknown) => ({ data: { id: 'ok', path, body } })),
+    post: vi.fn(async (path: string, body?: unknown) => {
+      if (path === '/delivery/plans') {
+        const payload = body as Record<string, unknown>
+        const plan = {
+          id: 'plan-1',
+          source: 'manual',
+          status: 'draft',
+          applicationId: payload.applicationId,
+          applicationName: 'Checkout Platform',
+          applicationEnvironmentId: payload.applicationEnvironmentId,
+          environmentKey: 'test',
+          action: payload.action,
+          targetId: payload.targetId,
+          targetSummary: 'cluster-a / checkout-test / checkout-api',
+          buildSourceId: payload.buildSourceId,
+          refType: payload.refType,
+          refName: payload.refName,
+          imageTag: payload.imageTag,
+          riskLevel: payload.action === 'build' ? 'low' : 'medium',
+          requiresApproval: payload.action !== 'build',
+          impact: { applicationId: payload.applicationId, action: payload.action },
+          rollbackStrategy: payload.action === 'build' ? 'Build only; no runtime rollback required.' : 'Use rollback context if rollout fails.',
+          createdAt: '2026-05-10T01:00:00Z',
+          updatedAt: '2026-05-10T01:00:00Z',
+        }
+        testState.lastDeliveryPlan = plan
+        return { data: plan }
+      }
+      if (path === '/delivery/plans/plan-1/confirm') {
+        const plan = testState.lastDeliveryPlan ?? {}
+        return {
+          data: {
+            plan: {
+              ...plan,
+              status: 'confirmed',
+              confirmedAt: '2026-05-10T01:01:00Z',
+              updatedAt: '2026-05-10T01:01:00Z',
+            },
+            result: {
+              action: plan.action ?? 'build',
+              applicationId: plan.applicationId ?? 'app-1',
+              applicationEnvironmentId: plan.applicationEnvironmentId ?? 'binding-test',
+              relatedIds: { executionTaskId: 'task-planned' },
+            },
+          },
+        }
+      }
+      return { data: { id: 'ok', path, body } }
+    }),
     put: vi.fn(),
     delete: vi.fn(),
   },
@@ -550,6 +642,7 @@ function findButton(container: HTMLElement, text: string) {
 describe('ApplicationDetailPage workbench', () => {
   beforeEach(() => {
     testState.apiGet.mockClear()
+    testState.permissionSnapshot.permissionKeys = [...defaultPermissionKeys]
     testState.detailWithoutWorkflow = false
     testState.detailWithoutValidationNodes = false
     testState.detailWithoutImageTagDefaults = false
@@ -686,7 +779,17 @@ describe('ApplicationDetailPage workbench', () => {
     expect(container.querySelector('.soha-application-container-row')).not.toBeNull()
   })
 
-  it('calls aggregated delivery action endpoint when build is clicked', async () => {
+  it('opens delivery tab and highlights focused build evidence from query params', async () => {
+    const container = await renderWithProviders(<ApplicationDetailPage />, '/applications/app-1?tab=delivery&buildId=build-1')
+
+    expect(testState.apiGet).toHaveBeenCalledWith('/builds?applicationId=app-1')
+    expect(container.textContent).toContain('已定位交付证据 build-1')
+    expect(container.textContent).toContain('buildId=build-1')
+    expect(container.textContent).toContain('Build / Release / Workflow')
+    expect(container.textContent).toContain('已定位')
+  })
+
+  it('creates and confirms a DeliveryPlan when build is clicked', async () => {
     const container = await renderWithProviders(<ApplicationDetailPage />)
     const buildButton = findButton(container, '构建')
 
@@ -695,7 +798,8 @@ describe('ApplicationDetailPage workbench', () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
 
-    expect(api.post).toHaveBeenCalledWith('/applications/app-1/delivery-actions', expect.objectContaining({
+    expect(api.post).toHaveBeenCalledWith('/delivery/plans', expect.objectContaining({
+      applicationId: 'app-1',
       action: 'build',
       applicationEnvironmentId: 'binding-test',
       targetId: 'target-1',
@@ -703,9 +807,21 @@ describe('ApplicationDetailPage workbench', () => {
       refType: 'branch',
       refName: 'main',
     }))
+    expect(api.post).not.toHaveBeenCalledWith('/applications/app-1/delivery-actions', expect.anything())
+    expect(document.body.textContent).toContain('DeliveryPlan 确认')
+    expect(document.body.textContent).toContain('确认前不会触发执行')
+
+    await act(async () => {
+      findButton(document.body, '确认执行').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(api.post).toHaveBeenCalledWith('/delivery/plans/plan-1/confirm', {})
+    expect(document.body.textContent).toContain('计划已确认并触发执行')
   })
 
-  it('calls aggregated delivery action endpoint when deploy is clicked', async () => {
+  it('creates a DeliveryPlan when deploy is clicked', async () => {
     const container = await renderWithProviders(<ApplicationDetailPage />)
     const deployButton = findButton(container, '部署')
 
@@ -714,12 +830,16 @@ describe('ApplicationDetailPage workbench', () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
 
-    expect(api.post).toHaveBeenCalledWith('/applications/app-1/delivery-actions', expect.objectContaining({
+    expect(api.post).toHaveBeenCalledWith('/delivery/plans', expect.objectContaining({
+      applicationId: 'app-1',
       action: 'deploy',
       applicationEnvironmentId: 'binding-test',
       targetId: 'target-1',
       imageTag: expect.any(String),
     }))
+    expect(api.post).not.toHaveBeenCalledWith('/applications/app-1/delivery-actions', expect.anything())
+    expect(document.body.textContent).toContain('medium')
+    expect(document.body.textContent).toContain('需要审批')
   })
 
   it('disables target delivery actions for agent clusters without delivery runner parity', async () => {
@@ -743,6 +863,7 @@ describe('ApplicationDetailPage workbench', () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
 
+    expect(api.post).not.toHaveBeenCalledWith('/delivery/plans', expect.anything())
     expect(api.post).not.toHaveBeenCalledWith('/applications/app-1/delivery-actions', expect.anything())
   })
 
@@ -751,6 +872,31 @@ describe('ApplicationDetailPage workbench', () => {
     const container = await renderWithProviders(<ApplicationDetailPage />)
 
     expect(findButton(container, '构建并部署').disabled).toBe(true)
+  })
+
+  it('disables delivery action buttons for readonly users', async () => {
+    testState.permissionSnapshot.permissionKeys = [...readonlyPermissionKeys]
+    const container = await renderWithProviders(<ApplicationDetailPage />)
+
+    const buildButton = findButton(container, '构建')
+    const deployButton = findButton(container, '部署')
+    const buildDeployButton = findButton(container, '构建并部署')
+    const verifyButton = findButton(container, '运行验证')
+
+    expect(buildButton.disabled).toBe(true)
+    expect(deployButton.disabled).toBe(true)
+    expect(buildDeployButton.disabled).toBe(true)
+    expect(verifyButton.disabled).toBe(true)
+
+    await act(async () => {
+      for (const button of [buildButton, deployButton, buildDeployButton, verifyButton]) {
+        button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      }
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(api.post).not.toHaveBeenCalledWith('/delivery/plans', expect.anything())
+    expect(api.post).not.toHaveBeenCalledWith('/applications/app-1/delivery-actions', expect.anything())
   })
 
   it('disables image-producing actions when image tag defaults are missing', async () => {

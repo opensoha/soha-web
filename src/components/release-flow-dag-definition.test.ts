@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  analyzeReleaseDagDefinition,
   createDefaultReleaseDagDefinition,
   createNodeConfig,
+  normalizeReleaseDagDefinition,
 } from './release-flow-dag-definition'
 
 describe('release flow DAG definition', () => {
@@ -36,5 +38,46 @@ describe('release flow DAG definition', () => {
       onTimeout: 'block',
       rejectAction: 'stop',
     })
+  })
+
+  it('preserves delivery_dag preview fields while remaining release compatible', () => {
+    const definition = normalizeReleaseDagDefinition({
+      schemaVersion: 2,
+      mode: 'delivery_dag',
+      nodes: [
+        {
+          id: 'build',
+          type: 'build',
+          name: 'Build image',
+          inputs: ['source'],
+          outputs: ['image'],
+          serviceSelector: { matchLabels: { service: 'checkout' } },
+          artifactOutputs: [{ name: 'image', kind: 'image', required: true }],
+          runCondition: 'branch == main',
+          failurePolicy: 'rollback',
+          observability: { events: ['started', 'completed'] },
+          config: {},
+        },
+        { id: 'deploy', type: 'deploy_update_image', name: 'Deploy', targetSelector: { key: 'prod' }, config: {} },
+      ],
+      edges: [{ id: 'edge-build-deploy', source: 'build', target: 'deploy', condition: 'success' }],
+    })
+    const analysis = analyzeReleaseDagDefinition(definition)
+
+    expect(definition.mode).toBe('delivery_dag')
+    expect(definition.nodes[0]).toMatchObject({
+      inputs: ['source'],
+      outputs: ['image'],
+      serviceSelector: { matchLabels: { service: 'checkout' } },
+      artifactOutputs: [{ name: 'image', kind: 'image', required: true }],
+      runCondition: 'branch == main',
+      failurePolicy: 'rollback',
+      observability: { events: ['started', 'completed'] },
+    })
+    expect(analysis.isDeliveryDag).toBe(true)
+    expect(analysis.isReleaseDagCompatible).toBe(true)
+    expect(analysis.artifactOutputCount).toBe(1)
+    expect(analysis.selectorNodeCount).toBe(2)
+    expect(analysis.conditionalNodeCount).toBe(1)
   })
 })

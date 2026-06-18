@@ -1,5 +1,21 @@
 /* Styles moved from web/src/styles/globals.css; keep scoped to this component or feature owner. */
 
+.soha-settings-table-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.soha-settings-table-section + .soha-settings-table-section,
+.soha-settings-table-section + .ant-card,
+.ant-card + .soha-settings-table-section {
+  margin-top: 16px;
+}
+
+.soha-settings-table-shell.soha-management-table-shell.soha-admin-table-shell.is-panel {
+  border-radius: 8px;
+}
+
 .soha-branding-section-title {
   margin: 24px 0 12px;
   font-size: 14px;

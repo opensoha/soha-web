@@ -40,9 +40,10 @@ vi.mock('@/services/api-client', () => ({
 }))
 
 vi.mock('@/components/admin-table', () => ({
-  AdminTable: ({ columns, dataSource, title, toolbar, toolbarExtra }: { columns: any[]; dataSource: Array<Record<string, unknown>>; title?: ReactNode; toolbar?: ReactNode; toolbarExtra?: ReactNode }) => (
+  AdminTable: ({ columns, dataSource, headerExtra, title, toolbar, toolbarExtra }: { columns: any[]; dataSource: Array<Record<string, unknown>>; headerExtra?: ReactNode; title?: ReactNode; toolbar?: ReactNode; toolbarExtra?: ReactNode }) => (
     <div data-testid="admin-table">
-      {title ? <div>{title}</div> : null}
+      {title ? <div data-testid="admin-table-title">{title}</div> : null}
+      {headerExtra ? <div>{headerExtra}</div> : null}
       {toolbar ? <div>{toolbar}</div> : null}
       {toolbarExtra ? <div>{toolbarExtra}</div> : null}
       <div data-testid="headers">
@@ -210,7 +211,7 @@ describe('access users page columns', () => {
     expect(displayNameCell?.textContent).toContain('Admin')
   })
 
-  it('filters users from the toolbar search input', async () => {
+  it('filters users from the query card search input without rendering a table title', async () => {
     testState.responses['/access/users'] = [
       {
         id: 'u-admin',
@@ -240,6 +241,7 @@ describe('access users page columns', () => {
     const searchInput = container.querySelector('input[placeholder="搜索用户名、显示名、邮箱、角色或组织"]') as HTMLInputElement | null
 
     expect(searchInput).not.toBeNull()
+    expect(container.querySelector('[data-testid="admin-table-title"]')).toBeNull()
 
     await act(async () => {
       const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set

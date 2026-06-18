@@ -102,8 +102,60 @@ export interface DeliveryBlueprint {
   updatedAt: string
 }
 
+export type DeliveryDraftSource = 'manual' | 'ai' | 'blueprint'
+export type DeliveryDraftStatus = 'draft' | 'confirming' | 'confirmed'
+
+export interface DeliveryDraftServiceInput {
+  id?: string
+  key: string
+  name: string
+  description?: string
+  serviceKind: ApplicationServiceKind
+  ownerTeam?: string
+  repositoryProvider?: string
+  repositoryProjectId?: string
+  repositoryPath?: string
+  defaultBranch?: string
+  buildSourceId?: string
+  enabled: boolean
+  metadata?: Record<string, unknown>
+  containers?: ApplicationServiceContainerInput[]
+}
+
+export interface ApplicationServiceContainerInput {
+  id?: string
+  name: string
+  imageRepository?: string
+  defaultTagTemplate?: string
+  dockerfilePath?: string
+  buildContextDir?: string
+  runtimePorts?: number[]
+  envSchema?: Record<string, unknown>
+  resourceProfile?: Record<string, unknown>
+  healthCheck?: Record<string, unknown>
+  metadata?: Record<string, unknown>
+}
+
+export interface DeliveryDraft {
+  id: string
+  source: DeliveryDraftSource
+  status: DeliveryDraftStatus
+  applicationDraft: BlueprintApplicationDraft
+  services?: DeliveryDraftServiceInput[]
+  buildSources?: BuildSource[]
+  environmentBindings?: BlueprintEnvironmentBindingTemplate[]
+  files?: BlueprintFileTemplate[]
+  executionHints?: Record<string, unknown>
+  postCreateActions?: string[]
+  createdBy?: string
+  confirmedAt?: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface RenderedDeliverySpec {
   applicationDraft: BlueprintApplicationDraft
+  services?: DeliveryDraftServiceInput[]
   buildSources?: BuildSource[]
   environmentBindings?: BlueprintEnvironmentBindingTemplate[]
   files?: BlueprintFileTemplate[]
@@ -113,6 +165,15 @@ export interface RenderedDeliverySpec {
 
 export interface BlueprintBootstrapResult {
   application: DeliveryApplication
+  services?: ApplicationServiceComponent[]
+  environmentBindings?: ApplicationEnvironment[]
+  spec: RenderedDeliverySpec
+}
+
+export interface DeliveryDraftConfirmResult {
+  draft: DeliveryDraft
+  application: DeliveryApplication
+  services?: ApplicationServiceComponent[]
   environmentBindings?: ApplicationEnvironment[]
   spec: RenderedDeliverySpec
 }
@@ -235,6 +296,100 @@ export interface WorkflowTemplate {
   updatedAt: string
 }
 
+export type TemplateUsageKind = 'workflow' | 'build' | 'blueprint'
+export type TemplateUsageRiskLevel = 'low' | 'medium' | 'high'
+
+export interface TemplateUsageApplication {
+  id: string
+  name?: string
+  key?: string
+  businessLineId?: string
+  group?: string
+}
+
+export interface TemplateUsageEnvironment {
+  id?: string
+  key?: string
+  name?: string
+  isProduction: boolean
+  requiresApproval: boolean
+}
+
+export interface TemplateUsageBinding {
+  id?: string
+  applicationId?: string
+  environmentId?: string
+  environmentKey?: string
+  requiresApproval: boolean
+  targetCount: number
+  riskLevel: TemplateUsageRiskLevel
+  application?: TemplateUsageApplication
+  environment?: TemplateUsageEnvironment
+}
+
+export interface TemplateUsageBuildSource {
+  applicationId: string
+  buildSourceId: string
+  buildSourceName?: string
+  application?: TemplateUsageApplication
+  bindingCount: number
+  riskLevel: TemplateUsageRiskLevel
+}
+
+export interface TemplateUsageRuntimeItem {
+  kind: string
+  id: string
+  status?: string
+  observedAt?: string
+  applicationId?: string
+  applicationEnvironmentId?: string
+  buildSourceId?: string
+  releaseBundleId?: string
+  executionTaskId?: string
+  workflowTemplateId?: string
+  workflowName?: string
+  version?: string
+  sourceType?: string
+  artifactRef?: string
+  sourceSystem?: string
+  clusterId?: string
+  namespace?: string
+  deploymentName?: string
+  taskKind?: string
+  providerKind?: string
+  operationState?: Record<string, unknown>
+}
+
+export interface TemplateUsageRuntimeSummary {
+  source?: string
+  note?: string
+  items?: TemplateUsageRuntimeItem[]
+  latest?: TemplateUsageRuntimeItem
+  latestAt?: string
+  statusCounts?: Record<string, number>
+  stateCounts?: Record<string, number>
+  kindCounts?: Record<string, number>
+}
+
+export interface TemplateUsageSummary {
+  templateKind: TemplateUsageKind
+  templateId: string
+  usageCount: number
+  applicationCount: number
+  environmentCount: number
+  productionEnvironmentCount: number
+  approvalBindingCount: number
+  targetCount: number
+  riskLevel: TemplateUsageRiskLevel
+  riskReasons?: string[]
+  recommendedAction?: string
+  applications?: TemplateUsageApplication[]
+  bindings?: TemplateUsageBinding[]
+  buildSources?: TemplateUsageBuildSource[]
+  fileKindCounts?: Record<string, number>
+  lastExecutionSummary?: TemplateUsageRuntimeSummary
+}
+
 export interface DeliveryApplication {
   id: string
   name: string
@@ -305,12 +460,20 @@ export interface ReleaseBundle {
   status: string
   artifactRef?: string
   artifactDigest?: string
+  artifacts?: ExecutionArtifact[]
   metadata?: Record<string, unknown>
   createdAt: string
   updatedAt: string
 }
 
 export interface ExecutionArtifact {
+  id?: string
+  applicationId?: string
+  applicationEnvironmentId?: string
+  workflowRunId?: string
+  workflowNodeId?: string
+  releaseBundleId?: string
+  executionTaskId?: string
   kind: string
   name?: string
   ref?: string
@@ -319,7 +482,40 @@ export interface ExecutionArtifact {
   status?: string
   sizeBytes?: number
   metadata?: Record<string, unknown>
+  retentionUntil?: string
+  createdAt?: string
+  updatedAt?: string
   modifiedAt?: string
+}
+
+export interface RuntimeObjectLinks {
+  application?: string
+  audit?: string
+  operations?: string
+  artifacts?: string
+}
+
+export interface RuntimeObjectPermissions {
+  canViewArtifacts: boolean
+  canViewAudit: boolean
+  canViewOperations: boolean
+  canRetry?: boolean
+  canCancel?: boolean
+}
+
+export interface RuntimeObjectDetail<TObject = unknown> {
+  kind: string
+  id: string
+  object: TObject
+  application?: DeliveryApplication
+  binding?: ApplicationEnvironment
+  environment?: DeliveryEnvironment
+  buildSource?: BuildSource
+  workflowTemplate?: WorkflowTemplate
+  evidence?: Record<string, unknown>
+  artifacts?: ExecutionArtifact[]
+  links: RuntimeObjectLinks
+  permissions: RuntimeObjectPermissions
 }
 
 export interface ExecutionTask {
@@ -379,7 +575,7 @@ export interface DeliveryApplicationDetail {
   latestRelease?: ReleaseRecord
 }
 
-export type ApplicationDeliveryActionKind = 'build' | 'deploy' | 'build_deploy' | 'workflow' | 'verify'
+export type ApplicationDeliveryActionKind = 'build' | 'deploy' | 'build_deploy' | 'workflow' | 'verify' | 'rollback'
 
 export interface ApplicationDeliveryActionRequest {
   action: ApplicationDeliveryActionKind
@@ -406,7 +602,54 @@ export interface ApplicationDeliveryActionResponse {
   relatedIds?: {
     releaseBundleId?: string
     executionTaskId?: string
+    workflowRunId?: string
   }
+}
+
+export type DeliveryPlanSource = 'manual' | 'ai'
+export type DeliveryPlanStatus = 'draft' | 'confirming' | 'confirmed'
+
+export interface DeliveryPlanRequest extends ApplicationDeliveryActionRequest {
+  id?: string
+  source?: DeliveryPlanSource
+  applicationId: string
+  reason?: string
+}
+
+export interface DeliveryPlan {
+  id: string
+  source: DeliveryPlanSource
+  status: DeliveryPlanStatus
+  applicationId: string
+  applicationName?: string
+  applicationEnvironmentId: string
+  environmentKey?: string
+  action: ApplicationDeliveryActionKind
+  targetId?: string
+  targetSummary?: string
+  buildSourceId?: string
+  releaseBundleId?: string
+  refType?: string
+  refName?: string
+  imageTag?: string
+  releaseName?: string
+  containerName?: string
+  reason?: string
+  riskLevel?: string
+  requiresApproval: boolean
+  impact?: Record<string, unknown>
+  rollbackStrategy?: string
+  variables?: Record<string, unknown>
+  buildArgs?: Record<string, unknown>
+  createdBy?: string
+  confirmedAt?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface DeliveryPlanConfirmResult {
+  plan: DeliveryPlan
+  result: ApplicationDeliveryActionResponse
 }
 
 export interface ApplicationRuntimeWorkload {

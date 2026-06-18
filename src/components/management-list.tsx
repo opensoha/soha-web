@@ -219,7 +219,7 @@ export function ManagementQueryGrid({
       className="soha-management-query-more-button"
       htmlType="button"
       icon={activeExpanded ? <UpOutlined /> : <DownOutlined />}
-      iconPosition="end"
+      iconPlacement="end"
       size="small"
       type="link"
       onClick={() => updateExpanded(!activeExpanded)}

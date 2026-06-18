@@ -456,8 +456,10 @@ describe("access route authorization", () => {
 
     expect(applicationNav.map((item) => item.id)).toEqual([
       "builds",
+      "application-environments",
     ]);
     expect(applicationNav[0].section).toBe("delivery");
+    expect(applicationNav[1].section).toBe("delivery-platform");
     expect(systemNav.map((item) => item.id)).toEqual(["system"]);
   });
 
@@ -512,10 +514,12 @@ describe("access route authorization", () => {
     expect(deliveryNav.map((item) => item.id)).toEqual([
       "builds",
       "release-board",
+      "application-environments",
     ]);
     expect(deliveryNav.map((item) => item.section)).toEqual([
       "delivery",
       "delivery",
+      "delivery-platform",
     ]);
   });
 
@@ -574,6 +578,139 @@ describe("access route authorization", () => {
       "releases:delivery-records",
       "workflow-templates:delivery-platform",
     ]);
+  });
+
+  it("matches delivery navigation to tester, readonly, and operator responsibilities", () => {
+    const testerSnapshot = buildSnapshot({
+      permissionKeys: [
+        "workspace.application.view",
+        "delivery.applications.view",
+        "delivery.application-services.view",
+        "delivery.application-environments.view",
+        "delivery.release-bundles.view",
+        "delivery.execution-tasks.view",
+      ],
+      visibleMenuIds: [
+        "builds",
+        "delivery-testing",
+        "delivery-analysis",
+        "release-bundles",
+        "execution-tasks",
+      ],
+      visibleMenus: [
+        { id: "builds", path: "/applications", section: "delivery", sortOrder: 10 },
+        { id: "delivery-testing", path: "/delivery/testing", section: "delivery", sortOrder: 40 },
+        { id: "delivery-analysis", path: "/delivery/analysis", section: "delivery", sortOrder: 50 },
+        { id: "release-bundles", path: "/delivery/release-bundles", section: "delivery-records", sortOrder: 10 },
+        { id: "execution-tasks", path: "/delivery/execution-tasks", section: "delivery-records", sortOrder: 20 },
+      ],
+    });
+    const readonlySnapshot = buildSnapshot({
+      permissionKeys: [
+        "workspace.application.view",
+        "delivery.applications.view",
+        "delivery.application-services.view",
+        "delivery.application-environments.view",
+        "delivery.release-board.view",
+        "delivery.release-bundles.view",
+        "delivery.execution-tasks.view",
+        "delivery.workflows.view",
+        "delivery.releases.view",
+      ],
+      visibleMenuIds: [
+        "builds",
+        "delivery-testing",
+        "delivery-analysis",
+        "release-bundles",
+        "execution-tasks",
+        "workflows",
+        "releases",
+      ],
+      visibleMenus: [
+        { id: "builds", path: "/applications", section: "delivery", sortOrder: 10 },
+        { id: "delivery-testing", path: "/delivery/testing", section: "delivery", sortOrder: 40 },
+        { id: "delivery-analysis", path: "/delivery/analysis", section: "delivery", sortOrder: 50 },
+        { id: "release-bundles", path: "/delivery/release-bundles", section: "delivery-records", sortOrder: 10 },
+        { id: "execution-tasks", path: "/delivery/execution-tasks", section: "delivery-records", sortOrder: 20 },
+        { id: "workflows", path: "/workflows", section: "delivery-records", sortOrder: 30 },
+        { id: "releases", path: "/releases", section: "delivery-records", sortOrder: 40 },
+      ],
+    });
+    const operatorSnapshot = buildSnapshot({
+      permissionKeys: [
+        "workspace.application.view",
+        "delivery.applications.view",
+        "delivery.application-environments.view",
+        "delivery.release-board.view",
+        "delivery.build-templates.view",
+        "delivery.workflow-templates.view",
+        "delivery.registries.view",
+      ],
+      visibleMenuIds: [
+        "builds",
+        "release-board",
+        "application-environments",
+        "build-templates",
+        "workflow-templates",
+        "registries",
+      ],
+      visibleMenus: [
+        { id: "builds", path: "/applications", section: "delivery", sortOrder: 10 },
+        { id: "release-board", path: "/release-board", section: "delivery", sortOrder: 30 },
+        { id: "build-templates", path: "/build-templates", section: "delivery-platform", sortOrder: 20 },
+        { id: "workflow-templates", path: "/workflow-templates", section: "delivery-platform", sortOrder: 30 },
+        { id: "application-environments", path: "/application-environments", section: "delivery-platform", sortOrder: 50 },
+        { id: "registries", path: "/registries", section: "delivery-platform", sortOrder: 70 },
+      ],
+    });
+
+    const testerNav = filterSidebarNavByWorkbench(
+      filterSidebarNavByWorkspace(getAccessibleSidebarNav(testerSnapshot), "application"),
+      "delivery",
+    );
+    const readonlyNav = filterSidebarNavByWorkbench(
+      filterSidebarNavByWorkspace(getAccessibleSidebarNav(readonlySnapshot), "application"),
+      "delivery",
+    );
+    const operatorNav = filterSidebarNavByWorkbench(
+      filterSidebarNavByWorkspace(getAccessibleSidebarNav(operatorSnapshot), "application"),
+      "delivery",
+    );
+
+    expect(testerNav.map((item) => item.id)).toEqual([
+      "builds",
+      "delivery-testing",
+      "delivery-analysis",
+      "release-bundles",
+      "execution-tasks",
+    ]);
+    expect(canAccessRoute(getRoute("release-board"), testerSnapshot)).toBe(false);
+    expect(canAccessRoute(getRoute("delivery-onboarding"), testerSnapshot)).toBe(false);
+    expect(canAccessRoute(getRoute("build-templates"), testerSnapshot)).toBe(false);
+
+    expect(readonlyNav.map((item) => item.id)).toEqual([
+      "builds",
+      "delivery-testing",
+      "delivery-analysis",
+      "release-bundles",
+      "execution-tasks",
+      "workflows",
+      "releases",
+    ]);
+    expect(canAccessRoute(getRoute("release-board"), readonlySnapshot)).toBe(false);
+    expect(canAccessRoute(getRoute("application-environments"), readonlySnapshot)).toBe(false);
+    expect(canAccessRoute(getRoute("workflow-templates"), readonlySnapshot)).toBe(false);
+
+    expect(operatorNav.map((item) => item.id)).toEqual([
+      "builds",
+      "release-board",
+      "build-templates",
+      "workflow-templates",
+      "application-environments",
+      "registries",
+    ]);
+    expect(canAccessRoute(getRoute("application-environments"), operatorSnapshot)).toBe(true);
+    expect(canAccessRoute(getRoute("workflow-templates"), operatorSnapshot)).toBe(true);
   });
 
   it("preserves empty backend menu sections inside a workbench", () => {

@@ -87,13 +87,22 @@ vi.mock("@/services/api-client", () => ({
 vi.mock("@/components/admin-table", () => ({
   AdminTable: ({
     title,
+    headerExtra,
+    toolbar,
+    toolbarExtra,
     dataSource,
   }: {
     title?: ReactNode;
+    headerExtra?: ReactNode;
+    toolbar?: ReactNode;
+    toolbarExtra?: ReactNode;
     dataSource: unknown[];
   }) => (
     <div data-testid="admin-table">
       {title ? <div>{title}</div> : null}
+      {headerExtra ? <div data-testid="admin-table-header-extra">{headerExtra}</div> : null}
+      {toolbar ? <div data-testid="admin-table-toolbar">{toolbar}</div> : null}
+      {toolbarExtra ? <div data-testid="admin-table-toolbar-extra">{toolbarExtra}</div> : null}
       <div>{`rows:${dataSource.length}`}</div>
       {dataSource.map((item, index) => (
         <div key={index}>{JSON.stringify(item)}</div>
@@ -314,7 +323,6 @@ describe("settings ai page rendering", () => {
       "/settings",
     );
 
-    expect(container.textContent).toContain("设置中心");
     expect(container.textContent).not.toContain("AI 设置");
     expect(container.textContent).not.toContain("Provider Connections");
     expect(container.textContent).toContain("登陆设置");
@@ -327,7 +335,7 @@ describe("settings ai page rendering", () => {
       "/settings/login",
     );
 
-    expect(container.textContent).toContain("登陆设置");
+    expect(container.textContent).toContain("新增登录源");
     expect(container.textContent).toContain("OIDC");
     expect(container.textContent).not.toContain(
       "配置 OIDC、飞书、钉钉、企业微信、OAuth2 与 SAML 登录源。",
@@ -363,15 +371,16 @@ describe("settings ai page rendering", () => {
       "/ai-workbench/model-settings",
     );
 
-    expect(container.textContent).toContain("Provider Connections");
-    expect(container.textContent).toContain("Agent Runtime Providers");
-    expect(container.textContent).toContain("Skills Registry");
-    expect(container.textContent).toContain("Data Sources");
     expect(
       container.querySelector(
         '[data-testid="ai-provider-connections-section"]',
       ),
     ).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="ai-agent-runtime-section"]'),
+    ).not.toBeNull();
+    expect(container.textContent).toContain("新增连接");
+    expect(container.textContent).toContain("刷新");
   });
 
   it("surfaces Agent Runtime providers and recent Hermes runs in model settings", async () => {
@@ -380,7 +389,6 @@ describe("settings ai page rendering", () => {
       "/ai-workbench/model-settings",
     );
 
-    expect(container.textContent).toContain("Agent Runtime Providers");
     expect(container.textContent).toContain("Hermes Agent");
     expect(container.textContent).toContain("hermes-agent-runner");
     expect(container.textContent).toContain("agent-run-1");

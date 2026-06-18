@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { App, Button, Card, Descriptions, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Tag, Typography } from 'antd'
+import { Alert, App, Button, Card, Descriptions, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Tag, Typography } from 'antd'
 import { ArrowRightOutlined, CopyOutlined, DeleteOutlined, EditOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined, SaveOutlined, SendOutlined } from '@ant-design/icons'
 import type { TableColumnsType } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -10,6 +10,7 @@ import {
   ManagementState,
 } from '@/components/management-list'
 import { DeliveryTable } from '@/features/delivery/delivery-table'
+import { DeliveryGatewayReadinessPanel } from '@/features/delivery/delivery-gateway-readiness'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
 import { useI18n } from '@/i18n'
 import {
@@ -27,7 +28,12 @@ import {
   releaseBoardQualitySignal,
   summarizeReleaseBoard,
 } from '@/features/delivery/delivery-status'
-import type { ApiResponse, ApplicationEnvironment, BuildSource, DeliveryApplication, DeliveryApplicationEnvironmentDetail, DeliveryTargetCandidate, ReleaseBoardEntry, WorkflowRun, WorkflowTemplate } from '@/types'
+import {
+  TemplateUsageImpactPanel,
+  shouldConfirmTemplateUsageSave,
+  templateUsageConfirmText,
+} from '@/features/delivery/template-usage-impact'
+import type { ApiResponse, ApplicationEnvironment, BuildSource, DeliveryApplication, DeliveryApplicationEnvironmentDetail, DeliveryTargetCandidate, ReleaseBoardEntry, TemplateUsageSummary, WorkflowRun, WorkflowTemplate } from '@/types'
 
 function parseJSONObject(raw: unknown, field: string) {
   const value = typeof raw === 'string' ? raw.trim() : ''
@@ -597,6 +603,22 @@ export function ReleaseBoardPage() {
           <Text type="secondary">{summary.blocked} 个阻塞</Text>
         </Card>
       </div>
+      <DeliveryGatewayReadinessPanel
+        title="AI Gateway 构建发布辅助"
+        description="用于读取应用环境、版本包、执行任务和 diff，并在授权允许时通过统一 delivery action 触发构建、发布或验证；常规发布看板和手工触发入口保持可用。"
+        skillId="delivery-developer"
+        manualPath="/application-environments"
+        manualTitle="手工配置"
+        capabilities={[
+          'delivery.application_environments.list',
+          'delivery.release_targets.list',
+          'delivery.release_bundles.list',
+          'delivery.execution_tasks.list',
+          'delivery.release.plan',
+          'delivery.release_context.diff',
+          'delivery.actions.trigger',
+        ]}
+      />
       <DeliveryTable
         refreshing={releaseBoardQuery.isFetching}
         onRefresh={() => void releaseBoardQuery.refetch()}
@@ -613,6 +635,7 @@ export function ApplicationEnvironmentDetailPage() {
   const { t, localeCode } = useI18n()
   const { message } = App.useApp()
   const { applicationEnvironmentId } = useParams()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
@@ -621,6 +644,7 @@ export function ApplicationEnvironmentDetailPage() {
   const [releaseName, setReleaseName] = useState('')
   const [containerName, setContainerName] = useState('')
   const [rollbackRevision, setRollbackRevision] = useState('')
+  const focusedReleaseId = searchParams.get('releaseId')?.trim() ?? ''
   const canViewReleaseBoard = hasPermission(permissionSnapshotQuery.data?.data, 'delivery.release-board.view')
   const canTriggerWorkflow = hasPermission(permissionSnapshotQuery.data?.data, 'delivery.workflows.trigger')
   const canTriggerRelease = hasPermission(permissionSnapshotQuery.data?.data, 'delivery.releases.trigger')
@@ -716,7 +740,16 @@ export function ApplicationEnvironmentDetailPage() {
     { title: t('common.container', 'Container'), dataIndex: 'containerName', render: (value: string) => value || '-' },
     { title: localeCode === 'zh_CN' ? '启用' : 'Enabled', dataIndex: 'enabled', render: (value: boolean) => <BooleanTag value={value} /> },
     { title: 'Workflow', dataIndex: 'latestWorkflow', render: (_: unknown, record) => <StatusTag value={record.latestWorkflow?.status || 'unknown'} /> },
-    { title: 'Release', dataIndex: 'latestRelease', render: (_: unknown, record) => <StatusTag value={record.latestRelease?.status || 'unknown'} /> },
+    {
+      title: 'Release',
+      dataIndex: 'latestRelease',
+      render: (_: unknown, record) => (
+        <Space size={6} wrap>
+          <StatusTag value={record.latestRelease?.status || 'unknown'} />
+          {record.latestRelease?.id === focusedReleaseId ? <Tag color="blue">已定位</Tag> : null}
+        </Space>
+      ),
+    },
     {
       title: localeCode === 'zh_CN' ? '最近动作' : 'Latest Activity',
       dataIndex: 'latestRelease',
@@ -854,6 +887,14 @@ export function ApplicationEnvironmentDetailPage() {
         description={localeCode === 'zh_CN' ? '查看单个应用环境绑定的工作流模板、发布目标和最新执行状态。' : 'Inspect the workflow template, release targets, and latest execution state for a single application-environment binding.'}
         actions={<Button onClick={() => navigate(backPath)}>{backLabel}</Button>}
       />
+      {focusedReleaseId ? (
+        <Alert
+          showIcon
+          title={latestRelease?.id === focusedReleaseId ? `已定位发布 ${latestRelease.id}` : '发布记录定位'}
+          description={`releaseId=${focusedReleaseId}`}
+          type={latestRelease?.id === focusedReleaseId || bindingQuery.isLoading ? 'info' : 'warning'}
+        />
+      ) : null}
       <Card className="soha-management-panel-card">
         <Descriptions
           items={[
@@ -867,7 +908,16 @@ export function ApplicationEnvironmentDetailPage() {
             { key: 'latestTask', label: localeCode === 'zh_CN' ? '最新任务' : 'Latest Task', children: <StatusTag value={detail?.latestExecutionTask?.status || 'unknown'} /> },
             { key: 'latestBuild', label: localeCode === 'zh_CN' ? '最新 Build' : 'Latest Build', children: <StatusTag value={latestBuild?.status || 'unknown'} /> },
             { key: 'latestWorkflow', label: localeCode === 'zh_CN' ? '最新 Workflow' : 'Latest Workflow', children: <StatusTag value={latestWorkflow?.status || 'unknown'} /> },
-            { key: 'latestRelease', label: localeCode === 'zh_CN' ? '最新 Release' : 'Latest Release', children: <StatusTag value={latestRelease?.status || 'unknown'} /> },
+            {
+              key: 'latestRelease',
+              label: localeCode === 'zh_CN' ? '最新 Release' : 'Latest Release',
+              children: (
+                <Space size={6} wrap>
+                  <StatusTag value={latestRelease?.status || 'unknown'} />
+                  {latestRelease?.id === focusedReleaseId ? <Tag color="blue">已定位</Tag> : null}
+                </Space>
+              ),
+            },
             { key: 'latestActivity', label: localeCode === 'zh_CN' ? '最近活动' : 'Latest Activity', children: summarizeLatestActivity(localeCode, latestBuild, latestWorkflow, latestRelease) },
           ]}
         />
@@ -976,6 +1026,7 @@ export function ApplicationEnvironmentDetailPage() {
 export function WorkflowTemplatesPage() {
   const { t, localeCode } = useI18n()
   const { message } = App.useApp()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -998,10 +1049,6 @@ export function WorkflowTemplatesPage() {
   const { data, isFetching, isLoading, refetch } = useQuery({
     queryKey: ['workflow-templates'],
     queryFn: () => api.get<ApiResponse<WorkflowTemplate[]>>('/workflow-templates'),
-  })
-  const bindingsQuery = useQuery({
-    queryKey: ['application-environments'],
-    queryFn: () => api.get<ApiResponse<ApplicationEnvironment[]>>('/application-environments'),
   })
 
   const confirmDiscardChanges = useCallback(() => {
@@ -1074,6 +1121,7 @@ export function WorkflowTemplatesPage() {
     onSuccess: () => {
       message.success(localeCode === 'zh_CN' ? 'DAG 发布流程模板更新成功' : 'DAG release flow template updated')
       queryClient.invalidateQueries({ queryKey: ['workflow-templates'] })
+      queryClient.invalidateQueries({ queryKey: ['workflow-template-usage'] })
     },
     onError: (err: Error) => message.error(err.message),
   })
@@ -1082,6 +1130,7 @@ export function WorkflowTemplatesPage() {
     onSuccess: (_payload, deletedId) => {
       message.success(localeCode === 'zh_CN' ? 'DAG 发布流程模板已删除' : 'DAG release flow template deleted')
       queryClient.invalidateQueries({ queryKey: ['workflow-templates'] })
+      queryClient.invalidateQueries({ queryKey: ['workflow-template-usage'] })
       if (selectedTemplateId === deletedId) {
         const nextTemplate = (data?.data ?? []).find((item) => item.id !== deletedId)
         if (nextTemplate) {
@@ -1102,16 +1151,18 @@ export function WorkflowTemplatesPage() {
   const selectedTemplate = selectedTemplateId && selectedTemplateId !== 'new'
     ? templates.find((item) => item.id === selectedTemplateId) ?? null
     : null
+  const selectedTemplateUsageQuery = useQuery({
+    queryKey: ['workflow-template-usage', selectedTemplate?.id ?? ''],
+    queryFn: () => api.get<ApiResponse<TemplateUsageSummary>>(`/workflow-templates/${selectedTemplate?.id ?? ''}/usage`),
+    enabled: !!selectedTemplate?.id,
+  })
+  const selectedTemplateUsage = selectedTemplateUsageQuery.data?.data
   const isNewDraft = selectedTemplateId === 'new'
   const hasSelection = isNewDraft || !!selectedTemplate
   const dagAnalysis = useMemo(() => analyzeReleaseDagDefinition(editorDefinition), [editorDefinition])
   const errorIssues = dagAnalysis.issues.filter((issue) => issue.severity === 'error')
   const warningIssues = dagAnalysis.issues.filter((issue) => issue.severity === 'warning')
   const previewDefinition = useMemo(() => JSON.stringify(editorDefinition, null, 2), [editorDefinition])
-  const selectedTemplateUsages = useMemo(
-    () => (bindingsQuery.data?.data ?? []).filter((binding) => selectedTemplate?.id && binding.workflowTemplateId === selectedTemplate.id),
-    [bindingsQuery.data, selectedTemplate?.id],
-  )
   const listTemplates = useMemo(() => {
     const draftKey = String(templateFormSnapshot.key || '').trim()
     const draftName = String(templateFormSnapshot.name || '').trim()
@@ -1262,6 +1313,10 @@ export function WorkflowTemplatesPage() {
         definition: editorDefinition,
       }
       if (selectedTemplate) {
+        const usageForSave = selectedTemplateUsage ?? (await selectedTemplateUsageQuery.refetch()).data?.data
+        if (shouldConfirmTemplateUsageSave(usageForSave) && !window.confirm(templateUsageConfirmText(selectedTemplate.name, usageForSave, localeCode))) {
+          return
+        }
         await updateMutation.mutateAsync({ id: selectedTemplate.id, values: payload })
         setEditorInitialDefinition(editorDefinition)
         savedDefinitionRef.current = serializeWorkflowTemplateDagDefinition(editorDefinition)
@@ -1413,8 +1468,8 @@ export function WorkflowTemplatesPage() {
             <Tag color={dagAnalysis.rollbackNodeCount > 0 ? 'green' : 'gold'}>{`${localeCode === 'zh_CN' ? '回滚' : 'Rollback'} ${dagAnalysis.rollbackNodeCount}`}</Tag>
             <Tag color={dagAnalysis.approvalNodeCount > 0 ? 'gold' : 'default'}>{`${localeCode === 'zh_CN' ? '审批' : 'Approval'} ${dagAnalysis.approvalNodeCount}`}</Tag>
             <Tag color={dagAnalysis.isReleaseDagCompatible ? 'green' : 'red'}>{dagAnalysis.isReleaseDagCompatible ? 'release_dag compatible' : 'blocked'}</Tag>
-            <Tag color={selectedTemplateUsages.length > 0 ? 'gold' : 'default'}>
-              {localeCode === 'zh_CN' ? `影响 ${selectedTemplateUsages.length} 个环境` : `${selectedTemplateUsages.length} bindings`}
+            <Tag color={(selectedTemplateUsage?.usageCount ?? 0) > 0 ? 'gold' : 'default'}>
+              {localeCode === 'zh_CN' ? `影响 ${selectedTemplateUsage?.environmentCount ?? 0} 个环境` : `${selectedTemplateUsage?.environmentCount ?? 0} environments`}
             </Tag>
           </div>
           {errorIssues.length > 0 ? (
@@ -1422,20 +1477,12 @@ export function WorkflowTemplatesPage() {
           ) : warningIssues.length > 0 ? (
             <Text type="warning" className="text-xs">{warningIssues.map((issue) => issue.message).join(' / ')}</Text>
           ) : null}
-          {selectedTemplateUsages.length > 0 ? (
-            <details className="soha-workflow-template-impact-inline">
-              <summary>{localeCode === 'zh_CN' ? '查看绑定影响面' : 'Show binding impact'}</summary>
-              <div className="soha-workflow-template-impact-inline__body">
-                {selectedTemplateUsages.slice(0, 8).map((binding) => (
-                  <span className="soha-workflow-template-usage-chip" key={binding.id}>
-                    <Text>{binding.applicationId}</Text>
-                    <Tag>{applicationEnvironmentLabel(binding)}</Tag>
-                  </span>
-                ))}
-                {selectedTemplateUsages.length > 8 ? <Text type="secondary">{`+${selectedTemplateUsages.length - 8}`}</Text> : null}
-              </div>
-            </details>
-          ) : null}
+          <TemplateUsageImpactPanel
+            loading={selectedTemplateUsageQuery.isFetching && !!selectedTemplate}
+            localeCode={localeCode}
+            onNavigate={navigate}
+            usage={selectedTemplateUsage}
+          />
         </Form>
       </Modal>
 

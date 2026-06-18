@@ -38,6 +38,12 @@
   min-width: 0;
 }
 
+.soha-access-users-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .soha-access-org-panel {
   border: 1px solid var(--soha-border);
   background: var(--soha-surface);

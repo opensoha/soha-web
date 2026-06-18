@@ -27,10 +27,12 @@ import type { TableColumnsType } from 'antd'
 import { DeleteOutlined, EditOutlined, EyeOutlined, PauseCircleOutlined, PlusOutlined, SendOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
+import { useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
 import {
-  ManagementDetailHeader,
   ManagementIconButton,
+  ManagementQueryField,
+  ManagementQueryPanel,
   ManagementTableToolbar,
 } from '@/components/management-list'
 import { hasPermission, invalidateAuthz, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
@@ -64,6 +66,13 @@ import { BooleanTag, StatusTag } from '@/components/status-tag'
 import { api } from '@/services/api-client'
 import { formatDateTime, formatRelativeTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
+import {
+  UsageSnapshotDiffView,
+  UsageSnapshotPanel,
+  UsageSnapshotRawJson,
+  UsageSnapshotSummary,
+  usageSnapshotFilterParams,
+} from '@/features/system/usage-snapshot'
 import type { ApiResponse } from '@/types'
 import type {
   AccessRoleOption,
@@ -84,6 +93,18 @@ const MODAL_FORM_LAYOUT = {
   labelAlign: 'left' as const,
   labelCol: { flex: '120px' },
   wrapperCol: { flex: 'auto' },
+}
+
+function buildQueryPath(path: string, params: Record<string, string>) {
+  const search = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    const trimmed = value.trim()
+    if (trimmed) {
+      search.set(key, trimmed)
+    }
+  })
+  const queryString = search.toString()
+  return queryString ? `${path}?${queryString}` : path
 }
 
 /* ─── Online Users ─── */
@@ -221,15 +242,50 @@ export function OnlineUsersPage() {
 
   return (
     <div className="soha-page">
-      <ManagementDetailHeader
-        title="在线用户"
-        description="查看当前在线会话、登录来源、最后活跃时间与会话到期信息。"
-      />
+      <ManagementQueryPanel
+        onFinish={() => undefined}
+        actions={(
+          <>
+            <Button
+              autoInsertSpace={false}
+              disabled={!providerFilter && !searchKeyword.trim()}
+              htmlType="button"
+              onClick={() => {
+                setProviderFilter('')
+                setSearchKeyword('')
+              }}
+            >
+              重置
+            </Button>
+            <Button autoInsertSpace={false} htmlType="submit" type="primary">
+              查询
+            </Button>
+          </>
+        )}
+      >
+        <ManagementQueryField minWidth={160} width={180} label="登录方式">
+          <Select
+            allowClear
+            placeholder="全部方式"
+            value={providerFilter || undefined}
+            onChange={(value) => setProviderFilter(value || '')}
+            options={providerOptions}
+          />
+        </ManagementQueryField>
+        <ManagementQueryField grow minWidth={280} width={360} label="关键字">
+          <Input.Search
+            allowClear
+            placeholder="搜索用户 / 邮箱 / IP / 设备"
+            value={searchKeyword}
+            onChange={(event) => setSearchKeyword(event.target.value)}
+            onSearch={(value) => setSearchKeyword(value)}
+          />
+        </ManagementQueryField>
+      </ManagementQueryPanel>
       <AdminTable
         columnSettingIconOnly
         columnSettingPlacement="header"
         shellClassName="soha-management-table-shell"
-        title="在线会话"
         headerExtra={canManageOnlineUsers ? (
           <ManagementTableToolbar>
             <Button
@@ -249,30 +305,7 @@ export function OnlineUsersPage() {
         rowKey="id"
         loading={isLoading}
         pageSize={20}
-        toolbar={(
-          <div className="soha-workload-table-filters">
-            <Select
-              className="soha-platform-compact-field"
-              allowClear
-              size="small"
-              placeholder="登录方式"
-              style={{ width: 180 }}
-              value={providerFilter || undefined}
-              onChange={(value) => setProviderFilter(value || '')}
-              options={providerOptions}
-            />
-            <Input.Search
-              className="soha-platform-compact-field"
-              allowClear
-              size="small"
-              placeholder="搜索用户 / 邮箱 / IP / 设备"
-              style={{ width: 280 }}
-              value={searchKeyword}
-              onChange={(event) => setSearchKeyword(event.target.value)}
-              onSearch={(value) => setSearchKeyword(value)}
-            />
-          </div>
-        )}
+        scroll={{ x: 'max-content' }}
         rowSelection={canManageOnlineUsers ? {
           selectedRowKeys: selectedSessionIds,
           onChange: (selectedRowKeys: React.Key[]) => setSelectedSessionIds(selectedRowKeys.map(String)),
@@ -441,15 +474,6 @@ export function AnnouncementsPage() {
 
   return (
     <div className="soha-page">
-      <ManagementDetailHeader
-        title="公告管理"
-        description="按发布状态管理公告内容、发布时间窗与置顶优先级。"
-        actions={canManageAnnouncements ? (
-          <Button size="small" icon={<PlusOutlined />} type="primary" onClick={() => { setEditing(null); setModalVisible(true) }}>
-            新建公告
-          </Button>
-        ) : null}
-      />
       <div className="soha-system-overview-grid">
         <Card variant="outlined" className="soha-system-metric-card">
           <Statistic title="已发布" value={announcementSummary.published} />
@@ -469,7 +493,15 @@ export function AnnouncementsPage() {
         </Card>
       </div>
 
-      <Card variant="outlined" className="soha-system-panel-card">
+      <Card
+        variant="outlined"
+        className="soha-system-panel-card"
+        extra={canManageAnnouncements ? (
+          <Button size="small" icon={<PlusOutlined />} type="primary" onClick={() => { setEditing(null); setModalVisible(true) }}>
+            新建公告
+          </Button>
+        ) : null}
+      >
         <Tabs
           activeKey={statusView}
           onChange={setStatusView}
@@ -482,7 +514,7 @@ export function AnnouncementsPage() {
                 itemLayout="vertical"
                 loading={isLoading}
                 dataSource={filteredAnnouncements}
-                locale={{ emptyText: <Alert type="info" showIcon message="当前分组下暂无公告" /> }}
+                locale={{ emptyText: <Alert type="info" showIcon title="当前分组下暂无公告" /> }}
                 renderItem={(record: Announcement) => {
                   const lifecycle = buildAnnouncementLifecycle(record)
                   return (
@@ -590,7 +622,7 @@ export function AnnouncementsPage() {
         title={previewing?.title || '公告详情'}
         open={Boolean(previewing)}
         onClose={() => setPreviewing(null)}
-        width={560}
+        size={560}
         destroyOnHidden
       >
         {previewing ? (
@@ -605,7 +637,7 @@ export function AnnouncementsPage() {
                 { key: 'window', label: '生效窗口', children: `${formatDateTime(previewing.startsAt)} ~ ${formatDateTime(previewing.endsAt)}` },
               ]}
             />
-            {previewing.summary ? <Alert type="info" showIcon message={previewing.summary} /> : null}
+            {previewing.summary ? <Alert type="info" showIcon title={previewing.summary} /> : null}
             <Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>{previewing.content}</Paragraph>
           </Space>
         ) : null}
@@ -904,10 +936,85 @@ export function MenusPage() {
 
   return (
     <div className="soha-page">
-      <ManagementDetailHeader
-        title="菜单管理"
-        description="维护工作台菜单、父子结构、排序、图标和可见性策略。"
-      />
+      <ManagementQueryPanel
+        collapsible
+        onFinish={() => undefined}
+        actions={(
+          <>
+            <Button
+              autoInsertSpace={false}
+              disabled={treeView === 'workbench' && !sectionFilter && !workbenchFilter && enabledFilter === 'all' && visibilityFilter === 'all'}
+              htmlType="button"
+              onClick={() => {
+                setTreeView('workbench')
+                setSectionFilter('')
+                setWorkbenchFilter('')
+                setEnabledFilter('all')
+                setVisibilityFilter('all')
+              }}
+            >
+              重置
+            </Button>
+            <Button autoInsertSpace={false} htmlType="submit" type="primary">
+              查询
+            </Button>
+          </>
+        )}
+      >
+        <ManagementQueryField label="树视图" minWidth={300} width={340}>
+          <Segmented
+            size="small"
+            value={treeView}
+            onChange={(value) => setTreeView(value as 'workbench' | 'top' | 'all')}
+            options={[
+              { value: 'workbench', label: '工作台视图' },
+              { value: 'top', label: '默认看顶级' },
+              { value: 'all', label: '看全部树' },
+            ]}
+          />
+        </ManagementQueryField>
+        <ManagementQueryField minWidth={180} width={220} label="分组">
+          <Select
+            allowClear
+            placeholder="全部分组"
+            value={sectionFilter || undefined}
+            onChange={(value) => setSectionFilter(value || '')}
+            options={sectionOptions}
+          />
+        </ManagementQueryField>
+        <ManagementQueryField minWidth={180} width={220} label="工作台">
+          <Select
+            allowClear
+            placeholder="全部工作台"
+            value={workbenchFilter || undefined}
+            onChange={(value) => setWorkbenchFilter(value || '')}
+            options={workbenchOptions}
+          />
+        </ManagementQueryField>
+        <ManagementQueryField minWidth={140} width={160} label="状态">
+          <Select
+            value={enabledFilter}
+            onChange={(value) => setEnabledFilter(value as 'all' | 'enabled' | 'disabled')}
+            options={[
+              { value: 'all', label: '全部状态' },
+              { value: 'enabled', label: '仅启用' },
+              { value: 'disabled', label: '仅禁用' },
+            ]}
+          />
+        </ManagementQueryField>
+        <ManagementQueryField minWidth={160} width={180} label="策略">
+          <Select
+            value={visibilityFilter}
+            onChange={(value) => setVisibilityFilter(value as 'all' | 'derived' | 'explicit' | 'unmapped')}
+            options={[
+              { value: 'all', label: '全部策略' },
+              { value: 'derived', label: '自动派生' },
+              { value: 'explicit', label: '显式覆盖' },
+              { value: 'unmapped', label: '未映射' },
+            ]}
+          />
+        </ManagementQueryField>
+      </ManagementQueryPanel>
       <AdminTable
         key={treeView}
         columnSettingIconOnly
@@ -920,77 +1027,17 @@ export function MenusPage() {
         pageSize={menuPageSize}
         pagination={false}
         scroll={{ x: 1320 }}
-        title="菜单树"
+        headerExtra={canManageMenus ? (
+          <ManagementTableToolbar>
+            <Button size="small" icon={<PlusOutlined />} type="primary" onClick={() => { setEditing(null); setModalVisible(true) }}>
+              新建菜单
+            </Button>
+          </ManagementTableToolbar>
+        ) : null}
         expandable={{
           defaultExpandAllRows: treeView !== 'top',
           rowExpandable: (record: MenuItem) => countDirectMenuChildren(record) > 0,
         }}
-        toolbar={(
-          <ManagementTableToolbar>
-            <div className="soha-workload-table-filters">
-              <Segmented
-                size="small"
-                value={treeView}
-                onChange={(value) => setTreeView(value as 'workbench' | 'top' | 'all')}
-                options={[
-                  { value: 'workbench', label: '工作台视图' },
-                  { value: 'top', label: '默认看顶级' },
-                  { value: 'all', label: '看全部树' },
-                ]}
-              />
-              <Select
-                className="soha-platform-compact-field"
-                allowClear
-                size="small"
-                placeholder="按分组筛选"
-                style={{ width: 220 }}
-                value={sectionFilter || undefined}
-                onChange={(value) => setSectionFilter(value || '')}
-                options={sectionOptions}
-              />
-              <Select
-                className="soha-platform-compact-field"
-                allowClear
-                size="small"
-                placeholder="按工作台筛选"
-                style={{ width: 220 }}
-                value={workbenchFilter || undefined}
-                onChange={(value) => setWorkbenchFilter(value || '')}
-                options={workbenchOptions}
-              />
-              <Select
-                className="soha-platform-compact-field"
-                size="small"
-                value={enabledFilter}
-                style={{ width: 160 }}
-                onChange={(value) => setEnabledFilter(value as 'all' | 'enabled' | 'disabled')}
-                options={[
-                  { value: 'all', label: '全部状态' },
-                  { value: 'enabled', label: '仅启用' },
-                  { value: 'disabled', label: '仅禁用' },
-                ]}
-              />
-              <Select
-                className="soha-platform-compact-field"
-                size="small"
-                value={visibilityFilter}
-                style={{ width: 180 }}
-                onChange={(value) => setVisibilityFilter(value as 'all' | 'derived' | 'explicit' | 'unmapped')}
-                options={[
-                  { value: 'all', label: '全部策略' },
-                  { value: 'derived', label: '自动派生' },
-                  { value: 'explicit', label: '显式覆盖' },
-                  { value: 'unmapped', label: '未映射' },
-                ]}
-              />
-            </div>
-            {canManageMenus ? (
-              <Button size="small" icon={<PlusOutlined />} type="primary" onClick={() => { setEditing(null); setModalVisible(true) }}>
-                新建菜单
-              </Button>
-            ) : null}
-          </ManagementTableToolbar>
-        )}
       />
       <Modal
         title={editing ? '编辑菜单' : '新建菜单'}
@@ -1109,8 +1156,7 @@ export function MenusPage() {
           </Form.Item>
           <Form.Item name="iconKey" label="图标" rules={[{ required: true, message: '请选择图标' }]}>
             <Select
-              showSearch
-              optionFilterProp="label"
+              showSearch={{ optionFilterProp: 'label' }}
               options={MENU_ICON_OPTIONS.map((item) => ({
                 value: item.value,
                 label: item.label,
@@ -1160,7 +1206,7 @@ export function MenusPage() {
 
 function AuditLogDrawer({ record, open, onClose }: { record: AuditLog | null; open: boolean; onClose: () => void }) {
   return (
-    <Drawer open={open} onClose={onClose} title={record ? `审计记录 · ${prettifyAction(record.action)}` : '审计记录'} width={620} destroyOnHidden>
+    <Drawer open={open} onClose={onClose} title={record ? `审计记录 · ${prettifyAction(record.action)}` : '审计记录'} size={620} destroyOnHidden>
       {record ? (
         <Tabs
           items={[
@@ -1169,6 +1215,7 @@ function AuditLogDrawer({ record, open, onClose }: { record: AuditLog | null; op
               label: '概览',
               children: (
                 <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+                  <UsageSnapshotPanel metadata={record.metadata} />
                   <Descriptions
                     bordered
                     size="small"
@@ -1201,10 +1248,16 @@ function AuditLogDrawer({ record, open, onClose }: { record: AuditLog | null; op
               ),
             },
             {
-              key: 'metadata',
-              label: '原始元数据',
+              key: 'diff',
+              label: '结构化 diff',
               children: (
-                <pre className="soha-system-json-block">{stringifyPayload(record.metadata)}</pre>
+                <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+                  <UsageSnapshotDiffView metadata={record.metadata} />
+                  <Card variant="outlined" className="soha-system-payload-card">
+                    <Typography.Title level={5} style={{ marginTop: 0 }}>原始 JSON</Typography.Title>
+                    <UsageSnapshotRawJson metadata={record.metadata} />
+                  </Card>
+                </Space>
               ),
             },
           ]}
@@ -1215,13 +1268,22 @@ function AuditLogDrawer({ record, open, onClose }: { record: AuditLog | null; op
 }
 
 export function AuditLogsPage() {
+  const [searchParams] = useSearchParams()
+  const initialUsageFilters = useMemo(() => usageSnapshotFilterParams(searchParams), [searchParams])
   const [actionFilter, setActionFilter] = useState<string>('')
   const [resultFilter, setResultFilter] = useState<string>('')
+  const [metadataKeyFilter, setMetadataKeyFilter] = useState<string>(initialUsageFilters.metadataKey)
+  const [metadataValueFilter, setMetadataValueFilter] = useState<string>(initialUsageFilters.metadataValue)
   const [viewMode, setViewMode] = useState<'all' | 'abnormal' | 'today'>('all')
   const [activeRecord, setActiveRecord] = useState<AuditLog | null>(null)
   const { data, isLoading } = useQuery({
-    queryKey: ['audit-logs', actionFilter, resultFilter],
-    queryFn: () => api.get<ApiResponse<AuditLog[]>>(`/audit/logs?action=${encodeURIComponent(actionFilter)}&result=${encodeURIComponent(resultFilter)}`),
+    queryKey: ['audit-logs', actionFilter, resultFilter, metadataKeyFilter, metadataValueFilter],
+    queryFn: () => api.get<ApiResponse<AuditLog[]>>(buildQueryPath('/audit/logs', {
+      action: actionFilter,
+      result: resultFilter,
+      metadataKey: metadataKeyFilter,
+      metadataValue: metadataValueFilter,
+    })),
   })
 
   const rawLogs = data?.data ?? []
@@ -1234,13 +1296,6 @@ export function AuditLogsPage() {
     }
     return rawLogs
   }, [rawLogs, viewMode])
-
-  const overview = useMemo(() => ({
-    total: rawLogs.length,
-    abnormal: rawLogs.filter((item) => !['success', 'published'].includes(item.result)).length,
-    actors: new Set(rawLogs.map((item) => item.actorId || item.actorName).filter(Boolean)).size,
-    today: rawLogs.filter((item) => isTodayDate(item.createdAt)).length,
-  }), [rawLogs])
 
   const columns: TableColumnsType<AuditLog> = [
     { ...tableColumnPresets.datetime, title: '时间', dataIndex: 'createdAt', render: (value: string) => formatDateTime(value) },
@@ -1282,10 +1337,18 @@ export function AuditLogsPage() {
       title: '摘要',
       dataIndex: 'summary',
       render: (value: string) => (
-        <Paragraph className="soha-log-summary" ellipsis={{ rows: 2, tooltip: value }}>
-          {value || '-'}
-        </Paragraph>
+        <Space orientation="vertical" size={4}>
+          <Paragraph className="soha-log-summary" ellipsis={{ rows: 2, tooltip: value }}>
+            {value || '-'}
+          </Paragraph>
+        </Space>
       ),
+    },
+    {
+      title: 'Usage Snapshot',
+      dataIndex: 'metadata',
+      width: 260,
+      render: (value: AuditLog['metadata']) => <UsageSnapshotSummary metadata={value} />,
     },
     {
       ...tableColumnPresets.action,
@@ -1305,25 +1368,99 @@ export function AuditLogsPage() {
 
   return (
     <div className="soha-page">
-      <ManagementDetailHeader title="审计日志" description="先看重点，再下钻查看请求上下文和原始元数据。" />
-      <div className="soha-system-overview-grid">
-        <Card variant="outlined" className="soha-system-metric-card">
-          <Statistic title="总记录" value={overview.total} />
-          <Text type="secondary">当前查询条件下的审计流水</Text>
-        </Card>
-        <Card variant="outlined" className="soha-system-metric-card">
-          <Statistic title="异常 / 拒绝" value={overview.abnormal} />
-          <Text type="secondary">优先关注 deny、failure 等记录</Text>
-        </Card>
-        <Card variant="outlined" className="soha-system-metric-card">
-          <Statistic title="涉及用户" value={overview.actors} />
-          <Text type="secondary">本页记录触达的操作者数量</Text>
-        </Card>
-        <Card variant="outlined" className="soha-system-metric-card">
-          <Statistic title="今日新增" value={overview.today} />
-          <Text type="secondary">今天发生的审计事件</Text>
-        </Card>
-      </div>
+      <ManagementQueryPanel
+        collapsible
+        onFinish={() => undefined}
+        actions={(
+          <>
+            <Button
+              autoInsertSpace={false}
+              disabled={viewMode === 'all' && !actionFilter && !resultFilter && !metadataKeyFilter && !metadataValueFilter.trim()}
+              htmlType="button"
+              onClick={() => {
+                setViewMode('all')
+                setActionFilter('')
+                setResultFilter('')
+                setMetadataKeyFilter('')
+                setMetadataValueFilter('')
+              }}
+            >
+              重置
+            </Button>
+            <Button autoInsertSpace={false} htmlType="submit" type="primary">
+              查询
+            </Button>
+          </>
+        )}
+      >
+        <ManagementQueryField label="视图" minWidth={260} width={300}>
+          <Segmented
+            size="small"
+            value={viewMode}
+            onChange={(value) => setViewMode(value as 'all' | 'abnormal' | 'today')}
+            options={[
+              { value: 'all', label: '全部' },
+              { value: 'abnormal', label: '异常 / 拒绝' },
+              { value: 'today', label: '今日' },
+            ]}
+          />
+        </ManagementQueryField>
+        <ManagementQueryField minWidth={140} width={160} label="动作">
+          <Select
+            allowClear
+            placeholder="全部动作"
+            value={actionFilter || undefined}
+            onChange={(value) => setActionFilter(value || '')}
+            options={[
+              { value: 'list', label: 'list' },
+              { value: 'view', label: 'view' },
+              { value: 'create', label: 'create' },
+              { value: 'update', label: 'update' },
+              { value: 'delete', label: 'delete' },
+              { value: 'login', label: 'login' },
+              { value: 'publish', label: 'publish' },
+              { value: 'withdraw', label: 'withdraw' },
+            ]}
+          />
+        </ManagementQueryField>
+        <ManagementQueryField minWidth={140} width={160} label="结果">
+          <Select
+            allowClear
+            placeholder="全部结果"
+            value={resultFilter || undefined}
+            onChange={(value) => setResultFilter(value || '')}
+            options={[
+              { value: 'success', label: 'success' },
+              { value: 'failure', label: 'failure' },
+              { value: 'deny', label: 'deny' },
+            ]}
+          />
+        </ManagementQueryField>
+        <ManagementQueryField minWidth={180} width={220} label="字段">
+          <Select
+            allowClear
+            placeholder="usageSnapshot 字段"
+            value={metadataKeyFilter || undefined}
+            onChange={(value) => setMetadataKeyFilter(value || '')}
+            options={[
+              { value: 'usageSnapshot.templateKind', label: 'templateKind' },
+              { value: 'usageSnapshot.templateId', label: 'templateId' },
+              { value: 'usageSnapshot.riskLevel', label: 'riskLevel' },
+              { value: 'usageSnapshot.before.templateId', label: 'before.templateId' },
+              { value: 'usageSnapshot.after.templateId', label: 'after.templateId' },
+              { value: 'usageSnapshot.after.riskLevel', label: 'after.riskLevel' },
+            ]}
+          />
+        </ManagementQueryField>
+        <ManagementQueryField grow minWidth={180} width={220} label="字段值">
+          <Input
+            allowClear
+            placeholder="usageSnapshot 值"
+            value={metadataValueFilter}
+            onChange={(event) => setMetadataValueFilter(event.target.value)}
+          />
+        </ManagementQueryField>
+      </ManagementQueryPanel>
       <AdminTable
         columnSettingIconOnly
         columnSettingPlacement="header"
@@ -1333,57 +1470,11 @@ export function AuditLogsPage() {
         rowKey="id"
         loading={isLoading}
         pageSize={50}
+        scroll={{ x: 'max-content' }}
         onRow={(record: AuditLog) => ({
           onClick: () => setActiveRecord(record),
           style: { cursor: 'pointer' },
         })}
-        toolbar={(
-          <div className="soha-workload-table-filters">
-            <Segmented
-              size="small"
-              value={viewMode}
-              onChange={(value) => setViewMode(value as 'all' | 'abnormal' | 'today')}
-              options={[
-                { value: 'all', label: '全部' },
-                { value: 'abnormal', label: '异常 / 拒绝' },
-                { value: 'today', label: '今日' },
-              ]}
-            />
-            <Select
-              className="soha-platform-compact-field"
-              allowClear
-              size="small"
-              placeholder="动作"
-              style={{ width: 160 }}
-              value={actionFilter || undefined}
-              onChange={(value) => setActionFilter(value || '')}
-              options={[
-                { value: 'list', label: 'list' },
-                { value: 'view', label: 'view' },
-                { value: 'create', label: 'create' },
-                { value: 'update', label: 'update' },
-                { value: 'delete', label: 'delete' },
-                { value: 'login', label: 'login' },
-                { value: 'publish', label: 'publish' },
-                { value: 'withdraw', label: 'withdraw' },
-              ]}
-            />
-            <Select
-              className="soha-platform-compact-field"
-              allowClear
-              size="small"
-              placeholder="结果"
-              style={{ width: 160 }}
-              value={resultFilter || undefined}
-              onChange={(value) => setResultFilter(value || '')}
-              options={[
-                { value: 'success', label: 'success' },
-                { value: 'failure', label: 'failure' },
-                { value: 'deny', label: 'deny' },
-              ]}
-            />
-          </div>
-        )}
       />
       <AuditLogDrawer record={activeRecord} open={Boolean(activeRecord)} onClose={() => setActiveRecord(null)} />
     </div>
@@ -1394,7 +1485,7 @@ export function AuditLogsPage() {
 
 function OperationLogDrawer({ record, open, onClose }: { record: OperationLog | null; open: boolean; onClose: () => void }) {
   return (
-    <Drawer open={open} onClose={onClose} title={record ? prettifyOperationType(record.operationType).primary : '操作详情'} width={640} destroyOnHidden>
+    <Drawer open={open} onClose={onClose} title={record ? prettifyOperationType(record.operationType).primary : '操作详情'} size={640} destroyOnHidden>
       {record ? (
         <Tabs
           items={[
@@ -1403,6 +1494,7 @@ function OperationLogDrawer({ record, open, onClose }: { record: OperationLog | 
               label: '概览',
               children: (
                 <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+                  <UsageSnapshotPanel metadata={record.metadata} />
                   <Descriptions
                     bordered
                     size="small"
@@ -1442,9 +1534,17 @@ function OperationLogDrawer({ record, open, onClose }: { record: OperationLog | 
               ),
             },
             {
-              key: 'metadata',
-              label: '元数据',
-              children: <pre className="soha-system-json-block">{stringifyPayload(record.metadata)}</pre>,
+              key: 'diff',
+              label: '结构化 diff',
+              children: (
+                <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+                  <UsageSnapshotDiffView metadata={record.metadata} />
+                  <Card variant="outlined" className="soha-system-payload-card">
+                    <Typography.Title level={5} style={{ marginTop: 0 }}>原始 JSON</Typography.Title>
+                    <UsageSnapshotRawJson metadata={record.metadata} />
+                  </Card>
+                </Space>
+              ),
             },
           ]}
         />
@@ -1454,13 +1554,22 @@ function OperationLogDrawer({ record, open, onClose }: { record: OperationLog | 
 }
 
 export function OperationLogsPage() {
+  const [searchParams] = useSearchParams()
+  const initialUsageFilters = useMemo(() => usageSnapshotFilterParams(searchParams), [searchParams])
   const [operationTypeFilter, setOperationTypeFilter] = useState<string>('')
   const [resultFilter, setResultFilter] = useState<string>('')
+  const [metadataKeyFilter, setMetadataKeyFilter] = useState<string>(initialUsageFilters.metadataKey)
+  const [metadataValueFilter, setMetadataValueFilter] = useState<string>(initialUsageFilters.metadataValue)
   const [moduleView, setModuleView] = useState<'all' | 'system' | 'access' | 'platform' | 'virtualization' | 'delivery'>('all')
   const [activeRecord, setActiveRecord] = useState<OperationLog | null>(null)
   const { data, isLoading } = useQuery({
-    queryKey: ['operation-logs', operationTypeFilter, resultFilter],
-    queryFn: () => api.get<ApiResponse<OperationLog[]>>(`/operations/logs?operationType=${encodeURIComponent(operationTypeFilter)}&result=${encodeURIComponent(resultFilter)}`),
+    queryKey: ['operation-logs', operationTypeFilter, resultFilter, metadataKeyFilter, metadataValueFilter],
+    queryFn: () => api.get<ApiResponse<OperationLog[]>>(buildQueryPath('/operations/logs', {
+      operationType: operationTypeFilter,
+      result: resultFilter,
+      metadataKey: metadataKeyFilter,
+      metadataValue: metadataValueFilter,
+    })),
   })
 
   const rawLogs = data?.data ?? []
@@ -1468,13 +1577,6 @@ export function OperationLogsPage() {
     if (moduleView === 'all') return rawLogs
     return rawLogs.filter((item) => compactText(String(item.targetScope?.module || '')) === moduleView)
   }, [moduleView, rawLogs])
-
-  const overview = useMemo(() => ({
-    total: rawLogs.length,
-    failed: rawLogs.filter((item) => item.result === 'failure').length,
-    system: rawLogs.filter((item) => compactText(String(item.targetScope?.module || '')) === 'system').length,
-    platform: rawLogs.filter((item) => compactText(String(item.targetScope?.module || '')) === 'platform').length,
-  }), [rawLogs])
 
   const columns: TableColumnsType<OperationLog> = [
     { ...tableColumnPresets.datetime, title: '时间', dataIndex: 'createdAt', render: (value: string) => formatDateTime(value) },
@@ -1533,6 +1635,12 @@ export function OperationLogsPage() {
       ),
     },
     {
+      title: 'Usage Snapshot',
+      dataIndex: 'metadata',
+      width: 260,
+      render: (value: OperationLog['metadata']) => <UsageSnapshotSummary metadata={value} />,
+    },
+    {
       ...tableColumnPresets.action,
       title: '详情',
       dataIndex: 'id',
@@ -1550,25 +1658,91 @@ export function OperationLogsPage() {
 
   return (
     <div className="soha-page">
-      <ManagementDetailHeader title="操作日志" description="把变更动作和目标对象拆开看，先看发生了什么，再看打到了哪里。" />
-      <div className="soha-system-overview-grid">
-        <Card variant="outlined" className="soha-system-metric-card">
-          <Statistic title="总操作" value={overview.total} />
-          <Text type="secondary">可追踪的后台变更流水</Text>
-        </Card>
-        <Card variant="outlined" className="soha-system-metric-card">
-          <Statistic title="失败操作" value={overview.failed} />
-          <Text type="secondary">优先排查执行失败的流程</Text>
-        </Card>
-        <Card variant="outlined" className="soha-system-metric-card">
-          <Statistic title="系统变更" value={overview.system} />
-          <Text type="secondary">公告、菜单、会话等系统域操作</Text>
-        </Card>
-        <Card variant="outlined" className="soha-system-metric-card">
-          <Statistic title="平台变更" value={overview.platform} />
-          <Text type="secondary">集群、命名空间、资源 YAML 等平台域操作</Text>
-        </Card>
-      </div>
+      <ManagementQueryPanel
+        collapsible
+        onFinish={() => undefined}
+        actions={(
+          <>
+            <Button
+              autoInsertSpace={false}
+              disabled={moduleView === 'all' && !operationTypeFilter.trim() && !resultFilter && !metadataKeyFilter && !metadataValueFilter.trim()}
+              htmlType="button"
+              onClick={() => {
+                setModuleView('all')
+                setOperationTypeFilter('')
+                setResultFilter('')
+                setMetadataKeyFilter('')
+                setMetadataValueFilter('')
+              }}
+            >
+              重置
+            </Button>
+            <Button autoInsertSpace={false} htmlType="submit" type="primary">
+              查询
+            </Button>
+          </>
+        )}
+      >
+        <ManagementQueryField label="视图" minWidth={260} width={300}>
+          <Segmented
+            size="small"
+            value={moduleView}
+            onChange={(value) => setModuleView(value as 'all' | 'system' | 'access' | 'platform' | 'virtualization' | 'delivery')}
+            options={[
+              { value: 'all', label: '全部' },
+              { value: 'system', label: '系统' },
+              { value: 'access', label: '访问控制' },
+              { value: 'platform', label: '平台' },
+              { value: 'virtualization', label: '虚拟化' },
+              { value: 'delivery', label: '交付' },
+            ]}
+          />
+        </ManagementQueryField>
+        <ManagementQueryField minWidth={180} width={220} label="操作类型">
+          <Input
+            allowClear
+            placeholder="按操作类型过滤"
+            value={operationTypeFilter}
+            onChange={(event) => setOperationTypeFilter(event.target.value)}
+          />
+        </ManagementQueryField>
+        <ManagementQueryField minWidth={140} width={160} label="结果">
+          <Select
+            allowClear
+            placeholder="全部结果"
+            value={resultFilter || undefined}
+            onChange={(value) => setResultFilter(value || '')}
+            options={[
+              { value: 'success', label: 'success' },
+              { value: 'failure', label: 'failure' },
+            ]}
+          />
+        </ManagementQueryField>
+        <ManagementQueryField minWidth={180} width={220} label="字段">
+          <Select
+            allowClear
+            placeholder="usageSnapshot 字段"
+            value={metadataKeyFilter || undefined}
+            onChange={(value) => setMetadataKeyFilter(value || '')}
+            options={[
+              { value: 'usageSnapshot.templateKind', label: 'templateKind' },
+              { value: 'usageSnapshot.templateId', label: 'templateId' },
+              { value: 'usageSnapshot.riskLevel', label: 'riskLevel' },
+              { value: 'usageSnapshot.before.templateId', label: 'before.templateId' },
+              { value: 'usageSnapshot.after.templateId', label: 'after.templateId' },
+              { value: 'usageSnapshot.after.riskLevel', label: 'after.riskLevel' },
+            ]}
+          />
+        </ManagementQueryField>
+        <ManagementQueryField grow minWidth={180} width={220} label="字段值">
+          <Input
+            allowClear
+            placeholder="usageSnapshot 值"
+            value={metadataValueFilter}
+            onChange={(event) => setMetadataValueFilter(event.target.value)}
+          />
+        </ManagementQueryField>
+      </ManagementQueryPanel>
       <AdminTable
         columnSettingIconOnly
         columnSettingPlacement="header"
@@ -1578,48 +1752,11 @@ export function OperationLogsPage() {
         rowKey="id"
         loading={isLoading}
         pageSize={50}
+        scroll={{ x: 'max-content' }}
         onRow={(record: OperationLog) => ({
           onClick: () => setActiveRecord(record),
           style: { cursor: 'pointer' },
         })}
-        toolbar={(
-          <div className="soha-workload-table-filters">
-            <Segmented
-              size="small"
-              value={moduleView}
-              onChange={(value) => setModuleView(value as 'all' | 'system' | 'access' | 'platform' | 'virtualization' | 'delivery')}
-              options={[
-                { value: 'all', label: '全部' },
-                { value: 'system', label: '系统' },
-                { value: 'access', label: '访问控制' },
-                { value: 'platform', label: '平台' },
-                { value: 'virtualization', label: '虚拟化' },
-                { value: 'delivery', label: '交付' },
-              ]}
-            />
-            <Input
-              className="soha-platform-compact-field"
-              size="small"
-              placeholder="按操作类型过滤"
-              value={operationTypeFilter}
-              onChange={(event) => setOperationTypeFilter(event.target.value)}
-              style={{ width: 220 }}
-            />
-            <Select
-              className="soha-platform-compact-field"
-              allowClear
-              size="small"
-              placeholder="按结果过滤"
-              style={{ width: 160 }}
-              value={resultFilter || undefined}
-              onChange={(value) => setResultFilter(value || '')}
-              options={[
-                { value: 'success', label: 'success' },
-                { value: 'failure', label: 'failure' },
-              ]}
-            />
-          </div>
-        )}
       />
       <OperationLogDrawer record={activeRecord} open={Boolean(activeRecord)} onClose={() => setActiveRecord(null)} />
     </div>

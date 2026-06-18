@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { MouseEvent, ReactNode } from "react";
+import type { ComponentProps, MouseEvent, ReactNode } from "react";
 import {
   Alert,
   AutoComplete,
@@ -24,7 +24,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import { AdminTable } from "@/components/admin-table";
 import {
-  ManagementDetailHeader,
   ManagementIconButton,
   ManagementState,
   ManagementTableToolbar,
@@ -125,6 +124,36 @@ function SettingsCard({
     <Card title={title} extra={extra}>
       {children}
     </Card>
+  );
+}
+
+function classNames(...items: Array<string | false | null | undefined>) {
+  return items.filter(Boolean).join(" ");
+}
+
+function SettingsAdminTable({
+  className,
+  columnSettingIconOnly = true,
+  columnSettingPlacement = "header",
+  scroll,
+  shellClassName,
+  tableSize = "small",
+  ...props
+}: ComponentProps<typeof AdminTable>) {
+  return (
+    <AdminTable
+      {...props}
+      className={classNames("soha-settings-table", className)}
+      columnSettingIconOnly={columnSettingIconOnly}
+      columnSettingPlacement={columnSettingPlacement}
+      scroll={scroll ?? { x: "max-content" }}
+      shellClassName={classNames(
+        "soha-management-table-shell",
+        "soha-settings-table-shell",
+        shellClassName,
+      )}
+      tableSize={tableSize}
+    />
   );
 }
 
@@ -465,10 +494,6 @@ export function BrandingSettingsPage({
 
   return (
     <div className="soha-page">
-      <ManagementDetailHeader
-        title="品牌设置"
-        description="配置品牌 Logo、Favicon 与网页标题。"
-      />
       {content}
     </div>
   );
@@ -779,10 +804,9 @@ export function LoginSettingsPage({
     },
   ];
   const content = (
-    <>
-      <SettingsCard
-        title="登陆设置"
-        extra={
+    <div className="soha-settings-table-section">
+      <SettingsAdminTable
+        headerExtra={
           canManageLoginSettings ? (
             <ManagementTableToolbar>
               <Button
@@ -798,19 +822,20 @@ export function LoginSettingsPage({
             </ManagementTableToolbar>
           ) : null
         }
-      >
-        <AdminTable
-          shellClassName="soha-management-table-shell"
-          columnSettingIconOnly
-          columnSettingPlacement="header"
-          rowKey="id"
-          tableSize="small"
-          pagination={false}
-          dataSource={providers}
-          columns={providerColumns}
-          empty={<ManagementState bordered={false} compact title="暂无登录源配置" description="新增登录源后，登录入口会按启用状态展示。" />}
-        />
-      </SettingsCard>
+        rowKey="id"
+        tableSize="small"
+        pagination={false}
+        dataSource={providers}
+        columns={providerColumns}
+        empty={
+          <ManagementState
+            bordered={false}
+            compact
+            title="暂无登录源配置"
+            description="新增登录源后，登录入口会按启用状态展示。"
+          />
+        }
+      />
       <Modal
         title={editingProvider ? "编辑登录源" : "新增登录源"}
         open={providerModalVisible}
@@ -1050,7 +1075,7 @@ export function LoginSettingsPage({
           </div>
         </Form>
       </Modal>
-    </>
+    </div>
   );
 
   if (embedded) {
@@ -1123,10 +1148,6 @@ export function MonitoringSettingsPage() {
 
   return (
     <div className="soha-page">
-      <ManagementDetailHeader
-        title="监控设置"
-        description="配置 Prometheus 地址、默认查询范围和访问凭证。"
-      />
       <SettingsCard>
         <Form
           {...DEFAULT_FORM_LAYOUT}
@@ -2032,22 +2053,14 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
   ];
 
   const providerCard = (
-    <section data-testid="ai-provider-connections-section">
-      <SettingsCard
-        title={
-          <Space size={8} wrap>
-            <span>Provider Connections</span>
-            <AIGradientTag tone="blue">LLM</AIGradientTag>
-            <AIGradientTag tone="slate">Model API</AIGradientTag>
-          </Space>
-        }
-      >
-        <div
-          data-testid="ai-provider-connections-actions"
-          className="soha-management-table-toolbar-actions"
-          style={{ justifyContent: "flex-end", marginBottom: 12 }}
-        >
-          {canManageAISettings ? (
+    <section
+      data-testid="ai-provider-connections-section"
+      className="soha-settings-table-section"
+    >
+      <SettingsAdminTable
+        data-testid="ai-provider-table"
+        headerExtra={
+          canManageAISettings ? (
             <Button
               data-testid="ai-provider-add"
               type="primary"
@@ -2059,37 +2072,33 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
             >
               新增连接
             </Button>
-          ) : null}
-        </div>
-        <div data-testid="ai-provider-table-shell">
-          <AdminTable
-            data-testid="ai-provider-table"
-            shellClassName="soha-management-table-shell"
-            columnSettingIconOnly
-            columnSettingPlacement="header"
-            rowKey="id"
-            tableSize="small"
-            pagination={false}
-            dataSource={settings?.providers ?? []}
-            columns={providerColumns}
-            empty={<ManagementState bordered={false} compact title="暂无 Provider 连接" description="新增 Provider 后，AI 工作台可选择对应模型执行分析。" />}
+          ) : null
+        }
+        rowKey="id"
+        tableSize="small"
+        pagination={false}
+        dataSource={settings?.providers ?? []}
+        columns={providerColumns}
+        empty={
+          <ManagementState
+            bordered={false}
+            compact
+            title="暂无 Provider 连接"
+            description="新增 Provider 后，AI 工作台可选择对应模型执行分析。"
           />
-        </div>
-      </SettingsCard>
+        }
+      />
     </section>
   );
 
   const agentRuntimeCard = showRuntimeSettings ? (
-    <section data-testid="ai-agent-runtime-section">
-      <SettingsCard
-        title={
-          <Space size={8} wrap>
-            <span>Agent Runtime Providers</span>
-            <AIGradientTag tone="violet">Catalog</AIGradientTag>
-            <AIGradientTag tone="green">Runner</AIGradientTag>
-          </Space>
-        }
-        extra={
+    <section
+      data-testid="ai-agent-runtime-section"
+      className="soha-settings-table-section"
+    >
+      <SettingsAdminTable
+        data-testid="ai-agent-provider-table"
+        headerExtra={
           <Button
             icon={<ReloadOutlined />}
             loading={
@@ -2108,70 +2117,52 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
             刷新
           </Button>
         }
-      >
-        <div className="flex flex-col gap-3">
-          <Alert
-            showIcon
-            type="info"
-            title="Agent Runtime 连接由后端 catalog 与 soha-agent runner 共同决定。"
-            description="Hermes 等外部 Agent 会领取 AgentRun，再通过 callback 写回心跳、Runner ID、工具调用和分析产物。这里展示可选择的 Agent Provider 与最近运行证据。"
+        rowKey="id"
+        tableSize="small"
+        pagination={false}
+        loading={workbenchCatalogQuery.isLoading}
+        dataSource={agentProviderRows}
+        columns={agentProviderColumns}
+        empty={
+          <ManagementState
+            bordered={false}
+            compact
+            title="暂无 Agent Runtime Provider"
+            description="后端 catalog 暂未返回可用于 AI Workbench 的 Agent Provider。"
           />
-          <AdminTable
-            data-testid="ai-agent-provider-table"
-            shellClassName="soha-management-table-shell"
-            columnSettingIconOnly
-            columnSettingPlacement="header"
-            rowKey="id"
-            tableSize="small"
-            pagination={false}
-            loading={workbenchCatalogQuery.isLoading}
-            dataSource={agentProviderRows}
-            columns={agentProviderColumns}
-            empty={
-              <ManagementState
-                bordered={false}
-                compact
-                title="暂无 Agent Runtime Provider"
-                description="后端 catalog 暂未返回可用于 AI Workbench 的 Agent Provider。"
-              />
-            }
-          />
-          <div className="soha-ai-settings-subhead">
-            <span>Recent AgentRuns</span>
-            <AIGradientTag tone="green">claim / callback</AIGradientTag>
-          </div>
-          {canViewAgentRuns ? (
-            <AdminTable
-              data-testid="ai-agent-run-table"
-              shellClassName="soha-management-table-shell"
-              columnSettingIconOnly
-              columnSettingPlacement="header"
-              rowKey="id"
-              tableSize="small"
-              pageSize={5}
-              loading={agentRunsQuery.isLoading}
-              dataSource={agentRuns}
-              columns={agentRunColumns}
-              empty={
-                <ManagementState
-                  bordered={false}
-                  compact
-                  title="暂无 AgentRun"
-                  description="选择 Hermes 等 Agent Provider 发起显式分析后，Runner claim/callback 记录会出现在这里。"
-                />
-              }
-            />
-          ) : (
+        }
+      />
+      <div className="soha-ai-settings-subhead">
+        <span>Recent AgentRuns</span>
+        <AIGradientTag tone="green">claim / callback</AIGradientTag>
+      </div>
+      {canViewAgentRuns ? (
+        <SettingsAdminTable
+          data-testid="ai-agent-run-table"
+          rowKey="id"
+          tableSize="small"
+          pageSize={5}
+          loading={agentRunsQuery.isLoading}
+          dataSource={agentRuns}
+          columns={agentRunColumns}
+          empty={
             <ManagementState
               bordered={false}
               compact
-              kind="no-permission"
-              title="无法查看 AgentRun 历史"
-              description="当前账号缺少 observe.ai.view 权限，只能查看 Agent Provider catalog。"
+              title="暂无 AgentRun"
+              description="选择 Hermes 等 Agent Provider 发起显式分析后，Runner claim/callback 记录会出现在这里。"
             />
-          )}
-        </div>
-      </SettingsCard>
+          }
+        />
+      ) : (
+        <ManagementState
+          bordered={false}
+          compact
+          kind="no-permission"
+          title="无法查看 AgentRun 历史"
+          description="当前账号缺少 observe.ai.view 权限，只能查看 Agent Provider catalog。"
+        />
+      )}
     </section>
   ) : null;
 
@@ -2400,28 +2391,21 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
     <>
       {providerCard}
       {agentRuntimeCard}
-      <SettingsCard
-        title="Skills Registry"
-        extra={
-          canManageAISettings ? (
-            <Button
-              type="primary"
-              onClick={() => {
-                setEditingSkill(null);
-                setSkillsModalVisible(true);
-              }}
-            >
-              新增
-            </Button>
-          ) : null
-        }
-      >
-        <div className="mb-3 text-sm text-[var(--ant-colorTextSecondary)]">
-          全局 skills 由 `settings.ai.manage`
-          控制；它们决定工作台可装配的默认能力集合，但不会自动绕过会话级选择与预算限制。
-        </div>
-        <AdminTable
-          shellClassName="soha-management-table-shell"
+      <div className="soha-settings-table-section">
+        <SettingsAdminTable
+          headerExtra={
+            canManageAISettings ? (
+              <Button
+                type="primary"
+                onClick={() => {
+                  setEditingSkill(null);
+                  setSkillsModalVisible(true);
+                }}
+              >
+                新增
+              </Button>
+            ) : null
+          }
           rowKey="id"
           dataSource={skillsRegistryDraft}
           empty={
@@ -2573,81 +2557,72 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
             },
           ]}
         />
-      </SettingsCard>
-      <SettingsCard
-        title="Data Sources"
-        extra={
-          canManageAISettings ? (
-            <Button
-              type="primary"
-              onClick={() => {
-                setEditingDataSource(null);
-                setDataSourceSourceKind("logs");
-                setDataSourceBackendType("es");
-                setDataSourceModalVisible(true);
-              }}
-            >
-              新增
-            </Button>
-          ) : null
-        }
-      >
-        <AdminTable
-          shellClassName="soha-management-table-shell"
+      </div>
+      <div className="soha-settings-table-section">
+        <SettingsAdminTable
+          headerExtra={
+            canManageAISettings ? (
+              <Button
+                type="primary"
+                onClick={() => {
+                  setEditingDataSource(null);
+                  setDataSourceSourceKind("logs");
+                  setDataSourceBackendType("es");
+                  setDataSourceModalVisible(true);
+                }}
+              >
+                新增
+              </Button>
+            ) : null
+          }
           columns={dataSourceColumns}
           dataSource={dataSources}
           rowKey="id"
           loading={dataSourcesQuery.isLoading}
         />
-      </SettingsCard>
-      <SettingsCard
-        title="Analysis Profiles"
-        extra={
-          canManageAISettings ? (
-            <Button
-              type="primary"
-              onClick={() => {
-                setEditingProfile(null);
-                setProfileModalVisible(true);
-              }}
-            >
-              新增
-            </Button>
-          ) : null
-        }
-      >
-        <AdminTable
-          shellClassName="soha-management-table-shell"
+      </div>
+      <div className="soha-settings-table-section">
+        <SettingsAdminTable
+          headerExtra={
+            canManageAISettings ? (
+              <Button
+                type="primary"
+                onClick={() => {
+                  setEditingProfile(null);
+                  setProfileModalVisible(true);
+                }}
+              >
+                新增
+              </Button>
+            ) : null
+          }
           columns={profileColumns}
           dataSource={profiles}
           rowKey="id"
           loading={profilesQuery.isLoading}
         />
-      </SettingsCard>
-      <SettingsCard
-        title="Automation Policies"
-        extra={
-          canManageAISettings ? (
-            <Button
-              type="primary"
-              onClick={() => {
-                setEditingPolicy(null);
-                setPolicyModalVisible(true);
-              }}
-            >
-              新增
-            </Button>
-          ) : null
-        }
-      >
-        <AdminTable
-          shellClassName="soha-management-table-shell"
+      </div>
+      <div className="soha-settings-table-section">
+        <SettingsAdminTable
+          headerExtra={
+            canManageAISettings ? (
+              <Button
+                type="primary"
+                onClick={() => {
+                  setEditingPolicy(null);
+                  setPolicyModalVisible(true);
+                }}
+              >
+                新增
+              </Button>
+            ) : null
+          }
           columns={policyColumns}
           dataSource={policies}
           rowKey="id"
           loading={policiesQuery.isLoading}
         />
-      </SettingsCard>
+      </div>
 
       {providerModal}
 
@@ -3336,10 +3311,6 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
 
   return (
     <div className="soha-page">
-      <ManagementDetailHeader
-        title="AI 设置"
-        description="配置 AI 提供商、模型、API Key 与基础接入地址。"
-      />
       {content}
     </div>
   );
@@ -3362,7 +3333,6 @@ export function SettingsCenterPage() {
   if (permissionSnapshotQuery.isLoading) {
     return (
       <div className="soha-page">
-        <ManagementDetailHeader title="设置中心" description="集中配置登陆与品牌能力。" />
         <Card>
           <Spin size="large" />
         </Card>
@@ -3373,7 +3343,6 @@ export function SettingsCenterPage() {
   if (!canViewLoginSettings && !canViewBrandingSettings) {
     return (
       <div className="soha-page">
-        <ManagementDetailHeader title="设置中心" description="集中配置登陆与品牌能力。" />
         <ManagementState kind="no-permission" description="当前账号没有可访问的设置页权限。" />
       </div>
     );
@@ -3389,8 +3358,7 @@ export function SettingsCenterPage() {
 
   return (
     <div className="soha-page">
-      <ManagementDetailHeader title="设置中心" description="集中配置登陆与品牌能力。" />
-      <SettingsCard title="可用设置">
+      <SettingsCard>
         <Space orientation="vertical" size={12}>
           {canViewLoginSettings ? (
             <Button

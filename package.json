@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "check:release-workflow": "node scripts/check-release-workflow.mjs",
+    "browser:baseline": "node scripts/browser-regression-baseline.mjs",
     "release:verify-dist": "node scripts/verify-release-artifact.mjs",
     "lint": "eslint . --max-warnings=0",
     "format": "prettier --write README.md package.json package-lock.json tsconfig.json vite.config.ts tailwind.config.ts postcss.config.js index.html eslint.config.js .prettierrc.json .github/workflows/*.yml src/App.tsx src/main.tsx src/components/app-error-boundary.tsx src/components/global-api-error-handler.tsx src/services/api-client.ts src/services/api-client.test.ts src/services/api-error.ts src/styles/globals.css",

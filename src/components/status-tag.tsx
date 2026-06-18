@@ -1,6 +1,23 @@
 import { Tag } from 'antd'
 
-type TagColor = 'default' | 'success' | 'error' | 'warning' | 'processing' | 'grey' | 'green' | 'red' | 'orange' | 'blue'
+type TagColor =
+  | 'default'
+  | 'success'
+  | 'error'
+  | 'warning'
+  | 'processing'
+  | 'grey'
+  | 'green'
+  | 'red'
+  | 'orange'
+  | 'blue'
+  | 'gold'
+  | 'lime'
+  | 'cyan'
+  | 'purple'
+  | 'volcano'
+  | 'geekblue'
+  | 'magenta'
 
 function resolveAntdTagColor(color: TagColor): Exclude<TagColor, 'grey' | 'green' | 'red' | 'orange' | 'blue'> {
   switch (color) {
@@ -25,10 +42,17 @@ function pickStatusColor(value?: null | string): TagColor {
     return 'default'
   }
 
+  if (['published', 'visible', 'resolved', 'deployed', 'available'].includes(normalized)) {
+    return 'geekblue'
+  }
+
+  if (['connected', 'bound', 'normal'].includes(normalized)) {
+    return 'cyan'
+  }
+
   if ([
     'active', 'healthy', 'ready', 'running', 'succeeded', 'complete', 'success',
-    'connected', 'published', 'visible', 'resolved', 'deployed', 'available',
-    'bound', 'normal', 'true', 'allow',
+    'true', 'allow',
   ].includes(normalized)) {
     return 'success'
   }
@@ -37,6 +61,7 @@ function pickStatusColor(value?: null | string): TagColor {
     'warning', 'pending', 'queued', 'building', 'waiting', 'released',
     'pending-install', 'pending-upgrade', 'draft',
   ].includes(normalized)) {
+    if (normalized === 'draft') return 'magenta'
     return 'warning'
   }
 

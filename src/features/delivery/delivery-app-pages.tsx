@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Key } from 'react'
-import { Alert, App, Button, Card, Collapse, Descriptions, Dropdown, Form, Input, Modal, Popconfirm, Select, Space, Switch, Tabs, Tag, Timeline, Typography } from 'antd'
+import { Alert, App, BorderBeam, Button, Card, Collapse, Descriptions, Dropdown, Form, Input, Modal, Popconfirm, Select, Space, Switch, Tabs, Tag, Timeline, Typography } from 'antd'
 import { ApiOutlined, CheckOutlined, CloseOutlined, DeleteOutlined, EditOutlined, FileTextOutlined, LinkOutlined, MoreOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined, RocketOutlined, SaveOutlined, StopOutlined } from '@ant-design/icons'
-import type { MenuProps, TableColumnsType } from 'antd'
+import type { BorderBeamGradient, MenuProps, TableColumnsType } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
@@ -33,6 +33,11 @@ import {
   splitApplicationGroups,
   useApplicationCenterState,
 } from '@/features/delivery/application-center-model'
+import {
+  TemplateUsageImpactPanel,
+  shouldConfirmTemplateUsageSave,
+  templateUsageConfirmText,
+} from '@/features/delivery/template-usage-impact'
 import type {
   ApiResponse,
   BuildSource,
@@ -43,6 +48,7 @@ import type {
   ExecutionTask,
   ReleaseBoardEntry,
   ReleaseBundle,
+  TemplateUsageSummary,
   WorkflowNodeRun,
   WorkflowRun,
 } from '@/types'
@@ -281,6 +287,50 @@ function renderTargetSummary(targets?: ApplicationBindingRow['targets']) {
 function summarizeApplicationRole(app: DeliveryApplication) {
   const language = app.language ? app.language.toUpperCase() : 'APP'
   return language
+}
+
+function applicationBeamTone(app: DeliveryApplication, index: number) {
+  const seed = `${app.language || ''}:${app.key || app.id || app.name}`.toLowerCase()
+  if (seed.includes('go')) return 'cyan'
+  if (seed.includes('java')) return 'volcano'
+  if (seed.includes('node') || seed.includes('js') || seed.includes('ts')) return 'lime'
+  if (seed.includes('python') || seed.includes('py')) return 'purple'
+  return ['blue', 'cyan', 'purple', 'lime', 'volcano'][index % 5]
+}
+
+function applicationBeamGradient(tone: string): BorderBeamGradient {
+  switch (tone) {
+    case 'cyan':
+      return [
+        { color: '#1677ff', percent: 0 },
+        { color: '#22d3ee', percent: 52 },
+        { color: '#67e8f9', percent: 100 },
+      ]
+    case 'purple':
+      return [
+        { color: '#2f54eb', percent: 0 },
+        { color: '#7c3aed', percent: 48 },
+        { color: '#ff85c0', percent: 100 },
+      ]
+    case 'lime':
+      return [
+        { color: '#22c55e', percent: 0 },
+        { color: '#a3e635', percent: 54 },
+        { color: '#facc15', percent: 100 },
+      ]
+    case 'volcano':
+      return [
+        { color: '#fa541c', percent: 0 },
+        { color: '#ff7875', percent: 46 },
+        { color: '#ffd666', percent: 100 },
+      ]
+    default:
+      return [
+        { color: '#1677ff', percent: 0 },
+        { color: '#36cfc9', percent: 52 },
+        { color: '#95de64', percent: 100 },
+      ]
+  }
 }
 
 function summarizeApplicationServiceClues(app: DeliveryApplication, bindings: ReleaseBoardEntry[]) {
@@ -530,107 +580,109 @@ export function ApplicationsPage() {
         <ManagementState kind="loading" />
       ) : visibleApplicationCards.length > 0 ? (
         <div className="soha-application-card-list">
-          {visibleApplicationCards.map(({ app, bindings, deliverySignal, gateSignal, activeTargets, serviceClues, latestEnvironmentName }) => {
+          {visibleApplicationCards.map(({ app, bindings, deliverySignal, gateSignal, activeTargets, serviceClues, latestEnvironmentName }, index) => {
+            const beamTone = applicationBeamTone(app, index)
             const actionMenuItems: MenuProps['items'] = [
               ...(managementState.canUpdateApplication ? [{ key: 'edit', icon: <EditOutlined />, label: '编辑' }] : []),
               ...(managementState.canDeleteApplication ? [{ key: 'delete', danger: true, icon: <DeleteOutlined />, label: '删除' }] : []),
             ]
             return (
-              <Card
-                key={app.id}
-                className="soha-application-card"
-                hoverable
-                onClick={() => navigate(`/applications/${app.id}`)}
-              >
-                <div className="soha-application-card__header">
-                  <div className="soha-application-card__title-wrap">
-                    <div className="soha-application-card__title-row">
-                      <h3 className="soha-application-card__title">{app.name}</h3>
+              <BorderBeam key={app.id} color={applicationBeamGradient(beamTone)} outset={0}>
+                <Card
+                  className="soha-application-card"
+                  hoverable
+                  onClick={() => navigate(`/applications/${app.id}`)}
+                >
+                  <div className="soha-application-card__header">
+                    <div className="soha-application-card__title-wrap">
+                      <div className="soha-application-card__title-row">
+                        <h3 className="soha-application-card__title">{app.name}</h3>
+                      </div>
+                      <div className="soha-application-card__subline">
+                        <Tag className="soha-application-card__language-tag" color={beamTone}>
+                          {summarizeApplicationRole(app)}
+                        </Tag>
+                        <Tag className="soha-application-card__state-tag" color={app.enabled ? 'success' : 'default'}>
+                          {app.enabled ? 'enabled' : 'disabled'}
+                        </Tag>
+                      </div>
                     </div>
-                    <div className="soha-application-card__subline">
-                      <Text type="secondary">{summarizeApplicationRole(app)}</Text>
-                      <Tag>{app.enabled ? 'enabled' : 'disabled'}</Tag>
-                    </div>
-                  </div>
-                  <div className="soha-application-card__header-actions">
-                    {actionMenuItems.length > 0 ? (
-                      <Popconfirm
-                        title="确认删除应用？"
-                        description={deleteConfirmApp?.id === app.id ? `删除 ${app.name} 后不可恢复。` : undefined}
-                        open={deleteConfirmApp?.id === app.id}
-                        okText="删除"
-                        cancelText="取消"
-                        okButtonProps={{ danger: true }}
-                        placement="bottomRight"
-                        onCancel={(event) => {
-                          event?.stopPropagation()
-                          setDeleteConfirmApp(null)
-                        }}
-                        onConfirm={(event) => {
-                          event?.stopPropagation()
-                          managementState.deleteAppMutation.mutate(app.id)
-                          setDeleteConfirmApp(null)
-                        }}
-                        onOpenChange={(open) => {
-                          if (!open && deleteConfirmApp?.id === app.id) {
-                            setDeleteConfirmApp(null)
-                          }
-                        }}
-                      >
-                        <Dropdown
-                          trigger={['click']}
+                    <div className="soha-application-card__header-actions">
+                      {actionMenuItems.length > 0 ? (
+                        <Popconfirm
+                          title="确认删除应用？"
+                          description={deleteConfirmApp?.id === app.id ? `删除 ${app.name} 后不可恢复。` : undefined}
+                          open={deleteConfirmApp?.id === app.id}
+                          okText="删除"
+                          cancelText="取消"
+                          okButtonProps={{ danger: true }}
                           placement="bottomRight"
-                          menu={{
-                            items: actionMenuItems,
-                            onClick: ({ key, domEvent }) => {
-                              domEvent.stopPropagation()
-                              if (key === 'edit') {
-                                openEditApplication(app)
-                              }
-                              if (key === 'delete') {
-                                setDeleteConfirmApp(app)
-                              }
-                            },
+                          onCancel={(event) => {
+                            event?.stopPropagation()
+                            setDeleteConfirmApp(null)
+                          }}
+                          onConfirm={(event) => {
+                            event?.stopPropagation()
+                            managementState.deleteAppMutation.mutate(app.id)
+                            setDeleteConfirmApp(null)
+                          }}
+                          onOpenChange={(open) => {
+                            if (!open && deleteConfirmApp?.id === app.id) {
+                              setDeleteConfirmApp(null)
+                            }
                           }}
                         >
-                          <Button
-                            aria-label={`${app.name} 操作`}
-                            className="soha-application-card__more"
-                            icon={<MoreOutlined />}
-                            size="small"
-                            type="text"
-                            onClick={(event) => event.stopPropagation()}
-                          />
-                        </Dropdown>
-                      </Popconfirm>
-                    ) : null}
+                          <Dropdown
+                            trigger={['click']}
+                            placement="bottomRight"
+                            menu={{
+                              items: actionMenuItems,
+                              onClick: ({ key, domEvent }) => {
+                                domEvent.stopPropagation()
+                                if (key === 'edit') {
+                                  openEditApplication(app)
+                                }
+                                if (key === 'delete') {
+                                  setDeleteConfirmApp(app)
+                                }
+                              },
+                            }}
+                          >
+                            <Button
+                              aria-label={`${app.name} 操作`}
+                              className="soha-application-card__more"
+                              icon={<MoreOutlined />}
+                              size="small"
+                              type="text"
+                              onClick={(event) => event.stopPropagation()}
+                            />
+                          </Dropdown>
+                        </Popconfirm>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
 
-                <div className="soha-application-card__signals">
-                  <Tag color={deliverySignal.color}>{`交付: ${deliverySignal.label}`}</Tag>
-                  <Tag color={gateSignal.color}>{`门禁: ${gateSignal.label}`}</Tag>
-                </div>
+                  <div className="soha-application-card__signals">
+                    <Tag color={deliverySignal.color}>{`交付: ${deliverySignal.label}`}</Tag>
+                    <Tag color={gateSignal.color}>{`门禁: ${gateSignal.label}`}</Tag>
+                  </div>
 
-                <div className="soha-application-card__stats">
-                  <div className="soha-application-card__stat">
-                    <span className="soha-application-card__stat-label">服务线索</span>
-                    <span className="soha-application-card__stat-value">{serviceClues}</span>
+                  <div className="soha-application-card__stats">
+                    <div className="soha-application-card__stat">
+                      <Tag className="soha-application-card__metric-tag" color="processing">服务线索 {serviceClues}</Tag>
+                    </div>
+                    <div className="soha-application-card__stat">
+                      <Tag className="soha-application-card__metric-tag" color={(bindings.length || app.environmentCount || 0) > 0 ? 'success' : 'default'}>环境 {bindings.length || app.environmentCount || 0}</Tag>
+                    </div>
+                    <div className="soha-application-card__stat">
+                      <Tag className="soha-application-card__metric-tag" color={activeTargets > 0 ? 'geekblue' : 'default'}>目标 {activeTargets}</Tag>
+                    </div>
+                    <div className="soha-application-card__stat is-wide">
+                      <Tag className="soha-application-card__metric-tag soha-application-card__metric-tag--wide" color={bindings.length > 0 ? 'purple' : 'default'}>最近环境 {latestEnvironmentName}</Tag>
+                    </div>
                   </div>
-                  <div className="soha-application-card__stat">
-                    <span className="soha-application-card__stat-label">环境</span>
-                    <span className="soha-application-card__stat-value">{bindings.length || app.environmentCount || 0}</span>
-                  </div>
-                  <div className="soha-application-card__stat">
-                    <span className="soha-application-card__stat-label">目标</span>
-                    <span className="soha-application-card__stat-value">{activeTargets}</span>
-                  </div>
-                  <div className="soha-application-card__stat is-wide">
-                    <span className="soha-application-card__stat-label">最近环境</span>
-                    <span className="soha-application-card__stat-value">{latestEnvironmentName}</span>
-                  </div>
-                </div>
-              </Card>
+                </Card>
+              </BorderBeam>
             )
           })}
         </div>
@@ -722,6 +774,7 @@ export function ApplicationDetailPage() {
 
 export function BuildTemplatesPage() {
   const { message } = App.useApp()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const canManage = hasPermission(permissionSnapshotQuery.data?.data, 'delivery.build-templates.manage')
@@ -742,6 +795,12 @@ export function BuildTemplatesPage() {
   const selectedTemplate = selectedTemplateId && selectedTemplateId !== 'new'
     ? templates.find((item) => item.id === selectedTemplateId) ?? null
     : null
+  const selectedTemplateUsageQuery = useQuery({
+    queryKey: ['build-template-usage', selectedTemplate?.id ?? ''],
+    queryFn: () => api.get<ApiResponse<TemplateUsageSummary>>(`/build-templates/${selectedTemplate?.id ?? ''}/usage`),
+    enabled: !!selectedTemplate?.id,
+  })
+  const selectedTemplateUsage = selectedTemplateUsageQuery.data?.data
   const isNewDraft = selectedTemplateId === 'new'
   const hasSelection = isNewDraft || !!selectedTemplate
 
@@ -758,6 +817,7 @@ export function BuildTemplatesPage() {
     onSuccess: () => {
       message.success('构建模板更新成功')
       queryClient.invalidateQueries({ queryKey: ['build-templates'] })
+      queryClient.invalidateQueries({ queryKey: ['build-template-usage'] })
     },
     onError: (err: Error) => message.error(err.message),
   })
@@ -766,6 +826,7 @@ export function BuildTemplatesPage() {
     onSuccess: (_payload, deletedId) => {
       message.success('构建模板已删除')
       queryClient.invalidateQueries({ queryKey: ['build-templates'] })
+      queryClient.invalidateQueries({ queryKey: ['build-template-usage'] })
       if (selectedTemplateId === deletedId) {
         const nextTemplate = templates.find((item) => item.id !== deletedId)
         if (nextTemplate) {
@@ -949,6 +1010,10 @@ export function BuildTemplatesPage() {
       const values = await form.validateFields()
       const payload = buildBuildTemplatePayloadFromDesigner(values)
       if (selectedTemplate) {
+        const usageForSave = selectedTemplateUsage ?? (await selectedTemplateUsageQuery.refetch()).data?.data
+        if (shouldConfirmTemplateUsageSave(usageForSave) && !window.confirm(templateUsageConfirmText(selectedTemplate.name, usageForSave))) {
+          return
+        }
         await updateMutation.mutateAsync({ id: selectedTemplate.id, values: payload })
         setFormSnapshot(values)
         setIsDirty(false)
@@ -1219,6 +1284,11 @@ export function BuildTemplatesPage() {
                 setIsDirty(true)
               }}
             >
+              <TemplateUsageImpactPanel
+                loading={selectedTemplateUsageQuery.isFetching && !!selectedTemplate}
+                onNavigate={navigate}
+                usage={selectedTemplateUsage}
+              />
               <Tabs
                 activeKey={activeTabKey}
                 className="soha-build-template-tabs"
@@ -1399,15 +1469,26 @@ export function WorkflowsPage() {
 }
 
 export function ReleaseBundlesPage() {
+  const [searchParams] = useSearchParams()
+  const focusedReleaseBundleId = searchParams.get('releaseBundleId')?.trim() ?? ''
   const bundlesQuery = useQuery({
     queryKey: ['release-bundles'],
     queryFn: () => api.get<ApiResponse<ReleaseBundle[]>>('/delivery/release-bundles'),
   })
   const bundles = bundlesQuery.data?.data ?? []
+  const focusedBundle = focusedReleaseBundleId ? bundles.find((item) => item.id === focusedReleaseBundleId) : undefined
   const bundleSummary = useMemo(() => summarizeReleaseBundleStatus(bundles), [bundles])
 
   return (
     <div className="soha-page">
+      {focusedReleaseBundleId ? (
+        <Alert
+          showIcon
+          title={focusedBundle ? `已定位版本包 ${focusedBundle.id}` : '版本包定位'}
+          description={`releaseBundleId=${focusedReleaseBundleId}`}
+          type={focusedBundle || bundlesQuery.isLoading ? 'info' : 'warning'}
+        />
+      ) : null}
       <div className="soha-release-bundle-summary">
         <Card className="soha-management-panel-card" size="small">
           <Text type="secondary">候选版本</Text>
@@ -1442,7 +1523,10 @@ export function ReleaseBundlesPage() {
             dataIndex: 'version',
             render: (value: string, record: ReleaseBundle) => (
               <Space orientation="vertical" size={0}>
-                <Text strong>{value}</Text>
+                <Space size={6} wrap>
+                  <Text strong>{value}</Text>
+                  {record.id === focusedReleaseBundleId ? <Tag color="blue">已定位</Tag> : null}
+                </Space>
                 <Text type="secondary">{record.id}</Text>
               </Space>
             ),
@@ -1462,6 +1546,9 @@ export function ReleaseBundlesPage() {
 
 export function ExecutionTasksPage() {
   const { message } = App.useApp()
+  const [searchParams] = useSearchParams()
+  const focusedExecutionTaskId = searchParams.get('executionTaskId')?.trim() ?? ''
+  const focusedReleaseBundleId = searchParams.get('releaseBundleId')?.trim() ?? ''
   const permissionSnapshotQuery = usePermissionSnapshot()
   const canManage = hasPermission(permissionSnapshotQuery.data?.data, 'delivery.execution-tasks.manage')
   const [selectedTask, setSelectedTask] = useState<ExecutionTask | null>(null)
@@ -1520,10 +1607,27 @@ export function ExecutionTasksPage() {
     onError: (err: Error) => message.error(err.message),
   })
   const executionTasks = tasksQuery.data?.data ?? []
+  const focusedTask = focusedExecutionTaskId ? executionTasks.find((item) => item.id === focusedExecutionTaskId) : undefined
   const executionSummary = useMemo(() => summarizeExecutionTaskStatus(executionTasks), [executionTasks])
+
+  useEffect(() => {
+    if (!focusedTask || selectedTask?.id === focusedTask.id) return
+    setSelectedTask(focusedTask)
+  }, [focusedTask, selectedTask?.id])
 
   return (
     <div className="soha-page">
+      {focusedExecutionTaskId || focusedReleaseBundleId ? (
+        <Alert
+          showIcon
+          title={focusedTask ? `已定位执行任务 ${focusedTask.id}` : '执行任务定位'}
+          description={[
+            focusedExecutionTaskId ? `executionTaskId=${focusedExecutionTaskId}` : '',
+            focusedReleaseBundleId ? `releaseBundleId=${focusedReleaseBundleId}` : '',
+          ].filter(Boolean).join(' / ')}
+          type={focusedTask || tasksQuery.isLoading ? 'info' : 'warning'}
+        />
+      ) : null}
       <div className="soha-execution-task-summary">
         <Card className="soha-management-panel-card" size="small">
           <Text type="secondary">任务总数</Text>
@@ -1558,7 +1662,10 @@ export function ExecutionTasksPage() {
             dataIndex: 'taskKind',
             render: (value: string, record: ExecutionTask) => (
               <Space orientation="vertical" size={0}>
-                <Text strong>{value}</Text>
+                <Space size={6} wrap>
+                  <Text strong>{value}</Text>
+                  {record.id === focusedExecutionTaskId ? <Tag color="blue">已定位</Tag> : null}
+                </Space>
                 <Text type="secondary">{record.id}</Text>
               </Space>
             ),

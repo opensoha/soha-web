@@ -27,9 +27,12 @@ import {
   createDagNode,
   createNodeConfig,
   getDefaultReleaseDagNodeLabel,
+  type DeliveryDagArtifactOutput,
+  type DeliveryDagSelector,
   type ReleaseDagDefinition,
   type ReleaseDagEdgeCondition,
   type ReleaseDagEdgeDefinition,
+  type ReleaseDagMode,
   type ReleaseDagNodeDefinition,
   type ReleaseDagNodeType,
 } from '@/components/release-flow-dag-definition'
@@ -53,22 +56,22 @@ const DAG_NODE_TAG_COLORS: Record<DagTagColor, string> = {
   orange: 'orange',
 }
 
-const DAG_NODE_OPTIONS: Array<{ value: ReleaseDagNodeType; label: string; color: DagTagColor }> = [
-  { value: 'build', label: '构建', color: 'green' },
-  { value: 'manual_approval', label: '审批', color: 'orange' },
-  { value: 'deploy_update_image', label: '更新镜像', color: 'blue' },
-  { value: 'restart_workload', label: '重启工作负载', color: 'red' },
-  { value: 'scale_workload', label: '扩缩容', color: 'cyan' },
-  { value: 'delete_pod', label: '删除 Pod', color: 'orange' },
-  { value: 'evict_pod', label: '驱逐 Pod', color: 'orange' },
-  { value: 'wait_rollout', label: '等待 Rollout', color: 'cyan' },
-  { value: 'check_http', label: 'HTTP 检查', color: 'green' },
-  { value: 'check_k8s_event', label: 'K8s 事件检查', color: 'yellow' },
-  { value: 'smoke_test', label: 'Smoke Test', color: 'purple' },
-  { value: 'http_callback', label: 'HTTP 回调', color: 'pink' },
-  { value: 'create_silence', label: '创建静默', color: 'grey' },
-  { value: 'notify', label: '通知', color: 'pink' },
-  { value: 'rollback_to_previous', label: '失败回滚', color: 'red' },
+const DAG_NODE_OPTIONS: Array<{ value: ReleaseDagNodeType; color: DagTagColor }> = [
+  { value: 'build', color: 'green' },
+  { value: 'manual_approval', color: 'orange' },
+  { value: 'deploy_update_image', color: 'blue' },
+  { value: 'restart_workload', color: 'red' },
+  { value: 'scale_workload', color: 'cyan' },
+  { value: 'delete_pod', color: 'orange' },
+  { value: 'evict_pod', color: 'orange' },
+  { value: 'wait_rollout', color: 'cyan' },
+  { value: 'check_http', color: 'green' },
+  { value: 'check_k8s_event', color: 'yellow' },
+  { value: 'smoke_test', color: 'purple' },
+  { value: 'http_callback', color: 'pink' },
+  { value: 'create_silence', color: 'grey' },
+  { value: 'notify', color: 'pink' },
+  { value: 'rollback_to_previous', color: 'red' },
 ]
 
 const EDGE_CONDITION_OPTIONS = [
@@ -93,6 +96,13 @@ const APPROVAL_REJECT_ACTION_OPTIONS = [
   { value: 'stop', labelZh: '终止流程', labelEn: 'Stop Flow' },
   { value: 'rollback', labelZh: '进入回滚', labelEn: 'Rollback' },
   { value: 'previous', labelZh: '回到上一节点', labelEn: 'Back to Previous' },
+]
+
+const FAILURE_POLICY_OPTIONS = [
+  { value: 'stop', labelZh: '终止流程', labelEn: 'Stop Flow' },
+  { value: 'continue', labelZh: '继续执行', labelEn: 'Continue' },
+  { value: 'rollback', labelZh: '进入回滚', labelEn: 'Rollback' },
+  { value: 'notify', labelZh: '通知后终止', labelEn: 'Notify' },
 ]
 
 const NODE_WIDTH = 260
@@ -177,6 +187,50 @@ function splitConfigStringList(value: string) {
   return value.split(',').map((item) => item.trim()).filter(Boolean)
 }
 
+function selectorSummary(selector?: DeliveryDagSelector) {
+  if (!selector) return ''
+  const labels = Object.entries(selector.matchLabels ?? {}).map(([key, value]) => `${key}=${value}`)
+  return [selector.id, selector.key, ...labels].filter(Boolean).join(' / ')
+}
+
+function artifactOutputSummary(items?: DeliveryDagArtifactOutput[]) {
+  if (!items?.length) return ''
+  return items.map((item) => `${item.kind}:${item.name}`).join(' / ')
+}
+
+function parseJsonObject(value: string) {
+  const text = value.trim()
+  if (!text) return undefined
+  const parsed = JSON.parse(text)
+  return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : undefined
+}
+
+function parseJsonArray(value: string) {
+  const text = value.trim()
+  if (!text) return undefined
+  const parsed = JSON.parse(text)
+  return Array.isArray(parsed) ? parsed : undefined
+}
+
+function stringifyJsonValue(value: unknown) {
+  if (value === undefined || value === null) return ''
+  return JSON.stringify(value, null, 2)
+}
+
+function patchNodeDeliveryField<K extends keyof ReleaseDagNodeDefinition>(
+  node: ReleaseDagNodeDefinition,
+  key: K,
+  value: ReleaseDagNodeDefinition[K] | undefined,
+) {
+  const next = { ...node }
+  if (value === undefined || (Array.isArray(value) && value.length === 0)) {
+    delete next[key]
+  } else {
+    next[key] = value
+  }
+  return next
+}
+
 function approvalModeLabel(value: unknown, localeCode: 'zh_CN' | 'en_US') {
   const option = APPROVAL_MODE_OPTIONS.find((item) => item.value === String(value || 'any'))
   if (!option) return String(value || 'any')
@@ -226,9 +280,27 @@ function serializeNodes(nodes: FlowNode[]): ReleaseDagNodeDefinition[] {
     name: node.data.name,
     timeoutSeconds: node.data.timeoutSeconds ?? 300,
     continueOnFailure: Boolean(node.data.continueOnFailure),
+    ...(node.data.inputs?.length ? { inputs: node.data.inputs } : {}),
+    ...(node.data.outputs?.length ? { outputs: node.data.outputs } : {}),
+    ...(node.data.serviceSelector ? { serviceSelector: node.data.serviceSelector } : {}),
+    ...(node.data.environmentSelector ? { environmentSelector: node.data.environmentSelector } : {}),
+    ...(node.data.targetSelector ? { targetSelector: node.data.targetSelector } : {}),
+    ...(node.data.artifactOutputs?.length ? { artifactOutputs: node.data.artifactOutputs } : {}),
+    ...(node.data.runCondition ? { runCondition: node.data.runCondition } : {}),
+    ...(node.data.failurePolicy ? { failurePolicy: node.data.failurePolicy } : {}),
+    ...(node.data.observability ? { observability: node.data.observability } : {}),
     config: node.data.config ?? {},
     position: node.position,
   }))
+}
+
+function serializeDefinition(mode: ReleaseDagMode, nodes: FlowNode[], edges: FlowEdge[]): ReleaseDagDefinition {
+  return {
+    schemaVersion: 2,
+    mode,
+    nodes: serializeNodes(nodes),
+    edges: serializeEdges(edges),
+  }
 }
 
 function serializeEdges(edges: FlowEdge[]): ReleaseDagEdgeDefinition[] {
@@ -282,6 +354,12 @@ function ReleaseStepNode({ data, selected }: NodeProps<FlowNode>) {
         </div>
         <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? `超时 ${data.timeoutSeconds ?? 300}s` : `timeout ${data.timeoutSeconds ?? 300}s`}</Text>
         {data.type === 'manual_approval' ? <Text type="secondary" className="text-xs">{approvalNodeSummary(data, localeCode)}</Text> : null}
+        {data.inputs?.length ? <Text type="secondary" className="text-xs">{`inputs ${data.inputs.join(', ')}`}</Text> : null}
+        {data.outputs?.length ? <Text type="secondary" className="text-xs">{`outputs ${data.outputs.join(', ')}`}</Text> : null}
+        {artifactOutputSummary(data.artifactOutputs) ? <Text type="secondary" className="text-xs">{artifactOutputSummary(data.artifactOutputs)}</Text> : null}
+        {selectorSummary(data.serviceSelector) || selectorSummary(data.environmentSelector) || selectorSummary(data.targetSelector) ? (
+          <Text type="secondary" className="text-xs">{selectorSummary(data.serviceSelector) || selectorSummary(data.environmentSelector) || selectorSummary(data.targetSelector)}</Text>
+        ) : null}
         {data.continueOnFailure ? <Text type="warning" className="text-xs">{localeCode === 'zh_CN' ? '失败继续' : 'Continue on failure'}</Text> : null}
       </div>
       <Handle type="source" position={Position.Bottom} />
@@ -520,6 +598,110 @@ function StepConfigInspector({
   }
 }
 
+function DeliveryDagInspector({
+  node,
+  onChange,
+}: {
+  node: ReleaseDagNodeDefinition
+  onChange: (node: ReleaseDagNodeDefinition) => void
+}) {
+  const { localeCode } = useI18n()
+  const patch = <K extends keyof ReleaseDagNodeDefinition>(key: K, value: ReleaseDagNodeDefinition[K] | undefined) => {
+    onChange(patchNodeDeliveryField(node, key, value))
+  }
+  const patchJSON = <K extends keyof ReleaseDagNodeDefinition>(key: K, value: string, parser: (input: string) => unknown) => {
+    try {
+      patch(key, parser(value) as ReleaseDagNodeDefinition[K])
+    } catch {
+      // Keep the previous valid structured field while the user is editing invalid JSON.
+    }
+  }
+
+  return (
+    <div className="soha-dag-approval-config">
+      <div className="soha-dag-inspector-field">
+        <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '输入产物' : 'Inputs'}</Text>
+        <Input
+          value={node.inputs?.join(', ') ?? ''}
+          placeholder="source.image, scan.sbom"
+          onChange={(event) => patch('inputs', splitConfigStringList(event.target.value))}
+        />
+      </div>
+      <div className="soha-dag-inspector-field">
+        <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '输出产物' : 'Outputs'}</Text>
+        <Input
+          value={node.outputs?.join(', ') ?? ''}
+          placeholder="image, test_report"
+          onChange={(event) => patch('outputs', splitConfigStringList(event.target.value))}
+        />
+      </div>
+      <div className="soha-dag-inspector-field">
+        <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '运行条件' : 'Run Condition'}</Text>
+        <Input
+          value={node.runCondition ?? ''}
+          placeholder="branch == main"
+          onChange={(event) => patch('runCondition', event.target.value.trim() || undefined)}
+        />
+      </div>
+      <div className="soha-dag-inspector-field">
+        <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '失败策略' : 'Failure Policy'}</Text>
+        <Select
+          allowClear
+          style={FULL_WIDTH_STYLE}
+          value={node.failurePolicy}
+          options={localizedOptions(FAILURE_POLICY_OPTIONS, localeCode)}
+          onChange={(value) => patch('failurePolicy', value ? String(value) : undefined)}
+        />
+      </div>
+      <div className="soha-dag-inspector-field">
+        <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '服务选择器(JSON)' : 'Service Selector JSON'}</Text>
+        <Input.TextArea
+          rows={3}
+          value={stringifyJsonValue(node.serviceSelector)}
+          placeholder='{"matchLabels":{"service":"api"}}'
+          onChange={(event) => patchJSON('serviceSelector', event.target.value, parseJsonObject)}
+        />
+      </div>
+      <div className="soha-dag-inspector-field">
+        <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '环境选择器(JSON)' : 'Environment Selector JSON'}</Text>
+        <Input.TextArea
+          rows={3}
+          value={stringifyJsonValue(node.environmentSelector)}
+          placeholder='{"key":"prod"}'
+          onChange={(event) => patchJSON('environmentSelector', event.target.value, parseJsonObject)}
+        />
+      </div>
+      <div className="soha-dag-inspector-field">
+        <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '目标选择器(JSON)' : 'Target Selector JSON'}</Text>
+        <Input.TextArea
+          rows={3}
+          value={stringifyJsonValue(node.targetSelector)}
+          placeholder='{"matchLabels":{"tier":"backend"}}'
+          onChange={(event) => patchJSON('targetSelector', event.target.value, parseJsonObject)}
+        />
+      </div>
+      <div className="soha-dag-inspector-field">
+        <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '产物输出(JSON)' : 'Artifact Outputs JSON'}</Text>
+        <Input.TextArea
+          rows={4}
+          value={stringifyJsonValue(node.artifactOutputs)}
+          placeholder='[{"name":"image","kind":"image","required":true}]'
+          onChange={(event) => patchJSON('artifactOutputs', event.target.value, parseJsonArray)}
+        />
+      </div>
+      <div className="soha-dag-inspector-field">
+        <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '可观测事件(JSON)' : 'Observability JSON'}</Text>
+        <Input.TextArea
+          rows={3}
+          value={stringifyJsonValue(node.observability)}
+          placeholder='{"events":["started","completed"]}'
+          onChange={(event) => patchJSON('observability', event.target.value, parseJsonObject)}
+        />
+      </div>
+    </div>
+  )
+}
+
 function ReleaseFlowDagEditorInner({
   initialDefinition,
   onChange,
@@ -544,13 +726,8 @@ function ReleaseFlowDagEditorInner({
   const { fitView } = useReactFlow()
 
   useEffect(() => {
-    onChange({
-      schemaVersion: 2,
-      mode: 'release_dag',
-      nodes: serializeNodes(nodes),
-      edges: serializeEdges(edges),
-    })
-  }, [edges, nodes, onChange])
+    onChange(serializeDefinition(initialDefinition.mode, nodes, edges))
+  }, [edges, initialDefinition.mode, nodes, onChange])
 
   useEffect(() => {
     setNodes(initialDefinition.nodes.map(toFlowNode))
@@ -682,6 +859,10 @@ function ReleaseFlowDagEditorInner({
       <StepConfigInspector
         node={selectedNode.data}
         onChange={(config) => setNodes((current) => current.map((node) => node.id === selectedNode.id ? { ...node, data: { ...node.data, config } } : node))}
+      />
+      <DeliveryDagInspector
+        node={selectedNode.data}
+        onChange={(nextNode) => setNodes((current) => current.map((node) => node.id === selectedNode.id ? { ...node, data: { ...node.data, ...nextNode } } : node))}
       />
     </>
   ) : null

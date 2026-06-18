@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Alert, App, Button, Card, Descriptions, Form, Input, Modal, Popconfirm, Select, Space, Switch, Tabs, Tag, Tooltip, Typography } from 'antd'
 import { ArrowRightOutlined, CloudUploadOutlined, DeleteOutlined, EditOutlined, LinkOutlined, MinusCircleOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined, RocketOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ManagementDetailHeader, ManagementIconButton, ManagementState } from '@/components/management-list'
 import { DeliveryTable } from '@/features/delivery/delivery-table'
 import { PodLogViewer } from '@/components/pod-log-viewer'
@@ -35,9 +35,11 @@ import type {
   ApiResponse,
   ApplicationDeliveryActionKind,
   ApplicationDeliveryActionRequest,
-  ApplicationDeliveryActionResponse,
   ApplicationEnvironment,
   DeliveryApplicationBindingSummary,
+  DeliveryPlan,
+  DeliveryPlanConfirmResult,
+  DeliveryPlanRequest,
   ApplicationRuntimeDetail,
   ApplicationServiceComponent,
   ApplicationServiceContainer,
@@ -88,6 +90,15 @@ const REF_TYPE_OPTIONS = [
   { value: 'tag', label: 'Tag' },
   { value: 'commit', label: 'Commit' },
 ]
+
+const DELIVERY_ACTION_LABELS: Record<ApplicationDeliveryActionKind, string> = {
+  build: '构建',
+  deploy: '部署',
+  build_deploy: '构建并部署',
+  workflow: '工作流',
+  verify: '验证',
+  rollback: '回滚',
+}
 
 function firstPodName(pods?: Pod[]) {
   return pods?.[0]?.name || ''
@@ -305,6 +316,28 @@ function buildDeliveryActionPayload(action: ApplicationDeliveryActionKind, value
   }
 }
 
+function buildDeliveryPlanPayload(applicationId: string, action: ApplicationDeliveryActionKind, values: DeliveryActionFormValues): DeliveryPlanRequest {
+  return {
+    ...buildDeliveryActionPayload(action, values),
+    applicationId,
+    source: 'manual',
+    reason: `${DELIVERY_ACTION_LABELS[action]} from application runtime page`,
+  }
+}
+
+function deliveryPlanRiskColor(risk?: string) {
+  switch (risk) {
+    case 'high':
+      return 'red'
+    case 'medium':
+      return 'gold'
+    case 'low':
+      return 'green'
+    default:
+      return 'default'
+  }
+}
+
 function disabledReason(reasons: Array<string | false | undefined>) {
   return reasons.find(Boolean) || ''
 }
@@ -338,12 +371,20 @@ function DeploymentOverview({ deployment }: { deployment: DeploymentDetail }) {
 export function ApplicationDetailPage() {
   const { applicationId } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { message } = App.useApp()
   const queryClient = useQueryClient()
+  const initialTab = searchParams.get('tab') === 'delivery' ? 'delivery' : 'overview'
+  const focusedBuildId = searchParams.get('buildId')?.trim() ?? ''
+  const focusedReleaseId = searchParams.get('releaseId')?.trim() ?? ''
+  const focusedWorkflowRunId = searchParams.get('workflowRunId')?.trim() ?? ''
   const [activeEnvironmentId, setActiveEnvironmentId] = useState('')
-  const [activeTab, setActiveTab] = useState('overview')
+  const [activeTab, setActiveTab] = useState(initialTab)
   const [serviceModalVisible, setServiceModalVisible] = useState(false)
   const [editingService, setEditingService] = useState<ApplicationServiceComponent | null>(null)
+  const [deliveryPlanModalVisible, setDeliveryPlanModalVisible] = useState(false)
+  const [pendingDeliveryPlan, setPendingDeliveryPlan] = useState<DeliveryPlan | null>(null)
+  const [confirmedDeliveryPlan, setConfirmedDeliveryPlan] = useState<DeliveryPlanConfirmResult | null>(null)
   const [serviceForm] = Form.useForm<ServiceFormValues>()
   const [deliveryForm] = Form.useForm<DeliveryActionFormValues>()
   const permissionSnapshotQuery = usePermissionSnapshot()
@@ -412,17 +453,23 @@ export function ApplicationDetailPage() {
     queryFn: () => api.get<ApiResponse<WorkflowRun[]>>(`/workflows?applicationId=${applicationId ?? ''}`),
     enabled: !!applicationId,
   })
-  const deliveryActionMutation = useMutation({
-    mutationFn: (payload: ApplicationDeliveryActionRequest) => api.post<ApiResponse<ApplicationDeliveryActionResponse>>(`/applications/${applicationId}/delivery-actions`, payload),
-    onSuccess: (_data, payload) => {
-      const labels: Record<ApplicationDeliveryActionKind, string> = {
-        build: '构建',
-        deploy: '部署',
-        build_deploy: '构建并部署',
-        workflow: '工作流',
-        verify: '验证',
-      }
-      message.success(`${labels[payload.action]}已触发`)
+  const createDeliveryPlanMutation = useMutation({
+    mutationFn: (payload: DeliveryPlanRequest) => api.post<ApiResponse<DeliveryPlan>>('/delivery/plans', payload),
+    onSuccess: (payload: ApiResponse<DeliveryPlan>) => {
+      setPendingDeliveryPlan(payload.data)
+      setConfirmedDeliveryPlan(null)
+      setDeliveryPlanModalVisible(true)
+      message.success('DeliveryPlan 已生成')
+    },
+    onError: (err: Error) => message.error(err.message),
+  })
+
+  const confirmDeliveryPlanMutation = useMutation({
+    mutationFn: (planID: string) => api.post<ApiResponse<DeliveryPlanConfirmResult>>(`/delivery/plans/${planID}/confirm`, {}),
+    onSuccess: (payload: ApiResponse<DeliveryPlanConfirmResult>) => {
+      setPendingDeliveryPlan(payload.data.plan)
+      setConfirmedDeliveryPlan(payload.data)
+      message.success(`${DELIVERY_ACTION_LABELS[payload.data.plan.action]}已触发`)
       void queryClient.invalidateQueries({ queryKey: ['application-detail', applicationId] })
       void queryClient.invalidateQueries({ queryKey: ['application-runtime', applicationId] })
       void queryClient.invalidateQueries({ queryKey: ['application-builds', applicationId] })
@@ -548,11 +595,13 @@ export function ApplicationDetailPage() {
   const triggerDeliveryAction = async (action: ApplicationDeliveryActionKind) => {
     try {
       const values = await deliveryForm.validateFields()
-      deliveryActionMutation.mutate(buildDeliveryActionPayload(action, values))
+      if (!applicationId) return
+      createDeliveryPlanMutation.mutate(buildDeliveryPlanPayload(applicationId, action, values))
     } catch {
       // antd Form has already marked the invalid fields.
     }
   }
+  const deliveryActionPending = createDeliveryPlanMutation.isPending || confirmDeliveryPlanMutation.isPending
   const buildDisabledReason = disabledReason([
     !selectedDeliveryBinding && '无环境绑定',
     !effectiveImageTag && '缺少 imageTag/defaultTag',
@@ -595,6 +644,13 @@ export function ApplicationDetailPage() {
   const latestBuilds = latestBuildsQuery.data?.data ?? []
   const latestReleases = latestReleasesQuery.data?.data ?? []
   const latestWorkflows = latestWorkflowsQuery.data?.data ?? []
+  const focusedRuntimeEvidenceId = focusedBuildId || focusedReleaseId || focusedWorkflowRunId
+  const focusedRuntimeEvidence = [
+    ...latestBuilds.map((item) => ({ kind: 'build', id: item.id, status: item.status, label: item.sourceSystem, summary: item.metadata?.artifact ? 'artifact ready' : 'build record' })),
+    ...latestReleases.map((item) => ({ kind: 'release', id: item.id, status: item.status, label: `${item.clusterId}/${item.namespace}`, summary: item.deploymentName })),
+    ...latestWorkflows.map((item) => ({ kind: 'workflow', id: item.id, status: item.status, label: item.workflowName, summary: `${item.steps?.length ?? 0} steps` })),
+  ]
+  const focusedRuntimeRow = focusedRuntimeEvidenceId ? focusedRuntimeEvidence.find((item) => item.id === focusedRuntimeEvidenceId) : undefined
 
   return (
     <div className="soha-page">
@@ -603,6 +659,18 @@ export function ApplicationDetailPage() {
         description="围绕应用查看服务组件、容器、环境运行态和交付入口。"
         actions={<Button onClick={() => navigate('/applications')}>返回应用中心</Button>}
       />
+      {focusedRuntimeEvidenceId ? (
+        <Alert
+          showIcon
+          title={focusedRuntimeRow ? `已定位交付证据 ${focusedRuntimeRow.id}` : '交付证据定位'}
+          description={[
+            focusedBuildId ? `buildId=${focusedBuildId}` : '',
+            focusedReleaseId ? `releaseId=${focusedReleaseId}` : '',
+            focusedWorkflowRunId ? `workflowRunId=${focusedWorkflowRunId}` : '',
+          ].filter(Boolean).join(' / ')}
+          type={focusedRuntimeRow || latestBuildsQuery.isLoading || latestReleasesQuery.isLoading || latestWorkflowsQuery.isLoading ? 'info' : 'warning'}
+        />
+      ) : null}
       <div className="soha-application-runtime-service-summary">
         <Card className="soha-management-panel-card" size="small"><Text type="secondary">服务组件</Text><strong>{services.length}</strong></Card>
         <Card className="soha-management-panel-card" size="small"><Text type="secondary">容器</Text><strong>{services.reduce((sum, item) => sum + (item.containers?.length ?? 0), 0)}</strong></Card>
@@ -708,21 +776,79 @@ export function ApplicationDetailPage() {
             </Space>
             <Space wrap>
               <Tooltip title={buildDisabledReason || '触发构建'}>
-                <Button icon={<CloudUploadOutlined />} disabled={!!buildDisabledReason} loading={deliveryActionMutation.isPending} onClick={() => void triggerDeliveryAction('build')}>构建</Button>
+                <Button icon={<CloudUploadOutlined />} disabled={!!buildDisabledReason} loading={deliveryActionPending} onClick={() => void triggerDeliveryAction('build')}>构建</Button>
               </Tooltip>
               <Tooltip title={deployDisabledReason || '触发部署'}>
-                <Button icon={<RocketOutlined />} disabled={!!deployDisabledReason} loading={deliveryActionMutation.isPending} onClick={() => void triggerDeliveryAction('deploy')}>部署</Button>
+                <Button icon={<RocketOutlined />} disabled={!!deployDisabledReason} loading={deliveryActionPending} onClick={() => void triggerDeliveryAction('deploy')}>部署</Button>
               </Tooltip>
               <Tooltip title={buildDeployDisabledReason || '通过 workflow template 编排'}>
-                <Button type="primary" icon={<PlayCircleOutlined />} disabled={!!buildDeployDisabledReason} loading={deliveryActionMutation.isPending} onClick={() => void triggerDeliveryAction('build_deploy')}>构建并部署</Button>
+                <Button type="primary" icon={<PlayCircleOutlined />} disabled={!!buildDeployDisabledReason} loading={deliveryActionPending} onClick={() => void triggerDeliveryAction('build_deploy')}>构建并部署</Button>
               </Tooltip>
               <Tooltip title={verifyDisabledReason || '只运行验证节点'}>
-                <Button icon={<SafetyCertificateOutlined />} disabled={!!verifyDisabledReason} loading={deliveryActionMutation.isPending} onClick={() => void triggerDeliveryAction('verify')}>运行验证</Button>
+                <Button icon={<SafetyCertificateOutlined />} disabled={!!verifyDisabledReason} loading={deliveryActionPending} onClick={() => void triggerDeliveryAction('verify')}>运行验证</Button>
               </Tooltip>
             </Space>
           </div>
         </Form>
       </Card>
+      <Modal
+        width={820}
+        title="DeliveryPlan 确认"
+        open={deliveryPlanModalVisible}
+        onCancel={() => setDeliveryPlanModalVisible(false)}
+        footer={[
+          <Button key="close" onClick={() => setDeliveryPlanModalVisible(false)}>
+            关闭
+          </Button>,
+          <Button
+            key="confirm"
+            type="primary"
+            disabled={!pendingDeliveryPlan || pendingDeliveryPlan.status !== 'draft'}
+            loading={confirmDeliveryPlanMutation.isPending}
+            onClick={() => pendingDeliveryPlan && confirmDeliveryPlanMutation.mutate(pendingDeliveryPlan.id)}
+          >
+            确认执行
+          </Button>,
+        ]}
+      >
+        {confirmedDeliveryPlan ? (
+          <Alert
+            showIcon
+            type="success"
+            title="计划已确认并触发执行"
+            description={confirmedDeliveryPlan.result.relatedIds?.executionTaskId || confirmedDeliveryPlan.result.relatedIds?.workflowRunId || confirmedDeliveryPlan.result.relatedIds?.releaseBundleId || '执行请求已提交'}
+          />
+        ) : (
+          <Alert
+            showIcon
+            type="warning"
+            title="确认前不会触发执行"
+            description="请核对风险、审批要求、目标环境和回滚策略。确认后才会触发现有交付动作 API。"
+          />
+        )}
+        {pendingDeliveryPlan ? (
+          <Space orientation="vertical" size={12} style={{ width: '100%', marginTop: 12 }}>
+            <Descriptions
+              bordered
+              size="small"
+              column={1}
+              items={[
+                { key: 'action', label: '动作', children: DELIVERY_ACTION_LABELS[pendingDeliveryPlan.action] },
+                { key: 'app', label: '应用', children: pendingDeliveryPlan.applicationName || pendingDeliveryPlan.applicationId },
+                { key: 'env', label: '环境', children: pendingDeliveryPlan.environmentKey || pendingDeliveryPlan.applicationEnvironmentId },
+                { key: 'target', label: '目标', children: pendingDeliveryPlan.targetSummary || '-' },
+                { key: 'ref', label: '版本来源', children: [pendingDeliveryPlan.refType, pendingDeliveryPlan.refName].filter(Boolean).join(' / ') || '-' },
+                { key: 'risk', label: '风险', children: <Tag color={deliveryPlanRiskColor(pendingDeliveryPlan.riskLevel)}>{pendingDeliveryPlan.riskLevel || 'unknown'}</Tag> },
+                { key: 'approval', label: '审批', children: pendingDeliveryPlan.requiresApproval ? <Tag color="gold">需要审批</Tag> : <Tag>无需审批</Tag> },
+                { key: 'rollback', label: '回滚策略', children: pendingDeliveryPlan.rollbackStrategy || '-' },
+              ]}
+            />
+            <Card size="small" title="影响范围">
+              <pre className="soha-json-block">{JSON.stringify(pendingDeliveryPlan.impact ?? {}, null, 2)}</pre>
+            </Card>
+          </Space>
+        ) : null}
+      </Modal>
       <Tabs
         activeKey={activeTab}
         onChange={setActiveTab}
@@ -1017,14 +1143,19 @@ export function ApplicationDetailPage() {
                   title="Build / Release / Workflow"
                   rowKey="id"
                   pagination={false}
-                  dataSource={[
-                    ...latestBuilds.map((item) => ({ kind: 'build', id: item.id, status: item.status, label: item.sourceSystem, summary: item.metadata?.artifact ? 'artifact ready' : 'build record' })),
-                    ...latestReleases.map((item) => ({ kind: 'release', id: item.id, status: item.status, label: `${item.clusterId}/${item.namespace}`, summary: item.deploymentName })),
-                    ...latestWorkflows.map((item) => ({ kind: 'workflow', id: item.id, status: item.status, label: item.workflowName, summary: `${item.steps?.length ?? 0} steps` })),
-                  ]}
+                  dataSource={focusedRuntimeEvidence}
                   columns={[
                     { title: '类型', dataIndex: 'kind' },
-                    { title: 'ID', dataIndex: 'id' },
+                    {
+                      title: 'ID',
+                      dataIndex: 'id',
+                      render: (value: string) => (
+                        <Space size={6} wrap>
+                          <Text>{value}</Text>
+                          {value === focusedRuntimeEvidenceId ? <Tag color="blue">已定位</Tag> : null}
+                        </Space>
+                      ),
+                    },
                     { title: '状态', dataIndex: 'status', render: (value: string) => <StatusTag value={value} /> },
                     { title: '主体', dataIndex: 'label' },
                     { title: '说明', dataIndex: 'summary' },

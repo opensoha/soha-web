@@ -31,6 +31,7 @@ const APPLICATION_PATH_PREFIXES = [
   "/delivery/testing",
   "/delivery/analysis",
   "/delivery/blueprints",
+  "/builds",
   "/delivery/release-bundles",
   "/delivery/execution-tasks",
   "/workflow-templates",
@@ -281,6 +282,7 @@ export function getRouteScopeMode(
     pathname.startsWith("/application-environments") ||
     pathname.startsWith("/build-templates") ||
     pathname.startsWith("/delivery/blueprints") ||
+    pathname.startsWith("/builds") ||
     pathname.startsWith("/delivery/release-bundles") ||
     pathname.startsWith("/delivery/execution-tasks") ||
     pathname.startsWith("/workflow-templates") ||
@@ -493,8 +495,8 @@ const APPLICATION_SECTION_ORDER: Record<string, number> = {
   "delivery-blueprints": 10,
   "build-templates": 20,
   "workflow-templates": 30,
-  registries: 50,
-  "application-environments": 60,
+  "application-environments": 50,
+  registries: 70,
 };
 
 const APPLICATION_MENU_SECTION_OVERRIDES: Record<string, string> = {

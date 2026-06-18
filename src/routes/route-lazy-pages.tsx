@@ -337,6 +337,26 @@ export const ExecutionTasksPage = lazyNamed(
   () => import("@/features/delivery/delivery-app-pages"),
   "ExecutionTasksPage",
 );
+export const BuildDetailPage = lazyNamed(
+  () => import("@/features/delivery/delivery-runtime-detail-pages"),
+  "BuildDetailPage",
+);
+export const WorkflowDetailPage = lazyNamed(
+  () => import("@/features/delivery/delivery-runtime-detail-pages"),
+  "WorkflowDetailPage",
+);
+export const ReleaseDetailPage = lazyNamed(
+  () => import("@/features/delivery/delivery-runtime-detail-pages"),
+  "ReleaseDetailPage",
+);
+export const ReleaseBundleDetailPage = lazyNamed(
+  () => import("@/features/delivery/delivery-runtime-detail-pages"),
+  "ReleaseBundleDetailPage",
+);
+export const ExecutionTaskDetailPage = lazyNamed(
+  () => import("@/features/delivery/delivery-runtime-detail-pages"),
+  "ExecutionTaskDetailPage",
+);
 export const ApplicationEnvironmentsPage = lazyNamed(
   () => import("@/features/delivery/delivery-catalog-pages"),
   "ApplicationEnvironmentsPage",

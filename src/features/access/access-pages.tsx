@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
-import { Alert, App, Avatar, Button, Col, Form, Input, InputNumber, Modal, Popconfirm, Popover, Row, Select, Space, Switch, Tag, Tree, Typography } from 'antd'
-import { ApartmentOutlined, DeleteOutlined, EditOutlined, FolderOpenOutlined, PlusOutlined } from '@ant-design/icons'
+import { App, Avatar, Button, Col, Form, Input, InputNumber, Modal, Popconfirm, Popover, Row, Select, Space, Switch, Tag, Tree, Typography } from 'antd'
+import { ApartmentOutlined, DeleteOutlined, EditOutlined, FolderOpenOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
 import type { TableColumnsType } from 'antd'
 import type { DataNode } from 'antd/es/tree'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Navigate } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
-import { ManagementIconButton, ManagementState, ManagementTableToolbar } from '@/components/management-list'
+import { ManagementIconButton, ManagementQueryField, ManagementQueryPanel, ManagementState, ManagementTableToolbar } from '@/components/management-list'
 import { consolePermissionGroups, consolePermissionLabelMap } from '@/features/auth/permission-catalog'
 import { hasPermission, invalidateAuthz, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
 import { StatusTag } from '@/components/status-tag'
@@ -840,14 +840,24 @@ function ScopeGrantManager({
     <>
       <Modal title={title} open={visible} onCancel={onClose} footer={null} width={880}>
         <div className="soha-page">
-          <div className="flex justify-end">
-            {canManageScopeGrants ? (
-              <Button icon={<PlusOutlined />} type="primary" onClick={() => { setEditing(null); setGrantModalVisible(true) }}>
-                新建授权项
-              </Button>
+          <AdminTable
+            columnSettingIconOnly
+            columnSettingPlacement="header"
+            shellClassName="soha-management-table-shell"
+            title="授权项"
+            headerExtra={canManageScopeGrants ? (
+              <ManagementTableToolbar>
+                <Button icon={<PlusOutlined />} type="primary" onClick={() => { setEditing(null); setGrantModalVisible(true) }}>
+                  新建授权项
+                </Button>
+              </ManagementTableToolbar>
             ) : null}
-          </div>
-          <AdminTable columns={columns} dataSource={grants} rowKey="id" loading={grantsQuery.isLoading} />
+            columns={columns}
+            dataSource={grants}
+            rowKey="id"
+            loading={grantsQuery.isLoading}
+            scroll={{ x: 'max-content' }}
+          />
         </div>
       </Modal>
       <Modal
@@ -974,10 +984,6 @@ export function AccessUsersPage() {
     }
     return ids
   }, [includeSubOrganizations, selectedOrgId, teamsQuery.data])
-  const selectedOrganization = useMemo(
-    () => (teamsQuery.data?.data ?? []).find((item) => item.id === selectedOrgId) ?? null,
-    [selectedOrgId, teamsQuery.data],
-  )
   const filteredUsers = useMemo(() => {
     const query = searchText.trim().toLowerCase()
     const items = usersQuery.data?.data ?? []
@@ -1169,32 +1175,57 @@ export function AccessUsersPage() {
           />
         </section>
         <section className="soha-access-users-panel">
+          <ManagementQueryPanel
+            onFinish={() => undefined}
+            actions={(
+              <>
+                <Button
+                  autoInsertSpace={false}
+                  disabled={!searchText.trim() && includeSubOrganizations}
+                  htmlType="button"
+                  onClick={() => {
+                    setSearchText('')
+                    setIncludeSubOrganizations(true)
+                  }}
+                >
+                  重置
+                </Button>
+                <Button autoInsertSpace={false} htmlType="submit" type="primary">
+                  查询
+                </Button>
+              </>
+            )}
+          >
+            <ManagementQueryField label="关键词" width={360} minWidth={260}>
+              <Input
+                allowClear
+                className="soha-platform-compact-field soha-workload-search-input"
+                prefix={<SearchOutlined />}
+                size="small"
+                placeholder="搜索用户名、显示名、邮箱、角色或组织"
+                value={searchText}
+                variant="filled"
+                onChange={(event) => setSearchText(event.target.value)}
+              />
+            </ManagementQueryField>
+            {selectedOrgId !== ORG_ALL_KEY ? (
+              <ManagementQueryField label="下级组织" width={184} minWidth={160}>
+                <Switch
+                  size="small"
+                  checked={includeSubOrganizations}
+                  checkedChildren="包含"
+                  unCheckedChildren="仅当前"
+                  onChange={setIncludeSubOrganizations}
+                />
+              </ManagementQueryField>
+            ) : null}
+          </ManagementQueryPanel>
           <AdminTable
             columnSettingIconOnly
             columnSettingPlacement="header"
             shellClassName="soha-management-table-shell"
-            title={selectedOrganization ? `${getOrganizationLabel(selectedOrganization)} 用户` : '用户管理'}
             className="soha-access-table"
-            toolbar={(
-              <div className="soha-workload-table-filters">
-                <Input
-                  allowClear
-                  className="soha-platform-compact-field"
-                  size="small"
-                  placeholder="搜索用户名、显示名、邮箱、角色或组织"
-                  value={searchText}
-                  onChange={(event) => setSearchText(event.target.value)}
-                  style={{ width: 320 }}
-                />
-                {selectedOrgId !== ORG_ALL_KEY ? (
-                  <Space size={6}>
-                    <Text type="secondary">包含下级</Text>
-                    <Switch size="small" checked={includeSubOrganizations} onChange={setIncludeSubOrganizations} />
-                  </Space>
-                ) : null}
-              </div>
-            )}
-            toolbarExtra={canManageUsers ? (
+            headerExtra={canManageUsers ? (
               <ManagementTableToolbar>
                 <Button
                   size="small"
@@ -1213,6 +1244,7 @@ export function AccessUsersPage() {
             dataSource={filteredUsers}
             rowKey="id"
             loading={usersQuery.isLoading || teamsQuery.isLoading}
+            scroll={{ x: 'max-content' }}
           />
         </section>
       </div>
@@ -1321,6 +1353,7 @@ export function AccessRolesPage() {
   const canManageRoles = hasPermission(snapshot, 'access.roles.manage')
   const [form] = Form.useForm<Record<string, unknown>>()
   const crud = useCRUD<AccessRole>('access/roles', { invalidateKeys: [['access/users']], invalidateAuthz: true })
+  const [searchKeyword, setSearchKeyword] = useState('')
 
   const columns: ColumnProps<AccessRole>[] = [
     { title: '角色名称', dataIndex: 'name', width: 128 },
@@ -1382,21 +1415,54 @@ export function AccessRolesPage() {
     return <div className="soha-page"><ManagementState kind="no-permission" description="当前账号没有角色管理权限。" /></div>
   }
 
+  const filteredRoles = crud.data.filter((item) => {
+    const keyword = searchKeyword.trim().toLowerCase()
+    if (!keyword) return true
+    return [
+      item.name,
+      item.scope,
+      ...(item.capabilities ?? []),
+      ...(item.permissionKeys ?? []),
+    ].some((value) => String(value || '').toLowerCase().includes(keyword))
+  })
+
   return (
     <div className="soha-page">
-      <Alert
-        className="mb-4"
-        type="info"
-        showIcon
-        title="角色授权按菜单和页面动作选择，保存时仍提交 permissionKeys，由后端 API 与 AI Gateway 统一校验。"
-      />
+      <ManagementQueryPanel
+        onFinish={() => undefined}
+        actions={(
+          <>
+            <Button
+              autoInsertSpace={false}
+              disabled={!searchKeyword.trim()}
+              htmlType="button"
+              onClick={() => setSearchKeyword('')}
+            >
+              重置
+            </Button>
+            <Button autoInsertSpace={false} htmlType="submit" type="primary">
+              查询
+            </Button>
+          </>
+        )}
+      >
+        <ManagementQueryField label="关键词" width={360} minWidth={260}>
+          <Input
+            allowClear
+            className="soha-platform-compact-field soha-workload-search-input"
+            placeholder="搜索角色、范围或权限键"
+            value={searchKeyword}
+            variant="filled"
+            onChange={(event) => setSearchKeyword(event.target.value)}
+          />
+        </ManagementQueryField>
+      </ManagementQueryPanel>
       <AdminTable
         columnSettingIconOnly
         columnSettingPlacement="header"
         shellClassName="soha-management-table-shell"
-        title="角色管理"
         className="soha-access-table"
-        toolbarExtra={canManageRoles ? (
+        headerExtra={canManageRoles ? (
           <ManagementTableToolbar>
             <Button size="small" icon={<PlusOutlined />} type="primary" onClick={crud.openCreate}>
               添加角色
@@ -1404,9 +1470,10 @@ export function AccessRolesPage() {
           </ManagementTableToolbar>
         ) : null}
         columns={columns}
-        dataSource={crud.data}
+        dataSource={filteredRoles}
         rowKey="id"
         loading={crud.isLoading}
+        scroll={{ x: 'max-content' }}
       />
       <Modal
         title={crud.editing ? `编辑角色: ${crud.editing.name}` : '添加角色'}
@@ -1498,6 +1565,7 @@ export function AccessTeamsPage() {
   const [form] = Form.useForm<Record<string, unknown>>()
   const crud = useCRUD<AccessTeam>('access/teams', { invalidateKeys: [['access/users'], ['scope-grants']], invalidateAuthz: true })
   const [grantTeam, setGrantTeam] = useState<AccessTeam | null>(null)
+  const [searchKeyword, setSearchKeyword] = useState('')
   const loginProvidersQuery = useQuery({
     queryKey: ['settings-identity'],
     queryFn: () => api.get<ApiResponse<IdentitySettingsResponse>>('/settings/identity'),
@@ -1586,15 +1654,56 @@ export function AccessTeamsPage() {
     return <div className="soha-page"><ManagementState kind="no-permission" description="当前账号没有组织管理权限。" /></div>
   }
 
+  const filteredTeams = crud.data.filter((item) => {
+    const keyword = searchKeyword.trim().toLowerCase()
+    if (!keyword) return true
+    return [
+      item.name,
+      item.slug,
+      item.path,
+      item.source,
+      item.externalId,
+      getGroupDescription(item.metadata),
+    ].some((value) => String(value || '').toLowerCase().includes(keyword))
+  })
+
   return (
     <div className="soha-page">
+      <ManagementQueryPanel
+        onFinish={() => undefined}
+        actions={(
+          <>
+            <Button
+              autoInsertSpace={false}
+              disabled={!searchKeyword.trim()}
+              htmlType="button"
+              onClick={() => setSearchKeyword('')}
+            >
+              重置
+            </Button>
+            <Button autoInsertSpace={false} htmlType="submit" type="primary">
+              查询
+            </Button>
+          </>
+        )}
+      >
+        <ManagementQueryField label="关键词" width={360} minWidth={260}>
+          <Input
+            allowClear
+            className="soha-platform-compact-field soha-workload-search-input"
+            placeholder="搜索组织、路径、标识或来源"
+            value={searchKeyword}
+            variant="filled"
+            onChange={(event) => setSearchKeyword(event.target.value)}
+          />
+        </ManagementQueryField>
+      </ManagementQueryPanel>
       <AdminTable
         columnSettingIconOnly
         columnSettingPlacement="header"
         shellClassName="soha-management-table-shell"
-        title="组织架构"
         className="soha-access-table"
-        toolbarExtra={canManageGroups ? (
+        headerExtra={canManageGroups ? (
           <ManagementTableToolbar>
             <Button size="small" icon={<PlusOutlined />} type="primary" onClick={crud.openCreate}>
               添加组织
@@ -1602,9 +1711,10 @@ export function AccessTeamsPage() {
           </ManagementTableToolbar>
         ) : null}
         columns={columns}
-        dataSource={crud.data}
+        dataSource={filteredTeams}
         rowKey="id"
         loading={crud.isLoading}
+        scroll={{ x: 'max-content' }}
       />
       <Modal
         title={crud.editing ? `编辑组织: ${crud.editing.name}` : '添加组织'}
@@ -1695,6 +1805,7 @@ export function AccessPoliciesPage() {
   const canManagePolicies = hasPermission(snapshot, 'access.policies.manage')
   const [form] = Form.useForm<Record<string, unknown>>()
   const crud = useCRUD<AccessPolicy>('access/policies', { invalidateAuthz: true })
+  const [searchKeyword, setSearchKeyword] = useState('')
 
   const rolesQuery = useQuery({
     queryKey: ['access/roles'],
@@ -1831,15 +1942,62 @@ export function AccessPoliciesPage() {
     return <div className="soha-page"><ManagementState kind="no-permission" description="当前账号没有策略管理权限。" /></div>
   }
 
+  const filteredPolicies = crud.data.filter((item) => {
+    const keyword = searchKeyword.trim().toLowerCase()
+    if (!keyword) return true
+    return [
+      item.name,
+      item.effect,
+      item.reason,
+      ...(item.actions ?? []),
+      ...(item.subjects?.roles ?? []).map((id) => roleMap[id] || id),
+      ...(item.subjects?.teams ?? []).map((id) => teamMap[id] || id),
+      ...(item.subjects?.users ?? []),
+      ...(item.subjects?.tags ?? []),
+      ...(item.clusters?.ids ?? []),
+      ...(item.namespaces?.names ?? []),
+      ...(item.resources?.kinds ?? []),
+      ...(item.resources?.names ?? []),
+    ].some((value) => String(value || '').toLowerCase().includes(keyword))
+  })
+
   return (
     <div className="soha-page">
+      <ManagementQueryPanel
+        onFinish={() => undefined}
+        actions={(
+          <>
+            <Button
+              autoInsertSpace={false}
+              disabled={!searchKeyword.trim()}
+              htmlType="button"
+              onClick={() => setSearchKeyword('')}
+            >
+              重置
+            </Button>
+            <Button autoInsertSpace={false} htmlType="submit" type="primary">
+              查询
+            </Button>
+          </>
+        )}
+      >
+        <ManagementQueryField label="关键词" width={360} minWidth={260}>
+          <Input
+            allowClear
+            className="soha-platform-compact-field soha-workload-search-input"
+            placeholder="搜索策略、主体、目标或动作"
+            value={searchKeyword}
+            variant="filled"
+            onChange={(event) => setSearchKeyword(event.target.value)}
+          />
+        </ManagementQueryField>
+      </ManagementQueryPanel>
       <AdminTable
         columnSettingIconOnly
         columnSettingPlacement="header"
         shellClassName="soha-management-table-shell"
-        title="策略管理"
         className="soha-access-table"
-        toolbarExtra={canManagePolicies ? (
+        headerExtra={canManagePolicies ? (
           <ManagementTableToolbar>
             <Button size="small" icon={<PlusOutlined />} type="primary" onClick={crud.openCreate}>
               添加策略
@@ -1847,9 +2005,10 @@ export function AccessPoliciesPage() {
           </ManagementTableToolbar>
         ) : null}
         columns={columns}
-        dataSource={crud.data}
+        dataSource={filteredPolicies}
         rowKey="id"
         loading={crud.isLoading}
+        scroll={{ x: 'max-content' }}
       />
       <Modal
         title={crud.editing ? `编辑策略: ${crud.editing.name}` : '添加策略'}

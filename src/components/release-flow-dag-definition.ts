@@ -16,6 +16,24 @@ export type ReleaseDagNodeType =
   | 'rollback_to_previous'
 
 export type ReleaseDagEdgeCondition = 'success' | 'failure' | 'always'
+export type ReleaseDagMode = 'release_dag' | 'delivery_dag'
+export type DeliveryDagArtifactKind = 'image' | 'test_report' | 'scan_report' | 'sbom'
+export type DeliveryDagFailurePolicy = 'stop' | 'continue' | 'rollback' | 'notify'
+
+export interface DeliveryDagSelector {
+  id?: string
+  key?: string
+  matchLabels?: Record<string, string>
+  matchExpressions?: Array<Record<string, unknown>>
+}
+
+export interface DeliveryDagArtifactOutput {
+  name: string
+  kind: DeliveryDagArtifactKind | string
+  ref?: string
+  path?: string
+  required?: boolean
+}
 
 export interface ReleaseDagNodeDefinition {
   id: string
@@ -24,6 +42,15 @@ export interface ReleaseDagNodeDefinition {
   position: { x: number; y: number }
   timeoutSeconds?: number
   continueOnFailure?: boolean
+  inputs?: string[]
+  outputs?: string[]
+  serviceSelector?: DeliveryDagSelector
+  environmentSelector?: DeliveryDagSelector
+  targetSelector?: DeliveryDagSelector
+  artifactOutputs?: DeliveryDagArtifactOutput[]
+  runCondition?: string
+  failurePolicy?: DeliveryDagFailurePolicy | string
+  observability?: Record<string, unknown>
   config: Record<string, unknown>
 }
 
@@ -36,7 +63,7 @@ export interface ReleaseDagEdgeDefinition {
 
 export interface ReleaseDagDefinition {
   schemaVersion: number
-  mode: 'release_dag'
+  mode: ReleaseDagMode
   nodes: ReleaseDagNodeDefinition[]
   edges: ReleaseDagEdgeDefinition[]
 }
@@ -59,6 +86,11 @@ export interface ReleaseDagAnalysis {
   approvalNodeCount: number
   buildNodeCount: number
   deployNodeCount: number
+  artifactOutputCount: number
+  selectorNodeCount: number
+  conditionalNodeCount: number
+  failureBranchCount: number
+  isDeliveryDag: boolean
   entryNodeIds: string[]
   terminalNodeIds: string[]
   isolatedNodeIds: string[]
@@ -214,6 +246,85 @@ function toArray(value: unknown) {
   return Array.isArray(value) ? value : []
 }
 
+function toStringList(value: unknown) {
+  if (!Array.isArray(value)) return undefined
+  const items = value.map((item) => String(item).trim()).filter(Boolean)
+  return items.length > 0 ? items : undefined
+}
+
+function normalizeSelector(value: unknown): DeliveryDagSelector | undefined {
+  const selector = toConfigObject(value)
+  if (Object.keys(selector).length === 0) return undefined
+  const matchLabels = toConfigObject(selector.matchLabels)
+  return {
+    ...(selector.id ? { id: String(selector.id) } : {}),
+    ...(selector.key ? { key: String(selector.key) } : {}),
+    ...(Object.keys(matchLabels).length > 0
+      ? { matchLabels: Object.fromEntries(Object.entries(matchLabels).map(([key, item]) => [key, String(item)])) }
+      : {}),
+    ...(Array.isArray(selector.matchExpressions) ? { matchExpressions: selector.matchExpressions as Array<Record<string, unknown>> } : {}),
+  }
+}
+
+function normalizeArtifactOutputs(value: unknown): DeliveryDagArtifactOutput[] | undefined {
+  const items = toArray(value)
+    .map((raw, index) => {
+      const item = toConfigObject(raw)
+      const name = String(item.name || item.ref || `artifact-${index + 1}`).trim()
+      const kind = String(item.kind || 'image').trim()
+      if (!name || !kind) return null
+      return {
+        name,
+        kind,
+        ...(item.ref ? { ref: String(item.ref) } : {}),
+        ...(item.path ? { path: String(item.path) } : {}),
+        ...(item.required !== undefined ? { required: Boolean(item.required) } : {}),
+      }
+    })
+    .filter(Boolean) as DeliveryDagArtifactOutput[]
+  return items.length > 0 ? items : undefined
+}
+
+function normalizeDagMode(value: unknown): ReleaseDagMode {
+  return value === 'delivery_dag' ? 'delivery_dag' : 'release_dag'
+}
+
+function normalizeDagNode(nodeRaw: unknown, index: number): ReleaseDagNodeDefinition {
+  const node = toConfigObject(nodeRaw)
+  const type = String(node.type || 'deploy_update_image') as ReleaseDagNodeType
+  const position = toConfigObject(node.position)
+  const normalized: ReleaseDagNodeDefinition = {
+    id: String(node.id || createGraphId(`node-${index}`)),
+    type,
+    name: String(node.name || getDefaultReleaseDagNodeLabel(type)),
+    position: {
+      x: Number(position.x ?? 120 + index * 80),
+      y: Number(position.y ?? 120 + index * 40),
+    },
+    timeoutSeconds: Number(node.timeoutSeconds || 300),
+    continueOnFailure: Boolean(node.continueOnFailure),
+    config: toConfigObject(node.config),
+  }
+  const inputs = toStringList(node.inputs)
+  const outputs = toStringList(node.outputs)
+  const artifactOutputs = normalizeArtifactOutputs(node.artifactOutputs)
+  const serviceSelector = normalizeSelector(node.serviceSelector)
+  const environmentSelector = normalizeSelector(node.environmentSelector)
+  const targetSelector = normalizeSelector(node.targetSelector)
+  if (inputs) normalized.inputs = inputs
+  if (outputs) normalized.outputs = outputs
+  if (artifactOutputs) normalized.artifactOutputs = artifactOutputs
+  if (serviceSelector) normalized.serviceSelector = serviceSelector
+  if (environmentSelector) normalized.environmentSelector = environmentSelector
+  if (targetSelector) normalized.targetSelector = targetSelector
+  if (node.runCondition) normalized.runCondition = String(node.runCondition)
+  if (node.failurePolicy) normalized.failurePolicy = String(node.failurePolicy)
+  if (node.observability && typeof node.observability === 'object' && !Array.isArray(node.observability)) {
+    normalized.observability = node.observability as Record<string, unknown>
+  }
+  return normalized
+}
+
 function normalizeLegacyDefinition(raw: Record<string, unknown>): ReleaseDagDefinition {
   const stages = toArray(raw.stages)
   const legacySteps = toArray(raw.steps)
@@ -297,29 +408,13 @@ export function normalizeReleaseDagDefinition(raw: unknown): ReleaseDagDefinitio
   const value = raw as Record<string, unknown>
   const nodeItems = toArray(value.nodes)
   const edgeItems = toArray(value.edges)
-  if (nodeItems.length === 0 && value.mode !== 'release_dag' && !('nodes' in value) && !('edges' in value)) {
+  if (nodeItems.length === 0 && value.mode !== 'release_dag' && value.mode !== 'delivery_dag' && !('nodes' in value) && !('edges' in value)) {
     return normalizeLegacyDefinition(value)
   }
   return {
     schemaVersion: Number(value.schemaVersion || 2),
-    mode: 'release_dag',
-    nodes: nodeItems.map((nodeRaw, index) => {
-      const node = toConfigObject(nodeRaw)
-      const type = String(node.type || 'deploy_update_image') as ReleaseDagNodeType
-      const position = toConfigObject(node.position)
-      return {
-        id: String(node.id || createGraphId(`node-${index}`)),
-        type,
-        name: String(node.name || getDefaultReleaseDagNodeLabel(type)),
-        position: {
-          x: Number(position.x ?? 120 + index * 80),
-          y: Number(position.y ?? 120 + index * 40),
-        },
-        timeoutSeconds: Number(node.timeoutSeconds || 300),
-        continueOnFailure: Boolean(node.continueOnFailure),
-        config: toConfigObject(node.config),
-      }
-    }),
+    mode: normalizeDagMode(value.mode),
+    nodes: nodeItems.map(normalizeDagNode),
     edges: edgeItems.map((edgeRaw, index) => {
       const edge = toConfigObject(edgeRaw)
       return {
@@ -427,6 +522,10 @@ export function analyzeReleaseDagDefinition(raw: unknown): ReleaseDagAnalysis {
   const approvalNodeCount = definition.nodes.filter((node) => RELEASE_DAG_APPROVAL_NODE_TYPES.has(normalizeReleaseDagNodeType(node.type))).length
   const buildNodeCount = definition.nodes.filter((node) => RELEASE_DAG_BUILD_NODE_TYPES.has(normalizeReleaseDagNodeType(node.type))).length
   const deployNodeCount = definition.nodes.filter((node) => RELEASE_DAG_DEPLOY_NODE_TYPES.has(normalizeReleaseDagNodeType(node.type))).length
+  const artifactOutputCount = definition.nodes.reduce((sum, node) => sum + (node.artifactOutputs?.length ?? 0), 0)
+  const selectorNodeCount = definition.nodes.filter((node) => node.serviceSelector || node.environmentSelector || node.targetSelector).length
+  const conditionalNodeCount = definition.nodes.filter((node) => Boolean(node.runCondition)).length
+  const failureBranchCount = definition.edges.filter((edge) => edge.condition === 'failure').length
 
   if (definition.nodes.length === 0) {
     issues.push({ severity: 'error', message: '至少需要 1 个 DAG 节点' })
@@ -468,6 +567,11 @@ export function analyzeReleaseDagDefinition(raw: unknown): ReleaseDagAnalysis {
     approvalNodeCount,
     buildNodeCount,
     deployNodeCount,
+    artifactOutputCount,
+    selectorNodeCount,
+    conditionalNodeCount,
+    failureBranchCount,
+    isDeliveryDag: definition.mode === 'delivery_dag',
     entryNodeIds,
     terminalNodeIds,
     isolatedNodeIds,
@@ -475,7 +579,7 @@ export function analyzeReleaseDagDefinition(raw: unknown): ReleaseDagAnalysis {
     duplicateNodeIds,
     selfLoopEdgeIds,
     hasCycle: cycleDetected,
-    isReleaseDagCompatible: definition.mode === 'release_dag' && !issues.some((issue) => issue.severity === 'error'),
+    isReleaseDagCompatible: !issues.some((issue) => issue.severity === 'error'),
     issues,
   }
 }

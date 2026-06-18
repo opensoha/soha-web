@@ -1,16 +1,18 @@
 import type { ReactNode } from 'react'
-import { Alert, Button, Card, Space, Steps, Tag, Typography } from 'antd'
-import { ArrowRightOutlined, BugOutlined, CheckCircleOutlined, CodeOutlined, ExperimentOutlined, FileTextOutlined, RobotOutlined, RocketOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
+import { useState } from 'react'
+import { Alert, App, Button, Card, Form, Input, Modal, Select, Space, Steps, Tag, Typography } from 'antd'
+import { ArrowRightOutlined, BugOutlined, CheckCircleOutlined, CodeOutlined, ExperimentOutlined, FileTextOutlined, RocketOutlined, SafetyCertificateOutlined, SendOutlined } from '@ant-design/icons'
 import type { TableColumnsType } from 'antd'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
 import { DeliveryTable } from '@/features/delivery/delivery-table'
+import { DeliveryGatewayReadinessPanel } from '@/features/delivery/delivery-gateway-readiness'
 import { api } from '@/services/api-client'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
-import type { ApiResponse, DeliveryApplication, DeliveryBlueprint, ExecutionTask, ReleaseBoardEntry, ReleaseBundle } from '@/types'
+import type { ApiResponse, DeliveryApplication, DeliveryBlueprint, DeliveryDraft, DeliveryDraftConfirmResult, ExecutionTask, ReleaseBoardEntry, ReleaseBundle, RenderedDeliverySpec } from '@/types'
 
 const { Text } = Typography
 type ColumnProps<T> = TableColumnsType<T>[number]
@@ -44,6 +46,22 @@ interface OnboardingRow {
   }
   serviceClues: number
   targetCount: number
+}
+
+interface OnboardingDraftFormValues {
+  appGroup?: string
+  appKey?: string
+  appName?: string
+  blueprintId?: string
+  clusterId?: string
+  defaultBranch?: string
+  environmentKey?: string
+  language?: string
+  namespace?: string
+  repositoryPath?: string
+  serviceKey?: string
+  serviceName?: string
+  workloadName?: string
 }
 
 function normalizeStatus(value?: string) {
@@ -161,36 +179,6 @@ function OnboardingBoundaryCards() {
   )
 }
 
-function AiAssistCard({
-  capabilities,
-  description,
-  title,
-}: {
-  capabilities: string[]
-  description: string
-  title: string
-}) {
-  return (
-    <Card className="soha-delivery-workbench-ai-card" size="small">
-      <Space align="start" size={12}>
-        <RobotOutlined className="soha-delivery-workbench-ai-card__icon" />
-        <Space orientation="vertical" size={8}>
-          <Space size={8} wrap>
-            <Text strong>{title}</Text>
-            <Tag color="processing">可选增强</Tag>
-          </Space>
-          <Text type="secondary">{description}</Text>
-          <Space size={6} wrap>
-            {capabilities.map((item) => (
-              <Tag key={item}>{item}</Tag>
-            ))}
-          </Space>
-        </Space>
-      </Space>
-    </Card>
-  )
-}
-
 function ManualModeAlert({ description }: { description: string }) {
   return (
     <Alert
@@ -231,8 +219,189 @@ function summarizeOnboardingNextStep(app: DeliveryApplication, bindings: Release
   return { color: 'success', label: '可进入交付' }
 }
 
+function slugFrom(value: unknown, fallback: string) {
+  const slug = String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return slug || fallback
+}
+
+function buildManualDeliveryDraftPayload(values: OnboardingDraftFormValues, blueprint?: DeliveryBlueprint) {
+  const appKey = slugFrom(values.appKey || values.appName || blueprint?.applicationDraft?.key, 'sample-app')
+  const appName = String(values.appName || blueprint?.applicationDraft?.name || appKey).trim()
+  const serviceKey = slugFrom(values.serviceKey || appKey, appKey)
+  const serviceName = String(values.serviceName || appName).trim()
+  const defaultBranch = String(values.defaultBranch || blueprint?.applicationDraft?.defaultBranch || 'main').trim()
+  const repositoryPath = String(values.repositoryPath || blueprint?.applicationDraft?.repositoryPath || '').trim()
+  const buildSourceId = blueprint?.buildSources?.[0]?.id || 'source-1'
+  const environmentKey = String(values.environmentKey || blueprint?.environmentBindings?.[0]?.environmentKey || 'dev').trim()
+  const clusterId = String(values.clusterId || '').trim()
+  const namespace = String(values.namespace || '').trim()
+  const workloadName = String(values.workloadName || serviceKey).trim()
+
+  return {
+    source: blueprint ? 'blueprint' : 'manual',
+    applicationDraft: {
+      ...(blueprint?.applicationDraft ?? {}),
+      name: appName,
+      key: appKey,
+      group: String(values.appGroup || blueprint?.applicationDraft?.group || 'default').trim(),
+      language: String(values.language || blueprint?.applicationDraft?.language || 'go').trim(),
+      repositoryPath: repositoryPath || undefined,
+      defaultBranch,
+      enabled: true,
+      metadata: blueprint?.applicationDraft?.metadata ?? {},
+    },
+    services: [
+      {
+        key: serviceKey,
+        name: serviceName,
+        serviceKind: 'kubernetes_workload',
+        repositoryPath: repositoryPath || undefined,
+        defaultBranch,
+        buildSourceId,
+        enabled: true,
+        metadata: {},
+        containers: [
+          {
+            name: serviceKey,
+            imageRepository: '',
+            dockerfilePath: blueprint?.applicationDraft?.dockerfilePath || 'Dockerfile',
+            buildContextDir: blueprint?.applicationDraft?.buildContextDir || '.',
+            metadata: {},
+          },
+        ],
+      },
+    ],
+    buildSources: blueprint?.buildSources?.length
+      ? blueprint.buildSources
+      : [
+          {
+            id: buildSourceId,
+            name: 'Repo Dockerfile',
+            type: 'repo_dockerfile',
+            enabled: true,
+            isDefault: true,
+            config: {
+              contextDir: blueprint?.applicationDraft?.buildContextDir || '.',
+              dockerfilePath: blueprint?.applicationDraft?.dockerfilePath || 'Dockerfile',
+            },
+          },
+        ],
+    environmentBindings: [
+      {
+        ...(blueprint?.environmentBindings?.[0] ?? {}),
+        environmentKey,
+        buildPolicy: {
+          ...(blueprint?.environmentBindings?.[0]?.buildPolicy ?? {}),
+          sourceId: buildSourceId,
+          refType: 'branch',
+          refValue: defaultBranch,
+        },
+        releasePolicy: {
+          ...(blueprint?.environmentBindings?.[0]?.releasePolicy ?? {}),
+          actionKind: 'deploy',
+          requiresApproval: blueprint?.environmentBindings?.[0]?.releasePolicy?.requiresApproval ?? false,
+          verificationMode: 'workflow',
+        },
+        targets: clusterId && namespace && workloadName
+          ? [
+              {
+                id: 'target-1',
+                clusterId,
+                namespace,
+                workloadKind: 'Deployment',
+                workloadName,
+                containerName: serviceKey,
+                enabled: true,
+              },
+            ]
+          : blueprint?.environmentBindings?.[0]?.targets ?? [],
+      },
+    ],
+    files: blueprint?.files ?? [],
+    executionHints: {
+      ...(blueprint?.executionHints ?? {}),
+      onboardingMode: 'manual',
+    },
+    postCreateActions: blueprint?.postCreateActions ?? ['render_spec'],
+  }
+}
+
+function specFromDraft(draft: DeliveryDraft): RenderedDeliverySpec {
+  return {
+    applicationDraft: draft.applicationDraft,
+    services: draft.services,
+    buildSources: draft.buildSources,
+    environmentBindings: draft.environmentBindings,
+    files: draft.files,
+    executionHints: draft.executionHints,
+    postCreateActions: draft.postCreateActions,
+  }
+}
+
+function DeliveryDraftPreview({ spec }: { spec: RenderedDeliverySpec | null }) {
+  if (!spec) {
+    return <ManagementState bordered={false} compact title="暂无草稿" description="生成 DeliveryDraft 后可在这里确认将创建或更新的对象。" />
+  }
+  return (
+    <div className="soha-delivery-draft-preview">
+      <Card size="small" title="应用档案">
+        <Space orientation="vertical" size={2}>
+          <Text strong>{spec.applicationDraft?.name || '-'}</Text>
+          <Text type="secondary">{spec.applicationDraft?.key || '-'} / {spec.applicationDraft?.group || '-'}</Text>
+          <Text type="secondary">{spec.applicationDraft?.repositoryPath || spec.applicationDraft?.repositoryProjectId || '未填写仓库'}</Text>
+        </Space>
+      </Card>
+      <Card size="small" title="服务组件">
+        <Space size={6} wrap>
+          {(spec.services ?? []).map((service) => (
+            <Tag key={service.key}>{service.name || service.key}</Tag>
+          ))}
+          {(spec.services?.length ?? 0) === 0 ? <Text type="secondary">未配置服务组件</Text> : null}
+        </Space>
+      </Card>
+      <Card size="small" title="构建源">
+        <Space size={6} wrap>
+          {(spec.buildSources ?? []).map((source) => (
+            <Tag key={source.id}>{source.name || source.type}</Tag>
+          ))}
+          {(spec.buildSources?.length ?? 0) === 0 ? <Text type="secondary">未配置构建源</Text> : null}
+        </Space>
+      </Card>
+      <Card size="small" title="环境绑定">
+        <Space size={6} wrap>
+          {(spec.environmentBindings ?? []).map((binding, index) => (
+            <Tag key={`${binding.environmentId || binding.environmentKey || index}`}>{binding.environmentKey || binding.environmentId || '未映射环境'}</Tag>
+          ))}
+          {(spec.environmentBindings?.length ?? 0) === 0 ? <Text type="secondary">未配置环境绑定</Text> : null}
+        </Space>
+      </Card>
+      <Card size="small" title="规范文件">
+        <Space size={6} wrap>
+          {(spec.files ?? []).map((file) => (
+            <Tag key={file.path}>{file.kind}: {file.path}</Tag>
+          ))}
+          {(spec.files?.length ?? 0) === 0 ? <Text type="secondary">未附带规范文件草稿</Text> : null}
+        </Space>
+      </Card>
+      <Card size="small" title="流程提示">
+        <pre className="soha-json-block">{JSON.stringify(spec.executionHints ?? {}, null, 2)}</pre>
+      </Card>
+    </div>
+  )
+}
+
 export function DeliveryOnboardingPage() {
+  const { message } = App.useApp()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [form] = Form.useForm<OnboardingDraftFormValues>()
+  const [draftModalVisible, setDraftModalVisible] = useState(false)
+  const [createdDraft, setCreatedDraft] = useState<DeliveryDraft | null>(null)
+  const [confirmedResult, setConfirmedResult] = useState<DeliveryDraftConfirmResult | null>(null)
   const applicationsQuery = useQuery({
     queryKey: ['applications'],
     queryFn: () => api.get<ApiResponse<DeliveryApplication[]>>('/applications'),
@@ -276,6 +445,32 @@ export function DeliveryOnboardingPage() {
   ]
 
   const loading = applicationsQuery.isLoading || blueprintsQuery.isLoading || releaseBoardQuery.isLoading
+  const selectedBlueprintId = Form.useWatch('blueprintId', form)
+  const selectedBlueprint = selectedBlueprintId ? blueprints.find((item) => item.id === selectedBlueprintId) : undefined
+
+  const createDraftMutation = useMutation({
+    mutationFn: (values: OnboardingDraftFormValues) => api.post<ApiResponse<DeliveryDraft>>('/delivery/drafts', buildManualDeliveryDraftPayload(values, selectedBlueprint)),
+    onSuccess: (payload: ApiResponse<DeliveryDraft>) => {
+      setCreatedDraft(payload.data)
+      setConfirmedResult(null)
+      setDraftModalVisible(true)
+      void message.success('DeliveryDraft 已生成')
+    },
+    onError: (err: Error) => void message.error(err.message),
+  })
+
+  const confirmDraftMutation = useMutation({
+    mutationFn: (draftID: string) => api.post<ApiResponse<DeliveryDraftConfirmResult>>(`/delivery/drafts/${draftID}/confirm`, {}),
+    onSuccess: (payload: ApiResponse<DeliveryDraftConfirmResult>) => {
+      setConfirmedResult(payload.data)
+      setCreatedDraft(payload.data.draft)
+      void message.success('DeliveryDraft 已确认并创建交付对象')
+      void queryClient.invalidateQueries({ queryKey: ['applications'] })
+      void queryClient.invalidateQueries({ queryKey: ['application-environments'] })
+      void queryClient.invalidateQueries({ queryKey: ['delivery-release-board'] })
+    },
+    onError: (err: Error) => void message.error(err.message),
+  })
 
   const onboardingColumns: ColumnProps<OnboardingRow>[] = [
     {
@@ -320,6 +515,11 @@ export function DeliveryOnboardingPage() {
     },
   ]
 
+  const handleCreateDraft = async () => {
+    const values = await form.validateFields()
+    createDraftMutation.mutate(values)
+  }
+
   return (
     <div className="soha-page soha-delivery-workbench-page">
       <WorkbenchHeader
@@ -329,6 +529,83 @@ export function DeliveryOnboardingPage() {
       <ManualModeAlert description="手工选择应用档案、服务组件、构建源、环境绑定和模板即可完成接入；AI Gateway 只负责辅助识别和生成草稿。" />
       <StatCards items={onboardingStats} />
       <OnboardingBoundaryCards />
+      <Card
+        className="soha-management-panel-card"
+        title="手工生成 DeliveryDraft"
+        extra={(
+          <Button
+            type="primary"
+            icon={<SendOutlined />}
+            loading={createDraftMutation.isPending}
+            onClick={() => void handleCreateDraft()}
+          >
+            生成草稿
+          </Button>
+        )}
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          initialValues={{
+            appGroup: 'default',
+            language: 'go',
+            defaultBranch: 'main',
+            environmentKey: 'dev',
+          }}
+        >
+          <div className="soha-delivery-onboarding-form-grid">
+            <Form.Item label="接入模板" name="blueprintId">
+              <Select
+                allowClear
+                placeholder="可选，未选择时使用手工默认规范"
+                options={enabledBlueprints.map((item) => ({ value: item.id, label: `${item.name} (${item.key})` }))}
+              />
+            </Form.Item>
+            <Form.Item label="应用名称" name="appName" rules={[{ required: true, message: '请输入应用名称' }]}>
+              <Input placeholder={selectedBlueprint?.applicationDraft?.name || 'Demo API'} />
+            </Form.Item>
+            <Form.Item label="应用 Key" name="appKey" rules={[{ required: true, message: '请输入应用 Key' }]}>
+              <Input placeholder={selectedBlueprint?.applicationDraft?.key || 'demo-api'} />
+            </Form.Item>
+            <Form.Item label="应用分组" name="appGroup">
+              <Input />
+            </Form.Item>
+            <Form.Item label="语言" name="language">
+              <Select options={[
+                { value: 'go', label: 'Go' },
+                { value: 'node', label: 'Node.js' },
+                { value: 'java', label: 'Java' },
+                { value: 'python', label: 'Python' },
+                { value: 'other', label: 'Other' },
+              ]} />
+            </Form.Item>
+            <Form.Item label="仓库路径" name="repositoryPath">
+              <Input placeholder="group/project" />
+            </Form.Item>
+            <Form.Item label="默认分支" name="defaultBranch">
+              <Input />
+            </Form.Item>
+            <Form.Item label="服务名称" name="serviceName" rules={[{ required: true, message: '请输入服务名称' }]}>
+              <Input placeholder="API" />
+            </Form.Item>
+            <Form.Item label="服务 Key" name="serviceKey" rules={[{ required: true, message: '请输入服务 Key' }]}>
+              <Input placeholder="api" />
+            </Form.Item>
+            <Form.Item label="环境 Key" name="environmentKey" rules={[{ required: true, message: '请输入环境 Key' }]}>
+              <Input placeholder="dev" />
+            </Form.Item>
+            <Form.Item label="集群 ID" name="clusterId">
+              <Input placeholder="可选，填写后生成发布目标" />
+            </Form.Item>
+            <Form.Item label="命名空间" name="namespace">
+              <Input placeholder="可选" />
+            </Form.Item>
+            <Form.Item label="工作负载" name="workloadName">
+              <Input placeholder="可选，默认使用服务 Key" />
+            </Form.Item>
+          </div>
+        </Form>
+      </Card>
       <div className="soha-delivery-workbench-grid">
         <Card className="soha-management-panel-card" title="接入路径" size="small">
           <Steps
@@ -341,13 +618,19 @@ export function DeliveryOnboardingPage() {
             ]}
           />
         </Card>
-        <AiAssistCard
+        <DeliveryGatewayReadinessPanel
           title="AI Gateway 接入辅助"
           description="适合分析仓库语言、入口、服务拆分和构建方式，并生成 Dockerfile 与 Helm / Deployment 草稿；平台对象创建仍走确认后的常规 API。"
+          skillId="delivery-developer"
+          manualPath="/applications"
+          manualTitle="手工接入"
           capabilities={[
             'delivery.onboarding.analyze_repo',
             'delivery.standards.dockerfile.generate',
+            'delivery.standards.dockerfile.validate',
             'delivery.standards.helm.generate',
+            'delivery.standards.k8s.validate',
+            'delivery.spec.render',
             'delivery.application.bootstrap',
           ]}
         />
@@ -376,6 +659,43 @@ export function DeliveryOnboardingPage() {
           <ManagementState bordered={false} compact title="暂无服务线索" description="可以先创建应用档案，或从接入模板生成 DeliveryDraft。" />
         </Card>
       )}
+      <Modal
+        width={980}
+        title="DeliveryDraft 预览确认"
+        open={draftModalVisible}
+        onCancel={() => setDraftModalVisible(false)}
+        footer={[
+          <Button key="close" onClick={() => setDraftModalVisible(false)}>
+            关闭
+          </Button>,
+          <Button
+            key="confirm"
+            type="primary"
+            disabled={!createdDraft || createdDraft.status !== 'draft'}
+            loading={confirmDraftMutation.isPending}
+            onClick={() => createdDraft && confirmDraftMutation.mutate(createdDraft.id)}
+          >
+            确认创建交付对象
+          </Button>,
+        ]}
+      >
+        {confirmedResult ? (
+          <Alert
+            showIcon
+            type="success"
+            title="草稿已确认"
+            description={`应用 ${confirmedResult.application.name} 已创建或更新，服务 ${confirmedResult.services?.length ?? 0} 个，环境绑定 ${confirmedResult.environmentBindings?.length ?? 0} 个。`}
+          />
+        ) : (
+          <Alert
+            showIcon
+            type="warning"
+            title="确认前不会创建或修改平台对象"
+            description="请核对应用、服务、构建源、环境绑定、规范文件和流程提示，确认后才会写入控制面。"
+          />
+        )}
+        <DeliveryDraftPreview spec={createdDraft ? specFromDraft(createdDraft) : null} />
+      </Modal>
     </div>
   )
 }
@@ -456,14 +776,18 @@ export function DeliveryTestingPage() {
         ]}
       />
       <div className="soha-delivery-workbench-grid">
-        <AiAssistCard
+        <DeliveryGatewayReadinessPanel
           title="AI Gateway 验证辅助"
           description="可以汇总版本、任务日志、diff 和验证证据，输出是否可晋级的建议；最终晋级仍由常规流程和审批决定。"
+          skillId="delivery-tester"
+          manualPath="/delivery/execution-tasks"
+          manualTitle="手工验证"
           capabilities={[
-            'delivery-tester',
             'delivery.release.plan',
-            'delivery.diff.summarize',
-            'delivery.validation.evidence_summarize',
+            'delivery.release_context.diff',
+            'delivery.release_bundles.list',
+            'delivery.execution_tasks.list',
+            'delivery.execution_logs.list',
           ]}
         />
         <Card className="soha-management-panel-card" title="验证证据来源" size="small">
@@ -576,14 +900,18 @@ export function DeliveryAnalysisPage() {
         ]}
       />
       <div className="soha-delivery-workbench-grid">
-        <AiAssistCard
+        <DeliveryGatewayReadinessPanel
           title="AI Gateway 故障分析"
           description="可在常规证据基础上汇总失败原因、影响范围和修复建议，适合发布失败、验证失败和 K8s 运行态问题。"
+          skillId="delivery-tester"
+          manualPath="/delivery/execution-tasks"
+          manualTitle="手工排查"
           capabilities={[
             'diagnosis.release_failure.analyze',
-            'delivery-tester',
-            'k8s-sre',
-            'delivery.analysis.strategy',
+            'delivery.rollback.context',
+            'delivery.release_context.diff',
+            'k8s.pods.logs',
+            'k8s.deployments.events',
           ]}
         />
         <Card className="soha-management-panel-card" title="分析闭环" size="small">

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { App, Button, Form, Input, InputNumber, Modal, Select, Space, Switch, Tabs, Tag, Typography } from 'antd'
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ManagementIconButton,
   ManagementState,
@@ -10,11 +10,17 @@ import {
 import { hasPermission, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
 import { StatusTag } from '@/components/status-tag'
 import { api } from '@/services/api-client'
+import {
+  TemplateUsageImpactPanel,
+  shouldConfirmTemplateUsageSave,
+  templateUsageConfirmText,
+} from '@/features/delivery/template-usage-impact'
 import type {
   ApiResponse,
   BlueprintBootstrapResult,
   DeliveryBlueprint,
   RenderedDeliverySpec,
+  TemplateUsageSummary,
 } from '@/types'
 import { formatDateTime } from '@/utils/time'
 
@@ -414,6 +420,7 @@ function createListItemFromBlueprint(blueprint: DeliveryBlueprint, activeValues?
 
 export function DeliveryBlueprintsPage() {
   const { message } = App.useApp()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const canManage = hasPermission(permissionSnapshotQuery.data?.data, 'delivery.application.update')
@@ -449,6 +456,7 @@ export function DeliveryBlueprintsPage() {
     onSuccess: () => {
       void message.success('应用接入模板已更新')
       void queryClient.invalidateQueries({ queryKey: ['delivery-blueprints'] })
+      void queryClient.invalidateQueries({ queryKey: ['delivery-blueprint-usage'] })
     },
     onError: (err: Error) => void message.error(err.message),
   })
@@ -477,6 +485,12 @@ export function DeliveryBlueprintsPage() {
   const selectedBlueprint = selectedBlueprintId && selectedBlueprintId !== 'new'
     ? blueprints.find((item) => item.id === selectedBlueprintId) ?? null
     : null
+  const selectedBlueprintUsageQuery = useQuery({
+    queryKey: ['delivery-blueprint-usage', selectedBlueprint?.id ?? ''],
+    queryFn: () => api.get<ApiResponse<TemplateUsageSummary>>(`/delivery/blueprints/${selectedBlueprint?.id ?? ''}/usage`),
+    enabled: !!selectedBlueprint?.id,
+  })
+  const selectedBlueprintUsage = selectedBlueprintUsageQuery.data?.data
   const isNewDraft = selectedBlueprintId === 'new'
   const hasSelection = isNewDraft || !!selectedBlueprint
 
@@ -622,6 +636,10 @@ export function DeliveryBlueprintsPage() {
       const values = await form.validateFields()
       const payload = buildBlueprintPayload(values, selectedBlueprint?.id)
       if (selectedBlueprint) {
+        const usageForSave = selectedBlueprintUsage ?? (await selectedBlueprintUsageQuery.refetch()).data?.data
+        if (shouldConfirmTemplateUsageSave(usageForSave) && !window.confirm(templateUsageConfirmText(selectedBlueprint.name, usageForSave))) {
+          return
+        }
         await updateMutation.mutateAsync({ id: selectedBlueprint.id, values: payload })
         setFormSnapshot(values)
         setIsDirty(false)
@@ -1089,6 +1107,11 @@ export function DeliveryBlueprintsPage() {
                 setIsDirty(true)
               }}
             >
+              <TemplateUsageImpactPanel
+                loading={selectedBlueprintUsageQuery.isFetching && !!selectedBlueprint}
+                onNavigate={navigate}
+                usage={selectedBlueprintUsage}
+              />
               <Tabs
                 activeKey={activeTabKey}
                 className="soha-delivery-blueprint-tabs"

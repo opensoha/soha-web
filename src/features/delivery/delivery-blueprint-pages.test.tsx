@@ -59,6 +59,67 @@ const testState = vi.hoisted(() => ({
         ],
       }
     }
+    if (path === '/delivery/blueprints/blueprint-1/usage') {
+      return {
+        data: {
+          templateKind: 'blueprint',
+          templateId: 'blueprint-1',
+          usageCount: 1,
+          applicationCount: 1,
+          environmentCount: 1,
+          productionEnvironmentCount: 0,
+          approvalBindingCount: 0,
+          targetCount: 1,
+          riskLevel: 'low',
+          riskReasons: ['1 spec file templates'],
+          recommendedAction: 'save_with_standard_review',
+          applications: [{ id: 'app-1', name: 'Node Service', key: 'node-service' }],
+          buildSources: [{
+            applicationId: 'app-1',
+            buildSourceId: 'source-1',
+            buildSourceName: 'Repo Dockerfile',
+            application: { id: 'app-1', name: 'Node Service', key: 'node-service' },
+            bindingCount: 1,
+            riskLevel: 'low',
+          }],
+          fileKindCounts: { dockerfile: 1 },
+          lastExecutionSummary: {
+            source: 'delivery_blueprint_runtime',
+            stateCounts: { succeeded: 1, failed: 0, running: 1, pending: 0 },
+            statusCounts: { completed: 1, running: 1 },
+            latest: {
+              kind: 'execution_task',
+              id: 'task-blueprint-1',
+              applicationId: 'app-1',
+              applicationEnvironmentId: 'binding-blueprint-1',
+              taskKind: 'onboarding',
+              status: 'running',
+              observedAt: '2026-05-08T11:20:00Z',
+            },
+            items: [
+              {
+                kind: 'build',
+                id: 'build-blueprint-1',
+                applicationId: 'app-1',
+                buildSourceId: 'source-1',
+                sourceSystem: 'manual',
+                status: 'completed',
+                observedAt: '2026-05-08T10:00:00Z',
+              },
+              {
+                kind: 'execution_task',
+                id: 'task-blueprint-1',
+                applicationId: 'app-1',
+                applicationEnvironmentId: 'binding-blueprint-1',
+                taskKind: 'onboarding',
+                status: 'running',
+                observedAt: '2026-05-08T11:20:00Z',
+              },
+            ],
+          },
+        },
+      }
+    }
     throw new Error(`Unhandled GET ${path}`)
   }),
 }))
@@ -110,12 +171,21 @@ async function renderWithProviders(node: ReactNode, route = '/delivery/blueprint
   })
 
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    for (let index = 0; index < 16; index += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
   })
 
   return container
+}
+
+async function waitForText(container: ParentNode, text: string) {
+  for (let index = 0; index < 40; index += 1) {
+    if (container.textContent?.includes(text)) return
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+  }
 }
 
 describe('DeliveryBlueprintsPage', () => {
@@ -177,6 +247,12 @@ describe('DeliveryBlueprintsPage', () => {
     expect(container.textContent).toContain('环境绑定')
     expect(container.textContent).toContain('规范文件')
     expect(container.textContent).toContain('高级预览')
+    expect(container.textContent).toContain('模板影响面')
+    await waitForText(container, '成功 1')
+    expect(container.textContent).toContain('成功 1')
+    expect(container.textContent).toContain('运行中 1')
+    expect(container.textContent).toContain('最近证据：执行任务: onboarding')
+    expect(container.textContent).toContain('跳转：')
     expect(container.textContent).not.toContain('Application Draft(JSON)')
     expect(container.textContent).not.toContain('Build Sources(JSON Array)')
     expect(container.textContent).not.toContain('Environment Bindings(JSON Array)')

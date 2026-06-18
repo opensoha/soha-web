@@ -614,6 +614,14 @@ export function AppRouter() {
             }
           />
           <Route
+            path="/builds/:buildId"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.BuildDetailPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
             path="/applications/:applicationId/application-environments/:applicationEnvironmentId/workloads/:workloadName"
             element={
               <RoutePages.LazyPage>
@@ -686,10 +694,26 @@ export function AppRouter() {
             }
           />
           <Route
+            path="/delivery/release-bundles/:releaseBundleId"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.ReleaseBundleDetailPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
             path="/delivery/execution-tasks"
             element={
               <RoutePages.LazyPage>
                 <RoutePages.ExecutionTasksPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
+            path="/delivery/execution-tasks/:executionTaskId"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.ExecutionTaskDetailPage />
               </RoutePages.LazyPage>
             }
           />
@@ -718,10 +742,26 @@ export function AppRouter() {
             }
           />
           <Route
+            path="/workflows/:workflowId"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.WorkflowDetailPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
             path="/releases"
             element={
               <RoutePages.LazyPage>
                 <RoutePages.ReleasesPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
+            path="/releases/:releaseId"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.ReleaseDetailPage />
               </RoutePages.LazyPage>
             }
           />

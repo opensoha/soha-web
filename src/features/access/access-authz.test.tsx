@@ -186,7 +186,7 @@ describe('frontend access authorization splits', () => {
 
     const container = await renderWithProviders(<AccessRolesPage />, '/access/roles')
 
-    expect(container.textContent).toContain('角色管理')
+    expect(container.textContent).toContain('关键词')
     expect(getButtonTexts(container)).not.toContain('添加角色')
   })
 
@@ -195,7 +195,7 @@ describe('frontend access authorization splits', () => {
 
     const container = await renderWithProviders(<AccessRolesPage />, '/access/roles')
 
-    expect(container.textContent).toContain('角色管理')
+    expect(container.textContent).toContain('关键词')
     expect(getButtonTexts(container)).toContain('添加角色')
   })
 
