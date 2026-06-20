@@ -4,11 +4,9 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { App, Button, Card, Descriptions, Form, Input, Modal, Popconfirm, Select, Space, Spin, Tag, Typography } from 'antd'
 import {
   DeleteOutlined,
-  DownOutlined,
   EditOutlined,
   EyeOutlined,
   PlusOutlined,
-  UpOutlined,
 } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
@@ -17,6 +15,8 @@ import {
   ManagementDensityButton,
   ManagementDetailHeader,
   ManagementIconButton,
+  ManagementKeywordField,
+  ManagementQueryActions,
   ManagementQueryField,
   ManagementQueryPanel,
   ManagementRefreshButton,
@@ -112,7 +112,6 @@ export function ClustersPage() {
   const [appliedStatusFilter, setAppliedStatusFilter] = useState<string>()
   const [appliedTypeFilter, setAppliedTypeFilter] = useState<string>()
   const [appliedModeFilter, setAppliedModeFilter] = useState<string>()
-  const [queryExpanded, setQueryExpanded] = useState(false)
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([])
   const [tableSize, setTableSize] = useState<'middle' | 'small'>('small')
   const setClusterId = usePlatformScopeStore((state) => state.setClusterId)
@@ -427,78 +426,52 @@ kubernetes:
 
   const queryPanel = (
     <ManagementQueryPanel
-      expanded={queryExpanded}
       onFinish={applyFilters}
       actions={(
-        <>
-          <Button autoInsertSpace={false} disabled={!hasActiveFilters} htmlType="button" onClick={resetFilters}>
-            {localeCode === 'zh_CN' ? '重置' : 'Reset'}
-          </Button>
-          <Button autoInsertSpace={false} htmlType="submit" type="primary">
-            {localeCode === 'zh_CN' ? '查询' : 'Search'}
-          </Button>
-          <Button
-            autoInsertSpace={false}
-            icon={queryExpanded ? <UpOutlined /> : <DownOutlined />}
-            iconPlacement="end"
-            type="link"
-            onClick={() => setQueryExpanded((current) => !current)}
-          >
-            {queryExpanded
-              ? (localeCode === 'zh_CN' ? '收起' : 'Collapse')
-              : (localeCode === 'zh_CN' ? '展开' : 'Expand')}
-          </Button>
-        </>
+        <ManagementQueryActions
+          disabledReset={!hasActiveFilters}
+          onReset={resetFilters}
+          resetLabel={localeCode === 'zh_CN' ? '重置' : 'Reset'}
+          submitLabel={localeCode === 'zh_CN' ? '查询' : 'Search'}
+        />
       )}
     >
-      <ManagementQueryField label={localeCode === 'zh_CN' ? '集群名称' : 'Cluster Name'}>
-        <Input
-          allowClear
-          className="soha-clusters-search-input"
-          placeholder={localeCode === 'zh_CN' ? '请输入' : 'Search'}
-          value={searchText}
-          variant="filled"
-          onChange={(event) => setSearchText(event.target.value)}
-          onPressEnter={applyFilters}
-        />
-      </ManagementQueryField>
+      <ManagementKeywordField
+        label={localeCode === 'zh_CN' ? '集群名称' : 'Cluster Name'}
+        placeholder={localeCode === 'zh_CN' ? '请输入' : 'Search'}
+        value={searchText}
+        onChange={setSearchText}
+        inputProps={{
+          onPressEnter: applyFilters,
+        }}
+      />
       <ManagementQueryField label={localeCode === 'zh_CN' ? '集群类型' : 'Cluster Type'}>
         <Select
           allowClear
-          className="soha-clusters-filter-control"
           options={typeOptions}
           placeholder={localeCode === 'zh_CN' ? '请选择' : 'Select'}
           value={typeFilter}
-          variant="filled"
           onChange={(value) => setTypeFilter(value)}
         />
       </ManagementQueryField>
-      {queryExpanded ? (
-        <>
-          <ManagementQueryField label={localeCode === 'zh_CN' ? '状态' : 'Status'}>
-            <Select
-              allowClear
-              className="soha-clusters-filter-control"
-              options={statusOptions}
-              placeholder={localeCode === 'zh_CN' ? '请选择' : 'Select'}
-              value={statusFilter}
-              variant="filled"
-              onChange={(value) => setStatusFilter(value)}
-            />
-          </ManagementQueryField>
-          <ManagementQueryField label={localeCode === 'zh_CN' ? '连接方式' : 'Mode'}>
-            <Select
-              allowClear
-              className="soha-clusters-filter-control"
-              options={modeOptions}
-              placeholder={localeCode === 'zh_CN' ? '请选择' : 'Select'}
-              value={modeFilter}
-              variant="filled"
-              onChange={(value) => setModeFilter(value)}
-            />
-          </ManagementQueryField>
-        </>
-      ) : null}
+      <ManagementQueryField label={localeCode === 'zh_CN' ? '状态' : 'Status'}>
+        <Select
+          allowClear
+          options={statusOptions}
+          placeholder={localeCode === 'zh_CN' ? '请选择' : 'Select'}
+          value={statusFilter}
+          onChange={(value) => setStatusFilter(value)}
+        />
+      </ManagementQueryField>
+      <ManagementQueryField label={localeCode === 'zh_CN' ? '连接方式' : 'Mode'}>
+        <Select
+          allowClear
+          options={modeOptions}
+          placeholder={localeCode === 'zh_CN' ? '请选择' : 'Select'}
+          value={modeFilter}
+          onChange={(value) => setModeFilter(value)}
+        />
+      </ManagementQueryField>
     </ManagementQueryPanel>
   )
 

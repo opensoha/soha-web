@@ -41,36 +41,36 @@
 .soha-vrt-lane.is-success,
 .soha-vrt-chip.is-success,
 .soha-vrt-provider-row.is-success {
-  border-color: rgba(34, 197, 94, 0.26);
+  border-color: color-mix(in srgb, var(--soha-success) 26%, transparent);
 }
 
 .soha-vrt-metric-card.is-success.ant-card {
-  border-color: rgba(34, 197, 94, 0.26);
-  background: linear-gradient(180deg, var(--soha-bg-surface) 0%, rgba(34, 197, 94, 0.07) 100%);
+  border-color: color-mix(in srgb, var(--soha-success) 26%, transparent);
+  background: linear-gradient(180deg, var(--soha-bg-surface) 0%, color-mix(in srgb, var(--soha-success) 7%, transparent) 100%);
 }
 
 .soha-vrt-commandbar.is-warning,
 .soha-vrt-lane.is-warning,
 .soha-vrt-chip.is-warning,
 .soha-vrt-provider-row.is-warning {
-  border-color: rgba(249, 115, 22, 0.28);
+  border-color: color-mix(in srgb, var(--soha-warning) 28%, transparent);
 }
 
 .soha-vrt-metric-card.is-warning.ant-card {
-  border-color: rgba(249, 115, 22, 0.28);
-  background: linear-gradient(180deg, var(--soha-bg-surface) 0%, rgba(249, 115, 22, 0.07) 100%);
+  border-color: color-mix(in srgb, var(--soha-warning) 28%, transparent);
+  background: linear-gradient(180deg, var(--soha-bg-surface) 0%, color-mix(in srgb, var(--soha-warning) 7%, transparent) 100%);
 }
 
 .soha-vrt-commandbar.is-danger,
 .soha-vrt-lane.is-danger,
 .soha-vrt-chip.is-danger,
 .soha-vrt-provider-row.is-danger {
-  border-color: rgba(239, 68, 68, 0.28);
+  border-color: color-mix(in srgb, var(--soha-danger) 28%, transparent);
 }
 
 .soha-vrt-metric-card.is-danger.ant-card {
-  border-color: rgba(239, 68, 68, 0.28);
-  background: linear-gradient(180deg, var(--soha-bg-surface) 0%, rgba(239, 68, 68, 0.07) 100%);
+  border-color: color-mix(in srgb, var(--soha-danger) 28%, transparent);
+  background: linear-gradient(180deg, var(--soha-bg-surface) 0%, color-mix(in srgb, var(--soha-danger) 7%, transparent) 100%);
 }
 
 .soha-vrt-commandbar.is-default,

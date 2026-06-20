@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Button, Card, Spin, Statistic, Typography } from 'antd'
+import { Button, Card, Spin, Typography } from 'antd'
 import {
   AppstoreOutlined,
   ArrowRightOutlined,
@@ -12,6 +12,13 @@ import {
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { ManagementState } from '@/components/management-list'
+import {
+  OverviewChip,
+  OverviewMetricCard,
+  OverviewSectionBar,
+  type OverviewChipItem,
+  type OverviewMetricItem,
+} from '@/components/overview-visuals'
 import { StatusTag } from '@/components/status-tag'
 import { buildClusterScopedPath } from '@/features/platform/platform-scope-query'
 import { useI18n } from '@/i18n'
@@ -239,7 +246,7 @@ export function OverviewPage() {
       icon: <AppstoreOutlined />,
       tone: 'default',
     },
-  ]
+  ] satisfies OverviewMetricItem[]
 
   const alertChips = [
     { key: 'total', label: localeCode === 'zh_CN' ? '总数' : 'Total', value: summary?.totalCount ?? 0, tone: 'default' },
@@ -247,7 +254,7 @@ export function OverviewPage() {
     { key: 'resolved', label: localeCode === 'zh_CN' ? '已恢复' : 'Resolved', value: summary?.resolvedCount ?? 0, tone: 'success' },
     { key: 'critical', label: 'Critical', value: summary?.criticalCount ?? 0, tone: 'danger' },
     { key: 'warning', label: 'Warning', value: summary?.warningCount ?? 0, tone: 'warning' },
-  ]
+  ] satisfies OverviewChipItem[]
 
   const podStats = [
     {
@@ -298,22 +305,20 @@ export function OverviewPage() {
       icon: <ReloadOutlined />,
       tone: (workloadOverview?.restartingPods ?? 0) > 0 ? 'warning' : 'default',
     },
-  ]
+  ] satisfies OverviewMetricItem[]
 
   return (
     <div className="soha-page soha-overview-page soha-platform-overview-page">
       <div className="soha-overview-metric-grid">
         {overviewStats.map((item) => (
-          <Card key={item.key} size="small" variant="outlined" className={`soha-overview-metric-card is-${item.tone}`}>
-            <div className="soha-overview-metric-card-head">
-              <div className="soha-overview-metric-copy">
-                <Text className="soha-overview-metric-label">{item.label}</Text>
-                <Statistic value={item.value} />
-              </div>
-              <span className="soha-overview-metric-icon">{item.icon}</span>
-            </div>
-            <Text className="soha-overview-metric-helper">{item.helper}</Text>
-          </Card>
+          <OverviewMetricCard
+            key={item.key}
+            label={item.label}
+            value={item.value}
+            helper={item.helper}
+            icon={item.icon}
+            tone={item.tone}
+          />
         ))}
       </div>
 
@@ -329,25 +334,22 @@ export function OverviewPage() {
         >
           {summary ? (
             <div className="soha-overview-alert-stack">
-              <div className="soha-overview-section-bar">
-                <div>
-                  <Text strong>{localeCode === 'zh_CN' ? '告警分布' : 'Alert Distribution'}</Text>
-                  <div className="soha-overview-inline-caption">
-                    {summary.firingCount > 0
-                      ? (localeCode === 'zh_CN' ? '当前仍有活跃告警，优先看 Critical 和 Warning。' : 'Active alerts remain. Start with Critical and Warning.')
-                      : (localeCode === 'zh_CN' ? '当前没有活跃告警，保持通道与规则可用。' : 'No active alerts right now. Keep rules and channels healthy.')}
-                  </div>
-                </div>
-                <Button type="text" icon={<ArrowRightOutlined />} onClick={() => navigate('/monitoring-workbench/alerts')}>
-                  {localeCode === 'zh_CN' ? '查看监控工作台' : 'Open Monitoring Workbench'}
-                </Button>
-              </div>
+              <OverviewSectionBar
+                title={localeCode === 'zh_CN' ? '告警分布' : 'Alert Distribution'}
+                description={
+                  summary.firingCount > 0
+                    ? (localeCode === 'zh_CN' ? '当前仍有活跃告警，优先看 Critical 和 Warning。' : 'Active alerts remain. Start with Critical and Warning.')
+                    : (localeCode === 'zh_CN' ? '当前没有活跃告警，保持通道与规则可用。' : 'No active alerts right now. Keep rules and channels healthy.')
+                }
+                extra={
+                  <Button type="text" icon={<ArrowRightOutlined />} onClick={() => navigate('/monitoring-workbench/alerts')}>
+                    {localeCode === 'zh_CN' ? '查看监控工作台' : 'Open Monitoring Workbench'}
+                  </Button>
+                }
+              />
               <div className="soha-overview-chip-grid">
                 {alertChips.map((item) => (
-                  <div key={item.key} className={`soha-overview-chip is-${item.tone}`}>
-                    <span className="soha-overview-chip-label">{item.label}</span>
-                    <span className="soha-overview-chip-value">{item.value}</span>
-                  </div>
+                  <OverviewChip key={item.key} label={item.label} value={item.value} tone={item.tone} />
                 ))}
               </div>
             </div>
@@ -414,39 +416,34 @@ export function OverviewPage() {
         ) : (
           <div className="soha-overview-runtime-layout">
             <div className="soha-overview-runtime-main">
-              <div className="soha-overview-section-bar">
-                <div>
-                  <div className="soha-overview-section-kicker">
-                    {localeCode === 'zh_CN' ? '运行面信号' : 'Runtime Signal'}
+              <OverviewSectionBar
+                kicker={localeCode === 'zh_CN' ? '运行面信号' : 'Runtime Signal'}
+                title={currentCluster?.name || (localeCode === 'zh_CN' ? '当前集群' : 'Current Cluster')}
+                extra={
+                  <div className="soha-overview-meta-pills">
+                    <span className="soha-overview-pill">
+                      <span className="soha-overview-pill-label">{localeCode === 'zh_CN' ? '数据来源' : 'Source'}</span>
+                      <span className="soha-overview-pill-value">{formatWorkloadSource(workloadOverview.source, localeCode)}</span>
+                    </span>
+                    <span className="soha-overview-pill">
+                      <span className="soha-overview-pill-label">{localeCode === 'zh_CN' ? '更新时间' : 'Updated'}</span>
+                      <span className="soha-overview-pill-value">{updatedAt}</span>
+                    </span>
                   </div>
-                  <Text strong className="soha-overview-runtime-scope">
-                    {currentCluster?.name || (localeCode === 'zh_CN' ? '当前集群' : 'Current Cluster')}
-                  </Text>
-                </div>
-                <div className="soha-overview-meta-pills">
-                  <span className="soha-overview-pill">
-                    <span className="soha-overview-pill-label">{localeCode === 'zh_CN' ? '数据来源' : 'Source'}</span>
-                    <span className="soha-overview-pill-value">{formatWorkloadSource(workloadOverview.source, localeCode)}</span>
-                  </span>
-                  <span className="soha-overview-pill">
-                    <span className="soha-overview-pill-label">{localeCode === 'zh_CN' ? '更新时间' : 'Updated'}</span>
-                    <span className="soha-overview-pill-value">{updatedAt}</span>
-                  </span>
-                </div>
-              </div>
+                }
+              />
 
               <div className="soha-overview-pod-grid">
                 {podStats.map((item) => (
-                  <Card key={item.key} size="small" variant="outlined" className={`soha-overview-pod-card is-${item.tone}`}>
-                    <div className="soha-overview-pod-card-head">
-                      <div className="soha-overview-metric-copy">
-                        <Text className="soha-overview-metric-label">{item.label}</Text>
-                        <Statistic value={item.value} />
-                      </div>
-                      <span className="soha-overview-metric-icon">{item.icon}</span>
-                    </div>
-                    <Text className="soha-overview-metric-helper">{item.helper}</Text>
-                  </Card>
+                  <OverviewMetricCard
+                    key={item.key}
+                    label={item.label}
+                    value={item.value}
+                    helper={item.helper}
+                    icon={item.icon}
+                    tone={item.tone}
+                    variant="pod"
+                  />
                 ))}
               </div>
 

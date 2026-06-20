@@ -81,7 +81,7 @@ function pickStatusColor(value?: null | string): TagColor {
 
 export function StatusTag({ value }: { value?: null | string }) {
   const label = (value || '').trim() || '-'
-  return <Tag color={resolveAntdTagColor(pickStatusColor(value))}>{label}</Tag>
+  return <Tag className="soha-status-tag" color={resolveAntdTagColor(pickStatusColor(value))}>{label}</Tag>
 }
 
 export function BooleanTag({
@@ -97,5 +97,5 @@ export function BooleanTag({
   trueColor?: TagColor
   falseColor?: TagColor
 }) {
-  return <Tag color={resolveAntdTagColor(value ? trueColor : falseColor)}>{value ? trueLabel : falseLabel}</Tag>
+  return <Tag className="soha-status-tag" color={resolveAntdTagColor(value ? trueColor : falseColor)}>{value ? trueLabel : falseLabel}</Tag>
 }

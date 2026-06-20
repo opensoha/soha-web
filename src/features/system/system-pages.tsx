@@ -29,11 +29,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import { useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
+import { ManagementDataPage } from '@/components/management-data-page'
 import {
+  ManagementKeywordField,
   ManagementIconButton,
+  ManagementQueryActions,
   ManagementQueryField,
-  ManagementQueryPanel,
   ManagementTableToolbar,
+  useManagementTextFilter,
 } from '@/components/management-list'
 import { hasPermission, invalidateAuthz, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
 import { MENU_ICON_OPTIONS, isKnownMenuIcon, resolveMenuIcon } from '@/features/system/menu-icons'
@@ -179,22 +182,18 @@ export function OnlineUsersPage() {
     })),
     [sessions],
   )
+  const keywordFilteredSessions = useManagementTextFilter(sessions, searchKeyword, (item: OnlineUser) => [
+    item.userId,
+    item.userName,
+    item.email,
+    item.providerType,
+    item.source,
+    item.sourceIp,
+    item.userAgent,
+  ])
   const filteredSessions = useMemo(() => {
-    const keyword = searchKeyword.trim().toLowerCase()
-    return sessions.filter((item: OnlineUser) => {
-      const matchesProvider = !providerFilter || item.providerType === providerFilter
-      const matchesKeyword = !keyword || [
-        item.userId,
-        item.userName,
-        item.email,
-        item.providerType,
-        item.source,
-        item.sourceIp,
-        item.userAgent,
-      ].some((field) => String(field || '').toLowerCase().includes(keyword))
-      return matchesProvider && matchesKeyword
-    })
-  }, [providerFilter, searchKeyword, sessions])
+    return keywordFilteredSessions.filter((item: OnlineUser) => !providerFilter || item.providerType === providerFilter)
+  }, [keywordFilteredSessions, providerFilter])
   const selectedSessions = useMemo(
     () => filteredSessions.filter((item: OnlineUser) => selectedSessionIds.includes(item.id)),
     [filteredSessions, selectedSessionIds],
@@ -241,52 +240,42 @@ export function OnlineUsersPage() {
   ]
 
   return (
-    <div className="soha-page">
-      <ManagementQueryPanel
-        onFinish={() => undefined}
-        actions={(
+    <ManagementDataPage
+      query={{
+        onFinish: () => undefined,
+        actions: (
+          <ManagementQueryActions
+            disabledReset={!providerFilter && !searchKeyword.trim()}
+            onReset={() => {
+              setProviderFilter('')
+              setSearchKeyword('')
+            }}
+          />
+        ),
+        children: (
           <>
-            <Button
-              autoInsertSpace={false}
-              disabled={!providerFilter && !searchKeyword.trim()}
-              htmlType="button"
-              onClick={() => {
-                setProviderFilter('')
-                setSearchKeyword('')
-              }}
-            >
-              重置
-            </Button>
-            <Button autoInsertSpace={false} htmlType="submit" type="primary">
-              查询
-            </Button>
+            <ManagementQueryField minWidth={160} width={180} label="登录方式">
+              <Select
+                allowClear
+                placeholder="全部方式"
+                value={providerFilter || undefined}
+                onChange={(value) => setProviderFilter(value || '')}
+                options={providerOptions}
+              />
+            </ManagementQueryField>
+            <ManagementKeywordField
+              label="关键字"
+              placeholder="搜索用户 / 邮箱 / IP / 设备"
+              value={searchKeyword}
+              onChange={setSearchKeyword}
+            />
           </>
-        )}
-      >
-        <ManagementQueryField minWidth={160} width={180} label="登录方式">
-          <Select
-            allowClear
-            placeholder="全部方式"
-            value={providerFilter || undefined}
-            onChange={(value) => setProviderFilter(value || '')}
-            options={providerOptions}
-          />
-        </ManagementQueryField>
-        <ManagementQueryField grow minWidth={280} width={360} label="关键字">
-          <Input.Search
-            allowClear
-            placeholder="搜索用户 / 邮箱 / IP / 设备"
-            value={searchKeyword}
-            onChange={(event) => setSearchKeyword(event.target.value)}
-            onSearch={(value) => setSearchKeyword(value)}
-          />
-        </ManagementQueryField>
-      </ManagementQueryPanel>
-      <AdminTable
-        columnSettingIconOnly
-        columnSettingPlacement="header"
-        shellClassName="soha-management-table-shell"
-        headerExtra={canManageOnlineUsers ? (
+        ),
+      }}
+      table={{
+        columnSettingIconOnly: true,
+        columnSettingPlacement: 'header',
+        headerExtra: canManageOnlineUsers ? (
           <ManagementTableToolbar>
             <Button
               size="small"
@@ -299,19 +288,19 @@ export function OnlineUsersPage() {
               {`批量下线 (${selectedSessions.length})`}
             </Button>
           </ManagementTableToolbar>
-        ) : null}
-        columns={columns}
-        dataSource={filteredSessions}
-        rowKey="id"
-        loading={isLoading}
-        pageSize={20}
-        scroll={{ x: 'max-content' }}
-        rowSelection={canManageOnlineUsers ? {
+        ) : null,
+        columns,
+        dataSource: filteredSessions,
+        rowKey: 'id',
+        loading: isLoading,
+        pageSize: 20,
+        scroll: { x: 'max-content' },
+        rowSelection: canManageOnlineUsers ? {
           selectedRowKeys: selectedSessionIds,
           onChange: (selectedRowKeys: React.Key[]) => setSelectedSessionIds(selectedRowKeys.map(String)),
-        } : undefined}
-      />
-    </div>
+        } : undefined,
+      }}
+    />
   )
 }
 
@@ -935,87 +924,82 @@ export function MenusPage() {
   ]
 
   return (
-    <div className="soha-page">
-      <ManagementQueryPanel
-        collapsible
-        onFinish={() => undefined}
-        actions={(
+    <ManagementDataPage
+      query={{
+        collapsible: true,
+        onFinish: () => undefined,
+        actions: (
+          <ManagementQueryActions
+            disabledReset={treeView === 'workbench' && !sectionFilter && !workbenchFilter && enabledFilter === 'all' && visibilityFilter === 'all'}
+            onReset={() => {
+              setTreeView('workbench')
+              setSectionFilter('')
+              setWorkbenchFilter('')
+              setEnabledFilter('all')
+              setVisibilityFilter('all')
+            }}
+          />
+        ),
+        children: (
           <>
-            <Button
-              autoInsertSpace={false}
-              disabled={treeView === 'workbench' && !sectionFilter && !workbenchFilter && enabledFilter === 'all' && visibilityFilter === 'all'}
-              htmlType="button"
-              onClick={() => {
-                setTreeView('workbench')
-                setSectionFilter('')
-                setWorkbenchFilter('')
-                setEnabledFilter('all')
-                setVisibilityFilter('all')
-              }}
-            >
-              重置
-            </Button>
-            <Button autoInsertSpace={false} htmlType="submit" type="primary">
-              查询
-            </Button>
+            <ManagementQueryField label="树视图" minWidth={300} width={340}>
+              <Segmented
+                size="small"
+                value={treeView}
+                onChange={(value) => setTreeView(value as 'workbench' | 'top' | 'all')}
+                options={[
+                  { value: 'workbench', label: '工作台视图' },
+                  { value: 'top', label: '默认看顶级' },
+                  { value: 'all', label: '看全部树' },
+                ]}
+              />
+            </ManagementQueryField>
+            <ManagementQueryField minWidth={180} width={220} label="分组">
+              <Select
+                allowClear
+                placeholder="全部分组"
+                value={sectionFilter || undefined}
+                onChange={(value) => setSectionFilter(value || '')}
+                options={sectionOptions}
+              />
+            </ManagementQueryField>
+            <ManagementQueryField minWidth={180} width={220} label="工作台">
+              <Select
+                allowClear
+                placeholder="全部工作台"
+                value={workbenchFilter || undefined}
+                onChange={(value) => setWorkbenchFilter(value || '')}
+                options={workbenchOptions}
+              />
+            </ManagementQueryField>
+            <ManagementQueryField minWidth={140} width={160} label="状态">
+              <Select
+                value={enabledFilter}
+                onChange={(value) => setEnabledFilter(value as 'all' | 'enabled' | 'disabled')}
+                options={[
+                  { value: 'all', label: '全部状态' },
+                  { value: 'enabled', label: '仅启用' },
+                  { value: 'disabled', label: '仅禁用' },
+                ]}
+              />
+            </ManagementQueryField>
+            <ManagementQueryField minWidth={160} width={180} label="策略">
+              <Select
+                value={visibilityFilter}
+                onChange={(value) => setVisibilityFilter(value as 'all' | 'derived' | 'explicit' | 'unmapped')}
+                options={[
+                  { value: 'all', label: '全部策略' },
+                  { value: 'derived', label: '自动派生' },
+                  { value: 'explicit', label: '显式覆盖' },
+                  { value: 'unmapped', label: '未映射' },
+                ]}
+              />
+            </ManagementQueryField>
           </>
-        )}
-      >
-        <ManagementQueryField label="树视图" minWidth={300} width={340}>
-          <Segmented
-            size="small"
-            value={treeView}
-            onChange={(value) => setTreeView(value as 'workbench' | 'top' | 'all')}
-            options={[
-              { value: 'workbench', label: '工作台视图' },
-              { value: 'top', label: '默认看顶级' },
-              { value: 'all', label: '看全部树' },
-            ]}
-          />
-        </ManagementQueryField>
-        <ManagementQueryField minWidth={180} width={220} label="分组">
-          <Select
-            allowClear
-            placeholder="全部分组"
-            value={sectionFilter || undefined}
-            onChange={(value) => setSectionFilter(value || '')}
-            options={sectionOptions}
-          />
-        </ManagementQueryField>
-        <ManagementQueryField minWidth={180} width={220} label="工作台">
-          <Select
-            allowClear
-            placeholder="全部工作台"
-            value={workbenchFilter || undefined}
-            onChange={(value) => setWorkbenchFilter(value || '')}
-            options={workbenchOptions}
-          />
-        </ManagementQueryField>
-        <ManagementQueryField minWidth={140} width={160} label="状态">
-          <Select
-            value={enabledFilter}
-            onChange={(value) => setEnabledFilter(value as 'all' | 'enabled' | 'disabled')}
-            options={[
-              { value: 'all', label: '全部状态' },
-              { value: 'enabled', label: '仅启用' },
-              { value: 'disabled', label: '仅禁用' },
-            ]}
-          />
-        </ManagementQueryField>
-        <ManagementQueryField minWidth={160} width={180} label="策略">
-          <Select
-            value={visibilityFilter}
-            onChange={(value) => setVisibilityFilter(value as 'all' | 'derived' | 'explicit' | 'unmapped')}
-            options={[
-              { value: 'all', label: '全部策略' },
-              { value: 'derived', label: '自动派生' },
-              { value: 'explicit', label: '显式覆盖' },
-              { value: 'unmapped', label: '未映射' },
-            ]}
-          />
-        </ManagementQueryField>
-      </ManagementQueryPanel>
-      <AdminTable
+        ),
+      }}
+      tableNode={(
+        <AdminTable
         key={treeView}
         columnSettingIconOnly
         columnSettingPlacement="header"
@@ -1039,7 +1023,9 @@ export function MenusPage() {
           rowExpandable: (record: MenuItem) => countDirectMenuChildren(record) > 0,
         }}
       />
-      <Modal
+      )}
+      afterTable={(
+        <Modal
         title={editing ? '编辑菜单' : '新建菜单'}
         open={modalVisible}
         onCancel={() => { setModalVisible(false); setEditing(null); form.resetFields() }}
@@ -1198,7 +1184,8 @@ export function MenusPage() {
           </div>
         </Form>
       </Modal>
-    </div>
+      )}
+    />
   )
 }
 
@@ -1367,117 +1354,110 @@ export function AuditLogsPage() {
   ]
 
   return (
-    <div className="soha-page">
-      <ManagementQueryPanel
-        collapsible
-        onFinish={() => undefined}
-        actions={(
+    <ManagementDataPage
+      query={{
+        collapsible: true,
+        onFinish: () => undefined,
+        actions: (
+          <ManagementQueryActions
+            disabledReset={viewMode === 'all' && !actionFilter && !resultFilter && !metadataKeyFilter && !metadataValueFilter.trim()}
+            onReset={() => {
+              setViewMode('all')
+              setActionFilter('')
+              setResultFilter('')
+              setMetadataKeyFilter('')
+              setMetadataValueFilter('')
+            }}
+          />
+        ),
+        children: (
           <>
-            <Button
-              autoInsertSpace={false}
-              disabled={viewMode === 'all' && !actionFilter && !resultFilter && !metadataKeyFilter && !metadataValueFilter.trim()}
-              htmlType="button"
-              onClick={() => {
-                setViewMode('all')
-                setActionFilter('')
-                setResultFilter('')
-                setMetadataKeyFilter('')
-                setMetadataValueFilter('')
-              }}
-            >
-              重置
-            </Button>
-            <Button autoInsertSpace={false} htmlType="submit" type="primary">
-              查询
-            </Button>
+            <ManagementQueryField label="视图" minWidth={260} width={300}>
+              <Segmented
+                size="small"
+                value={viewMode}
+                onChange={(value) => setViewMode(value as 'all' | 'abnormal' | 'today')}
+                options={[
+                  { value: 'all', label: '全部' },
+                  { value: 'abnormal', label: '异常 / 拒绝' },
+                  { value: 'today', label: '今日' },
+                ]}
+              />
+            </ManagementQueryField>
+            <ManagementQueryField minWidth={140} width={160} label="动作">
+              <Select
+                allowClear
+                placeholder="全部动作"
+                value={actionFilter || undefined}
+                onChange={(value) => setActionFilter(value || '')}
+                options={[
+                  { value: 'list', label: 'list' },
+                  { value: 'view', label: 'view' },
+                  { value: 'create', label: 'create' },
+                  { value: 'update', label: 'update' },
+                  { value: 'delete', label: 'delete' },
+                  { value: 'login', label: 'login' },
+                  { value: 'publish', label: 'publish' },
+                  { value: 'withdraw', label: 'withdraw' },
+                ]}
+              />
+            </ManagementQueryField>
+            <ManagementQueryField minWidth={140} width={160} label="结果">
+              <Select
+                allowClear
+                placeholder="全部结果"
+                value={resultFilter || undefined}
+                onChange={(value) => setResultFilter(value || '')}
+                options={[
+                  { value: 'success', label: 'success' },
+                  { value: 'failure', label: 'failure' },
+                  { value: 'deny', label: 'deny' },
+                ]}
+              />
+            </ManagementQueryField>
+            <ManagementQueryField minWidth={180} width={220} label="字段">
+              <Select
+                allowClear
+                placeholder="usageSnapshot 字段"
+                value={metadataKeyFilter || undefined}
+                onChange={(value) => setMetadataKeyFilter(value || '')}
+                options={[
+                  { value: 'usageSnapshot.templateKind', label: 'templateKind' },
+                  { value: 'usageSnapshot.templateId', label: 'templateId' },
+                  { value: 'usageSnapshot.riskLevel', label: 'riskLevel' },
+                  { value: 'usageSnapshot.before.templateId', label: 'before.templateId' },
+                  { value: 'usageSnapshot.after.templateId', label: 'after.templateId' },
+                  { value: 'usageSnapshot.after.riskLevel', label: 'after.riskLevel' },
+                ]}
+              />
+            </ManagementQueryField>
+            <ManagementQueryField grow minWidth={180} width={220} label="字段值">
+              <Input
+                allowClear
+                placeholder="usageSnapshot 值"
+                value={metadataValueFilter}
+                onChange={(event) => setMetadataValueFilter(event.target.value)}
+              />
+            </ManagementQueryField>
           </>
-        )}
-      >
-        <ManagementQueryField label="视图" minWidth={260} width={300}>
-          <Segmented
-            size="small"
-            value={viewMode}
-            onChange={(value) => setViewMode(value as 'all' | 'abnormal' | 'today')}
-            options={[
-              { value: 'all', label: '全部' },
-              { value: 'abnormal', label: '异常 / 拒绝' },
-              { value: 'today', label: '今日' },
-            ]}
-          />
-        </ManagementQueryField>
-        <ManagementQueryField minWidth={140} width={160} label="动作">
-          <Select
-            allowClear
-            placeholder="全部动作"
-            value={actionFilter || undefined}
-            onChange={(value) => setActionFilter(value || '')}
-            options={[
-              { value: 'list', label: 'list' },
-              { value: 'view', label: 'view' },
-              { value: 'create', label: 'create' },
-              { value: 'update', label: 'update' },
-              { value: 'delete', label: 'delete' },
-              { value: 'login', label: 'login' },
-              { value: 'publish', label: 'publish' },
-              { value: 'withdraw', label: 'withdraw' },
-            ]}
-          />
-        </ManagementQueryField>
-        <ManagementQueryField minWidth={140} width={160} label="结果">
-          <Select
-            allowClear
-            placeholder="全部结果"
-            value={resultFilter || undefined}
-            onChange={(value) => setResultFilter(value || '')}
-            options={[
-              { value: 'success', label: 'success' },
-              { value: 'failure', label: 'failure' },
-              { value: 'deny', label: 'deny' },
-            ]}
-          />
-        </ManagementQueryField>
-        <ManagementQueryField minWidth={180} width={220} label="字段">
-          <Select
-            allowClear
-            placeholder="usageSnapshot 字段"
-            value={metadataKeyFilter || undefined}
-            onChange={(value) => setMetadataKeyFilter(value || '')}
-            options={[
-              { value: 'usageSnapshot.templateKind', label: 'templateKind' },
-              { value: 'usageSnapshot.templateId', label: 'templateId' },
-              { value: 'usageSnapshot.riskLevel', label: 'riskLevel' },
-              { value: 'usageSnapshot.before.templateId', label: 'before.templateId' },
-              { value: 'usageSnapshot.after.templateId', label: 'after.templateId' },
-              { value: 'usageSnapshot.after.riskLevel', label: 'after.riskLevel' },
-            ]}
-          />
-        </ManagementQueryField>
-        <ManagementQueryField grow minWidth={180} width={220} label="字段值">
-          <Input
-            allowClear
-            placeholder="usageSnapshot 值"
-            value={metadataValueFilter}
-            onChange={(event) => setMetadataValueFilter(event.target.value)}
-          />
-        </ManagementQueryField>
-      </ManagementQueryPanel>
-      <AdminTable
-        columnSettingIconOnly
-        columnSettingPlacement="header"
-        shellClassName="soha-management-table-shell"
-        columns={columns}
-        dataSource={filteredLogs}
-        rowKey="id"
-        loading={isLoading}
-        pageSize={50}
-        scroll={{ x: 'max-content' }}
-        onRow={(record: AuditLog) => ({
+        ),
+      }}
+      table={{
+        columnSettingIconOnly: true,
+        columnSettingPlacement: 'header',
+        columns,
+        dataSource: filteredLogs,
+        rowKey: 'id',
+        loading: isLoading,
+        pageSize: 50,
+        scroll: { x: 'max-content' },
+        onRow: (record: AuditLog) => ({
           onClick: () => setActiveRecord(record),
           style: { cursor: 'pointer' },
-        })}
-      />
-      <AuditLogDrawer record={activeRecord} open={Boolean(activeRecord)} onClose={() => setActiveRecord(null)} />
-    </div>
+        }),
+      }}
+      afterTable={<AuditLogDrawer record={activeRecord} open={Boolean(activeRecord)} onClose={() => setActiveRecord(null)} />}
+    />
   )
 }
 
@@ -1657,108 +1637,101 @@ export function OperationLogsPage() {
   ]
 
   return (
-    <div className="soha-page">
-      <ManagementQueryPanel
-        collapsible
-        onFinish={() => undefined}
-        actions={(
+    <ManagementDataPage
+      query={{
+        collapsible: true,
+        onFinish: () => undefined,
+        actions: (
+          <ManagementQueryActions
+            disabledReset={moduleView === 'all' && !operationTypeFilter.trim() && !resultFilter && !metadataKeyFilter && !metadataValueFilter.trim()}
+            onReset={() => {
+              setModuleView('all')
+              setOperationTypeFilter('')
+              setResultFilter('')
+              setMetadataKeyFilter('')
+              setMetadataValueFilter('')
+            }}
+          />
+        ),
+        children: (
           <>
-            <Button
-              autoInsertSpace={false}
-              disabled={moduleView === 'all' && !operationTypeFilter.trim() && !resultFilter && !metadataKeyFilter && !metadataValueFilter.trim()}
-              htmlType="button"
-              onClick={() => {
-                setModuleView('all')
-                setOperationTypeFilter('')
-                setResultFilter('')
-                setMetadataKeyFilter('')
-                setMetadataValueFilter('')
-              }}
-            >
-              重置
-            </Button>
-            <Button autoInsertSpace={false} htmlType="submit" type="primary">
-              查询
-            </Button>
+            <ManagementQueryField label="视图" minWidth={260} width={300}>
+              <Segmented
+                size="small"
+                value={moduleView}
+                onChange={(value) => setModuleView(value as 'all' | 'system' | 'access' | 'platform' | 'virtualization' | 'delivery')}
+                options={[
+                  { value: 'all', label: '全部' },
+                  { value: 'system', label: '系统' },
+                  { value: 'access', label: '访问控制' },
+                  { value: 'platform', label: '平台' },
+                  { value: 'virtualization', label: '虚拟化' },
+                  { value: 'delivery', label: '交付' },
+                ]}
+              />
+            </ManagementQueryField>
+            <ManagementQueryField minWidth={180} width={220} label="操作类型">
+              <Input
+                allowClear
+                placeholder="按操作类型过滤"
+                value={operationTypeFilter}
+                onChange={(event) => setOperationTypeFilter(event.target.value)}
+              />
+            </ManagementQueryField>
+            <ManagementQueryField minWidth={140} width={160} label="结果">
+              <Select
+                allowClear
+                placeholder="全部结果"
+                value={resultFilter || undefined}
+                onChange={(value) => setResultFilter(value || '')}
+                options={[
+                  { value: 'success', label: 'success' },
+                  { value: 'failure', label: 'failure' },
+                ]}
+              />
+            </ManagementQueryField>
+            <ManagementQueryField minWidth={180} width={220} label="字段">
+              <Select
+                allowClear
+                placeholder="usageSnapshot 字段"
+                value={metadataKeyFilter || undefined}
+                onChange={(value) => setMetadataKeyFilter(value || '')}
+                options={[
+                  { value: 'usageSnapshot.templateKind', label: 'templateKind' },
+                  { value: 'usageSnapshot.templateId', label: 'templateId' },
+                  { value: 'usageSnapshot.riskLevel', label: 'riskLevel' },
+                  { value: 'usageSnapshot.before.templateId', label: 'before.templateId' },
+                  { value: 'usageSnapshot.after.templateId', label: 'after.templateId' },
+                  { value: 'usageSnapshot.after.riskLevel', label: 'after.riskLevel' },
+                ]}
+              />
+            </ManagementQueryField>
+            <ManagementQueryField grow minWidth={180} width={220} label="字段值">
+              <Input
+                allowClear
+                placeholder="usageSnapshot 值"
+                value={metadataValueFilter}
+                onChange={(event) => setMetadataValueFilter(event.target.value)}
+              />
+            </ManagementQueryField>
           </>
-        )}
-      >
-        <ManagementQueryField label="视图" minWidth={260} width={300}>
-          <Segmented
-            size="small"
-            value={moduleView}
-            onChange={(value) => setModuleView(value as 'all' | 'system' | 'access' | 'platform' | 'virtualization' | 'delivery')}
-            options={[
-              { value: 'all', label: '全部' },
-              { value: 'system', label: '系统' },
-              { value: 'access', label: '访问控制' },
-              { value: 'platform', label: '平台' },
-              { value: 'virtualization', label: '虚拟化' },
-              { value: 'delivery', label: '交付' },
-            ]}
-          />
-        </ManagementQueryField>
-        <ManagementQueryField minWidth={180} width={220} label="操作类型">
-          <Input
-            allowClear
-            placeholder="按操作类型过滤"
-            value={operationTypeFilter}
-            onChange={(event) => setOperationTypeFilter(event.target.value)}
-          />
-        </ManagementQueryField>
-        <ManagementQueryField minWidth={140} width={160} label="结果">
-          <Select
-            allowClear
-            placeholder="全部结果"
-            value={resultFilter || undefined}
-            onChange={(value) => setResultFilter(value || '')}
-            options={[
-              { value: 'success', label: 'success' },
-              { value: 'failure', label: 'failure' },
-            ]}
-          />
-        </ManagementQueryField>
-        <ManagementQueryField minWidth={180} width={220} label="字段">
-          <Select
-            allowClear
-            placeholder="usageSnapshot 字段"
-            value={metadataKeyFilter || undefined}
-            onChange={(value) => setMetadataKeyFilter(value || '')}
-            options={[
-              { value: 'usageSnapshot.templateKind', label: 'templateKind' },
-              { value: 'usageSnapshot.templateId', label: 'templateId' },
-              { value: 'usageSnapshot.riskLevel', label: 'riskLevel' },
-              { value: 'usageSnapshot.before.templateId', label: 'before.templateId' },
-              { value: 'usageSnapshot.after.templateId', label: 'after.templateId' },
-              { value: 'usageSnapshot.after.riskLevel', label: 'after.riskLevel' },
-            ]}
-          />
-        </ManagementQueryField>
-        <ManagementQueryField grow minWidth={180} width={220} label="字段值">
-          <Input
-            allowClear
-            placeholder="usageSnapshot 值"
-            value={metadataValueFilter}
-            onChange={(event) => setMetadataValueFilter(event.target.value)}
-          />
-        </ManagementQueryField>
-      </ManagementQueryPanel>
-      <AdminTable
-        columnSettingIconOnly
-        columnSettingPlacement="header"
-        shellClassName="soha-management-table-shell"
-        columns={columns}
-        dataSource={filteredLogs}
-        rowKey="id"
-        loading={isLoading}
-        pageSize={50}
-        scroll={{ x: 'max-content' }}
-        onRow={(record: OperationLog) => ({
+        ),
+      }}
+      table={{
+        columnSettingIconOnly: true,
+        columnSettingPlacement: 'header',
+        columns,
+        dataSource: filteredLogs,
+        rowKey: 'id',
+        loading: isLoading,
+        pageSize: 50,
+        scroll: { x: 'max-content' },
+        onRow: (record: OperationLog) => ({
           onClick: () => setActiveRecord(record),
           style: { cursor: 'pointer' },
-        })}
-      />
-      <OperationLogDrawer record={activeRecord} open={Boolean(activeRecord)} onClose={() => setActiveRecord(null)} />
-    </div>
+        }),
+      }}
+      afterTable={<OperationLogDrawer record={activeRecord} open={Boolean(activeRecord)} onClose={() => setActiveRecord(null)} />}
+    />
   )
 }

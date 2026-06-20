@@ -13,10 +13,17 @@ import {
   ReloadOutlined,
   TeamOutlined,
 } from '@ant-design/icons'
-import { App, Button, Card, Form, Input, InputNumber, Modal, Select, Space, Statistic, Switch, Tabs, Tag, Typography } from 'antd'
+import { App, Button, Card, Form, Input, InputNumber, Modal, Select, Space, Switch, Tabs, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
+import {
+  OverviewChip,
+  OverviewMetricCard,
+  OverviewSectionBar,
+  type OverviewChipItem,
+  type OverviewMetricItem,
+} from '@/components/overview-visuals'
 import {
   ManagementDetailHeader,
   ManagementIconButton,
@@ -399,7 +406,7 @@ export function MonitoringPage() {
       icon: <NotificationOutlined />,
       tone: 'default',
     },
-  ]
+  ] satisfies OverviewMetricItem[]
 
   const alertChips = [
     { key: 'total', label: '总数', value: summary?.totalCount ?? 0, tone: 'default' },
@@ -408,14 +415,14 @@ export function MonitoringPage() {
     { key: 'critical', label: 'Critical', value: summary?.criticalCount ?? 0, tone: 'danger' },
     { key: 'warning', label: 'Warning', value: summary?.warningCount ?? 0, tone: 'warning' },
     { key: 'info', label: 'Info', value: summary?.infoCount ?? 0, tone: 'default' },
-  ]
+  ] satisfies OverviewChipItem[]
 
   const operationStats = [
     { key: 'integrations', label: '启用集成', value: enabledIntegrations, helper: `共 ${integrations.length} 个来源`, icon: <LinkOutlined />, tone: 'default' },
     { key: 'policies', label: '启用通知策略', value: enabledPolicies, helper: `共 ${policies.length} 条策略`, icon: <NotificationOutlined />, tone: 'default' },
     { key: 'oncall', label: '启用值班表', value: enabledOncall, helper: `共 ${oncallSchedules.length} 张值班表`, icon: <TeamOutlined />, tone: 'default' },
     { key: 'healing', label: '待处理自愈', value: pendingHealing, helper: `最近 ${healingRuns.length} 条运行`, icon: <ReloadOutlined />, tone: pendingHealing > 0 ? 'warning' : 'default' },
-  ]
+  ] satisfies OverviewChipItem[]
 
   return (
     <div className="soha-page soha-overview-page soha-monitoring-overview-page">
@@ -426,16 +433,15 @@ export function MonitoringPage() {
 
       <div className="soha-overview-metric-grid">
         {overviewStats.map((item) => (
-          <Card key={item.key} size="small" variant="outlined" className={`soha-overview-metric-card is-${item.tone}`} loading={isLoading}>
-            <div className="soha-overview-metric-card-head">
-              <div className="soha-overview-metric-copy">
-                <Text className="soha-overview-metric-label">{item.label}</Text>
-                <Statistic value={item.value} />
-              </div>
-              <span className="soha-overview-metric-icon">{item.icon}</span>
-            </div>
-            <Text className="soha-overview-metric-helper">{item.helper}</Text>
-          </Card>
+          <OverviewMetricCard
+            key={item.key}
+            label={item.label}
+            value={item.value}
+            helper={item.helper}
+            icon={item.icon}
+            tone={item.tone}
+            loading={isLoading}
+          />
         ))}
       </div>
 
@@ -447,23 +453,18 @@ export function MonitoringPage() {
         >
           {summary ? (
             <div className="soha-overview-alert-stack">
-              <div className="soha-overview-section-bar">
-                <div>
-                  <Text strong>告警分布</Text>
-                  <div className="soha-overview-inline-caption">
-                    {summary.firingCount > 0 ? '当前仍有活跃告警，优先处置 Critical 和 Warning。' : '当前没有活跃告警，继续关注规则、通知和值班链路。'}
-                  </div>
-                </div>
-                <Button type="text" icon={<EyeOutlined />} onClick={() => navigate('/monitoring-workbench/alerts')}>
-                  查看活跃告警
-                </Button>
-              </div>
+              <OverviewSectionBar
+                title="告警分布"
+                description={summary.firingCount > 0 ? '当前仍有活跃告警，优先处置 Critical 和 Warning。' : '当前没有活跃告警，继续关注规则、通知和值班链路。'}
+                extra={
+                  <Button type="text" icon={<EyeOutlined />} onClick={() => navigate('/monitoring-workbench/alerts')}>
+                    查看活跃告警
+                  </Button>
+                }
+              />
               <div className="soha-overview-chip-grid soha-monitoring-chip-grid">
                 {alertChips.map((item) => (
-                  <div key={item.key} className={`soha-overview-chip is-${item.tone}`}>
-                    <span className="soha-overview-chip-label">{item.label}</span>
-                    <span className="soha-overview-chip-value">{item.value}</span>
-                  </div>
+                  <OverviewChip key={item.key} label={item.label} value={item.value} tone={item.tone} />
                 ))}
               </div>
             </div>
@@ -475,12 +476,14 @@ export function MonitoringPage() {
         <Card className="soha-overview-panel-card" title="运行链路">
           <div className="soha-monitoring-operation-grid">
             {operationStats.map((item) => (
-              <div key={item.key} className={`soha-overview-chip is-${item.tone}`}>
-                <span className="soha-overview-metric-icon">{item.icon}</span>
-                <span className="soha-overview-chip-label">{item.label}</span>
-                <span className="soha-overview-chip-value">{item.value}</span>
-                <span className="soha-overview-metric-helper">{item.helper}</span>
-              </div>
+              <OverviewChip
+                key={item.key}
+                label={item.label}
+                value={item.value}
+                helper={item.helper}
+                icon={item.icon}
+                tone={item.tone}
+              />
             ))}
           </div>
         </Card>

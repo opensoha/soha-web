@@ -169,11 +169,11 @@ export function VMConsole({ vmId }: { vmId: string }) {
         </Space>
       }
     >
-      {status === 'disconnected' && <Alert type="warning" message="控制台已断开" className="mb-2" />}
-      {status === 'error' && <Alert type="error" message="连接失败" description={errorMessage} className="mb-2" />}
+      {status === 'disconnected' && <Alert type="warning" title="控制台已断开" className="mb-2" />}
+      {status === 'error' && <Alert type="error" title="连接失败" description={errorMessage} className="mb-2" />}
       <div
         ref={containerRef}
-        className="relative w-full overflow-hidden rounded border border-[var(--soha-border)] bg-black"
+        className="relative w-full overflow-hidden rounded border border-[var(--soha-terminal-border)] bg-[var(--soha-terminal-bg)]"
         style={{ height: 'calc(100vh - 320px)', minHeight: 400 }}
       />
     </Card>

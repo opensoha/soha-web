@@ -8,7 +8,9 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   ManagementDetailHeader,
   ManagementIconButton,
+  ManagementSearchableListPane,
   ManagementState,
+  TemplateDesignerShell,
 } from '@/components/management-list'
 import { DeliveryTable } from '@/features/delivery/delivery-table'
 import { BooleanTag, StatusTag } from '@/components/status-tag'
@@ -302,33 +304,33 @@ function applicationBeamGradient(tone: string): BorderBeamGradient {
   switch (tone) {
     case 'cyan':
       return [
-        { color: '#1677ff', percent: 0 },
-        { color: '#22d3ee', percent: 52 },
-        { color: '#67e8f9', percent: 100 },
+        { color: 'var(--soha-primary)', percent: 0 },
+        { color: 'var(--soha-accent-cyan)', percent: 52 },
+        { color: 'var(--soha-info)', percent: 100 },
       ]
     case 'purple':
       return [
-        { color: '#2f54eb', percent: 0 },
-        { color: '#7c3aed', percent: 48 },
-        { color: '#ff85c0', percent: 100 },
+        { color: 'var(--soha-primary)', percent: 0 },
+        { color: 'var(--soha-graph-span)', percent: 48 },
+        { color: 'var(--soha-graph-hypothesis)', percent: 100 },
       ]
     case 'lime':
       return [
-        { color: '#22c55e', percent: 0 },
-        { color: '#a3e635', percent: 54 },
-        { color: '#facc15', percent: 100 },
+        { color: 'var(--soha-success)', percent: 0 },
+        { color: 'var(--soha-accent-teal)', percent: 54 },
+        { color: 'var(--soha-warning)', percent: 100 },
       ]
     case 'volcano':
       return [
-        { color: '#fa541c', percent: 0 },
-        { color: '#ff7875', percent: 46 },
-        { color: '#ffd666', percent: 100 },
+        { color: 'var(--soha-warning)', percent: 0 },
+        { color: 'var(--soha-danger)', percent: 46 },
+        { color: 'var(--soha-primary)', percent: 100 },
       ]
     default:
       return [
-        { color: '#1677ff', percent: 0 },
-        { color: '#36cfc9', percent: 52 },
-        { color: '#95de64', percent: 100 },
+        { color: 'var(--soha-primary)', percent: 0 },
+        { color: 'var(--soha-accent-cyan)', percent: 52 },
+        { color: 'var(--soha-accent-teal)', percent: 100 },
       ]
   }
 }
@@ -384,11 +386,11 @@ function workflowManualApprovalNode(run: WorkflowRun) {
 
 function workflowNodeTimelineColor(status: string) {
   const normalized = status.toLowerCase()
-  if (['completed', 'success', 'approved'].includes(normalized)) return '#52c41a'
-  if (['failed', 'rejected', 'canceled', 'callback_timeout'].includes(normalized)) return '#ff4d4f'
-  if (['waiting_approval', 'pending_approval', 'pending'].includes(normalized)) return '#faad14'
-  if (['running', 'dispatching'].includes(normalized)) return '#1677ff'
-  return '#8c8c8c'
+  if (['completed', 'success', 'approved'].includes(normalized)) return 'var(--soha-success)'
+  if (['failed', 'rejected', 'canceled', 'callback_timeout'].includes(normalized)) return 'var(--soha-danger)'
+  if (['waiting_approval', 'pending_approval', 'pending'].includes(normalized)) return 'var(--soha-warning)'
+  if (['running', 'dispatching'].includes(normalized)) return 'var(--soha-primary)'
+  return 'var(--soha-graph-muted)'
 }
 
 function workflowNodeSummary(node: WorkflowNodeRun) {
@@ -1173,9 +1175,8 @@ export function BuildTemplatesPage() {
     },
   ]
 
-  return (
-    <div className="soha-page soha-build-template-page">
-      <div className="soha-build-template-toolbar">
+  const templateToolbar = (
+    <>
         <Space wrap>
           <Button icon={<PlusOutlined />} type="primary" disabled={!canManage} onClick={handleNewTemplate}>
             新建模板
@@ -1198,37 +1199,25 @@ export function BuildTemplatesPage() {
             刷新
           </Button>
         </Space>
-      </div>
+    </>
+  )
 
-      <div className="soha-build-template-workspace">
-        <aside className="soha-build-template-list">
-          <Input.Search
-            allowClear
-            value={searchText}
-            onChange={(event) => setSearchText(event.target.value)}
-            placeholder="搜索构建模板"
-          />
-          <div className="soha-build-template-list__items">
-            {templatesQuery.isLoading ? <ManagementState bordered={false} compact kind="loading" title="正在加载" /> : null}
-            {!templatesQuery.isLoading && visibleListItems.length === 0 ? (
-              <ManagementState bordered={false} compact kind="empty" title="暂无构建模板" description="新建模板后，可在右侧维护 Dockerfile、命令和变量。" />
-            ) : null}
-            {visibleListItems.map((item) => {
-              const isActive = item.id === selectedTemplateId
-              return (
-                <div
-                  className={`soha-build-template-list__item ${isActive ? 'is-active' : ''}`}
-                  key={item.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => handleSelectListItem(item)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault()
-                      handleSelectListItem(item)
-                    }
-                  }}
-                >
+  const templateList = (
+    <ManagementSearchableListPane
+      activeKey={selectedTemplateId}
+      className="soha-build-template-list"
+      emptyDescription="新建模板后，可在右侧维护 Dockerfile、命令和变量。"
+      emptyTitle="暂无构建模板"
+      getItemKey={(item) => item.id}
+      isLoading={templatesQuery.isLoading}
+      itemClassName="soha-build-template-list__item"
+      items={visibleListItems}
+      searchPlaceholder="搜索构建模板"
+      searchValue={searchText}
+      onItemSelect={handleSelectListItem}
+      onSearchChange={setSearchText}
+      renderItem={(item) => (
+        <>
                   <span className="soha-build-template-list__item-head">
                     <span className="soha-build-template-list__item-main">
                       <strong>{item.name}</strong>
@@ -1265,49 +1254,55 @@ export function BuildTemplatesPage() {
                     {item.isDraft ? <Tag color="gold">草稿</Tag> : null}
                   </span>
                   <Text type="secondary" className="text-xs">{item.updatedAt ? formatDateTime(item.updatedAt) : '尚未保存'}</Text>
-                </div>
-              )
-            })}
-          </div>
-        </aside>
+        </>
+      )}
+    />
+  )
 
-        <main className="soha-build-template-designer">
-          {hasSelection ? (
-            <Form
-              className="soha-build-template-form"
-              disabled={!canManage}
-              form={form}
-              layout="vertical"
-              onValuesChange={(_changedValues, allValues) => {
-                if (suppressFormChangeRef.current) return
-                setFormSnapshot(allValues)
-                setIsDirty(true)
-              }}
-            >
-              <TemplateUsageImpactPanel
-                loading={selectedTemplateUsageQuery.isFetching && !!selectedTemplate}
-                onNavigate={navigate}
-                usage={selectedTemplateUsage}
-              />
-              <Tabs
-                activeKey={activeTabKey}
-                className="soha-build-template-tabs"
-                destroyOnHidden={false}
-                items={designerTabs}
-                onChange={setActiveTabKey}
-              />
-            </Form>
-          ) : (
-            <ManagementState
-              bordered={false}
-              kind="select-scope"
-              title="选择或新建构建模板"
-              description="左侧选择模板后，在右侧维护 Dockerfile、构建命令和变量。"
-            />
-          )}
-        </main>
-      </div>
-    </div>
+  const templateDesigner = hasSelection ? (
+    <Form
+      className="soha-build-template-form"
+      disabled={!canManage}
+      form={form}
+      layout="vertical"
+      onValuesChange={(_changedValues, allValues) => {
+        if (suppressFormChangeRef.current) return
+        setFormSnapshot(allValues)
+        setIsDirty(true)
+      }}
+    >
+      <TemplateUsageImpactPanel
+        loading={selectedTemplateUsageQuery.isFetching && !!selectedTemplate}
+        onNavigate={navigate}
+        usage={selectedTemplateUsage}
+      />
+      <Tabs
+        activeKey={activeTabKey}
+        className="soha-build-template-tabs"
+        destroyOnHidden={false}
+        items={designerTabs}
+        onChange={setActiveTabKey}
+      />
+    </Form>
+  ) : (
+    <ManagementState
+      bordered={false}
+      kind="select-scope"
+      title="选择或新建构建模板"
+      description="左侧选择模板后，在右侧维护 Dockerfile、构建命令和变量。"
+    />
+  )
+
+  return (
+    <TemplateDesignerShell
+      className="soha-page soha-build-template-page"
+      designer={templateDesigner}
+      designerClassName="soha-build-template-designer"
+      list={templateList}
+      toolbar={templateToolbar}
+      toolbarClassName="soha-build-template-toolbar"
+      workspaceClassName="soha-build-template-workspace"
+    />
   )
 }
 

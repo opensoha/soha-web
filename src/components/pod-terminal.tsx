@@ -8,6 +8,7 @@ import { ManagementState } from '@/components/management-list'
 import './resource-operation-panels.css'
 import { buildSameOriginStreamURL, withStreamTicket } from '@/features/auth/stream-ticket'
 import { useI18n } from '@/i18n'
+import { readTerminalThemeColors } from '@/theme/app-theme'
 
 const { Text } = Typography
 
@@ -123,9 +124,7 @@ export function PodTerminal({
       fontSize: 13,
       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace',
       theme: {
-        background: '#0b1220',
-        foreground: '#e5edf5',
-        cursor: '#4cbbff',
+        ...readTerminalThemeColors(),
       },
       convertEol: false,
       scrollback: 3000,

@@ -37,7 +37,7 @@ import {
 } from 'antd'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
-import { ManagementDetailHeader, ManagementIconButton, ManagementState, ManagementTableToolbar } from '@/components/management-list'
+import { ManagementDetailHeader, ManagementIconButton, ManagementState, ManagementTableToolbar, ManagementToolbarSearch, useManagementTextFilter } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
 import { api } from '@/services/api-client'
@@ -399,12 +399,6 @@ function isPendingApproval(record: ApprovalRequest) {
   return record.status === 'pending'
 }
 
-function recordMatchesText(values: Array<unknown>, filter: string) {
-  const needle = filter.trim().toLowerCase()
-  if (!needle) return true
-  return values.some((value) => String(value ?? '').toLowerCase().includes(needle))
-}
-
 function ScopeFields() {
   return (
     <>
@@ -634,11 +628,11 @@ export function AIGatewayPage() {
   const auditLogs = auditQuery.data?.data ?? []
   const approvalRequests = approvalsQuery.data?.data ?? []
   const governanceStatus = governanceQuery.data?.data
-  const filteredClients = useMemo(() => clients.filter((item) => recordMatchesText([item.id, item.name, item.kind, item.status], clientFilter)), [clientFilter, clients])
-  const filteredPersonalTokens = useMemo(() => personalTokens.filter((item) => recordMatchesText([item.id, item.name, item.userId, item.tokenPrefix, ...(item.permissionKeys ?? []), ...(item.scopes ?? [])], tokenFilter)), [personalTokens, tokenFilter])
-  const filteredServiceAccountTokens = useMemo(() => serviceAccountTokens.filter((item) => recordMatchesText([item.id, item.name, item.serviceAccountId, item.tokenPrefix, ...(item.permissionKeys ?? []), ...(item.scopes ?? [])], serviceTokenFilter)), [serviceAccountTokens, serviceTokenFilter])
-  const filteredPolicies = useMemo(() => policies.filter((item) => recordMatchesText([item.id, item.name, item.subjectType, item.subjectId, item.aiClientId, ...(item.toolPatterns ?? []), ...(item.skillIds ?? [])], policyFilter)), [policies, policyFilter])
-  const filteredGrants = useMemo(() => grants.filter((item) => recordMatchesText([item.id, item.subjectType, item.subjectId, item.aiClientId, item.toolName], grantFilter)), [grantFilter, grants])
+  const filteredClients = useManagementTextFilter(clients, clientFilter, (item) => [item.id, item.name, item.kind, item.status])
+  const filteredPersonalTokens = useManagementTextFilter(personalTokens, tokenFilter, (item) => [item.id, item.name, item.userId, item.tokenPrefix, ...(item.permissionKeys ?? []), ...(item.scopes ?? [])])
+  const filteredServiceAccountTokens = useManagementTextFilter(serviceAccountTokens, serviceTokenFilter, (item) => [item.id, item.name, item.serviceAccountId, item.tokenPrefix, ...(item.permissionKeys ?? []), ...(item.scopes ?? [])])
+  const filteredPolicies = useManagementTextFilter(policies, policyFilter, (item) => [item.id, item.name, item.subjectType, item.subjectId, item.aiClientId, ...(item.toolPatterns ?? []), ...(item.skillIds ?? [])])
+  const filteredGrants = useManagementTextFilter(grants, grantFilter, (item) => [item.id, item.subjectType, item.subjectId, item.aiClientId, item.toolName])
 
   useEffect(() => {
     if (!drawer) {
@@ -1401,7 +1395,7 @@ export function AIGatewayPage() {
                   headerExtra={(
                     <ManagementTableToolbar>
                       <Button type="primary" size="small" icon={<PlusOutlined />} disabled={!canManage} onClick={() => setDrawer({ kind: 'ai-client' })}>新增 client</Button>
-                      <Input allowClear size="small" style={{ width: 220 }} placeholder="过滤 client" value={clientFilter} onChange={(event) => setClientFilter(event.target.value)} />
+                      <ManagementToolbarSearch placeholder="过滤 client" value={clientFilter} onChange={setClientFilter} />
                     </ManagementTableToolbar>
                   )}
                 />
@@ -1425,7 +1419,7 @@ export function AIGatewayPage() {
                   headerExtra={(
                     <ManagementTableToolbar>
                       <Button type="primary" size="small" icon={<PlusOutlined />} disabled={!canInvoke} onClick={() => setDrawer({ kind: 'personal-token' })}>生成我的 key</Button>
-                      <Input allowClear size="small" style={{ width: 260 }} placeholder="过滤 key / owner" value={tokenFilter} onChange={(event) => setTokenFilter(event.target.value)} />
+                      <ManagementToolbarSearch placeholder="过滤 key / owner" value={tokenFilter} onChange={setTokenFilter} />
                     </ManagementTableToolbar>
                   )}
                 />
@@ -1467,7 +1461,7 @@ export function AIGatewayPage() {
                     headerExtra={(
                       <ManagementTableToolbar>
                         <Button size="small" danger icon={<StopOutlined />} disabled={!canManage} onClick={() => setDrawer({ kind: 'service-token-revoke' })}>吊销服务 token</Button>
-                        <Input allowClear size="small" style={{ width: 260 }} placeholder="过滤 service token" value={serviceTokenFilter} onChange={(event) => setServiceTokenFilter(event.target.value)} />
+                        <ManagementToolbarSearch placeholder="过滤 service token" value={serviceTokenFilter} onChange={setServiceTokenFilter} />
                       </ManagementTableToolbar>
                     )}
                   />
@@ -1480,7 +1474,7 @@ export function AIGatewayPage() {
               children: <AdminTable shellClassName="soha-management-table-shell" columnSettingIconOnly columnSettingPlacement="header" rowKey="id" tableSize="small" columns={grantColumns} dataSource={filteredGrants} loading={grantsQuery.isLoading} scroll={{ x: 1000 }} title="Tool Grants" headerExtra={(
                 <ManagementTableToolbar>
                   <Button type="primary" size="small" icon={<PlusOutlined />} disabled={!canManage} onClick={() => setDrawer({ kind: 'tool-grant' })}>新增 grant</Button>
-                  <Input allowClear size="small" style={{ width: 240 }} placeholder="过滤 grant" value={grantFilter} onChange={(event) => setGrantFilter(event.target.value)} />
+                  <ManagementToolbarSearch placeholder="过滤 grant" value={grantFilter} onChange={setGrantFilter} />
                 </ManagementTableToolbar>
               )} />,
             },
@@ -1490,7 +1484,7 @@ export function AIGatewayPage() {
               children: <AdminTable shellClassName="soha-management-table-shell" columnSettingIconOnly columnSettingPlacement="header" rowKey="id" tableSize="small" columns={policyColumns} dataSource={filteredPolicies} loading={policiesQuery.isLoading} scroll={{ x: 1080 }} title="Access Policies" headerExtra={(
                 <ManagementTableToolbar>
                   <Button type="primary" size="small" icon={<PlusOutlined />} disabled={!canManage} onClick={() => setDrawer({ kind: 'access-policy' })}>新增 policy</Button>
-                  <Input allowClear size="small" style={{ width: 240 }} placeholder="过滤 policy" value={policyFilter} onChange={(event) => setPolicyFilter(event.target.value)} />
+                  <ManagementToolbarSearch placeholder="过滤 policy" value={policyFilter} onChange={setPolicyFilter} />
                 </ManagementTableToolbar>
               )} />,
             },

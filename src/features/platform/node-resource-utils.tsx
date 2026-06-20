@@ -105,9 +105,9 @@ export function formatBytesAsG(value?: string) {
 }
 
 function resolveProgressStroke(percent: number) {
-  if (percent >= 85) return '#d84c45'
-  if (percent >= 60) return '#d97706'
-  return '#22a36a'
+  if (percent >= 85) return 'var(--soha-danger)'
+  if (percent >= 60) return 'var(--soha-warning)'
+  return 'var(--soha-success)'
 }
 
 export function ResourceProgressCell({

@@ -70,8 +70,8 @@
   padding: 10px;
   border-radius: var(--soha-radius);
   overflow: hidden;
-  border: 1px solid rgba(var(--soha-primary-rgb), 0.18);
-  background: #0b1220;
+  border: 1px solid var(--soha-terminal-border);
+  background: var(--soha-terminal-bg);
 }
 
 .soha-terminal-shell-inner {
@@ -85,8 +85,8 @@
   height: clamp(540px, 64vh, 840px);
   border-radius: var(--soha-radius);
   overflow: auto;
-  border: 1px solid rgba(var(--soha-primary-rgb), 0.18);
-  background: #0b1220;
+  border: 1px solid var(--soha-terminal-border);
+  background: var(--soha-terminal-bg);
 }
 
 .soha-log-card.ant-card .ant-card-body {
@@ -119,10 +119,10 @@
   gap: 12px;
   align-items: center;
   padding: 0 12px;
-  color: #e5edf5;
+  color: var(--soha-terminal-fg);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace;
   font-size: 12px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  border-bottom: 1px solid var(--soha-terminal-row-divider);
 }
 
 .soha-log-row-plain {
@@ -135,14 +135,14 @@
   top: 0;
   z-index: 1;
   padding: 8px 12px;
-  color: rgba(226, 232, 240, 0.92);
-  background: rgba(11, 18, 32, 0.92);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  color: color-mix(in srgb, var(--soha-terminal-fg) 92%, transparent);
+  background: var(--soha-terminal-overlay-bg);
+  border-bottom: 1px solid var(--soha-terminal-row-divider);
   font-size: 12px;
 }
 
 .soha-log-row-index {
-  color: rgba(148, 163, 184, 0.88);
+  color: var(--soha-terminal-muted);
 }
 
 .soha-log-row-text {

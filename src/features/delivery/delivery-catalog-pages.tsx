@@ -7,7 +7,9 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   ManagementDetailHeader,
   ManagementIconButton,
+  ManagementSearchableListPane,
   ManagementState,
+  TemplateDesignerShell,
 } from '@/components/management-list'
 import { DeliveryTable } from '@/features/delivery/delivery-table'
 import { DeliveryGatewayReadinessPanel } from '@/features/delivery/delivery-gateway-readiness'
@@ -1386,9 +1388,8 @@ export function WorkflowTemplatesPage() {
     setIsDirty(true)
   }
 
-  return (
-    <div className="soha-page soha-workflow-template-page">
-      <div className="soha-workflow-template-toolbar">
+  const templateToolbar = (
+    <>
         <Space wrap>
           <Button icon={<PlusOutlined />} type="primary" disabled={!canManageWorkflowTemplates} onClick={handleNewTemplate}>
             {localeCode === 'zh_CN' ? '新建模板' : 'New Template'}
@@ -1418,8 +1419,92 @@ export function WorkflowTemplatesPage() {
             {t('common.refresh', 'Refresh')}
           </Button>
         </Space>
-      </div>
+    </>
+  )
 
+  const templateList = (
+    <ManagementSearchableListPane
+      activeKey={selectedTemplateId}
+      className="soha-workflow-template-list"
+      emptyDescription={localeCode === 'zh_CN' ? '暂无模板' : 'No templates'}
+      getItemKey={(template) => template.id}
+      isLoading={isLoading}
+      itemClassName="soha-workflow-template-list__item"
+      items={visibleTemplates}
+      searchPlaceholder={localeCode === 'zh_CN' ? '搜索模板' : 'Search templates'}
+      searchValue={searchText}
+      onItemSelect={handleSelectTemplateListItem}
+      onSearchChange={setSearchText}
+      renderItem={(template) => {
+        const analysis = analyzeReleaseDagDefinition(template.definition)
+        const isActive = template.id === selectedTemplateId
+        const enabledValue = isActive ? templateFormSnapshot.enabled !== false : template.enabled
+        return (
+          <>
+                  <span className="soha-workflow-template-list__item-head">
+                    <span className="soha-workflow-template-list__item-main">
+                      <strong>{template.name}</strong>
+                      <Text type="secondary">{template.key}</Text>
+                    </span>
+                    <span className="soha-workflow-template-list__item-actions" onClick={(event) => event.stopPropagation()}>
+                      <Switch
+                        checked={enabledValue}
+                        disabled={!canManageWorkflowTemplates}
+                        size="small"
+                        onChange={(checked) => handleTemplateEnabledChange(template, checked)}
+                      />
+                      <ManagementIconButton
+                        aria-label={localeCode === 'zh_CN' ? '编辑模板设置' : 'Edit template settings'}
+                        icon={<EditOutlined />}
+                        size="small"
+                        tooltip={localeCode === 'zh_CN' ? '设置' : 'Settings'}
+                        onClick={() => handleOpenTemplateSettings(template)}
+                      />
+                    </span>
+                  </span>
+                  <span className="soha-workflow-template-list__item-meta">
+                    <Tag>{template.category || 'release'}</Tag>
+                    <Tag>{`${analysis.nodeCount} nodes`}</Tag>
+                    {template.id === 'new' ? <Tag color="gold">{localeCode === 'zh_CN' ? '草稿' : 'Draft'}</Tag> : null}
+                  </span>
+                  <Text type="secondary" className="text-xs">{template.updatedAt ? formatDateTime(template.updatedAt) : (localeCode === 'zh_CN' ? '尚未保存' : 'Not saved')}</Text>
+          </>
+        )
+      }}
+    />
+  )
+
+  const templateDesigner = hasSelection ? (
+    <Suspense fallback={<ManagementState kind="loading" title={t('common.loading', 'Loading...')} />}>
+      <ReleaseFlowDagEditor
+        className="soha-workflow-template-dag-editor"
+        height="calc(100vh - 238px)"
+        initialDefinition={editorInitialDefinition}
+        key={selectedTemplateId || 'workflow-template-empty'}
+        layout="palette-right-floating-inspector"
+        onChange={handleEditorChange}
+        variant="embedded"
+      />
+    </Suspense>
+  ) : (
+    <ManagementState
+      bordered={false}
+      kind="select-scope"
+      title={localeCode === 'zh_CN' ? '选择或新建模板' : 'Select or create a template'}
+      description={localeCode === 'zh_CN' ? '左侧选择模板后在此编辑 DAG。' : 'Choose a template from the list to edit its DAG.'}
+    />
+  )
+
+  return (
+    <TemplateDesignerShell
+      className="soha-page soha-workflow-template-page"
+      designer={templateDesigner}
+      designerClassName="soha-workflow-template-designer"
+      list={templateList}
+      toolbar={templateToolbar}
+      toolbarClassName="soha-workflow-template-toolbar"
+      workspaceClassName="soha-workflow-template-workspace"
+    >
       {jsonPreviewVisible && hasSelection ? (
         <pre className="soha-json-block soha-workflow-template-json-panel">{previewDefinition}</pre>
       ) : null}
@@ -1485,93 +1570,6 @@ export function WorkflowTemplatesPage() {
           />
         </Form>
       </Modal>
-
-      <div className="soha-workflow-template-workspace">
-        <aside className="soha-workflow-template-list">
-          <Input.Search
-            allowClear
-            value={searchText}
-            onChange={(event) => setSearchText(event.target.value)}
-            placeholder={localeCode === 'zh_CN' ? '搜索模板' : 'Search templates'}
-          />
-          <div className="soha-workflow-template-list__items">
-            {isLoading ? <ManagementState bordered={false} compact kind="loading" title={t('common.loading', 'Loading...')} /> : null}
-            {!isLoading && visibleTemplates.length === 0 ? (
-              <ManagementState bordered={false} compact kind="empty" description={localeCode === 'zh_CN' ? '暂无模板' : 'No templates'} />
-            ) : null}
-            {visibleTemplates.map((template) => {
-              const analysis = analyzeReleaseDagDefinition(template.definition)
-              const isActive = template.id === selectedTemplateId
-              const enabledValue = isActive ? templateFormSnapshot.enabled !== false : template.enabled
-              return (
-                <div
-                  className={`soha-workflow-template-list__item ${isActive ? 'is-active' : ''}`}
-                  key={template.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => handleSelectTemplateListItem(template)}
-                  onKeyDown={(event) => {
-                    if (event.key !== 'Enter' && event.key !== ' ') return
-                    event.preventDefault()
-                    handleSelectTemplateListItem(template)
-                  }}
-                >
-                  <span className="soha-workflow-template-list__item-head">
-                    <span className="soha-workflow-template-list__item-main">
-                      <strong>{template.name}</strong>
-                      <Text type="secondary">{template.key}</Text>
-                    </span>
-                    <span className="soha-workflow-template-list__item-actions" onClick={(event) => event.stopPropagation()}>
-                      <Switch
-                        checked={enabledValue}
-                        disabled={!canManageWorkflowTemplates}
-                        size="small"
-                        onChange={(checked) => handleTemplateEnabledChange(template, checked)}
-                      />
-                      <ManagementIconButton
-                        aria-label={localeCode === 'zh_CN' ? '编辑模板设置' : 'Edit template settings'}
-                        icon={<EditOutlined />}
-                        size="small"
-                        tooltip={localeCode === 'zh_CN' ? '设置' : 'Settings'}
-                        onClick={() => handleOpenTemplateSettings(template)}
-                      />
-                    </span>
-                  </span>
-                  <span className="soha-workflow-template-list__item-meta">
-                    <Tag>{template.category || 'release'}</Tag>
-                    <Tag>{`${analysis.nodeCount} nodes`}</Tag>
-                    {template.id === 'new' ? <Tag color="gold">{localeCode === 'zh_CN' ? '草稿' : 'Draft'}</Tag> : null}
-                  </span>
-                  <Text type="secondary" className="text-xs">{template.updatedAt ? formatDateTime(template.updatedAt) : (localeCode === 'zh_CN' ? '尚未保存' : 'Not saved')}</Text>
-                </div>
-              )
-            })}
-          </div>
-        </aside>
-
-        <main className="soha-workflow-template-designer">
-          {hasSelection ? (
-            <Suspense fallback={<ManagementState kind="loading" title={t('common.loading', 'Loading...')} />}>
-              <ReleaseFlowDagEditor
-                className="soha-workflow-template-dag-editor"
-                height="calc(100vh - 238px)"
-                initialDefinition={editorInitialDefinition}
-                key={selectedTemplateId || 'workflow-template-empty'}
-                layout="palette-right-floating-inspector"
-                onChange={handleEditorChange}
-                variant="embedded"
-              />
-            </Suspense>
-          ) : (
-            <ManagementState
-              bordered={false}
-              kind="select-scope"
-              title={localeCode === 'zh_CN' ? '选择或新建模板' : 'Select or create a template'}
-              description={localeCode === 'zh_CN' ? '左侧选择模板后在此编辑 DAG。' : 'Choose a template from the list to edit its DAG.'}
-            />
-          )}
-        </main>
-      </div>
-    </div>
+    </TemplateDesignerShell>
   )
 }

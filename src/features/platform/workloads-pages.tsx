@@ -8,8 +8,6 @@ import {
   Tabs,
   Card,
   Spin,
-  Input,
-  Statistic,
   List,
   Descriptions,
   Typography,
@@ -27,20 +25,20 @@ import {
   ClusterOutlined,
   ClockCircleOutlined,
   DeleteOutlined,
-  DownOutlined,
   EditOutlined,
   ReloadOutlined,
   ScheduleOutlined,
-  SearchOutlined,
   UndoOutlined,
-  UpOutlined,
 } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
+import { OverviewMetricCard, type OverviewMetricItem } from '@/components/overview-visuals'
 import {
   ManagementDensityButton,
   ManagementIconButton,
+  ManagementKeywordField,
+  ManagementQueryActions,
   ManagementQueryField,
   ManagementQueryPanel,
   ManagementRefreshButton,
@@ -247,84 +245,57 @@ function WorkloadRefreshButton({
 }
 
 function WorkloadSearchInput({
+  label,
   onChange,
   placeholder,
   value,
-  width = '100%',
+  width,
 }: {
+  label: ReactNode
   onChange: (value: string) => void
   placeholder: string
   value: string
   width?: number | string
 }) {
   return (
-    <Input
-      allowClear
-      className="soha-platform-compact-field soha-workload-search-input"
-      prefix={<SearchOutlined />}
-      size="small"
+    <ManagementKeywordField
+      label={label}
       value={value}
-      variant="filled"
-      onChange={(event) => onChange(event.target.value)}
+      onChange={onChange}
       placeholder={placeholder}
-      style={{ width }}
+      width={width}
+      inputProps={{
+        className: 'soha-platform-compact-field soha-workload-search-input',
+        size: 'small',
+      }}
     />
   )
 }
 
 function WorkloadQueryPanel({
   children,
-  expandable = false,
-  expanded = false,
   hasActiveFilters,
   localeCode,
-  onExpandedChange,
   onReset,
 }: {
   children: ReactNode
-  expandable?: boolean
-  expanded?: boolean
   hasActiveFilters: boolean
   localeCode: 'zh_CN' | 'en_US'
-  onExpandedChange?: (expanded: boolean) => void
   onReset: () => void
 }) {
   return (
     <ManagementQueryPanel
-      expanded={expanded}
+      collapsible
+      lessLabel={localeCode === 'zh_CN' ? '收起' : 'Collapse'}
+      moreLabel={localeCode === 'zh_CN' ? '展开' : 'Expand'}
       onFinish={() => undefined}
       actions={
-        <>
-          <Button
-            autoInsertSpace={false}
-            disabled={!hasActiveFilters}
-            htmlType="button"
-            onClick={onReset}
-          >
-            {localeCode === 'zh_CN' ? '重置' : 'Reset'}
-          </Button>
-          <Button autoInsertSpace={false} htmlType="submit" type="primary">
-            {localeCode === 'zh_CN' ? '查询' : 'Search'}
-          </Button>
-          {expandable ? (
-            <Button
-              autoInsertSpace={false}
-              htmlType="button"
-              icon={expanded ? <UpOutlined /> : <DownOutlined />}
-              iconPlacement="end"
-              type="link"
-              onClick={() => onExpandedChange?.(!expanded)}
-            >
-              {expanded
-                ? localeCode === 'zh_CN'
-                  ? '收起'
-                  : 'Collapse'
-                : localeCode === 'zh_CN'
-                  ? '展开'
-                  : 'Expand'}
-            </Button>
-          ) : null}
-        </>
+        <ManagementQueryActions
+          disabledReset={!hasActiveFilters}
+          onReset={onReset}
+          resetLabel={localeCode === 'zh_CN' ? '重置' : 'Reset'}
+          submitLabel={localeCode === 'zh_CN' ? '查询' : 'Search'}
+        />
       }
     >
       {children}
@@ -504,7 +475,7 @@ export function WorkloadsOverviewPage() {
       icon: <ScheduleOutlined />,
       tone: 'default',
     },
-  ]
+  ] satisfies OverviewMetricItem[]
 
   const eventColumns: TableColumnsType<WorkloadOverviewEvent> = [
     {
@@ -539,21 +510,14 @@ export function WorkloadsOverviewPage() {
     <div className="soha-page soha-overview-page soha-workloads-overview-page">
       <div className="soha-overview-metric-grid soha-workload-overview-metric-grid">
         {stats.map((item) => (
-          <Card
+          <OverviewMetricCard
             key={item.key}
-            size="small"
-            variant="outlined"
-            className={`soha-overview-metric-card is-${item.tone}`}
-          >
-            <div className="soha-overview-metric-card-head">
-              <div className="soha-overview-metric-copy">
-                <Text className="soha-overview-metric-label">{item.label}</Text>
-                <Statistic value={item.value} />
-              </div>
-              <span className="soha-overview-metric-icon">{item.icon}</span>
-            </div>
-            <Text className="soha-overview-metric-helper">{item.helper}</Text>
-          </Card>
+            label={item.label}
+            value={item.value}
+            helper={item.helper}
+            icon={item.icon}
+            tone={item.tone}
+          />
         ))}
       </div>
       <AdminTable
@@ -1252,19 +1216,17 @@ export function WorkloadsDeploymentsPage() {
         setHealthFilter('all')
       }}
     >
-      <ManagementQueryField label={localeCode === 'zh_CN' ? '名称' : 'Name'}>
-        <WorkloadSearchInput
-          value={searchKeyword}
-          onChange={setSearchKeyword}
-          placeholder={localeCode === 'zh_CN' ? '搜索 Deployment 名称' : 'Search deployment name'}
-        />
-      </ManagementQueryField>
+      <WorkloadSearchInput
+        label={localeCode === 'zh_CN' ? '名称' : 'Name'}
+        value={searchKeyword}
+        onChange={setSearchKeyword}
+        placeholder={localeCode === 'zh_CN' ? '搜索 Deployment 名称' : 'Search deployment name'}
+      />
       <ManagementQueryField label={localeCode === 'zh_CN' ? '健康状态' : 'Health'}>
         <Select
           className="soha-platform-compact-field"
           size="small"
           value={healthFilter}
-          variant="filled"
           onChange={(value) => setHealthFilter(String(value || 'all'))}
           options={[
             { value: 'all', label: localeCode === 'zh_CN' ? '全部健康状态' : 'All health states' },
@@ -1965,7 +1927,7 @@ function renderPodRuntimeCell(record: Pod) {
   return (
     <Space size={6} wrap={false} className="soha-pod-table-runtime">
       <StatusTag value={record.phase} />
-      <Tag bordered={false} color={readyHealthy ? 'success' : 'warning'}>
+      <Tag variant="filled" color={readyHealthy ? 'success' : 'warning'}>
         {`Ready ${record.readyContainers || '-'}`}
       </Tag>
     </Space>
@@ -1975,10 +1937,10 @@ function renderPodRuntimeCell(record: Pod) {
 function renderPodResourceSummaryCell(record: Pod, localeCode: 'zh_CN' | 'en_US') {
   return (
     <Space size={6} wrap={false} className="soha-pod-table-resource-summary">
-      <Tag bordered={false} color="processing">
+      <Tag variant="filled" color="processing">
         {`CPU ${formatCpuDisplay(record.cpu)}`}
       </Tag>
-      <Tag bordered={false} color="purple">
+      <Tag variant="filled" color="purple">
         {`${localeCode === 'zh_CN' ? '内存' : 'MEM'} ${formatMemoryDisplay(record.memory)}`}
       </Tag>
     </Space>
@@ -1998,19 +1960,19 @@ function renderPodNameCell(record: Pod, onClick: () => void, localeCode: 'zh_CN'
         </Link>
       </Tooltip>
       <Space size={4} wrap={false} className="soha-pod-table-meta">
-        <Tag bordered={false} color="blue">
+        <Tag variant="filled" color="blue">
           {record.namespace || '-'}
         </Tag>
-        <Tag bordered={false} color="cyan">{`IP ${podIp}`}</Tag>
+        <Tag variant="filled" color="cyan">{`IP ${podIp}`}</Tag>
         <Tooltip
           title={`${localeCode === 'zh_CN' ? '节点' : 'Node'}: ${nodeName}`}
           placement="topLeft"
         >
-          <Tag bordered={false} color="geekblue" className="soha-pod-table-node-tag">
+          <Tag variant="filled" color="geekblue" className="soha-pod-table-node-tag">
             {nodeName}
           </Tag>
         </Tooltip>
-        <Tag bordered={false} className="soha-pod-table-age-tag">
+        <Tag variant="filled" className="soha-pod-table-age-tag">
           {age}
         </Tag>
       </Space>
@@ -2030,7 +1992,6 @@ export function WorkloadsPodsPage() {
   const [restartFilter, setRestartFilter] = useState('all')
   const [pvcFilter, setPvcFilter] = useState('all')
   const [nodeFilter, setNodeFilter] = useState('all')
-  const [queryExpanded, setQueryExpanded] = useState(false)
   const { densityButton, tableSize } = useWorkloadTableDensity(localeCode)
 
   const podsQuery = useQuery({
@@ -2165,7 +2126,7 @@ export function WorkloadsPodsPage() {
       width: 64,
       sorter: podSorter((left, right) => left.restarts - right.restarts),
       render: (value: number) => (
-        <Tag bordered={false} color={value > 0 ? 'warning' : 'default'}>
+        <Tag variant="filled" color={value > 0 ? 'warning' : 'default'}>
           {value}
         </Tag>
       ),
@@ -2225,8 +2186,6 @@ export function WorkloadsPodsPage() {
 
   const podQueryPanel = (
     <WorkloadQueryPanel
-      expandable
-      expanded={queryExpanded}
       hasActiveFilters={
         Boolean(searchKeyword.trim()) ||
         phaseFilter !== 'all' ||
@@ -2235,29 +2194,25 @@ export function WorkloadsPodsPage() {
         nodeFilter !== 'all'
       }
       localeCode={localeCode}
-      onExpandedChange={setQueryExpanded}
       onReset={() => {
         setSearchKeyword('')
         setPhaseFilter('all')
         setRestartFilter('all')
         setPvcFilter('all')
         setNodeFilter('all')
-        setQueryExpanded(false)
       }}
     >
-      <ManagementQueryField label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}>
-        <WorkloadSearchInput
-          value={searchKeyword}
-          onChange={setSearchKeyword}
-          placeholder={localeCode === 'zh_CN' ? '搜索 Pod / Node / IP' : 'Search pod / node / IP'}
-        />
-      </ManagementQueryField>
+      <WorkloadSearchInput
+        label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}
+        value={searchKeyword}
+        onChange={setSearchKeyword}
+        placeholder={localeCode === 'zh_CN' ? '搜索 Pod / Node / IP' : 'Search pod / node / IP'}
+      />
       <ManagementQueryField label={localeCode === 'zh_CN' ? '状态' : 'Phase'}>
         <Select
           className="soha-platform-compact-field"
           size="small"
           value={phaseFilter}
-          variant="filled"
           onChange={(value) => setPhaseFilter(String(value || 'all'))}
           options={[
             { value: 'all', label: localeCode === 'zh_CN' ? '全部状态' : 'All phases' },
@@ -2269,66 +2224,59 @@ export function WorkloadsPodsPage() {
           ]}
         />
       </ManagementQueryField>
-      {queryExpanded ? (
-        <>
-          <ManagementQueryField label={localeCode === 'zh_CN' ? '重启' : 'Restarts'}>
-            <Select
-              className="soha-platform-compact-field"
-              size="small"
-              value={restartFilter}
-              variant="filled"
-              onChange={(value) => setRestartFilter(String(value || 'all'))}
-              options={[
-                {
-                  value: 'all',
-                  label: localeCode === 'zh_CN' ? '全部重启状态' : 'All restart states',
-                },
-                {
-                  value: 'restarting',
-                  label: localeCode === 'zh_CN' ? '仅有重启' : 'Restarted only',
-                },
-                { value: 'clean', label: localeCode === 'zh_CN' ? '仅无重启' : 'No restarts' },
-              ]}
-            />
-          </ManagementQueryField>
-          <ManagementQueryField label={localeCode === 'zh_CN' ? '存储' : 'Storage'}>
-            <Select
-              className="soha-platform-compact-field"
-              size="small"
-              value={pvcFilter}
-              variant="filled"
-              onChange={(value) => setPvcFilter(String(value || 'all'))}
-              options={[
-                {
-                  value: 'all',
-                  label: localeCode === 'zh_CN' ? '全部存储状态' : 'All storage states',
-                },
-                {
-                  value: 'with-pvc',
-                  label: localeCode === 'zh_CN' ? '仅挂载 PVC' : 'With PVC only',
-                },
-                {
-                  value: 'without-pvc',
-                  label: localeCode === 'zh_CN' ? '仅无 PVC' : 'Without PVC',
-                },
-              ]}
-            />
-          </ManagementQueryField>
-          <ManagementQueryField label={localeCode === 'zh_CN' ? '节点' : 'Node'}>
-            <Select
-              className="soha-platform-compact-field"
-              size="small"
-              value={nodeFilter}
-              variant="filled"
-              onChange={(value) => setNodeFilter(String(value || 'all'))}
-              options={[
-                { value: 'all', label: localeCode === 'zh_CN' ? '全部节点' : 'All nodes' },
-                ...nodeOptions.map((item) => ({ value: item, label: item })),
-              ]}
-            />
-          </ManagementQueryField>
-        </>
-      ) : null}
+      <ManagementQueryField label={localeCode === 'zh_CN' ? '重启' : 'Restarts'}>
+        <Select
+          className="soha-platform-compact-field"
+          size="small"
+          value={restartFilter}
+          onChange={(value) => setRestartFilter(String(value || 'all'))}
+          options={[
+            {
+              value: 'all',
+              label: localeCode === 'zh_CN' ? '全部重启状态' : 'All restart states',
+            },
+            {
+              value: 'restarting',
+              label: localeCode === 'zh_CN' ? '仅有重启' : 'Restarted only',
+            },
+            { value: 'clean', label: localeCode === 'zh_CN' ? '仅无重启' : 'No restarts' },
+          ]}
+        />
+      </ManagementQueryField>
+      <ManagementQueryField label={localeCode === 'zh_CN' ? '存储' : 'Storage'}>
+        <Select
+          className="soha-platform-compact-field"
+          size="small"
+          value={pvcFilter}
+          onChange={(value) => setPvcFilter(String(value || 'all'))}
+          options={[
+            {
+              value: 'all',
+              label: localeCode === 'zh_CN' ? '全部存储状态' : 'All storage states',
+            },
+            {
+              value: 'with-pvc',
+              label: localeCode === 'zh_CN' ? '仅挂载 PVC' : 'With PVC only',
+            },
+            {
+              value: 'without-pvc',
+              label: localeCode === 'zh_CN' ? '仅无 PVC' : 'Without PVC',
+            },
+          ]}
+        />
+      </ManagementQueryField>
+      <ManagementQueryField label={localeCode === 'zh_CN' ? '节点' : 'Node'}>
+        <Select
+          className="soha-platform-compact-field"
+          size="small"
+          value={nodeFilter}
+          onChange={(value) => setNodeFilter(String(value || 'all'))}
+          options={[
+            { value: 'all', label: localeCode === 'zh_CN' ? '全部节点' : 'All nodes' },
+            ...nodeOptions.map((item) => ({ value: item, label: item })),
+          ]}
+        />
+      </ManagementQueryField>
     </WorkloadQueryPanel>
   )
 
@@ -3054,17 +3002,16 @@ export function WorkloadsStatefulSetsPage() {
       localeCode={localeCode}
       onReset={() => setSearchKeyword('')}
     >
-      <ManagementQueryField label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}>
-        <WorkloadSearchInput
-          value={searchKeyword}
-          onChange={setSearchKeyword}
-          placeholder={
-            localeCode === 'zh_CN'
-              ? '搜索 StatefulSet / Namespace / Service'
-              : 'Search stateful set / namespace / service'
-          }
-        />
-      </ManagementQueryField>
+      <WorkloadSearchInput
+        label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}
+        value={searchKeyword}
+        onChange={setSearchKeyword}
+        placeholder={
+          localeCode === 'zh_CN'
+            ? '搜索 StatefulSet / Namespace / Service'
+            : 'Search stateful set / namespace / service'
+        }
+      />
     </WorkloadQueryPanel>
   )
 
@@ -3189,15 +3136,14 @@ export function WorkloadsDaemonSetsPage() {
       localeCode={localeCode}
       onReset={() => setSearchKeyword('')}
     >
-      <ManagementQueryField label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}>
-        <WorkloadSearchInput
-          value={searchKeyword}
-          onChange={setSearchKeyword}
-          placeholder={
-            localeCode === 'zh_CN' ? '搜索 DaemonSet / Namespace' : 'Search daemon set / namespace'
-          }
-        />
-      </ManagementQueryField>
+      <WorkloadSearchInput
+        label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}
+        value={searchKeyword}
+        onChange={setSearchKeyword}
+        placeholder={
+          localeCode === 'zh_CN' ? '搜索 DaemonSet / Namespace' : 'Search daemon set / namespace'
+        }
+      />
     </WorkloadQueryPanel>
   )
 
@@ -3324,15 +3270,14 @@ export function WorkloadsJobsPage() {
       localeCode={localeCode}
       onReset={() => setSearchKeyword('')}
     >
-      <ManagementQueryField label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}>
-        <WorkloadSearchInput
-          value={searchKeyword}
-          onChange={setSearchKeyword}
-          placeholder={
-            localeCode === 'zh_CN' ? '搜索 Job / Namespace / Mode' : 'Search job / namespace / mode'
-          }
-        />
-      </ManagementQueryField>
+      <WorkloadSearchInput
+        label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}
+        value={searchKeyword}
+        onChange={setSearchKeyword}
+        placeholder={
+          localeCode === 'zh_CN' ? '搜索 Job / Namespace / Mode' : 'Search job / namespace / mode'
+        }
+      />
     </WorkloadQueryPanel>
   )
 
@@ -3473,17 +3418,16 @@ export function WorkloadsCronJobsPage() {
       localeCode={localeCode}
       onReset={() => setSearchKeyword('')}
     >
-      <ManagementQueryField label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}>
-        <WorkloadSearchInput
-          value={searchKeyword}
-          onChange={setSearchKeyword}
-          placeholder={
-            localeCode === 'zh_CN'
-              ? '搜索 CronJob / Namespace / Schedule'
-              : 'Search cron job / namespace / schedule'
-          }
-        />
-      </ManagementQueryField>
+      <WorkloadSearchInput
+        label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}
+        value={searchKeyword}
+        onChange={setSearchKeyword}
+        placeholder={
+          localeCode === 'zh_CN'
+            ? '搜索 CronJob / Namespace / Schedule'
+            : 'Search cron job / namespace / schedule'
+        }
+      />
     </WorkloadQueryPanel>
   )
 

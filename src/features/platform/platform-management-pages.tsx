@@ -16,14 +16,14 @@ import {
   Tooltip,
   Typography,
 } from 'antd'
-import { DeleteOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { AdminTable } from '@/components/admin-table'
+import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementDensityButton,
-  ManagementQueryField,
-  ManagementQueryPanel,
+  ManagementKeywordField,
+  ManagementQueryActions,
   ManagementState,
   ManagementRefreshButton,
   ManagementTableToolbar,
@@ -196,6 +196,7 @@ function useScopedResourceQuery<T>(resourcePath: string) {
 }
 
 function ResourceTableCard<T extends Record<string, any>>({
+  children,
   columns,
   headerExtra,
   emptyDescription,
@@ -206,6 +207,7 @@ function ResourceTableCard<T extends Record<string, any>>({
   title,
   actionConfig,
 }: {
+  children?: ReactNode
   columns: TableColumnsType<T>
   headerExtra?: ReactNode
   emptyDescription: LocalizedCopy
@@ -254,48 +256,38 @@ function ResourceTableCard<T extends Record<string, any>>({
   const densityLabel = localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'
 
   return (
-    <>
-      {actionConfig ? modalNode : null}
-      <ManagementQueryPanel
-        onFinish={() => undefined}
-        actions={
-          <>
-            <Button
-              autoInsertSpace={false}
-              disabled={!searchKeyword.trim()}
-              htmlType="button"
-              onClick={() => setSearchKeyword('')}
-            >
-              {localeCode === 'zh_CN' ? '重置' : 'Reset'}
-            </Button>
-            <Button autoInsertSpace={false} htmlType="submit" type="primary">
-              {localeCode === 'zh_CN' ? '查询' : 'Search'}
-            </Button>
-          </>
-        }
-      >
-        <ManagementQueryField label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}>
-          <Input
-            allowClear
-            className="soha-platform-compact-field soha-workload-search-input"
-            prefix={<SearchOutlined />}
-            size="small"
+    <ManagementDataPage
+      query={{
+        onFinish: () => undefined,
+        actions: (
+          <ManagementQueryActions
+            disabledReset={!searchKeyword.trim()}
+            resetLabel={localeCode === 'zh_CN' ? '重置' : 'Reset'}
+            submitLabel={localeCode === 'zh_CN' ? '查询' : 'Search'}
+            onReset={() => setSearchKeyword('')}
+          />
+        ),
+        children: (
+          <ManagementKeywordField
+            label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}
             value={searchKeyword}
-            variant="filled"
-            onChange={(event) => setSearchKeyword(event.target.value)}
+            onChange={setSearchKeyword}
             placeholder={localize(
               localeCode,
               searchPlaceholder ?? buildResourceSearchPlaceholder(title),
             )}
+            inputProps={{
+              className: 'soha-platform-compact-field soha-workload-search-input',
+              size: 'small',
+            }}
           />
-        </ManagementQueryField>
-      </ManagementQueryPanel>
-      <AdminTable
-        className="soha-platform-table"
-        columnSettingIconOnly
-        columnSettingPlacement="header"
-        shellClassName="soha-management-table-shell"
-        headerExtra={
+        ),
+      }}
+      table={{
+        className: 'soha-platform-table',
+        columnSettingIconOnly: true,
+        columnSettingPlacement: 'header',
+        headerExtra: (
           <ManagementTableToolbar>
             {headerExtra}
             <ManagementDensityButton
@@ -316,29 +308,32 @@ function ResourceTableCard<T extends Record<string, any>>({
               }}
             />
           </ManagementTableToolbar>
-        }
-        columns={effectiveColumns}
-        dataSource={clusterId ? filteredItems : []}
-        rowKey={rowKey}
-        loading={query.isLoading}
-        paginationSummary={
+        ),
+        columns: effectiveColumns,
+        dataSource: clusterId ? filteredItems : [],
+        rowKey,
+        loading: query.isLoading,
+        paginationSummary: (
           <Text className="soha-workload-table-summary" type="secondary">
             {localeCode === 'zh_CN'
               ? `当前 ${filteredItems.length} / ${rawItems.length} 条`
               : `${filteredItems.length} / ${rawItems.length} items`}
           </Text>
-        }
-        empty={
+        ),
+        empty: (
           <PlatformTableState
             description={effectiveEmptyDescription}
             kind={buildTableStateKind(clusterId, effectiveEmptyDescription)}
           />
-        }
-        pageSize={10}
-        tableSize={tableSize}
-        scroll={scroll ?? { x: 'max-content' }}
-      />
-    </>
+        ),
+        pageSize: 10,
+        tableSize,
+        scroll: scroll ?? { x: 'max-content' },
+      }}
+    >
+      {actionConfig ? modalNode : null}
+      {children}
+    </ManagementDataPage>
   )
 }
 
@@ -365,17 +360,15 @@ function ResourceListPage<T extends Record<string, any>>({
   }
 }) {
   return (
-    <div className="soha-page">
-      <ResourceTableCard<T>
-        columns={columns}
-        headerExtra={headerExtra}
-        resourcePath={resourcePath}
-        rowKey={rowKey}
-        title={title}
-        emptyDescription={emptyDescription}
-        actionConfig={actionConfig}
-      />
-    </div>
+    <ResourceTableCard<T>
+      columns={columns}
+      headerExtra={headerExtra}
+      resourcePath={resourcePath}
+      rowKey={rowKey}
+      title={title}
+      emptyDescription={emptyDescription}
+      actionConfig={actionConfig}
+    />
   )
 }
 
@@ -498,44 +491,10 @@ function WorkloadReplicaListPage<T extends { allowedActions?: string[] }>({
   })
   const effectiveColumns = shouldShowActions ? [...columns, actionColumn] : columns
   const densityLabel = localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'
-  const replicaQueryPanel = (
-    <ManagementQueryPanel
-      onFinish={() => undefined}
-      actions={
-        <>
-          <Button
-            autoInsertSpace={false}
-            disabled={!searchKeyword.trim()}
-            htmlType="button"
-            onClick={() => setSearchKeyword('')}
-          >
-            {localeCode === 'zh_CN' ? '重置' : 'Reset'}
-          </Button>
-          <Button autoInsertSpace={false} htmlType="submit" type="primary">
-            {localeCode === 'zh_CN' ? '查询' : 'Search'}
-          </Button>
-        </>
-      }
-    >
-      <ManagementQueryField label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}>
-        <Input
-          allowClear
-          className="soha-platform-compact-field soha-workload-search-input"
-          prefix={<SearchOutlined />}
-          size="small"
-          value={searchKeyword}
-          variant="filled"
-          onChange={(event) => setSearchKeyword(event.target.value)}
-          placeholder={localize(localeCode, searchPlaceholder)}
-        />
-      </ManagementQueryField>
-    </ManagementQueryPanel>
-  )
 
   return (
-    <div className="soha-page">
-      {shouldShowActions ? modalNode : null}
-      {query.isError ? (
+    <ManagementDataPage
+      beforeQuery={query.isError ? (
         <ManagementState
           className="mb-3"
           description={buildWorkloadReplicaErrorDescription(localeCode, query.error)}
@@ -545,27 +504,48 @@ function WorkloadReplicaListPage<T extends { allowedActions?: string[] }>({
           }
         />
       ) : null}
-      {replicaQueryPanel}
-      <AdminTable
-        className="soha-workload-replica-table soha-platform-table"
-        columnSettingIconOnly
-        columnSettingPlacement="header"
-        shellClassName="soha-management-table-shell"
-        columns={effectiveColumns}
-        dataSource={clusterId ? filteredItems : []}
-        rowKey={rowKey}
-        loading={query.isLoading}
-        paginationSummary={
+      query={{
+        onFinish: () => undefined,
+        actions: (
+          <ManagementQueryActions
+            disabledReset={!searchKeyword.trim()}
+            resetLabel={localeCode === 'zh_CN' ? '重置' : 'Reset'}
+            submitLabel={localeCode === 'zh_CN' ? '查询' : 'Search'}
+            onReset={() => setSearchKeyword('')}
+          />
+        ),
+        children: (
+          <ManagementKeywordField
+            label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}
+            value={searchKeyword}
+            onChange={setSearchKeyword}
+            placeholder={localize(localeCode, searchPlaceholder)}
+            inputProps={{
+              className: 'soha-platform-compact-field soha-workload-search-input',
+              size: 'small',
+            }}
+          />
+        ),
+      }}
+      table={{
+        className: 'soha-workload-replica-table soha-platform-table',
+        columnSettingIconOnly: true,
+        columnSettingPlacement: 'header',
+        columns: effectiveColumns,
+        dataSource: clusterId ? filteredItems : [],
+        rowKey,
+        loading: query.isLoading,
+        paginationSummary: (
           <Text className="soha-workload-table-summary" type="secondary">
             {localeCode === 'zh_CN'
               ? `当前 ${filteredItems.length} / ${rawItems.length} 条`
               : `${filteredItems.length} / ${rawItems.length} items`}
           </Text>
-        }
-        pageSize={10}
-        tableSize={tableSize}
-        scroll={{ x: 'max-content' }}
-        headerExtra={
+        ),
+        pageSize: 10,
+        tableSize,
+        scroll: { x: 'max-content' },
+        headerExtra: (
           <ManagementTableToolbar>
             <ManagementDensityButton
               aria-label={densityLabel}
@@ -585,8 +565,8 @@ function WorkloadReplicaListPage<T extends { allowedActions?: string[] }>({
               }}
             />
           </ManagementTableToolbar>
-        }
-        empty={
+        ),
+        empty: (
           <WorkloadReplicaTableEmpty
             clusterId={clusterId}
             emptyDescription={emptyDescription}
@@ -595,9 +575,11 @@ function WorkloadReplicaListPage<T extends { allowedActions?: string[] }>({
             title={title}
             totalCount={rawItems.length}
           />
-        }
-      />
-    </div>
+        ),
+      }}
+    >
+      {shouldShowActions ? modalNode : null}
+    </ManagementDataPage>
   )
 }
 
@@ -685,90 +667,73 @@ function RBACListPage<T extends { allowedActions?: string[] }>({
   const densityLabel = localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'
 
   return (
-    <div className="soha-page">
-      {query.isError ? (
-        <ManagementState
-          className="mb-3"
-          description={buildRequestErrorDescription(localeCode, query.error)}
-          kind="error"
-          title={buildRBACErrorMessage(localeCode)}
-        />
-      ) : null}
-      {capabilityNotice ? (
-        <Alert
-          showIcon
-          type={yamlApplyCapability.disabled ? 'warning' : 'info'}
-          style={{ marginBottom: 12 }}
-          title={localeCode === 'zh_CN' ? 'YAML 操作能力' : 'YAML operation capability'}
-          description={capabilityNotice}
-        />
-      ) : null}
-      {modalNode}
-      {createConfig ? (
-        <CreateResourceModal
-          visible={createVisible}
-          onClose={() => setCreateVisible(false)}
-          kind={createConfig.kind}
-          resourcePath={resourcePath}
-          defaultTemplate={createConfig.defaultTemplate}
-          invalidationKeys={[['platform-resource', resourcePath]]}
-          namespaceScope={createConfig.namespaceScope}
-        />
-      ) : null}
-      <ManagementQueryPanel
-        onFinish={() => undefined}
-        actions={
-          <>
-            <Button
-              autoInsertSpace={false}
-              disabled={!searchKeyword.trim()}
-              htmlType="button"
-              onClick={() => setSearchKeyword('')}
-            >
-              {localeCode === 'zh_CN' ? '重置' : 'Reset'}
-            </Button>
-            <Button autoInsertSpace={false} htmlType="submit" type="primary">
-              {localeCode === 'zh_CN' ? '查询' : 'Search'}
-            </Button>
-          </>
-        }
-      >
-        <ManagementQueryField label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}>
-          <Input
-            allowClear
-            className="soha-platform-compact-field soha-workload-search-input"
-            prefix={<SearchOutlined />}
-            size="small"
+    <ManagementDataPage
+      beforeQuery={(
+        <>
+          {query.isError ? (
+            <ManagementState
+              className="mb-3"
+              description={buildRequestErrorDescription(localeCode, query.error)}
+              kind="error"
+              title={buildRBACErrorMessage(localeCode)}
+            />
+          ) : null}
+          {capabilityNotice ? (
+            <Alert
+              showIcon
+              type={yamlApplyCapability.disabled ? 'warning' : 'info'}
+              style={{ marginBottom: 12 }}
+              title={localeCode === 'zh_CN' ? 'YAML 操作能力' : 'YAML operation capability'}
+              description={capabilityNotice}
+            />
+          ) : null}
+        </>
+      )}
+      query={{
+        onFinish: () => undefined,
+        actions: (
+          <ManagementQueryActions
+            disabledReset={!searchKeyword.trim()}
+            resetLabel={localeCode === 'zh_CN' ? '重置' : 'Reset'}
+            submitLabel={localeCode === 'zh_CN' ? '查询' : 'Search'}
+            onReset={() => setSearchKeyword('')}
+          />
+        ),
+        children: (
+          <ManagementKeywordField
+            label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}
             value={searchKeyword}
-            variant="filled"
-            onChange={(event) => setSearchKeyword(event.target.value)}
+            onChange={setSearchKeyword}
             placeholder={localize(
               localeCode,
               searchPlaceholder ?? buildRBACSearchPlaceholder(title),
             )}
+            inputProps={{
+              className: 'soha-platform-compact-field soha-workload-search-input',
+              size: 'small',
+            }}
           />
-        </ManagementQueryField>
-      </ManagementQueryPanel>
-      <AdminTable
-        className="soha-rbac-table soha-platform-table"
-        columnSettingIconOnly
-        columnSettingPlacement="header"
-        shellClassName="soha-management-table-shell"
-        columns={effectiveColumns}
-        dataSource={clusterId ? filteredItems : []}
-        rowKey={rowKey}
-        loading={query.isLoading}
-        paginationSummary={
+        ),
+      }}
+      table={{
+        className: 'soha-rbac-table soha-platform-table',
+        columnSettingIconOnly: true,
+        columnSettingPlacement: 'header',
+        columns: effectiveColumns,
+        dataSource: clusterId ? filteredItems : [],
+        rowKey,
+        loading: query.isLoading,
+        paginationSummary: (
           <Text className="soha-workload-table-summary" type="secondary">
             {localeCode === 'zh_CN'
               ? `当前 ${filteredItems.length} / ${rawItems.length} 条`
               : `${filteredItems.length} / ${rawItems.length} items`}
           </Text>
-        }
-        pageSize={10}
-        tableSize={tableSize}
-        scroll={{ x: 'max-content' }}
-        headerExtra={
+        ),
+        pageSize: 10,
+        tableSize,
+        scroll: { x: 'max-content' },
+        headerExtra: (
           <ManagementTableToolbar>
             {createConfig ? (
               <Tooltip title={createDisabled ? createDisabledReason : ''}>
@@ -803,15 +768,28 @@ function RBACListPage<T extends { allowedActions?: string[] }>({
               }}
             />
           </ManagementTableToolbar>
-        }
-        empty={
+        ),
+        empty: (
           <PlatformTableState
             description={effectiveEmptyDescription}
             kind={buildTableStateKind(clusterId, effectiveEmptyDescription)}
           />
-        }
-      />
-    </div>
+        ),
+      }}
+    >
+      {modalNode}
+      {createConfig ? (
+        <CreateResourceModal
+          visible={createVisible}
+          onClose={() => setCreateVisible(false)}
+          kind={createConfig.kind}
+          resourcePath={resourcePath}
+          defaultTemplate={createConfig.defaultTemplate}
+          invalidationKeys={[['platform-resource', resourcePath]]}
+          namespaceScope={createConfig.namespaceScope}
+        />
+      ) : null}
+    </ManagementDataPage>
   )
 }
 
@@ -1254,7 +1232,7 @@ function renderQuotaProgress(record: ResourceQuotaResource) {
                   display: 'flex',
                   justifyContent: 'space-between',
                   fontSize: 11,
-                  color: 'rgba(0, 0, 0, 0.45)',
+                  color: 'var(--soha-text-tertiary)',
                 }}
               >
                 <span
@@ -1438,33 +1416,32 @@ export function ConfigurationConfigMapsPage() {
   const { localeCode } = useI18n()
   const [createVisible, setCreateVisible] = useState(false)
   return (
-    <div className="soha-page">
-      <ResourceTableCard<ConfigMapResource>
-        columns={configMapColumns}
-        headerExtra={
-          <Button
-            autoInsertSpace={false}
-            size="small"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => setCreateVisible(true)}
-          >
-            {localeCode === 'zh_CN' ? '新增' : 'Create'}
-          </Button>
-        }
-        resourcePath="configuration/configmaps"
-        rowKey={(record) => `${record.namespace}/${record.name}`}
-        title={{ zh_CN: 'ConfigMaps', en_US: 'ConfigMaps' }}
-        emptyDescription={{
-          zh_CN: '当前范围没有 ConfigMaps',
-          en_US: 'No configmaps in the current scope',
-        }}
-        actionConfig={{
-          resourceKind: 'ConfigMap',
-          getName: (record) => record.name,
-          getNamespace: (record) => record.namespace,
-        }}
-      />
+    <ResourceTableCard<ConfigMapResource>
+      columns={configMapColumns}
+      headerExtra={
+        <Button
+          autoInsertSpace={false}
+          size="small"
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => setCreateVisible(true)}
+        >
+          {localeCode === 'zh_CN' ? '新增' : 'Create'}
+        </Button>
+      }
+      resourcePath="configuration/configmaps"
+      rowKey={(record) => `${record.namespace}/${record.name}`}
+      title={{ zh_CN: 'ConfigMaps', en_US: 'ConfigMaps' }}
+      emptyDescription={{
+        zh_CN: '当前范围没有 ConfigMaps',
+        en_US: 'No configmaps in the current scope',
+      }}
+      actionConfig={{
+        resourceKind: 'ConfigMap',
+        getName: (record) => record.name,
+        getNamespace: (record) => record.namespace,
+      }}
+    >
       <CreateResourceModal
         visible={createVisible}
         onClose={() => setCreateVisible(false)}
@@ -1473,7 +1450,7 @@ export function ConfigurationConfigMapsPage() {
         defaultTemplate={CONFIGMAP_DEFAULT_TEMPLATE}
         invalidationKeys={[['platform-resource', 'configuration/configmaps']]}
       />
-    </div>
+    </ResourceTableCard>
   )
 }
 
@@ -1481,33 +1458,32 @@ export function ConfigurationSecretsPage() {
   const { localeCode } = useI18n()
   const [createVisible, setCreateVisible] = useState(false)
   return (
-    <div className="soha-page">
-      <ResourceTableCard<SecretResource>
-        columns={secretColumns}
-        headerExtra={
-          <Button
-            autoInsertSpace={false}
-            size="small"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => setCreateVisible(true)}
-          >
-            {localeCode === 'zh_CN' ? '新增' : 'Create'}
-          </Button>
-        }
-        resourcePath="configuration/secrets"
-        rowKey={(record) => `${record.namespace}/${record.name}`}
-        title={{ zh_CN: 'Secrets', en_US: 'Secrets' }}
-        emptyDescription={{
-          zh_CN: '当前范围没有 Secrets',
-          en_US: 'No secrets in the current scope',
-        }}
-        actionConfig={{
-          resourceKind: 'Secret',
-          getName: (record) => record.name,
-          getNamespace: (record) => record.namespace,
-        }}
-      />
+    <ResourceTableCard<SecretResource>
+      columns={secretColumns}
+      headerExtra={
+        <Button
+          autoInsertSpace={false}
+          size="small"
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => setCreateVisible(true)}
+        >
+          {localeCode === 'zh_CN' ? '新增' : 'Create'}
+        </Button>
+      }
+      resourcePath="configuration/secrets"
+      rowKey={(record) => `${record.namespace}/${record.name}`}
+      title={{ zh_CN: 'Secrets', en_US: 'Secrets' }}
+      emptyDescription={{
+        zh_CN: '当前范围没有 Secrets',
+        en_US: 'No secrets in the current scope',
+      }}
+      actionConfig={{
+        resourceKind: 'Secret',
+        getName: (record) => record.name,
+        getNamespace: (record) => record.namespace,
+      }}
+    >
       <CreateResourceModal
         visible={createVisible}
         onClose={() => setCreateVisible(false)}
@@ -1516,7 +1492,7 @@ export function ConfigurationSecretsPage() {
         defaultTemplate={SECRET_DEFAULT_TEMPLATE}
         invalidationKeys={[['platform-resource', 'configuration/secrets']]}
       />
-    </div>
+    </ResourceTableCard>
   )
 }
 
@@ -1885,59 +1861,39 @@ export function NetworkPortForwardPage() {
   ]
 
   return (
-    <div className="soha-page">
-      <ManagementQueryPanel
-        onFinish={() => undefined}
-        actions={
-          <>
-            <Button
-              autoInsertSpace={false}
-              disabled={!searchKeyword.trim()}
-              htmlType="button"
-              onClick={() => setSearchKeyword('')}
-            >
-              {localeCode === 'zh_CN' ? '重置' : 'Reset'}
-            </Button>
-            <Button autoInsertSpace={false} htmlType="submit" type="primary">
-              {localeCode === 'zh_CN' ? '查询' : 'Search'}
-            </Button>
-          </>
-        }
-      >
-        <ManagementQueryField label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}>
-          <Input
-            allowClear
-            className="soha-platform-compact-field soha-workload-search-input"
-            prefix={<SearchOutlined />}
-            size="small"
+    <ManagementDataPage
+      query={{
+        onFinish: () => undefined,
+        actions: (
+          <ManagementQueryActions
+            disabledReset={!searchKeyword.trim()}
+            resetLabel={localeCode === 'zh_CN' ? '重置' : 'Reset'}
+            submitLabel={localeCode === 'zh_CN' ? '查询' : 'Search'}
+            onReset={() => setSearchKeyword('')}
+          />
+        ),
+        children: (
+          <ManagementKeywordField
+            label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}
             value={searchKeyword}
-            variant="filled"
-            onChange={(event) => setSearchKeyword(event.target.value)}
+            onChange={setSearchKeyword}
             placeholder={
               localeCode === 'zh_CN'
                 ? '搜索会话 / Namespace / 目标 / 状态 / 端口'
                 : 'Search session / namespace / target / status / port'
             }
+            inputProps={{
+              className: 'soha-platform-compact-field soha-workload-search-input',
+              size: 'small',
+            }}
           />
-        </ManagementQueryField>
-      </ManagementQueryPanel>
-      {portForwardCapabilityReason ? (
-        <Alert
-          showIcon
-          type={portForwardUnsupported ? 'warning' : 'info'}
-          style={{ marginBottom: 12 }}
-          title={
-            localeCode === 'zh_CN' ? 'Port Forward 连接模式说明' : 'Port forward connection mode'
-          }
-          description={portForwardCapabilityReason}
-        />
-      ) : null}
-      <AdminTable
-        className="soha-platform-table"
-        columnSettingIconOnly
-        columnSettingPlacement="header"
-        shellClassName="soha-management-table-shell"
-        headerExtra={
+        ),
+      }}
+      table={{
+        className: 'soha-platform-table',
+        columnSettingIconOnly: true,
+        columnSettingPlacement: 'header',
+        headerExtra: (
           <ManagementTableToolbar>
             <Tooltip
               title={
@@ -1979,28 +1935,40 @@ export function NetworkPortForwardPage() {
               }}
             />
           </ManagementTableToolbar>
-        }
-        columns={columns}
-        dataSource={clusterId ? filteredItems : []}
-        rowKey="sessionId"
-        loading={query.isLoading}
-        paginationSummary={
+        ),
+        columns,
+        dataSource: clusterId ? filteredItems : [],
+        rowKey: 'sessionId',
+        loading: query.isLoading,
+        paginationSummary: (
           <Text className="soha-workload-table-summary" type="secondary">
             {localeCode === 'zh_CN'
               ? `当前 ${filteredItems.length} / ${rawItems.length} 条`
               : `${filteredItems.length} / ${rawItems.length} items`}
           </Text>
-        }
-        pageSize={10}
-        tableSize={tableSize}
-        scroll={{ x: 'max-content' }}
-        empty={
+        ),
+        pageSize: 10,
+        tableSize,
+        scroll: { x: 'max-content' },
+        empty: (
           <PlatformTableState
             description={effectiveEmpty}
             kind={!clusterId ? 'select-scope' : 'empty'}
           />
-        }
-      />
+        ),
+      }}
+    >
+      {portForwardCapabilityReason ? (
+        <Alert
+          showIcon
+          type={portForwardUnsupported ? 'warning' : 'info'}
+          style={{ marginBottom: 12 }}
+          title={
+            localeCode === 'zh_CN' ? 'Port Forward 连接模式说明' : 'Port forward connection mode'
+          }
+          description={portForwardCapabilityReason}
+        />
+      ) : null}
       <Modal
         title={localeCode === 'zh_CN' ? '新建 Port Forward' : 'New Port Forward'}
         open={modalVisible}
@@ -2059,7 +2027,7 @@ export function NetworkPortForwardPage() {
           </div>
         </Space>
       </Modal>
-    </div>
+    </ManagementDataPage>
   )
 }
 

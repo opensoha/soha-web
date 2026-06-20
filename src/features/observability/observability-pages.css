@@ -74,12 +74,12 @@
 }
 
 .soha-oncall-cell-empty {
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--soha-text-tertiary);
   justify-content: center;
 }
 
 .soha-oncall-cell-override {
-  background: rgba(250, 140, 22, 0.08);
+  background: color-mix(in srgb, var(--soha-warning) 8%, transparent);
   border-radius: 4px;
   padding-inline: 4px;
 }

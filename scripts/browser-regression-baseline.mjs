@@ -1,6 +1,6 @@
 import { createServer } from 'node:http'
 import { createReadStream } from 'node:fs'
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { join, resolve, extname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawn } from 'node:child_process'

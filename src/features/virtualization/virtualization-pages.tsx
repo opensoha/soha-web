@@ -49,13 +49,17 @@ import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { api } from '@/services/api-client'
 import { AdminTable } from '@/components/admin-table'
+import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementDetailHeader,
   ManagementIconButton,
+  ManagementKeywordField,
+  ManagementQueryActions,
   ManagementQueryField,
   ManagementQueryPanel,
   ManagementState,
   ManagementTableToolbar,
+  useManagementTextFilter,
 } from '@/components/management-list'
 import type { ApiResponse, Cluster } from '@/types'
 import { virtualizationApi } from './virtualization-api'
@@ -227,7 +231,7 @@ function vmMetricColor(key: string): string {
 
 function VMMetricsChart({ data }: { data: VirtualizationVMMetrics }) {
   if (!data.ready || data.message) {
-    return <Alert type="info" message={data.message || '当前暂无可用指标数据'} />
+    return <Alert type="info" title={data.message || '当前暂无可用指标数据'} />
   }
   const series = data.series ?? []
   if (series.length === 0) {
@@ -303,21 +307,6 @@ function TaskProgressBanner({ task, status, title, onCancel, cancelling }: TaskP
 }
 
 
-
-function VirtualizationFilterActions({
-  loading,
-  onReset,
-}: {
-  loading?: boolean
-  onReset: () => void
-}) {
-  return (
-    <Space size={8}>
-      <Button type="primary" htmlType="submit" icon={<SearchOutlined />} loading={loading}>筛选</Button>
-      <Button onClick={onReset}>重置</Button>
-    </Space>
-  )
-}
 
 function VirtualizationAdminTable({
   className,
@@ -650,7 +639,7 @@ function OperationsTable({
           <Descriptions.Item label="最近心跳">{formatDateTime(selectedOperation?.lastHeartbeatAt)}</Descriptions.Item>
           <Descriptions.Item label="完成时间">{formatDateTime(selectedOperation?.completedAt)}</Descriptions.Item>
         </Descriptions>
-        {selectedOperation?.message ? <Alert className="mt-4" type={isAbnormalOperation(selectedOperation.status) ? 'error' : 'info'} message={selectedOperation.message} /> : null}
+        {selectedOperation?.message ? <Alert className="mt-4" type={isAbnormalOperation(selectedOperation.status) ? 'error' : 'info'} title={selectedOperation.message} /> : null}
         <div className="mt-4 flex justify-end">
           <Button size="small" onClick={async () => {
             const text = (logs.length
@@ -665,7 +654,7 @@ function OperationsTable({
             复制日志
           </Button>
         </div>
-        <pre className="mt-4 max-h-[520px] overflow-auto rounded border border-[var(--soha-border)] bg-[var(--soha-surface-muted)] p-3 text-xs">
+        <pre className="mt-4 max-h-[520px] overflow-auto rounded border border-[var(--soha-border-color)] bg-[var(--soha-bg-surface-muted)] p-3 text-xs">
           {(logs.length
             ? logs.map((item) => `[${formatDateTime(item.createdAt)}] ${item.logLevel ?? 'info'} ${item.message}`).join('\n')
             : selectedOperation?.logs?.length
@@ -1113,7 +1102,7 @@ export function VirtualizationOverviewPage() {
                         showInfo={false}
                         size="small"
                         status={item.tone === 'danger' ? 'exception' : item.tone === 'success' ? 'success' : 'normal'}
-                        strokeColor={item.tone === 'warning' ? '#f97316' : undefined}
+                        strokeColor={item.tone === 'warning' ? 'var(--soha-warning)' : undefined}
                       />
                       <div className="soha-vrt-provider-meta">
                         <span>健康 {item.healthy}</span>
@@ -1155,8 +1144,8 @@ export function VirtualizationOverviewPage() {
           <Descriptions.Item label="开始时间">{formatDateTime(selectedOperation?.startedAt || selectedOperation?.createdAt)}</Descriptions.Item>
           <Descriptions.Item label="最近心跳">{formatDateTime(selectedOperation?.lastHeartbeatAt)}</Descriptions.Item>
         </Descriptions>
-        {selectedOperation?.message ? <Alert className="mt-4" type={isAbnormalOperation(selectedOperation.status) ? 'error' : 'info'} message={selectedOperation.message} /> : null}
-        <pre className="mt-4 max-h-[520px] overflow-auto rounded border border-[var(--soha-border)] bg-[var(--soha-surface-muted)] p-3 text-xs">
+        {selectedOperation?.message ? <Alert className="mt-4" type={isAbnormalOperation(selectedOperation.status) ? 'error' : 'info'} title={selectedOperation.message} /> : null}
+        <pre className="mt-4 max-h-[520px] overflow-auto rounded border border-[var(--soha-border-color)] bg-[var(--soha-bg-surface-muted)] p-3 text-xs">
           {(logs.length
             ? logs.map((item) => `[${formatDateTime(item.createdAt)}] ${item.logLevel ?? 'info'} ${item.message}`).join('\n')
             : selectedOperation?.message) || (logsQuery.isLoading ? '日志加载中' : '暂无日志')}
@@ -1290,70 +1279,76 @@ export function VirtualizationVmsPage() {
   ]
 
   return (
-    <div className="soha-page soha-virtualization-page">
-      <TaskProgressBanner
-        task={streamedTask}
-        status={streamStatus}
-        title="正在创建虚拟机"
-        onCancel={streamedTask?.id ? () => cancelCreateMutation.mutate(streamedTask.id) : undefined}
-        cancelling={cancelCreateMutation.isPending}
-      />
-      <div className="soha-vrt-query soha-vrt-vms-query">
-        <ManagementQueryPanel
-          collapsible
-          form={filterForm}
-          actions={(
-            <VirtualizationFilterActions
-              loading={vmsQuery.isFetching}
-              onReset={() => {
-                filterForm.resetFields()
-                setFilters((current) => ({ page: 1, pageSize: current.pageSize ?? 10 }))
-              }}
-            />
-          )}
-          onFinish={(values) => setFilters((current) => ({ ...current, ...values, page: 1 }))}
-        >
-          <ManagementQueryField minWidth={260} name="search" label="关键字" width={260}>
-            <Input allowClear prefix={<SearchOutlined />} placeholder="搜索名称、IP 或节点" />
-          </ManagementQueryField>
-          <ManagementQueryField minWidth={180} name="connectionId" label="连接" width={180}>
-            <Select
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              placeholder="全部连接"
-              options={clusters.map((item) => ({ value: item.id, label: item.name }))}
-            />
-          </ManagementQueryField>
-          <ManagementQueryField minWidth={136} name="status" label="状态" width={136}>
-            <Select
-              allowClear
-              placeholder="全部状态"
-              options={['running', 'stopped', 'pending', 'failed'].map((item) => ({ value: item, label: item }))}
-            />
-          </ManagementQueryField>
-          <ManagementQueryField minWidth={160} name="provider" label="Provider" width={160}>
-            <Select allowClear placeholder="全部 Provider" options={VIRTUALIZATION_PROVIDER_OPTIONS} />
-          </ManagementQueryField>
-        </ManagementQueryPanel>
-      </div>
-      <VirtualizationAdminTable
-        rowKey="id"
-        headerExtra={canManageVMs ? (
-          <ManagementTableToolbar>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setDrawerOpen(true)}>
-              创建虚拟机
-            </Button>
-          </ManagementTableToolbar>
-        ) : null}
-        loading={vmsQuery.isLoading}
-        dataSource={vmPage.items}
-        columns={columns}
-        scroll={{ x: 1340 }}
-        pagination={pageTablePagination(vmPage, setFilters)}
-        paginationSummary={virtualizationPageSummary}
-      />
-      <Drawer title="创建虚拟机" size="large" motion={stableDrawerMotion} open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+    <ManagementDataPage
+      className="soha-virtualization-page"
+      beforeQuery={(
+        <TaskProgressBanner
+          task={streamedTask}
+          status={streamStatus}
+          title="正在创建虚拟机"
+          onCancel={streamedTask?.id ? () => cancelCreateMutation.mutate(streamedTask.id) : undefined}
+          cancelling={cancelCreateMutation.isPending}
+        />
+      )}
+      query={{
+        actions: (
+          <ManagementQueryActions
+            loading={vmsQuery.isFetching}
+            onReset={() => {
+              filterForm.resetFields()
+              setFilters((current) => ({ page: 1, pageSize: current.pageSize ?? 10 }))
+            }}
+          />
+        ),
+        children: (
+          <>
+            <ManagementKeywordField label="关键字" placeholder="搜索名称、IP 或节点" />
+            <ManagementQueryField minWidth={180} name="connectionId" label="连接" width={180}>
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder="全部连接"
+                options={clusters.map((item) => ({ value: item.id, label: item.name }))}
+              />
+            </ManagementQueryField>
+            <ManagementQueryField minWidth={136} name="status" label="状态" width={136}>
+              <Select
+                allowClear
+                placeholder="全部状态"
+                options={['running', 'stopped', 'pending', 'failed'].map((item) => ({ value: item, label: item }))}
+              />
+            </ManagementQueryField>
+            <ManagementQueryField minWidth={160} name="provider" label="Provider" width={160}>
+              <Select allowClear placeholder="全部 Provider" options={VIRTUALIZATION_PROVIDER_OPTIONS} />
+            </ManagementQueryField>
+          </>
+        ),
+        collapsible: true,
+        form: filterForm,
+        onFinish: (values) => setFilters((current) => ({ ...current, ...values, page: 1 })),
+        wrapperClassName: 'soha-vrt-query soha-vrt-vms-query',
+      }}
+      tableNode={(
+        <VirtualizationAdminTable
+          rowKey="id"
+          headerExtra={canManageVMs ? (
+            <ManagementTableToolbar>
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => setDrawerOpen(true)}>
+                创建虚拟机
+              </Button>
+            </ManagementTableToolbar>
+          ) : null}
+          loading={vmsQuery.isLoading}
+          dataSource={vmPage.items}
+          columns={columns}
+          scroll={{ x: 1340 }}
+          pagination={pageTablePagination(vmPage, setFilters)}
+          paginationSummary={virtualizationPageSummary}
+        />
+      )}
+      afterTable={(
+        <Drawer title="创建虚拟机" size="large" motion={stableDrawerMotion} open={drawerOpen} onClose={() => setDrawerOpen(false)}>
         <Form form={form} layout="vertical" initialValues={{ provider: 'kubevirt', sourceMode: 'datasource_clone', startAfterCreate: true }} onFinish={(values) => createMutation.mutate(values)}>
           <Form.Item name="name" label="名称" rules={[{ required: true }]}>
             <Input />
@@ -1439,7 +1434,7 @@ export function VirtualizationVmsPage() {
                   </Form.Item>
                 ) : (
                   <Form.Item label="模板模式">
-                    <Alert type="info" showIcon message="当前将按模板克隆模式创建 VM，启动镜像字段会作为模板来源。" />
+                    <Alert type="info" showIcon title="当前将按模板克隆模式创建 VM，启动镜像字段会作为模板来源。" />
                   </Form.Item>
                 )}
               </div>
@@ -1479,8 +1474,9 @@ export function VirtualizationVmsPage() {
             <Button onClick={() => setDrawerOpen(false)}>取消</Button>
           </Space>
         </Form>
-      </Drawer>
-    </div>
+        </Drawer>
+      )}
+    />
   )
 }
 
@@ -1604,7 +1600,7 @@ export function VirtualizationVmDetailPage() {
             forceRender: true,
             children: (
               <Card size="small">
-                <pre className="max-h-[520px] overflow-auto rounded border border-[var(--soha-border)] bg-[var(--soha-surface-muted)] p-3 text-xs">
+                <pre className="max-h-[520px] overflow-auto rounded border border-[var(--soha-border-color)] bg-[var(--soha-bg-surface-muted)] p-3 text-xs">
                   {providerRaw || '暂无 provider raw 数据'}
                 </pre>
               </Card>
@@ -1653,7 +1649,7 @@ export function VirtualizationVmDetailPage() {
             forceRender: true,
             children: (
               <Card size="small">
-                <pre className="max-h-[520px] overflow-auto rounded border border-[var(--soha-border)] bg-[var(--soha-surface-muted)] p-3 text-xs">
+                <pre className="max-h-[520px] overflow-auto rounded border border-[var(--soha-border-color)] bg-[var(--soha-bg-surface-muted)] p-3 text-xs">
                   {(detail?.logs ?? []).map((item) => `[${formatDateTime(item.createdAt)}] ${item.logLevel ?? 'info'} ${item.message}`).join('\n') || '暂无日志'}
                 </pre>
               </Card>
@@ -2051,7 +2047,7 @@ export function VirtualizationClustersPage() {
           <Descriptions.Item label="摘要">{selectedConnectionOperation?.message || '-'}</Descriptions.Item>
           <Descriptions.Item label="开始时间">{formatDateTime(operationTime(selectedConnectionOperation || {} as VirtualizationOperation))}</Descriptions.Item>
         </Descriptions>
-        {selectedConnectionOperation?.message ? <Alert className="mt-4" type={isAbnormalOperation(selectedConnectionOperation.status) ? 'error' : 'info'} message={selectedConnectionOperation.message} /> : null}
+        {selectedConnectionOperation?.message ? <Alert className="mt-4" type={isAbnormalOperation(selectedConnectionOperation.status) ? 'error' : 'info'} title={selectedConnectionOperation.message} /> : null}
         <div className="mt-4">
           <Button onClick={() => navigate(`/virtualization/operations?connectionId=${encodeURIComponent(selectedConnectionOperation?.connectionId || '')}&abnormal=true`)}>查看该连接全部异常任务</Button>
         </div>
@@ -2148,54 +2144,58 @@ export function VirtualizationImagesPage() {
     },
   ]
   return (
-    <div className="soha-page soha-virtualization-page">
-      <div className="soha-vrt-query">
-        <ManagementQueryPanel
-          collapsible
-          form={filterForm}
-          actions={(
-            <VirtualizationFilterActions
-              loading={imagesQuery.isFetching}
-              onReset={() => {
-                filterForm.resetFields()
-                setFilters((current) => ({ page: 1, pageSize: current.pageSize ?? 10 }))
-              }}
-            />
-          )}
-          onFinish={(values) => setFilters((current) => ({ ...current, ...values, page: 1 }))}
-        >
-          <ManagementQueryField minWidth={260} name="search" label="关键字" width={260}>
-            <Input allowClear prefix={<SearchOutlined />} placeholder="搜索镜像、模板或 ISO" />
-          </ManagementQueryField>
-          <ManagementQueryField minWidth={180} name="connectionId" label="连接" width={180}>
-            <Select
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              placeholder="全部连接"
-              options={clusters.map((item) => ({ value: item.id, label: item.name }))}
-            />
-          </ManagementQueryField>
-          <ManagementQueryField minWidth={160} name="provider" label="Provider" width={160}>
-            <Select allowClear placeholder="全部 Provider" options={VIRTUALIZATION_PROVIDER_OPTIONS} />
-          </ManagementQueryField>
-        </ManagementQueryPanel>
-      </div>
-      <VirtualizationAdminTable
-        rowKey="id"
-        headerExtra={canManageImages ? (
-          <ManagementTableToolbar>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => openImageEditor()}>新增镜像入口</Button>
-          </ManagementTableToolbar>
-        ) : null}
-        loading={imagesQuery.isLoading}
-        dataSource={imagesPage.items}
-        columns={columns}
-        scroll={{ x: 1220 }}
-        pagination={pageTablePagination(imagesPage, setFilters)}
-        paginationSummary={virtualizationPageSummary}
-      />
-      <Drawer title={editing ? '编辑镜像入口' : '新增镜像入口'} size="large" motion={stableDrawerMotion} open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+    <ManagementDataPage
+      className="soha-virtualization-page"
+      query={{
+        actions: (
+          <ManagementQueryActions
+            loading={imagesQuery.isFetching}
+            onReset={() => {
+              filterForm.resetFields()
+              setFilters((current) => ({ page: 1, pageSize: current.pageSize ?? 10 }))
+            }}
+          />
+        ),
+        children: (
+          <>
+            <ManagementKeywordField label="关键字" placeholder="搜索镜像、模板或 ISO" />
+            <ManagementQueryField minWidth={180} name="connectionId" label="连接" width={180}>
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder="全部连接"
+                options={clusters.map((item) => ({ value: item.id, label: item.name }))}
+              />
+            </ManagementQueryField>
+            <ManagementQueryField minWidth={160} name="provider" label="Provider" width={160}>
+              <Select allowClear placeholder="全部 Provider" options={VIRTUALIZATION_PROVIDER_OPTIONS} />
+            </ManagementQueryField>
+          </>
+        ),
+        collapsible: true,
+        form: filterForm,
+        onFinish: (values) => setFilters((current) => ({ ...current, ...values, page: 1 })),
+        wrapperClassName: 'soha-vrt-query',
+      }}
+      tableNode={(
+        <VirtualizationAdminTable
+          rowKey="id"
+          headerExtra={canManageImages ? (
+            <ManagementTableToolbar>
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => openImageEditor()}>新增镜像入口</Button>
+            </ManagementTableToolbar>
+          ) : null}
+          loading={imagesQuery.isLoading}
+          dataSource={imagesPage.items}
+          columns={columns}
+          scroll={{ x: 1220 }}
+          pagination={pageTablePagination(imagesPage, setFilters)}
+          paginationSummary={virtualizationPageSummary}
+        />
+      )}
+      afterTable={(
+        <Drawer title={editing ? '编辑镜像入口' : '新增镜像入口'} size="large" motion={stableDrawerMotion} open={drawerOpen} onClose={() => setDrawerOpen(false)}>
         <Form form={form} layout="vertical" initialValues={{ provider: 'kubevirt', sourceKind: 'datasource' }} onFinish={(values) => saveMutation.mutate(values)}>
           <Form.Item name="name" label="名称" rules={[{ required: true }]}>
             <Input />
@@ -2247,8 +2247,9 @@ export function VirtualizationImagesPage() {
             <Button onClick={() => setDrawerOpen(false)}>取消</Button>
           </Space>
         </Form>
-      </Drawer>
-    </div>
+        </Drawer>
+      )}
+    />
   )
 }
 
@@ -2263,20 +2264,16 @@ export function VirtualizationFlavorsPage() {
   const { message } = App.useApp()
   const flavorsQuery = useQuery({ enabled: virtualizationModuleEnabled, queryKey: ['virtualization', 'flavors'], queryFn: virtualizationApi.flavors })
   const flavors = flavorsQuery.data?.data ?? []
+  const textFilteredFlavors = useManagementTextFilter(flavors, flavorFilters.search ?? '', (record) => [record.name, record.description])
   const flavorRows = useMemo(() => {
-    const search = flavorFilters.search?.trim().toLowerCase()
-    return flavors.filter((record) => {
-      const matchesSearch = !search || [record.name, record.description]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(search))
-      const matchesEnabled = flavorFilters.enabled === 'disabled'
+    return textFilteredFlavors.filter((record) => {
+      return flavorFilters.enabled === 'disabled'
         ? record.enabled === false
         : flavorFilters.enabled === 'enabled'
           ? record.enabled !== false
           : true
-      return matchesSearch && matchesEnabled
     })
-  }, [flavorFilters.enabled, flavorFilters.search, flavors])
+  }, [flavorFilters.enabled, textFilteredFlavors])
   const saveMutation = useMutation({
     mutationFn: (values: VirtualizationFlavorInput) => editing ? virtualizationApi.updateFlavor(editing.id, values) : virtualizationApi.createFlavor(values),
     onSuccess: () => {
@@ -2327,45 +2324,49 @@ export function VirtualizationFlavorsPage() {
     },
   ]
   return (
-    <div className="soha-page soha-virtualization-page">
-      <div className="soha-vrt-query">
-        <ManagementQueryPanel
-          collapsible
-          form={filterForm}
-          initialValues={{ enabled: 'all' }}
-          actions={(
-            <VirtualizationFilterActions
-              loading={flavorsQuery.isFetching}
-              onReset={() => {
-                filterForm.resetFields()
-                setFlavorFilters({ enabled: 'all' })
-              }}
-            />
-          )}
-          onFinish={(values) => setFlavorFilters({ enabled: values.enabled ?? 'all', search: values.search })}
-        >
-          <ManagementQueryField minWidth={260} name="search" label="关键字" width={260}>
-            <Input allowClear prefix={<SearchOutlined />} placeholder="搜索规格名称或描述" />
-          </ManagementQueryField>
-          <ManagementQueryField minWidth={180} name="enabled" label="启用状态" width={180}>
-            <Select options={ENABLED_FILTER_OPTIONS} />
-          </ManagementQueryField>
-        </ManagementQueryPanel>
-      </div>
-      <VirtualizationAdminTable
-        rowKey="id"
-        headerExtra={canManageFlavors ? (
-          <ManagementTableToolbar>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor()}>新增规格</Button>
-          </ManagementTableToolbar>
-        ) : null}
-        loading={flavorsQuery.isLoading}
-        dataSource={flavorRows}
-        columns={columns}
-        paginationSummary={localTableSummary(flavorRows.length, flavors.length)}
-        scroll={{ x: 900 }}
-      />
-      <Drawer title={editing ? '编辑规格' : '新增规格'} size="large" motion={stableDrawerMotion} open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+    <ManagementDataPage
+      className="soha-virtualization-page"
+      query={{
+        actions: (
+          <ManagementQueryActions
+            loading={flavorsQuery.isFetching}
+            onReset={() => {
+              filterForm.resetFields()
+              setFlavorFilters({ enabled: 'all' })
+            }}
+          />
+        ),
+        children: (
+          <>
+            <ManagementKeywordField label="关键字" placeholder="搜索规格名称或描述" />
+            <ManagementQueryField minWidth={180} name="enabled" label="启用状态" width={180}>
+              <Select options={ENABLED_FILTER_OPTIONS} />
+            </ManagementQueryField>
+          </>
+        ),
+        collapsible: true,
+        form: filterForm,
+        initialValues: { enabled: 'all' },
+        onFinish: (values) => setFlavorFilters({ enabled: values.enabled ?? 'all', search: values.search }),
+        wrapperClassName: 'soha-vrt-query',
+      }}
+      tableNode={(
+        <VirtualizationAdminTable
+          rowKey="id"
+          headerExtra={canManageFlavors ? (
+            <ManagementTableToolbar>
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor()}>新增规格</Button>
+            </ManagementTableToolbar>
+          ) : null}
+          loading={flavorsQuery.isLoading}
+          dataSource={flavorRows}
+          columns={columns}
+          paginationSummary={localTableSummary(flavorRows.length, flavors.length)}
+          scroll={{ x: 900 }}
+        />
+      )}
+      afterTable={(
+        <Drawer title={editing ? '编辑规格' : '新增规格'} size="large" motion={stableDrawerMotion} open={drawerOpen} onClose={() => setDrawerOpen(false)}>
         <Form form={form} layout="vertical" initialValues={{ cpu: 2, memoryMiB: 4096, diskGiB: 40, enabled: true }} onFinish={(values) => saveMutation.mutate(values)}>
           <Form.Item name="name" label="名称" rules={[{ required: true }]}>
             <Input />
@@ -2392,8 +2393,9 @@ export function VirtualizationFlavorsPage() {
             <Button onClick={() => setDrawerOpen(false)}>取消</Button>
           </Space>
         </Form>
-      </Drawer>
-    </div>
+        </Drawer>
+      )}
+    />
   )
 }
 

@@ -33,6 +33,7 @@ import {
   ManagementIconButton,
   ManagementState,
   ManagementTableToolbar,
+  ManagementToolbarSearch,
 } from '@/components/management-list'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
 import type { PermissionSnapshot } from '@/types'
@@ -421,13 +422,10 @@ export function PluginMarketplacePage() {
         title="插件市场"
         toolbar={
           <ManagementTableToolbar>
-            <Input.Search
-              allowClear
+            <ManagementToolbarSearch
               placeholder="搜索 ID、名称、发布者"
-              style={{ width: 260 }}
               value={filters.query}
-              onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))}
-              onSearch={(value) => setFilters((current) => ({ ...current, query: value }))}
+              onChange={(value) => setFilters((current) => ({ ...current, query: value }))}
             />
             <Select
               allowClear

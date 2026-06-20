@@ -21,6 +21,7 @@ import { Button, Card, Input, InputNumber, Select, Space, Switch, Tag, Typograph
 import { CloseOutlined } from '@ant-design/icons'
 import '@xyflow/react/dist/style.css'
 import { ManagementState } from '@/components/management-list'
+import { WorkflowCanvasSurface } from '@/components/workflow-canvas-surface'
 import './release-flow-dag-editor.css'
 import { useI18n } from '@/i18n'
 import {
@@ -800,7 +801,6 @@ function ReleaseFlowDagEditorInner({
     return <Card className={panelClassName} title={title}>{content}</Card>
   }
 
-  const canvasStyle = height ? { height } : undefined
   const inspectorTitle = selectedNode
     ? (localeCode === 'zh_CN' ? '节点属性' : 'Node Properties')
     : selectedEdge
@@ -940,7 +940,7 @@ function ReleaseFlowDagEditorInner({
     </>
   ))
   const canvasPanel = panel(localeCode === 'zh_CN' ? 'DAG 画布' : 'DAG Canvas', (
-    <div className="soha-dag-canvas" style={canvasStyle}>
+    <WorkflowCanvasSurface className="soha-dag-canvas" height={height}>
       <ReactFlow<FlowNode, FlowEdge>
         nodes={nodes}
         edges={edges}
@@ -960,7 +960,7 @@ function ReleaseFlowDagEditorInner({
         <MiniMap />
       </ReactFlow>
       {floatingInspector}
-    </div>
+    </WorkflowCanvasSurface>
   ), 'soha-dag-canvas-card')
   const inspectorPanel = panel(localeCode === 'zh_CN' ? '属性面板' : 'Inspector', inspectorContent)
 

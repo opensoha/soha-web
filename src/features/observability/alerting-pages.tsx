@@ -1800,7 +1800,7 @@ export function OnCallBoardPage() {
         <div className={`soha-oncall-cell${assignment.override ? ' soha-oncall-cell-override' : ''}${isToday ? ' soha-oncall-cell-today' : ''}`}>
           <Avatar.Group size="small" max={{ count: 3 }}>
             {list.map((name) => (
-              <Avatar key={name} style={{ backgroundColor: assignment.override ? '#fa8c16' : '#1677ff' }}>{participantAvatarText(name)}</Avatar>
+              <Avatar key={name} style={{ backgroundColor: assignment.override ? 'var(--soha-warning)' : 'var(--soha-primary)' }}>{participantAvatarText(name)}</Avatar>
             ))}
           </Avatar.Group>
           {assignment.override ? <Badge status="warning" text="覆盖" /> : null}

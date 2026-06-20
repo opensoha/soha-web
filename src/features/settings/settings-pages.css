@@ -112,7 +112,7 @@
   border: 1px solid color-mix(in srgb, var(--soha-border-color) 68%, var(--soha-primary) 32%);
   border-radius: 999px;
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--soha-primary) 13%, var(--soha-bg-surface) 87%), color-mix(in srgb, #10b981 10%, var(--soha-bg-surface) 90%));
+    linear-gradient(135deg, color-mix(in srgb, var(--soha-primary) 13%, var(--soha-bg-surface) 87%), color-mix(in srgb, var(--soha-graph-recommendation) 10%, var(--soha-bg-surface) 90%));
   color: var(--soha-text-primary);
   font-size: 11px;
   font-weight: 700;
@@ -120,27 +120,27 @@
 }
 
 .soha-ai-gradient-tag.is-blue.ant-tag {
-  border-color: color-mix(in srgb, var(--soha-border-color) 62%, #2563eb 38%);
+  border-color: color-mix(in srgb, var(--soha-border-color) 62%, var(--soha-graph-scope) 38%);
   background:
-    linear-gradient(135deg, color-mix(in srgb, #2563eb 16%, var(--soha-bg-surface) 84%), color-mix(in srgb, #06b6d4 10%, var(--soha-bg-surface) 90%));
+    linear-gradient(135deg, color-mix(in srgb, var(--soha-graph-scope) 16%, var(--soha-bg-surface) 84%), color-mix(in srgb, var(--soha-accent-cyan) 10%, var(--soha-bg-surface) 90%));
 }
 
 .soha-ai-gradient-tag.is-green.ant-tag {
-  border-color: color-mix(in srgb, var(--soha-border-color) 60%, #059669 40%);
+  border-color: color-mix(in srgb, var(--soha-border-color) 60%, var(--soha-success) 40%);
   background:
-    linear-gradient(135deg, color-mix(in srgb, #059669 16%, var(--soha-bg-surface) 84%), color-mix(in srgb, #84cc16 9%, var(--soha-bg-surface) 91%));
+    linear-gradient(135deg, color-mix(in srgb, var(--soha-success) 16%, var(--soha-bg-surface) 84%), color-mix(in srgb, var(--soha-graph-recommendation) 9%, var(--soha-bg-surface) 91%));
 }
 
 .soha-ai-gradient-tag.is-amber.ant-tag {
-  border-color: color-mix(in srgb, var(--soha-border-color) 58%, #d97706 42%);
+  border-color: color-mix(in srgb, var(--soha-border-color) 58%, var(--soha-warning) 42%);
   background:
-    linear-gradient(135deg, color-mix(in srgb, #f59e0b 18%, var(--soha-bg-surface) 82%), color-mix(in srgb, #eab308 10%, var(--soha-bg-surface) 90%));
+    linear-gradient(135deg, color-mix(in srgb, var(--soha-warning) 18%, var(--soha-bg-surface) 82%), color-mix(in srgb, var(--soha-graph-log) 10%, var(--soha-bg-surface) 90%));
 }
 
 .soha-ai-gradient-tag.is-violet.ant-tag {
-  border-color: color-mix(in srgb, var(--soha-border-color) 58%, #7c3aed 42%);
+  border-color: color-mix(in srgb, var(--soha-border-color) 58%, var(--soha-graph-span) 42%);
   background:
-    linear-gradient(135deg, color-mix(in srgb, #7c3aed 16%, var(--soha-bg-surface) 84%), color-mix(in srgb, #0ea5e9 10%, var(--soha-bg-surface) 90%));
+    linear-gradient(135deg, color-mix(in srgb, var(--soha-graph-span) 16%, var(--soha-bg-surface) 84%), color-mix(in srgb, var(--soha-graph-metric) 10%, var(--soha-bg-surface) 90%));
 }
 
 .soha-ai-gradient-tag.is-slate.ant-tag {

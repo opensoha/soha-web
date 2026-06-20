@@ -56,7 +56,7 @@ function renderRuleSummaries(values: string[] | undefined, emptyLabel: string) {
   return (
     <Space orientation="vertical" style={{ width: '100%' }} size={8}>
       {values.map((value) => (
-        <Card key={value} className="soha-detail-card" bodyStyle={{ padding: 12 }}>
+        <Card key={value} className="soha-detail-card" styles={{ body: { padding: 12 } }}>
           <Paragraph style={{ margin: 0 }}>{value}</Paragraph>
         </Card>
       ))}

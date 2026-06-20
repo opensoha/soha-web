@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import {
   ApiOutlined,
   BranchesOutlined,
@@ -58,6 +58,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
+import { WorkflowCanvasSurface } from '@/components/workflow-canvas-surface'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
 import { api } from '@/services/api-client'
 import type { ApiResponse } from '@/types'
@@ -121,6 +122,25 @@ type ArtifactContextLink = {
   label: string
   value: string
   path: string
+}
+
+function SohaAIWorkbenchShell({
+  alerts,
+  children,
+}: {
+  alerts?: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <div className="soha-page soha-ai-workbench-page">
+      <div className="soha-ai-workbench">
+        {alerts}
+        <section className="soha-ai-workbench__workspace">
+          {children}
+        </section>
+      </div>
+    </div>
+  )
 }
 
 const GRAPH_NODE_WIDTH = 248
@@ -410,24 +430,30 @@ function artifactContextLinks(entry: WorkbenchArtifactEntry, session?: Workbench
 function graphAccent(kind: string) {
   switch (kind) {
     case 'scope':
-      return '#1d4ed8'
+      return 'var(--soha-graph-scope)'
     case 'service':
-      return '#0f766e'
+      return 'var(--soha-graph-service)'
     case 'span':
-      return '#7c3aed'
+      return 'var(--soha-graph-span)'
     case 'log_signature':
-      return '#b45309'
+      return 'var(--soha-graph-log)'
     case 'metric_signal':
-      return '#2563eb'
+      return 'var(--soha-graph-metric)'
     case 'hypothesis':
-      return '#dc2626'
+      return 'var(--soha-graph-hypothesis)'
     case 'missing_source':
-      return '#64748b'
+      return 'var(--soha-graph-muted)'
     case 'recommendation':
-      return '#0f766e'
+      return 'var(--soha-graph-recommendation)'
     default:
-      return '#475569'
+      return 'var(--soha-graph-muted)'
   }
+}
+
+function graphEdgeColor(severity?: string) {
+  if (severity === 'critical') return 'var(--soha-workflow-edge-failure)'
+  if (severity === 'warning') return 'var(--soha-warning)'
+  return 'var(--soha-workflow-edge-default)'
 }
 
 function graphNodeLabel(kind: string) {
@@ -534,17 +560,17 @@ function layoutWorkbenchGraph(nodes: WorkbenchFlowNode[], edges: WorkbenchFlowEd
 
 function WorkbenchGraphNodeCard({ data, selected }: NodeProps<WorkbenchFlowNode>) {
   const accent = graphAccent(data.kind)
+  const accentStyle = {
+    '--soha-workbench-graph-accent': accent,
+  } as CSSProperties
   return (
     <div className={`soha-workbench-graph-node ${selected ? 'is-selected' : ''}`}>
       <div
         className="soha-workbench-graph-node__card"
-        style={{
-          borderColor: selected ? accent : `${accent}44`,
-          boxShadow: selected ? `0 0 0 2px ${accent}22` : undefined,
-        }}
+        style={accentStyle}
       >
         <div className="soha-workbench-graph-node__head">
-          <span className="soha-workbench-graph-node__kind" style={{ color: accent, background: `${accent}1a` }}>
+          <span className="soha-workbench-graph-node__kind">
             {graphNodeLabel(data.kind)}
           </span>
           {data.severity ? <StatusTag value={data.severity} /> : null}
@@ -593,11 +619,11 @@ function WorkbenchGraphCanvasInner({
       },
       label: item.relation,
       style: {
-        stroke: item.severity === 'critical' ? '#dc2626' : item.severity === 'warning' ? '#d97706' : '#94a3b8',
+        stroke: graphEdgeColor(item.severity),
         strokeWidth: item.relation === 'supports' ? 1.4 : 1.8,
         strokeDasharray: item.relation === 'supports' ? '8 4' : undefined,
       },
-      labelStyle: { fontSize: 11, fill: '#475569' },
+      labelStyle: { fontSize: 11, fill: 'var(--soha-text-secondary)' },
     }))
     return layoutWorkbenchGraph(rawNodes, rawEdges)
   }, [graph])
@@ -613,15 +639,15 @@ function WorkbenchGraphCanvasInner({
     },
     label: item.relation,
     style: {
-      stroke: item.severity === 'critical' ? '#dc2626' : item.severity === 'warning' ? '#d97706' : '#94a3b8',
+      stroke: graphEdgeColor(item.severity),
       strokeWidth: item.relation === 'supports' ? 1.4 : 1.8,
       strokeDasharray: item.relation === 'supports' ? '8 4' : undefined,
     },
-    labelStyle: { fontSize: 11, fill: '#475569' },
+    labelStyle: { fontSize: 11, fill: 'var(--soha-text-secondary)' },
   })), [graph.edges])
 
   return (
-    <div className="soha-workbench-graph-canvas">
+    <WorkflowCanvasSurface className="soha-workbench-graph-canvas">
       <ReactFlow<WorkbenchFlowNode, WorkbenchFlowEdge>
         nodes={nodes}
         edges={edges}
@@ -638,7 +664,7 @@ function WorkbenchGraphCanvasInner({
         <Background gap={18} size={1} />
         <Controls showInteractive={false} />
       </ReactFlow>
-    </div>
+    </WorkflowCanvasSurface>
   )
 }
 
@@ -1541,26 +1567,29 @@ export function AIWorkbenchPage() {
   }
 
   return (
-    <div className="soha-page soha-ai-workbench-page">
-      <div className="soha-ai-workbench">
-        {!canUseChat ? (
-          <Alert
-            type="warning"
-            showIcon
-            title="当前账号缺少 observe.ai.chat 权限，无法发送消息或创建会话。"
-          />
-        ) : null}
+    <>
+      <SohaAIWorkbenchShell
+        alerts={(
+          <>
+            {!canUseChat ? (
+              <Alert
+                type="warning"
+                showIcon
+                title="当前账号缺少 observe.ai.chat 权限，无法发送消息或创建会话。"
+              />
+            ) : null}
 
-        {queryError ? (
-          <Alert
-            type="error"
-            showIcon
-            title="工作台数据加载失败"
-            description={queryError instanceof Error ? queryError.message : '请检查当前 API 服务和权限快照。'}
-          />
-        ) : null}
-
-        <section className="soha-ai-workbench__workspace">
+            {queryError ? (
+              <Alert
+                type="error"
+                showIcon
+                title="工作台数据加载失败"
+                description={queryError instanceof Error ? queryError.message : '请检查当前 API 服务和权限快照。'}
+              />
+            ) : null}
+          </>
+        )}
+      >
           <aside className="soha-ai-workbench-sidebar">
             <div className="soha-ai-workbench__tools-header">
               <div className="soha-ai-workbench__tools-title">
@@ -2042,8 +2071,7 @@ export function AIWorkbenchPage() {
               </>
             )}
           </aside>
-        </section>
-      </div>
+      </SohaAIWorkbenchShell>
 
       <Drawer title="分析链路" placement="right" open={thinkingOpen} onClose={() => setThinkingOpen(false)} size="large">
         <ThoughtChain
@@ -2368,6 +2396,6 @@ export function AIWorkbenchPage() {
       >
         <Input value={renameValue} onChange={(event) => setRenameValue(event.target.value)} />
       </Modal>
-    </div>
+    </>
   )
 }

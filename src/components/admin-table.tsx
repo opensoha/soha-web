@@ -8,7 +8,7 @@ import './admin-table.css'
 const DEFAULT_PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
 const { Text } = Typography
 
-interface AdminTableProps {
+export interface AdminTableProps {
   className?: string
   columns: any[]
   currentPageSelectionLabel?: ReactNode

@@ -31,13 +31,13 @@ function resolveTimelineColor(event: ResourceEvent) {
   const type = resolveTimelineType(event)
   switch (type) {
     case 'warning':
-      return '#faad14'
+      return 'var(--soha-warning)'
     case 'error':
-      return '#ff4d4f'
+      return 'var(--soha-danger)'
     case 'success':
-      return '#52c41a'
+      return 'var(--soha-success)'
     default:
-      return '#1677ff'
+      return 'var(--soha-primary)'
   }
 }
 
