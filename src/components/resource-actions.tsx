@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { DeleteOutlined } from '@ant-design/icons'
-import { Button, message, Popconfirm, Tooltip } from 'antd'
+import { message, Popconfirm } from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { ManagementIconButton } from '@/components/management-list'
 import { useI18n } from '@/i18n'
 import { api } from '@/services/api-client'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
@@ -18,6 +19,8 @@ export function useResourceActions<T extends Record<string, any>>(options: {
   getName: (record: T) => string
   getNamespace?: (record: T) => string | undefined
   canDelete?: (record: T) => boolean
+  deleteDisabled?: boolean
+  deleteDisabledReason?: string
   width?: number
   listInvalidationKey?: unknown[]
 }): { column: ColumnProps<T>; modalNode: React.ReactNode } {
@@ -38,7 +41,9 @@ export function useResourceActions<T extends Record<string, any>>(options: {
     mutationFn: async ({ name, namespace }: { name: string; namespace?: string }) => {
       const encoded = encodeURIComponent(name)
       const base = buildClusterScopedPath(clusterId!, `${options.resourcePath}/${encoded}`)
-      const path = namespace ? `${base}${base.includes('?') ? '&' : '?'}namespace=${encodeURIComponent(namespace)}` : base
+      const path = namespace
+        ? `${base}${base.includes('?') ? '&' : '?'}namespace=${encodeURIComponent(namespace)}`
+        : base
       return api.delete(path)
     },
     onMutate: ({ name, namespace }) => setDeleting(`${namespace || ''}/${name}`),
@@ -65,26 +70,43 @@ export function useResourceActions<T extends Record<string, any>>(options: {
       const name = options.getName(record)
       const namespace = options.getNamespace?.(record)
       const key = `${namespace || ''}/${name}`
+      const deleteLabel = localeCode === 'zh_CN' ? '删除' : 'Delete'
+      if (options.deleteDisabled) {
+        return (
+          <ManagementIconButton
+            danger
+            disabled
+            icon={<DeleteOutlined />}
+            aria-label={deleteLabel}
+            tooltip={
+              options.deleteDisabledReason
+                ? `${deleteLabel}: ${options.deleteDisabledReason}`
+                : deleteLabel
+            }
+          />
+        )
+      }
       return (
         <Popconfirm
           title={localeCode === 'zh_CN' ? `确认删除 ${name}？` : `Delete ${name}?`}
-          description={localeCode === 'zh_CN' ? '此操作不可恢复，删除后集群资源立即消失。' : 'This deletes the resource immediately and cannot be undone.'}
+          description={
+            localeCode === 'zh_CN'
+              ? '此操作不可恢复，删除后集群资源立即消失。'
+              : 'This deletes the resource immediately and cannot be undone.'
+          }
           okText={localeCode === 'zh_CN' ? '删除' : 'Delete'}
           cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
           okButtonProps={{ danger: true, loading: deleting === key }}
           placement="topRight"
           onConfirm={() => deleteMutation.mutate({ name, namespace })}
         >
-          <Tooltip title={localeCode === 'zh_CN' ? '删除' : 'Delete'}>
-            <Button
-              size="small"
-              type="text"
-              danger
-              icon={<DeleteOutlined />}
-              aria-label={localeCode === 'zh_CN' ? '删除' : 'Delete'}
-              loading={deleting === key}
-            />
-          </Tooltip>
+          <ManagementIconButton
+            danger
+            icon={<DeleteOutlined />}
+            aria-label={deleteLabel}
+            loading={deleting === key}
+            tooltip={deleteLabel}
+          />
         </Popconfirm>
       )
     },

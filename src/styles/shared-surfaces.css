@@ -9,9 +9,9 @@
 }
 
 .soha-table-actions-column {
-  width: 52px !important;
-  min-width: 52px !important;
-  max-width: 52px !important;
+  width: var(--soha-table-actions-column-width, 52px) !important;
+  min-width: var(--soha-table-actions-column-width, 52px) !important;
+  max-width: var(--soha-table-actions-column-width, 52px) !important;
   padding-left: 4px !important;
   padding-right: 4px !important;
   text-align: center !important;
@@ -421,6 +421,30 @@
   max-width: 100%;
   margin-inline-end: 0;
   white-space: nowrap;
+}
+
+.soha-management-table-shell .ant-table-tbody .ant-tag,
+.soha-management-table-shell .ant-table-tbody .soha-status-tag.ant-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  min-height: 20px;
+  max-width: 100%;
+  margin-inline-end: 0;
+  padding-inline: 7px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 18px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.soha-management-table-shell .ant-table-tbody .ant-tag .ant-tag-text {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  line-height: 18px;
+  text-overflow: ellipsis;
 }
 
 .soha-status-tag.ant-tag .ant-tag-text {

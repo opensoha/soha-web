@@ -1,13 +1,22 @@
 import { formatBytesAsG, formatCpu } from '@/features/platform/node-resource-utils'
 import type { PodRelatedResource, PodVolume, ResourceQuantity, WorkloadCondition } from '@/types'
 
-export function resolveWorkloadNamespace(selectedNamespace: string | null, searchNamespace: string | null, rowNamespace?: string) {
+export function resolveWorkloadNamespace(
+  selectedNamespace: string | null,
+  searchNamespace: string | null,
+  rowNamespace?: string,
+) {
   if (selectedNamespace && selectedNamespace !== '') return selectedNamespace
   if (searchNamespace) return searchNamespace
   return rowNamespace ?? ''
 }
 
-export function buildWorkloadDetailPath(resource: string, name: string, selectedNamespace: string | null, rowNamespace: string) {
+export function buildWorkloadDetailPath(
+  resource: string,
+  name: string,
+  selectedNamespace: string | null,
+  rowNamespace: string,
+) {
   const params = new URLSearchParams()
   const resolvedNamespace = resolveWorkloadNamespace(selectedNamespace, null, rowNamespace)
   if (resolvedNamespace) {
@@ -81,7 +90,10 @@ export function localizeRelatedRelation(relation: string, localeCode: 'zh_CN' | 
   return labelMap[relation]?.[localeCode] ?? relation
 }
 
-export function buildRelatedResourcePath(resource: PodRelatedResource, selectedNamespace: string | null) {
+export function buildRelatedResourcePath(
+  resource: PodRelatedResource,
+  selectedNamespace: string | null,
+) {
   const effectiveNamespace = resource.namespace || selectedNamespace || ''
   switch (resource.kind) {
     case 'Service':
@@ -91,15 +103,35 @@ export function buildRelatedResourcePath(resource: PodRelatedResource, selectedN
     case 'Secret':
       return `/configuration/secrets/${encodeURIComponent(resource.name)}${buildNamespacedDetailQuery(effectiveNamespace)}`
     case 'Deployment':
-      return buildWorkloadDetailPath('deployments', resource.name, selectedNamespace, effectiveNamespace)
+      return buildWorkloadDetailPath(
+        'deployments',
+        resource.name,
+        selectedNamespace,
+        effectiveNamespace,
+      )
     case 'StatefulSet':
-      return buildWorkloadDetailPath('statefulsets', resource.name, selectedNamespace, effectiveNamespace)
+      return buildWorkloadDetailPath(
+        'statefulsets',
+        resource.name,
+        selectedNamespace,
+        effectiveNamespace,
+      )
     case 'DaemonSet':
-      return buildWorkloadDetailPath('daemonsets', resource.name, selectedNamespace, effectiveNamespace)
+      return buildWorkloadDetailPath(
+        'daemonsets',
+        resource.name,
+        selectedNamespace,
+        effectiveNamespace,
+      )
     case 'Job':
       return buildWorkloadDetailPath('jobs', resource.name, selectedNamespace, effectiveNamespace)
     case 'CronJob':
-      return buildWorkloadDetailPath('cronjobs', resource.name, selectedNamespace, effectiveNamespace)
+      return buildWorkloadDetailPath(
+        'cronjobs',
+        resource.name,
+        selectedNamespace,
+        effectiveNamespace,
+      )
     case 'PersistentVolumeClaim':
       return `/storage/persistentvolumeclaims/${encodeURIComponent(resource.name)}${buildNamespacedDetailQuery(effectiveNamespace)}`
     case 'ServiceAccount':
@@ -223,21 +255,28 @@ export function targetMatchesDeployment(
   deploymentName: string,
 ) {
   if (!target) return false
-  return target.clusterId === clusterId
-    && target.namespace === namespace
-    && target.workloadName === deploymentName
-    && target.workloadKind.toLowerCase() === 'deployment'
-    && target.enabled !== false
+  return (
+    target.clusterId === clusterId &&
+    target.namespace === namespace &&
+    target.workloadName === deploymentName &&
+    target.workloadKind.toLowerCase() === 'deployment' &&
+    target.enabled !== false
+  )
 }
 
-export function selectorMatchesLabels(selector?: Record<string, string>, labels?: Record<string, string>) {
+export function selectorMatchesLabels(
+  selector?: Record<string, string>,
+  labels?: Record<string, string>,
+) {
   const entries = Object.entries(selector ?? {})
   if (entries.length === 0) return false
   return entries.every(([key, value]) => (labels ?? {})[key] === value)
 }
 
 export function conditionToTimelineEvent(condition: WorkloadCondition): WorkloadOverviewEvent {
-  const timestamp = condition.lastTransitionTime ? new Date(condition.lastTransitionTime).getTime() : Date.now()
+  const timestamp = condition.lastTransitionTime
+    ? new Date(condition.lastTransitionTime).getTime()
+    : Date.now()
   const ageSeconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000))
   return {
     name: `${condition.type}:${condition.status}`,
@@ -280,9 +319,9 @@ export interface BatchRollbackDraft {
 export function getDeploymentHealth(deployment: Deployment) {
   if (deployment.desiredReplicas === 0) return 'scaled-down'
   if (
-    deployment.readyReplicas >= deployment.desiredReplicas
-    && deployment.available >= deployment.desiredReplicas
-    && deployment.updatedReplicas >= deployment.desiredReplicas
+    deployment.readyReplicas >= deployment.desiredReplicas &&
+    deployment.available >= deployment.desiredReplicas &&
+    deployment.updatedReplicas >= deployment.desiredReplicas
   ) {
     return 'healthy'
   }
@@ -307,6 +346,7 @@ export interface Pod {
   labels?: Record<string, string>
   persistentVolumeClaims?: string[]
   ageSeconds: number
+  allowedActions?: string[]
 }
 
 export function parseReadyContainers(value: string) {
@@ -359,7 +399,6 @@ export function formatMemoryDisplay(value?: string) {
   return formatted === '-' ? value : formatted
 }
 
-
 export function compareStrings(left?: string, right?: string) {
   return (left || '').localeCompare(right || '')
 }
@@ -381,6 +420,7 @@ export interface StatefulSet {
   readyReplicas: number
   currentReplicas: number
   ageSeconds: number
+  allowedActions?: string[]
 }
 
 export interface DaemonSet {
@@ -392,6 +432,7 @@ export interface DaemonSet {
   availableNumber: number
   updatedNumber: number
   ageSeconds: number
+  allowedActions?: string[]
 }
 
 export interface Job {
@@ -403,6 +444,7 @@ export interface Job {
   active: number
   completionMode?: string
   ageSeconds: number
+  allowedActions?: string[]
 }
 
 export interface CronJob {
@@ -413,4 +455,5 @@ export interface CronJob {
   activeJobs: number
   lastScheduleTime?: string
   ageSeconds: number
+  allowedActions?: string[]
 }

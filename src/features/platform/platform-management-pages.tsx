@@ -471,6 +471,7 @@ function WorkloadReplicaListPage<T extends { allowedActions?: string[] }>({
   const { clusterId, namespace } = usePlatformScopeStore()
   const [searchKeyword, setSearchKeyword] = useState('')
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
+  const workloadMutationCapability = useClusterCapability('workload.mutations', localeCode)
   const deferredSearchKeyword = useDeferredValue(searchKeyword)
   const normalizedKeyword = normalizeSearchKeyword(deferredSearchKeyword)
   const query = useScopedResourceQuery<T>(resourcePath)
@@ -487,6 +488,8 @@ function WorkloadReplicaListPage<T extends { allowedActions?: string[] }>({
     getName: actionConfig?.getName ?? (() => ''),
     getNamespace: actionConfig?.getNamespace,
     canDelete,
+    deleteDisabled: workloadMutationCapability.disabled,
+    deleteDisabledReason: workloadMutationCapability.reason,
     listInvalidationKey: ['platform-resource', resourcePath, clusterId, namespace],
   })
   const effectiveColumns = shouldShowActions ? [...columns, actionColumn] : columns
@@ -494,16 +497,18 @@ function WorkloadReplicaListPage<T extends { allowedActions?: string[] }>({
 
   return (
     <ManagementDataPage
-      beforeQuery={query.isError ? (
-        <ManagementState
-          className="mb-3"
-          description={buildWorkloadReplicaErrorDescription(localeCode, query.error)}
-          kind="error"
-          title={
-            localeCode === 'zh_CN' ? '工作负载资源暂时不可用' : 'Workload resources unavailable'
-          }
-        />
-      ) : null}
+      beforeQuery={
+        query.isError ? (
+          <ManagementState
+            className="mb-3"
+            description={buildWorkloadReplicaErrorDescription(localeCode, query.error)}
+            kind="error"
+            title={
+              localeCode === 'zh_CN' ? '工作负载资源暂时不可用' : 'Workload resources unavailable'
+            }
+          />
+        ) : null
+      }
       query={{
         onFinish: () => undefined,
         actions: (
@@ -1381,6 +1386,11 @@ export function WorkloadsReplicaSetsPage() {
         en_US: 'Search replica set / namespace',
       }}
       searchValues={(record) => [record.name, record.namespace]}
+      actionConfig={{
+        resourceKind: 'ReplicaSet',
+        getName: (record) => record.name,
+        getNamespace: (record) => record.namespace,
+      }}
     />
   )
 }
