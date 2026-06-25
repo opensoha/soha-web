@@ -36,12 +36,21 @@ body,
   --soha-accent-teal: #52c41a;
   --soha-accent-teal-rgb: 82, 196, 26;
   --soha-gradient-primary: linear-gradient(135deg, #1677ff 0%, #13c2c2 56%, #52c41a 100%);
-  --soha-gradient-subtle: linear-gradient(135deg, rgba(22, 119, 255, 0.10) 0%, rgba(19, 194, 194, 0.08) 54%, rgba(82, 196, 26, 0.06) 100%);
-  --soha-gradient-panel: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(249, 249, 251, 0.94) 100%);
+  --soha-gradient-subtle: linear-gradient(
+    135deg,
+    rgba(22, 119, 255, 0.1) 0%,
+    rgba(19, 194, 194, 0.08) 54%,
+    rgba(82, 196, 26, 0.06) 100%
+  );
+  --soha-gradient-panel: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(249, 249, 251, 0.94) 100%
+  );
   --soha-glass-bg: rgba(255, 255, 255, 0.72);
   --soha-glass-bg-strong: rgba(255, 255, 255, 0.88);
   --soha-glass-border: rgba(22, 119, 255, 0.24);
-  --soha-glass-shadow: 0 18px 48px rgba(22, 119, 255, 0.10);
+  --soha-glass-shadow: 0 18px 48px rgba(22, 119, 255, 0.1);
   --soha-glass-blur: 16px;
   --soha-bg-base: #ffffff;
   --soha-bg-layout: #ffffff;
@@ -85,10 +94,18 @@ body,
   --soha-overview-card-danger-bg: var(--soha-bg-surface);
   --soha-overview-icon-bg: var(--soha-bg-surface);
   --soha-overview-brand-border: var(--soha-border-color);
-  --soha-workflow-canvas-bg: linear-gradient(180deg, rgba(249, 249, 251, 0.98) 0%, rgba(230, 244, 255, 0.72) 100%);
+  --soha-workflow-canvas-bg: linear-gradient(
+    180deg,
+    rgba(249, 249, 251, 0.98) 0%,
+    rgba(230, 244, 255, 0.72) 100%
+  );
   --soha-workflow-canvas-grid: rgba(22, 119, 255, 0.14);
-  --soha-workflow-canvas-glow: radial-gradient(circle at top left, rgba(19, 194, 194, 0.16), transparent 36%);
-  --soha-workflow-node-bg: rgba(255, 255, 255, 0.90);
+  --soha-workflow-canvas-glow: radial-gradient(
+    circle at top left,
+    rgba(19, 194, 194, 0.16),
+    transparent 36%
+  );
+  --soha-workflow-node-bg: rgba(255, 255, 255, 0.9);
   --soha-workflow-node-border: rgba(22, 119, 255, 0.28);
   --soha-workflow-node-selected-border: var(--soha-primary);
   --soha-workflow-node-selected-ring: rgba(22, 119, 255, 0.18);
@@ -108,7 +125,11 @@ body,
   --soha-data-panel-border: #e5e7eb;
   --soha-data-row-hover-bg: #f9f9fb;
   --soha-data-row-selected-bg: #e6f4ff;
-  --soha-list-item-active-bg: linear-gradient(135deg, rgba(22, 119, 255, 0.12), rgba(19, 194, 194, 0.10));
+  --soha-list-item-active-bg: linear-gradient(
+    135deg,
+    rgba(22, 119, 255, 0.12),
+    rgba(19, 194, 194, 0.1)
+  );
   --soha-list-item-active-border: rgba(22, 119, 255, 0.42);
   --soha-app-chrome-height: 56px;
   --soha-font-size: 12px;
