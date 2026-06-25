@@ -822,8 +822,8 @@
 }
 
 .soha-workflow-template-mini-preview__node.is-validation {
-  border-color: #7ac79a;
-  background: #f0f9f4;
+  border-color: color-mix(in srgb, var(--soha-success) 42%, var(--soha-border-color) 58%);
+  background: color-mix(in srgb, var(--soha-success) 10%, var(--soha-bg-surface) 90%);
 }
 
 .soha-workflow-template-mini-preview__node strong,
@@ -966,81 +966,6 @@
   margin-top: 16px;
 }
 
-.soha-build-template-page {
-  min-height: 0;
-}
-
-.soha-build-template-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
-}
-
-.soha-build-template-workspace {
-  display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
-  gap: 12px;
-  min-height: calc(100vh - 174px);
-}
-
-.soha-build-template-list,
-.soha-build-template-designer {
-  min-height: 0;
-  border: 1px solid var(--soha-border-color);
-  border-radius: var(--soha-radius);
-  background: var(--soha-bg-surface);
-}
-
-.soha-build-template-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  overflow: hidden;
-  padding: 12px;
-}
-
-.soha-build-template-designer {
-  overflow: hidden;
-  padding: 12px;
-}
-
-.soha-build-template-list__items {
-  display: flex;
-  min-height: 0;
-  flex: 1 1 260px;
-  flex-direction: column;
-  gap: 8px;
-  overflow: auto;
-}
-
-.soha-build-template-list__item {
-  display: flex;
-  width: 100%;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  border: 1px solid var(--soha-border-color);
-  border-radius: var(--soha-radius);
-  background: var(--soha-fill-weak);
-  color: var(--soha-text-primary);
-  cursor: pointer;
-  text-align: left;
-}
-
-.soha-build-template-list__item:hover,
-.soha-build-template-list__item.is-active,
-.soha-build-template-list__item:focus-visible {
-  border-color: var(--soha-primary);
-  background: var(--soha-primary-light-default);
-}
-
-.soha-build-template-list__item:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--soha-primary) 50%, transparent);
-  outline-offset: 2px;
-}
-
 .soha-build-template-list__item-head {
   display: flex;
   align-items: flex-start;
@@ -1179,81 +1104,6 @@
   padding-inline: 4px;
 }
 
-.soha-delivery-blueprint-page {
-  min-height: 0;
-}
-
-.soha-delivery-blueprint-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
-}
-
-.soha-delivery-blueprint-workspace {
-  display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
-  gap: 12px;
-  min-height: calc(100vh - 174px);
-}
-
-.soha-delivery-blueprint-list,
-.soha-delivery-blueprint-designer {
-  min-height: 0;
-  border: 1px solid var(--soha-border-color);
-  border-radius: var(--soha-radius);
-  background: var(--soha-bg-surface);
-}
-
-.soha-delivery-blueprint-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  overflow: hidden;
-  padding: 12px;
-}
-
-.soha-delivery-blueprint-designer {
-  overflow: hidden;
-  padding: 12px;
-}
-
-.soha-delivery-blueprint-list__items {
-  display: flex;
-  min-height: 0;
-  flex: 1 1 260px;
-  flex-direction: column;
-  gap: 8px;
-  overflow: auto;
-}
-
-.soha-delivery-blueprint-list__item {
-  display: flex;
-  width: 100%;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  border: 1px solid var(--soha-border-color);
-  border-radius: var(--soha-radius);
-  background: var(--soha-fill-weak);
-  color: var(--soha-text-primary);
-  cursor: pointer;
-  text-align: left;
-}
-
-.soha-delivery-blueprint-list__item:hover,
-.soha-delivery-blueprint-list__item.is-active,
-.soha-delivery-blueprint-list__item:focus-visible {
-  border-color: var(--soha-primary);
-  background: var(--soha-primary-light-default);
-}
-
-.soha-delivery-blueprint-list__item:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--soha-primary) 50%, transparent);
-  outline-offset: 2px;
-}
-
 .soha-delivery-blueprint-list__item-head {
   display: flex;
   align-items: flex-start;
@@ -1374,18 +1224,6 @@
   overflow: auto;
 }
 
-.soha-workflow-template-page {
-  min-height: 0;
-}
-
-.soha-workflow-template-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
-}
-
 .soha-workflow-template-impact-inline {
   color: var(--soha-text-secondary);
   font-size: 12px;
@@ -1426,43 +1264,6 @@
   overflow: auto;
 }
 
-.soha-workflow-template-workspace {
-  display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
-  gap: 12px;
-  min-height: calc(100vh - 174px);
-}
-
-.soha-workflow-template-list,
-.soha-workflow-template-designer {
-  min-height: 0;
-  border: 1px solid var(--soha-border-color);
-  border-radius: var(--soha-radius);
-  background: var(--soha-bg-surface);
-}
-
-.soha-workflow-template-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  overflow: hidden;
-  padding: 12px;
-}
-
-.soha-workflow-template-designer {
-  padding: 12px;
-  overflow: hidden;
-}
-
-.soha-workflow-template-list__items {
-  display: flex;
-  min-height: 0;
-  flex: 1 1 260px;
-  flex-direction: column;
-  gap: 8px;
-  overflow: auto;
-}
-
 .soha-workflow-template-settings-form {
   display: flex;
   flex-direction: column;
@@ -1490,26 +1291,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-}
-
-.soha-workflow-template-list__item {
-  display: flex;
-  width: 100%;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  border: 1px solid var(--soha-border-color);
-  border-radius: var(--soha-radius);
-  background: var(--soha-fill-weak);
-  color: var(--soha-text-primary);
-  cursor: pointer;
-  text-align: left;
-}
-
-.soha-workflow-template-list__item:hover,
-.soha-workflow-template-list__item.is-active {
-  border-color: var(--soha-primary);
-  background: var(--soha-primary-light-default);
 }
 
 .soha-workflow-template-list__item-head {
@@ -1597,18 +1378,6 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .soha-workflow-template-workspace {
-    grid-template-columns: 280px minmax(0, 1fr);
-  }
-
-  .soha-delivery-blueprint-workspace {
-    grid-template-columns: 280px minmax(0, 1fr);
-  }
-
-  .soha-build-template-workspace {
-    grid-template-columns: 280px minmax(0, 1fr);
-  }
-
   .soha-delivery-blueprint-form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1642,11 +1411,9 @@
 .soha-application-runtime-verification-grid,
 .soha-application-service-form-grid,
 .soha-application-service-container-editor__grid,
-.soha-build-template-workspace,
 .soha-build-template-form-grid,
-.soha-delivery-blueprint-workspace,
 .soha-delivery-blueprint-form-grid,
-.soha-workflow-template-workspace {
+.soha-workflow-template-settings-form__grid {
     grid-template-columns: 1fr;
   }
 
@@ -1664,27 +1431,16 @@
     flex-direction: column;
   }
 
-  .soha-workflow-template-toolbar {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .soha-delivery-blueprint-toolbar,
   .soha-delivery-blueprint-repeat-list__toolbar,
   .soha-delivery-blueprint-repeat-item__head {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .soha-build-template-toolbar,
   .soha-build-template-variable-list__toolbar,
   .soha-build-template-variable-item__head {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .soha-workflow-template-settings-form__grid {
-    grid-template-columns: 1fr;
   }
 
   .soha-application-container-row {

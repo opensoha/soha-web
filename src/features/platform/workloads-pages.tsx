@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, useEffect, useMemo } from 'react'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import {
   App,
   Tag,
@@ -8,8 +8,6 @@ import {
   Tabs,
   Card,
   Spin,
-  Input,
-  Statistic,
   List,
   Descriptions,
   Typography,
@@ -17,6 +15,7 @@ import {
   Modal,
   Popconfirm,
   InputNumber,
+  Progress,
   Switch,
   Tooltip,
   message,
@@ -27,20 +26,21 @@ import {
   ClusterOutlined,
   ClockCircleOutlined,
   DeleteOutlined,
-  DownOutlined,
   EditOutlined,
   ReloadOutlined,
   ScheduleOutlined,
-  SearchOutlined,
   UndoOutlined,
-  UpOutlined,
 } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
+import { OverviewMetricCard, type OverviewMetricItem } from '@/components/overview-visuals'
 import {
   ManagementDensityButton,
+  ManagementBatchBar,
   ManagementIconButton,
+  ManagementKeywordField,
+  ManagementQueryActions,
   ManagementQueryField,
   ManagementQueryPanel,
   ManagementRefreshButton,
@@ -57,6 +57,7 @@ import { ResourceMetricsPanel } from '@/components/resource-metrics-panel'
 import { api } from '@/services/api-client'
 import {
   capabilityActionTooltip,
+  type ClusterCapabilityDecision,
   useClusterCapability,
 } from '@/features/platform/cluster-capabilities'
 import { buildClusterScopedPath } from '@/features/platform/platform-scope-query'
@@ -121,7 +122,8 @@ import type { TableColumnsType, TabsProps } from 'antd'
 import './platform-pages.css'
 
 const { Link, Text } = Typography
-const DEPLOYMENT_ACTIONS_COLUMN_CLASS_NAME = `${TABLE_ACTIONS_COLUMN_CLASS_NAME} soha-deployment-actions-column`
+const WORKLOAD_ACTIONS_COLUMN_CLASS_NAME = `${TABLE_ACTIONS_COLUMN_CLASS_NAME} soha-workload-actions-column`
+const POD_BATCH_DELETE_CONCURRENCY = 8
 
 const K8sYamlEditor = lazy(async () => {
   const mod = await import('@/components/k8s-yaml-editor')
@@ -151,6 +153,193 @@ function renderDetailTagList(values: string[] | undefined, emptyLabel = '-') {
       ))}
     </Space>
   )
+}
+
+type WorkloadActionRecord = {
+  allowedActions?: string[]
+  namespace: string
+}
+
+type WorkloadScaleTarget = {
+  name: string
+  namespace: string
+  replicas: number
+}
+
+function isWorkloadMutationPending<T extends { name: string; namespace: string }>(
+  mutation: { isPending: boolean; variables?: T },
+  name: string,
+  namespace: string,
+) {
+  return (
+    mutation.isPending &&
+    mutation.variables?.name === name &&
+    mutation.variables?.namespace === namespace
+  )
+}
+
+async function mapSettledWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  task: (item: T) => Promise<R>,
+) {
+  const results = new Array<PromiseSettledResult<R>>(items.length)
+  const workerCount = Math.min(Math.max(1, concurrency), items.length)
+  let nextIndex = 0
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const currentIndex = nextIndex
+        nextIndex += 1
+        try {
+          results[currentIndex] = {
+            status: 'fulfilled',
+            value: await task(items[currentIndex]),
+          }
+        } catch (reason) {
+          results[currentIndex] = {
+            status: 'rejected',
+            reason,
+          }
+        }
+      }
+    }),
+  )
+
+  return results
+}
+
+function buildWorkloadActionColumn<T extends WorkloadActionRecord>({
+  capability,
+  deleteMutation,
+  localeCode,
+  onRestart,
+  onRollback,
+  onScale,
+  restartMutation,
+  rollbackMutation,
+  scaleLabel,
+  width,
+}: {
+  capability: ClusterCapabilityDecision
+  deleteMutation: {
+    isPending: boolean
+    mutate: (value: { name: string; namespace: string }) => void
+    variables?: { name: string; namespace: string }
+  }
+  localeCode: 'zh_CN' | 'en_US'
+  onRestart?: (record: T, name: string) => void
+  onRollback?: (record: T, name: string) => void
+  onScale?: (record: T, name: string) => void
+  restartMutation?: {
+    isPending: boolean
+    variables?: { name: string; namespace: string }
+  }
+  rollbackMutation?: {
+    isPending: boolean
+    variables?: { name: string; namespace: string }
+  }
+  scaleLabel?: string
+  width: number
+}): TableColumnsType<T>[number] {
+  const restartLabel = localeCode === 'zh_CN' ? '重启' : 'Restart'
+  const resolvedScaleLabel = scaleLabel ?? (localeCode === 'zh_CN' ? '扩缩' : 'Scale')
+  const rollbackLabel = localeCode === 'zh_CN' ? '回滚' : 'Rollback'
+  const deleteLabel = localeCode === 'zh_CN' ? '删除' : 'Delete'
+
+  return {
+    fixed: 'right',
+    title: '',
+    dataIndex: 'name',
+    key: 'actions',
+    width,
+    align: 'center',
+    onHeaderCell: () => ({ className: WORKLOAD_ACTIONS_COLUMN_CLASS_NAME }),
+    onCell: () => ({ className: WORKLOAD_ACTIONS_COLUMN_CLASS_NAME }),
+    render: (name: string, record: T) => {
+      const canRestart = Boolean(onRestart) && hasAllowedAction(record.allowedActions, 'restart')
+      const canScale = Boolean(onScale) && hasAllowedAction(record.allowedActions, 'scale')
+      const canRollback = Boolean(onRollback) && hasAllowedAction(record.allowedActions, 'update')
+      const canDelete = hasAllowedAction(record.allowedActions, 'delete')
+      if (!canRestart && !canScale && !canRollback && !canDelete) return '-'
+
+      const deletePending = isWorkloadMutationPending(deleteMutation, name, record.namespace)
+      return (
+        <Space size={4} className="soha-deployment-action-cell">
+          {canRestart ? (
+            <ManagementIconButton
+              icon={<ReloadOutlined />}
+              aria-label={restartLabel}
+              disabled={capability.disabled}
+              loading={isWorkloadMutationPending(
+                restartMutation ?? { isPending: false },
+                name,
+                record.namespace,
+              )}
+              tooltip={capabilityActionTooltip(restartLabel, capability)}
+              onClick={() => onRestart?.(record, name)}
+            />
+          ) : null}
+          {canScale ? (
+            <ManagementIconButton
+              icon={<EditOutlined />}
+              aria-label={resolvedScaleLabel}
+              disabled={capability.disabled}
+              tooltip={capabilityActionTooltip(resolvedScaleLabel, capability)}
+              onClick={() => onScale?.(record, name)}
+            />
+          ) : null}
+          {canRollback ? (
+            <ManagementIconButton
+              icon={<UndoOutlined />}
+              aria-label={rollbackLabel}
+              disabled={capability.disabled}
+              loading={isWorkloadMutationPending(
+                rollbackMutation ?? { isPending: false },
+                name,
+                record.namespace,
+              )}
+              tooltip={capabilityActionTooltip(rollbackLabel, capability)}
+              onClick={() => onRollback?.(record, name)}
+            />
+          ) : null}
+          {canDelete && capability.disabled ? (
+            <ManagementIconButton
+              danger
+              disabled
+              icon={<DeleteOutlined />}
+              aria-label={deleteLabel}
+              tooltip={capabilityActionTooltip(deleteLabel, capability)}
+            />
+          ) : null}
+          {canDelete && !capability.disabled ? (
+            <Popconfirm
+              title={localeCode === 'zh_CN' ? `确认删除 ${name}？` : `Delete ${name}?`}
+              description={
+                localeCode === 'zh_CN'
+                  ? '此操作不可恢复，删除后集群资源立即消失。'
+                  : 'This deletes the resource immediately and cannot be undone.'
+              }
+              okText={deleteLabel}
+              cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
+              okButtonProps={{ danger: true, loading: deletePending }}
+              placement="topRight"
+              onConfirm={() => deleteMutation.mutate({ name, namespace: record.namespace })}
+            >
+              <ManagementIconButton
+                danger
+                icon={<DeleteOutlined />}
+                aria-label={deleteLabel}
+                loading={deletePending}
+                tooltip={deleteLabel}
+              />
+            </Popconfirm>
+          ) : null}
+        </Space>
+      )
+    },
+  }
 }
 
 function renderVolumeMounts(mounts: PodVolumeMount[] | undefined) {
@@ -247,84 +436,57 @@ function WorkloadRefreshButton({
 }
 
 function WorkloadSearchInput({
+  label,
   onChange,
   placeholder,
   value,
-  width = '100%',
+  width,
 }: {
+  label: ReactNode
   onChange: (value: string) => void
   placeholder: string
   value: string
   width?: number | string
 }) {
   return (
-    <Input
-      allowClear
-      className="soha-platform-compact-field soha-workload-search-input"
-      prefix={<SearchOutlined />}
-      size="small"
+    <ManagementKeywordField
+      label={label}
       value={value}
-      variant="filled"
-      onChange={(event) => onChange(event.target.value)}
+      onChange={onChange}
       placeholder={placeholder}
-      style={{ width }}
+      width={width}
+      inputProps={{
+        className: 'soha-platform-compact-field soha-workload-search-input',
+        size: 'small',
+      }}
     />
   )
 }
 
 function WorkloadQueryPanel({
   children,
-  expandable = false,
-  expanded = false,
   hasActiveFilters,
   localeCode,
-  onExpandedChange,
   onReset,
 }: {
   children: ReactNode
-  expandable?: boolean
-  expanded?: boolean
   hasActiveFilters: boolean
   localeCode: 'zh_CN' | 'en_US'
-  onExpandedChange?: (expanded: boolean) => void
   onReset: () => void
 }) {
   return (
     <ManagementQueryPanel
-      expanded={expanded}
+      collapsible
+      lessLabel={localeCode === 'zh_CN' ? '收起' : 'Collapse'}
+      moreLabel={localeCode === 'zh_CN' ? '展开' : 'Expand'}
       onFinish={() => undefined}
       actions={
-        <>
-          <Button
-            autoInsertSpace={false}
-            disabled={!hasActiveFilters}
-            htmlType="button"
-            onClick={onReset}
-          >
-            {localeCode === 'zh_CN' ? '重置' : 'Reset'}
-          </Button>
-          <Button autoInsertSpace={false} htmlType="submit" type="primary">
-            {localeCode === 'zh_CN' ? '查询' : 'Search'}
-          </Button>
-          {expandable ? (
-            <Button
-              autoInsertSpace={false}
-              htmlType="button"
-              icon={expanded ? <UpOutlined /> : <DownOutlined />}
-              iconPlacement="end"
-              type="link"
-              onClick={() => onExpandedChange?.(!expanded)}
-            >
-              {expanded
-                ? localeCode === 'zh_CN'
-                  ? '收起'
-                  : 'Collapse'
-                : localeCode === 'zh_CN'
-                  ? '展开'
-                  : 'Expand'}
-            </Button>
-          ) : null}
-        </>
+        <ManagementQueryActions
+          disabledReset={!hasActiveFilters}
+          onReset={onReset}
+          resetLabel={localeCode === 'zh_CN' ? '重置' : 'Reset'}
+          submitLabel={localeCode === 'zh_CN' ? '查询' : 'Search'}
+        />
       }
     >
       {children}
@@ -504,7 +666,7 @@ export function WorkloadsOverviewPage() {
       icon: <ScheduleOutlined />,
       tone: 'default',
     },
-  ]
+  ] satisfies OverviewMetricItem[]
 
   const eventColumns: TableColumnsType<WorkloadOverviewEvent> = [
     {
@@ -539,21 +701,14 @@ export function WorkloadsOverviewPage() {
     <div className="soha-page soha-overview-page soha-workloads-overview-page">
       <div className="soha-overview-metric-grid soha-workload-overview-metric-grid">
         {stats.map((item) => (
-          <Card
+          <OverviewMetricCard
             key={item.key}
-            size="small"
-            variant="outlined"
-            className={`soha-overview-metric-card is-${item.tone}`}
-          >
-            <div className="soha-overview-metric-card-head">
-              <div className="soha-overview-metric-copy">
-                <Text className="soha-overview-metric-label">{item.label}</Text>
-                <Statistic value={item.value} />
-              </div>
-              <span className="soha-overview-metric-icon">{item.icon}</span>
-            </div>
-            <Text className="soha-overview-metric-helper">{item.helper}</Text>
-          </Card>
+            label={item.label}
+            value={item.value}
+            helper={item.helper}
+            icon={item.icon}
+            tone={item.tone}
+          />
         ))}
       </div>
       <AdminTable
@@ -1133,114 +1288,22 @@ export function WorkloadsDeploymentsPage() {
       width: 104,
       render: (value: number) => formatAgeSeconds(value),
     },
-    {
-      fixed: 'right',
-      title: '',
-      dataIndex: 'name',
-      key: 'actions',
+    buildWorkloadActionColumn<Deployment>({
+      capability: workloadMutationCapability,
+      deleteMutation,
+      localeCode,
+      onRestart: (record, name) => restartMutation.mutate({ name, namespace: record.namespace }),
+      onRollback: (record, name) => rollbackMutation.mutate({ name, namespace: record.namespace }),
+      onScale: (record, name) =>
+        setScaleTarget({
+          name,
+          namespace: record.namespace,
+          replicas: record.desiredReplicas,
+        }),
+      restartMutation,
+      rollbackMutation,
       width: 148,
-      align: 'center',
-      onHeaderCell: () => ({ className: DEPLOYMENT_ACTIONS_COLUMN_CLASS_NAME }),
-      onCell: () => ({ className: DEPLOYMENT_ACTIONS_COLUMN_CLASS_NAME }),
-      render: (name: string, record: Deployment) => {
-        const canRestart = hasAllowedAction(record.allowedActions, 'restart')
-        const canScale = hasAllowedAction(record.allowedActions, 'scale')
-        const canRollback = hasAllowedAction(record.allowedActions, 'update')
-        const canDelete = hasAllowedAction(record.allowedActions, 'delete')
-        if (!canRestart && !canScale && !canRollback && !canDelete) return '-'
-        return (
-          <Space size={4} className="soha-deployment-action-cell">
-            {canRestart ? (
-              <ManagementIconButton
-                icon={<ReloadOutlined />}
-                aria-label={localeCode === 'zh_CN' ? '重启' : 'Restart'}
-                disabled={workloadMutationDisabled}
-                tooltip={capabilityActionTooltip(
-                  localeCode === 'zh_CN' ? '重启' : 'Restart',
-                  workloadMutationCapability,
-                )}
-                onClick={() => restartMutation.mutate({ name, namespace: record.namespace })}
-              />
-            ) : null}
-            {canScale ? (
-              <ManagementIconButton
-                icon={<EditOutlined />}
-                aria-label={localeCode === 'zh_CN' ? '扩缩' : 'Scale'}
-                disabled={workloadMutationDisabled}
-                tooltip={capabilityActionTooltip(
-                  localeCode === 'zh_CN' ? '扩缩' : 'Scale',
-                  workloadMutationCapability,
-                )}
-                onClick={() =>
-                  setScaleTarget({
-                    name,
-                    namespace: record.namespace,
-                    replicas: record.desiredReplicas,
-                  })
-                }
-              />
-            ) : null}
-            {canRollback ? (
-              <ManagementIconButton
-                icon={<UndoOutlined />}
-                aria-label={localeCode === 'zh_CN' ? '回滚' : 'Rollback'}
-                disabled={workloadMutationDisabled}
-                tooltip={capabilityActionTooltip(
-                  localeCode === 'zh_CN' ? '回滚' : 'Rollback',
-                  workloadMutationCapability,
-                )}
-                onClick={() => rollbackMutation.mutate({ name, namespace: record.namespace })}
-              />
-            ) : null}
-            {canDelete && workloadMutationDisabled ? (
-              <ManagementIconButton
-                danger
-                disabled
-                icon={<DeleteOutlined />}
-                aria-label={localeCode === 'zh_CN' ? '删除' : 'Delete'}
-                tooltip={capabilityActionTooltip(
-                  localeCode === 'zh_CN' ? '删除' : 'Delete',
-                  workloadMutationCapability,
-                )}
-              />
-            ) : null}
-            {canDelete && !workloadMutationDisabled ? (
-              <Popconfirm
-                title={localeCode === 'zh_CN' ? `确认删除 ${name}？` : `Delete ${name}?`}
-                description={
-                  localeCode === 'zh_CN'
-                    ? '此操作不可恢复，删除后集群资源立即消失。'
-                    : 'This deletes the resource immediately and cannot be undone.'
-                }
-                okText={localeCode === 'zh_CN' ? '删除' : 'Delete'}
-                cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
-                okButtonProps={{
-                  danger: true,
-                  loading:
-                    deleteMutation.isPending &&
-                    deleteMutation.variables?.name === name &&
-                    deleteMutation.variables?.namespace === record.namespace,
-                }}
-                placement="topRight"
-                onConfirm={() => deleteMutation.mutate({ name, namespace: record.namespace })}
-              >
-                <ManagementIconButton
-                  danger
-                  icon={<DeleteOutlined />}
-                  aria-label={localeCode === 'zh_CN' ? '删除' : 'Delete'}
-                  loading={
-                    deleteMutation.isPending &&
-                    deleteMutation.variables?.name === name &&
-                    deleteMutation.variables?.namespace === record.namespace
-                  }
-                  tooltip={localeCode === 'zh_CN' ? '删除' : 'Delete'}
-                />
-              </Popconfirm>
-            ) : null}
-          </Space>
-        )
-      },
-    },
+    }),
   ]
 
   const deploymentQueryPanel = (
@@ -1252,19 +1315,17 @@ export function WorkloadsDeploymentsPage() {
         setHealthFilter('all')
       }}
     >
-      <ManagementQueryField label={localeCode === 'zh_CN' ? '名称' : 'Name'}>
-        <WorkloadSearchInput
-          value={searchKeyword}
-          onChange={setSearchKeyword}
-          placeholder={localeCode === 'zh_CN' ? '搜索 Deployment 名称' : 'Search deployment name'}
-        />
-      </ManagementQueryField>
+      <WorkloadSearchInput
+        label={localeCode === 'zh_CN' ? '名称' : 'Name'}
+        value={searchKeyword}
+        onChange={setSearchKeyword}
+        placeholder={localeCode === 'zh_CN' ? '搜索 Deployment 名称' : 'Search deployment name'}
+      />
       <ManagementQueryField label={localeCode === 'zh_CN' ? '健康状态' : 'Health'}>
         <Select
           className="soha-platform-compact-field"
           size="small"
           value={healthFilter}
-          variant="filled"
           onChange={(value) => setHealthFilter(String(value || 'all'))}
           options={[
             { value: 'all', label: localeCode === 'zh_CN' ? '全部健康状态' : 'All health states' },
@@ -1965,30 +2026,96 @@ function renderPodRuntimeCell(record: Pod) {
   return (
     <Space size={6} wrap={false} className="soha-pod-table-runtime">
       <StatusTag value={record.phase} />
-      <Tag bordered={false} color={readyHealthy ? 'success' : 'warning'}>
+      <Tag variant="filled" color={readyHealthy ? 'success' : 'warning'}>
         {`Ready ${record.readyContainers || '-'}`}
       </Tag>
     </Space>
   )
 }
 
-function renderPodResourceSummaryCell(record: Pod, localeCode: 'zh_CN' | 'en_US') {
+function formatPodResourceValue(resource: 'cpu' | 'memory', value?: string) {
+  return resource === 'cpu' ? formatCpuDisplay(value) : formatMemoryDisplay(value)
+}
+
+function getPodResourceAmount(resource: 'cpu' | 'memory', value?: string) {
+  return resource === 'cpu' ? parseCpuValue(value) : parseMemoryValue(value)
+}
+
+function renderPodResourceLimitComparison(
+  record: Pod,
+  resource: 'cpu' | 'memory',
+  localeCode: 'zh_CN' | 'en_US',
+) {
+  const usageValue = resource === 'cpu' ? record.cpu : record.memory
+  const requestValue = record.requests?.[resource]
+  const limitValue = record.limits?.[resource]
+  const usageAmount = getPodResourceAmount(resource, usageValue)
+  const requestAmount = getPodResourceAmount(resource, requestValue)
+  const limitAmount = getPodResourceAmount(resource, limitValue)
+  const hasUsage = usageAmount >= 0
+  const hasRequest = requestAmount >= 0
+  const hasLimit = limitAmount > 0
+  const baselineAmount = hasLimit ? limitAmount : hasRequest ? requestAmount : 0
+  const hasBaseline = baselineAmount > 0
+  const percent =
+    hasUsage && hasBaseline ? Math.min(100, Math.round((usageAmount / baselineAmount) * 100)) : 0
+  const requestPercent =
+    hasRequest && hasBaseline
+      ? Math.min(100, Math.round((requestAmount / baselineAmount) * 100))
+      : null
+  const limitPercent =
+    hasLimit && hasBaseline ? Math.min(100, Math.round((limitAmount / baselineAmount) * 100)) : null
+  const label = resource === 'cpu' ? 'CPU' : localeCode === 'zh_CN' ? '内存' : 'Memory'
+  const usageLabel = formatPodResourceValue(resource, usageValue)
+  const requestLabel = formatPodResourceValue(resource, requestValue)
+  const limitLabel = formatPodResourceValue(resource, limitValue)
+  const usageText = localeCode === 'zh_CN' ? '使用' : 'Use'
+  const requestText = localeCode === 'zh_CN' ? '请求' : 'Req'
+  const limitText = localeCode === 'zh_CN' ? '限制' : 'Limit'
+  const tooltipTitle = hasLimit
+    ? `${label} ${usageText} ${usageLabel} / ${requestText} ${requestLabel} / ${limitText} ${limitLabel}`
+    : localeCode === 'zh_CN'
+      ? `${label} 使用 ${usageLabel} / 请求 ${requestLabel}，未设置限制`
+      : `${label} use ${usageLabel} / request ${requestLabel}, no limit set`
+  const markerStyle = {
+    '--soha-pod-resource-request-percent': `${requestPercent ?? 0}%`,
+    '--soha-pod-resource-limit-percent': `${limitPercent ?? 100}%`,
+  } as CSSProperties
+  const progressClassName = hasBaseline ? undefined : 'is-without-baseline'
+  const strokeColor =
+    hasUsage && hasLimit && usageAmount > limitAmount
+      ? 'var(--soha-danger)'
+      : resource === 'cpu'
+        ? 'var(--soha-primary)'
+        : 'var(--soha-success)'
+
   return (
-    <Space size={6} wrap={false} className="soha-pod-table-resource-summary">
-      <Tag bordered={false} color="processing">
-        {`CPU ${formatCpuDisplay(record.cpu)}`}
-      </Tag>
-      <Tag bordered={false} color="purple">
-        {`${localeCode === 'zh_CN' ? '内存' : 'MEM'} ${formatMemoryDisplay(record.memory)}`}
-      </Tag>
-    </Space>
+    <Tooltip title={tooltipTitle} placement="topLeft">
+      <div className="soha-pod-resource-limit-cell" aria-label={tooltipTitle}>
+        <div className="soha-pod-resource-progress-wrap" style={markerStyle}>
+          <Progress
+            className={progressClassName}
+            percent={percent}
+            showInfo={false}
+            size={['100%', 5]}
+            strokeColor={strokeColor}
+            strokeLinecap="butt"
+            railColor="var(--soha-fill-weak)"
+          />
+          {requestPercent === null ? null : (
+            <span className="soha-pod-resource-marker is-request" aria-hidden />
+          )}
+          {limitPercent === null ? null : (
+            <span className="soha-pod-resource-marker is-limit" aria-hidden />
+          )}
+        </div>
+      </div>
+    </Tooltip>
   )
 }
 
-function renderPodNameCell(record: Pod, onClick: () => void, localeCode: 'zh_CN' | 'en_US') {
-  const podIp = record.podIp || '-'
-  const nodeName = record.nodeName || '-'
-  const age = formatAgeSeconds(record.ageSeconds)
+function renderPodNameCell(record: Pod, onClick: () => void) {
+  const persistentVolumeClaims = record.persistentVolumeClaims ?? []
 
   return (
     <div className="soha-pod-table-name-cell">
@@ -1997,23 +2124,13 @@ function renderPodNameCell(record: Pod, onClick: () => void, localeCode: 'zh_CN'
           {record.name}
         </Link>
       </Tooltip>
-      <Space size={4} wrap={false} className="soha-pod-table-meta">
-        <Tag bordered={false} color="blue">
-          {record.namespace || '-'}
-        </Tag>
-        <Tag bordered={false} color="cyan">{`IP ${podIp}`}</Tag>
-        <Tooltip
-          title={`${localeCode === 'zh_CN' ? '节点' : 'Node'}: ${nodeName}`}
-          placement="topLeft"
-        >
-          <Tag bordered={false} color="geekblue" className="soha-pod-table-node-tag">
-            {nodeName}
+      {persistentVolumeClaims.length > 0 ? (
+        <Space size={4} wrap={false} className="soha-pod-table-meta">
+          <Tag variant="filled" className="soha-pod-table-pvc-tag">
+            PVC {persistentVolumeClaims.length}
           </Tag>
-        </Tooltip>
-        <Tag bordered={false} className="soha-pod-table-age-tag">
-          {age}
-        </Tag>
-      </Space>
+        </Space>
+      ) : null}
     </div>
   )
 }
@@ -2022,6 +2139,7 @@ export function WorkloadsPodsPage() {
   const { t, localeCode } = useI18n()
   const navigate = useNavigate()
   const { clusterId, namespace } = usePlatformScopeStore()
+  const podDeleteCapability = useClusterCapability('workload.mutations', localeCode)
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true)
   const [autoRefreshIntervalSeconds, setAutoRefreshIntervalSeconds] = useState(15)
   const [manualRefreshPending, setManualRefreshPending] = useState(false)
@@ -2030,7 +2148,7 @@ export function WorkloadsPodsPage() {
   const [restartFilter, setRestartFilter] = useState('all')
   const [pvcFilter, setPvcFilter] = useState('all')
   const [nodeFilter, setNodeFilter] = useState('all')
-  const [queryExpanded, setQueryExpanded] = useState(false)
+  const [selectedPodKeys, setSelectedPodKeys] = useState<string[]>([])
   const { densityButton, tableSize } = useWorkloadTableDensity(localeCode)
 
   const podsQuery = useQuery({
@@ -2081,6 +2199,44 @@ export function WorkloadsPodsPage() {
       }),
     [filteredPods],
   )
+  const selectedPods = useMemo(
+    () => pods.filter((item) => selectedPodKeys.includes(`${item.namespace}/${item.name}`)),
+    [pods, selectedPodKeys],
+  )
+  const hasSelectedPodsWithoutDeleteAction = selectedPods.some(
+    (item) => !hasAllowedAction(item.allowedActions, 'delete'),
+  )
+  const podDeleteDisabled =
+    podDeleteCapability.isLoading ||
+    podDeleteCapability.disabled ||
+    (podDeleteCapability.mode === 'agent' && podDeleteCapability.status === 'partial')
+  const podDeleteDisabledReason = podDeleteDisabled
+    ? podDeleteCapability.isLoading
+      ? localeCode === 'zh_CN'
+        ? '正在读取当前集群的 Pod 删除能力。'
+        : 'Reading pod delete capability for the current cluster.'
+      : podDeleteCapability.reason ||
+        (localeCode === 'zh_CN'
+          ? '当前集群连接模式暂不支持 Pod 删除。'
+          : 'The current cluster connection mode does not support pod deletion.')
+    : ''
+  const canDeleteSelectedPods =
+    !!clusterId &&
+    selectedPods.length > 0 &&
+    !hasSelectedPodsWithoutDeleteAction &&
+    !podDeleteDisabled
+  const batchDeleteDisabledReason =
+    selectedPods.length === 0
+      ? localeCode === 'zh_CN'
+        ? '先选择要删除的 Pod'
+        : 'Select pods first'
+      : podDeleteDisabledReason
+        ? podDeleteDisabledReason
+        : hasSelectedPodsWithoutDeleteAction
+          ? localeCode === 'zh_CN'
+            ? '部分 Pod 当前不允许删除'
+            : 'Some selected pods do not allow delete'
+          : ''
 
   const refreshStatusLabel = manualRefreshPending
     ? localeCode === 'zh_CN'
@@ -2114,6 +2270,31 @@ export function WorkloadsPodsPage() {
     onError: (err: Error) => void message.error(err.message),
   })
 
+  const batchDeletePodsMutation = useMutation({
+    mutationFn: async (items: Pod[]) =>
+      mapSettledWithConcurrency(items, POD_BATCH_DELETE_CONCURRENCY, (item) =>
+        api.delete(
+          `/clusters/${clusterId}/workloads/pods/${encodeURIComponent(item.name)}?namespace=${encodeURIComponent(item.namespace)}`,
+        ),
+      ),
+    onSuccess: (results) => {
+      const successCount = results.filter((item) => item.status === 'fulfilled').length
+      const failureCount = results.length - successCount
+      void message.success(
+        failureCount > 0
+          ? localeCode === 'zh_CN'
+            ? `批量删除完成，成功 ${successCount}，失败 ${failureCount}`
+            : `Batch delete finished: ${successCount} succeeded, ${failureCount} failed`
+          : localeCode === 'zh_CN'
+            ? `已删除 ${successCount} 个 Pod`
+            : `Deleted ${successCount} pods`,
+      )
+      setSelectedPodKeys([])
+      void podsQuery.refetch()
+    },
+    onError: (err: Error) => void message.error(err.message),
+  })
+
   const handleRefresh = async () => {
     if (!clusterId || manualRefreshPending) {
       return
@@ -2130,7 +2311,8 @@ export function WorkloadsPodsPage() {
     {
       title: 'Pod',
       dataIndex: 'name',
-      width: 320,
+      fixed: 'left',
+      width: 360,
       ellipsis: { showTitle: false },
       sorter: podSorter((left, right) => {
         const nameCompare = compareStrings(left.name, right.name)
@@ -2139,11 +2321,46 @@ export function WorkloadsPodsPage() {
       }),
       defaultSortOrder: 'ascend',
       render: (_name: string, record: Pod) =>
-        renderPodNameCell(
-          record,
-          () => navigate(buildWorkloadDetailPath('pods', record.name, namespace, record.namespace)),
-          localeCode,
+        renderPodNameCell(record, () =>
+          navigate(buildWorkloadDetailPath('pods', record.name, namespace, record.namespace)),
         ),
+    },
+    {
+      title: localeCode === 'zh_CN' ? '命名空间' : 'Namespace',
+      dataIndex: 'namespace',
+      width: 132,
+      sorter: podSorter((left, right) => compareStrings(left.namespace, right.namespace)),
+      render: (value: string) => (
+        <Tag variant="filled" color="blue" className="soha-pod-table-namespace-tag">
+          {value || '-'}
+        </Tag>
+      ),
+    },
+    {
+      title: 'IP',
+      dataIndex: 'podIp',
+      width: 128,
+      sorter: podSorter((left, right) => compareStrings(left.podIp, right.podIp)),
+      render: (value?: string) => value || '-',
+    },
+    {
+      title: localeCode === 'zh_CN' ? '节点' : 'Node',
+      dataIndex: 'nodeName',
+      width: 180,
+      ellipsis: { showTitle: false },
+      sorter: podSorter((left, right) => compareStrings(left.nodeName, right.nodeName)),
+      render: (value?: string) => (
+        <Tooltip title={value || '-'} placement="topLeft">
+          <Text className="soha-pod-table-node-text">{value || '-'}</Text>
+        </Tooltip>
+      ),
+    },
+    {
+      title: localeCode === 'zh_CN' ? '运行时间' : 'Age',
+      dataIndex: 'ageSeconds',
+      width: 96,
+      sorter: podSorter((left, right) => left.ageSeconds - right.ageSeconds),
+      render: (value: number) => formatAgeSeconds(value),
     },
     {
       title: localeCode === 'zh_CN' ? '运行状态' : 'Runtime',
@@ -2165,21 +2382,33 @@ export function WorkloadsPodsPage() {
       width: 64,
       sorter: podSorter((left, right) => left.restarts - right.restarts),
       render: (value: number) => (
-        <Tag bordered={false} color={value > 0 ? 'warning' : 'default'}>
+        <Tag variant="filled" color={value > 0 ? 'warning' : 'default'}>
           {value}
         </Tag>
       ),
     },
     {
-      title: localeCode === 'zh_CN' ? '资源' : 'Resources',
-      key: 'resources',
-      width: 132,
-      sorter: podSorter((left, right) => {
-        const cpuCompare = parseCpuValue(left.cpu) - parseCpuValue(right.cpu)
-        if (cpuCompare !== 0) return cpuCompare
-        return parseMemoryValue(left.memory) - parseMemoryValue(right.memory)
-      }),
-      render: (_: unknown, record: Pod) => renderPodResourceSummaryCell(record, localeCode),
+      title: localeCode === 'zh_CN' ? 'CPU 使用 / 请求 / 限制' : 'CPU Use / Req / Limit',
+      key: 'cpu-resource',
+      width: 150,
+      sorter: podSorter(
+        (left, right) =>
+          getPodResourceAmount('cpu', left.cpu) - getPodResourceAmount('cpu', right.cpu),
+      ),
+      render: (_: unknown, record: Pod) =>
+        renderPodResourceLimitComparison(record, 'cpu', localeCode),
+    },
+    {
+      title: localeCode === 'zh_CN' ? '内存 使用 / 请求 / 限制' : 'Memory Use / Req / Limit',
+      key: 'memory-resource',
+      width: 150,
+      sorter: podSorter(
+        (left, right) =>
+          getPodResourceAmount('memory', left.memory) -
+          getPodResourceAmount('memory', right.memory),
+      ),
+      render: (_: unknown, record: Pod) =>
+        renderPodResourceLimitComparison(record, 'memory', localeCode),
     },
     {
       fixed: 'right',
@@ -2193,40 +2422,58 @@ export function WorkloadsPodsPage() {
         className: `${TABLE_ACTIONS_COLUMN_CLASS_NAME} soha-pod-actions-column`,
       }),
       onCell: () => ({ className: `${TABLE_ACTIONS_COLUMN_CLASS_NAME} soha-pod-actions-column` }),
-      render: (value: string, record: Pod) => (
-        <Space size={4} className="soha-deployment-action-cell">
-          <Popconfirm
-            title={localeCode === 'zh_CN' ? `确认重建 Pod ${value}？` : `Rebuild pod ${value}?`}
-            description={
-              localeCode === 'zh_CN'
-                ? '这会删除当前 Pod，由控制器自动重建。'
-                : 'This deletes the current pod and lets the controller recreate it.'
-            }
-            okText={localeCode === 'zh_CN' ? '重建' : 'Rebuild'}
-            cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
-            okButtonProps={{ danger: true, loading: rebuildPodMutation.isPending }}
-            placement="topRight"
-            onConfirm={() =>
-              rebuildPodMutation.mutate({ name: value, namespace: record.namespace })
-            }
-          >
-            <ManagementIconButton
-              danger
-              icon={<DeleteOutlined />}
-              aria-label={localeCode === 'zh_CN' ? '重建 Pod' : 'Rebuild Pod'}
-              loading={rebuildPodMutation.isPending}
-              tooltip={localeCode === 'zh_CN' ? '重建 Pod' : 'Rebuild Pod'}
-            />
-          </Popconfirm>
-        </Space>
-      ),
+      render: (value: string, record: Pod) => {
+        const podRebuildDisabled =
+          podDeleteDisabled || !hasAllowedAction(record.allowedActions, 'delete')
+        const podRebuildDisabledReason =
+          podDeleteDisabledReason ||
+          (localeCode === 'zh_CN' ? '当前 Pod 不允许删除。' : 'This pod does not allow delete.')
+        return (
+          <Space size={4} className="soha-deployment-action-cell">
+            {podRebuildDisabled ? (
+              <ManagementIconButton
+                danger
+                disabled
+                icon={<DeleteOutlined />}
+                aria-label={localeCode === 'zh_CN' ? '重建 Pod' : 'Rebuild Pod'}
+                tooltip={capabilityActionTooltip(
+                  localeCode === 'zh_CN' ? '重建 Pod' : 'Rebuild Pod',
+                  { ...podDeleteCapability, reason: podRebuildDisabledReason },
+                )}
+              />
+            ) : (
+              <Popconfirm
+                title={localeCode === 'zh_CN' ? `确认重建 Pod ${value}？` : `Rebuild pod ${value}?`}
+                description={
+                  localeCode === 'zh_CN'
+                    ? '这会删除当前 Pod，由控制器自动重建。'
+                    : 'This deletes the current pod and lets the controller recreate it.'
+                }
+                okText={localeCode === 'zh_CN' ? '重建' : 'Rebuild'}
+                cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
+                okButtonProps={{ danger: true, loading: rebuildPodMutation.isPending }}
+                placement="topRight"
+                onConfirm={() =>
+                  rebuildPodMutation.mutate({ name: value, namespace: record.namespace })
+                }
+              >
+                <ManagementIconButton
+                  danger
+                  icon={<DeleteOutlined />}
+                  aria-label={localeCode === 'zh_CN' ? '重建 Pod' : 'Rebuild Pod'}
+                  loading={rebuildPodMutation.isPending}
+                  tooltip={localeCode === 'zh_CN' ? '重建 Pod' : 'Rebuild Pod'}
+                />
+              </Popconfirm>
+            )}
+          </Space>
+        )
+      },
     },
   ]
 
   const podQueryPanel = (
     <WorkloadQueryPanel
-      expandable
-      expanded={queryExpanded}
       hasActiveFilters={
         Boolean(searchKeyword.trim()) ||
         phaseFilter !== 'all' ||
@@ -2235,29 +2482,25 @@ export function WorkloadsPodsPage() {
         nodeFilter !== 'all'
       }
       localeCode={localeCode}
-      onExpandedChange={setQueryExpanded}
       onReset={() => {
         setSearchKeyword('')
         setPhaseFilter('all')
         setRestartFilter('all')
         setPvcFilter('all')
         setNodeFilter('all')
-        setQueryExpanded(false)
       }}
     >
-      <ManagementQueryField label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}>
-        <WorkloadSearchInput
-          value={searchKeyword}
-          onChange={setSearchKeyword}
-          placeholder={localeCode === 'zh_CN' ? '搜索 Pod / Node / IP' : 'Search pod / node / IP'}
-        />
-      </ManagementQueryField>
+      <WorkloadSearchInput
+        label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}
+        value={searchKeyword}
+        onChange={setSearchKeyword}
+        placeholder={localeCode === 'zh_CN' ? '搜索 Pod / Node / IP' : 'Search pod / node / IP'}
+      />
       <ManagementQueryField label={localeCode === 'zh_CN' ? '状态' : 'Phase'}>
         <Select
           className="soha-platform-compact-field"
           size="small"
           value={phaseFilter}
-          variant="filled"
           onChange={(value) => setPhaseFilter(String(value || 'all'))}
           options={[
             { value: 'all', label: localeCode === 'zh_CN' ? '全部状态' : 'All phases' },
@@ -2269,71 +2512,110 @@ export function WorkloadsPodsPage() {
           ]}
         />
       </ManagementQueryField>
-      {queryExpanded ? (
-        <>
-          <ManagementQueryField label={localeCode === 'zh_CN' ? '重启' : 'Restarts'}>
-            <Select
-              className="soha-platform-compact-field"
-              size="small"
-              value={restartFilter}
-              variant="filled"
-              onChange={(value) => setRestartFilter(String(value || 'all'))}
-              options={[
-                {
-                  value: 'all',
-                  label: localeCode === 'zh_CN' ? '全部重启状态' : 'All restart states',
-                },
-                {
-                  value: 'restarting',
-                  label: localeCode === 'zh_CN' ? '仅有重启' : 'Restarted only',
-                },
-                { value: 'clean', label: localeCode === 'zh_CN' ? '仅无重启' : 'No restarts' },
-              ]}
-            />
-          </ManagementQueryField>
-          <ManagementQueryField label={localeCode === 'zh_CN' ? '存储' : 'Storage'}>
-            <Select
-              className="soha-platform-compact-field"
-              size="small"
-              value={pvcFilter}
-              variant="filled"
-              onChange={(value) => setPvcFilter(String(value || 'all'))}
-              options={[
-                {
-                  value: 'all',
-                  label: localeCode === 'zh_CN' ? '全部存储状态' : 'All storage states',
-                },
-                {
-                  value: 'with-pvc',
-                  label: localeCode === 'zh_CN' ? '仅挂载 PVC' : 'With PVC only',
-                },
-                {
-                  value: 'without-pvc',
-                  label: localeCode === 'zh_CN' ? '仅无 PVC' : 'Without PVC',
-                },
-              ]}
-            />
-          </ManagementQueryField>
-          <ManagementQueryField label={localeCode === 'zh_CN' ? '节点' : 'Node'}>
-            <Select
-              className="soha-platform-compact-field"
-              size="small"
-              value={nodeFilter}
-              variant="filled"
-              onChange={(value) => setNodeFilter(String(value || 'all'))}
-              options={[
-                { value: 'all', label: localeCode === 'zh_CN' ? '全部节点' : 'All nodes' },
-                ...nodeOptions.map((item) => ({ value: item, label: item })),
-              ]}
-            />
-          </ManagementQueryField>
-        </>
-      ) : null}
+      <ManagementQueryField label={localeCode === 'zh_CN' ? '重启' : 'Restarts'}>
+        <Select
+          className="soha-platform-compact-field"
+          size="small"
+          value={restartFilter}
+          onChange={(value) => setRestartFilter(String(value || 'all'))}
+          options={[
+            {
+              value: 'all',
+              label: localeCode === 'zh_CN' ? '全部重启状态' : 'All restart states',
+            },
+            {
+              value: 'restarting',
+              label: localeCode === 'zh_CN' ? '仅有重启' : 'Restarted only',
+            },
+            { value: 'clean', label: localeCode === 'zh_CN' ? '仅无重启' : 'No restarts' },
+          ]}
+        />
+      </ManagementQueryField>
+      <ManagementQueryField label={localeCode === 'zh_CN' ? '存储' : 'Storage'}>
+        <Select
+          className="soha-platform-compact-field"
+          size="small"
+          value={pvcFilter}
+          onChange={(value) => setPvcFilter(String(value || 'all'))}
+          options={[
+            {
+              value: 'all',
+              label: localeCode === 'zh_CN' ? '全部存储状态' : 'All storage states',
+            },
+            {
+              value: 'with-pvc',
+              label: localeCode === 'zh_CN' ? '仅挂载 PVC' : 'With PVC only',
+            },
+            {
+              value: 'without-pvc',
+              label: localeCode === 'zh_CN' ? '仅无 PVC' : 'Without PVC',
+            },
+          ]}
+        />
+      </ManagementQueryField>
+      <ManagementQueryField label={localeCode === 'zh_CN' ? '节点' : 'Node'}>
+        <Select
+          className="soha-platform-compact-field"
+          size="small"
+          value={nodeFilter}
+          onChange={(value) => setNodeFilter(String(value || 'all'))}
+          options={[
+            { value: 'all', label: localeCode === 'zh_CN' ? '全部节点' : 'All nodes' },
+            ...nodeOptions.map((item) => ({ value: item, label: item })),
+          ]}
+        />
+      </ManagementQueryField>
     </WorkloadQueryPanel>
   )
 
+  const podBatchBar =
+    selectedPodKeys.length > 0 ? (
+      <ManagementBatchBar
+        selectedCount={selectedPodKeys.length}
+        selectedLabel={
+          localeCode === 'zh_CN'
+            ? `已选 ${selectedPodKeys.length} 个 Pod`
+            : `${selectedPodKeys.length} pods selected`
+        }
+      >
+        <Tooltip title={batchDeleteDisabledReason}>
+          <span>
+            <Popconfirm
+              title={
+                localeCode === 'zh_CN'
+                  ? `确认删除 ${selectedPods.length} 个 Pod？`
+                  : `Delete ${selectedPods.length} pods?`
+              }
+              description={
+                localeCode === 'zh_CN'
+                  ? '这会删除已选 Pod。受控制器管理的 Pod 会按控制器策略重建；独立 Pod 会直接消失。'
+                  : 'This deletes the selected pods. Controller-managed pods may be recreated; standalone pods are removed.'
+              }
+              okText={localeCode === 'zh_CN' ? '删除' : 'Delete'}
+              cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
+              okButtonProps={{ danger: true, loading: batchDeletePodsMutation.isPending }}
+              placement="topRight"
+              disabled={!canDeleteSelectedPods}
+              onConfirm={() => batchDeletePodsMutation.mutate(selectedPods)}
+            >
+              <Button
+                autoInsertSpace={false}
+                danger
+                disabled={!canDeleteSelectedPods}
+                loading={batchDeletePodsMutation.isPending}
+                size="small"
+                variant="outlined"
+              >
+                {localeCode === 'zh_CN' ? '批量删除' : 'Batch Delete'}
+              </Button>
+            </Popconfirm>
+          </span>
+        </Tooltip>
+      </ManagementBatchBar>
+    ) : null
+
   const podToolbarExtra = (
-    <ManagementTableToolbar>
+    <ManagementTableToolbar batchBar={podBatchBar}>
       <Text className="soha-refresh-meta" type="secondary">
         {refreshStatusLabel}
       </Text>
@@ -2402,7 +2684,12 @@ export function WorkloadsPodsPage() {
         }
         pageSize={10}
         tableSize={tableSize}
-        scroll={{ x: 730 }}
+        scroll={{ x: 1500 }}
+        selectCurrentPageOnly
+        rowSelection={{
+          selectedRowKeys: selectedPodKeys,
+          onChange: (selectedRowKeys: string[]) => setSelectedPodKeys(selectedRowKeys),
+        }}
       />
     </div>
   )
@@ -2435,11 +2722,13 @@ export function PodDetailPage() {
       ? '正在读取当前集群的终端能力。'
       : 'Reading terminal capability for the current cluster.'
   const terminalDisabled =
-    podExecCapability.isLoading || podExecCapability.disabled || podExecCapability.status === 'partial'
+    podExecCapability.isLoading ||
+    podExecCapability.disabled ||
+    podExecCapability.status === 'partial'
   const terminalDisabledReason = podExecCapability.isLoading
     ? terminalLoadingReason
     : podExecCapability.status === 'partial'
-      ? (podExecCapability.reason || terminalPartialReason)
+      ? podExecCapability.reason || terminalPartialReason
       : podExecCapability.reason
 
   const podDetailPath =
@@ -2920,7 +3209,11 @@ export function PodDetailPage() {
           <ManagementState
             compact
             kind="unsupported"
-            title={localeCode === 'zh_CN' ? '当前集群不支持交互终端' : 'Interactive terminal is not supported'}
+            title={
+              localeCode === 'zh_CN'
+                ? '当前集群不支持交互终端'
+                : 'Interactive terminal is not supported'
+            }
             description={terminalDisabledReason}
           />
         ) : (
@@ -2987,10 +3280,49 @@ export function WorkloadsStatefulSetsPage() {
   const queryClient = useQueryClient()
   const { clusterId, namespace } = usePlatformScopeStore()
   const { data, isLoading } = useScopedQuery<StatefulSet>('statefulsets')
+  const [scaleTarget, setScaleTarget] = useState<WorkloadScaleTarget | null>(null)
   const [searchKeyword, setSearchKeyword] = useState('')
   const { densityButton, tableSize } = useWorkloadTableDensity(localeCode)
+  const workloadMutationCapability = useClusterCapability('workload.mutations', localeCode)
 
   const statefulSets = data?.data ?? []
+  const restartMutation = useMutation({
+    mutationFn: ({ name, namespace: targetNamespace }: { name: string; namespace: string }) =>
+      api.post(`/clusters/${clusterId}/workloads/statefulsets/restart`, {
+        namespace: targetNamespace,
+        name,
+      }),
+    onSuccess: () => {
+      void message.success(localeCode === 'zh_CN' ? '已触发重启' : 'Restart triggered')
+      queryClient.invalidateQueries({ queryKey: ['statefulsets'] })
+    },
+    onError: (err: Error) => void message.error(err.message),
+  })
+  const scaleMutation = useMutation({
+    mutationFn: ({ name, namespace: targetNamespace, replicas }: WorkloadScaleTarget) =>
+      api.post(`/clusters/${clusterId}/workloads/statefulsets/scale`, {
+        namespace: targetNamespace,
+        name,
+        replicas,
+      }),
+    onSuccess: () => {
+      void message.success(localeCode === 'zh_CN' ? '已触发扩缩容' : 'Scale triggered')
+      setScaleTarget(null)
+      queryClient.invalidateQueries({ queryKey: ['statefulsets'] })
+    },
+    onError: (err: Error) => void message.error(err.message),
+  })
+  const deleteMutation = useMutation({
+    mutationFn: ({ name, namespace: targetNamespace }: { name: string; namespace: string }) =>
+      api.delete(
+        `/clusters/${clusterId}/workloads/statefulsets/${encodeURIComponent(name)}?namespace=${encodeURIComponent(targetNamespace)}`,
+      ),
+    onSuccess: () => {
+      void message.success(localeCode === 'zh_CN' ? '已删除' : 'Deleted')
+      queryClient.invalidateQueries({ queryKey: ['statefulsets'] })
+    },
+    onError: (err: Error) => void message.error(err.message),
+  })
   const filteredStatefulSets = useMemo(
     () =>
       statefulSets.filter((item) =>
@@ -3037,16 +3369,22 @@ export function WorkloadsStatefulSetsPage() {
       render: (value: number) => formatAgeSeconds(value),
     },
   ]
-
-  const { column: statefulSetActions, modalNode: statefulSetYamlModal } =
-    useResourceActions<StatefulSet>({
-      resourcePath: 'workloads/statefulsets',
-      resourceKind: 'StatefulSet',
-      getName: (record) => record.name,
-      getNamespace: (record) => record.namespace,
-      listInvalidationKey: ['statefulsets'],
-    })
-  columns.push(statefulSetActions)
+  columns.push(
+    buildWorkloadActionColumn<StatefulSet>({
+      capability: workloadMutationCapability,
+      deleteMutation,
+      localeCode,
+      onRestart: (record, name) => restartMutation.mutate({ name, namespace: record.namespace }),
+      onScale: (record, name) =>
+        setScaleTarget({
+          name,
+          namespace: record.namespace,
+          replicas: record.desiredReplicas,
+        }),
+      restartMutation,
+      width: 116,
+    }),
+  )
 
   const statefulSetQueryPanel = (
     <WorkloadQueryPanel
@@ -3054,23 +3392,21 @@ export function WorkloadsStatefulSetsPage() {
       localeCode={localeCode}
       onReset={() => setSearchKeyword('')}
     >
-      <ManagementQueryField label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}>
-        <WorkloadSearchInput
-          value={searchKeyword}
-          onChange={setSearchKeyword}
-          placeholder={
-            localeCode === 'zh_CN'
-              ? '搜索 StatefulSet / Namespace / Service'
-              : 'Search stateful set / namespace / service'
-          }
-        />
-      </ManagementQueryField>
+      <WorkloadSearchInput
+        label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}
+        value={searchKeyword}
+        onChange={setSearchKeyword}
+        placeholder={
+          localeCode === 'zh_CN'
+            ? '搜索 StatefulSet / Namespace / Service'
+            : 'Search stateful set / namespace / service'
+        }
+      />
     </WorkloadQueryPanel>
   )
 
   return (
     <div className="soha-page">
-      {statefulSetYamlModal}
       {statefulSetQueryPanel}
       <AdminTable
         className="soha-statefulsets-table soha-platform-table"
@@ -3112,6 +3448,28 @@ export function WorkloadsStatefulSetsPage() {
         tableSize={tableSize}
         scroll={{ x: 'max-content' }}
       />
+      <Modal
+        title={localeCode === 'zh_CN' ? 'StatefulSet 扩缩容' : 'Scale StatefulSet'}
+        open={!!scaleTarget}
+        onOk={() => {
+          if (scaleTarget) {
+            scaleMutation.mutate(scaleTarget)
+          }
+        }}
+        onCancel={() => setScaleTarget(null)}
+        confirmLoading={scaleMutation.isPending}
+      >
+        <div className="flex items-center gap-2">
+          <Text>{localeCode === 'zh_CN' ? '副本数:' : 'Replicas:'}</Text>
+          <InputNumber
+            value={scaleTarget?.replicas ?? 1}
+            min={0}
+            onChange={(value) =>
+              scaleTarget && setScaleTarget({ ...scaleTarget, replicas: Number(value) || 0 })
+            }
+          />
+        </div>
+      </Modal>
     </div>
   )
 }
@@ -3132,8 +3490,32 @@ export function WorkloadsDaemonSetsPage() {
   const { data, isLoading } = useScopedQuery<DaemonSet>('daemonsets')
   const [searchKeyword, setSearchKeyword] = useState('')
   const { densityButton, tableSize } = useWorkloadTableDensity(localeCode)
+  const workloadMutationCapability = useClusterCapability('workload.mutations', localeCode)
 
   const daemonSets = data?.data ?? []
+  const restartMutation = useMutation({
+    mutationFn: ({ name, namespace: targetNamespace }: { name: string; namespace: string }) =>
+      api.post(`/clusters/${clusterId}/workloads/daemonsets/restart`, {
+        namespace: targetNamespace,
+        name,
+      }),
+    onSuccess: () => {
+      void message.success(localeCode === 'zh_CN' ? '已触发重启' : 'Restart triggered')
+      queryClient.invalidateQueries({ queryKey: ['daemonsets'] })
+    },
+    onError: (err: Error) => void message.error(err.message),
+  })
+  const deleteMutation = useMutation({
+    mutationFn: ({ name, namespace: targetNamespace }: { name: string; namespace: string }) =>
+      api.delete(
+        `/clusters/${clusterId}/workloads/daemonsets/${encodeURIComponent(name)}?namespace=${encodeURIComponent(targetNamespace)}`,
+      ),
+    onSuccess: () => {
+      void message.success(localeCode === 'zh_CN' ? '已删除' : 'Deleted')
+      queryClient.invalidateQueries({ queryKey: ['daemonsets'] })
+    },
+    onError: (err: Error) => void message.error(err.message),
+  })
   const filteredDaemonSets = useMemo(
     () =>
       daemonSets.filter((item) =>
@@ -3171,17 +3553,16 @@ export function WorkloadsDaemonSetsPage() {
       render: (value: number) => formatAgeSeconds(value),
     },
   ]
-
-  const { column: daemonSetActions, modalNode: daemonSetYamlModal } = useResourceActions<DaemonSet>(
-    {
-      resourcePath: 'workloads/daemonsets',
-      resourceKind: 'DaemonSet',
-      getName: (record) => record.name,
-      getNamespace: (record) => record.namespace,
-      listInvalidationKey: ['daemonsets'],
-    },
+  columns.push(
+    buildWorkloadActionColumn<DaemonSet>({
+      capability: workloadMutationCapability,
+      deleteMutation,
+      localeCode,
+      onRestart: (record, name) => restartMutation.mutate({ name, namespace: record.namespace }),
+      restartMutation,
+      width: 84,
+    }),
   )
-  columns.push(daemonSetActions)
 
   const daemonSetQueryPanel = (
     <WorkloadQueryPanel
@@ -3189,21 +3570,19 @@ export function WorkloadsDaemonSetsPage() {
       localeCode={localeCode}
       onReset={() => setSearchKeyword('')}
     >
-      <ManagementQueryField label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}>
-        <WorkloadSearchInput
-          value={searchKeyword}
-          onChange={setSearchKeyword}
-          placeholder={
-            localeCode === 'zh_CN' ? '搜索 DaemonSet / Namespace' : 'Search daemon set / namespace'
-          }
-        />
-      </ManagementQueryField>
+      <WorkloadSearchInput
+        label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}
+        value={searchKeyword}
+        onChange={setSearchKeyword}
+        placeholder={
+          localeCode === 'zh_CN' ? '搜索 DaemonSet / Namespace' : 'Search daemon set / namespace'
+        }
+      />
     </WorkloadQueryPanel>
   )
 
   return (
     <>
-      {daemonSetYamlModal}
       <div className="soha-page">
         {daemonSetQueryPanel}
         <AdminTable
@@ -3265,6 +3644,7 @@ export function WorkloadsJobsPage() {
   const { data, isLoading } = useScopedQuery<Job>('jobs')
   const [searchKeyword, setSearchKeyword] = useState('')
   const { densityButton, tableSize } = useWorkloadTableDensity(localeCode)
+  const workloadMutationCapability = useClusterCapability('workload.mutations', localeCode)
 
   const jobs = data?.data ?? []
   const filteredJobs = useMemo(
@@ -3314,6 +3694,9 @@ export function WorkloadsJobsPage() {
     resourceKind: 'Job',
     getName: (record) => record.name,
     getNamespace: (record) => record.namespace,
+    canDelete: (record) => hasAllowedAction(record.allowedActions, 'delete'),
+    deleteDisabled: workloadMutationCapability.disabled,
+    deleteDisabledReason: workloadMutationCapability.reason,
     listInvalidationKey: ['jobs'],
   })
   columns.push(jobActions)
@@ -3324,15 +3707,14 @@ export function WorkloadsJobsPage() {
       localeCode={localeCode}
       onReset={() => setSearchKeyword('')}
     >
-      <ManagementQueryField label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}>
-        <WorkloadSearchInput
-          value={searchKeyword}
-          onChange={setSearchKeyword}
-          placeholder={
-            localeCode === 'zh_CN' ? '搜索 Job / Namespace / Mode' : 'Search job / namespace / mode'
-          }
-        />
-      </ManagementQueryField>
+      <WorkloadSearchInput
+        label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}
+        value={searchKeyword}
+        onChange={setSearchKeyword}
+        placeholder={
+          localeCode === 'zh_CN' ? '搜索 Job / Namespace / Mode' : 'Search job / namespace / mode'
+        }
+      />
     </WorkloadQueryPanel>
   )
 
@@ -3400,6 +3782,7 @@ export function WorkloadsCronJobsPage() {
   const { data, isLoading } = useScopedQuery<CronJob>('cronjobs')
   const [searchKeyword, setSearchKeyword] = useState('')
   const { densityButton, tableSize } = useWorkloadTableDensity(localeCode)
+  const workloadMutationCapability = useClusterCapability('workload.mutations', localeCode)
 
   const cronJobs = data?.data ?? []
   const filteredCronJobs = useMemo(
@@ -3463,6 +3846,9 @@ export function WorkloadsCronJobsPage() {
     resourceKind: 'CronJob',
     getName: (record) => record.name,
     getNamespace: (record) => record.namespace,
+    canDelete: (record) => hasAllowedAction(record.allowedActions, 'delete'),
+    deleteDisabled: workloadMutationCapability.disabled,
+    deleteDisabledReason: workloadMutationCapability.reason,
     listInvalidationKey: ['cronjobs'],
   })
   columns.push(cronJobActions)
@@ -3473,17 +3859,16 @@ export function WorkloadsCronJobsPage() {
       localeCode={localeCode}
       onReset={() => setSearchKeyword('')}
     >
-      <ManagementQueryField label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}>
-        <WorkloadSearchInput
-          value={searchKeyword}
-          onChange={setSearchKeyword}
-          placeholder={
-            localeCode === 'zh_CN'
-              ? '搜索 CronJob / Namespace / Schedule'
-              : 'Search cron job / namespace / schedule'
-          }
-        />
-      </ManagementQueryField>
+      <WorkloadSearchInput
+        label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}
+        value={searchKeyword}
+        onChange={setSearchKeyword}
+        placeholder={
+          localeCode === 'zh_CN'
+            ? '搜索 CronJob / Namespace / Schedule'
+            : 'Search cron job / namespace / schedule'
+        }
+      />
     </WorkloadQueryPanel>
   )
 

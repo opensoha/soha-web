@@ -268,6 +268,46 @@ describe('docker pages', () => {
     expect(payload).not.toHaveProperty('diskGiB')
   })
 
+  it('builds quick host payload with KubeVirt network provider params', () => {
+    const payload = buildQuickHostPayload({
+      name: 'docker-kubevirt',
+      architecture: 'amd64',
+      virtualizationConnectionId: 'conn-kv',
+      imageId: 'image-kv',
+      flavorId: 'flavor-1',
+      network: 'apps/docker-build-net',
+      config: {
+        providerParams: {
+          networkType: 'multus',
+          networkAttachmentDefinition: 'apps/docker-build-net',
+          interfaceModel: 'virtio',
+          interfaceBinding: 'bridge',
+          interfaceName: 'net1',
+        },
+      },
+      cpuCoreCount: 4,
+      memoryGiB: 8,
+      diskGiB: 80,
+    }) satisfies DockerQuickCreateHostInput
+
+    expect(payload).toMatchObject({
+      virtualizationConnectionId: 'conn-kv',
+      imageId: 'image-kv',
+      network: 'apps/docker-build-net',
+      config: {
+        providerParams: {
+          networkType: 'multus',
+          networkAttachmentDefinition: 'apps/docker-build-net',
+          interfaceModel: 'virtio',
+          interfaceBinding: 'bridge',
+          interfaceName: 'net1',
+        },
+      },
+      memoryBytes: 8 * 1024 ** 3,
+      diskBytes: 80 * 1024 ** 3,
+    })
+  })
+
   it('builds compose project payload with typed labels and config', () => {
     const payload = buildProjectPayload({
       hostId: 'host-1',

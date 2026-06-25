@@ -3,17 +3,20 @@ import { useEffect, useMemo, useState } from 'react'
 import { App, Alert, Badge, Button, Card, Descriptions, Drawer, Form, Input, InputNumber, Popconfirm, Segmented, Select, Space, Switch, Tabs, Tag, Typography } from 'antd'
 import type { FormInstance } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { CloudServerOutlined, DeleteOutlined, DockerOutlined, EditOutlined, FileTextOutlined, MinusCircleOutlined, PlayCircleOutlined, PlusOutlined, PoweroffOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
+import { CloudServerOutlined, DeleteOutlined, DockerOutlined, EditOutlined, FileTextOutlined, MinusCircleOutlined, PlayCircleOutlined, PlusOutlined, PoweroffOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
 import { useWorkbenchModuleEnabled } from '@/features/modules/module-status'
 import { formatDateTime } from '@/utils/time'
 import { AdminTable } from '@/components/admin-table'
+import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementDensityButton,
   ManagementDetailHeader,
   ManagementIconButton,
+  ManagementKeywordField,
+  ManagementQueryActions,
   ManagementQueryField,
   ManagementQueryPanel,
   ManagementRefreshButton,
@@ -81,10 +84,16 @@ const STATUS_COLORS: Record<string, string> = {
   online: 'green',
   pending: 'gold',
   provisioning: 'blue',
+  provisioned_waiting_agent: 'blue',
   queued: 'gold',
   ready: 'green',
   released: 'default',
   running: 'green',
+  agent_bootstrapping: 'blue',
+  agent_failed: 'red',
+  agent_registered: 'gold',
+  docker_ready: 'green',
+  vm_ready: 'blue',
   stopped: 'default',
   timeout: 'red',
   callback_timeout: 'red',
@@ -93,6 +102,22 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 const DEFAULT_COMPOSE = `services:\n  web:\n    image: nginx:alpine\n    ports:\n      - "8080:80"\n`
+
+const HOST_STATUS_OPTIONS = [
+  'pending',
+  'online',
+  'ready',
+  'docker_ready',
+  'provisioning',
+  'vm_ready',
+  'provisioned_waiting_agent',
+  'agent_registered',
+  'agent_bootstrapping',
+  'agent_failed',
+  'degraded',
+  'offline',
+  'unavailable',
+]
 
 const DOCKER_QUERY_ROOT = ['docker'] as const
 const ARCHITECTURE_OPTIONS = [
@@ -400,15 +425,6 @@ function DockerTableHeader({
   )
 }
 
-function DockerFilterActions({ loading, onReset }: { loading?: boolean; onReset: () => void }) {
-  return (
-    <Space size={8}>
-      <Button htmlType="submit" icon={<SearchOutlined />} loading={loading} type="primary">查询</Button>
-      <Button htmlType="button" onClick={onReset}>重置</Button>
-    </Space>
-  )
-}
-
 type DockerAdminTableProps = Omit<
   AdminTableProps,
   | 'columnSettingIconOnly'
@@ -696,6 +712,7 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
   const { moduleEnabled: virtualizationModuleEnabled } = useWorkbenchModuleEnabled('virtualization')
   const provisionOptions = useVirtualizationProvisionOptions(canManageHosts && virtualizationModuleEnabled)
   const selectedProvisionConnectionID = Form.useWatch('virtualizationConnectionId', quickForm)
+  const kubevirtQuickNetworkType = Form.useWatch(['config', 'providerParams', 'networkType'], quickForm) ?? 'pod'
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const hostsQuery = useQuery({ enabled: dockerModuleEnabled, queryKey: ['docker', 'hosts', filters], queryFn: () => dockerApi.hosts(filters) })
@@ -749,6 +766,7 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
       imageId: undefined,
       vmTemplateId: undefined,
       network: provider === 'pve' ? stringConfigValue(connection?.config, 'defaultBridge') || undefined : undefined,
+      config: provider === 'kubevirt' ? { providerParams: { networkType: 'pod', interfaceBinding: 'bridge' } } : { providerParams: { runtimeEndpoint: 'http://__SOHA_VM_IP__:18080' } },
     })
   }
   const applyProvisionImageDefaults = (imageID?: string) => {
@@ -789,11 +807,11 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
         <div className="soha-vrt-query">
           <ManagementQueryPanel
             form={filterForm}
-            actions={<DockerFilterActions loading={hostsQuery.isFetching} onReset={() => { filterForm.resetFields(); setFilters({ page: 1, pageSize: filters.pageSize ?? 10 }) }} />}
+            actions={<ManagementQueryActions loading={hostsQuery.isFetching} onReset={() => { filterForm.resetFields(); setFilters({ page: 1, pageSize: filters.pageSize ?? 10 }) }} />}
             onFinish={(values) => setFilters((current) => ({ ...current, ...values, page: 1 }))}
           >
-            <ManagementQueryField grow minWidth={260} width={360} name="search" label="关键词"><Input allowClear prefix={<SearchOutlined />} placeholder="主机、Endpoint、VM 或 IP" /></ManagementQueryField>
-            <ManagementQueryField minWidth={132} width={150} name="status" label="状态"><Select allowClear placeholder="全部" options={['online', 'ready', 'provisioning', 'degraded', 'offline', 'unavailable'].map((item) => ({ value: item, label: item }))} /></ManagementQueryField>
+            <ManagementKeywordField placeholder="主机、Endpoint、VM 或 IP" />
+            <ManagementQueryField minWidth={132} width={150} name="status" label="状态"><Select allowClear placeholder="全部" options={HOST_STATUS_OPTIONS.map((item) => ({ value: item, label: item }))} /></ManagementQueryField>
             <ManagementQueryField minWidth={148} width={170} name="architecture" label="架构"><Select allowClear placeholder="全部" options={ARCHITECTURE_OPTIONS} /></ManagementQueryField>
             <ManagementQueryField minWidth={150} width={180} name="environment" label="环境"><Input allowClear placeholder="dev / test" /></ManagementQueryField>
           </ManagementQueryPanel>
@@ -823,7 +841,7 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
         <Form form={form} layout="vertical" onFinish={(values) => createMutation.mutate(values)}>
           <Form.Item name="name" label="名称" rules={[{ required: true }]}><Input /></Form.Item>
           <div className="grid gap-3 md:grid-cols-2">
-            <Form.Item name="status" label="状态"><Select options={['pending', 'online', 'ready', 'provisioning', 'degraded', 'offline'].map((item) => ({ value: item, label: item }))} /></Form.Item>
+            <Form.Item name="status" label="状态"><Select options={HOST_STATUS_OPTIONS.map((item) => ({ value: item, label: item }))} /></Form.Item>
             <Form.Item name="endpoint" label="Endpoint"><Input placeholder="tcp://10.0.0.10:2376" /></Form.Item>
             <Form.Item name="architecture" label="架构"><Select allowClear options={ARCHITECTURE_OPTIONS} /></Form.Item>
             <Form.Item name="agentId" label="Agent ID"><Input /></Form.Item>
@@ -873,9 +891,34 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
               <Select allowClear showSearch={{ optionFilterProp: 'label' }} loading={provisionOptions.loading} options={quickFlavorOptions} placeholder="选择规格或手动填写资源" />
             </Form.Item>
             <Form.Item name="architecture" label="架构"><Select options={ARCHITECTURE_OPTIONS} /></Form.Item>
-            <Form.Item name="network" label={selectedProvisionProvider === 'kubevirt' ? '网络' : 'PVE 网桥'}>
-              <Input disabled={selectedProvisionProvider === 'kubevirt'} placeholder={selectedProvisionProvider === 'kubevirt' ? 'KubeVirt 使用默认 Pod 网络' : 'vmbr0'} />
-            </Form.Item>
+            {selectedProvisionProvider === 'kubevirt' ? (
+              <>
+                <Form.Item name={['config', 'providerParams', 'networkType']} label="KubeVirt 网络类型">
+                  <Select options={[{ value: 'pod', label: 'Pod 默认网络' }, { value: 'multus', label: 'Multus' }]} />
+                </Form.Item>
+                <Form.Item name="network" label={kubevirtQuickNetworkType === 'multus' ? 'NetworkAttachmentDefinition' : '网络'}>
+                  <Input placeholder={kubevirtQuickNetworkType === 'multus' ? 'namespace/nad-name' : 'pod'} />
+                </Form.Item>
+                {kubevirtQuickNetworkType === 'multus' ? (
+                  <Form.Item name={['config', 'providerParams', 'networkAttachmentDefinition']} label="NAD 引用">
+                    <Input placeholder="apps/docker-build-net" />
+                  </Form.Item>
+                ) : null}
+                <Form.Item name={['config', 'providerParams', 'interfaceModel']} label="Interface Model">
+                  <Input placeholder="virtio" />
+                </Form.Item>
+                <Form.Item name={['config', 'providerParams', 'interfaceBinding']} label="Interface Binding">
+                  <Select allowClear options={[{ value: 'bridge', label: 'bridge' }, { value: 'masquerade', label: 'masquerade' }, { value: 'sriov', label: 'sriov' }]} />
+                </Form.Item>
+                <Form.Item name={['config', 'providerParams', 'interfaceName']} label="Interface Name">
+                  <Input placeholder="net1" />
+                </Form.Item>
+              </>
+            ) : (
+              <Form.Item name="network" label="PVE 网桥">
+                <Input placeholder="vmbr0" />
+              </Form.Item>
+            )}
             <Form.Item name="vmTemplateId" hidden><Input /></Form.Item>
             <Form.Item name="environment" label="环境"><Input /></Form.Item>
             <Form.Item name="owner" label="负责人"><Input /></Form.Item>
@@ -886,7 +929,20 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
             <Form.Item name="ttlSeconds" label="有效期秒数"><InputNumber min={0} className="w-full" /></Form.Item>
             <Form.Item name="availablePortStart" label="端口池起始"><InputNumber min={1} max={65535} className="w-full" /></Form.Item>
             <Form.Item name="availablePortEnd" label="端口池结束"><InputNumber min={1} max={65535} className="w-full" /></Form.Item>
-            {selectedProvisionProvider === 'pve' ? <Form.Item name={['config', 'providerParams', 'snippetStorage']} label="PVE Snippet Storage"><Input placeholder="local" /></Form.Item> : null}
+            {selectedProvisionProvider === 'pve' ? (
+              <>
+                <Form.Item name={['config', 'providerParams', 'snippetStorage']} label="PVE Snippet Storage"><Input placeholder="local" /></Form.Item>
+                <Form.Item name={['config', 'providerParams', 'controlPlaneBaseURL']} label="控制面地址">
+                  <Input placeholder="http://10.0.3.x:8080" />
+                </Form.Item>
+                <Form.Item name={['config', 'providerParams', 'runtimeEndpoint']} label="Agent Endpoint">
+                  <Input placeholder="http://__SOHA_VM_IP__:18080" />
+                </Form.Item>
+                <Form.Item name={['config', 'providerParams', 'agentInstallScript']} label="Agent 安装脚本">
+                  <Input.TextArea rows={3} spellCheck={false} />
+                </Form.Item>
+              </>
+            ) : null}
           </div>
           <Form.Item name="cloudInit" label="Cloud-init 用户数据"><TextArea rows={8} spellCheck={false} placeholder="#cloud-config" /></Form.Item>
         </Form>
@@ -977,10 +1033,10 @@ function ProjectsTable({ embedded = false, sourceKind = 'compose' as DockerProje
         <div className="soha-vrt-query">
           <ManagementQueryPanel
             form={filterForm}
-            actions={<DockerFilterActions loading={projectsQuery.isFetching} onReset={() => { filterForm.resetFields(); setFilters({ page: 1, pageSize: filters.pageSize ?? 10, sourceKind }) }} />}
+            actions={<ManagementQueryActions loading={projectsQuery.isFetching} onReset={() => { filterForm.resetFields(); setFilters({ page: 1, pageSize: filters.pageSize ?? 10, sourceKind }) }} />}
             onFinish={(values) => setFilters((current) => ({ ...current, ...values, sourceKind, page: 1 }))}
           >
-            <ManagementQueryField grow minWidth={260} width={360} name="search" label="关键词"><Input allowClear prefix={<SearchOutlined />} placeholder="项目、Slug 或来源" /></ManagementQueryField>
+            <ManagementKeywordField placeholder="项目、Slug 或来源" />
             <ManagementQueryField minWidth={180} width={220} name="hostId" label="主机"><Select allowClear showSearch={{ optionFilterProp: 'label' }} placeholder="全部主机" options={hostOptions} /></ManagementQueryField>
             <ManagementQueryField minWidth={132} width={150} name="status" label="状态"><Select allowClear placeholder="全部" options={['draft', 'defined', 'running', 'stopped', 'failed'].map((item) => ({ value: item, label: item }))} /></ManagementQueryField>
             <ManagementQueryField minWidth={150} width={180} name="environment" label="环境"><Input allowClear placeholder="dev / test" /></ManagementQueryField>
@@ -1176,10 +1232,10 @@ function ServicesTable({ embedded = false, fixedProjectId }: { embedded?: boolea
         <div className="soha-vrt-query">
           <ManagementQueryPanel
             form={filterForm}
-            actions={<DockerFilterActions loading={servicesQuery.isFetching} onReset={() => { filterForm.resetFields(); setFilters({ page: 1, pageSize: filters.pageSize ?? 10, projectId: fixedProjectId }) }} />}
+            actions={<ManagementQueryActions loading={servicesQuery.isFetching} onReset={() => { filterForm.resetFields(); setFilters({ page: 1, pageSize: filters.pageSize ?? 10, projectId: fixedProjectId }) }} />}
             onFinish={(values) => setFilters((current) => ({ ...current, ...values, projectId: fixedProjectId, page: 1 }))}
           >
-            <ManagementQueryField grow minWidth={260} width={360} name="search" label="关键词"><Input allowClear prefix={<SearchOutlined />} placeholder="服务、镜像或容器" /></ManagementQueryField>
+            <ManagementKeywordField placeholder="服务、镜像或容器" />
             <ManagementQueryField minWidth={180} width={220} name="hostId" label="主机"><Select allowClear showSearch={{ optionFilterProp: 'label' }} placeholder="全部主机" options={hostOptions} /></ManagementQueryField>
             {!fixedProjectId ? <ManagementQueryField minWidth={180} width={220} name="projectId" label="项目"><Select allowClear showSearch={{ optionFilterProp: 'label' }} placeholder="全部项目" options={projectOptions} /></ManagementQueryField> : null}
             <ManagementQueryField minWidth={132} width={150} name="status" label="状态"><Select allowClear placeholder="全部" options={['defined', 'running', 'exited', 'failed', 'unknown'].map((item) => ({ value: item, label: item }))} /></ManagementQueryField>
@@ -1257,10 +1313,10 @@ function PortsTable({ embedded = false, fixedHostId, fixedProjectId }: { embedde
         <div className="soha-vrt-query">
           <ManagementQueryPanel
             form={filterForm}
-            actions={<DockerFilterActions loading={portsQuery.isFetching} onReset={() => { filterForm.resetFields(); setFilters({ page: 1, pageSize: filters.pageSize ?? 10, hostId: fixedHostId, projectId: fixedProjectId }) }} />}
+            actions={<ManagementQueryActions loading={portsQuery.isFetching} onReset={() => { filterForm.resetFields(); setFilters({ page: 1, pageSize: filters.pageSize ?? 10, hostId: fixedHostId, projectId: fixedProjectId }) }} />}
             onFinish={(values) => setFilters((current) => ({ ...current, ...values, hostId: fixedHostId, projectId: fixedProjectId, page: 1 }))}
           >
-            <ManagementQueryField grow minWidth={260} width={360} name="search" label="关键词"><Input allowClear prefix={<SearchOutlined />} placeholder="名称、访问地址或负责人" /></ManagementQueryField>
+            <ManagementKeywordField placeholder="名称、访问地址或负责人" />
             {!fixedHostId ? <ManagementQueryField minWidth={180} width={220} name="hostId" label="主机"><Select allowClear showSearch={{ optionFilterProp: 'label' }} placeholder="全部主机" options={hostOptions} /></ManagementQueryField> : null}
             {!fixedProjectId ? <ManagementQueryField minWidth={180} width={220} name="projectId" label="项目"><Select allowClear showSearch={{ optionFilterProp: 'label' }} placeholder="全部项目" options={projectOptions} /></ManagementQueryField> : null}
             <ManagementQueryField minWidth={132} width={150} name="status" label="状态"><Select allowClear placeholder="全部" options={['active', 'reserved', 'released', 'expired'].map((item) => ({ value: item, label: item }))} /></ManagementQueryField>
@@ -1548,10 +1604,10 @@ function TemplatesTable() {
       <div className="soha-vrt-query">
         <ManagementQueryPanel
           form={filterForm}
-          actions={<DockerFilterActions loading={templatesQuery.isFetching} onReset={() => { filterForm.resetFields(); setFilters({ page: 1, pageSize: filters.pageSize ?? 10 }) }} />}
+          actions={<ManagementQueryActions loading={templatesQuery.isFetching} onReset={() => { filterForm.resetFields(); setFilters({ page: 1, pageSize: filters.pageSize ?? 10 }) }} />}
           onFinish={(values) => setFilters((current) => ({ ...current, ...values, page: 1 }))}
         >
-          <ManagementQueryField grow minWidth={260} width={360} name="search" label="关键词"><Input allowClear prefix={<SearchOutlined />} placeholder="模板名称或描述" /></ManagementQueryField>
+          <ManagementKeywordField placeholder="模板名称或描述" />
           <ManagementQueryField minWidth={132} width={150} name="kind" label="类型"><Select allowClear placeholder="全部" options={[{ value: 'compose', label: 'compose' }]} /></ManagementQueryField>
           <ManagementQueryField minWidth={132} width={150} name="enabled" label="启用"><Select allowClear placeholder="全部" options={[{ value: true, label: '启用' }, { value: false, label: '停用' }]} /></ManagementQueryField>
         </ManagementQueryPanel>
@@ -1634,7 +1690,7 @@ function OperationsTable({ embedded = false, initialPreset = 'all' as OperationP
         <div className="soha-vrt-query">
           <ManagementQueryPanel
             form={filterForm}
-            actions={<DockerFilterActions loading={operationsQuery.isFetching} onReset={() => { filterForm.resetFields(); setPreset(initialPreset); setFilters({ page: 1, pageSize: filters.pageSize ?? (embedded ? 6 : 10) }) }} />}
+            actions={<ManagementQueryActions loading={operationsQuery.isFetching} onReset={() => { filterForm.resetFields(); setPreset(initialPreset); setFilters({ page: 1, pageSize: filters.pageSize ?? (embedded ? 6 : 10) }) }} />}
             onFinish={(values) => setFilters((current) => ({ ...current, ...values, page: 1 }))}
           >
             <ManagementQueryField minWidth={360} width={460} label="任务视图">
@@ -1651,7 +1707,7 @@ function OperationsTable({ embedded = false, initialPreset = 'all' as OperationP
                 ]}
               />
             </ManagementQueryField>
-            <ManagementQueryField grow minWidth={240} width={320} name="search" label="关键词"><Input allowClear prefix={<SearchOutlined />} placeholder="任务 ID、类型或发起人" /></ManagementQueryField>
+            <ManagementKeywordField placeholder="任务 ID、类型或发起人" />
           </ManagementQueryPanel>
         </div>
       ) : null}
@@ -1757,7 +1813,7 @@ export function DockerOverviewPage() {
 }
 
 export function DockerHostsPage() {
-  return <div className="soha-page soha-virtualization-page"><HostsTable /></div>
+  return <ManagementDataPage className="soha-virtualization-page" tableNode={<HostsTable />} />
 }
 
 export function DockerProjectsPage() {
@@ -1777,9 +1833,9 @@ export function DockerPortsPage() {
 }
 
 export function DockerTemplatesPage() {
-  return <div className="soha-page soha-virtualization-page"><TemplatesTable /></div>
+  return <ManagementDataPage className="soha-virtualization-page" tableNode={<TemplatesTable />} />
 }
 
 export function DockerOperationsPage() {
-  return <div className="soha-page soha-virtualization-page"><OperationsTable /></div>
+  return <ManagementDataPage className="soha-virtualization-page" tableNode={<OperationsTable />} />
 }

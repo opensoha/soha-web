@@ -32,7 +32,6 @@ import {
   PlusOutlined,
   RightOutlined,
   RocketOutlined,
-  SearchOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
@@ -40,7 +39,7 @@ import {
   ManagementDetailHeader,
   ManagementDensityButton,
   ManagementIconButton,
-  ManagementQueryField,
+  ManagementKeywordField,
   ManagementQueryPanel,
   ManagementRefreshButton,
   ManagementState,
@@ -128,18 +127,16 @@ function ResourceQueryPanel({
         </>
       )}
     >
-      <ManagementQueryField label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}>
-        <Input
-          allowClear
-          className="soha-platform-compact-field soha-workload-search-input"
-          prefix={<SearchOutlined />}
-          size="small"
-          value={searchKeyword}
-          variant="filled"
-          onChange={(event) => setSearchKeyword(event.target.value)}
-          placeholder={placeholder}
-        />
-      </ManagementQueryField>
+      <ManagementKeywordField
+        label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}
+        value={searchKeyword}
+        onChange={setSearchKeyword}
+        placeholder={placeholder}
+        inputProps={{
+          className: 'soha-platform-compact-field soha-workload-search-input',
+          size: 'small',
+        }}
+      />
     </ManagementQueryPanel>
   )
 }
@@ -1083,7 +1080,7 @@ export function CRDApiGroupDetailPage() {
                     >
                       <span className="soha-crd-kind-item__header">
                         <span className="soha-crd-kind-item__name">{crd.name}</span>
-                        <Tag color={isNamespacedCRD(crd) ? 'gold' : 'blue'} bordered={false}>
+                        <Tag color={isNamespacedCRD(crd) ? 'gold' : 'blue'} variant="filled">
                           {isNamespacedCRD(crd)
                             ? t('page.extensions.crd.namespacedScoped', 'Namespaced')
                             : t('page.extensions.crd.clusterScoped', 'Cluster scoped')}
@@ -1652,8 +1649,8 @@ function renderHelmReadme(readme?: string) {
   }
   return (
     <pre style={{
-      background: 'var(--soha-color-surface-muted)',
-      border: '1px solid var(--soha-color-border)',
+      background: 'var(--soha-bg-surface-muted)',
+      border: '1px solid var(--soha-border-color)',
       borderRadius: 6,
       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
       fontSize: 12,
@@ -1881,7 +1878,7 @@ export function HelmChartsPage() {
             <img
               src={record.logoImageUrl}
               alt=""
-              style={{ width: 32, height: 32, borderRadius: 4, objectFit: 'contain', border: '1px solid var(--soha-color-border)' }}
+              style={{ width: 32, height: 32, borderRadius: 4, objectFit: 'contain', border: '1px solid var(--soha-border-color)' }}
             />
           ) : null}
           <Space orientation="vertical" size={2}>
@@ -2157,7 +2154,7 @@ export function HelmChartsPage() {
                 <img
                   src={activeChart.logoImageUrl}
                   alt=""
-                  style={{ width: 72, height: 72, borderRadius: 6, objectFit: 'contain', border: '1px solid var(--soha-color-border)' }}
+                  style={{ width: 72, height: 72, borderRadius: 6, objectFit: 'contain', border: '1px solid var(--soha-border-color)' }}
                 />
               ) : null}
               <Space orientation="vertical" size={6}>

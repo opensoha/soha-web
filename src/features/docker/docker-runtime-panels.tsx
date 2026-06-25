@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ManagementState } from '@/components/management-list'
 import '@/components/resource-operation-panels.css'
 import { buildSameOriginStreamURL, withStreamTicket } from '@/features/auth/stream-ticket'
+import { readTerminalThemeColors } from '@/theme/app-theme'
 import { downloadText } from '@/utils/download'
 import { dockerApi } from './docker-api'
 import type { DockerProjectVolumeFileEntry } from './docker-types'
@@ -311,7 +312,7 @@ export function DockerProjectTerminalPanel({
         convertEol: true,
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace',
         fontSize: 13,
-        theme: { background: '#0b1220', foreground: '#e5edf5' },
+        theme: readTerminalThemeColors(),
       })
       const fitAddon = new XTermFitAddon()
       terminal.loadAddon(fitAddon)

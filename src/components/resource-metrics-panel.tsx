@@ -4,6 +4,7 @@ import { AdminTable } from '@/components/admin-table'
 import { ManagementState } from '@/components/management-list'
 import { StatGrid } from '@/components/stat-grid'
 import { useI18n } from '@/i18n'
+import { resolveThemeColorReference } from '@/theme/app-theme'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import type { MetricSeries, MetricsSnapshot, ResourceQuantity } from '@/types'
@@ -52,18 +53,22 @@ interface MetricPointRow {
 }
 
 export const compactMetricColors: Record<string, string> = {
-  connections: '#64748b',
-  cpu: '#0ea5e9',
-  cpuLimit: '#ef4444',
-  cpuRequest: '#22c55e',
-  default: '#2563eb',
-  diskRead: '#0891b2',
-  diskWrite: '#dc2626',
-  memory: '#4f46e5',
-  memoryLimit: '#ef4444',
-  memoryRequest: '#22c55e',
-  networkRx: '#10b981',
-  networkTx: '#f97316',
+  connections: 'var(--soha-graph-muted, #64748b)',
+  cpu: 'var(--soha-graph-metric, #0891b2)',
+  cpuLimit: 'var(--soha-danger, #ef4444)',
+  cpuRequest: 'var(--soha-success, #22c55e)',
+  default: 'var(--soha-primary, #1677ff)',
+  diskRead: 'var(--soha-info, #0891b2)',
+  diskWrite: 'var(--soha-graph-hypothesis, #dc2626)',
+  memory: 'var(--soha-graph-span, #7c3aed)',
+  memoryLimit: 'var(--soha-danger, #ef4444)',
+  memoryRequest: 'var(--soha-success, #22c55e)',
+  networkRx: 'var(--soha-graph-service, #13c2c2)',
+  networkTx: 'var(--soha-warning, #f97316)',
+}
+
+function resolveCompactChartColor(color: string) {
+  return resolveThemeColorReference(color, '#1677ff')
 }
 
 export function formatBytes(value: number) {
@@ -234,7 +239,7 @@ export function buildCompactChartSpec(lines: CompactChartLine[], unit: string, _
   const dashMap: Record<string, number[] | undefined> = {}
   lines.forEach((line) => {
     colorDomain.push(line.label)
-    colorRange.push(line.color)
+    colorRange.push(resolveCompactChartColor(line.color))
     if (line.lineStyle === 'dashed') dashMap[line.label] = [6, 4]
     else if (line.lineStyle === 'dotted') dashMap[line.label] = [2, 4]
   })
@@ -333,11 +338,11 @@ export function buildCompactChartSpec(lines: CompactChartLine[], unit: string, _
         orient: 'bottom',
         type: 'band',
         label: {
-          style: { fontSize: 10, fill: '#8a91a5' },
+          style: { fontSize: 10, fill: resolveThemeColorReference('var(--soha-text-tertiary, #6b7280)', '#6b7280') },
           autoLimit: true,
           autoHide: true,
         },
-        domainLine: { style: { stroke: 'var(--ant-color-border-secondary)' } },
+        domainLine: { style: { stroke: resolveThemeColorReference('var(--soha-border-color-strong, #f0f2f5)', '#f0f2f5') } },
         tick: { visible: false },
       },
       {
@@ -349,13 +354,13 @@ export function buildCompactChartSpec(lines: CompactChartLine[], unit: string, _
         max: mirroredAxisDomain?.max,
         expand: { min: 0.08, max: 0.08 },
         label: {
-          style: { fontSize: 10, fill: '#8a91a5' },
+          style: { fontSize: 10, fill: resolveThemeColorReference('var(--soha-text-tertiary, #6b7280)', '#6b7280') },
           formatMethod: (value: unknown) => formatAxisMetricValue(Number(value), unit),
         },
         grid: {
           visible: true,
           style: {
-            stroke: 'var(--ant-color-border-secondary)',
+            stroke: resolveThemeColorReference('var(--soha-border-color-strong, #f0f2f5)', '#f0f2f5'),
             lineDash: [3, 3],
             strokeOpacity: 0.6,
           },
@@ -395,6 +400,10 @@ export function buildCompactChartSpec(lines: CompactChartLine[], unit: string, _
     },
     animation: false,
   }
+}
+
+export function resolveCompactMetricColor(key: string): string {
+  return resolveThemeColorReference(compactMetricColors[key] ?? compactMetricColors.default, '#1677ff')
 }
 
 function buildPlaceholderCard(key: string, title: string, unit: string): CompactChartCard {

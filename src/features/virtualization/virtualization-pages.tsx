@@ -12,6 +12,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Modal,
   Popconfirm,
   Progress,
   Segmented,
@@ -21,6 +22,7 @@ import {
   Switch,
   Tabs,
   Tag,
+  Tooltip,
   Typography,
 } from 'antd'
 import type { DrawerProps } from 'antd'
@@ -49,13 +51,17 @@ import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { api } from '@/services/api-client'
 import { AdminTable } from '@/components/admin-table'
+import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementDetailHeader,
   ManagementIconButton,
+  ManagementKeywordField,
+  ManagementQueryActions,
   ManagementQueryField,
   ManagementQueryPanel,
   ManagementState,
   ManagementTableToolbar,
+  useManagementTextFilter,
 } from '@/components/management-list'
 import type { ApiResponse, Cluster } from '@/types'
 import { virtualizationApi } from './virtualization-api'
@@ -76,6 +82,7 @@ import {
   formatOperationDuration,
   isAbnormalOperation,
   isPendingOperation,
+  isStaleVirtualMachine,
   isSyncOperation,
   isVMOperation,
   latestNonEmptyOperationMessage,
@@ -90,6 +97,7 @@ import {
   riskReasons,
   selectableOperationIds,
   stringifyRaw,
+  virtualMachineDisplayStatus,
   virtualizationPageSummary,
 } from './virtualization-model'
 import type {
@@ -114,6 +122,7 @@ import type {
   VirtualMachine,
   VirtualMachinePowerAction,
   VirtualizationCluster,
+  VirtualizationConnectionDeleteDependencies,
   VirtualizationFlavor,
   VirtualizationFlavorInput,
   VirtualizationImage,
@@ -127,6 +136,7 @@ import type {
 
 const { Text } = Typography
 const stableDrawerMotion = null as unknown as DrawerProps['motion']
+const tableEllipsis = { showTitle: false } as const
 
 const VMConsole = lazy(() =>
   import('./vm-console').then((module) => ({ default: module.VMConsole })),
@@ -138,6 +148,40 @@ function statusTag(value?: string) {
   if (!value) return <Text type="secondary">-</Text>
   const key = value.toLowerCase()
   return <Tag color={STATUS_COLORS[key] ?? 'default'}>{value}</Tag>
+}
+
+function tableTooltipText(value: unknown) {
+  const text = String(value ?? '').trim() || '-'
+  const content = <span className="soha-vrt-table-tooltip-text">{text}</span>
+  if (text === '-') return content
+  return (
+    <Tooltip placement="topLeft" title={<span className="soha-vrt-table-tooltip-content">{text}</span>}>
+      {content}
+    </Tooltip>
+  )
+}
+
+function tableTooltipLink(value: unknown, to: string) {
+  const text = String(value ?? '').trim() || '-'
+  const content = <Link className="soha-vrt-table-tooltip-text" to={to}>{text}</Link>
+  if (text === '-') return <span className="soha-vrt-table-tooltip-text">-</span>
+  return (
+    <Tooltip placement="topLeft" title={<span className="soha-vrt-table-tooltip-content">{text}</span>}>
+      {content}
+    </Tooltip>
+  )
+}
+
+function tableTooltipTextButton(value: unknown, onClick: () => void) {
+  const text = String(value ?? '').trim() || '-'
+  if (text === '-') return <span className="soha-vrt-table-tooltip-text">-</span>
+  return (
+    <Tooltip placement="topLeft" title={<span className="soha-vrt-table-tooltip-content">{text}</span>}>
+      <button className="soha-vrt-table-text-button" type="button" onClick={onClick}>
+        {text}
+      </button>
+    </Tooltip>
+  )
 }
 
 
@@ -227,7 +271,7 @@ function vmMetricColor(key: string): string {
 
 function VMMetricsChart({ data }: { data: VirtualizationVMMetrics }) {
   if (!data.ready || data.message) {
-    return <Alert type="info" message={data.message || '当前暂无可用指标数据'} />
+    return <Alert type="info" title={data.message || '当前暂无可用指标数据'} />
   }
   const series = data.series ?? []
   if (series.length === 0) {
@@ -302,22 +346,48 @@ function TaskProgressBanner({ task, status, title, onCancel, cancelling }: TaskP
   )
 }
 
+function dependencySampleText(samples?: VirtualizationConnectionDeleteDependencies['vmSamples']) {
+  const names = (samples ?? []).map((item) => item.name || item.externalId || item.id).filter(Boolean)
+  return names.length > 0 ? names.slice(0, 3).join('、') : '-'
+}
 
-
-function VirtualizationFilterActions({
-  loading,
-  onReset,
-}: {
-  loading?: boolean
-  onReset: () => void
-}) {
+function ConnectionDeletePreview({ dependencies }: { dependencies: VirtualizationConnectionDeleteDependencies }) {
+  const pendingTaskCount = dependencies.pendingTaskCount ?? 0
+  const forceRequired = dependencies.forceRequired === true
   return (
-    <Space size={8}>
-      <Button type="primary" htmlType="submit" icon={<SearchOutlined />} loading={loading}>筛选</Button>
-      <Button onClick={onReset}>重置</Button>
+    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+      {pendingTaskCount > 0 ? (
+        <Alert
+          type="warning"
+          showIcon
+          message="存在未完成任务"
+          description="请先取消或等待 queued/running 任务结束后再删除连接。"
+        />
+      ) : forceRequired ? (
+        <Alert
+          type="warning"
+          showIcon
+          message="删除将影响关联资源"
+          description="确认后会使用 force 删除，后端会先为历史任务写入连接与 VM 快照。"
+        />
+      ) : (
+        <Alert type="info" showIcon message="未发现关联资源" description="可以直接删除该虚拟化连接。" />
+      )}
+      <Descriptions size="small" column={2} bordered>
+        <Descriptions.Item label="VM">{dependencies.vmCount ?? 0}</Descriptions.Item>
+        <Descriptions.Item label="镜像">{dependencies.imageCount ?? 0}</Descriptions.Item>
+        <Descriptions.Item label="规格">{dependencies.flavorCount ?? 0}</Descriptions.Item>
+        <Descriptions.Item label="历史任务">{dependencies.taskCount ?? 0}</Descriptions.Item>
+        <Descriptions.Item label="未完成任务">{pendingTaskCount}</Descriptions.Item>
+        <Descriptions.Item label="Docker Host">{dependencies.dockerHostCount ?? 0}</Descriptions.Item>
+        <Descriptions.Item label="VM 样例" span={2}>{dependencySampleText(dependencies.vmSamples)}</Descriptions.Item>
+        <Descriptions.Item label="任务样例" span={2}>{dependencySampleText(dependencies.taskSamples)}</Descriptions.Item>
+      </Descriptions>
     </Space>
   )
 }
+
+
 
 function VirtualizationAdminTable({
   className,
@@ -371,8 +441,8 @@ function useVirtualizationPermissions() {
     canManageFlavors: hasVirtualizationPermission('virtualization.flavors.manage'),
     canManageOperations: hasVirtualizationPermission('virtualization.operations.manage'),
     canSync: hasVirtualizationPermission('virtualization.sync.manage'),
-    canViewMetrics: virtualizationModuleEnabled && (hasPermission(snapshot, 'virtualization.vms.metrics') || hasManage),
-    canAccessConsole: virtualizationModuleEnabled && (hasPermission(snapshot, 'virtualization.vms.console') || hasManage),
+    canViewMetrics: hasVirtualizationPermission('virtualization.vms.metrics'),
+    canAccessConsole: hasVirtualizationPermission('virtualization.vms.console'),
   }
 }
 
@@ -478,14 +548,14 @@ function OperationsTable({
     },
   })
   const columns: ColumnsType<VirtualizationOperation> = [
-    { title: '类型', dataIndex: 'operationType', render: (_value, record) => operationKind(record), width: 150 },
-    { title: '资源', dataIndex: 'targetName', render: (value, record) => value || record.targetType || record.assetType || '-', width: 160 },
-    { title: '连接', dataIndex: 'connectionName', render: (value, record) => value || record.connectionId || '-', width: 160 },
+    { title: '类型', dataIndex: 'operationType', render: (_value, record) => tableTooltipText(operationKind(record)), ellipsis: tableEllipsis, width: 140 },
+    { title: '资源', dataIndex: 'targetName', render: (value, record) => tableTooltipText(value || record.targetType || record.assetType || '-'), ellipsis: tableEllipsis, width: 180 },
+    { title: '连接', dataIndex: 'connectionName', render: (value, record) => tableTooltipText(value || record.connectionId || '-'), ellipsis: tableEllipsis, width: 200 },
     { ...tableColumnPresets.status, title: '状态', dataIndex: 'status', render: statusTag, width: 120 },
-    { title: '异常摘要', dataIndex: 'message', render: (_value, record) => latestNonEmptyOperationMessage(record), ellipsis: true },
-    { title: '运行时长', render: (_value, record) => formatOperationDuration(record), width: 140 },
-    { ...tableColumnPresets.datetime, title: '最近心跳', dataIndex: 'lastHeartbeatAt', render: formatDateTime, width: 180 },
-    { ...tableColumnPresets.datetime, title: '开始时间', dataIndex: 'startedAt', render: (_value, record) => formatDateTime(operationTime(record)), width: 180 },
+    { title: '异常摘要', dataIndex: 'message', render: (_value, record) => tableTooltipText(latestNonEmptyOperationMessage(record)), ellipsis: tableEllipsis, width: 320 },
+    { title: '运行时长', render: (_value, record) => tableTooltipText(formatOperationDuration(record)), ellipsis: tableEllipsis, width: 140 },
+    { ...tableColumnPresets.datetime, title: '最近心跳', dataIndex: 'lastHeartbeatAt', render: (value) => tableTooltipText(formatDateTime(value)), ellipsis: tableEllipsis, width: 180 },
+    { ...tableColumnPresets.datetime, title: '开始时间', dataIndex: 'startedAt', render: (_value, record) => tableTooltipText(formatDateTime(operationTime(record))), ellipsis: tableEllipsis, width: 180 },
     {
       ...tableColumnPresets.action,
       title: '操作',
@@ -630,7 +700,7 @@ function OperationsTable({
         dataSource={filteredOperations}
         columns={columns}
         paginationSummary={localTableSummary(filteredOperations.length, operations.length)}
-        scroll={{ x: 1360 }}
+        scroll={{ x: 1640 }}
       />
       <Drawer
         title="任务日志"
@@ -650,7 +720,7 @@ function OperationsTable({
           <Descriptions.Item label="最近心跳">{formatDateTime(selectedOperation?.lastHeartbeatAt)}</Descriptions.Item>
           <Descriptions.Item label="完成时间">{formatDateTime(selectedOperation?.completedAt)}</Descriptions.Item>
         </Descriptions>
-        {selectedOperation?.message ? <Alert className="mt-4" type={isAbnormalOperation(selectedOperation.status) ? 'error' : 'info'} message={selectedOperation.message} /> : null}
+        {selectedOperation?.message ? <Alert className="mt-4" type={isAbnormalOperation(selectedOperation.status) ? 'error' : 'info'} title={selectedOperation.message} /> : null}
         <div className="mt-4 flex justify-end">
           <Button size="small" onClick={async () => {
             const text = (logs.length
@@ -665,7 +735,7 @@ function OperationsTable({
             复制日志
           </Button>
         </div>
-        <pre className="mt-4 max-h-[520px] overflow-auto rounded border border-[var(--soha-border)] bg-[var(--soha-surface-muted)] p-3 text-xs">
+        <pre className="mt-4 max-h-[520px] overflow-auto rounded border border-[var(--soha-border-color)] bg-[var(--soha-bg-surface-muted)] p-3 text-xs">
           {(logs.length
             ? logs.map((item) => `[${formatDateTime(item.createdAt)}] ${item.logLevel ?? 'info'} ${item.message}`).join('\n')
             : selectedOperation?.logs?.length
@@ -1027,14 +1097,14 @@ export function VirtualizationOverviewPage() {
                 className="soha-vrt-overview-table"
                 empty="暂无任务记录"
                 enableColumnSelection={false}
-                scroll={{ x: 920 }}
+                scroll={{ x: 980 }}
                 columns={[
-                  { title: '类型', render: (_value: unknown, record: VirtualizationOperation) => operationKind(record), width: 150 },
-                  { title: '资源', dataIndex: 'targetName', render: (value: string, record: VirtualizationOperation) => value || record.targetType || '-', width: 180 },
-                  { title: '连接', dataIndex: 'connectionId', render: (value: string) => value || '-', width: 180 },
-                  { title: '状态', dataIndex: 'status', render: statusTag, width: 120 },
-                  { title: '摘要', render: (_value: unknown, record: VirtualizationOperation) => latestNonEmptyOperationMessage(record), ellipsis: true },
-                  { title: '时间', render: (_value: unknown, record: VirtualizationOperation) => formatDateTime(operationTime(record)), width: 180 },
+                  { title: '类型', render: (_value: unknown, record: VirtualizationOperation) => tableTooltipText(operationKind(record)), ellipsis: tableEllipsis, width: 120 },
+                  { title: '资源', dataIndex: 'targetName', render: (value: string, record: VirtualizationOperation) => tableTooltipText(value || record.targetType || '-'), ellipsis: tableEllipsis, width: 160 },
+                  { title: '连接', dataIndex: 'connectionId', render: (value: string) => tableTooltipText(value || '-'), ellipsis: tableEllipsis, width: 160 },
+                  { title: '状态', dataIndex: 'status', render: statusTag, width: 110 },
+                  { title: '摘要', render: (_value: unknown, record: VirtualizationOperation) => tableTooltipText(latestNonEmptyOperationMessage(record)), ellipsis: tableEllipsis, width: 230 },
+                  { title: '时间', render: (_value: unknown, record: VirtualizationOperation) => tableTooltipText(formatDateTime(operationTime(record))), ellipsis: tableEllipsis, width: 140 },
                   {
                     ...tableColumnPresets.action,
                     title: '操作',
@@ -1047,7 +1117,7 @@ export function VirtualizationOverviewPage() {
                         onClick={() => setSelectedOperation(record)}
                       />
                     ),
-                    width: 100,
+                    width: 60,
                   },
                 ]}
               />
@@ -1113,7 +1183,7 @@ export function VirtualizationOverviewPage() {
                         showInfo={false}
                         size="small"
                         status={item.tone === 'danger' ? 'exception' : item.tone === 'success' ? 'success' : 'normal'}
-                        strokeColor={item.tone === 'warning' ? '#f97316' : undefined}
+                        strokeColor={item.tone === 'warning' ? 'var(--soha-warning)' : undefined}
                       />
                       <div className="soha-vrt-provider-meta">
                         <span>健康 {item.healthy}</span>
@@ -1155,8 +1225,8 @@ export function VirtualizationOverviewPage() {
           <Descriptions.Item label="开始时间">{formatDateTime(selectedOperation?.startedAt || selectedOperation?.createdAt)}</Descriptions.Item>
           <Descriptions.Item label="最近心跳">{formatDateTime(selectedOperation?.lastHeartbeatAt)}</Descriptions.Item>
         </Descriptions>
-        {selectedOperation?.message ? <Alert className="mt-4" type={isAbnormalOperation(selectedOperation.status) ? 'error' : 'info'} message={selectedOperation.message} /> : null}
-        <pre className="mt-4 max-h-[520px] overflow-auto rounded border border-[var(--soha-border)] bg-[var(--soha-surface-muted)] p-3 text-xs">
+        {selectedOperation?.message ? <Alert className="mt-4" type={isAbnormalOperation(selectedOperation.status) ? 'error' : 'info'} title={selectedOperation.message} /> : null}
+        <pre className="mt-4 max-h-[520px] overflow-auto rounded border border-[var(--soha-border-color)] bg-[var(--soha-bg-surface-muted)] p-3 text-xs">
           {(logs.length
             ? logs.map((item) => `[${formatDateTime(item.createdAt)}] ${item.logLevel ?? 'info'} ${item.message}`).join('\n')
             : selectedOperation?.message) || (logsQuery.isLoading ? '日志加载中' : '暂无日志')}
@@ -1193,8 +1263,10 @@ export function VirtualizationVmsPage() {
   const { virtualizationModuleEnabled, canManageVMs } = useVirtualizationPermissions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
-  const createProvider = Form.useWatch('provider', form) ?? 'kubevirt'
-  const createSourceMode = Form.useWatch('sourceMode', form) ?? (createProvider === 'pve' ? 'template_clone' : 'datasource_clone')
+	  const createProvider = Form.useWatch('provider', form) ?? 'kubevirt'
+	  const createSourceMode = Form.useWatch('sourceMode', form) ?? (createProvider === 'pve' ? 'template_clone' : 'datasource_clone')
+	  const kubevirtNetworkType = Form.useWatch('kubevirtNetworkType', form) ?? 'pod'
+	  const selectedConnectionId = Form.useWatch('connectionId', form)
   const { task: streamedTask, status: streamStatus } = useTaskStream(pendingTaskId, virtualizationModuleEnabled)
 
   useEffect(() => {
@@ -1244,9 +1316,32 @@ export function VirtualizationVmsPage() {
   const clusters = clustersQuery.data?.data ?? []
   const images = normalizePage(imagesQuery.data?.data, 1, 200).items
   const flavors = flavorsQuery.data?.data ?? []
-  const pveNodeOptions = useMemo(() => images.filter((item) => item.provider === 'pve' && item.node).map((item) => item.node as string).filter((value, index, items) => items.indexOf(value) === index).map((value) => ({ value, label: value })), [images])
-  const pveStorageOptions = useMemo(() => images.filter((item) => item.provider === 'pve' && item.assetKind === 'storage' && item.name).map((item) => item.name).filter((value, index, items) => items.indexOf(value) === index).map((value) => ({ value, label: value })), [images])
-  const pveBridgeOptions = useMemo(() => ['vmbr0', 'vmbr1'].map((value) => ({ value, label: value })), [])
+  const selectedCluster = useMemo(() => clusters.find((item) => item.id === selectedConnectionId), [clusters, selectedConnectionId])
+  const pveCapabilityAssets = useMemo(() => images.filter((item) => item.provider === 'pve' && (!selectedConnectionId || item.connectionId === selectedConnectionId)), [images, selectedConnectionId])
+  const pveNodeOptions = useMemo(() => Array.from(new Set([
+    typeof selectedCluster?.config?.defaultNode === 'string' ? selectedCluster.config.defaultNode : '',
+    ...pveCapabilityAssets.map((item) => item.node || ''),
+  ].map((value) => value.trim()).filter(Boolean))).map((value) => ({ value, label: value })), [pveCapabilityAssets, selectedCluster?.config?.defaultNode])
+  const pveStorageOptions = useMemo(() => Array.from(new Set([
+    typeof selectedCluster?.config?.defaultStorage === 'string' ? selectedCluster.config.defaultStorage : '',
+    ...pveCapabilityAssets
+      .filter((item) => item.assetKind === 'storage' || item.sourceKind === 'storage')
+      .map((item) => item.storage || item.name || ''),
+  ].map((value) => value.trim()).filter(Boolean))).map((value) => ({ value, label: value })), [pveCapabilityAssets, selectedCluster?.config?.defaultStorage])
+  const pveSnippetStorageOptions = useMemo(() => Array.from(new Set([
+    typeof selectedCluster?.config?.defaultSnippetStorage === 'string' ? selectedCluster.config.defaultSnippetStorage : '',
+    typeof selectedCluster?.config?.snippetStorage === 'string' ? selectedCluster.config.snippetStorage : '',
+    ...pveCapabilityAssets
+      .filter((item) => (item.assetKind === 'storage' || item.sourceKind === 'storage') && (item.config?.supportsSnippets === true || item.config?.supportsSnippets === 'true' || String(item.config?.content || '').split(',').map((part) => part.trim()).includes('snippets')))
+      .map((item) => item.storage || item.name || ''),
+  ].map((value) => value.trim()).filter(Boolean))).map((value) => ({ value, label: value })), [pveCapabilityAssets, selectedCluster?.config?.defaultSnippetStorage, selectedCluster?.config?.snippetStorage])
+  const pveBridgeOptions = useMemo(() => Array.from(new Set([
+    typeof selectedCluster?.config?.defaultBridge === 'string' ? selectedCluster.config.defaultBridge : '',
+    ...pveCapabilityAssets
+      .filter((item) => item.assetKind === 'network' || item.sourceKind === 'network')
+      .filter((item) => item.config?.bridge === true || item.config?.bridge === 'true' || item.name?.startsWith('vmbr'))
+      .map((item) => item.config?.network && typeof item.config.network === 'string' ? item.config.network : item.name || ''),
+  ].map((value) => value.trim()).filter(Boolean))).map((value) => ({ value, label: value })), [pveCapabilityAssets, selectedCluster?.config?.defaultBridge])
   const vmPage = normalizePage(vmsQuery.data?.data, filters.page ?? 1, filters.pageSize ?? 10)
   const selectedFlavorId = Form.useWatch('flavorId', form)
   const selectedFlavor = flavors.find((item) => item.id === selectedFlavorId)
@@ -1256,15 +1351,16 @@ export function VirtualizationVmsPage() {
       dataIndex: 'name',
       fixed: 'left',
       width: 190,
-      render: (value, record) => <Link to={`/virtualization/vms/${encodeURIComponent(record.id)}`}>{value}</Link>,
+      render: (value, record) => tableTooltipLink(value, `/virtualization/vms/${encodeURIComponent(record.id)}`),
+      ellipsis: tableEllipsis,
     },
-    { title: 'Provider', dataIndex: 'provider', render: (value) => value || '-' },
-    { title: '连接', dataIndex: 'connectionName', render: (value, record) => value || record.connectionId || '-' },
-    { title: '命名空间/节点', render: (_value, record) => [record.namespace, record.node].filter(Boolean).join(' / ') || '-' },
-    { title: '电源', dataIndex: 'powerState', render: (value, record) => statusTag(value || record.status), width: 120 },
-    { title: '规格', render: (_value, record) => record.flavorName || `${record.cpu ?? '-'}C / ${record.memoryMiB ?? '-'}MiB / ${record.diskGiB ?? '-'}GiB` },
-    { title: '镜像', dataIndex: 'bootImageName', render: (value, record) => value || record.bootImageId || '-' },
-    { title: '地址', dataIndex: 'ipAddresses', render: (value: string[]) => value?.join(', ') || '-' },
+    { title: 'Provider', dataIndex: 'provider', render: (value) => tableTooltipText(value || '-'), ellipsis: tableEllipsis, width: 120 },
+    { title: '连接', dataIndex: 'connectionName', render: (value, record) => tableTooltipText(value || record.connectionId || '-'), ellipsis: tableEllipsis, width: 180 },
+    { title: '命名空间/节点', render: (_value, record) => tableTooltipText([record.namespace, record.node].filter(Boolean).join(' / ') || '-'), ellipsis: tableEllipsis, width: 200 },
+    { title: '电源', dataIndex: 'powerState', render: (_value, record) => statusTag(virtualMachineDisplayStatus(record)), width: 120 },
+    { title: '规格', render: (_value, record) => tableTooltipText(record.flavorName || `${record.cpu ?? '-'}C / ${record.memoryMiB ?? '-'}MiB / ${record.diskGiB ?? '-'}GiB`), ellipsis: tableEllipsis, width: 180 },
+    { title: '镜像', dataIndex: 'bootImageName', render: (value, record) => tableTooltipText(value || record.bootImageId || '-'), ellipsis: tableEllipsis, width: 220 },
+    { title: '地址', dataIndex: 'ipAddresses', render: (value: string[]) => tableTooltipText(value?.join(', ') || '-'), ellipsis: tableEllipsis, width: 220 },
     { ...tableColumnPresets.datetime, title: '创建时间', dataIndex: 'createdAt', render: formatDateTime },
     {
       ...tableColumnPresets.action,
@@ -1290,71 +1386,77 @@ export function VirtualizationVmsPage() {
   ]
 
   return (
-    <div className="soha-page soha-virtualization-page">
-      <TaskProgressBanner
-        task={streamedTask}
-        status={streamStatus}
-        title="正在创建虚拟机"
-        onCancel={streamedTask?.id ? () => cancelCreateMutation.mutate(streamedTask.id) : undefined}
-        cancelling={cancelCreateMutation.isPending}
-      />
-      <div className="soha-vrt-query soha-vrt-vms-query">
-        <ManagementQueryPanel
-          collapsible
-          form={filterForm}
-          actions={(
-            <VirtualizationFilterActions
-              loading={vmsQuery.isFetching}
-              onReset={() => {
-                filterForm.resetFields()
-                setFilters((current) => ({ page: 1, pageSize: current.pageSize ?? 10 }))
-              }}
-            />
-          )}
-          onFinish={(values) => setFilters((current) => ({ ...current, ...values, page: 1 }))}
-        >
-          <ManagementQueryField minWidth={260} name="search" label="关键字" width={260}>
-            <Input allowClear prefix={<SearchOutlined />} placeholder="搜索名称、IP 或节点" />
-          </ManagementQueryField>
-          <ManagementQueryField minWidth={180} name="connectionId" label="连接" width={180}>
-            <Select
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              placeholder="全部连接"
-              options={clusters.map((item) => ({ value: item.id, label: item.name }))}
-            />
-          </ManagementQueryField>
-          <ManagementQueryField minWidth={136} name="status" label="状态" width={136}>
-            <Select
-              allowClear
-              placeholder="全部状态"
-              options={['running', 'stopped', 'pending', 'failed'].map((item) => ({ value: item, label: item }))}
-            />
-          </ManagementQueryField>
-          <ManagementQueryField minWidth={160} name="provider" label="Provider" width={160}>
-            <Select allowClear placeholder="全部 Provider" options={VIRTUALIZATION_PROVIDER_OPTIONS} />
-          </ManagementQueryField>
-        </ManagementQueryPanel>
-      </div>
-      <VirtualizationAdminTable
-        rowKey="id"
-        headerExtra={canManageVMs ? (
-          <ManagementTableToolbar>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setDrawerOpen(true)}>
-              创建虚拟机
-            </Button>
-          </ManagementTableToolbar>
-        ) : null}
-        loading={vmsQuery.isLoading}
-        dataSource={vmPage.items}
-        columns={columns}
-        scroll={{ x: 1340 }}
-        pagination={pageTablePagination(vmPage, setFilters)}
-        paginationSummary={virtualizationPageSummary}
-      />
-      <Drawer title="创建虚拟机" size="large" motion={stableDrawerMotion} open={drawerOpen} onClose={() => setDrawerOpen(false)}>
-        <Form form={form} layout="vertical" initialValues={{ provider: 'kubevirt', sourceMode: 'datasource_clone', startAfterCreate: true }} onFinish={(values) => createMutation.mutate(values)}>
+    <ManagementDataPage
+      className="soha-virtualization-page"
+      beforeQuery={(
+        <TaskProgressBanner
+          task={streamedTask}
+          status={streamStatus}
+          title="正在创建虚拟机"
+          onCancel={streamedTask?.id ? () => cancelCreateMutation.mutate(streamedTask.id) : undefined}
+          cancelling={cancelCreateMutation.isPending}
+        />
+      )}
+      query={{
+        actions: (
+          <ManagementQueryActions
+            loading={vmsQuery.isFetching}
+            onReset={() => {
+              filterForm.resetFields()
+              setFilters((current) => ({ page: 1, pageSize: current.pageSize ?? 10 }))
+            }}
+          />
+        ),
+        children: (
+          <>
+            <ManagementKeywordField label="关键字" placeholder="搜索名称、IP 或节点" />
+            <ManagementQueryField minWidth={180} name="connectionId" label="连接" width={180}>
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder="全部连接"
+                options={clusters.map((item) => ({ value: item.id, label: item.name }))}
+              />
+            </ManagementQueryField>
+            <ManagementQueryField minWidth={136} name="status" label="状态" width={136}>
+              <Select
+                allowClear
+                placeholder="全部状态"
+                options={['running', 'stopped', 'pending', 'failed'].map((item) => ({ value: item, label: item }))}
+              />
+            </ManagementQueryField>
+            <ManagementQueryField minWidth={160} name="provider" label="Provider" width={160}>
+              <Select allowClear placeholder="全部 Provider" options={VIRTUALIZATION_PROVIDER_OPTIONS} />
+            </ManagementQueryField>
+          </>
+        ),
+        collapsible: true,
+        form: filterForm,
+        onFinish: (values) => setFilters((current) => ({ ...current, ...values, page: 1 })),
+        wrapperClassName: 'soha-vrt-query soha-vrt-vms-query',
+      }}
+      tableNode={(
+        <VirtualizationAdminTable
+          rowKey="id"
+          headerExtra={canManageVMs ? (
+            <ManagementTableToolbar>
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => setDrawerOpen(true)}>
+                创建虚拟机
+              </Button>
+            </ManagementTableToolbar>
+          ) : null}
+          loading={vmsQuery.isLoading}
+          dataSource={vmPage.items}
+          columns={columns}
+          scroll={{ x: 1620 }}
+          pagination={pageTablePagination(vmPage, setFilters)}
+          paginationSummary={virtualizationPageSummary}
+        />
+      )}
+      afterTable={(
+        <Drawer title="创建虚拟机" size="large" motion={stableDrawerMotion} open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+	        <Form form={form} layout="vertical" initialValues={{ provider: 'kubevirt', sourceMode: 'datasource_clone', kubevirtNetworkType: 'pod', kubevirtInterfaceBinding: 'bridge', startAfterCreate: true }} onFinish={(values) => createMutation.mutate(values)}>
           <Form.Item name="name" label="名称" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
@@ -1421,9 +1523,34 @@ export function VirtualizationVmsPage() {
               {createProvider === 'pve' && pveNodeOptions.length > 0 ? <Select allowClear options={pveNodeOptions} /> : <Input disabled={createProvider === 'kubevirt'} placeholder={createProvider === 'kubevirt' ? '当前由集群调度' : undefined} />}
             </Form.Item>
           </div>
-          <Form.Item name="network" label="网络">
-            <Input disabled={createProvider === 'kubevirt'} placeholder={createProvider === 'kubevirt' ? '当前仅支持默认 Pod 网络' : undefined} />
-          </Form.Item>
+	          {createProvider === 'kubevirt' ? (
+	            <div className="grid gap-3 md:grid-cols-2">
+	              <Form.Item name="kubevirtNetworkType" label="KubeVirt 网络类型">
+	                <Select options={[{ value: 'pod', label: 'Pod 默认网络' }, { value: 'multus', label: 'Multus' }]} />
+	              </Form.Item>
+	              <Form.Item name="network" label={kubevirtNetworkType === 'multus' ? 'NetworkAttachmentDefinition' : '网络'}>
+	                <Input placeholder={kubevirtNetworkType === 'multus' ? 'namespace/nad-name' : 'pod'} />
+	              </Form.Item>
+	              {kubevirtNetworkType === 'multus' ? (
+	                <Form.Item name="kubevirtNetworkAttachmentDefinition" label="NAD 引用">
+	                  <Input placeholder="apps/docker-build-net" />
+	                </Form.Item>
+	              ) : null}
+	              <Form.Item name="kubevirtInterfaceModel" label="Interface Model">
+	                <Input placeholder="virtio" />
+	              </Form.Item>
+	              <Form.Item name="kubevirtInterfaceBinding" label="Interface Binding">
+	                <Select allowClear options={[{ value: 'bridge', label: 'bridge' }, { value: 'masquerade', label: 'masquerade' }, { value: 'sriov', label: 'sriov' }]} />
+	              </Form.Item>
+	              <Form.Item name="kubevirtInterfaceName" label="Interface Name">
+	                <Input placeholder="net1" />
+	              </Form.Item>
+	            </div>
+	          ) : (
+	            <Form.Item name="network" label="网络">
+	              <Input placeholder="vmbr0" />
+	            </Form.Item>
+	          )}
           {createProvider === 'pve' ? (
             <>
               <div className="grid gap-3 md:grid-cols-3">
@@ -1431,7 +1558,7 @@ export function VirtualizationVmsPage() {
                   {pveStorageOptions.length > 0 ? <Select allowClear options={pveStorageOptions} /> : <Input placeholder="local-lvm" />}
                 </Form.Item>
                 <Form.Item name="pveBridge" label="PVE 网桥">
-                  <Select allowClear options={pveBridgeOptions} placeholder="vmbr0" />
+                  {pveBridgeOptions.length > 0 ? <Select allowClear options={pveBridgeOptions} placeholder="选择已同步网桥" /> : <Input placeholder="vmbr0" />}
                 </Form.Item>
                 {createSourceMode === 'iso_install' ? (
                   <Form.Item name="pveIso" label="安装 ISO">
@@ -1439,7 +1566,7 @@ export function VirtualizationVmsPage() {
                   </Form.Item>
                 ) : (
                   <Form.Item label="模板模式">
-                    <Alert type="info" showIcon message="当前将按模板克隆模式创建 VM，启动镜像字段会作为模板来源。" />
+                    <Alert type="info" showIcon title="当前将按模板克隆模式创建 VM，启动镜像字段会作为模板来源。" />
                   </Form.Item>
                 )}
               </div>
@@ -1447,8 +1574,14 @@ export function VirtualizationVmsPage() {
                 <Form.Item name="pveCloudInitUser" label="PVE Cloud-Init 用户名">
                   <Input placeholder="ubuntu" />
                 </Form.Item>
+                <Form.Item name="pveSnippetStorage" label="PVE Snippet Storage">
+                  {pveSnippetStorageOptions.length > 0 ? <Select allowClear options={pveSnippetStorageOptions} placeholder="选择支持 snippets 的存储" /> : <Input placeholder="local" />}
+                </Form.Item>
                 <Form.Item name="pveCloudInitSSHKeys" label="PVE Cloud-Init SSH Keys">
                   <Input.TextArea rows={3} placeholder="ssh-rsa AAAA..." />
+                </Form.Item>
+                <Form.Item name="pveCICustom" label="PVE cicustom 引用">
+                  <Input placeholder="user=local:snippets/docker-agent.yaml" />
                 </Form.Item>
               </div>
             </>
@@ -1468,8 +1601,8 @@ export function VirtualizationVmsPage() {
               )}
             </div>
           )}
-          <Form.Item name="cloudInit" label={createProvider === 'pve' ? 'KubeVirt 以外场景不建议使用原始 Cloud Init 文本' : 'Cloud Init userData'}>
-            <Input.TextArea rows={5} disabled={createProvider === 'pve'} placeholder={createProvider === 'pve' ? 'PVE 改用上方用户名 / SSH Keys 字段' : '#cloud-config'} />
+          <Form.Item name="cloudInit" label={createProvider === 'pve' ? 'PVE raw Cloud-Init user-data' : 'Cloud Init userData'}>
+            <Input.TextArea rows={5} placeholder="#cloud-config" />
           </Form.Item>
           <Form.Item name="startAfterCreate" label="创建后启动" valuePropName="checked">
             <Switch />
@@ -1479,8 +1612,9 @@ export function VirtualizationVmsPage() {
             <Button onClick={() => setDrawerOpen(false)}>取消</Button>
           </Space>
         </Form>
-      </Drawer>
-    </div>
+        </Drawer>
+      )}
+    />
   )
 }
 
@@ -1518,7 +1652,8 @@ export function VirtualizationVmDetailPage() {
   }, [detail?.operations])
   const latestAbnormalOperation = sortedOperations.find((item) => isAbnormalOperation(item.status))
 
-  const isRunning = vm?.powerState === 'running' || vm?.status === 'running'
+  const vmDisplayStatus = virtualMachineDisplayStatus(vm)
+  const isRunning = !isStaleVirtualMachine(vm) && (vm?.powerState === 'running' || vm?.status === 'running')
 
   const metricsQuery = useQuery({
     queryKey: ['virtualization', 'vm-metrics', vmId, metricsRange],
@@ -1535,7 +1670,7 @@ export function VirtualizationVmDetailPage() {
           <Space size={8} wrap>
             <Badge
               status={badgeStatusForTone(latestAbnormalOperation ? 'danger' : isRunning ? 'success' : 'default')}
-              text={vm?.powerState || vm?.status || (detailQuery.isLoading ? '加载中' : '-')}
+              text={vmDisplayStatus || (detailQuery.isLoading ? '加载中' : '-')}
             />
           </Space>
         }
@@ -1567,7 +1702,7 @@ export function VirtualizationVmDetailPage() {
           <Descriptions.Item label="ID">{vm?.id ?? '-'}</Descriptions.Item>
           <Descriptions.Item label="Provider">{vm?.provider ?? '-'}</Descriptions.Item>
           <Descriptions.Item label="连接">{vm?.connectionName || vm?.connectionId || '-'}</Descriptions.Item>
-          <Descriptions.Item label="状态">{statusTag(vm?.powerState || vm?.status)}</Descriptions.Item>
+          <Descriptions.Item label="状态">{statusTag(vmDisplayStatus)}</Descriptions.Item>
           <Descriptions.Item label="命名空间">{vm?.namespace || '-'}</Descriptions.Item>
           <Descriptions.Item label="节点">{vm?.node || '-'}</Descriptions.Item>
           <Descriptions.Item label="规格">{vm?.flavorName || vm?.flavorId || '-'}</Descriptions.Item>
@@ -1604,7 +1739,7 @@ export function VirtualizationVmDetailPage() {
             forceRender: true,
             children: (
               <Card size="small">
-                <pre className="max-h-[520px] overflow-auto rounded border border-[var(--soha-border)] bg-[var(--soha-surface-muted)] p-3 text-xs">
+                <pre className="max-h-[520px] overflow-auto rounded border border-[var(--soha-border-color)] bg-[var(--soha-bg-surface-muted)] p-3 text-xs">
                   {providerRaw || '暂无 provider raw 数据'}
                 </pre>
               </Card>
@@ -1621,13 +1756,13 @@ export function VirtualizationVmDetailPage() {
                   tableSize="small"
                   dataSource={sortedOperations}
                   pageSize={10}
-                  columnSettingIconOnly
-                  columnSettingPlacement="header"
-                  columns={[
-                    { title: '类型', render: (_value: unknown, record: VirtualizationOperation) => operationKind(record), width: 150 },
-                    { title: '状态', dataIndex: 'status', render: statusTag, width: 120 },
-                    { title: '消息', dataIndex: 'message', render: (value: string) => value || '-' },
-                    { title: '时间', render: (_value: unknown, record: VirtualizationOperation) => formatDateTime(operationTime(record)), width: 180 },
+	                  columnSettingIconOnly
+	                  columnSettingPlacement="header"
+	                  columns={[
+	                    { title: '类型', render: (_value: unknown, record: VirtualizationOperation) => tableTooltipText(operationKind(record)), ellipsis: tableEllipsis, width: 150 },
+	                    { title: '状态', dataIndex: 'status', render: statusTag, width: 120 },
+	                    { title: '消息', dataIndex: 'message', render: (value: string) => tableTooltipText(value || '-'), ellipsis: tableEllipsis, width: 320 },
+	                    { title: '时间', render: (_value: unknown, record: VirtualizationOperation) => tableTooltipText(formatDateTime(operationTime(record))), ellipsis: tableEllipsis, width: 180 },
                     {
                       ...tableColumnPresets.action,
                       title: '操作',
@@ -1640,10 +1775,11 @@ export function VirtualizationVmDetailPage() {
                           onClick={() => navigate(buildInvestigationPath({ connectionId: vm?.connectionId, vmId: vm?.id, namespace: vm?.namespace, workload: vm?.name, timeRangeMinutes: 60 }))}
                         />
                       ),
-                      width: 100,
-                    },
-                  ]}
-                />
+	                      width: 100,
+	                    },
+	                  ]}
+	                  scroll={{ x: 870 }}
+	                />
               </Card>
             ),
           },
@@ -1653,7 +1789,7 @@ export function VirtualizationVmDetailPage() {
             forceRender: true,
             children: (
               <Card size="small">
-                <pre className="max-h-[520px] overflow-auto rounded border border-[var(--soha-border)] bg-[var(--soha-surface-muted)] p-3 text-xs">
+                <pre className="max-h-[520px] overflow-auto rounded border border-[var(--soha-border-color)] bg-[var(--soha-bg-surface-muted)] p-3 text-xs">
                   {(detail?.logs ?? []).map((item) => `[${formatDateTime(item.createdAt)}] ${item.logLevel ?? 'info'} ${item.message}`).join('\n') || '暂无日志'}
                 </pre>
               </Card>
@@ -1723,10 +1859,12 @@ export function VirtualizationClustersPage() {
   const [showNeverSynced, setShowNeverSynced] = useState(false)
   const [selectedConnectionOperation, setSelectedConnectionOperation] = useState<VirtualizationOperation | null>(null)
   const [selectedClusterRowKeys, setSelectedClusterRowKeys] = useState<React.Key[]>([])
+  const [deletePreview, setDeletePreview] = useState<{ cluster: VirtualizationCluster; dependencies: VirtualizationConnectionDeleteDependencies } | null>(null)
   const { virtualizationModuleEnabled, canManageClusters, canSync } = useVirtualizationPermissions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const provider = Form.useWatch('provider', form) ?? 'kubevirt'
+  const selectedKubernetesClusterId = Form.useWatch('kubernetesClusterId', form)
   const clustersQuery = useQuery({ enabled: virtualizationModuleEnabled, queryKey: ['virtualization', 'clusters'], queryFn: virtualizationApi.clusters })
   const clusterOperationsQuery = useQuery({
     enabled: virtualizationModuleEnabled,
@@ -1751,10 +1889,20 @@ export function VirtualizationClustersPage() {
       refreshVirtualization(queryClient)
     },
   })
+  const deletePreviewMutation = useMutation({
+    mutationFn: async (cluster: VirtualizationCluster) => {
+      const response = await virtualizationApi.clusterDeleteDependencies(cluster.id)
+      return { cluster, dependencies: response.data }
+    },
+    onSuccess: (preview) => {
+      setDeletePreview(preview)
+    },
+  })
   const deleteMutation = useMutation({
-    mutationFn: virtualizationApi.deleteCluster,
+    mutationFn: ({ id, force }: { id: string; force?: boolean }) => virtualizationApi.deleteCluster(id, { force }),
     onSuccess: () => {
       message.success('连接已删除')
+      setDeletePreview(null)
       refreshVirtualization(queryClient)
     },
   })
@@ -1779,6 +1927,7 @@ export function VirtualizationClustersPage() {
 
   function openEditor(record?: VirtualizationCluster) {
     setEditing(record ?? null)
+    form.resetFields()
     form.setFieldsValue(record ? {
       name: record.name,
       provider: record.provider === 'pve' ? 'pve' : 'kubevirt',
@@ -1792,9 +1941,12 @@ export function VirtualizationClustersPage() {
       defaultNode: typeof record.config?.defaultNode === 'string' ? record.config.defaultNode : undefined,
       defaultStorage: typeof record.config?.defaultStorage === 'string' ? record.config.defaultStorage : undefined,
       defaultBridge: typeof record.config?.defaultBridge === 'string' ? record.config.defaultBridge : undefined,
+      defaultSnippetStorage: typeof record.config?.defaultSnippetStorage === 'string' ? record.config.defaultSnippetStorage : typeof record.config?.snippetStorage === 'string' ? record.config.snippetStorage : undefined,
       backendUrl: typeof record.config?.backendUrl === 'string' ? record.config.backendUrl : undefined,
       prometheusUrl: typeof record.config?.prometheusUrl === 'string' ? record.config.prometheusUrl : undefined,
-      prometheusBearerToken: typeof record.config?.prometheusBearerToken === 'string' ? record.config.prometheusBearerToken : undefined,
+      prometheusBearerToken: undefined,
+      prometheusBearerTokenSecretRef: typeof record.config?.prometheusBearerTokenSecretRef === 'string' ? record.config.prometheusBearerTokenSecretRef : undefined,
+      mode: typeof record.config?.mode === 'string' ? record.config.mode : undefined,
     } : { provider: 'kubevirt', enabled: true, verifyTls: true })
     setDrawerOpen(true)
   }
@@ -1808,6 +1960,10 @@ export function VirtualizationClustersPage() {
       .filter((record) => !showNeverSynced || !record.lastSyncedAt)
       .sort((left, right) => clusterRiskScore(left) - clusterRiskScore(right) || left.name.localeCompare(right.name))
   }, [clustersQuery.data?.data, enabledFilter, providerFilter, showNeverSynced, showOnlyAbnormal])
+  const selectedPlatformCluster = useMemo(
+    () => (platformClustersQuery.data?.data ?? []).find((item) => item.id === selectedKubernetesClusterId),
+    [platformClustersQuery.data?.data, selectedKubernetesClusterId],
+  )
   const clusterOperations = clusterOperationsQuery.data?.data ?? []
   function operationsForConnection(connectionId?: string) {
     if (!connectionId) return []
@@ -1830,44 +1986,53 @@ export function VirtualizationClustersPage() {
   }
 
   const columns: ColumnsType<VirtualizationCluster> = [
-    { title: '名称', dataIndex: 'name', fixed: 'left', width: 180 },
+    { title: '名称', dataIndex: 'name', render: tableTooltipText, ellipsis: tableEllipsis, width: 180 },
     { title: 'Provider', dataIndex: 'provider', render: providerLabel, width: 120 },
-    { title: '接入目标', render: (_value, record) => record.provider === 'kubevirt' ? record.kubernetesClusterId || '-' : record.endpoint || '-', ellipsis: true },
+    { title: '接入目标', render: (_value, record) => tableTooltipText(record.provider === 'kubevirt' ? record.kubernetesClusterId || '-' : record.endpoint || '-'), ellipsis: tableEllipsis, width: 280 },
     { title: '健康', dataIndex: 'health', render: (value, record) => statusTag(value || record.status), width: 120 },
-    { title: '风险', render: (_value, record) => riskReasons(record).join(' / ') || '正常', width: 220 },
+    { title: '风险', render: (_value, record) => tableTooltipText(riskReasons(record).join(' / ') || '正常'), ellipsis: tableEllipsis, width: 240 },
     { title: '风险等级', dataIndex: 'riskLevel', render: (value: string | undefined) => value ? <Tag color={value === 'critical' ? 'red' : value === 'warning' ? 'gold' : value === 'attention' ? 'blue' : 'default'}>{value}</Tag> : '-', width: 120 },
     { title: '最近失败同步', render: (_value, record) => {
       const failedSync = failedSyncForConnection(record.id)
       return failedSync ? (
-        <Button size="small" type="link" onClick={() => setSelectedConnectionOperation(failedSync)}>{latestNonEmptyOperationMessage(failedSync)}</Button>
+        tableTooltipTextButton(latestNonEmptyOperationMessage(failedSync), () => setSelectedConnectionOperation(failedSync))
       ) : '-'
-    }, width: 200 },
+    }, ellipsis: tableEllipsis, width: 260 },
     { title: '最近异常任务', render: (_value, record) => {
       const abnormal = latestAbnormalForConnection(record.id)
       return abnormal ? (
-        <Button size="small" type="link" onClick={() => setSelectedConnectionOperation(abnormal)}>{operationKind(abnormal)}</Button>
+        tableTooltipTextButton(operationKind(abnormal), () => setSelectedConnectionOperation(abnormal))
       ) : '-'
-    }, width: 160 },
+    }, ellipsis: tableEllipsis, width: 180 },
     { title: '凭证', dataIndex: 'credentialConfigured', render: (value: boolean | undefined) => value === false ? <Tag color="red">未配置</Tag> : <Tag color="green">已配置</Tag>, width: 120 },
     { ...tableColumnPresets.datetime, title: '最近同步', dataIndex: 'lastSyncedAt', render: formatDateTime, width: 180 },
     {
       ...tableColumnPresets.action,
       title: '操作',
-      width: 130,
+      width: 168,
       render: (_value, record) => (
-        <Space className="soha-row-action-icons" wrap>
+        <Space className="soha-row-action-icons">
           {canManageClusters ? <ManagementIconButton aria-label="测试连接" size="small" tooltip="测试" icon={<ThunderboltOutlined />} onClick={() => testMutation.mutate(record.id)} /> : null}
           {canSync ? <ManagementIconButton aria-label="同步连接" size="small" tooltip="同步" icon={<CloudSyncOutlined />} onClick={() => syncMutation.mutate(record.id)} /> : null}
           {canManageClusters ? <ManagementIconButton aria-label="编辑连接" size="small" tooltip="编辑" icon={<EditOutlined />} onClick={() => openEditor(record)} /> : null}
           {canManageClusters ? (
-            <Popconfirm title="确认删除连接？" onConfirm={() => deleteMutation.mutate(record.id)}>
-              <ManagementIconButton aria-label="删除连接" size="small" tooltip="删除" danger icon={<DeleteOutlined />} />
-            </Popconfirm>
+            <ManagementIconButton
+              aria-label="删除连接"
+              size="small"
+              tooltip="删除"
+              danger
+              icon={<DeleteOutlined />}
+              loading={deletePreviewMutation.isPending || deleteMutation.isPending}
+              onClick={() => deletePreviewMutation.mutate(record)}
+            />
           ) : null}
         </Space>
       ),
     },
   ]
+  const deletePendingTaskCount = deletePreview?.dependencies.pendingTaskCount ?? 0
+  const deleteForceRequired = deletePreview?.dependencies.forceRequired === true
+  const deleteBlocked = deletePendingTaskCount > 0
 
   return (
     <div className="soha-page soha-virtualization-page">
@@ -1931,7 +2096,7 @@ export function VirtualizationClustersPage() {
         loading={clustersQuery.isLoading || clusterOperationsQuery.isLoading}
         dataSource={clusterRows}
         columns={columns}
-        scroll={{ x: 1320 }}
+        scroll={{ x: 1970 }}
         paginationSummary={localTableSummary(clusterRows.length, clustersQuery.data?.data?.length ?? 0)}
         expandable={{
           expandedRowRender: (record: VirtualizationCluster) => {
@@ -1948,6 +2113,7 @@ export function VirtualizationClustersPage() {
                 <Descriptions.Item label="Console Backend">{record.provider === 'kubevirt' ? String(record.config?.backendUrl || record.endpoint || '-') : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Prometheus">{record.provider === 'kubevirt' ? String(record.config?.prometheusUrl || '-') : '-'}</Descriptions.Item>
                 <Descriptions.Item label="PVE 默认网桥">{record.provider === 'pve' ? String(record.config?.defaultBridge || '-') : '-'}</Descriptions.Item>
+                <Descriptions.Item label="PVE Snippet Storage">{record.provider === 'pve' ? String(record.config?.defaultSnippetStorage || record.config?.snippetStorage || '-') : '-'}</Descriptions.Item>
                 <Descriptions.Item label="最近失败同步">{failedSync ? `${operationKind(failedSync)} · ${latestNonEmptyOperationMessage(failedSync)}` : '-'}</Descriptions.Item>
                 <Descriptions.Item label="最近异常任务">{latestAbnormal ? `${operationKind(latestAbnormal)} · ${latestNonEmptyOperationMessage(latestAbnormal)}` : '-'}</Descriptions.Item>
               </Descriptions>
@@ -1955,6 +2121,21 @@ export function VirtualizationClustersPage() {
           },
         }}
       />
+      <Modal
+        title={deletePreview ? `删除连接：${deletePreview.cluster.name}` : '删除连接'}
+        open={Boolean(deletePreview)}
+        okText={deleteForceRequired ? '确认强制删除' : '确认删除'}
+        cancelText="取消"
+        okButtonProps={{ danger: true, disabled: deleteBlocked, loading: deleteMutation.isPending }}
+        onOk={() => {
+          if (!deletePreview || deleteBlocked) return
+          deleteMutation.mutate({ id: deletePreview.cluster.id, force: deleteForceRequired })
+        }}
+        onCancel={() => setDeletePreview(null)}
+        destroyOnHidden
+      >
+        {deletePreview ? <ConnectionDeletePreview dependencies={deletePreview.dependencies} /> : null}
+      </Modal>
       <Drawer title={editing ? '编辑连接' : '新增连接'} size="large" motion={stableDrawerMotion} open={drawerOpen} onClose={() => setDrawerOpen(false)}>
         <Form form={form} layout="vertical" initialValues={{ provider: 'kubevirt', enabled: true, verifyTls: true }} onFinish={(values) => saveMutation.mutate(values)}>
           <Form.Item name="name" label="名称" rules={[{ required: true }]}>
@@ -1963,14 +2144,27 @@ export function VirtualizationClustersPage() {
           <Form.Item name="provider" label="Provider" rules={[{ required: true }]}>
             <Select options={[{ value: 'kubevirt', label: 'KubeVirt' }, { value: 'pve', label: 'PVE' }]} />
           </Form.Item>
+          <Form.Item name="mode" hidden>
+            <Input />
+          </Form.Item>
           {provider === 'kubevirt' ? (
             <>
+              <Alert
+                className="mb-3"
+                type={selectedPlatformCluster?.connectionMode === 'agent' ? 'warning' : 'info'}
+                showIcon
+                title={selectedPlatformCluster?.connectionMode === 'agent' ? '当前 Kubernetes 集群为 Agent 模式，KubeVirt 连接测试会返回 unsupported，真实创建需等待 Agent 侧适配。' : '当前按直连 kubeconfig 模式保存 KubeVirt 连接参数。'}
+              />
               <Form.Item name="kubernetesClusterId" label="Kubernetes 集群" rules={[{ required: true }]}>
                 <Select
                   showSearch
                   loading={platformClustersQuery.isLoading}
                   optionFilterProp="label"
-                  options={(platformClustersQuery.data?.data ?? []).map((item) => ({ value: item.id, label: `${item.name} (${item.id})` }))}
+                  options={(platformClustersQuery.data?.data ?? []).map((item) => ({ value: item.id, label: `${item.name} (${item.id} · ${item.connectionMode})` }))}
+                  onChange={(value) => {
+                    const cluster = (platformClustersQuery.data?.data ?? []).find((item) => item.id === value)
+                    form.setFieldValue('mode', cluster?.connectionMode === 'agent' ? 'agent' : 'direct_kubeconfig')
+                  }}
                 />
               </Form.Item>
               <Form.Item name="defaultNamespace" label="默认命名空间">
@@ -1984,7 +2178,10 @@ export function VirtualizationClustersPage() {
                   <Input placeholder="https://prometheus.example" />
                 </Form.Item>
                 <Form.Item name="prometheusBearerToken" label="Prometheus Bearer Token">
-                  <Input.Password />
+                  <Input.Password placeholder={editing?.config?.prometheusBearerTokenConfigured ? '留空表示保留已配置 Token' : '保存到加密凭证'} />
+                </Form.Item>
+                <Form.Item name="prometheusBearerTokenSecretRef" label="Prometheus Token SecretRef">
+                  <Input placeholder="observability/prometheus-token" />
                 </Form.Item>
               </div>
             </>
@@ -1993,6 +2190,14 @@ export function VirtualizationClustersPage() {
               <Form.Item name="endpoint" label="Endpoint" rules={[{ required: true }]}>
                 <Input placeholder="https://pve.example:8006" />
               </Form.Item>
+              <div className="grid gap-3 md:grid-cols-2">
+                <Form.Item name="username" label="Username">
+                  <Input placeholder="root@pam" />
+                </Form.Item>
+                <Form.Item name="password" label="Password">
+                  <Input.Password placeholder="保存到加密凭证" />
+                </Form.Item>
+              </div>
               <div className="grid gap-3 md:grid-cols-2">
                 <Form.Item name="tokenID" label="Token ID">
                   <Input />
@@ -2019,6 +2224,9 @@ export function VirtualizationClustersPage() {
               </div>
               <Form.Item name="defaultBridge" label="默认网桥">
                 <Input placeholder="vmbr0" />
+              </Form.Item>
+              <Form.Item name="defaultSnippetStorage" label="默认 Snippet Storage">
+                <Input placeholder="local" />
               </Form.Item>
             </>
           )}
@@ -2051,7 +2259,7 @@ export function VirtualizationClustersPage() {
           <Descriptions.Item label="摘要">{selectedConnectionOperation?.message || '-'}</Descriptions.Item>
           <Descriptions.Item label="开始时间">{formatDateTime(operationTime(selectedConnectionOperation || {} as VirtualizationOperation))}</Descriptions.Item>
         </Descriptions>
-        {selectedConnectionOperation?.message ? <Alert className="mt-4" type={isAbnormalOperation(selectedConnectionOperation.status) ? 'error' : 'info'} message={selectedConnectionOperation.message} /> : null}
+        {selectedConnectionOperation?.message ? <Alert className="mt-4" type={isAbnormalOperation(selectedConnectionOperation.status) ? 'error' : 'info'} title={selectedConnectionOperation.message} /> : null}
         <div className="mt-4">
           <Button onClick={() => navigate(`/virtualization/operations?connectionId=${encodeURIComponent(selectedConnectionOperation?.connectionId || '')}&abnormal=true`)}>查看该连接全部异常任务</Button>
         </div>
@@ -2114,18 +2322,18 @@ export function VirtualizationImagesPage() {
     setDrawerOpen(true)
   }
   const columns: ColumnsType<VirtualizationImage> = [
-    { title: '名称', dataIndex: 'name', fixed: 'left', width: 180 },
-    { title: 'Provider', dataIndex: 'provider', render: providerLabel },
-    { title: '连接', dataIndex: 'connectionName', render: (value, record) => value || record.connectionId || '-' },
-    { title: '命名空间', dataIndex: 'namespace', render: (value) => value || '-' },
-    { title: '来源', render: (_value, record) => record.assetKind || record.sourceKind || record.source || '-' },
-    { title: '引用', dataIndex: 'sourceRef', render: (value) => value || '-' },
-    { title: '节点/存储', render: (_value, record) => [record.node, record.storage].filter(Boolean).join(' / ') || '-' },
-    { title: 'StorageClass', dataIndex: 'storageClass', render: (value) => value || '-' },
-    { title: '可用性', render: (_value, record) => record.ready === false ? <Tag color="red">不可用</Tag> : <Tag color="green">可用</Tag> },
-    { title: '系统', dataIndex: 'osType', render: (value) => value || '-' },
-    { title: '大小', dataIndex: 'sizeGiB', render: (value) => value ? `${value} GiB` : '-' },
-    { title: '状态', dataIndex: 'status', render: statusTag },
+    { title: '名称', dataIndex: 'name', fixed: 'left', render: tableTooltipText, ellipsis: tableEllipsis, width: 180 },
+    { title: 'Provider', dataIndex: 'provider', render: providerLabel, width: 120 },
+    { title: '连接', dataIndex: 'connectionName', render: (value, record) => tableTooltipText(value || record.connectionId || '-'), ellipsis: tableEllipsis, width: 200 },
+    { title: '命名空间', dataIndex: 'namespace', render: (value) => tableTooltipText(value || '-'), ellipsis: tableEllipsis, width: 160 },
+    { title: '来源', render: (_value, record) => tableTooltipText(record.assetKind || record.sourceKind || record.source || '-'), ellipsis: tableEllipsis, width: 160 },
+    { title: '引用', dataIndex: 'sourceRef', render: (value) => tableTooltipText(value || '-'), ellipsis: tableEllipsis, width: 280 },
+    { title: '节点/存储', render: (_value, record) => tableTooltipText([record.node, record.storage].filter(Boolean).join(' / ') || '-'), ellipsis: tableEllipsis, width: 200 },
+    { title: 'StorageClass', dataIndex: 'storageClass', render: (value) => tableTooltipText(value || '-'), ellipsis: tableEllipsis, width: 200 },
+    { title: '可用性', render: (_value, record) => record.ready === false ? <Tag color="red">不可用</Tag> : <Tag color="green">可用</Tag>, width: 110 },
+    { title: '系统', dataIndex: 'osType', render: (value) => tableTooltipText(value || '-'), ellipsis: tableEllipsis, width: 120 },
+    { title: '大小', dataIndex: 'sizeGiB', render: (value) => value ? `${value} GiB` : '-', width: 100 },
+    { title: '状态', dataIndex: 'status', render: statusTag, width: 120 },
     { ...tableColumnPresets.datetime, title: '更新时间', dataIndex: 'updatedAt', render: formatDateTime },
     {
       ...tableColumnPresets.action,
@@ -2148,54 +2356,58 @@ export function VirtualizationImagesPage() {
     },
   ]
   return (
-    <div className="soha-page soha-virtualization-page">
-      <div className="soha-vrt-query">
-        <ManagementQueryPanel
-          collapsible
-          form={filterForm}
-          actions={(
-            <VirtualizationFilterActions
-              loading={imagesQuery.isFetching}
-              onReset={() => {
-                filterForm.resetFields()
-                setFilters((current) => ({ page: 1, pageSize: current.pageSize ?? 10 }))
-              }}
-            />
-          )}
-          onFinish={(values) => setFilters((current) => ({ ...current, ...values, page: 1 }))}
-        >
-          <ManagementQueryField minWidth={260} name="search" label="关键字" width={260}>
-            <Input allowClear prefix={<SearchOutlined />} placeholder="搜索镜像、模板或 ISO" />
-          </ManagementQueryField>
-          <ManagementQueryField minWidth={180} name="connectionId" label="连接" width={180}>
-            <Select
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              placeholder="全部连接"
-              options={clusters.map((item) => ({ value: item.id, label: item.name }))}
-            />
-          </ManagementQueryField>
-          <ManagementQueryField minWidth={160} name="provider" label="Provider" width={160}>
-            <Select allowClear placeholder="全部 Provider" options={VIRTUALIZATION_PROVIDER_OPTIONS} />
-          </ManagementQueryField>
-        </ManagementQueryPanel>
-      </div>
-      <VirtualizationAdminTable
-        rowKey="id"
-        headerExtra={canManageImages ? (
-          <ManagementTableToolbar>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => openImageEditor()}>新增镜像入口</Button>
-          </ManagementTableToolbar>
-        ) : null}
-        loading={imagesQuery.isLoading}
-        dataSource={imagesPage.items}
-        columns={columns}
-        scroll={{ x: 1220 }}
-        pagination={pageTablePagination(imagesPage, setFilters)}
-        paginationSummary={virtualizationPageSummary}
-      />
-      <Drawer title={editing ? '编辑镜像入口' : '新增镜像入口'} size="large" motion={stableDrawerMotion} open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+    <ManagementDataPage
+      className="soha-virtualization-page"
+      query={{
+        actions: (
+          <ManagementQueryActions
+            loading={imagesQuery.isFetching}
+            onReset={() => {
+              filterForm.resetFields()
+              setFilters((current) => ({ page: 1, pageSize: current.pageSize ?? 10 }))
+            }}
+          />
+        ),
+        children: (
+          <>
+            <ManagementKeywordField label="关键字" placeholder="搜索镜像、模板或 ISO" />
+            <ManagementQueryField minWidth={180} name="connectionId" label="连接" width={180}>
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder="全部连接"
+                options={clusters.map((item) => ({ value: item.id, label: item.name }))}
+              />
+            </ManagementQueryField>
+            <ManagementQueryField minWidth={160} name="provider" label="Provider" width={160}>
+              <Select allowClear placeholder="全部 Provider" options={VIRTUALIZATION_PROVIDER_OPTIONS} />
+            </ManagementQueryField>
+          </>
+        ),
+        collapsible: true,
+        form: filterForm,
+        onFinish: (values) => setFilters((current) => ({ ...current, ...values, page: 1 })),
+        wrapperClassName: 'soha-vrt-query',
+      }}
+      tableNode={(
+        <VirtualizationAdminTable
+          rowKey="id"
+          headerExtra={canManageImages ? (
+            <ManagementTableToolbar>
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => openImageEditor()}>新增镜像入口</Button>
+            </ManagementTableToolbar>
+          ) : null}
+          loading={imagesQuery.isLoading}
+          dataSource={imagesPage.items}
+          columns={columns}
+          scroll={{ x: 2270 }}
+          pagination={pageTablePagination(imagesPage, setFilters)}
+          paginationSummary={virtualizationPageSummary}
+        />
+      )}
+      afterTable={(
+        <Drawer title={editing ? '编辑镜像入口' : '新增镜像入口'} size="large" motion={stableDrawerMotion} open={drawerOpen} onClose={() => setDrawerOpen(false)}>
         <Form form={form} layout="vertical" initialValues={{ provider: 'kubevirt', sourceKind: 'datasource' }} onFinish={(values) => saveMutation.mutate(values)}>
           <Form.Item name="name" label="名称" rules={[{ required: true }]}>
             <Input />
@@ -2247,8 +2459,9 @@ export function VirtualizationImagesPage() {
             <Button onClick={() => setDrawerOpen(false)}>取消</Button>
           </Space>
         </Form>
-      </Drawer>
-    </div>
+        </Drawer>
+      )}
+    />
   )
 }
 
@@ -2263,20 +2476,16 @@ export function VirtualizationFlavorsPage() {
   const { message } = App.useApp()
   const flavorsQuery = useQuery({ enabled: virtualizationModuleEnabled, queryKey: ['virtualization', 'flavors'], queryFn: virtualizationApi.flavors })
   const flavors = flavorsQuery.data?.data ?? []
+  const textFilteredFlavors = useManagementTextFilter(flavors, flavorFilters.search ?? '', (record) => [record.name, record.description])
   const flavorRows = useMemo(() => {
-    const search = flavorFilters.search?.trim().toLowerCase()
-    return flavors.filter((record) => {
-      const matchesSearch = !search || [record.name, record.description]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(search))
-      const matchesEnabled = flavorFilters.enabled === 'disabled'
+    return textFilteredFlavors.filter((record) => {
+      return flavorFilters.enabled === 'disabled'
         ? record.enabled === false
         : flavorFilters.enabled === 'enabled'
           ? record.enabled !== false
           : true
-      return matchesSearch && matchesEnabled
     })
-  }, [flavorFilters.enabled, flavorFilters.search, flavors])
+  }, [flavorFilters.enabled, textFilteredFlavors])
   const saveMutation = useMutation({
     mutationFn: (values: VirtualizationFlavorInput) => editing ? virtualizationApi.updateFlavor(editing.id, values) : virtualizationApi.createFlavor(values),
     onSuccess: () => {
@@ -2300,12 +2509,12 @@ export function VirtualizationFlavorsPage() {
     setDrawerOpen(true)
   }
   const columns: ColumnsType<VirtualizationFlavor> = [
-    { title: '名称', dataIndex: 'name', fixed: 'left', width: 180 },
+    { title: '名称', dataIndex: 'name', fixed: 'left', render: tableTooltipText, ellipsis: tableEllipsis, width: 180 },
     { title: 'CPU', dataIndex: 'cpu', width: 90 },
     { title: '内存 MiB', dataIndex: 'memoryMiB', width: 120 },
     { title: '磁盘 GiB', dataIndex: 'diskGiB', width: 120 },
     { title: '状态', dataIndex: 'enabled', render: (value) => value === false ? <Tag>禁用</Tag> : <Tag color="green">启用</Tag>, width: 100 },
-    { title: '描述', dataIndex: 'description', render: (value) => value || '-' },
+    { title: '描述', dataIndex: 'description', render: (value) => tableTooltipText(value || '-'), ellipsis: tableEllipsis, width: 320 },
     {
       ...tableColumnPresets.action,
       title: '操作',
@@ -2327,45 +2536,49 @@ export function VirtualizationFlavorsPage() {
     },
   ]
   return (
-    <div className="soha-page soha-virtualization-page">
-      <div className="soha-vrt-query">
-        <ManagementQueryPanel
-          collapsible
-          form={filterForm}
-          initialValues={{ enabled: 'all' }}
-          actions={(
-            <VirtualizationFilterActions
-              loading={flavorsQuery.isFetching}
-              onReset={() => {
-                filterForm.resetFields()
-                setFlavorFilters({ enabled: 'all' })
-              }}
-            />
-          )}
-          onFinish={(values) => setFlavorFilters({ enabled: values.enabled ?? 'all', search: values.search })}
-        >
-          <ManagementQueryField minWidth={260} name="search" label="关键字" width={260}>
-            <Input allowClear prefix={<SearchOutlined />} placeholder="搜索规格名称或描述" />
-          </ManagementQueryField>
-          <ManagementQueryField minWidth={180} name="enabled" label="启用状态" width={180}>
-            <Select options={ENABLED_FILTER_OPTIONS} />
-          </ManagementQueryField>
-        </ManagementQueryPanel>
-      </div>
-      <VirtualizationAdminTable
-        rowKey="id"
-        headerExtra={canManageFlavors ? (
-          <ManagementTableToolbar>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor()}>新增规格</Button>
-          </ManagementTableToolbar>
-        ) : null}
-        loading={flavorsQuery.isLoading}
-        dataSource={flavorRows}
-        columns={columns}
-        paginationSummary={localTableSummary(flavorRows.length, flavors.length)}
-        scroll={{ x: 900 }}
-      />
-      <Drawer title={editing ? '编辑规格' : '新增规格'} size="large" motion={stableDrawerMotion} open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+    <ManagementDataPage
+      className="soha-virtualization-page"
+      query={{
+        actions: (
+          <ManagementQueryActions
+            loading={flavorsQuery.isFetching}
+            onReset={() => {
+              filterForm.resetFields()
+              setFlavorFilters({ enabled: 'all' })
+            }}
+          />
+        ),
+        children: (
+          <>
+            <ManagementKeywordField label="关键字" placeholder="搜索规格名称或描述" />
+            <ManagementQueryField minWidth={180} name="enabled" label="启用状态" width={180}>
+              <Select options={ENABLED_FILTER_OPTIONS} />
+            </ManagementQueryField>
+          </>
+        ),
+        collapsible: true,
+        form: filterForm,
+        initialValues: { enabled: 'all' },
+        onFinish: (values) => setFlavorFilters({ enabled: values.enabled ?? 'all', search: values.search }),
+        wrapperClassName: 'soha-vrt-query',
+      }}
+      tableNode={(
+        <VirtualizationAdminTable
+          rowKey="id"
+          headerExtra={canManageFlavors ? (
+            <ManagementTableToolbar>
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor()}>新增规格</Button>
+            </ManagementTableToolbar>
+          ) : null}
+          loading={flavorsQuery.isLoading}
+          dataSource={flavorRows}
+          columns={columns}
+          paginationSummary={localTableSummary(flavorRows.length, flavors.length)}
+          scroll={{ x: 1070 }}
+        />
+      )}
+      afterTable={(
+        <Drawer title={editing ? '编辑规格' : '新增规格'} size="large" motion={stableDrawerMotion} open={drawerOpen} onClose={() => setDrawerOpen(false)}>
         <Form form={form} layout="vertical" initialValues={{ cpu: 2, memoryMiB: 4096, diskGiB: 40, enabled: true }} onFinish={(values) => saveMutation.mutate(values)}>
           <Form.Item name="name" label="名称" rules={[{ required: true }]}>
             <Input />
@@ -2392,8 +2605,9 @@ export function VirtualizationFlavorsPage() {
             <Button onClick={() => setDrawerOpen(false)}>取消</Button>
           </Space>
         </Form>
-      </Drawer>
-    </div>
+        </Drawer>
+      )}
+    />
   )
 }
 

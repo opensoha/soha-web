@@ -29,7 +29,7 @@ import {
 } from "@/features/auth/auth-api";
 import { findLandingPath } from "@/routes/meta";
 import { usePreferencesStore } from "@/stores/preferences-store";
-import { resolveThemeMode } from "@/theme/app-theme";
+import { getThemePalette, readThemeCssVariable, resolveThemeMode } from "@/theme/app-theme";
 import { readStoredBrandingSettings } from "@/utils/branding";
 import "./login-page.css";
 
@@ -45,7 +45,7 @@ interface LoginFormValues {
 interface StarNode {
   pulse: number;
   radius: number;
-  tone: string;
+  tone: StarToneVariable;
   vx: number;
   vy: number;
   x: number;
@@ -53,11 +53,13 @@ interface StarNode {
 }
 
 const STAR_TONES = [
-  "56, 189, 248",
-  "45, 212, 191",
-  "34, 197, 94",
-  "245, 158, 11",
-];
+  "--soha-primary",
+  "--soha-accent-cyan",
+  "--soha-accent-teal",
+  "--soha-success",
+] as const;
+
+type StarToneVariable = (typeof STAR_TONES)[number];
 
 const CAPABILITY_QUESTIONS = [
   {
@@ -99,6 +101,21 @@ function createStarNode(width: number, height: number): StarNode {
     x: Math.random() * width,
     y: Math.random() * height,
   };
+}
+
+function fallbackStarToneColor(tone: StarToneVariable, themeMode: "light" | "dark") {
+  const palette = getThemePalette(themeMode);
+  switch (tone) {
+    case "--soha-accent-cyan":
+      return palette.accentCyan;
+    case "--soha-accent-teal":
+      return palette.accentTeal;
+    case "--soha-success":
+      return palette.colorSuccess;
+    case "--soha-primary":
+    default:
+      return palette.primary;
+  }
 }
 
 function LoginConstellationBackground() {
@@ -163,23 +180,16 @@ function LoginConstellationBackground() {
       lastTimestamp = timestamp;
 
       const gradient = context.createLinearGradient(0, 0, width, height);
-      if (currentThemeMode === "dark") {
-        gradient.addColorStop(0, "#0f172a");
-        gradient.addColorStop(0.52, "#111827");
-        gradient.addColorStop(1, "#0b1d24");
-      } else {
-        gradient.addColorStop(0, "#f8fafc");
-        gradient.addColorStop(0.48, "#eef2f7");
-        gradient.addColorStop(1, "#e7edf4");
-      }
+      const palette = getThemePalette(currentThemeMode);
+      gradient.addColorStop(0, readThemeCssVariable("--soha-bg-layout", palette.colorBgLayout));
+      gradient.addColorStop(0.52, readThemeCssVariable("--soha-bg-surface", palette.colorBgContainer));
+      gradient.addColorStop(1, readThemeCssVariable("--soha-bg-surface-muted", palette.colorBgMuted));
       context.fillStyle = gradient;
       context.fillRect(0, 0, width, height);
 
       context.save();
-      context.strokeStyle =
-        currentThemeMode === "dark"
-          ? "rgba(148, 163, 184, 0.06)"
-          : "rgba(100, 116, 139, 0.085)";
+      context.strokeStyle = readThemeCssVariable("--soha-graph-muted", palette.graphMuted);
+      context.globalAlpha = currentThemeMode === "dark" ? 0.06 : 0.085;
       context.lineWidth = 1;
       for (let x = 0; x <= width; x += 72) {
         context.beginPath();
@@ -225,30 +235,30 @@ function LoginConstellationBackground() {
           const alpha =
             (1 - distance / connectionDistance) *
             (currentThemeMode === "dark" ? 0.32 : 0.2);
-          context.strokeStyle = `rgba(${source.tone}, ${alpha})`;
+          context.strokeStyle = readThemeCssVariable(source.tone, fallbackStarToneColor(source.tone, currentThemeMode));
+          context.globalAlpha = alpha;
           context.lineWidth = 1;
           context.beginPath();
           context.moveTo(source.x, source.y);
           context.lineTo(target.x, target.y);
           context.stroke();
+          context.globalAlpha = 1;
         }
       }
 
       nodes.forEach((node) => {
         const pulse = 0.28 + Math.sin(node.pulse) * 0.12;
-        context.fillStyle = `rgba(${node.tone}, ${
-          currentThemeMode === "dark" ? 0.54 + pulse : 0.42 + pulse * 0.62
-        })`;
+        context.fillStyle = readThemeCssVariable(node.tone, fallbackStarToneColor(node.tone, currentThemeMode));
+        context.globalAlpha = currentThemeMode === "dark" ? 0.54 + pulse : 0.42 + pulse * 0.62;
         context.beginPath();
         context.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
         context.fill();
 
-        context.fillStyle = `rgba(${node.tone}, ${
-          currentThemeMode === "dark" ? 0.06 + pulse * 0.12 : 0.035 + pulse * 0.08
-        })`;
+        context.globalAlpha = currentThemeMode === "dark" ? 0.06 + pulse * 0.12 : 0.035 + pulse * 0.08;
         context.beginPath();
         context.arc(node.x, node.y, node.radius * 6.5, 0, Math.PI * 2);
         context.fill();
+        context.globalAlpha = 1;
       });
 
       if (!reducedMotion) {
@@ -315,10 +325,10 @@ function LoginCapabilityFlow() {
         >
           <defs>
             <linearGradient id="soha-auth-flow-gradient" x1="0" x2="1" y1="0" y2="0">
-              <stop offset="0%" stopColor="#94a3b8" stopOpacity="0.18" />
-              <stop offset="46%" stopColor="#38bdf8" stopOpacity="0.72" />
-              <stop offset="68%" stopColor="#2dd4bf" stopOpacity="0.78" />
-              <stop offset="100%" stopColor="#94a3b8" stopOpacity="0.18" />
+              <stop offset="0%" stopColor="var(--soha-graph-muted)" stopOpacity="0.18" />
+              <stop offset="46%" stopColor="var(--soha-accent-cyan)" stopOpacity="0.72" />
+              <stop offset="68%" stopColor="var(--soha-accent-teal)" stopOpacity="0.78" />
+              <stop offset="100%" stopColor="var(--soha-graph-muted)" stopOpacity="0.18" />
             </linearGradient>
           </defs>
           <path className="soha-auth-flow-line" d="M80 72 C210 24 250 118 332 116" />

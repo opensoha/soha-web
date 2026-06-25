@@ -37,12 +37,57 @@ export interface ThemePalette {
   colorTextQuaternary: string
   colorCodeBg: string
   colorCodeText: string
+  terminalBg: string
+  terminalFg: string
+  terminalCursor: string
+  terminalBorder: string
+  terminalMuted: string
+  terminalRowDivider: string
+  terminalOverlayBg: string
   colorPrimaryBg: string
   colorPrimaryBgHover: string
   colorPrimaryBorder: string
   colorPrimaryBorderHover: string
   boxShadow: string
   boxShadowSecondary: string
+  accentBlue: string
+  accentBlueRgb: string
+  accentCyan: string
+  accentCyanRgb: string
+  accentTeal: string
+  accentTealRgb: string
+  gradientPrimary: string
+  gradientSubtle: string
+  gradientPanel: string
+  glassBg: string
+  glassBgStrong: string
+  glassBorder: string
+  glassShadow: string
+  workflowCanvasBg: string
+  workflowCanvasGrid: string
+  workflowCanvasGlow: string
+  workflowNodeBg: string
+  workflowNodeBorder: string
+  workflowNodeSelectedBorder: string
+  workflowNodeSelectedRing: string
+  workflowEdgeDefault: string
+  workflowEdgeSuccess: string
+  workflowEdgeFailure: string
+  workflowInspectorBg: string
+  graphScope: string
+  graphService: string
+  graphSpan: string
+  graphLog: string
+  graphMetric: string
+  graphHypothesis: string
+  graphMuted: string
+  graphRecommendation: string
+  dataPanelBg: string
+  dataPanelBorder: string
+  dataRowHoverBg: string
+  dataRowSelectedBg: string
+  listItemActiveBg: string
+  listItemActiveBorder: string
 }
 
 const PREFERENCES_STORAGE_KEY = 'soha-prefs'
@@ -63,84 +108,174 @@ export const themeModeOptions: Array<{ value: ThemeMode; label: string }> = [
 const APP_FONT_FAMILY = "'Inter', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif"
 const APP_FONT_SIZE = 12
 const APP_LINE_HEIGHT = 20 / APP_FONT_SIZE
+const GLASS_BLUR = '16px'
 
 const THEME_PALETTES: Record<ResolvedThemeMode, ThemePalette> = {
   light: {
-    primaryRgb: '17, 24, 39',
-    primary: '#111827',
-    primaryHover: '#1f2937',
-    primaryActive: '#0f172a',
-    primaryLightDefault: '#eef3f8',
-    primaryLightHover: '#e3ebf4',
-    primaryLightActive: '#d7e2ee',
-    primaryDisabled: '#cdd8e5',
+    primaryRgb: '22, 119, 255',
+    primary: '#1677ff',
+    primaryHover: '#4096ff',
+    primaryActive: '#0958d9',
+    primaryLightDefault: '#e6f4ff',
+    primaryLightHover: '#bae0ff',
+    primaryLightActive: '#91caff',
+    primaryDisabled: '#adc6ff',
     colorSuccess: '#22c55e',
     colorWarning: '#f97316',
     colorDanger: '#ef4444',
-    colorInfo: '#111827',
-    controlOutline: 'rgba(17, 24, 39, 0.12)',
+    colorInfo: '#0891b2',
+    controlOutline: 'rgba(22, 119, 255, 0.16)',
     colorBgBase: '#ffffff',
     colorBgLayout: '#ffffff',
     colorBgContainer: '#ffffff',
-    colorBgElevated: '#ffffff',
-    colorBgMuted: '#eef3f8',
-    colorBorder: '#dbe4ee',
-    colorBorderSecondary: '#e8eef5',
-    colorFill: '#dfe7f0',
-    colorFillSecondary: '#edf3f8',
-    colorFillTertiary: '#f4f7fb',
-    colorFillQuaternary: '#f8fbfd',
+    colorBgElevated: 'rgba(255, 255, 255, 0.94)',
+    colorBgMuted: '#f9f9fb',
+    colorBorder: '#e5e7eb',
+    colorBorderSecondary: '#f0f2f5',
+    colorFill: '#d1d5db',
+    colorFillSecondary: '#e5e7eb',
+    colorFillTertiary: '#f3f4f6',
+    colorFillQuaternary: '#f9f9fb',
     colorText: '#111827',
     colorTextSecondary: '#4b5563',
     colorTextTertiary: '#6b7280',
     colorTextQuaternary: '#9ca3af',
     colorCodeBg: '#111827',
     colorCodeText: '#fafafa',
-    colorPrimaryBg: '#edf3f8',
-    colorPrimaryBgHover: '#e2eaf3',
-    colorPrimaryBorder: '#d2deea',
-    colorPrimaryBorderHover: '#b8c8da',
-    boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1)',
-    boxShadowSecondary:
-      '0 10px 24px rgba(15, 23, 42, 0.06)',
+    terminalBg: '#0b1220',
+    terminalFg: '#e5edf5',
+    terminalCursor: '#4cbbff',
+    terminalBorder: 'rgba(22, 119, 255, 0.18)',
+    terminalMuted: 'rgba(148, 163, 184, 0.88)',
+    terminalRowDivider: 'rgba(148, 163, 184, 0.08)',
+    terminalOverlayBg: 'rgba(11, 18, 32, 0.92)',
+    colorPrimaryBg: '#e6f4ff',
+    colorPrimaryBgHover: '#bae0ff',
+    colorPrimaryBorder: '#91caff',
+    colorPrimaryBorderHover: '#69b1ff',
+    boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.08), 0 1px 2px -1px rgba(15, 23, 42, 0.08)',
+    boxShadowSecondary: '0 14px 34px rgba(22, 119, 255, 0.08)',
+    accentBlue: '#1677ff',
+    accentBlueRgb: '22, 119, 255',
+    accentCyan: '#13c2c2',
+    accentCyanRgb: '19, 194, 194',
+    accentTeal: '#52c41a',
+    accentTealRgb: '82, 196, 26',
+    gradientPrimary: 'linear-gradient(135deg, #1677ff 0%, #13c2c2 56%, #52c41a 100%)',
+    gradientSubtle: 'linear-gradient(135deg, rgba(22, 119, 255, 0.10) 0%, rgba(19, 194, 194, 0.08) 54%, rgba(82, 196, 26, 0.06) 100%)',
+    gradientPanel: 'linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(249, 249, 251, 0.94) 100%)',
+    glassBg: 'rgba(255, 255, 255, 0.72)',
+    glassBgStrong: 'rgba(255, 255, 255, 0.88)',
+    glassBorder: 'rgba(22, 119, 255, 0.24)',
+    glassShadow: '0 18px 48px rgba(22, 119, 255, 0.10)',
+    workflowCanvasBg: 'linear-gradient(180deg, rgba(249, 249, 251, 0.98) 0%, rgba(230, 244, 255, 0.72) 100%)',
+    workflowCanvasGrid: 'rgba(22, 119, 255, 0.14)',
+    workflowCanvasGlow: 'radial-gradient(circle at top left, rgba(19, 194, 194, 0.16), transparent 36%)',
+    workflowNodeBg: 'rgba(255, 255, 255, 0.90)',
+    workflowNodeBorder: 'rgba(22, 119, 255, 0.28)',
+    workflowNodeSelectedBorder: '#1677ff',
+    workflowNodeSelectedRing: 'rgba(22, 119, 255, 0.18)',
+    workflowEdgeDefault: '#94a3b8',
+    workflowEdgeSuccess: '#52c41a',
+    workflowEdgeFailure: '#ef4444',
+    workflowInspectorBg: 'rgba(255, 255, 255, 0.88)',
+    graphScope: '#1677ff',
+    graphService: '#13c2c2',
+    graphSpan: '#7c3aed',
+    graphLog: '#b45309',
+    graphMetric: '#0891b2',
+    graphHypothesis: '#dc2626',
+    graphMuted: '#64748b',
+    graphRecommendation: '#0f766e',
+    dataPanelBg: 'rgba(255, 255, 255, 0.88)',
+    dataPanelBorder: '#e5e7eb',
+    dataRowHoverBg: '#f9f9fb',
+    dataRowSelectedBg: '#e6f4ff',
+    listItemActiveBg: 'linear-gradient(135deg, rgba(22, 119, 255, 0.12), rgba(19, 194, 194, 0.10))',
+    listItemActiveBorder: 'rgba(22, 119, 255, 0.42)',
   },
   dark: {
-    primaryRgb: '250, 250, 250',
-    primary: '#fafafa',
-    primaryHover: '#e4e4e7',
-    primaryActive: '#d4d4d8',
-    primaryLightDefault: 'rgba(244, 244, 245, 0.12)',
-    primaryLightHover: 'rgba(244, 244, 245, 0.18)',
-    primaryLightActive: 'rgba(244, 244, 245, 0.24)',
-    primaryDisabled: 'rgba(161, 161, 170, 0.35)',
+    primaryRgb: '64, 150, 255',
+    primary: '#4096ff',
+    primaryHover: '#69b1ff',
+    primaryActive: '#1677ff',
+    primaryLightDefault: 'rgba(64, 150, 255, 0.16)',
+    primaryLightHover: 'rgba(64, 150, 255, 0.24)',
+    primaryLightActive: 'rgba(64, 150, 255, 0.30)',
+    primaryDisabled: 'rgba(64, 150, 255, 0.34)',
     colorSuccess: '#4ade80',
     colorWarning: '#fb923c',
     colorDanger: '#f87171',
-    colorInfo: '#fafafa',
-    controlOutline: 'rgba(244, 244, 245, 0.24)',
-    colorBgBase: '#09090b',
-    colorBgLayout: '#09090b',
-    colorBgContainer: '#18181b',
-    colorBgElevated: '#18181b',
-    colorBgMuted: '#27272a',
-    colorBorder: '#27272a',
-    colorBorderSecondary: '#3f3f46',
-    colorFill: '#3f3f46',
-    colorFillSecondary: '#27272a',
-    colorFillTertiary: '#1f1f23',
-    colorFillQuaternary: '#27272a',
+    colorInfo: '#69b1ff',
+    controlOutline: 'rgba(64, 150, 255, 0.28)',
+    colorBgBase: '#07111f',
+    colorBgLayout: '#07111f',
+    colorBgContainer: '#0d1726',
+    colorBgElevated: '#101c2d',
+    colorBgMuted: '#122238',
+    colorBorder: '#1e334d',
+    colorBorderSecondary: '#28415f',
+    colorFill: '#2c4665',
+    colorFillSecondary: '#172b44',
+    colorFillTertiary: '#102035',
+    colorFillQuaternary: '#0f1b2b',
     colorText: '#fafafa',
     colorTextSecondary: '#d4d4d8',
     colorTextTertiary: '#a1a1aa',
     colorTextQuaternary: '#71717a',
     colorCodeBg: '#000000',
     colorCodeText: '#fafafa',
-    colorPrimaryBg: 'rgba(244, 244, 245, 0.12)',
-    colorPrimaryBgHover: 'rgba(244, 244, 245, 0.18)',
-    colorPrimaryBorder: 'rgba(244, 244, 245, 0.24)',
-    colorPrimaryBorderHover: 'rgba(244, 244, 245, 0.32)',
+    terminalBg: '#020817',
+    terminalFg: '#e5edf5',
+    terminalCursor: '#7dd3fc',
+    terminalBorder: 'rgba(64, 150, 255, 0.22)',
+    terminalMuted: 'rgba(148, 163, 184, 0.88)',
+    terminalRowDivider: 'rgba(148, 163, 184, 0.10)',
+    terminalOverlayBg: 'rgba(2, 8, 23, 0.92)',
+    colorPrimaryBg: 'rgba(64, 150, 255, 0.16)',
+    colorPrimaryBgHover: 'rgba(64, 150, 255, 0.24)',
+    colorPrimaryBorder: 'rgba(64, 150, 255, 0.32)',
+    colorPrimaryBorderHover: 'rgba(105, 177, 255, 0.44)',
     boxShadow: '0 12px 30px rgba(0, 0, 0, 0.45)',
-    boxShadowSecondary: '0 8px 20px rgba(0, 0, 0, 0.32)',
+    boxShadowSecondary: '0 18px 42px rgba(0, 0, 0, 0.34)',
+    accentBlue: '#4096ff',
+    accentBlueRgb: '64, 150, 255',
+    accentCyan: '#36cfc9',
+    accentCyanRgb: '54, 207, 201',
+    accentTeal: '#73d13d',
+    accentTealRgb: '115, 209, 61',
+    gradientPrimary: 'linear-gradient(135deg, #4096ff 0%, #36cfc9 56%, #73d13d 100%)',
+    gradientSubtle: 'linear-gradient(135deg, rgba(64, 150, 255, 0.18) 0%, rgba(54, 207, 201, 0.14) 54%, rgba(115, 209, 61, 0.12) 100%)',
+    gradientPanel: 'linear-gradient(180deg, rgba(16, 28, 45, 0.92) 0%, rgba(13, 23, 38, 0.88) 100%)',
+    glassBg: 'rgba(13, 23, 38, 0.72)',
+    glassBgStrong: 'rgba(16, 28, 45, 0.88)',
+    glassBorder: 'rgba(64, 150, 255, 0.24)',
+    glassShadow: '0 20px 56px rgba(0, 0, 0, 0.36)',
+    workflowCanvasBg: 'linear-gradient(180deg, rgba(7, 17, 31, 0.98) 0%, rgba(13, 23, 38, 0.94) 100%)',
+    workflowCanvasGrid: 'rgba(64, 150, 255, 0.18)',
+    workflowCanvasGlow: 'radial-gradient(circle at top left, rgba(54, 207, 201, 0.16), transparent 38%)',
+    workflowNodeBg: 'rgba(16, 28, 45, 0.90)',
+    workflowNodeBorder: 'rgba(64, 150, 255, 0.28)',
+    workflowNodeSelectedBorder: '#4096ff',
+    workflowNodeSelectedRing: 'rgba(64, 150, 255, 0.24)',
+    workflowEdgeDefault: '#64748b',
+    workflowEdgeSuccess: '#73d13d',
+    workflowEdgeFailure: '#f87171',
+    workflowInspectorBg: 'rgba(16, 28, 45, 0.88)',
+    graphScope: '#4096ff',
+    graphService: '#36cfc9',
+    graphSpan: '#a78bfa',
+    graphLog: '#fbbf24',
+    graphMetric: '#22d3ee',
+    graphHypothesis: '#f87171',
+    graphMuted: '#94a3b8',
+    graphRecommendation: '#5eead4',
+    dataPanelBg: 'rgba(16, 28, 45, 0.88)',
+    dataPanelBorder: '#1e334d',
+    dataRowHoverBg: '#0f1b2b',
+    dataRowSelectedBg: 'rgba(64, 150, 255, 0.16)',
+    listItemActiveBg: 'linear-gradient(135deg, rgba(64, 150, 255, 0.18), rgba(54, 207, 201, 0.14))',
+    listItemActiveBorder: 'rgba(64, 150, 255, 0.42)',
   },
 }
 
@@ -153,6 +288,38 @@ export function resolveThemeMode(themeMode: ThemeMode): ResolvedThemeMode {
 export function getThemePalette(themeMode: ThemeMode | ResolvedThemeMode): ThemePalette {
   const resolvedMode = themeMode === 'system' ? resolveThemeMode(themeMode) : themeMode
   return THEME_PALETTES[resolvedMode]
+}
+
+export function readThemeCssVariable(name: string, fallback: string): string {
+  if (typeof window === 'undefined') return fallback
+  const value = window.getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+  return value || fallback
+}
+
+const THEME_CSS_VAR_COLOR_PATTERN = /^var\((--[^),]+)(?:,\s*(.+))?\)$/
+
+export function resolveThemeColorReference(value: string, fallback?: string): string {
+  const match = value.match(THEME_CSS_VAR_COLOR_PATTERN)
+  if (!match) return value
+  const [, variableName, inlineFallback] = match
+  const resolved = readThemeCssVariable(variableName, inlineFallback?.trim() || fallback || value)
+  if (THEME_CSS_VAR_COLOR_PATTERN.test(resolved) && resolved !== value) {
+    return resolveThemeColorReference(resolved, fallback)
+  }
+  return resolved
+}
+
+export function readTerminalThemeColors() {
+  const mode = typeof document !== 'undefined' && document.documentElement.dataset.themeMode === 'dark'
+    ? 'dark'
+    : 'light'
+  const palette = getThemePalette(mode)
+
+  return {
+    background: readThemeCssVariable('--soha-terminal-bg', palette.terminalBg),
+    foreground: readThemeCssVariable('--soha-terminal-fg', palette.terminalFg),
+    cursor: readThemeCssVariable('--soha-terminal-cursor', palette.terminalCursor),
+  }
 }
 
 export function getAntdTheme(themeMode: ThemeMode | ResolvedThemeMode): ThemeConfig {
@@ -180,8 +347,8 @@ export function getAntdTheme(themeMode: ThemeMode | ResolvedThemeMode): ThemeCon
       colorBgContainer: palette.colorBgContainer,
       colorBgElevated: palette.colorBgElevated,
       colorBgLayout: palette.colorBgLayout,
-      colorBgSpotlight: resolvedMode === 'dark' ? 'rgba(24, 24, 27, 0.92)' : 'rgba(38, 38, 38, 0.85)',
-      colorBgMask: resolvedMode === 'dark' ? 'rgba(9, 9, 11, 0.72)' : 'rgba(38, 38, 38, 0.45)',
+      colorBgSpotlight: resolvedMode === 'dark' ? 'rgba(13, 23, 38, 0.94)' : 'rgba(15, 23, 42, 0.86)',
+      colorBgMask: resolvedMode === 'dark' ? 'rgba(7, 17, 31, 0.72)' : 'rgba(15, 23, 42, 0.42)',
       colorPrimaryBg: palette.colorPrimaryBg,
       colorPrimaryBgHover: palette.colorPrimaryBgHover,
       colorPrimaryBorder: palette.colorPrimaryBorder,
@@ -335,7 +502,7 @@ export function getAntdTheme(themeMode: ThemeMode | ResolvedThemeMode): ThemeCon
         bodyPadding: 20,
       },
       Button: {
-        primaryShadow: 'none',
+        primaryShadow: '0 8px 18px rgba(var(--soha-primary-rgb), 0.20)',
         defaultShadow: 'none',
         dangerShadow: 'none',
         defaultBorderColor: palette.colorBorder,
@@ -347,8 +514,8 @@ export function getAntdTheme(themeMode: ThemeMode | ResolvedThemeMode): ThemeCon
         defaultActiveBg: palette.colorFillSecondary,
         defaultActiveBorderColor: palette.colorPrimaryBorder,
         defaultActiveColor: palette.colorText,
-        primaryColor: resolvedMode === 'dark' ? '#18181b' : '#ffffff',
-        solidTextColor: resolvedMode === 'dark' ? '#18181b' : '#ffffff',
+        primaryColor: '#ffffff',
+        solidTextColor: '#ffffff',
         dangerColor: '#ffffff',
         fontWeight: 500,
         borderRadius: 6,
@@ -439,23 +606,32 @@ export function applyAppTheme(_themeId: AppThemeId, themeMode: ThemeMode) {
   root.style.setProperty('--soha-primary-light-hover', palette.primaryLightHover)
   root.style.setProperty('--soha-primary-light-active', palette.primaryLightActive)
   root.style.setProperty('--soha-primary-disabled', palette.primaryDisabled)
+  root.style.setProperty('--soha-accent-blue', palette.accentBlue)
+  root.style.setProperty('--soha-accent-blue-rgb', palette.accentBlueRgb)
+  root.style.setProperty('--soha-accent-cyan', palette.accentCyan)
+  root.style.setProperty('--soha-accent-cyan-rgb', palette.accentCyanRgb)
+  root.style.setProperty('--soha-accent-teal', palette.accentTeal)
+  root.style.setProperty('--soha-accent-teal-rgb', palette.accentTealRgb)
+  root.style.setProperty('--soha-gradient-primary', palette.gradientPrimary)
+  root.style.setProperty('--soha-gradient-subtle', palette.gradientSubtle)
+  root.style.setProperty('--soha-gradient-panel', palette.gradientPanel)
+  root.style.setProperty('--soha-glass-bg', palette.glassBg)
+  root.style.setProperty('--soha-glass-bg-strong', palette.glassBgStrong)
+  root.style.setProperty('--soha-glass-border', palette.glassBorder)
+  root.style.setProperty('--soha-glass-shadow', palette.glassShadow)
+  root.style.setProperty('--soha-glass-blur', GLASS_BLUR)
   root.style.setProperty('--soha-bg-base', palette.colorBgBase)
   root.style.setProperty('--soha-bg-canvas', palette.colorBgLayout)
   root.style.setProperty('--soha-bg-layout', palette.colorBgLayout)
   root.style.setProperty('--soha-bg-surface', palette.colorBgContainer)
   root.style.setProperty('--soha-bg-surface-elevated', palette.colorBgElevated)
   root.style.setProperty('--soha-bg-surface-muted', palette.colorBgMuted)
-  root.style.setProperty('--soha-surface', palette.colorBgContainer)
-  root.style.setProperty('--soha-surface-elevated', palette.colorBgElevated)
-  root.style.setProperty('--soha-surface-muted', palette.colorBgMuted)
   root.style.setProperty('--soha-fill-strong', palette.colorFill)
   root.style.setProperty('--soha-fill-medium', palette.colorFillSecondary)
   root.style.setProperty('--soha-fill-weak', palette.colorFillQuaternary)
   root.style.setProperty('--soha-fill-subtle', palette.colorFillQuaternary)
   root.style.setProperty('--soha-border-color', palette.colorBorder)
   root.style.setProperty('--soha-border-color-strong', palette.colorBorderSecondary)
-  root.style.setProperty('--soha-border', palette.colorBorder)
-  root.style.setProperty('--soha-border-strong', palette.colorBorderSecondary)
   root.style.setProperty('--soha-text-primary', palette.colorText)
   root.style.setProperty('--soha-text-secondary', palette.colorTextSecondary)
   root.style.setProperty('--soha-text-tertiary', palette.colorTextTertiary)
@@ -463,17 +639,67 @@ export function applyAppTheme(_themeId: AppThemeId, themeMode: ThemeMode) {
   root.style.setProperty('--soha-text-inverse', '#ffffff')
   root.style.setProperty('--soha-code-bg', palette.colorCodeBg)
   root.style.setProperty('--soha-code-fg', palette.colorCodeText)
+  root.style.setProperty('--soha-terminal-bg', palette.terminalBg)
+  root.style.setProperty('--soha-terminal-fg', palette.terminalFg)
+  root.style.setProperty('--soha-terminal-cursor', palette.terminalCursor)
+  root.style.setProperty('--soha-terminal-border', palette.terminalBorder)
+  root.style.setProperty('--soha-terminal-muted', palette.terminalMuted)
+  root.style.setProperty('--soha-terminal-row-divider', palette.terminalRowDivider)
+  root.style.setProperty('--soha-terminal-overlay-bg', palette.terminalOverlayBg)
   root.style.setProperty('--soha-shadow-soft', palette.boxShadowSecondary)
   root.style.setProperty('--soha-shadow-strong', palette.boxShadow)
   root.style.setProperty('--soha-shadow-panel', palette.boxShadowSecondary)
   root.style.setProperty('--soha-danger', palette.colorDanger)
+  root.style.setProperty('--soha-success', palette.colorSuccess)
+  root.style.setProperty('--soha-warning', palette.colorWarning)
+  root.style.setProperty('--soha-info', palette.colorInfo)
   root.style.setProperty('--soha-table-header-bg', palette.colorBgMuted)
   root.style.setProperty('--soha-table-header-sort-bg', palette.colorFillSecondary)
   root.style.setProperty('--soha-table-row-hover-bg', palette.colorFillQuaternary)
   root.style.setProperty('--soha-table-row-selected-bg', palette.colorPrimaryBg)
   root.style.setProperty('--soha-table-row-selected-hover-bg', palette.colorPrimaryBgHover)
+  root.style.setProperty('--soha-table-link-color', palette.primary)
+  root.style.setProperty('--soha-table-link-hover-color', palette.primaryHover)
   root.style.setProperty('--soha-menu-item-hover-bg', palette.colorFillQuaternary)
   root.style.setProperty('--soha-menu-item-selected-bg', palette.colorPrimaryBg)
+  root.style.setProperty('--soha-menu-item-selected-color', palette.primary)
+  root.style.setProperty('--soha-overview-card-bg', palette.colorBgContainer)
+  root.style.setProperty('--soha-overview-card-success-bg', palette.colorBgContainer)
+  root.style.setProperty('--soha-overview-card-warning-bg', palette.colorBgContainer)
+  root.style.setProperty('--soha-overview-card-danger-bg', palette.colorBgContainer)
+  root.style.setProperty('--soha-overview-icon-bg', palette.colorBgContainer)
+  root.style.setProperty('--soha-overview-brand-border', palette.colorBorder)
+  root.style.setProperty('--soha-workflow-canvas-bg', palette.workflowCanvasBg)
+  root.style.setProperty('--soha-workflow-canvas-grid', palette.workflowCanvasGrid)
+  root.style.setProperty('--soha-workflow-canvas-glow', palette.workflowCanvasGlow)
+  root.style.setProperty('--soha-workflow-node-bg', palette.workflowNodeBg)
+  root.style.setProperty('--soha-workflow-node-border', palette.workflowNodeBorder)
+  root.style.setProperty('--soha-workflow-node-selected-border', palette.workflowNodeSelectedBorder)
+  root.style.setProperty('--soha-workflow-node-selected-ring', palette.workflowNodeSelectedRing)
+  root.style.setProperty('--soha-workflow-edge-default', palette.workflowEdgeDefault)
+  root.style.setProperty('--soha-workflow-edge-success', palette.workflowEdgeSuccess)
+  root.style.setProperty('--soha-workflow-edge-failure', palette.workflowEdgeFailure)
+  root.style.setProperty('--soha-workflow-inspector-bg', palette.workflowInspectorBg)
+  root.style.setProperty('--soha-graph-scope', palette.graphScope)
+  root.style.setProperty('--soha-graph-service', palette.graphService)
+  root.style.setProperty('--soha-graph-span', palette.graphSpan)
+  root.style.setProperty('--soha-graph-log', palette.graphLog)
+  root.style.setProperty('--soha-graph-metric', palette.graphMetric)
+  root.style.setProperty('--soha-graph-hypothesis', palette.graphHypothesis)
+  root.style.setProperty('--soha-graph-muted', palette.graphMuted)
+  root.style.setProperty('--soha-graph-recommendation', palette.graphRecommendation)
+  root.style.setProperty('--soha-data-panel-bg', palette.dataPanelBg)
+  root.style.setProperty('--soha-data-panel-border', palette.dataPanelBorder)
+  root.style.setProperty('--soha-data-row-hover-bg', palette.dataRowHoverBg)
+  root.style.setProperty('--soha-data-row-selected-bg', palette.dataRowSelectedBg)
+  root.style.setProperty('--soha-list-item-active-bg', palette.listItemActiveBg)
+  root.style.setProperty('--soha-list-item-active-border', palette.listItemActiveBorder)
+  root.style.setProperty('--soha-radius', '6px')
+  root.style.setProperty('--soha-radius-control', '6px')
+  root.style.setProperty('--soha-radius-panel', '8px')
+  root.style.setProperty('--soha-radius-lg', '14px')
+  root.style.setProperty('--soha-management-query-field-default-width', '300px')
+  root.style.setProperty('--soha-management-toolbar-search-width', '300px')
   root.style.setProperty('color-scheme', resolvedMode)
 
   document.body.setAttribute('theme-mode', resolvedMode)

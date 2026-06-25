@@ -2,7 +2,7 @@
 
 .soha-management-query-card.ant-card {
   border-color: var(--soha-border-color);
-  border-radius: 8px;
+  border-radius: var(--soha-radius-panel, 8px);
   background: var(--soha-bg-surface);
   box-shadow: none;
 }
@@ -23,6 +23,10 @@
   align-items: start;
 }
 
+.soha-management-query-grid.is-actions-stacked {
+  grid-template-columns: 1fr;
+}
+
 .soha-management-query-fields {
   display: flex;
   align-items: flex-start;
@@ -38,9 +42,9 @@
 }
 
 .soha-management-query-field.ant-form-item {
-  flex: 0 1 var(--soha-management-query-field-width, 220px);
+  flex: 0 1 var(--soha-management-query-field-width, var(--soha-management-query-field-default-width, 300px));
   max-width: 100%;
-  min-width: min(var(--soha-management-query-field-min-width, 176px), 100%);
+  min-width: min(var(--soha-management-query-field-min-width, 240px), 100%);
   margin-bottom: 0;
 }
 
@@ -67,19 +71,33 @@
 }
 
 .soha-management-query-field .ant-form-item-control {
+  flex: 1 1 0;
   min-width: 0;
 }
 
 .soha-management-query-field .ant-form-item-control-input {
+  width: 100%;
   min-height: 28px;
+}
+
+.soha-management-query-field .ant-form-item-control-input-content {
+  width: 100%;
+  min-width: 0;
 }
 
 .soha-management-query-card .ant-input,
 .soha-management-query-card .ant-input-affix-wrapper,
 .soha-management-query-card .ant-select-selector {
+  width: 100%;
   height: 28px !important;
   min-height: 28px;
-  border-radius: 6px !important;
+  border-radius: var(--soha-radius-control, 6px) !important;
+  background: var(--soha-bg-surface) !important;
+}
+
+.soha-management-query-card .ant-input-affix-wrapper,
+.soha-management-query-card .ant-select {
+  width: 100%;
 }
 
 .soha-management-query-card .ant-input {
@@ -121,24 +139,57 @@
   white-space: nowrap;
 }
 
+.soha-management-query-grid.is-actions-stacked .soha-management-query-actions {
+  justify-content: flex-start;
+  justify-self: start;
+}
+
 .soha-management-query-actions .ant-btn {
+  flex: 0 0 auto;
   height: 28px;
 }
 
+.soha-management-query-actions .ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous):not(.ant-btn-color-dangerous) {
+  border-color: var(--soha-border-color);
+  background: var(--soha-bg-surface);
+  color: var(--soha-text-secondary);
+  box-shadow: none;
+}
+
+.soha-management-query-actions .ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous):not(.ant-btn-color-dangerous):hover,
+.soha-management-query-actions .ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous):not(.ant-btn-color-dangerous):focus-visible {
+  border-color: var(--soha-border-color-strong);
+  background: var(--soha-bg-surface);
+  color: var(--soha-text-primary);
+}
+
 .soha-management-query-more-button.ant-btn {
-  padding-inline: 4px;
+  min-width: 64px;
+  padding-inline: 8px;
+  border-color: var(--soha-border-color);
+  background: var(--soha-bg-surface);
+  color: var(--soha-text-secondary);
+  transition-property: background-color, border-color, color;
+  box-shadow: none;
+}
+
+.soha-management-query-more-button.ant-btn:hover,
+.soha-management-query-more-button.ant-btn:focus-visible {
+  border-color: var(--soha-border-color-strong);
+  background: var(--soha-bg-surface);
+  color: var(--soha-text-primary);
 }
 
 .soha-management-table-shell.soha-admin-table-shell.is-panel {
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: var(--soha-radius-panel, 8px);
   background: var(--soha-bg-surface);
 }
 
 .soha-management-table-shell-plain.soha-admin-table-shell {
   overflow: hidden;
   border: 1px solid var(--soha-border-color);
-  border-radius: 8px;
+  border-radius: var(--soha-radius-panel, 8px);
   background: var(--soha-bg-surface);
 }
 
@@ -186,7 +237,7 @@
   gap: 8px;
   padding: 0 8px;
   border: 1px solid var(--soha-border-color);
-  border-radius: 6px;
+  border-radius: var(--soha-radius-control, 6px);
   background: var(--soha-bg-surface-muted);
 }
 
@@ -194,7 +245,7 @@
   width: 100%;
   padding: 18px;
   border: 1px solid var(--soha-border-color);
-  border-radius: 8px;
+  border-radius: var(--soha-radius-panel, 8px);
   background: var(--soha-bg-surface);
 }
 
@@ -219,7 +270,7 @@
 .soha-management-state .ant-alert {
   align-items: flex-start;
   border-color: var(--soha-border-color);
-  border-radius: 8px;
+  border-radius: var(--soha-radius-panel, 8px);
   background: var(--soha-bg-surface-muted);
 }
 
@@ -270,7 +321,7 @@
 .soha-management-panel-card.ant-card {
   overflow: hidden;
   border-color: var(--soha-border-color);
-  border-radius: 8px;
+  border-radius: var(--soha-radius-panel, 8px);
   background: var(--soha-bg-surface);
   box-shadow: none;
 }
@@ -304,7 +355,7 @@
   gap: 12px;
   padding: 10px 16px;
   border: 1px solid var(--soha-border-color);
-  border-radius: 8px;
+  border-radius: var(--soha-radius-panel, 8px);
   background: var(--soha-bg-surface);
   box-shadow: none;
 }
@@ -353,14 +404,23 @@
 .soha-management-table-shell .soha-admin-table .ant-table-container {
   border-right: none;
   border-left: none;
-  border-radius: 0;
+  border-radius: var(--soha-radius-panel, 8px);
+  overflow: hidden;
 }
 
-.soha-management-table-shell .soha-admin-table .ant-table-thead > tr > th,
-.soha-management-table-shell .soha-admin-table .ant-table-thead > tr:first-child > th:first-child,
+.soha-management-table-shell .soha-admin-table .ant-table-thead > tr:first-child > th:first-child {
+  border-start-start-radius: var(--soha-radius-panel, 8px) !important;
+}
+
 .soha-management-table-shell .soha-admin-table .ant-table-thead > tr:first-child > th:last-child {
-  border-radius: 0 !important;
+  border-start-end-radius: var(--soha-radius-panel, 8px) !important;
+}
+
+.soha-management-table-shell:has(.soha-admin-table-header, .soha-admin-table-toolbar) .soha-admin-table .ant-table-thead > tr:first-child > th:first-child {
   border-start-start-radius: 0 !important;
+}
+
+.soha-management-table-shell:has(.soha-admin-table-header, .soha-admin-table-toolbar) .soha-admin-table .ant-table-thead > tr:first-child > th:last-child {
   border-start-end-radius: 0 !important;
 }
 
@@ -375,6 +435,89 @@
   margin-inline-end: auto;
   color: var(--soha-text-tertiary);
   font-size: 12px;
+}
+
+.soha-management-searchable-list-pane {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+  padding: 12px;
+  border: 1px solid var(--soha-data-panel-border);
+  border-radius: var(--soha-radius-panel, 8px);
+  background: var(--soha-data-panel-bg);
+}
+
+.soha-management-searchable-list-pane__search.ant-input-affix-wrapper {
+  border-radius: var(--soha-radius-control, 6px);
+  background: var(--soha-bg-surface);
+}
+
+.soha-management-searchable-list-pane__items {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 260px;
+  flex-direction: column;
+  gap: 8px;
+  overflow: auto;
+}
+
+.soha-management-searchable-list-pane__item {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--soha-border-color);
+  border-radius: var(--soha-radius-control, 6px);
+  background: var(--soha-fill-weak);
+  color: var(--soha-text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.soha-management-searchable-list-pane__item:hover {
+  border-color: var(--soha-list-item-active-border);
+  background: var(--soha-data-row-hover-bg);
+}
+
+.soha-management-searchable-list-pane__item.is-active {
+  border-color: var(--soha-list-item-active-border);
+  background: var(--soha-list-item-active-bg);
+}
+
+.soha-management-searchable-list-pane__item:focus-visible {
+  outline: 2px solid var(--soha-focus-ring);
+  outline-offset: 2px;
+}
+
+.soha-template-designer-shell {
+  min-height: 0;
+}
+
+.soha-template-designer-shell__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.soha-template-designer-shell__workspace {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 12px;
+  min-height: calc(100vh - 174px);
+}
+
+.soha-template-designer-shell__designer {
+  min-height: 0;
+  overflow: hidden;
+  padding: 12px;
+  border: 1px solid var(--soha-data-panel-border);
+  border-radius: var(--soha-radius);
+  background: var(--soha-data-panel-bg);
 }
 
 .soha-management-table-shell .soha-admin-table .ant-table-thead > tr > th,
@@ -452,5 +595,18 @@
   .soha-management-batchbar {
     width: 100%;
     flex-wrap: wrap;
+  }
+
+  .soha-management-searchable-list-pane {
+    min-height: 320px;
+  }
+
+  .soha-template-designer-shell__toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .soha-template-designer-shell__workspace {
+    grid-template-columns: 1fr;
   }
 }

@@ -40,19 +40,19 @@
 }
 
 .soha-cluster-status.is-success .soha-cluster-status-dot {
-  background: #52c41a;
+  background: var(--soha-success);
 }
 
 .soha-cluster-status.is-error .soha-cluster-status-dot {
-  background: #ff4d4f;
+  background: var(--soha-danger);
 }
 
 .soha-cluster-status.is-warning .soha-cluster-status-dot {
-  background: #faad14;
+  background: var(--soha-warning);
 }
 
 .soha-cluster-status.is-processing .soha-cluster-status-dot {
-  background: #1677ff;
+  background: var(--soha-primary);
 }
 
 .soha-cluster-action-links .ant-btn {
@@ -104,7 +104,7 @@
 .soha-platform-table a.ant-typography-link,
 .soha-platform-table .ant-btn-link:not(.ant-btn-dangerous):not(.ant-btn-color-dangerous),
 .soha-platform-table .ant-btn-text:not(.ant-btn-dangerous):not(.ant-btn-color-dangerous) {
-  color: #597ef7;
+  color: var(--soha-table-link-color);
   font-weight: 600;
   cursor: pointer;
 }
@@ -122,24 +122,39 @@
 .soha-platform-table a.ant-typography-link:hover,
 .soha-platform-table .ant-btn-link:not(.ant-btn-dangerous):not(.ant-btn-color-dangerous):hover,
 .soha-platform-table .ant-btn-text:not(.ant-btn-dangerous):not(.ant-btn-color-dangerous):hover {
-  color: #3f6ae0;
+  color: var(--soha-table-link-hover-color);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
-.soha-deployment-actions-column,
+.soha-pods-table .ant-table-cell-fix-start,
+.soha-pods-table .ant-table-cell-fix-left,
+.soha-pods-table .ant-table-cell-fix-left-first,
+.soha-pods-table .ant-table-cell-fix-left-last,
 .soha-pods-table .ant-table-cell-fix-end,
 .soha-pods-table .ant-table-cell-fix-right,
 .soha-pods-table .ant-table-cell-fix-right-first,
 .soha-pods-table .ant-table-cell-fix-right-last,
+.soha-platform-table .ant-table-cell-fix-start,
+.soha-platform-table .ant-table-cell-fix-left,
+.soha-platform-table .ant-table-cell-fix-left-first,
+.soha-platform-table .ant-table-cell-fix-left-last,
 .soha-platform-table .ant-table-cell-fix-end,
 .soha-platform-table .ant-table-cell-fix-right,
 .soha-platform-table .ant-table-cell-fix-right-first,
 .soha-platform-table .ant-table-cell-fix-right-last,
+.soha-pods-table th.ant-table-cell-fix-start,
+.soha-pods-table th.ant-table-cell-fix-left,
+.soha-pods-table th.ant-table-cell-fix-left-first,
+.soha-pods-table th.ant-table-cell-fix-left-last,
 .soha-pods-table th.ant-table-cell-fix-end,
 .soha-pods-table th.ant-table-cell-fix-right,
 .soha-pods-table th.ant-table-cell-fix-right-first,
 .soha-pods-table th.ant-table-cell-fix-right-last,
+.soha-platform-table th.ant-table-cell-fix-start,
+.soha-platform-table th.ant-table-cell-fix-left,
+.soha-platform-table th.ant-table-cell-fix-left-first,
+.soha-platform-table th.ant-table-cell-fix-left-last,
 .soha-platform-table th.ant-table-cell-fix-end,
 .soha-platform-table th.ant-table-cell-fix-right,
 .soha-platform-table th.ant-table-cell-fix-right-first,
@@ -150,24 +165,60 @@
   background-clip: padding-box;
 }
 
+.soha-pods-table .ant-table-cell-fix-start,
+.soha-pods-table .ant-table-cell-fix-left,
+.soha-pods-table .ant-table-cell-fix-left-first,
+.soha-pods-table .ant-table-cell-fix-left-last,
+.soha-platform-table .ant-table-cell-fix-start,
+.soha-platform-table .ant-table-cell-fix-left,
+.soha-platform-table .ant-table-cell-fix-left-first,
+.soha-platform-table .ant-table-cell-fix-left-last,
+.soha-pods-table th.ant-table-cell-fix-start,
+.soha-pods-table th.ant-table-cell-fix-left,
+.soha-pods-table th.ant-table-cell-fix-left-first,
+.soha-pods-table th.ant-table-cell-fix-left-last,
+.soha-platform-table th.ant-table-cell-fix-start,
+.soha-platform-table th.ant-table-cell-fix-left,
+.soha-platform-table th.ant-table-cell-fix-left-first,
+.soha-platform-table th.ant-table-cell-fix-left-last {
+  border-left: none !important;
+  border-right: 1px solid var(--soha-border-color) !important;
+}
+
 .soha-pods-table .ant-table-cell-fix-end-shadow::before,
 .soha-pods-table .ant-table-cell-fix-end-shadow-show::before,
+.soha-pods-table .ant-table-cell-fix-start-shadow::before,
+.soha-pods-table .ant-table-cell-fix-start-shadow-show::before,
 .soha-platform-table .ant-table-cell-fix-end-shadow::before,
-.soha-platform-table .ant-table-cell-fix-end-shadow-show::before {
+.soha-platform-table .ant-table-cell-fix-end-shadow-show::before,
+.soha-platform-table .ant-table-cell-fix-start-shadow::before,
+.soha-platform-table .ant-table-cell-fix-start-shadow-show::before {
   box-shadow: none !important;
 }
 
 .soha-pods-table .ant-table-cell-fix-end-shadow::after,
 .soha-pods-table .ant-table-cell-fix-end-shadow-show::after,
+.soha-pods-table .ant-table-cell-fix-start-shadow::after,
+.soha-pods-table .ant-table-cell-fix-start-shadow-show::after,
 .soha-platform-table .ant-table-cell-fix-end-shadow::after,
-.soha-platform-table .ant-table-cell-fix-end-shadow-show::after {
+.soha-platform-table .ant-table-cell-fix-end-shadow-show::after,
+.soha-platform-table .ant-table-cell-fix-start-shadow::after,
+.soha-platform-table .ant-table-cell-fix-start-shadow-show::after {
   box-shadow: none !important;
 }
 
+.soha-pods-table .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-start,
+.soha-pods-table .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-left,
+.soha-pods-table .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-left-first,
+.soha-pods-table .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-left-last,
 .soha-pods-table .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-end,
 .soha-pods-table .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-right,
 .soha-pods-table .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-right-first,
 .soha-pods-table .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-right-last,
+.soha-platform-table .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-start,
+.soha-platform-table .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-left,
+.soha-platform-table .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-left-first,
+.soha-platform-table .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-left-last,
 .soha-platform-table .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-end,
 .soha-platform-table .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-right,
 .soha-platform-table .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-right-first,
@@ -175,10 +226,18 @@
   background: var(--soha-table-row-selected-bg) !important;
 }
 
+.soha-pods-table .ant-table-tbody > tr.ant-table-row-selected:hover > td.ant-table-cell-fix-start,
+.soha-pods-table .ant-table-tbody > tr.ant-table-row-selected:hover > td.ant-table-cell-fix-left,
+.soha-pods-table .ant-table-tbody > tr.ant-table-row-selected:hover > td.ant-table-cell-fix-left-first,
+.soha-pods-table .ant-table-tbody > tr.ant-table-row-selected:hover > td.ant-table-cell-fix-left-last,
 .soha-pods-table .ant-table-tbody > tr.ant-table-row-selected:hover > td.ant-table-cell-fix-end,
 .soha-pods-table .ant-table-tbody > tr.ant-table-row-selected:hover > td.ant-table-cell-fix-right,
 .soha-pods-table .ant-table-tbody > tr.ant-table-row-selected:hover > td.ant-table-cell-fix-right-first,
 .soha-pods-table .ant-table-tbody > tr.ant-table-row-selected:hover > td.ant-table-cell-fix-right-last,
+.soha-platform-table .ant-table-tbody > tr.ant-table-row-selected:hover > td.ant-table-cell-fix-start,
+.soha-platform-table .ant-table-tbody > tr.ant-table-row-selected:hover > td.ant-table-cell-fix-left,
+.soha-platform-table .ant-table-tbody > tr.ant-table-row-selected:hover > td.ant-table-cell-fix-left-first,
+.soha-platform-table .ant-table-tbody > tr.ant-table-row-selected:hover > td.ant-table-cell-fix-left-last,
 .soha-platform-table .ant-table-tbody > tr.ant-table-row-selected:hover > td.ant-table-cell-fix-end,
 .soha-platform-table .ant-table-tbody > tr.ant-table-row-selected:hover > td.ant-table-cell-fix-right,
 .soha-platform-table .ant-table-tbody > tr.ant-table-row-selected:hover > td.ant-table-cell-fix-right-first,
@@ -186,10 +245,18 @@
   background: var(--soha-table-row-selected-hover-bg) !important;
 }
 
+.soha-pods-table .ant-table-thead > tr > th.ant-table-cell-fix-start,
+.soha-pods-table .ant-table-thead > tr > th.ant-table-cell-fix-left,
+.soha-pods-table .ant-table-thead > tr > th.ant-table-cell-fix-left-first,
+.soha-pods-table .ant-table-thead > tr > th.ant-table-cell-fix-left-last,
 .soha-pods-table .ant-table-thead > tr > th.ant-table-cell-fix-end,
 .soha-pods-table .ant-table-thead > tr > th.ant-table-cell-fix-right,
 .soha-pods-table .ant-table-thead > tr > th.ant-table-cell-fix-right-first,
 .soha-pods-table .ant-table-thead > tr > th.ant-table-cell-fix-right-last,
+.soha-platform-table .ant-table-thead > tr > th.ant-table-cell-fix-start,
+.soha-platform-table .ant-table-thead > tr > th.ant-table-cell-fix-left,
+.soha-platform-table .ant-table-thead > tr > th.ant-table-cell-fix-left-first,
+.soha-platform-table .ant-table-thead > tr > th.ant-table-cell-fix-left-last,
 .soha-platform-table .ant-table-thead > tr > th.ant-table-cell-fix-end,
 .soha-platform-table .ant-table-thead > tr > th.ant-table-cell-fix-right,
 .soha-platform-table .ant-table-thead > tr > th.ant-table-cell-fix-right-first,
@@ -197,10 +264,18 @@
   background: var(--soha-bg-surface-muted) !important;
 }
 
+.soha-pods-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-start,
+.soha-pods-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-left,
+.soha-pods-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-left-first,
+.soha-pods-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-left-last,
 .soha-pods-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-end,
 .soha-pods-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-right,
 .soha-pods-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-right-first,
 .soha-pods-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-right-last,
+.soha-platform-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-start,
+.soha-platform-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-left,
+.soha-platform-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-left-first,
+.soha-platform-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-left-last,
 .soha-platform-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-end,
 .soha-platform-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-right,
 .soha-platform-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-right-first,
@@ -208,10 +283,18 @@
   background: var(--soha-bg-surface) !important;
 }
 
+.soha-pods-table .ant-table-cell-fix-start::after,
+.soha-pods-table .ant-table-cell-fix-left::after,
+.soha-pods-table .ant-table-cell-fix-left-first::after,
+.soha-pods-table .ant-table-cell-fix-left-last::after,
 .soha-pods-table .ant-table-cell-fix-end::after,
 .soha-pods-table .ant-table-cell-fix-right::after,
 .soha-pods-table .ant-table-cell-fix-right-first::after,
 .soha-pods-table .ant-table-cell-fix-right-last::after,
+.soha-platform-table .ant-table-cell-fix-start::after,
+.soha-platform-table .ant-table-cell-fix-left::after,
+.soha-platform-table .ant-table-cell-fix-left-first::after,
+.soha-platform-table .ant-table-cell-fix-left-last::after,
 .soha-platform-table .ant-table-cell-fix-end::after,
 .soha-platform-table .ant-table-cell-fix-right::after,
 .soha-platform-table .ant-table-cell-fix-right-first::after,
@@ -501,9 +584,9 @@
   max-width: min(360px, 38%);
   height: 24px;
   padding: 0 8px;
-  border: 1px solid rgba(22, 119, 255, 0.22);
+  border: 1px solid rgba(var(--soha-primary-rgb), 0.22);
   border-radius: 8px;
-  background: rgba(22, 119, 255, 0.06);
+  background: rgba(var(--soha-primary-rgb), 0.06);
   color: var(--soha-primary);
   font-weight: 600;
   transition: border-color 0.2s ease, background-color 0.2s ease;
@@ -511,8 +594,8 @@
 
 .soha-related-pod-name.ant-btn:hover,
 .soha-related-pod-name.ant-btn:focus-visible {
-  border-color: rgba(22, 119, 255, 0.42);
-  background: rgba(22, 119, 255, 0.12);
+  border-color: rgba(var(--soha-primary-rgb), 0.42);
+  background: rgba(var(--soha-primary-rgb), 0.12);
   color: var(--soha-primary-hover);
 }
 
@@ -756,13 +839,13 @@
 
 .soha-pod-overview-status.ant-card {
   min-height: 100%;
-  border-color: rgba(var(--soha-primary-rgb), 0.24);
-  background: linear-gradient(180deg, rgba(var(--soha-primary-rgb), 0.03), rgba(var(--soha-primary-rgb), 0.01)), var(--soha-bg-surface);
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.04);
+  border-color: color-mix(in srgb, var(--soha-primary) 24%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--soha-primary) 3%, transparent), color-mix(in srgb, var(--soha-primary) 1%, transparent)), var(--soha-bg-surface);
+  box-shadow: var(--soha-shadow-soft);
 }
 
 .soha-pod-overview-status.ant-card .ant-card-head {
-  background: rgba(var(--soha-primary-rgb), 0.035);
+  background: color-mix(in srgb, var(--soha-primary) 3.5%, transparent);
   min-height: 46px;
   padding-inline: 18px;
 }
@@ -838,27 +921,91 @@
 .soha-pod-table-runtime .ant-tag,
 .soha-pod-table-resource-summary .ant-tag {
   max-width: 96px;
-  margin-inline-end: 0;
   overflow: hidden;
-  border-radius: 6px;
-  line-height: 20px;
+  text-overflow: ellipsis;
+}
+
+.soha-pod-table-namespace-tag.ant-tag,
+.soha-pod-table-pvc-tag.ant-tag {
+  max-width: 112px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.soha-pod-table-node-text.ant-typography {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--soha-text-primary);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.soha-pod-table-meta .soha-pod-table-node-tag.ant-tag {
-  max-width: 82px;
+.soha-pod-resource-limit-cell {
+  display: flex;
+  align-items: center;
+  min-height: 22px;
+  min-width: 0;
+  width: 100%;
 }
 
-.soha-pod-table-meta .soha-pod-table-age-tag.ant-tag {
-  max-width: 64px;
-  font-variant-numeric: tabular-nums;
+.soha-pod-resource-progress-wrap {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  padding-block: 5px;
+}
+
+.soha-pod-resource-limit-cell .ant-progress {
+  display: block;
+  line-height: 1;
+}
+
+.soha-pod-resource-limit-cell .ant-progress-line {
+  margin-bottom: 0;
+}
+
+.soha-pod-resource-limit-cell .ant-progress.is-without-baseline .ant-progress-bg {
+  opacity: 0;
+}
+
+.soha-pod-resource-marker {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  z-index: 1;
+  width: 2px;
+  border-radius: 2px;
+  pointer-events: none;
+  transform: translateX(-1px);
+}
+
+.soha-pod-resource-marker.is-request {
+  left: var(--soha-pod-resource-request-percent);
+  background: var(--soha-text-primary);
+  opacity: 0.62;
+}
+
+.soha-pod-resource-marker.is-limit {
+  left: var(--soha-pod-resource-limit-percent);
+  background: var(--soha-danger);
+  opacity: 0.72;
 }
 
 .soha-pod-actions-column.soha-table-actions-column {
-  width: 64px !important;
-  min-width: 64px !important;
-  max-width: 64px !important;
+  --soha-table-actions-column-width: 64px;
+}
+
+.soha-deployments-table .soha-workload-actions-column {
+  --soha-table-actions-column-width: 148px;
+}
+
+.soha-statefulsets-table .soha-workload-actions-column {
+  --soha-table-actions-column-width: 116px;
+}
+
+.soha-daemonsets-table .soha-workload-actions-column {
+  --soha-table-actions-column-width: 84px;
 }
 
 .soha-replica-progress-cell {
@@ -929,7 +1076,8 @@
 }
 
 .soha-deployments-table .soha-table-actions-column,
-.soha-deployments-table .soha-deployment-actions-column {
+.soha-statefulsets-table .soha-table-actions-column,
+.soha-daemonsets-table .soha-table-actions-column {
   border-left: 1px solid var(--soha-border-color) !important;
   box-shadow: none !important;
   background: var(--soha-bg-surface);
@@ -940,9 +1088,9 @@
 
 .soha-workload-overview-events.ant-card {
   border: 1px solid var(--soha-border-color);
-  border-radius: 16px;
+  border-radius: var(--soha-radius-panel);
   background: var(--soha-bg-surface);
-  box-shadow: none;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
 }
 
 .soha-workload-overview-toolbar {
@@ -958,45 +1106,6 @@
 
 .soha-workload-overview-metric-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.soha-workloads-overview-page .soha-workload-overview-metric-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.soha-workloads-overview-page .soha-overview-metric-card.ant-card .ant-card-body {
-  gap: 8px;
-  padding: 12px 14px;
-}
-
-.soha-workloads-overview-page .soha-overview-metric-card .ant-statistic {
-  min-height: 36px;
-}
-
-.soha-workloads-overview-page .soha-overview-metric-card .ant-statistic-content {
-  font-size: 28px;
-}
-
-.soha-workloads-overview-page .soha-overview-metric-card-head {
-  gap: 8px;
-}
-
-.soha-workloads-overview-page .soha-overview-metric-label {
-  margin-bottom: 4px;
-  font-size: 11px;
-}
-
-.soha-workloads-overview-page .soha-overview-metric-helper {
-  font-size: 11px;
-  line-height: 1.45;
-}
-
-.soha-workloads-overview-page .soha-overview-metric-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  font-size: 16px;
 }
 
 .soha-workload-overview-events.ant-card .ant-card-head {
@@ -1017,113 +1126,8 @@
   gap: 12px;
 }
 
-.soha-platform-overview-page .soha-overview-metric-grid,
-.soha-platform-overview-page .soha-overview-summary-grid,
-.soha-platform-overview-page .soha-overview-runtime-layout,
-.soha-platform-overview-page .soha-overview-pod-grid,
-.soha-platform-overview-page .soha-overview-chip-grid {
-  gap: 10px;
-}
-
-.soha-platform-overview-page .soha-overview-metric-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
 .soha-platform-overview-page .soha-overview-summary-grid {
   grid-template-columns: minmax(0, 1.18fr) minmax(300px, 0.82fr);
-}
-
-.soha-platform-overview-page .soha-overview-pod-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.soha-platform-overview-page .soha-overview-metric-card.ant-card .ant-card-body,
-.soha-platform-overview-page .soha-overview-pod-card.ant-card .ant-card-body {
-  gap: 8px;
-  padding: 12px 14px;
-}
-
-.soha-platform-overview-page .soha-overview-metric-card .ant-statistic,
-.soha-platform-overview-page .soha-overview-pod-card .ant-statistic {
-  min-height: 36px;
-}
-
-.soha-platform-overview-page .soha-overview-metric-card .ant-statistic-content,
-.soha-platform-overview-page .soha-overview-pod-card .ant-statistic-content {
-  font-size: 28px;
-}
-
-.soha-platform-overview-page .soha-overview-metric-card-head,
-.soha-platform-overview-page .soha-overview-pod-card-head {
-  gap: 8px;
-}
-
-.soha-platform-overview-page .soha-overview-metric-label {
-  margin-bottom: 4px;
-  font-size: 11px;
-}
-
-.soha-platform-overview-page .soha-overview-metric-helper {
-  font-size: 11px;
-  line-height: 1.45;
-}
-
-.soha-platform-overview-page .soha-overview-metric-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  font-size: 16px;
-}
-
-.soha-platform-overview-page .soha-overview-panel-card.ant-card .ant-card-head,
-.soha-platform-overview-page .soha-overview-runtime-card.ant-card .ant-card-head {
-  min-height: 44px;
-  padding-inline: 14px;
-}
-
-.soha-platform-overview-page .soha-overview-panel-card.ant-card .ant-card-body,
-.soha-platform-overview-page .soha-overview-runtime-card.ant-card .ant-card-body {
-  padding: 12px 14px;
-}
-
-.soha-platform-overview-page .soha-overview-alert-stack,
-.soha-platform-overview-page .soha-overview-runtime-main,
-.soha-platform-overview-page .soha-overview-runtime-side,
-.soha-platform-overview-page .soha-overview-subpanel {
-  gap: 10px;
-}
-
-.soha-platform-overview-page .soha-overview-section-bar {
-  padding: 8px 10px;
-}
-
-.soha-platform-overview-page .soha-overview-chip {
-  gap: 5px;
-  padding: 10px 12px;
-  border-radius: 10px;
-}
-
-.soha-platform-overview-page .soha-overview-chip-value {
-  font-size: 20px;
-}
-
-.soha-platform-overview-page .soha-overview-cluster-list,
-.soha-platform-overview-page .soha-overview-attention-list,
-.soha-platform-overview-page .soha-overview-namespace-list {
-  gap: 8px;
-}
-
-.soha-platform-overview-page .soha-overview-cluster-row,
-.soha-platform-overview-page .soha-overview-attention-row,
-.soha-platform-overview-page .soha-overview-namespace-row {
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 10px;
-}
-
-.soha-platform-overview-page .soha-overview-subpanel {
-  padding: 12px;
-  border-radius: 10px;
 }
 
 @media (max-width: 960px) {

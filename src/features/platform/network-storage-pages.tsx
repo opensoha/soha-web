@@ -1,14 +1,15 @@
 import { lazy, Suspense, useDeferredValue, useMemo, useState } from 'react'
-import { PlusOutlined, SearchOutlined } from '@ant-design/icons'
-import { Button, Card, Descriptions, Input, Spin, Tabs, Tag, Tooltip, Typography, message } from 'antd'
+import { PlusOutlined } from '@ant-design/icons'
+import { Button, Card, Descriptions, Spin, Tabs, Tag, Tooltip, Typography, message } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
+import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementDetailHeader,
   ManagementDensityButton,
-  ManagementQueryField,
-  ManagementQueryPanel,
+  ManagementKeywordField,
+  ManagementQueryActions,
   ManagementState,
   ManagementRefreshButton,
   ManagementTableToolbar,
@@ -199,7 +200,7 @@ function includesSearch(values: Array<string | undefined | null>, keyword: strin
   return values.some((value) => (value ?? '').toLowerCase().includes(keyword))
 }
 
-function StorageQueryPanel({
+function buildResourceKeywordQuery({
   localeCode,
   placeholder,
   searchKeyword,
@@ -210,34 +211,29 @@ function StorageQueryPanel({
   searchKeyword: string
   setSearchKeyword: (value: string) => void
 }) {
-  return (
-    <ManagementQueryPanel
-      onFinish={() => undefined}
-      actions={(
-        <>
-          <Button autoInsertSpace={false} disabled={!searchKeyword.trim()} htmlType="button" onClick={() => setSearchKeyword('')}>
-            {localeCode === 'zh_CN' ? '重置' : 'Reset'}
-          </Button>
-          <Button autoInsertSpace={false} htmlType="submit" type="primary">
-            {localeCode === 'zh_CN' ? '查询' : 'Search'}
-          </Button>
-        </>
-      )}
-    >
-      <ManagementQueryField label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}>
-        <Input
-          allowClear
-          className="soha-platform-compact-field soha-workload-search-input"
-          prefix={<SearchOutlined />}
-          size="small"
-          value={searchKeyword}
-          variant="filled"
-          onChange={(event) => setSearchKeyword(event.target.value)}
-          placeholder={placeholder}
-        />
-      </ManagementQueryField>
-    </ManagementQueryPanel>
-  )
+  return {
+    onFinish: () => undefined,
+    actions: (
+      <ManagementQueryActions
+        disabledReset={!searchKeyword.trim()}
+        onReset={() => setSearchKeyword('')}
+        resetLabel={localeCode === 'zh_CN' ? '重置' : 'Reset'}
+        submitLabel={localeCode === 'zh_CN' ? '查询' : 'Search'}
+      />
+    ),
+    children: (
+      <ManagementKeywordField
+        label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}
+        value={searchKeyword}
+        onChange={setSearchKeyword}
+        placeholder={placeholder}
+        inputProps={{
+          className: 'soha-platform-compact-field soha-workload-search-input',
+          size: 'small',
+        }}
+      />
+    ),
+  }
 }
 
 function buildStorageNamespaceQuery(namespace: string | undefined | null) {
@@ -378,59 +374,42 @@ function NetworkResourceListPage<T extends Record<string, any>>({
   const densityLabel = localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'
 
   return (
-    <div className="soha-page">
-      {actionConfig ? modalNode : null}
-      {query.isError ? (
-        <ManagementState
-          className="mb-3"
-          description={buildNetworkErrorDescription(localeCode, query.error)}
-          kind="error"
-          title={localeCode === 'zh_CN' ? '网络资源暂时不可用' : 'Network resources unavailable'}
-        />
-      ) : null}
-      <ManagementQueryPanel
-        onFinish={() => undefined}
-        actions={(
-          <>
-            <Button autoInsertSpace={false} disabled={!searchKeyword.trim()} htmlType="button" onClick={() => setSearchKeyword('')}>
-              {localeCode === 'zh_CN' ? '重置' : 'Reset'}
-            </Button>
-            <Button autoInsertSpace={false} htmlType="submit" type="primary">
-              {localeCode === 'zh_CN' ? '查询' : 'Search'}
-            </Button>
-          </>
-        )}
-      >
-        <ManagementQueryField label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}>
-          <Input
-            allowClear
-            className="soha-platform-compact-field soha-workload-search-input"
-            prefix={<SearchOutlined />}
-            size="small"
-            value={searchKeyword}
-            variant="filled"
-            onChange={(event) => setSearchKeyword(event.target.value)}
-            placeholder={searchPlaceholder}
-          />
-        </ManagementQueryField>
-      </ManagementQueryPanel>
-      <AdminTable
-        className="soha-platform-table"
-        columnSettingIconOnly
-        columnSettingPlacement="header"
-        shellClassName="soha-management-table-shell"
-        columns={effectiveColumns}
-        dataSource={clusterId ? filteredItems : []}
-        rowKey={rowKey}
-        loading={query.isLoading}
-        paginationSummary={(
+    <ManagementDataPage
+      beforeQuery={(
+        <>
+          {actionConfig ? modalNode : null}
+          {query.isError ? (
+            <ManagementState
+              className="mb-3"
+              description={buildNetworkErrorDescription(localeCode, query.error)}
+              kind="error"
+              title={localeCode === 'zh_CN' ? '网络资源暂时不可用' : 'Network resources unavailable'}
+            />
+          ) : null}
+        </>
+      )}
+      query={buildResourceKeywordQuery({
+        localeCode,
+        placeholder: searchPlaceholder,
+        searchKeyword,
+        setSearchKeyword,
+      })}
+      table={{
+        className: 'soha-platform-table',
+        columnSettingIconOnly: true,
+        columnSettingPlacement: 'header',
+        columns: effectiveColumns,
+        dataSource: clusterId ? filteredItems : [],
+        rowKey,
+        loading: query.isLoading,
+        paginationSummary: (
           <Text className="soha-workload-table-summary" type="secondary">
             {localeCode === 'zh_CN' ? `当前 ${filteredItems.length} / ${rawItems.length} 条` : `${filteredItems.length} / ${rawItems.length} items`}
           </Text>
-        )}
-        tableSize={tableSize}
-        scroll={{ x: 'max-content' }}
-        headerExtra={(
+        ),
+        tableSize,
+        scroll: { x: 'max-content' },
+        headerExtra: (
           <ManagementTableToolbar>
             <ManagementDensityButton
               aria-label={densityLabel}
@@ -450,10 +429,10 @@ function NetworkResourceListPage<T extends Record<string, any>>({
               }}
             />
           </ManagementTableToolbar>
-        )}
-        empty={<PlatformResourceState description={effectiveEmpty} kind={resourceEmptyKind(clusterId, effectiveEmpty)} />}
-      />
-    </div>
+        ),
+        empty: <PlatformResourceState description={effectiveEmpty} kind={resourceEmptyKind(clusterId, effectiveEmpty)} />,
+      }}
+    />
   )
 }
 
@@ -533,8 +512,8 @@ export function NetworkServicesPage() {
   const densityLabel = localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'
 
   return (
-    <div className="soha-page">
-      {query.isError ? (
+    <ManagementDataPage
+      beforeQuery={query.isError ? (
         <ManagementState
           className="mb-3"
           description={buildNetworkErrorDescription(localeCode, query.error)}
@@ -542,49 +521,28 @@ export function NetworkServicesPage() {
           title={localeCode === 'zh_CN' ? '网络资源暂时不可用' : 'Network resources unavailable'}
         />
       ) : null}
-      <ManagementQueryPanel
-        onFinish={() => undefined}
-        actions={(
-          <>
-            <Button autoInsertSpace={false} disabled={!searchKeyword.trim()} htmlType="button" onClick={() => setSearchKeyword('')}>
-              {localeCode === 'zh_CN' ? '重置' : 'Reset'}
-            </Button>
-            <Button autoInsertSpace={false} htmlType="submit" type="primary">
-              {localeCode === 'zh_CN' ? '查询' : 'Search'}
-            </Button>
-          </>
-        )}
-      >
-        <ManagementQueryField label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}>
-          <Input
-            allowClear
-            className="soha-platform-compact-field soha-workload-search-input"
-            prefix={<SearchOutlined />}
-            size="small"
-            value={searchKeyword}
-            variant="filled"
-            onChange={(event) => setSearchKeyword(event.target.value)}
-            placeholder={searchPlaceholder}
-          />
-        </ManagementQueryField>
-      </ManagementQueryPanel>
-      <AdminTable
-        className="soha-platform-table"
-        columnSettingIconOnly
-        columnSettingPlacement="header"
-        shellClassName="soha-management-table-shell"
-        columns={columns}
-        dataSource={clusterId ? filteredItems : []}
-        rowKey={(record) => `${record.namespace}/${record.name}`}
-        loading={query.isLoading}
-        paginationSummary={(
+      query={buildResourceKeywordQuery({
+        localeCode,
+        placeholder: searchPlaceholder,
+        searchKeyword,
+        setSearchKeyword,
+      })}
+      table={{
+        className: 'soha-platform-table',
+        columnSettingIconOnly: true,
+        columnSettingPlacement: 'header',
+        columns,
+        dataSource: clusterId ? filteredItems : [],
+        rowKey: (record) => `${record.namespace}/${record.name}`,
+        loading: query.isLoading,
+        paginationSummary: (
           <Text className="soha-workload-table-summary" type="secondary">
             {localeCode === 'zh_CN' ? `当前 ${filteredItems.length} / ${rawItems.length} 条` : `${filteredItems.length} / ${rawItems.length} items`}
           </Text>
-        )}
-        tableSize={tableSize}
-        scroll={{ x: 'max-content' }}
-        headerExtra={(
+        ),
+        tableSize,
+        scroll: { x: 'max-content' },
+        headerExtra: (
           <ManagementTableToolbar>
             <ManagementDensityButton
               aria-label={densityLabel}
@@ -604,10 +562,10 @@ export function NetworkServicesPage() {
               }}
             />
           </ManagementTableToolbar>
-        )}
-        empty={<PlatformResourceState description={effectiveEmpty} kind={resourceEmptyKind(clusterId, effectiveEmpty)} />}
-      />
-    </div>
+        ),
+        empty: <PlatformResourceState description={effectiveEmpty} kind={resourceEmptyKind(clusterId, effectiveEmpty)} />,
+      }}
+    />
   )
 }
 
@@ -913,31 +871,30 @@ export function StoragePvcPage() {
   const densityLabel = localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'
 
   return (
-    <div className="soha-page">
-      <CreateResourceModal visible={createVisible} onClose={() => setCreateVisible(false)} kind="PersistentVolumeClaim" resourcePath="storage/persistentvolumeclaims" defaultTemplate={PVC_DEFAULT_TEMPLATE} invalidationKeys={[['platform-resource', 'storage/persistentvolumeclaims']]} />
-      <StorageQueryPanel
-        localeCode={localeCode}
-        placeholder={searchPlaceholder}
-        searchKeyword={searchKeyword}
-        setSearchKeyword={setSearchKeyword}
-      />
-      <AdminTable
-        className="soha-platform-table"
-        columnSettingIconOnly
-        columnSettingPlacement="header"
-        shellClassName="soha-management-table-shell"
-        columns={columns}
-        dataSource={clusterId ? filteredItems : []}
-        rowKey={(record) => `${record.namespace}/${record.name}`}
-        loading={query.isLoading}
-        paginationSummary={(
+    <ManagementDataPage
+      beforeQuery={<CreateResourceModal visible={createVisible} onClose={() => setCreateVisible(false)} kind="PersistentVolumeClaim" resourcePath="storage/persistentvolumeclaims" defaultTemplate={PVC_DEFAULT_TEMPLATE} invalidationKeys={[['platform-resource', 'storage/persistentvolumeclaims']]} />}
+      query={buildResourceKeywordQuery({
+        localeCode,
+        placeholder: searchPlaceholder,
+        searchKeyword,
+        setSearchKeyword,
+      })}
+      table={{
+        className: 'soha-platform-table',
+        columnSettingIconOnly: true,
+        columnSettingPlacement: 'header',
+        columns,
+        dataSource: clusterId ? filteredItems : [],
+        rowKey: (record) => `${record.namespace}/${record.name}`,
+        loading: query.isLoading,
+        paginationSummary: (
           <Text className="soha-workload-table-summary" type="secondary">
             {localeCode === 'zh_CN' ? `当前 ${filteredItems.length} / ${rawItems.length} 条` : `${filteredItems.length} / ${rawItems.length} items`}
           </Text>
-        )}
-        tableSize={tableSize}
-        scroll={{ x: 'max-content' }}
-        headerExtra={(
+        ),
+        tableSize,
+        scroll: { x: 'max-content' },
+        headerExtra: (
           <ManagementTableToolbar>
             <Tooltip title={!clusterId ? (localeCode === 'zh_CN' ? '请先选择集群。' : 'Select a cluster first.') : ''}>
               <span>
@@ -964,10 +921,10 @@ export function StoragePvcPage() {
               }}
             />
           </ManagementTableToolbar>
-        )}
-        empty={<PlatformResourceState description={effectiveEmpty} kind={clusterId ? 'empty' : 'select-scope'} />}
-      />
-    </div>
+        ),
+        empty: <PlatformResourceState description={effectiveEmpty} kind={clusterId ? 'empty' : 'select-scope'} />,
+      }}
+    />
   )
 }
 
@@ -1004,31 +961,30 @@ export function StoragePvPage() {
   const densityLabel = localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'
 
   return (
-    <div className="soha-page">
-      <CreateResourceModal visible={createVisible} onClose={() => setCreateVisible(false)} kind="PersistentVolume" resourcePath="storage/persistentvolumes" defaultTemplate={PV_DEFAULT_TEMPLATE} invalidationKeys={[['platform-resource', 'storage/persistentvolumes']]} namespaceScope="cluster" />
-      <StorageQueryPanel
-        localeCode={localeCode}
-        placeholder={searchPlaceholder}
-        searchKeyword={searchKeyword}
-        setSearchKeyword={setSearchKeyword}
-      />
-      <AdminTable
-        className="soha-platform-table"
-        columnSettingIconOnly
-        columnSettingPlacement="header"
-        shellClassName="soha-management-table-shell"
-        columns={columns}
-        dataSource={clusterId ? filteredItems : []}
-        rowKey="name"
-        loading={query.isLoading}
-        paginationSummary={(
+    <ManagementDataPage
+      beforeQuery={<CreateResourceModal visible={createVisible} onClose={() => setCreateVisible(false)} kind="PersistentVolume" resourcePath="storage/persistentvolumes" defaultTemplate={PV_DEFAULT_TEMPLATE} invalidationKeys={[['platform-resource', 'storage/persistentvolumes']]} namespaceScope="cluster" />}
+      query={buildResourceKeywordQuery({
+        localeCode,
+        placeholder: searchPlaceholder,
+        searchKeyword,
+        setSearchKeyword,
+      })}
+      table={{
+        className: 'soha-platform-table',
+        columnSettingIconOnly: true,
+        columnSettingPlacement: 'header',
+        columns,
+        dataSource: clusterId ? filteredItems : [],
+        rowKey: 'name',
+        loading: query.isLoading,
+        paginationSummary: (
           <Text className="soha-workload-table-summary" type="secondary">
             {localeCode === 'zh_CN' ? `当前 ${filteredItems.length} / ${rawItems.length} 条` : `${filteredItems.length} / ${rawItems.length} items`}
           </Text>
-        )}
-        tableSize={tableSize}
-        scroll={{ x: 'max-content' }}
-        headerExtra={(
+        ),
+        tableSize,
+        scroll: { x: 'max-content' },
+        headerExtra: (
           <ManagementTableToolbar>
             <Tooltip title={!clusterId ? (localeCode === 'zh_CN' ? '请先选择集群。' : 'Select a cluster first.') : ''}>
               <span>
@@ -1055,10 +1011,10 @@ export function StoragePvPage() {
               }}
             />
           </ManagementTableToolbar>
-        )}
-        empty={<PlatformResourceState description={effectiveEmpty} kind={clusterId ? 'empty' : 'select-scope'} />}
-      />
-    </div>
+        ),
+        empty: <PlatformResourceState description={effectiveEmpty} kind={clusterId ? 'empty' : 'select-scope'} />,
+      }}
+    />
   )
 }
 
@@ -1093,31 +1049,30 @@ export function StorageClassesPage() {
   const densityLabel = localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'
 
   return (
-    <div className="soha-page">
-      <CreateResourceModal visible={createVisible} onClose={() => setCreateVisible(false)} kind="StorageClass" resourcePath="storage/storageclasses" defaultTemplate={STORAGE_CLASS_DEFAULT_TEMPLATE} invalidationKeys={[['platform-resource', 'storage/storageclasses']]} namespaceScope="cluster" />
-      <StorageQueryPanel
-        localeCode={localeCode}
-        placeholder={searchPlaceholder}
-        searchKeyword={searchKeyword}
-        setSearchKeyword={setSearchKeyword}
-      />
-      <AdminTable
-        className="soha-platform-table"
-        columnSettingIconOnly
-        columnSettingPlacement="header"
-        shellClassName="soha-management-table-shell"
-        columns={columns}
-        dataSource={clusterId ? filteredItems : []}
-        rowKey="name"
-        loading={query.isLoading}
-        paginationSummary={(
+    <ManagementDataPage
+      beforeQuery={<CreateResourceModal visible={createVisible} onClose={() => setCreateVisible(false)} kind="StorageClass" resourcePath="storage/storageclasses" defaultTemplate={STORAGE_CLASS_DEFAULT_TEMPLATE} invalidationKeys={[['platform-resource', 'storage/storageclasses']]} namespaceScope="cluster" />}
+      query={buildResourceKeywordQuery({
+        localeCode,
+        placeholder: searchPlaceholder,
+        searchKeyword,
+        setSearchKeyword,
+      })}
+      table={{
+        className: 'soha-platform-table',
+        columnSettingIconOnly: true,
+        columnSettingPlacement: 'header',
+        columns,
+        dataSource: clusterId ? filteredItems : [],
+        rowKey: 'name',
+        loading: query.isLoading,
+        paginationSummary: (
           <Text className="soha-workload-table-summary" type="secondary">
             {localeCode === 'zh_CN' ? `当前 ${filteredItems.length} / ${rawItems.length} 条` : `${filteredItems.length} / ${rawItems.length} items`}
           </Text>
-        )}
-        tableSize={tableSize}
-        scroll={{ x: 'max-content' }}
-        headerExtra={(
+        ),
+        tableSize,
+        scroll: { x: 'max-content' },
+        headerExtra: (
           <ManagementTableToolbar>
             <Tooltip title={!clusterId ? (localeCode === 'zh_CN' ? '请先选择集群。' : 'Select a cluster first.') : ''}>
               <span>
@@ -1144,10 +1099,10 @@ export function StorageClassesPage() {
               }}
             />
           </ManagementTableToolbar>
-        )}
-        empty={<PlatformResourceState description={effectiveEmpty} kind={clusterId ? 'empty' : 'select-scope'} />}
-      />
-    </div>
+        ),
+        empty: <PlatformResourceState description={effectiveEmpty} kind={clusterId ? 'empty' : 'select-scope'} />,
+      }}
+    />
   )
 }
 

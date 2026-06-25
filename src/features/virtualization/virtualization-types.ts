@@ -16,8 +16,15 @@ export interface VirtualizationVmProviderParams extends VirtualizationPayloadMap
   iso?: string
   ciuser?: string
   sshkeys?: string
+  snippetStorage?: string
+  cicustom?: string
   storageClass?: string
   dataVolumeName?: string
+  networkType?: string
+  networkAttachmentDefinition?: string
+  interfaceModel?: string
+  interfaceBinding?: string
+  interfaceName?: string
 }
 
 export interface VirtualizationClusterConfig extends VirtualizationPayloadMap {
@@ -26,17 +33,24 @@ export interface VirtualizationClusterConfig extends VirtualizationPayloadMap {
   defaultNode?: string
   defaultStorage?: string
   defaultBridge?: string
+  defaultSnippetStorage?: string
+  snippetStorage?: string
   backendUrl?: string
   prometheusUrl?: string
-  prometheusBearerToken?: string
+  prometheusBearerTokenConfigured?: boolean
+  prometheusBearerTokenSecretRef?: string
   credentialSecretRef?: string
+  mode?: string
 }
 
 export interface VirtualizationClusterCredential extends VirtualizationPayloadMap {
+  username?: string
+  password?: string
   tokenID?: string
   tokenSecret?: string
   ticket?: string
   csrfToken?: string
+  prometheusBearerToken?: string
 }
 
 export interface VirtualizationImageConfig extends VirtualizationPayloadMap {
@@ -184,6 +198,34 @@ export interface VirtualizationCluster {
   allowedActions?: string[]
 }
 
+export interface VirtualizationDeleteDependencySample {
+  id: string
+  kind?: string
+  name?: string
+  externalId?: string
+  status?: string
+  nodeName?: string
+  taskKind?: string
+  vmId?: string
+}
+
+export interface VirtualizationConnectionDeleteDependencies {
+  connection?: VirtualizationCluster
+  vmCount?: number
+  imageCount?: number
+  flavorCount?: number
+  taskCount?: number
+  pendingTaskCount?: number
+  dockerHostCount?: number
+  vmSamples?: VirtualizationDeleteDependencySample[]
+  imageSamples?: VirtualizationDeleteDependencySample[]
+  flavorSamples?: VirtualizationDeleteDependencySample[]
+  taskSamples?: VirtualizationDeleteDependencySample[]
+  forceRequired?: boolean
+  blocking?: boolean
+  blockingReasons?: string[]
+}
+
 export interface VirtualizationClusterInput {
   name: string
   provider?: string
@@ -196,6 +238,27 @@ export interface VirtualizationClusterInput {
   config?: VirtualizationClusterConfig
   region?: string
   description?: string
+}
+
+export interface VirtualizationImageConfig extends VirtualizationPayloadMap {
+  sourceKind?: string
+  assetKind?: string
+  sourceRef?: string
+  namespace?: string
+  node?: string
+  storage?: string
+  storageClass?: string
+  content?: string
+  contentType?: string
+  iface?: string
+  network?: string
+  bridge?: string | boolean
+  active?: string | boolean
+  supportsISO?: string | boolean
+  supportsImages?: string | boolean
+  supportsSnippets?: string | boolean
+  supportsBackup?: string | boolean
+  supportsRootdir?: string | boolean
 }
 
 export interface VirtualizationImage {

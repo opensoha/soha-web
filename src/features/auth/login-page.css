@@ -15,17 +15,17 @@
   padding: clamp(16px, 3.2vw, 36px) clamp(18px, 4vw, 44px) clamp(10px, 1.8vh, 16px);
   overflow: hidden;
   background:
-    radial-gradient(circle at 18% 20%, rgba(56, 189, 248, 0.18), transparent 28%),
-    radial-gradient(circle at 62% 76%, rgba(45, 212, 191, 0.14), transparent 30%),
-    linear-gradient(135deg, #f8fafc 0%, #eef2f7 48%, #e7edf4 100%);
+    radial-gradient(circle at 18% 20%, rgba(var(--soha-accent-cyan-rgb), 0.18), transparent 28%),
+    radial-gradient(circle at 62% 76%, rgba(var(--soha-accent-teal-rgb), 0.14), transparent 30%),
+    linear-gradient(135deg, var(--soha-bg-base) 0%, var(--soha-bg-layout) 48%, var(--soha-bg-surface-muted) 100%);
   isolation: isolate;
 }
 
 :root[data-theme-mode='dark'] .soha-auth-shell {
   background:
-    radial-gradient(circle at 18% 20%, rgba(56, 189, 248, 0.16), transparent 30%),
-    radial-gradient(circle at 62% 76%, rgba(45, 212, 191, 0.12), transparent 32%),
-    linear-gradient(135deg, #0f172a 0%, #111827 52%, #0b1d24 100%);
+    radial-gradient(circle at 18% 20%, rgba(var(--soha-accent-cyan-rgb), 0.16), transparent 30%),
+    radial-gradient(circle at 62% 76%, rgba(var(--soha-accent-teal-rgb), 0.12), transparent 32%),
+    linear-gradient(135deg, var(--soha-bg-layout) 0%, var(--soha-bg-surface) 52%, var(--soha-bg-surface-muted) 100%);
 }
 
 .soha-auth-shell::after {
@@ -35,14 +35,14 @@
   pointer-events: none;
   content: '';
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(226, 232, 240, 0.3)),
-    linear-gradient(90deg, rgba(248, 250, 252, 0.68), transparent 30%, transparent 70%, rgba(226, 232, 240, 0.62));
+    linear-gradient(180deg, color-mix(in srgb, var(--soha-bg-surface) 10%, transparent), color-mix(in srgb, var(--soha-fill-medium) 30%, transparent)),
+    linear-gradient(90deg, color-mix(in srgb, var(--soha-bg-base) 68%, transparent), transparent 30%, transparent 70%, color-mix(in srgb, var(--soha-fill-medium) 62%, transparent));
 }
 
 :root[data-theme-mode='dark'] .soha-auth-shell::after {
   background:
-    linear-gradient(180deg, rgba(15, 23, 42, 0.14), rgba(15, 23, 42, 0.42)),
-    linear-gradient(90deg, rgba(15, 23, 42, 0.7), transparent 28%, transparent 72%, rgba(15, 23, 42, 0.62));
+    linear-gradient(180deg, color-mix(in srgb, var(--soha-bg-layout) 14%, transparent), color-mix(in srgb, var(--soha-bg-layout) 42%, transparent)),
+    linear-gradient(90deg, color-mix(in srgb, var(--soha-bg-layout) 70%, transparent), transparent 28%, transparent 72%, color-mix(in srgb, var(--soha-bg-layout) 62%, transparent));
 }
 
 .soha-auth-background {
@@ -77,39 +77,39 @@
   z-index: 2;
   width: 34px;
   height: 34px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
+  border: 1px solid var(--soha-glass-border);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.74);
-  color: #334155;
-  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.1);
-  backdrop-filter: blur(14px);
+  background: var(--soha-glass-bg);
+  color: var(--soha-text-secondary);
+  box-shadow: var(--soha-glass-shadow);
+  backdrop-filter: blur(var(--soha-glass-blur));
 }
 
 .soha-auth-theme-toggle.ant-btn:hover,
 .soha-auth-theme-toggle.ant-btn:focus {
-  border-color: rgba(56, 189, 248, 0.42);
-  background: rgba(255, 255, 255, 0.9) !important;
-  color: #0f172a !important;
+  border-color: color-mix(in srgb, var(--soha-accent-cyan) 42%, transparent);
+  background: var(--soha-glass-bg-strong) !important;
+  color: var(--soha-text-primary) !important;
 }
 
 :root[data-theme-mode='dark'] .soha-auth-theme-toggle.ant-btn {
-  border-color: rgba(148, 163, 184, 0.22);
-  background: rgba(17, 24, 39, 0.68);
-  color: #e2e8f0;
+  border-color: var(--soha-glass-border);
+  background: var(--soha-glass-bg);
+  color: var(--soha-text-secondary);
 }
 
 .soha-auth-copyright {
   position: relative;
   z-index: 1;
   width: 100%;
-  color: rgba(71, 85, 105, 0.78);
+  color: color-mix(in srgb, var(--soha-text-secondary) 78%, transparent);
   font-size: 12px;
   line-height: 1.5;
   text-align: center;
 }
 
 :root[data-theme-mode='dark'] .soha-auth-copyright {
-  color: rgba(203, 213, 225, 0.62);
+  color: color-mix(in srgb, var(--soha-text-secondary) 62%, transparent);
 }
 
 .soha-auth-flow {
@@ -127,7 +127,7 @@
 .soha-auth-flow-title.ant-typography {
   max-width: 620px;
   margin: 0 0 10px;
-  color: #0f172a;
+  color: var(--soha-text-primary);
   font-size: clamp(30px, 5vw, 54px);
   font-weight: 750;
   line-height: 1.08;
@@ -137,17 +137,17 @@
 .soha-auth-flow-subtitle.ant-typography {
   display: block;
   max-width: 560px;
-  color: #475569;
+  color: var(--soha-text-secondary);
   font-size: 14px;
   line-height: 1.8;
 }
 
 :root[data-theme-mode='dark'] .soha-auth-flow-title.ant-typography {
-  color: #f8fafc;
+  color: var(--soha-text-primary);
 }
 
 :root[data-theme-mode='dark'] .soha-auth-flow-subtitle.ant-typography {
-  color: #cbd5e1;
+  color: var(--soha-text-secondary);
 }
 
 .soha-auth-flow-map {
@@ -171,7 +171,7 @@
   stroke-width: 2;
   opacity: 0.92;
   animation: soha-auth-flow-stream 3.4s linear infinite;
-  filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.24));
+  filter: drop-shadow(0 0 8px rgba(var(--soha-accent-cyan-rgb), 0.24));
 }
 
 .soha-auth-flow-line.is-delay-1 {
@@ -209,17 +209,17 @@
   gap: 10px;
   width: min(232px, 34vw);
   padding: 12px 13px;
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  border: 1px solid var(--soha-glass-border);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.68);
-  box-shadow: 0 18px 46px rgba(15, 23, 42, 0.08);
-  backdrop-filter: blur(14px);
+  background: var(--soha-glass-bg);
+  box-shadow: var(--soha-glass-shadow);
+  backdrop-filter: blur(var(--soha-glass-blur));
 }
 
 :root[data-theme-mode='dark'] .soha-auth-flow-node {
-  border-color: rgba(148, 163, 184, 0.18);
-  background: rgba(17, 24, 39, 0.66);
-  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.22);
+  border-color: var(--soha-glass-border);
+  background: var(--soha-glass-bg);
+  box-shadow: var(--soha-glass-shadow);
 }
 
 .soha-auth-flow-node--0 {
@@ -258,15 +258,15 @@
   height: 12px;
   margin-top: 3px;
   border-radius: 999px;
-  background: linear-gradient(135deg, #38bdf8, #2dd4bf);
-  box-shadow: 0 0 0 6px rgba(56, 189, 248, 0.12);
+  background: linear-gradient(135deg, var(--soha-accent-cyan), var(--soha-accent-teal));
+  box-shadow: 0 0 0 6px rgba(var(--soha-accent-cyan-rgb), 0.12);
 }
 
 .soha-auth-flow-node__dot::after {
   position: absolute;
   inset: -8px;
   border-radius: inherit;
-  border: 1px solid rgba(56, 189, 248, 0.24);
+  border: 1px solid color-mix(in srgb, var(--soha-accent-cyan) 24%, transparent);
   content: '';
   animation: soha-auth-node-pulse 2.8s ease-in-out infinite;
 }
@@ -285,7 +285,7 @@
 }
 
 .soha-auth-flow-node__question {
-  color: #0f172a;
+  color: var(--soha-text-primary);
   font-size: 13px;
   font-weight: 700;
   line-height: 1.45;
@@ -293,17 +293,17 @@
 
 .soha-auth-flow-node__answer {
   margin-top: 4px;
-  color: #64748b;
+  color: var(--soha-text-tertiary);
   font-size: 12px;
   line-height: 1.55;
 }
 
 :root[data-theme-mode='dark'] .soha-auth-flow-node__question {
-  color: #f8fafc;
+  color: var(--soha-text-primary);
 }
 
 :root[data-theme-mode='dark'] .soha-auth-flow-node__answer {
-  color: #cbd5e1;
+  color: var(--soha-text-secondary);
 }
 
 .soha-auth-panel {
@@ -312,22 +312,18 @@
   min-height: 0;
   height: auto;
   padding: 0;
-  border: 1px solid rgba(148, 163, 184, 0.28);
+  border: 1px solid var(--soha-glass-border);
   border-radius: 8px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 252, 0.86)),
-    rgba(255, 255, 255, 0.92);
-  box-shadow: 0 28px 74px rgba(15, 23, 42, 0.16);
+  background: var(--soha-gradient-panel);
+  box-shadow: var(--soha-shadow-panel);
   overflow: hidden;
   backdrop-filter: blur(18px);
 }
 
 :root[data-theme-mode='dark'] .soha-auth-panel {
-  border-color: rgba(148, 163, 184, 0.22);
-  background:
-    linear-gradient(180deg, rgba(17, 24, 39, 0.88), rgba(15, 23, 42, 0.84)),
-    rgba(17, 24, 39, 0.88);
-  box-shadow: 0 28px 84px rgba(0, 0, 0, 0.44);
+  border-color: var(--soha-glass-border);
+  background: var(--soha-gradient-panel);
+  box-shadow: var(--soha-shadow-panel);
 }
 
 .soha-auth-panel.ant-card .ant-card-body {
@@ -359,8 +355,8 @@
   width: 38px;
   height: 38px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #111827, #334155 52%, #0f766e);
-  color: #fff;
+  background: linear-gradient(135deg, var(--soha-text-primary), color-mix(in srgb, var(--soha-text-secondary) 64%, var(--soha-primary) 36%) 52%, var(--soha-graph-recommendation));
+  color: var(--soha-text-inverse);
   font-size: 14px;
   font-weight: 700;
   letter-spacing: 0;
@@ -403,7 +399,7 @@
   border: 1px solid var(--soha-border-color);
   border-radius: 8px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(241, 245, 249, 0.68)),
+    linear-gradient(180deg, color-mix(in srgb, var(--soha-bg-surface) 72%, transparent), color-mix(in srgb, var(--soha-fill-medium) 68%, transparent)),
     color-mix(in srgb, var(--soha-bg-surface) 92%, var(--soha-fill-weak) 8%);
   overflow: hidden;
   transition:
@@ -412,22 +408,22 @@
 }
 
 .soha-auth-slider.is-verified {
-  border-color: rgba(34, 197, 94, 0.38);
-  background: rgba(34, 197, 94, 0.08);
+  border-color: color-mix(in srgb, var(--soha-success) 38%, transparent);
+  background: color-mix(in srgb, var(--soha-success) 8%, transparent);
 }
 
 :root[data-theme-mode='dark'] .soha-auth-slider {
-  border-color: rgba(148, 163, 184, 0.2);
+  border-color: color-mix(in srgb, var(--soha-graph-muted) 20%, transparent);
   background:
-    linear-gradient(180deg, rgba(15, 23, 42, 0.86), rgba(30, 41, 59, 0.7)),
-    rgba(15, 23, 42, 0.78);
+    linear-gradient(180deg, color-mix(in srgb, var(--soha-bg-layout) 86%, transparent), color-mix(in srgb, var(--soha-fill-medium) 70%, transparent)),
+    color-mix(in srgb, var(--soha-bg-layout) 78%, transparent);
 }
 
 :root[data-theme-mode='dark'] .soha-auth-slider.is-verified {
-  border-color: rgba(34, 197, 94, 0.3);
+  border-color: color-mix(in srgb, var(--soha-success) 30%, transparent);
   background:
-    linear-gradient(180deg, rgba(15, 23, 42, 0.82), rgba(20, 83, 45, 0.34)),
-    rgba(15, 23, 42, 0.78);
+    linear-gradient(180deg, color-mix(in srgb, var(--soha-bg-layout) 82%, transparent), color-mix(in srgb, var(--soha-success) 34%, transparent)),
+    color-mix(in srgb, var(--soha-bg-layout) 78%, transparent);
 }
 
 .soha-auth-slider-label {
@@ -448,23 +444,23 @@
 
 .soha-auth-slider.is-verified .soha-auth-slider-label,
 .soha-auth-slider.is-verified .soha-auth-slider-label__icon {
-  color: #16a34a;
+  color: var(--soha-success);
 }
 
 .soha-auth-slider-track-shell {
   position: relative;
   height: 24px;
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid color-mix(in srgb, var(--soha-graph-muted) 18%, transparent);
   border-radius: 6px;
   background:
-    linear-gradient(90deg, rgba(148, 163, 184, 0.12), rgba(255, 255, 255, 0.32), rgba(148, 163, 184, 0.12));
+    linear-gradient(90deg, color-mix(in srgb, var(--soha-graph-muted) 12%, transparent), color-mix(in srgb, var(--soha-bg-surface) 32%, transparent), color-mix(in srgb, var(--soha-graph-muted) 12%, transparent));
 }
 
 :root[data-theme-mode='dark'] .soha-auth-slider-track-shell {
-  border-color: rgba(148, 163, 184, 0.16);
+  border-color: color-mix(in srgb, var(--soha-graph-muted) 16%, transparent);
   background:
-    linear-gradient(90deg, rgba(30, 41, 59, 0.58), rgba(51, 65, 85, 0.38), rgba(30, 41, 59, 0.58));
+    linear-gradient(90deg, color-mix(in srgb, var(--soha-fill-medium) 58%, transparent), color-mix(in srgb, var(--soha-fill-strong) 38%, transparent), color-mix(in srgb, var(--soha-fill-medium) 58%, transparent));
 }
 
 .soha-auth-slider-shine {
@@ -474,12 +470,12 @@
   left: -34%;
   width: 42%;
   transform: skewX(-18deg);
-  background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.32), rgba(45, 212, 191, 0.36), transparent);
+  background: linear-gradient(90deg, transparent, rgba(var(--soha-accent-cyan-rgb), 0.32), rgba(var(--soha-accent-teal-rgb), 0.36), transparent);
   animation: soha-auth-slider-shine 2.4s ease-in-out infinite;
 }
 
 .soha-auth-slider.is-verified .soha-auth-slider-shine {
-  background: linear-gradient(90deg, transparent, rgba(34, 197, 94, 0.32), rgba(45, 212, 191, 0.34), transparent);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--soha-success) 32%, transparent), rgba(var(--soha-accent-teal-rgb), 0.34), transparent);
 }
 
 @keyframes soha-auth-slider-shine {
@@ -520,27 +516,27 @@
 }
 
 .soha-auth-slider-control.ant-slider .ant-slider-rail {
-  background: rgba(148, 163, 184, 0.24);
+  background: color-mix(in srgb, var(--soha-graph-muted) 24%, transparent);
 }
 
 :root[data-theme-mode='dark'] .soha-auth-slider-control.ant-slider .ant-slider-rail {
-  background: rgba(148, 163, 184, 0.14);
+  background: color-mix(in srgb, var(--soha-graph-muted) 14%, transparent);
 }
 
 .soha-auth-slider-control.ant-slider .ant-slider-track {
-  background: linear-gradient(90deg, #64748b, #38bdf8, #2dd4bf, #22c55e);
+  background: linear-gradient(90deg, var(--soha-graph-muted), var(--soha-accent-cyan), var(--soha-accent-teal), var(--soha-success));
 }
 
 :root[data-theme-mode='dark'] .soha-auth-slider-control.ant-slider .ant-slider-track {
-  background: linear-gradient(90deg, #64748b, #60a5fa, #2dd4bf, #34d399);
+  background: linear-gradient(90deg, var(--soha-graph-muted), var(--soha-primary), var(--soha-accent-teal), var(--soha-success));
 }
 
 .soha-auth-slider-control.ant-slider .ant-slider-handle::after {
-  box-shadow: 0 0 0 2px #fff, 0 6px 14px rgba(15, 23, 42, 0.24);
+  box-shadow: 0 0 0 2px var(--soha-bg-surface), 0 6px 14px color-mix(in srgb, var(--soha-text-primary) 24%, transparent);
 }
 
 :root[data-theme-mode='dark'] .soha-auth-slider-control.ant-slider .ant-slider-handle::after {
-  box-shadow: 0 0 0 2px #0f172a, 0 6px 14px rgba(0, 0, 0, 0.36);
+  box-shadow: 0 0 0 2px var(--soha-bg-layout), 0 6px 14px color-mix(in srgb, var(--soha-bg-base) 36%, transparent);
 }
 
 .soha-auth-provider-list {
@@ -575,7 +571,7 @@
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  background: var(--soha-primary-light-default, rgba(22, 119, 255, 0.08));
+  background: var(--soha-primary-light-default);
   color: var(--soha-primary);
   font-size: 13px;
   flex: 0 0 auto;

@@ -45,8 +45,8 @@
 }
 
 .soha-access-org-panel {
-  border: 1px solid var(--soha-border);
-  background: var(--soha-surface);
+  border: 1px solid var(--soha-border-color);
+  background: var(--soha-bg-surface);
   border-radius: 8px;
   padding: 10px;
 }
@@ -141,7 +141,7 @@
   border: 1px solid var(--soha-border-color);
   border-radius: 8px;
   padding: 8px;
-  background: var(--soha-surface);
+  background: var(--soha-bg-surface);
 }
 
 @media (max-width: 760px) {

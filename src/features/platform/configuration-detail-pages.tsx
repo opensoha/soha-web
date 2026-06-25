@@ -181,7 +181,7 @@ function renderEntries(
         const raw = entries?.[key] ?? ''
         const display = transform ? transform(raw) : raw
         return (
-          <Card key={key} className="soha-detail-card" bodyStyle={{ padding: 12 }}>
+          <Card key={key} className="soha-detail-card" styles={{ body: { padding: 12 } }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <Text strong>{key}</Text>
               <Button size="small" type="text" icon={<CopyOutlined />} onClick={() => copyToClipboard(display, localeCode)}>

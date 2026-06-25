@@ -5,7 +5,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ManagementIconButton,
+  ManagementSearchableListPane,
   ManagementState,
+  TemplateDesignerShell,
 } from '@/components/management-list'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
 import { StatusTag } from '@/components/status-tag'
@@ -994,9 +996,8 @@ export function DeliveryBlueprintsPage() {
     },
   ]
 
-  return (
-    <div className="soha-page soha-delivery-blueprint-page">
-      <div className="soha-delivery-blueprint-toolbar">
+  const blueprintToolbar = (
+    <>
         <Space wrap>
           <Button icon={<PlusOutlined />} type="primary" disabled={!canManage} onClick={handleNewBlueprint}>
             新建模板
@@ -1020,37 +1021,25 @@ export function DeliveryBlueprintsPage() {
             刷新
           </Button>
         </Space>
-      </div>
+    </>
+  )
 
-      <div className="soha-delivery-blueprint-workspace">
-        <aside className="soha-delivery-blueprint-list">
-          <Input.Search
-            allowClear
-            value={searchText}
-            onChange={(event) => setSearchText(event.target.value)}
-            placeholder="搜索接入模板"
-          />
-          <div className="soha-delivery-blueprint-list__items">
-            {blueprintsQuery.isLoading ? <ManagementState bordered={false} compact kind="loading" title="正在加载" /> : null}
-            {!blueprintsQuery.isLoading && visibleListItems.length === 0 ? (
-              <ManagementState bordered={false} compact kind="empty" title="暂无接入模板" description="新建模板后，可在右侧维护应用档案、构建源、环境绑定和规范文件。" />
-            ) : null}
-            {visibleListItems.map((item) => {
-              const isActive = item.id === selectedBlueprintId
-              return (
-                <div
-                  className={`soha-delivery-blueprint-list__item ${isActive ? 'is-active' : ''}`}
-                  key={item.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => handleSelectListItem(item)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault()
-                      handleSelectListItem(item)
-                    }
-                  }}
-                >
+  const blueprintList = (
+    <ManagementSearchableListPane
+      activeKey={selectedBlueprintId}
+      className="soha-delivery-blueprint-list"
+      emptyDescription="新建模板后，可在右侧维护应用档案、构建源、环境绑定和规范文件。"
+      emptyTitle="暂无接入模板"
+      getItemKey={(item) => item.id}
+      isLoading={blueprintsQuery.isLoading}
+      itemClassName="soha-delivery-blueprint-list__item"
+      items={visibleListItems}
+      searchPlaceholder="搜索接入模板"
+      searchValue={searchText}
+      onItemSelect={handleSelectListItem}
+      onSearchChange={setSearchText}
+      renderItem={(item) => (
+        <>
                   <span className="soha-delivery-blueprint-list__item-head">
                     <span className="soha-delivery-blueprint-list__item-main">
                       <strong>{item.name}</strong>
@@ -1088,49 +1077,55 @@ export function DeliveryBlueprintsPage() {
                   </span>
                   <Text type="secondary" className="text-xs">{item.applicationName}</Text>
                   <Text type="secondary" className="text-xs">{item.updatedAt ? formatDateTime(item.updatedAt) : '尚未保存'}</Text>
-                </div>
-              )
-            })}
-          </div>
-        </aside>
+        </>
+      )}
+    />
+  )
 
-        <main className="soha-delivery-blueprint-designer">
-          {hasSelection ? (
-            <Form
-              className="soha-delivery-blueprint-form"
-              disabled={!canManage}
-              form={form}
-              layout="vertical"
-              onValuesChange={(_changedValues, allValues) => {
-                if (suppressFormChangeRef.current) return
-                setFormSnapshot(allValues)
-                setIsDirty(true)
-              }}
-            >
-              <TemplateUsageImpactPanel
-                loading={selectedBlueprintUsageQuery.isFetching && !!selectedBlueprint}
-                onNavigate={navigate}
-                usage={selectedBlueprintUsage}
-              />
-              <Tabs
-                activeKey={activeTabKey}
-                className="soha-delivery-blueprint-tabs"
-                destroyOnHidden={false}
-                items={designerTabs}
-                onChange={setActiveTabKey}
-              />
-            </Form>
-          ) : (
-            <ManagementState
-              bordered={false}
-              kind="select-scope"
-              title="选择或新建接入模板"
-              description="左侧选择模板后，在右侧设计应用档案、构建源、环境绑定和规范文件。"
-            />
-          )}
-        </main>
-      </div>
+  const blueprintDesigner = hasSelection ? (
+    <Form
+      className="soha-delivery-blueprint-form"
+      disabled={!canManage}
+      form={form}
+      layout="vertical"
+      onValuesChange={(_changedValues, allValues) => {
+        if (suppressFormChangeRef.current) return
+        setFormSnapshot(allValues)
+        setIsDirty(true)
+      }}
+    >
+      <TemplateUsageImpactPanel
+        loading={selectedBlueprintUsageQuery.isFetching && !!selectedBlueprint}
+        onNavigate={navigate}
+        usage={selectedBlueprintUsage}
+      />
+      <Tabs
+        activeKey={activeTabKey}
+        className="soha-delivery-blueprint-tabs"
+        destroyOnHidden={false}
+        items={designerTabs}
+        onChange={setActiveTabKey}
+      />
+    </Form>
+  ) : (
+    <ManagementState
+      bordered={false}
+      kind="select-scope"
+      title="选择或新建接入模板"
+      description="左侧选择模板后，在右侧设计应用档案、构建源、环境绑定和规范文件。"
+    />
+  )
 
+  return (
+    <TemplateDesignerShell
+      className="soha-page soha-delivery-blueprint-page"
+      designer={blueprintDesigner}
+      designerClassName="soha-delivery-blueprint-designer"
+      list={blueprintList}
+      toolbar={blueprintToolbar}
+      toolbarClassName="soha-delivery-blueprint-toolbar"
+      workspaceClassName="soha-delivery-blueprint-workspace"
+    >
       <Modal width={960} title="渲染结果" open={specModalVisible} onCancel={() => setSpecModalVisible(false)} footer={null}>
         <pre className="soha-json-block">{JSON.stringify(renderedSpec ?? {}, null, 2)}</pre>
       </Modal>
@@ -1138,6 +1133,6 @@ export function DeliveryBlueprintsPage() {
       <Modal width={960} title="平台接入结果" open={bootstrapModalVisible} onCancel={() => setBootstrapModalVisible(false)} footer={null}>
         <pre className="soha-json-block">{JSON.stringify(bootstrapResult ?? {}, null, 2)}</pre>
       </Modal>
-    </div>
+    </TemplateDesignerShell>
   )
 }

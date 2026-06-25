@@ -44,7 +44,10 @@ const testState = vi.hoisted(() => ({
       }
     }
     if (path === '/virtualization/vms?page=1&pageSize=10') {
-      return { data: { items: [{ id: 'vm-1', name: 'build-vm', provider: 'kubevirt', status: 'running', flavorName: 'standard-2c4g', bootImageName: 'ubuntu-24.04', cpu: 2, memoryMiB: 4096, diskGiB: 40 }], total: 1, page: 1, pageSize: 10 } }
+      return { data: { items: [
+        { id: 'vm-1', name: 'build-vm', provider: 'kubevirt', status: 'running', flavorName: 'standard-2c4g', bootImageName: 'ubuntu-24.04', cpu: 2, memoryMiB: 4096, diskGiB: 40 },
+        { id: 'vm-stale', name: 'stale-vm', provider: 'kubevirt', status: 'stale', powerState: 'running', flavorName: 'standard-2c4g', bootImageName: 'ubuntu-24.04', cpu: 2, memoryMiB: 4096, diskGiB: 40 },
+      ], total: 2, page: 1, pageSize: 10 } }
     }
     if (path === '/virtualization/vms/vm-1/detail') {
       return { data: {
@@ -55,6 +58,14 @@ const testState = vi.hoisted(() => ({
           { id: 'op-vm', operationType: 'vm_create', status: 'completed', targetName: 'build-vm', createdAt: '2026-05-21T00:00:00Z' },
         ],
         logs: [{ id: 'log-vm', taskId: 'op-vm', logLevel: 'info', message: 'vm ready', createdAt: '2026-05-21T00:00:00Z' }],
+      } }
+    }
+    if (path === '/virtualization/vms/vm-stale/detail') {
+      return { data: {
+        vm: { id: 'vm-stale', name: 'stale-vm', provider: 'kubevirt', status: 'stale', powerState: 'running', flavorName: 'standard-2c4g', bootImageName: 'ubuntu-24.04' },
+        providerRaw: { kind: 'VirtualMachine', metadata: { name: 'stale-vm' } },
+        operations: [],
+        logs: [],
       } }
     }
     if (path === '/virtualization/vms/vm-1/metrics?rangeMinutes=60&stepSeconds=60') {
@@ -91,15 +102,39 @@ const testState = vi.hoisted(() => ({
     }
     if (path === '/virtualization/clusters') {
       return { data: [
-        { id: 'conn-pve', name: 'pve-a', provider: 'pve', endpoint: 'https://pve.example:8006', enabled: true, verifyTls: true, health: 'unavailable', credentialConfigured: false, config: { defaultNode: 'pve-1', defaultStorage: 'local-lvm', defaultBridge: 'vmbr0' } },
-        { id: 'conn-1', name: 'kubevirt-a', provider: 'kubevirt', kubernetesClusterId: 'cluster-a', enabled: true, verifyTls: true, health: 'degraded', credentialConfigured: true, lastSyncedAt: '2026-05-21T00:00:00Z', config: { backendUrl: 'https://kube.example:6443' } },
+        { id: 'conn-pve', name: 'pve-a', provider: 'pve', endpoint: 'https://pve.example:8006', enabled: true, verifyTls: true, health: 'unavailable', credentialConfigured: false, config: { defaultNode: 'pve-1', defaultStorage: 'local-lvm', defaultBridge: 'vmbr0', defaultSnippetStorage: 'local' } },
+        { id: 'conn-1', name: 'kubevirt-a', provider: 'kubevirt', kubernetesClusterId: 'cluster-a', enabled: true, verifyTls: true, health: 'degraded', credentialConfigured: true, lastSyncedAt: '2026-05-21T00:00:00Z', config: { backendUrl: 'https://kube.example:6443', prometheusBearerTokenConfigured: true } },
       ] }
+    }
+    if (path === '/clusters') {
+      return { data: [
+        { id: 'cluster-a', name: 'prod-k8s', region: 'cn', environment: 'prod', labels: {}, connectionMode: 'direct_kubeconfig', version: 'v1.30.0', health: { status: 'healthy' } },
+        { id: 'cluster-agent', name: 'edge-agent', region: 'cn', environment: 'edge', labels: {}, connectionMode: 'agent', version: 'v1.30.0', health: { status: 'healthy' } },
+      ] }
+    }
+    if (path === '/virtualization/clusters/conn-pve/delete-dependencies') {
+      return { data: {
+        connection: { id: 'conn-pve', name: 'pve-a', provider: 'pve' },
+        vmCount: 1,
+        imageCount: 2,
+        flavorCount: 0,
+        taskCount: 3,
+        pendingTaskCount: 0,
+        dockerHostCount: 1,
+        vmSamples: [{ id: 'vm-1', name: 'build-vm', externalId: '101' }],
+        taskSamples: [{ id: 'op-1', name: 'vm_create', status: 'completed' }],
+        forceRequired: true,
+        blocking: true,
+        blockingReasons: ['virtual_machines', 'docker_hosts'],
+      } }
     }
     if (path === '/virtualization/images' || path === '/virtualization/images?page=1&pageSize=10') {
       return { data: { items: [
         { id: 'image-1', name: 'ubuntu-24.04', provider: 'kubevirt', connectionId: 'conn-1', sourceKind: 'datasource', sourceRef: 'default/ubuntu', osType: 'ubuntu' },
         { id: 'image-2', name: 'debian-template', provider: 'pve', connectionId: 'conn-pve', sourceKind: 'template', sourceRef: 'local:vztmpl/debian.tar.zst', node: 'pve-1', storage: 'local', osType: 'debian' },
-      ], total: 2, page: 1, pageSize: 10 } }
+        { id: 'storage-local', name: 'local', provider: 'pve', connectionId: 'conn-pve', sourceKind: 'storage', assetKind: 'storage', node: 'pve-1', storage: 'local', config: { supportsSnippets: true, supportsISO: true, content: 'iso,snippets' } },
+        { id: 'network-vmbr0', name: 'vmbr0', provider: 'pve', connectionId: 'conn-pve', sourceKind: 'network', assetKind: 'network', node: 'pve-1', config: { bridge: true, network: 'vmbr0' } },
+      ], total: 4, page: 1, pageSize: 10 } }
     }
     if (path === '/virtualization/flavors') {
       return { data: [{ id: 'flavor-1', name: 'standard-2c4g', cpu: 2, memoryMiB: 4096, diskGiB: 40, enabled: true }] }
@@ -218,10 +253,32 @@ async function waitForText(text: string) {
   }
 }
 
+async function waitForDeleteCall(path: string) {
+  for (let index = 0; index < 10; index += 1) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    if (testState.apiDelete.mock.calls.some(([calledPath]) => calledPath === path)) {
+      return
+    }
+  }
+}
+
 async function clickButtonByLabel(container: ParentNode, label: string) {
   const button = Array.from(container.querySelectorAll('button')).find((node) => node.getAttribute('aria-label') === label)
   if (!(button instanceof HTMLButtonElement)) {
     throw new Error(`button not found by aria-label: ${label}`)
+  }
+  await act(async () => {
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await Promise.resolve()
+  })
+}
+
+async function clickButtonByText(container: ParentNode, text: string) {
+  const button = Array.from(container.querySelectorAll('button')).find((node) => node.textContent?.includes(text))
+  if (!(button instanceof HTMLButtonElement)) {
+    throw new Error(`button not found by text: ${text}`)
   }
   await act(async () => {
     button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -322,8 +379,24 @@ describe('virtualization pages', () => {
     expect(document.body.textContent).toContain('StorageClass')
     expect(document.body.textContent).toContain('DataSource 克隆')
     expect(document.body.textContent).toContain('DataVolume')
+    expect(document.body.textContent).toContain('KubeVirt 网络类型')
+    expect(document.body.textContent).toContain('Interface Model')
     expect(document.body.textContent).not.toContain('raw YAML')
     expect(document.body.textContent).not.toContain('raw PVE config')
+  })
+
+  it('shows stale VM records before their old power state', async () => {
+    const listContainer = await renderWithProviders(<VirtualizationVmsPage />)
+    const staleRow = Array.from(listContainer.querySelectorAll('tr')).find((row) => row.textContent?.includes('stale-vm'))
+
+    expect(staleRow?.textContent).toContain('stale')
+    expect(staleRow?.textContent).not.toContain('running')
+
+    const detailContainer = await renderWithProviders(<VirtualizationVmDetailPage />, '/virtualization/vms/vm-stale')
+
+    expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/vms/vm-stale/detail')
+    expect(detailContainer.textContent).toContain('stale-vm')
+    expect(detailContainer.textContent).toContain('stale')
   })
 
   it('keeps the VM filter row on the compact aligned query layout', async () => {
@@ -340,13 +413,13 @@ describe('virtualization pages', () => {
       expect.stringContaining('Provider'),
     ])
     expect(fields.map((field) => field.style.getPropertyValue('--soha-management-query-field-width'))).toEqual([
-      '260px',
+      '300px',
       '180px',
       '136px',
       '160px',
     ])
     expect(fields.map((field) => field.style.getPropertyValue('--soha-management-query-field-min-width'))).toEqual([
-      '260px',
+      '300px',
       '180px',
       '136px',
       '160px',
@@ -379,14 +452,61 @@ describe('virtualization pages', () => {
       startAfterCreate: true,
       kubevirtStorageClass: 'fast-ssd',
       kubevirtDataVolumeName: 'build-vm-root',
+      kubevirtNetworkType: 'multus',
+      kubevirtNetworkAttachmentDefinition: 'apps/docker-build-net',
+      kubevirtInterfaceModel: 'virtio',
+      kubevirtInterfaceBinding: 'bridge',
+      kubevirtInterfaceName: 'net1',
     }) satisfies CreateVirtualMachineInput
 
     expect(payload.sourceMode).toBe('pvc_clone')
     expect(payload.sourceId).toBe('image-pvc')
     expect(payload.imageId).toBe('image-pvc')
-    expect(payload.providerParams).toMatchObject({ storageClass: 'fast-ssd', dataVolumeName: 'build-vm-root' })
+    expect(payload.providerParams).toMatchObject({
+      storageClass: 'fast-ssd',
+      dataVolumeName: 'build-vm-root',
+      networkType: 'multus',
+      networkAttachmentDefinition: 'apps/docker-build-net',
+      interfaceModel: 'virtio',
+      interfaceBinding: 'bridge',
+      interfaceName: 'net1',
+    })
     expect(payload).not.toHaveProperty('kubevirtStorageClass')
     expect(payload).not.toHaveProperty('kubevirtDataVolumeName')
+  })
+
+  it('builds PVE VM create payload with raw cloud-init snippet fields', () => {
+    const payload = buildCreateVmPayload({
+      provider: 'pve',
+      connectionId: 'conn-pve',
+      name: 'pve-vm',
+      flavorId: 'flavor-1',
+      bootImageId: 'image-pve-template',
+      sourceMode: 'template_clone',
+      cloudInit: '#cloud-config\npackages:\n  - docker.io',
+      pveStorage: 'local-lvm',
+      pveBridge: 'vmbr0',
+      pveCloudInitUser: 'ubuntu',
+      pveCloudInitSSHKeys: 'ssh-rsa AAAA',
+      pveSnippetStorage: 'local',
+      pveCICustom: 'user=local:snippets/docker-agent.yaml',
+      startAfterCreate: true,
+    }) satisfies CreateVirtualMachineInput
+
+    expect(payload.sourceMode).toBe('template_clone')
+    expect(payload.sourceId).toBe('image-pve-template')
+    expect(payload.imageId).toBe('image-pve-template')
+    expect(payload.cloudInit).toBe('#cloud-config\npackages:\n  - docker.io')
+    expect(payload.providerParams).toMatchObject({
+      storage: 'local-lvm',
+      bridge: 'vmbr0',
+      ciuser: 'ubuntu',
+      sshkeys: 'ssh-rsa AAAA',
+      snippetStorage: 'local',
+      cicustom: 'user=local:snippets/docker-agent.yaml',
+    })
+    expect(payload).not.toHaveProperty('pveSnippetStorage')
+    expect(payload).not.toHaveProperty('pveCICustom')
   })
 
   it('builds provider connection config for PVE and KubeVirt runtime fields', () => {
@@ -397,10 +517,11 @@ describe('virtualization pages', () => {
       defaultNode: 'pve-1',
       defaultStorage: 'local-lvm',
       defaultBridge: 'vmbr0',
+      defaultSnippetStorage: 'local',
       tokenID: 'root@pam!soha',
       tokenSecret: 'secret',
     }) satisfies VirtualizationClusterInput
-    expect(pvePayload.config).toMatchObject({ defaultNode: 'pve-1', defaultStorage: 'local-lvm', defaultBridge: 'vmbr0' })
+    expect(pvePayload.config).toMatchObject({ defaultNode: 'pve-1', defaultStorage: 'local-lvm', defaultBridge: 'vmbr0', defaultSnippetStorage: 'local', snippetStorage: 'local' })
     expect(pvePayload.credential).toMatchObject({ tokenID: 'root@pam!soha', tokenSecret: 'secret' })
     expect(pvePayload).not.toHaveProperty('tokenID')
     expect(pvePayload).not.toHaveProperty('defaultNode')
@@ -411,11 +532,21 @@ describe('virtualization pages', () => {
       kubernetesClusterId: 'cluster-a',
       backendUrl: 'https://kube.example:6443',
       prometheusUrl: 'https://prometheus.example',
+      prometheusBearerToken: 'secret',
+      prometheusBearerTokenSecretRef: 'observability/prometheus-token',
+      mode: 'direct_kubeconfig',
     }) satisfies VirtualizationClusterInput
-    expect(kubevirtPayload.config).toMatchObject({ backendUrl: 'https://kube.example:6443', prometheusUrl: 'https://prometheus.example' })
+    expect(kubevirtPayload.config).toMatchObject({
+      backendUrl: 'https://kube.example:6443',
+      prometheusUrl: 'https://prometheus.example',
+      prometheusBearerTokenSecretRef: 'observability/prometheus-token',
+      mode: 'direct_kubeconfig',
+    })
+    expect(kubevirtPayload.credential).toMatchObject({ prometheusBearerToken: 'secret' })
     expect(kubevirtPayload.endpoint).toBeUndefined()
     expect(kubevirtPayload).not.toHaveProperty('backendUrl')
     expect(kubevirtPayload).not.toHaveProperty('prometheusUrl')
+    expect(kubevirtPayload.config).not.toHaveProperty('prometheusBearerToken')
   })
 
   it('renders VM detail with provider raw, operations, logs and AI investigation entry', async () => {
@@ -450,6 +581,23 @@ describe('virtualization pages', () => {
     expect(container.textContent).not.toContain('创建虚拟机')
     expect(container.textContent).not.toContain('启动')
     expect(container.textContent).not.toContain('停止')
+  })
+
+  it('treats virtualization.manage as the aggregate virtualization permission', async () => {
+    testState.permissionSnapshot = {
+      permissionKeys: ['virtualization.manage'],
+      visibleMenuIds: [],
+      visibleMenus: [],
+    }
+
+    const listContainer = await renderWithProviders(<VirtualizationVmsPage />)
+    expect(listContainer.textContent).toContain('创建虚拟机')
+
+    const detailContainer = await renderWithProviders(<VirtualizationVmDetailPage />, '/virtualization/vms/vm-1')
+    const tabTexts = Array.from(detailContainer.querySelectorAll('.ant-tabs-tab-btn')).map((node) => node.textContent?.trim()).filter(Boolean)
+    expect(tabTexts).toContain('监控指标')
+    expect(tabTexts).toContain('控制台')
+    expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/vms/vm-1/metrics?rangeMinutes=60&stepSeconds=60')
   })
 
   it('does not load virtualization data or expose actions when the module is disabled', async () => {
@@ -528,6 +676,7 @@ describe('virtualization pages', () => {
 
     expect(testState.apiGet).toHaveBeenCalledWith('/clusters')
     expect(document.body.textContent).toContain('Kubernetes 集群')
+    expect(document.body.textContent).toContain('Prometheus Token SecretRef')
     expect(document.body.textContent).not.toContain('Other')
     expect(document.body.textContent).toContain('校验 TLS')
   })
@@ -545,6 +694,22 @@ describe('virtualization pages', () => {
     expect(container.textContent).toContain('风险等级')
     expect(container.textContent).toContain('最近失败同步')
     expect(container.textContent).toContain('最近异常任务')
+  })
+
+  it('previews dependencies before force deleting a virtualization connection', async () => {
+    const container = await renderWithProviders(<VirtualizationClustersPage />, '/virtualization/clusters')
+
+    await clickButtonByLabel(container, '删除连接')
+    await waitForText('删除将影响关联资源')
+
+    expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/clusters/conn-pve/delete-dependencies')
+    expect(document.body.textContent).toContain('Docker Host')
+    expect(document.body.textContent).toContain('build-vm')
+
+    await clickButtonByText(document.body, '确认强制删除')
+    await waitForDeleteCall('/virtualization/clusters/conn-pve?force=true')
+
+    expect(testState.apiDelete).toHaveBeenCalledWith('/virtualization/clusters/conn-pve?force=true')
   })
 
   it('shows image management entries for KubeVirt and PVE sources', async () => {

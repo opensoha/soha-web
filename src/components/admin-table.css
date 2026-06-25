@@ -20,7 +20,7 @@
 .soha-admin-table-shell.is-panel {
   gap: 0;
   border: 1px solid var(--soha-border-color);
-  border-radius: 16px;
+  border-radius: var(--soha-radius-panel, 8px);
   background: var(--soha-bg-surface);
   box-shadow: none;
   overflow: hidden;
@@ -157,10 +157,31 @@
   border-bottom-color: var(--soha-border-color) !important;
 }
 
+.soha-admin-table-shell.is-panel .soha-admin-table .ant-table-container,
+.soha-admin-table-shell.is-panel .soha-admin-table .ant-table-content,
+.soha-admin-table-shell.is-panel .soha-admin-table .ant-table-body {
+  border-radius: inherit;
+}
+
+.soha-admin-table-shell.is-panel .soha-admin-table .ant-table-thead > tr:first-child > th:first-child {
+  border-start-start-radius: var(--soha-radius-panel, 8px) !important;
+}
+
+.soha-admin-table-shell.is-panel .soha-admin-table .ant-table-thead > tr:first-child > th:last-child {
+  border-start-end-radius: var(--soha-radius-panel, 8px) !important;
+}
+
+.soha-admin-table-shell.is-panel .soha-admin-table .ant-table-thead > tr:first-child > th:first-child .ant-table-filter-column,
+.soha-admin-table-shell.is-panel .soha-admin-table .ant-table-thead > tr:first-child > th:last-child .ant-table-filter-column {
+  border-radius: inherit;
+}
+
 .soha-admin-table .ant-table-thead > tr > th,
 .soha-admin-table .ant-table-tbody > tr > td {
   padding-left: 12px;
   padding-right: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
   word-break: keep-all;
 }
@@ -179,7 +200,7 @@
 .soha-admin-table .ant-table-tbody a.ant-typography.ant-typography-link,
 .soha-admin-table .ant-table-tbody .ant-btn-link:not(.ant-btn-dangerous):not(.ant-btn-color-dangerous),
 .soha-admin-table .ant-table-tbody .ant-btn-text:not(.ant-btn-dangerous):not(.ant-btn-color-dangerous) {
-  color: #597ef7 !important;
+  color: var(--soha-table-link-color) !important;
   font-weight: 600;
 }
 
@@ -189,9 +210,30 @@
 .soha-admin-table .ant-table-tbody .ant-btn-link:not(.ant-btn-dangerous):not(.ant-btn-color-dangerous):focus-visible,
 .soha-admin-table .ant-table-tbody .ant-btn-text:not(.ant-btn-dangerous):not(.ant-btn-color-dangerous):hover,
 .soha-admin-table .ant-table-tbody .ant-btn-text:not(.ant-btn-dangerous):not(.ant-btn-color-dangerous):focus-visible {
-  color: #3f6ae0 !important;
+  color: var(--soha-table-link-hover-color) !important;
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+.soha-admin-table .ant-table-cell-fix-end,
+.soha-admin-table .ant-table-cell-fix-start,
+.soha-admin-table .ant-table-cell-fix-left,
+.soha-admin-table .ant-table-cell-fix-left-first,
+.soha-admin-table .ant-table-cell-fix-left-last,
+.soha-admin-table .ant-table-cell-fix-right,
+.soha-admin-table .ant-table-cell-fix-right-first,
+.soha-admin-table .ant-table-cell-fix-right-last,
+.soha-admin-table th.ant-table-cell-fix-end,
+.soha-admin-table th.ant-table-cell-fix-start,
+.soha-admin-table th.ant-table-cell-fix-left,
+.soha-admin-table th.ant-table-cell-fix-left-first,
+.soha-admin-table th.ant-table-cell-fix-left-last,
+.soha-admin-table th.ant-table-cell-fix-right,
+.soha-admin-table th.ant-table-cell-fix-right-first,
+.soha-admin-table th.ant-table-cell-fix-right-last {
+  box-shadow: none !important;
+  background: var(--soha-bg-surface) !important;
+  background-clip: padding-box;
 }
 
 .soha-admin-table .ant-table-cell-fix-end,
@@ -203,9 +245,17 @@
 .soha-admin-table th.ant-table-cell-fix-right-first,
 .soha-admin-table th.ant-table-cell-fix-right-last {
   border-left: 1px solid var(--soha-border-color) !important;
-  box-shadow: none !important;
-  background: var(--soha-bg-surface) !important;
-  background-clip: padding-box;
+}
+
+.soha-admin-table .ant-table-cell-fix-start,
+.soha-admin-table .ant-table-cell-fix-left,
+.soha-admin-table .ant-table-cell-fix-left-first,
+.soha-admin-table .ant-table-cell-fix-left-last,
+.soha-admin-table th.ant-table-cell-fix-start,
+.soha-admin-table th.ant-table-cell-fix-left,
+.soha-admin-table th.ant-table-cell-fix-left-first,
+.soha-admin-table th.ant-table-cell-fix-left-last {
+  border-right: 1px solid var(--soha-border-color) !important;
 }
 
 .soha-admin-table .ant-table-cell-fix-end-shadow::before,
@@ -219,6 +269,10 @@
 }
 
 .soha-admin-table .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-end,
+.soha-admin-table .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-start,
+.soha-admin-table .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-left,
+.soha-admin-table .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-left-first,
+.soha-admin-table .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-left-last,
 .soha-admin-table .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-right,
 .soha-admin-table .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-right-first,
 .soha-admin-table .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-right-last {
@@ -226,12 +280,20 @@
 }
 
 .soha-admin-table .ant-table-tbody > tr.ant-table-row-selected:hover > td.ant-table-cell-fix-end,
+.soha-admin-table .ant-table-tbody > tr.ant-table-row-selected:hover > td.ant-table-cell-fix-start,
+.soha-admin-table .ant-table-tbody > tr.ant-table-row-selected:hover > td.ant-table-cell-fix-left,
+.soha-admin-table .ant-table-tbody > tr.ant-table-row-selected:hover > td.ant-table-cell-fix-left-first,
+.soha-admin-table .ant-table-tbody > tr.ant-table-row-selected:hover > td.ant-table-cell-fix-left-last,
 .soha-admin-table .ant-table-tbody > tr.ant-table-row-selected:hover > td.ant-table-cell-fix-right,
 .soha-admin-table .ant-table-tbody > tr.ant-table-row-selected:hover > td.ant-table-cell-fix-right-first,
 .soha-admin-table .ant-table-tbody > tr.ant-table-row-selected:hover > td.ant-table-cell-fix-right-last {
   background: var(--soha-table-row-selected-hover-bg) !important;
 }
 
+.soha-admin-table .ant-table-thead > tr > th.ant-table-cell-fix-start,
+.soha-admin-table .ant-table-thead > tr > th.ant-table-cell-fix-left,
+.soha-admin-table .ant-table-thead > tr > th.ant-table-cell-fix-left-first,
+.soha-admin-table .ant-table-thead > tr > th.ant-table-cell-fix-left-last,
 .soha-admin-table .ant-table-thead > tr > th.ant-table-cell-fix-right,
 .soha-admin-table .ant-table-thead > tr > th.ant-table-cell-fix-end,
 .soha-admin-table .ant-table-thead > tr > th.ant-table-cell-fix-right-first,
@@ -240,6 +302,10 @@
 }
 
 .soha-admin-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-end,
+.soha-admin-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-start,
+.soha-admin-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-left,
+.soha-admin-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-left-first,
+.soha-admin-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-left-last,
 .soha-admin-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-right,
 .soha-admin-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-right-first,
 .soha-admin-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-right-last {
@@ -247,6 +313,10 @@
 }
 
 .soha-admin-table .ant-table-cell-fix-end::after,
+.soha-admin-table .ant-table-cell-fix-start::after,
+.soha-admin-table .ant-table-cell-fix-left::after,
+.soha-admin-table .ant-table-cell-fix-left-first::after,
+.soha-admin-table .ant-table-cell-fix-left-last::after,
 .soha-admin-table .ant-table-cell-fix-right::after,
 .soha-admin-table .ant-table-cell-fix-right-first::after,
 .soha-admin-table .ant-table-cell-fix-right-last::after {
@@ -259,7 +329,8 @@
 
 .soha-admin-table-shell.is-panel .soha-admin-table .ant-table-container {
   border: none;
-  border-radius: 0;
+  border-radius: var(--soha-radius-panel, 8px);
+  overflow: hidden;
 }
 
 .soha-admin-table .ant-table-cell-fix-right-first .ant-space {

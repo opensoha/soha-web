@@ -162,15 +162,15 @@ const NODE_WIDTH = 256
 const NODE_HEIGHT = 118
 
 const NODE_COLORS: Record<TopologyNodeKind, string> = {
-  entry: '#3f67f6',
-  'ingress-route': '#0f766e',
-  'http-route': '#d97706',
-  'pending-route': '#b08900',
-  service: '#1d92c5',
-  'missing-service': '#d84c45',
-  'backend-group': '#22a36a',
-  'empty-backend': '#94a3b8',
-  pod: '#22a36a',
+  entry: 'var(--soha-graph-scope)',
+  'ingress-route': 'var(--soha-graph-service)',
+  'http-route': 'var(--soha-warning)',
+  'pending-route': 'var(--soha-warning)',
+  service: 'var(--soha-graph-metric)',
+  'missing-service': 'var(--soha-danger)',
+  'backend-group': 'var(--soha-success)',
+  'empty-backend': 'var(--soha-graph-muted)',
+  pod: 'var(--soha-success)',
 }
 
 const LEGEND_TAG_COLORS: Record<Exclude<TopologyNodeKind, 'pod'>, string> = {
@@ -184,25 +184,9 @@ const LEGEND_TAG_COLORS: Record<Exclude<TopologyNodeKind, 'pod'>, string> = {
   'empty-backend': 'default',
 }
 
-function hexToRgba(hex: string, alpha: number) {
-  const normalized = hex.replace('#', '')
-  const value = normalized.length === 3
-    ? normalized.split('').map((part) => `${part}${part}`).join('')
-    : normalized
-
-  if (value.length !== 6) {
-    return hex
-  }
-
-  const red = Number.parseInt(value.slice(0, 2), 16)
-  const green = Number.parseInt(value.slice(2, 4), 16)
-  const blue = Number.parseInt(value.slice(4, 6), 16)
-
-  if ([red, green, blue].some((item) => Number.isNaN(item))) {
-    return hex
-  }
-
-  return `rgba(${red}, ${green}, ${blue}, ${alpha})`
+function colorWithAlpha(color: string, alpha: number) {
+  const boundedAlpha = Math.max(0, Math.min(1, alpha))
+  return `color-mix(in srgb, ${color} ${Math.round(boundedAlpha * 100)}%, transparent)`
 }
 
 function mergeTopologyState(current: TopologyDataState, next: TopologyDataState) {
@@ -726,12 +710,12 @@ function TopologyCanvasNode({ data, selected }: NodeProps<TopologyFlowNode>) {
       <div
         className="soha-topology-node-card"
         style={{
-          borderColor: hexToRgba(accent, selected ? 0.9 : 0.28),
-          background: `linear-gradient(180deg, ${hexToRgba(accent, 0.14)} 0%, rgba(255, 255, 255, 0.96) 100%)`,
+          borderColor: colorWithAlpha(accent, selected ? 0.9 : 0.28),
+          background: `linear-gradient(180deg, ${colorWithAlpha(accent, 0.14)} 0%, color-mix(in srgb, var(--soha-bg-surface) 96%, transparent) 100%)`,
         }}
       >
         <div className="soha-topology-node-head">
-          <span className="soha-topology-node-kind" style={{ color: accent, background: hexToRgba(accent, 0.12) }}>
+          <span className="soha-topology-node-kind" style={{ color: accent, background: colorWithAlpha(accent, 0.12) }}>
             {getTopologyKindLabel(data.kind, localeCode)}
           </span>
           <span className={`soha-topology-node-state is-${data.state}`}>
@@ -1147,7 +1131,7 @@ export function NetworkTopologyPage() {
             ) : null}
           </Space>
         )}
-        bodyStyle={{ padding: 12 }}
+        styles={{ body: { padding: 12 } }}
       >
         {flowNodes.length > 0 ? (
           <>
