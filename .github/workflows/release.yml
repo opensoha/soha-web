@@ -21,10 +21,16 @@ jobs:
       CONTRACTS_VERSION: ${{ inputs.contracts_version || '0.1.0' }}
     steps:
       - name: Checkout web
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: soha-web
-      - uses: actions/setup-node@v4
+      - name: Checkout contracts
+        uses: actions/checkout@v7
+        with:
+          repository: opensoha/soha-contracts
+          path: soha-contracts
+          token: ${{ secrets.OPENSOHA_CI_TOKEN || github.token }}
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
           cache: npm
@@ -62,7 +68,7 @@ jobs:
           sha256sum -c "${asset}.sha256"
           node soha-web/scripts/verify-release-artifact.mjs --artifact "${asset}"
       - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: soha-web-dist-${{ github.ref_name }}
           path: |
