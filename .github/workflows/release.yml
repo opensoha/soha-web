@@ -14,16 +14,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout web
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: soha-web
       - name: Checkout contracts
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: opensoha/soha-contracts
           path: soha-contracts
           token: ${{ secrets.OPENSOHA_CI_TOKEN || github.token }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: npm
@@ -41,12 +41,16 @@ jobs:
         working-directory: soha-web
         run: |
           test -f dist/index.html
-          tar -C dist -czf "../soha-web-dist-${GITHUB_REF_NAME}.tar.gz" .
+          artifact="soha-web-dist-${GITHUB_REF_NAME}.tar.gz"
+          tar -C dist -czf "../${artifact}" .
+          (cd .. && shasum -a 256 "${artifact}" > "${artifact}.sha256")
       - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: soha-web-dist-${{ github.ref_name }}
-          path: soha-web-dist-${{ github.ref_name }}.tar.gz
+          path: |
+            soha-web-dist-${{ github.ref_name }}.tar.gz
+            soha-web-dist-${{ github.ref_name }}.tar.gz.sha256
           if-no-files-found: error
       - name: Publish GitHub release asset
         if: startsWith(github.ref, 'refs/tags/v')
@@ -54,8 +58,9 @@ jobs:
           GH_TOKEN: ${{ secrets.OPENSOHA_CI_TOKEN || github.token }}
         run: |
           asset="soha-web-dist-${GITHUB_REF_NAME}.tar.gz"
+          checksum_asset="${asset}.sha256"
           if gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
-            gh release upload "${GITHUB_REF_NAME}" "${asset}" --repo "${GITHUB_REPOSITORY}" --clobber
+            gh release upload "${GITHUB_REF_NAME}" "${asset}" "${checksum_asset}" --repo "${GITHUB_REPOSITORY}" --clobber
           else
-            gh release create "${GITHUB_REF_NAME}" "${asset}" --repo "${GITHUB_REPOSITORY}" --title "soha-web ${GITHUB_REF_NAME}" --generate-notes
+            gh release create "${GITHUB_REF_NAME}" "${asset}" "${checksum_asset}" --repo "${GITHUB_REPOSITORY}" --title "soha-web ${GITHUB_REF_NAME}" --generate-notes
           fi

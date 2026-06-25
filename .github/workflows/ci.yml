@@ -11,16 +11,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout web
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: soha-web
       - name: Checkout contracts
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: opensoha/soha-contracts
           path: soha-contracts
           token: ${{ secrets.OPENSOHA_CI_TOKEN || github.token }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: npm
