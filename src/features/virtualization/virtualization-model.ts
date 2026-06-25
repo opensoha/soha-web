@@ -67,6 +67,17 @@ export function isPendingOperation(status?: string) {
   return ['queued', 'running'].includes(String(status || '').toLowerCase())
 }
 
+export function isStaleVirtualMachine(record?: { status?: string }) {
+  return String(record?.status || '').toLowerCase() === 'stale'
+}
+
+export function virtualMachineDisplayStatus(record?: { status?: string; powerState?: string }) {
+  if (!record) return ''
+  const status = String(record.status || '').trim()
+  if (status.toLowerCase() === 'stale') return status
+  return record.powerState || status
+}
+
 export function isSyncOperation(record: VirtualizationOperation) {
   return operationKind(record) === 'asset_sync'
 }
@@ -223,14 +234,19 @@ export interface VirtualizationClusterFormValues {
   description?: string
   tokenID?: string
   tokenSecret?: string
+  username?: string
+  password?: string
   ticket?: string
   csrfToken?: string
   defaultNode?: string
   defaultStorage?: string
   defaultBridge?: string
+  defaultSnippetStorage?: string
   backendUrl?: string
   prometheusUrl?: string
   prometheusBearerToken?: string
+  prometheusBearerTokenSecretRef?: string
+  mode?: string
 }
 
 export function operationPresetFromSearch(search: string): OperationFilterPreset {
@@ -331,8 +347,15 @@ export interface VirtualMachineFormValues extends CreateVirtualMachineInput {
   pveIso?: string
   pveCloudInitUser?: string
   pveCloudInitSSHKeys?: string
+  pveSnippetStorage?: string
+  pveCICustom?: string
   kubevirtStorageClass?: string
   kubevirtDataVolumeName?: string
+  kubevirtNetworkType?: string
+  kubevirtNetworkAttachmentDefinition?: string
+  kubevirtInterfaceModel?: string
+  kubevirtInterfaceBinding?: string
+  kubevirtInterfaceName?: string
 }
 
 export function buildCreateVmPayload(values: VirtualMachineFormValues): CreateVirtualMachineInput {
@@ -342,8 +365,15 @@ export function buildCreateVmPayload(values: VirtualMachineFormValues): CreateVi
     iso: values.pveIso,
     ciuser: values.pveCloudInitUser,
     sshkeys: values.pveCloudInitSSHKeys,
+    snippetStorage: values.pveSnippetStorage,
+    cicustom: values.pveCICustom,
     storageClass: values.kubevirtStorageClass,
     dataVolumeName: values.kubevirtDataVolumeName,
+    networkType: values.kubevirtNetworkType,
+    networkAttachmentDefinition: values.kubevirtNetworkAttachmentDefinition,
+    interfaceModel: values.kubevirtInterfaceModel,
+    interfaceBinding: values.kubevirtInterfaceBinding,
+    interfaceName: values.kubevirtInterfaceName,
   })
   const sourceMode = values.sourceMode || (values.provider === 'pve' ? 'template_clone' : 'datasource_clone')
   return buildVmPayload({
@@ -380,6 +410,12 @@ export function buildClusterPayload(values: VirtualizationClusterFormValues): Vi
     if (values.defaultNode) config.defaultNode = values.defaultNode
     if (values.defaultStorage) config.defaultStorage = values.defaultStorage
     if (values.defaultBridge) config.defaultBridge = values.defaultBridge
+    if (values.defaultSnippetStorage) {
+      config.defaultSnippetStorage = values.defaultSnippetStorage
+      config.snippetStorage = values.defaultSnippetStorage
+    }
+    if (values.username) credential.username = values.username
+    if (values.password) credential.password = values.password
     if (values.tokenID) credential.tokenID = values.tokenID
     if (values.tokenSecret) credential.tokenSecret = values.tokenSecret
     if (values.ticket) credential.ticket = values.ticket
@@ -387,7 +423,9 @@ export function buildClusterPayload(values: VirtualizationClusterFormValues): Vi
   } else {
     if (values.backendUrl) config.backendUrl = values.backendUrl
     if (values.prometheusUrl) config.prometheusUrl = values.prometheusUrl
-    if (values.prometheusBearerToken) config.prometheusBearerToken = values.prometheusBearerToken
+    if (values.prometheusBearerTokenSecretRef) config.prometheusBearerTokenSecretRef = values.prometheusBearerTokenSecretRef
+    if (values.mode) config.mode = values.mode
+    if (values.prometheusBearerToken) credential.prometheusBearerToken = values.prometheusBearerToken
   }
   return {
     name: values.name,

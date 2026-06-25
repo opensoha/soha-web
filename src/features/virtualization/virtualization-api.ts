@@ -7,6 +7,7 @@ import type {
   VirtualMachinePowerAction,
   VirtualizationListParams,
   VirtualizationCluster,
+  VirtualizationConnectionDeleteDependencies,
   VirtualizationClusterInput,
   VirtualizationConsoleURL,
   VirtualizationFlavor,
@@ -46,7 +47,10 @@ export const virtualizationApi = {
     api.post<ApiResponse<VirtualizationCluster>>(`${BASE}/clusters`, payload),
   updateCluster: (id: string, payload: VirtualizationClusterInput) =>
     api.put<ApiResponse<VirtualizationCluster>>(`${BASE}/clusters/${encodeURIComponent(id)}`, payload),
-  deleteCluster: (id: string) => api.delete<ApiResponse<void>>(`${BASE}/clusters/${encodeURIComponent(id)}`),
+  clusterDeleteDependencies: (id: string) =>
+    api.get<ApiResponse<VirtualizationConnectionDeleteDependencies>>(`${BASE}/clusters/${encodeURIComponent(id)}/delete-dependencies`),
+  deleteCluster: (id: string, options: { force?: boolean } = {}) =>
+    api.delete<ApiResponse<void>>(`${BASE}/clusters/${encodeURIComponent(id)}${options.force ? '?force=true' : ''}`),
   testCluster: (id: string) =>
     api.post<ApiResponse<VirtualizationOperation>>(`${BASE}/clusters/${encodeURIComponent(id)}/test`),
   syncCluster: (id: string) =>

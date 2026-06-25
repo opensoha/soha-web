@@ -221,6 +221,15 @@
   border: 0;
 }
 
+.soha-vrt-table .soha-row-action-icons.ant-space {
+  flex-wrap: nowrap !important;
+  white-space: nowrap;
+}
+
+.soha-vrt-table .soha-row-action-icons .ant-space-item {
+  flex: 0 0 auto;
+}
+
 .soha-vrt-metric-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -315,7 +324,7 @@
 .soha-vrt-panel {
   min-width: 0;
   border: 1px solid var(--soha-border-color);
-  border-radius: 14px;
+  border-radius: var(--soha-radius-lg, 14px);
   background: var(--soha-bg-surface);
   box-shadow: none;
   overflow: hidden;
@@ -399,7 +408,42 @@
 }
 
 .soha-vrt-table-panel .ant-table-wrapper {
-  border-radius: 0 0 14px 14px;
+  border-radius: 0 0 var(--soha-radius-lg, 14px) var(--soha-radius-lg, 14px);
+  overflow: hidden;
+}
+
+.soha-vrt-table-tooltip-text {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.soha-vrt-table-tooltip-content {
+  word-break: break-all;
+}
+
+.soha-vrt-table-text-button {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: var(--ant-color-link);
+  cursor: pointer;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.soha-vrt-table-text-button:hover {
+  color: var(--ant-color-link-hover);
 }
 
 .soha-vrt-chip-grid {
