@@ -1100,6 +1100,22 @@ export function AppRouter() {
             }
           />
           <Route
+            path="/ai-gateway/relay"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.AIGatewayPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
+            path="/ai-gateway/upstreams"
+            element={<Navigate to="/ai-gateway/relay?tab=upstreams" replace />}
+          />
+          <Route
+            path="/ai-gateway/model-routes"
+            element={<Navigate to="/ai-gateway/relay?tab=model-routes" replace />}
+          />
+          <Route
             path="/ai-gateway/manifest"
             element={
               <RoutePages.LazyPage>

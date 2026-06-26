@@ -154,6 +154,9 @@ export const consolePermissionGroups: PermissionCatalogGroup[] = [
       { value: "ai.gateway.view", label: "查看 AI Gateway" },
       { value: "ai.gateway.invoke", label: "调用 AI Gateway 工具" },
       { value: "ai.gateway.manage", label: "管理 AI Gateway" },
+      { value: "ai.gateway.relay.view", label: "查看 AI Gateway 模型中转" },
+      { value: "ai.gateway.relay.invoke", label: "调用 AI Gateway 模型中转" },
+      { value: "ai.gateway.relay.manage", label: "管理 AI Gateway 模型中转" },
     ],
   },
   {

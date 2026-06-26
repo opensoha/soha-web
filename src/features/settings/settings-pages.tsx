@@ -2250,6 +2250,8 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
               { value: "grok", label: "Grok" },
               { value: "deepseek", label: "DeepSeek" },
               { value: "qwen", label: "Qwen" },
+              { value: "openrouter", label: "OpenRouter" },
+              { value: "azure-openai", label: "Azure OpenAI" },
               { value: "glm", label: "GLM" },
               { value: "kimi", label: "Kimi" },
               { value: "minimax", label: "MiniMax" },

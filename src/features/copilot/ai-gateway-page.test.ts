@@ -15,10 +15,13 @@ import {
   governanceTokenFindingDrilldown,
   governanceTokenFindingRows,
   gatewaySecretTypeOptions,
+  gatewayTokenMetadataFromValues,
+  gatewayTokenScopesFromValues,
   gatewayTimeRangeQuery,
   rateLimitModeOptions,
 } from './ai-gateway-page'
 import {
+  relayEndpointOptions,
   valuesToResourceScopes,
   type GatewayAccessPolicyConditionFormValues,
   type GatewayApprovalPolicyFormValues,
@@ -383,6 +386,56 @@ describe('AI Gateway policy condition helpers', () => {
       to: '2026-05-29T04:05:06.000Z',
     })
     expect(gatewayTimeRangeQuery(null)).toEqual({ from: '', to: '' })
+  })
+
+  it('keeps relay endpoint filters aligned with implemented native relay endpoints', () => {
+    const values = relayEndpointOptions.map((item) => item.value)
+    expect(values).toEqual(expect.arrayContaining([
+      'embeddings',
+      'images/generations',
+      'images/edits',
+      'images/variations',
+      'audio/speech',
+      'audio/transcriptions',
+      'audio/translations',
+      'realtime',
+      'generateContent',
+      'streamGenerateContent',
+      'interactions',
+      'rerank',
+    ]))
+  })
+
+  it('serializes relay token purpose and metadata limits without exposing secrets', () => {
+    expect(
+      gatewayTokenMetadataFromValues({
+        purpose: 'LLM relay',
+        allowedModels: [' gpt-4.1 ', 'claude-sonnet-4-5'],
+        allowedProviderKinds: ['openai', 'anthropic'],
+        allowedUpstreamIds: ['upstream-openai'],
+        allowedIPCIDRs: ['10.0.0.0/8'],
+        allowedTeams: [' platform ', 'ml'],
+        deniedTeams: ['suspended'],
+        rateLimitProfileId: 'developer-default',
+      }),
+    ).toEqual({
+      purpose: 'llm-relay',
+      allowedModels: ['gpt-4.1', 'claude-sonnet-4-5'],
+      allowedProviderKinds: ['openai', 'anthropic'],
+      allowedUpstreamIds: ['upstream-openai'],
+      allowedIPCIDRs: ['10.0.0.0/8'],
+      allowedTeams: ['platform', 'ml'],
+      deniedTeams: ['suspended'],
+      rateLimitProfileId: 'developer-default',
+    })
+
+    expect(
+      gatewayTokenScopesFromValues({
+        purpose: 'both',
+        scopes: ['custom', 'relay'],
+      }),
+    ).toEqual(['custom', 'relay', 'ai_gateway'])
+    expect(gatewayTokenScopesFromValues({ purpose: 'mcp-tools' })).toEqual([])
   })
 
   it('summarizes governance policy coverage rows for the Console status tab', () => {

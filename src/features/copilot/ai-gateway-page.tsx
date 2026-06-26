@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   CheckOutlined,
   CloseOutlined,
+  CopyOutlined,
   DeleteOutlined,
   EditOutlined,
   HistoryOutlined,
@@ -62,6 +63,10 @@ import {
   firstNumber,
   firstValue,
   firstString,
+  gatewayTokenMetadataFromValues,
+  gatewayTokenPurposeFromRecord,
+  gatewayTokenPurposeOptions,
+  gatewayTokenScopesFromValues,
   gatewayLimitScopeOptions,
   gatewayMenuMeta,
   gatewaySecretTypeOptions,
@@ -71,6 +76,7 @@ import {
   gatewayTabBelongsToSection,
   gatewayTabSectionMap,
   gatewayTimeRangeQuery,
+  jsonTextFromRecord,
   governanceApprovalQueueRows,
   governanceCoverageDrilldown,
   governanceCoverageRows,
@@ -89,6 +95,11 @@ import {
   rateLimitModeOptions,
   redactionModeOptions,
   redactionTargetOptions,
+  relayCallStatusOptions,
+  relayCacheStatusOptions,
+  relayEndpointOptions,
+  relayProviderKindOptions,
+  relayUpstreamStatusOptions,
   riskLevelOptions,
   scopeFieldDefs,
   scopeValuesFromRecord,
@@ -123,6 +134,12 @@ import type {
   GovernanceRedactionRow,
   GovernanceStatus,
   GovernanceTokenFindingRow,
+  LLMCallLog,
+  LLMModelRoute,
+  LLMRelayMetrics,
+  LLMUpstream,
+  LLMTokenMetadata,
+  ModelCallFilterState,
   PersonalAccessToken,
   ServiceAccount,
   ServiceAccountToken,
@@ -146,6 +163,8 @@ export {
   governanceRiskCountTags,
   governanceTokenFindingDrilldown,
   governanceTokenFindingRows,
+  gatewayTokenMetadataFromValues,
+  gatewayTokenScopesFromValues,
   rateLimitModeOptions,
 }
 
@@ -355,6 +374,134 @@ function tokenStatus(record: { expiresAt?: string; revokedAt?: string }) {
   return 'active'
 }
 
+function formatNumber(value?: number) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '-'
+  return new Intl.NumberFormat('zh-CN').format(value)
+}
+
+function formatDurationMs(value?: number) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '-'
+  return `${Math.round(value)} ms`
+}
+
+function formatPercent(value?: number) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '-'
+  const normalized = value <= 1 ? value * 100 : value
+  return `${normalized.toFixed(1)}%`
+}
+
+function tokenPurposeLabel(value: string) {
+  return gatewayTokenPurposeOptions.find((item) => item.value === value)?.label ?? value
+}
+
+function tokenPurposeSummary(record: { metadata?: Record<string, unknown>; scopes?: string[] }) {
+  const purpose = gatewayTokenPurposeFromRecord(record)
+  return <Tag>{tokenPurposeLabel(purpose)}</Tag>
+}
+
+function tokenRelayLimitsSummary(metadata?: Record<string, unknown>) {
+  const values = asRecord(metadata) as LLMTokenMetadata
+  const items = [
+    ...(values.allowedModels ?? []).map((item) => `model:${item}`),
+    ...(values.allowedProviderKinds ?? []).map((item) => `provider:${item}`),
+    ...(values.allowedUpstreamIds ?? []).map((item) => `upstream:${item}`),
+    ...(values.allowedIPCIDRs ?? []).map((item) => `ip:${item}`),
+    ...(values.allowedTeams ?? []).map((item) => `team:${item}`),
+    ...(values.deniedTeams ?? []).map((item) => `deny-team:${item}`),
+    values.rateLimitProfileId ? `rate:${values.rateLimitProfileId}` : '',
+  ].filter(Boolean)
+  return compactList(items, 3)
+}
+
+function parseJsonObjectField(value: unknown, label: string): Record<string, unknown> {
+  const text = String(value ?? '').trim()
+  if (!text) return {}
+  const parsed = JSON.parse(text) as unknown
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`${label} 必须是 JSON object`)
+  }
+  return parsed as Record<string, unknown>
+}
+
+function upstreamHealthSummary(record: LLMUpstream) {
+  const health = asRecord(record.health)
+  const status = firstString(health, 'status', 'state') || record.status
+  const lastChecked = firstString(health, 'lastCheckedAt', 'checkedAt', 'updatedAt')
+  return (
+    <Space orientation="vertical" size={0}>
+      <StatusTag value={status} />
+      <Text type="secondary">{lastChecked ? formatDateTime(lastChecked) : '-'}</Text>
+    </Space>
+  )
+}
+
+function routePolicySummary(record: LLMModelRoute) {
+  const items = [
+    Object.keys(record.fallbackPolicy ?? {}).length ? 'fallback' : '',
+    Object.keys(record.cachePolicy ?? {}).length ? 'cache' : '',
+    record.rateLimitProfileId ? `rate:${record.rateLimitProfileId}` : '',
+  ].filter(Boolean)
+  return items.length ? compactList(items, 3) : <Text type="secondary">-</Text>
+}
+
+function relayMetric(metrics: LLMRelayMetrics | undefined, ...keys: string[]) {
+  return firstNumber(metrics, ...keys)
+}
+
+function modelCallActor(record: LLMCallLog) {
+  return (
+    <Space orientation="vertical" size={0}>
+      <Text strong>{record.actorName || record.actorId || '-'}</Text>
+      <Text type="secondary">{[record.actorType, record.actorId].filter(Boolean).join(':') || '-'}</Text>
+      {record.sourceIp ? <Text type="secondary">{record.sourceIp}</Text> : null}
+    </Space>
+  )
+}
+
+function modelCallRoute(record: LLMCallLog) {
+  return (
+    <Space orientation="vertical" size={0}>
+      <Text strong>{record.publicModel || '-'}</Text>
+      <Text type="secondary">{[record.upstreamName || record.upstreamId, record.upstreamModel].filter(Boolean).join(' / ') || '-'}</Text>
+      <Space size={4} wrap>
+        {record.providerKind ? <Tag>{record.providerKind}</Tag> : null}
+        {record.endpoint ? <Tag>{record.endpoint}</Tag> : null}
+        {record.stream ? <Tag>stream</Tag> : null}
+      </Space>
+    </Space>
+  )
+}
+
+function modelCallUsage(record: LLMCallLog) {
+  return (
+    <Space orientation="vertical" size={0}>
+      <Text>{formatNumber(record.totalTokens)} tokens</Text>
+      <Text type="secondary">
+        {formatNumber(record.promptTokens)} in / {formatNumber(record.completionTokens)} out
+      </Text>
+      {record.cachedReadTokens || record.cachedWriteTokens ? (
+        <Text type="secondary">
+          cache {formatNumber(record.cachedReadTokens)} / {formatNumber(record.cachedWriteTokens)}
+        </Text>
+      ) : null}
+    </Space>
+  )
+}
+
+function modelCallLatency(record: LLMCallLog) {
+  return (
+    <Space orientation="vertical" size={0}>
+      <Text>{formatDurationMs(record.durationMs)}</Text>
+      <Text type="secondary">TTFB {formatDurationMs(record.ttfbMs)}</Text>
+      <Text type="secondary">TTFT {formatDurationMs(record.ttftMs)}</Text>
+    </Space>
+  )
+}
+
+function relayModelRanking(metrics?: LLMRelayMetrics) {
+  return metrics?.modelRanking ?? metrics?.topModels ?? []
+}
+
 
 
 function cardTitle(icon: ReactNode, title: string) {
@@ -551,6 +698,24 @@ export function AIGatewayPage() {
   const [serviceTokenFilter, setServiceTokenFilter] = useState('')
   const [policyFilter, setPolicyFilter] = useState('')
   const [grantFilter, setGrantFilter] = useState('')
+  const [upstreamFilter, setUpstreamFilter] = useState('')
+  const [upstreamProviderFilter, setUpstreamProviderFilter] = useState('')
+  const [upstreamStatusFilter, setUpstreamStatusFilter] = useState('')
+  const [modelRouteFilter, setModelRouteFilter] = useState('')
+  const [modelRouteProviderFilter, setModelRouteProviderFilter] = useState('')
+  const [modelRouteUpstreamFilter, setModelRouteUpstreamFilter] = useState('')
+  const [modelCallFilters, setModelCallFilters] = useState<ModelCallFilterState>({
+    actor: '',
+    tokenId: '',
+    publicModel: '',
+    upstreamId: '',
+    providerKind: '',
+    status: '',
+    endpoint: '',
+    cacheStatus: '',
+    from: '',
+    to: '',
+  })
   const [governanceWindowHours, setGovernanceWindowHours] = useState('24')
   const currentUser = useAuthStore((state) => state.user)
   const permissionSnapshot = usePermissionSnapshot()
@@ -558,7 +723,11 @@ export function AIGatewayPage() {
   const canView = hasPermission(snapshot, 'ai.gateway.view')
   const canManage = hasPermission(snapshot, 'ai.gateway.manage')
   const canInvoke = hasPermission(snapshot, 'ai.gateway.invoke')
-  const canUseGateway = canView || canInvoke || canManage
+  const canRelayView = hasPermission(snapshot, 'ai.gateway.relay.view')
+  const canRelayManage = hasPermission(snapshot, 'ai.gateway.relay.manage')
+  const canRelayInvoke = hasPermission(snapshot, 'ai.gateway.relay.invoke')
+  const canUseRelay = canRelayView || canRelayManage || canRelayInvoke
+  const canUseGateway = canView || canInvoke || canManage || canUseRelay
   const personalTokenScope = canManage ? 'all' : 'mine'
 
   const clientsQuery = useQuery({
@@ -569,7 +738,27 @@ export function AIGatewayPage() {
   const personalTokensQuery = useQuery({
     queryKey: ['ai-gateway', 'personal-access-tokens', personalTokenScope],
     queryFn: () => api.get<ApiResponse<PersonalAccessToken[]>>(canManage ? '/ai-gateway/personal-access-tokens?scope=all' : '/ai-gateway/personal-access-tokens'),
-    enabled: canManage || canView,
+    enabled: canManage || canView || canInvoke,
+  })
+  const relayMetricsQuery = useQuery({
+    queryKey: ['ai-gateway', 'relay', 'metrics'],
+    queryFn: () => api.get<ApiResponse<LLMRelayMetrics>>('/ai-gateway/relay/metrics'),
+    enabled: canRelayManage || canRelayView,
+  })
+  const upstreamsQuery = useQuery({
+    queryKey: ['ai-gateway', 'relay', 'upstreams', upstreamProviderFilter, upstreamStatusFilter],
+    queryFn: () => api.get<ApiResponse<LLMUpstream[]>>(`/ai-gateway/relay/upstreams${queryString({ providerKind: upstreamProviderFilter, status: upstreamStatusFilter, includeAll: 'true' })}`),
+    enabled: canRelayManage || canRelayView,
+  })
+  const modelRoutesQuery = useQuery({
+    queryKey: ['ai-gateway', 'relay', 'model-routes', modelRouteProviderFilter, modelRouteUpstreamFilter],
+    queryFn: () => api.get<ApiResponse<LLMModelRoute[]>>(`/ai-gateway/relay/model-routes${queryString({ providerKind: modelRouteProviderFilter, upstreamId: modelRouteUpstreamFilter, includeDisabled: 'true' })}`),
+    enabled: canRelayManage || canRelayView,
+  })
+  const modelCallsQuery = useQuery({
+    queryKey: ['ai-gateway', 'relay', 'model-calls', modelCallFilters],
+    queryFn: () => api.get<ApiResponse<LLMCallLog[]>>(`/ai-gateway/relay/model-calls${queryString({ ...modelCallFilters, actorId: modelCallFilters.actor, actor: undefined, limit: '100' })}`),
+    enabled: canRelayManage,
   })
   const serviceAccountsQuery = useQuery({
     queryKey: ['ai-gateway', 'service-accounts'],
@@ -619,6 +808,10 @@ export function AIGatewayPage() {
 
   const clients = clientsQuery.data?.data ?? []
   const personalTokens = personalTokensQuery.data?.data ?? []
+  const relayMetrics = relayMetricsQuery.data?.data
+  const upstreams = upstreamsQuery.data?.data ?? []
+  const modelRoutes = modelRoutesQuery.data?.data ?? []
+  const modelCalls = modelCallsQuery.data?.data ?? []
   const serviceAccounts = serviceAccountsQuery.data?.data ?? []
   const serviceAccountTokens = serviceAccountTokensQuery.data?.data ?? []
   const grants = grantsQuery.data?.data ?? []
@@ -629,10 +822,12 @@ export function AIGatewayPage() {
   const approvalRequests = approvalsQuery.data?.data ?? []
   const governanceStatus = governanceQuery.data?.data
   const filteredClients = useManagementTextFilter(clients, clientFilter, (item) => [item.id, item.name, item.kind, item.status])
-  const filteredPersonalTokens = useManagementTextFilter(personalTokens, tokenFilter, (item) => [item.id, item.name, item.userId, item.tokenPrefix, ...(item.permissionKeys ?? []), ...(item.scopes ?? [])])
-  const filteredServiceAccountTokens = useManagementTextFilter(serviceAccountTokens, serviceTokenFilter, (item) => [item.id, item.name, item.serviceAccountId, item.tokenPrefix, ...(item.permissionKeys ?? []), ...(item.scopes ?? [])])
+  const filteredPersonalTokens = useManagementTextFilter(personalTokens, tokenFilter, (item) => [item.id, item.name, item.userId, item.tokenPrefix, gatewayTokenPurposeFromRecord(item), ...(item.permissionKeys ?? []), ...(item.scopes ?? []), ...Object.values(item.metadata ?? {}).map((value) => String(value))])
+  const filteredServiceAccountTokens = useManagementTextFilter(serviceAccountTokens, serviceTokenFilter, (item) => [item.id, item.name, item.serviceAccountId, item.tokenPrefix, gatewayTokenPurposeFromRecord(item), ...(item.permissionKeys ?? []), ...(item.scopes ?? []), ...Object.values(item.metadata ?? {}).map((value) => String(value))])
   const filteredPolicies = useManagementTextFilter(policies, policyFilter, (item) => [item.id, item.name, item.subjectType, item.subjectId, item.aiClientId, ...(item.toolPatterns ?? []), ...(item.skillIds ?? [])])
   const filteredGrants = useManagementTextFilter(grants, grantFilter, (item) => [item.id, item.subjectType, item.subjectId, item.aiClientId, item.toolName])
+  const filteredUpstreams = useManagementTextFilter(upstreams, upstreamFilter, (item) => [item.id, item.name, item.providerKind, item.baseUrl, item.status, ...(item.supportedModels ?? [])])
+  const filteredModelRoutes = useManagementTextFilter(modelRoutes, modelRouteFilter, (item) => [item.id, item.publicModel, item.providerKind, item.upstreamId, item.upstreamModel, item.routeGroup])
 
   useEffect(() => {
     if (!drawer) {
@@ -644,6 +839,32 @@ export function AIGatewayPage() {
     form.resetFields()
     if (!record) {
       form.setFieldsValue({ ...defaultFormValues(drawer.kind), ...initialValues })
+      return
+    }
+    if (drawer.kind === 'relay-upstream') {
+      const upstream = record as LLMUpstream
+      form.setFieldsValue({
+        ...defaultFormValues(drawer.kind),
+        ...upstream,
+        apiKey: '',
+        defaultHeadersJson: jsonTextFromRecord(upstream.defaultHeaders),
+        metadataJson: jsonTextFromRecord(upstream.metadata),
+        ...initialValues,
+      })
+      return
+    }
+    if (drawer.kind === 'relay-route') {
+      const route = record as LLMModelRoute
+      form.setFieldsValue({
+        ...defaultFormValues(drawer.kind),
+        ...route,
+        enabled: route.enabled ? 'true' : 'false',
+        transformPolicyJson: jsonTextFromRecord(route.transformPolicy),
+        fallbackPolicyJson: jsonTextFromRecord(route.fallbackPolicy),
+        cachePolicyJson: jsonTextFromRecord(route.cachePolicy),
+        metadataJson: jsonTextFromRecord(route.metadata),
+        ...initialValues,
+      })
       return
     }
     form.setFieldsValue(drawer.kind === 'access-policy'
@@ -742,11 +963,55 @@ export function AIGatewayPage() {
             ? api.put<ApiResponse<AIClient>>(`/ai-gateway/ai-clients/${record.id}`, payload)
             : api.post<ApiResponse<AIClient>>('/ai-gateway/ai-clients', payload)
         }
+        case 'relay-upstream': {
+          const payload = {
+            id: values.id,
+            name: values.name,
+            providerKind: values.providerKind,
+            baseUrl: values.baseUrl,
+            apiKey: values.apiKey || undefined,
+            status: values.status,
+            priority: firstNumber(values, 'priority') ?? 100,
+            weight: firstNumber(values, 'weight') ?? 100,
+            timeoutSeconds: firstNumber(values, 'timeoutSeconds') ?? 120,
+            streamTimeoutSeconds: firstNumber(values, 'streamTimeoutSeconds') ?? 300,
+            maxConcurrency: firstNumber(values, 'maxConcurrency') ?? 0,
+            supportedModels: values.supportedModels ?? [],
+            defaultHeaders: parseJsonObjectField(values.defaultHeadersJson, 'Default headers'),
+            proxyUrl: values.proxyUrl || undefined,
+            metadata: parseJsonObjectField(values.metadataJson, 'Metadata'),
+          }
+          return record?.id
+            ? api.put<ApiResponse<LLMUpstream>>(`/ai-gateway/relay/upstreams/${record.id}`, payload)
+            : api.post<ApiResponse<LLMUpstream>>('/ai-gateway/relay/upstreams', payload)
+        }
+        case 'relay-route': {
+          const payload = {
+            id: values.id,
+            publicModel: values.publicModel,
+            providerKind: values.providerKind || undefined,
+            upstreamId: values.upstreamId || undefined,
+            upstreamModel: values.upstreamModel,
+            routeGroup: values.routeGroup || undefined,
+            priority: firstNumber(values, 'priority') ?? 100,
+            weight: firstNumber(values, 'weight') ?? 100,
+            enabled: values.enabled !== 'false',
+            transformPolicy: parseJsonObjectField(values.transformPolicyJson, 'Transform policy'),
+            fallbackPolicy: parseJsonObjectField(values.fallbackPolicyJson, 'Fallback policy'),
+            cachePolicy: parseJsonObjectField(values.cachePolicyJson, 'Cache policy'),
+            rateLimitProfileId: values.rateLimitProfileId || undefined,
+            metadata: parseJsonObjectField(values.metadataJson, 'Metadata'),
+          }
+          return record?.id
+            ? api.put<ApiResponse<LLMModelRoute>>(`/ai-gateway/relay/model-routes/${record.id}`, payload)
+            : api.post<ApiResponse<LLMModelRoute>>('/ai-gateway/relay/model-routes', payload)
+        }
         case 'personal-token':
           return api.post<ApiResponse<CreatedPersonalAccessToken>>('/ai-gateway/personal-access-tokens', {
             name: values.name,
-            scopes: values.scopes ?? [],
+            scopes: gatewayTokenScopesFromValues(values),
             permissionKeys: values.permissionKeys ?? [],
+            metadata: gatewayTokenMetadataFromValues(values),
             expiresAt: values.expiresAt || undefined,
           })
         case 'service-account':
@@ -763,8 +1028,9 @@ export function AIGatewayPage() {
         case 'service-token':
           return api.post<ApiResponse<CreatedServiceAccountToken>>(`/ai-gateway/service-accounts/${record.id}/tokens`, {
             name: values.name,
-            scopes: values.scopes ?? [],
+            scopes: gatewayTokenScopesFromValues(values),
             permissionKeys: values.permissionKeys ?? [],
+            metadata: gatewayTokenMetadataFromValues(values),
             expiresAt: values.expiresAt || undefined,
           })
         case 'service-token-revoke':
@@ -837,10 +1103,11 @@ export function AIGatewayPage() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: ({ kind, id }: { kind: 'grant' | 'policy' | 'binding' | 'personal-token'; id: string }) => {
+    mutationFn: ({ kind, id }: { kind: 'grant' | 'policy' | 'binding' | 'personal-token' | 'model-route'; id: string }) => {
       if (kind === 'grant') return api.delete(`/ai-gateway/tool-grants/${id}`)
       if (kind === 'policy') return api.delete(`/ai-gateway/access-policies/${id}`)
       if (kind === 'binding') return api.delete(`/ai-gateway/skill-bindings/${id}`)
+      if (kind === 'model-route') return api.delete(`/ai-gateway/relay/model-routes/${id}`)
       return api.post(`/ai-gateway/personal-access-tokens/${id}/revoke`)
     },
     onSuccess: () => {
@@ -889,6 +1156,39 @@ export function AIGatewayPage() {
     onError: (error: Error) => message.error(error.message),
   })
 
+  const disableUpstreamMutation = useMutation({
+    mutationFn: (record: LLMUpstream) => api.put<ApiResponse<LLMUpstream>>(`/ai-gateway/relay/upstreams/${record.id}`, {
+      id: record.id,
+      name: record.name,
+      providerKind: record.providerKind,
+      baseUrl: record.baseUrl,
+      status: 'disabled',
+      priority: record.priority,
+      weight: record.weight,
+      timeoutSeconds: record.timeoutSeconds,
+      streamTimeoutSeconds: record.streamTimeoutSeconds,
+      maxConcurrency: record.maxConcurrency,
+      supportedModels: record.supportedModels ?? [],
+      defaultHeaders: record.defaultHeaders ?? {},
+      proxyUrl: record.proxyUrl,
+      metadata: record.metadata ?? {},
+    }),
+    onSuccess: () => {
+      void refreshAll()
+      message.success('已禁用')
+    },
+    onError: (error: Error) => message.error(error.message),
+  })
+
+  const testUpstreamMutation = useMutation({
+    mutationFn: (record: LLMUpstream) => api.post<ApiResponse<{ status: string }>>(`/ai-gateway/relay/upstreams/${record.id}/test`),
+    onSuccess: () => {
+      void refreshAll()
+      message.success('已提交测试')
+    },
+    onError: (error: Error) => message.error(error.message),
+  })
+
   const decisionMutation = useMutation({
     mutationFn: ({ action, id, comment }: { action: 'approve' | 'reject' | 'cancel'; id: string; comment?: string }) =>
       api.post<ApiResponse<ApprovalDecisionResult>>(`/ai-gateway/approval-requests/${id}/${action}`, { comment }),
@@ -908,8 +1208,10 @@ export function AIGatewayPage() {
     grants: grants.length,
     policies: policies.length,
     bindings: bindings.length,
+    upstreams: upstreams.length,
+    modelRoutes: modelRoutes.length,
     tools: manifest?.summary.toolCount ?? 0,
-  }), [bindings.length, clients.length, grants.length, manifest, policies.length, serviceAccounts.length])
+  }), [bindings.length, clients.length, grants.length, manifest, modelRoutes.length, policies.length, serviceAccounts.length, upstreams.length])
   const gatewayPanelMeta = gatewaySectionMeta[section]
   const sectionActiveTab = gatewayTabBelongsToSection(activeTab, section)
     ? activeTab
@@ -918,6 +1220,7 @@ export function AIGatewayPage() {
   const clientOptions = clients.map((item) => ({ label: `${item.name} (${item.id})`, value: item.id }))
   const skillOptions = manifest?.skills?.map((item) => ({ label: `${item.name} (${item.id})`, value: item.id })) ?? []
   const toolOptions = manifest?.tools.map((item) => ({ label: item.name, value: item.name })) ?? []
+  const upstreamOptions = upstreams.map((item) => ({ label: `${item.name} (${item.id})`, value: item.id }))
 
   const aiClientColumns: TableColumnsType<AIClient> = [
     { title: 'Client', dataIndex: 'name', width: 220, render: (_, record) => <Space orientation="vertical" size={0}><Text strong>{record.name}</Text><Text type="secondary">{record.id}</Text></Space> },
@@ -941,9 +1244,93 @@ export function AIGatewayPage() {
     },
   ]
 
+  const upstreamColumns: TableColumnsType<LLMUpstream> = [
+    { title: '上游', dataIndex: 'name', width: 240, render: (_, record) => <Space orientation="vertical" size={0}><Text strong>{record.name}</Text><Text type="secondary">{record.id}</Text></Space> },
+    { title: 'Provider', dataIndex: 'providerKind', width: 150, render: (value) => <Tag>{value}</Tag> },
+    { title: 'Base URL', dataIndex: 'baseUrl', width: 260, render: (value) => <Paragraph ellipsis={{ rows: 1, tooltip: value }} style={{ marginBottom: 0 }}>{value}</Paragraph> },
+    { title: 'API key', dataIndex: 'apiKeyPrefix', width: 140, render: (value) => value ? <Tag>{value}</Tag> : <Text type="secondary">未配置</Text> },
+    { title: '模型', dataIndex: 'supportedModels', width: 220, render: (value) => compactList(value, 3) },
+    { title: '状态', dataIndex: 'status', width: 150, render: (_, record) => upstreamHealthSummary(record) },
+    { title: '路由权重', key: 'routing', width: 140, render: (_, record) => <Text>{record.priority} / {record.weight}</Text> },
+    { title: '并发', dataIndex: 'maxConcurrency', width: 100, render: (value) => value || '-' },
+    { title: '更新时间', dataIndex: 'updatedAt', width: 140, render: formatDateTime },
+    {
+      title: '',
+      key: 'actions',
+      fixed: 'right',
+      width: 150,
+      render: (_, record) => (
+        <Space className="soha-row-action-icons">
+          <ManagementIconButton size="small" tooltip="测试" aria-label="测试上游" icon={<CheckOutlined />} disabled={!canRelayManage || record.status === 'disabled'} loading={testUpstreamMutation.isPending} onClick={() => testUpstreamMutation.mutate(record)} />
+          <ManagementIconButton size="small" tooltip="编辑" aria-label="编辑上游" icon={<EditOutlined />} disabled={!canRelayManage} onClick={() => setDrawer({ kind: 'relay-upstream', record })} />
+          <Popconfirm title="禁用上游？" description="该操作会停止新的模型中转请求选择该上游。" okButtonProps={{ danger: true, loading: disableUpstreamMutation.isPending }} onConfirm={() => disableUpstreamMutation.mutate(record)}>
+            <ManagementIconButton size="small" tooltip="禁用" aria-label="禁用上游" danger icon={<StopOutlined />} loading={disableUpstreamMutation.isPending} disabled={!canRelayManage || record.status === 'disabled'} />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ]
+
+  const modelRouteColumns: TableColumnsType<LLMModelRoute> = [
+    { title: 'Public model', dataIndex: 'publicModel', width: 220, render: (_, record) => <Space orientation="vertical" size={0}><Text strong>{record.publicModel}</Text><Text type="secondary">{record.routeGroup || 'default'}</Text></Space> },
+    { title: 'Provider', dataIndex: 'providerKind', width: 150, render: (value) => value ? <Tag>{value}</Tag> : <Text type="secondary">any</Text> },
+    { title: '上游', dataIndex: 'upstreamId', width: 220, render: (value) => {
+      const upstream = upstreams.find((item) => item.id === value)
+      return <Space orientation="vertical" size={0}><Text>{upstream?.name || value || 'auto'}</Text><Text type="secondary">{value || '-'}</Text></Space>
+    } },
+    { title: 'Upstream model', dataIndex: 'upstreamModel', width: 220, render: (value) => <Tag>{value}</Tag> },
+    { title: '优先级 / 权重', key: 'routing', width: 140, render: (_, record) => <Text>{record.priority} / {record.weight}</Text> },
+    { title: '策略', key: 'policy', width: 180, render: (_, record) => routePolicySummary(record) },
+    { title: '启用', dataIndex: 'enabled', width: 90, render: (value) => <StatusTag value={value ? 'enabled' : 'disabled'} /> },
+    { title: '更新时间', dataIndex: 'updatedAt', width: 140, render: formatDateTime },
+    {
+      title: '',
+      key: 'actions',
+      fixed: 'right',
+      width: 130,
+      render: (_, record) => (
+        <Space className="soha-row-action-icons">
+          <ManagementIconButton size="small" tooltip="复制" aria-label="复制模型路由" icon={<CopyOutlined />} disabled={!canRelayManage} onClick={() => setDrawer({ kind: 'relay-route', initialValues: {
+            ...record,
+            id: undefined,
+            publicModel: `${record.publicModel}-copy`,
+            enabled: 'true',
+            transformPolicyJson: jsonTextFromRecord(record.transformPolicy),
+            fallbackPolicyJson: jsonTextFromRecord(record.fallbackPolicy),
+            cachePolicyJson: jsonTextFromRecord(record.cachePolicy),
+            metadataJson: jsonTextFromRecord(record.metadata),
+          } })} />
+          <ManagementIconButton size="small" tooltip="编辑" aria-label="编辑模型路由" icon={<EditOutlined />} disabled={!canRelayManage} onClick={() => setDrawer({ kind: 'relay-route', record })} />
+          <Popconfirm title="删除模型路由？" description="删除后该 public model 不再使用这条路由。" okButtonProps={{ danger: true, loading: deleteMutation.isPending }} onConfirm={() => deleteMutation.mutate({ kind: 'model-route', id: record.id })}>
+            <ManagementIconButton size="small" tooltip="删除" aria-label="删除模型路由" danger icon={<DeleteOutlined />} disabled={!canRelayManage} />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ]
+
+  const modelCallColumns: TableColumnsType<LLMCallLog> = [
+    { title: '时间', dataIndex: 'createdAt', width: 140, render: formatDateTime },
+    { title: '调用者', dataIndex: 'actorId', width: 220, render: (_, record) => modelCallActor(record) },
+    { title: 'Token', dataIndex: 'tokenPrefix', width: 180, render: (_, record) => <Space orientation="vertical" size={0}><Text>{record.tokenPrefix || record.tokenId || '-'}</Text><Text type="secondary">{record.tokenKind || '-'}</Text></Space> },
+    { title: '模型 / 上游', dataIndex: 'publicModel', width: 320, render: (_, record) => modelCallRoute(record) },
+    { title: '状态', dataIndex: 'status', width: 150, render: (_, record) => <Space orientation="vertical" size={0}><StatusTag value={record.status} /><Text type="secondary">{record.httpStatus || '-'} / {record.upstreamStatus || '-'}</Text></Space> },
+    { title: '用量', key: 'usage', width: 190, render: (_, record) => modelCallUsage(record) },
+    { title: '延迟', key: 'latency', width: 150, render: (_, record) => modelCallLatency(record) },
+    { title: 'Cache', dataIndex: 'cacheStatus', width: 120, render: (value) => value ? <Tag>{value}</Tag> : <Text type="secondary">-</Text> },
+    { title: '错误', key: 'error', render: (_, record) => record.errorCode || record.errorMessage ? <Paragraph style={{ marginBottom: 0 }} ellipsis={{ rows: 2, tooltip: [record.errorCode, record.errorMessage].filter(Boolean).join(': ') }}>{[record.errorCode, record.errorMessage].filter(Boolean).join(': ')}</Paragraph> : <Text type="secondary">-</Text> },
+  ]
+
+  const relayRankingColumns: TableColumnsType<{ key: string; count: number }> = [
+    { title: '模型', dataIndex: 'key', render: (value) => <Tag>{value}</Tag> },
+    { title: '调用数', dataIndex: 'count', width: 120, render: formatNumber },
+  ]
+
   const tokenColumns: TableColumnsType<PersonalAccessToken> = [
     { title: '名称', dataIndex: 'name', width: 220, render: (_, record) => <Space orientation="vertical" size={0}><Text strong>{record.name}</Text><Text type="secondary">{record.tokenPrefix}</Text></Space> },
     { title: 'Owner', dataIndex: 'userId', width: 180, render: (value) => <Tag>{value}</Tag> },
+    { title: '用途', key: 'purpose', width: 120, render: (_, record) => tokenPurposeSummary(record) },
+    { title: 'Relay 限制', key: 'relayLimits', width: 260, render: (_, record) => tokenRelayLimitsSummary(record.metadata) },
     { title: '权限', dataIndex: 'permissionKeys', render: (value) => compactList(value, 3) },
     { title: '过期', dataIndex: 'expiresAt', width: 140, render: formatDateTime },
     { title: '最近使用', dataIndex: 'lastUsedAt', width: 140, render: formatDateTime },
@@ -992,6 +1379,8 @@ export function AIGatewayPage() {
   const serviceAccountTokenColumns: TableColumnsType<ServiceAccountToken> = [
     { title: 'Token', dataIndex: 'name', width: 240, render: (_, record) => <Space orientation="vertical" size={0}><Text strong>{record.name || record.id}</Text><Text type="secondary">{record.tokenPrefix || record.id}</Text></Space> },
     { title: '服务账号', dataIndex: 'serviceAccountId', width: 180, render: (value) => <Tag>{value}</Tag> },
+    { title: '用途', key: 'purpose', width: 120, render: (_, record) => tokenPurposeSummary(record) },
+    { title: 'Relay 限制', key: 'relayLimits', width: 260, render: (_, record) => tokenRelayLimitsSummary(record.metadata) },
     { title: '权限', dataIndex: 'permissionKeys', render: (value) => compactList(value, 3) },
     { title: 'Scopes', dataIndex: 'scopes', render: (value) => compactList(value, 2) },
     { title: '过期', dataIndex: 'expiresAt', width: 140, render: formatDateTime },
@@ -1322,7 +1711,7 @@ export function AIGatewayPage() {
           ) : null}
           {section === 'overview' ? (
             <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-              <div className="grid gap-3 lg:grid-cols-2">
+              <div className="grid gap-3 lg:grid-cols-3">
                 <Descriptions size="small" column={2} bordered items={[
                   { key: 'tools', label: 'Visible tools', children: summary.tools },
                   { key: 'clients', label: 'AI clients', children: summary.clients },
@@ -1335,8 +1724,15 @@ export function AIGatewayPage() {
                   { key: 'bindings', label: 'Skill bindings', children: summary.bindings },
                   { key: 'approvals', label: 'Approvals', children: approvalRequests.length },
                 ]} />
+                <Descriptions size="small" column={2} bordered items={[
+                  { key: 'upstreams', label: 'LLM upstreams', children: summary.upstreams },
+                  { key: 'modelRoutes', label: 'Model routes', children: summary.modelRoutes },
+                  { key: 'modelCalls', label: 'Model calls', children: formatNumber(relayMetric(relayMetrics, 'totalCalls', 'requestsToday')) },
+                  { key: 'successRate', label: 'Success', children: formatPercent(relayMetric(relayMetrics, 'successRate')) },
+                ]} />
               </div>
               <Space wrap>
+                <Button icon={<LinkOutlined />} disabled={!canUseRelay} onClick={() => navigate(gatewaySectionPaths.relay)}>模型中转</Button>
                 <Button icon={<SafetyCertificateOutlined />} onClick={() => navigate(gatewaySectionPaths.manifest)}>能力清单</Button>
                 <Button icon={<LinkOutlined />} disabled={!canManage} onClick={() => navigate(gatewaySectionPaths.clients)}>AI Clients</Button>
                 <Button icon={<KeyOutlined />} onClick={() => navigate(gatewaySectionPaths.tokens)}>Tokens</Button>
@@ -1348,8 +1744,122 @@ export function AIGatewayPage() {
             <Tabs
               activeKey={sectionActiveTab}
               onChange={(key) => setActiveTab(key as GatewayTabKey)}
-              renderTabBar={section === 'manifest' || section === 'clients' || section === 'call-logs' ? () => <></> : undefined}
+              renderTabBar={section === 'manifest' || section === 'clients' ? () => <></> : undefined}
               items={[
+            {
+              key: 'relay',
+              label: '模型中转',
+              children: (
+                <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+                  <Descriptions size="small" column={4} bordered items={[
+                    { key: 'requests', label: '今日请求', children: formatNumber(relayMetric(relayMetrics, 'requestsToday', 'totalCalls')) },
+                    { key: 'successRate', label: '成功率', children: formatPercent(relayMetric(relayMetrics, 'successRate')) },
+                    { key: 'failure', label: '失败数', children: formatNumber(relayMetric(relayMetrics, 'failureCount')) },
+                    { key: 'ttfb', label: '平均 TTFB', children: formatDurationMs(relayMetric(relayMetrics, 'averageTTFBMs', 'avgTTFBMs')) },
+                    { key: 'ttft', label: '平均 TTFT', children: formatDurationMs(relayMetric(relayMetrics, 'averageTTFTMs', 'avgTTFTMs')) },
+                    { key: 'duration', label: '平均耗时', children: formatDurationMs(relayMetric(relayMetrics, 'averageDurationMs', 'avgDurationMs')) },
+                    { key: 'tps', label: 'tokens/sec', children: formatNumber(relayMetric(relayMetrics, 'tokensPerSecond')) },
+                    { key: 'cache', label: 'Cache', children: `${formatNumber(relayMetric(relayMetrics, 'cacheHitCount'))} hit / ${formatNumber(relayMetric(relayMetrics, 'cacheReadTokens'))} read / ${formatNumber(relayMetric(relayMetrics, 'cacheWriteTokens'))} write` },
+                  ]} />
+                  <Space wrap>
+                    <Button size="small" icon={<LinkOutlined />} onClick={() => setActiveTab('upstreams')}>上游管理</Button>
+                    <Button size="small" icon={<LinkOutlined />} onClick={() => setActiveTab('model-routes')}>模型路由</Button>
+                    <Button size="small" icon={<HistoryOutlined />} disabled={!canRelayManage} onClick={() => setActiveTab('model-calls')}>Model Calls</Button>
+                    <Button size="small" icon={<ReloadOutlined />} loading={relayMetricsQuery.isFetching || upstreamsQuery.isFetching || modelRoutesQuery.isFetching} onClick={() => void refreshAll()}>刷新</Button>
+                  </Space>
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    <AdminTable
+                      shellClassName="soha-management-table-shell"
+                      columnSettingIconOnly
+                      columnSettingPlacement="header"
+                      rowKey="key"
+                      tableSize="small"
+                      title="模型排行"
+                      columns={relayRankingColumns}
+                      dataSource={relayModelRanking(relayMetrics)}
+                      loading={relayMetricsQuery.isLoading}
+                      pagination={false}
+                    />
+                    <AdminTable
+                      shellClassName="soha-management-table-shell"
+                      columnSettingIconOnly
+                      columnSettingPlacement="header"
+                      rowKey="id"
+                      tableSize="small"
+                      title="最近模型错误"
+                      columns={modelCallColumns}
+                      dataSource={(relayMetrics?.recentErrors ?? modelCalls.filter((item) => item.status && item.status !== 'success')).slice(0, 5)}
+                      loading={relayMetricsQuery.isLoading || modelCallsQuery.isLoading}
+                      pagination={false}
+                      scroll={{ x: 1180 }}
+                      expandable={{ expandedRowRender: (record: LLMCallLog) => <JsonBlock value={{ requestId: record.requestId, routeTrace: record.routeTrace, metadata: record.metadata, errorCode: record.errorCode, errorMessage: record.errorMessage }} /> }}
+                    />
+                  </div>
+                </Space>
+              ),
+            },
+            {
+              key: 'upstreams',
+              label: '上游管理',
+              children: (
+                <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+                  <Space wrap>
+                    <Select allowClear style={{ width: 190 }} placeholder="Provider" options={relayProviderKindOptions} value={upstreamProviderFilter || undefined} onChange={(value) => setUpstreamProviderFilter(value ?? '')} />
+                    <Select allowClear style={{ width: 160 }} placeholder="状态" options={relayUpstreamStatusOptions} value={upstreamStatusFilter || undefined} onChange={(value) => setUpstreamStatusFilter(value ?? '')} />
+                    <Button icon={<ReloadOutlined />} loading={upstreamsQuery.isFetching} onClick={() => void upstreamsQuery.refetch()}>刷新</Button>
+                  </Space>
+                  <AdminTable
+                    shellClassName="soha-management-table-shell"
+                    columnSettingIconOnly
+                    columnSettingPlacement="header"
+                    rowKey="id"
+                    tableSize="small"
+                    columns={upstreamColumns}
+                    dataSource={filteredUpstreams}
+                    loading={upstreamsQuery.isLoading}
+                    scroll={{ x: 1540 }}
+                    title="上游管理"
+                    headerExtra={(
+                      <ManagementTableToolbar>
+                        <Button type="primary" size="small" icon={<PlusOutlined />} disabled={!canRelayManage} onClick={() => setDrawer({ kind: 'relay-upstream' })}>新增上游</Button>
+                        <ManagementToolbarSearch placeholder="过滤上游 / 模型" value={upstreamFilter} onChange={setUpstreamFilter} />
+                      </ManagementTableToolbar>
+                    )}
+                  />
+                </Space>
+              ),
+            },
+            {
+              key: 'model-routes',
+              label: '模型路由',
+              children: (
+                <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+                  <Space wrap>
+                    <Select allowClear style={{ width: 190 }} placeholder="Provider" options={relayProviderKindOptions} value={modelRouteProviderFilter || undefined} onChange={(value) => setModelRouteProviderFilter(value ?? '')} />
+                    <Select allowClear showSearch style={{ width: 260 }} placeholder="上游" options={upstreamOptions} value={modelRouteUpstreamFilter || undefined} onChange={(value) => setModelRouteUpstreamFilter(value ?? '')} />
+                    <Button icon={<ReloadOutlined />} loading={modelRoutesQuery.isFetching} onClick={() => void modelRoutesQuery.refetch()}>刷新</Button>
+                  </Space>
+                  <AdminTable
+                    shellClassName="soha-management-table-shell"
+                    columnSettingIconOnly
+                    columnSettingPlacement="header"
+                    rowKey="id"
+                    tableSize="small"
+                    columns={modelRouteColumns}
+                    dataSource={filteredModelRoutes}
+                    loading={modelRoutesQuery.isLoading}
+                    scroll={{ x: 1380 }}
+                    title="模型路由"
+                    headerExtra={(
+                      <ManagementTableToolbar>
+                        <Button type="primary" size="small" icon={<PlusOutlined />} disabled={!canRelayManage} onClick={() => setDrawer({ kind: 'relay-route' })}>新增路由</Button>
+                        <ManagementToolbarSearch placeholder="过滤 public/upstream model" value={modelRouteFilter} onChange={setModelRouteFilter} />
+                      </ManagementTableToolbar>
+                    )}
+                  />
+                </Space>
+              ),
+            },
             {
               key: 'manifest',
               label: 'Manifest',
@@ -1414,7 +1924,7 @@ export function AIGatewayPage() {
                   columns={tokenColumns}
                   dataSource={filteredPersonalTokens}
                   loading={personalTokensQuery.isLoading}
-                  scroll={{ x: 1080 }}
+                  scroll={{ x: 1420 }}
                   title={canManage ? 'User Login Keys' : 'My Login Keys'}
                   headerExtra={(
                     <ManagementTableToolbar>
@@ -1456,7 +1966,7 @@ export function AIGatewayPage() {
                     columns={serviceAccountTokenColumns}
                     dataSource={filteredServiceAccountTokens}
                     loading={serviceAccountTokensQuery.isLoading}
-                    scroll={{ x: 1180 }}
+                    scroll={{ x: 1520 }}
                     title="Service Tokens"
                     headerExtra={(
                       <ManagementTableToolbar>
@@ -1612,8 +2122,44 @@ export function AIGatewayPage() {
               ),
             },
             {
+              key: 'model-calls',
+              label: 'Model Calls',
+              children: (
+                <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+                  <Space wrap>
+                    <Input style={{ width: 180 }} placeholder="调用者 ID" value={modelCallFilters.actor} onChange={(event) => setModelCallFilters((prev) => ({ ...prev, actor: event.target.value }))} />
+                    <Input style={{ width: 180 }} placeholder="Token ID" value={modelCallFilters.tokenId} onChange={(event) => setModelCallFilters((prev) => ({ ...prev, tokenId: event.target.value }))} />
+                    <Input style={{ width: 200 }} placeholder="Public model" value={modelCallFilters.publicModel} onChange={(event) => setModelCallFilters((prev) => ({ ...prev, publicModel: event.target.value }))} />
+                    <Select allowClear showSearch style={{ width: 240 }} placeholder="上游" options={upstreamOptions} value={modelCallFilters.upstreamId || undefined} onChange={(value) => setModelCallFilters((prev) => ({ ...prev, upstreamId: value ?? '' }))} />
+                    <Select allowClear style={{ width: 170 }} placeholder="Provider" options={relayProviderKindOptions} value={modelCallFilters.providerKind || undefined} onChange={(value) => setModelCallFilters((prev) => ({ ...prev, providerKind: value ?? '' }))} />
+                    <Select allowClear style={{ width: 190 }} placeholder="Endpoint" options={relayEndpointOptions} value={modelCallFilters.endpoint || undefined} onChange={(value) => setModelCallFilters((prev) => ({ ...prev, endpoint: value ?? '' }))} />
+                    <Select allowClear style={{ width: 170 }} placeholder="状态" options={relayCallStatusOptions} value={modelCallFilters.status || undefined} onChange={(value) => setModelCallFilters((prev) => ({ ...prev, status: value ?? '' }))} />
+                    <Select allowClear style={{ width: 170 }} placeholder="Cache" options={relayCacheStatusOptions} value={modelCallFilters.cacheStatus || undefined} onChange={(value) => setModelCallFilters((prev) => ({ ...prev, cacheStatus: value ?? '' }))} />
+                    <RangePicker showTime allowClear style={{ width: 340 }} placeholder={['开始时间', '结束时间']} onChange={(value) => setModelCallFilters((prev) => ({ ...prev, ...gatewayTimeRangeQuery(value) }))} />
+                    <Button icon={<ReloadOutlined />} disabled={!canRelayManage} loading={modelCallsQuery.isFetching} onClick={() => void modelCallsQuery.refetch()}>刷新</Button>
+                  </Space>
+                  {canRelayManage ? (
+                    <AdminTable
+                      shellClassName="soha-management-table-shell"
+                      columnSettingIconOnly
+                      columnSettingPlacement="header"
+                      rowKey="id"
+                      tableSize="small"
+                      columns={modelCallColumns}
+                      dataSource={modelCalls}
+                      loading={modelCallsQuery.isLoading}
+                      scroll={{ x: 1420 }}
+                      expandable={{ expandedRowRender: (record: LLMCallLog) => <JsonBlock value={{ requestId: record.requestId, sourceIp: record.sourceIp, userAgent: record.userAgent, routeTrace: record.routeTrace, metadata: record.metadata }} /> }}
+                    />
+                  ) : (
+                    <ManagementState bordered={false} compact kind="no-permission" description="当前账号没有查看模型调用日志的权限。" />
+                  )}
+                </Space>
+              ),
+            },
+            {
               key: 'audit',
-              label: '调用日志',
+              label: 'Tool Calls',
               children: (
                 <Space orientation="vertical" size={12} style={{ width: '100%' }}>
                   <Space wrap>
@@ -1650,7 +2196,7 @@ export function AIGatewayPage() {
         )}
       >
         <Form form={form} layout="vertical" onFinish={(values) => upsertMutation.mutate(values)} initialValues={drawer ? defaultFormValues(drawer.kind) : undefined}>
-          {drawer ? renderDrawerFields(drawer, clients, manifest) : null}
+          {drawer ? renderDrawerFields(drawer, clients, manifest, upstreams) : null}
         </Form>
       </Drawer>
 
@@ -1707,8 +2253,30 @@ function defaultFormValues(kind: DrawerKind) {
   switch (kind) {
     case 'ai-client':
       return { kind: 'mcp_client', status: 'active' }
+    case 'relay-upstream':
+      return {
+        providerKind: 'openai',
+        status: 'active',
+        priority: 100,
+        weight: 100,
+        timeoutSeconds: 120,
+        streamTimeoutSeconds: 300,
+        maxConcurrency: 0,
+      }
+    case 'relay-route':
+      return {
+        providerKind: undefined,
+        routeGroup: 'default',
+        priority: 100,
+        weight: 100,
+        enabled: 'true',
+      }
+    case 'personal-token':
+      return { purpose: 'mcp-tools' }
     case 'service-account':
       return { status: 'active' }
+    case 'service-token':
+      return { purpose: 'mcp-tools' }
     case 'tool-grant':
       return { subjectType: 'role', effect: 'allow', riskLevel: 'read', requiresApproval: 'false' }
     case 'access-policy':
@@ -1743,6 +2311,10 @@ function drawerTitle(drawer: DrawerState | null) {
   switch (drawer.kind) {
     case 'ai-client':
       return drawer.record ? '编辑 AI client' : '新增 AI client'
+    case 'relay-upstream':
+      return drawer.record ? '编辑上游' : '新增上游'
+    case 'relay-route':
+      return drawer.record ? '编辑模型路由' : '新增模型路由'
     case 'personal-token':
       return '创建 personal access token'
     case 'service-account':
@@ -1769,8 +2341,41 @@ function decisionModalTitle(target: { action: 'approve' | 'reject' | 'cancel'; r
   return '取消审批请求'
 }
 
-function renderDrawerFields(drawer: DrawerState, clients: AIClient[], manifest?: GatewayManifest) {
+function TokenRelayMetadataFields({ upstreamOptions }: { upstreamOptions: Array<{ label: string; value: string }> }) {
+  return (
+    <>
+      <Divider plain>Token 用途</Divider>
+      <Form.Item name="purpose" label="用途" rules={[{ required: true }]}>
+        <Select options={gatewayTokenPurposeOptions} />
+      </Form.Item>
+      <Form.Item name="allowedModels" label="Allowed models">
+        <Select mode="tags" tokenSeparators={[',', ' ']} placeholder="例如 gpt-4.1, claude-sonnet-4-5" />
+      </Form.Item>
+      <Form.Item name="allowedProviderKinds" label="Allowed providers">
+        <Select mode="tags" tokenSeparators={[',', ' ']} options={relayProviderKindOptions} />
+      </Form.Item>
+      <Form.Item name="allowedUpstreamIds" label="Allowed upstreams">
+        <Select mode="multiple" showSearch options={upstreamOptions} />
+      </Form.Item>
+      <Form.Item name="allowedIPCIDRs" label="Allowed IP CIDRs">
+        <Select mode="tags" tokenSeparators={[',', ' ']} placeholder="例如 10.0.0.0/8" />
+      </Form.Item>
+      <Form.Item name="allowedTeams" label="Allowed teams">
+        <Select mode="tags" tokenSeparators={[',', ' ']} placeholder="例如 platform, ml" />
+      </Form.Item>
+      <Form.Item name="deniedTeams" label="Denied teams">
+        <Select mode="tags" tokenSeparators={[',', ' ']} placeholder="例如 suspended" />
+      </Form.Item>
+      <Form.Item name="rateLimitProfileId" label="Rate limit profile">
+        <Input />
+      </Form.Item>
+    </>
+  )
+}
+
+function renderDrawerFields(drawer: DrawerState, clients: AIClient[], manifest?: GatewayManifest, upstreams: LLMUpstream[] = []) {
   const clientOptions = clients.map((item) => ({ label: `${item.name} (${item.id})`, value: item.id }))
+  const upstreamOptions = upstreams.map((item) => ({ label: `${item.name} (${item.id})`, value: item.id }))
   const toolOptions = manifest?.tools.map((item) => ({ label: item.name, value: item.name })) ?? []
   const skillOptions = manifest?.skills?.map((item) => ({ label: `${item.name} (${item.id})`, value: item.id })) ?? []
   const capabilityOptions = manifest?.tools.map((item) => ({ label: item.name, value: item.name })) ?? []
@@ -1798,6 +2403,112 @@ function renderDrawerFields(drawer: DrawerState, clients: AIClient[], manifest?:
           </Form.Item>
         </>
       )
+    case 'relay-upstream':
+      return (
+        <>
+          <Form.Item name="id" label="上游 ID">
+            <Input disabled={!!drawer.record} placeholder="留空由后端生成" />
+          </Form.Item>
+          <Form.Item name="name" label="名称" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="providerKind" label="Provider" rules={[{ required: true }]}>
+            <Select options={relayProviderKindOptions} />
+          </Form.Item>
+          <Form.Item name="baseUrl" label="Base URL" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="apiKey" label="API key" rules={[{ required: !drawer.record }]}>
+            <Input.Password autoComplete="new-password" placeholder={drawer.record ? '已配置，留空不更新' : undefined} />
+          </Form.Item>
+          <Form.Item name="apiKeyPrefix" label="Key prefix">
+            <Input disabled />
+          </Form.Item>
+          <Form.Item name="status" label="状态">
+            <Select options={relayUpstreamStatusOptions} />
+          </Form.Item>
+          <Space size={12} style={{ width: '100%' }} align="start">
+            <Form.Item name="priority" label="优先级" style={{ flex: 1 }}>
+              <InputNumber min={0} precision={0} style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item name="weight" label="权重" style={{ flex: 1 }}>
+              <InputNumber min={0} precision={0} style={{ width: '100%' }} />
+            </Form.Item>
+          </Space>
+          <Space size={12} style={{ width: '100%' }} align="start">
+            <Form.Item name="timeoutSeconds" label="超时秒数" style={{ flex: 1 }}>
+              <InputNumber min={1} precision={0} style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item name="streamTimeoutSeconds" label="流式超时秒数" style={{ flex: 1 }}>
+              <InputNumber min={1} precision={0} style={{ width: '100%' }} />
+            </Form.Item>
+          </Space>
+          <Form.Item name="maxConcurrency" label="最大并发">
+            <InputNumber min={0} precision={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="supportedModels" label="支持模型">
+            <Select mode="tags" tokenSeparators={[',', ' ']} />
+          </Form.Item>
+          <Form.Item name="defaultHeadersJson" label="Default headers">
+            <Input.TextArea autoSize={{ minRows: 3 }} placeholder={'{\n  "X-Provider": "soha"\n}'} />
+          </Form.Item>
+          <Form.Item name="proxyUrl" label="Proxy URL">
+            <Input />
+          </Form.Item>
+          <Form.Item name="metadataJson" label="Metadata">
+            <Input.TextArea autoSize={{ minRows: 3 }} placeholder="{}" />
+          </Form.Item>
+        </>
+      )
+    case 'relay-route':
+      return (
+        <>
+          <Form.Item name="id" label="路由 ID">
+            <Input disabled={!!drawer.record} placeholder="留空由后端生成" />
+          </Form.Item>
+          <Form.Item name="publicModel" label="Public model" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="providerKind" label="Provider">
+            <Select allowClear options={relayProviderKindOptions} />
+          </Form.Item>
+          <Form.Item name="upstreamId" label="上游">
+            <Select allowClear showSearch options={upstreamOptions} />
+          </Form.Item>
+          <Form.Item name="upstreamModel" label="Upstream model" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="routeGroup" label="Route group">
+            <Input />
+          </Form.Item>
+          <Space size={12} style={{ width: '100%' }} align="start">
+            <Form.Item name="priority" label="优先级" style={{ flex: 1 }}>
+              <InputNumber min={0} precision={0} style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item name="weight" label="权重" style={{ flex: 1 }}>
+              <InputNumber min={0} precision={0} style={{ width: '100%' }} />
+            </Form.Item>
+          </Space>
+          <Form.Item name="enabled" label="启用">
+            <Select options={[{ label: '启用', value: 'true' }, { label: '禁用', value: 'false' }]} />
+          </Form.Item>
+          <Form.Item name="fallbackPolicyJson" label="Fallback policy">
+            <Input.TextArea autoSize={{ minRows: 3 }} placeholder="{}" />
+          </Form.Item>
+          <Form.Item name="cachePolicyJson" label="Cache policy">
+            <Input.TextArea autoSize={{ minRows: 3 }} placeholder="{}" />
+          </Form.Item>
+          <Form.Item name="transformPolicyJson" label="Transform policy">
+            <Input.TextArea autoSize={{ minRows: 3 }} placeholder="{}" />
+          </Form.Item>
+          <Form.Item name="rateLimitProfileId" label="Rate limit profile">
+            <Input />
+          </Form.Item>
+          <Form.Item name="metadataJson" label="Metadata">
+            <Input.TextArea autoSize={{ minRows: 3 }} placeholder="{}" />
+          </Form.Item>
+        </>
+      )
     case 'personal-token':
       return (
         <>
@@ -1813,6 +2524,7 @@ function renderDrawerFields(drawer: DrawerState, clients: AIClient[], manifest?:
           <Form.Item name="expiresAt" label="过期时间">
             <Input placeholder="RFC3339，例如 2026-06-30T00:00:00Z" />
           </Form.Item>
+          <TokenRelayMetadataFields upstreamOptions={upstreamOptions} />
         </>
       )
     case 'service-account':
@@ -1857,6 +2569,7 @@ function renderDrawerFields(drawer: DrawerState, clients: AIClient[], manifest?:
           <Form.Item name="expiresAt" label="过期时间">
             <Input placeholder="RFC3339，例如 2026-06-30T00:00:00Z" />
           </Form.Item>
+          <TokenRelayMetadataFields upstreamOptions={upstreamOptions} />
         </>
       )
     case 'service-token-revoke':

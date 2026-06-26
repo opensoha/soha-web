@@ -631,6 +631,9 @@ export function AIWorkbenchModelSettingsRedirect() {
 
 const AI_GATEWAY_TAB_PATHS: Record<string, string> = {
   overview: "/ai-gateway/overview",
+  relay: "/ai-gateway/relay",
+  upstreams: "/ai-gateway/relay",
+  "model-routes": "/ai-gateway/relay",
   manifest: "/ai-gateway/manifest",
   clients: "/ai-gateway/clients",
   tokens: "/ai-gateway/tokens",
@@ -640,6 +643,7 @@ const AI_GATEWAY_TAB_PATHS: Record<string, string> = {
   bindings: "/ai-gateway/governance",
   governance: "/ai-gateway/governance",
   approvals: "/ai-gateway/governance",
+  "model-calls": "/ai-gateway/relay",
   audit: "/ai-gateway/call-logs",
   "call-logs": "/ai-gateway/call-logs",
 };
@@ -649,7 +653,7 @@ function getAIGatewayRedirectTarget(search: string) {
   const requestedTab = params.get("tab")?.trim() ?? "";
   const hasApprovalFocus = Boolean(params.get("approvalRequestId")?.trim());
   const targetPath = AI_GATEWAY_TAB_PATHS[requestedTab] ?? (hasApprovalFocus ? "/ai-gateway/governance" : "/ai-gateway/overview");
-  if (["overview", "manifest", "clients", "tokens", "governance", "call-logs"].includes(requestedTab)) {
+  if (["overview", "relay", "manifest", "clients", "tokens", "governance", "call-logs"].includes(requestedTab)) {
     params.delete("tab");
   }
   const suffix = params.toString();

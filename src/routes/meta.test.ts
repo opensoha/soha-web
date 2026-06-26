@@ -778,6 +778,8 @@ describe("access route authorization", () => {
         "observe.ai.chat",
         "ai.gateway.view",
         "ai.gateway.manage",
+        "ai.gateway.relay.view",
+        "ai.gateway.relay.manage",
         "observe.monitoring.view",
         "observe.alert-integrations.view",
         "observe.alert-rules.view",
@@ -804,6 +806,7 @@ describe("access route authorization", () => {
         "ai-workbench-model-settings",
         "ai-gateway",
         "ai-gateway-overview",
+        "ai-gateway-relay",
         "ai-gateway-manifest",
         "ai-gateway-clients",
         "ai-gateway-tokens",
@@ -1042,6 +1045,17 @@ describe("access route authorization", () => {
           enabled: true,
         },
         {
+          id: "ai-gateway-relay",
+          parentId: "ai-gateway",
+          path: "/ai-gateway/relay",
+          labelZh: "模型中转",
+          labelEn: "Model Relay",
+          iconKey: "link",
+          section: "ops",
+          sortOrder: 24,
+          enabled: true,
+        },
+        {
           id: "ai-gateway-manifest",
           parentId: "ai-gateway",
           path: "/ai-gateway/manifest",
@@ -1049,7 +1063,7 @@ describe("access route authorization", () => {
           labelEn: "Manifest",
           iconKey: "shield",
           section: "ops",
-          sortOrder: 24,
+          sortOrder: 25,
           enabled: true,
         },
         {
@@ -1060,7 +1074,7 @@ describe("access route authorization", () => {
           labelEn: "AI Clients",
           iconKey: "link",
           section: "ops",
-          sortOrder: 25,
+          sortOrder: 26,
           enabled: true,
         },
         {
@@ -1071,7 +1085,7 @@ describe("access route authorization", () => {
           labelEn: "Tokens",
           iconKey: "key",
           section: "ops",
-          sortOrder: 26,
+          sortOrder: 27,
           enabled: true,
         },
         {
@@ -1082,7 +1096,7 @@ describe("access route authorization", () => {
           labelEn: "Governance",
           iconKey: "shield",
           section: "ops",
-          sortOrder: 27,
+          sortOrder: 28,
           enabled: true,
         },
         {
@@ -1093,7 +1107,7 @@ describe("access route authorization", () => {
           labelEn: "Call Logs",
           iconKey: "history",
           section: "ops",
-          sortOrder: 28,
+          sortOrder: 29,
           enabled: true,
         },
         {
@@ -1180,6 +1194,7 @@ describe("access route authorization", () => {
     );
     expect(aiGatewayNav.map((item) => item.id)).toEqual([
       "ai-gateway-overview",
+      "ai-gateway-relay",
       "ai-gateway-manifest",
       "ai-gateway-clients",
       "ai-gateway-tokens",
@@ -1364,6 +1379,38 @@ describe("access route authorization", () => {
     );
     expect(canAccessRoute(getRoute("ai-gateway-overview"), snapshot)).toBe(
       false,
+    );
+  });
+
+  it("exposes AI Gateway model relay under the standalone Gateway workbench", () => {
+    const relayRoute = getRoute("ai-gateway-relay");
+    const upstreamRoute = getRoute("ai-gateway-upstreams");
+    const modelRoutesRoute = getRoute("ai-gateway-model-routes");
+    const viewSnapshot = buildSnapshot({
+      permissionKeys: ["workspace.resource.view", "ai.gateway.relay.view"],
+      visibleMenuIds: ["ai-gateway", "ai-gateway-relay"],
+      visibleMenus: [
+        { id: "ai-gateway", path: "/ai-gateway" },
+        {
+          id: "ai-gateway-relay",
+          parentId: "ai-gateway",
+          path: "/ai-gateway/relay",
+        },
+      ],
+    });
+    const manageSnapshot = buildSnapshot({
+      permissionKeys: ["workspace.resource.view", "ai.gateway.relay.manage"],
+      visibleMenuIds: ["ai-gateway", "ai-gateway-relay"],
+      visibleMenus: viewSnapshot.visibleMenus,
+    });
+
+    expect(getRouteWorkbenchId(relayRoute)).toBe("aiGateway");
+    expect(canAccessRoute(relayRoute, viewSnapshot)).toBe(true);
+    expect(canAccessRoute(upstreamRoute, viewSnapshot)).toBe(false);
+    expect(canAccessRoute(upstreamRoute, manageSnapshot)).toBe(true);
+    expect(upstreamRoute.redirectTo).toBe("/ai-gateway/relay?tab=upstreams");
+    expect(modelRoutesRoute.redirectTo).toBe(
+      "/ai-gateway/relay?tab=model-routes",
     );
   });
 

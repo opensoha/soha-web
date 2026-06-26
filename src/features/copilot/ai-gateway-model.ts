@@ -32,12 +32,16 @@ export type RiskLevel = ContractRiskLevel
 export type GatewayEffect = 'allow' | 'deny'
 export type GatewaySectionKey =
   | 'overview'
+  | 'relay'
   | 'manifest'
   | 'clients'
   | 'tokens'
   | 'governance'
   | 'call-logs'
 export type GatewayTabKey =
+  | 'relay'
+  | 'upstreams'
+  | 'model-routes'
   | 'manifest'
   | 'clients'
   | 'tokens'
@@ -47,6 +51,7 @@ export type GatewayTabKey =
   | 'bindings'
   | 'governance'
   | 'approvals'
+  | 'model-calls'
   | 'audit'
 export type ApprovalStrategy =
   | 'none'
@@ -334,9 +339,49 @@ export interface GatewayDrawerFormValues extends AccessPolicyFormValues {
   requiresApproval?: 'true' | 'false' | boolean | string
   skillId?: string
   capabilityRefs?: string[]
+  purpose?: string
+  allowedModels?: string[]
+  allowedProviderKinds?: string[]
+  allowedUpstreamIds?: string[]
+  allowedIPCIDRs?: string[]
+  allowedTeams?: string[]
+  deniedTeams?: string[]
+  rateLimitProfileId?: string
+  providerKind?: string
+  baseUrl?: string
+  apiKey?: string
+  apiKeyPrefix?: string
+  priority?: number | string
+  weight?: number | string
+  timeoutSeconds?: number | string
+  streamTimeoutSeconds?: number | string
+  maxConcurrency?: number | string
+  supportedModels?: string[]
+  defaultHeadersJson?: string
+  proxyUrl?: string
+  metadataJson?: string
+  publicModel?: string
+  upstreamId?: string
+  upstreamModel?: string
+  routeGroup?: string
+  transformPolicyJson?: string
+  fallbackPolicyJson?: string
+  cachePolicyJson?: string
 }
 
 export const gatewayMenuMeta: Record<GatewayTabKey, { description: string; title: string }> = {
+  relay: {
+    title: '模型中转',
+    description: '查看模型中转请求、成功率、延迟、token 速度、缓存与错误摘要。',
+  },
+  upstreams: {
+    title: '上游管理',
+    description: '管理 OpenAI、Anthropic 和 OpenAI-compatible 上游、模型列表、权重与健康状态。',
+  },
+  'model-routes': {
+    title: '模型路由',
+    description: '配置对外模型名到上游模型的映射、权重、优先级、fallback 与缓存策略。',
+  },
   manifest: {
     title: 'Manifest',
     description: '当前身份可见的 MCP tools、resources、prompts 和 skills。',
@@ -373,8 +418,12 @@ export const gatewayMenuMeta: Record<GatewayTabKey, { description: string; title
     title: 'Approvals',
     description: '高风险工具审批、决策轨迹和 workflow 关联。',
   },
+  'model-calls': {
+    title: 'Model Calls',
+    description: '查看模型中转调用的模型、上游、状态、token、延迟、缓存与脱敏 metadata。',
+  },
   audit: {
-    title: '调用日志',
+    title: 'Tool Calls',
     description: '按调用者、入口 client、调用内容、结果和 request 追踪 Gateway 调用。',
   },
 }
@@ -384,6 +433,10 @@ export const gatewaySectionMeta: Record<GatewaySectionKey, { description: string
     overview: {
       title: '概览',
       description: '汇总 AI Gateway 的能力入口、身份对象、授权策略和治理状态。',
+    },
+    relay: {
+      title: '模型中转',
+      description: '管理 AI Gateway 面向外部 SDK 的模型中转、上游、模型路由与模型调用日志。',
     },
     manifest: {
       title: '能力清单',
@@ -408,6 +461,9 @@ export const gatewaySectionMeta: Record<GatewaySectionKey, { description: string
   }
 
 export const gatewayTabSectionMap: Record<GatewayTabKey, GatewaySectionKey> = {
+  relay: 'relay',
+  upstreams: 'relay',
+  'model-routes': 'relay',
   manifest: 'manifest',
   clients: 'clients',
   tokens: 'tokens',
@@ -417,11 +473,13 @@ export const gatewayTabSectionMap: Record<GatewayTabKey, GatewaySectionKey> = {
   bindings: 'governance',
   governance: 'governance',
   approvals: 'governance',
+  'model-calls': 'relay',
   audit: 'call-logs',
 }
 
 export const gatewaySectionPaths: Record<GatewaySectionKey, string> = {
   overview: '/ai-gateway/overview',
+  relay: '/ai-gateway/relay',
   manifest: '/ai-gateway/manifest',
   clients: '/ai-gateway/clients',
   tokens: '/ai-gateway/tokens',
@@ -430,6 +488,12 @@ export const gatewaySectionPaths: Record<GatewaySectionKey, string> = {
 }
 
 export function gatewaySectionFromPath(pathname: string): GatewaySectionKey {
+  if (
+    pathname.startsWith('/ai-gateway/relay') ||
+    pathname.startsWith('/ai-gateway/upstreams') ||
+    pathname.startsWith('/ai-gateway/model-routes')
+  )
+    return 'relay'
   if (pathname.startsWith('/ai-gateway/manifest')) return 'manifest'
   if (pathname.startsWith('/ai-gateway/clients')) return 'clients'
   if (pathname.startsWith('/ai-gateway/tokens')) return 'tokens'
@@ -451,6 +515,7 @@ export function defaultGatewayTabForSection(
 ): GatewayTabKey {
   if (focusedApprovalRequestId) return 'approvals'
   if (section === 'manifest') return 'manifest'
+  if (section === 'relay') return 'relay'
   if (section === 'clients') return 'clients'
   if (section === 'tokens') return 'tokens'
   if (section === 'call-logs') return 'audit'
@@ -458,6 +523,7 @@ export function defaultGatewayTabForSection(
 }
 
 export function gatewayTabBelongsToSection(tab: GatewayTabKey, section: GatewaySectionKey) {
+  if (section === 'call-logs' && tab === 'model-calls') return true
   return gatewayTabSectionMap[tab] === section
 }
 
@@ -581,6 +647,120 @@ export interface GatewayManifest {
   }
 }
 
+export interface LLMTokenMetadata {
+  purpose?: string
+  allowedModels?: string[]
+  allowedProviderKinds?: string[]
+  allowedUpstreamIds?: string[]
+  allowedIPCIDRs?: string[]
+  allowedTeams?: string[]
+  deniedTeams?: string[]
+  rateLimitProfileId?: string
+}
+
+export interface LLMUpstream {
+  id: string
+  name: string
+  providerKind: string
+  baseUrl: string
+  apiKeyPrefix?: string
+  status: string
+  priority: number
+  weight: number
+  timeoutSeconds?: number
+  streamTimeoutSeconds?: number
+  maxConcurrency?: number
+  supportedModels?: string[]
+  defaultHeaders?: Record<string, unknown>
+  proxyUrl?: string
+  health?: Record<string, unknown>
+  metadata?: Record<string, unknown>
+  createdBy?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface LLMModelRoute {
+  id: string
+  publicModel: string
+  providerKind?: string
+  upstreamId?: string
+  upstreamModel: string
+  routeGroup?: string
+  priority: number
+  weight: number
+  enabled: boolean
+  transformPolicy?: Record<string, unknown>
+  fallbackPolicy?: Record<string, unknown>
+  cachePolicy?: Record<string, unknown>
+  rateLimitProfileId?: string
+  metadata?: Record<string, unknown>
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface LLMCallLog {
+  id: string
+  requestId?: string
+  actorType?: string
+  actorId?: string
+  actorName?: string
+  tokenId?: string
+  tokenPrefix?: string
+  tokenKind?: string
+  aiClientId?: string
+  publicModel?: string
+  upstreamId?: string
+  upstreamName?: string
+  providerKind?: string
+  upstreamModel?: string
+  endpoint?: string
+  stream?: boolean
+  status: string
+  httpStatus?: number
+  upstreamStatus?: number
+  errorCode?: string
+  errorMessage?: string
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
+  reasoningTokens?: number
+  cachedReadTokens?: number
+  cachedWriteTokens?: number
+  estimatedTokens?: boolean
+  ttfbMs?: number
+  ttftMs?: number
+  durationMs?: number
+  inputBytes?: number
+  outputBytes?: number
+  cacheStatus?: string
+  routeTrace?: Record<string, unknown>
+  sourceIp?: string
+  userAgent?: string
+  metadata?: Record<string, unknown>
+  createdAt?: string
+}
+
+export interface LLMRelayMetrics {
+  requestsToday?: number
+  totalCalls?: number
+  successRate?: number
+  successCount?: number
+  failureCount?: number
+  averageTTFBMs?: number
+  averageTTFTMs?: number
+  averageDurationMs?: number
+  tokensPerSecond?: number
+  cacheHitCount?: number
+  cacheReadTokens?: number
+  cacheWriteTokens?: number
+  modelRanking?: Array<{ key: string; count: number }>
+  topModels?: Array<{ key: string; count: number }>
+  upstreamHealth?: Array<{ key: string; count: number }>
+  recentErrors?: LLMCallLog[]
+  generatedAt?: string
+}
+
 export type GatewayAuditLog = ContractAuditLog
 
 export type ApprovalRequest = ContractApprovalRequest
@@ -678,6 +858,19 @@ export interface AuditFilterState {
   to: string
 }
 
+export interface ModelCallFilterState {
+  actor: string
+  tokenId: string
+  publicModel: string
+  upstreamId: string
+  providerKind: string
+  status: string
+  endpoint: string
+  cacheStatus: string
+  from: string
+  to: string
+}
+
 export interface ApprovalFilterState {
   id: string
   status: string
@@ -694,6 +887,8 @@ export type GovernanceStatus = ContractGovernanceStatus
 
 export type DrawerKind =
   | 'ai-client'
+  | 'relay-upstream'
+  | 'relay-route'
   | 'personal-token'
   | 'service-account'
   | 'service-token'
@@ -704,7 +899,7 @@ export type DrawerKind =
 
 export interface DrawerState {
   kind: DrawerKind
-  record?: AIClient | ServiceAccount | ToolGrant | AccessPolicy | SkillBinding
+  record?: AIClient | LLMUpstream | LLMModelRoute | ServiceAccount | ToolGrant | AccessPolicy | SkillBinding
   initialValues?: Record<string, unknown>
 }
 
@@ -799,6 +994,68 @@ export const clientKindOptions = [
 export const statusOptions = [
   { label: 'active', value: 'active' },
   { label: 'disabled', value: 'disabled' },
+]
+
+export const relayProviderKindOptions = [
+  { label: 'OpenAI', value: 'openai' },
+  { label: 'Anthropic', value: 'anthropic' },
+  { label: 'OpenAI-compatible', value: 'openai-compatible' },
+  { label: 'DeepSeek', value: 'deepseek' },
+  { label: 'Qwen', value: 'qwen' },
+  { label: 'OpenRouter', value: 'openrouter' },
+  { label: 'Azure OpenAI', value: 'azure-openai' },
+  { label: 'Gemini', value: 'gemini' },
+  { label: 'Cohere', value: 'cohere' },
+]
+
+export const relayUpstreamStatusOptions = [
+  { label: 'active', value: 'active' },
+  { label: 'disabled', value: 'disabled' },
+  { label: 'degraded', value: 'degraded' },
+]
+
+export const relayCallStatusOptions = [
+  'success',
+  'failure',
+  'cancelled',
+  'client_cancelled',
+  'rate_limited',
+  'policy_denied',
+  'auth_failed',
+].map((value) => ({ label: value, value }))
+
+export const relayCacheStatusOptions = [
+  'bypass',
+  'miss',
+  'hit',
+  'stale_hit',
+  'write',
+  'write_skipped',
+].map((value) => ({ label: value, value }))
+
+export const relayEndpointOptions = [
+  'models',
+  'chat/completions',
+  'responses',
+  'messages',
+  'embeddings',
+  'images/generations',
+  'images/edits',
+  'images/variations',
+  'audio/speech',
+  'audio/transcriptions',
+  'audio/translations',
+  'realtime',
+  'generateContent',
+  'streamGenerateContent',
+  'interactions',
+  'rerank',
+].map((value) => ({ label: value, value }))
+
+export const gatewayTokenPurposeOptions = [
+  { label: 'MCP tools', value: 'mcp-tools' },
+  { label: 'LLM relay', value: 'llm-relay' },
+  { label: 'Both', value: 'both' },
 ]
 
 export const gatewayLimitScopeOptions = [
@@ -1342,6 +1599,68 @@ export function compactObject<T extends Record<string, unknown>>(value: T): Part
     out[key as keyof T] = item as T[keyof T]
   })
   return out
+}
+
+export interface GatewayTokenMetadataFormValues {
+  scopes?: string[]
+  purpose?: string
+  allowedModels?: string[]
+  allowedProviderKinds?: string[]
+  allowedUpstreamIds?: string[]
+  allowedIPCIDRs?: string[]
+  allowedTeams?: string[]
+  deniedTeams?: string[]
+  rateLimitProfileId?: string
+}
+
+export function normalizeGatewayTokenPurpose(value: unknown) {
+  const normalized = String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, '-')
+  if (['relay', 'llm', 'llm-relay', 'model-relay'].includes(normalized)) return 'llm-relay'
+  if (['both', 'all', 'mcp-and-relay'].includes(normalized)) return 'both'
+  return 'mcp-tools'
+}
+
+export function gatewayTokenMetadataFromValues(
+  values: GatewayTokenMetadataFormValues,
+): LLMTokenMetadata {
+  const purpose = normalizeGatewayTokenPurpose(values.purpose)
+  return compactObject({
+    purpose,
+    allowedModels: normalizedStringList(values.allowedModels),
+    allowedProviderKinds: normalizedStringList(values.allowedProviderKinds),
+    allowedUpstreamIds: normalizedStringList(values.allowedUpstreamIds),
+    allowedIPCIDRs: normalizedStringList(values.allowedIPCIDRs),
+    allowedTeams: normalizedStringList(values.allowedTeams),
+    deniedTeams: normalizedStringList(values.deniedTeams),
+    rateLimitProfileId: firstString(values, 'rateLimitProfileId'),
+  })
+}
+
+export function gatewayTokenScopesFromValues(values: GatewayTokenMetadataFormValues) {
+  const purpose = normalizeGatewayTokenPurpose(values.purpose)
+  const scopes = new Set(normalizedStringList(values.scopes))
+  if (purpose === 'llm-relay' || purpose === 'both') {
+    scopes.add('ai_gateway')
+    scopes.add('relay')
+  }
+  return [...scopes]
+}
+
+export function gatewayTokenPurposeFromRecord(record?: {
+  metadata?: Record<string, unknown>
+  scopes?: string[]
+}) {
+  const purpose = firstString(record?.metadata, 'purpose')
+  if (purpose) return normalizeGatewayTokenPurpose(purpose)
+  const scopes = normalizedStringList(record?.scopes)
+  return scopes.includes('relay') ? 'llm-relay' : 'mcp-tools'
+}
+
+export function jsonTextFromRecord(value?: Record<string, unknown>) {
+  return Object.keys(value ?? {}).length > 0 ? JSON.stringify(value, null, 2) : ''
 }
 
 export function accessPolicyApprovalPolicyFromValues(

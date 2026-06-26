@@ -448,6 +448,7 @@ describe('app layout workspace navigation', () => {
         'workspace.resource.view',
         'ai.gateway.view',
         'ai.gateway.manage',
+        'ai.gateway.relay.view',
         'observe.ai.view',
         'observe.ai.chat',
         'observe.monitoring.view',
