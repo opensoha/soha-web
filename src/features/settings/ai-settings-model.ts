@@ -189,29 +189,7 @@ export function agentCapabilityLabels(
 }
 
 export interface AISettings {
-  provider?: {
-    id?: string;
-    name?: string;
-    providerKind?: string;
-    enabled: boolean;
-    baseUrl: string;
-    apiKey: string;
-    model: string;
-  };
-  providers?: Array<{
-    id: string;
-    name: string;
-    providerKind: string;
-    enabled: boolean;
-    baseUrl: string;
-    apiKey: string;
-    model: string;
-  }>;
-  defaultProviderId?: string;
-  enabled: boolean;
-  baseUrl: string;
-  apiKey: string;
-  model: string;
+  workbenchModel?: AIWorkbenchModelSettings;
   skillsRegistry?: Array<{
     id: string;
     name: string;
@@ -226,6 +204,13 @@ export interface AISettings {
     inputSchema?: Record<string, unknown>;
     outputSchema?: Record<string, unknown>;
   }>;
+}
+
+export interface AIWorkbenchModelSettings {
+  defaultPublicModel?: string;
+  defaultRouteId?: string;
+  defaultEndpoint?: string;
+  enabled: boolean;
 }
 
 export interface AISkillSetting {
@@ -283,30 +268,6 @@ export interface AutomationPolicy {
   dedupWindowSeconds: number;
   triggerConditions?: Record<string, unknown>;
   approvalPolicy?: Record<string, unknown>;
-}
-
-export interface AIProviderConnection {
-  id: string;
-  name: string;
-  providerKind: string;
-  enabled: boolean;
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-}
-
-export function normalizeAIProviderConnection(
-  item?: Partial<AIProviderConnection> | null,
-): AIProviderConnection {
-  return {
-    id: String(item?.id || "default"),
-    name: String(item?.name || "default"),
-    providerKind: String(item?.providerKind || "openai-compatible"),
-    enabled: Boolean(item?.enabled),
-    baseUrl: String(item?.baseUrl || ""),
-    apiKey: String(item?.apiKey || ""),
-    model: String(item?.model || ""),
-  };
 }
 
 export const PLAYBOOK_OPTIONS = [

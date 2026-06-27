@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import type { ComponentProps, MouseEvent, ReactNode } from "react";
 import {
   Alert,
-  AutoComplete,
   Button,
   Card,
   Form,
@@ -50,20 +49,20 @@ import {
   buildPolicyPayload,
   buildProfileFormValues,
   buildProfilePayload,
-  normalizeAIProviderConnection,
   resolveAgentRuntimeState,
   summarizeAgentProviderRuntime,
 } from "./ai-settings-model";
 import type {
   AgentProviderRuntimeRow,
   AgentRuntimeSummary,
-  AIProviderConnection,
   AISettings,
+  AIWorkbenchModelSettings,
   AISkillSetting,
   AnalysisProfile,
   AutomationPolicy,
   DataSource,
 } from "./ai-settings-model";
+import type { LLMModelRoute } from "@/features/copilot/ai-gateway-model";
 import type { ApiResponse, BrandingSettings } from "@/types";
 import {
   ArrowDownOutlined,
@@ -71,6 +70,7 @@ import {
   CheckCircleOutlined,
   DeleteOutlined,
   EditOutlined,
+  LinkOutlined,
   ReloadOutlined,
   StarOutlined,
 } from "@ant-design/icons";
@@ -216,7 +216,7 @@ interface IdentitySettingsResponse {
 }
 
 interface SettingsPageProps {
-  embedded?: boolean | "provider-only";
+  embedded?: boolean;
 }
 
 const LOGIN_PROVIDER_TYPE_OPTIONS = [
@@ -1266,26 +1266,22 @@ function renderAgentTagList(
   );
 }
 
-function uniqueProviderModelOptions(models: string[], currentModel?: string) {
-  const values = new Set<string>();
-  [...models, currentModel || ""].forEach((item) => {
-    const value = String(item || "").trim();
-    if (value) {
-      values.add(value);
-    }
-  });
-  return [...values].map((item) => ({ value: item, label: item }));
+function normalizeWorkbenchModelSettings(
+  item?: Partial<AIWorkbenchModelSettings> | null,
+): AIWorkbenchModelSettings {
+  return {
+    defaultPublicModel: String(item?.defaultPublicModel || ""),
+    defaultRouteId: String(item?.defaultRouteId || ""),
+    defaultEndpoint: String(item?.defaultEndpoint || "chat/completions"),
+    enabled: item?.enabled ?? true,
+  };
 }
 
 export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const permissionSnapshotQuery = usePermissionSnapshot();
-  const showRuntimeSettings = embedded !== "provider-only";
-  const [providerForm] = Form.useForm();
-  const [providerModalVisible, setProviderModalVisible] = useState(false);
-  const [editingProvider, setEditingProvider] =
-    useState<AIProviderConnection | null>(null);
-  const [providerModels, setProviderModels] = useState<string[]>([]);
+  const [workbenchModelForm] = Form.useForm<AIWorkbenchModelSettings>();
   const [dataSourceModalVisible, setDataSourceModalVisible] = useState(false);
   const [profileModalVisible, setProfileModalVisible] = useState(false);
   const [policyModalVisible, setPolicyModalVisible] = useState(false);
@@ -1335,27 +1331,23 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
     queryFn: () => api.get<ApiResponse<AISettings>>("/settings/ai"),
     select: (response: any) => {
       const current = response.data as AISettings;
-      const provider = normalizeAIProviderConnection(
-        current.provider as Partial<AIProviderConnection> | undefined,
-      );
-      const providers =
-        Array.isArray(current.providers) && current.providers.length > 0
-          ? current.providers.map((item) => normalizeAIProviderConnection(item))
-          : [provider];
       return {
         data: {
-          provider,
-          providers,
-          defaultProviderId:
-            current.defaultProviderId || providers[0]?.id || "default",
-          enabled: provider.enabled,
-          baseUrl: provider.baseUrl,
-          apiKey: provider.apiKey,
-          model: provider.model,
+          workbenchModel: normalizeWorkbenchModelSettings(
+            current.workbenchModel,
+          ),
           skillsRegistry: current.skillsRegistry ?? [],
         } satisfies AISettings,
       };
     },
+  });
+  const modelRoutesQuery = useQuery({
+    queryKey: ["ai-gateway", "relay", "model-routes", "workbench-settings"],
+    queryFn: () =>
+      api.get<ApiResponse<LLMModelRoute[]>>(
+        "/ai-gateway/relay/model-routes?includeDisabled=true",
+      ),
+    enabled: canViewAISettings,
   });
   const dataSourcesQuery = useQuery({
     queryKey: ["copilot-data-sources"],
@@ -1389,23 +1381,33 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
     queryKey: ["copilot-workbench-catalog"],
     queryFn: () =>
       api.get<ApiResponse<WorkbenchCatalog>>("/copilot/workbench/catalog"),
-    enabled: canViewAISettings && showRuntimeSettings,
+    enabled: canViewAISettings,
   });
   const agentRunsQuery = useQuery({
     queryKey: ["copilot-agent-runs"],
     queryFn: () =>
       api.get<ApiResponse<WorkbenchAgentRun[]>>("/copilot/agent-runs"),
-    enabled: canViewAISettings && canViewAgentRuns && showRuntimeSettings,
+    enabled: canViewAISettings && canViewAgentRuns,
   });
 
-  const saveMutation = useMutation({
-    mutationFn: (values: Record<string, unknown>) =>
-      api.put("/settings/ai/provider", {
-        ...values,
+  const saveWorkbenchModelMutation = useMutation({
+    mutationFn: (values: AIWorkbenchModelSettings) =>
+      api.put("/settings/ai/workbench-model", {
+        workbenchModel: values,
+      }),
+    onSuccess: () => {
+      void message.success("Workbench 默认模型已保存");
+      void queryClient.invalidateQueries({ queryKey: ["settings-ai"] });
+    },
+    onError: (err: Error) => void message.error(err.message),
+  });
+  const saveSkillsMutation = useMutation({
+    mutationFn: () =>
+      api.put("/settings/ai/skills", {
         skillsRegistry: skillsRegistryDraft,
       }),
     onSuccess: () => {
-      void message.success("AI 设置已保存");
+      void message.success("Skills registry 已保存");
       void queryClient.invalidateQueries({ queryKey: ["settings-ai"] });
     },
     onError: (err: Error) => void message.error(err.message),
@@ -1498,55 +1500,25 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
     onError: (err: Error) => void message.error(err.message),
   });
 
-  const fetchModelsMutation = useMutation({
-    mutationFn: (provider: AIProviderConnection) =>
-      api.post<ApiResponse<{ models: string[] }>>(
-        "/settings/ai/provider/models",
-        { provider },
-      ),
-    onSuccess: (response) => {
-      const models = [
-        ...new Set(
-          (response.data.models ?? [])
-            .map((item) => String(item || "").trim())
-            .filter(Boolean),
-        ),
-      ];
-      setProviderModels(models);
-      const currentModel = String(
-        providerForm.getFieldValue("model") || "",
-      ).trim();
-      if (models.length > 0 && !models.includes(currentModel)) {
-        providerForm.setFieldValue("model", models[0]);
-      }
-      if (models.length === 0) {
-        providerForm.setFieldValue("model", undefined);
-      }
-      void message.success("已获取模型列表");
-    },
-    onError: (err: Error) => void message.error(err.message),
-  });
-
-  const testProviderMutation = useMutation({
-    mutationFn: (payload: { provider: AIProviderConnection; prompt: string }) =>
-      api.post<ApiResponse<{ ok: boolean; message?: string; reply?: string }>>(
-        "/settings/ai/provider/test",
-        payload,
-      ),
-    onSuccess: (response) => {
-      void message.success(
-        response.data.reply
-          ? `测试成功: ${response.data.reply}`
-          : "联通性测试成功",
-      );
-    },
-    onError: (err: Error) => void message.error(err.message),
-  });
-
   const settings = data?.data;
-  const providerModelOptions = uniqueProviderModelOptions(
-    providerModels,
-    editingProvider?.model,
+  const modelRoutes = modelRoutesQuery.data?.data ?? [];
+  const enabledModelRoutes = modelRoutes.filter((route) => route.enabled);
+  const routeOptions = enabledModelRoutes.map((route) => ({
+    value: route.id,
+    label: `${route.publicModel} / ${route.id}`,
+  }));
+  const publicModelOptions = [
+    ...new Map(
+      enabledModelRoutes
+        .filter((route) => route.publicModel)
+        .map((route) => [
+          route.publicModel,
+          { value: route.publicModel, label: route.publicModel },
+        ]),
+    ).values(),
+  ];
+  const selectedRoute = enabledModelRoutes.find(
+    (route) => route.id === settings?.workbenchModel?.defaultRouteId,
   );
   const agentProviders = workbenchCatalogQuery.data?.data?.agentProviders ?? [];
   const agentCapabilities = workbenchCatalogQuery.data?.data?.capabilities ?? [];
@@ -1568,6 +1540,9 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
   );
 
   useEffect(() => {
+    workbenchModelForm.setFieldsValue(
+      normalizeWorkbenchModelSettings(settings?.workbenchModel),
+    );
     setSkillsRegistryDraft(
       (settings?.skillsRegistry ?? []).map((item) => ({
         id: item.id,
@@ -1584,7 +1559,7 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
         outputSchema: item.outputSchema ?? {},
       })),
     );
-  }, [settings?.skillsRegistry]);
+  }, [settings?.skillsRegistry, settings?.workbenchModel, workbenchModelForm]);
 
   if (isLoading) {
     return (
@@ -1798,107 +1773,6 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
     },
   ];
 
-  const providerColumns: TableColumnsType<AIProviderConnection> = [
-    { title: "名称", dataIndex: "name" },
-    {
-      title: "Provider",
-      dataIndex: "providerKind",
-      render: (value: string) => (
-        <AIGradientTag tone="slate">{value || "-"}</AIGradientTag>
-      ),
-    },
-    { title: "模型", dataIndex: "model" },
-    {
-      title: "Base URL",
-      dataIndex: "baseUrl",
-      render: (value: string) => value || "-",
-    },
-    {
-      title: "启用",
-      dataIndex: "enabled",
-      render: (value: boolean) => (
-        <StatusTag value={value ? "enabled" : "disabled"} />
-      ),
-    },
-    {
-      title: "默认",
-      dataIndex: "id",
-      render: (value: string) =>
-        settings?.defaultProviderId === value ? (
-          <AIGradientTag tone="blue">默认</AIGradientTag>
-        ) : (
-          "-"
-        ),
-    },
-    {
-      ...tableColumnPresets.action,
-      title: "操作",
-      dataIndex: "id",
-      render: (_: unknown, record: AIProviderConnection) =>
-        canManageAISettings ? (
-          <Space className="soha-row-action-icons">
-            <ManagementIconButton
-              data-testid={`ai-provider-edit-${record.id}`}
-              aria-label="编辑 Provider 连接"
-              tooltip="编辑"
-              icon={<EditOutlined />}
-              size="small"
-              onClick={() => {
-                setEditingProvider(record);
-                setProviderModels([]);
-                setProviderModalVisible(true);
-              }}
-            />
-            <Popconfirm
-              title="确认删除 Provider 连接？"
-              description="删除后会立即保存 AI 设置。"
-              okButtonProps={{ danger: true, loading: saveMutation.isPending }}
-              onConfirm={() => {
-                saveMutation.mutate({
-                  providers: (settings?.providers ?? []).filter(
-                    (item) => item.id !== record.id,
-                  ),
-                  defaultProviderId:
-                    settings?.defaultProviderId === record.id
-                      ? (settings?.providers ?? []).find(
-                          (item) => item.id !== record.id,
-                        )?.id || ""
-                      : settings?.defaultProviderId,
-                });
-              }}
-            >
-              <ManagementIconButton
-                data-testid={`ai-provider-delete-${record.id}`}
-                aria-label="删除 Provider 连接"
-                tooltip="删除"
-                danger
-                icon={<DeleteOutlined />}
-                loading={saveMutation.isPending}
-                size="small"
-              />
-            </Popconfirm>
-            {settings?.defaultProviderId !== record.id ? (
-              <ManagementIconButton
-                data-testid={`ai-provider-default-${record.id}`}
-                aria-label="设为默认 Provider"
-                tooltip="设为默认"
-                icon={<StarOutlined />}
-                size="small"
-                onClick={() => {
-                  saveMutation.mutate({
-                    providers: settings?.providers ?? [],
-                    defaultProviderId: record.id,
-                  });
-                }}
-              />
-            ) : null}
-          </Space>
-        ) : (
-          "-"
-        ),
-    },
-  ];
-
   const agentProviderColumns: TableColumnsType<AgentProviderRuntimeRow> = [
     {
       title: "Provider",
@@ -2052,46 +1926,122 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
     },
   ];
 
-  const providerCard = (
+  const workbenchModelCard = (
     <section
-      data-testid="ai-provider-connections-section"
+      data-testid="ai-workbench-model-section"
       className="soha-settings-table-section"
     >
-      <SettingsAdminTable
-        data-testid="ai-provider-table"
-        headerExtra={
-          canManageAISettings ? (
+      <SettingsCard
+        title="Workbench 默认模型"
+        extra={
+          <Space>
             <Button
-              data-testid="ai-provider-add"
-              type="primary"
-              onClick={() => {
-                setEditingProvider(null);
-                setProviderModels([]);
-                setProviderModalVisible(true);
-              }}
+              icon={<LinkOutlined />}
+              onClick={() => navigate("/ai-gateway/relay?tab=upstreams")}
             >
-              新增连接
+              上游管理
             </Button>
-          ) : null
+            <Button
+              icon={<LinkOutlined />}
+              onClick={() => navigate("/ai-gateway/relay?tab=model-routes")}
+            >
+              模型路由
+            </Button>
+          </Space>
         }
-        rowKey="id"
-        tableSize="small"
-        pagination={false}
-        dataSource={settings?.providers ?? []}
-        columns={providerColumns}
-        empty={
-          <ManagementState
-            bordered={false}
-            compact
-            title="暂无 Provider 连接"
-            description="新增 Provider 后，AI 工作台可选择对应模型执行分析。"
-          />
-        }
-      />
+      >
+        <Alert
+          showIcon
+          type="info"
+          style={{ marginBottom: 16 }}
+          title="模型 Provider 在 AI Gateway 管理。这里仅选择 AI Workbench 的默认模型和 Agent Runtime 使用策略。"
+        />
+        <Form
+          data-testid="ai-workbench-model-form"
+          form={workbenchModelForm}
+          {...WIDE_FORM_LAYOUT}
+          initialValues={normalizeWorkbenchModelSettings(
+            settings?.workbenchModel,
+          )}
+          onFinish={(values) => {
+            if (!canManageAISettings) return;
+            saveWorkbenchModelMutation.mutate(
+              normalizeWorkbenchModelSettings(values),
+            );
+          }}
+        >
+          <Row gutter={16}>
+            <Col xs={24} md={12}>
+              <Form.Item name="defaultPublicModel" label="默认 public model">
+                <Select
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  loading={modelRoutesQuery.isLoading}
+                  options={publicModelOptions}
+                  placeholder="从 Gateway model routes 选择"
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item name="defaultRouteId" label="默认 route">
+                <Select
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  loading={modelRoutesQuery.isLoading}
+                  options={routeOptions}
+                  placeholder="优先使用稳定 route id"
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col xs={24} md={12}>
+              <Form.Item name="defaultEndpoint" label="默认 endpoint">
+                <Select
+                  options={[
+                    { value: "chat/completions", label: "chat/completions" },
+                    { value: "responses", label: "responses" },
+                    { value: "messages", label: "messages" },
+                  ]}
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item name="enabled" label="启用 Workbench 模型" valuePropName="checked">
+                <Switch />
+              </Form.Item>
+            </Col>
+          </Row>
+          <div className="mb-4 flex flex-wrap gap-2">
+            <AIGradientTag tone={selectedRoute ? "green" : "slate"}>
+              {selectedRoute ? `route: ${selectedRoute.id}` : "未选择 route"}
+            </AIGradientTag>
+            <AIGradientTag tone={settings?.workbenchModel?.defaultPublicModel ? "blue" : "slate"}>
+              {settings?.workbenchModel?.defaultPublicModel || "未选择 public model"}
+            </AIGradientTag>
+            <AIGradientTag tone="violet">
+              {enabledModelRoutes.length} active routes
+            </AIGradientTag>
+          </div>
+          {canManageAISettings ? (
+            <div className="soha-form-actions">
+              <Button
+                htmlType="submit"
+                type="primary"
+                loading={saveWorkbenchModelMutation.isPending}
+              >
+                保存默认模型
+              </Button>
+            </div>
+          ) : null}
+        </Form>
+      </SettingsCard>
     </section>
   );
 
-  const agentRuntimeCard = showRuntimeSettings ? (
+  const agentRuntimeCard = (
     <section
       data-testid="ai-agent-runtime-section"
       className="soha-settings-table-section"
@@ -2164,248 +2114,33 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
         />
       )}
     </section>
-  ) : null;
-
-  const providerModal = (
-    <Modal
-      title={editingProvider ? "编辑 Provider 连接" : "新增 Provider 连接"}
-      open={providerModalVisible}
-      className="soha-ai-provider-modal"
-      footer={null}
-      onCancel={() => {
-        setProviderModalVisible(false);
-        setEditingProvider(null);
-        setProviderModels([]);
-      }}
-      destroyOnHidden
-      modalRender={(node) => <div data-testid="ai-provider-modal">{node}</div>}
-    >
-      <Form
-        data-testid="ai-provider-form"
-        form={providerForm}
-        {...DEFAULT_FORM_LAYOUT}
-        initialValues={{
-          id: editingProvider?.id ?? "",
-          name: editingProvider?.name ?? "",
-          providerKind: editingProvider?.providerKind ?? "openai-compatible",
-          enabled: editingProvider?.enabled ?? true,
-          baseUrl: editingProvider?.baseUrl ?? "",
-          apiKey: editingProvider?.apiKey ?? "",
-          model: editingProvider?.model ?? "",
-        }}
-        onFinish={(values) => {
-          if (!canManageAISettings) return;
-          const nextProvider: AIProviderConnection = {
-            id: String(values.id || editingProvider?.id || crypto.randomUUID()),
-            name: String(values.name || "").trim(),
-            providerKind: String(values.providerKind || "openai-compatible"),
-            enabled: Boolean(values.enabled),
-            baseUrl: String(values.baseUrl || "").trim(),
-            apiKey: String(values.apiKey || "").trim(),
-            model: String(values.model || "").trim(),
-          };
-          const providers = [...(settings?.providers ?? [])];
-          const index = providers.findIndex(
-            (item) => item.id === nextProvider.id,
-          );
-          if (index >= 0) {
-            providers[index] = nextProvider;
-          } else {
-            providers.push(nextProvider);
-          }
-          saveMutation.mutate({
-            providers,
-            defaultProviderId: settings?.defaultProviderId || nextProvider.id,
-          });
-          setProviderModalVisible(false);
-          setEditingProvider(null);
-          setProviderModels([]);
-        }}
-      >
-        <Form.Item name="id" hidden>
-          <Input />
-        </Form.Item>
-        <Form.Item
-          name="name"
-          label="连接名称"
-          rules={[{ required: true, message: "请输入连接名称" }]}
-        >
-          <Input
-            data-testid="ai-provider-name"
-            placeholder="OpenAI 主账号 / Claude Team A"
-          />
-        </Form.Item>
-        <Form.Item
-          name="providerKind"
-          label="Provider"
-          rules={[{ required: true, message: "请选择 Provider" }]}
-        >
-          <Select
-            data-testid="ai-provider-kind"
-            options={[
-              { value: "openai-compatible", label: "OpenAI Compatible" },
-              { value: "openai", label: "OpenAI" },
-              { value: "anthropic", label: "Anthropic" },
-              { value: "gemini", label: "Gemini" },
-              { value: "grok", label: "Grok" },
-              { value: "deepseek", label: "DeepSeek" },
-              { value: "qwen", label: "Qwen" },
-              { value: "openrouter", label: "OpenRouter" },
-              { value: "azure-openai", label: "Azure OpenAI" },
-              { value: "glm", label: "GLM" },
-              { value: "kimi", label: "Kimi" },
-              { value: "minimax", label: "MiniMax" },
-            ]}
-          />
-        </Form.Item>
-        <Form.Item
-          name="baseUrl"
-          label="Base URL"
-          rules={[{ required: true, message: "请输入 Base URL" }]}
-        >
-          <Input
-            data-testid="ai-provider-base-url"
-            placeholder="https://api.openai.com/v1 / https://api.anthropic.com/v1 / https://generativelanguage.googleapis.com/v1beta"
-          />
-        </Form.Item>
-        <Form.Item
-          name="apiKey"
-          label="API Key"
-          rules={[{ required: true, message: "请输入 API Key" }]}
-        >
-          <Input.Password data-testid="ai-provider-api-key" />
-        </Form.Item>
-        <Form.Item
-          name="model"
-          label="模型"
-          rules={[{ required: true, message: "请选择或输入模型" }]}
-        >
-          <AutoComplete
-            data-testid="ai-provider-model"
-            options={providerModelOptions}
-            filterOption={(inputValue, option) =>
-              String(option?.value ?? "")
-                .toLowerCase()
-                .includes(inputValue.toLowerCase())
-            }
-            placeholder={
-              providerModelOptions.length > 0
-                ? "选择模型，或手动输入"
-                : "可手动输入模型，或先获取模型列表"
-            }
-          />
-        </Form.Item>
-        <Form.Item name="enabled" label="启用" valuePropName="checked">
-          <Switch data-testid="ai-provider-enabled" />
-        </Form.Item>
-        <div data-testid="ai-provider-actions" className="soha-form-actions">
-          <Button
-            data-testid="ai-provider-fetch-models"
-            onClick={async () => {
-              const values = await providerForm.validateFields([
-                "providerKind",
-                "baseUrl",
-                "apiKey",
-              ]);
-              const currentValues = providerForm.getFieldsValue();
-              fetchModelsMutation.mutate({
-                id: String(currentValues.id || editingProvider?.id || ""),
-                name: String(currentValues.name || ""),
-                providerKind: String(
-                  values.providerKind || "openai-compatible",
-                ),
-                enabled: Boolean(currentValues.enabled),
-                baseUrl: String(values.baseUrl || ""),
-                apiKey: String(values.apiKey || ""),
-                model: String(currentValues.model || ""),
-              });
-            }}
-            loading={fetchModelsMutation.isPending}
-          >
-            获取模型列表
-          </Button>
-          <Button
-            data-testid="ai-provider-test"
-            onClick={async () => {
-              const values = await providerForm.validateFields([
-                "providerKind",
-                "baseUrl",
-                "apiKey",
-                "model",
-                "name",
-                "enabled",
-              ]);
-              const currentValues = providerForm.getFieldsValue();
-              testProviderMutation.mutate({
-                provider: {
-                  id: String(currentValues.id || editingProvider?.id || ""),
-                  name: String(values.name || currentValues.name || ""),
-                  providerKind: String(
-                    values.providerKind || "openai-compatible",
-                  ),
-                  enabled: Boolean(values.enabled ?? currentValues.enabled),
-                  baseUrl: String(values.baseUrl || ""),
-                  apiKey: String(values.apiKey || ""),
-                  model: String(values.model || ""),
-                },
-                prompt: "hello",
-              });
-            }}
-            loading={testProviderMutation.isPending}
-          >
-            联通性测试
-          </Button>
-          <Button
-            data-testid="ai-provider-cancel"
-            onClick={() => {
-              setProviderModalVisible(false);
-              setEditingProvider(null);
-              setProviderModels([]);
-            }}
-          >
-            取消
-          </Button>
-          {canManageAISettings ? (
-            <Button
-              data-testid="ai-provider-save"
-              htmlType="submit"
-              type="primary"
-              loading={saveMutation.isPending}
-            >
-              保存
-            </Button>
-          ) : null}
-        </div>
-      </Form>
-    </Modal>
   );
-
-  if (embedded === "provider-only") {
-    return (
-      <>
-        {providerCard}
-        {providerModal}
-      </>
-    );
-  }
 
   const content = (
     <>
-      {providerCard}
+      {workbenchModelCard}
       {agentRuntimeCard}
       <div className="soha-settings-table-section">
         <SettingsAdminTable
           headerExtra={
             canManageAISettings ? (
-              <Button
-                type="primary"
-                onClick={() => {
-                  setEditingSkill(null);
-                  setSkillsModalVisible(true);
-                }}
-              >
-                新增
-              </Button>
+              <Space>
+                <Button
+                  onClick={() => {
+                    setEditingSkill(null);
+                    setSkillsModalVisible(true);
+                  }}
+                >
+                  新增
+                </Button>
+                <Button
+                  type="primary"
+                  loading={saveSkillsMutation.isPending}
+                  onClick={() => saveSkillsMutation.mutate()}
+                >
+                  保存 Skills
+                </Button>
+              </Space>
             ) : null
           }
           rowKey="id"
@@ -2625,8 +2360,6 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
           loading={policiesQuery.isLoading}
         />
       </div>
-
-      {providerModal}
 
       <Modal
         title={editingSkill ? "编辑 Skill" : "新增 Skill"}

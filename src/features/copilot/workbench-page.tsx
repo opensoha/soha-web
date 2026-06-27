@@ -1941,7 +1941,7 @@ export function AIWorkbenchPage() {
                       <span className="soha-ai-workbench__assembly-icon"><ApiOutlined /></span>
                       <span>
                         <strong>模型设置</strong>
-                        <small>配置 Base URL、API Key 和模型</small>
+                        <small>选择 Gateway 默认模型和 route</small>
                       </span>
                     </button>
                     <button className="soha-ai-workbench__quick-action" type="button" onClick={openExplicitAnalysis} disabled={!currentSession || !canRunExplicitAnalysis}>

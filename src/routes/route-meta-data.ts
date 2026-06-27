@@ -1848,7 +1848,7 @@ export const routeMeta: RouteMeta[] = [
     id: "ai-workbench-model-settings",
     path: "/ai-workbench/model-settings",
     title: "AI 设置",
-    description: "查看并调整 AI Provider、数据源、技能与自动化策略",
+    description: "选择 Workbench 默认模型、数据源、技能与自动化策略",
     icon: "IconComment",
     group: "observe",
     workbenchId: "ai",
