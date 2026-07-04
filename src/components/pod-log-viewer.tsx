@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DeleteOutlined, ReloadOutlined } from '@ant-design/icons'
-import { Button, Card, Input, Select, Space, Switch, Tag, Typography } from 'antd'
+import { Button, Card, Flex, Input, Select, Switch, Tag, Typography } from 'antd'
 import { ManagementState } from '@/components/management-list'
 import './resource-operation-panels.css'
 import { buildSameOriginStreamURL, withStreamTicket } from '@/features/auth/stream-ticket'
@@ -447,74 +447,74 @@ export function PodLogViewer({
 
   return (
     <Card className="soha-detail-card soha-log-card">
-      <div className="soha-terminal-toolbar soha-log-toolbar">
-        <Space className="soha-log-toolbar-group soha-log-toolbar-meta">
-          <Tag color={connectionState === 'connected' ? 'green' : connectionState === 'connecting' ? 'blue' : connectionState === 'error' ? 'red' : connectionState === 'closed' ? 'orange' : undefined}>
-            {connectionState}
-          </Tag>
-          <Tag color={previous ? 'orange' : 'blue'}>
-            {previous
-              ? (localeCode === 'zh_CN' ? '历史日志' : 'Historical logs')
-              : (localeCode === 'zh_CN' ? '当前日志' : 'Current logs')}
-          </Tag>
-          {streamingDisabledReason ? (
-            <>
-              <Tag color="orange">{localeCode === 'zh_CN' ? '轮询' : 'Polling'}</Tag>
-              <Text type="secondary" style={{ fontSize: 12 }}>{streamingDisabledReason}</Text>
-            </>
-          ) : null}
-        </Space>
-        <Space className="soha-log-toolbar-group soha-log-toolbar-actions">
-          {containerOptions && containerOptions.length > 0 ? (
-            <Select
-              value={container || undefined}
-              onChange={(value) => onContainerChange?.(String(value ?? ''))}
-              options={containerOptions}
-              placeholder={t('common.container', 'Container')}
-              style={{ width: 220 }}
-              allowClear
-            />
-          ) : null}
-          <Input
-            value={keyword}
-            onChange={(event) => setKeyword(event.target.value)}
-            placeholder={t('podLogViewer.searchPlaceholder', 'Search log keyword')}
-            style={{ width: 220 }}
-          />
+      <Flex className="soha-terminal-toolbar soha-log-toolbar" align="center" gap={8} wrap>
+        <Tag color={connectionState === 'connected' ? 'green' : connectionState === 'connecting' ? 'blue' : connectionState === 'error' ? 'red' : connectionState === 'closed' ? 'orange' : undefined}>
+          {connectionState}
+        </Tag>
+        <Tag color={previous ? 'orange' : 'blue'}>
+          {previous
+            ? (localeCode === 'zh_CN' ? '历史日志' : 'Historical logs')
+            : (localeCode === 'zh_CN' ? '当前日志' : 'Current logs')}
+        </Tag>
+        {streamingDisabledReason ? (
+          <>
+            <Tag color="orange">{localeCode === 'zh_CN' ? '轮询' : 'Polling'}</Tag>
+            <Text className="soha-log-toolbar-status" type="secondary">{streamingDisabledReason}</Text>
+          </>
+        ) : null}
+        {containerOptions && containerOptions.length > 0 ? (
           <Select
-            value={String(sinceSeconds)}
-            onChange={(value) => setSinceSeconds(Number(value) || 0)}
-            style={{ width: 180 }}
-            options={[
-              { value: '0', label: t('podLogViewer.timeAll', 'All available') },
-              { value: '300', label: t('podLogViewer.time5m', 'Last 5 min') },
-              { value: '900', label: t('podLogViewer.time15m', 'Last 15 min') },
-              { value: '3600', label: t('podLogViewer.time1h', 'Last 1 hour') },
-              { value: '21600', label: t('podLogViewer.time6h', 'Last 6 hours') },
-            ]}
+            size="small"
+            value={container || undefined}
+            onChange={(value) => onContainerChange?.(String(value ?? ''))}
+            options={containerOptions}
+            placeholder={t('common.container', 'Container')}
+            style={{ width: 220 }}
+            allowClear
           />
-          <div className="soha-step-inline">
-            <Text type="secondary" style={{ fontSize: 12 }}>{t('podLogViewer.autoScroll', 'Auto scroll')}</Text>
-            <Switch checked={autoScroll} onChange={(checked) => setAutoScroll(checked)} />
-          </div>
-          <div className="soha-step-inline">
-            <Text type="secondary" style={{ fontSize: 12 }}>{localeCode === 'zh_CN' ? '历史日志' : 'Historical logs'}</Text>
-            <Switch checked={previous} onChange={(checked) => setPrevious(checked)} />
-          </div>
-          <Button icon={<DeleteOutlined />} type="text" onClick={handleClear}>{t('podLogViewer.clear', 'Clear')}</Button>
-          <Button
-            type="text"
-            onClick={() => downloadText(
-              `${podName}-${previous ? 'historical' : 'current'}-logs.txt`,
-              exportLogContent,
-            )}
-            disabled={filteredLines.length === 0}
-          >
-            {localeCode === 'zh_CN' ? '导出日志' : 'Export Logs'}
-          </Button>
-          <Button icon={<ReloadOutlined />} size="small" type="text" onClick={() => fetchSnapshot(historyLines)}>{t('podLogViewer.reconnect', 'Reconnect')}</Button>
-        </Space>
-      </div>
+        ) : null}
+        <Input
+          size="small"
+          value={keyword}
+          onChange={(event) => setKeyword(event.target.value)}
+          placeholder={t('podLogViewer.searchPlaceholder', 'Search log keyword')}
+          style={{ width: 220 }}
+        />
+        <Select
+          size="small"
+          value={String(sinceSeconds)}
+          onChange={(value) => setSinceSeconds(Number(value) || 0)}
+          style={{ width: 180 }}
+          options={[
+            { value: '0', label: t('podLogViewer.timeAll', 'All available') },
+            { value: '300', label: t('podLogViewer.time5m', 'Last 5 min') },
+            { value: '900', label: t('podLogViewer.time15m', 'Last 15 min') },
+            { value: '3600', label: t('podLogViewer.time1h', 'Last 1 hour') },
+            { value: '21600', label: t('podLogViewer.time6h', 'Last 6 hours') },
+          ]}
+        />
+        <div className="soha-step-inline">
+          <Text type="secondary" style={{ fontSize: 12 }}>{t('podLogViewer.autoScroll', 'Auto scroll')}</Text>
+          <Switch size="small" checked={autoScroll} onChange={(checked) => setAutoScroll(checked)} />
+        </div>
+        <div className="soha-step-inline">
+          <Text type="secondary" style={{ fontSize: 12 }}>{localeCode === 'zh_CN' ? '历史日志' : 'Historical logs'}</Text>
+          <Switch size="small" checked={previous} onChange={(checked) => setPrevious(checked)} />
+        </div>
+        <Button icon={<DeleteOutlined />} size="small" type="text" onClick={handleClear}>{t('podLogViewer.clear', 'Clear')}</Button>
+        <Button
+          size="small"
+          type="text"
+          onClick={() => downloadText(
+            `${podName}-${previous ? 'historical' : 'current'}-logs.txt`,
+            exportLogContent,
+          )}
+          disabled={filteredLines.length === 0}
+        >
+          {localeCode === 'zh_CN' ? '导出日志' : 'Export Logs'}
+        </Button>
+        <Button icon={<ReloadOutlined />} size="small" type="text" onClick={() => fetchSnapshot(historyLines)}>{t('podLogViewer.reconnect', 'Reconnect')}</Button>
+      </Flex>
       <div ref={scrollerRef} className="soha-log-shell" onScroll={() => { void handleScroll() }}>
         {loadingOlder ? (
           <div className="soha-log-loading">{localeCode === 'zh_CN' ? '加载更早日志中...' : 'Loading older logs...'}</div>

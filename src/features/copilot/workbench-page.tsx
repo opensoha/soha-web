@@ -18,6 +18,7 @@ import {
   Conversations,
   Prompts,
   Sender,
+  Sources,
   ThoughtChain,
   Welcome,
 } from '@ant-design/x'
@@ -81,6 +82,12 @@ import {
   recommendedAdapterIds,
   scopeOverrideState,
 } from './workbench-toolset'
+import {
+  createWorkbenchStreamState,
+  reduceWorkbenchStreamState,
+  streamWorkbenchMessage,
+  type WorkbenchStreamState,
+} from './workbench-stream'
 import type {
   WorkbenchArtifact,
   WorkbenchCatalog,
@@ -90,6 +97,7 @@ import type {
   WorkbenchMessageEnvelope,
   WorkbenchSession,
   WorkbenchSessionScope,
+  WorkbenchToolCall,
 } from './workbench-types'
 
 const { Paragraph, Text } = Typography
@@ -525,8 +533,62 @@ function buildPromptItems(mode: NonNullable<WorkbenchSession['metadata']>['mode'
   ]
 }
 
-function envelopeHasVisibleToolSteps(envelope?: WorkbenchMessageEnvelope) {
-  return (envelope?.analysisArtifacts ?? []).some((artifact) => (artifact.toolExecutions ?? []).length > 0)
+function recordPreview(value: unknown): Record<string, unknown> | undefined {
+  if (!value) return undefined
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>
+  }
+  return { preview: value }
+}
+
+function streamToolCallToWorkbenchToolCall(tool: WorkbenchStreamState['toolCalls'][number]): WorkbenchToolCall {
+  return {
+    id: tool.id,
+    adapterId: tool.adapterId,
+    toolName: tool.toolName,
+    status: tool.status,
+    summary: tool.summary,
+    input: recordPreview(tool.inputPreview),
+    output: recordPreview(tool.outputPreview),
+    startedAt: tool.startedAt ?? new Date().toISOString(),
+    completedAt: tool.completedAt,
+  }
+}
+
+function isWorkbenchArtifact(value: unknown): value is WorkbenchArtifact {
+  if (!value || typeof value !== 'object') return false
+  const item = value as Partial<WorkbenchArtifact>
+  return typeof item.kind === 'string' && typeof item.runId === 'string' && typeof item.summary === 'string'
+}
+
+function streamStateArtifacts(state: WorkbenchStreamState): WorkbenchArtifact[] {
+  const artifacts = state.artifacts.filter(isWorkbenchArtifact)
+  const toolExecutions = state.toolCalls.map(streamToolCallToWorkbenchToolCall)
+  if (toolExecutions.length === 0) {
+    return artifacts
+  }
+  if (artifacts.some((artifact) => (artifact.toolExecutions ?? []).length > 0)) {
+    return artifacts
+  }
+  if (artifacts.length > 0) {
+    const [first, ...rest] = artifacts
+    return [{ ...first, toolExecutions }, ...rest]
+  }
+  return [{
+    kind: 'stream',
+    runId: state.message.id || 'stream',
+    title: '实时分析链路',
+    summary: state.thinking?.summary || '正在分析当前会话。',
+    toolExecutions,
+  }]
+}
+
+function evidenceSourceItems(artifact?: WorkbenchArtifact) {
+  return (artifact?.evidence ?? []).map((item) => ({
+    key: item.id,
+    title: item.title,
+    description: item.summary,
+  }))
 }
 
 function layoutWorkbenchGraph(nodes: WorkbenchFlowNode[], edges: WorkbenchFlowEdge[]) {
@@ -698,6 +760,7 @@ export function AIWorkbenchPage() {
   const autoSessionScopeKeyRef = useRef<string>('')
   const routeModePatchKeyRef = useRef<string>('')
   const senderRef = useRef<SenderRef>(null)
+  const streamAbortRef = useRef<AbortController | null>(null)
 
   const requestedSessionId = searchParams.get('session') || undefined
   const searchMode = normalizeAIWorkbenchMode(searchParams.get('mode')) || 'general'
@@ -745,6 +808,11 @@ export function AIWorkbenchPage() {
   const [senderValue, setSenderValue] = useState('')
   const [senderResetVersion, setSenderResetVersion] = useState(0)
   const [localMessages, setLocalMessages] = useState<ConversationMessage[]>([])
+
+  useEffect(() => () => {
+    streamAbortRef.current?.abort()
+    streamAbortRef.current = null
+  }, [])
 
   const updateSearchParams = (patch: Record<string, string | undefined>) => {
     const next = new URLSearchParams(searchParams)
@@ -887,48 +955,79 @@ export function AIWorkbenchPage() {
   })
 
   const sendMessageMutation = useMutation({
-    mutationFn: (payload: { sessionId: string; content: string }) =>
-      api.post<ApiResponse<WorkbenchMessageEnvelope>>(`/copilot/sessions/${payload.sessionId}/messages`, { content: payload.content }),
-    onMutate: (payload) => {
-      const pendingMessages = pendingConversationMessages(payload.sessionId, payload.content)
-      setLocalMessages((items) => [...items, pendingMessages.user, pendingMessages.assistant])
-      return pendingMessages
+    mutationFn: async (payload: { sessionId: string; content: string; pendingMessages: { user: ConversationMessage; assistant: ConversationMessage } }) => {
+      const controller = new AbortController()
+      const seenEvents = new Set<string>()
+      let streamState = createWorkbenchStreamState()
+      streamAbortRef.current = controller
+      await streamWorkbenchMessage(
+        `/copilot/sessions/${payload.sessionId}/messages/stream`,
+        { content: payload.content },
+        (event) => {
+          const eventKey = `${event.sessionId}:${event.sequence}`
+          if (seenEvents.has(eventKey)) return
+          seenEvents.add(eventKey)
+          if (event.type === 'error') {
+            throw new Error(event.message)
+          }
+          streamState = reduceWorkbenchStreamState(streamState, event)
+          const artifacts = streamStateArtifacts(streamState)
+          setLocalMessages((items) => items.map((item) => {
+            if (item.id === payload.pendingMessages.user.id) {
+              return { ...item, deliveryStatus: 'success' as WorkbenchBubbleStatus }
+            }
+            if (item.id !== payload.pendingMessages.assistant.id) {
+              return item
+            }
+            return {
+              ...item,
+              id: streamState.message.done && streamState.message.id ? streamState.message.id : item.id,
+              content: streamState.message.content || item.content,
+              deliveryStatus: streamState.message.done ? 'success' as WorkbenchBubbleStatus : 'loading' as WorkbenchBubbleStatus,
+              metadata: {
+                ...(item.metadata ?? {}),
+                ...(streamState.message.metadata ?? {}),
+                source: typeof streamState.message.metadata?.source === 'string' ? streamState.message.metadata.source : item.metadata?.source ?? 'workbench-stream',
+                streamMessageId: streamState.message.id,
+                analysisArtifacts: artifacts,
+              },
+            }
+          }))
+          if (streamState.toolCalls.length > 0) {
+            setThinkingOpen(true)
+          }
+        },
+        controller.signal,
+      )
+      return streamState
     },
-    onSuccess: async (response, payload, context) => {
-      const returnedMessages = (response.data.messages ?? []).map((item) => ({
-        ...item,
-        deliveryStatus: 'success' as WorkbenchBubbleStatus,
-      }))
-      setLocalMessages((items) => {
-        const returnedIds = new Set(returnedMessages.map((item) => item.id))
-        const localIds = new Set([context?.user.id, context?.assistant.id].filter(Boolean))
-        const next = items.filter((item) => !localIds.has(item.id) && !returnedIds.has(item.id))
-        if (returnedMessages.length > 0) {
-          return [...next, ...returnedMessages]
-        }
-        if (context?.user) {
-          return [...next, { ...context.user, deliveryStatus: 'success' }]
-        }
-        return next
-      })
+    onSuccess: async (streamState, payload) => {
+      streamAbortRef.current = null
       await queryClient.invalidateQueries({ queryKey: ['copilot-workbench-messages', payload.sessionId] })
       await queryClient.invalidateQueries({ queryKey: ['copilot-workbench-sessions'] })
       await queryClient.invalidateQueries({ queryKey: ['copilot-workbench-session-detail', payload.sessionId] })
-      if (envelopeHasVisibleToolSteps(response.data)) {
+      setLocalMessages((items) => items.filter((item) => (
+        item.id !== payload.pendingMessages.user.id
+        && (streamState.message.id || item.id !== payload.pendingMessages.assistant.id)
+      )))
+      if (streamState.toolCalls.length > 0 || streamState.artifacts.length > 0) {
         setThinkingOpen(true)
       }
     },
-    onError: (err: Error, _payload, context) => {
-      if (context?.user || context?.assistant) {
-        setLocalMessages((items) => items.map((item) => (
-          item.id === context?.user.id
-            ? { ...item, deliveryStatus: 'error', metadata: { ...(item.metadata ?? {}), error: err.message } }
-            : item.id === context?.assistant.id
-              ? { ...item, content: `发送失败：${err.message}`, deliveryStatus: 'error', metadata: { ...(item.metadata ?? {}), error: err.message } }
-            : item
-        )))
+    onError: (err: Error, payload) => {
+      streamAbortRef.current = null
+      const aborted = err.name === 'AbortError'
+      const errorMessage = aborted ? '已取消本次回复。' : err.message
+      setLocalMessages((items) => items.map((item) => (
+        item.id === payload.pendingMessages.user.id
+          ? { ...item, deliveryStatus: aborted ? 'abort' : 'error', metadata: { ...(item.metadata ?? {}), error: errorMessage } }
+          : item.id === payload.pendingMessages.assistant.id
+            ? { ...item, content: errorMessage, deliveryStatus: aborted ? 'abort' : 'error', metadata: { ...(item.metadata ?? {}), error: errorMessage } }
+          : item
+      )))
+      if (!aborted) {
+        void message.error(errorMessage)
       }
-      void message.error(err.message)
     },
   })
 
@@ -940,7 +1039,14 @@ export function AIWorkbenchPage() {
     setSenderValue('')
     senderRef.current?.clear()
     setSenderResetVersion((version) => version + 1)
-    sendMessageMutation.mutate({ sessionId: requestedSessionId, content })
+    const pendingMessages = pendingConversationMessages(requestedSessionId, content)
+    setLocalMessages((items) => [...items, pendingMessages.user, pendingMessages.assistant])
+    sendMessageMutation.mutate({ sessionId: requestedSessionId, content, pendingMessages })
+  }
+
+  const cancelMessageStream = () => {
+    streamAbortRef.current?.abort()
+    streamAbortRef.current = null
   }
 
   const analyzeSessionMutation = useMutation({
@@ -1512,20 +1618,24 @@ export function AIWorkbenchPage() {
     }
 
     if (inspectorView === 'evidence') {
+      const sources = evidenceSourceItems(activeArtifact)
       return activeArtifact ? (
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           {(activeArtifact.evidence ?? []).length === 0 ? (
             <ManagementState bordered={false} compact title="暂无证据" description="当前分析工件还没有结构化证据。" />
           ) : (
-            (activeArtifact.evidence ?? []).map((item) => (
-              <Card key={item.id} size="small">
-                <Flex justify="space-between">
-                  <Text strong>{item.title}</Text>
-                  {item.severity ? <StatusTag value={item.severity} /> : null}
-                </Flex>
-                <Paragraph type="secondary" style={{ margin: '8px 0 0' }}>{item.summary}</Paragraph>
-              </Card>
-            ))
+            <>
+              <Sources title="证据来源" items={sources} />
+              {(activeArtifact.evidence ?? []).map((item) => (
+                <Card key={item.id} size="small">
+                  <Flex justify="space-between">
+                    <Text strong>{item.title}</Text>
+                    {item.severity ? <StatusTag value={item.severity} /> : null}
+                  </Flex>
+                  <Paragraph type="secondary" style={{ margin: '8px 0 0' }}>{item.summary}</Paragraph>
+                </Card>
+              ))}
+            </>
           )}
         </Space>
       ) : <ManagementState bordered={false} compact title="暂无分析工件" description="会话产生分析结果后这里会展示证据。" />
@@ -1866,6 +1976,7 @@ export function AIWorkbenchPage() {
                       disabled={!canUseChat || !currentSession}
                       value={senderValue}
                       onChange={setSenderValue}
+                      onCancel={cancelMessageStream}
                       onSubmit={submitMessage}
                       header={
                         <Prompts

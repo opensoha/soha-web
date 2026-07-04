@@ -225,7 +225,17 @@ const testState = vi.hoisted(() => ({
                     ...workflowDefinition,
                     nodes: [
                       ...workflowDefinition.nodes,
-                      { id: 'verify', type: 'check_http', name: 'HTTP 验证', config: { url: 'https://example.com/healthz' } },
+                      {
+                        id: 'verify',
+                        type: 'verify',
+                        name: 'AI 回归验证',
+                        executorKind: 'mcp',
+                        targetKind: 'ai_test',
+                        capabilityRef: 'testing.ui.run',
+                        providerRef: 'external-test-platform',
+                        artifactKinds: ['test_report', 'screenshot', 'junit'],
+                        config: { url: 'https://example.com/healthz' },
+                      },
                     ],
                   },
               },
@@ -711,8 +721,10 @@ describe('ApplicationDetailPage workbench', () => {
     expect(container.textContent).toContain('Checkout Platform')
     expect(container.textContent).toContain('总览')
     expect(container.textContent).toContain('配置')
+    expect(container.textContent).toContain('权限')
     expect(container.textContent).toContain('服务组件')
-    expect(container.textContent).toContain('流水线')
+    expect(container.textContent).toContain('工作流')
+    expect(container.textContent).toContain('AI/MCP')
     expect(container.textContent).toContain('交付操作')
     expect(container.textContent).toContain('交付态势')
     expect(container.textContent).toContain('门禁状态')
@@ -741,7 +753,16 @@ describe('ApplicationDetailPage workbench', () => {
     expect(container.textContent).toContain('app=checkout-api')
     expect(container.querySelector('.soha-application-runtime-settings-grid')).not.toBeNull()
 
-    clickTab(container, '交付物')
+    clickTab(container, '权限')
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(container.textContent).toContain('Application + Environment Key')
+    expect(container.textContent).toContain('权限快照')
+    expect(container.textContent).toContain('构建: 允许')
+    expect(container.textContent).toContain('环境授权上下文')
+
+    clickTab(container, '构建发布')
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
@@ -752,7 +773,7 @@ describe('ApplicationDetailPage workbench', () => {
     expect(container.textContent).toContain('workflow-1')
     expect(container.querySelector('.soha-application-runtime-delivery-grid')).not.toBeNull()
 
-    clickTab(container, '流水线')
+    clickTab(container, '工作流')
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
@@ -768,6 +789,16 @@ describe('ApplicationDetailPage workbench', () => {
     expect(container.textContent).toContain('验证门禁')
     expect(container.textContent).toContain('DAG 节点数')
     expect(container.querySelector('.soha-application-runtime-verification-grid')).not.toBeNull()
+
+    clickTab(container, 'AI/MCP')
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(container.textContent).toContain('能力就绪')
+    expect(container.textContent).toContain('Workflow Capability Refs')
+    expect(container.textContent).toContain('testing.ui.run')
+    expect(container.textContent).toContain('external-test-platform')
+    expect(container.textContent).toContain('外部 AI 测试平台尚未接入')
 
     clickTab(container, '服务组件')
     await act(async () => {

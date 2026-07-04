@@ -17,6 +17,7 @@ import {
   analyzeReleaseDagDefinition,
   getDefaultReleaseDagNodeLabel,
   isReleaseDagValidationNodeType,
+  type ReleaseDagNodeDefinition,
 } from '@/components/release-flow-dag-definition'
 import {
   countRuntimeArtifacts,
@@ -251,6 +252,39 @@ function renderWorkflowTemplatePreview(template?: DeliveryApplicationBindingSumm
 function workflowTemplateValidationNodes(template?: DeliveryApplicationBindingSummary['workflowTemplate'] | null) {
   if (!template) return []
   return analyzeReleaseDagDefinition(template.definition).definition.nodes.filter((node) => isReleaseDagValidationNodeType(node.type))
+}
+
+type WorkflowCapabilityRow = {
+  id: string
+  environment: string
+  nodeName: string
+  nodeType: string
+  executorKind?: string
+  targetKind?: string
+  capabilityRef?: string
+  providerRef?: string
+  artifactKinds?: string[]
+}
+
+function collectWorkflowCapabilityRows(bindings: DeliveryApplicationBindingSummary[]): WorkflowCapabilityRow[] {
+  return bindings.flatMap((binding) => {
+    if (!binding.workflowTemplate?.definition) return []
+    const environment = binding.environmentName || binding.environmentKey || binding.environmentId
+    const analysis = analyzeReleaseDagDefinition(binding.workflowTemplate.definition)
+    return analysis.definition.nodes
+      .filter((node: ReleaseDagNodeDefinition) => node.executorKind || node.targetKind || node.capabilityRef || node.providerRef || node.artifactKinds?.length)
+      .map((node: ReleaseDagNodeDefinition) => ({
+        id: `${binding.applicationEnvironmentId}:${node.id}`,
+        environment,
+        nodeName: node.name,
+        nodeType: node.type,
+        executorKind: node.executorKind,
+        targetKind: node.targetKind,
+        capabilityRef: node.capabilityRef,
+        providerRef: node.providerRef,
+        artifactKinds: node.artifactKinds,
+      }))
+  })
 }
 
 function summarizeWorkflowRun(run?: WorkflowRun | null) {
@@ -571,6 +605,7 @@ export function ApplicationDetailPage() {
   const selectedWorkflowAnalysis = selectedDeliveryBinding?.workflowTemplate
     ? analyzeReleaseDagDefinition(selectedDeliveryBinding.workflowTemplate.definition)
     : null
+  const workflowCapabilityRows = useMemo(() => collectWorkflowCapabilityRows(bindings), [bindings])
   const bindingSummaryById = useMemo(
     () => Object.fromEntries(bindings.map((binding) => [binding.applicationEnvironmentId, binding])),
     [bindings],
@@ -651,6 +686,12 @@ export function ApplicationDetailPage() {
     ...latestWorkflows.map((item) => ({ kind: 'workflow', id: item.id, status: item.status, label: item.workflowName, summary: `${item.steps?.length ?? 0} steps` })),
   ]
   const focusedRuntimeRow = focusedRuntimeEvidenceId ? focusedRuntimeEvidence.find((item) => item.id === focusedRuntimeEvidenceId) : undefined
+  const permissionRows = [
+    { key: 'delivery.builds.trigger', label: '构建', enabled: canTriggerBuild },
+    { key: 'delivery.workflows.trigger', label: '工作流', enabled: canTriggerWorkflow },
+    { key: 'delivery.releases.trigger', label: '发布', enabled: canTriggerRelease },
+    { key: 'delivery.application-services.manage', label: '服务配置', enabled: canManageServices },
+  ]
 
   return (
     <div className="soha-page">
@@ -1003,6 +1044,54 @@ export function ApplicationDetailPage() {
             ),
           },
           {
+            key: 'permissions',
+            label: '权限',
+            children: (
+              <div className="soha-application-runtime-settings-grid">
+                <Card
+                  className="soha-management-panel-card"
+                  title="Application + Environment Key"
+                  extra={<Button icon={<LinkOutlined />} onClick={() => navigate('/access/scope-grants')}>授权范围</Button>}
+                >
+                  <Descriptions
+                    column={1}
+                    items={[
+                      { key: 'app', label: 'Application', children: `${runtime.application.name} / ${runtime.application.key}` },
+                      { key: 'scope', label: 'Scope', children: bindings.map((binding) => binding.environmentKey || binding.environmentId).filter(Boolean).join(', ') || 'default' },
+                      {
+                        key: 'permissions',
+                        label: '权限快照',
+                        children: (
+                          <Space wrap>
+                            {permissionRows.map((item) => (
+                              <Tag key={item.key} color={item.enabled ? 'green' : 'red'}>
+                                {`${item.label}: ${item.enabled ? '允许' : '缺失'}`}
+                              </Tag>
+                            ))}
+                          </Space>
+                        ),
+                      },
+                    ]}
+                  />
+                </Card>
+                <DeliveryTable
+                  title="环境授权上下文"
+                  rowKey="applicationEnvironmentId"
+                  pagination={false}
+                  dataSource={bindings}
+                  columns={[
+                    { title: '环境', dataIndex: 'environmentId', render: (_: string, record: DeliveryApplicationBindingSummary) => record.environmentName || record.environmentKey || record.environmentId },
+                    { title: '绑定 ID', dataIndex: 'applicationEnvironmentId' },
+                    { title: '动作', dataIndex: 'actionKind', render: (value?: string) => value || 'deploy' },
+                    { title: '审批', dataIndex: 'requiresApproval', render: (value: boolean) => (value ? <Tag color="gold">需要</Tag> : <Tag>无需</Tag>) },
+                    { title: '发布目标', dataIndex: 'targetCount', render: (_: number, record: DeliveryApplicationBindingSummary) => record.targetCount || record.targets?.length || 0 },
+                    { title: '工作流', dataIndex: 'workflowTemplateName', render: (_: string, record: DeliveryApplicationBindingSummary) => record.workflowTemplate?.name || record.workflowTemplateName || '-' },
+                  ]}
+                />
+              </div>
+            ),
+          },
+          {
             key: 'services',
             label: '服务组件',
             children: (
@@ -1128,7 +1217,7 @@ export function ApplicationDetailPage() {
           },
           {
             key: 'delivery',
-            label: '交付物',
+            label: '构建发布',
             children: (
               <div className="soha-application-runtime-delivery-grid">
                 <Card className="soha-management-panel-card" title="Release Bundle">
@@ -1166,7 +1255,7 @@ export function ApplicationDetailPage() {
           },
           {
             key: 'pipeline',
-            label: '流水线',
+            label: '工作流',
             children: (
               <div className="soha-application-runtime-pipeline-grid">
                 <Card className="soha-management-panel-card" title="DAG 模板">
@@ -1252,6 +1341,48 @@ export function ApplicationDetailPage() {
                     <Button onClick={() => navigate('/delivery/release-bundles')}>查看交付物中心</Button>
                   </Space>
                 </Card>
+              </div>
+            ),
+          },
+          {
+            key: 'capabilities',
+            label: 'AI/MCP',
+            children: (
+              <div className="soha-application-runtime-verification-grid">
+                <Card className="soha-management-panel-card" title="能力就绪">
+                  <Descriptions column={1} items={[
+                    { key: 'deliveryActions', label: 'Delivery Actions', children: <StatusTag value={deliveryActionsCapability.status} /> },
+                    { key: 'reason', label: '限制', children: deliveryTargetCapabilityReason || '-' },
+                    { key: 'capabilities', label: '声明数量', children: workflowCapabilityRows.length },
+                    { key: 'artifacts', label: '交付物类型', children: [...new Set(workflowCapabilityRows.flatMap((item) => item.artifactKinds ?? []))].join(', ') || '-' },
+                  ]} />
+                </Card>
+                <Card className="soha-management-panel-card" title="Workflow Capability Refs">
+                  {workflowCapabilityRows.length > 0 ? (
+                    <DeliveryTable
+                      rowKey="id"
+                      pagination={false}
+                      dataSource={workflowCapabilityRows}
+                      columns={[
+                        { title: '环境', dataIndex: 'environment' },
+                        { title: '节点', dataIndex: 'nodeName' },
+                        { title: '类型', dataIndex: 'nodeType', render: (value: string) => releaseDagNodeLabel(value as Parameters<typeof releaseDagNodeLabel>[0]) },
+                        { title: 'Executor', dataIndex: 'executorKind', render: (value?: string) => value || '-' },
+                        { title: 'Target', dataIndex: 'targetKind', render: (value?: string) => value || '-' },
+                        { title: 'Capability', dataIndex: 'capabilityRef', render: (value?: string) => value || '-' },
+                        { title: 'Provider', dataIndex: 'providerRef', render: (value?: string) => value || '-' },
+                      ]}
+                    />
+                  ) : (
+                    <ManagementState bordered={false} compact kind="not-configured" description="当前工作流模板尚未声明 capabilityRef / providerRef / executorKind。" />
+                  )}
+                </Card>
+                <Alert
+                  showIcon
+                  type="info"
+                  title="外部 AI 测试平台尚未接入"
+                  description="当前阶段只保存和展示 DAG 能力引用，真实 provider 由 ExecutionTask callback 与后续 MCP adapter 对接。"
+                />
               </div>
             ),
           },

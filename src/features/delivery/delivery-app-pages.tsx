@@ -67,6 +67,10 @@ type ApplicationWorkspaceCard = {
   activeTargets: number
   serviceClues: number
   latestEnvironmentName: string
+  latestBundleLabel: string
+  latestWorkflowLabel: string
+  latestTaskLabel: string
+  blockedReason: string
 }
 
 export interface BuildTemplateFormValues {
@@ -352,6 +356,36 @@ function summarizeEnvironmentCoverage(bindings: ReleaseBoardEntry[]) {
   return `${names.slice(0, 2).join(' / ')}${names.length > 2 ? ` +${names.length - 2}` : ''}`
 }
 
+function latestByUpdatedAt<T extends { updatedAt?: string; createdAt?: string }>(items: Array<T | undefined>) {
+  return items.filter(Boolean).sort((a, b) => Date.parse(b!.updatedAt || b!.createdAt || '') - Date.parse(a!.updatedAt || a!.createdAt || ''))[0]
+}
+
+function summarizeLatestBundle(bindings: ReleaseBoardEntry[]) {
+  const bundle = latestByUpdatedAt(bindings.map((binding) => binding.latestBundle))
+  return bundle ? `${bundle.version} / ${bundle.status}` : '-'
+}
+
+function summarizeLatestWorkflow(bindings: ReleaseBoardEntry[]) {
+  const workflow = latestByUpdatedAt(bindings.map((binding) => binding.latestWorkflow))
+  return workflow ? `${workflow.workflowName} / ${workflow.status}` : '-'
+}
+
+function summarizeLatestTask(bindings: ReleaseBoardEntry[]) {
+  const task = latestByUpdatedAt(bindings.map((binding) => binding.latestExecutionTask))
+  return task ? `${task.taskKind} / ${task.status}` : '-'
+}
+
+function summarizeBlockedReason(bindings: ReleaseBoardEntry[]) {
+  if (bindings.length === 0) return '未绑定环境'
+  if (bindings.every((binding) => !binding.targets?.length)) return '未配置发布目标'
+  const failedTask = latestByUpdatedAt(bindings.map((binding) => binding.latestExecutionTask).filter((task) => task && ['failed', 'callback_timeout', 'canceled'].includes(task.status)))
+  if (failedTask) return `执行任务 ${failedTask.status}`
+  const failedWorkflow = latestByUpdatedAt(bindings.map((binding) => binding.latestWorkflow).filter((workflow) => workflow && ['failed', 'canceled'].includes(workflow.status)))
+  if (failedWorkflow) return `工作流 ${failedWorkflow.status}`
+  if (bindings.some((binding) => binding.requiresApproval)) return '存在审批门禁'
+  return '无阻塞'
+}
+
 function metadataText(metadata: Record<string, unknown> | undefined, ...keys: string[]) {
   if (!metadata) return ''
   for (const key of keys) {
@@ -524,6 +558,10 @@ export function ApplicationsPage() {
         activeTargets: bindings.reduce((sum, item) => sum + (item.targets?.length ?? 0), 0),
         serviceClues: summarizeApplicationServiceClues(app, bindings),
         latestEnvironmentName: summarizeEnvironmentCoverage(bindings),
+        latestBundleLabel: summarizeLatestBundle(bindings),
+        latestWorkflowLabel: summarizeLatestWorkflow(bindings),
+        latestTaskLabel: summarizeLatestTask(bindings),
+        blockedReason: summarizeBlockedReason(bindings),
       }
     })
   }, [applicationsQuery.data, boardByApp])
@@ -582,8 +620,9 @@ export function ApplicationsPage() {
         <ManagementState kind="loading" />
       ) : visibleApplicationCards.length > 0 ? (
         <div className="soha-application-card-list">
-          {visibleApplicationCards.map(({ app, bindings, deliverySignal, gateSignal, activeTargets, serviceClues, latestEnvironmentName }, index) => {
+          {visibleApplicationCards.map(({ app, bindings, deliverySignal, gateSignal, activeTargets, serviceClues, latestEnvironmentName, latestBundleLabel, latestWorkflowLabel, latestTaskLabel, blockedReason }, index) => {
             const beamTone = applicationBeamTone(app, index)
+            const ownerTeam = metadataText(app.metadata, 'ownerTeam', 'owner', 'team')
             const actionMenuItems: MenuProps['items'] = [
               ...(managementState.canUpdateApplication ? [{ key: 'edit', icon: <EditOutlined />, label: '编辑' }] : []),
               ...(managementState.canDeleteApplication ? [{ key: 'delete', danger: true, icon: <DeleteOutlined />, label: '删除' }] : []),
@@ -604,6 +643,8 @@ export function ApplicationsPage() {
                         <Tag className="soha-application-card__language-tag" color={beamTone}>
                           {summarizeApplicationRole(app)}
                         </Tag>
+                        <Tag>{app.key}</Tag>
+                        {ownerTeam ? <Tag>{ownerTeam}</Tag> : null}
                         <Tag className="soha-application-card__state-tag" color={app.enabled ? 'success' : 'default'}>
                           {app.enabled ? 'enabled' : 'disabled'}
                         </Tag>
@@ -667,6 +708,7 @@ export function ApplicationsPage() {
                   <div className="soha-application-card__signals">
                     <Tag color={deliverySignal.color}>{`交付: ${deliverySignal.label}`}</Tag>
                     <Tag color={gateSignal.color}>{`门禁: ${gateSignal.label}`}</Tag>
+                    <Tag color={blockedReason === '无阻塞' ? 'success' : 'warning'}>{`阻塞: ${blockedReason}`}</Tag>
                   </div>
 
                   <div className="soha-application-card__stats">
@@ -681,6 +723,15 @@ export function ApplicationsPage() {
                     </div>
                     <div className="soha-application-card__stat is-wide">
                       <Tag className="soha-application-card__metric-tag soha-application-card__metric-tag--wide" color={bindings.length > 0 ? 'purple' : 'default'}>最近环境 {latestEnvironmentName}</Tag>
+                    </div>
+                    <div className="soha-application-card__stat is-wide">
+                      <Tag className="soha-application-card__metric-tag soha-application-card__metric-tag--wide" color={latestBundleLabel === '-' ? 'default' : 'blue'}>Bundle {latestBundleLabel}</Tag>
+                    </div>
+                    <div className="soha-application-card__stat is-wide">
+                      <Tag className="soha-application-card__metric-tag soha-application-card__metric-tag--wide" color={latestWorkflowLabel === '-' ? 'default' : 'cyan'}>Workflow {latestWorkflowLabel}</Tag>
+                    </div>
+                    <div className="soha-application-card__stat is-wide">
+                      <Tag className="soha-application-card__metric-tag soha-application-card__metric-tag--wide" color={latestTaskLabel === '-' ? 'default' : 'geekblue'}>Task {latestTaskLabel}</Tag>
                     </div>
                   </div>
                 </Card>

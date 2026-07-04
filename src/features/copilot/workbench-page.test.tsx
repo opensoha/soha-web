@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { WorkbenchStreamEvent } from '@opensoha/contracts/gen/ts/sohaapi'
 import { AIWorkbenchPage, RUNNABLE_ANALYSIS_MODE_OPTIONS } from './workbench-page'
 import type { PermissionSnapshot } from '@/types'
 import type { WorkbenchMessage, WorkbenchMessageEnvelope, WorkbenchSession } from './workbench-types'
@@ -271,6 +272,74 @@ const apiPostMock = vi.hoisted(() => vi.fn(async (path: string, body?: Record<st
 }))
 const apiPatchMock = vi.hoisted(() => vi.fn(async () => ({ data: {} })))
 const apiDeleteMock = vi.hoisted(() => vi.fn(async () => undefined))
+const streamWorkbenchMessageMock = vi.hoisted(() => vi.fn(async (
+  path: string,
+  _body: Record<string, unknown>,
+  onEvent: (event: WorkbenchStreamEvent) => void | Promise<void>,
+) => {
+  if (path !== '/copilot/sessions/session-1/messages/stream') {
+    throw new Error(`Unhandled stream ${path}`)
+  }
+  if (testState.sendMessageGate) {
+    await testState.sendMessageGate
+  }
+  const envelope = testState.sendMessageEnvelope
+  if ((envelope.analysisArtifacts ?? []).some((artifact) => (artifact.toolExecutions ?? []).length > 0)) {
+    testState.messageScenario = 'tool-artifact'
+  }
+  const createdAt = '2026-05-12T10:04:00Z'
+  let sequence = 1
+  const emit = async (event: Record<string, unknown>) => {
+    await onEvent({
+      id: `evt-${sequence}`,
+      sessionId: 'session-1',
+      sequence: sequence++,
+      createdAt,
+      ...event,
+    } as WorkbenchStreamEvent)
+  }
+  for (const artifact of envelope.analysisArtifacts ?? []) {
+    await emit({ type: 'thinking.delta', textDelta: artifact.summary })
+    for (const tool of artifact.toolExecutions ?? []) {
+      await emit({
+        type: 'tool.started',
+        toolCall: {
+          id: tool.id,
+          adapterId: tool.adapterId,
+          toolName: tool.toolName,
+          status: 'running',
+          summary: tool.summary,
+          inputPreview: tool.input,
+          outputPreview: tool.output,
+          startedAt: tool.startedAt,
+          completedAt: tool.completedAt,
+        },
+      })
+      await emit({
+        type: 'tool.completed',
+        toolCall: {
+          id: tool.id,
+          adapterId: tool.adapterId,
+          toolName: tool.toolName,
+          status: tool.status === 'completed' ? 'success' : tool.status as 'pending' | 'running' | 'success' | 'error' | 'skipped',
+          summary: tool.summary,
+          inputPreview: tool.input,
+          outputPreview: tool.output,
+          startedAt: tool.startedAt,
+          completedAt: tool.completedAt,
+        },
+      })
+    }
+    await emit({ type: 'artifact.updated', runId: artifact.runId, artifact })
+    await emit({ type: 'thinking.done', runId: artifact.runId, summary: artifact.summary, collapsed: true })
+  }
+  const assistant = envelope.messages.find((item) => item.role === 'assistant')
+  if (assistant) {
+    await emit({ type: 'message.delta', messageId: assistant.id, role: 'assistant', contentDelta: assistant.content })
+    await emit({ type: 'message.done', messageId: assistant.id, role: 'assistant', content: assistant.content, metadata: assistant.metadata })
+  }
+  await emit({ type: 'agent.status', providerId: 'internal', providerKind: 'internal', status: 'succeeded' })
+}))
 
 vi.mock('@/features/auth/permission-snapshot', async () => {
   const actual = await vi.importActual<typeof import('@/features/auth/permission-snapshot')>('@/features/auth/permission-snapshot')
@@ -292,6 +361,14 @@ vi.mock('@/services/api-client', () => ({
     put: vi.fn(),
   },
 }))
+
+vi.mock('./workbench-stream', async () => {
+  const actual = await vi.importActual<typeof import('./workbench-stream')>('./workbench-stream')
+  return {
+    ...actual,
+    streamWorkbenchMessage: streamWorkbenchMessageMock,
+  }
+})
 
 let containers: HTMLDivElement[] = []
 let roots: Array<ReturnType<typeof createRoot>> = []
@@ -436,6 +513,7 @@ describe('AIWorkbenchPage', () => {
     apiPostMock.mockClear()
     apiPatchMock.mockClear()
     apiDeleteMock.mockClear()
+    streamWorkbenchMessageMock.mockClear()
   })
 
   it('keeps explicit analysis modes aligned with backend runnable artifact modes', () => {
@@ -571,7 +649,7 @@ describe('AIWorkbenchPage', () => {
 
     await submitSenderMessage(container, '只是问个普通问题')
 
-    expect(apiPostMock).toHaveBeenCalledWith('/copilot/sessions/session-1/messages', { content: '只是问个普通问题' })
+    expect(streamWorkbenchMessageMock).toHaveBeenCalledWith('/copilot/sessions/session-1/messages/stream', { content: '只是问个普通问题' }, expect.any(Function), expect.any(AbortSignal))
     expect(document.body.textContent).not.toContain('暂无分析链路')
     expect(document.body.textContent).not.toContain('通用聊天不会自动执行工具')
   })
@@ -625,7 +703,7 @@ describe('AIWorkbenchPage', () => {
       await flushAsyncWork()
     })
 
-    expect(apiPostMock).toHaveBeenCalledWith('/copilot/sessions/session-1/messages', { content: '帮我梳理当前问题' })
+    expect(streamWorkbenchMessageMock).toHaveBeenCalledWith('/copilot/sessions/session-1/messages/stream', { content: '帮我梳理当前问题' }, expect.any(Function), expect.any(AbortSignal))
     expect(container.textContent).toContain('帮我梳理当前问题')
     expect(container.textContent).toContain('正在思考...')
 
@@ -685,7 +763,7 @@ describe('AIWorkbenchPage', () => {
 
     await submitSenderMessage(container, '请执行一次指标分析')
 
-    expect(apiPostMock).toHaveBeenCalledWith('/copilot/sessions/session-1/messages', { content: '请执行一次指标分析' })
+    expect(streamWorkbenchMessageMock).toHaveBeenCalledWith('/copilot/sessions/session-1/messages/stream', { content: '请执行一次指标分析' }, expect.any(Function), expect.any(AbortSignal))
     expect(document.body.textContent).toContain('metrics.anomaly_summary')
     expect(document.body.textContent).toContain('发现错误率突增。')
   })

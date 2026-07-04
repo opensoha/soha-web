@@ -1,42 +1,36 @@
 /* Styles moved from web/src/styles/globals.css; keep scoped to this component or feature owner. */
 
 .soha-events-timeline-shell {
-  padding-inline: 16px;
+  padding-inline: 12px;
 }
 
 .soha-events-timeline-item {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding-inline: 8px 12px;
-  padding-block: 2px;
+  gap: 8px;
+  padding-inline: 4px 8px;
+  padding-block: 0;
 }
 
 .soha-events-timeline-summary {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .soha-events-timeline-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  font-size: 12px;
 }
 
-.soha-events-timeline-row {
-  display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  column-gap: 16px;
-  align-items: start;
+.soha-events-timeline-meta .ant-descriptions-item {
+  padding-bottom: 4px;
 }
 
-.soha-events-timeline-label {
+.soha-events-timeline-meta .ant-descriptions-item-label {
   color: var(--soha-text-tertiary);
 }
 
-.soha-events-timeline-value {
+.soha-events-timeline-meta .ant-descriptions-item-content {
   color: var(--soha-text-primary);
-  line-height: 1.7;
   word-break: break-word;
 }

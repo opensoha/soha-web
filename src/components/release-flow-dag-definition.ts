@@ -5,7 +5,9 @@ export type ReleaseDagNodeType =
   | 'wait_rollout'
   | 'check_http'
   | 'check_k8s_event'
+  | 'verify'
   | 'smoke_test'
+  | 'external'
   | 'notify'
   | 'restart_workload'
   | 'scale_workload'
@@ -17,12 +19,13 @@ export type ReleaseDagNodeType =
 
 export type ReleaseDagEdgeCondition = 'success' | 'failure' | 'always'
 export type ReleaseDagMode = 'release_dag' | 'delivery_dag'
-export type DeliveryDagArtifactKind = 'image' | 'test_report' | 'scan_report' | 'sbom'
+export type DeliveryDagArtifactKind = 'image' | 'test_report' | 'scan_report' | 'sbom' | 'screenshot' | 'video' | 'junit' | 'log'
 export type DeliveryDagFailurePolicy = 'stop' | 'continue' | 'rollback' | 'notify'
 
 export interface DeliveryDagSelector {
   id?: string
   key?: string
+  keys?: string[]
   matchLabels?: Record<string, string>
   matchExpressions?: Array<Record<string, unknown>>
 }
@@ -40,6 +43,10 @@ export interface ReleaseDagNodeDefinition {
   type: ReleaseDagNodeType
   name: string
   position: { x: number; y: number }
+  executorKind?: string
+  targetKind?: string
+  capabilityRef?: string
+  providerRef?: string
   timeoutSeconds?: number
   continueOnFailure?: boolean
   inputs?: string[]
@@ -47,7 +54,9 @@ export interface ReleaseDagNodeDefinition {
   serviceSelector?: DeliveryDagSelector
   environmentSelector?: DeliveryDagSelector
   targetSelector?: DeliveryDagSelector
+  inputMapping?: Record<string, unknown>
   artifactOutputs?: DeliveryDagArtifactOutput[]
+  artifactKinds?: string[]
   runCondition?: string
   failurePolicy?: DeliveryDagFailurePolicy | string
   observability?: Record<string, unknown>
@@ -152,8 +161,12 @@ export function getDefaultReleaseDagNodeLabel(type: ReleaseDagNodeType) {
       return 'HTTP 检查'
     case 'check_k8s_event':
       return 'K8s 事件检查'
+    case 'verify':
+      return '验证'
     case 'smoke_test':
       return 'Smoke Test'
+    case 'external':
+      return '外部执行'
     case 'notify':
       return '通知'
     case 'restart_workload':
@@ -256,9 +269,11 @@ function normalizeSelector(value: unknown): DeliveryDagSelector | undefined {
   const selector = toConfigObject(value)
   if (Object.keys(selector).length === 0) return undefined
   const matchLabels = toConfigObject(selector.matchLabels)
+  const keys = toStringList(selector.keys)
   return {
     ...(selector.id ? { id: String(selector.id) } : {}),
     ...(selector.key ? { key: String(selector.key) } : {}),
+    ...(keys ? { keys } : {}),
     ...(Object.keys(matchLabels).length > 0
       ? { matchLabels: Object.fromEntries(Object.entries(matchLabels).map(([key, item]) => [key, String(item)])) }
       : {}),
@@ -307,16 +322,24 @@ function normalizeDagNode(nodeRaw: unknown, index: number): ReleaseDagNodeDefini
   }
   const inputs = toStringList(node.inputs)
   const outputs = toStringList(node.outputs)
+  const artifactKinds = toStringList(node.artifactKinds)
   const artifactOutputs = normalizeArtifactOutputs(node.artifactOutputs)
   const serviceSelector = normalizeSelector(node.serviceSelector)
   const environmentSelector = normalizeSelector(node.environmentSelector)
   const targetSelector = normalizeSelector(node.targetSelector)
+  const inputMapping = toConfigObject(node.inputMapping)
+  if (node.executorKind) normalized.executorKind = String(node.executorKind)
+  if (node.targetKind) normalized.targetKind = String(node.targetKind)
+  if (node.capabilityRef) normalized.capabilityRef = String(node.capabilityRef)
+  if (node.providerRef) normalized.providerRef = String(node.providerRef)
   if (inputs) normalized.inputs = inputs
   if (outputs) normalized.outputs = outputs
+  if (artifactKinds) normalized.artifactKinds = artifactKinds
   if (artifactOutputs) normalized.artifactOutputs = artifactOutputs
   if (serviceSelector) normalized.serviceSelector = serviceSelector
   if (environmentSelector) normalized.environmentSelector = environmentSelector
   if (targetSelector) normalized.targetSelector = targetSelector
+  if (Object.keys(inputMapping).length > 0) normalized.inputMapping = inputMapping
   if (node.runCondition) normalized.runCondition = String(node.runCondition)
   if (node.failurePolicy) normalized.failurePolicy = String(node.failurePolicy)
   if (node.observability && typeof node.observability === 'object' && !Array.isArray(node.observability)) {

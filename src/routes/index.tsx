@@ -1,7 +1,7 @@
-import { Navigate, Route, Routes } from "react-router-dom";
-import { AuthGuard } from "@/features/auth/auth-guard";
-import { AppLayout } from "@/layouts/app-layout";
-import * as RoutePages from "./route-lazy-pages";
+import { Navigate, Route, Routes } from 'react-router-dom'
+import { AuthGuard } from '@/features/auth/auth-guard'
+import { AppLayout } from '@/layouts/app-layout'
+import * as RoutePages from './route-lazy-pages'
 
 export function AppRouter() {
   return (
@@ -85,10 +85,7 @@ export function AppRouter() {
             }
           />
 
-          <Route
-            path="/workloads"
-            element={<Navigate to="/workloads/overview" replace />}
-          />
+          <Route path="/workloads" element={<Navigate to="/workloads/overview" replace />} />
           <Route
             path="/workloads/overview"
             element={
@@ -209,6 +206,22 @@ export function AppRouter() {
               </RoutePages.LazyPage>
             }
           />
+          <Route
+            path="/workloads/replicasets/:replicaSetName"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.ReplicaSetDetailPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
+            path="/workloads/replicationcontrollers/:replicationControllerName"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.ReplicationControllerDetailPage />
+              </RoutePages.LazyPage>
+            }
+          />
 
           <Route
             path="/configuration"
@@ -255,10 +268,26 @@ export function AppRouter() {
             }
           />
           <Route
+            path="/configuration/resourcequotas/:name"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.ConfigurationResourceQuotaDetailPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
             path="/configuration/limitranges"
             element={
               <RoutePages.LazyPage>
                 <RoutePages.ConfigurationLimitRangesPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
+            path="/configuration/limitranges/:name"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.ConfigurationLimitRangeDetailPage />
               </RoutePages.LazyPage>
             }
           />
@@ -271,10 +300,26 @@ export function AppRouter() {
             }
           />
           <Route
+            path="/configuration/hpas/:name"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.ConfigurationHPADetailPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
             path="/configuration/poddisruptionbudgets"
             element={
               <RoutePages.LazyPage>
                 <RoutePages.ConfigurationPodDisruptionBudgetsPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
+            path="/configuration/poddisruptionbudgets/:name"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.ConfigurationPodDisruptionBudgetDetailPage />
               </RoutePages.LazyPage>
             }
           />
@@ -311,6 +356,14 @@ export function AppRouter() {
             }
           />
           <Route
+            path="/configuration/mutatingwebhookconfigurations/:name"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.ConfigurationMutatingWebhookConfigurationDetailPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
             path="/configuration/validatingwebhookconfigurations"
             element={
               <RoutePages.LazyPage>
@@ -318,12 +371,18 @@ export function AppRouter() {
               </RoutePages.LazyPage>
             }
           />
+          <Route
+            path="/configuration/validatingwebhookconfigurations/:name"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.ConfigurationValidatingWebhookConfigurationDetailPage />
+              </RoutePages.LazyPage>
+            }
+          />
 
           <Route
             path="/platform-access-control"
-            element={
-              <Navigate to="/platform-access-control/serviceaccounts" replace />
-            }
+            element={<Navigate to="/platform-access-control/serviceaccounts" replace />}
           />
           <Route
             path="/platform-access-control/serviceaccounts"
@@ -406,10 +465,7 @@ export function AppRouter() {
             }
           />
 
-          <Route
-            path="/network"
-            element={<Navigate to="/network/topology" replace />}
-          />
+          <Route path="/network" element={<Navigate to="/network/topology" replace />} />
           <Route
             path="/network/topology"
             element={
@@ -443,6 +499,14 @@ export function AppRouter() {
             }
           />
           <Route
+            path="/network/ingresses/:name"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.IngressDetailPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
             path="/network/gateways"
             element={<Navigate to="/network/gateway-api/gateways" replace />}
           />
@@ -459,10 +523,58 @@ export function AppRouter() {
             }
           />
           <Route
+            path="/network/gateway-api/gatewayclasses/:name"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.GatewayClassDetailPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
             path="/network/gateway-api/gateways"
             element={
               <RoutePages.LazyPage>
                 <RoutePages.NetworkGatewaysPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
+            path="/network/gateway-api/httproutes"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.NetworkHTTPRoutesPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
+            path="/network/gateway-api/backendtlspolicies"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.NetworkBackendTLSPoliciesPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
+            path="/network/gateway-api/grpcroutes"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.NetworkGRPCRoutesPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
+            path="/network/gateway-api/referencegrants"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.NetworkReferenceGrantsPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
+            path="/network/gateway-api/gateways/:name"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.GatewayDetailPage />
               </RoutePages.LazyPage>
             }
           />
@@ -475,6 +587,14 @@ export function AppRouter() {
             }
           />
           <Route
+            path="/network/endpointslices/:name"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.EndpointSliceDetailPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
             path="/network/ingressclasses"
             element={
               <RoutePages.LazyPage>
@@ -483,10 +603,26 @@ export function AppRouter() {
             }
           />
           <Route
+            path="/network/ingressclasses/:name"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.IngressClassDetailPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
             path="/network/networkpolicies"
             element={
               <RoutePages.LazyPage>
                 <RoutePages.NetworkPoliciesPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
+            path="/network/networkpolicies/:name"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.NetworkPolicyDetailPage />
               </RoutePages.LazyPage>
             }
           />
@@ -568,10 +704,7 @@ export function AppRouter() {
               </RoutePages.LazyPage>
             }
           />
-          <Route
-            path="/helm"
-            element={<Navigate to="/helm/releases" replace />}
-          />
+          <Route path="/helm" element={<Navigate to="/helm/releases" replace />} />
           <Route
             path="/helm/releases"
             element={
@@ -843,10 +976,7 @@ export function AppRouter() {
             }
           />
 
-          <Route
-            path="/docker"
-            element={<Navigate to="/docker/overview" replace />}
-          />
+          <Route path="/docker" element={<Navigate to="/docker/overview" replace />} />
           <Route
             path="/docker/overview"
             element={
@@ -879,14 +1009,8 @@ export function AppRouter() {
               </RoutePages.LazyPage>
             }
           />
-          <Route
-            path="/docker/services"
-            element={<Navigate to="/docker/projects" replace />}
-          />
-          <Route
-            path="/docker/ports"
-            element={<Navigate to="/docker/projects" replace />}
-          />
+          <Route path="/docker/services" element={<Navigate to="/docker/projects" replace />} />
+          <Route path="/docker/ports" element={<Navigate to="/docker/projects" replace />} />
           <Route
             path="/docker/templates"
             element={
@@ -988,10 +1112,7 @@ export function AppRouter() {
               </RoutePages.LazyPage>
             }
           />
-          <Route
-            path="/observability"
-            element={<Navigate to="/monitoring-workbench" replace />}
-          />
+          <Route path="/observability" element={<Navigate to="/monitoring-workbench" replace />} />
           <Route
             path="/observability/monitoring"
             element={<Navigate to="/monitoring-workbench/overview" replace />}
@@ -1014,9 +1135,7 @@ export function AppRouter() {
           />
           <Route
             path="/observability/notifications"
-            element={
-              <Navigate to="/monitoring-workbench/notifications" replace />
-            }
+            element={<Navigate to="/monitoring-workbench/notifications" replace />}
           />
           <Route
             path="/observability/healing"
@@ -1031,10 +1150,7 @@ export function AppRouter() {
             element={<Navigate to="/monitoring-workbench/events" replace />}
           />
 
-          <Route
-            path="/ai-workbench"
-            element={<RoutePages.AIWorkbenchModeRedirect />}
-          />
+          <Route path="/ai-workbench" element={<RoutePages.AIWorkbenchModeRedirect />} />
           <Route
             path="/ai-workbench/chat"
             element={
@@ -1087,10 +1203,7 @@ export function AppRouter() {
               </RoutePages.LazyPage>
             }
           />
-          <Route
-            path="/ai-gateway"
-            element={<RoutePages.AIGatewayRedirect />}
-          />
+          <Route path="/ai-gateway" element={<RoutePages.AIGatewayRedirect />} />
           <Route
             path="/ai-gateway/overview"
             element={
@@ -1155,10 +1268,7 @@ export function AppRouter() {
               </RoutePages.LazyPage>
             }
           />
-          <Route
-            path="/ai-gateway/*"
-            element={<Navigate to="/ai-gateway/overview" replace />}
-          />
+          <Route path="/ai-gateway/*" element={<Navigate to="/ai-gateway/overview" replace />} />
           <Route
             path="/plugins"
             element={
@@ -1199,34 +1309,19 @@ export function AppRouter() {
               </RoutePages.LazyPage>
             }
           />
-          <Route
-            path="/ai-workbench/gateway"
-            element={<RoutePages.AIGatewayRedirect />}
-          />
+          <Route path="/ai-workbench/gateway" element={<RoutePages.AIGatewayRedirect />} />
           <Route
             path="/ai-workbench/automation"
             element={<RoutePages.AIWorkbenchOperationsRedirect />}
           />
-          <Route
-            path="/ai-workbench/tools"
-            element={<RoutePages.AIWorkbenchToolsRedirect />}
-          />
-          <Route
-            path="/ai-observe"
-            element={<RoutePages.AIWorkbenchModeRedirect />}
-          />
-          <Route
-            path="/ai-observe/workbench"
-            element={<RoutePages.AIWorkbenchModeRedirect />}
-          />
+          <Route path="/ai-workbench/tools" element={<RoutePages.AIWorkbenchToolsRedirect />} />
+          <Route path="/ai-observe" element={<RoutePages.AIWorkbenchModeRedirect />} />
+          <Route path="/ai-observe/workbench" element={<RoutePages.AIWorkbenchModeRedirect />} />
           <Route
             path="/ai-observe/operations"
             element={<RoutePages.AIWorkbenchOperationsRedirect />}
           />
-          <Route
-            path="/ai-observe/tools"
-            element={<RoutePages.AIWorkbenchToolsRedirect />}
-          />
+          <Route path="/ai-observe/tools" element={<RoutePages.AIWorkbenchToolsRedirect />} />
           <Route
             path="/ai-observe/root-cause"
             element={<RoutePages.AIWorkbenchFixedModeRedirect mode="root_cause" />}
@@ -1235,18 +1330,12 @@ export function AppRouter() {
             path="/ai-observe/performance"
             element={<RoutePages.AIWorkbenchFixedModeRedirect mode="performance" />}
           />
-          <Route
-            path="/ai-observe/chat"
-            element={<RoutePages.AIWorkbenchModeRedirect />}
-          />
+          <Route path="/ai-observe/chat" element={<RoutePages.AIWorkbenchModeRedirect />} />
           <Route
             path="/ai-observe/inspection"
             element={<RoutePages.AIWorkbenchOperationsRedirect />}
           />
-          <Route
-            path="/chat"
-            element={<RoutePages.AIWorkbenchModeRedirect />}
-          />
+          <Route path="/chat" element={<RoutePages.AIWorkbenchModeRedirect />} />
 
           <Route
             path="/access"
@@ -1297,10 +1386,7 @@ export function AppRouter() {
             }
           />
 
-          <Route
-            path="/system"
-            element={<Navigate to="/system/online-users" replace />}
-          />
+          <Route path="/system" element={<Navigate to="/system/online-users" replace />} />
           <Route
             path="/system/online-users"
             element={
@@ -1358,14 +1444,8 @@ export function AppRouter() {
               </RoutePages.LazyPage>
             }
           />
-          <Route
-            path="/settings/identity"
-            element={<Navigate to="/settings/login" replace />}
-          />
-          <Route
-            path="/settings/monitoring"
-            element={<Navigate to="/settings" replace />}
-          />
+          <Route path="/settings/identity" element={<Navigate to="/settings/login" replace />} />
+          <Route path="/settings/monitoring" element={<Navigate to="/settings" replace />} />
           <Route
             path="/settings/branding"
             element={
@@ -1374,10 +1454,7 @@ export function AppRouter() {
               </RoutePages.LazyPage>
             }
           />
-          <Route
-            path="/settings/ai"
-            element={<RoutePages.AIWorkbenchModelSettingsRedirect />}
-          />
+          <Route path="/settings/ai" element={<RoutePages.AIWorkbenchModelSettingsRedirect />} />
 
           <Route
             path="/account/profile"
@@ -1392,5 +1469,5 @@ export function AppRouter() {
         </Route>
       </Route>
     </Routes>
-  );
+  )
 }

@@ -1060,9 +1060,6 @@ export function NetworkTopologyPage() {
     <div className="soha-page">
       <ManagementDetailHeader
         title={localeCode === 'zh_CN' ? '网络拓扑' : 'Network Topology'}
-        description={localeCode === 'zh_CN'
-          ? '把 Ingress、Gateway / HTTPRoute、Service 与后端汇总进一张入口网络拓扑里，先看路径，再继续向 Service 和 Pod 钻取。'
-          : 'Aggregate ingress, Gateway / HTTPRoute, services, and backends into one network topology so operators can read the path first and drill into services and pods next.'}
         actions={(
           <Space wrap>
             <Tag color={viewTagColor}>{viewTag}</Tag>

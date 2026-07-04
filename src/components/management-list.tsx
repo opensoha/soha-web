@@ -611,9 +611,16 @@ export const ManagementIconButton = forwardRef<HTMLButtonElement, ManagementIcon
   { tooltip, ...buttonProps },
   ref,
 ) {
+  const nativeTitle = typeof tooltip === 'string' ? tooltip : undefined
   return (
     <Tooltip title={tooltip}>
-      <Button {...buttonProps} ref={ref} className={classNames('soha-management-icon-action', buttonProps.className)} type="text" />
+      <Button
+        {...buttonProps}
+        ref={ref}
+        className={classNames('soha-management-icon-action', buttonProps.className)}
+        title={buttonProps.title ?? nativeTitle}
+        type="text"
+      />
     </Tooltip>
   )
 })

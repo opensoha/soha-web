@@ -308,6 +308,33 @@ export interface DeploymentDetailMeta {
   selector?: Record<string, string>
 }
 
+export interface StatefulSetDetailMeta {
+  name: string
+  namespace: string
+  serviceName?: string
+  desiredReplicas?: number
+  readyReplicas?: number
+  currentReplicas?: number
+  updateStrategy?: string
+  currentRevision?: string
+  updateRevision?: string
+  createdAt?: string
+  selector?: Record<string, string>
+}
+
+export interface DaemonSetDetailMeta {
+  name: string
+  namespace: string
+  desiredNumber?: number
+  currentNumber?: number
+  readyNumber?: number
+  availableNumber?: number
+  updatedNumber?: number
+  updateStrategy?: string
+  createdAt?: string
+  selector?: Record<string, string>
+}
+
 export interface BatchRollbackDraft {
   key: string
   name: string
@@ -447,6 +474,13 @@ export interface Job {
   allowedActions?: string[]
 }
 
+export interface JobDetailMeta extends Job {
+  parallelism?: number
+  createdAt?: string
+  startTime?: string
+  completionTime?: string
+}
+
 export interface CronJob {
   name: string
   namespace: string
@@ -456,4 +490,10 @@ export interface CronJob {
   lastScheduleTime?: string
   ageSeconds: number
   allowedActions?: string[]
+}
+
+export interface CronJobDetailMeta extends CronJob {
+  concurrencyPolicy?: string
+  timeZone?: string
+  createdAt?: string
 }

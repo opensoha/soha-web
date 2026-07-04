@@ -1,4 +1,4 @@
-import { Card, Timeline, Typography } from 'antd'
+import { Card, Descriptions, Timeline, Typography } from 'antd'
 import { ManagementState } from '@/components/management-list'
 import './resource-events-timeline.css'
 import { useI18n } from '@/i18n'
@@ -70,34 +70,40 @@ export function ResourceEventsTimeline({
                     <Text strong>{event.message || event.reason}</Text>
                     <Text type="secondary" className="text-xs">{formatAgeSeconds(event.ageSeconds)}</Text>
                   </div>
-                  <div className="soha-events-timeline-meta">
-                    <div className="soha-events-timeline-row">
-                      <Text type="secondary" className="soha-events-timeline-label text-xs">{localeCode === 'zh_CN' ? '时间' : 'Time'}</Text>
-                      <Text className="soha-events-timeline-value text-xs">{formatDateTime(new Date(Date.now() - event.ageSeconds * 1000).toISOString())}</Text>
-                    </div>
-                    {event.namespace ? (
-                      <div className="soha-events-timeline-row">
-                        <Text type="secondary" className="soha-events-timeline-label text-xs">{localeCode === 'zh_CN' ? '命名空间' : 'Namespace'}</Text>
-                        <Text className="soha-events-timeline-value text-xs">{event.namespace}</Text>
-                      </div>
-                    ) : null}
-                    <div className="soha-events-timeline-row">
-                      <Text type="secondary" className="soha-events-timeline-label text-xs">{localeCode === 'zh_CN' ? '原因' : 'Reason'}</Text>
-                      <Text className="soha-events-timeline-value text-xs">{event.reason}</Text>
-                    </div>
-                    <div className="soha-events-timeline-row">
-                      <Text type="secondary" className="soha-events-timeline-label text-xs">{localeCode === 'zh_CN' ? '次数' : 'Count'}</Text>
-                      <Text className="soha-events-timeline-value text-xs">{event.count}</Text>
-                    </div>
-                    {event.involvedKind || event.involvedName ? (
-                      <div className="soha-events-timeline-row">
-                        <Text type="secondary" className="soha-events-timeline-label text-xs">{localeCode === 'zh_CN' ? '对象' : 'Object'}</Text>
-                        <Text className="soha-events-timeline-value text-xs">
-                          {`${event.involvedKind || '-'} / ${event.involvedName || '-'}`}
-                        </Text>
-                      </div>
-                    ) : null}
-                  </div>
+                  <Descriptions
+                    className="soha-events-timeline-meta"
+                    colon={false}
+                    column={{ xs: 1, sm: 2, md: 2, lg: 2, xl: 2, xxl: 2 }}
+                    size="small"
+                    items={[
+                      {
+                        key: 'time',
+                        label: localeCode === 'zh_CN' ? '时间' : 'Time',
+                        children: formatDateTime(new Date(Date.now() - event.ageSeconds * 1000).toISOString()),
+                      },
+                      ...(event.namespace ? [{
+                        key: 'namespace',
+                        label: localeCode === 'zh_CN' ? '命名空间' : 'Namespace',
+                        children: event.namespace,
+                      }] : []),
+                      {
+                        key: 'reason',
+                        label: localeCode === 'zh_CN' ? '原因' : 'Reason',
+                        children: event.reason,
+                      },
+                      {
+                        key: 'count',
+                        label: localeCode === 'zh_CN' ? '次数' : 'Count',
+                        children: event.count,
+                      },
+                      ...(event.involvedKind || event.involvedName ? [{
+                        key: 'object',
+                        label: localeCode === 'zh_CN' ? '对象' : 'Object',
+                        children: `${event.involvedKind || '-'} / ${event.involvedName || '-'}`,
+                        span: 2,
+                      }] : []),
+                    ]}
+                  />
                 </div>
               ),
             }))}

@@ -8,6 +8,7 @@ import YamlWorker from 'monaco-yaml/yaml.worker?worker'
 import './resource-operation-panels.css'
 import { useI18n } from '@/i18n'
 import { k8sYamlSchema } from '@/schemas/k8s-yaml-schema'
+import { ensureYamlLanguage } from './monaco-yaml-language'
 
 const { Text } = Typography
 
@@ -65,6 +66,7 @@ export function K8sYamlEditor({
   useEffect(() => {
     if (!monaco) return
     ensureMonacoWorkers()
+    ensureYamlLanguage(monaco)
     if (!yamlHandleRef.current) {
       yamlHandleRef.current = configureMonacoYaml(monaco, {
         enableSchemaRequest: false,
@@ -109,9 +111,6 @@ export function K8sYamlEditor({
       <div className="soha-terminal-toolbar soha-yaml-toolbar">
         <Space className="soha-yaml-toolbar-meta" orientation="vertical" size={2}>
           <Text strong>{t('yamlEditor.title', 'Kubernetes YAML Editor')}</Text>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            {t('yamlEditor.hint', 'Monaco + monaco-yaml with local schema assistance enabled')}
-          </Text>
           {applyDisabledReason ? (
             <Text type="danger" style={{ fontSize: 12 }}>
               {applyDisabledReason}
@@ -137,7 +136,7 @@ export function K8sYamlEditor({
       <div className="soha-yaml-editor-shell" style={{ height: editorHeight }}>
         <Editor
           height="100%"
-          defaultLanguage="yaml"
+          language="yaml"
           path={editorPath}
           value={value}
           onChange={(nextValue) => onChange(nextValue ?? '')}

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useState, useEffect, useMemo } from 'react'
+import { isValidElement } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import {
   App,
@@ -27,6 +28,8 @@ import {
   ClockCircleOutlined,
   DeleteOutlined,
   EditOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined,
   ReloadOutlined,
   ScheduleOutlined,
   UndoOutlined,
@@ -95,12 +98,16 @@ import type {
   BuildRecord,
   CronJob,
   DaemonSet,
+  DaemonSetDetailMeta,
   Deployment,
   DeploymentDetailMeta,
   Job,
+  JobDetailMeta,
   Pod,
   ReleaseRecord,
   StatefulSet,
+  StatefulSetDetailMeta,
+  CronJobDetailMeta,
   WorkflowRecord,
   WorkloadOverviewEvent,
 } from './workloads-model'
@@ -767,6 +774,12 @@ interface WorkloadMeta {
   [key: string]: unknown
 }
 
+type WorkloadDetailExtraOverview = React.ReactNode | ((detail: WorkloadMeta) => React.ReactNode)
+type WorkloadDetailExtraTabPanes =
+  | NonNullable<TabsProps['items']>
+  | ((detail: WorkloadMeta) => NonNullable<TabsProps['items']>)
+type WorkloadDetailActions = React.ReactNode | ((detail: WorkloadMeta) => React.ReactNode)
+
 function WorkloadMetadataSection({
   items,
   title,
@@ -821,9 +834,9 @@ function WorkloadDetailShell({
   title: string
   resource: string
   paramKey: string
-  extraTabPanes?: NonNullable<TabsProps['items']>
-  extraOverview?: React.ReactNode
-  actions?: React.ReactNode
+  extraTabPanes?: WorkloadDetailExtraTabPanes
+  extraOverview?: WorkloadDetailExtraOverview
+  actions?: WorkloadDetailActions
   activeTabKey?: string
   onTabChange?: (activeKey: string) => void
   yamlLast?: boolean
@@ -906,6 +919,12 @@ function WorkloadDetailShell({
       />
     )
 
+  const resolvedExtraOverview =
+    typeof extraOverview === 'function' ? extraOverview(detail) : extraOverview
+  const resolvedExtraTabPanes =
+    typeof extraTabPanes === 'function' ? extraTabPanes(detail) : (extraTabPanes ?? [])
+  const resolvedActions = typeof actions === 'function' ? actions(detail) : actions
+
   return (
     <div className="soha-page soha-workload-detail-page">
       <div className="soha-workload-detail-heading">
@@ -917,7 +936,9 @@ function WorkloadDetailShell({
             {name}
           </Text>
         </div>
-        {actions ? <div className="soha-workload-detail-actions">{actions}</div> : null}
+        {resolvedActions ? (
+          <div className="soha-workload-detail-actions">{resolvedActions}</div>
+        ) : null}
       </div>
       <Tabs
         {...(activeTabKey != null ? { activeKey: activeTabKey } : { defaultActiveKey: 'overview' })}
@@ -934,6 +955,8 @@ function WorkloadDetailShell({
               <>
                 <Card className="soha-detail-card">
                   <Descriptions
+                    column={{ xs: 1, sm: 2, md: 3 }}
+                    size="small"
                     items={[
                       {
                         key: t('common.name', 'Name'),
@@ -963,11 +986,11 @@ function WorkloadDetailShell({
                     />
                   </div>
                 </Card>
-                {extraOverview}
+                {resolvedExtraOverview}
               </>
             ),
           },
-          ...(yamlLast ? (extraTabPanes ?? []) : []),
+          ...(yamlLast ? resolvedExtraTabPanes : []),
           {
             key: 'yaml',
             label: t('common.yaml', 'YAML'),
@@ -1003,7 +1026,7 @@ function WorkloadDetailShell({
               </Suspense>
             ),
           },
-          ...(yamlLast ? [] : (extraTabPanes ?? [])),
+          ...(yamlLast ? [] : resolvedExtraTabPanes),
         ]}
       />
     </div>
@@ -1719,6 +1742,7 @@ export function DeploymentDetailPage() {
     <div className="soha-detail-stack">
       <Card
         className="soha-detail-card soha-related-pod-card"
+        size="small"
         title={localeCode === 'zh_CN' ? '关联 Pods' : 'Related Pods'}
       >
         <List
@@ -1782,6 +1806,7 @@ export function DeploymentDetailPage() {
       </Card>
       <Card
         className="soha-detail-card soha-rollout-card"
+        size="small"
         title={localeCode === 'zh_CN' ? '滚动发布' : 'Rollout'}
       >
         <div className="soha-rollout-status-section">
@@ -1861,7 +1886,7 @@ export function DeploymentDetailPage() {
           )}
         </div>
       </Card>
-      <Card className="soha-detail-card" title="交付联动">
+      <Card className="soha-detail-card" size="small" title="交付联动">
         {matchedBindings.length === 0 ? (
           <ManagementState
             bordered={false}
@@ -2687,6 +2712,7 @@ export function WorkloadsPodsPage() {
         scroll={{ x: 1500 }}
         selectCurrentPageOnly
         rowSelection={{
+          columnWidth: 44,
           selectedRowKeys: selectedPodKeys,
           onChange: (selectedRowKeys: string[]) => setSelectedPodKeys(selectedRowKeys),
         }}
@@ -2706,8 +2732,6 @@ export function PodDetailPage() {
   const [container, setContainer] = useState<string>('')
   const [terminalShell, setTerminalShell] = useState('/bin/sh')
   const [activeTabKey, setActiveTabKey] = useState('overview')
-  const [terminalVisible, setTerminalVisible] = useState(false)
-  const [terminalMounted, setTerminalMounted] = useState(false)
   const [metricsRangeMinutes, setMetricsRangeMinutes] = useState(60)
   const podLogsCapability = useClusterCapability('pod.logs', localeCode)
   const podExecCapability = useClusterCapability('pod.exec', localeCode)
@@ -2974,6 +2998,8 @@ export function PodDetailPage() {
         title={localeCode === 'zh_CN' ? '运行时概览' : 'Runtime Overview'}
       >
         <Descriptions
+          column={{ xs: 1, sm: 2, lg: 3 }}
+          size="small"
           items={[
             {
               key: localeCode === 'zh_CN' ? '阶段' : 'Phase',
@@ -3161,114 +3187,101 @@ export function PodDetailPage() {
     ),
   }
 
-  return (
-    <>
-      <WorkloadDetailShell
-        title="Pod"
-        resource="pods"
-        paramKey="podName"
-        extraOverview={runtimeOverview}
-        extraTabPanes={[
-          containersTab,
-          logsTab,
-          eventsTab,
-          volumesTab,
-          relatedResourcesTab,
-          metricsTab,
-        ]}
-        activeTabKey={activeTabKey}
-        onTabChange={setActiveTabKey}
-        yamlLast
-        actions={
-          <Space>
-            <Tooltip title={terminalDisabled ? terminalDisabledReason : undefined}>
-              <span>
-                <Button
-                  disabled={terminalDisabled}
-                  variant="outlined"
-                  onClick={() => setTerminalVisible(true)}
-                >
-                  {localeCode === 'zh_CN' ? '打开终端' : 'Open Terminal'}
-                </Button>
-              </span>
-            </Tooltip>
-          </Space>
+  const terminalTab: NonNullable<TabsProps['items']>[number] = {
+    key: 'terminal',
+    label: terminalDisabled ? (
+      <Tooltip title={terminalDisabledReason}>
+        <span>{localeCode === 'zh_CN' ? '终端' : 'Terminal'}</span>
+      </Tooltip>
+    ) : (
+      localeCode === 'zh_CN' ? '终端' : 'Terminal'
+    ),
+    disabled: terminalDisabled,
+    children: podExecCapability.isLoading ? (
+      <ManagementState compact kind="loading" />
+    ) : terminalDisabled ? (
+      <ManagementState
+        compact
+        kind="unsupported"
+        title={
+          localeCode === 'zh_CN'
+            ? '当前集群不支持交互终端'
+            : 'Interactive terminal is not supported'
         }
+        description={terminalDisabledReason}
       />
-      <Modal
-        title={`Terminal: ${podName}`}
-        open={terminalVisible}
-        onCancel={() => setTerminalVisible(false)}
-        afterOpenChange={setTerminalMounted}
-        footer={null}
-        width={1080}
-      >
-        {podExecCapability.isLoading ? (
-          <ManagementState compact kind="loading" />
-        ) : terminalDisabled ? (
-          <ManagementState
-            compact
-            kind="unsupported"
-            title={
-              localeCode === 'zh_CN'
-                ? '当前集群不支持交互终端'
-                : 'Interactive terminal is not supported'
-            }
-            description={terminalDisabledReason}
+    ) : (
+      <div className="soha-pod-terminal-tab-card">
+        <div className="soha-terminal-controls">
+          <div className="soha-terminal-control-group">
+            <Text strong className="text-xs">
+              {localeCode === 'zh_CN' ? '容器:' : 'Container:'}
+            </Text>
+            <Select
+              size="small"
+              placeholder={localeCode === 'zh_CN' ? '选择容器' : 'Select container'}
+              value={container}
+              onChange={(value) => setContainer(String(value || ''))}
+              style={{ width: 220 }}
+              options={containerOptions}
+              allowClear
+            />
+          </div>
+          <div className="soha-terminal-control-group">
+            <Text strong className="text-xs">
+              {localeCode === 'zh_CN' ? 'Shell:' : 'Shell:'}
+            </Text>
+            <Select
+              size="small"
+              value={terminalShell}
+              onChange={(value) => setTerminalShell(String(value))}
+              style={{ width: 180 }}
+              options={[
+                { value: '/bin/sh', label: '/bin/sh' },
+                { value: '/bin/bash', label: '/bin/bash' },
+                { value: '/bin/ash', label: '/bin/ash' },
+              ]}
+            />
+          </div>
+        </div>
+        <Suspense
+          fallback={
+            <Card className="soha-detail-card">
+              <Spin size="large" />
+            </Card>
+          }
+        >
+          <PodTerminal
+            clusterId={clusterId}
+            namespace={detailNamespace}
+            podName={podName}
+            container={container || undefined}
+            shell={terminalShell}
           />
-        ) : (
-          <>
-            <div className="soha-terminal-controls">
-              <div className="soha-terminal-control-group">
-                <Text strong className="text-xs">
-                  {localeCode === 'zh_CN' ? '容器:' : 'Container:'}
-                </Text>
-                <Select
-                  placeholder={localeCode === 'zh_CN' ? '选择容器' : 'Select container'}
-                  value={container}
-                  onChange={(value) => setContainer(String(value || ''))}
-                  style={{ width: 220 }}
-                  options={containerOptions}
-                  allowClear
-                />
-              </div>
-              <div className="soha-terminal-control-group">
-                <Text strong className="text-xs">
-                  {localeCode === 'zh_CN' ? 'Shell:' : 'Shell:'}
-                </Text>
-                <Select
-                  value={terminalShell}
-                  onChange={(value) => setTerminalShell(String(value))}
-                  style={{ width: 180 }}
-                  options={[
-                    { value: '/bin/sh', label: '/bin/sh' },
-                    { value: '/bin/bash', label: '/bin/bash' },
-                    { value: '/bin/ash', label: '/bin/ash' },
-                  ]}
-                />
-              </div>
-            </div>
-            {terminalMounted ? (
-              <Suspense
-                fallback={
-                  <Card className="soha-detail-card">
-                    <Spin size="large" />
-                  </Card>
-                }
-              >
-                <PodTerminal
-                  clusterId={clusterId}
-                  namespace={detailNamespace}
-                  podName={podName}
-                  container={container || undefined}
-                  shell={terminalShell}
-                />
-              </Suspense>
-            ) : null}
-          </>
-        )}
-      </Modal>
-    </>
+        </Suspense>
+      </div>
+    ),
+  }
+
+  return (
+    <WorkloadDetailShell
+      title="Pod"
+      resource="pods"
+      paramKey="podName"
+      extraOverview={runtimeOverview}
+      extraTabPanes={[
+        containersTab,
+        logsTab,
+        terminalTab,
+        eventsTab,
+        volumesTab,
+        relatedResourcesTab,
+        metricsTab,
+      ]}
+      activeTabKey={activeTabKey}
+      onTabChange={setActiveTabKey}
+      yamlLast
+    />
   )
 }
 
@@ -3474,9 +3487,211 @@ export function WorkloadsStatefulSetsPage() {
   )
 }
 
-export function StatefulSetDetailPage() {
+function StatefulSetOverview({ detail }: { detail: StatefulSetDetailMeta }) {
+  const { localeCode } = useI18n()
+  const navigate = useNavigate()
+  const { clusterId } = usePlatformScopeStore()
+  const selector = detail.selector
+  const podsQuery = useQuery({
+    queryKey: ['statefulset-pods', clusterId, detail.namespace, detail.name, selector],
+    queryFn: async () => {
+      const response = await api.get<ApiResponse<Pod[]>>(
+        `/clusters/${clusterId}/workloads/pods?namespace=${encodeURIComponent(detail.namespace)}`,
+      )
+      return {
+        data: (response.data ?? []).filter((item) => selectorMatchesLabels(selector, item.labels)),
+      } as ApiResponse<Pod[]>
+    },
+    enabled: !!clusterId && !!detail.namespace && !!selector,
+  })
+  const pods = podsQuery.data?.data ?? []
+
   return (
-    <WorkloadDetailShell title="StatefulSet" resource="statefulsets" paramKey="statefulSetName" />
+    <div className="soha-detail-stack">
+      <Card
+        className="soha-detail-card soha-rollout-card"
+        size="small"
+        title={localeCode === 'zh_CN' ? 'StatefulSet 状态' : 'StatefulSet Status'}
+      >
+        <Descriptions
+          column={{ xs: 1, sm: 2, md: 3 }}
+          size="small"
+          items={[
+            {
+              key: 'service',
+              label: 'Service',
+              children: detail.serviceName || '-',
+            },
+            {
+              key: 'ready',
+              label: localeCode === 'zh_CN' ? '就绪副本' : 'Ready',
+              children: `${detail.readyReplicas ?? 0}/${detail.desiredReplicas ?? 0}`,
+            },
+            {
+              key: 'current',
+              label: localeCode === 'zh_CN' ? '当前副本' : 'Current',
+              children: detail.currentReplicas ?? '-',
+            },
+            {
+              key: 'strategy',
+              label: localeCode === 'zh_CN' ? '更新策略' : 'Update Strategy',
+              children: detail.updateStrategy || '-',
+            },
+            {
+              key: 'currentRevision',
+              label: 'Current Revision',
+              children: detail.currentRevision || '-',
+            },
+            {
+              key: 'updateRevision',
+              label: 'Update Revision',
+              children: detail.updateRevision || '-',
+            },
+          ]}
+        />
+      </Card>
+      <Card
+        className="soha-detail-card soha-related-pod-card"
+        size="small"
+        title={localeCode === 'zh_CN' ? '关联 Pods' : 'Related Pods'}
+      >
+        <List
+          className="soha-related-pod-list"
+          dataSource={pods}
+          loading={podsQuery.isLoading}
+          rowKey={(record) => `${record.namespace}/${record.name}`}
+          locale={{
+            emptyText: (
+              <ManagementState
+                bordered={false}
+                compact
+                title={localeCode === 'zh_CN' ? '暂无关联 Pods' : 'No related Pods'}
+              />
+            ),
+          }}
+          renderItem={(pod: Pod) => (
+            <List.Item className="soha-related-pod-item">
+              <div className="soha-related-pod-line">
+                <Tooltip title={pod.name}>
+                  <Button
+                    type="link"
+                    className="soha-related-pod-name"
+                    onClick={() =>
+                      navigate(
+                        buildWorkloadDetailPath('pods', pod.name, detail.namespace, pod.namespace),
+                      )
+                    }
+                  >
+                    {pod.name}
+                  </Button>
+                </Tooltip>
+                <StatusTag value={pod.phase} />
+                <Tag color="blue" className="soha-related-pod-tag">
+                  {pod.namespace || detail.namespace || '-'}
+                </Tag>
+                <Tag color="cyan" className="soha-related-pod-tag">
+                  {pod.podIp || '-'}
+                </Tag>
+                <Tag color="success" className="soha-related-pod-tag">
+                  {`Ready ${pod.readyContainers || '-'}`}
+                </Tag>
+                <Tag
+                  color={(pod.restarts ?? 0) > 0 ? 'warning' : 'default'}
+                  className="soha-related-pod-tag"
+                >
+                  {`${localeCode === 'zh_CN' ? '重启' : 'Restarts'} ${pod.restarts ?? 0}`}
+                </Tag>
+                <Tooltip title={pod.nodeName || '-'}>
+                  <Tag color="purple" className="soha-related-pod-tag soha-related-pod-tag-node">
+                    {pod.nodeName || '-'}
+                  </Tag>
+                </Tooltip>
+                <Tag color="geekblue" className="soha-related-pod-tag">
+                  {formatAgeSeconds(pod.ageSeconds)}
+                </Tag>
+              </div>
+            </List.Item>
+          )}
+        />
+      </Card>
+    </div>
+  )
+}
+
+function StatefulSetEventsTab({ detail }: { detail: StatefulSetDetailMeta }) {
+  const { localeCode } = useI18n()
+  const { clusterId } = usePlatformScopeStore()
+  const eventsQuery = useQuery({
+    queryKey: ['statefulset-events', clusterId, detail.namespace, detail.name],
+    queryFn: async () => {
+      const response = await api.get<ApiResponse<WorkloadOverviewEvent[]>>(
+        buildClusterScopedPath(clusterId!, 'events', detail.namespace, { limit: 100 }),
+      )
+      return {
+        data: (response.data ?? []).filter(
+          (item) =>
+            item.involvedName === detail.name &&
+            (!item.involvedKind || item.involvedKind.toLowerCase() === 'statefulset'),
+        ),
+      } as ApiResponse<WorkloadOverviewEvent[]>
+    },
+    enabled: !!clusterId && !!detail.namespace,
+  })
+
+  return (
+    <ResourceEventsTimeline
+      title={localeCode === 'zh_CN' ? 'StatefulSet 事件时间线' : 'StatefulSet Event Timeline'}
+      events={eventsQuery.data?.data ?? []}
+      loading={eventsQuery.isLoading}
+      emptyDescription={
+        localeCode === 'zh_CN' ? '当前 StatefulSet 暂无事件' : 'No StatefulSet events'
+      }
+    />
+  )
+}
+
+export function StatefulSetDetailPage() {
+  const { localeCode } = useI18n()
+  const params = useParams()
+  const [searchParams] = useSearchParams()
+  const statefulSetName = params.statefulSetName as string
+  const { clusterId, namespace } = usePlatformScopeStore()
+  const detailNamespace = resolveWorkloadNamespace(namespace, searchParams.get('namespace'))
+  const metricsQuery = useQuery({
+    queryKey: ['statefulset-metrics', clusterId, detailNamespace, statefulSetName],
+    queryFn: () =>
+      api.get<ApiResponse<ResourceMetrics>>(
+        `/clusters/${clusterId}/workloads/statefulsets/${statefulSetName}/metrics?namespace=${encodeURIComponent(detailNamespace!)}`,
+      ),
+    enabled: !!clusterId && !!detailNamespace,
+  })
+
+  return (
+    <WorkloadDetailShell
+      title="StatefulSet"
+      resource="statefulsets"
+      paramKey="statefulSetName"
+      extraOverview={(detail) => <StatefulSetOverview detail={detail as StatefulSetDetailMeta} />}
+      extraTabPanes={(detail) => [
+        {
+          key: 'metrics',
+          label: localeCode === 'zh_CN' ? '指标' : 'Metrics',
+          children: (
+            <ResourceMetricsPanel
+              title={localeCode === 'zh_CN' ? 'StatefulSet 指标' : 'StatefulSet Metrics'}
+              data={metricsQuery.data?.data}
+              loading={metricsQuery.isLoading}
+            />
+          ),
+        },
+        {
+          key: 'events',
+          label: localeCode === 'zh_CN' ? '事件' : 'Events',
+          children: <StatefulSetEventsTab detail={detail as StatefulSetDetailMeta} />,
+        },
+      ]}
+      yamlLast
+    />
   )
 }
 
@@ -3630,8 +3845,210 @@ export function WorkloadsDaemonSetsPage() {
   )
 }
 
+function DaemonSetOverview({ detail }: { detail: DaemonSetDetailMeta }) {
+  const { localeCode } = useI18n()
+  const navigate = useNavigate()
+  const { clusterId } = usePlatformScopeStore()
+  const selector = detail.selector
+  const podsQuery = useQuery({
+    queryKey: ['daemonset-pods', clusterId, detail.namespace, detail.name, selector],
+    queryFn: async () => {
+      const response = await api.get<ApiResponse<Pod[]>>(
+        `/clusters/${clusterId}/workloads/pods?namespace=${encodeURIComponent(detail.namespace)}`,
+      )
+      return {
+        data: (response.data ?? []).filter((item) => selectorMatchesLabels(selector, item.labels)),
+      } as ApiResponse<Pod[]>
+    },
+    enabled: !!clusterId && !!detail.namespace && !!selector,
+  })
+  const pods = podsQuery.data?.data ?? []
+
+  return (
+    <div className="soha-detail-stack">
+      <Card
+        className="soha-detail-card soha-rollout-card"
+        size="small"
+        title={localeCode === 'zh_CN' ? 'DaemonSet 状态' : 'DaemonSet Status'}
+      >
+        <Descriptions
+          column={{ xs: 1, sm: 2, md: 3 }}
+          size="small"
+          items={[
+            {
+              key: 'desired',
+              label: 'Desired',
+              children: detail.desiredNumber ?? '-',
+            },
+            {
+              key: 'current',
+              label: 'Current',
+              children: detail.currentNumber ?? '-',
+            },
+            {
+              key: 'ready',
+              label: 'Ready',
+              children: detail.readyNumber ?? '-',
+            },
+            {
+              key: 'available',
+              label: 'Available',
+              children: detail.availableNumber ?? '-',
+            },
+            {
+              key: 'updated',
+              label: 'Updated',
+              children: detail.updatedNumber ?? '-',
+            },
+            {
+              key: 'strategy',
+              label: localeCode === 'zh_CN' ? '更新策略' : 'Update Strategy',
+              children: detail.updateStrategy || '-',
+            },
+          ]}
+        />
+      </Card>
+      <Card
+        className="soha-detail-card soha-related-pod-card"
+        size="small"
+        title={localeCode === 'zh_CN' ? '关联 Pods' : 'Related Pods'}
+      >
+        <List
+          className="soha-related-pod-list"
+          dataSource={pods}
+          loading={podsQuery.isLoading}
+          rowKey={(record) => `${record.namespace}/${record.name}`}
+          locale={{
+            emptyText: (
+              <ManagementState
+                bordered={false}
+                compact
+                title={localeCode === 'zh_CN' ? '暂无关联 Pods' : 'No related Pods'}
+              />
+            ),
+          }}
+          renderItem={(pod: Pod) => (
+            <List.Item className="soha-related-pod-item">
+              <div className="soha-related-pod-line">
+                <Tooltip title={pod.name}>
+                  <Button
+                    type="link"
+                    className="soha-related-pod-name"
+                    onClick={() =>
+                      navigate(
+                        buildWorkloadDetailPath('pods', pod.name, detail.namespace, pod.namespace),
+                      )
+                    }
+                  >
+                    {pod.name}
+                  </Button>
+                </Tooltip>
+                <StatusTag value={pod.phase} />
+                <Tag color="blue" className="soha-related-pod-tag">
+                  {pod.namespace || detail.namespace || '-'}
+                </Tag>
+                <Tag color="cyan" className="soha-related-pod-tag">
+                  {pod.podIp || '-'}
+                </Tag>
+                <Tag color="success" className="soha-related-pod-tag">
+                  {`Ready ${pod.readyContainers || '-'}`}
+                </Tag>
+                <Tag
+                  color={(pod.restarts ?? 0) > 0 ? 'warning' : 'default'}
+                  className="soha-related-pod-tag"
+                >
+                  {`${localeCode === 'zh_CN' ? '重启' : 'Restarts'} ${pod.restarts ?? 0}`}
+                </Tag>
+                <Tooltip title={pod.nodeName || '-'}>
+                  <Tag color="purple" className="soha-related-pod-tag soha-related-pod-tag-node">
+                    {pod.nodeName || '-'}
+                  </Tag>
+                </Tooltip>
+                <Tag color="geekblue" className="soha-related-pod-tag">
+                  {formatAgeSeconds(pod.ageSeconds)}
+                </Tag>
+              </div>
+            </List.Item>
+          )}
+        />
+      </Card>
+    </div>
+  )
+}
+
+function DaemonSetEventsTab({ detail }: { detail: DaemonSetDetailMeta }) {
+  const { localeCode } = useI18n()
+  const { clusterId } = usePlatformScopeStore()
+  const eventsQuery = useQuery({
+    queryKey: ['daemonset-events', clusterId, detail.namespace, detail.name],
+    queryFn: async () => {
+      const response = await api.get<ApiResponse<WorkloadOverviewEvent[]>>(
+        buildClusterScopedPath(clusterId!, 'events', detail.namespace, { limit: 100 }),
+      )
+      return {
+        data: (response.data ?? []).filter(
+          (item) =>
+            item.involvedName === detail.name &&
+            (!item.involvedKind || item.involvedKind.toLowerCase() === 'daemonset'),
+        ),
+      } as ApiResponse<WorkloadOverviewEvent[]>
+    },
+    enabled: !!clusterId && !!detail.namespace,
+  })
+
+  return (
+    <ResourceEventsTimeline
+      title={localeCode === 'zh_CN' ? 'DaemonSet 事件时间线' : 'DaemonSet Event Timeline'}
+      events={eventsQuery.data?.data ?? []}
+      loading={eventsQuery.isLoading}
+      emptyDescription={localeCode === 'zh_CN' ? '当前 DaemonSet 暂无事件' : 'No DaemonSet events'}
+    />
+  )
+}
+
 export function DaemonSetDetailPage() {
-  return <WorkloadDetailShell title="DaemonSet" resource="daemonsets" paramKey="daemonSetName" />
+  const { localeCode } = useI18n()
+  const params = useParams()
+  const [searchParams] = useSearchParams()
+  const daemonSetName = params.daemonSetName as string
+  const { clusterId, namespace } = usePlatformScopeStore()
+  const detailNamespace = resolveWorkloadNamespace(namespace, searchParams.get('namespace'))
+  const metricsQuery = useQuery({
+    queryKey: ['daemonset-metrics', clusterId, detailNamespace, daemonSetName],
+    queryFn: () =>
+      api.get<ApiResponse<ResourceMetrics>>(
+        `/clusters/${clusterId}/workloads/daemonsets/${daemonSetName}/metrics?namespace=${encodeURIComponent(detailNamespace!)}`,
+      ),
+    enabled: !!clusterId && !!detailNamespace,
+  })
+
+  return (
+    <WorkloadDetailShell
+      title="DaemonSet"
+      resource="daemonsets"
+      paramKey="daemonSetName"
+      extraOverview={(detail) => <DaemonSetOverview detail={detail as DaemonSetDetailMeta} />}
+      extraTabPanes={(detail) => [
+        {
+          key: 'metrics',
+          label: localeCode === 'zh_CN' ? '指标' : 'Metrics',
+          children: (
+            <ResourceMetricsPanel
+              title={localeCode === 'zh_CN' ? 'DaemonSet 指标' : 'DaemonSet Metrics'}
+              data={metricsQuery.data?.data}
+              loading={metricsQuery.isLoading}
+            />
+          ),
+        },
+        {
+          key: 'events',
+          label: localeCode === 'zh_CN' ? '事件' : 'Events',
+          children: <DaemonSetEventsTab detail={detail as DaemonSetDetailMeta} />,
+        },
+      ]}
+      yamlLast
+    />
+  )
 }
 
 /* ─── Jobs ─── */
@@ -3768,14 +4185,181 @@ export function WorkloadsJobsPage() {
   )
 }
 
+function JobOverview({ detail }: { detail: JobDetailMeta }) {
+  const { localeCode } = useI18n()
+  const navigate = useNavigate()
+  const { clusterId } = usePlatformScopeStore()
+  const podsQuery = useQuery({
+    queryKey: ['job-pods', clusterId, detail.namespace, detail.name],
+    queryFn: async () => {
+      const response = await api.get<ApiResponse<Pod[]>>(
+        `/clusters/${clusterId}/workloads/pods?namespace=${encodeURIComponent(detail.namespace)}`,
+      )
+      return {
+        data: (response.data ?? []).filter(
+          (pod) =>
+            pod.labels?.['job-name'] === detail.name ||
+            pod.labels?.['batch.kubernetes.io/job-name'] === detail.name,
+        ),
+      } as ApiResponse<Pod[]>
+    },
+    enabled: !!clusterId && !!detail.namespace,
+  })
+  const pods = podsQuery.data?.data ?? []
+
+  return (
+    <div className="soha-detail-stack">
+      <Card
+        className="soha-detail-card soha-rollout-card"
+        size="small"
+        title={localeCode === 'zh_CN' ? 'Job 状态' : 'Job Status'}
+      >
+        <Descriptions
+          column={{ xs: 1, sm: 2, md: 3 }}
+          size="small"
+          items={[
+            { key: 'completions', label: 'Completions', children: detail.completions ?? '-' },
+            { key: 'parallelism', label: 'Parallelism', children: detail.parallelism ?? '-' },
+            { key: 'succeeded', label: 'Succeeded', children: detail.succeeded ?? 0 },
+            { key: 'failed', label: 'Failed', children: detail.failed ?? 0 },
+            { key: 'active', label: 'Active', children: detail.active ?? 0 },
+            { key: 'mode', label: 'Mode', children: detail.completionMode || '-' },
+            {
+              key: 'startTime',
+              label: localeCode === 'zh_CN' ? '开始时间' : 'Start Time',
+              children: detail.startTime ? formatDateTime(detail.startTime) : '-',
+            },
+            {
+              key: 'completionTime',
+              label: localeCode === 'zh_CN' ? '完成时间' : 'Completion Time',
+              children: detail.completionTime ? formatDateTime(detail.completionTime) : '-',
+            },
+          ]}
+        />
+      </Card>
+      <Card
+        className="soha-detail-card soha-related-pod-card"
+        size="small"
+        title={localeCode === 'zh_CN' ? '关联 Pods' : 'Related Pods'}
+      >
+        <List
+          className="soha-related-pod-list"
+          dataSource={pods}
+          loading={podsQuery.isLoading}
+          rowKey={(record) => `${record.namespace}/${record.name}`}
+          locale={{
+            emptyText: (
+              <ManagementState
+                bordered={false}
+                compact
+                title={localeCode === 'zh_CN' ? '暂无关联 Pods' : 'No related Pods'}
+              />
+            ),
+          }}
+          renderItem={(pod: Pod) => (
+            <List.Item className="soha-related-pod-item">
+              <div className="soha-related-pod-line">
+                <Tooltip title={pod.name}>
+                  <Button
+                    type="link"
+                    className="soha-related-pod-name"
+                    onClick={() =>
+                      navigate(
+                        buildWorkloadDetailPath('pods', pod.name, detail.namespace, pod.namespace),
+                      )
+                    }
+                  >
+                    {pod.name}
+                  </Button>
+                </Tooltip>
+                <StatusTag value={pod.phase} />
+                <Tag color="blue" className="soha-related-pod-tag">
+                  {pod.namespace || detail.namespace || '-'}
+                </Tag>
+                <Tag color="cyan" className="soha-related-pod-tag">
+                  {pod.podIp || '-'}
+                </Tag>
+                <Tag color="success" className="soha-related-pod-tag">
+                  {`Ready ${pod.readyContainers || '-'}`}
+                </Tag>
+                <Tag
+                  color={(pod.restarts ?? 0) > 0 ? 'warning' : 'default'}
+                  className="soha-related-pod-tag"
+                >
+                  {`${localeCode === 'zh_CN' ? '重启' : 'Restarts'} ${pod.restarts ?? 0}`}
+                </Tag>
+                <Tooltip title={pod.nodeName || '-'}>
+                  <Tag color="purple" className="soha-related-pod-tag soha-related-pod-tag-node">
+                    {pod.nodeName || '-'}
+                  </Tag>
+                </Tooltip>
+                <Tag color="geekblue" className="soha-related-pod-tag">
+                  {formatAgeSeconds(pod.ageSeconds)}
+                </Tag>
+              </div>
+            </List.Item>
+          )}
+        />
+      </Card>
+    </div>
+  )
+}
+
+function JobEventsTab({ detail }: { detail: JobDetailMeta }) {
+  const { localeCode } = useI18n()
+  const { clusterId } = usePlatformScopeStore()
+  const eventsQuery = useQuery({
+    queryKey: ['job-events', clusterId, detail.namespace, detail.name],
+    queryFn: async () => {
+      const response = await api.get<ApiResponse<WorkloadOverviewEvent[]>>(
+        buildClusterScopedPath(clusterId!, 'events', detail.namespace, { limit: 100 }),
+      )
+      return {
+        data: (response.data ?? []).filter(
+          (item) =>
+            item.involvedName === detail.name &&
+            (!item.involvedKind || item.involvedKind.toLowerCase() === 'job'),
+        ),
+      } as ApiResponse<WorkloadOverviewEvent[]>
+    },
+    enabled: !!clusterId && !!detail.namespace,
+  })
+
+  return (
+    <ResourceEventsTimeline
+      title={localeCode === 'zh_CN' ? 'Job 事件时间线' : 'Job Event Timeline'}
+      events={eventsQuery.data?.data ?? []}
+      loading={eventsQuery.isLoading}
+      emptyDescription={localeCode === 'zh_CN' ? '当前 Job 暂无事件' : 'No Job events'}
+    />
+  )
+}
+
 export function JobDetailPage() {
-  return <WorkloadDetailShell title="Job" resource="jobs" paramKey="jobName" />
+  const { localeCode } = useI18n()
+  return (
+    <WorkloadDetailShell
+      title="Job"
+      resource="jobs"
+      paramKey="jobName"
+      extraOverview={(detail) => <JobOverview detail={detail as unknown as JobDetailMeta} />}
+      extraTabPanes={(detail) => [
+        {
+          key: 'events',
+          label: localeCode === 'zh_CN' ? '事件' : 'Events',
+          children: <JobEventsTab detail={detail as unknown as JobDetailMeta} />,
+        },
+      ]}
+      yamlLast
+    />
+  )
 }
 
 /* ─── CronJobs ─── */
 
 export function WorkloadsCronJobsPage() {
   const { t, localeCode } = useI18n()
+  const { message } = App.useApp()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { clusterId, namespace } = usePlatformScopeStore()
@@ -3850,8 +4434,75 @@ export function WorkloadsCronJobsPage() {
     deleteDisabled: workloadMutationCapability.disabled,
     deleteDisabledReason: workloadMutationCapability.reason,
     listInvalidationKey: ['cronjobs'],
+    width: 96,
   })
-  columns.push(cronJobActions)
+  const suspendCronJobMutation = useMutation({
+    mutationFn: ({ name, namespace: targetNamespace, suspend }: { name: string; namespace: string; suspend: boolean }) =>
+      api.post<ApiResponse<CronJobDetailMeta>>(
+        `/clusters/${clusterId}/workloads/cronjobs/${name}/suspend?namespace=${encodeURIComponent(targetNamespace)}`,
+        { suspend },
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cronjobs', clusterId, namespace] })
+      void message.success(localeCode === 'zh_CN' ? '已更新定时任务状态' : 'CronJob updated')
+    },
+    onError: (err: Error) => void message.error(err.message),
+  })
+  const suspendLabel = localeCode === 'zh_CN' ? '暂停' : 'Suspend'
+  const resumeLabel = localeCode === 'zh_CN' ? '恢复' : 'Resume'
+  const renderCronJobResourceAction =
+    typeof cronJobActions.render === 'function' ? cronJobActions.render : undefined
+  columns.push({
+    ...cronJobActions,
+    render: (_: unknown, record: CronJob) => {
+      const actionLabel = record.suspend ? resumeLabel : suspendLabel
+      const actionDisabled =
+        workloadMutationCapability.disabled || !hasAllowedAction(record.allowedActions, 'update')
+      const actionPending =
+        suspendCronJobMutation.isPending &&
+        suspendCronJobMutation.variables?.name === record.name &&
+        suspendCronJobMutation.variables?.namespace === record.namespace
+      const resourceAction = renderCronJobResourceAction?.(undefined, record, 0)
+      return (
+        <Space size={4} className="soha-deployment-action-cell">
+          <Popconfirm
+            title={
+              record.suspend
+                ? localeCode === 'zh_CN'
+                  ? `恢复 ${record.name}？`
+                  : `Resume ${record.name}?`
+                : localeCode === 'zh_CN'
+                  ? `暂停 ${record.name}？`
+                  : `Suspend ${record.name}?`
+            }
+            okText={localeCode === 'zh_CN' ? '确认' : 'OK'}
+            cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
+            disabled={actionDisabled}
+            onConfirm={() =>
+              suspendCronJobMutation.mutate({
+                name: record.name,
+                namespace: record.namespace,
+                suspend: !record.suspend,
+              })
+            }
+          >
+            <ManagementIconButton
+              disabled={actionDisabled}
+              icon={record.suspend ? <PlayCircleOutlined /> : <PauseCircleOutlined />}
+              aria-label={actionLabel}
+              loading={actionPending}
+              tooltip={
+                actionDisabled
+                  ? capabilityActionTooltip(actionLabel, workloadMutationCapability)
+                  : actionLabel
+              }
+            />
+          </Popconfirm>
+          {isValidElement(resourceAction) ? resourceAction : null}
+        </Space>
+      )
+    },
+  })
 
   const cronJobQueryPanel = (
     <WorkloadQueryPanel
@@ -3922,6 +4573,305 @@ export function WorkloadsCronJobsPage() {
   )
 }
 
+function CronJobOverview({ detail }: { detail: CronJobDetailMeta }) {
+  const { localeCode } = useI18n()
+  const navigate = useNavigate()
+  const { clusterId } = usePlatformScopeStore()
+  const jobsQuery = useQuery({
+    queryKey: ['cronjob-jobs', clusterId, detail.namespace, detail.name],
+    queryFn: async () => {
+      const response = await api.get<ApiResponse<Job[]>>(
+        `/clusters/${clusterId}/workloads/jobs?namespace=${encodeURIComponent(detail.namespace)}`,
+      )
+      return {
+        data: (response.data ?? []).filter((job) => job.name.startsWith(`${detail.name}-`)),
+      } as ApiResponse<Job[]>
+    },
+    enabled: !!clusterId && !!detail.namespace,
+  })
+  const jobs = jobsQuery.data?.data ?? []
+
+  return (
+    <div className="soha-detail-stack">
+      <Card
+        className="soha-detail-card soha-rollout-card"
+        size="small"
+        title={localeCode === 'zh_CN' ? 'CronJob 调度' : 'CronJob Schedule'}
+      >
+        <Descriptions
+          column={{ xs: 1, sm: 2, md: 3 }}
+          size="small"
+          items={[
+            { key: 'schedule', label: 'Schedule', children: detail.schedule || '-' },
+            {
+              key: 'suspend',
+              label: localeCode === 'zh_CN' ? '暂停' : 'Suspend',
+              children: (
+                <BooleanTag
+                  value={detail.suspend}
+                  trueLabel="Yes"
+                  falseLabel="No"
+                  trueColor="orange"
+                  falseColor="green"
+                />
+              ),
+            },
+            { key: 'activeJobs', label: 'Active', children: detail.activeJobs ?? 0 },
+            {
+              key: 'lastSchedule',
+              label: localeCode === 'zh_CN' ? '上次调度' : 'Last Schedule',
+              children: detail.lastScheduleTime ? formatDateTime(detail.lastScheduleTime) : '-',
+            },
+            {
+              key: 'concurrency',
+              label: localeCode === 'zh_CN' ? '并发策略' : 'Concurrency',
+              children: detail.concurrencyPolicy || '-',
+            },
+            { key: 'timeZone', label: 'Time Zone', children: detail.timeZone || '-' },
+          ]}
+        />
+      </Card>
+      <Card
+        className="soha-detail-card soha-related-pod-card"
+        size="small"
+        title={localeCode === 'zh_CN' ? '关联 Jobs' : 'Related Jobs'}
+      >
+        <List
+          className="soha-related-pod-list"
+          dataSource={jobs}
+          loading={jobsQuery.isLoading}
+          rowKey={(record) => `${record.namespace}/${record.name}`}
+          locale={{
+            emptyText: (
+              <ManagementState
+                bordered={false}
+                compact
+                title={localeCode === 'zh_CN' ? '暂无关联 Jobs' : 'No related Jobs'}
+              />
+            ),
+          }}
+          renderItem={(job: Job) => (
+            <List.Item className="soha-related-pod-item">
+              <div className="soha-related-pod-line">
+                <Tooltip title={job.name}>
+                  <Button
+                    type="link"
+                    className="soha-related-pod-name"
+                    onClick={() =>
+                      navigate(
+                        buildWorkloadDetailPath('jobs', job.name, detail.namespace, job.namespace),
+                      )
+                    }
+                  >
+                    {job.name}
+                  </Button>
+                </Tooltip>
+                <Tag color="blue" className="soha-related-pod-tag">
+                  {job.namespace || detail.namespace || '-'}
+                </Tag>
+                <Tag color="success" className="soha-related-pod-tag">
+                  {`Succeeded ${job.succeeded ?? 0}`}
+                </Tag>
+                <Tag
+                  color={(job.failed ?? 0) > 0 ? 'error' : 'default'}
+                  className="soha-related-pod-tag"
+                >
+                  {`Failed ${job.failed ?? 0}`}
+                </Tag>
+                <Tag
+                  color={(job.active ?? 0) > 0 ? 'processing' : 'default'}
+                  className="soha-related-pod-tag"
+                >
+                  {`Active ${job.active ?? 0}`}
+                </Tag>
+                <Tag color="geekblue" className="soha-related-pod-tag">
+                  {formatAgeSeconds(job.ageSeconds)}
+                </Tag>
+              </div>
+            </List.Item>
+          )}
+        />
+      </Card>
+    </div>
+  )
+}
+
+function CronJobEventsTab({ detail }: { detail: CronJobDetailMeta }) {
+  const { localeCode } = useI18n()
+  const { clusterId } = usePlatformScopeStore()
+  const eventsQuery = useQuery({
+    queryKey: ['cronjob-events', clusterId, detail.namespace, detail.name],
+    queryFn: async () => {
+      const response = await api.get<ApiResponse<WorkloadOverviewEvent[]>>(
+        buildClusterScopedPath(clusterId!, 'events', detail.namespace, { limit: 100 }),
+      )
+      return {
+        data: (response.data ?? []).filter(
+          (item) =>
+            item.involvedName === detail.name &&
+            (!item.involvedKind || item.involvedKind.toLowerCase() === 'cronjob'),
+        ),
+      } as ApiResponse<WorkloadOverviewEvent[]>
+    },
+    enabled: !!clusterId && !!detail.namespace,
+  })
+
+  return (
+    <ResourceEventsTimeline
+      title={localeCode === 'zh_CN' ? 'CronJob 事件时间线' : 'CronJob Event Timeline'}
+      events={eventsQuery.data?.data ?? []}
+      loading={eventsQuery.isLoading}
+      emptyDescription={localeCode === 'zh_CN' ? '当前 CronJob 暂无事件' : 'No CronJob events'}
+    />
+  )
+}
+
 export function CronJobDetailPage() {
-  return <WorkloadDetailShell title="CronJob" resource="cronjobs" paramKey="cronJobName" />
+  const { localeCode } = useI18n()
+
+  return (
+    <WorkloadDetailShell
+      title="CronJob"
+      resource="cronjobs"
+      paramKey="cronJobName"
+      extraOverview={(detail) => (
+        <CronJobOverview detail={detail as unknown as CronJobDetailMeta} />
+      )}
+      extraTabPanes={(detail) => [
+        {
+          key: 'events',
+          label: localeCode === 'zh_CN' ? '事件' : 'Events',
+          children: <CronJobEventsTab detail={detail as unknown as CronJobDetailMeta} />,
+        },
+      ]}
+      yamlLast
+    />
+  )
+}
+
+function WorkloadYAMLOnlyDetailPage({
+  paramKey,
+  resource,
+  title,
+}: {
+  paramKey: string
+  resource: string
+  title: string
+}) {
+  const { t, localeCode } = useI18n()
+  const { message } = App.useApp()
+  const params = useParams()
+  const [searchParams] = useSearchParams()
+  const name = params[paramKey] as string
+  const { clusterId, namespace } = usePlatformScopeStore()
+  const detailNamespace = resolveWorkloadNamespace(namespace, searchParams.get('namespace'))
+  const yamlPath = clusterId
+    ? `/clusters/${clusterId}/workloads/${resource}/${name}/yaml${detailNamespace ? `?namespace=${encodeURIComponent(detailNamespace)}` : ''}`
+    : null
+  const yamlQuery = useQuery({
+    queryKey: [resource, 'yaml', clusterId, detailNamespace, name],
+    queryFn: () => api.get<ApiResponse<ResourceYAMLView>>(yamlPath!),
+    enabled: !!yamlPath,
+  })
+  const yamlServerValue = yamlQuery.data?.data?.content ?? ''
+  const [yamlDraft, setYamlDraft] = useState('')
+  const yamlApplyCapability = useClusterCapability('resource.yaml.apply', localeCode)
+  const yamlApplyDisabledReason = yamlApplyCapability.disabled
+    ? yamlApplyCapability.reason
+    : undefined
+  const applyYamlMutation = useMutation({
+    mutationFn: () => api.put<ApiResponse<ResourceYAMLView>>(yamlPath!, { content: yamlDraft }),
+    onSuccess: (response) => {
+      setYamlDraft(response.data?.content ?? yamlDraft)
+      void message.success(t('yamlEditor.applySuccess', 'YAML applied'))
+      yamlQuery.refetch()
+    },
+    onError: (err: Error) => void message.error(err.message),
+  })
+
+  useEffect(() => {
+    if (yamlPath) setYamlDraft(yamlServerValue)
+  }, [yamlPath, yamlServerValue])
+
+  return (
+    <div className="soha-page soha-workload-detail-page">
+      <div className="soha-workload-detail-heading">
+        <div className="soha-workload-detail-heading-main">
+          <Text type="secondary" className="soha-workload-detail-kind">
+            {title}
+          </Text>
+          <Text strong className="soha-workload-detail-name">
+            {name}
+          </Text>
+        </div>
+      </div>
+      <Tabs
+        className="soha-workload-detail-tabs"
+        defaultActiveKey="yaml"
+        indicator={{ size: (origin) => Math.max(16, origin - 16), align: 'center' }}
+        items={[
+          {
+            key: 'yaml',
+            label: t('common.yaml', 'YAML'),
+            children: yamlQuery.isLoading ? (
+              <Card className="soha-detail-card">
+                <Spin size="large" />
+              </Card>
+            ) : yamlQuery.isError ? (
+              <ManagementState
+                compact
+                kind="not-found"
+                title={localeCode === 'zh_CN' ? `${title}未找到` : `${title} not found`}
+              />
+            ) : (
+              <Suspense
+                fallback={
+                  <Card className="soha-detail-card">
+                    <Spin size="large" />
+                  </Card>
+                }
+              >
+                <K8sYamlEditor
+                  value={yamlDraft}
+                  onChange={setYamlDraft}
+                  onReset={() => {
+                    setYamlDraft(yamlServerValue)
+                    void message.success(t('yamlEditor.resetSuccess', 'YAML draft reset'))
+                  }}
+                  onSave={() =>
+                    void message.info(
+                      localeCode === 'zh_CN' ? '此页面不保存本地草稿' : 'Local draft save disabled here',
+                    )
+                  }
+                  onApply={() => applyYamlMutation.mutate()}
+                  saveDisabled
+                  applyDisabled={!yamlPath || !yamlDraft.trim() || yamlApplyCapability.disabled}
+                  applyDisabledReason={yamlApplyDisabledReason}
+                  applying={applyYamlMutation.isPending}
+                />
+              </Suspense>
+            ),
+          },
+        ]}
+        size="small"
+        tabBarGutter={18}
+      />
+    </div>
+  )
+}
+
+export function ReplicaSetDetailPage() {
+  return (
+    <WorkloadYAMLOnlyDetailPage paramKey="replicaSetName" resource="replicasets" title="ReplicaSet" />
+  )
+}
+
+export function ReplicationControllerDetailPage() {
+  return (
+    <WorkloadYAMLOnlyDetailPage
+      paramKey="replicationControllerName"
+      resource="replicationcontrollers"
+      title="ReplicationController"
+    />
+  )
 }

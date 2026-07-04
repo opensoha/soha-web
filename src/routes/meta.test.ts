@@ -1620,6 +1620,9 @@ describe("access route authorization", () => {
     expect(getRouteScopeMode(getRoute("network-gateway-api-gatewayclasses"))).toBe(
       "cluster",
     );
+    expect(getRouteScopeMode(getRoute("network-gateway-api-httproutes"))).toBe(
+      "namespace",
+    );
   });
 
   it("derives namespace scope for namespaced platform pages and detail routes", () => {

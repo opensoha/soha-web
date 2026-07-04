@@ -6,6 +6,7 @@ import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import YamlWorker from 'monaco-yaml/yaml.worker?worker'
 import './resource-operation-panels.css'
 import { useI18n } from '@/i18n'
+import { ensureYamlLanguage } from './monaco-yaml-language'
 
 const { Text } = Typography
 
@@ -72,6 +73,7 @@ export function YamlDraftDiffEditor({
   useEffect(() => {
     if (!monaco) return
     ensureMonacoWorkers()
+    ensureYamlLanguage(monaco)
   }, [monaco])
 
   const editorPath = useMemo(() => 'file:///helm-values-draft.yaml', [])
@@ -121,7 +123,7 @@ export function YamlDraftDiffEditor({
           <div className="soha-yaml-pane-body">
             <Editor
               height="100%"
-              defaultLanguage="yaml"
+              language="yaml"
               path={editorPath}
               value={modified}
               onChange={(nextValue) => {

@@ -8,7 +8,6 @@ import {
   InputNumber,
   Modal,
   Popconfirm,
-  Popover,
   Progress,
   Select,
   Space,
@@ -18,7 +17,7 @@ import {
 } from 'antd'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementDensityButton,
@@ -38,8 +37,13 @@ import {
 import { buildClusterScopedPath } from '@/features/platform/platform-scope-query'
 import {
   CONFIGMAP_DEFAULT_TEMPLATE,
+  ConfigurationDetailShell,
+  ConfigurationDetailTabs,
+  ConfigurationYamlTab,
   CreateResourceModal,
   SECRET_DEFAULT_TEMPLATE,
+  ResourceMetaOverview,
+  useResourceYAMLState,
 } from '@/features/platform/configuration-detail-pages'
 import {
   CLUSTER_ROLE_BINDING_DEFAULT_TEMPLATE,
@@ -126,49 +130,81 @@ function buildTableStateKind(
     : 'empty'
 }
 
-function roleRefTag(value?: string) {
-  if (!value) {
+function splitRBACRef(value?: string) {
+  if (!value) return null
+  const [kind, ...nameParts] = value.split('/')
+  const name = nameParts.join('/')
+  return { kind: kind || 'Role', name: name || value }
+}
+
+function roleRefTag(value?: string, namespace?: string) {
+  const ref = splitRBACRef(value)
+  if (!ref) {
     return <Text type="secondary">-</Text>
   }
-  return (
-    <Text code className="soha-rbac-role-ref">
-      {value}
-    </Text>
+  const path =
+    ref.kind === 'ClusterRole'
+      ? buildRBACDetailPath('clusterroles', ref.name)
+      : buildRBACDetailPath('roles', ref.name, namespace)
+  return <ResourceNameLink name={value ?? ref.name} to={path} />
+}
+
+function rbacSubjectPath(subject: ReturnType<typeof parseRBACSubject>, fallbackNamespace?: string) {
+  if (subject.kind !== 'ServiceAccount') return null
+  return buildRBACDetailPath(
+    'serviceaccounts',
+    subject.name,
+    subject.namespace || fallbackNamespace,
   )
 }
 
-function renderRBACSubjectChips(subjects: string[] | undefined, emptyLabel: string) {
+function renderRBACSubjectLinks(
+  subjects: string[] | undefined,
+  emptyLabel: string,
+  fallbackNamespace?: string,
+) {
   if (!subjects || subjects.length === 0) {
     return <Text type="secondary">{emptyLabel}</Text>
   }
-
-  const preview = subjects.slice(0, 2).map(parseRBACSubject)
-  const overflow = subjects.slice(2).map(parseRBACSubject)
-
+  const visibleSubjects = subjects.slice(0, 2)
+  const hiddenCount = subjects.length - visibleSubjects.length
   return (
-    <div className="soha-rbac-subject-list">
-      {preview.map((subject) => (
-        <Tag key={subject.label} className="soha-rbac-subject-chip">
-          {subject.label}
-        </Tag>
-      ))}
-      {overflow.length > 0 ? (
-        <Popover
-          placement="topLeft"
-          content={
-            <div className="soha-rbac-subject-popover">
-              {overflow.map((subject) => (
-                <Tag key={subject.label} className="soha-rbac-subject-chip">
-                  {subject.label}
-                </Tag>
-              ))}
-            </div>
-          }
-        >
-          <Tag className="soha-rbac-subject-chip">{`+${overflow.length}`}</Tag>
-        </Popover>
-      ) : null}
+    <div className="soha-rbac-subject-list is-table-preview">
+      {visibleSubjects.map((value) => {
+        const subject = parseRBACSubject(value)
+        const path = rbacSubjectPath(subject, fallbackNamespace)
+        return path ? (
+          <Tag key={value} className="soha-rbac-subject-chip">
+            <ResourceNameLink name={subject.label} to={path} />
+          </Tag>
+        ) : (
+          <Tag key={value} className="soha-rbac-subject-chip">
+            {subject.label}
+          </Tag>
+        )
+      })}
+      {hiddenCount > 0 ? <Tag className="soha-rbac-subject-chip">{`+${hiddenCount}`}</Tag> : null}
     </div>
+  )
+}
+
+function renderRBACSubjectKinds(subjects: string[] | undefined, localeCode: 'zh_CN' | 'en_US') {
+  if (!subjects || subjects.length === 0) {
+    return <Text type="secondary">-</Text>
+  }
+  const counts = new Map<string, number>()
+  subjects.forEach((value) => {
+    const subject = parseRBACSubject(value)
+    counts.set(subject.kind, (counts.get(subject.kind) ?? 0) + 1)
+  })
+  const summary = [
+    ...[...counts.entries()].map(([kind, count]) => `${kind} ${count}`),
+    localeCode === 'zh_CN' ? `共 ${subjects.length}` : `${subjects.length} total`,
+  ].join(' / ')
+  return (
+    <Text className="soha-rbac-kind-summary" title={summary}>
+      {summary}
+    </Text>
   )
 }
 
@@ -438,13 +474,21 @@ function renderReplicaReadyCell(ready: number | undefined, desired: number | und
   )
 }
 
-function renderWorkloadNameText(value: string) {
-  return (
-    <Tooltip title={value} placement="topLeft">
-      <Text strong className="soha-workload-name-text">
-        {value}
-      </Text>
-    </Tooltip>
+function renderWorkloadNameLink(resource: string) {
+  return (value: string, record: { namespace?: string }) => (
+    <ResourceNameLink
+      name={value}
+      to={`/workloads/${resource}/${encodeURIComponent(value)}${buildNamespaceQuery(record.namespace)}`}
+    />
+  )
+}
+
+function renderConfigurationNameLink(resource: string, namespaced = true) {
+  return (value: string, record: any) => (
+    <ResourceNameLink
+      name={value}
+      to={`/configuration/${resource}/${encodeURIComponent(value)}${namespaced ? buildNamespaceQuery(record.namespace) : ''}`}
+    />
   )
 }
 
@@ -597,6 +641,211 @@ function ResourceNameLink({ to, name }: { to: string; name: string }) {
   )
 }
 
+function useResolvedNamespace() {
+  const [searchParams] = useSearchParams()
+  const { namespace } = usePlatformScopeStore()
+  return namespace && namespace !== '' ? namespace : searchParams.get('namespace') || ''
+}
+
+function ConfigurationListDetailPage<
+  T extends {
+    name: string
+    namespace?: string
+    labels?: Record<string, string>
+    annotations?: Record<string, string>
+    ageSeconds: number
+  },
+>({
+  getExtra,
+  kind,
+  name,
+  namespace,
+  resourcePath,
+}: {
+  getExtra?: (item: T) => Array<{ key: string; value: ReactNode }>
+  kind: string
+  name: string
+  namespace?: string
+  resourcePath: string
+}) {
+  const { localeCode } = useI18n()
+  const { clusterId } = usePlatformScopeStore()
+  const listPath = clusterId ? buildClusterScopedPath(clusterId, resourcePath, namespace) : null
+  const listQuery = useQuery({
+    queryKey: [resourcePath, 'detail-source', clusterId, namespace],
+    queryFn: () => api.get<ApiResponse<T[]>>(listPath!),
+    enabled: !!listPath,
+  })
+  const item = listQuery.data?.data.find((record) => record.name === name)
+  const yamlPath = clusterId
+    ? `/clusters/${clusterId}/${resourcePath}/${encodeURIComponent(name)}/yaml${namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''}`
+    : null
+  const yamlState = useResourceYAMLState(yamlPath, resourcePath, name, namespace ?? '')
+
+  if (listQuery.isLoading) {
+    return (
+      <ManagementState
+        kind="loading"
+        compact
+        description={localeCode === 'zh_CN' ? '加载中' : 'Loading'}
+      />
+    )
+  }
+  if (listQuery.isError) {
+    return (
+      <div className="soha-page">
+        <ManagementState
+          kind="error"
+          description={
+            listQuery.error instanceof Error
+              ? listQuery.error.message
+              : localeCode === 'zh_CN'
+                ? '加载失败'
+                : 'Load failed'
+          }
+        />
+      </div>
+    )
+  }
+  if (!item) {
+    return (
+      <div className="soha-page">
+        <ManagementState
+          kind="not-found"
+          description={localeCode === 'zh_CN' ? `${kind} 未找到` : `${kind} not found`}
+        />
+      </div>
+    )
+  }
+
+  return (
+    <ConfigurationDetailShell kind={kind} name={item.name}>
+      <ConfigurationDetailTabs
+        items={[
+          {
+            key: 'overview',
+            label: localeCode === 'zh_CN' ? '概览' : 'Overview',
+            children: (
+              <ResourceMetaOverview
+                name={item.name}
+                namespace={item.namespace || '-'}
+                ageSeconds={item.ageSeconds}
+                labels={item.labels}
+                annotations={item.annotations}
+                extra={getExtra?.(item)}
+              />
+            ),
+          },
+          {
+            key: 'yaml',
+            label: 'YAML',
+            children: <ConfigurationYamlTab state={yamlState} yamlPath={yamlPath} />,
+          },
+        ]}
+      />
+    </ConfigurationDetailShell>
+  )
+}
+
+export function ConfigurationHPADetailPage() {
+  const params = useParams()
+  const name = params.name as string
+  const namespace = useResolvedNamespace()
+  return (
+    <ConfigurationListDetailPage<HorizontalPodAutoscalerResource>
+      kind="HorizontalPodAutoscaler"
+      name={name}
+      namespace={namespace}
+      resourcePath="configuration/hpas"
+      getExtra={(item) => [
+        { key: 'Target', value: item.targetRef || '-' },
+        { key: 'Replicas', value: `${item.currentReplicas}/${item.desiredReplicas}` },
+        { key: 'Min / Max', value: `${item.minReplicas} / ${item.maxReplicas}` },
+      ]}
+    />
+  )
+}
+
+export function ConfigurationPDBDetailPage() {
+  const params = useParams()
+  const name = params.name as string
+  const namespace = useResolvedNamespace()
+  return (
+    <ConfigurationListDetailPage<PodDisruptionBudgetResource>
+      kind="PodDisruptionBudget"
+      name={name}
+      namespace={namespace}
+      resourcePath="configuration/poddisruptionbudgets"
+      getExtra={(item) => [
+        { key: 'Min Available', value: item.minAvailable || '-' },
+        { key: 'Max Unavailable', value: item.maxUnavailable || '-' },
+        { key: 'Healthy', value: `${item.currentHealthy}/${item.desiredHealthy}` },
+        { key: 'Disruptions Allowed', value: item.disruptionsAllowed },
+      ]}
+    />
+  )
+}
+
+export function ConfigurationResourceQuotaDetailPage() {
+  const params = useParams()
+  const name = params.name as string
+  const namespace = useResolvedNamespace()
+  return (
+    <ConfigurationListDetailPage<ResourceQuotaResource>
+      kind="ResourceQuota"
+      name={name}
+      namespace={namespace}
+      resourcePath="configuration/resourcequotas"
+      getExtra={(item) => [
+        { key: 'Scopes', value: item.scopes?.join(', ') || '-' },
+        { key: 'Hard', value: Object.keys(item.hard ?? {}).length || '-' },
+        { key: 'Used', value: Object.keys(item.used ?? {}).length || '-' },
+      ]}
+    />
+  )
+}
+
+export function ConfigurationLimitRangeDetailPage() {
+  const params = useParams()
+  const name = params.name as string
+  const namespace = useResolvedNamespace()
+  return (
+    <ConfigurationListDetailPage<LimitRangeResource>
+      kind="LimitRange"
+      name={name}
+      namespace={namespace}
+      resourcePath="configuration/limitranges"
+      getExtra={(item) => [{ key: 'Limits', value: item.limits }]}
+    />
+  )
+}
+
+export function ConfigurationMutatingWebhookConfigurationDetailPage() {
+  const params = useParams()
+  const name = params.name as string
+  return (
+    <ConfigurationListDetailPage<MutatingWebhookConfigurationResource>
+      kind="MutatingWebhookConfiguration"
+      name={name}
+      resourcePath="configuration/mutatingwebhookconfigurations"
+      getExtra={(item) => [{ key: 'Webhooks', value: item.webhooks }]}
+    />
+  )
+}
+
+export function ConfigurationValidatingWebhookConfigurationDetailPage() {
+  const params = useParams()
+  const name = params.name as string
+  return (
+    <ConfigurationListDetailPage<ValidatingWebhookConfigurationResource>
+      kind="ValidatingWebhookConfiguration"
+      name={name}
+      resourcePath="configuration/validatingwebhookconfigurations"
+      getExtra={(item) => [{ key: 'Webhooks', value: item.webhooks }]}
+    />
+  )
+}
+
 function RBACListPage<T extends { allowedActions?: string[] }>({
   actionConfig,
   createConfig,
@@ -673,7 +922,7 @@ function RBACListPage<T extends { allowedActions?: string[] }>({
 
   return (
     <ManagementDataPage
-      beforeQuery={(
+      beforeQuery={
         <>
           {query.isError ? (
             <ManagementState
@@ -693,7 +942,7 @@ function RBACListPage<T extends { allowedActions?: string[] }>({
             />
           ) : null}
         </>
-      )}
+      }
       query={{
         onFinish: () => undefined,
         actions: (
@@ -860,7 +1109,7 @@ function buildReplicaSetColumns(
       title: localeCode === 'zh_CN' ? '名称' : 'Name',
       dataIndex: 'name',
       ellipsis: { showTitle: false },
-      render: renderWorkloadNameText,
+      render: renderWorkloadNameLink('replicasets'),
       width: 240,
     },
     {
@@ -888,37 +1137,57 @@ function buildReplicaSetColumns(
 }
 
 const hpaColumns: TableColumnsType<HorizontalPodAutoscalerResource> = [
-  { title: 'Name', dataIndex: 'name' },
-  { title: 'Namespace', dataIndex: 'namespace' },
-  { title: 'Target', dataIndex: 'targetRef' },
-  { title: 'Min', dataIndex: 'minReplicas' },
-  { title: 'Max', dataIndex: 'maxReplicas' },
-  { title: 'Current', dataIndex: 'currentReplicas' },
-  { title: 'Desired', dataIndex: 'desiredReplicas' },
+  {
+    title: 'Name',
+    dataIndex: 'name',
+    width: 260,
+    ellipsis: { showTitle: false },
+    render: renderConfigurationNameLink('hpas'),
+  },
+  { title: 'Namespace', dataIndex: 'namespace', width: 160 },
+  { title: 'Target', dataIndex: 'targetRef', width: 260, ellipsis: { showTitle: false } },
+  { title: 'Min', dataIndex: 'minReplicas', width: 88 },
+  { title: 'Max', dataIndex: 'maxReplicas', width: 88 },
+  { title: 'Current', dataIndex: 'currentReplicas', width: 96 },
+  { title: 'Desired', dataIndex: 'desiredReplicas', width: 96 },
   {
     ...tableColumnPresets.datetime,
     title: 'Age',
     dataIndex: 'ageSeconds',
+    width: 120,
     render: (value: number) => formatAgeSeconds(value),
   },
 ]
 
 const pdbColumns: TableColumnsType<PodDisruptionBudgetResource> = [
-  { title: 'Name', dataIndex: 'name' },
-  { title: 'Namespace', dataIndex: 'namespace' },
-  { title: 'Min Available', dataIndex: 'minAvailable', render: (value: string) => value || '-' },
+  {
+    title: 'Name',
+    dataIndex: 'name',
+    width: 260,
+    ellipsis: { showTitle: false },
+    render: renderConfigurationNameLink('poddisruptionbudgets'),
+  },
+  { title: 'Namespace', dataIndex: 'namespace', width: 160 },
+  {
+    title: 'Min Available',
+    dataIndex: 'minAvailable',
+    width: 128,
+    render: (value: string) => value || '-',
+  },
   {
     title: 'Max Unavailable',
     dataIndex: 'maxUnavailable',
+    width: 150,
     render: (value: string) => value || '-',
   },
-  { title: 'Healthy', dataIndex: 'currentHealthy' },
-  { title: 'Desired', dataIndex: 'desiredHealthy' },
-  { title: 'Allowed', dataIndex: 'disruptionsAllowed' },
+  { title: 'Healthy', dataIndex: 'currentHealthy', width: 96 },
+  { title: 'Desired', dataIndex: 'desiredHealthy', width: 96 },
+  { title: 'Allowed', dataIndex: 'disruptionsAllowed', width: 96 },
   {
     ...tableColumnPresets.datetime,
     title: 'Age',
     dataIndex: 'ageSeconds',
+    width: 120,
     render: (value: number) => formatAgeSeconds(value),
   },
 ]
@@ -1031,6 +1300,8 @@ function buildRoleBindingColumns(
     {
       title: localeCode === 'zh_CN' ? '名称' : 'Name',
       dataIndex: 'name',
+      ellipsis: { showTitle: false },
+      width: 310,
       render: (value: string, record: RoleBindingResource) => (
         <ResourceNameLink
           name={value}
@@ -1042,20 +1313,28 @@ function buildRoleBindingColumns(
     {
       title: 'RoleRef',
       dataIndex: 'roleRef',
-      width: 170,
-      render: (value: string | undefined) => roleRefTag(value),
+      ellipsis: { showTitle: false },
+      width: 310,
+      render: (value: string | undefined, record: RoleBindingResource) =>
+        roleRefTag(value, record.namespace),
     },
     {
       title: localeCode === 'zh_CN' ? '主体预览' : 'Subjects',
       dataIndex: 'subjects',
-      render: (value: string[] | undefined) =>
-        renderRBACSubjectChips(value, localeCode === 'zh_CN' ? '无主体' : 'No subjects'),
+      ellipsis: { showTitle: false },
+      width: 290,
+      render: (value: string[] | undefined, record: RoleBindingResource) =>
+        renderRBACSubjectLinks(
+          value,
+          localeCode === 'zh_CN' ? '无主体' : 'No subjects',
+          record.namespace,
+        ),
     },
     {
-      title: localeCode === 'zh_CN' ? '主体数' : 'Subject Count',
+      title: localeCode === 'zh_CN' ? '主体类型' : 'Subject Types',
       dataIndex: 'subjects',
-      width: 108,
-      render: (value: string[] | undefined) => value?.length ?? 0,
+      width: 150,
+      render: (value: string[] | undefined) => renderRBACSubjectKinds(value, localeCode),
     },
     {
       ...tableColumnPresets.datetime,
@@ -1089,38 +1368,43 @@ const ingressClassColumns: TableColumnsType<IngressClassResource> = [
 ]
 
 const priorityClassColumns: TableColumnsType<PriorityClassResource> = [
-  { title: 'Name', dataIndex: 'name' },
-  { title: 'Value', dataIndex: 'value' },
+  { title: 'Name', dataIndex: 'name', width: 280, ellipsis: { showTitle: false } },
+  { title: 'Value', dataIndex: 'value', width: 120 },
   {
     title: 'Global Default',
     dataIndex: 'globalDefault',
+    width: 140,
     render: (value: boolean) => <BooleanTag value={value} trueLabel="Yes" falseLabel="No" />,
   },
   {
     title: 'Preemption',
     dataIndex: 'preemptionPolicy',
+    width: 180,
     render: (value: string | undefined) => value || '-',
   },
   {
     title: 'Description',
     dataIndex: 'description',
+    ellipsis: { showTitle: false },
     render: (value: string | undefined) => value || '-',
   },
   {
     ...tableColumnPresets.datetime,
     title: 'Age',
     dataIndex: 'ageSeconds',
+    width: 120,
     render: (value: number) => formatAgeSeconds(value),
   },
 ]
 
 const runtimeClassColumns: TableColumnsType<RuntimeClassResource> = [
-  { title: 'Name', dataIndex: 'name' },
-  { title: 'Handler', dataIndex: 'handler' },
+  { title: 'Name', dataIndex: 'name', width: 280, ellipsis: { showTitle: false } },
+  { title: 'Handler', dataIndex: 'handler', ellipsis: { showTitle: false } },
   {
     ...tableColumnPresets.datetime,
     title: 'Age',
     dataIndex: 'ageSeconds',
+    width: 120,
     render: (value: number) => formatAgeSeconds(value),
   },
 ]
@@ -1159,6 +1443,8 @@ function buildClusterRoleBindingColumns(
     {
       title: localeCode === 'zh_CN' ? '名称' : 'Name',
       dataIndex: 'name',
+      ellipsis: { showTitle: false },
+      width: 310,
       render: (value: string) => (
         <ResourceNameLink name={value} to={buildRBACDetailPath('clusterrolebindings', value)} />
       ),
@@ -1166,20 +1452,23 @@ function buildClusterRoleBindingColumns(
     {
       title: 'RoleRef',
       dataIndex: 'roleRef',
-      width: 170,
+      ellipsis: { showTitle: false },
+      width: 280,
       render: (value: string | undefined) => roleRefTag(value),
     },
     {
       title: localeCode === 'zh_CN' ? '主体预览' : 'Subjects',
       dataIndex: 'subjects',
+      ellipsis: { showTitle: false },
+      width: 320,
       render: (value: string[] | undefined) =>
-        renderRBACSubjectChips(value, localeCode === 'zh_CN' ? '无主体' : 'No subjects'),
+        renderRBACSubjectLinks(value, localeCode === 'zh_CN' ? '无主体' : 'No subjects'),
     },
     {
-      title: localeCode === 'zh_CN' ? '主体数' : 'Subject Count',
+      title: localeCode === 'zh_CN' ? '主体类型' : 'Subject Types',
       dataIndex: 'subjects',
-      width: 108,
-      render: (value: string[] | undefined) => value?.length ?? 0,
+      width: 150,
+      render: (value: string[] | undefined) => renderRBACSubjectKinds(value, localeCode),
     },
     {
       ...tableColumnPresets.datetime,
@@ -1192,23 +1481,35 @@ function buildClusterRoleBindingColumns(
 }
 
 const mutatingWebhookColumns: TableColumnsType<MutatingWebhookConfigurationResource> = [
-  { title: 'Name', dataIndex: 'name' },
-  { title: 'Webhooks', dataIndex: 'webhooks' },
+  {
+    title: 'Name',
+    dataIndex: 'name',
+    ellipsis: { showTitle: false },
+    render: renderConfigurationNameLink('mutatingwebhookconfigurations', false),
+  },
+  { title: 'Webhooks', dataIndex: 'webhooks', width: 120 },
   {
     ...tableColumnPresets.datetime,
     title: 'Age',
     dataIndex: 'ageSeconds',
+    width: 120,
     render: (value: number) => formatAgeSeconds(value),
   },
 ]
 
 const validatingWebhookColumns: TableColumnsType<ValidatingWebhookConfigurationResource> = [
-  { title: 'Name', dataIndex: 'name' },
-  { title: 'Webhooks', dataIndex: 'webhooks' },
+  {
+    title: 'Name',
+    dataIndex: 'name',
+    ellipsis: { showTitle: false },
+    render: renderConfigurationNameLink('validatingwebhookconfigurations', false),
+  },
+  { title: 'Webhooks', dataIndex: 'webhooks', width: 120 },
   {
     ...tableColumnPresets.datetime,
     title: 'Age',
     dataIndex: 'ageSeconds',
+    width: 120,
     render: (value: number) => formatAgeSeconds(value),
   },
 ]
@@ -1269,11 +1570,19 @@ function renderQuotaProgress(record: ResourceQuotaResource) {
 }
 
 const resourceQuotaColumns: TableColumnsType<ResourceQuotaResource> = [
-  { title: 'Namespace', dataIndex: 'namespace' },
-  { title: 'Name', dataIndex: 'name' },
+  { title: 'Namespace', dataIndex: 'namespace', width: 160 },
+  {
+    title: 'Name',
+    dataIndex: 'name',
+    width: 240,
+    ellipsis: { showTitle: false },
+    render: renderConfigurationNameLink('resourcequotas'),
+  },
   {
     title: 'Scopes',
     dataIndex: 'scopes',
+    width: 220,
+    ellipsis: { showTitle: false },
     render: (value: string[] | undefined) => value?.join(', ') || '-',
   },
   {
@@ -1285,49 +1594,61 @@ const resourceQuotaColumns: TableColumnsType<ResourceQuotaResource> = [
     ...tableColumnPresets.datetime,
     title: 'Age',
     dataIndex: 'ageSeconds',
+    width: 120,
     render: (value: number) => formatAgeSeconds(value),
   },
 ]
 
 const limitRangeColumns: TableColumnsType<LimitRangeResource> = [
-  { title: 'Namespace', dataIndex: 'namespace' },
-  { title: 'Name', dataIndex: 'name' },
-  { title: 'Limits', dataIndex: 'limits' },
+  { title: 'Namespace', dataIndex: 'namespace', width: 160 },
+  {
+    title: 'Name',
+    dataIndex: 'name',
+    ellipsis: { showTitle: false },
+    render: renderConfigurationNameLink('limitranges'),
+  },
+  { title: 'Limits', dataIndex: 'limits', width: 120 },
   {
     ...tableColumnPresets.datetime,
     title: 'Age',
     dataIndex: 'ageSeconds',
+    width: 120,
     render: (value: number) => formatAgeSeconds(value),
   },
 ]
 
 const leaseColumns: TableColumnsType<LeaseResource> = [
-  { title: 'Namespace', dataIndex: 'namespace' },
-  { title: 'Name', dataIndex: 'name' },
+  { title: 'Namespace', dataIndex: 'namespace', width: 160 },
+  { title: 'Name', dataIndex: 'name', width: 260, ellipsis: { showTitle: false } },
   {
     title: 'Holder',
     dataIndex: 'holderIdentity',
+    ellipsis: { showTitle: false },
     render: (value: string | undefined) => value || '-',
   },
   {
     title: 'Duration (s)',
     dataIndex: 'leaseDurationSeconds',
+    width: 120,
     render: (value: number | undefined) => (value == null ? '-' : String(value)),
   },
   {
     title: 'Acquired',
     dataIndex: 'acquireTime',
+    width: 180,
     render: (value: string | undefined) => (value ? formatDateTime(value) : '-'),
   },
   {
     title: 'Renewed',
     dataIndex: 'renewTime',
+    width: 180,
     render: (value: string | undefined) => (value ? formatDateTime(value) : '-'),
   },
   {
     ...tableColumnPresets.datetime,
     title: 'Age',
     dataIndex: 'ageSeconds',
+    width: 120,
     render: (value: number) => formatAgeSeconds(value),
   },
 ]
@@ -1340,7 +1661,7 @@ function buildReplicationControllerColumns(
       title: localeCode === 'zh_CN' ? '名称' : 'Name',
       dataIndex: 'name',
       ellipsis: { showTitle: false },
-      render: renderWorkloadNameText,
+      render: renderWorkloadNameLink('replicationcontrollers'),
       width: 260,
     },
     {
@@ -1557,6 +1878,11 @@ export function ConfigurationHPAPage() {
         zh_CN: '当前范围没有 HPA',
         en_US: 'No HPA resources in the current scope',
       }}
+      actionConfig={{
+        resourceKind: 'HorizontalPodAutoscaler',
+        getName: (record) => record.name,
+        getNamespace: (record) => record.namespace,
+      }}
     />
   )
 }
@@ -1571,6 +1897,11 @@ export function ConfigurationPodDisruptionBudgetsPage() {
       emptyDescription={{
         zh_CN: '当前范围没有 PodDisruptionBudgets',
         en_US: 'No pod disruption budgets in the current scope',
+      }}
+      actionConfig={{
+        resourceKind: 'PodDisruptionBudget',
+        getName: (record) => record.name,
+        getNamespace: (record) => record.namespace,
       }}
     />
   )

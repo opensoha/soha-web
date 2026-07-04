@@ -1,6 +1,27 @@
+import type { components as SohaAPIComponents } from '@opensoha/contracts/gen/ts/sohaapi'
 import type { Ingress, Pod, Service, WorkloadCondition, WorkloadContainer } from './platform'
 
-export interface WorkflowNodeRun {
+type SohaAPISchemas = SohaAPIComponents['schemas']
+type ContractWorkflowNodeRun = SohaAPISchemas['WorkflowNodeRun']
+type ContractReleaseTarget = SohaAPISchemas['ReleaseTarget']
+type ContractBuildSource = SohaAPISchemas['BuildSource']
+type ContractApplicationServiceContainer = SohaAPISchemas['ApplicationServiceContainer']
+type ContractApplicationService = SohaAPISchemas['ApplicationService']
+type ContractBuildPolicy = SohaAPISchemas['BuildPolicy']
+type ContractReleasePolicy = SohaAPISchemas['ReleasePolicy']
+type ContractBuildTemplate = SohaAPISchemas['BuildTemplate']
+type ContractWorkflowTemplate = SohaAPISchemas['WorkflowTemplate']
+type ContractApplication = SohaAPISchemas['Application']
+type ContractBuildRecord = SohaAPISchemas['BuildRecord']
+type ContractReleaseRecord = SohaAPISchemas['ReleaseRecord']
+type ContractWorkflowRun = SohaAPISchemas['WorkflowRun']
+type ContractReleaseBundle = SohaAPISchemas['ReleaseBundle']
+type ContractExecutionArtifact = SohaAPISchemas['ExecutionArtifact']
+type ContractExecutionTask = SohaAPISchemas['ExecutionTask']
+type ContractApplicationDeliveryActionRequest = SohaAPISchemas['ApplicationDeliveryActionRequest']
+type ContractDeliveryPlan = SohaAPISchemas['DeliveryPlan']
+
+export interface WorkflowNodeRun extends ContractWorkflowNodeRun {
   nodeId: string
   name: string
   type: string
@@ -24,8 +45,9 @@ export interface DeliveryEnvironment {
   updatedAt: string
 }
 
-export interface ReleaseTarget {
+export interface ReleaseTarget extends Partial<ContractReleaseTarget> {
   id: string
+  applicationEnvironmentId?: string
   clusterId: string
   namespace: string
   targetKind?: string
@@ -178,7 +200,7 @@ export interface DeliveryDraftConfirmResult {
   spec: RenderedDeliverySpec
 }
 
-export interface BuildSource {
+export interface BuildSource extends ContractBuildSource {
   id: string
   name: string
   type: 'repo_dockerfile' | 'platform_build_template' | 'external_pipeline'
@@ -191,7 +213,7 @@ export interface BuildSource {
 
 export type ApplicationServiceKind = 'kubernetes_workload' | 'helm_release' | 'external_service' | 'job'
 
-export interface ApplicationServiceContainer {
+export interface ApplicationServiceContainer extends ContractApplicationServiceContainer {
   id: string
   serviceId?: string
   name: string
@@ -208,7 +230,7 @@ export interface ApplicationServiceContainer {
   updatedAt?: string
 }
 
-export interface ApplicationServiceComponent {
+export interface ApplicationServiceComponent extends ContractApplicationService {
   id: string
   applicationId: string
   key: string
@@ -228,7 +250,7 @@ export interface ApplicationServiceComponent {
   updatedAt: string
 }
 
-export interface BuildPolicy {
+export interface BuildPolicy extends ContractBuildPolicy {
   sourceId?: string
   refType?: string
   refValue?: string
@@ -238,7 +260,7 @@ export interface BuildPolicy {
   buildArgs?: Record<string, unknown>
 }
 
-export interface ReleasePolicy {
+export interface ReleasePolicy extends ContractReleasePolicy {
   actionKind?: 'deploy' | 'release'
   requiresApproval?: boolean
   approverRoles?: string[]
@@ -269,7 +291,7 @@ export interface ApplicationEnvironment {
   updatedAt: string
 }
 
-export interface BuildTemplate {
+export interface BuildTemplate extends ContractBuildTemplate {
   id: string
   key: string
   name: string
@@ -284,7 +306,7 @@ export interface BuildTemplate {
   updatedAt: string
 }
 
-export interface WorkflowTemplate {
+export interface WorkflowTemplate extends ContractWorkflowTemplate {
   id: string
   key: string
   name: string
@@ -390,7 +412,7 @@ export interface TemplateUsageSummary {
   lastExecutionSummary?: TemplateUsageRuntimeSummary
 }
 
-export interface DeliveryApplication {
+export interface DeliveryApplication extends ContractApplication {
   id: string
   name: string
   key: string
@@ -413,7 +435,7 @@ export interface DeliveryApplication {
   updatedAt: string
 }
 
-export interface BuildRecord {
+export interface BuildRecord extends ContractBuildRecord {
   id: string
   applicationId: string
   sourceSystem: string
@@ -424,7 +446,7 @@ export interface BuildRecord {
   createdAt: string
 }
 
-export interface ReleaseRecord {
+export interface ReleaseRecord extends ContractReleaseRecord {
   id: string
   applicationId: string
   clusterId: string
@@ -436,7 +458,7 @@ export interface ReleaseRecord {
   createdAt: string
 }
 
-export interface WorkflowRun {
+export interface WorkflowRun extends ContractWorkflowRun {
   id: string
   applicationId: string
   workflowName: string
@@ -451,7 +473,7 @@ export interface WorkflowRun {
   updatedAt: string
 }
 
-export interface ReleaseBundle {
+export interface ReleaseBundle extends ContractReleaseBundle {
   id: string
   applicationId: string
   applicationEnvironmentId?: string
@@ -466,7 +488,7 @@ export interface ReleaseBundle {
   updatedAt: string
 }
 
-export interface ExecutionArtifact {
+export interface ExecutionArtifact extends ContractExecutionArtifact {
   id?: string
   applicationId?: string
   applicationEnvironmentId?: string
@@ -518,7 +540,7 @@ export interface RuntimeObjectDetail<TObject = unknown> {
   permissions: RuntimeObjectPermissions
 }
 
-export interface ExecutionTask {
+export interface ExecutionTask extends Partial<ContractExecutionTask> {
   id: string
   releaseBundleId?: string
   applicationId: string
@@ -577,7 +599,7 @@ export interface DeliveryApplicationDetail {
 
 export type ApplicationDeliveryActionKind = 'build' | 'deploy' | 'build_deploy' | 'workflow' | 'verify' | 'rollback'
 
-export interface ApplicationDeliveryActionRequest {
+export interface ApplicationDeliveryActionRequest extends ContractApplicationDeliveryActionRequest {
   action: ApplicationDeliveryActionKind
   applicationEnvironmentId: string
   targetId?: string
@@ -616,7 +638,7 @@ export interface DeliveryPlanRequest extends ApplicationDeliveryActionRequest {
   reason?: string
 }
 
-export interface DeliveryPlan {
+export interface DeliveryPlan extends ContractDeliveryPlan {
   id: string
   source: DeliveryPlanSource
   status: DeliveryPlanStatus

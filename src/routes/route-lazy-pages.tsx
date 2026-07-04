@@ -1,589 +1,652 @@
-import { lazy, Suspense } from "react";
-import type { ReactNode } from "react";
-import { Navigate, useLocation } from "react-router-dom";
-import { Spin } from "antd";
+import { lazy, Suspense } from 'react'
+import type { ReactNode } from 'react'
+import { Navigate, useLocation } from 'react-router-dom'
+import { Spin } from 'antd'
 import {
   getAIModelSettingsPath,
   getAIOperationsPath,
   getAIToolsPath,
   getAIWorkbenchPathForMode,
-} from "@/features/copilot/workbench-navigation";
+} from '@/features/copilot/workbench-navigation'
 
 function lazyNamed<T extends Record<string, any>, K extends keyof T>(
   importer: () => Promise<T>,
   key: K,
 ) {
   return lazy(async () => {
-    const mod = await importer();
-    return { default: mod[key] as any };
-  });
+    const mod = await importer()
+    return { default: mod[key] as any }
+  })
 }
 
-export const LoginPage = lazyNamed(
-  () => import("@/features/auth/login-page"),
-  "LoginPage",
-);
+export const LoginPage = lazyNamed(() => import('@/features/auth/login-page'), 'LoginPage')
 export const OIDCCallbackPage = lazyNamed(
-  () => import("@/features/auth/oidc-callback-page"),
-  "OIDCCallbackPage",
-);
+  () => import('@/features/auth/oidc-callback-page'),
+  'OIDCCallbackPage',
+)
 export const UserProfilePage = lazyNamed(
-  () => import("@/features/auth/user-profile-page"),
-  "UserProfilePage",
-);
+  () => import('@/features/auth/user-profile-page'),
+  'UserProfilePage',
+)
 
 export const OverviewPage = lazyNamed(
-  () => import("@/features/platform/overview-page"),
-  "OverviewPage",
-);
+  () => import('@/features/platform/overview-page'),
+  'OverviewPage',
+)
 export const ClustersPage = lazyNamed(
-  () => import("@/features/platform/clusters-page"),
-  "ClustersPage",
-);
+  () => import('@/features/platform/clusters-page'),
+  'ClustersPage',
+)
 export const ClusterDetailPage = lazyNamed(
-  () => import("@/features/platform/clusters-page"),
-  "ClusterDetailPage",
-);
+  () => import('@/features/platform/clusters-page'),
+  'ClusterDetailPage',
+)
 export const ClusterNodesPage = lazyNamed(
-  () => import("@/features/platform/cluster-resources-pages"),
-  "ClusterNodesPage",
-);
+  () => import('@/features/platform/cluster-resources-pages'),
+  'ClusterNodesPage',
+)
 export const ClusterNamespacesPage = lazyNamed(
-  () => import("@/features/platform/cluster-resources-pages"),
-  "ClusterNamespacesPage",
-);
+  () => import('@/features/platform/cluster-resources-pages'),
+  'ClusterNamespacesPage',
+)
 export const NodeDetailPage = lazyNamed(
-  () => import("@/features/platform/node-detail-page"),
-  "NodeDetailPage",
-);
+  () => import('@/features/platform/node-detail-page'),
+  'NodeDetailPage',
+)
 
 export const WorkloadsOverviewPage = lazyNamed(
-  () => import("@/features/platform/workloads-pages"),
-  "WorkloadsOverviewPage",
-);
+  () => import('@/features/platform/workloads-pages'),
+  'WorkloadsOverviewPage',
+)
 export const WorkloadsDeploymentsPage = lazyNamed(
-  () => import("@/features/platform/workloads-pages"),
-  "WorkloadsDeploymentsPage",
-);
+  () => import('@/features/platform/workloads-pages'),
+  'WorkloadsDeploymentsPage',
+)
 export const WorkloadsPodsPage = lazyNamed(
-  () => import("@/features/platform/workloads-pages"),
-  "WorkloadsPodsPage",
-);
+  () => import('@/features/platform/workloads-pages'),
+  'WorkloadsPodsPage',
+)
 export const WorkloadsStatefulSetsPage = lazyNamed(
-  () => import("@/features/platform/workloads-pages"),
-  "WorkloadsStatefulSetsPage",
-);
+  () => import('@/features/platform/workloads-pages'),
+  'WorkloadsStatefulSetsPage',
+)
 export const WorkloadsDaemonSetsPage = lazyNamed(
-  () => import("@/features/platform/workloads-pages"),
-  "WorkloadsDaemonSetsPage",
-);
+  () => import('@/features/platform/workloads-pages'),
+  'WorkloadsDaemonSetsPage',
+)
 export const WorkloadsJobsPage = lazyNamed(
-  () => import("@/features/platform/workloads-pages"),
-  "WorkloadsJobsPage",
-);
+  () => import('@/features/platform/workloads-pages'),
+  'WorkloadsJobsPage',
+)
 export const WorkloadsCronJobsPage = lazyNamed(
-  () => import("@/features/platform/workloads-pages"),
-  "WorkloadsCronJobsPage",
-);
+  () => import('@/features/platform/workloads-pages'),
+  'WorkloadsCronJobsPage',
+)
 export const WorkloadsReplicaSetsPage = lazyNamed(
-  () => import("@/features/platform/platform-management-pages"),
-  "WorkloadsReplicaSetsPage",
-);
+  () => import('@/features/platform/platform-management-pages'),
+  'WorkloadsReplicaSetsPage',
+)
 export const WorkloadsReplicationControllersPage = lazyNamed(
-  () => import("@/features/platform/platform-management-pages"),
-  "WorkloadsReplicationControllersPage",
-);
+  () => import('@/features/platform/platform-management-pages'),
+  'WorkloadsReplicationControllersPage',
+)
 export const PodDetailPage = lazyNamed(
-  () => import("@/features/platform/workloads-pages"),
-  "PodDetailPage",
-);
+  () => import('@/features/platform/workloads-pages'),
+  'PodDetailPage',
+)
 export const DeploymentDetailPage = lazyNamed(
-  () => import("@/features/platform/workloads-pages"),
-  "DeploymentDetailPage",
-);
+  () => import('@/features/platform/workloads-pages'),
+  'DeploymentDetailPage',
+)
 export const StatefulSetDetailPage = lazyNamed(
-  () => import("@/features/platform/workloads-pages"),
-  "StatefulSetDetailPage",
-);
+  () => import('@/features/platform/workloads-pages'),
+  'StatefulSetDetailPage',
+)
 export const DaemonSetDetailPage = lazyNamed(
-  () => import("@/features/platform/workloads-pages"),
-  "DaemonSetDetailPage",
-);
+  () => import('@/features/platform/workloads-pages'),
+  'DaemonSetDetailPage',
+)
 export const JobDetailPage = lazyNamed(
-  () => import("@/features/platform/workloads-pages"),
-  "JobDetailPage",
-);
+  () => import('@/features/platform/workloads-pages'),
+  'JobDetailPage',
+)
 export const CronJobDetailPage = lazyNamed(
-  () => import("@/features/platform/workloads-pages"),
-  "CronJobDetailPage",
-);
+  () => import('@/features/platform/workloads-pages'),
+  'CronJobDetailPage',
+)
+export const ReplicaSetDetailPage = lazyNamed(
+  () => import('@/features/platform/workloads-pages'),
+  'ReplicaSetDetailPage',
+)
+export const ReplicationControllerDetailPage = lazyNamed(
+  () => import('@/features/platform/workloads-pages'),
+  'ReplicationControllerDetailPage',
+)
 
 export const ConfigurationConfigMapsPage = lazyNamed(
-  () => import("@/features/platform/platform-management-pages"),
-  "ConfigurationConfigMapsPage",
-);
+  () => import('@/features/platform/platform-management-pages'),
+  'ConfigurationConfigMapsPage',
+)
 export const ConfigurationSecretsPage = lazyNamed(
-  () => import("@/features/platform/platform-management-pages"),
-  "ConfigurationSecretsPage",
-);
+  () => import('@/features/platform/platform-management-pages'),
+  'ConfigurationSecretsPage',
+)
 export const ConfigMapDetailPage = lazyNamed(
-  () => import("@/features/platform/configuration-detail-pages"),
-  "ConfigMapDetailPage",
-);
+  () => import('@/features/platform/configuration-detail-pages'),
+  'ConfigMapDetailPage',
+)
 export const SecretDetailPage = lazyNamed(
-  () => import("@/features/platform/configuration-detail-pages"),
-  "SecretDetailPage",
-);
+  () => import('@/features/platform/configuration-detail-pages'),
+  'SecretDetailPage',
+)
+export const ConfigurationResourceQuotaDetailPage = lazyNamed(
+  () => import('@/features/platform/platform-management-pages'),
+  'ConfigurationResourceQuotaDetailPage',
+)
+export const ConfigurationLimitRangeDetailPage = lazyNamed(
+  () => import('@/features/platform/platform-management-pages'),
+  'ConfigurationLimitRangeDetailPage',
+)
+export const ConfigurationHPADetailPage = lazyNamed(
+  () => import('@/features/platform/platform-management-pages'),
+  'ConfigurationHPADetailPage',
+)
+export const ConfigurationPodDisruptionBudgetDetailPage = lazyNamed(
+  () => import('@/features/platform/platform-management-pages'),
+  'ConfigurationPDBDetailPage',
+)
+export const ConfigurationMutatingWebhookConfigurationDetailPage = lazyNamed(
+  () => import('@/features/platform/platform-management-pages'),
+  'ConfigurationMutatingWebhookConfigurationDetailPage',
+)
+export const ConfigurationValidatingWebhookConfigurationDetailPage = lazyNamed(
+  () => import('@/features/platform/platform-management-pages'),
+  'ConfigurationValidatingWebhookConfigurationDetailPage',
+)
 export const ConfigurationResourceQuotasPage = lazyNamed(
-  () => import("@/features/platform/platform-management-pages"),
-  "ConfigurationResourceQuotasPage",
-);
+  () => import('@/features/platform/platform-management-pages'),
+  'ConfigurationResourceQuotasPage',
+)
 export const ConfigurationLimitRangesPage = lazyNamed(
-  () => import("@/features/platform/platform-management-pages"),
-  "ConfigurationLimitRangesPage",
-);
+  () => import('@/features/platform/platform-management-pages'),
+  'ConfigurationLimitRangesPage',
+)
 export const ConfigurationHPAPage = lazyNamed(
-  () => import("@/features/platform/platform-management-pages"),
-  "ConfigurationHPAPage",
-);
+  () => import('@/features/platform/platform-management-pages'),
+  'ConfigurationHPAPage',
+)
 export const ConfigurationPodDisruptionBudgetsPage = lazyNamed(
-  () => import("@/features/platform/platform-management-pages"),
-  "ConfigurationPodDisruptionBudgetsPage",
-);
+  () => import('@/features/platform/platform-management-pages'),
+  'ConfigurationPodDisruptionBudgetsPage',
+)
 export const ConfigurationPriorityClassesPage = lazyNamed(
-  () => import("@/features/platform/platform-management-pages"),
-  "ConfigurationPriorityClassesPage",
-);
+  () => import('@/features/platform/platform-management-pages'),
+  'ConfigurationPriorityClassesPage',
+)
 export const ConfigurationRuntimeClassesPage = lazyNamed(
-  () => import("@/features/platform/platform-management-pages"),
-  "ConfigurationRuntimeClassesPage",
-);
+  () => import('@/features/platform/platform-management-pages'),
+  'ConfigurationRuntimeClassesPage',
+)
 export const ConfigurationLeasesPage = lazyNamed(
-  () => import("@/features/platform/platform-management-pages"),
-  "ConfigurationLeasesPage",
-);
+  () => import('@/features/platform/platform-management-pages'),
+  'ConfigurationLeasesPage',
+)
 export const ConfigurationMutatingWebhooksPage = lazyNamed(
-  () => import("@/features/platform/platform-management-pages"),
-  "ConfigurationMutatingWebhooksPage",
-);
+  () => import('@/features/platform/platform-management-pages'),
+  'ConfigurationMutatingWebhooksPage',
+)
 export const ConfigurationValidatingWebhooksPage = lazyNamed(
-  () => import("@/features/platform/platform-management-pages"),
-  "ConfigurationValidatingWebhooksPage",
-);
+  () => import('@/features/platform/platform-management-pages'),
+  'ConfigurationValidatingWebhooksPage',
+)
 export const PlatformAccessControlServiceAccountsPage = lazyNamed(
-  () => import("@/features/platform/platform-management-pages"),
-  "PlatformAccessControlServiceAccountsPage",
-);
+  () => import('@/features/platform/platform-management-pages'),
+  'PlatformAccessControlServiceAccountsPage',
+)
 export const PlatformAccessControlClusterRolesPage = lazyNamed(
-  () => import("@/features/platform/platform-management-pages"),
-  "PlatformAccessControlClusterRolesPage",
-);
+  () => import('@/features/platform/platform-management-pages'),
+  'PlatformAccessControlClusterRolesPage',
+)
 export const PlatformAccessControlRolesPage = lazyNamed(
-  () => import("@/features/platform/platform-management-pages"),
-  "PlatformAccessControlRolesPage",
-);
+  () => import('@/features/platform/platform-management-pages'),
+  'PlatformAccessControlRolesPage',
+)
 export const PlatformAccessControlClusterRoleBindingsPage = lazyNamed(
-  () => import("@/features/platform/platform-management-pages"),
-  "PlatformAccessControlClusterRoleBindingsPage",
-);
+  () => import('@/features/platform/platform-management-pages'),
+  'PlatformAccessControlClusterRoleBindingsPage',
+)
 export const PlatformAccessControlRoleBindingsPage = lazyNamed(
-  () => import("@/features/platform/platform-management-pages"),
-  "PlatformAccessControlRoleBindingsPage",
-);
+  () => import('@/features/platform/platform-management-pages'),
+  'PlatformAccessControlRoleBindingsPage',
+)
 export const PlatformAccessControlServiceAccountDetailPage = lazyNamed(
-  () => import("@/features/platform/rbac-detail-pages"),
-  "PlatformAccessControlServiceAccountDetailPage",
-);
+  () => import('@/features/platform/rbac-detail-pages'),
+  'PlatformAccessControlServiceAccountDetailPage',
+)
 export const PlatformAccessControlRoleDetailPage = lazyNamed(
-  () => import("@/features/platform/rbac-detail-pages"),
-  "PlatformAccessControlRoleDetailPage",
-);
+  () => import('@/features/platform/rbac-detail-pages'),
+  'PlatformAccessControlRoleDetailPage',
+)
 export const PlatformAccessControlRoleBindingDetailPage = lazyNamed(
-  () => import("@/features/platform/rbac-detail-pages"),
-  "PlatformAccessControlRoleBindingDetailPage",
-);
+  () => import('@/features/platform/rbac-detail-pages'),
+  'PlatformAccessControlRoleBindingDetailPage',
+)
 export const PlatformAccessControlClusterRoleDetailPage = lazyNamed(
-  () => import("@/features/platform/rbac-detail-pages"),
-  "PlatformAccessControlClusterRoleDetailPage",
-);
+  () => import('@/features/platform/rbac-detail-pages'),
+  'PlatformAccessControlClusterRoleDetailPage',
+)
 export const PlatformAccessControlClusterRoleBindingDetailPage = lazyNamed(
-  () => import("@/features/platform/rbac-detail-pages"),
-  "PlatformAccessControlClusterRoleBindingDetailPage",
-);
+  () => import('@/features/platform/rbac-detail-pages'),
+  'PlatformAccessControlClusterRoleBindingDetailPage',
+)
 
 export const NetworkServicesPage = lazyNamed(
-  () => import("@/features/platform/network-storage-pages"),
-  "NetworkServicesPage",
-);
+  () => import('@/features/platform/network-storage-pages'),
+  'NetworkServicesPage',
+)
 export const ServiceDetailPage = lazyNamed(
-  () => import("@/features/platform/network-storage-pages"),
-  "ServiceDetailPage",
-);
+  () => import('@/features/platform/network-storage-pages'),
+  'ServiceDetailPage',
+)
 export const NetworkIngressesPage = lazyNamed(
-  () => import("@/features/platform/network-storage-pages"),
-  "NetworkIngressesPage",
-);
+  () => import('@/features/platform/network-storage-pages'),
+  'NetworkIngressesPage',
+)
+export const IngressDetailPage = lazyNamed(
+  () => import('@/features/platform/network-storage-pages'),
+  'IngressDetailPage',
+)
 export const NetworkGatewayClassesPage = lazyNamed(
-  () => import("@/features/platform/network-storage-pages"),
-  "NetworkGatewayClassesPage",
-);
+  () => import('@/features/platform/network-storage-pages'),
+  'NetworkGatewayClassesPage',
+)
+export const GatewayClassDetailPage = lazyNamed(
+  () => import('@/features/platform/network-storage-pages'),
+  'GatewayClassDetailPage',
+)
 export const NetworkGatewaysPage = lazyNamed(
-  () => import("@/features/platform/network-storage-pages"),
-  "NetworkGatewaysPage",
-);
+  () => import('@/features/platform/network-storage-pages'),
+  'NetworkGatewaysPage',
+)
+export const NetworkHTTPRoutesPage = lazyNamed(
+  () => import('@/features/platform/network-storage-pages'),
+  'NetworkHTTPRoutesPage',
+)
+export const NetworkBackendTLSPoliciesPage = lazyNamed(
+  () => import('@/features/platform/network-storage-pages'),
+  'NetworkBackendTLSPoliciesPage',
+)
+export const NetworkGRPCRoutesPage = lazyNamed(
+  () => import('@/features/platform/network-storage-pages'),
+  'NetworkGRPCRoutesPage',
+)
+export const NetworkReferenceGrantsPage = lazyNamed(
+  () => import('@/features/platform/network-storage-pages'),
+  'NetworkReferenceGrantsPage',
+)
+export const GatewayDetailPage = lazyNamed(
+  () => import('@/features/platform/network-storage-pages'),
+  'GatewayDetailPage',
+)
 export const NetworkTopologyPage = lazyNamed(
-  () => import("@/features/platform/network-topology-page"),
-  "NetworkTopologyPage",
-);
+  () => import('@/features/platform/network-topology-page'),
+  'NetworkTopologyPage',
+)
 export const NetworkEndpointSlicesPage = lazyNamed(
-  () => import("@/features/platform/network-storage-pages"),
-  "NetworkEndpointSlicesPage",
-);
+  () => import('@/features/platform/network-storage-pages'),
+  'NetworkEndpointSlicesPage',
+)
+export const EndpointSliceDetailPage = lazyNamed(
+  () => import('@/features/platform/network-storage-pages'),
+  'EndpointSliceDetailPage',
+)
 export const NetworkIngressClassesPage = lazyNamed(
-  () => import("@/features/platform/network-storage-pages"),
-  "NetworkIngressClassesPage",
-);
+  () => import('@/features/platform/network-storage-pages'),
+  'NetworkIngressClassesPage',
+)
+export const IngressClassDetailPage = lazyNamed(
+  () => import('@/features/platform/network-storage-pages'),
+  'IngressClassDetailPage',
+)
 export const NetworkPoliciesPage = lazyNamed(
-  () => import("@/features/platform/network-storage-pages"),
-  "NetworkPoliciesPage",
-);
+  () => import('@/features/platform/network-storage-pages'),
+  'NetworkPoliciesPage',
+)
+export const NetworkPolicyDetailPage = lazyNamed(
+  () => import('@/features/platform/network-storage-pages'),
+  'NetworkPolicyDetailPage',
+)
 export const NetworkPortForwardPage = lazyNamed(
-  () => import("@/features/platform/platform-management-pages"),
-  "NetworkPortForwardPage",
-);
+  () => import('@/features/platform/platform-management-pages'),
+  'NetworkPortForwardPage',
+)
 export const StoragePvcPage = lazyNamed(
-  () => import("@/features/platform/network-storage-pages"),
-  "StoragePvcPage",
-);
+  () => import('@/features/platform/network-storage-pages'),
+  'StoragePvcPage',
+)
 export const StoragePvPage = lazyNamed(
-  () => import("@/features/platform/network-storage-pages"),
-  "StoragePvPage",
-);
+  () => import('@/features/platform/network-storage-pages'),
+  'StoragePvPage',
+)
 export const StorageClassesPage = lazyNamed(
-  () => import("@/features/platform/network-storage-pages"),
-  "StorageClassesPage",
-);
+  () => import('@/features/platform/network-storage-pages'),
+  'StorageClassesPage',
+)
 export const StoragePvcDetailPage = lazyNamed(
-  () => import("@/features/platform/network-storage-pages"),
-  "StoragePvcDetailPage",
-);
+  () => import('@/features/platform/network-storage-pages'),
+  'StoragePvcDetailPage',
+)
 export const StoragePvDetailPage = lazyNamed(
-  () => import("@/features/platform/network-storage-pages"),
-  "StoragePvDetailPage",
-);
+  () => import('@/features/platform/network-storage-pages'),
+  'StoragePvDetailPage',
+)
 export const StorageClassDetailPage = lazyNamed(
-  () => import("@/features/platform/network-storage-pages"),
-  "StorageClassDetailPage",
-);
+  () => import('@/features/platform/network-storage-pages'),
+  'StorageClassDetailPage',
+)
 
-export const CRDPage = lazyNamed(
-  () => import("@/features/platform/extensions-pages"),
-  "CRDPage",
-);
+export const CRDPage = lazyNamed(() => import('@/features/platform/extensions-pages'), 'CRDPage')
 export const CRDApiGroupDetailPage = lazyNamed(
-  () => import("@/features/platform/extensions-pages"),
-  "CRDApiGroupDetailPage",
-);
+  () => import('@/features/platform/extensions-pages'),
+  'CRDApiGroupDetailPage',
+)
 export const HelmReleasesPage = lazyNamed(
-  () => import("@/features/platform/extensions-pages"),
-  "HelmReleasesPage",
-);
+  () => import('@/features/platform/extensions-pages'),
+  'HelmReleasesPage',
+)
 export const HelmReleaseDetailPage = lazyNamed(
-  () => import("@/features/platform/extensions-pages"),
-  "HelmReleaseDetailPage",
-);
+  () => import('@/features/platform/extensions-pages'),
+  'HelmReleaseDetailPage',
+)
 export const HelmChartsPage = lazyNamed(
-  () => import("@/features/platform/extensions-pages"),
-  "HelmChartsPage",
-);
+  () => import('@/features/platform/extensions-pages'),
+  'HelmChartsPage',
+)
 
 export const ApplicationsPage = lazyNamed(
-  () => import("@/features/delivery/delivery-app-pages"),
-  "ApplicationsPage",
-);
+  () => import('@/features/delivery/delivery-app-pages'),
+  'ApplicationsPage',
+)
 export const ApplicationDetailPage = lazyNamed(
-  () => import("@/features/delivery/application-runtime-pages"),
-  "ApplicationDetailPage",
-);
+  () => import('@/features/delivery/application-runtime-pages'),
+  'ApplicationDetailPage',
+)
 export const ApplicationWorkloadDetailPage = lazyNamed(
-  () => import("@/features/delivery/application-runtime-pages"),
-  "ApplicationWorkloadDetailPage",
-);
+  () => import('@/features/delivery/application-runtime-pages'),
+  'ApplicationWorkloadDetailPage',
+)
 export const BuildTemplatesPage = lazyNamed(
-  () => import("@/features/delivery/delivery-app-pages"),
-  "BuildTemplatesPage",
-);
+  () => import('@/features/delivery/delivery-app-pages'),
+  'BuildTemplatesPage',
+)
 export const DeliveryBlueprintsPage = lazyNamed(
-  () => import("@/features/delivery/delivery-blueprint-pages"),
-  "DeliveryBlueprintsPage",
-);
+  () => import('@/features/delivery/delivery-blueprint-pages'),
+  'DeliveryBlueprintsPage',
+)
 export const DeliveryOnboardingPage = lazyNamed(
-  () => import("@/features/delivery/delivery-workbench-pages"),
-  "DeliveryOnboardingPage",
-);
+  () => import('@/features/delivery/delivery-workbench-pages'),
+  'DeliveryOnboardingPage',
+)
 export const DeliveryTestingPage = lazyNamed(
-  () => import("@/features/delivery/delivery-workbench-pages"),
-  "DeliveryTestingPage",
-);
+  () => import('@/features/delivery/delivery-workbench-pages'),
+  'DeliveryTestingPage',
+)
 export const DeliveryAnalysisPage = lazyNamed(
-  () => import("@/features/delivery/delivery-workbench-pages"),
-  "DeliveryAnalysisPage",
-);
+  () => import('@/features/delivery/delivery-workbench-pages'),
+  'DeliveryAnalysisPage',
+)
 export const ReleaseBundlesPage = lazyNamed(
-  () => import("@/features/delivery/delivery-app-pages"),
-  "ReleaseBundlesPage",
-);
+  () => import('@/features/delivery/delivery-app-pages'),
+  'ReleaseBundlesPage',
+)
 export const ExecutionTasksPage = lazyNamed(
-  () => import("@/features/delivery/delivery-app-pages"),
-  "ExecutionTasksPage",
-);
+  () => import('@/features/delivery/delivery-app-pages'),
+  'ExecutionTasksPage',
+)
 export const BuildDetailPage = lazyNamed(
-  () => import("@/features/delivery/delivery-runtime-detail-pages"),
-  "BuildDetailPage",
-);
+  () => import('@/features/delivery/delivery-runtime-detail-pages'),
+  'BuildDetailPage',
+)
 export const WorkflowDetailPage = lazyNamed(
-  () => import("@/features/delivery/delivery-runtime-detail-pages"),
-  "WorkflowDetailPage",
-);
+  () => import('@/features/delivery/delivery-runtime-detail-pages'),
+  'WorkflowDetailPage',
+)
 export const ReleaseDetailPage = lazyNamed(
-  () => import("@/features/delivery/delivery-runtime-detail-pages"),
-  "ReleaseDetailPage",
-);
+  () => import('@/features/delivery/delivery-runtime-detail-pages'),
+  'ReleaseDetailPage',
+)
 export const ReleaseBundleDetailPage = lazyNamed(
-  () => import("@/features/delivery/delivery-runtime-detail-pages"),
-  "ReleaseBundleDetailPage",
-);
+  () => import('@/features/delivery/delivery-runtime-detail-pages'),
+  'ReleaseBundleDetailPage',
+)
 export const ExecutionTaskDetailPage = lazyNamed(
-  () => import("@/features/delivery/delivery-runtime-detail-pages"),
-  "ExecutionTaskDetailPage",
-);
+  () => import('@/features/delivery/delivery-runtime-detail-pages'),
+  'ExecutionTaskDetailPage',
+)
 export const ApplicationEnvironmentsPage = lazyNamed(
-  () => import("@/features/delivery/delivery-catalog-pages"),
-  "ApplicationEnvironmentsPage",
-);
+  () => import('@/features/delivery/delivery-catalog-pages'),
+  'ApplicationEnvironmentsPage',
+)
 export const ApplicationEnvironmentDetailPage = lazyNamed(
-  () => import("@/features/delivery/delivery-catalog-pages"),
-  "ApplicationEnvironmentDetailPage",
-);
+  () => import('@/features/delivery/delivery-catalog-pages'),
+  'ApplicationEnvironmentDetailPage',
+)
 export const WorkflowTemplatesPage = lazyNamed(
-  () => import("@/features/delivery/delivery-catalog-pages"),
-  "WorkflowTemplatesPage",
-);
+  () => import('@/features/delivery/delivery-catalog-pages'),
+  'WorkflowTemplatesPage',
+)
 export const ReleaseBoardPage = lazyNamed(
-  () => import("@/features/delivery/delivery-catalog-pages"),
-  "ReleaseBoardPage",
-);
+  () => import('@/features/delivery/delivery-catalog-pages'),
+  'ReleaseBoardPage',
+)
 export const WorkflowsPage = lazyNamed(
-  () => import("@/features/delivery/delivery-app-pages"),
-  "WorkflowsPage",
-);
+  () => import('@/features/delivery/delivery-app-pages'),
+  'WorkflowsPage',
+)
 export const ReleasesPage = lazyNamed(
-  () => import("@/features/delivery/delivery-pages"),
-  "ReleasesPage",
-);
+  () => import('@/features/delivery/delivery-pages'),
+  'ReleasesPage',
+)
 export const RegistriesPage = lazyNamed(
-  () => import("@/features/delivery/delivery-pages"),
-  "RegistriesPage",
-);
+  () => import('@/features/delivery/delivery-pages'),
+  'RegistriesPage',
+)
 
 export const VirtualizationOverviewPage = lazyNamed(
-  () => import("@/features/virtualization/virtualization-pages"),
-  "VirtualizationOverviewPage",
-);
+  () => import('@/features/virtualization/virtualization-pages'),
+  'VirtualizationOverviewPage',
+)
 export const VirtualizationVmsPage = lazyNamed(
-  () => import("@/features/virtualization/virtualization-pages"),
-  "VirtualizationVmsPage",
-);
+  () => import('@/features/virtualization/virtualization-pages'),
+  'VirtualizationVmsPage',
+)
 export const VirtualizationVmDetailPage = lazyNamed(
-  () => import("@/features/virtualization/virtualization-pages"),
-  "VirtualizationVmDetailPage",
-);
+  () => import('@/features/virtualization/virtualization-pages'),
+  'VirtualizationVmDetailPage',
+)
 export const VirtualizationClustersPage = lazyNamed(
-  () => import("@/features/virtualization/virtualization-pages"),
-  "VirtualizationClustersPage",
-);
+  () => import('@/features/virtualization/virtualization-pages'),
+  'VirtualizationClustersPage',
+)
 export const VirtualizationImagesPage = lazyNamed(
-  () => import("@/features/virtualization/virtualization-pages"),
-  "VirtualizationImagesPage",
-);
+  () => import('@/features/virtualization/virtualization-pages'),
+  'VirtualizationImagesPage',
+)
 export const VirtualizationFlavorsPage = lazyNamed(
-  () => import("@/features/virtualization/virtualization-pages"),
-  "VirtualizationFlavorsPage",
-);
+  () => import('@/features/virtualization/virtualization-pages'),
+  'VirtualizationFlavorsPage',
+)
 export const VirtualizationOperationsPage = lazyNamed(
-  () => import("@/features/virtualization/virtualization-pages"),
-  "VirtualizationOperationsPage",
-);
+  () => import('@/features/virtualization/virtualization-pages'),
+  'VirtualizationOperationsPage',
+)
 export const VirtualizationSyncPage = lazyNamed(
-  () => import("@/features/virtualization/virtualization-pages"),
-  "VirtualizationSyncPage",
-);
+  () => import('@/features/virtualization/virtualization-pages'),
+  'VirtualizationSyncPage',
+)
 
 export const DockerOverviewPage = lazyNamed(
-  () => import("@/features/docker/docker-pages"),
-  "DockerOverviewPage",
-);
+  () => import('@/features/docker/docker-pages'),
+  'DockerOverviewPage',
+)
 export const DockerHostsPage = lazyNamed(
-  () => import("@/features/docker/docker-pages"),
-  "DockerHostsPage",
-);
+  () => import('@/features/docker/docker-pages'),
+  'DockerHostsPage',
+)
 export const DockerProjectsPage = lazyNamed(
-  () => import("@/features/docker/docker-pages"),
-  "DockerProjectsPage",
-);
+  () => import('@/features/docker/docker-pages'),
+  'DockerProjectsPage',
+)
 export const DockerProjectDetailPage = lazyNamed(
-  () => import("@/features/docker/docker-pages"),
-  "DockerProjectDetailPage",
-);
+  () => import('@/features/docker/docker-pages'),
+  'DockerProjectDetailPage',
+)
 export const DockerServicesPage = lazyNamed(
-  () => import("@/features/docker/docker-pages"),
-  "DockerServicesPage",
-);
+  () => import('@/features/docker/docker-pages'),
+  'DockerServicesPage',
+)
 export const DockerPortsPage = lazyNamed(
-  () => import("@/features/docker/docker-pages"),
-  "DockerPortsPage",
-);
+  () => import('@/features/docker/docker-pages'),
+  'DockerPortsPage',
+)
 export const DockerTemplatesPage = lazyNamed(
-  () => import("@/features/docker/docker-pages"),
-  "DockerTemplatesPage",
-);
+  () => import('@/features/docker/docker-pages'),
+  'DockerTemplatesPage',
+)
 export const DockerOperationsPage = lazyNamed(
-  () => import("@/features/docker/docker-pages"),
-  "DockerOperationsPage",
-);
+  () => import('@/features/docker/docker-pages'),
+  'DockerOperationsPage',
+)
 
 export const MonitoringPage = lazyNamed(
-  () => import("@/features/observability/monitoring-pages"),
-  "MonitoringPage",
-);
+  () => import('@/features/observability/monitoring-pages'),
+  'MonitoringPage',
+)
 export const AlertIntegrationsPage = lazyNamed(
-  () => import("@/features/observability/monitoring-pages"),
-  "AlertIntegrationsPage",
-);
+  () => import('@/features/observability/monitoring-pages'),
+  'AlertIntegrationsPage',
+)
 export const AlertsPage = lazyNamed(
-  () => import("@/features/observability/monitoring-pages"),
-  "AlertsPage",
-);
+  () => import('@/features/observability/monitoring-pages'),
+  'AlertsPage',
+)
 export const NotificationsPage = lazyNamed(
-  () => import("@/features/observability/monitoring-pages"),
-  "NotificationsPage",
-);
+  () => import('@/features/observability/monitoring-pages'),
+  'NotificationsPage',
+)
 export const EventsPage = lazyNamed(
-  () => import("@/features/observability/monitoring-pages"),
-  "EventsPage",
-);
+  () => import('@/features/observability/monitoring-pages'),
+  'EventsPage',
+)
 export const AlertRulesPage = lazyNamed(
-  () => import("@/features/observability/alerting-pages"),
-  "AlertRulesPage",
-);
+  () => import('@/features/observability/alerting-pages'),
+  'AlertRulesPage',
+)
 export const HealingPage = lazyNamed(
-  () => import("@/features/observability/alerting-pages"),
-  "HealingPage",
-);
+  () => import('@/features/observability/alerting-pages'),
+  'HealingPage',
+)
 export const OnCallBoardPage = lazyNamed(
-  () => import("@/features/observability/alerting-pages"),
-  "OnCallBoardPage",
-);
+  () => import('@/features/observability/alerting-pages'),
+  'OnCallBoardPage',
+)
 export const OnCallSettingsPage = lazyNamed(
-  () => import("@/features/observability/alerting-pages"),
-  "OnCallSettingsPage",
-);
+  () => import('@/features/observability/alerting-pages'),
+  'OnCallSettingsPage',
+)
 export const AlertEventDetailPage = lazyNamed(
-  () => import("@/features/observability/alerting-pages"),
-  "AlertEventDetailPage",
-);
+  () => import('@/features/observability/alerting-pages'),
+  'AlertEventDetailPage',
+)
 
 export const AIWorkbenchPage = lazyNamed(
-  () => import("@/features/copilot/ai-observe-pages"),
-  "AIWorkbenchPage",
-);
+  () => import('@/features/copilot/ai-observe-pages'),
+  'AIWorkbenchPage',
+)
 export const AIOperationsPage = lazyNamed(
-  () => import("@/features/copilot/ai-observe-pages"),
-  "AIOperationsPage",
-);
+  () => import('@/features/copilot/ai-observe-pages'),
+  'AIOperationsPage',
+)
 export const AIToolsPage = lazyNamed(
-  () => import("@/features/copilot/ai-observe-pages"),
-  "AIToolsPage",
-);
+  () => import('@/features/copilot/ai-observe-pages'),
+  'AIToolsPage',
+)
 export const AIModelSettingsPage = lazyNamed(
-  () => import("@/features/copilot/ai-observe-pages"),
-  "AIModelSettingsPage",
-);
+  () => import('@/features/copilot/ai-observe-pages'),
+  'AIModelSettingsPage',
+)
 export const AIGatewayPage = lazyNamed(
-  () => import("@/features/copilot/ai-gateway-page"),
-  "AIGatewayPage",
-);
+  () => import('@/features/copilot/ai-gateway-page'),
+  'AIGatewayPage',
+)
 export const PluginRedirectPage = lazyNamed(
-  () => import("@/features/plugins/plugin-pages"),
-  "PluginRedirectPage",
-);
+  () => import('@/features/plugins/plugin-pages'),
+  'PluginRedirectPage',
+)
 export const PluginMarketplacePage = lazyNamed(
-  () => import("@/features/plugins/plugin-pages"),
-  "PluginMarketplacePage",
-);
+  () => import('@/features/plugins/plugin-pages'),
+  'PluginMarketplacePage',
+)
 export const PluginMarketplaceDetailPage = lazyNamed(
-  () => import("@/features/plugins/plugin-pages"),
-  "PluginMarketplaceDetailPage",
-);
+  () => import('@/features/plugins/plugin-pages'),
+  'PluginMarketplaceDetailPage',
+)
 export const InstalledPluginsPage = lazyNamed(
-  () => import("@/features/plugins/plugin-pages"),
-  "InstalledPluginsPage",
-);
+  () => import('@/features/plugins/plugin-pages'),
+  'InstalledPluginsPage',
+)
 export const InstalledPluginDetailPage = lazyNamed(
-  () => import("@/features/plugins/plugin-pages"),
-  "InstalledPluginDetailPage",
-);
+  () => import('@/features/plugins/plugin-pages'),
+  'InstalledPluginDetailPage',
+)
 
 export const AccessCenterPage = lazyNamed(
-  () => import("@/features/access/access-pages"),
-  "AccessCenterPage",
-);
+  () => import('@/features/access/access-pages'),
+  'AccessCenterPage',
+)
 export const AccessUsersPage = lazyNamed(
-  () => import("@/features/access/access-pages"),
-  "AccessUsersPage",
-);
+  () => import('@/features/access/access-pages'),
+  'AccessUsersPage',
+)
 export const AccessRolesPage = lazyNamed(
-  () => import("@/features/access/access-pages"),
-  "AccessRolesPage",
-);
+  () => import('@/features/access/access-pages'),
+  'AccessRolesPage',
+)
 export const AccessTeamsPage = lazyNamed(
-  () => import("@/features/access/access-pages"),
-  "AccessTeamsPage",
-);
+  () => import('@/features/access/access-pages'),
+  'AccessTeamsPage',
+)
 export const AccessPoliciesPage = lazyNamed(
-  () => import("@/features/access/access-pages"),
-  "AccessPoliciesPage",
-);
+  () => import('@/features/access/access-pages'),
+  'AccessPoliciesPage',
+)
 export const AccessScopeGrantsPage = lazyNamed(
-  () => import("@/features/access/scope-grants-page"),
-  "AccessScopeGrantsPage",
-);
+  () => import('@/features/access/scope-grants-page'),
+  'AccessScopeGrantsPage',
+)
 
 export const OnlineUsersPage = lazyNamed(
-  () => import("@/features/system/system-pages"),
-  "OnlineUsersPage",
-);
+  () => import('@/features/system/system-pages'),
+  'OnlineUsersPage',
+)
 export const AnnouncementsPage = lazyNamed(
-  () => import("@/features/system/system-pages"),
-  "AnnouncementsPage",
-);
-export const MenusPage = lazyNamed(
-  () => import("@/features/system/system-pages"),
-  "MenusPage",
-);
+  () => import('@/features/system/system-pages'),
+  'AnnouncementsPage',
+)
+export const MenusPage = lazyNamed(() => import('@/features/system/system-pages'), 'MenusPage')
 export const AuditLogsPage = lazyNamed(
-  () => import("@/features/system/system-pages"),
-  "AuditLogsPage",
-);
+  () => import('@/features/system/system-pages'),
+  'AuditLogsPage',
+)
 export const OperationLogsPage = lazyNamed(
-  () => import("@/features/system/system-pages"),
-  "OperationLogsPage",
-);
+  () => import('@/features/system/system-pages'),
+  'OperationLogsPage',
+)
 
 export const SettingsCenterPage = lazyNamed(
-  () => import("@/features/settings/settings-pages"),
-  "SettingsCenterPage",
-);
+  () => import('@/features/settings/settings-pages'),
+  'SettingsCenterPage',
+)
 
 export function LazyPage({ children }: { children: ReactNode }) {
   return (
@@ -596,71 +659,80 @@ export function LazyPage({ children }: { children: ReactNode }) {
     >
       {children}
     </Suspense>
-  );
+  )
 }
 
 export function AIWorkbenchModeRedirect() {
-  const location = useLocation();
+  const location = useLocation()
   return (
     <Navigate
-      to={getAIWorkbenchPathForMode(new URLSearchParams(location.search).get("mode"), location.search)}
+      to={getAIWorkbenchPathForMode(
+        new URLSearchParams(location.search).get('mode'),
+        location.search,
+      )}
       replace
     />
-  );
+  )
 }
 
 export function AIWorkbenchFixedModeRedirect({ mode }: { mode: string }) {
-  const location = useLocation();
-  return <Navigate to={getAIWorkbenchPathForMode(mode, location.search)} replace />;
+  const location = useLocation()
+  return <Navigate to={getAIWorkbenchPathForMode(mode, location.search)} replace />
 }
 
 export function AIWorkbenchOperationsRedirect() {
-  const location = useLocation();
-  return <Navigate to={getAIOperationsPath(location.search)} replace />;
+  const location = useLocation()
+  return <Navigate to={getAIOperationsPath(location.search)} replace />
 }
 
 export function AIWorkbenchToolsRedirect() {
-  const location = useLocation();
-  return <Navigate to={getAIToolsPath(location.search)} replace />;
+  const location = useLocation()
+  return <Navigate to={getAIToolsPath(location.search)} replace />
 }
 
 export function AIWorkbenchModelSettingsRedirect() {
-  const location = useLocation();
-  return <Navigate to={getAIModelSettingsPath(location.search)} replace />;
+  const location = useLocation()
+  return <Navigate to={getAIModelSettingsPath(location.search)} replace />
 }
 
 const AI_GATEWAY_TAB_PATHS: Record<string, string> = {
-  overview: "/ai-gateway/overview",
-  relay: "/ai-gateway/relay",
-  upstreams: "/ai-gateway/relay",
-  "model-routes": "/ai-gateway/relay",
-  manifest: "/ai-gateway/manifest",
-  clients: "/ai-gateway/clients",
-  tokens: "/ai-gateway/tokens",
-  "service-accounts": "/ai-gateway/tokens",
-  grants: "/ai-gateway/governance",
-  policies: "/ai-gateway/governance",
-  bindings: "/ai-gateway/governance",
-  governance: "/ai-gateway/governance",
-  approvals: "/ai-gateway/governance",
-  "model-calls": "/ai-gateway/relay",
-  audit: "/ai-gateway/call-logs",
-  "call-logs": "/ai-gateway/call-logs",
-};
+  overview: '/ai-gateway/overview',
+  relay: '/ai-gateway/relay',
+  upstreams: '/ai-gateway/relay',
+  'model-routes': '/ai-gateway/relay',
+  manifest: '/ai-gateway/manifest',
+  clients: '/ai-gateway/clients',
+  tokens: '/ai-gateway/tokens',
+  'service-accounts': '/ai-gateway/tokens',
+  grants: '/ai-gateway/governance',
+  policies: '/ai-gateway/governance',
+  bindings: '/ai-gateway/governance',
+  governance: '/ai-gateway/governance',
+  approvals: '/ai-gateway/governance',
+  'model-calls': '/ai-gateway/relay',
+  audit: '/ai-gateway/call-logs',
+  'call-logs': '/ai-gateway/call-logs',
+}
 
 function getAIGatewayRedirectTarget(search: string) {
-  const params = new URLSearchParams(search);
-  const requestedTab = params.get("tab")?.trim() ?? "";
-  const hasApprovalFocus = Boolean(params.get("approvalRequestId")?.trim());
-  const targetPath = AI_GATEWAY_TAB_PATHS[requestedTab] ?? (hasApprovalFocus ? "/ai-gateway/governance" : "/ai-gateway/overview");
-  if (["overview", "relay", "manifest", "clients", "tokens", "governance", "call-logs"].includes(requestedTab)) {
-    params.delete("tab");
+  const params = new URLSearchParams(search)
+  const requestedTab = params.get('tab')?.trim() ?? ''
+  const hasApprovalFocus = Boolean(params.get('approvalRequestId')?.trim())
+  const targetPath =
+    AI_GATEWAY_TAB_PATHS[requestedTab] ??
+    (hasApprovalFocus ? '/ai-gateway/governance' : '/ai-gateway/overview')
+  if (
+    ['overview', 'relay', 'manifest', 'clients', 'tokens', 'governance', 'call-logs'].includes(
+      requestedTab,
+    )
+  ) {
+    params.delete('tab')
   }
-  const suffix = params.toString();
-  return `${targetPath}${suffix ? `?${suffix}` : ""}`;
+  const suffix = params.toString()
+  return `${targetPath}${suffix ? `?${suffix}` : ''}`
 }
 
 export function AIGatewayRedirect() {
-  const location = useLocation();
-  return <Navigate to={getAIGatewayRedirectTarget(location.search)} replace />;
+  const location = useLocation()
+  return <Navigate to={getAIGatewayRedirectTarget(location.search)} replace />
 }

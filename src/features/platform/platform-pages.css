@@ -92,6 +92,13 @@
   padding-right: 10px;
 }
 
+.soha-pods-table .ant-table-thead > tr > th.ant-table-selection-column,
+.soha-pods-table .ant-table-tbody > tr > td.ant-table-selection-column {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  text-align: center;
+}
+
 .soha-pods-table .ant-table-thead > tr > th:first-child .ant-table-column-title,
 .soha-pods-table .ant-table-tbody > tr > td:first-child .ant-typography,
 .soha-platform-table .ant-table-thead > tr > th:first-child .ant-table-column-title,
@@ -311,6 +318,97 @@
   table-layout: auto;
 }
 
+.soha-rbac-table .ant-table-content table {
+  table-layout: fixed;
+}
+
+.soha-rbac-table .ant-table-tbody > tr > td {
+  vertical-align: middle;
+}
+
+.soha-rbac-table .ant-table-tbody > tr > td .ant-btn,
+.soha-rbac-table .ant-table-tbody > tr > td .ant-typography,
+.soha-rbac-table .ant-table-tbody > tr > td .ant-typography-link {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.soha-storage-table .ant-table-content table {
+  table-layout: fixed;
+}
+
+.soha-storage-table .ant-table-tbody > tr > td {
+  vertical-align: middle;
+}
+
+.soha-storage-table .ant-table-tbody > tr > td .ant-btn,
+.soha-storage-table .ant-table-tbody > tr > td .ant-typography,
+.soha-storage-table .ant-table-tbody > tr > td .ant-typography-link {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.soha-config-data-table .ant-table-content table {
+  table-layout: fixed;
+}
+
+.soha-config-data-table .ant-table-tbody > tr > td {
+  vertical-align: middle;
+}
+
+.soha-config-data-toolbar {
+  display: flex;
+  min-height: 24px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.soha-config-data-editor {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.soha-config-data-preview {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.soha-config-data-expanded {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.soha-config-data-expanded .soha-json-block {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.soha-config-reference-table .ant-table-tbody > tr > td {
+  vertical-align: middle;
+}
+
+.soha-config-reference-name,
+.soha-config-reference-path {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.soha-config-reference-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
 .soha-platform-table .ant-table-tbody > tr > td .ant-btn,
 .soha-platform-table .ant-table-tbody > tr > td .ant-typography,
 .soha-platform-table .ant-table-tbody > tr > td .soha-resource-cell-copy,
@@ -497,8 +595,7 @@
 }
 
 .soha-workload-kv-item {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
+  display: flex;
   align-items: center;
   min-width: 0;
   gap: 12px;
@@ -517,13 +614,16 @@
 }
 
 .soha-workload-kv-key {
-  overflow: visible;
+  flex: 0 1 auto;
+  max-width: 50%;
+  overflow: hidden;
   color: var(--soha-text-secondary);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  text-overflow: clip;
+  text-overflow: ellipsis;
 }
 
 .soha-workload-kv-value {
+  flex: 1 1 0;
   overflow: hidden;
   color: var(--soha-text-primary);
   text-overflow: ellipsis;
@@ -536,17 +636,6 @@
   gap: 4px;
   overflow-wrap: anywhere;
   white-space: normal;
-}
-
-.soha-related-pod-card.ant-card .ant-card-head {
-  min-height: 42px;
-  padding: 0 20px;
-}
-
-.soha-related-pod-card.ant-card .ant-card-head-title {
-  padding: 10px 0;
-  font-size: 14px;
-  line-height: 20px;
 }
 
 .soha-related-pod-card.ant-card .ant-card-body {
@@ -629,17 +718,6 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-.soha-rollout-card.ant-card .ant-card-head {
-  min-height: 42px;
-  padding: 0 20px;
-}
-
-.soha-rollout-card.ant-card .ant-card-head-title {
-  padding: 10px 0;
-  font-size: 14px;
-  line-height: 20px;
 }
 
 .soha-rollout-status-section {
@@ -1044,6 +1122,34 @@
   max-width: 420px;
 }
 
+.soha-rbac-subject-list.is-compact {
+  max-width: 260px;
+}
+
+.soha-rbac-kind-summary {
+  display: inline-block;
+  max-width: 100%;
+}
+
+.soha-rbac-subject-list.is-table-preview {
+  flex-wrap: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.soha-rbac-subject-list.is-table-preview .soha-rbac-subject-chip.ant-tag {
+  flex: 0 1 auto;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.soha-rbac-subject-list.is-table-preview .soha-rbac-subject-chip .ant-typography,
+.soha-rbac-subject-list.is-table-preview .soha-rbac-subject-chip a {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .soha-rbac-subject-popover {
   display: flex;
   flex-wrap: wrap;
@@ -1052,6 +1158,8 @@
 }
 
 .soha-rbac-subject-chip.ant-tag {
+  display: inline-flex;
+  align-items: center;
   margin-inline-end: 0;
   padding-inline: 7px;
   border-color: var(--soha-border-color);
@@ -1060,6 +1168,12 @@
   color: var(--soha-text-secondary);
   line-height: 20px;
   white-space: normal;
+}
+
+.soha-rbac-subject-chip .ant-btn {
+  height: auto;
+  padding: 0;
+  line-height: 20px;
 }
 
 .soha-rbac-scope-note {

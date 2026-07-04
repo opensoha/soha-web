@@ -68,7 +68,9 @@ const DAG_NODE_OPTIONS: Array<{ value: ReleaseDagNodeType; color: DagTagColor }>
   { value: 'wait_rollout', color: 'cyan' },
   { value: 'check_http', color: 'green' },
   { value: 'check_k8s_event', color: 'yellow' },
+  { value: 'verify', color: 'purple' },
   { value: 'smoke_test', color: 'purple' },
+  { value: 'external', color: 'pink' },
   { value: 'http_callback', color: 'pink' },
   { value: 'create_silence', color: 'grey' },
   { value: 'notify', color: 'pink' },
@@ -139,8 +141,12 @@ function getDagNodeLabel(type: ReleaseDagNodeType, localeCode: 'zh_CN' | 'en_US'
         return 'HTTP Check'
       case 'check_k8s_event':
         return 'K8s Event'
+      case 'verify':
+        return 'Verify'
       case 'smoke_test':
         return 'Smoke Test'
+      case 'external':
+        return 'External Task'
       case 'http_callback':
         return 'HTTP Callback'
       case 'create_silence':
@@ -191,7 +197,7 @@ function splitConfigStringList(value: string) {
 function selectorSummary(selector?: DeliveryDagSelector) {
   if (!selector) return ''
   const labels = Object.entries(selector.matchLabels ?? {}).map(([key, value]) => `${key}=${value}`)
-  return [selector.id, selector.key, ...labels].filter(Boolean).join(' / ')
+  return [selector.id, selector.key, selector.keys?.join(','), ...labels].filter(Boolean).join(' / ')
 }
 
 function artifactOutputSummary(items?: DeliveryDagArtifactOutput[]) {
@@ -279,6 +285,10 @@ function serializeNodes(nodes: FlowNode[]): ReleaseDagNodeDefinition[] {
     id: node.id,
     type: node.data.type,
     name: node.data.name,
+    ...(node.data.executorKind ? { executorKind: node.data.executorKind } : {}),
+    ...(node.data.targetKind ? { targetKind: node.data.targetKind } : {}),
+    ...(node.data.capabilityRef ? { capabilityRef: node.data.capabilityRef } : {}),
+    ...(node.data.providerRef ? { providerRef: node.data.providerRef } : {}),
     timeoutSeconds: node.data.timeoutSeconds ?? 300,
     continueOnFailure: Boolean(node.data.continueOnFailure),
     ...(node.data.inputs?.length ? { inputs: node.data.inputs } : {}),
@@ -286,7 +296,9 @@ function serializeNodes(nodes: FlowNode[]): ReleaseDagNodeDefinition[] {
     ...(node.data.serviceSelector ? { serviceSelector: node.data.serviceSelector } : {}),
     ...(node.data.environmentSelector ? { environmentSelector: node.data.environmentSelector } : {}),
     ...(node.data.targetSelector ? { targetSelector: node.data.targetSelector } : {}),
+    ...(node.data.inputMapping ? { inputMapping: node.data.inputMapping } : {}),
     ...(node.data.artifactOutputs?.length ? { artifactOutputs: node.data.artifactOutputs } : {}),
+    ...(node.data.artifactKinds?.length ? { artifactKinds: node.data.artifactKinds } : {}),
     ...(node.data.runCondition ? { runCondition: node.data.runCondition } : {}),
     ...(node.data.failurePolicy ? { failurePolicy: node.data.failurePolicy } : {}),
     ...(node.data.observability ? { observability: node.data.observability } : {}),
@@ -355,6 +367,8 @@ function ReleaseStepNode({ data, selected }: NodeProps<FlowNode>) {
         </div>
         <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? `超时 ${data.timeoutSeconds ?? 300}s` : `timeout ${data.timeoutSeconds ?? 300}s`}</Text>
         {data.type === 'manual_approval' ? <Text type="secondary" className="text-xs">{approvalNodeSummary(data, localeCode)}</Text> : null}
+        {data.executorKind ? <Text type="secondary" className="text-xs">{`executor ${data.executorKind}`}</Text> : null}
+        {data.capabilityRef ? <Text type="secondary" className="text-xs">{`capability ${data.capabilityRef}`}</Text> : null}
         {data.inputs?.length ? <Text type="secondary" className="text-xs">{`inputs ${data.inputs.join(', ')}`}</Text> : null}
         {data.outputs?.length ? <Text type="secondary" className="text-xs">{`outputs ${data.outputs.join(', ')}`}</Text> : null}
         {artifactOutputSummary(data.artifactOutputs) ? <Text type="secondary" className="text-xs">{artifactOutputSummary(data.artifactOutputs)}</Text> : null}
@@ -555,6 +569,8 @@ function StepConfigInspector({
         </>
       )
     case 'smoke_test':
+    case 'verify':
+    case 'external':
       return (
         <>
           <Input value={String(config.endpoint ?? '')} placeholder="https://service/smoke" onChange={(event) => patch('endpoint', event.target.value)} />
@@ -621,6 +637,38 @@ function DeliveryDagInspector({
   return (
     <div className="soha-dag-approval-config">
       <div className="soha-dag-inspector-field">
+        <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '执行器' : 'Executor'}</Text>
+        <Input
+          value={node.executorKind ?? ''}
+          placeholder="runner / mcp / webhook_callback"
+          onChange={(event) => patch('executorKind', event.target.value.trim() || undefined)}
+        />
+      </div>
+      <div className="soha-dag-inspector-field">
+        <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '目标类型' : 'Target Kind'}</Text>
+        <Input
+          value={node.targetKind ?? ''}
+          placeholder="k8s_workload / ai_test"
+          onChange={(event) => patch('targetKind', event.target.value.trim() || undefined)}
+        />
+      </div>
+      <div className="soha-dag-inspector-field">
+        <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '能力引用' : 'Capability Ref'}</Text>
+        <Input
+          value={node.capabilityRef ?? ''}
+          placeholder="testing.ui.run"
+          onChange={(event) => patch('capabilityRef', event.target.value.trim() || undefined)}
+        />
+      </div>
+      <div className="soha-dag-inspector-field">
+        <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? 'Provider 引用' : 'Provider Ref'}</Text>
+        <Input
+          value={node.providerRef ?? ''}
+          placeholder="external-test-platform"
+          onChange={(event) => patch('providerRef', event.target.value.trim() || undefined)}
+        />
+      </div>
+      <div className="soha-dag-inspector-field">
         <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '输入产物' : 'Inputs'}</Text>
         <Input
           value={node.inputs?.join(', ') ?? ''}
@@ -679,6 +727,23 @@ function DeliveryDagInspector({
           value={stringifyJsonValue(node.targetSelector)}
           placeholder='{"matchLabels":{"tier":"backend"}}'
           onChange={(event) => patchJSON('targetSelector', event.target.value, parseJsonObject)}
+        />
+      </div>
+      <div className="soha-dag-inspector-field">
+        <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '输入映射(JSON)' : 'Input Mapping JSON'}</Text>
+        <Input.TextArea
+          rows={3}
+          value={stringifyJsonValue(node.inputMapping)}
+          placeholder='{"baseUrl":"${environment.url}"}'
+          onChange={(event) => patchJSON('inputMapping', event.target.value, parseJsonObject)}
+        />
+      </div>
+      <div className="soha-dag-inspector-field">
+        <Text type="secondary" className="text-xs">{localeCode === 'zh_CN' ? '产物类型' : 'Artifact Kinds'}</Text>
+        <Input
+          value={node.artifactKinds?.join(', ') ?? ''}
+          placeholder="test_report, screenshot, video, junit"
+          onChange={(event) => patch('artifactKinds', splitConfigStringList(event.target.value))}
         />
       </div>
       <div className="soha-dag-inspector-field">

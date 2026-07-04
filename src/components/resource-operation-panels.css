@@ -37,32 +37,33 @@
   min-width: 0;
 }
 
-.soha-log-toolbar-group.ant-space {
-  flex-wrap: wrap;
+.soha-pod-terminal-tab-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.soha-pod-terminal-tab-card .soha-terminal-controls {
+  margin-bottom: 0;
 }
 
 .soha-log-toolbar {
+  align-items: center;
   justify-content: flex-start;
-  row-gap: 10px;
-}
-
-.soha-log-toolbar-meta {
-  flex: 0 1 auto;
-  min-width: 0;
+  row-gap: 8px;
 }
 
 .soha-log-toolbar-status.ant-typography {
   display: inline-block;
   max-width: 240px;
+  font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.soha-log-toolbar-actions {
-  flex: 1 1 680px;
-  min-width: 0;
-  justify-content: flex-start;
+.soha-log-toolbar .ant-tag {
+  margin-inline-end: 0;
 }
 
 .soha-terminal-shell {
@@ -103,6 +104,10 @@
   min-height: 0;
 }
 
+.soha-yaml-toolbar {
+  align-items: center;
+}
+
 .soha-yaml-toolbar-meta {
   flex: 1 1 320px;
   min-width: 0;
@@ -110,6 +115,7 @@
 
 .soha-yaml-toolbar-actions {
   flex: 1 1 420px;
+  align-items: center;
   justify-content: flex-end;
 }
 
