@@ -1,0 +1,87 @@
+.soha-identity-providers-page {
+  gap: 12px;
+}
+
+.soha-identity-provider-name-cell {
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
+  gap: 10px;
+}
+
+.soha-identity-provider-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--soha-border-color);
+  border-radius: 8px;
+  color: var(--soha-color-primary);
+  background: var(--soha-fill-weak);
+}
+
+.soha-identity-provider-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.soha-identity-oidc-panel {
+  padding: 6px 0;
+}
+
+.soha-identity-provider-form {
+  margin-top: 8px;
+}
+
+.soha-identity-provider-config-section {
+  margin-top: 12px;
+}
+
+.soha-identity-provider-section-title {
+  margin: 14px 0 10px;
+  color: var(--soha-text-color);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.soha-identity-provider-form-grid,
+.soha-identity-provider-json-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.soha-identity-provider-form-grid.is-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.soha-identity-provider-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.soha-identity-secret-reveal {
+  width: 100%;
+}
+
+.soha-identity-secret-value.ant-typography {
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--soha-border-color);
+  border-radius: 8px;
+  background: var(--soha-fill-weak);
+}
+
+@media (max-width: 760px) {
+  .soha-identity-provider-form-grid,
+  .soha-identity-provider-form-grid.is-three,
+  .soha-identity-provider-json-grid {
+    grid-template-columns: 1fr;
+  }
+}

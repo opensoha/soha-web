@@ -206,6 +206,25 @@ export const consolePermissionGroups: PermissionCatalogGroup[] = [
       { value: "settings.branding.manage", label: "管理品牌设置" },
     ],
   },
+  {
+    key: "identity",
+    label: "身份门户",
+    description: "控制 Provider Portal 与下游应用目录管理能力。",
+    options: [
+      { value: "identity.portal.view", label: "访问 Provider Portal" },
+      { value: "identity.applications.view", label: "查看身份应用目录" },
+      { value: "identity.applications.manage", label: "管理身份应用目录" },
+      { value: "identity.providers.view", label: "查看身份 Provider" },
+      { value: "identity.providers.manage", label: "管理身份 Provider" },
+      { value: "identity.outposts.view", label: "查看身份 Outpost" },
+      { value: "identity.outposts.manage", label: "管理身份 Outpost" },
+      { value: "identity.policies.view", label: "查看身份访问策略" },
+      { value: "identity.policies.manage", label: "管理身份访问策略" },
+      { value: "identity.sessions.view", label: "查看身份会话" },
+      { value: "identity.sessions.manage", label: "管理身份会话" },
+      { value: "identity.audit.view", label: "查看身份审计" },
+    ],
+  },
 ];
 
 export const consolePermissionOptions = consolePermissionGroups.flatMap(

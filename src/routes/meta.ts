@@ -114,6 +114,7 @@ function deriveWorkspaceFromPath(
   }
   if (
     pathname.startsWith("/access") ||
+    pathname.startsWith("/identity") ||
     pathname.startsWith("/system") ||
     pathname.startsWith("/settings")
   ) {
@@ -176,7 +177,11 @@ function deriveWorkbenchIdFromPath(pathname: string): WorkbenchId | null {
   ) {
     return "monitoring";
   }
-  if (pathname.startsWith("/system") || pathname.startsWith("/settings")) {
+  if (
+    pathname.startsWith("/identity") ||
+    pathname.startsWith("/system") ||
+    pathname.startsWith("/settings")
+  ) {
     return "settings";
   }
   return null;
@@ -276,6 +281,7 @@ export function getRouteScopeMode(
   }
   if (
     pathname.startsWith("/access") ||
+    pathname.startsWith("/identity") ||
     pathname.startsWith("/system") ||
     pathname.startsWith("/settings") ||
     pathname.startsWith("/applications") ||
@@ -523,8 +529,15 @@ const SYSTEM_ROOT_ORDER: Record<string, number> = {
   "access-roles": 12,
   "access-teams": 13,
   "access-policies": 14,
-  system: 20,
-  settings: 30,
+  identity: 20,
+  "identity-overview": 20,
+  "identity-applications": 21,
+  "identity-providers": 22,
+  "identity-policies": 23,
+  "identity-sessions": 24,
+  "identity-audit": 25,
+  system: 30,
+  settings: 40,
 };
 
 function deriveRuntimeMenuSection(
@@ -709,7 +722,7 @@ export function filterSidebarNavByWorkbench(
   };
   const flattenedRootIds = [
     flattenedWorkbenchRootIds[workbenchId],
-    ...(workbenchId === "settings" ? ["system", "access"] : []),
+    ...(workbenchId === "settings" ? ["identity", "system", "access"] : []),
   ].filter((item): item is string => Boolean(item));
 
   if (flattenedRootIds.length === 0) {

@@ -1,0 +1,79 @@
+.soha-identity-policies-page {
+  gap: 12px;
+}
+
+.soha-identity-policy-application {
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
+  gap: 10px;
+}
+
+.soha-identity-policy-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--soha-border-color);
+  border-radius: 8px;
+  background: var(--soha-fill-weak);
+  color: var(--soha-text-secondary);
+}
+
+.soha-identity-policy-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 4px;
+}
+
+.soha-identity-policy-form {
+  margin-top: 8px;
+}
+
+.soha-identity-policy-assignment-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--soha-border-color);
+  border-radius: 8px;
+  background: var(--soha-fill-weak);
+}
+
+.soha-identity-policy-assignment-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.soha-identity-policy-assignment-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 150px) minmax(180px, 1fr) minmax(100px, 120px) 34px;
+  gap: 8px;
+  align-items: start;
+}
+
+.soha-identity-policy-assignment-row .ant-form-item {
+  margin-bottom: 0;
+}
+
+.soha-identity-policy-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+@media (max-width: 760px) {
+  .soha-identity-policy-assignment-row {
+    grid-template-columns: 1fr;
+  }
+
+  .soha-identity-policy-assignment-row .ant-btn {
+    width: 100%;
+  }
+}

@@ -31,6 +31,30 @@ export function AppRouter() {
         }
       />
       <Route element={<AuthGuard />}>
+        <Route
+          path="/portal"
+          element={
+            <RoutePages.LazyPage>
+              <RoutePages.SohaProviderPortalPage />
+            </RoutePages.LazyPage>
+          }
+        />
+        <Route
+          path="/portal/applications/:applicationId"
+          element={
+            <RoutePages.LazyPage>
+              <RoutePages.PortalApplicationDetailPage />
+            </RoutePages.LazyPage>
+          }
+        />
+        <Route
+          path="/portal/security"
+          element={
+            <RoutePages.LazyPage>
+              <RoutePages.PortalSecurityPage />
+            </RoutePages.LazyPage>
+          }
+        />
         <Route element={<AppLayout />}>
           <Route
             path="/"
@@ -1455,6 +1479,64 @@ export function AppRouter() {
             }
           />
           <Route path="/settings/ai" element={<RoutePages.AIWorkbenchModelSettingsRedirect />} />
+
+          <Route path="/identity" element={<Navigate to="/identity/overview" replace />} />
+          <Route
+            path="/identity/overview"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.IdentityOverviewPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
+            path="/identity/applications"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.IdentityApplicationsPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
+            path="/identity/providers"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.IdentityProvidersPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
+            path="/identity/outposts"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.IdentityOutpostsPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
+            path="/identity/policies"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.IdentityPoliciesPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
+            path="/identity/sessions"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.OnlineUsersPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
+            path="/identity/audit"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.AuditLogsPage />
+              </RoutePages.LazyPage>
+            }
+          />
 
           <Route
             path="/account/profile"

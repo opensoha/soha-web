@@ -54,6 +54,24 @@
   width: 100%;
 }
 
+.soha-plugin-extension-list {
+  width: 100%;
+}
+
+.soha-plugin-extension-row {
+  display: flex;
+  min-height: 36px;
+  flex-direction: column;
+  gap: 4px;
+  border-bottom: 1px solid var(--soha-border-color);
+  padding-bottom: 8px;
+}
+
+.soha-plugin-extension-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
 @media (max-width: 960px) {
   .soha-plugin-kpi-grid,
   .soha-plugin-detail-grid {

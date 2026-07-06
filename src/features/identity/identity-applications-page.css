@@ -1,0 +1,128 @@
+.soha-identity-applications-page {
+  gap: 12px;
+}
+
+.soha-identity-capability-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.soha-identity-capability {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--soha-border-color);
+  border-radius: 8px;
+  background: var(--soha-bg-surface);
+}
+
+.soha-identity-capability-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.soha-identity-app-name-cell {
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
+  gap: 10px;
+}
+
+.soha-identity-app-name-cell .ant-avatar {
+  flex: 0 0 auto;
+  border: 1px solid var(--soha-border-color);
+  background: var(--soha-fill-weak);
+}
+
+.soha-identity-app-name-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.soha-identity-app-description.ant-typography {
+  margin: 0;
+  color: var(--soha-text-secondary);
+}
+
+.soha-identity-app-form {
+  margin-top: 8px;
+}
+
+.soha-identity-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.soha-identity-switch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.soha-identity-oidc-launch-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 12px;
+  border: 1px solid var(--soha-border-color);
+  border-radius: 8px;
+  background: var(--soha-fill-weak);
+}
+
+.soha-identity-oidc-launch-editor .ant-form-item:last-child {
+  margin-bottom: 0;
+}
+
+.soha-identity-assignment-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--soha-border-color);
+  border-radius: 8px;
+  background: var(--soha-fill-weak);
+}
+
+.soha-identity-assignment-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.soha-identity-assignment-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 150px) minmax(180px, 1fr) minmax(100px, 120px) 34px;
+  gap: 8px;
+  align-items: start;
+}
+
+.soha-identity-assignment-row .ant-form-item {
+  margin-bottom: 0;
+}
+
+.soha-identity-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+@media (max-width: 760px) {
+  .soha-identity-form-grid,
+  .soha-identity-assignment-row {
+    grid-template-columns: 1fr;
+  }
+
+  .soha-identity-assignment-row .ant-btn {
+    width: 100%;
+  }
+}

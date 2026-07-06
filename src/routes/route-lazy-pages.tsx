@@ -28,6 +28,18 @@ export const UserProfilePage = lazyNamed(
   () => import('@/features/auth/user-profile-page'),
   'UserProfilePage',
 )
+export const SohaProviderPortalPage = lazyNamed(
+  () => import('@/features/provider-portal/provider-portal-pages'),
+  'SohaProviderPortalPage',
+)
+export const PortalApplicationDetailPage = lazyNamed(
+  () => import('@/features/provider-portal/provider-portal-pages'),
+  'PortalApplicationDetailPage',
+)
+export const PortalSecurityPage = lazyNamed(
+  () => import('@/features/provider-portal/provider-portal-pages'),
+  'PortalSecurityPage',
+)
 
 export const OverviewPage = lazyNamed(
   () => import('@/features/platform/overview-page'),
@@ -646,6 +658,26 @@ export const OperationLogsPage = lazyNamed(
 export const SettingsCenterPage = lazyNamed(
   () => import('@/features/settings/settings-pages'),
   'SettingsCenterPage',
+)
+export const IdentityOverviewPage = lazyNamed(
+  () => import('@/features/identity/identity-overview-page'),
+  'IdentityOverviewPage',
+)
+export const IdentityApplicationsPage = lazyNamed(
+  () => import('@/features/identity/identity-applications-page'),
+  'IdentityApplicationsPage',
+)
+export const IdentityProvidersPage = lazyNamed(
+  () => import('@/features/identity/identity-providers-page'),
+  'IdentityProvidersPage',
+)
+export const IdentityOutpostsPage = lazyNamed(
+  () => import('@/features/identity/identity-outposts-page'),
+  'IdentityOutpostsPage',
+)
+export const IdentityPoliciesPage = lazyNamed(
+  () => import('@/features/identity/identity-policies-page'),
+  'IdentityPoliciesPage',
 )
 
 export function LazyPage({ children }: { children: ReactNode }) {

@@ -18,15 +18,18 @@ import {
   Button,
   Card,
   Descriptions,
+  Form,
   Input,
+  InputNumber,
   Modal,
   Select,
   Space,
+  Switch,
   Tabs,
   Tag,
   Typography,
 } from 'antd'
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
 import {
   ManagementDetailHeader,
@@ -45,10 +48,13 @@ import {
   getInstalledPluginManifest,
   getMarketplacePlugin,
   installPlugin,
+  latestMarketplaceVersion,
+  listPluginExtensions,
   listInstalledPlugins,
   listMarketplacePlugins,
   manifestAssetCount,
   manifestCapabilityCount,
+  manifestExtensionCount,
   pluginQueryKeys,
   pluginRiskLabels,
   pluginTypeLabel,
@@ -62,6 +68,8 @@ import type {
   InstalledPlugin,
   MarketplacePlugin,
   PluginConfigRequest,
+  PluginExtensionPoints,
+  PluginExtensionRecord,
   PluginManifest,
   PluginPermissionRequest,
 } from './plugin-model'
@@ -98,16 +106,26 @@ function compactTags(values?: string[], max = 4) {
 }
 
 function pluginStatusBadge(status?: string) {
-  if (status === 'enabled') {
-    return <Badge status="success" text="Enabled" />
+  switch (status) {
+    case 'enabled':
+      return <Badge status="success" text="Enabled" />
+    case 'pending_config':
+      return <Badge status="warning" text="Pending config" />
+    case 'failed':
+      return <Badge status="error" text="Failed" />
+    case 'deprecated':
+      return <Badge status="default" text="Deprecated" />
+    case 'installed':
+      return <Badge status="processing" text="Installed" />
+    default:
+      return <Badge status="default" text="Disabled" />
   }
-  return <Badge status="default" text="Disabled" />
 }
 
 function riskTag(riskLevel?: string) {
   const value = String(riskLevel ?? '').trim()
   if (!value) return <Text type="secondary">-</Text>
-  const color = value === 'read' ? 'green' : value === 'write' ? 'gold' : 'red'
+  const color = value === 'read' ? 'green' : value === 'write' || value === 'mutate' ? 'gold' : 'red'
   return <Tag color={color}>{pluginRiskLabels[value] ?? value}</Tag>
 }
 
@@ -116,6 +134,135 @@ function jsonBlock(value: unknown) {
     <pre className="soha-plugin-json">
       {JSON.stringify(value ?? {}, null, 2)}
     </pre>
+  )
+}
+
+type SchemaObject = Record<string, unknown>
+
+function isRecord(value: unknown): value is SchemaObject {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function schemaProperties(schema?: unknown) {
+  if (!isRecord(schema) || !isRecord(schema.properties)) return []
+  return Object.entries(schema.properties).map(([name, raw]) => ({
+    name,
+    schema: isRecord(raw) ? raw : {},
+  }))
+}
+
+function schemaRequired(schema?: unknown) {
+  if (!isRecord(schema) || !Array.isArray(schema.required)) return new Set<string>()
+  return new Set(schema.required.filter((item): item is string => typeof item === 'string'))
+}
+
+function schemaFieldLabel(name: string, schema: SchemaObject) {
+  return String(schema.title || schema.label || name)
+}
+
+function schemaFieldControl(schema: SchemaObject) {
+  return String(schema['x-control'] || schema.format || schema.type || 'text')
+}
+
+function schemaSelectOptions(schema: SchemaObject) {
+  const values = Array.isArray(schema.enum) ? schema.enum : []
+  return values.map((value) => ({ value: String(value), label: String(value) }))
+}
+
+function renderSchemaInput(schema: SchemaObject) {
+  const control = schemaFieldControl(schema)
+  if (Array.isArray(schema.enum)) {
+    return <Select allowClear options={schemaSelectOptions(schema)} />
+  }
+  if (schema.type === 'boolean') {
+    return <Switch />
+  }
+  if (schema.type === 'number' || schema.type === 'integer') {
+    return <InputNumber style={{ width: '100%' }} />
+  }
+  if (control === 'secret-ref') {
+    return <Input.Password placeholder="secret://..." />
+  }
+  if (control === 'endpoint' || schema.format === 'uri') {
+    return <Input placeholder="https://..." />
+  }
+  if (control === 'resource-selector') {
+    return <Input.TextArea rows={3} placeholder='{"clusterId":"prod","namespace":"default"}' />
+  }
+  return <Input />
+}
+
+function extensionPointEntries(points?: PluginExtensionPoints | null) {
+  if (!points) return []
+  const entries: Array<{
+    key: string
+    scope: string
+    point: string
+    id: string
+    label?: string
+    actionRef?: string
+    permissionKeys?: string[]
+  }> = []
+  Object.entries(points).forEach(([scope, group]) => {
+    if (!isRecord(group)) return
+    Object.entries(group).forEach(([name, contributions]) => {
+      if (!Array.isArray(contributions)) return
+      contributions.forEach((item, index) => {
+        if (!isRecord(item)) return
+        const id = String(item.id || `${scope}.${name}.${index}`)
+        entries.push({
+          key: `${scope}.${name}.${id}`,
+          scope,
+          point: `${scope}.${name}`,
+          id,
+          label: typeof item.label === 'string' ? item.label : undefined,
+          actionRef: typeof item.actionRef === 'string' ? item.actionRef : undefined,
+          permissionKeys: Array.isArray(item.permissionKeys) ? item.permissionKeys.filter((value): value is string => typeof value === 'string') : undefined,
+        })
+      })
+    })
+  })
+  return entries
+}
+
+function ExtensionPointList({ points }: { points?: PluginExtensionPoints | null }) {
+  const entries = extensionPointEntries(points)
+  if (!entries.length) return <Text type="secondary">未声明扩展点</Text>
+  return (
+    <Space direction="vertical" size={8} className="soha-plugin-extension-list">
+      {entries.map((entry) => (
+        <div className="soha-plugin-extension-row" key={entry.key}>
+          <Space size={6} wrap>
+            <Tag color="blue">{entry.point}</Tag>
+            <Text strong>{entry.label || entry.id}</Text>
+            {entry.actionRef ? <Tag>{entry.actionRef}</Tag> : null}
+          </Space>
+          {entry.permissionKeys?.length ? (
+            <div>{compactTags(entry.permissionKeys, 4)}</div>
+          ) : null}
+        </div>
+      ))}
+    </Space>
+  )
+}
+
+function RegisteredExtensionList({ records }: { records: PluginExtensionRecord[] }) {
+  if (!records.length) return <Text type="secondary">当前没有已注册扩展</Text>
+  return (
+    <Space direction="vertical" size={8} className="soha-plugin-extension-list">
+      {records.map((record) => (
+        <div className="soha-plugin-extension-row" key={`${record.pluginId}:${record.point}:${record.id}`}>
+          <Space size={6} wrap>
+            <Tag color="blue">{record.point}</Tag>
+            <Text strong>{record.label || record.id}</Text>
+            <Tag>{record.runtimeMode || 'manifest-only'}</Tag>
+            {record.configured ? <Tag color="green">configured</Tag> : <Tag color="gold">pending config</Tag>}
+          </Space>
+          {record.actionRef ? <Text type="secondary">{record.actionRef}</Text> : null}
+          {record.permissionKeys?.length ? <div>{compactTags(record.permissionKeys, 4)}</div> : null}
+        </div>
+      ))}
+    </Space>
   )
 }
 
@@ -221,12 +368,13 @@ function PermissionReview({ permissions }: { permissions?: PluginPermissionReque
 function InstallReview({ plugin }: { plugin: MarketplacePlugin }) {
   const manifest = plugin.manifest
   const secrets = requiredSecretValues(manifest.secrets)
+  const latestVersion = latestMarketplaceVersion(plugin)
   return (
     <Space direction="vertical" size={12} className="soha-plugin-install-review">
       <Alert
         showIcon
         type={plugin.riskLevel === 'read' ? 'info' : 'warning'}
-        message="插件安装只保存 manifest 快照和 requested permissions，不会直接授予能力。"
+        title="插件安装只保存 manifest 快照和 requested permissions，不会直接授予能力。"
       />
       <Descriptions
         bordered
@@ -236,9 +384,14 @@ function InstallReview({ plugin }: { plugin: MarketplacePlugin }) {
           { key: 'id', label: 'ID', children: plugin.id },
           { key: 'publisher', label: 'Publisher', children: plugin.publisher },
           { key: 'version', label: 'Version', children: plugin.version },
+          { key: 'source', label: 'Source', children: plugin.sourceId || plugin.source },
+          { key: 'latest', label: 'Latest', children: latestVersion?.version || plugin.latestVersion || '-' },
+          { key: 'verified', label: 'Verified', children: plugin.verified ? <Tag color="green">已验证</Tag> : <Tag>未验证</Tag> },
           { key: 'risk', label: 'Risk', children: riskTag(plugin.riskLevel) },
           { key: 'assets', label: 'Assets', children: manifestAssetCount(manifest) },
           { key: 'capabilities', label: 'Capabilities', children: manifestCapabilityCount(manifest) },
+          { key: 'runtime', label: 'Runtime', children: manifest.runtime?.mode || 'manifest-only' },
+          { key: 'extensions', label: 'Extensions', children: manifestExtensionCount(manifest) },
         ]}
       />
       <Card size="small" title="Requested permissions">
@@ -246,6 +399,9 @@ function InstallReview({ plugin }: { plugin: MarketplacePlugin }) {
       </Card>
       <Card size="small" title="Required secrets">
         {secrets.length ? compactTags(secrets.map((item) => item.name), 6) : <Text type="secondary">无</Text>}
+      </Card>
+      <Card size="small" title="Extension points">
+        <ExtensionPointList points={manifest.extensionPoints} />
       </Card>
     </Space>
   )
@@ -267,6 +423,8 @@ function PluginManifestSections({ manifest }: { manifest?: PluginManifest | null
             { key: 'version', label: 'Version', children: manifest.version },
             { key: 'homepage', label: 'Homepage', children: manifest.homepage || '-' },
             { key: 'compatibility', label: 'Compatibility', children: jsonBlock(manifest.compatibility) },
+            { key: 'runtime', label: 'Runtime', children: manifest.runtime?.mode || 'manifest-only' },
+            { key: 'extensions', label: 'Extensions', children: manifestExtensionCount(manifest) },
           ]}
         />
       </Card>
@@ -294,6 +452,12 @@ function PluginManifestSections({ manifest }: { manifest?: PluginManifest | null
           </Space>
         ) : <Text type="secondary">无</Text>}
       </Card>
+      <Card title="Extension points" size="small">
+        <ExtensionPointList points={manifest.extensionPoints} />
+      </Card>
+      <Card title="Config schema" size="small">
+        {schemaProperties(manifest.configSchema).length ? jsonBlock(manifest.configSchema) : <Text type="secondary">未声明配置 schema</Text>}
+      </Card>
     </div>
   )
 }
@@ -303,7 +467,13 @@ function useInstallAction() {
   const queryClient = useQueryClient()
   const mutation = useMutation({
     mutationFn: (input: { plugin: MarketplacePlugin; enable: boolean }) =>
-      installPlugin({ pluginId: input.plugin.id, enable: input.enable }),
+      installPlugin({
+        pluginId: input.plugin.id,
+        enable: input.enable,
+        sourceId: input.plugin.sourceId,
+        marketplaceUrl: input.plugin.sourceUrl,
+        version: input.plugin.latestVersion || input.plugin.version,
+      }),
     onSuccess: (item) => {
       message.success(`已安装 ${item.name}`)
       queryClient.invalidateQueries({ queryKey: ['plugins'] })
@@ -326,8 +496,17 @@ function useInstallAction() {
   }
 }
 
+function marketplaceDetailPath(plugin: MarketplacePlugin) {
+  const params = new URLSearchParams()
+  if (plugin.sourceId) params.set('sourceId', plugin.sourceId)
+  if (plugin.sourceUrl) params.set('marketplaceUrl', plugin.sourceUrl)
+  if (plugin.latestVersion || plugin.version) params.set('version', plugin.latestVersion || plugin.version)
+  const suffix = params.toString()
+  return `/plugins/marketplace/${encodeURIComponent(plugin.id)}${suffix ? `?${suffix}` : ''}`
+}
+
 export function PluginMarketplacePage() {
-  const [filters, setFilters] = useState({ query: '', type: '', publisher: '' })
+  const [filters, setFilters] = useState({ query: '', type: '', publisher: '', sourceId: '', marketplaceUrl: '', version: '' })
   const navigate = useNavigate()
   const snapshot = usePermissionSnapshot().data?.data
   const installAction = useInstallAction()
@@ -353,12 +532,26 @@ export function PluginMarketplacePage() {
       ),
     },
     {
+      title: '来源',
+      width: 170,
+      render: (_, record) => (
+        <Space direction="vertical" size={2}>
+          <Space size={4} wrap>
+            <Tag>{record.sourceId || 'static'}</Tag>
+            {record.verified ? <Tag color="green">verified</Tag> : null}
+          </Space>
+          <Text type="secondary">{record.latestVersion || record.version}</Text>
+        </Space>
+      ),
+    },
+    {
       title: '能力',
-      width: 180,
+      width: 190,
       render: (_, record) => (
         <Space direction="vertical" size={2}>
           <Text>{manifestAssetCount(record.manifest)} assets</Text>
           <Text type="secondary">{manifestCapabilityCount(record.manifest)} capabilities</Text>
+          <Text type="secondary">{manifestExtensionCount(record.manifest)} extensions</Text>
         </Space>
       ),
     },
@@ -389,7 +582,7 @@ export function PluginMarketplacePage() {
           <ManagementIconButton
             icon={<EyeOutlined />}
             tooltip="查看详情"
-            onClick={() => navigate(`/plugins/marketplace/${encodeURIComponent(record.id)}`)}
+            onClick={() => navigate(marketplaceDetailPath(record))}
           />
           <Button
             disabled={record.installed || !canInstall(snapshot)}
@@ -415,7 +608,7 @@ export function PluginMarketplacePage() {
       }
     >
       <AdminTable
-        rowKey="id"
+        rowKey={(record) => `${record.sourceId || 'static'}:${record.id}:${record.version}`}
         columns={columns}
         dataSource={marketplaceQuery.data ?? []}
         loading={marketplaceQuery.isLoading || marketplaceQuery.isFetching}
@@ -442,6 +635,27 @@ export function PluginMarketplacePage() {
               value={filters.publisher}
               onChange={(event) => setFilters((current) => ({ ...current, publisher: event.target.value }))}
             />
+            <Input
+              allowClear
+              placeholder="Source ID"
+              style={{ width: 160 }}
+              value={filters.sourceId}
+              onChange={(event) => setFilters((current) => ({ ...current, sourceId: event.target.value }))}
+            />
+            <Input
+              allowClear
+              placeholder="Marketplace URL"
+              style={{ width: 260 }}
+              value={filters.marketplaceUrl}
+              onChange={(event) => setFilters((current) => ({ ...current, marketplaceUrl: event.target.value }))}
+            />
+            <Input
+              allowClear
+              placeholder="Version"
+              style={{ width: 140 }}
+              value={filters.version}
+              onChange={(event) => setFilters((current) => ({ ...current, version: event.target.value }))}
+            />
           </ManagementTableToolbar>
         }
         empty={<ManagementState kind="empty" title="没有匹配插件" description="调整筛选条件后重试。" />}
@@ -452,12 +666,18 @@ export function PluginMarketplacePage() {
 
 export function PluginMarketplaceDetailPage() {
   const { pluginId = '' } = useParams()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const snapshot = usePermissionSnapshot().data?.data
   const installAction = useInstallAction()
+  const filters = useMemo(() => ({
+    sourceId: searchParams.get('sourceId') ?? '',
+    marketplaceUrl: searchParams.get('marketplaceUrl') ?? '',
+    version: searchParams.get('version') ?? '',
+  }), [searchParams])
   const detailQuery = useQuery({
-    queryKey: pluginQueryKeys.marketplaceDetail(pluginId),
-    queryFn: () => getMarketplacePlugin(pluginId),
+    queryKey: pluginQueryKeys.marketplaceDetail(pluginId, filters),
+    queryFn: () => getMarketplacePlugin(pluginId, filters),
     enabled: Boolean(pluginId),
   })
   const plugin = detailQuery.data
@@ -500,9 +720,23 @@ export function PluginMarketplaceDetailPage() {
       <div className="soha-plugin-kpi-grid">
         <Card size="small"><Text type="secondary">Risk</Text><div>{riskTag(plugin.riskLevel)}</div></Card>
         <Card size="small"><Text type="secondary">Assets</Text><div className="soha-plugin-kpi-value">{manifestAssetCount(plugin.manifest)}</div></Card>
-        <Card size="small"><Text type="secondary">Capabilities</Text><div className="soha-plugin-kpi-value">{manifestCapabilityCount(plugin.manifest)}</div></Card>
+        <Card size="small"><Text type="secondary">Extensions</Text><div className="soha-plugin-kpi-value">{manifestExtensionCount(plugin.manifest)}</div></Card>
         <Card size="small"><Text type="secondary">Installed</Text><div>{plugin.installed ? <Tag color="green">是</Tag> : <Tag>否</Tag>}</div></Card>
       </div>
+      <Card title="市场来源" size="small">
+        <Descriptions
+          column={3}
+          size="small"
+          items={[
+            { key: 'source', label: 'Source', children: plugin.source },
+            { key: 'sourceId', label: 'Source ID', children: plugin.sourceId || '-' },
+            { key: 'sourceUrl', label: 'Catalog URL', children: plugin.sourceUrl || '-' },
+            { key: 'latest', label: 'Latest', children: plugin.latestVersion || '-' },
+            { key: 'verified', label: 'Verified', children: plugin.verified ? <Tag color="green">是</Tag> : <Tag>否</Tag> },
+            { key: 'categories', label: 'Categories', children: compactTags(plugin.categories, 4) },
+          ]}
+        />
+      </Card>
       <PluginManifestSections manifest={plugin.manifest} />
     </PluginPageShell>
   )
@@ -700,27 +934,66 @@ function PluginConfigModal({
   plugin?: InstalledPlugin
 }) {
   const { message } = App.useApp()
+  const [form] = Form.useForm<Record<string, unknown>>()
   const [secretRefsText, setSecretRefsText] = useState('')
   const [metadataText, setMetadataText] = useState('')
+  const schemaFields = useMemo(() => schemaProperties(plugin?.manifest.configSchema), [plugin?.manifest.configSchema])
+  const requiredFields = useMemo(() => schemaRequired(plugin?.manifest.configSchema), [plugin?.manifest.configSchema])
+  const requiredSecrets = useMemo(() => requiredSecretValues(plugin?.manifest.secrets), [plugin?.manifest.secrets])
+  const schemaFieldNames = useMemo(() => new Set(schemaFields.map((field) => field.name)), [schemaFields])
 
   useEffect(() => {
     if (!open || !plugin) return
-    setSecretRefsText(JSON.stringify(plugin.configuredSecretRefs ?? {}, null, 2))
-    setMetadataText(JSON.stringify(plugin.metadata ?? {}, null, 2))
-  }, [open, plugin])
+    const metadata = plugin.metadata && typeof plugin.metadata === 'object' ? plugin.metadata : {}
+    const config = isRecord(metadata.config) ? metadata.config : {}
+    const secretRefs = plugin.configuredSecretRefs ?? {}
+    const values: Record<string, unknown> = {}
+    schemaFields.forEach(({ name, schema }) => {
+      values[name] = schemaFieldControl(schema) === 'secret-ref' ? secretRefs[name] : config[name]
+    })
+    requiredSecrets.forEach((secret) => {
+      if (!schemaFieldNames.has(secret.name)) {
+        values[`secret:${secret.name}`] = secretRefs[secret.name] ?? secret.secretRef
+      }
+    })
+    form.setFieldsValue(values)
+    setSecretRefsText(JSON.stringify(secretRefs, null, 2))
+    setMetadataText(JSON.stringify(metadata, null, 2))
+  }, [form, open, plugin, requiredSecrets, schemaFieldNames, schemaFields])
 
   return (
     <Modal
       open={open}
       title="配置插件"
-      width={720}
+      width={860}
       okText="保存"
       cancelText="取消"
       onCancel={onCancel}
       onOk={async () => {
         try {
+          const formValues = await form.validateFields()
           const secretRefs = parseJSONObject(secretRefsText, 'Secret refs')
           const metadata = parseJSONObject(metadataText, 'Metadata')
+          const config = isRecord(metadata.config) ? { ...metadata.config } : {}
+          schemaFields.forEach(({ name, schema }) => {
+            const value = formValues[name]
+            if (value === undefined || value === '') return
+            if (schemaFieldControl(schema) === 'secret-ref') {
+              secretRefs[name] = String(value)
+              return
+            }
+            config[name] = value
+          })
+          requiredSecrets.forEach((secret) => {
+            if (schemaFieldNames.has(secret.name)) return
+            const value = formValues[`secret:${secret.name}`]
+            if (value !== undefined && value !== '') {
+              secretRefs[secret.name] = String(value)
+            }
+          })
+          if (Object.keys(config).length) {
+            metadata.config = config
+          }
           await onSubmit({
             secretRefs: canEditSecrets ? Object.fromEntries(Object.entries(secretRefs).map(([key, value]) => [key, String(value)])) : undefined,
             metadata,
@@ -735,8 +1008,43 @@ function PluginConfigModal({
         <Alert
           showIcon
           type="info"
-          message="这里只保存 secret 引用和插件配置元数据；secret 内容仍由外部 secret 管理。"
+          title="这里只保存 secret 引用和插件配置元数据；secret 内容仍由外部 secret 管理。"
         />
+        {schemaFields.length || requiredSecrets.length ? (
+          <Card size="small" title="Schema 配置">
+            <Form form={form} layout="vertical">
+              {schemaFields.map(({ name, schema }) => {
+                const isBoolean = schema.type === 'boolean'
+                const isSecretRef = schemaFieldControl(schema) === 'secret-ref'
+                return (
+                  <Form.Item
+                    key={name}
+                    name={name}
+                    label={schemaFieldLabel(name, schema)}
+                    extra={typeof schema.description === 'string' ? schema.description : undefined}
+                    valuePropName={isBoolean ? 'checked' : 'value'}
+                    rules={requiredFields.has(name) ? [{ required: true, message: `请填写 ${schemaFieldLabel(name, schema)}` }] : undefined}
+                  >
+                    {isSecretRef ? <Input.Password disabled={!canEditSecrets} placeholder="secret://..." /> : renderSchemaInput(schema)}
+                  </Form.Item>
+                )
+              })}
+              {requiredSecrets
+                .filter((secret) => !schemaFieldNames.has(secret.name))
+                .map((secret) => (
+                  <Form.Item
+                    key={secret.name}
+                    name={`secret:${secret.name}`}
+                    label={secret.name}
+                    extra={secret.description}
+                    rules={secret.required === false ? undefined : [{ required: true, message: `请填写 ${secret.name} secret ref` }]}
+                  >
+                    <Input.Password disabled={!canEditSecrets} placeholder="secret://..." />
+                  </Form.Item>
+                ))}
+            </Form>
+          </Card>
+        ) : null}
         <div>
           <Text strong>Secret refs</Text>
           <Input.TextArea
@@ -778,6 +1086,10 @@ export function InstalledPluginDetailPage() {
     queryFn: () => getInstalledPluginManifest(pluginId),
     enabled: Boolean(pluginId),
   })
+  const extensionsQuery = useQuery({
+    queryKey: pluginQueryKeys.extensions('runtime'),
+    queryFn: () => listPluginExtensions('runtime'),
+  })
   const configMutation = useMutation({
     mutationFn: (input: PluginConfigRequest) => configurePlugin(pluginId, input),
     onSuccess: (item) => {
@@ -787,6 +1099,10 @@ export function InstalledPluginDetailPage() {
   })
   const plugin = detailQuery.data
   const manifest = manifestQuery.data ?? plugin?.manifest
+  const registeredExtensions = useMemo(
+    () => (extensionsQuery.data ?? []).filter((record) => record.pluginId === plugin?.id),
+    [extensionsQuery.data, plugin?.id],
+  )
 
   if (detailQuery.isLoading) {
     return <PluginPageShell activeKey="installed"><ManagementState kind="loading" /></PluginPageShell>
@@ -841,6 +1157,9 @@ export function InstalledPluginDetailPage() {
             { key: 'secrets', label: 'Secret refs', children: compactTags(Object.keys(plugin.configuredSecretRefs ?? {}), 4) },
           ]}
         />
+      </Card>
+      <Card title="已注册扩展" size="small" loading={extensionsQuery.isLoading || extensionsQuery.isFetching}>
+        <RegisteredExtensionList records={registeredExtensions} />
       </Card>
       <PluginManifestSections manifest={manifest} />
       <Card title="Raw manifest" size="small" extra={<CodeOutlined />}>

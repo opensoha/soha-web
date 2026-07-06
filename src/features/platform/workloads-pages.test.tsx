@@ -947,11 +947,11 @@ describe('workloads pods page refresh controls', () => {
     })
     await flushAsyncWork()
 
-    const terminalButton = Array.from(container.querySelectorAll('button')).find((button) =>
-      button.textContent?.replace(/\s/g, '').includes('打开终端'),
+    const terminalTab = Array.from(container.querySelectorAll('[role="tab"]')).find((tab) =>
+      tab.textContent?.replace(/\s/g, '').includes('终端'),
     )
-    expect(terminalButton).toBeInstanceOf(HTMLButtonElement)
-    expect((terminalButton as HTMLButtonElement).disabled).toBe(true)
+    expect(terminalTab).toBeInstanceOf(HTMLElement)
+    expect(terminalTab?.getAttribute('aria-disabled')).toBe('true')
 
     const logContainer = await renderWithProviders(
       <PodLogViewer

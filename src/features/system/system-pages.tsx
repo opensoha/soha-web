@@ -27,7 +27,7 @@ import type { TableColumnsType } from 'antd'
 import { DeleteOutlined, EditOutlined, EyeOutlined, PauseCircleOutlined, PlusOutlined, SendOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
-import { useSearchParams } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
@@ -122,16 +122,20 @@ function SourceTag({ value }: { value?: string }) {
 }
 
 export function OnlineUsersPage() {
+  const location = useLocation()
+  const sessionsBasePath = location.pathname.startsWith('/identity/') ? '/identity/sessions' : '/auth/sessions'
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([])
   const [providerFilter, setProviderFilter] = useState<string>('')
   const [searchKeyword, setSearchKeyword] = useState('')
-  const canManageOnlineUsers = hasPermission(permissionSnapshotQuery.data?.data, 'system.online-users.manage')
+  const canManageOnlineUsers =
+    hasPermission(permissionSnapshotQuery.data?.data, 'system.online-users.manage') ||
+    hasPermission(permissionSnapshotQuery.data?.data, 'identity.sessions.manage')
 
   const { data, isLoading } = useQuery({
-    queryKey: ['online-users'],
-    queryFn: () => api.get<ApiResponse<OnlineUser[]>>('/auth/sessions'),
+    queryKey: ['online-users', sessionsBasePath],
+    queryFn: () => api.get<ApiResponse<OnlineUser[]>>(sessionsBasePath),
     select: (response: any) => ({
       data: (response.data ?? []).map((item: any) => ({
         id: item.id,
@@ -152,10 +156,10 @@ export function OnlineUsersPage() {
   })
 
   const revokeMutation = useMutation({
-    mutationFn: (sessionId: string) => api.post(`/auth/sessions/${sessionId}/revoke`),
+    mutationFn: (sessionId: string) => api.post(`${sessionsBasePath}/${sessionId}/revoke`),
     onSuccess: (_result, sessionId) => {
       void message.success('用户会话已下线')
-      void queryClient.invalidateQueries({ queryKey: ['online-users'] })
+      void queryClient.invalidateQueries({ queryKey: ['online-users', sessionsBasePath] })
       setSelectedSessionIds((current) => current.filter((id) => id !== sessionId))
     },
     onError: (err: Error) => void message.error(err.message),
@@ -163,13 +167,13 @@ export function OnlineUsersPage() {
 
   const batchRevokeMutation = useMutation({
     mutationFn: async (sessionIds: string[]) =>
-      Promise.allSettled(sessionIds.map((sessionId) => api.post(`/auth/sessions/${sessionId}/revoke`))),
+      Promise.allSettled(sessionIds.map((sessionId) => api.post(`${sessionsBasePath}/${sessionId}/revoke`))),
     onSuccess: (results) => {
       const successCount = results.filter((item) => item.status === 'fulfilled').length
       const failureCount = results.length - successCount
       void message.success(failureCount > 0 ? `批量下线完成，成功 ${successCount}，失败 ${failureCount}` : `已批量下线 ${successCount} 个会话`)
       setSelectedSessionIds([])
-      void queryClient.invalidateQueries({ queryKey: ['online-users'] })
+      void queryClient.invalidateQueries({ queryKey: ['online-users', sessionsBasePath] })
     },
     onError: (err: Error) => void message.error(err.message),
   })
@@ -1255,6 +1259,8 @@ function AuditLogDrawer({ record, open, onClose }: { record: AuditLog | null; op
 }
 
 export function AuditLogsPage() {
+  const location = useLocation()
+  const auditEventsPath = location.pathname.startsWith('/identity/') ? '/identity/audit/events' : '/audit/logs'
   const [searchParams] = useSearchParams()
   const initialUsageFilters = useMemo(() => usageSnapshotFilterParams(searchParams), [searchParams])
   const [actionFilter, setActionFilter] = useState<string>('')
@@ -1264,8 +1270,8 @@ export function AuditLogsPage() {
   const [viewMode, setViewMode] = useState<'all' | 'abnormal' | 'today'>('all')
   const [activeRecord, setActiveRecord] = useState<AuditLog | null>(null)
   const { data, isLoading } = useQuery({
-    queryKey: ['audit-logs', actionFilter, resultFilter, metadataKeyFilter, metadataValueFilter],
-    queryFn: () => api.get<ApiResponse<AuditLog[]>>(buildQueryPath('/audit/logs', {
+    queryKey: ['audit-logs', auditEventsPath, actionFilter, resultFilter, metadataKeyFilter, metadataValueFilter],
+    queryFn: () => api.get<ApiResponse<AuditLog[]>>(buildQueryPath(auditEventsPath, {
       action: actionFilter,
       result: resultFilter,
       metadataKey: metadataKeyFilter,

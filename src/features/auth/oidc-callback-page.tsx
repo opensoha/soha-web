@@ -7,6 +7,10 @@ import {
   fetchPermissionSnapshot,
   logoutAuthSession,
 } from "@/features/auth/auth-api";
+import {
+  normalizeLocalReturnTo,
+  shouldUseDocumentNavigation,
+} from "@/features/auth/return-to";
 import { findLandingPath } from "@/routes/meta";
 import { usePreferencesStore } from "@/stores/preferences-store";
 
@@ -39,16 +43,24 @@ export function OIDCCallbackPage() {
 
     async function exchangeCode(authCode: string) {
       try {
+        const returnTo = normalizeLocalReturnTo(searchParams.get("return_to"));
         const authResult = await exchangeOIDCCode(authCode);
         commitAuthResult(authResult);
-        const snapshot = await fetchPermissionSnapshot().catch(() => null);
+        const snapshot = returnTo
+          ? null
+          : await fetchPermissionSnapshot().catch(() => null);
         const nextPath =
+          returnTo ??
           findLandingPath(
             snapshot,
             usePreferencesStore.getState().currentWorkspace,
             authResult.user.roles,
           ) ?? "/";
         message.success("登录成功");
+        if (shouldUseDocumentNavigation(nextPath)) {
+          window.location.assign(nextPath);
+          return;
+        }
         navigate(nextPath, { replace: true });
       } catch (err: any) {
         setError(err?.message ?? "OIDC 登录失败");

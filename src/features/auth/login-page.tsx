@@ -27,6 +27,10 @@ import {
   fetchPermissionSnapshot,
   loginWithPassword,
 } from "@/features/auth/auth-api";
+import {
+  normalizeLocalReturnTo,
+  shouldUseDocumentNavigation,
+} from "@/features/auth/return-to";
 import { findLandingPath } from "@/routes/meta";
 import { usePreferencesStore } from "@/stores/preferences-store";
 import { getThemePalette, readThemeCssVariable, resolveThemeMode } from "@/theme/app-theme";
@@ -379,6 +383,31 @@ function normalizeSliderValue(value: number | number[]) {
   return Array.isArray(value) ? value[0] ?? 0 : value;
 }
 
+function routeLocationPath(
+  value:
+    | {
+        hash?: string;
+        pathname?: string;
+        search?: string;
+      }
+    | undefined,
+) {
+  if (!value?.pathname) {
+    return null;
+  }
+  return `${value.pathname}${value.search ?? ""}${value.hash ?? ""}`;
+}
+
+function providerLoginPath(provider: { id?: string; loginUrl?: string }) {
+  if (provider.id) {
+    return `/api/v1/auth/providers/${encodeURIComponent(provider.id)}/login`;
+  }
+  if (provider.loginUrl) {
+    return `/api/v1${provider.loginUrl}`;
+  }
+  return null;
+}
+
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -393,8 +422,23 @@ export function LoginPage() {
   const setThemeMode = usePreferencesStore((state) => state.setThemeMode);
 
   const branding = readStoredBrandingSettings();
-  const from = (location.state as { from?: { pathname: string } } | undefined)
-    ?.from?.pathname;
+  const stateReturnTo = normalizeLocalReturnTo(
+    routeLocationPath(
+      (location.state as
+        | {
+            from?: {
+              hash?: string;
+              pathname?: string;
+              search?: string;
+            };
+          }
+        | undefined)?.from,
+    ),
+  );
+  const queryReturnTo = normalizeLocalReturnTo(
+    new URLSearchParams(location.search).get("return_to"),
+  );
+  const returnTo = queryReturnTo ?? stateReturnTo;
   const providersQuery = useQuery({
     queryKey: ["auth-providers"],
     queryFn: fetchAuthProviders,
@@ -436,6 +480,13 @@ export function LoginPage() {
       return "/";
     }
   };
+  const completeLoginNavigation = (targetPath: string) => {
+    if (shouldUseDocumentNavigation(targetPath)) {
+      window.location.assign(targetPath);
+      return;
+    }
+    navigate(targetPath, { replace: true });
+  };
 
   const resetSliderVerification = () => {
     setSliderValue(0);
@@ -473,9 +524,12 @@ export function LoginPage() {
         values.password,
       );
       commitAuthResult(authResult);
-      const nextPath = await resolvePostLoginPath(authResult.user.roles, from);
+      const nextPath = await resolvePostLoginPath(
+        authResult.user.roles,
+        returnTo ?? undefined,
+      );
       message.success("登录成功");
-      navigate(nextPath, { replace: true });
+      completeLoginNavigation(nextPath);
     } catch (err: any) {
       if (sliderVerificationEnabled) {
         resetSliderVerification();
@@ -487,16 +541,23 @@ export function LoginPage() {
   };
 
   const handleProviderLogin = (provider: {
+    id?: string;
     type: string;
     loginUrl?: string;
     name: string;
   }) => {
-    if (provider.type === "saml" || !provider.loginUrl) {
+    const loginPath = providerLoginPath(provider);
+    if (provider.type === "saml" || !loginPath) {
       message.warning("当前 SAML 登录配置已保存，但服务端回调链路尚未启用。");
       return;
     }
-    setProviderLoadingKey(provider.loginUrl);
-    window.location.href = `/api/v1${provider.loginUrl}`;
+    const loginURL = new URL(loginPath, window.location.origin);
+    if (returnTo) {
+      loginURL.searchParams.set("return_to", returnTo);
+    }
+    const target = `${loginURL.pathname}${loginURL.search}`;
+    setProviderLoadingKey(target);
+    window.location.assign(target);
   };
 
   return (
@@ -632,9 +693,16 @@ export function LoginPage() {
                 <div className="soha-auth-provider-list">
                   {thirdPartyProviders.map((provider) => (
                     <Button
-                      key={`${provider.type}-${provider.name}`}
+                      key={`${provider.type}-${provider.id ?? provider.name}`}
                       block
-                      loading={providerLoadingKey === provider.loginUrl}
+                      loading={
+                        Boolean(
+                          providerLoginPath(provider) &&
+                            providerLoadingKey?.startsWith(
+                              providerLoginPath(provider) ?? "",
+                            ),
+                        )
+                      }
                       onClick={() => handleProviderLogin(provider)}
                       className="soha-auth-provider-button"
                     >

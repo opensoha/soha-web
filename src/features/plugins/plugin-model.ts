@@ -1,7 +1,9 @@
 import type {
   InstalledPlugin,
   MarketplacePlugin,
+  MarketplacePluginVersion,
   PluginConfigRequest,
+  PluginExtensionPoints,
   PluginInstallRequest,
   PluginManifest,
   PluginPermissionRequest,
@@ -18,20 +20,44 @@ export type {
   PluginManifest,
   PluginPermissionRequest,
   PluginSecretRequirement,
+  MarketplacePluginVersion,
+  PluginExtensionPoints,
 }
 
 export interface PluginMarketplaceFilters {
+  marketplaceUrl?: string
   publisher?: string
   query?: string
+  sourceId?: string
   type?: string
+  version?: string
+}
+
+export interface PluginExtensionRecord {
+  id: string
+  pluginId: string
+  pluginName: string
+  pluginVersion: string
+  point: string
+  scope: string
+  label?: string
+  description?: string
+  actionRef?: string
+  resourceKinds?: string[]
+  permissionKeys?: string[]
+  runtimeMode?: string
+  status: string
+  configured: boolean
+  metadata?: Record<string, unknown>
 }
 
 export const pluginQueryKeys = {
   marketplace: (filters: PluginMarketplaceFilters) => ['plugins', 'marketplace', filters] as const,
-  marketplaceDetail: (pluginId?: string) => ['plugins', 'marketplace', pluginId] as const,
+  marketplaceDetail: (pluginId?: string, filters?: PluginMarketplaceFilters) => ['plugins', 'marketplace', pluginId, filters] as const,
   installed: ['plugins', 'installed'] as const,
   installedDetail: (pluginId?: string) => ['plugins', 'installed', pluginId] as const,
   manifest: (pluginId?: string) => ['plugins', 'manifest', pluginId] as const,
+  extensions: (scope: string) => ['plugins', 'extensions', scope] as const,
 }
 
 export const pluginTypeOptions = [
@@ -42,6 +68,12 @@ export const pluginTypeOptions = [
   { value: 'ai-provider-adapter', label: 'AI Provider' },
   { value: 'agent-profile', label: 'Agent Profile' },
   { value: 'gateway-policy-pack', label: 'Policy Pack' },
+  { value: 'diagnostic', label: 'Diagnostic' },
+  { value: 'resource-extension', label: 'Resource Extension' },
+  { value: 'metric-extension', label: 'Metric Extension' },
+  { value: 'notification-channel', label: 'Notification Channel' },
+  { value: 'identity-template', label: 'Identity Template' },
+  { value: 'ui-extension', label: 'UI Extension' },
 ]
 
 export const pluginRiskLabels: Record<string, string> = {
@@ -49,6 +81,7 @@ export const pluginRiskLabels: Record<string, string> = {
   write: '写入',
   execute: '执行',
   high: '高风险',
+  mutate: '变更',
 }
 
 function queryString(filters: PluginMarketplaceFilters) {
@@ -56,6 +89,9 @@ function queryString(filters: PluginMarketplaceFilters) {
   if (filters.query?.trim()) params.set('q', filters.query.trim())
   if (filters.type?.trim()) params.set('type', filters.type.trim())
   if (filters.publisher?.trim()) params.set('publisher', filters.publisher.trim())
+  if (filters.sourceId?.trim()) params.set('sourceId', filters.sourceId.trim())
+  if (filters.marketplaceUrl?.trim()) params.set('marketplaceUrl', filters.marketplaceUrl.trim())
+  if (filters.version?.trim()) params.set('version', filters.version.trim())
   const suffix = params.toString()
   return suffix ? `?${suffix}` : ''
 }
@@ -66,9 +102,9 @@ export function listMarketplacePlugins(filters: PluginMarketplaceFilters) {
     .then((res) => res.data ?? [])
 }
 
-export function getMarketplacePlugin(pluginId: string) {
+export function getMarketplacePlugin(pluginId: string, filters: PluginMarketplaceFilters = {}) {
   return api
-    .get<ApiResponse<MarketplacePlugin>>(`/plugins/marketplace/${encodeURIComponent(pluginId)}`)
+    .get<ApiResponse<MarketplacePlugin>>(`/plugins/marketplace/${encodeURIComponent(pluginId)}${queryString(filters)}`)
     .then((res) => res.data)
 }
 
@@ -124,6 +160,12 @@ export function removePlugin(pluginId: string) {
   return api.delete<ApiResponse<{ status: string }>>(`/plugins/${encodeURIComponent(pluginId)}`)
 }
 
+export function listPluginExtensions(scope = 'runtime') {
+  return api
+    .get<ApiResponse<PluginExtensionRecord[]>>(`/extensions/${encodeURIComponent(scope)}`)
+    .then((res) => res.data ?? [])
+}
+
 export function pluginTypeLabel(type?: string) {
   const value = String(type ?? '').trim()
   return pluginTypeOptions.find((item) => item.value === value)?.label ?? (value || '-')
@@ -159,4 +201,20 @@ export function manifestCapabilityCount(manifest?: PluginManifest | null) {
     capabilities?.prompts,
     capabilities?.skills,
   ].reduce((total, values) => total + (values?.length ?? 0), 0)
+}
+
+export function manifestExtensionCount(manifest?: PluginManifest | null) {
+  const points = manifest?.extensionPoints
+  if (!points) return 0
+  return Object.values(points).reduce<number>((total, group) => {
+    if (!group || typeof group !== 'object') return total
+    return total + Object.values(group as Record<string, unknown>).reduce<number>((groupTotal, contributions) => (
+      groupTotal + (Array.isArray(contributions) ? contributions.length : 0)
+    ), 0)
+  }, 0)
+}
+
+export function latestMarketplaceVersion(plugin: MarketplacePlugin): MarketplacePluginVersion | undefined {
+  const target = plugin.latestVersion || plugin.version
+  return plugin.versions?.find((item) => item.version === target) ?? plugin.versions?.[0]
 }
