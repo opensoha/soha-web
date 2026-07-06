@@ -27,6 +27,7 @@ import { PlatformScopeTrigger } from '@/components/platform-scope-toolbar'
 import { AnnouncementBell } from '@/features/announcements/announcement-center'
 import { logoutAuthSession } from '@/features/auth/auth-api'
 import { usePermissionSnapshot } from '@/features/auth/permission-snapshot'
+import { GlobalAIAssistantProvider } from '@/features/copilot/global-assistant'
 import { resolveMenuIcon } from '@/features/system/menu-icons'
 import { resolveMenuSectionLabel } from '@/features/system/menu-schema'
 import { useI18n } from '@/i18n'
@@ -116,7 +117,7 @@ function buildAIWorkbenchItemKeyToPath(snapshot?: PermissionSnapshot | null) {
 function buildAIWorkbenchSearch(search: string) {
   const source = new URLSearchParams(search)
   const next = new URLSearchParams()
-  ;['session', 'clusterId', 'namespace', 'workload', 'alertId', 'timeRangeMinutes'].forEach((key) => {
+  ;['session', 'clusterId', 'namespace', 'workload', 'service', 'pod', 'node', 'alertId', 'timeRangeMinutes', 'sourceWorkbench', 'entityKind', 'entityName'].forEach((key) => {
     const value = source.get(key)
     if (value) {
       next.set(key, value)
@@ -647,7 +648,8 @@ export function AppLayout() {
   }
 
   return (
-    <Layout className="soha-shell">
+    <GlobalAIAssistantProvider permissionSnapshot={snapshot}>
+      <Layout className="soha-shell">
       <Sider
         className="soha-sider"
         collapsible
@@ -826,6 +828,7 @@ export function AppLayout() {
           </div>
         </Content>
       </Layout>
-    </Layout>
+      </Layout>
+    </GlobalAIAssistantProvider>
   )
 }

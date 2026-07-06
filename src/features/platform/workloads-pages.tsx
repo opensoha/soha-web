@@ -53,6 +53,8 @@ import {
 import { useResourceActions } from '@/components/resource-actions'
 import { TABLE_ACTIONS_COLUMN_CLASS_NAME } from '@/components/resource-actions'
 import { hasAllowedAction } from '@/features/auth/permission-snapshot'
+import { encodeAIContextForElement } from '@/features/copilot/global-assistant/ai-context'
+import { useAIPageContext } from '@/features/copilot/global-assistant/ai-context-provider'
 import { useI18n } from '@/i18n'
 import { ResourceEventsTimeline } from '@/components/resource-events-timeline'
 import { BooleanTag, StatusTag } from '@/components/status-tag'
@@ -1060,6 +1062,19 @@ export function WorkloadsDeploymentsPage() {
 
   const deployments = data?.data ?? []
   const normalizedKeyword = normalizeSearchKeyword(searchKeyword)
+  useAIPageContext({
+    sourceWorkbench: 'platform',
+    sourceRoute: '/workloads/deployments',
+    sourceTitle: localeCode === 'zh_CN' ? 'Deployments 列表' : 'Deployments',
+    entityKind: 'kubernetes.deployment.list',
+    entityName: 'Deployments',
+    clusterId: clusterId ?? undefined,
+    namespace: namespace ?? undefined,
+    timeRangeMinutes: 60,
+    visibleFilters: { searchKeyword, healthFilter },
+    pinnedData: { total: deployments.length },
+    promptHint: '分析当前 Deployment 列表的健康状态、重启、滚动发布和相关事件。',
+  })
 
   const restartMutation = useMutation({
     mutationFn: ({ name, namespace: targetNamespace }: { name: string; namespace: string }) =>
@@ -1442,6 +1457,19 @@ export function WorkloadsDeploymentsPage() {
         columns={columns}
         dataSource={filteredDeployments}
         rowKey={(record) => `${record.namespace}/${record.name}`}
+        onRow={(record: Deployment) => ({
+          'data-ai-context': encodeAIContextForElement({
+            sourceWorkbench: 'platform',
+            sourceRoute: `/workloads/deployments/${record.name}?namespace=${encodeURIComponent(record.namespace)}`,
+            sourceTitle: `Deployment ${record.name}`,
+            entityKind: 'kubernetes.deployment',
+            entityName: record.name,
+            clusterId: clusterId ?? undefined,
+            namespace: record.namespace,
+            workload: record.name,
+            timeRangeMinutes: 60,
+          }),
+        })}
         loading={isLoading}
         paginationSummary={
           <WorkloadTableSummary
@@ -1685,6 +1713,23 @@ export function DeploymentDetailPage() {
   const rolloutStatus = rolloutStatusQuery.data?.data
   const rolloutHistory = rolloutHistoryQuery.data?.data ?? []
   const deploymentPods = deploymentPodsQuery.data?.data ?? []
+  useAIPageContext({
+    sourceWorkbench: 'platform',
+    sourceRoute: `/workloads/deployments/${deploymentName}${detailNamespace ? `?namespace=${encodeURIComponent(detailNamespace)}` : ''}`,
+    sourceTitle: `Deployment ${deploymentName}`,
+    entityKind: 'kubernetes.deployment',
+    entityName: deploymentName,
+    clusterId: clusterId ?? undefined,
+    namespace: detailNamespace ?? undefined,
+    workload: deploymentName,
+    timeRangeMinutes: metricsQuery.data?.data?.rangeMinutes ?? 60,
+    pinnedData: {
+      pods: deploymentPods.length,
+      rolloutStatus: rolloutStatus?.status,
+      desiredReplicas: rolloutStatus?.desiredReplicas,
+    },
+    promptHint: `排查 Deployment ${deploymentName} 的副本、Pod、滚动发布、事件、日志和指标。`,
+  })
   const deploymentTimelineEvents = useMemo(
     () =>
       deploymentEventsQuery.data?.data?.length
@@ -2191,6 +2236,19 @@ export function WorkloadsPodsPage() {
 
   const pods = data?.data ?? []
   const normalizedKeyword = normalizeSearchKeyword(searchKeyword)
+  useAIPageContext({
+    sourceWorkbench: 'platform',
+    sourceRoute: '/workloads/pods',
+    sourceTitle: localeCode === 'zh_CN' ? 'Pods 列表' : 'Pods',
+    entityKind: 'kubernetes.pod.list',
+    entityName: 'Pods',
+    clusterId: clusterId ?? undefined,
+    namespace: namespace ?? undefined,
+    timeRangeMinutes: 60,
+    visibleFilters: { searchKeyword, phaseFilter, restartFilter, pvcFilter, nodeFilter },
+    pinnedData: { total: pods.length },
+    promptHint: '分析当前 Pod 列表中的异常状态、重启、节点分布和存储挂载风险。',
+  })
   const nodeOptions = useMemo(
     () => Array.from(new Set(pods.map((item) => item.nodeName).filter(Boolean))).sort(),
     [pods],
@@ -2690,6 +2748,20 @@ export function WorkloadsPodsPage() {
         columns={columns}
         dataSource={orderedPods}
         rowKey={(record) => `${record.namespace}/${record.name}`}
+        onRow={(record: Pod) => ({
+          'data-ai-context': encodeAIContextForElement({
+            sourceWorkbench: 'platform',
+            sourceRoute: `/workloads/pods/${record.name}?namespace=${encodeURIComponent(record.namespace)}`,
+            sourceTitle: `Pod ${record.name}`,
+            entityKind: 'kubernetes.pod',
+            entityName: record.name,
+            clusterId: clusterId ?? undefined,
+            namespace: record.namespace,
+            pod: record.name,
+            node: record.nodeName,
+            timeRangeMinutes: 60,
+          }),
+        })}
         loading={isLoading}
         paginationSummary={
           <WorkloadTableSummary
@@ -2808,6 +2880,27 @@ export function PodDetailPage() {
   }, [container, containerOptions])
 
   const podDetail = podDetailQuery.data?.data
+  useAIPageContext({
+    sourceWorkbench: 'platform',
+    sourceRoute: `/workloads/pods/${podName}${detailNamespace ? `?namespace=${encodeURIComponent(detailNamespace)}` : ''}`,
+    sourceTitle: `Pod ${podName}`,
+    entityKind: 'kubernetes.pod',
+    entityName: podName,
+    clusterId: clusterId ?? undefined,
+    namespace: detailNamespace ?? undefined,
+    pod: podName,
+    node: podDetail?.nodeName,
+    timeRangeMinutes: metricsRangeMinutes,
+    pinnedData: {
+      phase: podDetail?.phase,
+      containers: podDetail?.containers?.length,
+      readyContainers: podDetail?.containers?.filter((item) => item.ready).length,
+      restarts: podDetail?.containers?.reduce((sum, item) => sum + (item.restartCount || 0), 0),
+      activeTab: activeTabKey,
+      container,
+    },
+    promptHint: `排查 Pod ${podName} 的状态、容器、事件、日志、指标和节点相关问题。`,
+  })
   const podTimelineEvents = useMemo(
     () =>
       podEventsQuery.data?.data?.length

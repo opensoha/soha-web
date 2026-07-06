@@ -5,9 +5,10 @@ import type { FormInstance } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { CloudServerOutlined, DeleteOutlined, DockerOutlined, EditOutlined, FileTextOutlined, MinusCircleOutlined, PlayCircleOutlined, PlusOutlined, PoweroffOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, Navigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useLocation, useParams } from 'react-router-dom'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
 import { useWorkbenchModuleEnabled } from '@/features/modules/module-status'
+import { useAIPageContext } from '@/features/copilot/global-assistant/ai-context-provider'
 import { formatDateTime } from '@/utils/time'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementDataPage } from '@/components/management-data-page'
@@ -1394,6 +1395,7 @@ function ContainerManagementPage() {
 }
 
 function ProjectDetailWorkspace() {
+  const location = useLocation()
   const { projectId } = useParams()
   const resolvedProjectId = projectId ?? ''
   const { dockerModuleEnabled, canViewServices, canManageServices, canViewPorts } = useDockerPermissions()
@@ -1423,6 +1425,25 @@ function ProjectDetailWorkspace() {
     return options
   }, [projectConfig, runtimeServices])
   const defaultRuntimeServiceName = runtimeServiceOptions[0]?.value || ''
+  useAIPageContext({
+    sourceWorkbench: 'docker',
+    sourceRoute: `${location.pathname}${location.search}`,
+    sourceTitle: project?.name ? `Docker 项目 ${project.name}` : 'Docker 项目详情',
+    entityKind: 'docker.project',
+    entityName: project?.name ?? resolvedProjectId,
+    dockerHostId: project?.hostId,
+    dockerServiceId: runtimeServiceName || defaultRuntimeServiceName || undefined,
+    visibleFilters: {
+      runtimeServiceName: runtimeServiceName || defaultRuntimeServiceName,
+      sourceKind: project?.sourceKind,
+      status: project?.status,
+    },
+    pinnedData: {
+      projectId: resolvedProjectId,
+      serviceCount: runtimeServices.length,
+      hostId: project?.hostId,
+    },
+  })
   useEffect(() => {
     if (!defaultRuntimeServiceName) {
       return
@@ -1733,6 +1754,7 @@ function OperationsTable({ embedded = false, initialPreset = 'all' as OperationP
 }
 
 export function DockerOverviewPage() {
+  const location = useLocation()
   const { dockerModuleEnabled, canManageProjects } = useDockerPermissions()
   const overviewQuery = useQuery({ enabled: dockerModuleEnabled, queryKey: ['docker', 'overview'], queryFn: dockerApi.overview })
   const overview = overviewQuery.data?.data
@@ -1744,6 +1766,24 @@ export function DockerOverviewPage() {
   const recentOperations = overview?.recentOperations ?? []
   const expiringProjects = overview?.expiringProjects ?? []
   const overviewTone: OverviewTone = (stats.failedTaskCount ?? 0) > 0 ? 'danger' : (stats.pendingTaskCount ?? 0) > 0 || (hostSummary.provisioning ?? 0) > 0 ? 'warning' : (stats.hostCount ?? 0) > 0 ? 'success' : 'default'
+  useAIPageContext({
+    sourceWorkbench: 'docker',
+    sourceRoute: `${location.pathname}${location.search}`,
+    sourceTitle: 'Docker 工作台',
+    entityKind: 'docker.overview',
+    entityName: 'Docker 工作台',
+    visibleFilters: {
+      tone: overviewTone,
+    },
+    pinnedData: {
+      hostCount: stats.hostCount,
+      projectCount: stats.projectCount,
+      serviceCount: stats.serviceCount,
+      portMappingCount: stats.portMappingCount,
+      failedTaskCount: stats.failedTaskCount,
+      pendingTaskCount: stats.pendingTaskCount,
+    },
+  })
   return (
     <div className="soha-page soha-virtualization-page">
       <div className={`soha-vrt-commandbar is-${overviewTone}`}>

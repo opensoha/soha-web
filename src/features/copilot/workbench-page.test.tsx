@@ -9,10 +9,10 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import type { WorkbenchStreamEvent } from '@opensoha/contracts/gen/ts/sohaapi'
 import { AIWorkbenchPage, RUNNABLE_ANALYSIS_MODE_OPTIONS } from './workbench-page'
 import type { PermissionSnapshot } from '@/types'
-import type { WorkbenchMessage, WorkbenchMessageEnvelope, WorkbenchSession } from './workbench-types'
+import type { WorkbenchAgentRun, WorkbenchMessage, WorkbenchMessageEnvelope, WorkbenchSession } from './workbench-types'
 
 type TestWorkbenchMode = NonNullable<NonNullable<WorkbenchSession['metadata']>['mode']>
-type MessageScenario = 'default' | 'tool-artifact' | 'legacy-platform'
+type MessageScenario = 'default' | 'tool-artifact' | 'legacy-platform' | 'metadata-sources' | 'final-agent-run-metadata'
 
 const testState = vi.hoisted(() => ({
   snapshot: {
@@ -28,6 +28,9 @@ const testState = vi.hoisted(() => ({
     messages: [],
     analysisArtifacts: [],
   } as WorkbenchMessageEnvelope,
+  streamEvents: undefined as Array<Record<string, unknown>> | undefined,
+  streamError: undefined as { message: string; code?: string; retryable?: boolean } | undefined,
+  agentRuns: [] as WorkbenchAgentRun[],
   agentProviders: [
     {
       id: 'internal',
@@ -228,8 +231,89 @@ const apiGetMock = vi.hoisted(() => vi.fn(async (path: string) => {
         },
       })
     }
+    if (testState.messageScenario === 'metadata-sources') {
+      baseMessages.push({
+        id: 'msg-metadata-sources',
+        sessionId: 'session-1',
+        role: 'assistant',
+        content: '已完成来源回放。',
+        createdAt: '2026-05-12T10:04:00Z',
+        metadata: {
+          thinkingSummary: '从 final message metadata 恢复来源。',
+          sources: [{
+            id: 'source-metadata',
+            kind: 'document',
+            title: 'Runbook source from metadata',
+            url: 'https://docs.example/runbook',
+            summary: '最终消息快照里的来源。',
+          }],
+          toolExecutions: [{
+            id: 'tool-metadata',
+            adapterId: 'docs.v1',
+            toolName: 'docs.lookup',
+            status: 'success',
+            summary: '读取 runbook。',
+            startedAt: '2026-05-12T10:04:00Z',
+            completedAt: '2026-05-12T10:04:01Z',
+          }],
+          analysisArtifacts: [{
+            kind: 'root_cause',
+            runId: 'run-metadata',
+            title: 'metadata 回放',
+            summary: 'metadata sources should render even without evidence.',
+            evidence: [],
+          }],
+          agentStatus: {
+            providerId: 'internal',
+            providerKind: 'internal',
+            status: 'succeeded',
+          },
+        },
+      })
+    }
+    if (testState.messageScenario === 'final-agent-run-metadata') {
+      baseMessages.push({
+        id: 'msg-final-agent-run',
+        sessionId: 'session-1',
+        role: 'assistant',
+        content: '最终 agent 结果已经落库。',
+        createdAt: '2026-05-12T10:06:00Z',
+        metadata: {
+          source: 'agent-runtime',
+          agentRunId: 'agent-run-final',
+          thinkingSummary: 'final message metadata wins',
+          toolExecutions: [{
+            id: 'tool-final',
+            adapterId: 'metrics.v1',
+            toolName: 'metrics.final_summary',
+            status: 'success',
+            summary: '最终 metadata 工具快照。',
+            startedAt: '2026-05-12T10:05:00Z',
+            completedAt: '2026-05-12T10:05:30Z',
+          }],
+          analysisArtifacts: [{
+            kind: 'root_cause',
+            runId: 'agent-run-final',
+            title: 'final metadata artifact',
+            summary: 'final metadata artifact summary',
+            evidence: [],
+          }],
+          agentStatus: {
+            providerId: 'hermes',
+            providerKind: 'hermes',
+            status: 'completed',
+            agentRunId: 'agent-run-final',
+          },
+        },
+      })
+    }
     return {
       data: baseMessages,
+    }
+  }
+  if (path === '/copilot/agent-runs') {
+    return {
+      data: [...testState.agentRuns],
     }
   }
   if (path === '/copilot/workbench/catalog') {
@@ -276,13 +360,32 @@ const streamWorkbenchMessageMock = vi.hoisted(() => vi.fn(async (
   path: string,
   _body: Record<string, unknown>,
   onEvent: (event: WorkbenchStreamEvent) => void | Promise<void>,
+  signal?: AbortSignal,
 ) => {
   if (path !== '/copilot/sessions/session-1/messages/stream') {
     throw new Error(`Unhandled stream ${path}`)
   }
-  if (testState.sendMessageGate) {
-    await testState.sendMessageGate
+  const abortError = () => new DOMException('Aborted', 'AbortError')
+  const throwIfAborted = () => {
+    if (signal?.aborted) throw abortError()
   }
+  if (testState.sendMessageGate) {
+    await new Promise<void>((resolve, reject) => {
+      const abort = () => reject(abortError())
+      signal?.addEventListener('abort', abort, { once: true })
+      testState.sendMessageGate?.then(
+        () => {
+          signal?.removeEventListener('abort', abort)
+          resolve()
+        },
+        (error) => {
+          signal?.removeEventListener('abort', abort)
+          reject(error)
+        },
+      )
+    })
+  }
+  throwIfAborted()
   const envelope = testState.sendMessageEnvelope
   if ((envelope.analysisArtifacts ?? []).some((artifact) => (artifact.toolExecutions ?? []).length > 0)) {
     testState.messageScenario = 'tool-artifact'
@@ -290,6 +393,7 @@ const streamWorkbenchMessageMock = vi.hoisted(() => vi.fn(async (
   const createdAt = '2026-05-12T10:04:00Z'
   let sequence = 1
   const emit = async (event: Record<string, unknown>) => {
+    throwIfAborted()
     await onEvent({
       id: `evt-${sequence}`,
       sessionId: 'session-1',
@@ -297,6 +401,22 @@ const streamWorkbenchMessageMock = vi.hoisted(() => vi.fn(async (
       createdAt,
       ...event,
     } as WorkbenchStreamEvent)
+    throwIfAborted()
+  }
+  if (testState.streamError) {
+    await emit({
+      type: 'error',
+      message: testState.streamError.message,
+      code: testState.streamError.code,
+      retryable: testState.streamError.retryable,
+    })
+    return
+  }
+  if (testState.streamEvents) {
+    for (const event of testState.streamEvents) {
+      await emit(event)
+    }
+    return
   }
   for (const artifact of envelope.analysisArtifacts ?? []) {
     await emit({ type: 'thinking.delta', textDelta: artifact.summary })
@@ -413,7 +533,7 @@ async function renderPage(route = '/ai-workbench?session=session-1&mode=root_cau
     await new Promise((resolve) => setTimeout(resolve, 0))
   })
 
-  return container
+  return Object.assign(container, { queryClient })
 }
 
 async function flushAsyncWork() {
@@ -451,6 +571,40 @@ async function pressSenderEnter(container: HTMLElement) {
 async function submitSenderMessage(container: HTMLElement, value: string) {
   await typeSenderMessage(container, value)
   await pressSenderEnter(container)
+}
+
+function expectedStreamBody(content: string, mode: TestWorkbenchMode = 'root_cause', agentProviderId = 'internal') {
+  return {
+    content,
+    mode,
+    agentProviderId,
+    toolset: {
+      enabledAdapterIds: ['metrics.v1'],
+      enabledSkillIds: ['root-cause-skill'],
+      disabledToolNames: ['metrics.v1.metrics.anomaly_summary'],
+      budgetOverrides: { timeoutSeconds: 45, maxEvidenceItems: 12 },
+      scopeOverrides: { namespace: 'payments-shadow', timeRangeMinutes: 30 },
+    },
+    scopeOverrides: { namespace: 'payments-shadow', timeRangeMinutes: 30 },
+  }
+}
+
+function externalAgentRun(events: WorkbenchStreamEvent[], status = 'running'): WorkbenchAgentRun {
+  return {
+    id: status === 'running' ? 'agent-run-live' : `agent-run-${status}`,
+    providerId: 'hermes',
+    providerKind: 'hermes',
+    capabilityId: 'root_cause',
+    sessionId: 'session-1',
+    rootCauseRunId: 'run-live',
+    status,
+    output: { workbenchEvents: events },
+    queuedAt: '2026-05-12T10:05:00Z',
+    startedAt: '2026-05-12T10:05:01Z',
+    lastHeartbeatAt: '2026-05-12T10:05:10Z',
+    createdAt: '2026-05-12T10:05:00Z',
+    updatedAt: '2026-05-12T10:05:10Z',
+  }
 }
 
 describe('AIWorkbenchPage', () => {
@@ -509,6 +663,9 @@ describe('AIWorkbenchPage', () => {
       messages: [],
       analysisArtifacts: [],
     }
+    testState.streamEvents = undefined
+    testState.streamError = undefined
+    testState.agentRuns = []
     apiGetMock.mockClear()
     apiPostMock.mockClear()
     apiPatchMock.mockClear()
@@ -649,7 +806,7 @@ describe('AIWorkbenchPage', () => {
 
     await submitSenderMessage(container, '只是问个普通问题')
 
-    expect(streamWorkbenchMessageMock).toHaveBeenCalledWith('/copilot/sessions/session-1/messages/stream', { content: '只是问个普通问题' }, expect.any(Function), expect.any(AbortSignal))
+    expect(streamWorkbenchMessageMock).toHaveBeenCalledWith('/copilot/sessions/session-1/messages/stream', expectedStreamBody('只是问个普通问题', 'general'), expect.any(Function), expect.any(AbortSignal))
     expect(document.body.textContent).not.toContain('暂无分析链路')
     expect(document.body.textContent).not.toContain('通用聊天不会自动执行工具')
   })
@@ -703,7 +860,7 @@ describe('AIWorkbenchPage', () => {
       await flushAsyncWork()
     })
 
-    expect(streamWorkbenchMessageMock).toHaveBeenCalledWith('/copilot/sessions/session-1/messages/stream', { content: '帮我梳理当前问题' }, expect.any(Function), expect.any(AbortSignal))
+    expect(streamWorkbenchMessageMock).toHaveBeenCalledWith('/copilot/sessions/session-1/messages/stream', expectedStreamBody('帮我梳理当前问题', 'general'), expect.any(Function), expect.any(AbortSignal))
     expect(container.textContent).toContain('帮我梳理当前问题')
     expect(container.textContent).toContain('正在思考...')
 
@@ -763,9 +920,330 @@ describe('AIWorkbenchPage', () => {
 
     await submitSenderMessage(container, '请执行一次指标分析')
 
-    expect(streamWorkbenchMessageMock).toHaveBeenCalledWith('/copilot/sessions/session-1/messages/stream', { content: '请执行一次指标分析' }, expect.any(Function), expect.any(AbortSignal))
+    expect(streamWorkbenchMessageMock).toHaveBeenCalledWith('/copilot/sessions/session-1/messages/stream', expectedStreamBody('请执行一次指标分析'), expect.any(Function), expect.any(AbortSignal))
     expect(document.body.textContent).toContain('metrics.anomaly_summary')
     expect(document.body.textContent).toContain('发现错误率突增。')
+    expect(document.body.textContent).toContain('1 个工具调用，1 成功，0 失败')
+  })
+
+  it('aborts an in-flight explicit analysis stream from the shared stream cancel control', async () => {
+    testState.snapshot = {
+      permissionKeys: ['observe.ai.view', 'observe.ai.chat', 'observe.ai.root-cause.run'],
+      visibleMenuIds: [],
+      visibleMenus: [],
+    } as PermissionSnapshot
+    testState.sendMessageGate = new Promise<void>(() => {})
+    const container = await renderPage()
+
+    const explicitAnalysisButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('显式分析'))
+    expect(explicitAnalysisButton).toBeTruthy()
+
+    await act(async () => {
+      explicitAnalysisButton?.click()
+      await flushAsyncWork()
+    })
+
+    const startAnalysisButton = Array.from(document.body.querySelectorAll('button')).find((button) => button.textContent?.includes('开始分析'))
+    expect(startAnalysisButton).toBeTruthy()
+
+    await act(async () => {
+      startAnalysisButton?.click()
+      await flushAsyncWork()
+    })
+
+    expect(streamWorkbenchMessageMock).toHaveBeenCalledWith('/copilot/sessions/session-1/messages/stream', expectedStreamBody('确认异常来源与影响面'), expect.any(Function), expect.any(AbortSignal))
+
+    const cancelButton = Array.from(document.body.querySelectorAll('button')).find((button) => button.textContent?.includes('Stop loading'))
+    expect(cancelButton).toBeTruthy()
+
+    await act(async () => {
+      cancelButton?.click()
+      await flushAsyncWork()
+    })
+
+    expect(document.body.textContent).toContain('已取消本次回复。')
+  })
+
+  it('offers retry for retryable stream errors and resubmits the last input', async () => {
+    testState.sessionMode = 'general'
+    testState.streamError = { message: 'provider overloaded', code: 'provider_busy', retryable: true }
+    const container = await renderPage('/ai-workbench/chat?session=session-1')
+
+    await submitSenderMessage(container, '请重试这次请求')
+
+    expect(streamWorkbenchMessageMock).toHaveBeenCalledWith('/copilot/sessions/session-1/messages/stream', expectedStreamBody('请重试这次请求', 'general'), expect.any(Function), expect.any(AbortSignal))
+    expect(container.textContent).toContain('上一次 Workbench 流式调用可重试')
+    expect(container.textContent).toContain('provider overloaded')
+
+    testState.streamError = undefined
+    testState.sendMessageEnvelope = {
+      messages: [{
+        id: 'msg-retry-assistant',
+        sessionId: 'session-1',
+        role: 'assistant',
+        content: 'retry ok',
+        createdAt: '2026-05-12T10:05:00Z',
+        metadata: { source: 'workbench-stream' },
+      }],
+      analysisArtifacts: [],
+    }
+
+    const retryButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('重试'))
+    expect(retryButton).toBeTruthy()
+
+    await act(async () => {
+      retryButton?.click()
+      await flushAsyncWork()
+    })
+
+    expect(streamWorkbenchMessageMock).toHaveBeenCalledTimes(2)
+    expect(streamWorkbenchMessageMock.mock.calls[1][1]).toEqual(expectedStreamBody('请重试这次请求', 'general'))
+    expect(container.textContent).toContain('retry ok')
+  })
+
+  it('renders Sources from source.updated stream snapshots', async () => {
+    testState.streamEvents = [
+      {
+        type: 'source.updated',
+        source: {
+          id: 'source-stream',
+          kind: 'metric',
+          title: 'Prometheus stream source',
+          summary: 'error rate range query',
+        },
+      },
+      {
+        type: 'artifact.updated',
+        artifact: {
+          kind: 'root_cause',
+          runId: 'run-stream-source',
+          title: 'stream source artifact',
+          summary: 'stream source summary',
+          evidence: [],
+        },
+      },
+      {
+        type: 'agent.status',
+        providerId: 'internal',
+        providerKind: 'internal',
+        status: 'succeeded',
+      },
+    ]
+    const container = await renderPage()
+
+    await submitSenderMessage(container, '请收集实时来源')
+
+    const streamArtifactButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('stream source artifact'))
+    expect(streamArtifactButton).toBeTruthy()
+
+    await act(async () => {
+      streamArtifactButton?.click()
+      await flushAsyncWork()
+    })
+
+    const evidenceButton = Array.from(container.querySelectorAll<HTMLButtonElement>('.soha-ai-workbench__focus-tile'))
+      .find((button) => button.textContent?.includes('证据'))
+    expect(evidenceButton).toBeTruthy()
+
+    await act(async () => {
+      evidenceButton?.click()
+      await flushAsyncWork()
+    })
+
+    expect(document.body.textContent).toContain('Prometheus stream source')
+  })
+
+  it('replays final message metadata for tools, sources, thinking, and agent status', async () => {
+    testState.messageScenario = 'metadata-sources'
+    const container = await renderPage()
+
+    const chainButton = container.querySelector('button[aria-label="分析链路"]') as HTMLButtonElement | null
+    expect(chainButton).toBeTruthy()
+    expect(chainButton?.disabled).toBe(false)
+
+    await act(async () => {
+      chainButton?.click()
+      await flushAsyncWork()
+    })
+
+    expect(document.body.textContent).toContain('1 个工具调用，1 成功，0 失败')
+    expect(document.body.textContent).toContain('从 final message metadata 恢复来源。')
+    expect(document.body.textContent).toContain('Agent: internal / succeeded')
+    expect(document.body.textContent).toContain('docs.lookup')
+
+    const evidenceButton = Array.from(container.querySelectorAll<HTMLButtonElement>('.soha-ai-workbench__focus-tile'))
+      .find((button) => button.textContent?.includes('证据'))
+    expect(evidenceButton).toBeTruthy()
+
+    await act(async () => {
+      evidenceButton?.click()
+      await flushAsyncWork()
+    })
+
+    expect(document.body.textContent).toContain('Runbook source from metadata')
+  })
+
+  it('replays running external agent run workbenchEvents from polling', async () => {
+    testState.sessionAgentProviderId = 'hermes'
+    testState.agentRuns = [externalAgentRun([
+      {
+        id: 'evt-live-thinking',
+        sessionId: 'session-1',
+        runId: 'agent-run-live',
+        sequence: 1,
+        createdAt: '2026-05-12T10:05:02Z',
+        type: 'thinking.delta',
+        textDelta: 'Checking live run.',
+      },
+      {
+        id: 'evt-live-tool-started',
+        sessionId: 'session-1',
+        runId: 'agent-run-live',
+        sequence: 2,
+        createdAt: '2026-05-12T10:05:03Z',
+        type: 'tool.started',
+        toolCall: {
+          id: 'tool-live',
+          adapterId: 'logs.v1',
+          toolName: 'logs.query',
+          status: 'running',
+          summary: '查询 payment-api 错误日志。',
+          startedAt: '2026-05-12T10:05:03Z',
+        },
+      },
+      {
+        id: 'evt-live-tool-completed',
+        sessionId: 'session-1',
+        runId: 'agent-run-live',
+        sequence: 3,
+        createdAt: '2026-05-12T10:05:05Z',
+        type: 'tool.completed',
+        toolCall: {
+          id: 'tool-live',
+          adapterId: 'logs.v1',
+          toolName: 'logs.query',
+          status: 'success',
+          summary: '发现连接池错误日志。',
+          startedAt: '2026-05-12T10:05:03Z',
+          completedAt: '2026-05-12T10:05:05Z',
+        },
+      },
+    ])]
+
+    const container = await renderPage()
+
+    expect(apiGetMock).toHaveBeenCalledWith('/copilot/agent-runs')
+    expect(container.textContent).toContain('Checking live run.')
+    expect(container.textContent).toContain('实时分析链路')
+
+    const chainButton = container.querySelector('button[aria-label="分析链路"]') as HTMLButtonElement | null
+    expect(chainButton).toBeTruthy()
+    expect(chainButton?.disabled).toBe(false)
+
+    await act(async () => {
+      chainButton?.click()
+      await flushAsyncWork()
+    })
+
+    expect(document.body.textContent).toContain('logs.query')
+    expect(document.body.textContent).toContain('发现连接池错误日志。')
+    expect(document.body.textContent).toContain('Agent: hermes / running')
+  })
+
+  it('does not duplicate running external run replay when polling returns the same events', async () => {
+    testState.sessionAgentProviderId = 'hermes'
+    testState.agentRuns = [externalAgentRun([
+      {
+        id: 'evt-live-thinking',
+        sessionId: 'session-1',
+        runId: 'agent-run-live',
+        sequence: 1,
+        createdAt: '2026-05-12T10:05:02Z',
+        type: 'thinking.delta',
+        textDelta: 'Checking live run.',
+      },
+      {
+        id: 'evt-live-tool-started',
+        sessionId: 'session-1',
+        runId: 'agent-run-live',
+        sequence: 2,
+        createdAt: '2026-05-12T10:05:03Z',
+        type: 'tool.started',
+        toolCall: {
+          id: 'tool-live',
+          adapterId: 'logs.v1',
+          toolName: 'logs.query',
+          status: 'running',
+          summary: '查询 payment-api 错误日志。',
+          startedAt: '2026-05-12T10:05:03Z',
+        },
+      },
+    ])]
+    const container = await renderPage()
+
+    await act(async () => {
+      await container.queryClient.refetchQueries({ queryKey: ['copilot-agent-runs', 'session-1'] })
+      await flushAsyncWork()
+    })
+
+    expect(container.textContent?.match(/Checking live run\./g)?.length).toBe(1)
+
+    const chainButton = container.querySelector('button[aria-label="分析链路"]') as HTMLButtonElement | null
+    expect(chainButton).toBeTruthy()
+
+    await act(async () => {
+      chainButton?.click()
+      await flushAsyncWork()
+    })
+
+    expect(document.body.textContent).toContain('logs.query')
+  })
+
+  it('keeps final message metadata ahead of stale running external run replay', async () => {
+    testState.sessionAgentProviderId = 'hermes'
+    testState.messageScenario = 'final-agent-run-metadata'
+    testState.agentRuns = [{
+      id: 'agent-run-final',
+      providerId: 'hermes',
+      providerKind: 'hermes',
+      capabilityId: 'root_cause',
+      sessionId: 'session-1',
+      rootCauseRunId: 'agent-run-final',
+      status: 'running',
+      output: {
+        workbenchEvents: [{
+          id: 'evt-stale-thinking',
+          sessionId: 'session-1',
+          runId: 'agent-run-final',
+          sequence: 1,
+          createdAt: '2026-05-12T10:05:01Z',
+          type: 'thinking.delta',
+          textDelta: 'stale polling event',
+        }],
+      },
+      queuedAt: '2026-05-12T10:05:00Z',
+      startedAt: '2026-05-12T10:05:01Z',
+      updatedAt: '2026-05-12T10:05:02Z',
+    }]
+
+    const container = await renderPage()
+
+    expect(container.textContent).toContain('最终 agent 结果已经落库。')
+    expect(container.textContent).not.toContain('stale polling event')
+
+    const chainButton = container.querySelector('button[aria-label="分析链路"]') as HTMLButtonElement | null
+    expect(chainButton).toBeTruthy()
+    expect(chainButton?.disabled).toBe(false)
+
+    await act(async () => {
+      chainButton?.click()
+      await flushAsyncWork()
+    })
+
+    expect(document.body.textContent).toContain('final message metadata wins')
+    expect(document.body.textContent).toContain('metrics.final_summary')
+    expect(document.body.textContent).toContain('Agent: hermes / succeeded')
+    expect(document.body.textContent).not.toContain('stale polling event')
   })
 
   it('archives sessions from the left session list', async () => {
@@ -865,17 +1343,8 @@ describe('AIWorkbenchPage', () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
 
-    expect(apiPostMock).toHaveBeenCalledWith('/copilot/sessions/session-1/analyze', {
-      mode: 'root_cause',
-      question: '确认异常来源与影响面',
-      agentProviderId: 'internal',
-      analysisProfileId: 'profile:inspection',
-      scope: {
-        clusterId: 'local-k3s',
-        namespace: 'payments',
-        workload: 'payment-api',
-      },
-    })
+    expect(streamWorkbenchMessageMock).toHaveBeenCalledWith('/copilot/sessions/session-1/messages/stream', expectedStreamBody('确认异常来源与影响面'), expect.any(Function), expect.any(AbortSignal))
+    expect(apiPostMock).not.toHaveBeenCalledWith('/copilot/sessions/session-1/analyze', expect.anything())
     expect(latestRoute).toBe('/ai-workbench/root-cause?session=session-1')
   })
 
@@ -907,17 +1376,8 @@ describe('AIWorkbenchPage', () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
 
-    expect(apiPostMock).toHaveBeenCalledWith('/copilot/sessions/session-1/analyze', {
-      mode: 'root_cause',
-      question: '确认异常来源与影响面',
-      agentProviderId: 'hermes',
-      analysisProfileId: 'profile:inspection',
-      scope: {
-        clusterId: 'local-k3s',
-        namespace: 'payments',
-        workload: 'payment-api',
-      },
-    })
+    expect(streamWorkbenchMessageMock).toHaveBeenCalledWith('/copilot/sessions/session-1/messages/stream', expectedStreamBody('确认异常来源与影响面', 'root_cause', 'hermes'), expect.any(Function), expect.any(AbortSignal))
+    expect(apiPostMock).not.toHaveBeenCalledWith('/copilot/sessions/session-1/analyze', expect.anything())
   })
 
   it('creates an inspection task from the current session with the inspection profile', async () => {

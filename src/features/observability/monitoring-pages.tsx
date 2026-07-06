@@ -31,6 +31,8 @@ import {
   ManagementTableToolbar,
 } from '@/components/management-list'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
+import { encodeAIContextForElement } from '@/features/copilot/global-assistant/ai-context'
+import { useAIPageContext } from '@/features/copilot/global-assistant/ai-context-provider'
 import { BooleanTag, StatusTag } from '@/components/status-tag'
 import { api } from '@/services/api-client'
 import { getAIWorkbenchPathForMode } from '@/features/copilot/workbench-navigation'
@@ -891,6 +893,19 @@ export function AlertsPage() {
     queryKey: ['alert-events'],
     queryFn: () => api.get<ApiResponse<Alert[]>>('/alert-events'),
   })
+  useAIPageContext({
+    sourceWorkbench: 'monitoring',
+    sourceRoute: '/monitoring-workbench/alerts',
+    sourceTitle: '活跃告警',
+    entityKind: 'monitoring.alert.list',
+    entityName: 'Alerts',
+    timeRangeMinutes: 60,
+    pinnedData: {
+      total: data?.data?.length ?? 0,
+      firing: (data?.data ?? []).filter((item) => alertDisplayStatus(item) !== 'resolved').length,
+    },
+    promptHint: '分析当前活跃告警的严重程度、范围、来源系统和最近命中趋势。',
+  })
   const healingPoliciesQuery = useQuery({
     queryKey: ['healing-policies'],
     queryFn: () => api.get<ApiResponse<Array<{ id: string; name: string; enabled: boolean }>>>('/healing-policies'),
@@ -1009,6 +1024,19 @@ export function AlertsPage() {
         columns={columns}
         dataSource={data?.data ?? []}
         rowKey="id"
+        onRow={(record: Alert) => ({
+          'data-ai-context': encodeAIContextForElement({
+            sourceWorkbench: 'monitoring',
+            sourceRoute: `/monitoring-workbench/alerts/${record.id}`,
+            sourceTitle: record.title,
+            entityKind: 'monitoring.alert',
+            entityName: record.title,
+            alertId: record.id,
+            clusterId: record.clusterId,
+            namespace: record.namespace,
+            timeRangeMinutes: 60,
+          }),
+        })}
         loading={isLoading}
         pageSize={20}
         scroll={{ x: 'max-content' }}

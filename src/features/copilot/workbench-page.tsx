@@ -9,6 +9,7 @@ import {
   LinkOutlined,
   PlayCircleOutlined,
   RadarChartOutlined,
+  ReloadOutlined,
   RobotOutlined,
   ThunderboltOutlined,
   ToolOutlined,
@@ -63,6 +64,7 @@ import { WorkflowCanvasSurface } from '@/components/workflow-canvas-surface'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
 import { api } from '@/services/api-client'
 import type { ApiResponse } from '@/types'
+import type { WorkbenchSendMessageStreamRequest, WorkbenchSource, WorkbenchStreamEvent } from '@opensoha/contracts/gen/ts/sohaapi'
 import {
   getAIModelSettingsPath,
   getAIOperationsPath,
@@ -83,18 +85,22 @@ import {
   scopeOverrideState,
 } from './workbench-toolset'
 import {
+  canonicalWorkbenchAgentStatus,
   createWorkbenchStreamState,
+  isRunningWorkbenchAgentStatus,
+  isTerminalWorkbenchAgentStatus,
   reduceWorkbenchStreamState,
   streamWorkbenchMessage,
+  workbenchStreamEventKey,
   type WorkbenchStreamState,
 } from './workbench-stream'
 import type {
+  WorkbenchAgentRun,
   WorkbenchArtifact,
   WorkbenchCatalog,
   WorkbenchGraph,
   WorkbenchGraphNode,
   WorkbenchMessage,
-  WorkbenchMessageEnvelope,
   WorkbenchSession,
   WorkbenchSessionScope,
   WorkbenchToolCall,
@@ -109,6 +115,16 @@ type WorkbenchFlowEdge = Edge<{ relation: string; severity?: string }, 'smoothst
 type ThoughtChainStatus = 'loading' | 'success' | 'error' | 'abort'
 type WorkbenchBubbleStatus = 'local' | 'loading' | 'updating' | 'success' | 'error' | 'abort'
 type ConversationMessage = WorkbenchMessage & { deliveryStatus?: WorkbenchBubbleStatus }
+type WorkbenchStreamRetryInput = {
+  sessionId: string
+  request: WorkbenchSendMessageStreamRequest
+  closeAnalysisOnSuccess?: boolean
+  navigateMode?: WorkbenchMode
+  openThinkingOnSuccess?: boolean
+}
+type WorkbenchStreamSubmission = WorkbenchStreamRetryInput & {
+  pendingMessages: { user: ConversationMessage; assistant: ConversationMessage }
+}
 type GeneralChatStatusItem = {
   key: string
   label: string
@@ -365,6 +381,154 @@ function pendingConversationMessages(sessionId: string, content: string): { user
   }
 }
 
+const EXTERNAL_AGENT_REPLAY_SOURCE = 'agent-run-replay'
+
+function isExternalAgentRun(run: WorkbenchAgentRun) {
+  const providerKind = run.providerKind.trim().toLowerCase()
+  const providerId = run.providerId.trim().toLowerCase()
+  return providerKind !== 'internal' && providerId !== 'internal'
+}
+
+function isRunningExternalAgentRun(run: WorkbenchAgentRun) {
+  return isExternalAgentRun(run) && isRunningWorkbenchAgentStatus(run.status)
+}
+
+function isExternalAgentRunReplayMessage(item: ConversationMessage) {
+  return item.id.startsWith('local:agent-run:') || item.metadata?.source === EXTERNAL_AGENT_REPLAY_SOURCE
+}
+
+function externalAgentRunReplayMessageId(run: WorkbenchAgentRun) {
+  return `local:agent-run:${run.sessionId || 'session'}:${run.id}`
+}
+
+function agentRunTimestamp(run: WorkbenchAgentRun) {
+  const candidates = [run.updatedAt, run.lastHeartbeatAt, run.completedAt, run.startedAt, run.queuedAt, run.createdAt]
+  return candidates.reduce((latest, value) => {
+    if (!value) return latest
+    const timestamp = new Date(value).getTime()
+    return Number.isFinite(timestamp) ? Math.max(latest, timestamp) : latest
+  }, 0)
+}
+
+function agentRunMessageCreatedAt(run: WorkbenchAgentRun) {
+  return run.startedAt || run.queuedAt || run.createdAt || run.updatedAt || new Date().toISOString()
+}
+
+function messageAgentRunRefs(item: WorkbenchMessage | ConversationMessage) {
+  const ids = new Set<string>()
+  const metadata = item.metadata
+  const topLevelId = artifactSnapshotText(metadata, 'agentRunId', 'agentRuntimeId')
+  if (topLevelId) ids.add(topLevelId)
+  if (isRecord(metadata?.agentStatus)) {
+    const statusId = artifactSnapshotText(metadata.agentStatus, 'agentRunId', 'agentRuntimeId')
+    if (statusId) ids.add(statusId)
+  }
+  for (const artifact of metadataArtifacts(metadata)) {
+    const artifactRunId = artifactSnapshotText(artifact.dataSourceSnapshot, 'agentRunId', 'agentRuntimeId')
+    if (artifactRunId) ids.add(artifactRunId)
+  }
+  return [...ids]
+}
+
+function isWorkbenchStreamEvent(value: unknown): value is WorkbenchStreamEvent {
+  if (!isRecord(value)) return false
+  return typeof value.id === 'string'
+    && typeof value.type === 'string'
+    && typeof value.sessionId === 'string'
+    && typeof value.sequence === 'number'
+    && typeof value.createdAt === 'string'
+}
+
+function agentRunWorkbenchEvents(run: WorkbenchAgentRun) {
+  const raw = run.output?.workbenchEvents
+  return Array.isArray(raw) ? raw.filter(isWorkbenchStreamEvent) : []
+}
+
+function agentRunStatusReplayEvent(run: WorkbenchAgentRun, sessionId: string): WorkbenchStreamEvent {
+  const status = canonicalWorkbenchAgentStatus(run.status)
+  return {
+    id: `evt:${sessionId}:${run.id}:status:${status}`,
+    type: 'agent.status',
+    sessionId,
+    runId: run.rootCauseRunId || run.id,
+    sequence: 0,
+    createdAt: run.updatedAt || run.lastHeartbeatAt || run.startedAt || run.queuedAt || run.createdAt || new Date().toISOString(),
+    providerId: run.providerId,
+    providerKind: run.providerKind,
+    status,
+  } as WorkbenchStreamEvent
+}
+
+function sortedAgentRunReplayEvents(run: WorkbenchAgentRun, sessionId: string) {
+  return [agentRunStatusReplayEvent(run, sessionId), ...agentRunWorkbenchEvents(run)]
+    .sort((left, right) => left.sequence - right.sequence || left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id))
+}
+
+function agentRunStatusSnapshot(run: WorkbenchAgentRun, state: WorkbenchStreamState) {
+  return {
+    providerId: state.agentStatus?.providerId || run.providerId,
+    providerKind: state.agentStatus?.providerKind || run.providerKind,
+    status: canonicalWorkbenchAgentStatus(state.agentStatus?.status || run.status),
+    runId: run.rootCauseRunId || run.id,
+    agentRunId: run.id,
+    externalRunId: run.externalRunId,
+  }
+}
+
+function agentRunReplayArtifacts(metadata: Record<string, unknown>, run: WorkbenchAgentRun) {
+  const artifacts = metadataArtifacts(metadata)
+  if (artifacts.length === 0 && (run.analysisArtifacts ?? []).length > 0) {
+    return run.analysisArtifacts
+  }
+  const fallbackRunId = run.rootCauseRunId || run.id
+  return artifacts.map((artifact) => (artifact.runId === 'stream' ? { ...artifact, runId: fallbackRunId } : artifact))
+}
+
+function agentRunReplayMetadata(run: WorkbenchAgentRun, state: WorkbenchStreamState) {
+  const metadata = streamMessageMetadata({
+    source: EXTERNAL_AGENT_REPLAY_SOURCE,
+    agentRunId: run.id,
+    externalRunId: run.externalRunId,
+    agentProviderId: run.providerId,
+  }, state)
+  return {
+    ...metadata,
+    source: EXTERNAL_AGENT_REPLAY_SOURCE,
+    agentRunId: run.id,
+    externalRunId: run.externalRunId,
+    agentProviderId: run.providerId,
+    agentStatus: metadataAgentStatus(metadata) ?? agentRunStatusSnapshot(run, state),
+    analysisArtifacts: agentRunReplayArtifacts(metadata, run),
+  }
+}
+
+function agentRunReplayContent(run: WorkbenchAgentRun, state: WorkbenchStreamState) {
+  if (state.message.content) return state.message.content
+  if (state.error) return state.error.message
+  if (state.thinking?.summary) return state.thinking.summary
+  switch (canonicalWorkbenchAgentStatus(run.status)) {
+    case 'queued':
+      return '外部 Agent 已排队，等待 runner 接收。'
+    case 'running':
+      return '外部 Agent 正在分析当前会话。'
+    default:
+      return '正在思考...'
+  }
+}
+
+function agentRunReplayMessage(run: WorkbenchAgentRun, state: WorkbenchStreamState): ConversationMessage {
+  const sessionId = run.sessionId || state.message.sessionId || ''
+  return {
+    id: externalAgentRunReplayMessageId(run),
+    sessionId,
+    role: 'assistant',
+    content: agentRunReplayContent(run, state),
+    metadata: agentRunReplayMetadata(run, state),
+    createdAt: agentRunMessageCreatedAt(run),
+    deliveryStatus: streamBubbleStatus(state),
+  }
+}
+
 function artifactTitle(entry: WorkbenchArtifactEntry) {
   return entry.artifact.title || modeLabel(entry.artifact.kind) || entry.artifact.kind
 }
@@ -489,7 +653,7 @@ function graphNodeLabel(kind: string) {
 
 function buildScopeSummary(scope?: WorkbenchSessionScope) {
   if (!scope) return '未固定上下文'
-  return [scope.clusterId, scope.namespace, scope.workload || scope.service, scope.alertId].filter(Boolean).join(' / ') || '未固定上下文'
+  return [scope.clusterId, scope.namespace, scope.workload || scope.service || scope.pod || scope.node, scope.alertId].filter(Boolean).join(' / ') || '未固定上下文'
 }
 
 function isSyntheticSession(item: WorkbenchSession) {
@@ -541,6 +705,17 @@ function recordPreview(value: unknown): Record<string, unknown> | undefined {
   return { preview: value }
 }
 
+function streamToolOutputPreview(tool: WorkbenchStreamState['toolCalls'][number]) {
+  if (!tool.outputLog) return tool.outputPreview
+  if (tool.outputPreview && typeof tool.outputPreview === 'object' && !Array.isArray(tool.outputPreview)) {
+    return { ...(tool.outputPreview as Record<string, unknown>), log: tool.outputLog }
+  }
+  if (tool.outputPreview) {
+    return { output: tool.outputPreview, log: tool.outputLog }
+  }
+  return { log: tool.outputLog }
+}
+
 function streamToolCallToWorkbenchToolCall(tool: WorkbenchStreamState['toolCalls'][number]): WorkbenchToolCall {
   return {
     id: tool.id,
@@ -549,7 +724,7 @@ function streamToolCallToWorkbenchToolCall(tool: WorkbenchStreamState['toolCalls
     status: tool.status,
     summary: tool.summary,
     input: recordPreview(tool.inputPreview),
-    output: recordPreview(tool.outputPreview),
+    output: recordPreview(streamToolOutputPreview(tool)),
     startedAt: tool.startedAt ?? new Date().toISOString(),
     completedAt: tool.completedAt,
   }
@@ -583,12 +758,214 @@ function streamStateArtifacts(state: WorkbenchStreamState): WorkbenchArtifact[] 
   }]
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+function normalizeWorkbenchToolCall(value: unknown): WorkbenchToolCall | undefined {
+  if (!isRecord(value)) return undefined
+  if (
+    typeof value.id !== 'string'
+    || typeof value.adapterId !== 'string'
+    || typeof value.toolName !== 'string'
+    || typeof value.status !== 'string'
+  ) {
+    return undefined
+  }
+  return {
+    id: value.id,
+    adapterId: value.adapterId,
+    toolName: value.toolName,
+    status: value.status,
+    summary: typeof value.summary === 'string' ? value.summary : undefined,
+    input: isRecord(value.input) ? value.input : undefined,
+    output: isRecord(value.output) ? value.output : undefined,
+    startedAt: typeof value.startedAt === 'string' ? value.startedAt : '',
+    completedAt: typeof value.completedAt === 'string' ? value.completedAt : undefined,
+  }
+}
+
+function isWorkbenchSource(value: unknown): value is WorkbenchSource {
+  if (!isRecord(value)) return false
+  return typeof value.id === 'string'
+    && typeof value.kind === 'string'
+    && typeof value.title === 'string'
+}
+
+function isAgentStatusSnapshot(value: unknown): value is NonNullable<WorkbenchStreamState['agentStatus']> {
+  if (!isRecord(value)) return false
+  return typeof value.providerId === 'string'
+    && typeof value.providerKind === 'string'
+    && typeof value.status === 'string'
+}
+
+function metadataArray<T>(
+  metadata: Record<string, unknown> | undefined,
+  key: string,
+  guard: (value: unknown) => value is T,
+) {
+  const raw = metadata?.[key]
+  return Array.isArray(raw) ? raw.filter(guard) : []
+}
+
+function metadataToolExecutions(metadata: Record<string, unknown> | undefined) {
+  const raw = metadata?.toolExecutions
+  return Array.isArray(raw) ? raw.map(normalizeWorkbenchToolCall).filter((item): item is WorkbenchToolCall => Boolean(item)) : []
+}
+
+function metadataSources(metadata: Record<string, unknown> | undefined) {
+  return metadataArray(metadata, 'sources', isWorkbenchSource)
+}
+
+function metadataThinkingSummary(metadata: Record<string, unknown> | undefined) {
+  const raw = metadata?.thinkingSummary
+  return typeof raw === 'string' ? raw : ''
+}
+
+function metadataAgentStatus(metadata: Record<string, unknown> | undefined) {
+  const raw = metadata?.agentStatus
+  return isAgentStatusSnapshot(raw) ? { ...raw, status: canonicalWorkbenchAgentStatus(raw.status) } : undefined
+}
+
+function metadataArtifacts(metadata: Record<string, unknown> | undefined) {
+  return metadataArray(metadata, 'analysisArtifacts', isWorkbenchArtifact)
+}
+
+function replayArtifactsForMessage(message: ConversationMessage): WorkbenchArtifact[] {
+  const artifacts = metadataArtifacts(message.metadata)
+  const toolExecutions = metadataToolExecutions(message.metadata)
+  if (artifacts.length > 0) {
+    if (toolExecutions.length === 0) return artifacts
+    const [first, ...rest] = artifacts
+    return [{ ...first, toolExecutions }, ...rest]
+  }
+  const thinkingSummary = metadataThinkingSummary(message.metadata)
+  const sources = metadataSources(message.metadata)
+  if (toolExecutions.length === 0 && sources.length === 0 && !thinkingSummary) {
+    return []
+  }
+  return [{
+    kind: 'stream',
+    runId: message.id,
+    title: '实时分析链路',
+    summary: thinkingSummary || message.content || '已完成 Workbench 分析。',
+    toolExecutions,
+  }]
+}
+
+function streamMessageMetadata(
+  current: Record<string, unknown> | undefined,
+  state: WorkbenchStreamState,
+) {
+  const serverMetadata = state.message.metadata ?? {}
+  const toolExecutions = metadataToolExecutions(serverMetadata)
+  const sources = metadataSources(serverMetadata)
+  const artifacts = metadataArtifacts(serverMetadata)
+  const agentStatus = metadataAgentStatus(serverMetadata)
+  return {
+    ...(current ?? {}),
+    ...serverMetadata,
+    source: typeof serverMetadata.source === 'string' ? serverMetadata.source : current?.source ?? 'workbench-stream',
+    streamMessageId: state.message.id,
+    thinkingSummary: metadataThinkingSummary(serverMetadata) || state.thinking?.summary,
+    toolExecutions: toolExecutions.length > 0 ? toolExecutions : state.toolCalls.map(streamToolCallToWorkbenchToolCall),
+    sources: sources.length > 0 ? sources : state.sources,
+    analysisArtifacts: artifacts.length > 0 ? artifacts : streamStateArtifacts(state),
+    agentStatus: agentStatus ?? state.agentStatus,
+    ...(state.error ? {
+      error: state.error.message,
+      errorCode: state.error.code,
+      errorRetryable: state.error.retryable,
+    } : {}),
+  }
+}
+
+function sourceItemsFromWorkbenchSources(sources: WorkbenchSource[]) {
+  return sources.map((item) => ({
+    key: item.id,
+    title: item.title,
+    url: item.url,
+    description: item.summary || item.kind,
+  }))
+}
+
 function evidenceSourceItems(artifact?: WorkbenchArtifact) {
   return (artifact?.evidence ?? []).map((item) => ({
     key: item.id,
     title: item.title,
     description: item.summary,
   }))
+}
+
+function sourceItemsForArtifactEntry(entry?: WorkbenchArtifactEntry) {
+  const metadataSourceItems = sourceItemsFromWorkbenchSources(metadataSources(entry?.message.metadata))
+  return metadataSourceItems.length > 0 ? metadataSourceItems : evidenceSourceItems(entry?.artifact)
+}
+
+class WorkbenchStreamEventError extends Error {
+  code?: string
+  retryable?: boolean
+
+  constructor(error: NonNullable<WorkbenchStreamState['error']>) {
+    super(error.message)
+    this.name = 'WorkbenchStreamEventError'
+    this.code = error.code
+    this.retryable = error.retryable
+  }
+}
+
+function workbenchStreamErrorMessage(err: Error) {
+  if (err instanceof WorkbenchStreamEventError && err.code) {
+    return `${err.message} (${err.code})`
+  }
+  return err.message
+}
+
+function isRetryableWorkbenchStreamError(err: Error) {
+  return err instanceof WorkbenchStreamEventError && err.retryable === true
+}
+
+function streamBubbleStatus(state: WorkbenchStreamState): WorkbenchBubbleStatus {
+  if (state.error || state.agentStatus?.status === 'failed') return 'error'
+  if (state.agentStatus?.status === 'cancelled') return 'abort'
+  if (state.done || state.message.done) return 'success'
+  return 'loading'
+}
+
+function streamFallbackContent(state: WorkbenchStreamState, currentContent: string) {
+  if (state.message.content) return state.message.content
+  if (state.error) return state.error.message
+  if (state.agentStatus?.status === 'failed') return 'Agent 执行失败。'
+  if (state.agentStatus?.status === 'cancelled') return '已取消本次回复。'
+  if (state.agentStatus?.status === 'succeeded' && currentContent === '正在思考...') return '分析已完成，正在刷新会话。'
+  return currentContent
+}
+
+function thoughtChainStatus(status: string): ThoughtChainStatus {
+  switch (status) {
+    case 'pending':
+    case 'running':
+      return 'loading'
+    case 'success':
+      return 'success'
+    case 'error':
+      return 'error'
+    case 'skipped':
+      return 'abort'
+    default:
+      return 'abort'
+  }
+}
+
+function agentStatusLabel(status?: NonNullable<WorkbenchStreamState['agentStatus']>) {
+  if (!status) return ''
+  return `${status.providerId} / ${canonicalWorkbenchAgentStatus(status.status)}`
+}
+
+function toolCallSummaryText(toolCalls: WorkbenchToolCall[]) {
+  const successCount = toolCalls.filter((item) => item.status === 'success').length
+  const failedCount = toolCalls.filter((item) => item.status === 'error').length
+  return `${toolCalls.length} 个工具调用，${successCount} 成功，${failedCount} 失败`
 }
 
 function layoutWorkbenchGraph(nodes: WorkbenchFlowNode[], edges: WorkbenchFlowEdge[]) {
@@ -761,6 +1138,8 @@ export function AIWorkbenchPage() {
   const routeModePatchKeyRef = useRef<string>('')
   const senderRef = useRef<SenderRef>(null)
   const streamAbortRef = useRef<AbortController | null>(null)
+  const externalRunReplayRef = useRef<Record<string, { state: WorkbenchStreamState; seenEventKeys: Set<string> }>>({})
+  const terminalRunRefreshRef = useRef<Record<string, string>>({})
 
   const requestedSessionId = searchParams.get('session') || undefined
   const searchMode = normalizeAIWorkbenchMode(searchParams.get('mode')) || 'general'
@@ -780,6 +1159,9 @@ export function AIWorkbenchPage() {
     clusterId: searchParams.get('clusterId') || undefined,
     namespace: searchParams.get('namespace') || undefined,
     workload: searchParams.get('workload') || undefined,
+    service: searchParams.get('service') || undefined,
+    pod: searchParams.get('pod') || undefined,
+    node: searchParams.get('node') || undefined,
     alertId: searchParams.get('alertId') || undefined,
     timeRangeMinutes: Number(searchParams.get('timeRangeMinutes') || 60) || 60,
   }), [searchParams])
@@ -808,11 +1190,17 @@ export function AIWorkbenchPage() {
   const [senderValue, setSenderValue] = useState('')
   const [senderResetVersion, setSenderResetVersion] = useState(0)
   const [localMessages, setLocalMessages] = useState<ConversationMessage[]>([])
+  const [lastRetryableInput, setLastRetryableInput] = useState<WorkbenchStreamRetryInput | null>(null)
 
   useEffect(() => () => {
     streamAbortRef.current?.abort()
     streamAbortRef.current = null
   }, [])
+
+  useEffect(() => {
+    externalRunReplayRef.current = {}
+    terminalRunRefreshRef.current = {}
+  }, [requestedSessionId])
 
   const updateSearchParams = (patch: Record<string, string | undefined>) => {
     const next = new URLSearchParams(searchParams)
@@ -844,12 +1232,32 @@ export function AIWorkbenchPage() {
     queryFn: () => api.get<ApiResponse<WorkbenchMessage[]>>(`/copilot/sessions/${requestedSessionId}/messages`),
     enabled: Boolean(requestedSessionId),
   })
+  const agentRunsQuery = useQuery({
+    queryKey: ['copilot-agent-runs', requestedSessionId],
+    queryFn: () => api.get<ApiResponse<WorkbenchAgentRun[]>>('/copilot/agent-runs'),
+    enabled: Boolean(requestedSessionId),
+    refetchInterval: (query) => {
+      const runs = query.state.data?.data ?? []
+      return runs.some((run) => run.sessionId === requestedSessionId && isRunningExternalAgentRun(run)) ? 2500 : false
+    },
+  })
 
   const visibleSessions = useMemo(() => (sessionsQuery.data?.data ?? []).filter((item) => !isSyntheticSession(item)), [sessionsQuery.data?.data])
   const currentSession = (sessionDetailQuery.data?.data && !isSyntheticSession(sessionDetailQuery.data.data) ? sessionDetailQuery.data.data : undefined)
     ?? visibleSessions.find((item) => item.id === requestedSessionId)
   const currentSessionTitle = displayWorkbenchSessionTitle(currentSession?.title)
   const serverMessages = messagesQuery.data?.data ?? []
+  const finalAgentRunIds = useMemo(() => serverMessages.reduce((ids, item) => {
+    for (const runId of messageAgentRunRefs(item)) {
+      ids.add(runId)
+    }
+    return ids
+  }, new Set<string>()), [serverMessages])
+  const runningExternalAgentRuns = useMemo(() => {
+    return (agentRunsQuery.data?.data ?? [])
+      .filter((run) => run.sessionId === requestedSessionId && isRunningExternalAgentRun(run) && !finalAgentRunIds.has(run.id))
+      .sort((left, right) => agentRunTimestamp(left) - agentRunTimestamp(right) || left.id.localeCompare(right.id))
+  }, [agentRunsQuery.data?.data, finalAgentRunIds, requestedSessionId])
   const legacyPlatformMessages = useMemo(
     () => serverMessages.filter(isLegacyPlatformContextMessage),
     [serverMessages],
@@ -872,6 +1280,90 @@ export function AIWorkbenchPage() {
   const defaultInspectionProfileId = useMemo(() => {
     return analysisProfiles.find((item) => item.enabled && item.mode === 'inspection')?.id
   }, [analysisProfiles])
+
+  useEffect(() => {
+    if (!requestedSessionId) return
+    if (runningExternalAgentRuns.length === 0 && Object.keys(externalRunReplayRef.current).length === 0) {
+      return
+    }
+    const activeRunIds = new Set(runningExternalAgentRuns.map((run) => run.id))
+    const replayMessages = runningExternalAgentRuns.map((run) => {
+      const replay = externalRunReplayRef.current[run.id] ?? {
+        state: createWorkbenchStreamState(),
+        seenEventKeys: new Set<string>(),
+      }
+      let state = replay.state
+      for (const event of sortedAgentRunReplayEvents(run, requestedSessionId)) {
+        const eventKey = workbenchStreamEventKey(event)
+        if (replay.seenEventKeys.has(eventKey)) continue
+        replay.seenEventKeys.add(eventKey)
+        state = reduceWorkbenchStreamState(state, event)
+      }
+      replay.state = state
+      externalRunReplayRef.current[run.id] = replay
+      return agentRunReplayMessage(run, state)
+    })
+
+    for (const runId of Object.keys(externalRunReplayRef.current)) {
+      if (!activeRunIds.has(runId)) {
+        delete externalRunReplayRef.current[runId]
+      }
+    }
+
+    setLocalMessages((items) => {
+      let changed = false
+      const next = items.filter((item) => {
+        if (!isExternalAgentRunReplayMessage(item)) return true
+        const agentRunId = artifactSnapshotText(item.metadata, 'agentRunId', 'agentRuntimeId')
+        const keep = agentRunId ? activeRunIds.has(agentRunId) : false
+        if (!keep) changed = true
+        return keep
+      })
+      const indexById = new Map(next.map((item, index) => [item.id, index]))
+      for (const replayMessage of replayMessages) {
+        const index = indexById.get(replayMessage.id)
+        if (index === undefined) {
+          indexById.set(replayMessage.id, next.length)
+          next.push(replayMessage)
+          changed = true
+        } else {
+          const updated = {
+            ...replayMessage,
+            createdAt: next[index].createdAt,
+          }
+          if (next[index].content !== updated.content || next[index].deliveryStatus !== updated.deliveryStatus || next[index].metadata !== updated.metadata) {
+            next[index] = updated
+            changed = true
+          }
+        }
+      }
+      return changed ? next : items
+    })
+  }, [requestedSessionId, runningExternalAgentRuns])
+
+  useEffect(() => {
+    if (!requestedSessionId) return
+    const terminalRuns = (agentRunsQuery.data?.data ?? []).filter((run) => (
+      run.sessionId === requestedSessionId
+      && isExternalAgentRun(run)
+      && isTerminalWorkbenchAgentStatus(run.status)
+      && !finalAgentRunIds.has(run.id)
+    ))
+    if (terminalRuns.length === 0) return
+    let shouldRefresh = false
+    for (const run of terminalRuns) {
+      const status = canonicalWorkbenchAgentStatus(run.status)
+      const refreshKey = `${run.id}:${status}:${run.updatedAt ?? ''}:${run.completedAt ?? ''}`
+      if (terminalRunRefreshRef.current[run.id] === refreshKey) continue
+      terminalRunRefreshRef.current[run.id] = refreshKey
+      delete externalRunReplayRef.current[run.id]
+      shouldRefresh = true
+    }
+    if (!shouldRefresh) return
+    void queryClient.invalidateQueries({ queryKey: ['copilot-workbench-messages', requestedSessionId] })
+    void queryClient.invalidateQueries({ queryKey: ['copilot-workbench-sessions'] })
+    void queryClient.invalidateQueries({ queryKey: ['copilot-workbench-session-detail', requestedSessionId] })
+  }, [agentRunsQuery.data?.data, finalAgentRunIds, queryClient, requestedSessionId])
 
   useEffect(() => {
     if (!requestedSessionId && visibleSessions[0]?.id) {
@@ -931,13 +1423,13 @@ export function AIWorkbenchPage() {
 
   useEffect(() => {
     const scopeKey = JSON.stringify(draftScope)
-    const hasScopedEntry = Boolean(draftScope.alertId || draftScope.clusterId || draftScope.namespace || draftScope.workload)
+    const hasScopedEntry = Boolean(draftScope.alertId || draftScope.clusterId || draftScope.namespace || draftScope.workload || draftScope.service || draftScope.pod || draftScope.node)
     if (!hasScopedEntry || requestedSessionId || !canUseChat || createSessionMutation.isPending || autoSessionScopeKeyRef.current === scopeKey) {
       return
     }
     autoSessionScopeKeyRef.current = scopeKey
     createSessionMutation.mutate({
-      title: draftScope.alertId ? `Alert ${draftScope.alertId}` : draftScope.workload ? `${draftScope.workload} 分析` : '新的会话',
+      title: draftScope.alertId ? `Alert ${draftScope.alertId}` : draftScope.workload || draftScope.service || draftScope.pod || draftScope.node ? `${draftScope.workload || draftScope.service || draftScope.pod || draftScope.node} 分析` : '新的会话',
       scope: draftScope,
     })
   }, [canUseChat, createSessionMutation, draftScope, requestedSessionId])
@@ -954,24 +1446,37 @@ export function AIWorkbenchPage() {
     onError: (err: Error) => void message.error(err.message),
   })
 
+  const buildWorkbenchStreamRequest = (content: string, mode: WorkbenchMode): WorkbenchSendMessageStreamRequest => {
+    const requestScopeOverrides = scopeOverrideState(scopeOverrides)
+    return {
+      content,
+      mode,
+      agentProviderId: selectedAgentProviderId || defaultAgentProviderId,
+      toolset: cleanToolsetPayload({
+        enabledAdapterIds: selectedAdapterIds,
+        enabledSkillIds: selectedSkillIds,
+        disabledToolNames: canonicalDisabledToolNames(disabledToolNames, adapters),
+        budgetOverrides: numberRecord(budgetOverrides),
+        scopeOverrides: requestScopeOverrides,
+      }),
+      scopeOverrides: requestScopeOverrides,
+    }
+  }
+
   const sendMessageMutation = useMutation({
-    mutationFn: async (payload: { sessionId: string; content: string; pendingMessages: { user: ConversationMessage; assistant: ConversationMessage } }) => {
+    mutationFn: async (payload: WorkbenchStreamSubmission) => {
       const controller = new AbortController()
       const seenEvents = new Set<string>()
       let streamState = createWorkbenchStreamState()
       streamAbortRef.current = controller
       await streamWorkbenchMessage(
         `/copilot/sessions/${payload.sessionId}/messages/stream`,
-        { content: payload.content },
+        payload.request,
         (event) => {
-          const eventKey = `${event.sessionId}:${event.sequence}`
+          const eventKey = workbenchStreamEventKey(event)
           if (seenEvents.has(eventKey)) return
           seenEvents.add(eventKey)
-          if (event.type === 'error') {
-            throw new Error(event.message)
-          }
           streamState = reduceWorkbenchStreamState(streamState, event)
-          const artifacts = streamStateArtifacts(streamState)
           setLocalMessages((items) => items.map((item) => {
             if (item.id === payload.pendingMessages.user.id) {
               return { ...item, deliveryStatus: 'success' as WorkbenchBubbleStatus }
@@ -982,19 +1487,16 @@ export function AIWorkbenchPage() {
             return {
               ...item,
               id: streamState.message.done && streamState.message.id ? streamState.message.id : item.id,
-              content: streamState.message.content || item.content,
-              deliveryStatus: streamState.message.done ? 'success' as WorkbenchBubbleStatus : 'loading' as WorkbenchBubbleStatus,
-              metadata: {
-                ...(item.metadata ?? {}),
-                ...(streamState.message.metadata ?? {}),
-                source: typeof streamState.message.metadata?.source === 'string' ? streamState.message.metadata.source : item.metadata?.source ?? 'workbench-stream',
-                streamMessageId: streamState.message.id,
-                analysisArtifacts: artifacts,
-              },
+              content: streamFallbackContent(streamState, item.content),
+              deliveryStatus: streamBubbleStatus(streamState),
+              metadata: streamMessageMetadata(item.metadata, streamState),
             }
           }))
           if (streamState.toolCalls.length > 0) {
             setThinkingOpen(true)
+          }
+          if (streamState.error) {
+            throw new WorkbenchStreamEventError(streamState.error)
           }
         },
         controller.signal,
@@ -1003,26 +1505,46 @@ export function AIWorkbenchPage() {
     },
     onSuccess: async (streamState, payload) => {
       streamAbortRef.current = null
+      setLastRetryableInput(null)
       await queryClient.invalidateQueries({ queryKey: ['copilot-workbench-messages', payload.sessionId] })
       await queryClient.invalidateQueries({ queryKey: ['copilot-workbench-sessions'] })
       await queryClient.invalidateQueries({ queryKey: ['copilot-workbench-session-detail', payload.sessionId] })
+      await queryClient.invalidateQueries({ queryKey: ['copilot-agent-runs'] })
       setLocalMessages((items) => items.filter((item) => (
         item.id !== payload.pendingMessages.user.id
-        && (streamState.message.id || item.id !== payload.pendingMessages.assistant.id)
+        && (item.id !== payload.pendingMessages.assistant.id || !streamState.message.id)
       )))
+      if (payload.navigateMode) {
+        navigate(getAIWorkbenchPathForMode(payload.navigateMode, new URLSearchParams({ session: payload.sessionId })))
+      }
+      if (payload.closeAnalysisOnSuccess) {
+        setAnalysisOpen(false)
+      }
       if (streamState.toolCalls.length > 0 || streamState.artifacts.length > 0) {
+        setThinkingOpen(true)
+      }
+      if (payload.openThinkingOnSuccess) {
         setThinkingOpen(true)
       }
     },
     onError: (err: Error, payload) => {
       streamAbortRef.current = null
       const aborted = err.name === 'AbortError'
-      const errorMessage = aborted ? '已取消本次回复。' : err.message
+      const errorMessage = aborted ? '已取消本次回复。' : workbenchStreamErrorMessage(err)
+      setLastRetryableInput(!aborted && isRetryableWorkbenchStreamError(err)
+        ? {
+            sessionId: payload.sessionId,
+            request: payload.request,
+            closeAnalysisOnSuccess: payload.closeAnalysisOnSuccess,
+            navigateMode: payload.navigateMode,
+            openThinkingOnSuccess: payload.openThinkingOnSuccess,
+          }
+        : null)
       setLocalMessages((items) => items.map((item) => (
         item.id === payload.pendingMessages.user.id
-          ? { ...item, deliveryStatus: aborted ? 'abort' : 'error', metadata: { ...(item.metadata ?? {}), error: errorMessage } }
+          ? { ...item, deliveryStatus: aborted ? 'abort' : 'error', metadata: { ...(item.metadata ?? {}), error: errorMessage, errorRetryable: isRetryableWorkbenchStreamError(err) } }
           : item.id === payload.pendingMessages.assistant.id
-            ? { ...item, content: errorMessage, deliveryStatus: aborted ? 'abort' : 'error', metadata: { ...(item.metadata ?? {}), error: errorMessage } }
+            ? { ...item, content: errorMessage, deliveryStatus: aborted ? 'abort' : 'error', metadata: { ...(item.metadata ?? {}), error: errorMessage, errorCode: err instanceof WorkbenchStreamEventError ? err.code : undefined, errorRetryable: isRetryableWorkbenchStreamError(err) } }
           : item
       )))
       if (!aborted) {
@@ -1030,6 +1552,13 @@ export function AIWorkbenchPage() {
       }
     },
   })
+
+  const submitWorkbenchStream = (input: WorkbenchStreamRetryInput) => {
+    setLastRetryableInput(null)
+    const pendingMessages = pendingConversationMessages(input.sessionId, input.request.content)
+    setLocalMessages((items) => [...items, pendingMessages.user, pendingMessages.assistant])
+    sendMessageMutation.mutate({ ...input, pendingMessages })
+  }
 
   const submitMessage = (value: string) => {
     const content = value.trim()
@@ -1039,39 +1568,16 @@ export function AIWorkbenchPage() {
     setSenderValue('')
     senderRef.current?.clear()
     setSenderResetVersion((version) => version + 1)
-    const pendingMessages = pendingConversationMessages(requestedSessionId, content)
-    setLocalMessages((items) => [...items, pendingMessages.user, pendingMessages.assistant])
-    sendMessageMutation.mutate({ sessionId: requestedSessionId, content, pendingMessages })
+    submitWorkbenchStream({
+      sessionId: requestedSessionId,
+      request: buildWorkbenchStreamRequest(content, isExplicitRouteMode ? pathMode : currentSession.metadata?.mode || draftMode),
+    })
   }
 
   const cancelMessageStream = () => {
     streamAbortRef.current?.abort()
     streamAbortRef.current = null
   }
-
-  const analyzeSessionMutation = useMutation({
-    mutationFn: (payload: { sessionId: string; mode: WorkbenchMode; question: string; scope: WorkbenchSessionScope; agentProviderId: string; analysisProfileId?: string }) =>
-      api.post<ApiResponse<WorkbenchMessageEnvelope>>(`/copilot/sessions/${payload.sessionId}/analyze`, {
-        mode: payload.mode,
-        question: payload.question,
-        agentProviderId: payload.agentProviderId,
-        analysisProfileId: payload.analysisProfileId,
-        scope: payload.scope,
-      }),
-    onSuccess: async (response, payload) => {
-      await queryClient.invalidateQueries({ queryKey: ['copilot-workbench-messages', payload.sessionId] })
-      await queryClient.invalidateQueries({ queryKey: ['copilot-workbench-session-detail', payload.sessionId] })
-      await queryClient.invalidateQueries({ queryKey: ['copilot-workbench-sessions'] })
-      const nextMode = typeof response.data.sessionPatch?.mode === 'string'
-        ? response.data.sessionPatch.mode
-        : payload.mode
-      navigate(getAIWorkbenchPathForMode(nextMode, new URLSearchParams({ session: payload.sessionId })))
-      setAnalysisOpen(false)
-      setThinkingOpen(true)
-      void message.success('已触发显式分析')
-    },
-    onError: (err: Error) => void message.error(err.message),
-  })
 
   const createInspectionFromSessionMutation = useMutation({
     mutationFn: () => api.post(`/copilot/sessions/${requestedSessionId}/inspection-task`, {
@@ -1118,9 +1624,8 @@ export function AIWorkbenchPage() {
     const entries: WorkbenchArtifactEntry[] = []
     for (const item of [...messages].reverse()) {
       if (item.role !== 'assistant') continue
-      const raw = item.metadata?.analysisArtifacts
-      if (!Array.isArray(raw)) continue
-      ;(raw as WorkbenchArtifact[]).forEach((artifact, index) => {
+      const artifacts = replayArtifactsForMessage(item)
+      artifacts.forEach((artifact, index) => {
         entries.push({
           key: `${item.id}:${artifact.runId || artifact.kind}:${index}`,
           artifact,
@@ -1150,6 +1655,9 @@ export function AIWorkbenchPage() {
   const chainArtifactEntry = activeArtifactToolCalls.length > 0 ? activeArtifactEntry : latestToolArtifactEntry
   const toolCalls = chainArtifactEntry?.artifact.toolExecutions ?? []
   const hasToolCalls = toolCalls.length > 0
+  const chainThinkingSummary = metadataThinkingSummary(chainArtifactEntry?.message.metadata) || chainArtifactEntry?.artifact.summary || ''
+  const chainAgentStatus = metadataAgentStatus(chainArtifactEntry?.message.metadata)
+  const chainToolCallSummary = toolCallSummaryText(toolCalls)
   const activeGraph = activeArtifact?.graph
   const queryError = sessionsQuery.error || sessionDetailQuery.error || messagesQuery.error || catalogQuery.error
   const activeMode = isExplicitRouteMode ? pathMode : currentSession?.metadata?.mode || draftMode
@@ -1389,15 +1897,14 @@ export function AIWorkbenchPage() {
     setAnalysisOpen(true)
   }
   const submitExplicitAnalysis = () => {
-    if (!currentSession || !canSubmitExplicitAnalysis) return
+    if (!currentSession || !canSubmitExplicitAnalysis || sendMessageMutation.isPending) return
     const question = analysisQuestion.trim() || defaultAnalysisQuestion(analysisMode, currentSession)
-    analyzeSessionMutation.mutate({
+    submitWorkbenchStream({
       sessionId: currentSession.id,
-      mode: analysisMode,
-      question,
-      scope: currentSession.metadata?.scope || {},
-      agentProviderId: selectedAgentProviderId || defaultAgentProviderId,
-      analysisProfileId: selectedAnalysisProfileId || undefined,
+      request: buildWorkbenchStreamRequest(question, analysisMode),
+      closeAnalysisOnSuccess: true,
+      navigateMode: analysisMode,
+      openThinkingOnSuccess: true,
     })
   }
   const openInspector = (view: InspectorView) => {
@@ -1618,14 +2125,14 @@ export function AIWorkbenchPage() {
     }
 
     if (inspectorView === 'evidence') {
-      const sources = evidenceSourceItems(activeArtifact)
+      const sources = sourceItemsForArtifactEntry(activeArtifactEntry)
       return activeArtifact ? (
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-          {(activeArtifact.evidence ?? []).length === 0 ? (
+          {(activeArtifact.evidence ?? []).length === 0 && sources.length === 0 ? (
             <ManagementState bordered={false} compact title="暂无证据" description="当前分析工件还没有结构化证据。" />
           ) : (
             <>
-              <Sources title="证据来源" items={sources} />
+              {sources.length > 0 ? <Sources title="证据来源" items={sources} /> : null}
               {(activeArtifact.evidence ?? []).map((item) => (
                 <Card key={item.id} size="small">
                   <Flex justify="space-between">
@@ -1695,6 +2202,28 @@ export function AIWorkbenchPage() {
                 showIcon
                 title="工作台数据加载失败"
                 description={queryError instanceof Error ? queryError.message : '请检查当前 API 服务和权限快照。'}
+              />
+            ) : null}
+
+            {lastRetryableInput ? (
+              <Alert
+                type="warning"
+                showIcon
+                title="上一次 Workbench 流式调用可重试"
+                description={(
+                  <Space size={10} wrap>
+                    <Text>{lastRetryableInput.request.content}</Text>
+                    <Button
+                      type="primary"
+                      size="small"
+                      icon={<ReloadOutlined />}
+                      onClick={() => submitWorkbenchStream(lastRetryableInput)}
+                      disabled={sendMessageMutation.isPending}
+                    >
+                      重试
+                    </Button>
+                  </Space>
+                )}
               />
             ) : null}
           </>
@@ -2035,7 +2564,7 @@ export function AIWorkbenchPage() {
                     type="warning"
                     showIcon
                     className="soha-ai-workbench__legacy-chat-alert"
-                    message="已隐藏旧版平台上下文回复"
+                    title="已隐藏旧版平台上下文回复"
                     description="这些历史回复来自早期兜底逻辑，不是大模型输出；后续普通聊天只展示真实用户消息、模型回复和明确错误状态。"
                   />
                 ) : null}
@@ -2185,6 +2714,20 @@ export function AIWorkbenchPage() {
       </SohaAIWorkbenchShell>
 
       <Drawer title="分析链路" placement="right" open={thinkingOpen} onClose={() => setThinkingOpen(false)} size="large">
+        {toolCalls.length > 0 ? (
+          <Alert
+            type={toolCalls.some((item) => item.status === 'error') ? 'warning' : 'info'}
+            showIcon
+            title={chainToolCallSummary}
+            description={(
+              <Space orientation="vertical" size={4}>
+                {chainThinkingSummary ? <Text>{chainThinkingSummary}</Text> : null}
+                {chainAgentStatus ? <Text type="secondary">Agent: {agentStatusLabel(chainAgentStatus)}</Text> : null}
+              </Space>
+            )}
+            style={{ marginBottom: 12 }}
+          />
+        ) : null}
         <ThoughtChain
           items={toolCalls.length === 0 ? [
             { key: 'idle', title: '暂无分析链路', description: '通用聊天不会自动执行工具；执行显式分析或产生工具调用后，这里会显示步骤。', status: 'abort' satisfies ThoughtChainStatus },
@@ -2193,7 +2736,8 @@ export function AIWorkbenchPage() {
             title: item.toolName,
             description: item.summary || item.adapterId,
             content: item.output ? <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{JSON.stringify(item.output, null, 2)}</pre> : undefined,
-            status: (item.status === 'success' ? 'success' : 'error') satisfies ThoughtChainStatus,
+            status: thoughtChainStatus(item.status),
+            blink: item.status === 'running',
           }))}
         />
       </Drawer>
@@ -2400,12 +2944,17 @@ export function AIWorkbenchPage() {
       <Modal
         title="显式分析设置"
         open={analysisOpen}
-        onCancel={() => setAnalysisOpen(false)}
+        onCancel={() => {
+          if (sendMessageMutation.isPending) {
+            cancelMessageStream()
+          }
+          setAnalysisOpen(false)
+        }}
         onOk={submitExplicitAnalysis}
         okText="开始分析"
         cancelText="取消"
-        confirmLoading={analyzeSessionMutation.isPending}
-        okButtonProps={{ disabled: !currentSession || !canSubmitExplicitAnalysis }}
+        confirmLoading={sendMessageMutation.isPending}
+        okButtonProps={{ disabled: !currentSession || !canSubmitExplicitAnalysis || sendMessageMutation.isPending }}
         width={680}
       >
         {currentSession ? (

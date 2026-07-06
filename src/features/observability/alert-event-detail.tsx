@@ -6,6 +6,7 @@ import { AdminTable } from '@/components/admin-table'
 import { ManagementDetailHeader, ManagementState } from '@/components/management-list'
 import { BooleanTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
+import { useAIPageContext } from '@/features/copilot/global-assistant/ai-context-provider'
 import { getAIWorkbenchPathForMode } from '@/features/copilot/workbench-navigation'
 import { api } from '@/services/api-client'
 import type { ApiResponse } from '@/types'
@@ -460,6 +461,30 @@ export function AlertEventDetailPageContent({
   onBack: () => void
 }) {
   const detail = useAlertEventDetailController(eventId, eventId !== '')
+  const event = detail.event
+  const alertWorkload = event?.labels?.workload || event?.labels?.deployment || event?.labels?.app || event?.labels?.service
+  useAIPageContext({
+    sourceWorkbench: 'monitoring',
+    sourceRoute: `/monitoring-workbench/alerts/${eventId}`,
+    sourceTitle: event?.title || '告警事件详情',
+    entityKind: 'monitoring.alert',
+    entityName: event?.title || eventId,
+    alertId: event?.id || eventId,
+    clusterId: event?.clusterId,
+    namespace: event?.namespace,
+    workload: alertWorkload,
+    service: event?.labels?.service,
+    timeRangeMinutes: 60,
+    pinnedData: {
+      severity: event?.severity,
+      status: eventDisplayStatus(event),
+      sourceType: event?.sourceType,
+      sourceSystem: event?.sourceSystem,
+      startsAt: event?.startsAt,
+      lastSeenAt: event?.lastSeenAt,
+    },
+    promptHint: `排查告警 ${event?.title || eventId} 的触发原因、影响范围、关联资源和恢复建议。`,
+  })
 
   return (
     <div className="soha-page">
