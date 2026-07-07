@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { App, Button, Form, Input, Modal, Popconfirm, Space, Spin, Tag } from 'antd'
 import { ApartmentOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, SendOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
 import {
   ManagementDensityButton,
@@ -14,6 +14,7 @@ import {
 } from '@/components/management-list'
 import { useI18n } from '@/i18n'
 import { StatusTag } from '@/components/status-tag'
+import { useAIPageContext } from '@/features/copilot/global-assistant/ai-context-provider'
 import { api } from '@/services/api-client'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { formatAgeSeconds } from '@/utils/time'
@@ -32,6 +33,7 @@ import './platform-pages.css'
 export function ClusterNodesPage() {
   const { t } = useI18n()
   const { message } = App.useApp()
+  const location = useLocation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { clusterId } = usePlatformScopeStore()
@@ -48,6 +50,20 @@ export function ClusterNodesPage() {
     queryKey: ['cluster-node-detail', clusterId, editingNodeName],
     queryFn: () => api.get<ApiResponse<NodeDetail>>(`/clusters/${clusterId}/infrastructure/nodes/${editingNodeName}/detail`),
     enabled: !!clusterId && !!editingNodeName,
+  })
+
+  useAIPageContext({
+    sourceWorkbench: 'platform',
+    sourceRoute: `${location.pathname}${location.search}`,
+    sourceTitle: '集群节点',
+    entityKind: 'kubernetes.node-list',
+    entityName: clusterId || 'nodes',
+    clusterId: clusterId ?? undefined,
+    node: editingNodeName ?? undefined,
+    pinnedData: {
+      nodeCount: nodesQuery.data?.data?.length ?? 0,
+      editingNodeName,
+    },
   })
 
   const updateNodeMutation = useMutation({
@@ -232,6 +248,7 @@ export function ClusterNodesPage() {
 export function ClusterNamespacesPage() {
   const { t } = useI18n()
   const { message } = App.useApp()
+  const location = useLocation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { clusterId, setNamespace } = usePlatformScopeStore()
@@ -242,6 +259,20 @@ export function ClusterNamespacesPage() {
     queryKey: ['cluster-namespaces', clusterId],
     queryFn: () => api.get<ApiResponse<Namespace[]>>(`/clusters/${clusterId}/namespaces`),
     enabled: !!clusterId,
+  })
+
+  useAIPageContext({
+    sourceWorkbench: 'platform',
+    sourceRoute: `${location.pathname}${location.search}`,
+    sourceTitle: '集群命名空间',
+    entityKind: 'kubernetes.namespace-list',
+    entityName: clusterId || 'namespaces',
+    clusterId: clusterId ?? undefined,
+    namespace: editingNamespace?.name,
+    pinnedData: {
+      namespaceCount: namespacesQuery.data?.data?.length ?? 0,
+      editingNamespace: editingNamespace?.name,
+    },
   })
 
   const createNamespaceMutation = useMutation({

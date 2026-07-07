@@ -18,6 +18,8 @@ import { ResourceMetricsPanel } from '@/components/resource-metrics-panel'
 import { useResourceActions } from '@/components/resource-actions'
 import { BooleanTag, StatusTag } from '@/components/status-tag'
 import { hasAllowedAction } from '@/features/auth/permission-snapshot'
+import { encodeAIContextForElement } from '@/features/copilot/global-assistant/ai-context'
+import { useAIPageContext } from '@/features/copilot/global-assistant/ai-context-provider'
 import {
   CreateResourceModal,
   ResourceMetaOverview,
@@ -701,6 +703,19 @@ export function NetworkServicesPage() {
   const normalizedKeyword = normalizeSearchKeyword(deferredSearchKeyword)
   const query = usePlatformResourceQuery<Service>('network/services')
   const rawItems = query.data?.data ?? []
+  useAIPageContext({
+    sourceWorkbench: 'platform',
+    sourceRoute: '/network/services',
+    sourceTitle: localeCode === 'zh_CN' ? 'Services 列表' : 'Services',
+    entityKind: 'kubernetes.service.list',
+    entityName: 'Services',
+    clusterId: clusterId ?? undefined,
+    namespace: namespace ?? undefined,
+    timeRangeMinutes: 60,
+    visibleFilters: { searchKeyword },
+    pinnedData: { total: rawItems.length },
+    promptHint: '分析当前 Service 列表的类型、端口、ClusterIP、后端 Pod 和事件风险。',
+  })
   const filteredItems = useMemo(
     () =>
       rawItems.filter((item) =>
@@ -782,6 +797,19 @@ export function NetworkServicesPage() {
         columns,
         dataSource: clusterId ? filteredItems : [],
         rowKey: (record) => `${record.namespace}/${record.name}`,
+        onRow: (record: Service) => ({
+          'data-ai-context': encodeAIContextForElement({
+            sourceWorkbench: 'platform',
+            sourceRoute: `/network/services/${record.name}?namespace=${encodeURIComponent(record.namespace)}`,
+            sourceTitle: `Service ${record.name}`,
+            entityKind: 'kubernetes.service',
+            entityName: record.name,
+            clusterId: clusterId ?? undefined,
+            namespace: record.namespace,
+            service: record.name,
+            timeRangeMinutes: 60,
+          }),
+        }),
         loading: query.isLoading,
         paginationSummary: (
           <Text className="soha-workload-table-summary" type="secondary">
@@ -868,8 +896,26 @@ export function ServiceDetailPage() {
     queryFn: () =>
       api.get<ApiResponse<ResourceMetrics>>(
         `/clusters/${clusterId}/network/services/${serviceName}/metrics?namespace=${encodeURIComponent(detailNamespace)}`,
-      ),
+    ),
     enabled: !!clusterId && !!detailNamespace,
+  })
+  useAIPageContext({
+    sourceWorkbench: 'platform',
+    sourceRoute: `/network/services/${serviceName}${detailNamespace ? `?namespace=${encodeURIComponent(detailNamespace)}` : ''}`,
+    sourceTitle: `Service ${service?.name ?? serviceName}`,
+    entityKind: 'kubernetes.service',
+    entityName: service?.name ?? serviceName,
+    clusterId: clusterId ?? undefined,
+    namespace: detailNamespace || service?.namespace,
+    service: service?.name ?? serviceName,
+    timeRangeMinutes: metricsQuery.data?.data?.rangeMinutes ?? 60,
+    pinnedData: {
+      type: service?.type,
+      clusterIp: service?.clusterIp,
+      ports: service?.ports,
+      selector: service?.selector,
+    },
+    promptHint: `排查 Service ${service?.name ?? serviceName} 的访问异常、Endpoint/后端 Pod、事件、日志和指标。`,
   })
 
   const eventsQuery = useQuery({

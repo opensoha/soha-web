@@ -1,4 +1,5 @@
 import type {
+  WorkbenchSource,
   WorkbenchSendMessageStreamRequest,
   WorkbenchStreamEvent,
   WorkbenchToolCall,
@@ -23,12 +24,30 @@ export interface WorkbenchStreamThinkingState {
   collapsed: boolean
 }
 
+export interface WorkbenchStreamAgentStatusState {
+  providerId: string
+  providerKind: string
+  status: string
+}
+
+export interface WorkbenchStreamErrorState {
+  message: string
+  code?: string
+  retryable?: boolean
+}
+
+export type WorkbenchStreamToolCall = WorkbenchToolCall & {
+  outputLog?: string
+}
+
 export interface WorkbenchStreamState {
   message: WorkbenchStreamMessageState
-  toolCalls: WorkbenchToolCall[]
+  toolCalls: WorkbenchStreamToolCall[]
   artifacts: unknown[]
-  sources: unknown[]
+  sources: WorkbenchSource[]
   thinking?: WorkbenchStreamThinkingState
+  agentStatus?: WorkbenchStreamAgentStatusState
+  error?: WorkbenchStreamErrorState
   done: boolean
 }
 
@@ -67,12 +86,82 @@ export function createWorkbenchStreamState(): WorkbenchStreamState {
   }
 }
 
-function upsertToolCall(toolCalls: WorkbenchToolCall[], next: WorkbenchToolCall) {
+export function canonicalWorkbenchAgentStatus(status?: string) {
+  switch ((status || '').trim().toLowerCase()) {
+    case 'pending':
+    case 'queued':
+      return 'queued'
+    case 'running':
+      return 'running'
+    case 'completed':
+    case 'complete':
+    case 'success':
+    case 'succeeded':
+      return 'succeeded'
+    case 'canceled':
+    case 'cancelled':
+    case 'client_cancelled':
+      return 'cancelled'
+    case 'callback_timeout':
+    case 'error':
+    case 'failed':
+    case 'timeout':
+      return 'failed'
+    default:
+      return status || ''
+  }
+}
+
+export function isRunningWorkbenchAgentStatus(status?: string) {
+  const canonical = canonicalWorkbenchAgentStatus(status)
+  return canonical === 'queued' || canonical === 'running'
+}
+
+export function isTerminalWorkbenchAgentStatus(status?: string) {
+  const canonical = canonicalWorkbenchAgentStatus(status)
+  return canonical === 'succeeded' || canonical === 'failed' || canonical === 'cancelled'
+}
+
+export function workbenchStreamEventKey(event: Pick<WorkbenchStreamEvent, 'id' | 'sessionId' | 'sequence'> & { runId?: string }) {
+  return `${event.sessionId}:${event.runId ?? ''}:${event.sequence}:${event.id}`
+}
+
+function upsertToolCall(toolCalls: WorkbenchStreamToolCall[], next: WorkbenchStreamToolCall) {
   const index = toolCalls.findIndex((item) => item.id === next.id)
   if (index === -1) {
     return [...toolCalls, next]
   }
   return toolCalls.map((item, itemIndex) => (itemIndex === index ? { ...item, ...next } : item))
+}
+
+function upsertSource(sources: WorkbenchSource[], next: WorkbenchSource) {
+  const index = sources.findIndex((item) => item.id === next.id)
+  if (index === -1) {
+    return [...sources, next]
+  }
+  return sources.map((item, itemIndex) => (itemIndex === index ? { ...item, ...next } : item))
+}
+
+function appendDelta(current: unknown, delta?: string) {
+  if (!delta) return current
+  if (typeof current === 'string') return `${current}${delta}`
+  if (current === undefined || current === null) return delta
+  return `${JSON.stringify(current)}${delta}`
+}
+
+function reduceToolDelta(toolCalls: WorkbenchStreamToolCall[], event: Extract<WorkbenchStreamEvent, { type: 'tool.delta' }>) {
+  const existing = toolCalls.find((item) => item.id === event.toolCallId)
+  const terminalStatus = existing?.status === 'success' || existing?.status === 'error' || existing?.status === 'skipped'
+  const next: WorkbenchStreamToolCall = {
+    ...existing,
+    id: event.toolCallId,
+    adapterId: existing?.adapterId ?? 'stream',
+    toolName: existing?.toolName ?? event.toolCallId,
+    status: terminalStatus ? existing.status : 'running',
+    outputPreview: appendDelta(existing?.outputPreview, event.outputDelta),
+    outputLog: appendDelta(existing?.outputLog, event.logDelta) as string | undefined,
+  }
+  return upsertToolCall(toolCalls, next)
 }
 
 export function reduceWorkbenchStreamState(
@@ -111,6 +200,12 @@ export function reduceWorkbenchStreamState(
         ...state,
         toolCalls: upsertToolCall(state.toolCalls, event.toolCall),
       }
+    case 'tool.delta':
+      return {
+        ...state,
+        done: false,
+        toolCalls: reduceToolDelta(state.toolCalls, event),
+      }
     case 'artifact.updated':
       return {
         ...state,
@@ -119,7 +214,7 @@ export function reduceWorkbenchStreamState(
     case 'source.updated':
       return {
         ...state,
-        sources: [...state.sources, event.source],
+        sources: upsertSource(state.sources, event.source),
       }
     case 'thinking.delta':
       return {
@@ -135,6 +230,31 @@ export function reduceWorkbenchStreamState(
         thinking: {
           summary: event.summary,
           collapsed: event.collapsed,
+        },
+      }
+    case 'agent.status':
+      return {
+        ...state,
+        done: isTerminalWorkbenchAgentStatus(event.status),
+        agentStatus: {
+          providerId: event.providerId,
+          providerKind: event.providerKind,
+          status: canonicalWorkbenchAgentStatus(event.status),
+        },
+      }
+    case 'error':
+      return {
+        ...state,
+        done: true,
+        error: {
+          message: event.message,
+          code: event.code,
+          retryable: event.retryable,
+        },
+        message: {
+          ...state.message,
+          sessionId: event.sessionId,
+          done: true,
         },
       }
     default:

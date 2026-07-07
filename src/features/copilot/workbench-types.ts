@@ -3,6 +3,8 @@ export interface WorkbenchSessionScope {
   namespace?: string
   workload?: string
   service?: string
+  pod?: string
+  node?: string
   alertId?: string
   timeRangeMinutes?: number
 }
@@ -33,6 +35,8 @@ export interface WorkbenchSession {
     status?: string
     agentProviderId?: string
     summary?: string
+    source?: string
+    pinnedContext?: Record<string, unknown>
     tags?: string[]
     archivedAt?: string
     scope?: WorkbenchSessionScope

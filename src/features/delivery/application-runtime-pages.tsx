@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Alert, App, Button, Card, Descriptions, Form, Input, Modal, Popconfirm, Select, Space, Switch, Tabs, Tag, Tooltip, Typography } from 'antd'
 import { ArrowRightOutlined, CloudUploadOutlined, DeleteOutlined, EditOutlined, LinkOutlined, MinusCircleOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined, RocketOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ManagementDetailHeader, ManagementIconButton, ManagementState } from '@/components/management-list'
 import { DeliveryTable } from '@/features/delivery/delivery-table'
 import { PodLogViewer } from '@/components/pod-log-viewer'
@@ -12,6 +12,7 @@ import { hasPermission, usePermissionSnapshot } from '@/features/auth/permission
 import { StatusTag } from '@/components/status-tag'
 import { useClusterCapabilityForCluster } from '@/features/platform/cluster-capabilities'
 import { buildClusterScopedPath } from '@/features/platform/platform-scope-query'
+import { useAIPageContext } from '@/features/copilot/global-assistant/ai-context-provider'
 import { api } from '@/services/api-client'
 import {
   analyzeReleaseDagDefinition,
@@ -404,6 +405,7 @@ function DeploymentOverview({ deployment }: { deployment: DeploymentDetail }) {
 
 export function ApplicationDetailPage() {
   const { applicationId } = useParams()
+  const location = useLocation()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const { message } = App.useApp()
@@ -453,6 +455,27 @@ export function ApplicationDetailPage() {
   const selectedTargetId = Form.useWatch('targetId', deliveryForm)
   const selectedBuildSourceId = Form.useWatch('buildSourceId', deliveryForm)
   const selectedImageTag = Form.useWatch('imageTag', deliveryForm)
+
+  useAIPageContext({
+    sourceWorkbench: 'delivery',
+    sourceRoute: `${location.pathname}${location.search}`,
+    sourceTitle: detail?.application?.name ? `应用 ${detail.application.name}` : '应用详情',
+    entityKind: 'delivery.application',
+    entityName: detail?.application?.name ?? detail?.application?.key ?? applicationId,
+    applicationId,
+    visibleFilters: {
+      tab: activeTab,
+      focusedBuildId,
+      focusedReleaseId,
+      focusedWorkflowRunId,
+      activeEnvironmentId,
+    },
+    pinnedData: {
+      environmentCount: environments.length,
+      serviceCount: services.length,
+      bindingCount: bindings.length,
+    },
+  })
   const serviceBuildSourceOptions = useMemo(() => (runtime?.application.buildSources ?? []).map((item) => ({
     value: item.id,
     label: item.name,
@@ -1500,6 +1523,7 @@ export function ApplicationDetailPage() {
 
 export function ApplicationWorkloadDetailPage() {
   const { applicationId, applicationEnvironmentId, workloadName } = useParams()
+  const location = useLocation()
   const navigate = useNavigate()
   const { message } = App.useApp()
   const queryClient = useQueryClient()
@@ -1528,6 +1552,31 @@ export function ApplicationWorkloadDetailPage() {
   }, [podList, selectedPodName])
 
   const selectedPod = podList.find((item) => item.name === selectedPodName) ?? podList[0]
+
+  useAIPageContext({
+    sourceWorkbench: 'delivery',
+    sourceRoute: `${location.pathname}${location.search}`,
+    sourceTitle: detail?.workload?.workloadName ? `应用工作负载 ${detail.workload.workloadName}` : '应用工作负载详情',
+    entityKind: 'delivery.application-workload',
+    entityName: detail?.workload.workloadName ?? workloadName,
+    applicationId,
+    clusterId: detail?.workload?.clusterId,
+    namespace: detail?.workload?.namespace,
+    workload: detail?.workload?.workloadName ?? workloadName,
+    pod: selectedPod?.name,
+    visibleFilters: {
+      tab: activeTab,
+      applicationEnvironmentId,
+      selectedPodName,
+    },
+    pinnedData: {
+      podCount: podList.length,
+      serviceCount: serviceList.length,
+      ingressCount: ingressList.length,
+      readyReplicas: deployment?.readyReplicas,
+      desiredReplicas: deployment?.desiredReplicas,
+    },
+  })
 
   const metricsQuery = useQuery({
     queryKey: ['application-workload-metrics', detail?.workload.clusterId, detail?.workload.namespace, detail?.workload.workloadName],

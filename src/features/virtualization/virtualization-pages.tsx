@@ -47,6 +47,7 @@ import {
 import { hasAllowedAction, hasPermission, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
 import { useWorkbenchModuleEnabled } from '@/features/modules/module-status'
 import { getAIWorkbenchPathForMode } from '@/features/copilot/workbench-navigation'
+import { useAIPageContext } from '@/features/copilot/global-assistant/ai-context-provider'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { api } from '@/services/api-client'
@@ -330,7 +331,7 @@ function TaskProgressBanner({ task, status, title, onCancel, cancelling }: TaskP
       type={isError ? 'warning' : 'info'}
       showIcon
       icon={isError ? undefined : <Spin size="small" />}
-      message={
+      title={
         <Space>
           <span>{title}</span>
           {taskStatus}
@@ -355,23 +356,23 @@ function ConnectionDeletePreview({ dependencies }: { dependencies: Virtualizatio
   const pendingTaskCount = dependencies.pendingTaskCount ?? 0
   const forceRequired = dependencies.forceRequired === true
   return (
-    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+    <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
       {pendingTaskCount > 0 ? (
         <Alert
           type="warning"
           showIcon
-          message="存在未完成任务"
+          title="存在未完成任务"
           description="请先取消或等待 queued/running 任务结束后再删除连接。"
         />
       ) : forceRequired ? (
         <Alert
           type="warning"
           showIcon
-          message="删除将影响关联资源"
+          title="删除将影响关联资源"
           description="确认后会使用 force 删除，后端会先为历史任务写入连接与 VM 快照。"
         />
       ) : (
-        <Alert type="info" showIcon message="未发现关联资源" description="可以直接删除该虚拟化连接。" />
+        <Alert type="info" showIcon title="未发现关联资源" description="可以直接删除该虚拟化连接。" />
       )}
       <Descriptions size="small" column={2} bordered>
         <Descriptions.Item label="VM">{dependencies.vmCount ?? 0}</Descriptions.Item>
@@ -752,6 +753,7 @@ export function VirtualizationOverviewPage() {
   const { virtualizationModuleEnabled, canManageClusters, canManageOperations, canSync } = useVirtualizationPermissions()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const location = useLocation()
   const { message } = App.useApp()
   const [syncTaskId, setSyncTaskId] = useState<string | null>(null)
   const [selectedOperation, setSelectedOperation] = useState<VirtualizationOperation | null>(null)
@@ -875,6 +877,26 @@ export function VirtualizationOverviewPage() {
       : overviewTone === 'success'
         ? '运行正常'
         : '待接入'
+  useAIPageContext({
+    sourceWorkbench: 'virtualization',
+    sourceRoute: `${location.pathname}${location.search}`,
+    sourceTitle: '虚拟化工作台',
+    entityKind: 'virtualization.overview',
+    entityName: '虚拟化工作台',
+    visibleFilters: {
+      tone: overviewTone,
+      status: overviewStatusLabel,
+    },
+    pinnedData: {
+      totalConnections,
+      healthyConnections,
+      unhealthyConnections,
+      vmCount,
+      runningVmCount,
+      pendingTasks,
+      failedTaskTotal,
+    },
+  })
   const providerRows = useMemo(
     () => providerSummary.map((item) => {
       const connections = item.connections ?? 0
@@ -1255,6 +1277,7 @@ export function VirtualizationOverviewPage() {
 }
 
 export function VirtualizationVmsPage() {
+  const location = useLocation()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [filters, setFilters] = useState<VirtualizationListParams>({ page: 1, pageSize: 10 })
   const [filterForm] = Form.useForm<VirtualizationListParams>()
@@ -1345,6 +1368,28 @@ export function VirtualizationVmsPage() {
   const vmPage = normalizePage(vmsQuery.data?.data, filters.page ?? 1, filters.pageSize ?? 10)
   const selectedFlavorId = Form.useWatch('flavorId', form)
   const selectedFlavor = flavors.find((item) => item.id === selectedFlavorId)
+  useAIPageContext({
+    sourceWorkbench: 'virtualization',
+    sourceRoute: `${location.pathname}${location.search}`,
+    sourceTitle: '虚拟机列表',
+    entityKind: 'virtualization.vm-list',
+    entityName: '虚拟机列表',
+    virtualizationConnectionId: selectedConnectionId,
+    visibleFilters: {
+      ...filters,
+      createProvider,
+      createSourceMode,
+      kubevirtNetworkType,
+    },
+    pinnedData: {
+      total: vmPage.total,
+      pageItems: vmPage.items.length,
+      clusterCount: clusters.length,
+      imageCount: images.length,
+      flavorCount: flavors.length,
+      selectedFlavor: selectedFlavor?.name,
+    },
+  })
   const columns: ColumnsType<VirtualMachine> = [
     {
       title: '名称',
@@ -1413,8 +1458,7 @@ export function VirtualizationVmsPage() {
             <ManagementQueryField minWidth={180} name="connectionId" label="连接" width={180}>
               <Select
                 allowClear
-                showSearch
-                optionFilterProp="label"
+                showSearch={{ optionFilterProp: 'label' }}
                 placeholder="全部连接"
                 options={clusters.map((item) => ({ value: item.id, label: item.name }))}
               />
@@ -1466,8 +1510,7 @@ export function VirtualizationVmsPage() {
             </Form.Item>
             <Form.Item name="connectionId" label="连接" rules={[{ required: true }]}>
               <Select
-                showSearch
-                optionFilterProp="label"
+                showSearch={{ optionFilterProp: 'label' }}
                 options={clusters
                   .filter((item) => !createProvider || item.provider === createProvider)
                   .map((item) => ({ value: item.id, label: item.name }))}
@@ -1489,8 +1532,7 @@ export function VirtualizationVmsPage() {
           </Form.Item>
           <Form.Item name="flavorId" label="规格" rules={[{ required: true }]}>
             <Select
-              showSearch
-              optionFilterProp="label"
+              showSearch={{ optionFilterProp: 'label' }}
               options={flavors.filter((item) => item.enabled !== false).map((item) => ({
                 value: item.id,
                 label: `${item.name} (${item.cpu}C / ${item.memoryMiB}MiB / ${item.diskGiB}GiB)`,
@@ -1507,8 +1549,7 @@ export function VirtualizationVmsPage() {
           ) : null}
           <Form.Item name="bootImageId" label={createProvider === 'pve' ? (createSourceMode === 'iso_install' ? '安装 ISO' : '模板') : '启动镜像'} rules={[{ required: true }]}>
             <Select
-              showSearch
-              optionFilterProp="label"
+              showSearch={{ optionFilterProp: 'label' }}
               options={images
                 .filter((item) => !createProvider || item.provider === createProvider || !item.provider)
                 .filter((item) => createProvider !== 'pve' || (createSourceMode === 'iso_install' ? item.assetKind === 'iso' || item.sourceKind === 'iso' : item.assetKind === 'template' || item.sourceKind === 'template'))
@@ -1654,6 +1695,29 @@ export function VirtualizationVmDetailPage() {
 
   const vmDisplayStatus = virtualMachineDisplayStatus(vm)
   const isRunning = !isStaleVirtualMachine(vm) && (vm?.powerState === 'running' || vm?.status === 'running')
+  useAIPageContext({
+    sourceWorkbench: 'virtualization',
+    sourceRoute: `${location.pathname}${location.search}`,
+    sourceTitle: vm?.name ? `虚拟机 ${vm.name}` : '虚拟机详情',
+    entityKind: 'virtualization.vm',
+    entityName: vm?.name ?? vmId,
+    virtualizationConnectionId: vm?.connectionId,
+    vmId,
+    namespace: vm?.namespace,
+    node: vm?.node,
+    timeRangeMinutes: metricsRange,
+    visibleFilters: {
+      tab: activeTab,
+      metricsRange,
+    },
+    pinnedData: {
+      status: vmDisplayStatus,
+      provider: vm?.provider,
+      operationCount: sortedOperations.length,
+      latestAbnormalOperationId: latestAbnormalOperation?.id,
+      latestAbnormalOperationStatus: latestAbnormalOperation?.status,
+    },
+  })
 
   const metricsQuery = useQuery({
     queryKey: ['virtualization', 'vm-metrics', vmId, metricsRange],
@@ -1833,7 +1897,7 @@ export function VirtualizationVmDetailPage() {
             key: 'console',
             label: '控制台',
             children: isRunning ? (
-              <Suspense fallback={<Card size="small"><Spin tip="正在加载控制台..." /></Card>}>
+              <Suspense fallback={<Card size="small"><Spin description="正在加载控制台..." /></Card>}>
                 <VMConsole vmId={vmId} />
               </Suspense>
             ) : (
@@ -2157,9 +2221,8 @@ export function VirtualizationClustersPage() {
               />
               <Form.Item name="kubernetesClusterId" label="Kubernetes 集群" rules={[{ required: true }]}>
                 <Select
-                  showSearch
+                  showSearch={{ optionFilterProp: 'label' }}
                   loading={platformClustersQuery.isLoading}
-                  optionFilterProp="label"
                   options={(platformClustersQuery.data?.data ?? []).map((item) => ({ value: item.id, label: `${item.name} (${item.id} · ${item.connectionMode})` }))}
                   onChange={(value) => {
                     const cluster = (platformClustersQuery.data?.data ?? []).find((item) => item.id === value)
@@ -2374,8 +2437,7 @@ export function VirtualizationImagesPage() {
             <ManagementQueryField minWidth={180} name="connectionId" label="连接" width={180}>
               <Select
                 allowClear
-                showSearch
-                optionFilterProp="label"
+                showSearch={{ optionFilterProp: 'label' }}
                 placeholder="全部连接"
                 options={clusters.map((item) => ({ value: item.id, label: item.name }))}
               />
@@ -2418,8 +2480,7 @@ export function VirtualizationImagesPage() {
             </Form.Item>
             <Form.Item name="connectionId" label="连接" rules={[{ required: true }]}>
               <Select
-                showSearch
-                optionFilterProp="label"
+                showSearch={{ optionFilterProp: 'label' }}
                 options={clusters
                   .filter((item) => !imageProvider || item.provider === imageProvider)
                   .map((item) => ({ value: item.id, label: item.name }))}
