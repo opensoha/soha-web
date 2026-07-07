@@ -278,7 +278,7 @@ function inputFromFormValues(
     metadata: metadataFromFormValues(values, current),
     name: values.name.trim(),
     portalVisible: Boolean(values.portalVisible),
-    providerId: values.providerId?.trim() ?? '',
+    providerId: current ? values.providerId?.trim() ?? '' : '',
     providerType: values.providerType || 'link',
     slug: values.slug?.trim() ?? '',
     sortOrder: Number(values.sortOrder || 1000),
@@ -614,7 +614,7 @@ export function IdentityApplicationsPage() {
               <Input prefix={<LinkOutlined />} placeholder="https://grafana.example.com" />
             </Form.Item>
             <Form.Item label="Provider ID" name="providerId">
-              <Input placeholder="reserved for OIDC / Proxy phases" />
+              <Input disabled={!editing} placeholder="reserved for OIDC / Proxy phases" />
             </Form.Item>
           </div>
 
