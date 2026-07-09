@@ -22,6 +22,8 @@ import type { TableColumnsType } from "antd";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import { AdminTable } from "@/components/admin-table";
+import { StepForm } from "@/components/step-form";
+import type { StepFormStep } from "@/components/step-form";
 import {
   ManagementIconButton,
   ManagementState,
@@ -167,18 +169,6 @@ function TagSelect(props: {
 
 /* ─── Login Settings ─── */
 
-interface OIDCSettings {
-  enabled: boolean;
-  providerName: string;
-  issuer: string;
-  clientId: string;
-  clientSecret: string;
-  redirectUrl: string;
-  frontendRedirectUrl: string;
-  scopes: string[];
-  defaultRoles: string[];
-}
-
 interface LoginProviderSettings {
   id: string;
   name: string;
@@ -210,7 +200,6 @@ interface LoginProviderSettings {
 }
 
 interface IdentitySettingsResponse {
-  oidc?: OIDCSettings;
   providers?: LoginProviderSettings[];
   defaultProviderId?: string;
 }
@@ -277,6 +266,10 @@ function defaultRedirectPath(providerId: string) {
 
 function defaultFrontendRedirectPath() {
   return `${window.location.origin}/login/callback`;
+}
+
+function newLoginProviderID() {
+  return crypto.randomUUID();
 }
 
 function applyProviderPreset(
@@ -614,6 +607,7 @@ export function LoginSettingsPage({
   const [providerModalVisible, setProviderModalVisible] = useState(false);
   const [editingProvider, setEditingProvider] =
     useState<LoginProviderSettings | null>(null);
+  const [providerStep, setProviderStep] = useState(0);
   const canViewLoginSettings = hasPermission(
     permissionSnapshotQuery.data?.data,
     "settings.identity.view",
@@ -629,30 +623,9 @@ export function LoginSettingsPage({
       api.get<ApiResponse<IdentitySettingsResponse>>("/settings/identity"),
     select: (response: any) => {
       const current = response.data as IdentitySettingsResponse;
-      const legacyOIDC = current.oidc;
-      const providers =
-        Array.isArray(current.providers) && current.providers.length > 0
-          ? current.providers.map((item) => normalizeLoginProvider(item))
-          : legacyOIDC
-            ? [
-                normalizeLoginProvider({
-                  id: legacyOIDC.providerName || "oidc-default",
-                  name: legacyOIDC.providerName || "OIDC",
-                  type: "oidc",
-                  enabled: legacyOIDC.enabled,
-                  issuer: legacyOIDC.issuer,
-                  clientId: legacyOIDC.clientId,
-                  clientSecret: legacyOIDC.clientSecret,
-                  redirectUrl: legacyOIDC.redirectUrl,
-                  frontendRedirectUrl: legacyOIDC.frontendRedirectUrl,
-                  scopes: legacyOIDC.scopes,
-                  defaultRoles: legacyOIDC.defaultRoles,
-                  userIdField: "sub",
-                  userNameField: "name",
-                  emailField: "email",
-                }),
-              ]
-            : [];
+      const providers = Array.isArray(current.providers)
+        ? current.providers.map((item) => normalizeLoginProvider(item))
+        : [];
       return {
         data: {
           providers,
@@ -664,14 +637,29 @@ export function LoginSettingsPage({
   });
 
   const saveMutation = useMutation({
-    mutationFn: (values: Record<string, unknown>) =>
-      api.put("/settings/identity/providers", values),
-    onSuccess: () => {
-      void message.success("登陆设置已保存");
+    mutationFn: (input: {
+      values: Record<string, unknown>;
+      successMessage?: string;
+    }) => api.put("/settings/identity/providers", input.values),
+    onSuccess: (_data, input) => {
+      void message.success(input.successMessage || "登陆设置已保存");
       void queryClient.invalidateQueries({ queryKey: ["settings-identity"] });
       void invalidateAuthz(queryClient);
     },
     onError: (err: Error) => void message.error(err.message),
+  });
+
+  const settings = data?.data;
+  const providers = settings?.providers ?? [];
+  const providerInitialType = editingProvider?.type || "oidc";
+  const providerInitialID = editingProvider?.id || newLoginProviderID();
+  const providerInitialValues = applyProviderPreset(providerInitialType, {
+    ...editingProvider,
+    id: providerInitialID,
+    redirectUrl:
+      editingProvider?.redirectUrl || defaultRedirectPath(providerInitialID),
+    frontendRedirectUrl:
+      editingProvider?.frontendRedirectUrl || defaultFrontendRedirectPath(),
   });
 
   if (isLoading) {
@@ -690,8 +678,6 @@ export function LoginSettingsPage({
     );
   }
 
-  const settings = data?.data;
-  const providers = settings?.providers ?? [];
   const providerColumns: TableColumnsType<LoginProviderSettings> = [
     { title: "名称", dataIndex: "name" },
     {
@@ -726,8 +712,24 @@ export function LoginSettingsPage({
     {
       title: "启用",
       dataIndex: "enabled",
-      render: (value: boolean) => (
-        <StatusTag value={value ? "enabled" : "disabled"} />
+      render: (value: boolean, record: LoginProviderSettings) => (
+        <Switch
+          checked={value}
+          disabled={!canManageLoginSettings || saveMutation.isPending}
+          loading={saveMutation.isPending}
+          size="small"
+          onChange={(checked) => {
+            const nextProviders = providers.map((item) =>
+              item.id === record.id ? { ...item, enabled: checked } : item,
+            );
+            saveMutation.mutate({
+              values: {
+                providers: nextProviders,
+                defaultProviderId: settings?.defaultProviderId,
+              },
+            });
+          }}
+        />
       ),
     },
     {
@@ -754,23 +756,27 @@ export function LoginSettingsPage({
               size="small"
               onClick={() => {
                 setEditingProvider(record);
+                setProviderStep(0);
                 setProviderModalVisible(true);
               }}
             />
             <Popconfirm
               title="确认删除登录源？"
-              description="删除后会立即保存登录设置。"
+              description="删除后会立即保存；已有账号不会被禁用，关联记录保留，但该入口不可再登录。"
               okButtonProps={{ danger: true, loading: saveMutation.isPending }}
               onConfirm={() => {
                 const nextProviders = providers.filter(
                   (item) => item.id !== record.id,
                 );
                 saveMutation.mutate({
-                  providers: nextProviders,
-                  defaultProviderId:
-                    settings?.defaultProviderId === record.id
-                      ? nextProviders[0]?.id || ""
-                      : settings?.defaultProviderId,
+                  values: {
+                    providers: nextProviders,
+                    defaultProviderId:
+                      settings?.defaultProviderId === record.id
+                        ? nextProviders[0]?.id || ""
+                        : settings?.defaultProviderId,
+                  },
+                  successMessage: "登录源已删除",
                 });
               }}
             >
@@ -791,8 +797,10 @@ export function LoginSettingsPage({
                 size="small"
                 onClick={() =>
                   saveMutation.mutate({
-                    providers,
-                    defaultProviderId: record.id,
+                    values: {
+                      providers,
+                      defaultProviderId: record.id,
+                    },
                   })
                 }
               />
@@ -801,6 +809,228 @@ export function LoginSettingsPage({
         ) : (
           "-"
         ),
+    },
+  ];
+  const providerSteps: StepFormStep[] = [
+    {
+      title: "连接配置",
+      fieldNames: [
+        "name",
+        "type",
+        "enabled",
+        "issuer",
+        "authorizeUrl",
+        "tokenUrl",
+        "userInfoUrl",
+        "metadataUrl",
+        "entityId",
+        "certificate",
+        "clientId",
+        "clientSecret",
+        "redirectUrl",
+        "frontendRedirectUrl",
+      ],
+      children: (
+        <>
+          <Form.Item name="id" hidden>
+            <Input />
+          </Form.Item>
+          <Row gutter={16}>
+            <Col xs={24} md={12}>
+              <Form.Item
+                name="name"
+                label="显示名称"
+                rules={[{ required: true, message: "请输入显示名称" }]}
+              >
+                <Input placeholder="企业统一登录 / 飞书 / 钉钉" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item
+                name="type"
+                label="类型"
+                rules={[{ required: true, message: "请选择登录类型" }]}
+              >
+                <Select
+                  options={LOGIN_PROVIDER_TYPE_OPTIONS}
+                  onChange={(value) => {
+                    const current = providerForm.getFieldsValue();
+                    providerForm.setFieldsValue(
+                      applyProviderPreset(String(value), {
+                        ...current,
+                        frontendRedirectUrl:
+                          current.frontendRedirectUrl ||
+                          defaultFrontendRedirectPath(),
+                      }),
+                    );
+                  }}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Form.Item name="enabled" label="启用" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+          <Form.Item
+            noStyle
+            shouldUpdate={(prev, next) => prev.type !== next.type}
+          >
+            {({ getFieldValue }) => {
+              const type = String(getFieldValue("type") || "oidc");
+              return (
+                <>
+                  {type === "saml" ? (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      style={{ marginBottom: 16 }}
+                      title="SAML 当前为配置态"
+                      description="本次改动已支持 SAML 配置保存和菜单/登录入口展示，但后端断言消费与 ACS 运行链路尚未启用。"
+                    />
+                  ) : null}
+                  {type === "oidc" ? (
+                    <Form.Item
+                      name="issuer"
+                      label="Issuer URL"
+                      rules={[
+                        { required: true, message: "请输入 Issuer URL" },
+                      ]}
+                    >
+                      <Input placeholder="https://accounts.example.com" />
+                    </Form.Item>
+                  ) : null}
+                  {type !== "saml" ? (
+                    <Row gutter={16}>
+                      <Col xs={24} md={12}>
+                        <Form.Item name="authorizeUrl" label="Authorize URL">
+                          <Input placeholder="https://provider.example.com/oauth2/authorize" />
+                        </Form.Item>
+                      </Col>
+                      <Col xs={24} md={12}>
+                        <Form.Item name="tokenUrl" label="Token URL">
+                          <Input placeholder="https://provider.example.com/oauth2/token" />
+                        </Form.Item>
+                      </Col>
+                      <Col xs={24} md={12}>
+                        <Form.Item name="userInfoUrl" label="UserInfo URL">
+                          <Input placeholder="https://provider.example.com/userinfo" />
+                        </Form.Item>
+                      </Col>
+                    </Row>
+                  ) : (
+                    <>
+                      <Form.Item name="metadataUrl" label="Metadata URL">
+                        <Input placeholder="https://idp.example.com/metadata" />
+                      </Form.Item>
+                      <Form.Item name="entityId" label="Entity ID">
+                        <Input placeholder="https://soha.example.com/saml/sp" />
+                      </Form.Item>
+                      <Form.Item name="certificate" label="证书">
+                        <Input.TextArea
+                          rows={4}
+                          placeholder="粘贴 IdP 证书内容"
+                        />
+                      </Form.Item>
+                    </>
+                  )}
+                </>
+              );
+            }}
+          </Form.Item>
+          <Row gutter={16}>
+            <Col xs={24} md={12}>
+              <Form.Item name="clientId" label="Client ID">
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item name="clientSecret" label="Client Secret">
+                <Input.Password />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Form.Item name="redirectUrl" label="回调地址">
+            <Input />
+          </Form.Item>
+          <Form.Item name="frontendRedirectUrl" label="前端回跳地址">
+            <Input />
+          </Form.Item>
+        </>
+      ),
+    },
+    {
+      title: "账号映射",
+      children: (
+        <>
+          <Row gutter={16}>
+            <Col xs={24} md={12}>
+              <Form.Item name="scopes" label="Scopes">
+                <TagSelect mode="tags" placeholder="openid / profile / email" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item name="defaultRoles" label="默认角色">
+                <TagSelect mode="tags" placeholder="readonly / admin" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col xs={24} md={12}>
+              <Form.Item
+                name="syncRolesOnLogin"
+                label="登录补充角色"
+                valuePropName="checked"
+              >
+                <Switch />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item
+                name="syncOrgsOnLogin"
+                label="登录补充组织"
+                valuePropName="checked"
+              >
+                <Switch />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item name="roleField" label="角色字段">
+                <Input placeholder="roles / role_ids / realm_access.roles" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item name="roleSyncMode" label="角色模式">
+                <Select options={LOGIN_SYNC_MODE_OPTIONS} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item name="organizationField" label="组织字段">
+                <Input placeholder="groups / department_ids / department" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item name="orgSyncMode" label="组织模式">
+                <Select options={LOGIN_SYNC_MODE_OPTIONS} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item name="userIdField" label="用户ID字段">
+                <Input placeholder="sub / open_id / unionId / UserId" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item name="userNameField" label="用户名字段">
+                <Input placeholder="name / nick / preferred_username" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item name="emailField" label="邮箱字段">
+                <Input placeholder="email / enterprise_email" />
+              </Form.Item>
+            </Col>
+          </Row>
+        </>
+      ),
     },
   ];
   const content = (
@@ -814,6 +1044,7 @@ export function LoginSettingsPage({
                 type="primary"
                 onClick={() => {
                   setEditingProvider(null);
+                  setProviderStep(0);
                   setProviderModalVisible(true);
                 }}
               >
@@ -839,32 +1070,33 @@ export function LoginSettingsPage({
       <Modal
         title={editingProvider ? "编辑登录源" : "新增登录源"}
         open={providerModalVisible}
+        width={760}
         onCancel={() => {
           setProviderModalVisible(false);
           setEditingProvider(null);
+          setProviderStep(0);
         }}
         footer={null}
         destroyOnHidden
       >
-        <Form
+        <StepForm
+          key={editingProvider?.id || "new-login-provider"}
+          contentMaxWidth={680}
+          current={providerStep}
           form={providerForm}
-          {...DEFAULT_FORM_LAYOUT}
-          initialValues={applyProviderPreset(editingProvider?.type || "oidc", {
-            ...editingProvider,
-            redirectUrl:
-              editingProvider?.redirectUrl ||
-              defaultRedirectPath(editingProvider?.id || "provider"),
-            frontendRedirectUrl:
-              editingProvider?.frontendRedirectUrl ||
-              defaultFrontendRedirectPath(),
-          })}
+          initialValues={providerInitialValues}
+          loading={saveMutation.isPending}
+          onCancel={() => {
+            setProviderModalVisible(false);
+            setEditingProvider(null);
+            setProviderStep(0);
+          }}
+          onCurrentChange={setProviderStep}
           onFinish={(values) => {
             if (!canManageLoginSettings) return;
             const sourceType = String(values.type || "oidc");
             const sourceID = String(
-              values.id ||
-                editingProvider?.id ||
-                `${sourceType}-${crypto.randomUUID()}`,
+              values.id || editingProvider?.id || newLoginProviderID(),
             ).trim();
             const nextProvider = applyProviderPreset(sourceType, {
               ...values,
@@ -886,194 +1118,21 @@ export function LoginSettingsPage({
               nextProviders.push(nextProvider);
             }
             saveMutation.mutate({
-              providers: nextProviders,
-              defaultProviderId: settings?.defaultProviderId || nextProvider.id,
+              values: {
+                providers: nextProviders,
+                defaultProviderId:
+                  settings?.defaultProviderId || nextProvider.id,
+              },
+              successMessage: editingProvider
+                ? "登录源已保存"
+                : "登录源已新增",
             });
             setProviderModalVisible(false);
             setEditingProvider(null);
+            setProviderStep(0);
           }}
-        >
-          <Form.Item
-            name="id"
-            label="ID"
-            rules={[{ required: true, message: "请输入登录源 ID" }]}
-          >
-            <Input placeholder="oidc-default / feishu-main / saml-corp" />
-          </Form.Item>
-          <Form.Item
-            name="name"
-            label="显示名称"
-            rules={[{ required: true, message: "请输入显示名称" }]}
-          >
-            <Input placeholder="企业统一登录 / 飞书 / 钉钉" />
-          </Form.Item>
-          <Form.Item
-            name="type"
-            label="类型"
-            rules={[{ required: true, message: "请选择登录类型" }]}
-          >
-            <Select
-              options={LOGIN_PROVIDER_TYPE_OPTIONS}
-              onChange={(value) => {
-                const current = providerForm.getFieldsValue();
-                providerForm.setFieldsValue(
-                  applyProviderPreset(value, current),
-                );
-              }}
-            />
-          </Form.Item>
-          <Form.Item name="enabled" label="启用" valuePropName="checked">
-            <Switch />
-          </Form.Item>
-          <Form.Item
-            noStyle
-            shouldUpdate={(prev, next) => prev.type !== next.type}
-          >
-            {({ getFieldValue }) => {
-              const type = String(getFieldValue("type") || "oidc");
-              return (
-                <>
-                  {type === "saml" ? (
-                    <Alert
-                      type="warning"
-                      showIcon
-                      style={{ marginBottom: 16 }}
-                      title="SAML 当前为配置态"
-                      description="本次改动已支持 SAML 配置保存和菜单/登录入口展示，但后端断言消费与 ACS 运行链路尚未启用。"
-                    />
-                  ) : null}
-                  {type === "oidc" ? (
-                    <Form.Item
-                      name="issuer"
-                      label="Issuer URL"
-                      rules={[{ required: true, message: "请输入 Issuer URL" }]}
-                    >
-                      <Input placeholder="https://accounts.example.com" />
-                    </Form.Item>
-                  ) : null}
-                  {type !== "saml" ? (
-                    <>
-                      <Form.Item name="authorizeUrl" label="Authorize URL">
-                        <Input placeholder="https://provider.example.com/oauth2/authorize" />
-                      </Form.Item>
-                      <Form.Item name="tokenUrl" label="Token URL">
-                        <Input placeholder="https://provider.example.com/oauth2/token" />
-                      </Form.Item>
-                      <Form.Item name="userInfoUrl" label="UserInfo URL">
-                        <Input placeholder="https://provider.example.com/userinfo" />
-                      </Form.Item>
-                    </>
-                  ) : (
-                    <>
-                      <Form.Item name="metadataUrl" label="Metadata URL">
-                        <Input placeholder="https://idp.example.com/metadata" />
-                      </Form.Item>
-                      <Form.Item name="entityId" label="Entity ID">
-                        <Input placeholder="https://soha.example.com/saml/sp" />
-                      </Form.Item>
-                      <Form.Item name="certificate" label="证书">
-                        <Input.TextArea
-                          rows={4}
-                          placeholder="粘贴 IdP 证书内容"
-                        />
-                      </Form.Item>
-                    </>
-                  )}
-                </>
-              );
-            }}
-          </Form.Item>
-          <Form.Item name="clientId" label="Client ID">
-            <Input />
-          </Form.Item>
-          <Form.Item name="clientSecret" label="Client Secret">
-            <Input.Password />
-          </Form.Item>
-          <Form.Item name="redirectUrl" label="回调地址">
-            <Input />
-          </Form.Item>
-          <Form.Item name="frontendRedirectUrl" label="前端回跳地址">
-            <Input />
-          </Form.Item>
-          <Form.Item name="scopes" label="Scopes">
-            <TagSelect mode="tags" placeholder="openid / profile / email" />
-          </Form.Item>
-          <Form.Item name="defaultRoles" label="默认角色">
-            <TagSelect mode="tags" placeholder="readonly / admin" />
-          </Form.Item>
-          <Row gutter={16}>
-            <Col xs={24} md={12}>
-              <Form.Item
-                name="syncRolesOnLogin"
-                label="登录补充角色"
-                valuePropName="checked"
-              >
-                <Switch />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={12}>
-              <Form.Item
-                name="syncOrgsOnLogin"
-                label="登录补充组织"
-                valuePropName="checked"
-              >
-                <Switch />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={16}>
-            <Col xs={24} md={12}>
-              <Form.Item name="roleField" label="角色字段">
-                <Input placeholder="roles / role_ids / realm_access.roles" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={12}>
-              <Form.Item name="roleSyncMode" label="角色模式">
-                <Select options={LOGIN_SYNC_MODE_OPTIONS} />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={16}>
-            <Col xs={24} md={12}>
-              <Form.Item name="organizationField" label="组织字段">
-                <Input placeholder="groups / department_ids / department" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={12}>
-              <Form.Item name="orgSyncMode" label="组织模式">
-                <Select options={LOGIN_SYNC_MODE_OPTIONS} />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Form.Item name="userIdField" label="用户ID字段">
-            <Input placeholder="sub / open_id / unionId / UserId" />
-          </Form.Item>
-          <Form.Item name="userNameField" label="用户名字段">
-            <Input placeholder="name / nick / preferred_username" />
-          </Form.Item>
-          <Form.Item name="emailField" label="邮箱字段">
-            <Input placeholder="email / enterprise_email" />
-          </Form.Item>
-          <div className="soha-form-actions">
-            <Button
-              onClick={() => {
-                setProviderModalVisible(false);
-                setEditingProvider(null);
-              }}
-            >
-              取消
-            </Button>
-            {canManageLoginSettings ? (
-              <Button
-                htmlType="submit"
-                type="primary"
-                loading={saveMutation.isPending}
-              >
-                保存
-              </Button>
-            ) : null}
-          </div>
-        </Form>
+          steps={providerSteps}
+        />
       </Modal>
     </div>
   );

@@ -108,12 +108,18 @@ vi.mock("@/components/admin-table", () => ({
     toolbar,
     toolbarExtra,
     dataSource,
+    columns,
   }: {
     title?: ReactNode;
     headerExtra?: ReactNode;
     toolbar?: ReactNode;
     toolbarExtra?: ReactNode;
     dataSource: unknown[];
+    columns?: Array<{
+      dataIndex?: string;
+      key?: string;
+      render?: (value: unknown, record: unknown, index: number) => ReactNode;
+    }>;
   }) => (
     <div data-testid="admin-table">
       {title ? <div>{title}</div> : null}
@@ -122,7 +128,22 @@ vi.mock("@/components/admin-table", () => ({
       {toolbarExtra ? <div data-testid="admin-table-toolbar-extra">{toolbarExtra}</div> : null}
       <div>{`rows:${dataSource.length}`}</div>
       {dataSource.map((item, index) => (
-        <div key={index}>{JSON.stringify(item)}</div>
+        <div key={index}>
+          <div>{JSON.stringify(item)}</div>
+          {columns?.map((column, columnIndex) => (
+            <span key={`${column.key || column.dataIndex || "column"}-${columnIndex}`}>
+              {column.render
+                ? column.render(
+                    column.dataIndex
+                      ? (item as Record<string, unknown>)[column.dataIndex]
+                      : undefined,
+                    item,
+                    index,
+                  )
+                : null}
+            </span>
+          ))}
+        </div>
       ))}
     </div>
   ),
@@ -136,7 +157,7 @@ function setDefaultResponses() {
     "/settings/identity": {
       providers: [
         {
-          id: "oidc-default",
+          id: "corp-oidc",
           name: "OIDC",
           type: "oidc",
           enabled: true,
@@ -144,7 +165,7 @@ function setDefaultResponses() {
           clientId: "client",
           clientSecret: "secret",
           redirectUrl:
-            "http://127.0.0.1:8080/api/v1/auth/login/oidc-default/callback",
+            "http://127.0.0.1:8080/api/v1/auth/login/corp-oidc/callback",
           frontendRedirectUrl: "http://127.0.0.1:5173/login/callback",
           scopes: ["openid", "profile", "email"],
           defaultRoles: ["readonly"],
@@ -153,7 +174,7 @@ function setDefaultResponses() {
           emailField: "email",
         },
       ],
-      defaultProviderId: "oidc-default",
+      defaultProviderId: "corp-oidc",
     },
     "/settings/branding": {
       appTitle: "Soha",
@@ -462,6 +483,49 @@ describe("settings ai page rendering", () => {
     );
   });
 
+  it("renders empty login settings when providers are empty", async () => {
+    testState.responses["/settings/identity"] = {
+      providers: [],
+      defaultProviderId: "",
+    };
+
+    const container = await renderWithProviders(
+      <SettingsCenterPage />,
+      "/settings/login",
+    );
+
+    expect(container.textContent).toContain("rows:0");
+    expect(container.textContent).not.toContain("corp-oidc");
+  });
+
+  it("saves login source enabled state from the table switch", async () => {
+    const container = await renderWithProviders(
+      <SettingsCenterPage />,
+      "/settings/login",
+    );
+    const enabledSwitch = container.querySelector(
+      'button[role="switch"]',
+    ) as HTMLButtonElement | null;
+
+    expect(enabledSwitch).toBeTruthy();
+
+    await act(async () => {
+      enabledSwitch?.click();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(apiPutMock).toHaveBeenCalledWith("/settings/identity/providers", {
+      providers: [
+        expect.objectContaining({
+          id: "corp-oidc",
+          enabled: false,
+        }),
+      ],
+      defaultProviderId: "corp-oidc",
+    });
+  });
+
   it("exposes login role and organization mapping fields", async () => {
     const container = await renderWithProviders(
       <SettingsCenterPage />,
@@ -483,6 +547,34 @@ describe("settings ai page rendering", () => {
     expect(document.body.textContent).toContain("登录补充组织");
     expect(document.body.textContent).toContain("角色字段");
     expect(document.body.textContent).toContain("组织字段");
+  });
+
+  it("advances the login source step form without saving", async () => {
+    await renderWithProviders(<SettingsCenterPage />, "/settings/login");
+    const editButton = document.body.querySelector(
+      'button[aria-label="编辑登录源"]',
+    ) as HTMLButtonElement | null;
+
+    expect(editButton).toBeTruthy();
+
+    await act(async () => {
+      editButton?.click();
+      await Promise.resolve();
+    });
+
+    const nextButton = Array.from(document.body.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("下一步"),
+    ) as HTMLButtonElement | undefined;
+
+    expect(nextButton).toBeTruthy();
+
+    await act(async () => {
+      nextButton?.click();
+      await Promise.resolve();
+    });
+
+    expect(apiPutMock).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain("上一步");
   });
 
   it("renders full AI settings content under ai-workbench model settings", async () => {

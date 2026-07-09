@@ -1,0 +1,26 @@
+.soha-step-form__steps {
+  max-width: 520px;
+  margin: 0 auto 28px;
+}
+
+.soha-step-form__content {
+  width: 100%;
+  margin: 0 auto;
+}
+
+.soha-step-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+  max-width: 640px;
+  margin-right: auto;
+  margin-left: auto;
+  margin-top: 24px;
+}
+
+@media (max-width: 640px) {
+  .soha-step-form__steps {
+    margin-bottom: 20px;
+  }
+}
