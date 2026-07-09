@@ -14,18 +14,12 @@
   min-height: 0;
   padding: clamp(16px, 3.2vw, 36px) clamp(18px, 4vw, 44px) clamp(10px, 1.8vh, 16px);
   overflow: hidden;
-  background:
-    radial-gradient(circle at 18% 20%, rgba(var(--soha-accent-cyan-rgb), 0.18), transparent 28%),
-    radial-gradient(circle at 62% 76%, rgba(var(--soha-accent-teal-rgb), 0.14), transparent 30%),
-    linear-gradient(135deg, var(--soha-bg-base) 0%, var(--soha-bg-layout) 48%, var(--soha-bg-surface-muted) 100%);
+  background: var(--soha-bg-layout);
   isolation: isolate;
 }
 
 :root[data-theme-mode='dark'] .soha-auth-shell {
-  background:
-    radial-gradient(circle at 18% 20%, rgba(var(--soha-accent-cyan-rgb), 0.16), transparent 30%),
-    radial-gradient(circle at 62% 76%, rgba(var(--soha-accent-teal-rgb), 0.12), transparent 32%),
-    linear-gradient(135deg, var(--soha-bg-layout) 0%, var(--soha-bg-surface) 52%, var(--soha-bg-surface-muted) 100%);
+  background: var(--soha-bg-layout);
 }
 
 .soha-auth-shell::after {
@@ -35,8 +29,8 @@
   pointer-events: none;
   content: '';
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--soha-bg-surface) 10%, transparent), color-mix(in srgb, var(--soha-fill-medium) 30%, transparent)),
-    linear-gradient(90deg, color-mix(in srgb, var(--soha-bg-base) 68%, transparent), transparent 30%, transparent 70%, color-mix(in srgb, var(--soha-fill-medium) 62%, transparent));
+    linear-gradient(180deg, color-mix(in srgb, var(--soha-bg-surface) 16%, transparent), transparent 42%, color-mix(in srgb, var(--soha-fill-weak) 42%, transparent)),
+    linear-gradient(90deg, color-mix(in srgb, var(--soha-bg-layout) 68%, transparent), transparent 30%, transparent 70%, color-mix(in srgb, var(--soha-fill-weak) 68%, transparent));
 }
 
 :root[data-theme-mode='dark'] .soha-auth-shell::after {
@@ -52,6 +46,7 @@
   width: 100%;
   height: 100%;
   pointer-events: none;
+  opacity: 0.78;
 }
 
 .soha-auth-layout {
@@ -120,7 +115,7 @@
 
 .soha-auth-flow-copy {
   display: grid;
-  gap: 16px;
+  gap: 10px;
   max-width: 640px;
 }
 
@@ -128,18 +123,18 @@
   max-width: 620px;
   margin: 0 0 10px;
   color: var(--soha-text-primary);
-  font-size: clamp(30px, 5vw, 54px);
+  font-size: clamp(30px, 4.5vw, 48px);
   font-weight: 750;
-  line-height: 1.08;
+  line-height: 1.12;
   letter-spacing: 0;
 }
 
 .soha-auth-flow-subtitle.ant-typography {
   display: block;
-  max-width: 560px;
+  max-width: 600px;
   color: var(--soha-text-secondary);
-  font-size: 14px;
-  line-height: 1.8;
+  font-size: 15px;
+  line-height: 1.7;
 }
 
 :root[data-theme-mode='dark'] .soha-auth-flow-title.ant-typography {
@@ -152,7 +147,7 @@
 
 .soha-auth-flow-map {
   position: relative;
-  min-height: 410px;
+  min-height: 430px;
 }
 
 .soha-auth-flow-lines {
@@ -203,12 +198,14 @@
 
 .soha-auth-flow-node {
   position: absolute;
+  z-index: 1;
   box-sizing: border-box;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 10px;
-  width: min(232px, 34vw);
-  padding: 12px 13px;
+  width: min(196px, 30vw);
+  min-height: 72px;
+  padding: 10px 11px;
   border: 1px solid var(--soha-glass-border);
   border-radius: 8px;
   background: var(--soha-glass-bg);
@@ -223,33 +220,43 @@
 }
 
 .soha-auth-flow-node--0 {
-  top: 18px;
+  top: 4px;
   left: 0;
 }
 
 .soha-auth-flow-node--1 {
-  top: 96px;
+  top: 40px;
   left: 33%;
 }
 
 .soha-auth-flow-node--2 {
-  top: 42px;
+  top: 8px;
   right: 0;
 }
 
 .soha-auth-flow-node--3 {
-  top: 190px;
+  top: 124px;
   left: 8%;
 }
 
 .soha-auth-flow-node--4 {
-  top: 228px;
-  right: 10%;
+  top: 164px;
+  right: 9%;
 }
 
 .soha-auth-flow-node--5 {
-  bottom: 4px;
-  left: 38%;
+  top: 244px;
+  left: 30%;
+}
+
+.soha-auth-flow-node--6 {
+  bottom: 12px;
+  left: 0;
+}
+
+.soha-auth-flow-node--7 {
+  right: 0;
+  bottom: 2px;
 }
 
 .soha-auth-flow-node__dot {
@@ -286,7 +293,7 @@
 
 .soha-auth-flow-node__question {
   color: var(--soha-text-primary);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1.45;
 }
@@ -294,7 +301,7 @@
 .soha-auth-flow-node__answer {
   margin-top: 4px;
   color: var(--soha-text-tertiary);
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.55;
 }
 
@@ -668,11 +675,6 @@
 
   .soha-auth-flow-copy {
     gap: 10px;
-  }
-
-  .soha-auth-flow-title.ant-typography {
-    margin-bottom: 6px;
-    font-size: clamp(28px, 4vw, 44px);
   }
 
   .soha-auth-flow-subtitle.ant-typography {

@@ -70,9 +70,22 @@ vi.mock('@/features/announcements/announcement-center', () => ({
   AnnouncementBell: () => <div data-testid="announcement-bell">bell</div>,
 }))
 
-vi.mock('@/components/header-preference-button', () => ({
-  HeaderPreferenceButton: ({ label, title }: { label?: string; title?: string }) => <button>{label || title}</button>,
-}))
+vi.mock('@/components/header-action-button', async () => {
+  const { forwardRef } = await vi.importActual<typeof import('react')>('react')
+  return {
+    HeaderActionButton: forwardRef<HTMLButtonElement, any>(function HeaderActionButtonMock(
+      { ariaLabel, className, icon, label, onClick, title },
+      ref,
+    ) {
+      return (
+        <button ref={ref} aria-label={ariaLabel} className={className} onClick={onClick} title={title}>
+          {icon}
+          {label || title}
+        </button>
+      )
+    }),
+  }
+})
 
 vi.mock('@/components/platform-scope-toolbar', () => ({
   PlatformScopeTrigger: ({ scopeMode }: { scopeMode?: string }) => (

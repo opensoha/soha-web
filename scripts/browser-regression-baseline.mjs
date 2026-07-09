@@ -125,7 +125,7 @@ async function runBrowserBaseline(page, port) {
   if (snapshot.inputCount < 2) missing.push('username/password inputs')
   if (snapshot.submitCount < 1) missing.push('login submit button')
   if (!snapshot.canvasRendered) missing.push('login visual background')
-  for (const text of ['Soha 让工作快乐起来', 'AI Gateway', '多工作台统一控制台']) {
+  for (const text of ['Soha 是一种能力', 'k8s 工作台', 'AI Gateway', '多工作台统一控制台']) {
     if (!snapshot.text.includes(text)) {
       missing.push(`login copy: ${text}`)
     }

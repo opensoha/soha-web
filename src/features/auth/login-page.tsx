@@ -71,28 +71,36 @@ type StarToneVariable = (typeof STAR_TONES)[number];
 
 const CAPABILITY_QUESTIONS = [
   {
-    question: "Soha 支持哪些工作台？",
-    answer: "K8s、虚拟化、Docker、监控、AI 与系统治理统一入口",
+    question: "k8s 工作台",
+    answer: "多集群、工作负载、网络、存储、YAML 统一入口",
   },
   {
-    question: "虚拟机和容器怎么一起管？",
-    answer: "KubeVirt / PVE 虚拟机、Docker 主机与 Compose 项目联动",
+    question: "虚拟化管理工作台",
+    answer: "虚拟机、集群、镜像、规格、同步和操作记录",
   },
   {
-    question: "AI 工作台能做什么？",
-    answer: "会话、根因、巡检、性能分析进入同一排障上下文",
+    question: "Docker 工作台",
+    answer: "主机、容器、Compose、模板和操作任务",
   },
   {
-    question: "AI Gateway 怎么接入？",
-    answer: "模型供应商、工具绑定、策略与审计统一治理",
+    question: "应用交付工作台",
+    answer: "应用接入、环境绑定、构建、版本包和发布验证",
   },
   {
-    question: "交付和运行环境能闭环吗？",
-    answer: "应用、环境、发布包、执行任务和回调证据持续串联",
+    question: "AI 工作台",
+    answer: "会话、根因、性能、巡检、工具和模型配置",
   },
   {
-    question: "告警、值班和权限如何协同？",
-    answer: "监控事件、OnCall 路由、RBAC、菜单和审计同源",
+    question: "AI Gateway",
+    answer: "中转、上游、Tokens、能力清单、治理和调用日志",
+  },
+  {
+    question: "监控工作台",
+    answer: "指标集成、告警规则、告警事件、通知、OnCall 和自愈联动",
+  },
+  {
+    question: "设置中心",
+    answer: "总览、个人中心、关于、Provider、权限、菜单、审计和品牌",
   },
 ];
 
@@ -316,10 +324,10 @@ function LoginCapabilityFlow() {
       <div className="soha-auth-flow-copy">
         <div>
           <Title level={1} className="soha-auth-flow-title">
-            Soha 让工作快乐起来！
+            Soha 是一种能力！
           </Title>
           <Text className="soha-auth-flow-subtitle">
-            从 K8s、多集群、虚拟机、Docker 到 AI Gateway、AI 工作台与监控值班，让关键工作在同一条协作链路上自然衔接。
+            从 k8s、虚拟化、Docker、应用交付、AI 工作台、AI Gateway、监控告警到设置中心，Soha 把日常操作沉淀成可协同、可治理的能力。
           </Text>
         </div>
       </div>

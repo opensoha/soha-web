@@ -24,7 +24,7 @@ import {
   LockOutlined,
   UserOutlined,
 } from '@ant-design/icons'
-import { HeaderPreferenceButton } from '@/components/header-preference-button'
+import { HeaderActionButton } from '@/components/header-action-button'
 import { PlatformScopeTrigger } from '@/components/platform-scope-toolbar'
 import { AnnouncementBell } from '@/features/announcements/announcement-center'
 import { logoutAuthSession } from '@/features/auth/auth-api'
@@ -760,17 +760,15 @@ export function AppLayout() {
               </div>
             ) : null}
             <div className="soha-header-right">
-              <Button
-                className="soha-header-action"
-                size="small"
-                type="text"
+              <HeaderActionButton
+                ariaLabel={t('layout.docs', 'Docs')}
+                title={t('layout.docs', 'Docs')}
                 icon={<QuestionCircleOutlined />}
+                label={t('layout.docs', 'Docs')}
                 onClick={() => window.open('/docs/', '_blank', 'noopener,noreferrer')}
-              >
-                {t('layout.docs', 'Docs')}
-              </Button>
+              />
               <div className="soha-header-preferences">
-                <HeaderPreferenceButton
+                <HeaderActionButton
                   ariaLabel={languageSwitchTitle}
                   title={languageSwitchTitle}
                   inset
@@ -778,7 +776,7 @@ export function AppLayout() {
                   label={languageSwitchLabel}
                   onClick={() => setLocaleCode(localeCode === 'zh_CN' ? 'en_US' : 'zh_CN')}
                 />
-                <HeaderPreferenceButton
+                <HeaderActionButton
                   ariaLabel={themeSwitchTitle}
                   title={themeSwitchTitle}
                   icon={resolvedThemeMode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
@@ -824,11 +822,11 @@ export function AppLayout() {
                 placement="bottomRight"
                 trigger={['click']}
               >
-                <Button
-                  className="soha-header-action soha-user-trigger"
-                  size="small"
-                  type="text"
-                  icon={
+                <HeaderActionButton
+                  ariaLabel={userDisplayName}
+                  className="soha-user-trigger"
+                  iconClassName="soha-user-trigger__avatar"
+                  icon={(
                     <Avatar
                       className="soha-user-avatar"
                       size="small"
@@ -837,10 +835,9 @@ export function AppLayout() {
                     >
                       {userDisplayName.charAt(0).toUpperCase()}
                     </Avatar>
-                  }
-                >
-                  {userDisplayName}
-                </Button>
+                  )}
+                  label={userDisplayName}
+                />
               </Dropdown>
             </div>
           </div>

@@ -13,6 +13,7 @@ import {
 } from 'antd'
 import { BellOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { HeaderActionButton } from '@/components/header-action-button'
 import { ManagementState } from '@/components/management-list'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
 import { api } from '@/services/api-client'
@@ -207,10 +208,9 @@ export function AnnouncementBell() {
           </div>
         )}
       >
-        <Button
-          className="soha-header-action soha-header-bell"
-          size="small"
-          type="text"
+        <HeaderActionButton
+          ariaLabel={unreadCount > 0 ? `公告中心，${unreadCount} 条未读` : '公告中心'}
+          className="soha-header-bell"
           icon={(
             <Badge count={unreadCount} size="small" overflowCount={99}>
               <BellOutlined />
