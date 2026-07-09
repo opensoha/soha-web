@@ -1471,6 +1471,14 @@ export function AppRouter() {
           <Route path="/settings/identity" element={<Navigate to="/settings/login" replace />} />
           <Route path="/settings/monitoring" element={<Navigate to="/settings" replace />} />
           <Route
+            path="/settings/about"
+            element={
+              <RoutePages.LazyPage>
+                <RoutePages.SettingsCenterPage />
+              </RoutePages.LazyPage>
+            }
+          />
+          <Route
             path="/settings/branding"
             element={
               <RoutePages.LazyPage>

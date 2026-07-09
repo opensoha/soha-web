@@ -3,10 +3,13 @@
 import { act } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRoot } from "react-dom/client";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "antd";
 import { LoginPage } from "./login-page";
+import { restoreAuthSession } from "@/features/auth/auth-api";
+import { useAuthStore } from "@/stores/auth-store";
+import type { User } from "@/types";
 
 vi.mock("@/features/auth/auth-api", async () => {
   const actual =
@@ -23,6 +26,7 @@ vi.mock("@/features/auth/auth-api", async () => {
       visibleMenus: [],
     })),
     loginWithPassword: vi.fn(),
+    restoreAuthSession: vi.fn(async () => "unauthenticated"),
   };
 });
 
@@ -49,6 +53,23 @@ vi.mock("@/utils/branding", () => ({
 let containers: HTMLDivElement[] = [];
 let roots: Array<ReturnType<typeof createRoot>> = [];
 
+const user: User = {
+  userId: "user-1",
+  userName: "opensoha",
+  email: "opensoha@soha.local",
+  roles: [],
+  teams: [],
+  projects: [],
+  tags: [],
+};
+
+async function flushReact() {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
 async function renderLoginPage() {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -69,18 +90,21 @@ async function renderLoginPage() {
     root.render(
       <QueryClientProvider client={queryClient}>
         <App>
-          <MemoryRouter initialEntries={["/login"]}>
-            <LoginPage />
+          <MemoryRouter
+            initialEntries={["/login"]}
+            future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+          >
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/" element={<div>landing page</div>} />
+            </Routes>
           </MemoryRouter>
         </App>
       </QueryClientProvider>,
     );
   });
 
-  await act(async () => {
-    await Promise.resolve();
-    await Promise.resolve();
-  });
+  await flushReact();
 
   return container;
 }
@@ -133,6 +157,8 @@ describe("login page", () => {
 
   beforeEach(() => {
     document.documentElement.dataset.themeMode = "light";
+    vi.mocked(restoreAuthSession).mockResolvedValue("unauthenticated");
+    useAuthStore.getState().clearAuth();
   });
 
   afterEach(async () => {
@@ -146,7 +172,9 @@ describe("login page", () => {
       container.remove();
     }
     containers = [];
+    vi.useRealTimers();
     vi.clearAllMocks();
+    useAuthStore.getState().clearAuth();
   });
 
   it("renders copyright on the login page", async () => {
@@ -155,5 +183,30 @@ describe("login page", () => {
     expect(container.querySelector(".soha-auth-copyright")?.textContent).toBe(
       "© 2026 Soha 版权所有，由项目贡献者设计与开发。",
     );
+  });
+
+  it("restores an existing browser session from the login page", async () => {
+    vi.useFakeTimers();
+    vi.mocked(restoreAuthSession)
+      .mockResolvedValueOnce("unavailable")
+      .mockImplementationOnce(async () => {
+        useAuthStore.getState().setUser(user);
+        useAuthStore.getState().setTokens("new-access-token");
+        return "authenticated";
+      });
+
+    const container = await renderLoginPage();
+
+    expect(container.textContent).toContain("恢复登录状态");
+    expect(container.textContent).toContain("后端服务暂时不可用");
+    expect(container.textContent).not.toContain("登录控制台");
+
+    await act(async () => {
+      vi.advanceTimersByTime(2_000);
+    });
+    await flushReact();
+
+    expect(restoreAuthSession).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain("landing page");
   });
 });

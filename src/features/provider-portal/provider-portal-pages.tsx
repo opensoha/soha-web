@@ -388,7 +388,7 @@ export function SohaProviderPortalPage() {
   }
 
   return (
-    <div className="soha-provider-portal">
+    <div className="soha-provider-portal soha-provider-portal-home">
       <header className="soha-portal-header">
         <div className="soha-portal-brand">
           <div className="soha-portal-mark">

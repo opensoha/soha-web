@@ -211,6 +211,7 @@ export const MENU_WORKBENCH_LABELS: Record<MenuWorkbenchSurface, string> = {
 }
 
 export const MENU_UNGROUPED_FILTER = '__ungrouped__'
+const SETTINGS_WORKBENCH_ROOT_MENU_IDS = new Set(['settings', 'identity', 'system', 'access'])
 
 export function resolveMenuWorkbenchKey(item: Pick<MenuItem, 'id' | 'path'>): MenuWorkbenchSurface {
   const workbenchId = getMenuWorkbenchId(item)
@@ -298,7 +299,13 @@ export function buildWorkbenchMenuTree(items: MenuItem[]) {
       const directItems: MenuItem[] = []
       const sectionGroups = new Map<string, MenuItem[]>()
 
-      for (const item of workbenchItems) {
+      const displayItems = workbenchKey === 'settings'
+        ? workbenchItems.flatMap((item) => (
+            SETTINGS_WORKBENCH_ROOT_MENU_IDS.has(item.id) && item.children?.length ? item.children : [item]
+          ))
+        : workbenchItems
+
+      for (const item of displayItems) {
         const section = normalizeMenuSection(item.section)
         if (!section) {
           directItems.push(item)

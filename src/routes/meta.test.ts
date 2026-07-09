@@ -50,12 +50,14 @@ describe("access route authorization", () => {
     expect(canAccessRoute(getRoute("access-users"), snapshot)).toBe(false);
   });
 
-  it("allows login settings and branding routes from dedicated visible menu bindings", () => {
+  it("allows basic account routes and admin settings from visible menu bindings", () => {
     const snapshot = buildSnapshot({
       permissionKeys: ["settings.identity.view", "settings.branding.view"],
-      visibleMenuIds: ["settings", "settings-login", "settings-branding"],
+      visibleMenuIds: ["settings", "account-profile", "settings-about", "settings-login", "settings-branding"],
       visibleMenus: [
         { id: "settings", path: "/settings" },
+        { id: "account-profile", parentId: "settings", path: "/account/profile" },
+        { id: "settings-about", parentId: "settings", path: "/settings/about" },
         { id: "settings-login", parentId: "settings", path: "/settings/login" },
         {
           id: "settings-branding",
@@ -66,6 +68,8 @@ describe("access route authorization", () => {
     });
 
     expect(canAccessRoute(getRoute("settings"))).toBe(false);
+    expect(canAccessRoute(getRoute("account-profile"), snapshot)).toBe(true);
+    expect(canAccessRoute(getRoute("settings-about"), snapshot)).toBe(true);
     expect(canAccessRoute(getRoute("settings-login"), snapshot)).toBe(true);
     expect(canAccessRoute(getRoute("settings-branding"), snapshot)).toBe(true);
   });
@@ -77,6 +81,12 @@ describe("access route authorization", () => {
         "access.roles.view",
         "access.groups.view",
         "access.policies.view",
+        "identity.applications.view",
+        "identity.providers.view",
+        "identity.outposts.view",
+        "identity.policies.view",
+        "identity.sessions.view",
+        "identity.audit.view",
         "system.online-users.view",
         "system.announcements.view",
         "system.menus.view",
@@ -91,6 +101,14 @@ describe("access route authorization", () => {
         "access-roles",
         "access-teams",
         "access-policies",
+        "identity",
+        "identity-overview",
+        "identity-applications",
+        "identity-providers",
+        "identity-outposts",
+        "identity-policies",
+        "identity-sessions",
+        "identity-audit",
         "system",
         "system-online-users",
         "announcements",
@@ -98,29 +116,41 @@ describe("access route authorization", () => {
         "audit",
         "operations",
         "settings",
+        "account-profile",
+        "settings-about",
         "settings-login",
         "settings-branding",
       ],
       visibleMenus: [
         { id: "access", path: "/access", section: "admin", sortOrder: 240 },
-        { id: "access-users", path: "/access/users", section: "admin", sortOrder: 226 },
-        { id: "access-roles", path: "/access/roles", section: "admin", sortOrder: 227 },
-        { id: "access-teams", path: "/access/teams", section: "admin", sortOrder: 228 },
-        { id: "access-policies", path: "/access/policies", section: "admin", sortOrder: 229 },
+        { id: "access-users", path: "/access/users", section: "users", sortOrder: 10 },
+        { id: "access-roles", path: "/access/roles", section: "users", sortOrder: 20 },
+        { id: "access-teams", path: "/access/teams", section: "users", sortOrder: 30 },
+        { id: "access-policies", path: "/access/policies", section: "users", sortOrder: 40 },
+        { id: "identity", path: "/identity", section: "admin", sortOrder: 220 },
+        { id: "identity-overview", parentId: "identity", path: "/identity/overview", section: "", sortOrder: 1 },
+        { id: "identity-applications", parentId: "identity", path: "/identity/applications", section: "provider", sortOrder: 10 },
+        { id: "identity-providers", parentId: "identity", path: "/identity/providers", section: "provider", sortOrder: 20 },
+        { id: "identity-outposts", parentId: "identity", path: "/identity/outposts", section: "provider", sortOrder: 30 },
+        { id: "identity-policies", parentId: "identity", path: "/identity/policies", section: "provider", sortOrder: 40 },
+        { id: "identity-sessions", parentId: "identity", path: "/identity/sessions", section: "operations", sortOrder: 10 },
+        { id: "identity-audit", parentId: "identity", path: "/identity/audit", section: "operations", sortOrder: 20 },
         { id: "system", path: "/system", section: "admin", sortOrder: 225 },
-        { id: "system-online-users", parentId: "system", path: "/system/online-users", section: "admin", sortOrder: 256 },
-        { id: "announcements", parentId: "system", path: "/system/announcements", section: "admin", sortOrder: 230 },
-        { id: "menus", parentId: "system", path: "/system/menus", section: "admin", sortOrder: 250 },
-        { id: "audit", parentId: "system", path: "/system/audit", section: "admin", sortOrder: 258 },
-        { id: "operations", parentId: "system", path: "/system/operations", section: "admin", sortOrder: 257 },
+        { id: "system-online-users", parentId: "system", path: "/system/online-users", section: "operations", sortOrder: 40 },
+        { id: "announcements", parentId: "system", path: "/system/announcements", section: "operations", sortOrder: 30 },
+        { id: "menus", parentId: "system", path: "/system/menus", section: "users", sortOrder: 50 },
+        { id: "audit", parentId: "system", path: "/system/audit", section: "operations", sortOrder: 60 },
+        { id: "operations", parentId: "system", path: "/system/operations", section: "operations", sortOrder: 50 },
         { id: "settings", path: "/settings", section: "admin", sortOrder: 260 },
-        { id: "settings-login", parentId: "settings", path: "/settings/login", section: "admin", sortOrder: 261 },
+        { id: "account-profile", parentId: "settings", path: "/account/profile", section: "account", sortOrder: 10 },
+        { id: "settings-about", parentId: "settings", path: "/settings/about", section: "account", sortOrder: 20 },
+        { id: "settings-login", parentId: "settings", path: "/settings/login", section: "users", sortOrder: 60 },
         {
           id: "settings-branding",
           parentId: "settings",
           path: "/settings/branding",
-          section: "admin",
-          sortOrder: 262,
+          section: "operations",
+          sortOrder: 70,
         },
       ],
     });
@@ -132,6 +162,8 @@ describe("access route authorization", () => {
     const settingsNav = filterSidebarNavByWorkbench(systemNav, "settings");
 
     expect(getRouteWorkbenchId(getRoute("settings-login"))).toBe("settings");
+    expect(getRouteWorkbenchId(getRoute("account-profile"))).toBe("settings");
+    expect(getRouteWorkbenchId(getRoute("settings-about"))).toBe("settings");
     expect(getRouteWorkbenchId(getRoute("access-users"))).toBe("settings");
     expect(getRouteWorkbenchId(getRoute("system-menus"))).toBe("settings");
     expect(
@@ -145,19 +177,28 @@ describe("access route authorization", () => {
     );
     expect(getAccessibleWorkbenchIds(snapshot)).toContain("settings");
     expect(findFirstAccessiblePathForWorkbench("settings", snapshot)).toBe(
-      "/settings/login",
+      "/identity/overview",
     );
     expect(settingsNav.map((item) => item.id)).toEqual([
+      "identity-overview",
+      "account-profile",
+      "settings-about",
+      "identity-applications",
+      "identity-providers",
+      "identity-outposts",
+      "identity-policies",
       "access-users",
       "access-roles",
       "access-teams",
       "access-policies",
-      "announcements",
       "menus",
+      "settings-login",
+      "identity-sessions",
+      "identity-audit",
+      "announcements",
       "system-online-users",
       "operations",
       "audit",
-      "settings-login",
       "settings-branding",
     ]);
     expect(settingsNav.find((item) => item.id === "access")).toBeUndefined();
@@ -191,6 +232,22 @@ describe("access route authorization", () => {
         hiddenSettingsOnlySnapshot,
       ),
     ).toBeNull();
+  });
+
+  it("exposes basic settings menus without admin settings permissions", () => {
+    const snapshot = buildSnapshot({
+      visibleMenuIds: ["settings", "account-profile", "settings-about"],
+      visibleMenus: [
+        { id: "settings", path: "/settings", section: "admin", sortOrder: 260 },
+        { id: "account-profile", parentId: "settings", path: "/account/profile", section: "account", sortOrder: 10 },
+        { id: "settings-about", parentId: "settings", path: "/settings/about", section: "account", sortOrder: 20 },
+      ],
+    });
+
+    expect(canAccessRoute(getRoute("account-profile"), snapshot)).toBe(true);
+    expect(canAccessRoute(getRoute("settings-about"), snapshot)).toBe(true);
+    expect(getAccessibleWorkbenchIds(snapshot)).toContain("settings");
+    expect(findFirstAccessiblePathForWorkbench("settings", snapshot)).toBe("/settings/about");
   });
 
   it("keeps the access parent route blocked when the access menu binding is missing", () => {
@@ -377,6 +434,8 @@ describe("access route authorization", () => {
     expect(getRouteWorkspace(getRoute("delivery-analysis"))).toBe("application");
     expect(getRouteWorkspace(getRoute("workloads-pods"))).toBe("resource");
     expect(getRouteWorkspace(getRoute("system-menus"))).toBe("system");
+    expect(getRouteWorkspace(getRoute("account-profile"))).toBe("system");
+    expect(getRouteWorkspace(getRoute("settings-about"))).toBe("system");
   });
 
   it("requires workspace permissions for business routes", () => {

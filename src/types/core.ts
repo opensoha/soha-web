@@ -37,6 +37,8 @@ export interface User {
   userId: string
   userName: string
   email: string
+  avatarUrl?: string
+  avatarFit?: string
   roles: string[]
   teams: string[]
   projects: string[]
@@ -77,6 +79,8 @@ export interface UserProfile {
   displayName: string
   email: string
   phone?: string
+  avatarUrl?: string
+  avatarFit?: string
   status: string
   roles: string[]
   teams: string[]

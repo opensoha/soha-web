@@ -2,8 +2,9 @@ import {
   API_BASE_URL,
   clearAuthSession,
   getStoredAccessToken,
-  refreshAuthSession,
+  restoreAuthSession,
 } from '@/features/auth/auth-api'
+import type { AuthRefreshStatus } from '@/features/auth/auth-api'
 import { useAuthStore } from '@/stores/auth-store'
 import type { ErrorEnvelope } from '@/types'
 import {
@@ -20,8 +21,18 @@ function normalizeResponseBody<T>(body: unknown): T {
   return body as T
 }
 
-async function refreshToken(): Promise<boolean> {
-  return refreshAuthSession()
+async function refreshToken(): Promise<AuthRefreshStatus> {
+  return restoreAuthSession()
+}
+
+function throwRefreshUnavailableError(): never {
+  const error = createNetworkApiError(
+    '/auth/refresh',
+    'POST',
+    new Error('Authentication refresh is temporarily unavailable'),
+  )
+  emitApiError(error)
+  throw error
 }
 
 function getRequestMethod(options: RequestInit) {
@@ -106,10 +117,12 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   let res = await fetchApi(path, options, accessToken)
 
   if (res.status === 401 && accessToken) {
-    const refreshed = await refreshToken()
-    if (refreshed) {
+    const refreshStatus = await refreshToken()
+    if (refreshStatus === 'authenticated') {
       const { accessToken: newToken } = useAuthStore.getState()
       res = await fetchApi(path, options, newToken)
+    } else if (refreshStatus === 'unavailable') {
+      throwRefreshUnavailableError()
     }
   }
 
@@ -149,10 +162,12 @@ export const api = {
 
     let res = await fetchApi(path, options, accessToken)
     if (res.status === 401 && accessToken) {
-      const refreshed = await refreshToken()
-      if (refreshed) {
+      const refreshStatus = await refreshToken()
+      if (refreshStatus === 'authenticated') {
         const { accessToken: newToken } = useAuthStore.getState()
         res = await fetchApi(path, options, newToken)
+      } else if (refreshStatus === 'unavailable') {
+        throwRefreshUnavailableError()
       }
     }
 

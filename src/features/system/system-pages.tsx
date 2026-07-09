@@ -693,6 +693,15 @@ function MenuWorkbenchTag({ item, menuLookup }: { item: Pick<MenuItem, 'id' | 'p
   return <Tag color={color}>{summary.label}</Tag>
 }
 
+function formatSyntheticChildCount(record: MenuItem) {
+  const count = countDirectMenuChildren(record)
+  if (count === 0) return ''
+  if (record.syntheticKind === 'workbench' && (record.children ?? []).every((item) => item.syntheticKind === 'section')) {
+    return `${count} 个分组`
+  }
+  return `${count} 个菜单`
+}
+
 export function MenusPage() {
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
@@ -836,7 +845,7 @@ export function MenusPage() {
           <Space size={8} wrap>
             <Text strong>{value}</Text>
             <Tag color={record.syntheticKind === 'workbench' ? 'blue' : 'default'}>{record.syntheticKind === 'workbench' ? '工作台' : '分组'}</Tag>
-            {countDirectMenuChildren(record) > 0 ? <Tag color="blue">{`${countDirectMenuChildren(record)} 个菜单`}</Tag> : null}
+            {formatSyntheticChildCount(record) ? <Tag color="blue">{formatSyntheticChildCount(record)}</Tag> : null}
           </Space>
         ) : (
           <Space orientation="vertical" size={2}>

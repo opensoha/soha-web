@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { Spin } from 'antd'
 import { ManagementState } from '@/components/management-list'
-import { refreshAuthSession } from '@/features/auth/auth-api'
+import { restoreAuthSession } from '@/features/auth/auth-api'
 import { permissionSnapshotQueryKey, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
 import { canAccessRoute, findFirstAccessiblePath, findPreferredWorkspace, getRouteMeta } from '@/routes/meta'
 import { useAuthStore } from '@/stores/auth-store'
@@ -10,6 +10,20 @@ import { usePreferencesStore } from '@/stores/preferences-store'
 import { useQueryClient } from '@tanstack/react-query'
 
 const EMPTY_ROLES: string[] = []
+const AUTH_RESTORE_RETRY_MS = 2_000
+
+function AuthRestoringState({ unavailable }: { unavailable: boolean }) {
+  return (
+    <div className="flex items-center justify-center h-screen">
+      <ManagementState
+        bordered={false}
+        kind="loading"
+        title="正在恢复登录状态"
+        description={unavailable ? '后端服务暂时不可用，正在自动重试。' : '正在恢复当前登录会话。'}
+      />
+    </div>
+  )
+}
 
 export function AuthGuard() {
   const location = useLocation()
@@ -19,30 +33,55 @@ export function AuthGuard() {
   const roles = useAuthStore((s) => s.user?.roles ?? EMPTY_ROLES)
   const currentWorkspace = usePreferencesStore((state) => state.currentWorkspace)
   const [isRestoringAuth, setIsRestoringAuth] = useState(!isAuthenticated)
+  const [isRestoreUnavailable, setIsRestoreUnavailable] = useState(false)
   const permissionSnapshotQuery = usePermissionSnapshot()
 
   useEffect(() => {
     if (isAuthenticated) {
       setIsRestoringAuth(false)
+      setIsRestoreUnavailable(false)
       return undefined
     }
 
     let cancelled = false
-    setIsRestoringAuth(true)
-    void refreshAuthSession().finally(() => {
-      if (!cancelled) {
-        setIsRestoringAuth(false)
+    let retryTimer: ReturnType<typeof window.setTimeout> | undefined
+
+    const restore = async () => {
+      setIsRestoringAuth(true)
+      const result = await restoreAuthSession()
+      if (cancelled) {
+        return
       }
-    })
+
+      if (result === 'authenticated') {
+        setIsRestoreUnavailable(false)
+        return
+      }
+
+      if (result === 'unavailable') {
+        setIsRestoreUnavailable(true)
+        retryTimer = window.setTimeout(restore, AUTH_RESTORE_RETRY_MS)
+        return
+      }
+
+      setIsRestoreUnavailable(false)
+      setIsRestoringAuth(false)
+    }
+
+    setIsRestoringAuth(true)
+    void restore()
 
     return () => {
       cancelled = true
+      if (retryTimer !== undefined) {
+        window.clearTimeout(retryTimer)
+      }
     }
   }, [isAuthenticated])
 
   if (!isAuthenticated) {
     if (isRestoringAuth) {
-      return <div className="flex items-center justify-center h-screen"><Spin size="large" /></div>
+      return <AuthRestoringState unavailable={isRestoreUnavailable} />
     }
     return <Navigate to="/login" state={{ from: location }} replace />
   }

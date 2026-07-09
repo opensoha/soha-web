@@ -121,7 +121,7 @@ let roots: Array<ReturnType<typeof createRoot>> = []
 
 function LocationProbe() {
   const location = useLocation()
-  return <div data-testid="page" data-pathname={location.pathname}>page</div>
+  return <div data-testid="page" data-pathname={location.pathname} data-search={location.search}>page</div>
 }
 
 async function renderWithProviders(route: string, snapshotOverrides?: Partial<PermissionSnapshot>) {
@@ -273,7 +273,7 @@ describe('app layout workspace navigation', () => {
     expect(container.querySelector('[data-testid="platform-scope-trigger"]')).toBeNull()
     expect(container.textContent).toContain('应用中心')
     expect(container.textContent).not.toContain('概览')
-    expect(container.querySelector('.soha-nav-system')).toBeNull()
+    expect(container.querySelector('.soha-nav-business')).not.toBeNull()
     expect(testState.prefs.setCurrentWorkspace).toHaveBeenCalledWith('application')
   })
 
@@ -284,8 +284,10 @@ describe('app layout workspace navigation', () => {
     expect(container.querySelector('.soha-workbench-switcher__label')?.textContent).toBe('设置中心')
     expect(container.textContent).toContain('菜单管理')
     expect(container.textContent).not.toContain('概览')
-    expect(container.querySelector('.soha-nav-system')).toBeNull()
-    expect(container.querySelector('.soha-nav-business.is-system')).not.toBeNull()
+    expect(container.querySelector('.soha-nav-business')?.className).toBe('soha-nav-business')
+    const menuModifierClasses = Array.from(container.querySelector('.soha-nav-menu')?.classList ?? [])
+      .filter((className) => className.startsWith('soha-nav-menu--'))
+    expect(menuModifierClasses).toEqual([])
     expect(container.querySelector('.soha-sider-topbar > button.soha-sider-brand')).not.toBeNull()
     expect(container.querySelector('button[aria-label="系统设置"]')).toBeNull()
     expect(testState.prefs.setCurrentWorkspace).not.toHaveBeenCalled()
@@ -298,6 +300,12 @@ describe('app layout workspace navigation', () => {
         'access.roles.view',
         'access.groups.view',
         'access.policies.view',
+        'identity.applications.view',
+        'identity.providers.view',
+        'identity.outposts.view',
+        'identity.policies.view',
+        'identity.sessions.view',
+        'identity.audit.view',
         'system.announcements.view',
         'system.menus.view',
         'system.online-users.view',
@@ -312,6 +320,14 @@ describe('app layout workspace navigation', () => {
         'access-roles',
         'access-teams',
         'access-policies',
+        'identity',
+        'identity-overview',
+        'identity-applications',
+        'identity-providers',
+        'identity-outposts',
+        'identity-policies',
+        'identity-sessions',
+        'identity-audit',
         'system',
         'announcements',
         'menus',
@@ -319,35 +335,61 @@ describe('app layout workspace navigation', () => {
         'operations',
         'audit',
         'settings',
+        'account-profile',
+        'settings-about',
         'settings-login',
         'settings-branding',
       ],
       visibleMenus: [
         { id: 'access', path: '/access', labelZh: '访问控制', labelEn: 'Access Control', iconKey: 'shield', section: 'admin', sortOrder: 240, enabled: true },
-        { id: 'access-users', parentId: 'access', path: '/access/users', labelZh: '用户', labelEn: 'Users', iconKey: 'user', section: 'admin', sortOrder: 226, enabled: true },
-        { id: 'access-roles', parentId: 'access', path: '/access/roles', labelZh: '角色', labelEn: 'Roles', iconKey: 'shield', section: 'admin', sortOrder: 227, enabled: true },
-        { id: 'access-teams', parentId: 'access', path: '/access/teams', labelZh: '组织', labelEn: 'Organizations', iconKey: 'users', section: 'admin', sortOrder: 228, enabled: true },
-        { id: 'access-policies', parentId: 'access', path: '/access/policies', labelZh: '策略', labelEn: 'Policies', iconKey: 'shield', section: 'admin', sortOrder: 229, enabled: true },
+        { id: 'access-users', parentId: 'access', path: '/access/users', labelZh: '用户', labelEn: 'Users', iconKey: 'user', section: 'users', sortOrder: 10, enabled: true },
+        { id: 'access-roles', parentId: 'access', path: '/access/roles', labelZh: '角色', labelEn: 'Roles', iconKey: 'shield', section: 'users', sortOrder: 20, enabled: true },
+        { id: 'access-teams', parentId: 'access', path: '/access/teams', labelZh: '组织', labelEn: 'Organizations', iconKey: 'users', section: 'users', sortOrder: 30, enabled: true },
+        { id: 'access-policies', parentId: 'access', path: '/access/policies', labelZh: '策略', labelEn: 'Policies', iconKey: 'shield', section: 'users', sortOrder: 40, enabled: true },
+        { id: 'identity', path: '/identity', labelZh: '身份', labelEn: 'Identity', iconKey: 'shield', section: 'admin', sortOrder: 220, enabled: true },
+        { id: 'identity-overview', parentId: 'identity', path: '/identity/overview', labelZh: '总览', labelEn: 'Overview', iconKey: 'gauge', section: '', sortOrder: 1, enabled: true },
+        { id: 'identity-applications', parentId: 'identity', path: '/identity/applications', labelZh: '应用目录', labelEn: 'Applications', iconKey: 'blocks', section: 'provider', sortOrder: 10, enabled: true },
+        { id: 'identity-providers', parentId: 'identity', path: '/identity/providers', labelZh: 'Provider', labelEn: 'Providers', iconKey: 'shield', section: 'provider', sortOrder: 20, enabled: true },
+        { id: 'identity-outposts', parentId: 'identity', path: '/identity/outposts', labelZh: 'Outpost', labelEn: 'Outposts', iconKey: 'radio-tower', section: 'provider', sortOrder: 30, enabled: true },
+        { id: 'identity-policies', parentId: 'identity', path: '/identity/policies', labelZh: '访问策略', labelEn: 'Policies', iconKey: 'shield', section: 'provider', sortOrder: 40, enabled: true },
+        { id: 'identity-sessions', parentId: 'identity', path: '/identity/sessions', labelZh: '会话', labelEn: 'Sessions', iconKey: 'users', section: 'operations', sortOrder: 10, enabled: true },
+        { id: 'identity-audit', parentId: 'identity', path: '/identity/audit', labelZh: '审计', labelEn: 'Audit', iconKey: 'file-clock', section: 'operations', sortOrder: 20, enabled: true },
         { id: 'system', path: '/system', labelZh: '系统', labelEn: 'System', iconKey: 'panels-top-left', section: 'admin', sortOrder: 225, enabled: true },
-        { id: 'announcements', parentId: 'system', path: '/system/announcements', labelZh: '通知公告', labelEn: 'Announcements', iconKey: 'megaphone', section: 'admin', sortOrder: 230, enabled: true },
-        { id: 'menus', parentId: 'system', path: '/system/menus', labelZh: '菜单管理', labelEn: 'Menus', iconKey: 'menu-square', section: 'admin', sortOrder: 250, enabled: true },
-        { id: 'system-online-users', parentId: 'system', path: '/system/online-users', labelZh: '在线用户', labelEn: 'Online Users', iconKey: 'users', section: 'admin', sortOrder: 256, enabled: true },
-        { id: 'operations', parentId: 'system', path: '/system/operations', labelZh: '操作', labelEn: 'Operations', iconKey: 'clipboard-list', section: 'admin', sortOrder: 257, enabled: true },
-        { id: 'audit', parentId: 'system', path: '/system/audit', labelZh: '审计', labelEn: 'Audit', iconKey: 'file-clock', section: 'admin', sortOrder: 258, enabled: true },
+        { id: 'announcements', parentId: 'system', path: '/system/announcements', labelZh: '通知公告', labelEn: 'Announcements', iconKey: 'megaphone', section: 'operations', sortOrder: 30, enabled: true },
+        { id: 'menus', parentId: 'system', path: '/system/menus', labelZh: '菜单管理', labelEn: 'Menus', iconKey: 'menu-square', section: 'users', sortOrder: 50, enabled: true },
+        { id: 'system-online-users', parentId: 'system', path: '/system/online-users', labelZh: '在线用户', labelEn: 'Online Users', iconKey: 'users', section: 'operations', sortOrder: 40, enabled: true },
+        { id: 'operations', parentId: 'system', path: '/system/operations', labelZh: '操作日志', labelEn: 'Operations', iconKey: 'clipboard-list', section: 'operations', sortOrder: 50, enabled: true },
+        { id: 'audit', parentId: 'system', path: '/system/audit', labelZh: '审计日志', labelEn: 'Audit', iconKey: 'file-clock', section: 'operations', sortOrder: 60, enabled: true },
         { id: 'settings', path: '/settings', labelZh: '设置中心', labelEn: 'Settings Center', iconKey: 'cog', section: 'admin', sortOrder: 260, enabled: true },
-        { id: 'settings-login', parentId: 'settings', path: '/settings/login', labelZh: '登陆设置', labelEn: 'Login Settings', iconKey: 'shield', section: 'admin', sortOrder: 261, enabled: true },
-        { id: 'settings-branding', parentId: 'settings', path: '/settings/branding', labelZh: '品牌设置', labelEn: 'Branding Settings', iconKey: 'palette', section: 'admin', sortOrder: 262, enabled: true },
+        { id: 'account-profile', parentId: 'settings', path: '/account/profile', labelZh: '个人中心', labelEn: 'Profile', iconKey: 'user', section: 'account', sortOrder: 10, enabled: true },
+        { id: 'settings-about', parentId: 'settings', path: '/settings/about', labelZh: '关于', labelEn: 'About', iconKey: 'info', section: 'account', sortOrder: 20, enabled: true },
+        { id: 'settings-login', parentId: 'settings', path: '/settings/login', labelZh: '登陆设置', labelEn: 'Login Settings', iconKey: 'shield', section: 'users', sortOrder: 60, enabled: true },
+        { id: 'settings-branding', parentId: 'settings', path: '/settings/branding', labelZh: '品牌设置', labelEn: 'Branding Settings', iconKey: 'palette', section: 'operations', sortOrder: 70, enabled: true },
       ],
     })
 
-    const menu = container.querySelector('.soha-nav-menu--system-workspace')
+    const menu = container.querySelector('.soha-nav-menu')
     const menuText = menu?.textContent ?? ''
+    expect(menuText).toContain('account')
+    expect(menuText).toContain('provider')
+    expect(menuText).toContain('users')
+    expect(menuText).toContain('operations')
+    expect(menuText).toContain('总览')
+    expect(menuText).toContain('个人中心')
+    expect(menuText).toContain('关于')
+    expect(menuText).toContain('应用目录')
+    expect(menuText).toContain('访问策略')
     expect(menuText).toContain('用户')
     expect(menuText).toContain('角色')
     expect(menuText).toContain('组织')
     expect(menuText).toContain('策略')
+    expect(menuText).toContain('登陆设置')
+    expect(menuText).toContain('会话')
+    expect(menuText).toContain('通知公告')
+    expect(menuText).toContain('在线用户')
     expect(menuText).toContain('操作日志')
     expect(menuText).toContain('审计日志')
+    expect(menuText).toContain('品牌设置')
     expect(menuText).not.toContain('访问控制')
     expect(menu?.querySelector('.ant-menu-submenu')).toBeNull()
   })
@@ -434,7 +476,6 @@ describe('app layout workspace navigation', () => {
 
     expect(container.querySelector('.soha-workbench-switcher__label')?.textContent).toBe('AI工作台')
     expect(container.querySelector('.soha-nav-business')).not.toBeNull()
-    expect(container.querySelector('.soha-nav-system')).toBeNull()
     expect(container.textContent).toContain('通用聊天')
     expect(container.textContent).toContain('巡检')
     expect(container.textContent).not.toContain('监控工作台')
@@ -495,8 +536,7 @@ describe('app layout workspace navigation', () => {
 
     expect(container.querySelector('.soha-workbench-switcher__label')?.textContent).toBe('AI Gateway')
     expect(container.querySelector('.soha-nav-business')).not.toBeNull()
-    expect(container.querySelector('.soha-nav-system')).toBeNull()
-    const businessMenu = container.querySelector('.soha-nav-menu--business')
+    const businessMenu = container.querySelector('.soha-nav-menu')
     expect(businessMenu?.querySelector('.ant-menu-submenu')).toBeNull()
     expect(businessMenu?.textContent).not.toContain('AI Gateway')
     expect(businessMenu?.textContent).toContain('概览')
@@ -679,7 +719,7 @@ describe('app layout workspace navigation', () => {
     })
 
     expect(container.querySelector('button[aria-label="系统设置"]')).toBeNull()
-    expect(container.querySelector('.soha-nav-system')).toBeNull()
+    expect(container.querySelector('.soha-nav-business')).not.toBeNull()
   })
 
   it('opens profile from the avatar dropdown', async () => {
@@ -702,6 +742,87 @@ describe('app layout workspace navigation', () => {
     })
 
     expect(container.querySelector('[data-testid="page"]')?.getAttribute('data-pathname')).toBe('/account/profile')
+    expect(testState.auth.clearAuth).not.toHaveBeenCalled()
+  })
+
+  it('places account profile breadcrumbs under settings center', async () => {
+    const container = await renderWithProviders('/account/profile', {
+      permissionKeys: ['workspace.resource.view', 'overview.view', 'settings.identity.view'],
+      visibleMenuIds: ['dashboard', 'settings', 'account-profile', 'settings-about', 'settings-login'],
+      visibleMenus: [
+        { id: 'dashboard', path: '/', labelZh: '概览', labelEn: 'Overview', iconKey: 'gauge', section: 'platform', sortOrder: 1, enabled: true },
+        { id: 'settings', path: '/settings', labelZh: '设置中心', labelEn: 'Settings Center', iconKey: 'settings', section: 'admin', sortOrder: 2, enabled: true },
+        { id: 'account-profile', parentId: 'settings', path: '/account/profile', labelZh: '个人中心', labelEn: 'Profile', iconKey: 'user', section: 'account', sortOrder: 1, enabled: true },
+        { id: 'settings-about', parentId: 'settings', path: '/settings/about', labelZh: '关于', labelEn: 'About', iconKey: 'info', section: 'account', sortOrder: 2, enabled: true },
+        { id: 'settings-login', parentId: 'settings', path: '/settings/login', labelZh: '登陆设置', labelEn: 'Login Settings', iconKey: 'shield', section: 'admin', sortOrder: 3, enabled: true },
+      ],
+    })
+
+    expect(container.querySelector('.soha-workbench-switcher__label')?.textContent).toBe('设置中心')
+    expect(container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent).toContain('设置中心/个人中心')
+  })
+
+  it('opens password change from the avatar dropdown', async () => {
+    const container = await renderWithProviders('/')
+    const userButton = container.querySelector('.soha-user-trigger') as HTMLButtonElement | null
+    expect(userButton).not.toBeNull()
+
+    await act(async () => {
+      userButton?.click()
+      await Promise.resolve()
+    })
+
+    const passwordItem = Array.from(document.querySelectorAll('.ant-dropdown-menu-item'))
+      .find((item) => item.textContent?.includes('修改密码')) as HTMLElement | undefined
+    expect(passwordItem).not.toBeUndefined()
+
+    await act(async () => {
+      passwordItem?.click()
+      await Promise.resolve()
+    })
+
+    const page = container.querySelector('[data-testid="page"]')
+    expect(page?.getAttribute('data-pathname')).toBe('/account/profile')
+    expect(page?.getAttribute('data-search')).toBe('?changePassword=1')
+    expect(testState.auth.clearAuth).not.toHaveBeenCalled()
+  })
+
+  it('opens portal and about from the avatar dropdown', async () => {
+    const container = await renderWithProviders('/')
+    const userButton = container.querySelector('.soha-user-trigger') as HTMLButtonElement | null
+    expect(userButton).not.toBeNull()
+
+    await act(async () => {
+      userButton?.click()
+      await Promise.resolve()
+    })
+
+    const portalItem = Array.from(document.querySelectorAll('.ant-dropdown-menu-item'))
+      .find((item) => item.textContent?.includes('用户门户')) as HTMLElement | undefined
+    expect(portalItem).not.toBeUndefined()
+
+    await act(async () => {
+      portalItem?.click()
+      await Promise.resolve()
+    })
+
+    expect(container.querySelector('[data-testid="page"]')?.getAttribute('data-pathname')).toBe('/portal')
+
+    await act(async () => {
+      userButton?.click()
+      await Promise.resolve()
+    })
+
+    const aboutItem = Array.from(document.querySelectorAll('.ant-dropdown-menu-item'))
+      .find((item) => item.textContent?.includes('关于')) as HTMLElement | undefined
+    expect(aboutItem).not.toBeUndefined()
+
+    await act(async () => {
+      aboutItem?.click()
+      await Promise.resolve()
+    })
+
+    expect(container.querySelector('[data-testid="page"]')?.getAttribute('data-pathname')).toBe('/settings/about')
     expect(testState.auth.clearAuth).not.toHaveBeenCalled()
   })
 })

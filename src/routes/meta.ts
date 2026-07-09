@@ -49,7 +49,7 @@ const WORKBENCH_DEFAULT_PATHS = {
   ai: "/ai-workbench",
   aiGateway: "/ai-gateway/overview",
   monitoring: "/monitoring-workbench",
-  settings: "/settings",
+  settings: "/identity/overview",
 } as const;
 
 export type WorkbenchId = keyof typeof WORKBENCH_DEFAULT_PATHS;

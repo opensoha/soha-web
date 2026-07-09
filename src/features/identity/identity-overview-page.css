@@ -1,41 +1,44 @@
-.soha-identity-overview-page {
-  gap: 12px;
-}
-
-.soha-identity-overview-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
-}
-
-.soha-identity-overview-stats .ant-card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.soha-identity-overview-grid {
-  display: grid;
-  grid-template-columns: minmax(320px, 0.8fr) minmax(360px, 1.2fr);
-  gap: 12px;
-}
-
 .soha-identity-overview-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
   gap: 8px;
+  margin-top: 12px;
 }
 
-@media (max-width: 1100px) {
-  .soha-identity-overview-stats,
-  .soha-identity-overview-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.soha-identity-overview-actions .ant-btn {
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+.soha-identity-overview-chip-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.soha-identity-overview-page .soha-overview-summary-grid {
+  align-items: stretch;
+}
+
+.soha-identity-overview-audit-card.ant-card {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.soha-identity-overview-audit-card.ant-card .ant-card-body {
+  position: relative;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.soha-identity-overview-audit-list {
+  position: absolute;
+  inset: 14px;
+  overflow-y: auto;
 }
 
 @media (max-width: 760px) {
-  .soha-identity-overview-stats,
-  .soha-identity-overview-grid {
+  .soha-identity-overview-chip-grid {
     grid-template-columns: 1fr;
   }
 }

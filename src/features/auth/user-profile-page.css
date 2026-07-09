@@ -4,47 +4,24 @@
   gap: 12px;
 }
 
-.soha-profile-page-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  min-width: 0;
-}
-
-.soha-profile-page-header__main {
-  min-width: 0;
-}
-
-.soha-profile-page-header__main .ant-typography {
-  margin: 0;
-}
-
-.soha-profile-eyebrow {
-  display: block;
-  margin-bottom: 2px;
-  color: var(--soha-text-tertiary);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
 .soha-profile-layout {
   display: grid;
   grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .soha-profile-summary-card {
   position: sticky;
   top: 12px;
+  height: 100%;
 }
 
 .soha-profile-summary-card .ant-card-body {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  height: 100%;
 }
 
 .soha-profile-identity {
@@ -54,11 +31,44 @@
   min-width: 0;
 }
 
+.soha-profile-avatar-button {
+  position: relative;
+  flex: 0 0 auto;
+  width: 66px;
+  height: 66px;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
 .soha-profile-avatar {
   flex: 0 0 auto;
   background: var(--soha-bg-surface-muted);
   color: var(--soha-text-primary);
   border: 1px solid var(--soha-border-color);
+}
+
+.soha-profile-avatar img {
+  object-fit: var(--soha-avatar-fit, cover);
+}
+
+.soha-profile-avatar-edit {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  color: #fff;
+  background: var(--soha-primary);
+  border: 2px solid var(--soha-bg-surface);
+  border-radius: 50%;
+  font-size: 12px;
 }
 
 .soha-profile-identity__main {
@@ -134,7 +144,65 @@
   min-width: 0;
 }
 
+.soha-profile-actions {
+  justify-content: flex-end;
+}
+
+.soha-profile-avatar-editor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.soha-profile-avatar-preview {
+  width: 96px !important;
+  height: 96px !important;
+  font-size: 32px !important;
+  line-height: 96px !important;
+}
+
+.soha-profile-avatar-crop {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  overflow: hidden;
+  background: var(--soha-bg-surface-muted);
+  border: 1px solid var(--soha-border-color);
+  border-radius: 50%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.soha-profile-avatar-crop:active {
+  cursor: grabbing;
+}
+
+.soha-profile-avatar-crop img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  transform-origin: center;
+  user-select: none;
+}
+
+.soha-profile-avatar-zoom {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  width: min(260px, 100%);
+}
+
+.soha-profile-avatar-file {
+  display: none;
+}
+
 .soha-profile-gateway-card .ant-card-body {
+  --soha-table-actions-column-width: 64px;
+
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -144,12 +212,18 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   min-width: 0;
 }
 
 .soha-profile-gateway-overview > div:first-child {
+  flex: 1 1 420px;
   min-width: 0;
+}
+
+.soha-profile-gateway-overview > .ant-space {
+  flex: 0 0 auto;
 }
 
 .soha-profile-gateway-overview .ant-typography {
@@ -160,6 +234,28 @@
   margin-top: 2px;
 }
 
+.soha-profile-gateway-card .ant-table-cell {
+  min-width: 0;
+}
+
+.soha-profile-gateway-tags-cell .soha-profile-compact-tags {
+  width: 100%;
+}
+
+.soha-profile-gateway-tags-cell .soha-profile-compact-tags .ant-space-item {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.soha-profile-gateway-tags-cell .ant-tag {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 .soha-profile-secret-value textarea {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 12px;
@@ -167,7 +263,6 @@
 }
 
 @media (max-width: 900px) {
-  .soha-profile-page-header,
   .soha-profile-gateway-overview {
     flex-direction: column;
   }
@@ -178,5 +273,10 @@
 
   .soha-profile-summary-card {
     position: static;
+    height: auto;
+  }
+
+  .soha-profile-summary-card .ant-card-body {
+    height: auto;
   }
 }

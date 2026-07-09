@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { clearAuthSession, refreshAuthSession } from '@/features/auth/auth-api'
+import { clearAuthSession, restoreAuthSession } from '@/features/auth/auth-api'
 import { api } from './api-client'
 import { API_ERROR_EVENT, type ApiErrorEventDetail } from './api-error'
 
@@ -13,7 +13,7 @@ vi.mock('@/features/auth/auth-api', async () => {
     ...actual,
     clearAuthSession: vi.fn(),
     getStoredAccessToken: vi.fn(() => 'expired-token'),
-    refreshAuthSession: vi.fn(async () => false),
+    restoreAuthSession: vi.fn(async () => 'unauthenticated'),
   }
 })
 
@@ -38,7 +38,8 @@ describe('api client error handling', () => {
     }) as EventListener
     window.addEventListener(API_ERROR_EVENT, apiErrorListener)
     vi.mocked(clearAuthSession).mockClear()
-    vi.mocked(refreshAuthSession).mockClear()
+    vi.mocked(restoreAuthSession).mockClear()
+    vi.mocked(restoreAuthSession).mockResolvedValue('unauthenticated')
   })
 
   afterEach(() => {
@@ -70,7 +71,7 @@ describe('api client error handling', () => {
       status: 401,
     })
 
-    expect(refreshAuthSession).toHaveBeenCalledTimes(1)
+    expect(restoreAuthSession).toHaveBeenCalledTimes(1)
     expect(clearAuthSession).toHaveBeenCalledTimes(1)
     expect(events).toEqual([
       expect.objectContaining({
@@ -80,6 +81,41 @@ describe('api client error handling', () => {
         path: '/clusters',
         requestId: 'req-401',
         status: 401,
+      }),
+    ])
+  })
+
+  it('keeps auth state when token refresh is temporarily unavailable', async () => {
+    vi.mocked(restoreAuthSession).mockResolvedValueOnce('unavailable')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        jsonResponse(
+          { error: { code: 'token_expired', message: 'token expired', request_id: 'req-401' } },
+          {
+            status: 401,
+            statusText: 'Unauthorized',
+            headers: { 'x-request-id': 'req-401' },
+          },
+        ),
+      ),
+    )
+
+    await expect(api.get('/clusters')).rejects.toMatchObject({
+      kind: 'network',
+      message: 'Authentication refresh is temporarily unavailable',
+      path: '/auth/refresh',
+      status: 0,
+    })
+
+    expect(restoreAuthSession).toHaveBeenCalledTimes(1)
+    expect(clearAuthSession).not.toHaveBeenCalled()
+    expect(events).toEqual([
+      expect.objectContaining({
+        kind: 'network',
+        method: 'POST',
+        path: '/auth/refresh',
+        status: 0,
       }),
     ])
   })

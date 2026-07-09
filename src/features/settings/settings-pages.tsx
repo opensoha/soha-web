@@ -63,7 +63,7 @@ import type {
   DataSource,
 } from "./ai-settings-model";
 import type { LLMModelRoute } from "@/features/copilot/ai-gateway-model";
-import type { ApiResponse, BrandingSettings } from "@/types";
+import type { ApiResponse, BrandingSettings, PermissionSnapshot } from "@/types";
 import {
   ArrowDownOutlined,
   ArrowUpOutlined,
@@ -3056,14 +3056,7 @@ export function SettingsCenterPage() {
   const navigate = useNavigate();
   const permissionSnapshotQuery = usePermissionSnapshot();
   const snapshot = permissionSnapshotQuery.data?.data;
-  const canViewLoginSettings = hasPermission(
-    snapshot,
-    "settings.identity.view",
-  );
-  const canViewBrandingSettings = hasPermission(
-    snapshot,
-    "settings.branding.view",
-  );
+  const landingMenus = useMemo(() => getSettingsLandingMenus(snapshot), [snapshot]);
 
   if (permissionSnapshotQuery.isLoading) {
     return (
@@ -3075,12 +3068,8 @@ export function SettingsCenterPage() {
     );
   }
 
-  if (!canViewLoginSettings && !canViewBrandingSettings) {
-    return (
-      <div className="soha-page">
-        <ManagementState kind="no-permission" description="当前账号没有可访问的设置页权限。" />
-      </div>
-    );
+  if (location.pathname.endsWith("/about")) {
+    return <AboutSettingsPage />;
   }
 
   if (location.pathname.endsWith("/branding")) {
@@ -3094,25 +3083,49 @@ export function SettingsCenterPage() {
   return (
     <div className="soha-page">
       <SettingsCard>
-        <Space orientation="vertical" size={12}>
-          {canViewLoginSettings ? (
-            <Button
-              type="link"
-              style={{ paddingInline: 0 }}
-              onClick={() => navigate("/settings/login")}
-            >
-              登陆设置
-            </Button>
-          ) : null}
-          {canViewBrandingSettings ? (
-            <Button
-              type="link"
-              style={{ paddingInline: 0 }}
-              onClick={() => navigate("/settings/branding")}
-            >
-              品牌设置
-            </Button>
-          ) : null}
+        {landingMenus.length > 0 ? (
+          <Space orientation="vertical" size={12}>
+            {landingMenus.map((menu) => (
+              <Button
+                key={menu.id}
+                type="link"
+                style={{ paddingInline: 0 }}
+                onClick={() => navigate(menu.path)}
+              >
+                {menu.labelZh || menu.labelEn || menu.id}
+              </Button>
+            ))}
+          </Space>
+        ) : (
+          <span>暂无可用设置</span>
+        )}
+      </SettingsCard>
+    </div>
+  );
+}
+
+function getSettingsLandingMenus(snapshot?: PermissionSnapshot) {
+  return (snapshot?.visibleMenus ?? [])
+    .filter((menu) => menu.parentId === "settings" && menu.path !== "/settings")
+    .sort((left, right) => {
+      const leftOrder = typeof left.sortOrder === "number" ? left.sortOrder : 0;
+      const rightOrder = typeof right.sortOrder === "number" ? right.sortOrder : 0;
+      if (leftOrder !== rightOrder) return leftOrder - rightOrder;
+      return left.path.localeCompare(right.path);
+    });
+}
+
+function AboutSettingsPage() {
+  return (
+    <div className="soha-page">
+      <SettingsCard title="关于 OpenSoha">
+        <Space orientation="vertical" size={8}>
+          <strong>OpenSoha</strong>
+          <span>Soha AI Gateway 与云原生运维控制台。</span>
+          <Space size={8} wrap>
+            <Tag>Console</Tag>
+            <Tag>Apache-2.0</Tag>
+          </Space>
         </Space>
       </SettingsCard>
     </div>

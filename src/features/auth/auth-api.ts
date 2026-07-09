@@ -26,6 +26,12 @@ class AuthApiError extends Error {
   }
 }
 
+export type AuthRefreshStatus = 'authenticated' | 'unauthenticated' | 'unavailable'
+
+function isAuthRejected(error: unknown) {
+  return error instanceof AuthApiError && (error.status === 401 || error.status === 403)
+}
+
 function buildErrorMessage(body: ErrorEnvelope | unknown | undefined, fallback: string) {
   if (!body) {
     return fallback
@@ -150,17 +156,24 @@ export async function fetchPermissionSnapshot() {
   return response.data
 }
 
-export async function refreshAuthSession(): Promise<boolean> {
+export async function restoreAuthSession(): Promise<AuthRefreshStatus> {
   try {
     const response = await fetchAuthJSON<ApiResponse<AuthResult>>('/auth/refresh', {
       method: 'POST',
     })
     commitAuthResult(response.data)
-    return true
-  } catch {
-    clearAuthSession()
-    return false
+    return 'authenticated'
+  } catch (error) {
+    if (isAuthRejected(error)) {
+      clearAuthSession()
+      return 'unauthenticated'
+    }
+    return 'unavailable'
   }
+}
+
+export async function refreshAuthSession(): Promise<boolean> {
+  return (await restoreAuthSession()) === 'authenticated'
 }
 
 async function requestStreamTicket(path: string) {

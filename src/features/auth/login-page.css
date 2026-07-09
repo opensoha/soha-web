@@ -391,6 +391,13 @@
   border-radius: 6px;
 }
 
+.soha-auth-session-restore {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 168px;
+}
+
 .soha-auth-slider {
   position: relative;
   display: grid;

@@ -28,14 +28,42 @@ const testState = vi.hoisted(() => ({
       "settings.ai.manage",
       "observe.ai.view",
     ],
-    visibleMenuIds: ["settings", "settings-login", "settings-branding"],
+    visibleMenuIds: [
+      "settings",
+      "account-profile",
+      "settings-about",
+      "settings-login",
+      "settings-branding",
+    ],
     visibleMenus: [
-      { id: "settings", path: "/settings" },
-      { id: "settings-login", parentId: "settings", path: "/settings/login" },
+      { id: "settings", path: "/settings", labelZh: "设置中心" },
+      {
+        id: "account-profile",
+        parentId: "settings",
+        path: "/account/profile",
+        labelZh: "个人中心",
+        sortOrder: 10,
+      },
+      {
+        id: "settings-about",
+        parentId: "settings",
+        path: "/settings/about",
+        labelZh: "关于",
+        sortOrder: 20,
+      },
+      {
+        id: "settings-login",
+        parentId: "settings",
+        path: "/settings/login",
+        labelZh: "登陆设置",
+        sortOrder: 261,
+      },
       {
         id: "settings-branding",
         parentId: "settings",
         path: "/settings/branding",
+        labelZh: "品牌设置",
+        sortOrder: 262,
       },
     ],
   } as PermissionSnapshot,
@@ -296,6 +324,54 @@ describe("settings ai page rendering", () => {
   });
 
   beforeEach(() => {
+    testState.snapshot = {
+      permissionKeys: [
+        "settings.identity.view",
+        "settings.identity.manage",
+        "settings.branding.view",
+        "settings.ai.view",
+        "settings.ai.manage",
+        "observe.ai.view",
+      ],
+      visibleMenuIds: [
+        "settings",
+        "account-profile",
+        "settings-about",
+        "settings-login",
+        "settings-branding",
+      ],
+      visibleMenus: [
+        { id: "settings", path: "/settings", labelZh: "设置中心" },
+        {
+          id: "account-profile",
+          parentId: "settings",
+          path: "/account/profile",
+          labelZh: "个人中心",
+          sortOrder: 10,
+        },
+        {
+          id: "settings-about",
+          parentId: "settings",
+          path: "/settings/about",
+          labelZh: "关于",
+          sortOrder: 20,
+        },
+        {
+          id: "settings-login",
+          parentId: "settings",
+          path: "/settings/login",
+          labelZh: "登陆设置",
+          sortOrder: 261,
+        },
+        {
+          id: "settings-branding",
+          parentId: "settings",
+          path: "/settings/branding",
+          labelZh: "品牌设置",
+          sortOrder: 262,
+        },
+      ],
+    };
     setDefaultResponses();
   });
 
@@ -321,8 +397,56 @@ describe("settings ai page rendering", () => {
 
     expect(container.textContent).not.toContain("AI 设置");
     expect(container.textContent).not.toContain("Provider Connections");
+    expect(container.textContent).toContain("个人中心");
+    expect(container.textContent).toContain("关于");
     expect(container.textContent).toContain("登陆设置");
     expect(container.textContent).toContain("品牌设置");
+  });
+
+  it("renders settings landing from visible menus only", async () => {
+    testState.snapshot = {
+      permissionKeys: ["settings.identity.view", "settings.branding.view"],
+      visibleMenuIds: ["settings", "settings-login"],
+      visibleMenus: [
+        { id: "settings", path: "/settings", labelZh: "设置中心" },
+        {
+          id: "settings-login",
+          parentId: "settings",
+          path: "/settings/login",
+          labelZh: "登陆设置",
+          sortOrder: 261,
+        },
+      ],
+    };
+
+    const container = await renderWithProviders(
+      <SettingsCenterPage />,
+      "/settings",
+    );
+
+    expect(container.textContent).toContain("登陆设置");
+    expect(container.textContent).not.toContain("个人中心");
+    expect(container.textContent).not.toContain("关于");
+    expect(container.textContent).not.toContain("品牌设置");
+  });
+
+  it("renders about page without admin settings permissions", async () => {
+    testState.snapshot = {
+      permissionKeys: [],
+      visibleMenuIds: ["settings", "settings-about"],
+      visibleMenus: [
+        { id: "settings", path: "/settings" },
+        { id: "settings-about", parentId: "settings", path: "/settings/about" },
+      ],
+    };
+
+    const container = await renderWithProviders(
+      <SettingsCenterPage />,
+      "/settings/about",
+    );
+
+    expect(container.textContent).toContain("关于 OpenSoha");
+    expect(container.textContent).toContain("Apache-2.0");
   });
 
   it("renders login settings on /settings/login", async () => {

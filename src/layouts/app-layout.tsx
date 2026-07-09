@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Avatar, Breadcrumb, Button, Dropdown, Layout, Menu, Spin } from 'antd'
@@ -9,6 +9,7 @@ import {
   CloudServerOutlined,
   DockerOutlined,
   DownOutlined,
+  InfoCircleOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   MoonOutlined,
@@ -20,6 +21,7 @@ import {
   SunOutlined,
   TranslationOutlined,
   LogoutOutlined,
+  LockOutlined,
   UserOutlined,
 } from '@ant-design/icons'
 import { HeaderPreferenceButton } from '@/components/header-preference-button'
@@ -468,8 +470,8 @@ export function AppLayout() {
   const primaryMenuItems = useMemo(
     () => activeWorkbenchId === 'ai'
       ? buildAIWorkbenchMenuItems(snapshot)
-      : buildMenuItems(primaryNav, localeCode, { grouped: !isSystemWorkspaceRoute && activeWorkbenchId !== 'virtualization' && activeWorkbenchId !== 'docker' }),
-    [activeWorkbenchId, isSystemWorkspaceRoute, localeCode, primaryNav, snapshot],
+      : buildMenuItems(primaryNav, localeCode, { grouped: activeWorkbenchId !== 'virtualization' && activeWorkbenchId !== 'docker' }),
+    [activeWorkbenchId, localeCode, primaryNav, snapshot],
   )
   const primaryItemKeyToPath = useMemo(
     () => {
@@ -619,6 +621,8 @@ export function AppLayout() {
   }, [activeWorkbenchId, combinedNav, currentMeta, currentWorkbenchOption, localeCode, nodeByID, t])
 
   const userDisplayName = user?.userName ?? user?.email ?? 'User'
+  const userAvatarFit = user?.avatarFit === 'contain' || user?.avatarFit === 'fill' ? user.avatarFit : 'cover'
+  const userAvatarStyle = { '--soha-avatar-fit': userAvatarFit } as CSSProperties
   const branding = getNormalizedBranding(brandingQuery.data?.data)
   const expandedLogo = branding.expandedLogoUrl
   const collapsedLogo = branding.collapsedLogoUrl || branding.expandedLogoUrl
@@ -694,9 +698,9 @@ export function AppLayout() {
           ) : null}
 
           {(
-            <div className={['soha-nav-business', isSystemWorkspaceRoute ? 'is-system' : ''].filter(Boolean).join(' ')}>
+            <div className="soha-nav-business">
               <Menu
-                className={['soha-nav-menu', isSystemWorkspaceRoute ? 'soha-nav-menu--system-workspace' : 'soha-nav-menu--business'].join(' ')}
+                className="soha-nav-menu"
                 mode="inline"
                 items={primaryMenuItems}
                 selectedKeys={primarySelectedKeys}
@@ -712,7 +716,7 @@ export function AppLayout() {
                   const path = primaryItemKeyToPath[String(key)]
                   if (path) navigate(path)
                 }}
-                inlineIndent={isSystemWorkspaceRoute ? 16 : 8}
+                inlineIndent={8}
                 inlineCollapsed={sidebarCollapsed}
                 theme={resolvedThemeMode}
               />
@@ -788,13 +792,28 @@ export function AppLayout() {
                   items: [
                     { key: 'user', label: userDisplayName, disabled: true },
                     { type: 'divider' },
+                    { key: 'portal', icon: <AppstoreOutlined />, label: t('layout.portal', '用户门户') },
+                    { key: 'about', icon: <InfoCircleOutlined />, label: t('layout.about', '关于') },
                     { key: 'profile', icon: <UserOutlined />, label: t('layout.profile', '个人中心') },
+                    { key: 'changePassword', icon: <LockOutlined />, label: t('layout.changePassword', '修改密码') },
                     { type: 'divider' },
                     { key: 'logout', icon: <LogoutOutlined />, label: t('layout.logout', 'Sign out') },
                   ],
                   onClick: ({ key }) => {
+                    if (key === 'portal') {
+                      navigate('/portal')
+                      return
+                    }
+                    if (key === 'about') {
+                      navigate('/settings/about')
+                      return
+                    }
                     if (key === 'profile') {
                       navigate('/account/profile')
+                      return
+                    }
+                    if (key === 'changePassword') {
+                      navigate('/account/profile?changePassword=1')
                       return
                     }
                     if (key === 'logout') {
@@ -810,7 +829,12 @@ export function AppLayout() {
                   size="small"
                   type="text"
                   icon={
-                    <Avatar className="soha-user-avatar" size="small">
+                    <Avatar
+                      className="soha-user-avatar"
+                      size="small"
+                      src={user?.avatarUrl || undefined}
+                      style={userAvatarStyle}
+                    >
                       {userDisplayName.charAt(0).toUpperCase()}
                     </Avatar>
                   }

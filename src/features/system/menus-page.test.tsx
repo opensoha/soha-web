@@ -280,6 +280,91 @@ describe('menus page modal state', () => {
     expect(document.body.textContent).toContain('当前菜单会在 虚拟化管理工作台 的导航树内展示。')
   })
 
+  it('flattens settings containers before grouping the workbench menu view', async () => {
+    testState.responses['/menus'] = [
+      {
+        id: 'settings',
+        labelZh: '设置中心',
+        labelEn: 'Settings',
+        path: '/settings',
+        iconKey: 'settings',
+        section: 'admin',
+        sortOrder: 260,
+        enabled: true,
+        children: [
+          {
+            id: 'account-profile',
+            parentId: 'settings',
+            labelZh: '个人中心',
+            labelEn: 'Profile',
+            path: '/account/profile',
+            iconKey: 'user',
+            section: 'account',
+            sortOrder: 10,
+            enabled: true,
+          },
+          {
+            id: 'settings-about',
+            parentId: 'settings',
+            labelZh: '关于',
+            labelEn: 'About',
+            path: '/settings/about',
+            iconKey: 'info',
+            section: 'account',
+            sortOrder: 20,
+            enabled: true,
+          },
+          {
+            id: 'settings-login',
+            parentId: 'settings',
+            labelZh: '登陆设置',
+            labelEn: 'Login',
+            path: '/settings/login',
+            iconKey: 'settings',
+            section: 'admin',
+            sortOrder: 261,
+            enabled: true,
+          },
+        ],
+      },
+      {
+        id: 'system',
+        labelZh: '系统管理',
+        labelEn: 'System',
+        path: '/system',
+        iconKey: 'panels-top-left',
+        section: 'admin',
+        sortOrder: 225,
+        enabled: true,
+        children: [
+          {
+            id: 'menus',
+            parentId: 'system',
+            labelZh: '菜单管理',
+            labelEn: 'Menus',
+            path: '/system/menus',
+            iconKey: 'menu-square',
+            section: 'admin',
+            sortOrder: 250,
+            enabled: true,
+          },
+        ],
+      },
+    ]
+
+    await renderWithProviders(<MenusPage />, '/system/menus')
+
+    expect(document.body.textContent).toContain('设置中心')
+    expect(document.querySelector('[data-testid="row-__workbench__settings"]')?.textContent).toContain('2 个分组')
+    expect(document.querySelector('[data-testid="row-__section__settings__account"]')?.textContent).toContain('基础')
+    expect(document.querySelector('[data-testid="row-__section__settings__admin"]')?.textContent).toContain('管理')
+    expect(document.body.textContent).toContain('个人中心')
+    expect(document.body.textContent).toContain('关于')
+    expect(document.body.textContent).toContain('登陆设置')
+    expect(document.body.textContent).toContain('菜单管理')
+    expect(document.querySelector('[data-testid="row-system"]')).toBeNull()
+  })
+
   it('submits an empty section as an ungrouped menu', async () => {
     testState.responses['/menus'] = [
       {
