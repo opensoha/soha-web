@@ -7,7 +7,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { BuildDetailPage, ExecutionTaskDetailPage, ReleaseDetailPage } from './delivery-runtime-detail-pages'
+import { BuildDetailPage } from './builds/detail-page'
+import { ExecutionTaskDetailPage } from './execution-tasks/detail-page'
+import { ReleaseDetailPage } from './releases/detail-page'
 
 const testState = vi.hoisted(() => ({
   missingKind: '' as '' | 'build' | 'workflow' | 'release' | 'release_bundle' | 'execution_task',

@@ -7,8 +7,9 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PermissionSnapshot } from '@/types'
-import { AccessCenterPage, AccessRolesPage } from './access-pages'
-import { AccessScopeGrantsPage } from './scope-grants-page'
+import { AccessCenterPage } from './center/page'
+import { AccessRolesPage } from './roles/page'
+import { AccessScopeGrantsPage } from './scope-grants/page'
 
 const testState = vi.hoisted(() => ({
   snapshot: {
@@ -20,7 +21,9 @@ const testState = vi.hoisted(() => ({
 }))
 
 vi.mock('@/features/auth/permission-snapshot', async () => {
-  const actual = await vi.importActual<typeof import('@/features/auth/permission-snapshot')>('@/features/auth/permission-snapshot')
+  const actual = await vi.importActual<typeof import('@/features/auth/permission-snapshot')>(
+    '@/features/auth/permission-snapshot',
+  )
   return {
     ...actual,
     usePermissionSnapshot: () => ({
@@ -63,7 +66,11 @@ vi.mock('@/components/admin-table', () => ({
 let containers: HTMLDivElement[] = []
 let roots: Array<ReturnType<typeof createRoot>> = []
 
-function setSnapshot(permissionKeys: string[], visibleMenuIds: string[] = [], visibleMenus: PermissionSnapshot['visibleMenus'] = []) {
+function setSnapshot(
+  permissionKeys: string[],
+  visibleMenuIds: string[] = [],
+  visibleMenus: PermissionSnapshot['visibleMenus'] = [],
+) {
   testState.snapshot = {
     permissionKeys,
     visibleMenuIds,
@@ -191,7 +198,11 @@ describe('frontend access authorization splits', () => {
   })
 
   it('shows the role create action when the manage permission is present', async () => {
-    setSnapshot(['access.roles.view', 'access.roles.manage'], ['access'], [{ id: 'access', path: '/access' }])
+    setSnapshot(
+      ['access.roles.view', 'access.roles.manage'],
+      ['access'],
+      [{ id: 'access', path: '/access' }],
+    )
 
     const container = await renderWithProviders(<AccessRolesPage />, '/access/roles')
 

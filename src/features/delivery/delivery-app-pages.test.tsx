@@ -8,23 +8,23 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  ApplicationsPage,
   BuildTemplatesPage,
-  ExecutionTasksPage,
-  ReleaseBundlesPage,
-  WorkflowsPage,
   buildBuildTemplatePayload,
   type BuildTemplateFormValues,
-} from './delivery-app-pages'
+} from './build-templates/page'
+import { ApplicationsPage } from './applications/list-page'
+import { ExecutionTasksPage } from './execution-tasks/list-page'
+import { ReleaseBundlesPage } from './release-bundles/list-page'
+import { WorkflowsPage } from './workflows/list-page'
 import { runtimeEvidencePath } from './template-usage-runtime-links'
 import { defaultBuildSources } from './application-center-model'
-import { ApplicationEnvironmentsPage, ReleaseBoardPage, WorkflowTemplatesPage } from './delivery-catalog-pages'
-import { RegistriesPage } from './delivery-pages'
-import {
-  DeliveryAnalysisPage,
-  DeliveryOnboardingPage,
-  DeliveryTestingPage,
-} from './delivery-workbench-pages'
+import { ApplicationEnvironmentsPage } from './environments/list-page'
+import { ReleaseBoardPage } from './release-board/page'
+import { WorkflowTemplatesPage } from './workflow-templates/page'
+import { RegistriesPage } from './registries/page'
+import { DeliveryAnalysisPage } from './workbench/analysis-page'
+import { DeliveryOnboardingPage } from './workbench/onboarding-page'
+import { DeliveryTestingPage } from './workbench/testing-page'
 
 const workflowDefinition = {
   schemaVersion: 2,

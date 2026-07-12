@@ -49,6 +49,7 @@ export default defineConfig({
   build: {
     target: 'esnext',
     outDir: 'dist',
+    manifest: true,
     sourcemap: false,
     chunkSizeWarningLimit: 800,
     rollupOptions: {
@@ -66,9 +67,6 @@ export default defineConfig({
           }
           if (id.includes('@xterm')) {
             return 'xterm'
-          }
-          if (id.includes('@xyflow') || id.includes('dagre')) {
-            return 'flow'
           }
           if (id.includes('@visactor/react-vchart')) {
             return 'vchart-react'
@@ -91,13 +89,14 @@ export default defineConfig({
           if (id.includes('echarts')) {
             return 'charts'
           }
-          if (id.includes('@tanstack/react-query') || id.includes('zustand')) {
-            return 'data'
-          }
-          if (id.includes('react-router-dom')) {
+          if (id.includes('/node_modules/react-router-dom/')) {
             return 'router'
           }
-          if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/scheduler/')) {
+          if (
+            id.includes('/node_modules/react/') ||
+            id.includes('/node_modules/react-dom/') ||
+            id.includes('/node_modules/scheduler/')
+          ) {
             return 'react-vendor'
           }
         },

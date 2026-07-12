@@ -159,66 +159,6 @@ export interface ResourceYAMLView {
   content: string
 }
 
-export interface ServiceAccountDetail {
-  name: string
-  namespace: string
-  labels?: Record<string, string>
-  annotations?: Record<string, string>
-  secrets?: string[]
-  imagePullSecrets?: string[]
-  automountServiceAccountToken: boolean
-  createdAt?: string
-  ageSeconds: number
-  allowedActions?: string[]
-}
-
-export interface RoleDetail {
-  name: string
-  namespace: string
-  labels?: Record<string, string>
-  annotations?: Record<string, string>
-  rules: number
-  ruleSummaries?: string[]
-  createdAt?: string
-  ageSeconds: number
-  allowedActions?: string[]
-}
-
-export interface RoleBindingDetail {
-  name: string
-  namespace: string
-  labels?: Record<string, string>
-  annotations?: Record<string, string>
-  roleRef: string
-  subjects?: string[]
-  createdAt?: string
-  ageSeconds: number
-  allowedActions?: string[]
-}
-
-export interface ClusterRoleDetail {
-  name: string
-  labels?: Record<string, string>
-  annotations?: Record<string, string>
-  rules: number
-  aggregationRules: number
-  ruleSummaries?: string[]
-  createdAt?: string
-  ageSeconds: number
-  allowedActions?: string[]
-}
-
-export interface ClusterRoleBindingDetail {
-  name: string
-  labels?: Record<string, string>
-  annotations?: Record<string, string>
-  roleRef: string
-  subjects?: string[]
-  createdAt?: string
-  ageSeconds: number
-  allowedActions?: string[]
-}
-
 export interface PersistentVolumeClaim {
   name: string
   namespace: string

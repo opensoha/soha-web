@@ -7,8 +7,20 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from 'antd'
-import { DockerHostsPage, DockerProjectDetailPage, DockerProjectsPage, buildContainerStartPayload, buildProjectPayload, buildQuickHostPayload, buildTemplatePayload } from './docker-pages'
-import type { DockerContainerStartInput, DockerProjectInput, DockerQuickCreateHostInput, DockerTemplateInput } from './docker-types'
+import { DockerHostsPage, buildQuickHostPayload } from './hosts/page'
+import { DockerProjectDetailPage } from './projects/detail-page'
+import {
+  DockerProjectsPage,
+  buildContainerStartPayload,
+  buildProjectPayload,
+} from './projects/list-page'
+import { buildTemplatePayload } from './templates/page'
+import type {
+  DockerContainerStartInput,
+  DockerProjectInput,
+  DockerQuickCreateHostInput,
+  DockerTemplateInput,
+} from './docker-types'
 
 const testState = vi.hoisted(() => ({
   modules: {
@@ -24,8 +36,18 @@ const testState = vi.hoisted(() => ({
     if (path === '/modules') {
       return {
         data: [
-          { descriptor: { id: 'docker', name: 'Docker', defaultPath: '/docker' }, enabled: testState.modules.docker },
-          { descriptor: { id: 'virtualization', name: 'Virtualization', defaultPath: '/virtualization' }, enabled: testState.modules.virtualization },
+          {
+            descriptor: { id: 'docker', name: 'Docker', defaultPath: '/docker' },
+            enabled: testState.modules.docker,
+          },
+          {
+            descriptor: {
+              id: 'virtualization',
+              name: 'Virtualization',
+              defaultPath: '/virtualization',
+            },
+            enabled: testState.modules.virtualization,
+          },
         ],
       }
     }
@@ -33,10 +55,31 @@ const testState = vi.hoisted(() => ({
       return { data: { items: [], total: 0, page: 1, pageSize: 10 } }
     }
     if (path === '/docker/hosts?page=1&pageSize=200') {
-      return { data: { items: [{ id: 'host-1', name: 'local-orbstack', architecture: 'arm64' }], total: 1, page: 1, pageSize: 200 } }
+      return {
+        data: {
+          items: [{ id: 'host-1', name: 'local-orbstack', architecture: 'arm64' }],
+          total: 1,
+          page: 1,
+          pageSize: 200,
+        },
+      }
     }
     if (path === '/docker/projects?page=1&pageSize=200') {
-      return { data: { items: [{ id: 'project-1', hostId: 'host-1', name: 'soha-orbstack-smoke', sourceKind: 'single_container' }], total: 1, page: 1, pageSize: 200 } }
+      return {
+        data: {
+          items: [
+            {
+              id: 'project-1',
+              hostId: 'host-1',
+              name: 'soha-orbstack-smoke',
+              sourceKind: 'single_container',
+            },
+          ],
+          total: 1,
+          page: 1,
+          pageSize: 200,
+        },
+      }
     }
     if (path === '/docker/projects/project-1') {
       return {
@@ -56,7 +99,14 @@ const testState = vi.hoisted(() => ({
       }
     }
     if (path === '/docker/services?projectId=project-1&page=1&pageSize=100') {
-      return { data: { items: [{ id: 'service-1', name: 'web', projectId: 'project-1' }], total: 1, page: 1, pageSize: 100 } }
+      return {
+        data: {
+          items: [{ id: 'service-1', name: 'web', projectId: 'project-1' }],
+          total: 1,
+          page: 1,
+          pageSize: 100,
+        },
+      }
     }
     if (path === '/docker/services?page=1&pageSize=300') {
       return { data: { items: [], total: 0, page: 1, pageSize: 300 } }
@@ -67,22 +117,26 @@ const testState = vi.hoisted(() => ({
     if (path === '/docker/projects?page=1&pageSize=10&sourceKind=single_container') {
       return {
         data: {
-          items: [{
-            id: 'project-1',
-            hostId: 'host-1',
-            name: 'soha-orbstack-smoke',
-            slug: 'soha-orbstack-smoke',
-            sourceKind: 'single_container',
-            status: 'running',
-            desiredState: 'running',
-            environment: 'local',
-            owner: 'admin',
-            config: {
-              image: 'nginx:alpine',
-              architecture: 'arm64',
-              ports: [{ hostIp: '127.0.0.1', hostPort: 18083, containerPort: 80, protocol: 'tcp' }],
+          items: [
+            {
+              id: 'project-1',
+              hostId: 'host-1',
+              name: 'soha-orbstack-smoke',
+              slug: 'soha-orbstack-smoke',
+              sourceKind: 'single_container',
+              status: 'running',
+              desiredState: 'running',
+              environment: 'local',
+              owner: 'admin',
+              config: {
+                image: 'nginx:alpine',
+                architecture: 'arm64',
+                ports: [
+                  { hostIp: '127.0.0.1', hostPort: 18083, containerPort: 80, protocol: 'tcp' },
+                ],
+              },
             },
-          }],
+          ],
           total: 1,
           page: 1,
           pageSize: 10,
@@ -90,19 +144,65 @@ const testState = vi.hoisted(() => ({
       }
     }
     if (path === '/virtualization/clusters') {
-      return { data: [
-        { id: 'conn-pve', name: 'pve-a', provider: 'pve', enabled: true, config: { defaultBridge: 'vmbr0' } },
-        { id: 'conn-kv', name: 'kubevirt-a', provider: 'kubevirt', enabled: true, config: { backendUrl: 'https://kube.example:6443' } },
-      ] }
+      return {
+        data: [
+          {
+            id: 'conn-pve',
+            name: 'pve-a',
+            provider: 'pve',
+            enabled: true,
+            config: { defaultBridge: 'vmbr0' },
+          },
+          {
+            id: 'conn-kv',
+            name: 'kubevirt-a',
+            provider: 'kubevirt',
+            enabled: true,
+            config: { backendUrl: 'https://kube.example:6443' },
+          },
+        ],
+      }
     }
     if (path === '/virtualization/images?page=1&pageSize=500') {
-      return { data: { items: [
-        { id: 'image-pve-template', name: 'ubuntu-template', provider: 'pve', connectionId: 'conn-pve', sourceKind: 'template', sourceRef: '9000' },
-        { id: 'image-kv', name: 'ubuntu-ds', provider: 'kubevirt', connectionId: 'conn-kv', sourceKind: 'datasource', sourceRef: 'default/ubuntu' },
-      ], total: 2, page: 1, pageSize: 500 } }
+      return {
+        data: {
+          items: [
+            {
+              id: 'image-pve-template',
+              name: 'ubuntu-template',
+              provider: 'pve',
+              connectionId: 'conn-pve',
+              sourceKind: 'template',
+              sourceRef: '9000',
+            },
+            {
+              id: 'image-kv',
+              name: 'ubuntu-ds',
+              provider: 'kubevirt',
+              connectionId: 'conn-kv',
+              sourceKind: 'datasource',
+              sourceRef: 'default/ubuntu',
+            },
+          ],
+          total: 2,
+          page: 1,
+          pageSize: 500,
+        },
+      }
     }
     if (path === '/virtualization/flavors') {
-      return { data: [{ id: 'flavor-1', name: 'standard-2c4g', cpu: 2, memoryMiB: 4096, diskGiB: 40, enabled: true }] }
+      return {
+        data: [
+          {
+            id: 'flavor-1',
+            name: 'standard-2c4g',
+            cpu: 2,
+            memoryMiB: 4096,
+            diskGiB: 40,
+            enabled: true,
+          },
+        ],
+      }
     }
     throw new Error(`Unhandled GET ${path}`)
   }),
@@ -111,8 +211,9 @@ const testState = vi.hoisted(() => ({
   apiDelete: vi.fn(async (_path: string) => ({ data: undefined })),
 }))
 
-vi.mock('@/features/auth/permission-snapshot', () => ({
-  hasPermission: (snapshot: { permissionKeys?: string[] } | undefined, key: string) => snapshot?.permissionKeys?.includes(key) ?? false,
+vi.mock('@/features/auth', () => ({
+  hasPermission: (snapshot: { permissionKeys?: string[] } | undefined, key: string) =>
+    snapshot?.permissionKeys?.includes(key) ?? false,
   usePermissionSnapshot: () => ({
     data: { data: testState.permissionSnapshot },
     isLoading: false,
@@ -143,7 +244,10 @@ async function renderWithProviders(node: ReactNode, route = '/') {
   await act(async () => {
     root.render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={[route]}>
+        <MemoryRouter
+          future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+          initialEntries={[route]}
+        >
           <App>{node}</App>
         </MemoryRouter>
       </QueryClientProvider>,
@@ -181,7 +285,9 @@ async function flush() {
 }
 
 async function clickButtonByText(text: string) {
-  const button = Array.from(document.querySelectorAll('button')).find((node) => node.textContent?.includes(text))
+  const button = Array.from(document.querySelectorAll('button')).find((node) =>
+    node.textContent?.includes(text),
+  )
   if (!(button instanceof HTMLButtonElement)) {
     throw new Error(`button not found by text: ${text}`)
   }
@@ -193,6 +299,7 @@ async function clickButtonByText(text: string) {
 
 describe('docker pages', () => {
   beforeEach(() => {
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
     testState.modules = {
       docker: true,
       virtualization: true,
@@ -212,16 +319,29 @@ describe('docker pages', () => {
       disconnect() {}
     }
     vi.stubGlobal('ResizeObserver', ResizeObserverMock)
-    vi.stubGlobal('matchMedia', vi.fn().mockImplementation((query: string) => ({
-      matches: false,
-      media: query,
-      onchange: null,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    })))
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    )
+    Object.defineProperty(window, 'getComputedStyle', {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockReturnValue({
+        width: '0px',
+        height: '0px',
+        overflow: 'auto',
+        getPropertyValue: () => '',
+      }),
+    })
   })
 
   afterEach(async () => {
@@ -316,7 +436,11 @@ describe('docker pages', () => {
       status: '',
       composeContent: '',
       labels: { app: 'preview', managed: true },
-      config: { serviceName: 'web', image: 'nginx:alpine', ports: [{ hostPort: 18080, containerPort: 80 }] },
+      config: {
+        serviceName: 'web',
+        image: 'nginx:alpine',
+        ports: [{ hostPort: 18080, containerPort: 80 }],
+      },
     }) satisfies DockerProjectInput
 
     expect(payload).toMatchObject({
@@ -326,7 +450,11 @@ describe('docker pages', () => {
       status: 'draft',
       composeContent: expect.stringContaining('nginx:alpine'),
       labels: { app: 'preview', managed: true },
-      config: { serviceName: 'web', image: 'nginx:alpine', ports: [{ hostPort: 18080, containerPort: 80 }] },
+      config: {
+        serviceName: 'web',
+        image: 'nginx:alpine',
+        ports: [{ hostPort: 18080, containerPort: 80 }],
+      },
     })
   })
 
@@ -338,10 +466,29 @@ describe('docker pages', () => {
       architecture: 'arm64',
       restartPolicy: 'unless-stopped',
       ports: [
-        { name: 'http', hostIp: '0.0.0.0', hostPort: 18080, containerPort: 80, protocol: 'tcp', exposureScope: 'internal', domainName: 'preview.internal.example.com', domainScheme: 'https', domainTlsEnabled: true },
-        { name: 'admin', hostIp: '127.0.0.1', hostPort: 18081, containerPort: 8080, protocol: 'tcp', exposureScope: 'vpn' },
+        {
+          name: 'http',
+          hostIp: '0.0.0.0',
+          hostPort: 18080,
+          containerPort: 80,
+          protocol: 'tcp',
+          exposureScope: 'internal',
+          domainName: 'preview.internal.example.com',
+          domainScheme: 'https',
+          domainTlsEnabled: true,
+        },
+        {
+          name: 'admin',
+          hostIp: '127.0.0.1',
+          hostPort: 18081,
+          containerPort: 8080,
+          protocol: 'tcp',
+          exposureScope: 'vpn',
+        },
       ],
-      volumes: [{ type: 'bind', source: '/data/preview', target: '/usr/share/nginx/html', readOnly: true }],
+      volumes: [
+        { type: 'bind', source: '/data/preview', target: '/usr/share/nginx/html', readOnly: true },
+      ],
       environmentVariables: [{ name: 'APP_ENV', value: 'test' }],
       resources: { cpus: 0.5, memoryMiB: 512, memoryReservationMiB: 256 },
       labels: { app: 'preview-api' },
@@ -360,7 +507,11 @@ describe('docker pages', () => {
       ],
       volumes: [{ source: '/data/preview', target: '/usr/share/nginx/html', readOnly: true }],
       environmentVariables: [{ name: 'APP_ENV', value: 'test' }],
-      resources: { cpus: 0.5, memoryBytes: 512 * 1024 ** 2, memoryReservationBytes: 256 * 1024 ** 2 },
+      resources: {
+        cpus: 0.5,
+        memoryBytes: 512 * 1024 ** 2,
+        memoryReservationBytes: 256 * 1024 ** 2,
+      },
       labels: { app: 'preview-api' },
       config: { command: 'nginx -g daemon off;' },
     })
@@ -402,17 +553,25 @@ describe('docker pages', () => {
 
   it('keeps port mappings in container detail context and summarizes them in the single-container table', async () => {
     testState.permissionSnapshot = {
-      permissionKeys: ['docker.projects.view', 'docker.projects.manage', 'docker.projects.deploy', 'docker.ports.manage'],
+      permissionKeys: [
+        'docker.projects.view',
+        'docker.projects.manage',
+        'docker.projects.deploy',
+        'docker.ports.manage',
+      ],
       visibleMenuIds: [],
       visibleMenus: [],
     }
     await renderWithProviders(<DockerProjectsPage />)
 
-    let tabTexts = Array.from(document.querySelectorAll('.ant-tabs-tab-btn')).map((node) => node.textContent?.trim()).filter(Boolean)
+    let tabTexts = Array.from(document.querySelectorAll('.ant-tabs-tab-btn'))
+      .map((node) => node.textContent?.trim())
+      .filter(Boolean)
     expect(tabTexts).toEqual(['Compose', '单容器服务'])
 
-    const singleContainerTab = Array.from(document.querySelectorAll('.ant-tabs-tab-btn'))
-      .find((node) => node.textContent?.trim() === '单容器服务') as HTMLElement | undefined
+    const singleContainerTab = Array.from(document.querySelectorAll('.ant-tabs-tab-btn')).find(
+      (node) => node.textContent?.trim() === '单容器服务',
+    ) as HTMLElement | undefined
     expect(singleContainerTab).not.toBeUndefined()
     await act(async () => {
       singleContainerTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -420,7 +579,9 @@ describe('docker pages', () => {
     })
     await flush()
 
-    tabTexts = Array.from(document.querySelectorAll('.ant-tabs-tab-btn')).map((node) => node.textContent?.trim()).filter(Boolean)
+    tabTexts = Array.from(document.querySelectorAll('.ant-tabs-tab-btn'))
+      .map((node) => node.textContent?.trim())
+      .filter(Boolean)
     expect(tabTexts).toEqual(['Compose', '单容器服务'])
     expect(document.body.textContent).toContain('端口映射')
     expect(document.body.textContent).toContain('127.0.0.1:18083 -> 80/tcp')
@@ -432,7 +593,14 @@ describe('docker pages', () => {
       virtualization: true,
     }
     testState.permissionSnapshot = {
-      permissionKeys: ['docker.projects.view', 'docker.projects.manage', 'docker.projects.deploy', 'docker.services.view', 'docker.services.manage', 'docker.ports.manage'],
+      permissionKeys: [
+        'docker.projects.view',
+        'docker.projects.manage',
+        'docker.projects.deploy',
+        'docker.services.view',
+        'docker.services.manage',
+        'docker.ports.manage',
+      ],
       visibleMenuIds: [],
       visibleMenus: [],
     }
@@ -440,7 +608,9 @@ describe('docker pages', () => {
     await renderWithProviders(<DockerProjectsPage />)
 
     expect(testState.apiGet).toHaveBeenCalledWith('/modules')
-    expect(testState.apiGet).not.toHaveBeenCalledWith('/docker/projects?page=1&pageSize=10&sourceKind=compose')
+    expect(testState.apiGet).not.toHaveBeenCalledWith(
+      '/docker/projects?page=1&pageSize=10&sourceKind=compose',
+    )
     expect(testState.apiGet).not.toHaveBeenCalledWith('/docker/hosts?page=1&pageSize=200')
     expect(document.body.textContent).not.toContain('创建 Compose')
     expect(document.body.textContent).not.toContain('快速启动')
@@ -460,14 +630,20 @@ describe('docker pages', () => {
       '/docker/projects/project-1',
     )
 
-    const tabTexts = Array.from(container.querySelectorAll('.ant-tabs-tab-btn')).map((node) => node.textContent?.trim()).filter(Boolean)
+    const tabTexts = Array.from(container.querySelectorAll('.ant-tabs-tab-btn'))
+      .map((node) => node.textContent?.trim())
+      .filter(Boolean)
     expect(tabTexts).toContain('信息')
     expect(tabTexts).toContain('配置')
     expect(tabTexts).not.toContain('日志')
     expect(tabTexts).not.toContain('Shell')
     expect(tabTexts).not.toContain('卷文件')
     expect(testState.apiGet).toHaveBeenCalledWith('/docker/projects/project-1')
-    expect(testState.apiGet).not.toHaveBeenCalledWith('/docker/services?projectId=project-1&page=1&pageSize=100')
-    expect(testState.apiGet.mock.calls.some(([path]) => String(path).includes('/runtime/'))).toBe(false)
+    expect(testState.apiGet).not.toHaveBeenCalledWith(
+      '/docker/services?projectId=project-1&page=1&pageSize=100',
+    )
+    expect(testState.apiGet.mock.calls.some(([path]) => String(path).includes('/runtime/'))).toBe(
+      false,
+    )
   })
 })

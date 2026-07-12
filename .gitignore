@@ -2,6 +2,7 @@ node_modules/
 dist/
 coverage/
 test-results/
+graphify-out/
 .DS_Store
 .env
 .env.local

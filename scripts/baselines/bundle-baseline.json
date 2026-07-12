@@ -1,0 +1,4003 @@
+{
+  "version": 1,
+  "manifest": "dist/.vite/manifest.json",
+  "entry": "index.html",
+  "summary": {
+    "chunks": 411,
+    "routeSourceModules": 171,
+    "initial": {
+      "rawBytes": 1386226,
+      "gzipBytes": 413852,
+      "rawKiB": 1353.74,
+      "gzipKiB": 404.15
+    },
+    "initialHeavyRuntimes": {
+      "flow": [],
+      "vchart": [],
+      "monaco": [],
+      "xterm": [],
+      "novnc": []
+    },
+    "circularStaticImportGroups": [],
+    "largestRouteIncrement": {
+      "source": "src/features/observability/oncall/settings-page.tsx",
+      "rawBytes": 420010,
+      "gzipBytes": 123319,
+      "rawKiB": 410.17,
+      "gzipKiB": 120.43
+    },
+    "largestPageChunk": {
+      "source": "src/features/delivery/applications/detail-page.tsx",
+      "rawBytes": 53071,
+      "gzipBytes": 13113,
+      "rawKiB": 51.83,
+      "gzipKiB": 12.81
+    }
+  },
+  "initialFiles": [
+    {
+      "file": "assets/index-Ca98rlVc.js",
+      "raw": 1164827,
+      "gzip": 350679
+    },
+    {
+      "file": "assets/index-Dt99rKWh.css",
+      "raw": 55580,
+      "gzip": 8914
+    },
+    {
+      "file": "assets/react-vendor-CHnlWXqo.js",
+      "raw": 144110,
+      "gzip": 46188
+    },
+    {
+      "file": "assets/router-IX2HF3Qn.js",
+      "raw": 21709,
+      "gzip": 8071
+    }
+  ],
+  "routes": [
+    {
+      "source": "src/features/observability/oncall/settings-page.tsx",
+      "file": "assets/settings-page-8_DCU5zz.js",
+      "incremental": {
+        "rawBytes": 420010,
+        "gzipBytes": 123319,
+        "rawKiB": 410.17,
+        "gzipKiB": 120.43
+      },
+      "ownChunk": {
+        "rawBytes": 17309,
+        "gzipBytes": 5176,
+        "rawKiB": 16.9,
+        "gzipKiB": 5.05
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/observability/oncall/board-page.tsx",
+      "file": "assets/board-page-DZrnCwFm.js",
+      "incremental": {
+        "rawBytes": 375930,
+        "gzipBytes": 117716,
+        "rawKiB": 367.12,
+        "gzipKiB": 114.96
+      },
+      "ownChunk": {
+        "rawBytes": 19090,
+        "gzipBytes": 7149,
+        "rawKiB": 18.64,
+        "gzipKiB": 6.98
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/copilot/workbench/pages/performance-page.tsx",
+      "file": "assets/performance-page-DzgRHgAw.js",
+      "incremental": {
+        "rawBytes": 318115,
+        "gzipBytes": 105790,
+        "rawKiB": 310.66,
+        "gzipKiB": 103.31
+      },
+      "ownChunk": {
+        "rawBytes": 19031,
+        "gzipBytes": 3452,
+        "rawKiB": 18.58,
+        "gzipKiB": 3.37
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/copilot/workbench/pages/root-cause-page.tsx",
+      "file": "assets/root-cause-page-BUyiCpKt.js",
+      "incremental": {
+        "rawBytes": 318113,
+        "gzipBytes": 105787,
+        "rawKiB": 310.66,
+        "gzipKiB": 103.31
+      },
+      "ownChunk": {
+        "rawBytes": 19029,
+        "gzipBytes": 3449,
+        "rawKiB": 18.58,
+        "gzipKiB": 3.37
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/copilot/workbench/pages/chat-page.tsx",
+      "file": "assets/chat-page-CwCHgTq5.js",
+      "incremental": {
+        "rawBytes": 318108,
+        "gzipBytes": 105784,
+        "rawKiB": 310.65,
+        "gzipKiB": 103.3
+      },
+      "ownChunk": {
+        "rawBytes": 19024,
+        "gzipBytes": 3446,
+        "rawKiB": 18.58,
+        "gzipKiB": 3.37
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/delivery/applications/detail-page.tsx",
+      "file": "assets/detail-page-ohRgKUHv.js",
+      "incremental": {
+        "rawBytes": 307445,
+        "gzipBytes": 98940,
+        "rawKiB": 300.24,
+        "gzipKiB": 96.62
+      },
+      "ownChunk": {
+        "rawBytes": 53071,
+        "gzipBytes": 13113,
+        "rawKiB": 51.83,
+        "gzipKiB": 12.81
+      },
+      "heavyRuntimes": {
+        "flow": [
+          "_release-flow-dag-definition-DYPK6qdG.js",
+          "assets/release-flow-dag-definition-DYPK6qdG.js",
+          "release-flow-dag-definition"
+        ],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/workloads/pods/detail-page.tsx",
+      "file": "assets/detail-page-CKQAwmp7.js",
+      "incremental": {
+        "rawBytes": 296358,
+        "gzipBytes": 94993,
+        "rawKiB": 289.41,
+        "gzipKiB": 92.77
+      },
+      "ownChunk": {
+        "rawBytes": 13667,
+        "gzipBytes": 4853,
+        "rawKiB": 13.35,
+        "gzipKiB": 4.74
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/docker/projects/detail-page.tsx",
+      "file": "assets/detail-page-B102g4BN.js",
+      "incremental": {
+        "rawBytes": 270063,
+        "gzipBytes": 90769,
+        "rawKiB": 263.73,
+        "gzipKiB": 88.64
+      },
+      "ownChunk": {
+        "rawBytes": 15548,
+        "gzipBytes": 5306,
+        "rawKiB": 15.18,
+        "gzipKiB": 5.18
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/virtualization/overview/page.tsx",
+      "file": "assets/page-DnWgtx6Q.js",
+      "incremental": {
+        "rawBytes": 268686,
+        "gzipBytes": 90436,
+        "rawKiB": 262.39,
+        "gzipKiB": 88.32
+      },
+      "ownChunk": {
+        "rawBytes": 20857,
+        "gzipBytes": 6387,
+        "rawKiB": 20.37,
+        "gzipKiB": 6.24
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/workloads/deployments/list-page.tsx",
+      "file": "assets/list-page-Ct-jZtJ-.js",
+      "incremental": {
+        "rawBytes": 274570,
+        "gzipBytes": 90321,
+        "rawKiB": 268.13,
+        "gzipKiB": 88.2
+      },
+      "ownChunk": {
+        "rawBytes": 13542,
+        "gzipBytes": 5484,
+        "rawKiB": 13.22,
+        "gzipKiB": 5.36
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/docker/projects/list-page.tsx",
+      "file": "assets/list-page-CuN9MYuh.js",
+      "incremental": {
+        "rawBytes": 263368,
+        "gzipBytes": 88124,
+        "rawKiB": 257.2,
+        "gzipKiB": 86.06
+      },
+      "ownChunk": {
+        "rawBytes": 15501,
+        "gzipBytes": 4746,
+        "rawKiB": 15.14,
+        "gzipKiB": 4.63
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/workloads/statefulsets/list-page.tsx",
+      "file": "assets/list-page-DXRllzaB.js",
+      "incremental": {
+        "rawBytes": 264569,
+        "gzipBytes": 86652,
+        "rawKiB": 258.37,
+        "gzipKiB": 84.62
+      },
+      "ownChunk": {
+        "rawBytes": 5955,
+        "gzipBytes": 2674,
+        "rawKiB": 5.82,
+        "gzipKiB": 2.61
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/system/menus/page.tsx",
+      "file": "assets/page-r20cXjcH.js",
+      "incremental": {
+        "rawBytes": 250458,
+        "gzipBytes": 86097,
+        "rawKiB": 244.59,
+        "gzipKiB": 84.08
+      },
+      "ownChunk": {
+        "rawBytes": 12267,
+        "gzipBytes": 4710,
+        "rawKiB": 11.98,
+        "gzipKiB": 4.6
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/virtualization/flavors/list-page.tsx",
+      "file": "assets/list-page-ChZt2fOo.js",
+      "incremental": {
+        "rawBytes": 255173,
+        "gzipBytes": 85144,
+        "rawKiB": 249.19,
+        "gzipKiB": 83.15
+      },
+      "ownChunk": {
+        "rawBytes": 5147,
+        "gzipBytes": 2312,
+        "rawKiB": 5.03,
+        "gzipKiB": 2.26
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/workloads/pods/list-page.tsx",
+      "file": "assets/list-page-DLexWD4Z.js",
+      "incremental": {
+        "rawBytes": 260674,
+        "gzipBytes": 85141,
+        "rawKiB": 254.56,
+        "gzipKiB": 83.15
+      },
+      "ownChunk": {
+        "rawBytes": 14887,
+        "gzipBytes": 5812,
+        "rawKiB": 14.54,
+        "gzipKiB": 5.68
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/docker/hosts/page.tsx",
+      "file": "assets/page-DVfFH9zK.js",
+      "incremental": {
+        "rawBytes": 257273,
+        "gzipBytes": 85132,
+        "rawKiB": 251.24,
+        "gzipKiB": 83.14
+      },
+      "ownChunk": {
+        "rawBytes": 13141,
+        "gzipBytes": 4282,
+        "rawKiB": 12.83,
+        "gzipKiB": 4.18
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/virtualization/clusters/list-page.tsx",
+      "file": "assets/list-page-CgBHkpHu.js",
+      "incremental": {
+        "rawBytes": 255346,
+        "gzipBytes": 84948,
+        "rawKiB": 249.36,
+        "gzipKiB": 82.96
+      },
+      "ownChunk": {
+        "rawBytes": 16507,
+        "gzipBytes": 5589,
+        "rawKiB": 16.12,
+        "gzipKiB": 5.46
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/settings/ai/page.tsx",
+      "file": "assets/page-BxjFywYq.js",
+      "incremental": {
+        "rawBytes": 255808,
+        "gzipBytes": 84299,
+        "rawKiB": 249.81,
+        "gzipKiB": 82.32
+      },
+      "ownChunk": {
+        "rawBytes": 41236,
+        "gzipBytes": 11586,
+        "rawKiB": 40.27,
+        "gzipKiB": 11.31
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/virtualization/sync/page.tsx",
+      "file": "assets/page-BSG4ctGN.js",
+      "incremental": {
+        "rawBytes": 250313,
+        "gzipBytes": 84180,
+        "rawKiB": 244.45,
+        "gzipKiB": 82.21
+      },
+      "ownChunk": {
+        "rawBytes": 1273,
+        "gzipBytes": 737,
+        "rawKiB": 1.24,
+        "gzipKiB": 0.72
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/copilot/observe/operations/page.tsx",
+      "file": "assets/page-Clid1dXW.js",
+      "incremental": {
+        "rawBytes": 259451,
+        "gzipBytes": 83763,
+        "rawKiB": 253.37,
+        "gzipKiB": 81.8
+      },
+      "ownChunk": {
+        "rawBytes": 34867,
+        "gzipBytes": 8095,
+        "rawKiB": 34.05,
+        "gzipKiB": 7.91
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/delivery/workflows/list-page.tsx",
+      "file": "assets/list-page-QSKRkcVc.js",
+      "incremental": {
+        "rawBytes": 262114,
+        "gzipBytes": 83744,
+        "rawKiB": 255.97,
+        "gzipKiB": 81.78
+      },
+      "ownChunk": {
+        "rawBytes": 17666,
+        "gzipBytes": 6453,
+        "rawKiB": 17.25,
+        "gzipKiB": 6.3
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/virtualization/images/list-page.tsx",
+      "file": "assets/list-page-BjSIondO.js",
+      "incremental": {
+        "rawBytes": 249988,
+        "gzipBytes": 83317,
+        "rawKiB": 244.13,
+        "gzipKiB": 81.36
+      },
+      "ownChunk": {
+        "rawBytes": 7450,
+        "gzipBytes": 3040,
+        "rawKiB": 7.28,
+        "gzipKiB": 2.97
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/system/audit/page.tsx",
+      "file": "assets/page-BIZOJj_Q.js",
+      "incremental": {
+        "rawBytes": 242390,
+        "gzipBytes": 82903,
+        "rawKiB": 236.71,
+        "gzipKiB": 80.96
+      },
+      "ownChunk": {
+        "rawBytes": 6397,
+        "gzipBytes": 2549,
+        "rawKiB": 6.25,
+        "gzipKiB": 2.49
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/virtualization/virtual-machines/list-page.tsx",
+      "file": "assets/list-page-GBv8acHd.js",
+      "incremental": {
+        "rawBytes": 247914,
+        "gzipBytes": 82855,
+        "rawKiB": 242.1,
+        "gzipKiB": 80.91
+      },
+      "ownChunk": {
+        "rawBytes": 15157,
+        "gzipBytes": 5265,
+        "rawKiB": 14.8,
+        "gzipKiB": 5.14
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/system/operation-logs/page.tsx",
+      "file": "assets/page-BiYGk6rk.js",
+      "incremental": {
+        "rawBytes": 242345,
+        "gzipBytes": 82783,
+        "rawKiB": 236.67,
+        "gzipKiB": 80.84
+      },
+      "ownChunk": {
+        "rawBytes": 6352,
+        "gzipBytes": 2429,
+        "rawKiB": 6.2,
+        "gzipKiB": 2.37
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/virtualization/operations/page.tsx",
+      "file": "assets/page-BPCu1shX.js",
+      "incremental": {
+        "rawBytes": 247941,
+        "gzipBytes": 82755,
+        "rawKiB": 242.13,
+        "gzipKiB": 80.82
+      },
+      "ownChunk": {
+        "rawBytes": 927,
+        "gzipBytes": 504,
+        "rawKiB": 0.91,
+        "gzipKiB": 0.49
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/delivery/workbench/onboarding-page.tsx",
+      "file": "assets/onboarding-page-BEdn-CGf.js",
+      "incremental": {
+        "rawBytes": 257430,
+        "gzipBytes": 82019,
+        "rawKiB": 251.4,
+        "gzipKiB": 80.1
+      },
+      "ownChunk": {
+        "rawBytes": 15570,
+        "gzipBytes": 5565,
+        "rawKiB": 15.21,
+        "gzipKiB": 5.43
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/auth/user-profile-page.tsx",
+      "file": "assets/user-profile-page-CZg75HqB.js",
+      "incremental": {
+        "rawBytes": 231930,
+        "gzipBytes": 80851,
+        "rawKiB": 226.49,
+        "gzipKiB": 78.96
+      },
+      "ownChunk": {
+        "rawBytes": 30975,
+        "gzipBytes": 10405,
+        "rawKiB": 30.25,
+        "gzipKiB": 10.16
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/workloads/cronjobs/list-page.tsx",
+      "file": "assets/list-page-yWMk5ECA.js",
+      "incremental": {
+        "rawBytes": 246136,
+        "gzipBytes": 80687,
+        "rawKiB": 240.37,
+        "gzipKiB": 78.8
+      },
+      "ownChunk": {
+        "rawBytes": 5460,
+        "gzipBytes": 2525,
+        "rawKiB": 5.33,
+        "gzipKiB": 2.47
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/docker/overview/page.tsx",
+      "file": "assets/page-oJeZc2AQ.js",
+      "incremental": {
+        "rawBytes": 239567,
+        "gzipBytes": 80194,
+        "rawKiB": 233.95,
+        "gzipKiB": 78.31
+      },
+      "ownChunk": {
+        "rawBytes": 5144,
+        "gzipBytes": 1900,
+        "rawKiB": 5.02,
+        "gzipKiB": 1.86
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/delivery/workbench/testing-page.tsx",
+      "file": "assets/testing-page-DkRDWiYE.js",
+      "incremental": {
+        "rawBytes": 244091,
+        "gzipBytes": 79687,
+        "rawKiB": 238.37,
+        "gzipKiB": 77.82
+      },
+      "ownChunk": {
+        "rawBytes": 4759,
+        "gzipBytes": 2289,
+        "rawKiB": 4.65,
+        "gzipKiB": 2.24
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/identity/providers/list-page.tsx",
+      "file": "assets/list-page-BbKdOlEF.js",
+      "incremental": {
+        "rawBytes": 238412,
+        "gzipBytes": 79598,
+        "rawKiB": 232.82,
+        "gzipKiB": 77.73
+      },
+      "ownChunk": {
+        "rawBytes": 24228,
+        "gzipBytes": 7615,
+        "rawKiB": 23.66,
+        "gzipKiB": 7.44
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/network/services/detail-page.tsx",
+      "file": "assets/detail-page-BYeJkVzE.js",
+      "incremental": {
+        "rawBytes": 244726,
+        "gzipBytes": 79517,
+        "rawKiB": 238.99,
+        "gzipKiB": 77.65
+      },
+      "ownChunk": {
+        "rawBytes": 14943,
+        "gzipBytes": 3873,
+        "rawKiB": 14.59,
+        "gzipKiB": 3.78
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/delivery/workbench/analysis-page.tsx",
+      "file": "assets/analysis-page-BVTIvxPd.js",
+      "incremental": {
+        "rawBytes": 243563,
+        "gzipBytes": 79282,
+        "rawKiB": 237.85,
+        "gzipKiB": 77.42
+      },
+      "ownChunk": {
+        "rawBytes": 6522,
+        "gzipBytes": 3380,
+        "rawKiB": 6.37,
+        "gzipKiB": 3.3
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/docker/operations/page.tsx",
+      "file": "assets/page-CCtXzXNR.js",
+      "incremental": {
+        "rawBytes": 236020,
+        "gzipBytes": 79187,
+        "rawKiB": 230.49,
+        "gzipKiB": 77.33
+      },
+      "ownChunk": {
+        "rawBytes": 691,
+        "gzipBytes": 402,
+        "rawKiB": 0.67,
+        "gzipKiB": 0.39
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/workloads/replicationcontrollers/list-page.tsx",
+      "file": "assets/list-page-C0EfLunt.js",
+      "incremental": {
+        "rawBytes": 242153,
+        "gzipBytes": 78864,
+        "rawKiB": 236.48,
+        "gzipKiB": 77.02
+      },
+      "ownChunk": {
+        "rawBytes": 2052,
+        "gzipBytes": 1044,
+        "rawKiB": 2,
+        "gzipKiB": 1.02
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/workloads/replicasets/list-page.tsx",
+      "file": "assets/list-page-Da92d4iM.js",
+      "incremental": {
+        "rawBytes": 242054,
+        "gzipBytes": 78851,
+        "rawKiB": 236.38,
+        "gzipKiB": 77
+      },
+      "ownChunk": {
+        "rawBytes": 1953,
+        "gzipBytes": 1031,
+        "rawKiB": 1.91,
+        "gzipKiB": 1.01
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/workloads/daemonsets/list-page.tsx",
+      "file": "assets/list-page-D_S-KcO-.js",
+      "incremental": {
+        "rawBytes": 242561,
+        "gzipBytes": 78749,
+        "rawKiB": 236.88,
+        "gzipKiB": 76.9
+      },
+      "ownChunk": {
+        "rawBytes": 4975,
+        "gzipBytes": 2343,
+        "rawKiB": 4.86,
+        "gzipKiB": 2.29
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/delivery/environments/list-page.tsx",
+      "file": "assets/list-page-BEcPLh38.js",
+      "incremental": {
+        "rawBytes": 243981,
+        "gzipBytes": 78704,
+        "rawKiB": 238.26,
+        "gzipKiB": 76.86
+      },
+      "ownChunk": {
+        "rawBytes": 13238,
+        "gzipBytes": 4332,
+        "rawKiB": 12.93,
+        "gzipKiB": 4.23
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/plugins/marketplace/list-page.tsx",
+      "file": "assets/list-page-Bx68tt9y.js",
+      "incremental": {
+        "rawBytes": 231779,
+        "gzipBytes": 78436,
+        "rawKiB": 226.35,
+        "gzipKiB": 76.6
+      },
+      "ownChunk": {
+        "rawBytes": 3625,
+        "gzipBytes": 1630,
+        "rawKiB": 3.54,
+        "gzipKiB": 1.59
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/workloads/jobs/list-page.tsx",
+      "file": "assets/list-page-DqdT4FrV.js",
+      "incremental": {
+        "rawBytes": 241360,
+        "gzipBytes": 78281,
+        "rawKiB": 235.7,
+        "gzipKiB": 76.45
+      },
+      "ownChunk": {
+        "rawBytes": 4241,
+        "gzipBytes": 2127,
+        "rawKiB": 4.14,
+        "gzipKiB": 2.08
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/docker/templates/page.tsx",
+      "file": "assets/page-DlWUyFED.js",
+      "incremental": {
+        "rawBytes": 228949,
+        "gzipBytes": 76197,
+        "rawKiB": 223.58,
+        "gzipKiB": 74.41
+      },
+      "ownChunk": {
+        "rawBytes": 4490,
+        "gzipBytes": 2006,
+        "rawKiB": 4.38,
+        "gzipKiB": 1.96
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/identity/applications/list-page.tsx",
+      "file": "assets/list-page-CjYHOVlE.js",
+      "incremental": {
+        "rawBytes": 224953,
+        "gzipBytes": 75699,
+        "rawKiB": 219.68,
+        "gzipKiB": 73.92
+      },
+      "ownChunk": {
+        "rawBytes": 15029,
+        "gzipBytes": 5286,
+        "rawKiB": 14.68,
+        "gzipKiB": 5.16
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/settings/identity/page.tsx",
+      "file": "assets/page-DHEkBAUN.js",
+      "incremental": {
+        "rawBytes": 229910,
+        "gzipBytes": 75509,
+        "rawKiB": 224.52,
+        "gzipKiB": 73.74
+      },
+      "ownChunk": {
+        "rawBytes": 11217,
+        "gzipBytes": 4339,
+        "rawKiB": 10.95,
+        "gzipKiB": 4.24
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/observability/notifications/page.tsx",
+      "file": "assets/page-BezMtPWl.js",
+      "incremental": {
+        "rawBytes": 231653,
+        "gzipBytes": 75388,
+        "rawKiB": 226.22,
+        "gzipKiB": 73.62
+      },
+      "ownChunk": {
+        "rawBytes": 22155,
+        "gzipBytes": 5813,
+        "rawKiB": 21.64,
+        "gzipKiB": 5.68
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/access/policies/page.tsx",
+      "file": "assets/page-Z3pJyz3J.js",
+      "incremental": {
+        "rawBytes": 221253,
+        "gzipBytes": 74318,
+        "rawKiB": 216.07,
+        "gzipKiB": 72.58
+      },
+      "ownChunk": {
+        "rawBytes": 9533,
+        "gzipBytes": 3403,
+        "rawKiB": 9.31,
+        "gzipKiB": 3.32
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/cluster-resources/node-detail-page.tsx",
+      "file": "assets/node-detail-page-DjBsjsuR.js",
+      "incremental": {
+        "rawBytes": 225675,
+        "gzipBytes": 74060,
+        "rawKiB": 220.39,
+        "gzipKiB": 72.32
+      },
+      "ownChunk": {
+        "rawBytes": 10695,
+        "gzipBytes": 4274,
+        "rawKiB": 10.44,
+        "gzipKiB": 4.17
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/access-control/serviceaccounts/list-page.tsx",
+      "file": "assets/list-page-6YWF3YjP.js",
+      "incremental": {
+        "rawBytes": 221453,
+        "gzipBytes": 73725,
+        "rawKiB": 216.26,
+        "gzipKiB": 72
+      },
+      "ownChunk": {
+        "rawBytes": 1891,
+        "gzipBytes": 992,
+        "rawKiB": 1.85,
+        "gzipKiB": 0.97
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/network/port-forward/page.tsx",
+      "file": "assets/page-Bb1CLRZH.js",
+      "incremental": {
+        "rawBytes": 222046,
+        "gzipBytes": 73539,
+        "rawKiB": 216.84,
+        "gzipKiB": 71.82
+      },
+      "ownChunk": {
+        "rawBytes": 18136,
+        "gzipBytes": 4898,
+        "rawKiB": 17.71,
+        "gzipKiB": 4.78
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/observability/rules/page.tsx",
+      "file": "assets/page-xAV8YRoC.js",
+      "incremental": {
+        "rawBytes": 219212,
+        "gzipBytes": 73272,
+        "rawKiB": 214.07,
+        "gzipKiB": 71.55
+      },
+      "ownChunk": {
+        "rawBytes": 10815,
+        "gzipBytes": 3995,
+        "rawKiB": 10.56,
+        "gzipKiB": 3.9
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/access-control/rolebindings/list-page.tsx",
+      "file": "assets/list-page-CvFn8A8E.js",
+      "incremental": {
+        "rawBytes": 220270,
+        "gzipBytes": 73094,
+        "rawKiB": 215.11,
+        "gzipKiB": 71.38
+      },
+      "ownChunk": {
+        "rawBytes": 1952,
+        "gzipBytes": 986,
+        "rawKiB": 1.91,
+        "gzipKiB": 0.96
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/access-control/clusterrolebindings/list-page.tsx",
+      "file": "assets/list-page-zeKs1SF4.js",
+      "incremental": {
+        "rawBytes": 220130,
+        "gzipBytes": 73042,
+        "rawKiB": 214.97,
+        "gzipKiB": 71.33
+      },
+      "ownChunk": {
+        "rawBytes": 1812,
+        "gzipBytes": 934,
+        "rawKiB": 1.77,
+        "gzipKiB": 0.91
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/access-control/roles/list-page.tsx",
+      "file": "assets/list-page-BYIUHxGK.js",
+      "incremental": {
+        "rawBytes": 219815,
+        "gzipBytes": 72949,
+        "rawKiB": 214.66,
+        "gzipKiB": 71.24
+      },
+      "ownChunk": {
+        "rawBytes": 1497,
+        "gzipBytes": 841,
+        "rawKiB": 1.46,
+        "gzipKiB": 0.82
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/access-control/clusterroles/list-page.tsx",
+      "file": "assets/list-page-Bsb_QIwS.js",
+      "incremental": {
+        "rawBytes": 219810,
+        "gzipBytes": 72931,
+        "rawKiB": 214.66,
+        "gzipKiB": 71.22
+      },
+      "ownChunk": {
+        "rawBytes": 1492,
+        "gzipBytes": 823,
+        "rawKiB": 1.46,
+        "gzipKiB": 0.8
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/configuration/resourcequotas/list-page.tsx",
+      "file": "assets/list-page-Bhe2SMx2.js",
+      "incremental": {
+        "rawBytes": 218582,
+        "gzipBytes": 72898,
+        "rawKiB": 213.46,
+        "gzipKiB": 71.19
+      },
+      "ownChunk": {
+        "rawBytes": 2566,
+        "gzipBytes": 1386,
+        "rawKiB": 2.51,
+        "gzipKiB": 1.35
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/delivery/execution-tasks/list-page.tsx",
+      "file": "assets/list-page-DlzaeZr5.js",
+      "incremental": {
+        "rawBytes": 223721,
+        "gzipBytes": 72625,
+        "rawKiB": 218.48,
+        "gzipKiB": 70.92
+      },
+      "ownChunk": {
+        "rawBytes": 6693,
+        "gzipBytes": 2568,
+        "rawKiB": 6.54,
+        "gzipKiB": 2.51
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/observability/healing/page.tsx",
+      "file": "assets/page-Cp9efG-v.js",
+      "incremental": {
+        "rawBytes": 217717,
+        "gzipBytes": 72442,
+        "rawKiB": 212.61,
+        "gzipKiB": 70.74
+      },
+      "ownChunk": {
+        "rawBytes": 10567,
+        "gzipBytes": 3862,
+        "rawKiB": 10.32,
+        "gzipKiB": 3.77
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/observability/alerts/detail-page.tsx",
+      "file": "assets/detail-page-g_RgdziF.js",
+      "incremental": {
+        "rawBytes": 215412,
+        "gzipBytes": 71790,
+        "rawKiB": 210.36,
+        "gzipKiB": 70.11
+      },
+      "ownChunk": {
+        "rawBytes": 12567,
+        "gzipBytes": 4386,
+        "rawKiB": 12.27,
+        "gzipKiB": 4.28
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/cluster-resources/nodes-list-page.tsx",
+      "file": "assets/nodes-list-page-DtSAZAfA.js",
+      "incremental": {
+        "rawBytes": 216304,
+        "gzipBytes": 71604,
+        "rawKiB": 211.23,
+        "gzipKiB": 69.93
+      },
+      "ownChunk": {
+        "rawBytes": 4540,
+        "gzipBytes": 2250,
+        "rawKiB": 4.43,
+        "gzipKiB": 2.2
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/cluster-resources/namespaces-list-page.tsx",
+      "file": "assets/namespaces-list-page-DYmekJVC.js",
+      "incremental": {
+        "rawBytes": 216399,
+        "gzipBytes": 71578,
+        "rawKiB": 211.33,
+        "gzipKiB": 69.9
+      },
+      "ownChunk": {
+        "rawBytes": 4635,
+        "gzipBytes": 2224,
+        "rawKiB": 4.53,
+        "gzipKiB": 2.17
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/system/announcements/page.tsx",
+      "file": "assets/page-DZN9Omnd.js",
+      "incremental": {
+        "rawBytes": 250860,
+        "gzipBytes": 71430,
+        "rawKiB": 244.98,
+        "gzipKiB": 69.76
+      },
+      "ownChunk": {
+        "rawBytes": 9289,
+        "gzipBytes": 3461,
+        "rawKiB": 9.07,
+        "gzipKiB": 3.38
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/workloads/overview/page.tsx",
+      "file": "assets/page-CYiDKrnB.js",
+      "incremental": {
+        "rawBytes": 223481,
+        "gzipBytes": 71362,
+        "rawKiB": 218.24,
+        "gzipKiB": 69.69
+      },
+      "ownChunk": {
+        "rawBytes": 5503,
+        "gzipBytes": 2574,
+        "rawKiB": 5.37,
+        "gzipKiB": 2.51
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/virtualization/virtual-machines/detail-page.tsx",
+      "file": "assets/detail-page-ZRmezQlF.js",
+      "incremental": {
+        "rawBytes": 216941,
+        "gzipBytes": 70794,
+        "rawKiB": 211.86,
+        "gzipKiB": 69.13
+      },
+      "ownChunk": {
+        "rawBytes": 9564,
+        "gzipBytes": 3807,
+        "rawKiB": 9.34,
+        "gzipKiB": 3.72
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/delivery/environments/detail-page.tsx",
+      "file": "assets/detail-page-BZA8novj.js",
+      "incremental": {
+        "rawBytes": 221891,
+        "gzipBytes": 70696,
+        "rawKiB": 216.69,
+        "gzipKiB": 69.04
+      },
+      "ownChunk": {
+        "rawBytes": 14025,
+        "gzipBytes": 4693,
+        "rawKiB": 13.7,
+        "gzipKiB": 4.58
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/access/teams/page.tsx",
+      "file": "assets/page-__NoGmfK.js",
+      "incremental": {
+        "rawBytes": 208508,
+        "gzipBytes": 70572,
+        "rawKiB": 203.62,
+        "gzipKiB": 68.92
+      },
+      "ownChunk": {
+        "rawBytes": 6367,
+        "gzipBytes": 2989,
+        "rawKiB": 6.22,
+        "gzipKiB": 2.92
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/access/users/page.tsx",
+      "file": "assets/page-CrPsp48I.js",
+      "incremental": {
+        "rawBytes": 209014,
+        "gzipBytes": 70076,
+        "rawKiB": 204.12,
+        "gzipKiB": 68.43
+      },
+      "ownChunk": {
+        "rawBytes": 9348,
+        "gzipBytes": 3854,
+        "rawKiB": 9.13,
+        "gzipKiB": 3.76
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/delivery/release-board/page.tsx",
+      "file": "assets/page-ByyzthZK.js",
+      "incremental": {
+        "rawBytes": 208680,
+        "gzipBytes": 68478,
+        "rawKiB": 203.79,
+        "gzipKiB": 66.87
+      },
+      "ownChunk": {
+        "rawBytes": 5102,
+        "gzipBytes": 2059,
+        "rawKiB": 4.98,
+        "gzipKiB": 2.01
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/extensions/helm/releases/detail-page.tsx",
+      "file": "assets/detail-page-C3USn80w.js",
+      "incremental": {
+        "rawBytes": 210484,
+        "gzipBytes": 68381,
+        "rawKiB": 205.55,
+        "gzipKiB": 66.78
+      },
+      "ownChunk": {
+        "rawBytes": 18998,
+        "gzipBytes": 4587,
+        "rawKiB": 18.55,
+        "gzipKiB": 4.48
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/extensions/helm/releases/list-page.tsx",
+      "file": "assets/list-page-neBJ9NQI.js",
+      "incremental": {
+        "rawBytes": 207033,
+        "gzipBytes": 67872,
+        "rawKiB": 202.18,
+        "gzipKiB": 66.28
+      },
+      "ownChunk": {
+        "rawBytes": 18948,
+        "gzipBytes": 4713,
+        "rawKiB": 18.5,
+        "gzipKiB": 4.6
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/delivery/runtime/workload-detail-page.tsx",
+      "file": "assets/workload-detail-page-xM1bhv27.js",
+      "incremental": {
+        "rawBytes": 220129,
+        "gzipBytes": 67234,
+        "rawKiB": 214.97,
+        "gzipKiB": 65.66
+      },
+      "ownChunk": {
+        "rawBytes": 22183,
+        "gzipBytes": 5227,
+        "rawKiB": 21.66,
+        "gzipKiB": 5.1
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/configuration/secrets/list-page.tsx",
+      "file": "assets/list-page-DufcrLQx.js",
+      "incremental": {
+        "rawBytes": 203751,
+        "gzipBytes": 67164,
+        "rawKiB": 198.98,
+        "gzipKiB": 65.59
+      },
+      "ownChunk": {
+        "rawBytes": 1464,
+        "gzipBytes": 799,
+        "rawKiB": 1.43,
+        "gzipKiB": 0.78
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/configuration/configmaps/list-page.tsx",
+      "file": "assets/list-page-BqUi-w1h.js",
+      "incremental": {
+        "rawBytes": 203750,
+        "gzipBytes": 67146,
+        "rawKiB": 198.97,
+        "gzipKiB": 65.57
+      },
+      "ownChunk": {
+        "rawBytes": 1463,
+        "gzipBytes": 781,
+        "rawKiB": 1.43,
+        "gzipKiB": 0.76
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/configuration/priorityclasses/list-page.tsx",
+      "file": "assets/list-page-KkjMEyZt.js",
+      "incremental": {
+        "rawBytes": 203757,
+        "gzipBytes": 67131,
+        "rawKiB": 198.98,
+        "gzipKiB": 65.56
+      },
+      "ownChunk": {
+        "rawBytes": 1470,
+        "gzipBytes": 766,
+        "rawKiB": 1.44,
+        "gzipKiB": 0.75
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/clusters/list-page.tsx",
+      "file": "assets/list-page-q-tUkkKE.js",
+      "incremental": {
+        "rawBytes": 206793,
+        "gzipBytes": 66935,
+        "rawKiB": 201.95,
+        "gzipKiB": 65.37
+      },
+      "ownChunk": {
+        "rawBytes": 12673,
+        "gzipBytes": 4656,
+        "rawKiB": 12.38,
+        "gzipKiB": 4.55
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/delivery/registries/page.tsx",
+      "file": "assets/page-BdVlkNsW.js",
+      "incremental": {
+        "rawBytes": 207290,
+        "gzipBytes": 66599,
+        "rawKiB": 202.43,
+        "gzipKiB": 65.04
+      },
+      "ownChunk": {
+        "rawBytes": 3683,
+        "gzipBytes": 1694,
+        "rawKiB": 3.6,
+        "gzipKiB": 1.65
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/access/scope-grants/page.tsx",
+      "file": "assets/page-CHZyOX6P.js",
+      "incremental": {
+        "rawBytes": 200468,
+        "gzipBytes": 66522,
+        "rawKiB": 195.77,
+        "gzipKiB": 64.96
+      },
+      "ownChunk": {
+        "rawBytes": 5054,
+        "gzipBytes": 2223,
+        "rawKiB": 4.94,
+        "gzipKiB": 2.17
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/configuration/poddisruptionbudgets/list-page.tsx",
+      "file": "assets/list-page-DTEscEq5.js",
+      "incremental": {
+        "rawBytes": 202614,
+        "gzipBytes": 66516,
+        "rawKiB": 197.87,
+        "gzipKiB": 64.96
+      },
+      "ownChunk": {
+        "rawBytes": 1571,
+        "gzipBytes": 776,
+        "rawKiB": 1.53,
+        "gzipKiB": 0.76
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/network/gateway-api/gatewayclasses-list-page.tsx",
+      "file": "assets/gatewayclasses-list-page-DCL0vdO3.js",
+      "incremental": {
+        "rawBytes": 200337,
+        "gzipBytes": 66510,
+        "rawKiB": 195.64,
+        "gzipKiB": 64.95
+      },
+      "ownChunk": {
+        "rawBytes": 12263,
+        "gzipBytes": 2712,
+        "rawKiB": 11.98,
+        "gzipKiB": 2.65
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/configuration/hpas/list-page.tsx",
+      "file": "assets/list-page-DgymKDrt.js",
+      "incremental": {
+        "rawBytes": 202498,
+        "gzipBytes": 66503,
+        "rawKiB": 197.75,
+        "gzipKiB": 64.94
+      },
+      "ownChunk": {
+        "rawBytes": 1455,
+        "gzipBytes": 763,
+        "rawKiB": 1.42,
+        "gzipKiB": 0.75
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/configuration/leases/list-page.tsx",
+      "file": "assets/list-page-Ot_x78sa.js",
+      "incremental": {
+        "rawBytes": 202465,
+        "gzipBytes": 66476,
+        "rawKiB": 197.72,
+        "gzipKiB": 64.92
+      },
+      "ownChunk": {
+        "rawBytes": 1422,
+        "gzipBytes": 736,
+        "rawKiB": 1.39,
+        "gzipKiB": 0.72
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/network/resources/ingressclasses-list-page.tsx",
+      "file": "assets/ingressclasses-list-page-D8WpDu7f.js",
+      "incremental": {
+        "rawBytes": 200218,
+        "gzipBytes": 66439,
+        "rawKiB": 195.53,
+        "gzipKiB": 64.88
+      },
+      "ownChunk": {
+        "rawBytes": 12168,
+        "gzipBytes": 2661,
+        "rawKiB": 11.88,
+        "gzipKiB": 2.6
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/configuration/limitranges/list-page.tsx",
+      "file": "assets/list-page-CvVyGZ6G.js",
+      "incremental": {
+        "rawBytes": 202272,
+        "gzipBytes": 66430,
+        "rawKiB": 197.53,
+        "gzipKiB": 64.87
+      },
+      "ownChunk": {
+        "rawBytes": 1229,
+        "gzipBytes": 690,
+        "rawKiB": 1.2,
+        "gzipKiB": 0.67
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/configuration/validatingwebhookconfigurations/list-page.tsx",
+      "file": "assets/list-page-B5N_IYs6.js",
+      "incremental": {
+        "rawBytes": 202316,
+        "gzipBytes": 66426,
+        "rawKiB": 197.57,
+        "gzipKiB": 64.87
+      },
+      "ownChunk": {
+        "rawBytes": 1273,
+        "gzipBytes": 686,
+        "rawKiB": 1.24,
+        "gzipKiB": 0.67
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/configuration/mutatingwebhookconfigurations/list-page.tsx",
+      "file": "assets/list-page-Bu0HqZIc.js",
+      "incremental": {
+        "rawBytes": 202309,
+        "gzipBytes": 66425,
+        "rawKiB": 197.57,
+        "gzipKiB": 64.87
+      },
+      "ownChunk": {
+        "rawBytes": 1266,
+        "gzipBytes": 685,
+        "rawKiB": 1.24,
+        "gzipKiB": 0.67
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/configuration/runtimeclasses/list-page.tsx",
+      "file": "assets/list-page-rNQwiDGl.js",
+      "incremental": {
+        "rawBytes": 202195,
+        "gzipBytes": 66397,
+        "rawKiB": 197.46,
+        "gzipKiB": 64.84
+      },
+      "ownChunk": {
+        "rawBytes": 1152,
+        "gzipBytes": 657,
+        "rawKiB": 1.13,
+        "gzipKiB": 0.64
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/network/services/list-page.tsx",
+      "file": "assets/list-page-l3lkcMpg.js",
+      "incremental": {
+        "rawBytes": 200420,
+        "gzipBytes": 66366,
+        "rawKiB": 195.72,
+        "gzipKiB": 64.81
+      },
+      "ownChunk": {
+        "rawBytes": 12523,
+        "gzipBytes": 2836,
+        "rawKiB": 12.23,
+        "gzipKiB": 2.77
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/storage/persistent-volume-claims/list-page.tsx",
+      "file": "assets/list-page-B3CwnUPI.js",
+      "incremental": {
+        "rawBytes": 201309,
+        "gzipBytes": 66363,
+        "rawKiB": 196.59,
+        "gzipKiB": 64.81
+      },
+      "ownChunk": {
+        "rawBytes": 2372,
+        "gzipBytes": 1185,
+        "rawKiB": 2.32,
+        "gzipKiB": 1.16
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/network/ingresses/list-page.tsx",
+      "file": "assets/list-page-kJNKYf4q.js",
+      "incremental": {
+        "rawBytes": 199884,
+        "gzipBytes": 66349,
+        "rawKiB": 195.2,
+        "gzipKiB": 64.79
+      },
+      "ownChunk": {
+        "rawBytes": 12517,
+        "gzipBytes": 2858,
+        "rawKiB": 12.22,
+        "gzipKiB": 2.79
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/observability/integrations/page.tsx",
+      "file": "assets/page-B4rVpDkQ.js",
+      "incremental": {
+        "rawBytes": 199943,
+        "gzipBytes": 66340,
+        "rawKiB": 195.26,
+        "gzipKiB": 64.79
+      },
+      "ownChunk": {
+        "rawBytes": 12727,
+        "gzipBytes": 4505,
+        "rawKiB": 12.43,
+        "gzipKiB": 4.4
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/storage/persistent-volumes/list-page.tsx",
+      "file": "assets/list-page-DV2plHAd.js",
+      "incremental": {
+        "rawBytes": 201169,
+        "gzipBytes": 66314,
+        "rawKiB": 196.45,
+        "gzipKiB": 64.76
+      },
+      "ownChunk": {
+        "rawBytes": 2237,
+        "gzipBytes": 1139,
+        "rawKiB": 2.18,
+        "gzipKiB": 1.11
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/network/gateway-api/gateways-list-page.tsx",
+      "file": "assets/gateways-list-page-B7Pw3wRp.js",
+      "incremental": {
+        "rawBytes": 199621,
+        "gzipBytes": 66254,
+        "rawKiB": 194.94,
+        "gzipKiB": 64.7
+      },
+      "ownChunk": {
+        "rawBytes": 12366,
+        "gzipBytes": 2779,
+        "rawKiB": 12.08,
+        "gzipKiB": 2.71
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/storage/storage-classes/list-page.tsx",
+      "file": "assets/list-page-CRDzwLvd.js",
+      "incremental": {
+        "rawBytes": 200983,
+        "gzipBytes": 66253,
+        "rawKiB": 196.27,
+        "gzipKiB": 64.7
+      },
+      "ownChunk": {
+        "rawBytes": 2054,
+        "gzipBytes": 1080,
+        "rawKiB": 2.01,
+        "gzipKiB": 1.05
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/access/roles/page.tsx",
+      "file": "assets/page-BL7m2JlE.js",
+      "incremental": {
+        "rawBytes": 197107,
+        "gzipBytes": 66224,
+        "rawKiB": 192.49,
+        "gzipKiB": 64.67
+      },
+      "ownChunk": {
+        "rawBytes": 7523,
+        "gzipBytes": 3471,
+        "rawKiB": 7.35,
+        "gzipKiB": 3.39
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/network/gateway-api/backend-tls-policies-page.tsx",
+      "file": "assets/backend-tls-policies-page-CAG5AVTN.js",
+      "incremental": {
+        "rawBytes": 199630,
+        "gzipBytes": 66224,
+        "rawKiB": 194.95,
+        "gzipKiB": 64.67
+      },
+      "ownChunk": {
+        "rawBytes": 12375,
+        "gzipBytes": 2749,
+        "rawKiB": 12.08,
+        "gzipKiB": 2.68
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/network/gateway-api/grpc-routes-page.tsx",
+      "file": "assets/grpc-routes-page-BY2lKbh1.js",
+      "incremental": {
+        "rawBytes": 199587,
+        "gzipBytes": 66208,
+        "rawKiB": 194.91,
+        "gzipKiB": 64.66
+      },
+      "ownChunk": {
+        "rawBytes": 12332,
+        "gzipBytes": 2733,
+        "rawKiB": 12.04,
+        "gzipKiB": 2.67
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/network/gateway-api/httproutes-page.tsx",
+      "file": "assets/httproutes-page--GohM3LS.js",
+      "incremental": {
+        "rawBytes": 199539,
+        "gzipBytes": 66192,
+        "rawKiB": 194.86,
+        "gzipKiB": 64.64
+      },
+      "ownChunk": {
+        "rawBytes": 12284,
+        "gzipBytes": 2717,
+        "rawKiB": 12,
+        "gzipKiB": 2.65
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/network/gateway-api/reference-grants-page.tsx",
+      "file": "assets/reference-grants-page-9giHPFwr.js",
+      "incremental": {
+        "rawBytes": 199441,
+        "gzipBytes": 66162,
+        "rawKiB": 194.77,
+        "gzipKiB": 64.61
+      },
+      "ownChunk": {
+        "rawBytes": 12186,
+        "gzipBytes": 2687,
+        "rawKiB": 11.9,
+        "gzipKiB": 2.62
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/network/resources/networkpolicies-list-page.tsx",
+      "file": "assets/networkpolicies-list-page-Bf4a0jQ9.js",
+      "incremental": {
+        "rawBytes": 199469,
+        "gzipBytes": 66116,
+        "rawKiB": 194.79,
+        "gzipKiB": 64.57
+      },
+      "ownChunk": {
+        "rawBytes": 12238,
+        "gzipBytes": 2661,
+        "rawKiB": 11.95,
+        "gzipKiB": 2.6
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/network/resources/endpointslices-list-page.tsx",
+      "file": "assets/endpointslices-list-page-qFt67dSq.js",
+      "incremental": {
+        "rawBytes": 199031,
+        "gzipBytes": 65818,
+        "rawKiB": 194.37,
+        "gzipKiB": 64.28
+      },
+      "ownChunk": {
+        "rawBytes": 12225,
+        "gzipBytes": 2665,
+        "rawKiB": 11.94,
+        "gzipKiB": 2.6
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/clusters/detail-page.tsx",
+      "file": "assets/detail-page-lE2YeQSg.js",
+      "incremental": {
+        "rawBytes": 205363,
+        "gzipBytes": 65726,
+        "rawKiB": 200.55,
+        "gzipKiB": 64.19
+      },
+      "ownChunk": {
+        "rawBytes": 6822,
+        "gzipBytes": 2449,
+        "rawKiB": 6.66,
+        "gzipKiB": 2.39
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/configuration/configmaps/detail-page.tsx",
+      "file": "assets/detail-page-B7AcDgh7.js",
+      "incremental": {
+        "rawBytes": 194046,
+        "gzipBytes": 64681,
+        "rawKiB": 189.5,
+        "gzipKiB": 63.17
+      },
+      "ownChunk": {
+        "rawBytes": 3466,
+        "gzipBytes": 1720,
+        "rawKiB": 3.38,
+        "gzipKiB": 1.68
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/configuration/secrets/detail-page.tsx",
+      "file": "assets/detail-page-BDi8Lnam.js",
+      "incremental": {
+        "rawBytes": 193891,
+        "gzipBytes": 64637,
+        "rawKiB": 189.35,
+        "gzipKiB": 63.12
+      },
+      "ownChunk": {
+        "rawBytes": 3311,
+        "gzipBytes": 1676,
+        "rawKiB": 3.23,
+        "gzipKiB": 1.64
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/delivery/releases/list-page.tsx",
+      "file": "assets/list-page-BJMWPB_r.js",
+      "incremental": {
+        "rawBytes": 202421,
+        "gzipBytes": 64480,
+        "rawKiB": 197.68,
+        "gzipKiB": 62.97
+      },
+      "ownChunk": {
+        "rawBytes": 2079,
+        "gzipBytes": 1074,
+        "rawKiB": 2.03,
+        "gzipKiB": 1.05
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/delivery/release-bundles/list-page.tsx",
+      "file": "assets/list-page-CVDAJT5x.js",
+      "incremental": {
+        "rawBytes": 200170,
+        "gzipBytes": 64331,
+        "rawKiB": 195.48,
+        "gzipKiB": 62.82
+      },
+      "ownChunk": {
+        "rawBytes": 2853,
+        "gzipBytes": 1240,
+        "rawKiB": 2.79,
+        "gzipKiB": 1.21
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/plugins/installed/list-page.tsx",
+      "file": "assets/list-page-Cwe2hYY1.js",
+      "incremental": {
+        "rawBytes": 189588,
+        "gzipBytes": 63688,
+        "rawKiB": 185.14,
+        "gzipKiB": 62.2
+      },
+      "ownChunk": {
+        "rawBytes": 2553,
+        "gzipBytes": 1299,
+        "rawKiB": 2.49,
+        "gzipKiB": 1.27
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/system/sessions/page.tsx",
+      "file": "assets/page-H9WTi-Hu.js",
+      "incremental": {
+        "rawBytes": 189537,
+        "gzipBytes": 63543,
+        "rawKiB": 185.09,
+        "gzipKiB": 62.05
+      },
+      "ownChunk": {
+        "rawBytes": 4060,
+        "gzipBytes": 1994,
+        "rawKiB": 3.96,
+        "gzipKiB": 1.95
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/identity/outposts/list-page.tsx",
+      "file": "assets/list-page-CSnzJ0sU.js",
+      "incremental": {
+        "rawBytes": 188746,
+        "gzipBytes": 63180,
+        "rawKiB": 184.32,
+        "gzipKiB": 61.7
+      },
+      "ownChunk": {
+        "rawBytes": 7581,
+        "gzipBytes": 3256,
+        "rawKiB": 7.4,
+        "gzipKiB": 3.18
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/observability/alerts/page.tsx",
+      "file": "assets/page-BmpB7X44.js",
+      "incremental": {
+        "rawBytes": 189383,
+        "gzipBytes": 63037,
+        "rawKiB": 184.94,
+        "gzipKiB": 61.56
+      },
+      "ownChunk": {
+        "rawBytes": 7624,
+        "gzipBytes": 3093,
+        "rawKiB": 7.45,
+        "gzipKiB": 3.02
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/extensions/crds/list-page.tsx",
+      "file": "assets/list-page-CB9Fj9h8.js",
+      "incremental": {
+        "rawBytes": 196429,
+        "gzipBytes": 62610,
+        "rawKiB": 191.83,
+        "gzipKiB": 61.14
+      },
+      "ownChunk": {
+        "rawBytes": 18153,
+        "gzipBytes": 4148,
+        "rawKiB": 17.73,
+        "gzipKiB": 4.05
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/identity/policies/list-page.tsx",
+      "file": "assets/list-page-PGEMtmwI.js",
+      "incremental": {
+        "rawBytes": 186545,
+        "gzipBytes": 62267,
+        "rawKiB": 182.17,
+        "gzipKiB": 60.81
+      },
+      "ownChunk": {
+        "rawBytes": 9331,
+        "gzipBytes": 3815,
+        "rawKiB": 9.11,
+        "gzipKiB": 3.73
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/configuration/poddisruptionbudgets/detail-page.tsx",
+      "file": "assets/detail-page-7mUXZhlq.js",
+      "incremental": {
+        "rawBytes": 188902,
+        "gzipBytes": 62099,
+        "rawKiB": 184.47,
+        "gzipKiB": 60.64
+      },
+      "ownChunk": {
+        "rawBytes": 971,
+        "gzipBytes": 546,
+        "rawKiB": 0.95,
+        "gzipKiB": 0.53
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/configuration/hpas/detail-page.tsx",
+      "file": "assets/detail-page-DhUxWrdM.js",
+      "incremental": {
+        "rawBytes": 188838,
+        "gzipBytes": 62090,
+        "rawKiB": 184.41,
+        "gzipKiB": 60.63
+      },
+      "ownChunk": {
+        "rawBytes": 907,
+        "gzipBytes": 537,
+        "rawKiB": 0.89,
+        "gzipKiB": 0.52
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/configuration/resourcequotas/detail-page.tsx",
+      "file": "assets/detail-page-CKfneIvu.js",
+      "incremental": {
+        "rawBytes": 188838,
+        "gzipBytes": 62079,
+        "rawKiB": 184.41,
+        "gzipKiB": 60.62
+      },
+      "ownChunk": {
+        "rawBytes": 907,
+        "gzipBytes": 526,
+        "rawKiB": 0.89,
+        "gzipKiB": 0.51
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/configuration/limitranges/detail-page.tsx",
+      "file": "assets/detail-page-B7LYT4IB.js",
+      "incremental": {
+        "rawBytes": 188702,
+        "gzipBytes": 62019,
+        "rawKiB": 184.28,
+        "gzipKiB": 60.57
+      },
+      "ownChunk": {
+        "rawBytes": 771,
+        "gzipBytes": 466,
+        "rawKiB": 0.75,
+        "gzipKiB": 0.46
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/configuration/validatingwebhookconfigurations/detail-page.tsx",
+      "file": "assets/detail-page-C-Y_RinP.js",
+      "incremental": {
+        "rawBytes": 188690,
+        "gzipBytes": 61995,
+        "rawKiB": 184.27,
+        "gzipKiB": 60.54
+      },
+      "ownChunk": {
+        "rawBytes": 759,
+        "gzipBytes": 442,
+        "rawKiB": 0.74,
+        "gzipKiB": 0.43
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/configuration/mutatingwebhookconfigurations/detail-page.tsx",
+      "file": "assets/detail-page-U_AZJ03m.js",
+      "incremental": {
+        "rawBytes": 188684,
+        "gzipBytes": 61990,
+        "rawKiB": 184.26,
+        "gzipKiB": 60.54
+      },
+      "ownChunk": {
+        "rawBytes": 753,
+        "gzipBytes": 437,
+        "rawKiB": 0.74,
+        "gzipKiB": 0.43
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/settings/branding/page.tsx",
+      "file": "assets/page-D8j_GGfe.js",
+      "incremental": {
+        "rawBytes": 182917,
+        "gzipBytes": 60164,
+        "rawKiB": 178.63,
+        "gzipKiB": 58.75
+      },
+      "ownChunk": {
+        "rawBytes": 5756,
+        "gzipBytes": 2501,
+        "rawKiB": 5.62,
+        "gzipKiB": 2.44
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/observability/events/page.tsx",
+      "file": "assets/page-9lo_wCLC.js",
+      "incremental": {
+        "rawBytes": 179098,
+        "gzipBytes": 58761,
+        "rawKiB": 174.9,
+        "gzipKiB": 57.38
+      },
+      "ownChunk": {
+        "rawBytes": 1478,
+        "gzipBytes": 859,
+        "rawKiB": 1.44,
+        "gzipKiB": 0.84
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/settings/center/page.tsx",
+      "file": "assets/page-CQIgXo8L.js",
+      "incremental": {
+        "rawBytes": 176716,
+        "gzipBytes": 57806,
+        "rawKiB": 172.57,
+        "gzipKiB": 56.45
+      },
+      "ownChunk": {
+        "rawBytes": 1184,
+        "gzipBytes": 686,
+        "rawKiB": 1.16,
+        "gzipKiB": 0.67
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/settings/about/page.tsx",
+      "file": "assets/page-LVk9n-in.js",
+      "incremental": {
+        "rawBytes": 176293,
+        "gzipBytes": 57598,
+        "rawKiB": 172.16,
+        "gzipKiB": 56.25
+      },
+      "ownChunk": {
+        "rawBytes": 761,
+        "gzipBytes": 478,
+        "rawKiB": 0.74,
+        "gzipKiB": 0.47
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/workloads/deployments/detail-page.tsx",
+      "file": "assets/detail-page-CEsXNqVo.js",
+      "incremental": {
+        "rawBytes": 142409,
+        "gzipBytes": 45579,
+        "rawKiB": 139.07,
+        "gzipKiB": 44.51
+      },
+      "ownChunk": {
+        "rawBytes": 11379,
+        "gzipBytes": 3952,
+        "rawKiB": 11.11,
+        "gzipKiB": 3.86
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/workloads/statefulsets/detail-page.tsx",
+      "file": "assets/detail-page-C4S08L9S.js",
+      "incremental": {
+        "rawBytes": 113913,
+        "gzipBytes": 35836,
+        "rawKiB": 111.24,
+        "gzipKiB": 35
+      },
+      "ownChunk": {
+        "rawBytes": 5093,
+        "gzipBytes": 2147,
+        "rawKiB": 4.97,
+        "gzipKiB": 2.1
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/workloads/daemonsets/detail-page.tsx",
+      "file": "assets/detail-page-BYaQ_3im.js",
+      "incremental": {
+        "rawBytes": 113639,
+        "gzipBytes": 35749,
+        "rawKiB": 110.98,
+        "gzipKiB": 34.91
+      },
+      "ownChunk": {
+        "rawBytes": 4955,
+        "gzipBytes": 2095,
+        "rawKiB": 4.84,
+        "gzipKiB": 2.05
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/workloads/cronjobs/detail-page.tsx",
+      "file": "assets/detail-page-BWINtcbh.js",
+      "incremental": {
+        "rawBytes": 112256,
+        "gzipBytes": 35205,
+        "rawKiB": 109.63,
+        "gzipKiB": 34.38
+      },
+      "ownChunk": {
+        "rawBytes": 3700,
+        "gzipBytes": 1590,
+        "rawKiB": 3.61,
+        "gzipKiB": 1.55
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/workloads/jobs/detail-page.tsx",
+      "file": "assets/detail-page-CWBbjnBO.js",
+      "incremental": {
+        "rawBytes": 112173,
+        "gzipBytes": 35121,
+        "rawKiB": 109.54,
+        "gzipKiB": 34.3
+      },
+      "ownChunk": {
+        "rawBytes": 3841,
+        "gzipBytes": 1596,
+        "rawKiB": 3.75,
+        "gzipKiB": 1.56
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/copilot/gateway/pages/call-logs-page.tsx",
+      "file": "assets/call-logs-page-BbQ0TbY-.js",
+      "incremental": {
+        "rawBytes": 101561,
+        "gzipBytes": 30807,
+        "rawKiB": 99.18,
+        "gzipKiB": 30.08
+      },
+      "ownChunk": {
+        "rawBytes": 520,
+        "gzipBytes": 313,
+        "rawKiB": 0.51,
+        "gzipKiB": 0.31
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/copilot/gateway/pages/governance-page.tsx",
+      "file": "assets/governance-page-DD3sqWa0.js",
+      "incremental": {
+        "rawBytes": 101564,
+        "gzipBytes": 30804,
+        "rawKiB": 99.18,
+        "gzipKiB": 30.08
+      },
+      "ownChunk": {
+        "rawBytes": 523,
+        "gzipBytes": 310,
+        "rawKiB": 0.51,
+        "gzipKiB": 0.3
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/copilot/gateway/pages/clients-page.tsx",
+      "file": "assets/clients-page-BrkQIn3k.js",
+      "incremental": {
+        "rawBytes": 101558,
+        "gzipBytes": 30802,
+        "rawKiB": 99.18,
+        "gzipKiB": 30.08
+      },
+      "ownChunk": {
+        "rawBytes": 517,
+        "gzipBytes": 308,
+        "rawKiB": 0.5,
+        "gzipKiB": 0.3
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/copilot/gateway/pages/manifest-page.tsx",
+      "file": "assets/manifest-page-B8_k_qbg.js",
+      "incremental": {
+        "rawBytes": 101560,
+        "gzipBytes": 30800,
+        "rawKiB": 99.18,
+        "gzipKiB": 30.08
+      },
+      "ownChunk": {
+        "rawBytes": 519,
+        "gzipBytes": 306,
+        "rawKiB": 0.51,
+        "gzipKiB": 0.3
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/copilot/gateway/pages/overview-page.tsx",
+      "file": "assets/overview-page-BtMJaarf.js",
+      "incremental": {
+        "rawBytes": 101560,
+        "gzipBytes": 30800,
+        "rawKiB": 99.18,
+        "gzipKiB": 30.08
+      },
+      "ownChunk": {
+        "rawBytes": 519,
+        "gzipBytes": 306,
+        "rawKiB": 0.51,
+        "gzipKiB": 0.3
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/copilot/gateway/pages/relay-page.tsx",
+      "file": "assets/relay-page-5ifuBVnX.js",
+      "incremental": {
+        "rawBytes": 101554,
+        "gzipBytes": 30800,
+        "rawKiB": 99.17,
+        "gzipKiB": 30.08
+      },
+      "ownChunk": {
+        "rawBytes": 513,
+        "gzipBytes": 306,
+        "rawKiB": 0.5,
+        "gzipKiB": 0.3
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/copilot/gateway/pages/tokens-page.tsx",
+      "file": "assets/tokens-page-DGUfDQpX.js",
+      "incremental": {
+        "rawBytes": 101556,
+        "gzipBytes": 30798,
+        "rawKiB": 99.18,
+        "gzipKiB": 30.08
+      },
+      "ownChunk": {
+        "rawBytes": 515,
+        "gzipBytes": 304,
+        "rawKiB": 0.5,
+        "gzipKiB": 0.3
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/delivery/blueprints/page.tsx",
+      "file": "assets/page-C8hLV9BB.js",
+      "incremental": {
+        "rawBytes": 93277,
+        "gzipBytes": 29487,
+        "rawKiB": 91.09,
+        "gzipKiB": 28.8
+      },
+      "ownChunk": {
+        "rawBytes": 31940,
+        "gzipBytes": 9152,
+        "rawKiB": 31.19,
+        "gzipKiB": 8.94
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/plugins/installed/detail-page.tsx",
+      "file": "assets/detail-page-B86CBlDh.js",
+      "incremental": {
+        "rawBytes": 60486,
+        "gzipBytes": 23381,
+        "rawKiB": 59.07,
+        "gzipKiB": 22.83
+      },
+      "ownChunk": {
+        "rawBytes": 6755,
+        "gzipBytes": 2889,
+        "rawKiB": 6.6,
+        "gzipKiB": 2.82
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/delivery/workflow-templates/page.tsx",
+      "file": "assets/page-CeV8oR2h.js",
+      "incremental": {
+        "rawBytes": 67970,
+        "gzipBytes": 22396,
+        "rawKiB": 66.38,
+        "gzipKiB": 21.87
+      },
+      "ownChunk": {
+        "rawBytes": 16599,
+        "gzipBytes": 5735,
+        "rawKiB": 16.21,
+        "gzipKiB": 5.6
+      },
+      "heavyRuntimes": {
+        "flow": [
+          "_release-flow-dag-definition-DYPK6qdG.js",
+          "assets/release-flow-dag-definition-DYPK6qdG.js",
+          "release-flow-dag-definition"
+        ],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/delivery/applications/list-page.tsx",
+      "file": "assets/list-page-BEBG30ow.js",
+      "incremental": {
+        "rawBytes": 74081,
+        "gzipBytes": 22234,
+        "rawKiB": 72.34,
+        "gzipKiB": 21.71
+      },
+      "ownChunk": {
+        "rawBytes": 27552,
+        "gzipBytes": 7418,
+        "rawKiB": 26.91,
+        "gzipKiB": 7.24
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/plugins/marketplace/detail-page.tsx",
+      "file": "assets/detail-page-eDQQlrwf.js",
+      "incremental": {
+        "rawBytes": 56552,
+        "gzipBytes": 21387,
+        "rawKiB": 55.23,
+        "gzipKiB": 20.89
+      },
+      "ownChunk": {
+        "rawBytes": 2718,
+        "gzipBytes": 1108,
+        "rawKiB": 2.65,
+        "gzipKiB": 1.08
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/delivery/execution-tasks/detail-page.tsx",
+      "file": "assets/detail-page-R0WLjEsQ.js",
+      "incremental": {
+        "rawBytes": 70453,
+        "gzipBytes": 21320,
+        "rawKiB": 68.8,
+        "gzipKiB": 20.82
+      },
+      "ownChunk": {
+        "rawBytes": 426,
+        "gzipBytes": 283,
+        "rawKiB": 0.42,
+        "gzipKiB": 0.28
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/delivery/release-bundles/detail-page.tsx",
+      "file": "assets/detail-page-2KQ775Qt.js",
+      "incremental": {
+        "rawBytes": 70453,
+        "gzipBytes": 21320,
+        "rawKiB": 68.8,
+        "gzipKiB": 20.82
+      },
+      "ownChunk": {
+        "rawBytes": 426,
+        "gzipBytes": 283,
+        "rawKiB": 0.42,
+        "gzipKiB": 0.28
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/delivery/workflows/detail-page.tsx",
+      "file": "assets/detail-page-BCyFMy-L.js",
+      "incremental": {
+        "rawBytes": 70442,
+        "gzipBytes": 21314,
+        "rawKiB": 68.79,
+        "gzipKiB": 20.81
+      },
+      "ownChunk": {
+        "rawBytes": 415,
+        "gzipBytes": 277,
+        "rawKiB": 0.41,
+        "gzipKiB": 0.27
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/delivery/releases/detail-page.tsx",
+      "file": "assets/detail-page-DsdVeVqO.js",
+      "incremental": {
+        "rawBytes": 70440,
+        "gzipBytes": 21313,
+        "rawKiB": 68.79,
+        "gzipKiB": 20.81
+      },
+      "ownChunk": {
+        "rawBytes": 413,
+        "gzipBytes": 276,
+        "rawKiB": 0.4,
+        "gzipKiB": 0.27
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/delivery/builds/detail-page.tsx",
+      "file": "assets/detail-page-2i2dbbG-.js",
+      "incremental": {
+        "rawBytes": 70436,
+        "gzipBytes": 21312,
+        "rawKiB": 68.79,
+        "gzipKiB": 20.81
+      },
+      "ownChunk": {
+        "rawBytes": 409,
+        "gzipBytes": 275,
+        "rawKiB": 0.4,
+        "gzipKiB": 0.27
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/delivery/build-templates/page.tsx",
+      "file": "assets/page-cLPjwOCX.js",
+      "incremental": {
+        "rawBytes": 61609,
+        "gzipBytes": 19958,
+        "rawKiB": 60.17,
+        "gzipKiB": 19.49
+      },
+      "ownChunk": {
+        "rawBytes": 18929,
+        "gzipBytes": 6344,
+        "rawKiB": 18.49,
+        "gzipKiB": 6.2
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/auth/login-page.tsx",
+      "file": "assets/login-page-5Xkyguai.js",
+      "incremental": {
+        "rawBytes": 54374,
+        "gzipBytes": 19828,
+        "rawKiB": 53.1,
+        "gzipKiB": 19.36
+      },
+      "ownChunk": {
+        "rawBytes": 26418,
+        "gzipBytes": 8390,
+        "rawKiB": 25.8,
+        "gzipKiB": 8.19
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/workloads/replicationcontrollers/detail-page.tsx",
+      "file": "assets/detail-page-9_edYBLn.js",
+      "incremental": {
+        "rawBytes": 59288,
+        "gzipBytes": 17762,
+        "rawKiB": 57.9,
+        "gzipKiB": 17.35
+      },
+      "ownChunk": {
+        "rawBytes": 675,
+        "gzipBytes": 392,
+        "rawKiB": 0.66,
+        "gzipKiB": 0.38
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/workloads/replicasets/detail-page.tsx",
+      "file": "assets/detail-page-CziTq0bm.js",
+      "incremental": {
+        "rawBytes": 59244,
+        "gzipBytes": 17753,
+        "rawKiB": 57.86,
+        "gzipKiB": 17.34
+      },
+      "ownChunk": {
+        "rawBytes": 631,
+        "gzipBytes": 383,
+        "rawKiB": 0.62,
+        "gzipKiB": 0.37
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/copilot/observe/tools/page.tsx",
+      "file": "assets/page-CpMtGnoR.js",
+      "incremental": {
+        "rawBytes": 57040,
+        "gzipBytes": 17446,
+        "rawKiB": 55.7,
+        "gzipKiB": 17.04
+      },
+      "ownChunk": {
+        "rawBytes": 25939,
+        "gzipBytes": 6053,
+        "rawKiB": 25.33,
+        "gzipKiB": 5.91
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/overview-page.tsx",
+      "file": "assets/overview-page-CwWnenSx.js",
+      "incremental": {
+        "rawBytes": 38963,
+        "gzipBytes": 13998,
+        "rawKiB": 38.05,
+        "gzipKiB": 13.67
+      },
+      "ownChunk": {
+        "rawBytes": 23325,
+        "gzipBytes": 5793,
+        "rawKiB": 22.78,
+        "gzipKiB": 5.66
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/provider-portal/catalog/page.tsx",
+      "file": "assets/page-CpBxPEED.js",
+      "incremental": {
+        "rawBytes": 36173,
+        "gzipBytes": 13348,
+        "rawKiB": 35.33,
+        "gzipKiB": 13.04
+      },
+      "ownChunk": {
+        "rawBytes": 8493,
+        "gzipBytes": 2692,
+        "rawKiB": 8.29,
+        "gzipKiB": 2.63
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/access-control/serviceaccounts/detail-page.tsx",
+      "file": "assets/detail-page-K1cGqZj5.js",
+      "incremental": {
+        "rawBytes": 38887,
+        "gzipBytes": 12889,
+        "rawKiB": 37.98,
+        "gzipKiB": 12.59
+      },
+      "ownChunk": {
+        "rawBytes": 1398,
+        "gzipBytes": 777,
+        "rawKiB": 1.37,
+        "gzipKiB": 0.76
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/identity/overview/page.tsx",
+      "file": "assets/page-TeCVxHdl.js",
+      "incremental": {
+        "rawBytes": 29331,
+        "gzipBytes": 12787,
+        "rawKiB": 28.64,
+        "gzipKiB": 12.49
+      },
+      "ownChunk": {
+        "rawBytes": 10997,
+        "gzipBytes": 4172,
+        "rawKiB": 10.74,
+        "gzipKiB": 4.07
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/observability/overview/page.tsx",
+      "file": "assets/page-B0n3nEBl.js",
+      "incremental": {
+        "rawBytes": 30190,
+        "gzipBytes": 12547,
+        "rawKiB": 29.48,
+        "gzipKiB": 12.25
+      },
+      "ownChunk": {
+        "rawBytes": 8090,
+        "gzipBytes": 2908,
+        "rawKiB": 7.9,
+        "gzipKiB": 2.84
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/access-control/clusterroles/detail-page.tsx",
+      "file": "assets/detail-page-j7t96mh8.js",
+      "incremental": {
+        "rawBytes": 37359,
+        "gzipBytes": 12127,
+        "rawKiB": 36.48,
+        "gzipKiB": 11.84
+      },
+      "ownChunk": {
+        "rawBytes": 1114,
+        "gzipBytes": 640,
+        "rawKiB": 1.09,
+        "gzipKiB": 0.63
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/access-control/roles/detail-page.tsx",
+      "file": "assets/detail-page-CNAOoQ8v.js",
+      "incremental": {
+        "rawBytes": 37229,
+        "gzipBytes": 12077,
+        "rawKiB": 36.36,
+        "gzipKiB": 11.79
+      },
+      "ownChunk": {
+        "rawBytes": 984,
+        "gzipBytes": 590,
+        "rawKiB": 0.96,
+        "gzipKiB": 0.58
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/access-control/clusterrolebindings/detail-page.tsx",
+      "file": "assets/detail-page-BTw0ZqFb.js",
+      "incremental": {
+        "rawBytes": 37162,
+        "gzipBytes": 12014,
+        "rawKiB": 36.29,
+        "gzipKiB": 11.73
+      },
+      "ownChunk": {
+        "rawBytes": 917,
+        "gzipBytes": 527,
+        "rawKiB": 0.9,
+        "gzipKiB": 0.51
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/access-control/rolebindings/detail-page.tsx",
+      "file": "assets/detail-page-Dibko9Fn.js",
+      "incremental": {
+        "rawBytes": 37155,
+        "gzipBytes": 11978,
+        "rawKiB": 36.28,
+        "gzipKiB": 11.7
+      },
+      "ownChunk": {
+        "rawBytes": 910,
+        "gzipBytes": 491,
+        "rawKiB": 0.89,
+        "gzipKiB": 0.48
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/provider-portal/security/page.tsx",
+      "file": "assets/page-N_U9mfVe.js",
+      "incremental": {
+        "rawBytes": 32322,
+        "gzipBytes": 11741,
+        "rawKiB": 31.56,
+        "gzipKiB": 11.47
+      },
+      "ownChunk": {
+        "rawBytes": 3915,
+        "gzipBytes": 1148,
+        "rawKiB": 3.82,
+        "gzipKiB": 1.12
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/provider-portal/application-detail/page.tsx",
+      "file": "assets/page-J1yAvhpb.js",
+      "incremental": {
+        "rawBytes": 31175,
+        "gzipBytes": 11444,
+        "rawKiB": 30.44,
+        "gzipKiB": 11.18
+      },
+      "ownChunk": {
+        "rawBytes": 5087,
+        "gzipBytes": 1748,
+        "rawKiB": 4.97,
+        "gzipKiB": 1.71
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/network/gateway-api/gatewayclass-detail-page.tsx",
+      "file": "assets/gatewayclass-detail-page-HBa9ugiQ.js",
+      "incremental": {
+        "rawBytes": 28321,
+        "gzipBytes": 9519,
+        "rawKiB": 27.66,
+        "gzipKiB": 9.3
+      },
+      "ownChunk": {
+        "rawBytes": 11492,
+        "gzipBytes": 2359,
+        "rawKiB": 11.22,
+        "gzipKiB": 2.3
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/network/resources/ingressclass-detail-page.tsx",
+      "file": "assets/ingressclass-detail-page-BunbzFMf.js",
+      "incremental": {
+        "rawBytes": 28307,
+        "gzipBytes": 9507,
+        "rawKiB": 27.64,
+        "gzipKiB": 9.28
+      },
+      "ownChunk": {
+        "rawBytes": 11502,
+        "gzipBytes": 2367,
+        "rawKiB": 11.23,
+        "gzipKiB": 2.31
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/network/ingresses/detail-page.tsx",
+      "file": "assets/detail-page-DQ8WsLsE.js",
+      "incremental": {
+        "rawBytes": 28066,
+        "gzipBytes": 9468,
+        "rawKiB": 27.41,
+        "gzipKiB": 9.25
+      },
+      "ownChunk": {
+        "rawBytes": 11944,
+        "gzipBytes": 2615,
+        "rawKiB": 11.66,
+        "gzipKiB": 2.55
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/network/gateway-api/gateway-detail-page.tsx",
+      "file": "assets/gateway-detail-page-DDtxjr0C.js",
+      "incremental": {
+        "rawBytes": 27506,
+        "gzipBytes": 9230,
+        "rawKiB": 26.86,
+        "gzipKiB": 9.01
+      },
+      "ownChunk": {
+        "rawBytes": 11496,
+        "gzipBytes": 2393,
+        "rawKiB": 11.23,
+        "gzipKiB": 2.34
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/network/resources/networkpolicy-detail-page.tsx",
+      "file": "assets/networkpolicy-detail-page-CQ0EWy8R.js",
+      "incremental": {
+        "rawBytes": 27527,
+        "gzipBytes": 9217,
+        "rawKiB": 26.88,
+        "gzipKiB": 9
+      },
+      "ownChunk": {
+        "rawBytes": 11541,
+        "gzipBytes": 2400,
+        "rawKiB": 11.27,
+        "gzipKiB": 2.34
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/storage/storage-classes/detail-page.tsx",
+      "file": "assets/detail-page-Dyv0ZNDQ.js",
+      "incremental": {
+        "rawBytes": 28191,
+        "gzipBytes": 8993,
+        "rawKiB": 27.53,
+        "gzipKiB": 8.78
+      },
+      "ownChunk": {
+        "rawBytes": 3009,
+        "gzipBytes": 1540,
+        "rawKiB": 2.94,
+        "gzipKiB": 1.5
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/storage/persistent-volume-claims/detail-page.tsx",
+      "file": "assets/detail-page-CSOFiDL2.js",
+      "incremental": {
+        "rawBytes": 28076,
+        "gzipBytes": 8942,
+        "rawKiB": 27.42,
+        "gzipKiB": 8.73
+      },
+      "ownChunk": {
+        "rawBytes": 2886,
+        "gzipBytes": 1484,
+        "rawKiB": 2.82,
+        "gzipKiB": 1.45
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/network/resources/endpointslice-detail-page.tsx",
+      "file": "assets/endpointslice-detail-page-BVM68QYJ.js",
+      "incremental": {
+        "rawBytes": 27055,
+        "gzipBytes": 8901,
+        "rawKiB": 26.42,
+        "gzipKiB": 8.69
+      },
+      "ownChunk": {
+        "rawBytes": 11494,
+        "gzipBytes": 2386,
+        "rawKiB": 11.22,
+        "gzipKiB": 2.33
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/storage/persistent-volumes/detail-page.tsx",
+      "file": "assets/detail-page-Ilgs9xvu.js",
+      "incremental": {
+        "rawBytes": 27889,
+        "gzipBytes": 8841,
+        "rawKiB": 27.24,
+        "gzipKiB": 8.63
+      },
+      "ownChunk": {
+        "rawBytes": 2704,
+        "gzipBytes": 1386,
+        "rawKiB": 2.64,
+        "gzipKiB": 1.35
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/copilot/observe/model-settings/page.tsx",
+      "file": "assets/page-DV29aRLk.js",
+      "incremental": {
+        "rawBytes": 18448,
+        "gzipBytes": 3303,
+        "rawKiB": 18.02,
+        "gzipKiB": 3.23
+      },
+      "ownChunk": {
+        "rawBytes": 18448,
+        "gzipBytes": 3303,
+        "rawKiB": 18.02,
+        "gzipKiB": 3.23
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/auth/oidc-callback-page.tsx",
+      "file": "assets/oidc-callback-page-DDwGJwF4.js",
+      "incremental": {
+        "rawBytes": 2789,
+        "gzipBytes": 1504,
+        "rawKiB": 2.72,
+        "gzipKiB": 1.47
+      },
+      "ownChunk": {
+        "rawBytes": 1771,
+        "gzipBytes": 1023,
+        "rawKiB": 1.73,
+        "gzipKiB": 1
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/platform/network/topology/page.tsx",
+      "file": "assets/page-BnK6Gs3Z.js",
+      "incremental": {
+        "rawBytes": 1191,
+        "gzipBytes": 645,
+        "rawKiB": 1.16,
+        "gzipKiB": 0.63
+      },
+      "ownChunk": {
+        "rawBytes": 1191,
+        "gzipBytes": 645,
+        "rawKiB": 1.16,
+        "gzipKiB": 0.63
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    },
+    {
+      "source": "src/features/access/center/page.tsx",
+      "file": "assets/page-BTDi-ZdG.js",
+      "incremental": {
+        "rawBytes": 712,
+        "gzipBytes": 455,
+        "rawKiB": 0.7,
+        "gzipKiB": 0.44
+      },
+      "ownChunk": {
+        "rawBytes": 712,
+        "gzipBytes": 455,
+        "rawKiB": 0.7,
+        "gzipKiB": 0.44
+      },
+      "heavyRuntimes": {
+        "flow": [],
+        "vchart": [],
+        "monaco": [],
+        "xterm": [],
+        "novnc": []
+      }
+    }
+  ],
+  "generatedAt": "2026-07-10T20:14:10.809Z"
+}

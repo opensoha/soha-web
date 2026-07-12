@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useRef } from 'react'
+import { useLocation } from 'react-router-dom'
 import type { AIGlobalAssistantLaunchRequest, AIPageContext } from './ai-context'
 import { contextIdentityKey } from './ai-context'
 
@@ -16,17 +17,27 @@ function nextContextId() {
   return `ai-context-${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
-export function useAIPageContext(context: AIPageContext) {
+export type AIPageContextInput = Omit<AIPageContext, 'sourceRoute'> & {
+  sourceRoute?: string
+}
+
+export function useAIPageContext(context: AIPageContextInput) {
   const registry = useContext(AIPageContextRegistry)
+  const location = useLocation()
+  const registerPageContext = registry?.registerPageContext
   const idRef = useRef(nextContextId())
-  const contextRef = useRef(context)
-  const key = contextIdentityKey(context)
-  contextRef.current = context
+  const resolvedContext: AIPageContext = {
+    ...context,
+    sourceRoute: context.sourceRoute ?? `${location.pathname}${location.search}`,
+  }
+  const contextRef = useRef(resolvedContext)
+  const key = contextIdentityKey(resolvedContext)
+  contextRef.current = resolvedContext
 
   useEffect(() => {
-    if (!registry) return undefined
-    return registry.registerPageContext(idRef.current, contextRef.current, key)
-  }, [key, registry])
+    if (!registerPageContext) return undefined
+    return registerPageContext(idRef.current, contextRef.current, key)
+  }, [key, registerPageContext])
 }
 
 export function useAIGlobalAssistant() {

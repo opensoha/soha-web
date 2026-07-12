@@ -12,7 +12,7 @@ import type { WorkbenchSource } from '@opensoha/contracts/gen/ts/sohaapi'
 import type { AIGlobalAssistantMessage, AIPageContext } from './ai-context'
 import { contextDisplayName } from './ai-context'
 import { defaultPromptSuggestions } from './ai-prompts'
-import type { WorkbenchStreamToolCall } from '../workbench-stream'
+import type { WorkbenchStreamToolCall } from '../workbench/stream'
 
 const { Text } = Typography
 
@@ -90,31 +90,46 @@ export function AIFloatingAssistantPanel({
   toolCalls,
 }: AIFloatingAssistantPanelProps) {
   const promptSuggestions = useMemo(() => defaultPromptSuggestions(context), [context])
-  const sourceItems = useMemo(() => sources.map((item) => ({
-    key: item.id,
-    title: item.title,
-    url: item.url,
-    description: item.summary || item.kind,
-  })), [sources])
+  const sourceItems = useMemo(
+    () =>
+      sources.map((item) => ({
+        key: item.id,
+        title: item.title,
+        url: item.url,
+        description: item.summary || item.kind,
+      })),
+    [sources],
+  )
   const chainItems = useMemo<ThoughtChainItemType[]>(() => {
     if (!toolCalls.length && !thinkingSummary) {
       return []
     }
     const thinkingItem: ThoughtChainItemType[] = thinkingSummary
-      ? [{ key: 'thinking', title: '分析思路', description: thinkingSummary, status: running ? 'loading' : 'success' }]
+      ? [
+          {
+            key: 'thinking',
+            title: '分析思路',
+            description: thinkingSummary,
+            status: running ? 'loading' : 'success',
+          },
+        ]
       : []
-    return thinkingItem.concat(toolCalls.map((item) => {
-      const preview = outputPreview(item)
-      return {
-        key: item.id,
-        title: item.toolName,
-        description: item.summary || item.adapterId,
-        status: toolStatus(item.status),
-        blink: item.status === 'running',
-        content: preview ? <pre className="soha-ai-panel__tool-output">{preview}</pre> : undefined,
-        collapsible: Boolean(preview),
-      }
-    }))
+    return thinkingItem.concat(
+      toolCalls.map((item) => {
+        const preview = outputPreview(item)
+        return {
+          key: item.id,
+          title: item.toolName,
+          description: item.summary || item.adapterId,
+          status: toolStatus(item.status),
+          blink: item.status === 'running',
+          content: preview ? (
+            <pre className="soha-ai-panel__tool-output">{preview}</pre>
+          ) : undefined,
+          collapsible: Boolean(preview),
+        }
+      }),
+    )
   }, [running, thinkingSummary, toolCalls])
 
   if (!open) return null
@@ -138,13 +153,21 @@ export function AIFloatingAssistantPanel({
               type="text"
               onClick={onOpenWorkbench}
             />
-            <Button aria-label="关闭 AI 助手" icon={<CloseOutlined />} size="small" type="text" onClick={onClose} />
+            <Button
+              aria-label="关闭 AI 助手"
+              icon={<CloseOutlined />}
+              size="small"
+              type="text"
+              onClick={onClose}
+            />
           </Space>
         </header>
 
         <div className="soha-ai-panel__context">
           <div className="soha-ai-panel__tags">
-            {contextTags(context).map((item) => <Tag key={String(item)}>{String(item)}</Tag>)}
+            {contextTags(context).map((item) => (
+              <Tag key={String(item)}>{String(item)}</Tag>
+            ))}
           </div>
           {context.promptHint ? <Text type="secondary">{context.promptHint}</Text> : null}
         </div>
@@ -152,10 +175,7 @@ export function AIFloatingAssistantPanel({
         <div className="soha-ai-panel__body">
           {messages.length === 0 ? (
             <div className="soha-ai-panel__empty">
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="选择一个问题开始排查"
-              />
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="选择一个问题开始排查" />
               <div className="soha-ai-panel__quick-prompts">
                 {promptSuggestions.map((prompt) => (
                   <Button

@@ -6,6 +6,8 @@ import { ManagementState } from '@/components/management-list'
 import './admin-table.css'
 
 const DEFAULT_PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
+const ACTION_COLUMN_CLASS_NAME = 'soha-table-actions-column'
+const AUTO_ACTION_COLUMN_CLASS_NAME = 'soha-table-actions-column--auto'
 const { Text } = Typography
 
 export interface AdminTableProps {
@@ -49,7 +51,68 @@ function getColumnId(column: any, index: number) {
   return `column:${index}`
 }
 
+function isActionColumn(column: any) {
+  const key = String(column?.key ?? '').trim().toLowerCase()
+  const dataIndex = Array.isArray(column?.dataIndex)
+    ? column.dataIndex.join('.').toLowerCase()
+    : String(column?.dataIndex ?? '').trim().toLowerCase()
+  const title = typeof column?.title === 'string' ? column.title.trim().toLowerCase() : ''
+  return (
+    key === 'actions' ||
+    dataIndex === 'actions' ||
+    dataIndex === '__actions' ||
+    (column?.fixed === 'right' && (title === '操作' || title === 'actions'))
+  )
+}
+
+function mergeClassNames(...values: unknown[]) {
+  return values
+    .flatMap((value) => String(value ?? '').split(/\s+/))
+    .filter(Boolean)
+    .filter((value, index, items) => items.indexOf(value) === index)
+    .join(' ')
+}
+
+function normalizeTableColumn(column: any): any {
+  if (Array.isArray(column?.children)) {
+    return { ...column, children: column.children.map(normalizeTableColumn) }
+  }
+  if (!isActionColumn(column)) return column
+
+  const originalHeaderCell = column.onHeaderCell
+  const originalCell = column.onCell
+  const declaredClasses = mergeClassNames(
+    column.className,
+    typeof originalHeaderCell === 'function' ? originalHeaderCell(column)?.className : '',
+  )
+  const usesExplicitActionContract = declaredClasses.includes(ACTION_COLUMN_CLASS_NAME)
+  const actionClasses = mergeClassNames(
+    declaredClasses,
+    ACTION_COLUMN_CLASS_NAME,
+    usesExplicitActionContract ? '' : AUTO_ACTION_COLUMN_CLASS_NAME,
+  )
+
+  return {
+    ...column,
+    title: '',
+    fixed: 'right',
+    align: 'center',
+    width: usesExplicitActionContract ? column.width : undefined,
+    minWidth: usesExplicitActionContract ? column.minWidth : 52,
+    className: actionClasses,
+    onHeaderCell: (...args: any[]) => {
+      const props = typeof originalHeaderCell === 'function' ? originalHeaderCell(...args) : {}
+      return { ...props, className: mergeClassNames(props?.className, actionClasses) }
+    },
+    onCell: (...args: any[]) => {
+      const props = typeof originalCell === 'function' ? originalCell(...args) : {}
+      return { ...props, className: mergeClassNames(props?.className, actionClasses) }
+    },
+  }
+}
+
 function getColumnLabel(column: any, index: number) {
+  if (isActionColumn(column)) return '操作'
   if (typeof column?.title === 'string' && column.title) return column.title
   if (typeof column?.dataIndex === 'string' && column.dataIndex) return column.dataIndex
   if (Array.isArray(column?.dataIndex) && column.dataIndex.length > 0) return column.dataIndex.join('.')
@@ -94,11 +157,12 @@ export function AdminTable({
   toolbarExtra,
   ...rest
 }: AdminTableProps) {
-  const columnOptions = useMemo(() => columns.map((column, index) => ({
+  const normalizedColumns = useMemo(() => columns.map(normalizeTableColumn), [columns])
+  const columnOptions = useMemo(() => normalizedColumns.map((column, index) => ({
     id: getColumnId(column, index),
     label: getColumnLabel(column, index),
     column,
-  })), [columns])
+  })), [normalizedColumns])
   const columnSignature = columnOptions.map((option) => option.id).join('|')
   const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>([])
   const [currentPage, setCurrentPage] = useState(1)

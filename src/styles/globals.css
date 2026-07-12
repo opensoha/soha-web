@@ -980,6 +980,10 @@ a {
 /* ─── Branding Upload Zones ─── */
 
 @media (max-width: 768px) {
+  .soha-sider.ant-layout-sider-collapsed {
+    display: none;
+  }
+
   .soha-header {
     display: block;
     height: auto;

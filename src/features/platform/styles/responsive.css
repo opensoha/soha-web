@@ -1,0 +1,31 @@
+@media (max-width: 960px) {
+  .soha-workloads-overview-page .soha-workload-overview-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .soha-platform-overview-page .soha-overview-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .soha-platform-overview-page .soha-overview-pod-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .soha-platform-overview-page .soha-overview-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .soha-platform-overview-page .soha-overview-metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .soha-workloads-overview-page .soha-workload-overview-metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .soha-platform-overview-page .soha-overview-pod-grid {
+    grid-template-columns: 1fr;
+  }
+}

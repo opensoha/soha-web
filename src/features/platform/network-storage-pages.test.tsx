@@ -7,7 +7,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { NetworkGatewayClassesPage, NetworkServicesPage, StoragePvcPage } from './network-storage-pages'
+import { NetworkGatewayClassesPage } from './network/gateway-api/gatewayclasses-list-page'
+import { NetworkServicesPage } from './network/services/list-page'
+import { StoragePvcPage } from './storage/persistent-volume-claims/list-page'
 
 const testState = vi.hoisted(() => ({
   responses: {} as Record<string, unknown>,
@@ -76,7 +78,9 @@ vi.mock('@/components/admin-table', () => ({
       {toolbarExtra ? <div data-testid="toolbar-extra">{toolbarExtra}</div> : null}
       {paginationSummary ? (
         <div data-testid="pagination-summary">
-          {typeof paginationSummary === 'function' ? paginationSummary(dataSource.length, [1, dataSource.length]) : paginationSummary}
+          {typeof paginationSummary === 'function'
+            ? paginationSummary(dataSource.length, [1, dataSource.length])
+            : paginationSummary}
         </div>
       ) : null}
       <div data-testid="row-count">{dataSource.length}</div>
@@ -84,9 +88,12 @@ vi.mock('@/components/admin-table', () => ({
       {dataSource.map((record, rowIndex) => (
         <div key={`${record.name || 'row'}-${rowIndex}`} data-testid={`row-${rowIndex}`}>
           {columns.map((column, columnIndex) => {
-            const key = typeof column.dataIndex === 'string' ? column.dataIndex : `col-${columnIndex}`
-            const value = typeof column.dataIndex === 'string' ? record[column.dataIndex] : undefined
-            const content = typeof column.render === 'function' ? column.render(value, record, rowIndex) : value
+            const key =
+              typeof column.dataIndex === 'string' ? column.dataIndex : `col-${columnIndex}`
+            const value =
+              typeof column.dataIndex === 'string' ? record[column.dataIndex] : undefined
+            const content =
+              typeof column.render === 'function' ? column.render(value, record, rowIndex) : value
             return (
               <div key={`${key}-${columnIndex}`} data-testid={`cell-${rowIndex}-${columnIndex}`}>
                 {content == null ? '' : content}
@@ -207,8 +214,24 @@ describe('network resource list pages', () => {
   it('keeps service search controls in a separate card and summarizes results in pagination', async () => {
     setResponses({
       '/clusters/cluster-a/network/services?namespace=team-a': [
-        { name: 'core-dns', namespace: 'kube-system', type: 'ClusterIP', clusterIp: '10.43.0.10', ports: ['53/UDP'], ageSeconds: 60, allowedActions: ['view'] },
-        { name: 'web', namespace: 'team-a', type: 'NodePort', clusterIp: '10.43.1.20', ports: ['80/TCP'], ageSeconds: 120, allowedActions: ['view'] },
+        {
+          name: 'core-dns',
+          namespace: 'kube-system',
+          type: 'ClusterIP',
+          clusterIp: '10.43.0.10',
+          ports: ['53/UDP'],
+          ageSeconds: 60,
+          allowedActions: ['view'],
+        },
+        {
+          name: 'web',
+          namespace: 'team-a',
+          type: 'NodePort',
+          clusterIp: '10.43.1.20',
+          ports: ['80/TCP'],
+          ageSeconds: 120,
+          allowedActions: ['view'],
+        },
       ],
     })
 
@@ -216,15 +239,21 @@ describe('network resource list pages', () => {
 
     expect(container.querySelector('[data-testid="table-title"]')).toBeNull()
     expect(container.querySelector('[data-testid="toolbar"]')).toBeNull()
-    expect(container.querySelector('input[placeholder="搜索 Service / namespace / type / port"]')).not.toBeNull()
-    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain('当前 2 / 2 条')
-
-    const headerButtons = Array.from(container.querySelectorAll('[data-testid="header-extra"] button')).map((button) =>
-      button.textContent?.trim() || button.getAttribute('aria-label'),
+    expect(
+      container.querySelector('input[placeholder="搜索 Service / namespace / type / port"]'),
+    ).not.toBeNull()
+    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
+      '当前 2 / 2 条',
     )
+
+    const headerButtons = Array.from(
+      container.querySelectorAll('[data-testid="header-extra"] button'),
+    ).map((button) => button.textContent?.trim() || button.getAttribute('aria-label'))
     expect(headerButtons).toEqual(['切换表格密度', '刷新'])
 
-    const input = container.querySelector('input[placeholder="搜索 Service / namespace / type / port"]') as HTMLInputElement | null
+    const input = container.querySelector(
+      'input[placeholder="搜索 Service / namespace / type / port"]',
+    ) as HTMLInputElement | null
     if (!input) {
       throw new Error('service search input not found')
     }
@@ -238,7 +267,9 @@ describe('network resource list pages', () => {
     })
 
     expect(container.querySelector('[data-testid="row-count"]')?.textContent).toBe('1')
-    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain('当前 1 / 2 条')
+    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
+      '当前 1 / 2 条',
+    )
     expect(container.textContent).toContain('core-dns')
     expect(container.textContent).not.toContain('web')
   })
@@ -246,40 +277,83 @@ describe('network resource list pages', () => {
   it('keeps cluster-scoped gateway classes on the same network table pattern', async () => {
     setResponses({
       '/clusters/cluster-a/network/gatewayclasses': [
-        { name: 'traefik', controllerName: 'traefik.io/gateway-controller', accepted: 'True', parametersRef: '', ageSeconds: 60, allowedActions: ['view'] },
+        {
+          name: 'traefik',
+          controllerName: 'traefik.io/gateway-controller',
+          accepted: 'True',
+          parametersRef: '',
+          ageSeconds: 60,
+          allowedActions: ['view'],
+        },
       ],
     })
 
-    const container = await renderWithProviders(<NetworkGatewayClassesPage />, '/network/gateway-api/gatewayclasses')
+    const container = await renderWithProviders(
+      <NetworkGatewayClassesPage />,
+      '/network/gateway-api/gatewayclasses',
+    )
 
     expect(container.querySelector('[data-testid="table-title"]')).toBeNull()
     expect(container.querySelector('[data-testid="toolbar"]')).toBeNull()
-    expect(container.querySelector('input[placeholder="搜索 GatewayClass / controller"]')).not.toBeNull()
-    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain('当前 1 / 1 条')
+    expect(
+      container.querySelector('input[placeholder="搜索 GatewayClass / controller"]'),
+    ).not.toBeNull()
+    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
+      '当前 1 / 1 条',
+    )
     expect(container.textContent).not.toContain('集群级资源')
   })
 
   it('keeps storage PVC filters in a separate query card with create before table utilities', async () => {
     setResponses({
       '/clusters/cluster-a/storage/persistentvolumeclaims?namespace=team-a': [
-        { name: 'data-core', namespace: 'team-a', status: 'Bound', volumeName: 'pv-core', requested: '10Gi', storageClass: 'local-path', accessModes: ['ReadWriteOnce'], ageSeconds: 60, allowedActions: ['view'] },
-        { name: 'cache', namespace: 'team-a', status: 'Pending', volumeName: '', requested: '1Gi', storageClass: 'fast', accessModes: ['ReadWriteOnce'], ageSeconds: 120, allowedActions: ['view'] },
+        {
+          name: 'data-core',
+          namespace: 'team-a',
+          status: 'Bound',
+          volumeName: 'pv-core',
+          requested: '10Gi',
+          storageClass: 'local-path',
+          accessModes: ['ReadWriteOnce'],
+          ageSeconds: 60,
+          allowedActions: ['view'],
+        },
+        {
+          name: 'cache',
+          namespace: 'team-a',
+          status: 'Pending',
+          volumeName: '',
+          requested: '1Gi',
+          storageClass: 'fast',
+          accessModes: ['ReadWriteOnce'],
+          ageSeconds: 120,
+          allowedActions: ['view'],
+        },
       ],
     })
 
-    const container = await renderWithProviders(<StoragePvcPage />, '/storage/persistentvolumeclaims')
+    const container = await renderWithProviders(
+      <StoragePvcPage />,
+      '/storage/persistentvolumeclaims',
+    )
 
     expect(container.querySelector('[data-testid="table-title"]')).toBeNull()
     expect(container.querySelector('[data-testid="toolbar"]')).toBeNull()
-    expect(container.querySelector('input[placeholder="搜索 PVC / namespace / storageClass"]')).not.toBeNull()
-    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain('当前 2 / 2 条')
-
-    const headerButtons = Array.from(container.querySelectorAll('[data-testid="header-extra"] button')).map((button) =>
-      button.textContent?.trim() || button.getAttribute('aria-label'),
+    expect(
+      container.querySelector('input[placeholder="搜索 PVC / namespace / storageClass"]'),
+    ).not.toBeNull()
+    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
+      '当前 2 / 2 条',
     )
+
+    const headerButtons = Array.from(
+      container.querySelectorAll('[data-testid="header-extra"] button'),
+    ).map((button) => button.textContent?.trim() || button.getAttribute('aria-label'))
     expect(headerButtons).toEqual(['新增', '切换表格密度', '刷新'])
 
-    const input = container.querySelector('input[placeholder="搜索 PVC / namespace / storageClass"]') as HTMLInputElement | null
+    const input = container.querySelector(
+      'input[placeholder="搜索 PVC / namespace / storageClass"]',
+    ) as HTMLInputElement | null
     if (!input) {
       throw new Error('pvc search input not found')
     }
@@ -293,7 +367,9 @@ describe('network resource list pages', () => {
     })
 
     expect(container.querySelector('[data-testid="row-count"]')?.textContent).toBe('1')
-    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain('当前 1 / 2 条')
+    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
+      '当前 1 / 2 条',
+    )
     expect(container.textContent).toContain('data-core')
     expect(container.textContent).not.toContain('cache')
   })

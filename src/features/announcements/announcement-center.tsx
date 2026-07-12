@@ -1,53 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
-import {
-  Badge,
-  Button,
-  List,
-  Modal,
-  Popover,
-  Space,
-  Tag,
-  Tabs,
-  Typography,
-  message,
-} from 'antd'
+import { Badge, Button, List, Modal, Popover, Space, Tag, Tabs, Typography, message } from 'antd'
 import { BellOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { HeaderActionButton } from '@/components/header-action-button'
 import { ManagementState } from '@/components/management-list'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
-import { api } from '@/services/api-client'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { formatDateTime } from '@/utils/time'
-import type { ApiResponse } from '@/types'
+import { markAnnouncementRead } from './api'
+import { announcementKeys } from './keys'
+import { announcementQueries } from './queries'
+import type { AnnouncementInboxItem } from './types'
+
+export type { AnnouncementInboxItem } from './types'
 
 const { Paragraph, Text, Title } = Typography
 
-export interface AnnouncementInboxItem {
-  id: string
-  title: string
-  summary: string
-  content: string
-  level: string
-  status: string
-  audience: string
-  sticky: boolean
-  startsAt?: string | null
-  endsAt?: string | null
-  publishedAt?: string | null
-  createdBy?: string
-  updatedBy?: string
-  createdAt: string
-  updatedAt: string
-  isRead: boolean
-  readAt?: string | null
-}
-
-interface AnnouncementInbox {
-  items: AnnouncementInboxItem[]
-  unreadCount: number
-}
-
-export const announcementInboxQueryKey = ['announcements', 'inbox'] as const
+export const announcementInboxQueryKey = announcementKeys.inboxRoot
 
 function levelTag(level: string) {
   const normalized = String(level || '').toLowerCase()
@@ -72,7 +40,14 @@ function AnnouncementList({
   readingID?: string | null
 }) {
   if (items.length === 0) {
-    return <ManagementState bordered={false} compact title="暂无公告" description="当前没有需要处理的公告。" />
+    return (
+      <ManagementState
+        bordered={false}
+        compact
+        title="暂无公告"
+        description="当前没有需要处理的公告。"
+      />
+    )
   }
 
   return (
@@ -82,41 +57,52 @@ function AnnouncementList({
         <List.Item
           className="soha-announcement-center-item"
           actions={[
-            <Button key="preview" size="small" type="link" onClick={() => onPreview(item)}>查看</Button>,
-            item.isRead
-              ? <Text type="secondary" key="read">{item.readAt ? `已读 ${formatDateTime(item.readAt)}` : '已读'}</Text>
-              : (
-                <Button
-                  key="mark-read"
-                  size="small"
-                  type="link"
-                  loading={readingID === item.id}
-                  onClick={() => onRead(item.id)}
-                >
-                  标记已读
-                </Button>
-              ),
+            <Button key="preview" size="small" type="link" onClick={() => onPreview(item)}>
+              查看
+            </Button>,
+            item.isRead ? (
+              <Text type="secondary" key="read">
+                {item.readAt ? `已读 ${formatDateTime(item.readAt)}` : '已读'}
+              </Text>
+            ) : (
+              <Button
+                key="mark-read"
+                size="small"
+                type="link"
+                loading={readingID === item.id}
+                onClick={() => onRead(item.id)}
+              >
+                标记已读
+              </Button>
+            ),
           ]}
         >
           <List.Item.Meta
-            title={(
+            title={
               <Space size={8} wrap>
-                <Button type="link" className="soha-system-linklike" onClick={() => onPreview(item)}>
+                <Button
+                  type="link"
+                  className="soha-system-linklike"
+                  onClick={() => onPreview(item)}
+                >
                   {item.title}
                 </Button>
                 {item.sticky ? <Tag color="purple">置顶</Tag> : null}
                 {levelTag(item.level)}
               </Space>
-            )}
-            description={(
+            }
+            description={
               <Space orientation="vertical" size={4} style={{ width: '100%' }}>
                 {item.summary ? <Text>{item.summary}</Text> : null}
-                <Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }} ellipsis={{ rows: 2, expandable: true, symbol: '展开' }}>
+                <Paragraph
+                  style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}
+                  ellipsis={{ rows: 2, expandable: true, symbol: '展开' }}
+                >
                   {item.content}
                 </Paragraph>
                 <Text type="secondary">{formatAnnouncementTime(item)}</Text>
               </Space>
-            )}
+            }
           />
         </List.Item>
       )}
@@ -126,34 +112,29 @@ function AnnouncementList({
 
 export function useAnnouncementInbox(limit = 10) {
   const permissionSnapshotQuery = usePermissionSnapshot()
-  const canViewAnnouncements = hasPermission(permissionSnapshotQuery.data?.data, 'system.announcements.view')
+  const canViewAnnouncements = hasPermission(
+    permissionSnapshotQuery.data?.data,
+    'system.announcements.view',
+  )
 
-  return useQuery({
-    queryKey: [...announcementInboxQueryKey, limit],
-    queryFn: () => api.get<ApiResponse<AnnouncementInbox>>(`/announcements/inbox?limit=${limit}`),
-    enabled: canViewAnnouncements,
-    staleTime: 15_000,
-  })
+  return useQuery(announcementQueries.inbox(limit, canViewAnnouncements))
 }
 
 export function AnnouncementBell() {
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
-  const canViewAnnouncements = hasPermission(permissionSnapshotQuery.data?.data, 'system.announcements.view')
+  const canViewAnnouncements = hasPermission(
+    permissionSnapshotQuery.data?.data,
+    'system.announcements.view',
+  )
   const inboxQuery = useAnnouncementInbox(10)
   const [modalItem, setModalItem] = useState<AnnouncementInboxItem | null>(null)
   const [autoOpenedID, setAutoOpenedID] = useState<string | null>(null)
 
   const items = inboxQuery.data?.data.items ?? []
   const unreadCount = inboxQuery.data?.data.unreadCount ?? 0
-  const unreadItems = useMemo(
-    () => items.filter((item) => !item.isRead),
-    [items],
-  )
-  const topUnread = useMemo(
-    () => unreadItems[0] ?? null,
-    [unreadItems],
-  )
+  const unreadItems = useMemo(() => items.filter((item) => !item.isRead), [items])
+  const topUnread = useMemo(() => unreadItems[0] ?? null, [unreadItems])
 
   useEffect(() => {
     if (!canViewAnnouncements) return
@@ -164,7 +145,7 @@ export function AnnouncementBell() {
   }, [autoOpenedID, canViewAnnouncements, topUnread])
 
   const markReadMutation = useMutation({
-    mutationFn: (announcementID: string) => api.post(`/announcements/${announcementID}/read`),
+    mutationFn: markAnnouncementRead,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: announcementInboxQueryKey })
       void message.success('公告已标记为已读')
@@ -184,10 +165,19 @@ export function AnnouncementBell() {
       <Popover
         placement="bottomRight"
         trigger="click"
-        content={(
+        content={
           <div style={{ width: 420, maxWidth: 'min(92vw, 420px)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <Title level={5} style={{ margin: 0 }}>公告中心</Title>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 12,
+              }}
+            >
+              <Title level={5} style={{ margin: 0 }}>
+                公告中心
+              </Title>
               <Text type="secondary">{`${unreadCount} 条未读`}</Text>
             </div>
             <Tabs
@@ -196,26 +186,40 @@ export function AnnouncementBell() {
                 {
                   key: 'unread',
                   label: `未读 (${unreadCount})`,
-                  children: <AnnouncementList items={unreadItems} onRead={handleMarkRead} onPreview={setModalItem} readingID={markReadMutation.variables as string | null} />,
+                  children: (
+                    <AnnouncementList
+                      items={unreadItems}
+                      onRead={handleMarkRead}
+                      onPreview={setModalItem}
+                      readingID={markReadMutation.variables as string | null}
+                    />
+                  ),
                 },
                 {
                   key: 'all',
                   label: `全部 (${items.length})`,
-                  children: <AnnouncementList items={items} onRead={handleMarkRead} onPreview={setModalItem} readingID={markReadMutation.variables as string | null} />,
+                  children: (
+                    <AnnouncementList
+                      items={items}
+                      onRead={handleMarkRead}
+                      onPreview={setModalItem}
+                      readingID={markReadMutation.variables as string | null}
+                    />
+                  ),
                 },
               ]}
             />
           </div>
-        )}
+        }
       >
         <HeaderActionButton
           ariaLabel={unreadCount > 0 ? `公告中心，${unreadCount} 条未读` : '公告中心'}
           className="soha-header-bell"
-          icon={(
+          icon={
             <Badge count={unreadCount} size="small" overflowCount={99}>
               <BellOutlined />
             </Badge>
-          )}
+          }
         />
       </Popover>
 
@@ -224,7 +228,9 @@ export function AnnouncementBell() {
         title={modalItem?.title || '公告'}
         onCancel={() => setModalItem(null)}
         footer={[
-          <Button key="close" onClick={() => setModalItem(null)}>稍后查看</Button>,
+          <Button key="close" onClick={() => setModalItem(null)}>
+            稍后查看
+          </Button>,
           <Button
             key="read"
             type="primary"
@@ -246,7 +252,9 @@ export function AnnouncementBell() {
               <Text type="secondary">{formatAnnouncementTime(modalItem)}</Text>
             </Space>
             {modalItem.summary ? <Text>{modalItem.summary}</Text> : null}
-            <Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>{modalItem.content}</Paragraph>
+            <Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>
+              {modalItem.content}
+            </Paragraph>
           </Space>
         ) : null}
       </Modal>

@@ -1,17 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import {
-  App,
-  Button,
-  Card,
-  Divider,
-  Form,
-  Input,
-  Slider,
-  Spin,
-  Typography,
-} from "antd";
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { App, Button, Card, Divider, Form, Input, Slider, Spin, Typography } from 'antd'
 import {
   CheckCircleOutlined,
   LockOutlined,
@@ -20,7 +10,7 @@ import {
   SunOutlined,
   UserOutlined,
   WarningOutlined,
-} from "@ant-design/icons";
+} from '@ant-design/icons'
 import {
   commitAuthResult,
   fetchAuthProviders,
@@ -28,85 +18,83 @@ import {
   fetchPermissionSnapshot,
   loginWithPassword,
   restoreAuthSession,
-} from "@/features/auth/auth-api";
-import {
-  normalizeLocalReturnTo,
-  shouldUseDocumentNavigation,
-} from "@/features/auth/return-to";
-import { findLandingPath } from "@/routes/meta";
-import { useAuthStore } from "@/stores/auth-store";
-import { usePreferencesStore } from "@/stores/preferences-store";
-import { getThemePalette, readThemeCssVariable, resolveThemeMode } from "@/theme/app-theme";
-import { readStoredBrandingSettings } from "@/utils/branding";
-import "./login-page.css";
+} from '@/features/auth/auth-api'
+import { authKeys } from '@/features/auth/keys'
+import { normalizeLocalReturnTo, shouldUseDocumentNavigation } from '@/features/auth/return-to'
+import { findLandingPath } from '@/routes/meta'
+import { useAuthStore } from '@/stores/auth-store'
+import { usePreferencesStore } from '@/stores/preferences-store'
+import { getThemePalette, readThemeCssVariable, resolveThemeMode } from '@/theme/app-theme'
+import { readStoredBrandingSettings } from '@/utils/branding'
+import './login-page.css'
 
-const { Title, Text } = Typography;
+const { Title, Text } = Typography
 
-const LOGIN_COPYRIGHT_TEXT = "© 2026 Soha 版权所有，由项目贡献者设计与开发。";
-const LOGIN_SESSION_RESTORE_RETRY_MS = 2_000;
+const LOGIN_COPYRIGHT_TEXT = '© 2026 Soha 版权所有，由项目贡献者设计与开发。'
+const LOGIN_SESSION_RESTORE_RETRY_MS = 2_000
 
 interface LoginFormValues {
-  password: string;
-  username: string;
+  password: string
+  username: string
 }
 
 interface StarNode {
-  pulse: number;
-  radius: number;
-  tone: StarToneVariable;
-  vx: number;
-  vy: number;
-  x: number;
-  y: number;
+  pulse: number
+  radius: number
+  tone: StarToneVariable
+  vx: number
+  vy: number
+  x: number
+  y: number
 }
 
 const STAR_TONES = [
-  "--soha-primary",
-  "--soha-accent-cyan",
-  "--soha-accent-teal",
-  "--soha-success",
-] as const;
+  '--soha-primary',
+  '--soha-accent-cyan',
+  '--soha-accent-teal',
+  '--soha-success',
+] as const
 
-type StarToneVariable = (typeof STAR_TONES)[number];
+type StarToneVariable = (typeof STAR_TONES)[number]
 
 const CAPABILITY_QUESTIONS = [
   {
-    question: "k8s 工作台",
-    answer: "多集群、工作负载、网络、存储、YAML 统一入口",
+    question: 'k8s 工作台',
+    answer: '多集群、工作负载、网络、存储、YAML 统一入口',
   },
   {
-    question: "虚拟化管理工作台",
-    answer: "虚拟机、集群、镜像、规格、同步和操作记录",
+    question: '虚拟化管理工作台',
+    answer: '虚拟机、集群、镜像、规格、同步和操作记录',
   },
   {
-    question: "Docker 工作台",
-    answer: "主机、容器、Compose、模板和操作任务",
+    question: 'Docker 工作台',
+    answer: '主机、容器、Compose、模板和操作任务',
   },
   {
-    question: "应用交付工作台",
-    answer: "应用接入、环境绑定、构建、版本包和发布验证",
+    question: '应用交付工作台',
+    answer: '应用接入、环境绑定、构建、版本包和发布验证',
   },
   {
-    question: "AI 工作台",
-    answer: "会话、根因、性能、巡检、工具和模型配置",
+    question: 'AI 工作台',
+    answer: '会话、根因、性能、巡检、工具和模型配置',
   },
   {
-    question: "AI Gateway",
-    answer: "中转、上游、Tokens、能力清单、治理和调用日志",
+    question: 'AI Gateway',
+    answer: '中转、上游、Tokens、能力清单、治理和调用日志',
   },
   {
-    question: "监控工作台",
-    answer: "指标集成、告警规则、告警事件、通知、OnCall 和自愈联动",
+    question: '监控工作台',
+    answer: '指标集成、告警规则、告警事件、通知、OnCall 和自愈联动',
   },
   {
-    question: "设置中心",
-    answer: "总览、个人中心、关于、Provider、权限、菜单、审计和品牌",
+    question: '设置中心',
+    answer: '总览、个人中心、关于、Provider、权限、菜单、审计和品牌',
   },
-];
+]
 
 function createStarNode(width: number, height: number): StarNode {
-  const angle = Math.random() * Math.PI * 2;
-  const speed = 0.05 + Math.random() * 0.14;
+  const angle = Math.random() * Math.PI * 2
+  const speed = 0.05 + Math.random() * 0.14
 
   return {
     pulse: Math.random() * Math.PI * 2,
@@ -116,206 +104,201 @@ function createStarNode(width: number, height: number): StarNode {
     vy: Math.sin(angle) * speed,
     x: Math.random() * width,
     y: Math.random() * height,
-  };
+  }
 }
 
-function fallbackStarToneColor(tone: StarToneVariable, themeMode: "light" | "dark") {
-  const palette = getThemePalette(themeMode);
+function fallbackStarToneColor(tone: StarToneVariable, themeMode: 'light' | 'dark') {
+  const palette = getThemePalette(themeMode)
   switch (tone) {
-    case "--soha-accent-cyan":
-      return palette.accentCyan;
-    case "--soha-accent-teal":
-      return palette.accentTeal;
-    case "--soha-success":
-      return palette.colorSuccess;
-    case "--soha-primary":
+    case '--soha-accent-cyan':
+      return palette.accentCyan
+    case '--soha-accent-teal':
+      return palette.accentTeal
+    case '--soha-success':
+      return palette.colorSuccess
+    case '--soha-primary':
     default:
-      return palette.primary;
+      return palette.primary
   }
 }
 
 function LoginConstellationBackground() {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    const context = canvas?.getContext("2d");
+    const canvas = canvasRef.current
+    const context = canvas?.getContext('2d')
 
     if (!canvas || !context) {
-      return undefined;
+      return undefined
     }
 
-    let animationFrame = 0;
-    let width = 1;
-    let height = 1;
-    let lastTimestamp = 0;
-    let nodes: StarNode[] = [];
-    let currentThemeMode: "light" | "dark" = "light";
-    const reducedMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
+    let animationFrame = 0
+    let width = 1
+    let height = 1
+    let lastTimestamp = 0
+    let nodes: StarNode[] = []
+    let currentThemeMode: 'light' | 'dark' = 'light'
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const readThemeMode = () => {
-      currentThemeMode =
-        document.documentElement.dataset.themeMode === "dark"
-          ? "dark"
-          : "light";
-    };
+      currentThemeMode = document.documentElement.dataset.themeMode === 'dark' ? 'dark' : 'light'
+    }
 
     const resize = () => {
-      const rect = canvas.getBoundingClientRect();
-      width = Math.max(1, rect.width);
-      height = Math.max(1, rect.height);
-      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      const rect = canvas.getBoundingClientRect()
+      width = Math.max(1, rect.width)
+      height = Math.max(1, rect.height)
+      const ratio = Math.min(window.devicePixelRatio || 1, 2)
 
-      canvas.width = Math.floor(width * ratio);
-      canvas.height = Math.floor(height * ratio);
-      context.setTransform(ratio, 0, 0, ratio, 0, 0);
+      canvas.width = Math.floor(width * ratio)
+      canvas.height = Math.floor(height * ratio)
+      context.setTransform(ratio, 0, 0, ratio, 0, 0)
 
-      const nextCount = Math.round(
-        Math.min(118, Math.max(58, (width * height) / 15000)),
-      );
+      const nextCount = Math.round(Math.min(118, Math.max(58, (width * height) / 15000)))
 
       if (nodes.length > nextCount) {
-        nodes = nodes.slice(0, nextCount);
+        nodes = nodes.slice(0, nextCount)
       }
       while (nodes.length < nextCount) {
-        nodes.push(createStarNode(width, height));
+        nodes.push(createStarNode(width, height))
       }
       nodes = nodes.map((node) =>
-        node.x > width || node.y > height
-          ? createStarNode(width, height)
-          : node,
-      );
-    };
+        node.x > width || node.y > height ? createStarNode(width, height) : node,
+      )
+    }
 
     const draw = (timestamp: number) => {
-      readThemeMode();
-      const delta = lastTimestamp
-        ? Math.min(32, timestamp - lastTimestamp) / 16.67
-        : 1;
-      lastTimestamp = timestamp;
+      readThemeMode()
+      const delta = lastTimestamp ? Math.min(32, timestamp - lastTimestamp) / 16.67 : 1
+      lastTimestamp = timestamp
 
-      const gradient = context.createLinearGradient(0, 0, width, height);
-      const palette = getThemePalette(currentThemeMode);
-      gradient.addColorStop(0, readThemeCssVariable("--soha-bg-layout", palette.colorBgLayout));
-      gradient.addColorStop(0.52, readThemeCssVariable("--soha-bg-surface", palette.colorBgContainer));
-      gradient.addColorStop(1, readThemeCssVariable("--soha-bg-surface-muted", palette.colorBgMuted));
-      context.fillStyle = gradient;
-      context.fillRect(0, 0, width, height);
+      const gradient = context.createLinearGradient(0, 0, width, height)
+      const palette = getThemePalette(currentThemeMode)
+      gradient.addColorStop(0, readThemeCssVariable('--soha-bg-layout', palette.colorBgLayout))
+      gradient.addColorStop(
+        0.52,
+        readThemeCssVariable('--soha-bg-surface', palette.colorBgContainer),
+      )
+      gradient.addColorStop(
+        1,
+        readThemeCssVariable('--soha-bg-surface-muted', palette.colorBgMuted),
+      )
+      context.fillStyle = gradient
+      context.fillRect(0, 0, width, height)
 
-      context.save();
-      context.strokeStyle = readThemeCssVariable("--soha-graph-muted", palette.graphMuted);
-      context.globalAlpha = currentThemeMode === "dark" ? 0.06 : 0.085;
-      context.lineWidth = 1;
+      context.save()
+      context.strokeStyle = readThemeCssVariable('--soha-graph-muted', palette.graphMuted)
+      context.globalAlpha = currentThemeMode === 'dark' ? 0.06 : 0.085
+      context.lineWidth = 1
       for (let x = 0; x <= width; x += 72) {
-        context.beginPath();
-        context.moveTo(x, 0);
-        context.lineTo(x, height);
-        context.stroke();
+        context.beginPath()
+        context.moveTo(x, 0)
+        context.lineTo(x, height)
+        context.stroke()
       }
       for (let y = 0; y <= height; y += 72) {
-        context.beginPath();
-        context.moveTo(0, y);
-        context.lineTo(width, y);
-        context.stroke();
+        context.beginPath()
+        context.moveTo(0, y)
+        context.lineTo(width, y)
+        context.stroke()
       }
-      context.restore();
+      context.restore()
 
-      const connectionDistance = Math.max(116, Math.min(168, width / 7));
+      const connectionDistance = Math.max(116, Math.min(168, width / 7))
 
       nodes.forEach((node) => {
         if (!reducedMotion) {
-          node.x += node.vx * delta;
-          node.y += node.vy * delta;
-          node.pulse += 0.016 * delta;
+          node.x += node.vx * delta
+          node.y += node.vy * delta
+          node.pulse += 0.016 * delta
 
-          if (node.x < -24) node.x = width + 24;
-          if (node.x > width + 24) node.x = -24;
-          if (node.y < -24) node.y = height + 24;
-          if (node.y > height + 24) node.y = -24;
+          if (node.x < -24) node.x = width + 24
+          if (node.x > width + 24) node.x = -24
+          if (node.y < -24) node.y = height + 24
+          if (node.y > height + 24) node.y = -24
         }
-      });
+      })
 
       for (let index = 0; index < nodes.length; index += 1) {
-        const source = nodes[index]!;
+        const source = nodes[index]!
         for (let nextIndex = index + 1; nextIndex < nodes.length; nextIndex += 1) {
-          const target = nodes[nextIndex]!;
-          const dx = source.x - target.x;
-          const dy = source.y - target.y;
-          const distance = Math.hypot(dx, dy);
+          const target = nodes[nextIndex]!
+          const dx = source.x - target.x
+          const dy = source.y - target.y
+          const distance = Math.hypot(dx, dy)
 
           if (distance > connectionDistance) {
-            continue;
+            continue
           }
 
           const alpha =
-            (1 - distance / connectionDistance) *
-            (currentThemeMode === "dark" ? 0.32 : 0.2);
-          context.strokeStyle = readThemeCssVariable(source.tone, fallbackStarToneColor(source.tone, currentThemeMode));
-          context.globalAlpha = alpha;
-          context.lineWidth = 1;
-          context.beginPath();
-          context.moveTo(source.x, source.y);
-          context.lineTo(target.x, target.y);
-          context.stroke();
-          context.globalAlpha = 1;
+            (1 - distance / connectionDistance) * (currentThemeMode === 'dark' ? 0.32 : 0.2)
+          context.strokeStyle = readThemeCssVariable(
+            source.tone,
+            fallbackStarToneColor(source.tone, currentThemeMode),
+          )
+          context.globalAlpha = alpha
+          context.lineWidth = 1
+          context.beginPath()
+          context.moveTo(source.x, source.y)
+          context.lineTo(target.x, target.y)
+          context.stroke()
+          context.globalAlpha = 1
         }
       }
 
       nodes.forEach((node) => {
-        const pulse = 0.28 + Math.sin(node.pulse) * 0.12;
-        context.fillStyle = readThemeCssVariable(node.tone, fallbackStarToneColor(node.tone, currentThemeMode));
-        context.globalAlpha = currentThemeMode === "dark" ? 0.54 + pulse : 0.42 + pulse * 0.62;
-        context.beginPath();
-        context.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-        context.fill();
+        const pulse = 0.28 + Math.sin(node.pulse) * 0.12
+        context.fillStyle = readThemeCssVariable(
+          node.tone,
+          fallbackStarToneColor(node.tone, currentThemeMode),
+        )
+        context.globalAlpha = currentThemeMode === 'dark' ? 0.54 + pulse : 0.42 + pulse * 0.62
+        context.beginPath()
+        context.arc(node.x, node.y, node.radius, 0, Math.PI * 2)
+        context.fill()
 
-        context.globalAlpha = currentThemeMode === "dark" ? 0.06 + pulse * 0.12 : 0.035 + pulse * 0.08;
-        context.beginPath();
-        context.arc(node.x, node.y, node.radius * 6.5, 0, Math.PI * 2);
-        context.fill();
-        context.globalAlpha = 1;
-      });
+        context.globalAlpha =
+          currentThemeMode === 'dark' ? 0.06 + pulse * 0.12 : 0.035 + pulse * 0.08
+        context.beginPath()
+        context.arc(node.x, node.y, node.radius * 6.5, 0, Math.PI * 2)
+        context.fill()
+        context.globalAlpha = 1
+      })
 
       if (!reducedMotion) {
-        animationFrame = window.requestAnimationFrame(draw);
+        animationFrame = window.requestAnimationFrame(draw)
       }
-    };
+    }
 
     const resizeObserver = new ResizeObserver(() => {
-      resize();
+      resize()
       if (reducedMotion) {
-        draw(performance.now());
+        draw(performance.now())
       }
-    });
+    })
 
-    resizeObserver.observe(canvas);
+    resizeObserver.observe(canvas)
     const themeObserver = new MutationObserver(() => {
       if (reducedMotion) {
-        draw(performance.now());
+        draw(performance.now())
       }
-    });
+    })
     themeObserver.observe(document.documentElement, {
-      attributeFilter: ["data-theme-mode"],
+      attributeFilter: ['data-theme-mode'],
       attributes: true,
-    });
-    resize();
-    draw(performance.now());
+    })
+    resize()
+    draw(performance.now())
 
     return () => {
-      resizeObserver.disconnect();
-      themeObserver.disconnect();
-      window.cancelAnimationFrame(animationFrame);
-    };
-  }, []);
+      resizeObserver.disconnect()
+      themeObserver.disconnect()
+      window.cancelAnimationFrame(animationFrame)
+    }
+  }, [])
 
-  return (
-    <canvas
-      ref={canvasRef}
-      className="soha-auth-background"
-      aria-hidden="true"
-    />
-  );
+  return <canvas ref={canvasRef} className="soha-auth-background" aria-hidden="true" />
 }
 
 function LoginCapabilityFlow() {
@@ -327,7 +310,8 @@ function LoginCapabilityFlow() {
             Soha 是一种能力！
           </Title>
           <Text className="soha-auth-flow-subtitle">
-            从 k8s、虚拟化、Docker、应用交付、AI 工作台、AI Gateway、监控告警到设置中心，Soha 把日常操作沉淀成可协同、可治理的能力。
+            从 k8s、虚拟化、Docker、应用交付、AI 工作台、AI Gateway、监控告警到设置中心，Soha
+            把日常操作沉淀成可协同、可治理的能力。
           </Text>
         </div>
       </div>
@@ -370,268 +354,262 @@ function LoginCapabilityFlow() {
         ))}
       </div>
     </section>
-  );
+  )
 }
 
 function getProviderLabel(type: string, name: string) {
-  if (type === "oidc") {
-    return name || "OIDC";
+  if (type === 'oidc') {
+    return name || 'OIDC'
   }
-  if (type === "feishu") return name || "飞书";
-  if (type === "dingtalk") return name || "钉钉";
-  if (type === "wecom") return name || "企业微信";
-  if (type === "saml") return name || "SAML";
-  return name || type.toUpperCase();
+  if (type === 'feishu') return name || '飞书'
+  if (type === 'dingtalk') return name || '钉钉'
+  if (type === 'wecom') return name || '企业微信'
+  if (type === 'saml') return name || 'SAML'
+  return name || type.toUpperCase()
 }
 
-function getProviderIcon(type: string) {
-  if (type === "oidc" || type === "saml") {
-    return <SafetyCertificateOutlined />;
+function getProviderIcon(type: string, iconUrl?: string) {
+  if (iconUrl) {
+    return <img src={iconUrl} alt="" className="soha-auth-provider-button__icon-image" />
   }
-  return <UserOutlined />;
+  const brandInitials: Record<string, string> = { feishu: '飞', dingtalk: '钉', wecom: '企' }
+  if (brandInitials[type]) {
+    return <span className={`soha-auth-provider-button__brand is-${type}`}>{brandInitials[type]}</span>
+  }
+  if (type === 'oidc' || type === 'saml') {
+    return <SafetyCertificateOutlined />
+  }
+  return <UserOutlined />
 }
 
 function normalizeSliderValue(value: number | number[]) {
-  return Array.isArray(value) ? value[0] ?? 0 : value;
+  return Array.isArray(value) ? (value[0] ?? 0) : value
 }
 
 function routeLocationPath(
   value:
     | {
-        hash?: string;
-        pathname?: string;
-        search?: string;
+        hash?: string
+        pathname?: string
+        search?: string
       }
     | undefined,
 ) {
   if (!value?.pathname) {
-    return null;
+    return null
   }
-  return `${value.pathname}${value.search ?? ""}${value.hash ?? ""}`;
+  return `${value.pathname}${value.search ?? ''}${value.hash ?? ''}`
 }
 
 function providerLoginPath(provider: { id?: string; loginUrl?: string }) {
   if (provider.id) {
-    return `/api/v1/auth/providers/${encodeURIComponent(provider.id)}/login`;
+    return `/api/v1/auth/providers/${encodeURIComponent(provider.id)}/login`
   }
   if (provider.loginUrl) {
-    return `/api/v1${provider.loginUrl}`;
+    return `/api/v1${provider.loginUrl}`
   }
-  return null;
+  return null
 }
 
 export function LoginPage() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { message } = App.useApp();
-  const accessToken = useAuthStore((state) => state.accessToken);
-  const isAuthenticated = Boolean(accessToken);
-  const [loading, setLoading] = useState(false);
-  const [providerLoadingKey, setProviderLoadingKey] = useState<string | null>(
-    null,
-  );
-  const [checkingExistingSession, setCheckingExistingSession] = useState(!isAuthenticated);
-  const [sessionRestoreUnavailable, setSessionRestoreUnavailable] = useState(false);
-  const [sliderValue, setSliderValue] = useState(0);
-  const [sliderVerified, setSliderVerified] = useState(false);
-  const themeMode = usePreferencesStore((state) => state.themeMode);
-  const setThemeMode = usePreferencesStore((state) => state.setThemeMode);
+  const navigate = useNavigate()
+  const location = useLocation()
+  const { message } = App.useApp()
+  const accessToken = useAuthStore((state) => state.accessToken)
+  const isAuthenticated = Boolean(accessToken)
+  const [loading, setLoading] = useState(false)
+  const [providerLoadingKey, setProviderLoadingKey] = useState<string | null>(null)
+  const [checkingExistingSession, setCheckingExistingSession] = useState(!isAuthenticated)
+  const [sessionRestoreUnavailable, setSessionRestoreUnavailable] = useState(false)
+  const [sliderValue, setSliderValue] = useState(0)
+  const [sliderVerified, setSliderVerified] = useState(false)
+  const themeMode = usePreferencesStore((state) => state.themeMode)
+  const setThemeMode = usePreferencesStore((state) => state.setThemeMode)
 
-  const branding = readStoredBrandingSettings();
+  const branding = readStoredBrandingSettings()
   const stateReturnTo = normalizeLocalReturnTo(
     routeLocationPath(
-      (location.state as
-        | {
-            from?: {
-              hash?: string;
-              pathname?: string;
-              search?: string;
-            };
-          }
-        | undefined)?.from,
+      (
+        location.state as
+          | {
+              from?: {
+                hash?: string
+                pathname?: string
+                search?: string
+              }
+            }
+          | undefined
+      )?.from,
     ),
-  );
+  )
   const queryReturnTo = normalizeLocalReturnTo(
-    new URLSearchParams(location.search).get("return_to"),
-  );
-  const returnTo = queryReturnTo ?? stateReturnTo;
+    new URLSearchParams(location.search).get('return_to'),
+  )
+  const returnTo = queryReturnTo ?? stateReturnTo
   const providersQuery = useQuery({
-    queryKey: ["auth-providers"],
+    queryKey: authKeys.providers(),
     queryFn: fetchAuthProviders,
     enabled: !checkingExistingSession && !isAuthenticated,
     staleTime: 60_000,
-  });
+  })
   const loginOptionsQuery = useQuery({
-    queryKey: ["auth-login-options"],
+    queryKey: authKeys.loginOptions(),
     queryFn: fetchLoginOptions,
     enabled: !checkingExistingSession && !isAuthenticated,
     retry: false,
     staleTime: 60_000,
-  });
+  })
   const thirdPartyProviders = (providersQuery.data ?? []).filter(
-    (item) => item.enabled !== false && item.type !== "password",
-  );
-  const appTitle = branding.sidebarTitle || branding.appTitle || "Soha";
-  const resolvedThemeMode = resolveThemeMode(themeMode);
-  const sliderVerificationEnabled =
-    loginOptionsQuery.data?.verification?.sliderEnabled === true;
+    (item) => item.enabled !== false && item.type !== 'password',
+  )
+  const appTitle = branding.sidebarTitle || branding.appTitle || 'Soha'
+  const resolvedThemeMode = resolveThemeMode(themeMode)
+  const sliderVerificationEnabled = loginOptionsQuery.data?.verification?.sliderEnabled === true
+  const localPasswordLoginEnabled = loginOptionsQuery.data?.localPasswordLoginEnabled !== false
   const toggleThemeMode = () => {
-    setThemeMode(resolvedThemeMode === "dark" ? "light" : "dark");
-  };
-  const resolvePostLoginPath = useCallback(async (
-    roles: string[],
-    explicitPath?: string,
-  ) => {
-    if (explicitPath && explicitPath !== "/login") {
-      return explicitPath;
+    setThemeMode(resolvedThemeMode === 'dark' ? 'light' : 'dark')
+  }
+  const resolvePostLoginPath = useCallback(async (roles: string[], explicitPath?: string) => {
+    if (explicitPath && explicitPath !== '/login') {
+      return explicitPath
     }
     try {
-      const snapshot = await fetchPermissionSnapshot();
+      const snapshot = await fetchPermissionSnapshot()
       return (
-        findLandingPath(
-          snapshot,
-          usePreferencesStore.getState().currentWorkspace,
-          roles,
-        ) ?? "/"
-      );
+        findLandingPath(snapshot, usePreferencesStore.getState().currentWorkspace, roles) ?? '/'
+      )
     } catch {
-      return "/";
+      return '/'
     }
-  }, []);
-  const completeLoginNavigation = useCallback((targetPath: string) => {
-    if (shouldUseDocumentNavigation(targetPath)) {
-      window.location.assign(targetPath);
-      return;
-    }
-    navigate(targetPath, { replace: true });
-  }, [navigate]);
+  }, [])
+  const completeLoginNavigation = useCallback(
+    (targetPath: string) => {
+      if (shouldUseDocumentNavigation(targetPath)) {
+        window.location.assign(targetPath)
+        return
+      }
+      navigate(targetPath, { replace: true })
+    },
+    [navigate],
+  )
 
   useEffect(() => {
-    let cancelled = false;
-    let retryTimer: ReturnType<typeof window.setTimeout> | undefined;
+    let cancelled = false
+    let retryTimer: ReturnType<typeof window.setTimeout> | undefined
 
     const navigateWithCurrentSession = async () => {
-      const currentUser = useAuthStore.getState().user;
-      const nextPath = await resolvePostLoginPath(
-        currentUser?.roles ?? [],
-        returnTo ?? undefined,
-      );
+      const currentUser = useAuthStore.getState().user
+      const nextPath = await resolvePostLoginPath(currentUser?.roles ?? [], returnTo ?? undefined)
       if (!cancelled) {
-        completeLoginNavigation(nextPath);
+        completeLoginNavigation(nextPath)
       }
-    };
+    }
 
     const restore = async () => {
       if (accessToken) {
-        setCheckingExistingSession(false);
-        setSessionRestoreUnavailable(false);
-        await navigateWithCurrentSession();
-        return;
+        setCheckingExistingSession(false)
+        setSessionRestoreUnavailable(false)
+        await navigateWithCurrentSession()
+        return
       }
 
-      setCheckingExistingSession(true);
-      const result = await restoreAuthSession();
+      setCheckingExistingSession(true)
+      const result = await restoreAuthSession()
       if (cancelled) {
-        return;
+        return
       }
 
-      if (result === "authenticated") {
-        setSessionRestoreUnavailable(false);
-        await navigateWithCurrentSession();
-        return;
+      if (result === 'authenticated') {
+        setSessionRestoreUnavailable(false)
+        await navigateWithCurrentSession()
+        return
       }
 
-      if (result === "unavailable") {
-        setSessionRestoreUnavailable(true);
-        retryTimer = window.setTimeout(restore, LOGIN_SESSION_RESTORE_RETRY_MS);
-        return;
+      if (result === 'unavailable') {
+        setSessionRestoreUnavailable(true)
+        retryTimer = window.setTimeout(restore, LOGIN_SESSION_RESTORE_RETRY_MS)
+        return
       }
 
-      setSessionRestoreUnavailable(false);
-      setCheckingExistingSession(false);
-    };
+      setSessionRestoreUnavailable(false)
+      setCheckingExistingSession(false)
+    }
 
-    void restore();
+    void restore()
 
     return () => {
-      cancelled = true;
+      cancelled = true
       if (retryTimer !== undefined) {
-        window.clearTimeout(retryTimer);
+        window.clearTimeout(retryTimer)
       }
-    };
-  }, [accessToken, completeLoginNavigation, resolvePostLoginPath, returnTo]);
+    }
+  }, [accessToken, completeLoginNavigation, resolvePostLoginPath, returnTo])
 
   const resetSliderVerification = () => {
-    setSliderValue(0);
-    setSliderVerified(false);
-  };
+    setSliderValue(0)
+    setSliderVerified(false)
+  }
 
   const handleSliderChange = (value: number | number[]) => {
-    const nextValue = normalizeSliderValue(value);
-    setSliderValue(nextValue);
+    const nextValue = normalizeSliderValue(value)
+    setSliderValue(nextValue)
     if (nextValue < 98 && sliderVerified) {
-      setSliderVerified(false);
+      setSliderVerified(false)
     }
-  };
+  }
 
   const handleSliderComplete = (value: number | number[]) => {
-    const nextValue = normalizeSliderValue(value);
+    const nextValue = normalizeSliderValue(value)
     if (nextValue >= 98) {
-      setSliderValue(100);
-      setSliderVerified(true);
-      return;
+      setSliderValue(100)
+      setSliderVerified(true)
+      return
     }
-    resetSliderVerification();
-  };
+    resetSliderVerification()
+  }
 
   const handleLogin = async (values: LoginFormValues) => {
     if (sliderVerificationEnabled && !sliderVerified) {
-      message.warning("请先完成滑块验证");
-      return;
+      message.warning('请先完成滑块验证')
+      return
     }
 
-    setLoading(true);
+    setLoading(true)
     try {
-      const authResult = await loginWithPassword(
-        values.username,
-        values.password,
-      );
-      commitAuthResult(authResult);
-      const nextPath = await resolvePostLoginPath(
-        authResult.user.roles,
-        returnTo ?? undefined,
-      );
-      message.success("登录成功");
-      completeLoginNavigation(nextPath);
+      const authResult = await loginWithPassword(values.username, values.password)
+      commitAuthResult(authResult)
+      const nextPath = await resolvePostLoginPath(authResult.user.roles, returnTo ?? undefined)
+      message.success('登录成功')
+      completeLoginNavigation(nextPath)
     } catch (err: any) {
       if (sliderVerificationEnabled) {
-        resetSliderVerification();
+        resetSliderVerification()
       }
-      message.error(err?.message ?? "登录失败");
+      message.error(err?.message ?? '登录失败')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   const handleProviderLogin = (provider: {
-    id?: string;
-    type: string;
-    loginUrl?: string;
-    name: string;
+    id?: string
+    type: string
+    loginUrl?: string
+    name: string
   }) => {
-    const loginPath = providerLoginPath(provider);
-    if (provider.type === "saml" || !loginPath) {
-      message.warning("当前 SAML 登录配置已保存，但服务端回调链路尚未启用。");
-      return;
+    const loginPath = providerLoginPath(provider)
+    if (provider.type === 'saml' || !loginPath) {
+      message.warning('当前 SAML 登录配置已保存，但服务端回调链路尚未启用。')
+      return
     }
-    const loginURL = new URL(loginPath, window.location.origin);
+    const loginURL = new URL(loginPath, window.location.origin)
     if (returnTo) {
-      loginURL.searchParams.set("return_to", returnTo);
+      loginURL.searchParams.set('return_to', returnTo)
     }
-    const target = `${loginURL.pathname}${loginURL.search}`;
-    setProviderLoadingKey(target);
-    window.location.assign(target);
-  };
+    const target = `${loginURL.pathname}${loginURL.search}`
+    setProviderLoadingKey(target)
+    window.location.assign(target)
+  }
 
   return (
     <div className="soha-auth-shell">
@@ -639,24 +617,21 @@ export function LoginPage() {
       <Button
         type="text"
         className="soha-auth-theme-toggle"
-        icon={resolvedThemeMode === "dark" ? <SunOutlined /> : <MoonOutlined />}
-        aria-label={resolvedThemeMode === "dark" ? "切换浅色模式" : "切换深色模式"}
+        icon={resolvedThemeMode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
+        aria-label={resolvedThemeMode === 'dark' ? '切换浅色模式' : '切换深色模式'}
         onClick={toggleThemeMode}
       />
 
       <div className="soha-auth-layout soha-auth-layout--floating">
         <LoginCapabilityFlow />
 
-        <Card
-          className="soha-auth-panel soha-auth-panel--floating"
-          variant="borderless"
-        >
+        <Card className="soha-auth-panel soha-auth-panel--floating" variant="borderless">
           <div className="soha-auth-panel-inner">
             <div className="soha-auth-brand">
               {branding.expandedLogoUrl ? (
                 <img
                   src={branding.expandedLogoUrl}
-                  alt={branding.sidebarTitle || "Logo"}
+                  alt={branding.sidebarTitle || 'Logo'}
                   className="soha-auth-brand-logo-img"
                 />
               ) : (
@@ -672,13 +647,13 @@ export function LoginPage() {
 
             <div className="soha-auth-panel-copy">
               <Title level={5} style={{ marginTop: 0, marginBottom: 4 }}>
-                {checkingExistingSession ? "恢复登录状态" : "登录控制台"}
+                {checkingExistingSession ? '恢复登录状态' : '登录控制台'}
               </Title>
               {checkingExistingSession ? (
                 <Text type="secondary">
                   {sessionRestoreUnavailable
-                    ? "后端服务暂时不可用，正在自动重试。"
-                    : "正在检查当前浏览器会话。"}
+                    ? '后端服务暂时不可用，正在自动重试。'
+                    : '正在检查当前浏览器会话。'}
                 </Text>
               ) : null}
             </div>
@@ -689,11 +664,11 @@ export function LoginPage() {
               </div>
             ) : (
               <>
-                <Form<LoginFormValues> layout="vertical" onFinish={handleLogin}>
+                {localPasswordLoginEnabled ? <Form<LoginFormValues> layout="vertical" onFinish={handleLogin}>
                   <Form.Item<LoginFormValues>
                     name="username"
                     label="用户名"
-                    rules={[{ required: true, message: "请输入用户名" }]}
+                    rules={[{ required: true, message: '请输入用户名' }]}
                   >
                     <Input
                       prefix={<UserOutlined />}
@@ -705,7 +680,7 @@ export function LoginPage() {
                   <Form.Item<LoginFormValues>
                     name="password"
                     label="密码"
-                    rules={[{ required: true, message: "请输入密码" }]}
+                    rules={[{ required: true, message: '请输入密码' }]}
                   >
                     <Input.Password
                       prefix={<LockOutlined />}
@@ -716,11 +691,7 @@ export function LoginPage() {
 
                   {sliderVerificationEnabled ? (
                     <Form.Item>
-                      <div
-                        className={`soha-auth-slider ${
-                          sliderVerified ? "is-verified" : ""
-                        }`}
-                      >
+                      <div className={`soha-auth-slider ${sliderVerified ? 'is-verified' : ''}`}>
                         <div className="soha-auth-slider-label">
                           <span className="soha-auth-slider-label__icon">
                             {sliderVerified ? (
@@ -729,14 +700,12 @@ export function LoginPage() {
                               <SafetyCertificateOutlined />
                             )}
                           </span>
-                          <span>
-                            {sliderVerified ? "验证通过" : "拖动滑块完成验证"}
-                          </span>
+                          <span>{sliderVerified ? '验证通过' : '拖动滑块完成验证'}</span>
                         </div>
                         <div className="soha-auth-slider-track-shell">
                           <span className="soha-auth-slider-shine" />
                           <span className="soha-auth-slider-track-copy">
-                            {sliderVerified ? "身份环境检查完成" : "按住滑块向右拖动"}
+                            {sliderVerified ? '身份环境检查完成' : '按住滑块向右拖动'}
                           </span>
                         </div>
                         <Slider
@@ -751,8 +720,8 @@ export function LoginPage() {
                           value={sliderValue}
                         />
                         <div className="soha-auth-slider-footer">
-                          <span>{sliderVerified ? "可提交登录" : "滑到最右侧后解锁登录"}</span>
-                          <span>{sliderVerified ? "100%" : `${Math.round(sliderValue)}%`}</span>
+                          <span>{sliderVerified ? '可提交登录' : '滑到最右侧后解锁登录'}</span>
+                          <span>{sliderVerified ? '100%' : `${Math.round(sliderValue)}%`}</span>
                         </div>
                       </div>
                     </Form.Item>
@@ -768,11 +737,11 @@ export function LoginPage() {
                   >
                     登录控制台
                   </Button>
-                </Form>
+                </Form> : null}
 
                 {thirdPartyProviders.length > 0 ? (
                   <div className="soha-auth-provider-slot">
-                    <Divider style={{ marginBlock: 18 }}>
+                    <Divider style={{ marginBlock: localPasswordLoginEnabled ? 18 : 0 }}>
                       <Text type="secondary">第三方登录</Text>
                     </Divider>
 
@@ -781,27 +750,23 @@ export function LoginPage() {
                         <Button
                           key={`${provider.type}-${provider.id ?? provider.name}`}
                           block
-                          loading={
-                            Boolean(
-                              providerLoginPath(provider) &&
-                                providerLoadingKey?.startsWith(
-                                  providerLoginPath(provider) ?? "",
-                                ),
-                            )
-                          }
+                          loading={Boolean(
+                            providerLoginPath(provider) &&
+                            providerLoadingKey?.startsWith(providerLoginPath(provider) ?? ''),
+                          )}
                           onClick={() => handleProviderLogin(provider)}
                           className="soha-auth-provider-button"
                         >
                           <span className="soha-auth-provider-button__content">
                             <span className="soha-auth-provider-button__icon">
-                              {provider.type === "saml" && !provider.loginUrl ? (
+                              {provider.type === 'saml' && !provider.loginUrl ? (
                                 <WarningOutlined />
                               ) : (
-                                getProviderIcon(provider.type)
+                                getProviderIcon(provider.type, provider.iconUrl)
                               )}
                             </span>
                             <span className="soha-auth-provider-button__label">
-                              使用 {getProviderLabel(provider.type, provider.name)} 登录
+                              {getProviderLabel(provider.type, provider.name)}
                             </span>
                           </span>
                         </Button>
@@ -816,5 +781,5 @@ export function LoginPage() {
       </div>
       <div className="soha-auth-copyright">{LOGIN_COPYRIGHT_TEXT}</div>
     </div>
-  );
+  )
 }

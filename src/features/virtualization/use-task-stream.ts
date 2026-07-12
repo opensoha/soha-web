@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { buildSameOriginStreamURL, withStreamTicket } from '@/features/auth/stream-ticket'
+import { buildSameOriginStreamURL, withStreamTicket } from '@/features/auth'
 import type { VirtualizationOperation } from './virtualization-types'
 
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'canceled', 'callback_timeout'])
@@ -21,7 +21,10 @@ export function useTaskStream(taskId: string | null, enabled = true) {
     let cancelled = false
     void (async () => {
       try {
-        const baseURL = buildSameOriginStreamURL(`/api/v1/virtualization/operations/${encodeURIComponent(taskId)}/stream`, 'http')
+        const baseURL = buildSameOriginStreamURL(
+          `/api/v1/virtualization/operations/${encodeURIComponent(taskId)}/stream`,
+          'http',
+        )
         const url = await withStreamTicket(baseURL)
         if (cancelled) return
         const es = new EventSource(url)

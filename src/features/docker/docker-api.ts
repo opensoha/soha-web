@@ -25,6 +25,15 @@ import type {
 
 const BASE = '/docker'
 
+async function unwrap<T>(request: Promise<ApiResponse<T>>): Promise<T> {
+  const response = await request
+  return response.data
+}
+
+async function discard(request: Promise<unknown>): Promise<void> {
+  await request
+}
+
 function withQuery(path: string, params: object = {}) {
   const search = new URLSearchParams()
   Object.entries(params).forEach(([key, value]) => {
@@ -37,60 +46,123 @@ function withQuery(path: string, params: object = {}) {
 }
 
 export const dockerApi = {
-  overview: () => api.get<ApiResponse<DockerOverview>>(`${BASE}/overview`),
+  overview: () => unwrap(api.get<ApiResponse<DockerOverview>>(`${BASE}/overview`)),
   hosts: (params: DockerListParams = {}) =>
-    api.get<ApiResponse<DockerPage<DockerHost>>>(withQuery(`${BASE}/hosts`, params)),
-  host: (id: string) => api.get<ApiResponse<DockerHost>>(`${BASE}/hosts/${encodeURIComponent(id)}`),
-  createHost: (payload: DockerHostInput) => api.post<ApiResponse<DockerHost>>(`${BASE}/hosts`, payload),
+    unwrap(api.get<ApiResponse<DockerPage<DockerHost>>>(withQuery(`${BASE}/hosts`, params))),
+  host: (id: string) =>
+    unwrap(api.get<ApiResponse<DockerHost>>(`${BASE}/hosts/${encodeURIComponent(id)}`)),
+  createHost: (payload: DockerHostInput) =>
+    unwrap(api.post<ApiResponse<DockerHost>>(`${BASE}/hosts`, payload)),
   updateHost: (id: string, payload: DockerHostInput) =>
-    api.put<ApiResponse<DockerHost>>(`${BASE}/hosts/${encodeURIComponent(id)}`, payload),
-  deleteHost: (id: string) => api.delete<ApiResponse<void>>(`${BASE}/hosts/${encodeURIComponent(id)}`),
+    unwrap(api.put<ApiResponse<DockerHost>>(`${BASE}/hosts/${encodeURIComponent(id)}`, payload)),
+  deleteHost: (id: string) =>
+    discard(api.delete<ApiResponse<void>>(`${BASE}/hosts/${encodeURIComponent(id)}`)),
   quickCreateHost: (payload: DockerQuickCreateHostInput) =>
-    api.post<ApiResponse<DockerOperation>>(`${BASE}/hosts/quick-create`, payload),
+    unwrap(api.post<ApiResponse<DockerOperation>>(`${BASE}/hosts/quick-create`, payload)),
   projects: (params: DockerListParams = {}) =>
-    api.get<ApiResponse<DockerPage<DockerProject>>>(withQuery(`${BASE}/projects`, params)),
-  project: (id: string) => api.get<ApiResponse<DockerProject>>(`${BASE}/projects/${encodeURIComponent(id)}`),
-  createProject: (payload: DockerProjectInput) => api.post<ApiResponse<DockerProject>>(`${BASE}/projects`, payload),
+    unwrap(api.get<ApiResponse<DockerPage<DockerProject>>>(withQuery(`${BASE}/projects`, params))),
+  project: (id: string) =>
+    unwrap(api.get<ApiResponse<DockerProject>>(`${BASE}/projects/${encodeURIComponent(id)}`)),
+  createProject: (payload: DockerProjectInput) =>
+    unwrap(api.post<ApiResponse<DockerProject>>(`${BASE}/projects`, payload)),
   updateProject: (id: string, payload: DockerProjectInput) =>
-    api.put<ApiResponse<DockerProject>>(`${BASE}/projects/${encodeURIComponent(id)}`, payload),
-  deleteProject: (id: string) => api.delete<ApiResponse<void>>(`${BASE}/projects/${encodeURIComponent(id)}`),
+    unwrap(
+      api.put<ApiResponse<DockerProject>>(`${BASE}/projects/${encodeURIComponent(id)}`, payload),
+    ),
+  deleteProject: (id: string) =>
+    discard(api.delete<ApiResponse<void>>(`${BASE}/projects/${encodeURIComponent(id)}`)),
   deployProject: (id: string, action: string) =>
-    api.post<ApiResponse<DockerOperation>>(`${BASE}/projects/${encodeURIComponent(id)}/deploy`, { action }),
+    unwrap(
+      api.post<ApiResponse<DockerOperation>>(`${BASE}/projects/${encodeURIComponent(id)}/deploy`, {
+        action,
+      }),
+    ),
   projectLogs: (id: string, params: { serviceName?: string; tailLines?: number } = {}) =>
-    api.get<ApiResponse<DockerProjectRuntimeLogs>>(withQuery(`${BASE}/projects/${encodeURIComponent(id)}/runtime/logs`, params)),
+    unwrap(
+      api.get<ApiResponse<DockerProjectRuntimeLogs>>(
+        withQuery(`${BASE}/projects/${encodeURIComponent(id)}/runtime/logs`, params),
+      ),
+    ),
   projectVolumes: (id: string, params: { serviceName?: string } = {}) =>
-    api.get<ApiResponse<DockerProjectVolume[]>>(withQuery(`${BASE}/projects/${encodeURIComponent(id)}/runtime/volumes`, params)),
-  projectVolumeFiles: (id: string, params: { serviceName?: string; target: string; path?: string; limit?: number }) =>
-    api.get<ApiResponse<DockerProjectVolumeFileList>>(withQuery(`${BASE}/projects/${encodeURIComponent(id)}/runtime/volume-files`, params)),
-  projectVolumeFile: (id: string, params: { serviceName?: string; target: string; path: string; limitBytes?: number }) =>
-    api.get<ApiResponse<DockerProjectVolumeFileContent>>(withQuery(`${BASE}/projects/${encodeURIComponent(id)}/runtime/volume-file`, params)),
+    unwrap(
+      api.get<ApiResponse<DockerProjectVolume[]>>(
+        withQuery(`${BASE}/projects/${encodeURIComponent(id)}/runtime/volumes`, params),
+      ),
+    ),
+  projectVolumeFiles: (
+    id: string,
+    params: { serviceName?: string; target: string; path?: string; limit?: number },
+  ) =>
+    unwrap(
+      api.get<ApiResponse<DockerProjectVolumeFileList>>(
+        withQuery(`${BASE}/projects/${encodeURIComponent(id)}/runtime/volume-files`, params),
+      ),
+    ),
+  projectVolumeFile: (
+    id: string,
+    params: { serviceName?: string; target: string; path: string; limitBytes?: number },
+  ) =>
+    unwrap(
+      api.get<ApiResponse<DockerProjectVolumeFileContent>>(
+        withQuery(`${BASE}/projects/${encodeURIComponent(id)}/runtime/volume-file`, params),
+      ),
+    ),
   startContainer: (payload: DockerContainerStartInput) =>
-    api.post<ApiResponse<DockerOperation>>(`${BASE}/containers/start`, payload),
+    unwrap(api.post<ApiResponse<DockerOperation>>(`${BASE}/containers/start`, payload)),
   services: (params: DockerListParams = {}) =>
-    api.get<ApiResponse<DockerPage<DockerService>>>(withQuery(`${BASE}/services`, params)),
+    unwrap(api.get<ApiResponse<DockerPage<DockerService>>>(withQuery(`${BASE}/services`, params))),
   serviceAction: (id: string, action: string) =>
-    api.post<ApiResponse<DockerOperation>>(`${BASE}/services/${encodeURIComponent(id)}/actions`, { action }),
+    unwrap(
+      api.post<ApiResponse<DockerOperation>>(`${BASE}/services/${encodeURIComponent(id)}/actions`, {
+        action,
+      }),
+    ),
   ports: (params: DockerListParams = {}) =>
-    api.get<ApiResponse<DockerPage<DockerPortMapping>>>(withQuery(`${BASE}/ports`, params)),
+    unwrap(api.get<ApiResponse<DockerPage<DockerPortMapping>>>(withQuery(`${BASE}/ports`, params))),
   createPort: (payload: DockerPortMappingInput) =>
-    api.post<ApiResponse<DockerPortMapping>>(`${BASE}/ports`, payload),
+    unwrap(api.post<ApiResponse<DockerPortMapping>>(`${BASE}/ports`, payload)),
   updatePort: (id: string, payload: DockerPortMappingInput) =>
-    api.put<ApiResponse<DockerPortMapping>>(`${BASE}/ports/${encodeURIComponent(id)}`, payload),
-  deletePort: (id: string) => api.delete<ApiResponse<void>>(`${BASE}/ports/${encodeURIComponent(id)}`),
+    unwrap(
+      api.put<ApiResponse<DockerPortMapping>>(`${BASE}/ports/${encodeURIComponent(id)}`, payload),
+    ),
+  deletePort: (id: string) =>
+    discard(api.delete<ApiResponse<void>>(`${BASE}/ports/${encodeURIComponent(id)}`)),
   templates: (params: DockerListParams & { kind?: string; enabled?: boolean } = {}) =>
-    api.get<ApiResponse<DockerPage<DockerTemplate>>>(withQuery(`${BASE}/templates`, params)),
+    unwrap(
+      api.get<ApiResponse<DockerPage<DockerTemplate>>>(withQuery(`${BASE}/templates`, params)),
+    ),
   createTemplate: (payload: DockerTemplateInput) =>
-    api.post<ApiResponse<DockerTemplate>>(`${BASE}/templates`, payload),
+    unwrap(api.post<ApiResponse<DockerTemplate>>(`${BASE}/templates`, payload)),
   updateTemplate: (id: string, payload: DockerTemplateInput) =>
-    api.put<ApiResponse<DockerTemplate>>(`${BASE}/templates/${encodeURIComponent(id)}`, payload),
-  deleteTemplate: (id: string) => api.delete<ApiResponse<void>>(`${BASE}/templates/${encodeURIComponent(id)}`),
-  operations: (params: DockerListParams & { operationKind?: string; abnormal?: boolean; pending?: boolean } = {}) =>
-    api.get<ApiResponse<DockerPage<DockerOperation>>>(withQuery(`${BASE}/operations`, params)),
-  operation: (id: string) => api.get<ApiResponse<DockerOperation>>(`${BASE}/operations/${encodeURIComponent(id)}`),
+    unwrap(
+      api.put<ApiResponse<DockerTemplate>>(`${BASE}/templates/${encodeURIComponent(id)}`, payload),
+    ),
+  deleteTemplate: (id: string) =>
+    discard(api.delete<ApiResponse<void>>(`${BASE}/templates/${encodeURIComponent(id)}`)),
+  operations: (
+    params: DockerListParams & {
+      operationKind?: string
+      abnormal?: boolean
+      pending?: boolean
+    } = {},
+  ) =>
+    unwrap(
+      api.get<ApiResponse<DockerPage<DockerOperation>>>(withQuery(`${BASE}/operations`, params)),
+    ),
+  operation: (id: string) =>
+    unwrap(api.get<ApiResponse<DockerOperation>>(`${BASE}/operations/${encodeURIComponent(id)}`)),
   operationLogs: (id: string) =>
-    api.get<ApiResponse<DockerOperationLog[]>>(`${BASE}/operations/${encodeURIComponent(id)}/logs`),
+    unwrap(
+      api.get<ApiResponse<DockerOperationLog[]>>(
+        `${BASE}/operations/${encodeURIComponent(id)}/logs`,
+      ),
+    ),
   cancelOperation: (id: string) =>
-    api.post<ApiResponse<DockerOperation>>(`${BASE}/operations/${encodeURIComponent(id)}/cancel`),
+    unwrap(
+      api.post<ApiResponse<DockerOperation>>(`${BASE}/operations/${encodeURIComponent(id)}/cancel`),
+    ),
   retryOperation: (id: string) =>
-    api.post<ApiResponse<DockerOperation>>(`${BASE}/operations/${encodeURIComponent(id)}/retry`),
+    unwrap(
+      api.post<ApiResponse<DockerOperation>>(`${BASE}/operations/${encodeURIComponent(id)}/retry`),
+    ),
 }

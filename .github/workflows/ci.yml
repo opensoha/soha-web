@@ -31,6 +31,12 @@ jobs:
       - name: Release workflow guard
         working-directory: soha-web
         run: npm run check:release-workflow
+      - name: Route architecture guard
+        working-directory: soha-web
+        run: npm run check:routes
+      - name: Frontend boundary guard
+        working-directory: soha-web
+        run: npm run check:frontend-boundaries
       - name: Lint
         working-directory: soha-web
         run: npm run lint
@@ -49,3 +55,11 @@ jobs:
       - name: Build
         working-directory: soha-web
         run: npm run build
+      - name: Bundle budget
+        working-directory: soha-web
+        run: npm run check:bundle-budget
+      - name: Upload bundle manifest
+        uses: actions/upload-artifact@v7
+        with:
+          name: soha-web-vite-manifest
+          path: soha-web/dist/.vite/manifest.json

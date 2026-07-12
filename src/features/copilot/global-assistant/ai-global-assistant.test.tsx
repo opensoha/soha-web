@@ -114,20 +114,35 @@ async function renderProvider() {
   return container
 }
 
+async function waitForText(container: HTMLElement, text: string) {
+  const deadline = Date.now() + 2_000
+  while (Date.now() < deadline) {
+    if (container.textContent?.includes(text)) return
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 10))
+    })
+  }
+  throw new Error(`timed out waiting for text: ${text}`)
+}
+
 function sseResponse(content: string) {
   const encoder = new TextEncoder()
   const stream = new ReadableStream({
     start(controller) {
-      controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-        id: 'event-1',
-        sessionId: 'session-global',
-        sequence: 1,
-        createdAt: '2026-07-06T00:00:00Z',
-        type: 'message.done',
-        role: 'assistant',
-        messageId: 'message-ai',
-        content,
-      })}\n\n`))
+      controller.enqueue(
+        encoder.encode(
+          `data: ${JSON.stringify({
+            id: 'event-1',
+            sessionId: 'session-global',
+            sequence: 1,
+            createdAt: '2026-07-06T00:00:00Z',
+            type: 'message.done',
+            role: 'assistant',
+            messageId: 'message-ai',
+            content,
+          })}\n\n`,
+        ),
+      )
       controller.close()
     },
   })
@@ -138,8 +153,30 @@ function mockSelection(anchorNode: Node, text: string) {
   vi.spyOn(window, 'getSelection').mockReturnValue({
     anchorNode,
     getRangeAt: () => ({
-      getBoundingClientRect: () => ({ left: 80, top: 80, width: 120, height: 20, right: 200, bottom: 100, x: 80, y: 80, toJSON: () => ({}) }),
-      getClientRects: () => [{ left: 80, top: 80, width: 120, height: 20, right: 200, bottom: 100, x: 80, y: 80, toJSON: () => ({}) }],
+      getBoundingClientRect: () => ({
+        left: 80,
+        top: 80,
+        width: 120,
+        height: 20,
+        right: 200,
+        bottom: 100,
+        x: 80,
+        y: 80,
+        toJSON: () => ({}),
+      }),
+      getClientRects: () => [
+        {
+          left: 80,
+          top: 80,
+          width: 120,
+          height: 20,
+          right: 200,
+          bottom: 100,
+          x: 80,
+          y: 80,
+          toJSON: () => ({}),
+        },
+      ],
     }),
     isCollapsed: false,
     rangeCount: 1,
@@ -149,7 +186,9 @@ function mockSelection(anchorNode: Node, text: string) {
 
 describe('global AI assistant utilities', () => {
   it('sanitizes selected text and maps page context into Workbench scope', () => {
-    expect(sanitizeSelectionText('Authorization: Bearer abc\npassword=secret')).toContain('[REDACTED]')
+    expect(sanitizeSelectionText('Authorization: Bearer abc\npassword=secret')).toContain(
+      '[REDACTED]',
+    )
     expect(inferSelectionKind('ERROR failed to connect')).toBe('error')
     expect(workbenchScopeFromAIContext(serviceContext)).toEqual({
       clusterId: 'prod',
@@ -172,11 +211,19 @@ describe('global AI assistant utilities', () => {
   })
 
   it('clamps and snaps draggable FloatButton positions', () => {
-    expect(clampFloatPosition({ x: -20, y: 900 }, { width: 400, height: 300 }, { width: 48, height: 48 })).toEqual({
+    expect(
+      clampFloatPosition(
+        { x: -20, y: 900 },
+        { width: 400, height: 300 },
+        { width: 48, height: 48 },
+      ),
+    ).toEqual({
       x: 24,
       y: 228,
     })
-    expect(snapFloatPosition({ x: 340, y: 120 }, { width: 400, height: 300 }, { width: 48, height: 48 })).toEqual({
+    expect(
+      snapFloatPosition({ x: 340, y: 120 }, { width: 400, height: 300 }, { width: 48, height: 48 }),
+    ).toEqual({
       x: 328,
       y: 120,
       edge: 'right',
@@ -201,7 +248,10 @@ describe('GlobalAIAssistantProvider', () => {
       }
     }
     Object.defineProperty(window, 'ResizeObserver', { writable: true, value: ResizeObserverMock })
-    Object.defineProperty(window, 'IntersectionObserver', { writable: true, value: IntersectionObserverMock })
+    Object.defineProperty(window, 'IntersectionObserver', {
+      writable: true,
+      value: IntersectionObserverMock,
+    })
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
       value: vi.fn().mockImplementation(() => ({
@@ -240,7 +290,9 @@ describe('GlobalAIAssistantProvider', () => {
 
   it('creates a Workbench session and renders streamed assistant output', async () => {
     const container = await renderProvider()
-    const askButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'ask')
+    const askButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'ask',
+    )
     expect(askButton).toBeTruthy()
 
     await act(async () => {
@@ -250,11 +302,19 @@ describe('GlobalAIAssistantProvider', () => {
       await Promise.resolve()
     })
 
-    expect(api.post).toHaveBeenCalledWith('/copilot/sessions', expect.objectContaining({
-      mode: 'root_cause',
-      scope: expect.objectContaining({ clusterId: 'prod', namespace: 'payments', service: 'payment-api' }),
-      tags: ['global-assistant'],
-    }))
+    expect(api.post).toHaveBeenCalledWith(
+      '/copilot/sessions',
+      expect.objectContaining({
+        mode: 'root_cause',
+        scope: expect.objectContaining({
+          clusterId: 'prod',
+          namespace: 'payments',
+          service: 'payment-api',
+        }),
+        tags: ['global-assistant'],
+      }),
+    )
+    await waitForText(container, '已完成当前服务分析。')
     expect(String(container.textContent)).toContain('已完成当前服务分析。')
   })
 
@@ -276,7 +336,12 @@ describe('GlobalAIAssistantProvider', () => {
   it('does not intercept native context menus in inputs', async () => {
     const container = await renderProvider()
     const input = container.querySelector('[data-testid="plain-input"]')
-    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 })
+    const event = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 40,
+      clientY: 40,
+    })
 
     input?.dispatchEvent(event)
 
@@ -288,7 +353,12 @@ describe('GlobalAIAssistantProvider', () => {
     const container = await renderProvider()
     const row = container.querySelector('[data-testid="row-context"]')
     vi.spyOn(window, 'getSelection').mockReturnValue(null)
-    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 80 })
+    const event = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 80,
+      clientY: 80,
+    })
 
     await act(async () => {
       row?.dispatchEvent(event)
@@ -310,12 +380,15 @@ describe('GlobalAIAssistantProvider', () => {
       await Promise.resolve()
     })
 
-    expect(api.post).toHaveBeenCalledWith('/copilot/sessions', expect.objectContaining({
-      scope: expect.objectContaining({
-        clusterId: 'prod',
-        namespace: 'payments',
-        pod: 'demo-pod',
+    expect(api.post).toHaveBeenCalledWith(
+      '/copilot/sessions',
+      expect.objectContaining({
+        scope: expect.objectContaining({
+          clusterId: 'prod',
+          namespace: 'payments',
+          pod: 'demo-pod',
+        }),
       }),
-    }))
+    )
   })
 })

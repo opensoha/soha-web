@@ -3,22 +3,20 @@
 import dayjs from 'dayjs'
 import { describe, expect, it } from 'vitest'
 import { createDefaultReleaseDagDefinition } from '@/components/release-flow-dag-definition'
+import { buildAlertRulePayload, type AlertRuleFormValues } from './rules'
+import { buildHealingPolicyPayload, type HealingPolicyFormValues } from './healing'
 import {
-  buildAlertRulePayload,
-  buildHealingPolicyPayload,
   buildOnCallAssignmentPayload,
   buildOnCallEscalationPolicyPayload,
   buildOnCallRotationPayload,
   buildOnCallSchedulePayload,
   buildRotationConfigWithOverride,
-  type AlertRuleFormValues,
-  type HealingPolicyFormValues,
   type OnCallAssignmentFormValues,
   type OnCallEscalationPolicyFormValues,
   type OnCallEscalationStepPayload,
   type OnCallRotationFormValues,
   type OnCallScheduleFormValues,
-} from './alerting-pages'
+} from './oncall'
 
 describe('observability alerting payload builders', () => {
   it('builds alert rule payload from JSON text form fields', () => {
@@ -124,7 +122,9 @@ describe('observability alerting payload builders', () => {
     ] satisfies OnCallEscalationStepPayload[]
     const values = {
       name: 'Critical escalation',
-      steps: [{ scheduleId: 'schedule-primary', delayMinutes: 5, role: 'sre', description: 'page SRE' }],
+      steps: [
+        { scheduleId: 'schedule-primary', delayMinutes: 5, role: 'sre', description: 'page SRE' },
+      ],
       enabled: true,
     } satisfies OnCallEscalationPolicyFormValues
 

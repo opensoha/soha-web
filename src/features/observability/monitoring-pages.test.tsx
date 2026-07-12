@@ -4,30 +4,33 @@ import { act } from 'react'
 import { App as AntdApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot } from 'react-dom/client'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PermissionSnapshot } from '@/types'
+import { AlertIntegrationsPage } from './integrations/page'
 import {
-  AlertIntegrationsPage,
-  AlertsPage,
-  EventsPage,
-  NotificationsPage,
   alertIntegrationSamplePayload,
   buildAlertIntegrationPayload,
   buildAlertIntegrationTestPayload,
+  type AlertIntegrationFormValues,
+  type AlertIntegrationTestFormValues,
+} from './integrations'
+import { AlertsPage } from './alerts/page'
+import { AlertEventDetailPage } from './alerts/detail-page'
+import { EventsPage } from './events/page'
+import { NotificationsPage } from './notifications/page'
+import {
   buildNotificationChannelPayload,
   buildNotificationPolicyPayload,
   buildNotificationRoutePayload,
   buildNotificationSilencePayload,
   buildNotificationTemplatePayload,
-  type AlertIntegrationFormValues,
-  type AlertIntegrationTestFormValues,
   type NotificationChannelFormValues,
   type NotificationPolicyFormValues,
   type NotificationRouteFormValues,
   type NotificationSilenceFormValues,
   type NotificationTemplateFormValues,
-} from './monitoring-pages'
+} from './notifications'
 
 interface TestResponseMap {
   [path: string]: unknown
@@ -47,11 +50,15 @@ const testState = vi.hoisted(() => ({
   responses: {} as TestResponseMap,
 }))
 
-const apiGetMock = vi.hoisted(() => vi.fn((path: string) => Promise.resolve({ data: testState.responses[path] ?? [] })))
+const apiGetMock = vi.hoisted(() =>
+  vi.fn((path: string) => Promise.resolve({ data: testState.responses[path] ?? [] })),
+)
 const apiPostMock = vi.hoisted(() => vi.fn(() => Promise.resolve({ data: {} })))
 
 vi.mock('@/features/auth/permission-snapshot', async () => {
-  const actual = await vi.importActual<typeof import('@/features/auth/permission-snapshot')>('@/features/auth/permission-snapshot')
+  const actual = await vi.importActual<typeof import('@/features/auth/permission-snapshot')>(
+    '@/features/auth/permission-snapshot',
+  )
   return {
     ...actual,
     usePermissionSnapshot: () => ({
@@ -71,11 +78,25 @@ vi.mock('@/services/api-client', () => ({
 }))
 
 vi.mock('@/components/stat-grid', () => ({
-  StatGrid: ({ items }: { items: Array<{ label: string; value: number }> }) => <div>{items.map((item) => `${item.label}:${item.value}`).join('|')}</div>,
+  StatGrid: ({ items }: { items: Array<{ label: string; value: number }> }) => (
+    <div>{items.map((item) => `${item.label}:${item.value}`).join('|')}</div>
+  ),
 }))
 
 vi.mock('@/components/admin-table', () => ({
-  AdminTable: ({ dataSource, columns, title, headerExtra, toolbarExtra }: { dataSource: unknown[]; columns: any[]; title?: React.ReactNode; headerExtra?: React.ReactNode; toolbarExtra?: React.ReactNode }) => (
+  AdminTable: ({
+    dataSource,
+    columns,
+    title,
+    headerExtra,
+    toolbarExtra,
+  }: {
+    dataSource: unknown[]
+    columns: any[]
+    title?: React.ReactNode
+    headerExtra?: React.ReactNode
+    toolbarExtra?: React.ReactNode
+  }) => (
     <div data-testid="admin-table">
       {title ? <div>{title}</div> : null}
       {headerExtra ? <div>{headerExtra}</div> : null}
@@ -86,7 +107,9 @@ vi.mock('@/components/admin-table', () => ({
           {columns.map((column, columnIndex) => {
             const dataIndex = column?.dataIndex
             const value = typeof dataIndex === 'string' ? record[dataIndex] : undefined
-            const content = column?.render ? column.render(value, record, rowIndex) : String(value ?? '')
+            const content = column?.render
+              ? column.render(value, record, rowIndex)
+              : String(value ?? '')
             return <div key={`${String(dataIndex ?? columnIndex)}:${columnIndex}`}>{content}</div>
           })}
         </div>
@@ -109,21 +132,52 @@ function setSnapshot(permissionKeys: string[]) {
 function setDefaultResponses() {
   testState.responses = {
     '/notification-channels': [
-      { id: 'channel-slack', name: 'Primary Slack', channelType: 'slack', config: { webhookUrl: 'https://hooks.slack.local/primary' }, enabled: true },
+      {
+        id: 'channel-slack',
+        name: 'Primary Slack',
+        channelType: 'slack',
+        config: { webhookUrl: 'https://hooks.slack.local/primary' },
+        enabled: true,
+      },
     ],
-    '/alert-events?limit=20': [
-      { id: 'evt-1', title: 'CPU High', status: 'firing' },
-    ],
+    '/alert-events?limit=20': [{ id: 'evt-1', title: 'CPU High', status: 'firing' }],
     '/notification-policies': [
-      { id: 'policy-1', name: 'Primary Policy', matchers: { severity: 'critical' }, processorChain: ['webhook_update'], channelRefs: ['channel-slack'], enabled: true, sendResolved: false, cooldownSeconds: 0 },
+      {
+        id: 'policy-1',
+        name: 'Primary Policy',
+        matchers: { severity: 'critical' },
+        processorChain: ['webhook_update'],
+        channelRefs: ['channel-slack'],
+        enabled: true,
+        sendResolved: false,
+        cooldownSeconds: 0,
+      },
     ],
     '/notification-templates': [],
     '/alert-routes': [
-      { id: 'policy-1', name: 'Primary Policy', matchers: { severity: 'critical' }, channelIds: ['channel-slack'], enabled: true },
+      {
+        id: 'policy-1',
+        name: 'Primary Policy',
+        matchers: { severity: 'critical' },
+        channelIds: ['channel-slack'],
+        enabled: true,
+      },
     ],
     '/alert-silences': [],
     '/alert-events': [
-      { id: 'evt-1', title: 'CPU High', summary: 'CPU > 90%', severity: 'critical', status: 'firing', sourceType: 'prometheus', sourceSystem: 'prometheus-main', clusterId: 'cluster-a', namespace: 'default', startsAt: '2026-05-06T10:00:00Z', lastSeenAt: '2026-05-06T10:05:00Z' },
+      {
+        id: 'evt-1',
+        title: 'CPU High',
+        summary: 'CPU > 90%',
+        severity: 'critical',
+        status: 'firing',
+        sourceType: 'prometheus',
+        sourceSystem: 'prometheus-main',
+        clusterId: 'cluster-a',
+        namespace: 'default',
+        startsAt: '2026-05-06T10:00:00Z',
+        lastSeenAt: '2026-05-06T10:05:00Z',
+      },
     ],
     '/alert-integrations': [
       {
@@ -137,9 +191,7 @@ function setDefaultResponses() {
         lastReceivedAt: '2026-05-06T10:05:00Z',
       },
     ],
-    '/healing-policies': [
-      { id: 'heal-1', name: 'Restart Workload', enabled: true },
-    ],
+    '/healing-policies': [{ id: 'heal-1', name: 'Restart Workload', enabled: true }],
     '/alert-events/evt-1': {
       id: 'evt-1',
       ruleId: 'rule-1',
@@ -175,19 +227,54 @@ function setDefaultResponses() {
       updatedAt: '2026-05-06T09:30:00Z',
     },
     '/alert-rule-runs?ruleId=rule-1': [
-      { id: 'run-1', status: 'matched', matched: true, summary: 'CPU crossed threshold', durationMs: 120, createdAt: '2026-05-06T10:00:01Z' },
+      {
+        id: 'run-1',
+        status: 'matched',
+        matched: true,
+        summary: 'CPU crossed threshold',
+        durationMs: 120,
+        createdAt: '2026-05-06T10:00:01Z',
+      },
     ],
     '/healing-runs?eventId=evt-1': [
-      { id: 'healing-run-1', status: 'pending_approval', approvalStatus: 'pending', createdAt: '2026-05-06T10:05:30Z', updatedAt: '2026-05-06T10:05:30Z' },
+      {
+        id: 'healing-run-1',
+        status: 'pending_approval',
+        approvalStatus: 'pending',
+        createdAt: '2026-05-06T10:05:30Z',
+        updatedAt: '2026-05-06T10:05:30Z',
+      },
     ],
     '/notification-policies/policy-1/preview?eventId=evt-1': [
-      { channelId: 'channel-slack', url: 'https://hooks.slack.local/primary', method: 'POST', body: '{"alert":"CPU High"}' },
+      {
+        channelId: 'channel-slack',
+        url: 'https://hooks.slack.local/primary',
+        method: 'POST',
+        body: '{"alert":"CPU High"}',
+      },
     ],
     '/alert-delivery-logs?alertId=evt-1': [
-      { id: 'delivery-1', alertId: 'evt-1', channelId: 'channel-slack', status: 'delivered', summary: 'ok', metadata: { policyId: 'policy-1' }, createdAt: '2026-05-06T10:04:00Z' },
+      {
+        id: 'delivery-1',
+        alertId: 'evt-1',
+        channelId: 'channel-slack',
+        status: 'delivered',
+        summary: 'ok',
+        metadata: { policyId: 'policy-1' },
+        createdAt: '2026-05-06T10:04:00Z',
+      },
     ],
     '/events': [
-      { id: 'stream-1', source: 'alertmanager', category: 'alert', severity: 'warning', clusterId: 'cluster-a', namespace: 'default', summary: 'CPU pressure detected', payload: { alertId: 'evt-1' } },
+      {
+        id: 'stream-1',
+        source: 'alertmanager',
+        category: 'alert',
+        severity: 'warning',
+        clusterId: 'cluster-a',
+        namespace: 'default',
+        summary: 'CPU pressure detected',
+        payload: { alertId: 'evt-1' },
+      },
     ],
   }
 }
@@ -240,7 +327,9 @@ async function flushAsyncWork() {
 }
 
 async function clickButtonByLabel(label: string) {
-  const button = Array.from(document.querySelectorAll('button')).find((node) => node.getAttribute('aria-label') === label)
+  const button = Array.from(document.querySelectorAll('button')).find(
+    (node) => node.getAttribute('aria-label') === label,
+  )
   if (!(button instanceof HTMLButtonElement)) {
     throw new Error(`button not found by aria-label: ${label}`)
   }
@@ -251,8 +340,9 @@ async function clickButtonByLabel(label: string) {
 }
 
 async function clickElementByText(text: string) {
-  const element = Array.from(document.querySelectorAll<HTMLElement>('*'))
-    .find((node) => node.textContent?.trim() === text)
+  const element = Array.from(document.querySelectorAll<HTMLElement>('*')).find(
+    (node) => node.textContent?.trim() === text,
+  )
   if (!(element instanceof HTMLElement)) {
     throw new Error(`element not found: ${text}`)
   }
@@ -494,7 +584,10 @@ describe('observability monitoring pages', () => {
   })
 
   it('renders the notification route compatibility view using matchers and channel ids', async () => {
-    const container = await renderWithProviders(<NotificationsPage />, '/observability/notifications')
+    const container = await renderWithProviders(
+      <NotificationsPage />,
+      '/observability/notifications',
+    )
     await clickElementByText('路由规则')
 
     expect(container.textContent).toContain('通知策略')
@@ -506,7 +599,10 @@ describe('observability monitoring pages', () => {
   })
 
   it('renders alert integrations from the backend integration registry', async () => {
-    const container = await renderWithProviders(<AlertIntegrationsPage />, '/monitoring-workbench/integrations')
+    const container = await renderWithProviders(
+      <AlertIntegrationsPage />,
+      '/monitoring-workbench/integrations',
+    )
 
     expect(container.textContent).toContain('告警集成')
     expect(container.textContent).toContain('Alertmanager')
@@ -533,6 +629,23 @@ describe('observability monitoring pages', () => {
     expect(apiGetMock).toHaveBeenCalledWith('/healing-runs?eventId=evt-1')
     expect(apiGetMock).toHaveBeenCalledWith('/notification-policies/policy-1/preview?eventId=evt-1')
     expect(apiGetMock).toHaveBeenCalledWith('/alert-delivery-logs?alertId=evt-1')
+  })
+
+  it('loads the standalone alert detail from its deep-link route parameter', async () => {
+    const container = await renderWithProviders(
+      <Routes>
+        <Route path="/monitoring-workbench/alerts/:eventId" element={<AlertEventDetailPage />} />
+      </Routes>,
+      '/monitoring-workbench/alerts/evt-1',
+    )
+    await flushAsyncWork()
+
+    expect(container.textContent).toContain('CPU High')
+    expect(container.textContent).toContain('返回列表')
+    expect(container.textContent).toContain('规则运行')
+    expect(container.textContent).toContain('通知预览')
+    expect(apiGetMock).toHaveBeenCalledWith('/alert-events/evt-1')
+    expect(apiGetMock).toHaveBeenCalledWith('/alert-rules/rule-1')
   })
 
   it('renders the events page against event stream envelopes without crashing', async () => {

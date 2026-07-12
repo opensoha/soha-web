@@ -126,4 +126,55 @@ describe('AdminTable', () => {
   it('pins the shared action preset to the right side', () => {
     expect(tableColumnPresets.action.fixed).toBe('right')
   })
+
+  it('normalizes legacy action columns through the shared table contract', async () => {
+    await renderNode(
+      <AdminTable
+        columns={[
+          { title: '名称', dataIndex: 'name' },
+          { title: '操作', key: 'actions', fixed: 'right', width: 180, render: () => null },
+        ]}
+        dataSource={[{ id: '1', name: 'demo' }]}
+        rowKey="id"
+      />,
+    )
+
+    const actionColumn = captured.tableProps.columns[1]
+    expect(actionColumn).toMatchObject({
+      title: '',
+      fixed: 'right',
+      align: 'center',
+      minWidth: 52,
+      width: undefined,
+    })
+    expect(actionColumn.className).toContain('soha-table-actions-column')
+    expect(actionColumn.className).toContain('soha-table-actions-column--auto')
+    expect(actionColumn.onHeaderCell().className).toContain('soha-table-actions-column--auto')
+    expect(actionColumn.onCell({}, 0).className).toContain('soha-table-actions-column--auto')
+  })
+
+  it('preserves explicit K8s action widths while hiding the column title', async () => {
+    await renderNode(
+      <AdminTable
+        columns={[
+          {
+            title: '操作',
+            key: 'actions',
+            fixed: 'right',
+            width: 112,
+            onHeaderCell: () => ({ className: 'soha-table-actions-column k8s-actions' }),
+            render: () => null,
+          },
+        ]}
+        dataSource={[{ id: '1' }]}
+        rowKey="id"
+      />,
+    )
+
+    const actionColumn = captured.tableProps.columns[0]
+    expect(actionColumn.title).toBe('')
+    expect(actionColumn.width).toBe(112)
+    expect(actionColumn.className).not.toContain('soha-table-actions-column--auto')
+    expect(actionColumn.onHeaderCell().className).toContain('k8s-actions')
+  })
 })

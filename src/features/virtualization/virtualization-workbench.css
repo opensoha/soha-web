@@ -46,7 +46,11 @@
 
 .soha-vrt-metric-card.is-success.ant-card {
   border-color: color-mix(in srgb, var(--soha-success) 26%, transparent);
-  background: linear-gradient(180deg, var(--soha-bg-surface) 0%, color-mix(in srgb, var(--soha-success) 7%, transparent) 100%);
+  background: linear-gradient(
+    180deg,
+    var(--soha-bg-surface) 0%,
+    color-mix(in srgb, var(--soha-success) 7%, transparent) 100%
+  );
 }
 
 .soha-vrt-commandbar.is-warning,
@@ -58,7 +62,11 @@
 
 .soha-vrt-metric-card.is-warning.ant-card {
   border-color: color-mix(in srgb, var(--soha-warning) 28%, transparent);
-  background: linear-gradient(180deg, var(--soha-bg-surface) 0%, color-mix(in srgb, var(--soha-warning) 7%, transparent) 100%);
+  background: linear-gradient(
+    180deg,
+    var(--soha-bg-surface) 0%,
+    color-mix(in srgb, var(--soha-warning) 7%, transparent) 100%
+  );
 }
 
 .soha-vrt-commandbar.is-danger,
@@ -70,7 +78,11 @@
 
 .soha-vrt-metric-card.is-danger.ant-card {
   border-color: color-mix(in srgb, var(--soha-danger) 28%, transparent);
-  background: linear-gradient(180deg, var(--soha-bg-surface) 0%, color-mix(in srgb, var(--soha-danger) 7%, transparent) 100%);
+  background: linear-gradient(
+    180deg,
+    var(--soha-bg-surface) 0%,
+    color-mix(in srgb, var(--soha-danger) 7%, transparent) 100%
+  );
 }
 
 .soha-vrt-commandbar.is-default,
@@ -239,7 +251,9 @@
 .soha-vrt-metric-card.ant-card {
   min-width: 184px;
   overflow: hidden;
-  transition: border-color 0.16s ease, background-color 0.16s ease;
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease;
 }
 
 .soha-vrt-metric-card.ant-card:hover,
@@ -505,31 +519,29 @@
 }
 
 @media (max-width: 1200px) {
-
   .soha-vrt-workbench-grid {
     grid-template-columns: 1fr;
   }
 
   .soha-vrt-filter-grid,
-.soha-vrt-metric-grid {
+  .soha-vrt-metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 768px) {
-
   .soha-vrt-filter-grid,
-.soha-vrt-metric-grid,
-.soha-vrt-lane-grid,
-.soha-vrt-chip-grid.is-compact {
+  .soha-vrt-metric-grid,
+  .soha-vrt-lane-grid,
+  .soha-vrt-chip-grid.is-compact {
     grid-template-columns: 1fr;
   }
 
   .soha-vrt-commandbar,
-.soha-vrt-selection-bar,
-.soha-vrt-lane-head,
-.soha-vrt-panel-head,
-.soha-vrt-attention-row-head {
+  .soha-vrt-selection-bar,
+  .soha-vrt-lane-head,
+  .soha-vrt-panel-head,
+  .soha-vrt-attention-row-head {
     flex-direction: column;
   }
 
@@ -539,7 +551,7 @@
   }
 
   .soha-vrt-filterbar-main,
-.soha-vrt-filterbar-extra {
+  .soha-vrt-filterbar-extra {
     width: 100%;
   }
 

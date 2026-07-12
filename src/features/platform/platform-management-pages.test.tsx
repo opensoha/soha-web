@@ -7,14 +7,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  ConfigurationConfigMapsPage,
-  NetworkPortForwardPage,
-  PlatformAccessControlClusterRoleBindingsPage,
-  PlatformAccessControlClusterRolesPage,
-  PlatformAccessControlRoleBindingsPage,
-  PlatformAccessControlServiceAccountsPage,
-} from './platform-management-pages'
+import { PlatformAccessControlClusterRoleBindingsPage } from './access-control/clusterrolebindings/list-page'
+import { PlatformAccessControlClusterRolesPage } from './access-control/clusterroles/list-page'
+import { PlatformAccessControlRoleBindingsPage } from './access-control/rolebindings/list-page'
+import { PlatformAccessControlServiceAccountsPage } from './access-control/serviceaccounts/list-page'
+import { ConfigurationConfigMapsPage } from './configuration/configmaps/list-page'
+import { NetworkPortForwardPage } from './network/port-forward/page'
 
 const testState = vi.hoisted(() => ({
   responses: {} as Record<string, unknown>,

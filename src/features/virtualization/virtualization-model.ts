@@ -1,4 +1,4 @@
-import { hasAllowedAction } from '@/features/auth/permission-snapshot'
+import { hasAllowedAction } from '@/features/auth'
 import type {
   CreateVirtualMachineInput,
   VirtualMachineDetail,
@@ -101,7 +101,10 @@ export function formatOperationDuration(record: VirtualizationOperation) {
   return restMinutes > 0 ? `${hours} 小时 ${restMinutes} 分钟` : `${hours} 小时`
 }
 
-export function buildOperationFilter(records: VirtualizationOperation[], preset: OperationFilterPreset) {
+export function buildOperationFilter(
+  records: VirtualizationOperation[],
+  preset: OperationFilterPreset,
+) {
   switch (preset) {
     case 'pending':
       return records.filter((record) => isPendingOperation(record.status))
@@ -156,11 +159,18 @@ export function bulkActionSummary(label: string, items: string[]) {
   return `${label} ${items.length} 个对象：${items.slice(0, 3).join('、')}${items.length > 3 ? ' 等' : ''}`
 }
 
-export function selectableOperationIds(records: VirtualizationOperation[], action: 'cancel' | 'retry') {
-  return records.filter((record) => hasAllowedAction(record.allowedActions, action)).map((record) => record.id)
+export function selectableOperationIds(
+  records: VirtualizationOperation[],
+  action: 'cancel' | 'retry',
+) {
+  return records
+    .filter((record) => hasAllowedAction(record.allowedActions, action))
+    .map((record) => record.id)
 }
 
-export function badgeStatusForTone(tone: OverviewTone): 'success' | 'warning' | 'error' | 'default' {
+export function badgeStatusForTone(
+  tone: OverviewTone,
+): 'success' | 'warning' | 'error' | 'default' {
   if (tone === 'success') return 'success'
   if (tone === 'warning') return 'warning'
   if (tone === 'danger') return 'error'
@@ -175,15 +185,18 @@ export function operationTime(record: VirtualizationOperation) {
   return record.startedAt || record.createdAt || record.updatedAt
 }
 
-export const VIRTUALIZATION_PROVIDER_OPTIONS: Array<{ label: string; value: VirtualizationProvider }> = [
+export const VIRTUALIZATION_PROVIDER_OPTIONS: Array<{
+  label: string
+  value: VirtualizationProvider
+}> = [
   { value: 'kubevirt', label: 'KubeVirt' },
   { value: 'pve', label: 'PVE' },
 ]
 
-export const VIRTUALIZATION_PROVIDER_FILTER_OPTIONS: Array<{ label: string; value: ProviderFilter }> = [
-  { value: 'all', label: '全部' },
-  ...VIRTUALIZATION_PROVIDER_OPTIONS,
-]
+export const VIRTUALIZATION_PROVIDER_FILTER_OPTIONS: Array<{
+  label: string
+  value: ProviderFilter
+}> = [{ value: 'all', label: '全部' }, ...VIRTUALIZATION_PROVIDER_OPTIONS]
 
 export const ENABLED_FILTER_OPTIONS: Array<{ label: string; value: EnabledFilter }> = [
   { value: 'all', label: '全部' },
@@ -203,7 +216,11 @@ export function localTableSummary(filteredCount: number, totalCount: number) {
   return `当前 ${filteredCount} / ${totalCount} 条`
 }
 
-export function normalizePage<T>(data: VirtualizationPage<T> | T[] | undefined, fallbackPage: number, fallbackPageSize: number): VirtualizationPage<T> {
+export function normalizePage<T>(
+  data: VirtualizationPage<T> | T[] | undefined,
+  fallbackPage: number,
+  fallbackPageSize: number,
+): VirtualizationPage<T> {
   if (Array.isArray(data)) {
     return { items: data, total: data.length, page: fallbackPage, pageSize: fallbackPageSize }
   }
@@ -212,7 +229,9 @@ export function normalizePage<T>(data: VirtualizationPage<T> | T[] | undefined, 
 
 export function compactRecord<T extends VirtualizationPayloadMap>(values: T): T {
   return Object.fromEntries(
-    Object.entries(values).filter(([, value]) => value !== undefined && value !== '' && value !== null),
+    Object.entries(values).filter(
+      ([, value]) => value !== undefined && value !== '' && value !== null,
+    ),
   ) as T
 }
 
@@ -275,7 +294,12 @@ export function operationParamsFromSearch(search: string) {
   const connectionId = params.get('connectionId') || undefined
   const vmId = params.get('vmId') || undefined
   const searchText = params.get('search') || undefined
-  const statuses = params.get('statuses')?.split(',').map((item) => item.trim()).filter(Boolean) || undefined
+  const statuses =
+    params
+      .get('statuses')
+      ?.split(',')
+      .map((item) => item.trim())
+      .filter(Boolean) || undefined
   return {
     preset: operationPresetFromSearch(search),
     query: {
@@ -291,7 +315,16 @@ export function operationParamsFromSearch(search: string) {
   }
 }
 
-export function nextOperationSearch(preset: OperationFilterPreset, base: { connectionId?: string; vmId?: string; taskKind?: string; search?: string; statuses?: string[] }) {
+export function nextOperationSearch(
+  preset: OperationFilterPreset,
+  base: {
+    connectionId?: string
+    vmId?: string
+    taskKind?: string
+    search?: string
+    statuses?: string[]
+  },
+) {
   const params = new URLSearchParams()
   if (base.connectionId) params.set('connectionId', base.connectionId)
   if (base.vmId) params.set('vmId', base.vmId)
@@ -375,7 +408,8 @@ export function buildCreateVmPayload(values: VirtualMachineFormValues): CreateVi
     interfaceBinding: values.kubevirtInterfaceBinding,
     interfaceName: values.kubevirtInterfaceName,
   })
-  const sourceMode = values.sourceMode || (values.provider === 'pve' ? 'template_clone' : 'datasource_clone')
+  const sourceMode =
+    values.sourceMode || (values.provider === 'pve' ? 'template_clone' : 'datasource_clone')
   return buildVmPayload({
     ...values,
     sourceMode,
@@ -400,7 +434,9 @@ export function buildImagePayload(values: VirtualizationImageInput): Virtualizat
   }
 }
 
-export function buildClusterPayload(values: VirtualizationClusterFormValues): VirtualizationClusterInput {
+export function buildClusterPayload(
+  values: VirtualizationClusterFormValues,
+): VirtualizationClusterInput {
   const provider = values.provider ?? 'kubevirt'
   const config: VirtualizationClusterConfig = {}
   const credential: VirtualizationClusterCredential = {}
@@ -423,9 +459,11 @@ export function buildClusterPayload(values: VirtualizationClusterFormValues): Vi
   } else {
     if (values.backendUrl) config.backendUrl = values.backendUrl
     if (values.prometheusUrl) config.prometheusUrl = values.prometheusUrl
-    if (values.prometheusBearerTokenSecretRef) config.prometheusBearerTokenSecretRef = values.prometheusBearerTokenSecretRef
+    if (values.prometheusBearerTokenSecretRef)
+      config.prometheusBearerTokenSecretRef = values.prometheusBearerTokenSecretRef
     if (values.mode) config.mode = values.mode
-    if (values.prometheusBearerToken) credential.prometheusBearerToken = values.prometheusBearerToken
+    if (values.prometheusBearerToken)
+      credential.prometheusBearerToken = values.prometheusBearerToken
   }
   return {
     name: values.name,

@@ -2,10 +2,12 @@ import { useEffect, useMemo } from 'react'
 import { Select, Space, Tag, Typography } from 'antd'
 import { ApartmentOutlined, KubernetesOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
+import { listClusters } from '@/features/platform/clusters/api'
+import { clusterKeys } from '@/features/platform/clusters/keys'
 import { useI18n } from '@/i18n'
 import { api } from '@/services/api-client'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
-import type { ApiResponse, Cluster, Namespace, RouteMeta } from '@/types'
+import type { ApiResponse, Namespace, RouteMeta } from '@/types'
 
 const { Text } = Typography
 
@@ -45,8 +47,8 @@ function usePlatformScopeData() {
   const { clusterId, namespace, setClusterId, setNamespace } = usePlatformScopeStore()
 
   const clustersQuery = useQuery({
-    queryKey: ['clusters'],
-    queryFn: () => api.get<ApiResponse<Cluster[]>>('/clusters'),
+    queryKey: clusterKeys.legacyList(),
+    queryFn: listClusters,
   })
 
   const namespacesQuery = useQuery({
@@ -57,7 +59,7 @@ function usePlatformScopeData() {
 
   useEffect(() => {
     if (!clustersQuery.data) return
-    const clusters = clustersQuery.data.data ?? []
+    const clusters = clustersQuery.data
     if (clusterId && clusters.some((cluster) => cluster.id === clusterId)) {
       return
     }
@@ -77,7 +79,7 @@ function usePlatformScopeData() {
     setNamespace(null)
   }, [clusterId, namespace, namespacesQuery.data, setNamespace])
 
-  const clusters = clustersQuery.data?.data ?? []
+  const clusters = clustersQuery.data ?? []
   const namespaces = namespacesQuery.data?.data ?? []
   const currentCluster = useMemo(
     () => clusters.find((item) => item.id === clusterId) ?? null,
@@ -147,7 +149,6 @@ export function PlatformScopeTrigger({
           className="soha-platform-compact-field soha-platform-scope-select is-namespace"
           disabled={!clusterId}
           loading={namespacesLoading}
-          optionFilterProp="label"
           options={[
             { value: '', label: t('platformScope.allNamespaces', 'All namespaces') },
             ...namespaces.map((item) => ({
@@ -158,7 +159,7 @@ export function PlatformScopeTrigger({
           placeholder={t('platformScope.namespacePlaceholder', 'Select namespace')}
           popupMatchSelectWidth={220}
           prefix={<ApartmentOutlined />}
-          showSearch
+          showSearch={{ optionFilterProp: 'label' }}
           size="small"
           value={namespace ?? ''}
           variant="filled"
@@ -170,7 +171,6 @@ export function PlatformScopeTrigger({
         aria-label={t('platformScope.clusterPlaceholder', 'Select cluster')}
         className="soha-platform-compact-field soha-platform-scope-select is-cluster"
         loading={clustersLoading}
-        optionFilterProp="label"
         options={clusters.map((cluster) => ({
           value: cluster.id,
           label: cluster.name,
@@ -178,7 +178,7 @@ export function PlatformScopeTrigger({
         placeholder={t('platformScope.clusterPlaceholder', 'Select cluster')}
         popupMatchSelectWidth={200}
         prefix={<KubernetesOutlined />}
-        showSearch
+        showSearch={{ optionFilterProp: 'label' }}
         size="small"
         value={clusterId ?? undefined}
         variant="filled"

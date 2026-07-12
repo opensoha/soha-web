@@ -7,7 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ApplicationDetailPage } from './application-runtime-pages'
+import { ApplicationDetailPage } from './applications/detail-page'
 import { api } from '@/services/api-client'
 
 const workflowDefinition = {

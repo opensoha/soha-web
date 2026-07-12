@@ -8,13 +8,11 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PodLogViewer } from '@/components/pod-log-viewer'
-import {
-  PodDetailPage,
-  WorkloadsDaemonSetsPage,
-  WorkloadsDeploymentsPage,
-  WorkloadsPodsPage,
-  WorkloadsStatefulSetsPage,
-} from './workloads-pages'
+import { WorkloadsDaemonSetsPage } from './workloads/daemonsets/list-page'
+import { WorkloadsDeploymentsPage } from './workloads/deployments/list-page'
+import { PodDetailPage } from './workloads/pods/detail-page'
+import { WorkloadsPodsPage } from './workloads/pods/list-page'
+import { WorkloadsStatefulSetsPage } from './workloads/statefulsets/list-page'
 
 const testState = vi.hoisted(() => ({
   responses: {} as Record<string, unknown>,

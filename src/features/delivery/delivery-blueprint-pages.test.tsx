@@ -7,7 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DeliveryBlueprintsPage } from './delivery-blueprint-pages'
+import { DeliveryBlueprintsPage } from './blueprints/page'
 
 const testState = vi.hoisted(() => ({
   permissionSnapshot: {
