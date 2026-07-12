@@ -17,6 +17,17 @@
   text-align: center !important;
 }
 
+.soha-table-actions-column--auto {
+  width: 1% !important;
+  min-width: 52px !important;
+  max-width: none !important;
+  white-space: nowrap !important;
+}
+
+.soha-table-actions-column--auto .soha-row-action-icons.ant-space {
+  flex-wrap: nowrap;
+}
+
 .soha-row-action-icons .ant-btn {
   width: 24px;
   min-width: 24px;

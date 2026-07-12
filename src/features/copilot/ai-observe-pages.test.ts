@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { automationPolicyPayload, inspectionTaskPayload, policyFormValuesFromRecord } from './ai-observe-pages'
+import { automationPolicyPayload, inspectionTaskPayload, policyFormValuesFromRecord } from './observe/mutations'
 
 describe('AI operations helpers', () => {
   it('normalizes inspection task form values before persistence', () => {

@@ -1,15 +1,14 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { api } from '@/services/api-client'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import type {
-  ApiResponse,
-  Cluster,
   ClusterCapabilityMatrixEntry,
   ClusterCapabilityModeSupport,
   ClusterCapabilityRiskLevel,
   ClusterCapabilityStatus,
 } from '@/types'
+import { listClusterCapabilities, listClusters } from './clusters/api'
+import { clusterKeys } from './clusters/keys'
 
 type CapabilityMode = 'direct' | 'agent'
 type LocaleCode = 'zh_CN' | 'en_US'
@@ -73,7 +72,10 @@ export function evaluateClusterCapability({
   const support = entry[mode]
   const notes = notesFromSupport(support)
   const disabled = support.status === 'unsupported'
-  const reason = support.reason?.trim() || notes.join(' / ') || (disabled ? fallbackUnsupportedReason(localeCode) : '')
+  const reason =
+    support.reason?.trim() ||
+    notes.join(' / ') ||
+    (disabled ? fallbackUnsupportedReason(localeCode) : '')
 
   return {
     disabled,
@@ -104,19 +106,19 @@ export function useClusterCapabilityForCluster(
   clusterId?: string | null,
 ): ClusterCapabilityDecision {
   const clustersQuery = useQuery({
-    queryKey: ['clusters'],
-    queryFn: () => api.get<ApiResponse<Cluster[]>>('/clusters'),
+    queryKey: clusterKeys.legacyList(),
+    queryFn: listClusters,
     enabled: !!clusterId,
   })
   const capabilitiesQuery = useQuery({
-    queryKey: ['clusters', 'capabilities'],
-    queryFn: () => api.get<ApiResponse<ClusterCapabilityMatrixEntry[]>>('/clusters/capabilities'),
+    queryKey: clusterKeys.legacyCapabilities(),
+    queryFn: listClusterCapabilities,
     enabled: !!clusterId,
   })
 
   const connectionMode = useMemo(
-    () => (clustersQuery.data?.data ?? []).find((item) => item.id === clusterId)?.connectionMode,
-    [clusterId, clustersQuery.data?.data],
+    () => (clustersQuery.data ?? []).find((item) => item.id === clusterId)?.connectionMode,
+    [clusterId, clustersQuery.data],
   )
 
   return useMemo(
@@ -125,12 +127,12 @@ export function useClusterCapabilityForCluster(
         connectionMode,
         key,
         localeCode,
-        matrix: capabilitiesQuery.data?.data,
+        matrix: capabilitiesQuery.data,
       }),
       isLoading: clustersQuery.isLoading || capabilitiesQuery.isLoading,
     }),
     [
-      capabilitiesQuery.data?.data,
+      capabilitiesQuery.data,
       capabilitiesQuery.isLoading,
       clustersQuery.isLoading,
       connectionMode,

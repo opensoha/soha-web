@@ -1,0 +1,38 @@
+import type { ScopeKey } from '@/types'
+
+export interface CronJob {
+  name: string
+  namespace: string
+  schedule: string
+  suspend: boolean
+  activeJobs: number
+  lastScheduleTime?: string
+  ageSeconds: number
+  allowedActions?: string[]
+}
+
+export interface CronJobDetail extends CronJob {
+  concurrencyPolicy?: string
+  timeZone?: string
+  createdAt?: string
+  labels?: Record<string, string>
+  annotations?: Record<string, string>
+}
+
+export interface CronJobTarget {
+  readonly scope: ScopeKey
+  readonly name: string
+}
+
+export interface SuspendCronJobVariables extends CronJobTarget {
+  readonly suspend: boolean
+}
+
+export interface CronJobChildJob {
+  name: string
+  namespace: string
+  succeeded: number
+  failed: number
+  active: number
+  ageSeconds: number
+}

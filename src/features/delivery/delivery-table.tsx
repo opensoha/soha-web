@@ -6,7 +6,7 @@ import {
   ManagementRefreshButton,
   ManagementTableToolbar,
 } from '@/components/management-list'
-import './delivery-pages.css'
+import './styles/shared.css'
 
 type AdminTableProps = ComponentProps<typeof AdminTable>
 
@@ -30,7 +30,10 @@ type DeliveryTableProps = Omit<
   onRefresh?: () => void
 }
 
-const DEFAULT_PAGINATION_SUMMARY: NonNullable<AdminTableProps['paginationSummary']> = (total, range) => {
+const DEFAULT_PAGINATION_SUMMARY: NonNullable<AdminTableProps['paginationSummary']> = (
+  total,
+  range,
+) => {
   if (total <= 0) return '当前 0 / 0 条'
   return `当前 ${range[0]}-${range[1]} / ${total} 条`
 }
@@ -63,7 +66,7 @@ export function DeliveryTable({
         <ManagementDensityButton
           aria-label="切换表格密度"
           tooltip={tableSize === 'small' ? '切换为舒展密度' : '切换为紧凑密度'}
-          onClick={() => setTableSize((current) => current === 'small' ? 'middle' : 'small')}
+          onClick={() => setTableSize((current) => (current === 'small' ? 'middle' : 'small'))}
         />
       ) : null}
       {resolvedShowRefresh ? (
@@ -86,9 +89,15 @@ export function DeliveryTable({
       enableColumnSelection={showColumnSettings && enableColumnSelection !== false}
       headerExtra={hasTitle ? utilityToolbar : undefined}
       pagination={pagination}
-      paginationSummary={pagination === false ? undefined : paginationSummary ?? DEFAULT_PAGINATION_SUMMARY}
+      paginationSummary={
+        pagination === false ? undefined : (paginationSummary ?? DEFAULT_PAGINATION_SUMMARY)
+      }
       scroll={scroll ?? { x: 'max-content' }}
-      shellClassName={classNames('soha-management-table-shell', 'soha-delivery-table-shell', shellClassName)}
+      shellClassName={classNames(
+        'soha-management-table-shell',
+        'soha-delivery-table-shell',
+        shellClassName,
+      )}
       tableSize={tableSize}
       toolbarExtra={hasTitle ? undefined : utilityToolbar}
     />

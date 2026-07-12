@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AIOperationsPage } from './ai-observe-pages'
+import { AIOperationsPage } from './observe/operations/page'
 import type { PermissionSnapshot } from '@/types'
 
 const testState = vi.hoisted(() => ({
@@ -23,70 +23,80 @@ const testState = vi.hoisted(() => ({
   } as PermissionSnapshot,
 }))
 
-const apiGetMock = vi.hoisted(() => vi.fn(async (path: string) => {
-  if (path === '/copilot/inspection-tasks') {
-    return {
-      data: [{
-        id: 'task-1',
-        title: '支付命名空间巡检',
-        scopeType: 'namespace',
-        clusterId: 'local-k3s',
-        namespace: 'payments',
-        checks: ['cluster_health'],
-        enabled: true,
-        intervalMinutes: 30,
-        metadata: { analysisProfileId: 'profile:inspection' },
-      }],
-    }
-  }
-  if (path === '/copilot/inspection-runs') {
-    return {
-      data: [{
-        id: 'run-1',
-        taskId: 'task-1',
-        status: 'completed',
-        severity: 'warning',
-        summary: '巡检完成，发现一项配置风险。',
-        findings: [{ id: 'finding-1', title: '发布窗口告警', severity: 'warning' }],
-        startedAt: '2026-05-12T10:00:00Z',
-      }],
-    }
-  }
-  if (path === '/copilot/automation-policies') {
-    return {
-      data: [{
-        id: 'policy-1',
-        name: 'P1 告警根因分析',
-        enabled: true,
-        triggerType: 'alert_webhook',
-        analysisKinds: ['root_cause'],
-        analysisProfileId: 'profile:root-cause',
-        remediationPolicy: 'suggest_only',
-        dedupWindowSeconds: 900,
-        cooldownSeconds: 900,
-      }],
-    }
-  }
-  if (path === '/copilot/workbench/catalog') {
-    return {
-      data: {
-        adapters: [],
-        dataSources: [],
-        skillsRegistry: [],
-        analysisProfiles: [
-          { id: 'profile:inspection', name: '巡检模板', mode: 'inspection', enabled: true },
-          { id: 'profile:root-cause', name: '根因模板', mode: 'root_cause', enabled: true },
+const apiGetMock = vi.hoisted(() =>
+  vi.fn(async (path: string) => {
+    if (path === '/copilot/inspection-tasks') {
+      return {
+        data: [
+          {
+            id: 'task-1',
+            title: '支付命名空间巡检',
+            scopeType: 'namespace',
+            clusterId: 'local-k3s',
+            namespace: 'payments',
+            checks: ['cluster_health'],
+            enabled: true,
+            intervalMinutes: 30,
+            metadata: { analysisProfileId: 'profile:inspection' },
+          },
         ],
-      },
+      }
     }
-  }
-  throw new Error(`Unhandled GET ${path}`)
-}))
+    if (path === '/copilot/inspection-runs') {
+      return {
+        data: [
+          {
+            id: 'run-1',
+            taskId: 'task-1',
+            status: 'completed',
+            severity: 'warning',
+            summary: '巡检完成，发现一项配置风险。',
+            findings: [{ id: 'finding-1', title: '发布窗口告警', severity: 'warning' }],
+            startedAt: '2026-05-12T10:00:00Z',
+          },
+        ],
+      }
+    }
+    if (path === '/copilot/automation-policies') {
+      return {
+        data: [
+          {
+            id: 'policy-1',
+            name: 'P1 告警根因分析',
+            enabled: true,
+            triggerType: 'alert_webhook',
+            analysisKinds: ['root_cause'],
+            analysisProfileId: 'profile:root-cause',
+            remediationPolicy: 'suggest_only',
+            dedupWindowSeconds: 900,
+            cooldownSeconds: 900,
+          },
+        ],
+      }
+    }
+    if (path === '/copilot/workbench/catalog') {
+      return {
+        data: {
+          adapters: [],
+          dataSources: [],
+          skillsRegistry: [],
+          analysisProfiles: [
+            { id: 'profile:inspection', name: '巡检模板', mode: 'inspection', enabled: true },
+            { id: 'profile:root-cause', name: '根因模板', mode: 'root_cause', enabled: true },
+          ],
+        },
+      }
+    }
+    throw new Error(`Unhandled GET ${path}`)
+  }),
+)
 
 const apiDeleteMock = vi.hoisted(() => vi.fn(async () => undefined))
 
 vi.mock('@/features/auth/permission-snapshot', async () => {
-  const actual = await vi.importActual<typeof import('@/features/auth/permission-snapshot')>('@/features/auth/permission-snapshot')
+  const actual = await vi.importActual<typeof import('@/features/auth/permission-snapshot')>(
+    '@/features/auth/permission-snapshot',
+  )
   return {
     ...actual,
     usePermissionSnapshot: () => ({
@@ -147,13 +157,19 @@ async function renderOperationsPage(route = '/ai-workbench/inspection') {
 }
 
 function findButtonByLabel(container: ParentNode, label: string) {
-  return Array.from(container.querySelectorAll('button')).find((button) => button.getAttribute('aria-label') === label) as HTMLButtonElement | undefined
+  return Array.from(container.querySelectorAll('button')).find(
+    (button) => button.getAttribute('aria-label') === label,
+  ) as HTMLButtonElement | undefined
 }
 
 async function confirmPopconfirm() {
   await flush()
-  const buttons = Array.from(document.body.querySelectorAll('.ant-popconfirm-buttons button')) as HTMLButtonElement[]
-  const confirm = buttons.find((button) => button.className.includes('ant-btn-primary')) ?? buttons[buttons.length - 1]
+  const buttons = Array.from(
+    document.body.querySelectorAll('.ant-popconfirm-buttons button'),
+  ) as HTMLButtonElement[]
+  const confirm =
+    buttons.find((button) => button.className.includes('ant-btn-primary')) ??
+    buttons[buttons.length - 1]
   expect(confirm).toBeTruthy()
   await act(async () => {
     confirm.click()
@@ -230,7 +246,9 @@ describe('AIOperationsPage delete actions', () => {
 
     expect(apiDeleteMock).toHaveBeenCalledWith('/copilot/inspection-tasks/task-1')
 
-    const policySegment = Array.from(container.querySelectorAll('.ant-segmented-item')).find((item) => item.textContent?.includes('自动化策略')) as HTMLElement | undefined
+    const policySegment = Array.from(container.querySelectorAll('.ant-segmented-item')).find(
+      (item) => item.textContent?.includes('自动化策略'),
+    ) as HTMLElement | undefined
     expect(policySegment).toBeTruthy()
     await act(async () => {
       policySegment?.click()
@@ -251,13 +269,20 @@ describe('AIOperationsPage delete actions', () => {
 
   it('requires both AI view and chat permissions before creating a session from an inspection run', async () => {
     testState.snapshot = {
-      permissionKeys: ['observe.ai.chat', 'observe.ai.inspection.run', 'observe.ai.inspection.manage', 'settings.ai.manage'],
+      permissionKeys: [
+        'observe.ai.chat',
+        'observe.ai.inspection.run',
+        'observe.ai.inspection.manage',
+        'settings.ai.manage',
+      ],
       visibleMenuIds: [],
       visibleMenus: [],
     } as PermissionSnapshot
     const container = await renderOperationsPage()
 
-    const runsSegment = Array.from(container.querySelectorAll('.ant-segmented-item')).find((item) => item.textContent?.includes('巡检运行')) as HTMLElement | undefined
+    const runsSegment = Array.from(container.querySelectorAll('.ant-segmented-item')).find((item) =>
+      item.textContent?.includes('巡检运行'),
+    ) as HTMLElement | undefined
     expect(runsSegment).toBeTruthy()
     await act(async () => {
       runsSegment?.click()
@@ -271,7 +296,9 @@ describe('AIOperationsPage delete actions', () => {
   })
 
   it('opens directly on a linked inspection run from an artifact context link', async () => {
-    const container = await renderOperationsPage('/ai-workbench/inspection?view=runs&inspectionRunId=run-1&session=session-1')
+    const container = await renderOperationsPage(
+      '/ai-workbench/inspection?view=runs&inspectionRunId=run-1&session=session-1',
+    )
 
     expect(container.textContent).toContain('巡检运行记录')
     expect(container.textContent).toContain('已定位巡检运行 run-1')
@@ -280,7 +307,12 @@ describe('AIOperationsPage delete actions', () => {
 
   it('does not fetch automation policies for users without AI settings management permission', async () => {
     testState.snapshot = {
-      permissionKeys: ['observe.ai.view', 'observe.ai.chat', 'observe.ai.inspection.run', 'observe.ai.inspection.manage'],
+      permissionKeys: [
+        'observe.ai.view',
+        'observe.ai.chat',
+        'observe.ai.inspection.run',
+        'observe.ai.inspection.manage',
+      ],
       visibleMenuIds: [],
       visibleMenus: [],
     } as PermissionSnapshot
@@ -289,7 +321,9 @@ describe('AIOperationsPage delete actions', () => {
     expect(apiGetMock).not.toHaveBeenCalledWith('/copilot/automation-policies')
     expect(container.textContent).toContain('支付命名空间巡检')
 
-    const policySegment = Array.from(container.querySelectorAll('.ant-segmented-item')).find((item) => item.textContent?.includes('自动化策略')) as HTMLElement | undefined
+    const policySegment = Array.from(container.querySelectorAll('.ant-segmented-item')).find(
+      (item) => item.textContent?.includes('自动化策略'),
+    ) as HTMLElement | undefined
     expect(policySegment).toBeTruthy()
     await act(async () => {
       policySegment?.click()

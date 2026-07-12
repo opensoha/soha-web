@@ -1,4 +1,4 @@
 interface:
-  display_name: "Soha Frontend"
-  short_description: "Soha Web frontend theme standards"
-  default_prompt: "Use $soha-frontend to implement Soha frontend UI changes following the product theme system."
+  display_name: 'Soha Frontend'
+  short_description: 'Soha Web architecture and UI standards'
+  default_prompt: 'Use $soha-frontend to implement or review a Soha Web change with the required architecture, route, data-layer, performance, and theme conventions.'

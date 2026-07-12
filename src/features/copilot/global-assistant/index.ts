@@ -8,17 +8,13 @@ export type {
 } from './ai-context'
 export {
   contextIdentityKey,
+  encodeAIContextForElement,
   inferSelectionKind,
   sanitizeSelectionText,
   workbenchScopeFromAIContext,
 } from './ai-context'
-export {
-  useAIGlobalAssistant,
-  useAIPageContext,
-} from './ai-context-provider'
-export {
-  GlobalAIAssistantProvider,
-} from './ai-global-assistant-provider'
+export { useAIGlobalAssistant, useAIPageContext } from './ai-context-provider'
+export { GlobalAIAssistantProvider } from './ai-global-assistant-provider'
 export {
   clampFloatPosition,
   defaultFloatPosition,

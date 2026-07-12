@@ -1,0 +1,75 @@
+.soha-plugin-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.soha-plugin-tabs {
+  margin-bottom: -4px;
+}
+
+.soha-plugin-name-cell {
+  max-width: 100%;
+}
+
+.soha-plugin-summary {
+  margin-bottom: 0;
+  color: var(--ant-color-text-secondary);
+}
+
+.soha-plugin-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.soha-plugin-kpi-value {
+  margin-top: 4px;
+  font-weight: 600;
+  color: var(--ant-color-text);
+}
+
+.soha-plugin-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: 10px;
+}
+
+.soha-plugin-json {
+  max-height: 360px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: 1px solid var(--soha-border-color);
+  border-radius: 6px;
+  background: var(--soha-fill-weak);
+  padding: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.soha-plugin-extension-list {
+  width: 100%;
+}
+
+.soha-plugin-extension-row {
+  display: flex;
+  min-height: 36px;
+  flex-direction: column;
+  gap: 4px;
+  border-bottom: 1px solid var(--soha-border-color);
+  padding-bottom: 8px;
+}
+
+.soha-plugin-extension-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+@media (max-width: 960px) {
+  .soha-plugin-kpi-grid,
+  .soha-plugin-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}

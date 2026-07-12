@@ -3,10 +3,9 @@ import { Alert, Button, Card, Space, Tag, Typography } from 'antd'
 import { ArrowRightOutlined, RobotOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { api } from '@/services/api-client'
 import { isApiError } from '@/services/api-error'
-import type { ApiResponse } from '@/types'
-import type { GatewayManifest, GatewayTool } from '@/features/copilot/ai-gateway-model'
+import type { GatewayManifest, GatewayTool } from '@/features/copilot'
+import { deliveryQueries } from './queries'
 
 const { Text } = Typography
 
@@ -28,21 +27,14 @@ interface CapabilityStatus {
   state: GatewayReadinessState
 }
 
-function gatewayCapabilitiesPath(skillId: string) {
-  const params = new URLSearchParams({
-    source: 'delivery-workbench',
-  })
-  if (skillId) {
-    params.set('skillId', skillId)
-  }
-  return `/ai-gateway/capabilities?${params.toString()}`
-}
-
 function uniqueSorted(values: Array<string | undefined>) {
   return Array.from(new Set(values.map((item) => item?.trim()).filter(Boolean) as string[])).sort()
 }
 
-function summarizeCapabilityStatus(manifest: GatewayManifest | undefined, capabilities: string[]): CapabilityStatus {
+function summarizeCapabilityStatus(
+  manifest: GatewayManifest | undefined,
+  capabilities: string[],
+): CapabilityStatus {
   const requested = uniqueSorted(capabilities)
   const tools = manifest?.tools ?? []
   const byName = new Map(tools.map((tool) => [tool.name, tool]))
@@ -154,13 +146,10 @@ export function DeliveryGatewayReadinessPanel({
   title,
 }: DeliveryGatewayReadinessProps) {
   const navigate = useNavigate()
-  const manifestQuery = useQuery({
-    queryKey: ['delivery-gateway-readiness', skillId],
-    queryFn: () => api.get<ApiResponse<GatewayManifest>>(gatewayCapabilitiesPath(skillId)),
-    retry: false,
-    staleTime: 30_000,
-  })
-  const manifest = manifestQuery.data?.data
+  const manifestQuery = useQuery(
+    deliveryQueries.gateway.readiness({ skillId, source: 'delivery-workbench' }),
+  )
+  const manifest = manifestQuery.data
   const status = summarizeCapabilityStatus(manifest, capabilities)
   const state: GatewayReadinessState = manifestQuery.isError ? 'unavailable' : status.state
   const tone = readinessTone(state)
@@ -173,7 +162,17 @@ export function DeliveryGatewayReadinessPanel({
         <Space className="soha-delivery-gateway-readiness" orientation="vertical" size={10}>
           <Space size={8} wrap>
             <Text strong>{title}</Text>
-            <Tag color={state === 'available' ? 'success' : state === 'approval' ? 'processing' : state === 'restricted' ? 'warning' : 'error'}>
+            <Tag
+              color={
+                state === 'available'
+                  ? 'success'
+                  : state === 'approval'
+                    ? 'processing'
+                    : state === 'restricted'
+                      ? 'warning'
+                      : 'error'
+              }
+            >
               {tone.label}
             </Tag>
             {manifestQuery.isFetching ? <Tag>刷新中</Tag> : null}
@@ -184,34 +183,49 @@ export function DeliveryGatewayReadinessPanel({
             type={tone.alertType}
             title={tone.title}
             description={reason}
-            action={(
+            action={
               <Space size={8} wrap>
-                <Button size="small" icon={<SafetyCertificateOutlined />} onClick={() => navigate('/ai-gateway/manifest')}>
+                <Button
+                  size="small"
+                  icon={<SafetyCertificateOutlined />}
+                  onClick={() => navigate('/ai-gateway/manifest')}
+                >
                   能力清单
                 </Button>
-                <Button size="small" icon={<ArrowRightOutlined />} onClick={() => navigate(manualPath)}>
+                <Button
+                  size="small"
+                  icon={<ArrowRightOutlined />}
+                  onClick={() => navigate(manualPath)}
+                >
                   {manualTitle}
                 </Button>
               </Space>
-            )}
+            }
           />
           {status.requiredScopes.length > 0 ? (
             <CapabilityTags label="所需 scope">
-              {status.requiredScopes.map((scope) => <Tag key={scope}>{scope}</Tag>)}
+              {status.requiredScopes.map((scope) => (
+                <Tag key={scope}>{scope}</Tag>
+              ))}
             </CapabilityTags>
           ) : null}
           {status.availableTools.length > 0 ? (
             <CapabilityTags label="可见能力">
               {status.availableTools.map((tool) => (
                 <Tag key={tool.name} color={tool.requiresApproval ? 'processing' : undefined}>
-                  {tool.name}{tool.requiresApproval ? ' / 审批' : ''}
+                  {tool.name}
+                  {tool.requiresApproval ? ' / 审批' : ''}
                 </Tag>
               ))}
             </CapabilityTags>
           ) : null}
           {status.missingCapabilities.length > 0 ? (
             <CapabilityTags label="缺失能力">
-              {status.missingCapabilities.map((name) => <Tag key={name} color="warning">{name}</Tag>)}
+              {status.missingCapabilities.map((name) => (
+                <Tag key={name} color="warning">
+                  {name}
+                </Tag>
+              ))}
             </CapabilityTags>
           ) : null}
         </Space>

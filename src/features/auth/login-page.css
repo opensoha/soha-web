@@ -591,6 +591,34 @@
   flex: 0 0 auto;
 }
 
+.soha-auth-provider-button__icon-image {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+.soha-auth-provider-button__brand {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  background: #1677ff;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.soha-auth-provider-button__brand.is-dingtalk {
+  background: #0089ff;
+}
+
+.soha-auth-provider-button__brand.is-wecom {
+  background: #07c160;
+}
+
 .soha-auth-provider-button__label {
   display: inline-flex;
   align-items: center;

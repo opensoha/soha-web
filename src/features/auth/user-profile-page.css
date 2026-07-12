@@ -280,3 +280,7 @@
     height: auto;
   }
 }
+.soha-profile-link-button.ant-btn {
+  height: 28px;
+  min-height: 28px;
+}

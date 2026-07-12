@@ -3,9 +3,9 @@ import { useQuery } from '@tanstack/react-query'
 import { Alert, App, Badge, Button, Card, Space, Spin } from 'antd'
 import { CopyOutlined, FullscreenOutlined, FullscreenExitOutlined } from '@ant-design/icons'
 import RFB from '@novnc/novnc'
-import { virtualizationApi } from './virtualization-api'
+import { virtualizationQueries } from './queries'
 import { ManagementState } from '@/components/management-list'
-import { buildSameOriginStreamURL, withStreamTicket } from '@/features/auth/stream-ticket'
+import { buildSameOriginStreamURL, withStreamTicket } from '@/features/auth'
 
 const STATUS_BADGE: Record<string, 'success' | 'processing' | 'warning' | 'error' | 'default'> = {
   connecting: 'processing',
@@ -23,19 +23,18 @@ const STATUS_LABEL: Record<string, string> = {
 
 export function VMConsole({ vmId }: { vmId: string }) {
   const [rfb, setRfb] = useState<RFB | null>(null)
-  const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting')
+  const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>(
+    'connecting',
+  )
   const [errorMessage, setErrorMessage] = useState<string>('')
   const [isFullscreen, setIsFullscreen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const { message } = App.useApp()
 
-  const consoleQuery = useQuery({
-    queryKey: ['virtualization', 'vm-console', vmId],
-    queryFn: () => virtualizationApi.vmConsoleURL(vmId),
-  })
+  const consoleQuery = useQuery(virtualizationQueries.vmConsole(vmId))
 
   useEffect(() => {
-    const consoleData = consoleQuery.data?.data
+    const consoleData = consoleQuery.data
     if (!consoleData || !containerRef.current || consoleData.message) {
       return
     }
@@ -122,14 +121,21 @@ export function VMConsole({ vmId }: { vmId: string }) {
   }
 
   if (consoleQuery.isLoading) {
-    return <Spin tip="正在获取控制台信息..." />
+    return <Spin description="正在获取控制台信息..." />
   }
 
   if (consoleQuery.error) {
-    return <ManagementState compact kind="error" title="获取控制台信息失败" description={String(consoleQuery.error)} />
+    return (
+      <ManagementState
+        compact
+        kind="error"
+        title="获取控制台信息失败"
+        description={String(consoleQuery.error)}
+      />
+    )
   }
 
-  const consoleData = consoleQuery.data?.data
+  const consoleData = consoleQuery.data
   if (!consoleData?.ready) {
     return (
       <ManagementState
@@ -153,7 +159,12 @@ export function VMConsole({ vmId }: { vmId: string }) {
       }
       extra={
         <Space>
-          <Button size="small" icon={<CopyOutlined />} onClick={handlePaste} disabled={status !== 'connected'}>
+          <Button
+            size="small"
+            icon={<CopyOutlined />}
+            onClick={handlePaste}
+            disabled={status !== 'connected'}
+          >
             粘贴
           </Button>
           <Button size="small" onClick={sendCtrlAltDel} disabled={status !== 'connected'}>
@@ -170,7 +181,9 @@ export function VMConsole({ vmId }: { vmId: string }) {
       }
     >
       {status === 'disconnected' && <Alert type="warning" title="控制台已断开" className="mb-2" />}
-      {status === 'error' && <Alert type="error" title="连接失败" description={errorMessage} className="mb-2" />}
+      {status === 'error' && (
+        <Alert type="error" title="连接失败" description={errorMessage} className="mb-2" />
+      )}
       <div
         ref={containerRef}
         className="relative w-full overflow-hidden rounded border border-[var(--soha-terminal-border)] bg-[var(--soha-terminal-bg)]"

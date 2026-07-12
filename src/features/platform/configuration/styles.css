@@ -1,0 +1,62 @@
+@import '../platform-shared.css';
+
+/* Configuration-only data and reference presentation. */
+
+.soha-config-data-table .ant-table-content table {
+  table-layout: fixed;
+}
+
+.soha-config-data-table .ant-table-tbody > tr > td {
+  vertical-align: middle;
+}
+
+.soha-config-data-toolbar {
+  display: flex;
+  min-height: 24px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.soha-config-data-editor {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+}
+
+.soha-config-data-preview {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.soha-config-data-expanded {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.soha-config-data-expanded .soha-json-block {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.soha-config-reference-table .ant-table-tbody > tr > td {
+  vertical-align: middle;
+}
+
+.soha-config-reference-name,
+.soha-config-reference-path {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.soha-config-reference-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+}

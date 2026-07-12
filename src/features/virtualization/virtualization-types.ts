@@ -364,6 +364,17 @@ export interface VirtualizationListParams {
   status?: string
 }
 
+export interface VirtualizationOperationListParams {
+  assetType?: string
+  taskKind?: string
+  abnormal?: boolean
+  pending?: boolean
+  statuses?: string[]
+  connectionId?: string
+  vmId?: string
+  search?: string
+}
+
 export interface VirtualizationPage<T> {
   items: T[]
   total: number

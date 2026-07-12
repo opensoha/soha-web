@@ -9,7 +9,6 @@ import {
   CloudServerOutlined,
   DockerOutlined,
   DownOutlined,
-  InfoCircleOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   MoonOutlined,
@@ -49,12 +48,11 @@ import {
   resolveRouteMenuId,
   type WorkbenchId,
 } from '@/routes/meta'
-import { useBrandingSettings } from '@/features/settings/use-branding-settings'
+import { getNormalizedBranding, useBrandingSettings } from '@/features/settings'
 import { useAuthStore } from '@/stores/auth-store'
 import { usePreferencesStore } from '@/stores/preferences-store'
 import { resolveThemeMode, watchSystemThemeMode } from '@/theme/app-theme'
 import type { BusinessWorkspaceType, PermissionSnapshot, RuntimeMenuNode } from '@/types'
-import { getNormalizedBranding } from '@/features/settings/use-branding-settings'
 
 const { Sider, Header, Content } = Layout
 const SIDEBAR_WIDTH = 200
@@ -76,18 +74,69 @@ interface WorkbenchOption {
 }
 
 const AI_WORKBENCH_MENU_ENTRIES = [
-  { key: 'ai-workbench-chat', iconKey: 'bot', label: '通用聊天', path: '/ai-workbench/chat', permissionKey: 'observe.ai.chat', legacyMenuIds: ['ai-workbench-investigation'] },
-  { key: 'ai-workbench-inspection', iconKey: 'inspect', label: '巡检', path: '/ai-workbench/inspection', permissionKey: 'observe.ai.view', legacyMenuIds: ['ai-workbench-operations'] },
-  { key: 'ai-workbench-tool-settings', iconKey: 'wrench', label: '工具与技能', path: '/ai-workbench/tool-settings', permissionKey: 'observe.ai.view', legacyMenuIds: ['ai-workbench-tools'] },
-  { key: 'ai-workbench-model-settings', iconKey: 'settings', label: 'AI 设置', path: '/ai-workbench/model-settings', permissionKey: 'settings.ai.view', legacyMenuIds: ['ai-workbench-tools'] },
+  {
+    key: 'ai-workbench-chat',
+    iconKey: 'bot',
+    label: '通用聊天',
+    path: '/ai-workbench/chat',
+    permissionKey: 'observe.ai.chat',
+    legacyMenuIds: ['ai-workbench-investigation'],
+  },
+  {
+    key: 'ai-workbench-inspection',
+    iconKey: 'inspect',
+    label: '巡检',
+    path: '/ai-workbench/inspection',
+    permissionKey: 'observe.ai.view',
+    legacyMenuIds: ['ai-workbench-operations'],
+  },
+  {
+    key: 'ai-workbench-tool-settings',
+    iconKey: 'wrench',
+    label: '工具与技能',
+    path: '/ai-workbench/tool-settings',
+    permissionKey: 'observe.ai.view',
+    legacyMenuIds: ['ai-workbench-tools'],
+  },
+  {
+    key: 'ai-workbench-model-settings',
+    iconKey: 'settings',
+    label: 'AI 设置',
+    path: '/ai-workbench/model-settings',
+    permissionKey: 'settings.ai.view',
+    legacyMenuIds: ['ai-workbench-tools'],
+  },
 ] as const
 
-const RUNTIME_MENU_LABEL_OVERRIDES: Record<string, { en: string; legacyEn: string[]; legacyZh: string[]; zh: string }> = {
-  operations: { zh: '操作日志', en: 'Operation Logs', legacyZh: ['操作'], legacyEn: ['Operations'] },
+const RUNTIME_MENU_LABEL_OVERRIDES: Record<
+  string,
+  { en: string; legacyEn: string[]; legacyZh: string[]; zh: string }
+> = {
+  operations: {
+    zh: '操作日志',
+    en: 'Operation Logs',
+    legacyZh: ['操作'],
+    legacyEn: ['Operations'],
+  },
   audit: { zh: '审计日志', en: 'Audit Logs', legacyZh: ['审计'], legacyEn: ['Audit'] },
-  'delivery-blueprints': { zh: '应用接入模板', en: 'Onboarding Templates', legacyZh: ['交付蓝图'], legacyEn: ['Delivery Blueprints'] },
-  'release-board': { zh: '构建发布', en: 'Build & Release', legacyZh: ['发布看板'], legacyEn: ['Release Board'] },
-  releases: { zh: '发布记录', en: 'Release Records', legacyZh: ['发布', '发布管理'], legacyEn: ['Releases', 'Release Management'] },
+  'delivery-blueprints': {
+    zh: '应用接入模板',
+    en: 'Onboarding Templates',
+    legacyZh: ['交付蓝图'],
+    legacyEn: ['Delivery Blueprints'],
+  },
+  'release-board': {
+    zh: '构建发布',
+    en: 'Build & Release',
+    legacyZh: ['发布看板'],
+    legacyEn: ['Release Board'],
+  },
+  releases: {
+    zh: '发布记录',
+    en: 'Release Records',
+    legacyZh: ['发布', '发布管理'],
+    legacyEn: ['Releases', 'Release Management'],
+  },
 }
 
 function canUseAIWorkbenchMenuEntry(
@@ -96,30 +145,47 @@ function canUseAIWorkbenchMenuEntry(
 ) {
   const hasPermissionKey = snapshot?.permissionKeys.includes(item.permissionKey) ?? false
   const visibleMenuIds = snapshot?.visibleMenuIds ?? []
-  const hasVisibleMenu = visibleMenuIds.includes(item.key) || item.legacyMenuIds.some((id) => visibleMenuIds.includes(id))
+  const hasVisibleMenu =
+    visibleMenuIds.includes(item.key) ||
+    item.legacyMenuIds.some((id) => visibleMenuIds.includes(id))
   return hasPermissionKey && hasVisibleMenu
 }
 
 function buildAIWorkbenchMenuItems(snapshot?: PermissionSnapshot | null): MenuProps['items'] {
-  return AI_WORKBENCH_MENU_ENTRIES.filter((item) => canUseAIWorkbenchMenuEntry(item, snapshot)).map((item) => ({
-    key: item.key,
-    icon: resolveMenuIcon(item.iconKey),
-    label: item.label,
-  }))
+  return AI_WORKBENCH_MENU_ENTRIES.filter((item) => canUseAIWorkbenchMenuEntry(item, snapshot)).map(
+    (item) => ({
+      key: item.key,
+      icon: resolveMenuIcon(item.iconKey),
+      label: item.label,
+    }),
+  )
 }
 
 function buildAIWorkbenchItemKeyToPath(snapshot?: PermissionSnapshot | null) {
   return Object.fromEntries(
-    AI_WORKBENCH_MENU_ENTRIES
-      .filter((item) => canUseAIWorkbenchMenuEntry(item, snapshot))
-      .map((item) => [item.key, item.path]),
+    AI_WORKBENCH_MENU_ENTRIES.filter((item) => canUseAIWorkbenchMenuEntry(item, snapshot)).map(
+      (item) => [item.key, item.path],
+    ),
   ) as Record<string, string>
 }
 
 function buildAIWorkbenchSearch(search: string) {
   const source = new URLSearchParams(search)
   const next = new URLSearchParams()
-  ;['session', 'clusterId', 'namespace', 'workload', 'service', 'pod', 'node', 'alertId', 'timeRangeMinutes', 'sourceWorkbench', 'entityKind', 'entityName'].forEach((key) => {
+  ;[
+    'session',
+    'clusterId',
+    'namespace',
+    'workload',
+    'service',
+    'pod',
+    'node',
+    'alertId',
+    'timeRangeMinutes',
+    'sourceWorkbench',
+    'entityKind',
+    'entityName',
+  ].forEach((key) => {
     const value = source.get(key)
     if (value) {
       next.set(key, value)
@@ -156,7 +222,10 @@ function resolveRuntimeMenuLabel(node: RuntimeMenuNode, localeCode: 'zh_CN' | 'e
   return localeCode === 'en_US' && node.labelEn ? node.labelEn : node.labelZh
 }
 
-function buildMenuNodeItem(node: RuntimeMenuNode, localeCode: 'zh_CN' | 'en_US'): NonNullable<MenuProps['items']>[number] {
+function buildMenuNodeItem(
+  node: RuntimeMenuNode,
+  localeCode: 'zh_CN' | 'en_US',
+): NonNullable<MenuProps['items']>[number] {
   const label = resolveRuntimeMenuLabel(node, localeCode)
   const icon = resolveMenuIcon(resolveRuntimeMenuIconKey(node))
   if (node.children?.length) {
@@ -220,7 +289,11 @@ function buildMenuItems(
   const groupedItems = Array.from(groups.entries()).map(([groupKey, items]) => ({
     key: `group-${groupKey}`,
     type: 'group' as const,
-    label: <span className="soha-nav-section-title">{resolveMenuSectionLabel(groupKey, localeCode)}</span>,
+    label: (
+      <span className="soha-nav-section-title">
+        {resolveMenuSectionLabel(groupKey, localeCode)}
+      </span>
+    ),
     children: items,
   }))
 
@@ -306,31 +379,114 @@ function mergeOpenKeys(current: string[], desired: string[]) {
     return current
   }
   const merged = Array.from(new Set([...current, ...desired]))
-  return merged.length === current.length && merged.every((key, index) => key === current[index]) ? current : merged
+  return merged.length === current.length && merged.every((key, index) => key === current[index])
+    ? current
+    : merged
 }
 
 function buildWorkbenchOptions(localeCode: 'zh_CN' | 'en_US'): WorkbenchOption[] {
   if (localeCode === 'en_US') {
     return [
-      { key: 'platform', label: 'K8s Workbench', description: 'Operations dashboard for clusters, workloads, network, storage, and runtime resources', icon: <AppstoreOutlined /> },
-      { key: 'virtualization', label: 'Virtualization Workbench', description: 'Virtual machines, clusters, images, flavors, and operation records', icon: <SlidersOutlined /> },
-      { key: 'docker', label: 'Docker Workbench', description: 'Docker hosts, container management, templates, and operations', icon: <DockerOutlined /> },
-      { key: 'delivery', label: 'Delivery Workbench', description: 'Applications, build sources, bindings, and release orchestration', icon: <CloudServerOutlined /> },
-      { key: 'ai', label: 'AI Workbench', description: 'Investigation, automation, tools, and skills', icon: <RobotOutlined /> },
-      { key: 'aiGateway', label: 'AI Gateway', description: 'AI clients, MCP access, tokens, policies, approvals, and call logs', icon: <SafetyOutlined /> },
-      { key: 'monitoring', label: 'Monitoring Workbench', description: 'Alerts, routes, notifications, and on-call flows', icon: <AlertOutlined /> },
-      { key: 'settings', label: 'Settings Center', description: 'Login, branding, monitoring, and AI settings', icon: <SettingOutlined /> },
+      {
+        key: 'platform',
+        label: 'K8s Workbench',
+        description:
+          'Operations dashboard for clusters, workloads, network, storage, and runtime resources',
+        icon: <AppstoreOutlined />,
+      },
+      {
+        key: 'virtualization',
+        label: 'Virtualization Workbench',
+        description: 'Virtual machines, clusters, images, flavors, and operation records',
+        icon: <SlidersOutlined />,
+      },
+      {
+        key: 'docker',
+        label: 'Docker Workbench',
+        description: 'Docker hosts, container management, templates, and operations',
+        icon: <DockerOutlined />,
+      },
+      {
+        key: 'delivery',
+        label: 'Delivery Workbench',
+        description: 'Applications, build sources, bindings, and release orchestration',
+        icon: <CloudServerOutlined />,
+      },
+      {
+        key: 'ai',
+        label: 'AI Workbench',
+        description: 'Investigation, automation, tools, and skills',
+        icon: <RobotOutlined />,
+      },
+      {
+        key: 'aiGateway',
+        label: 'AI Gateway',
+        description: 'AI clients, MCP access, tokens, policies, approvals, and call logs',
+        icon: <SafetyOutlined />,
+      },
+      {
+        key: 'monitoring',
+        label: 'Monitoring Workbench',
+        description: 'Alerts, routes, notifications, and on-call flows',
+        icon: <AlertOutlined />,
+      },
+      {
+        key: 'settings',
+        label: 'Settings Center',
+        description: 'Login, branding, monitoring, and AI settings',
+        icon: <SettingOutlined />,
+      },
     ]
   }
   return [
-    { key: 'platform', label: 'k8s工作台', description: '面向运维视角的集群、工作负载、网络、存储与运行资源', icon: <AppstoreOutlined /> },
-    { key: 'virtualization', label: '虚拟化管理工作台', description: '虚拟机、集群、镜像、规格与操作记录', icon: <SlidersOutlined /> },
-    { key: 'docker', label: 'Docker 工作台', description: '主机、容器管理、模板与操作记录', icon: <DockerOutlined /> },
-    { key: 'delivery', label: '应用交付工作台', description: '应用、构建来源、环境绑定与发布编排', icon: <CloudServerOutlined /> },
-    { key: 'ai', label: 'AI工作台', description: '调查、自动化、工具与技能', icon: <RobotOutlined /> },
-    { key: 'aiGateway', label: 'AI Gateway', description: '外部 AI 客户端、MCP、令牌、策略、审批与调用日志', icon: <SafetyOutlined /> },
-    { key: 'monitoring', label: '监控工作台', description: '告警、路由、通知和值班协同', icon: <AlertOutlined /> },
-    { key: 'settings', label: '设置中心', description: '登录、品牌、监控与 AI 设置', icon: <SettingOutlined /> },
+    {
+      key: 'platform',
+      label: 'k8s工作台',
+      description: '面向运维视角的集群、工作负载、网络、存储与运行资源',
+      icon: <AppstoreOutlined />,
+    },
+    {
+      key: 'virtualization',
+      label: '虚拟化管理工作台',
+      description: '虚拟机、集群、镜像、规格与操作记录',
+      icon: <SlidersOutlined />,
+    },
+    {
+      key: 'docker',
+      label: 'Docker 工作台',
+      description: '主机、容器管理、模板与操作记录',
+      icon: <DockerOutlined />,
+    },
+    {
+      key: 'delivery',
+      label: '应用交付工作台',
+      description: '应用、构建来源、环境绑定与发布编排',
+      icon: <CloudServerOutlined />,
+    },
+    {
+      key: 'ai',
+      label: 'AI工作台',
+      description: '调查、自动化、工具与技能',
+      icon: <RobotOutlined />,
+    },
+    {
+      key: 'aiGateway',
+      label: 'AI Gateway',
+      description: '外部 AI 客户端、MCP、令牌、策略、审批与调用日志',
+      icon: <SafetyOutlined />,
+    },
+    {
+      key: 'monitoring',
+      label: '监控工作台',
+      description: '告警、路由、通知和值班协同',
+      icon: <AlertOutlined />,
+    },
+    {
+      key: 'settings',
+      label: '设置中心',
+      description: '登录、品牌、监控与 AI 设置',
+      icon: <SettingOutlined />,
+    },
   ]
 }
 
@@ -366,7 +522,9 @@ function WorkbenchSwitcher({
           <span className="soha-workbench-switcher__desc">{current.description}</span>
         </span>
       ) : null}
-      {!collapsed && options.length > 1 ? <DownOutlined className="soha-workbench-switcher__arrow" /> : null}
+      {!collapsed && options.length > 1 ? (
+        <DownOutlined className="soha-workbench-switcher__arrow" />
+      ) : null}
     </Button>
   )
 
@@ -413,7 +571,11 @@ export function AppLayout() {
   const fullSidebarNav = useMemo(() => getAccessibleSidebarNav(snapshot), [snapshot])
   const accessibleWorkspaces = useMemo(() => getAccessibleWorkspaces(snapshot), [snapshot])
   const accessibleWorkbenchIds = useMemo(() => getAccessibleWorkbenchIds(snapshot), [snapshot])
-  const workbenchOptions = useMemo(() => buildWorkbenchOptions(localeCode).filter((item) => accessibleWorkbenchIds.includes(item.key)), [accessibleWorkbenchIds, localeCode])
+  const workbenchOptions = useMemo(
+    () =>
+      buildWorkbenchOptions(localeCode).filter((item) => accessibleWorkbenchIds.includes(item.key)),
+    [accessibleWorkbenchIds, localeCode],
+  )
   const preferredWorkspace = useMemo(
     () => findPreferredWorkspace(snapshot, currentWorkspace, user?.roles ?? []),
     [snapshot, currentWorkspace, user?.roles],
@@ -424,7 +586,10 @@ export function AppLayout() {
   const currentRouteWorkspace = getRouteWorkspace(currentMeta)
   const isSystemWorkspaceRoute = currentRouteWorkspace === 'system'
   const activeWorkspace = useMemo<BusinessWorkspaceType | null>(() => {
-    if ((currentRouteWorkspace === 'application' || currentRouteWorkspace === 'resource') && accessibleWorkspaces.includes(currentRouteWorkspace)) {
+    if (
+      (currentRouteWorkspace === 'application' || currentRouteWorkspace === 'resource') &&
+      accessibleWorkspaces.includes(currentRouteWorkspace)
+    ) {
       return currentRouteWorkspace
     }
     return preferredWorkspace
@@ -437,7 +602,11 @@ export function AppLayout() {
       return 'delivery'
     }
     if (activeWorkspace === 'resource') {
-      return (['platform', 'virtualization', 'docker', 'ai', 'aiGateway', 'monitoring'] as const).find((item) => accessibleWorkbenchIds.includes(item)) ?? null
+      return (
+        (['platform', 'virtualization', 'docker', 'ai', 'aiGateway', 'monitoring'] as const).find(
+          (item) => accessibleWorkbenchIds.includes(item),
+        ) ?? null
+      )
     }
     return accessibleWorkbenchIds[0] ?? null
   }, [accessibleWorkbenchIds, activeWorkspace, currentWorkbenchId])
@@ -468,21 +637,26 @@ export function AppLayout() {
     return businessNav
   }, [businessNav, isSystemWorkspaceRoute, systemNav, systemWorkbenchNav])
   const primaryMenuItems = useMemo(
-    () => activeWorkbenchId === 'ai'
-      ? buildAIWorkbenchMenuItems(snapshot)
-      : buildMenuItems(primaryNav, localeCode, { grouped: activeWorkbenchId !== 'virtualization' && activeWorkbenchId !== 'docker' }),
+    () =>
+      activeWorkbenchId === 'ai'
+        ? buildAIWorkbenchMenuItems(snapshot)
+        : buildMenuItems(primaryNav, localeCode, {
+            grouped: activeWorkbenchId !== 'virtualization' && activeWorkbenchId !== 'docker',
+          }),
     [activeWorkbenchId, localeCode, primaryNav, snapshot],
   )
-  const primaryItemKeyToPath = useMemo(
-    () => {
-      if (activeWorkbenchId === 'ai') {
-        const suffix = buildAIWorkbenchSearch(location.search)
-        return Object.fromEntries(Object.entries(buildAIWorkbenchItemKeyToPath(snapshot)).map(([key, path]) => [key, `${path}${suffix}`]))
-      }
-      return buildItemKeyToPath(primaryNav)
-    },
-    [activeWorkbenchId, location.search, primaryNav, snapshot],
-  )
+  const primaryItemKeyToPath = useMemo(() => {
+    if (activeWorkbenchId === 'ai') {
+      const suffix = buildAIWorkbenchSearch(location.search)
+      return Object.fromEntries(
+        Object.entries(buildAIWorkbenchItemKeyToPath(snapshot)).map(([key, path]) => [
+          key,
+          `${path}${suffix}`,
+        ]),
+      )
+    }
+    return buildItemKeyToPath(primaryNav)
+  }, [activeWorkbenchId, location.search, primaryNav, snapshot])
   const combinedNav = useMemo(() => [...businessNav, ...systemNav], [businessNav, systemNav])
   const combinedItemKeyToPath = useMemo(
     () => ({ ...buildItemKeyToPath(businessNav), ...buildItemKeyToPath(systemNav) }),
@@ -491,20 +665,33 @@ export function AppLayout() {
   const parentByID = useMemo(() => buildParentMap(combinedNav), [combinedNav])
   const nodeByID = useMemo(() => buildNodeByID(combinedNav), [combinedNav])
   const businessNodeIDs = useMemo(() => collectNodeIDs(businessNav), [businessNav])
-  const businessExpandableNodeIDs = useMemo(() => collectExpandableNodeIDs(businessNav), [businessNav])
+  const businessExpandableNodeIDs = useMemo(
+    () => collectExpandableNodeIDs(businessNav),
+    [businessNav],
+  )
   const systemNodeIDs = useMemo(() => collectNodeIDs(systemNav), [systemNav])
   const systemExpandableNodeIDs = useMemo(() => collectExpandableNodeIDs(systemNav), [systemNav])
-  const resolvedThemeMode = useMemo(() => resolveThemeMode(themeMode), [themeMode, systemThemeVersion])
+  const resolvedThemeMode = useMemo(
+    () => resolveThemeMode(themeMode),
+    [themeMode, systemThemeVersion],
+  )
 
   const parentMeta = getParentRouteMeta(currentMeta)
   const currentMenuID = useMemo(() => {
     if (activeWorkbenchId === 'ai') {
-      return findAIWorkbenchMenuKey(location.pathname, location.search)
-        ?? resolveRouteMenuId(currentMeta)
-        ?? currentMeta.menuId
-        ?? currentMeta.id
+      return (
+        findAIWorkbenchMenuKey(location.pathname, location.search) ??
+        resolveRouteMenuId(currentMeta) ??
+        currentMeta.menuId ??
+        currentMeta.id
+      )
     }
-    return findMenuIDByRoutePath(combinedNav, currentMeta.path) ?? resolveRouteMenuId(currentMeta) ?? currentMeta.menuId ?? currentMeta.id
+    return (
+      findMenuIDByRoutePath(combinedNav, currentMeta.path) ??
+      resolveRouteMenuId(currentMeta) ??
+      currentMeta.menuId ??
+      currentMeta.id
+    )
   }, [activeWorkbenchId, combinedNav, currentMeta, location.pathname, location.search])
 
   const selectedKeys = useMemo(() => {
@@ -518,7 +705,14 @@ export function AppLayout() {
       return [parentMeta.id]
     }
     return [currentMeta.id]
-  }, [activeWorkbenchId, combinedItemKeyToPath, currentMenuID, currentMeta, parentMeta, primaryItemKeyToPath])
+  }, [
+    activeWorkbenchId,
+    combinedItemKeyToPath,
+    currentMenuID,
+    currentMeta,
+    parentMeta,
+    primaryItemKeyToPath,
+  ])
 
   const routeOpenKeys = useMemo(() => {
     if (activeWorkbenchId === 'ai') {
@@ -532,11 +726,20 @@ export function AppLayout() {
       keys.unshift(parentID)
       pointer = parentID
     }
-    if (currentMenuID && (businessExpandableNodeIDs.has(currentMenuID) || systemExpandableNodeIDs.has(currentMenuID))) {
+    if (
+      currentMenuID &&
+      (businessExpandableNodeIDs.has(currentMenuID) || systemExpandableNodeIDs.has(currentMenuID))
+    ) {
       keys.push(currentMenuID)
     }
     return keys
-  }, [activeWorkbenchId, businessExpandableNodeIDs, currentMenuID, parentByID, systemExpandableNodeIDs])
+  }, [
+    activeWorkbenchId,
+    businessExpandableNodeIDs,
+    currentMenuID,
+    parentByID,
+    systemExpandableNodeIDs,
+  ])
 
   useEffect(() => {
     if (sidebarCollapsed) {
@@ -559,24 +762,42 @@ export function AppLayout() {
     if (!snapshot) {
       return
     }
-    if ((currentRouteWorkspace === 'application' || currentRouteWorkspace === 'resource') && accessibleWorkspaces.includes(currentRouteWorkspace)) {
+    if (
+      (currentRouteWorkspace === 'application' || currentRouteWorkspace === 'resource') &&
+      accessibleWorkspaces.includes(currentRouteWorkspace)
+    ) {
       if (currentWorkspace !== currentRouteWorkspace) {
         setCurrentWorkspace(currentRouteWorkspace)
       }
       return
     }
-    if ((currentWorkspace == null || !accessibleWorkspaces.includes(currentWorkspace)) && preferredWorkspace && currentWorkspace !== preferredWorkspace) {
+    if (
+      (currentWorkspace == null || !accessibleWorkspaces.includes(currentWorkspace)) &&
+      preferredWorkspace &&
+      currentWorkspace !== preferredWorkspace
+    ) {
       setCurrentWorkspace(preferredWorkspace)
     }
-  }, [accessibleWorkspaces, currentRouteWorkspace, currentWorkspace, preferredWorkspace, setCurrentWorkspace, snapshot])
+  }, [
+    accessibleWorkspaces,
+    currentRouteWorkspace,
+    currentWorkspace,
+    preferredWorkspace,
+    setCurrentWorkspace,
+    snapshot,
+  ])
 
-  const currentWorkbenchOption = workbenchOptions.find((option) => option.key === activeWorkbenchId) ?? workbenchOptions[0] ?? null
+  const currentWorkbenchOption =
+    workbenchOptions.find((option) => option.key === activeWorkbenchId) ??
+    workbenchOptions[0] ??
+    null
   const breadcrumbRoutes = useMemo(() => {
     const routes: Array<{ name: string; path?: string }> = []
     const resolveBreadcrumbTitle = (route: typeof currentMeta) => {
-      const menuID = route.navVisible !== false
-        ? findMenuIDByRoutePath(combinedNav, route.path) ?? route.menuId
-        : undefined
+      const menuID =
+        route.navVisible !== false
+          ? (findMenuIDByRoutePath(combinedNav, route.path) ?? route.menuId)
+          : undefined
       const menuNode = menuID ? nodeByID.get(menuID) : null
       if (menuNode) {
         return getRuntimeMenuNodeLabel(menuNode, localeCode)
@@ -591,7 +812,7 @@ export function AppLayout() {
       routes.push({ name: currentWorkbenchOption.label })
     }
 
-    const routeChain: typeof currentMeta[] = []
+    const routeChain: (typeof currentMeta)[] = []
     const seenRouteIds = new Set<string>()
     let pointer: typeof currentMeta | null = currentMeta
     while (pointer && !seenRouteIds.has(pointer.id)) {
@@ -600,7 +821,9 @@ export function AppLayout() {
       pointer = getParentRouteMeta(pointer)
     }
 
-    const workbenchRootRouteIds = activeWorkbenchId ? (BREADCRUMB_WORKBENCH_ROOT_ROUTE_IDS[activeWorkbenchId] ?? []) : []
+    const workbenchRootRouteIds = activeWorkbenchId
+      ? (BREADCRUMB_WORKBENCH_ROOT_ROUTE_IDS[activeWorkbenchId] ?? [])
+      : []
 
     for (const route of routeChain) {
       if (workbenchRootRouteIds.includes(route.id)) {
@@ -613,7 +836,7 @@ export function AppLayout() {
       }
       routes.push({
         name,
-        path: route.id === currentMeta.id ? undefined : route.redirectTo ?? route.path,
+        path: route.id === currentMeta.id ? undefined : (route.redirectTo ?? route.path),
       })
     }
 
@@ -621,27 +844,39 @@ export function AppLayout() {
   }, [activeWorkbenchId, combinedNav, currentMeta, currentWorkbenchOption, localeCode, nodeByID, t])
 
   const userDisplayName = user?.userName ?? user?.email ?? 'User'
-  const userAvatarFit = user?.avatarFit === 'contain' || user?.avatarFit === 'fill' ? user.avatarFit : 'cover'
+  const userAvatarFit =
+    user?.avatarFit === 'contain' || user?.avatarFit === 'fill' ? user.avatarFit : 'cover'
   const userAvatarStyle = { '--soha-avatar-fit': userAvatarFit } as CSSProperties
   const branding = getNormalizedBranding(brandingQuery.data?.data)
   const expandedLogo = branding.expandedLogoUrl
   const collapsedLogo = branding.collapsedLogoUrl || branding.expandedLogoUrl
-  const activeLogo = sidebarCollapsed ? (collapsedLogo || expandedLogo) : (expandedLogo || collapsedLogo)
+  const activeLogo = sidebarCollapsed
+    ? collapsedLogo || expandedLogo
+    : expandedLogo || collapsedLogo
   const languageSwitchLabel = localeCode === 'zh_CN' ? 'EN' : '中文'
-  const languageSwitchTitle = localeCode === 'zh_CN'
-    ? t('layout.switchLanguageToEnglish', 'Switch to English')
-    : t('layout.switchLanguageToChinese', '切换到中文')
-  const themeSwitchTitle = resolvedThemeMode === 'dark'
-    ? t('layout.switchThemeToLight', 'Switch to light mode')
-    : t('layout.switchThemeToDark', '切换到深色模式')
+  const languageSwitchTitle =
+    localeCode === 'zh_CN'
+      ? t('layout.switchLanguageToEnglish', 'Switch to English')
+      : t('layout.switchLanguageToChinese', '切换到中文')
+  const themeSwitchTitle =
+    resolvedThemeMode === 'dark'
+      ? t('layout.switchThemeToLight', 'Switch to light mode')
+      : t('layout.switchThemeToDark', '切换到深色模式')
   const businessSelectedKeys = selectedKeys.filter((key) => businessNodeIDs.has(key))
   const systemSelectedKeys = selectedKeys.filter((key) => systemNodeIDs.has(key))
   const aiSelectedKeys = selectedKeys.filter((key) => primaryItemKeyToPath[key])
-  const primarySelectedKeys = activeWorkbenchId === 'ai' ? aiSelectedKeys : isSystemWorkspaceRoute ? systemSelectedKeys : businessSelectedKeys
+  const primarySelectedKeys =
+    activeWorkbenchId === 'ai'
+      ? aiSelectedKeys
+      : isSystemWorkspaceRoute
+        ? systemSelectedKeys
+        : businessSelectedKeys
   const primaryOpenKeys = isSystemWorkspaceRoute ? systemOpenKeys : businessOpenKeys
-  const platformHeaderScopeMode = activeWorkbenchId === 'platform' && (currentScopeMode === 'cluster' || currentScopeMode === 'namespace')
-    ? currentScopeMode
-    : 'hidden'
+  const platformHeaderScopeMode =
+    activeWorkbenchId === 'platform' &&
+    (currentScopeMode === 'cluster' || currentScopeMode === 'namespace')
+      ? currentScopeMode
+      : 'hidden'
 
   if (permissionSnapshotQuery.isLoading) {
     return (
@@ -654,16 +889,17 @@ export function AppLayout() {
   return (
     <GlobalAIAssistantProvider permissionSnapshot={snapshot}>
       <Layout className="soha-shell">
-      <Sider
-        className="soha-sider"
-        collapsible
-        collapsed={sidebarCollapsed}
-        collapsedWidth={SIDEBAR_COLLAPSED_WIDTH}
-        onCollapse={(collapsed) => setSidebarCollapsed(collapsed)}
-        style={{ backgroundColor: 'transparent' }}
-        trigger={null}
-        width={SIDEBAR_WIDTH}
-      >
+        <Sider
+          breakpoint="md"
+          className="soha-sider"
+          collapsible
+          collapsed={sidebarCollapsed}
+          collapsedWidth={SIDEBAR_COLLAPSED_WIDTH}
+          onCollapse={(collapsed) => setSidebarCollapsed(collapsed)}
+          style={{ backgroundColor: 'transparent' }}
+          trigger={null}
+          width={SIDEBAR_WIDTH}
+        >
           <div className="soha-nav" style={{ height: '100%' }}>
             <div className="soha-sider-topbar">
               <button
@@ -680,175 +916,192 @@ export function AppLayout() {
               </button>
             </div>
 
-          {workbenchOptions.length > 0 && currentWorkbenchOption ? (
-            <div className="soha-workbench-switcher-shell">
-              <WorkbenchSwitcher
-                collapsed={sidebarCollapsed}
-                current={currentWorkbenchOption}
-                options={workbenchOptions}
-                onSelect={(workbench) => {
-                  const targetPath = findFirstAccessiblePathForWorkbench(workbench, snapshot)
-                  if (!targetPath) {
-                    return
-                  }
-                  navigate(targetPath)
-                }}
-              />
-            </div>
-          ) : null}
-
-          {(
-            <div className="soha-nav-business">
-              <Menu
-                className="soha-nav-menu"
-                mode="inline"
-                items={primaryMenuItems}
-                selectedKeys={primarySelectedKeys}
-                openKeys={sidebarCollapsed ? [] : primaryOpenKeys}
-                onOpenChange={(keys) => {
-                  if (isSystemWorkspaceRoute) {
-                    setSystemOpenKeys(keys as string[])
-                    return
-                  }
-                  setBusinessOpenKeys(keys as string[])
-                }}
-                onClick={({ key }) => {
-                  const path = primaryItemKeyToPath[String(key)]
-                  if (path) navigate(path)
-                }}
-                inlineIndent={8}
-                inlineCollapsed={sidebarCollapsed}
-                theme={resolvedThemeMode}
-              />
-            </div>
-          )}
-        </div>
-      </Sider>
-
-      <Layout className="soha-main">
-        <Header className="soha-header">
-          <div className="soha-header-top-row">
-            <div className="soha-header-main">
-              <div className="soha-header-breadcrumb-row">
-                <Button
-                  aria-label={sidebarCollapsed ? t('layout.expand', 'Expand sidebar') : t('layout.collapse', 'Collapse sidebar')}
-                  className="soha-header-action soha-header-sider-toggle"
-                  type="text"
-                  icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-                  onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            {workbenchOptions.length > 0 && currentWorkbenchOption ? (
+              <div className="soha-workbench-switcher-shell">
+                <WorkbenchSwitcher
+                  collapsed={sidebarCollapsed}
+                  current={currentWorkbenchOption}
+                  options={workbenchOptions}
+                  onSelect={(workbench) => {
+                    const targetPath = findFirstAccessiblePathForWorkbench(workbench, snapshot)
+                    if (!targetPath) {
+                      return
+                    }
+                    navigate(targetPath)
+                  }}
                 />
-                <Breadcrumb
-                  items={breadcrumbRoutes.map((route) => ({
-                    title: route.path ? (
-                      <a
-                        href={route.path}
-                        onClick={(event) => {
-                          event.preventDefault()
-                          navigate(route.path!)
-                        }}
-                      >
-                        {route.name}
-                      </a>
-                    ) : route.name,
-                  }))}
-                />
-              </div>
-            </div>
-            {platformHeaderScopeMode !== 'hidden' ? (
-              <div className="soha-header-context">
-                <PlatformScopeTrigger scopeMode={platformHeaderScopeMode} />
               </div>
             ) : null}
-            <div className="soha-header-right">
-              <HeaderActionButton
-                ariaLabel={t('layout.docs', 'Docs')}
-                title={t('layout.docs', 'Docs')}
-                icon={<QuestionCircleOutlined />}
-                label={t('layout.docs', 'Docs')}
-                onClick={() => window.open('/docs/', '_blank', 'noopener,noreferrer')}
-              />
-              <div className="soha-header-preferences">
-                <HeaderActionButton
-                  ariaLabel={languageSwitchTitle}
-                  title={languageSwitchTitle}
-                  inset
-                  icon={<TranslationOutlined />}
-                  label={languageSwitchLabel}
-                  onClick={() => setLocaleCode(localeCode === 'zh_CN' ? 'en_US' : 'zh_CN')}
-                />
-                <HeaderActionButton
-                  ariaLabel={themeSwitchTitle}
-                  title={themeSwitchTitle}
-                  icon={resolvedThemeMode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
-                  onClick={() => setThemeMode(resolvedThemeMode === 'dark' ? 'light' : 'dark')}
-                  pressed={resolvedThemeMode === 'dark'}
+
+            {
+              <div className="soha-nav-business">
+                <Menu
+                  className="soha-nav-menu"
+                  mode="inline"
+                  items={primaryMenuItems}
+                  selectedKeys={primarySelectedKeys}
+                  openKeys={sidebarCollapsed ? [] : primaryOpenKeys}
+                  onOpenChange={(keys) => {
+                    if (isSystemWorkspaceRoute) {
+                      setSystemOpenKeys(keys as string[])
+                      return
+                    }
+                    setBusinessOpenKeys(keys as string[])
+                  }}
+                  onClick={({ key }) => {
+                    const path = primaryItemKeyToPath[String(key)]
+                    if (path) navigate(path)
+                  }}
+                  inlineIndent={8}
+                  inlineCollapsed={sidebarCollapsed}
+                  theme={resolvedThemeMode}
                 />
               </div>
-              <AnnouncementBell />
-              <Dropdown
-                menu={{
-                  items: [
-                    { key: 'user', label: userDisplayName, disabled: true },
-                    { type: 'divider' },
-                    { key: 'portal', icon: <AppstoreOutlined />, label: t('layout.portal', '用户门户') },
-                    { key: 'about', icon: <InfoCircleOutlined />, label: t('layout.about', '关于') },
-                    { key: 'profile', icon: <UserOutlined />, label: t('layout.profile', '个人中心') },
-                    { key: 'changePassword', icon: <LockOutlined />, label: t('layout.changePassword', '修改密码') },
-                    { type: 'divider' },
-                    { key: 'logout', icon: <LogoutOutlined />, label: t('layout.logout', 'Sign out') },
-                  ],
-                  onClick: ({ key }) => {
-                    if (key === 'portal') {
-                      navigate('/portal')
-                      return
-                    }
-                    if (key === 'about') {
-                      navigate('/settings/about')
-                      return
-                    }
-                    if (key === 'profile') {
-                      navigate('/account/profile')
-                      return
-                    }
-                    if (key === 'changePassword') {
-                      navigate('/account/profile?changePassword=1')
-                      return
-                    }
-                    if (key === 'logout') {
-                      void logoutAuthSession().finally(() => navigate('/login'))
-                    }
-                  },
-                }}
-                placement="bottomRight"
-                trigger={['click']}
-              >
-                <HeaderActionButton
-                  ariaLabel={userDisplayName}
-                  className="soha-user-trigger"
-                  iconClassName="soha-user-trigger__avatar"
-                  icon={(
-                    <Avatar
-                      className="soha-user-avatar"
-                      size="small"
-                      src={user?.avatarUrl || undefined}
-                      style={userAvatarStyle}
-                    >
-                      {userDisplayName.charAt(0).toUpperCase()}
-                    </Avatar>
-                  )}
-                  label={userDisplayName}
-                />
-              </Dropdown>
-            </div>
+            }
           </div>
-        </Header>
+        </Sider>
 
-        <Content className="soha-content">
-          <div className="soha-content-inner soha-pro-content-host">
-            <Outlet />
-          </div>
-        </Content>
-      </Layout>
+        <Layout className="soha-main">
+          <Header className="soha-header">
+            <div className="soha-header-top-row">
+              <div className="soha-header-main">
+                <div className="soha-header-breadcrumb-row">
+                  <Button
+                    aria-label={
+                      sidebarCollapsed
+                        ? t('layout.expand', 'Expand sidebar')
+                        : t('layout.collapse', 'Collapse sidebar')
+                    }
+                    className="soha-header-action soha-header-sider-toggle"
+                    type="text"
+                    icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                    onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                  />
+                  <Breadcrumb
+                    items={breadcrumbRoutes.map((route) => ({
+                      title: route.path ? (
+                        <a
+                          href={route.path}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            navigate(route.path!)
+                          }}
+                        >
+                          {route.name}
+                        </a>
+                      ) : (
+                        route.name
+                      ),
+                    }))}
+                  />
+                </div>
+              </div>
+              {platformHeaderScopeMode !== 'hidden' ? (
+                <div className="soha-header-context">
+                  <PlatformScopeTrigger scopeMode={platformHeaderScopeMode} />
+                </div>
+              ) : null}
+              <div className="soha-header-right">
+                <HeaderActionButton
+                  ariaLabel={t('layout.docs', 'Docs')}
+                  title={t('layout.docs', 'Docs')}
+                  icon={<QuestionCircleOutlined />}
+                  label={t('layout.docs', 'Docs')}
+                  onClick={() => window.open('/docs/', '_blank', 'noopener,noreferrer')}
+                />
+                <div className="soha-header-preferences">
+                  <HeaderActionButton
+                    ariaLabel={languageSwitchTitle}
+                    title={languageSwitchTitle}
+                    inset
+                    icon={<TranslationOutlined />}
+                    label={languageSwitchLabel}
+                    onClick={() => setLocaleCode(localeCode === 'zh_CN' ? 'en_US' : 'zh_CN')}
+                  />
+                  <HeaderActionButton
+                    ariaLabel={themeSwitchTitle}
+                    title={themeSwitchTitle}
+                    icon={resolvedThemeMode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
+                    onClick={() => setThemeMode(resolvedThemeMode === 'dark' ? 'light' : 'dark')}
+                    pressed={resolvedThemeMode === 'dark'}
+                  />
+                </div>
+                <AnnouncementBell />
+                <Dropdown
+                  menu={{
+                    items: [
+                      { key: 'user', label: userDisplayName, disabled: true },
+                      { type: 'divider' },
+                      {
+                        key: 'portal',
+                        icon: <AppstoreOutlined />,
+                        label: t('layout.portal', '门户首页'),
+                      },
+                      {
+                        key: 'profile',
+                        icon: <UserOutlined />,
+                        label: t('layout.profile', '个人中心'),
+                      },
+                      {
+                        key: 'changePassword',
+                        icon: <LockOutlined />,
+                        label: t('layout.changePassword', '修改密码'),
+                      },
+                      { type: 'divider' },
+                      {
+                        key: 'logout',
+                        icon: <LogoutOutlined />,
+                        label: t('layout.logout', 'Sign out'),
+                      },
+                    ],
+                    onClick: ({ key }) => {
+                      if (key === 'portal') {
+                        navigate('/portal')
+                        return
+                      }
+                      if (key === 'profile') {
+                        navigate('/account/profile')
+                        return
+                      }
+                      if (key === 'changePassword') {
+                        navigate('/account/profile?changePassword=1')
+                        return
+                      }
+                      if (key === 'logout') {
+                        void logoutAuthSession().finally(() => navigate('/login'))
+                      }
+                    },
+                  }}
+                  placement="bottomRight"
+                  trigger={['click']}
+                >
+                  <HeaderActionButton
+                    ariaLabel={userDisplayName}
+                    className="soha-user-trigger"
+                    iconClassName="soha-user-trigger__avatar"
+                    icon={
+                      <Avatar
+                        className="soha-user-avatar"
+                        size="small"
+                        src={user?.avatarUrl || undefined}
+                        style={userAvatarStyle}
+                      >
+                        {userDisplayName.charAt(0).toUpperCase()}
+                      </Avatar>
+                    }
+                    label={userDisplayName}
+                  />
+                </Dropdown>
+              </div>
+            </div>
+          </Header>
+
+          <Content className="soha-content">
+            <div className="soha-content-inner soha-pro-content-host">
+              <Outlet />
+            </div>
+          </Content>
+        </Layout>
       </Layout>
     </GlobalAIAssistantProvider>
   )

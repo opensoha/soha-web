@@ -1,0 +1,114 @@
+export interface AccessUser {
+  id: string
+  username: string
+  email: string
+  displayName: string
+  avatarUrl?: string
+  avatarFit?: string
+  status: string
+  lastLoginAt?: string
+  tags: string[]
+  roles: string[]
+  teams: string[]
+  projects: string[]
+  loginSources: AccessUserLoginSource[]
+}
+
+export interface AccessUserLoginSource {
+  type: string
+  providerId?: string
+}
+
+export interface AccessRole {
+  id: string
+  name: string
+  scope: string
+  capabilities: string[]
+  permissionKeys?: string[]
+  userCount: number
+}
+
+export interface AccessTeam {
+  id: string
+  parentId?: string
+  name: string
+  slug: string
+  path?: string
+  source?: string
+  externalId?: string
+  metadata: Record<string, unknown>
+  userCount: number
+}
+
+export interface AccessPolicy {
+  id: string
+  name: string
+  effect: string
+  priority: number
+  subjects: {
+    roles: string[]
+    teams: string[]
+    projects: string[]
+    users: string[]
+    tags: string[]
+  }
+  clusters: {
+    ids: string[]
+    regions: string[]
+    environments: string[]
+    labels: Record<string, string[]>
+  }
+  namespaces: {
+    names: string[]
+    ownerTeams: string[]
+    labels: Record<string, string[]>
+  }
+  resources: {
+    kinds: string[]
+    names: string[]
+    labels: Record<string, string[]>
+  }
+  actions: string[]
+  conditions: {
+    sources: string[]
+    approvalStates: string[]
+  }
+  reason: string
+}
+
+export interface AccessApplicationOption {
+  id: string
+  name: string
+}
+
+export interface AccessLoginProviderRef {
+  id: string
+  name: string
+  type: string
+  enabled?: boolean
+}
+
+export interface AccessIdentitySettings {
+  providers?: AccessLoginProviderRef[]
+}
+
+export type AccessMutationValues = Record<string, unknown>
+
+export interface AccessUpdateVariables {
+  id: string
+  values: AccessMutationValues
+}
+
+export interface AccessScopeGrant {
+  id: string
+  subjectType: string
+  subjectId: string
+  businessLineId: string
+  environmentIds: string[]
+  applicationIds: string[]
+  role: string
+  effect: string
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
+}

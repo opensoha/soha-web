@@ -33,7 +33,9 @@ const testState = vi.hoisted(() => ({
 }))
 
 vi.mock('@/features/auth/permission-snapshot', async () => {
-  const actual = await vi.importActual<typeof import('@/features/auth/permission-snapshot')>('@/features/auth/permission-snapshot')
+  const actual = await vi.importActual<typeof import('@/features/auth/permission-snapshot')>(
+    '@/features/auth/permission-snapshot',
+  )
   return {
     ...actual,
     usePermissionSnapshot: () => ({
@@ -43,7 +45,7 @@ vi.mock('@/features/auth/permission-snapshot', async () => {
   }
 })
 
-vi.mock('@/features/settings/use-branding-settings', () => ({
+vi.mock('@/features/settings', () => ({
   useBrandingSettings: () => ({
     data: {
       data: {
@@ -78,7 +80,13 @@ vi.mock('@/components/header-action-button', async () => {
       ref,
     ) {
       return (
-        <button ref={ref} aria-label={ariaLabel} className={className} onClick={onClick} title={title}>
+        <button
+          ref={ref}
+          aria-label={ariaLabel}
+          className={className}
+          onClick={onClick}
+          title={title}
+        >
           {icon}
           {label || title}
         </button>
@@ -98,7 +106,9 @@ vi.mock('@/features/system/menu-icons', () => ({
 }))
 
 vi.mock('@/features/system/menu-schema', async () => {
-  const actual = await vi.importActual<typeof import('@/features/system/menu-schema')>('@/features/system/menu-schema')
+  const actual = await vi.importActual<typeof import('@/features/system/menu-schema')>(
+    '@/features/system/menu-schema',
+  )
   return {
     ...actual,
     resolveMenuSectionLabel: (key: string) => key,
@@ -117,16 +127,17 @@ vi.mock('@/stores/auth-store', () => ({
 }))
 
 vi.mock('@/stores/preferences-store', () => ({
-  usePreferencesStore: (selector: (state: any) => unknown) => selector({
-    currentWorkspace: testState.prefs.currentWorkspace,
-    localeCode: testState.prefs.localeCode,
-    setCurrentWorkspace: testState.prefs.setCurrentWorkspace,
-    setLocaleCode: testState.prefs.setLocaleCode,
-    setSidebarCollapsed: testState.prefs.setSidebarCollapsed,
-    setThemeMode: testState.prefs.setThemeMode,
-    sidebarCollapsed: testState.prefs.sidebarCollapsed,
-    themeMode: testState.prefs.themeMode,
-  }),
+  usePreferencesStore: (selector: (state: any) => unknown) =>
+    selector({
+      currentWorkspace: testState.prefs.currentWorkspace,
+      localeCode: testState.prefs.localeCode,
+      setCurrentWorkspace: testState.prefs.setCurrentWorkspace,
+      setLocaleCode: testState.prefs.setLocaleCode,
+      setSidebarCollapsed: testState.prefs.setSidebarCollapsed,
+      setThemeMode: testState.prefs.setThemeMode,
+      sidebarCollapsed: testState.prefs.sidebarCollapsed,
+      themeMode: testState.prefs.themeMode,
+    }),
 }))
 
 let containers: HTMLDivElement[] = []
@@ -134,7 +145,11 @@ let roots: Array<ReturnType<typeof createRoot>> = []
 
 function LocationProbe() {
   const location = useLocation()
-  return <div data-testid="page" data-pathname={location.pathname} data-search={location.search}>page</div>
+  return (
+    <div data-testid="page" data-pathname={location.pathname} data-search={location.search}>
+      page
+    </div>
+  )
 }
 
 async function renderWithProviders(route: string, snapshotOverrides?: Partial<PermissionSnapshot>) {
@@ -214,13 +229,56 @@ describe('app layout workspace navigation', () => {
     testState.prefs.sidebarCollapsed = false
     testState.prefs.setCurrentWorkspace.mockClear()
     testState.snapshot = {
-      permissionKeys: ['workspace.resource.view', 'workspace.application.view', 'overview.view', 'delivery.applications.view', 'system.menus.view'],
+      permissionKeys: [
+        'workspace.resource.view',
+        'workspace.application.view',
+        'overview.view',
+        'delivery.applications.view',
+        'system.menus.view',
+      ],
       visibleMenuIds: ['dashboard', 'builds', 'system', 'menus'],
       visibleMenus: [
-        { id: 'dashboard', path: '/', labelZh: '概览', labelEn: 'Overview', iconKey: 'gauge', section: 'platform', sortOrder: 1, enabled: true },
-        { id: 'builds', path: '/applications', labelZh: '应用中心', labelEn: 'Applications', iconKey: 'blocks', section: 'deliver', sortOrder: 2, enabled: true },
-        { id: 'system', path: '/system', labelZh: '系统管理', labelEn: 'System', iconKey: 'panels-top-left', section: 'admin', sortOrder: 3, enabled: true },
-        { id: 'menus', parentId: 'system', path: '/system/menus', labelZh: '菜单管理', labelEn: 'Menus', iconKey: 'menu-square', section: 'admin', sortOrder: 4, enabled: true },
+        {
+          id: 'dashboard',
+          path: '/',
+          labelZh: '概览',
+          labelEn: 'Overview',
+          iconKey: 'gauge',
+          section: 'platform',
+          sortOrder: 1,
+          enabled: true,
+        },
+        {
+          id: 'builds',
+          path: '/applications',
+          labelZh: '应用中心',
+          labelEn: 'Applications',
+          iconKey: 'blocks',
+          section: 'deliver',
+          sortOrder: 2,
+          enabled: true,
+        },
+        {
+          id: 'system',
+          path: '/system',
+          labelZh: '系统管理',
+          labelEn: 'System',
+          iconKey: 'panels-top-left',
+          section: 'admin',
+          sortOrder: 3,
+          enabled: true,
+        },
+        {
+          id: 'menus',
+          parentId: 'system',
+          path: '/system/menus',
+          labelZh: '菜单管理',
+          labelEn: 'Menus',
+          iconKey: 'menu-square',
+          section: 'admin',
+          sortOrder: 4,
+          enabled: true,
+        },
       ],
     }
   })
@@ -244,15 +302,49 @@ describe('app layout workspace navigation', () => {
       permissionKeys: ['workspace.resource.view', 'overview.view', 'system.menus.view'],
       visibleMenuIds: ['dashboard', 'system', 'menus'],
       visibleMenus: [
-        { id: 'dashboard', path: '/', labelZh: '概览', labelEn: 'Overview', iconKey: 'gauge', section: 'platform', sortOrder: 1, enabled: true },
-        { id: 'system', path: '/system', labelZh: '系统管理', labelEn: 'System', iconKey: 'panels-top-left', section: 'admin', sortOrder: 3, enabled: true },
-        { id: 'menus', parentId: 'system', path: '/system/menus', labelZh: '菜单管理', labelEn: 'Menus', iconKey: 'menu-square', section: 'admin', sortOrder: 4, enabled: true },
+        {
+          id: 'dashboard',
+          path: '/',
+          labelZh: '概览',
+          labelEn: 'Overview',
+          iconKey: 'gauge',
+          section: 'platform',
+          sortOrder: 1,
+          enabled: true,
+        },
+        {
+          id: 'system',
+          path: '/system',
+          labelZh: '系统管理',
+          labelEn: 'System',
+          iconKey: 'panels-top-left',
+          section: 'admin',
+          sortOrder: 3,
+          enabled: true,
+        },
+        {
+          id: 'menus',
+          parentId: 'system',
+          path: '/system/menus',
+          labelZh: '菜单管理',
+          labelEn: 'Menus',
+          iconKey: 'menu-square',
+          section: 'admin',
+          sortOrder: 4,
+          enabled: true,
+        },
       ],
     })
 
-    expect(container.querySelector('.soha-workbench-switcher__label')?.textContent).toBe('k8s工作台')
-    expect(container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent).toContain('k8s工作台/概览')
-    expect(container.querySelector('[data-testid="platform-scope-trigger"]')?.textContent).toBe('cluster')
+    expect(container.querySelector('.soha-workbench-switcher__label')?.textContent).toBe(
+      'k8s工作台',
+    )
+    expect(container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent).toContain(
+      'k8s工作台/概览',
+    )
+    expect(container.querySelector('[data-testid="platform-scope-trigger"]')?.textContent).toBe(
+      'cluster',
+    )
     expect(container.querySelector('.soha-workspace-switcher-shell')).toBeNull()
   })
 
@@ -268,21 +360,65 @@ describe('app layout workspace navigation', () => {
       permissionKeys: ['workspace.resource.view', 'platform.workloads.view', 'system.menus.view'],
       visibleMenuIds: ['workloads', 'workloads-overview', 'system', 'menus'],
       visibleMenus: [
-        { id: 'workloads', path: '/workloads', labelZh: '工作负载', labelEn: 'Workloads', iconKey: 'boxes', section: 'platform', sortOrder: 1, enabled: true },
-        { id: 'workloads-overview', parentId: 'workloads', path: '/workloads/overview', labelZh: '概览', labelEn: 'Overview', iconKey: 'gauge', section: 'platform', sortOrder: 2, enabled: true },
-        { id: 'system', path: '/system', labelZh: '系统管理', labelEn: 'System', iconKey: 'panels-top-left', section: 'admin', sortOrder: 3, enabled: true },
-        { id: 'menus', parentId: 'system', path: '/system/menus', labelZh: '菜单管理', labelEn: 'Menus', iconKey: 'menu-square', section: 'admin', sortOrder: 4, enabled: true },
+        {
+          id: 'workloads',
+          path: '/workloads',
+          labelZh: '工作负载',
+          labelEn: 'Workloads',
+          iconKey: 'boxes',
+          section: 'platform',
+          sortOrder: 1,
+          enabled: true,
+        },
+        {
+          id: 'workloads-overview',
+          parentId: 'workloads',
+          path: '/workloads/overview',
+          labelZh: '概览',
+          labelEn: 'Overview',
+          iconKey: 'gauge',
+          section: 'platform',
+          sortOrder: 2,
+          enabled: true,
+        },
+        {
+          id: 'system',
+          path: '/system',
+          labelZh: '系统管理',
+          labelEn: 'System',
+          iconKey: 'panels-top-left',
+          section: 'admin',
+          sortOrder: 3,
+          enabled: true,
+        },
+        {
+          id: 'menus',
+          parentId: 'system',
+          path: '/system/menus',
+          labelZh: '菜单管理',
+          labelEn: 'Menus',
+          iconKey: 'menu-square',
+          section: 'admin',
+          sortOrder: 4,
+          enabled: true,
+        },
       ],
     })
 
-    expect(container.querySelector('[data-testid="platform-scope-trigger"]')?.textContent).toBe('namespace')
-    expect(container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent).toContain('k8s工作台/工作负载/概览')
+    expect(container.querySelector('[data-testid="platform-scope-trigger"]')?.textContent).toBe(
+      'namespace',
+    )
+    expect(container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent).toContain(
+      'k8s工作台/工作负载/概览',
+    )
   })
 
   it('filters the business menu by the current application workspace', async () => {
     const container = await renderWithProviders('/applications')
 
-    expect(container.querySelector('.soha-workbench-switcher__label')?.textContent).toBe('应用交付工作台')
+    expect(container.querySelector('.soha-workbench-switcher__label')?.textContent).toBe(
+      '应用交付工作台',
+    )
     expect(container.querySelector('[data-testid="platform-scope-trigger"]')).toBeNull()
     expect(container.textContent).toContain('应用中心')
     expect(container.textContent).not.toContain('概览')
@@ -298,8 +434,9 @@ describe('app layout workspace navigation', () => {
     expect(container.textContent).toContain('菜单管理')
     expect(container.textContent).not.toContain('概览')
     expect(container.querySelector('.soha-nav-business')?.className).toBe('soha-nav-business')
-    const menuModifierClasses = Array.from(container.querySelector('.soha-nav-menu')?.classList ?? [])
-      .filter((className) => className.startsWith('soha-nav-menu--'))
+    const menuModifierClasses = Array.from(
+      container.querySelector('.soha-nav-menu')?.classList ?? [],
+    ).filter((className) => className.startsWith('soha-nav-menu--'))
     expect(menuModifierClasses).toEqual([])
     expect(container.querySelector('.soha-sider-topbar > button.soha-sider-brand')).not.toBeNull()
     expect(container.querySelector('button[aria-label="系统设置"]')).toBeNull()
@@ -313,6 +450,7 @@ describe('app layout workspace navigation', () => {
         'access.roles.view',
         'access.groups.view',
         'access.policies.view',
+        'access.directory.view',
         'identity.applications.view',
         'identity.providers.view',
         'identity.outposts.view',
@@ -354,30 +492,266 @@ describe('app layout workspace navigation', () => {
         'settings-branding',
       ],
       visibleMenus: [
-        { id: 'access', path: '/access', labelZh: '访问控制', labelEn: 'Access Control', iconKey: 'shield', section: 'admin', sortOrder: 240, enabled: true },
-        { id: 'access-users', parentId: 'access', path: '/access/users', labelZh: '用户', labelEn: 'Users', iconKey: 'user', section: 'users', sortOrder: 10, enabled: true },
-        { id: 'access-roles', parentId: 'access', path: '/access/roles', labelZh: '角色', labelEn: 'Roles', iconKey: 'shield', section: 'users', sortOrder: 20, enabled: true },
-        { id: 'access-teams', parentId: 'access', path: '/access/teams', labelZh: '组织', labelEn: 'Organizations', iconKey: 'users', section: 'users', sortOrder: 30, enabled: true },
-        { id: 'access-policies', parentId: 'access', path: '/access/policies', labelZh: '策略', labelEn: 'Policies', iconKey: 'shield', section: 'users', sortOrder: 40, enabled: true },
-        { id: 'identity', path: '/identity', labelZh: '身份', labelEn: 'Identity', iconKey: 'shield', section: 'admin', sortOrder: 220, enabled: true },
-        { id: 'identity-overview', parentId: 'identity', path: '/identity/overview', labelZh: '总览', labelEn: 'Overview', iconKey: 'gauge', section: '', sortOrder: 1, enabled: true },
-        { id: 'identity-applications', parentId: 'identity', path: '/identity/applications', labelZh: '应用目录', labelEn: 'Applications', iconKey: 'blocks', section: 'provider', sortOrder: 10, enabled: true },
-        { id: 'identity-providers', parentId: 'identity', path: '/identity/providers', labelZh: 'Provider', labelEn: 'Providers', iconKey: 'shield', section: 'provider', sortOrder: 20, enabled: true },
-        { id: 'identity-outposts', parentId: 'identity', path: '/identity/outposts', labelZh: 'Outpost', labelEn: 'Outposts', iconKey: 'radio-tower', section: 'provider', sortOrder: 30, enabled: true },
-        { id: 'identity-policies', parentId: 'identity', path: '/identity/policies', labelZh: '访问策略', labelEn: 'Policies', iconKey: 'shield', section: 'provider', sortOrder: 40, enabled: true },
-        { id: 'identity-sessions', parentId: 'identity', path: '/identity/sessions', labelZh: '会话', labelEn: 'Sessions', iconKey: 'users', section: 'operations', sortOrder: 10, enabled: true },
-        { id: 'identity-audit', parentId: 'identity', path: '/identity/audit', labelZh: '审计', labelEn: 'Audit', iconKey: 'file-clock', section: 'operations', sortOrder: 20, enabled: true },
-        { id: 'system', path: '/system', labelZh: '系统', labelEn: 'System', iconKey: 'panels-top-left', section: 'admin', sortOrder: 225, enabled: true },
-        { id: 'announcements', parentId: 'system', path: '/system/announcements', labelZh: '通知公告', labelEn: 'Announcements', iconKey: 'megaphone', section: 'operations', sortOrder: 30, enabled: true },
-        { id: 'menus', parentId: 'system', path: '/system/menus', labelZh: '菜单管理', labelEn: 'Menus', iconKey: 'menu-square', section: 'users', sortOrder: 50, enabled: true },
-        { id: 'system-online-users', parentId: 'system', path: '/system/online-users', labelZh: '在线用户', labelEn: 'Online Users', iconKey: 'users', section: 'operations', sortOrder: 40, enabled: true },
-        { id: 'operations', parentId: 'system', path: '/system/operations', labelZh: '操作日志', labelEn: 'Operations', iconKey: 'clipboard-list', section: 'operations', sortOrder: 50, enabled: true },
-        { id: 'audit', parentId: 'system', path: '/system/audit', labelZh: '审计日志', labelEn: 'Audit', iconKey: 'file-clock', section: 'operations', sortOrder: 60, enabled: true },
-        { id: 'settings', path: '/settings', labelZh: '设置中心', labelEn: 'Settings Center', iconKey: 'cog', section: 'admin', sortOrder: 260, enabled: true },
-        { id: 'account-profile', parentId: 'settings', path: '/account/profile', labelZh: '个人中心', labelEn: 'Profile', iconKey: 'user', section: 'account', sortOrder: 10, enabled: true },
-        { id: 'settings-about', parentId: 'settings', path: '/settings/about', labelZh: '关于', labelEn: 'About', iconKey: 'info', section: 'account', sortOrder: 20, enabled: true },
-        { id: 'settings-login', parentId: 'settings', path: '/settings/login', labelZh: '登陆设置', labelEn: 'Login Settings', iconKey: 'shield', section: 'users', sortOrder: 60, enabled: true },
-        { id: 'settings-branding', parentId: 'settings', path: '/settings/branding', labelZh: '品牌设置', labelEn: 'Branding Settings', iconKey: 'palette', section: 'operations', sortOrder: 70, enabled: true },
+        {
+          id: 'access',
+          path: '/access',
+          labelZh: '访问控制',
+          labelEn: 'Access Control',
+          iconKey: 'shield',
+          section: 'admin',
+          sortOrder: 240,
+          enabled: true,
+        },
+        {
+          id: 'access-users',
+          parentId: 'access',
+          path: '/access/users',
+          labelZh: '用户',
+          labelEn: 'Users',
+          iconKey: 'user',
+          section: 'users',
+          sortOrder: 10,
+          enabled: true,
+        },
+        {
+          id: 'access-roles',
+          parentId: 'access',
+          path: '/access/roles',
+          labelZh: '角色',
+          labelEn: 'Roles',
+          iconKey: 'shield',
+          section: 'users',
+          sortOrder: 20,
+          enabled: true,
+        },
+        {
+          id: 'access-teams',
+          parentId: 'access',
+          path: '/access/teams',
+          labelZh: '组织',
+          labelEn: 'Organizations',
+          iconKey: 'users',
+          section: 'users',
+          sortOrder: 30,
+          enabled: true,
+        },
+        {
+          id: 'access-policies',
+          parentId: 'access',
+          path: '/access/policies',
+          labelZh: '策略',
+          labelEn: 'Policies',
+          iconKey: 'shield',
+          section: 'users',
+          sortOrder: 40,
+          enabled: true,
+        },
+        {
+          id: 'identity',
+          path: '/identity',
+          labelZh: '身份',
+          labelEn: 'Identity',
+          iconKey: 'shield',
+          section: 'admin',
+          sortOrder: 220,
+          enabled: true,
+        },
+        {
+          id: 'identity-overview',
+          parentId: 'identity',
+          path: '/identity/overview',
+          labelZh: '总览',
+          labelEn: 'Overview',
+          iconKey: 'gauge',
+          section: '',
+          sortOrder: 1,
+          enabled: true,
+        },
+        {
+          id: 'identity-applications',
+          parentId: 'identity',
+          path: '/identity/applications',
+          labelZh: '应用目录',
+          labelEn: 'Applications',
+          iconKey: 'blocks',
+          section: 'provider',
+          sortOrder: 10,
+          enabled: true,
+        },
+        {
+          id: 'identity-providers',
+          parentId: 'identity',
+          path: '/identity/providers',
+          labelZh: 'Provider',
+          labelEn: 'Providers',
+          iconKey: 'shield',
+          section: 'provider',
+          sortOrder: 20,
+          enabled: true,
+        },
+        {
+          id: 'identity-outposts',
+          parentId: 'identity',
+          path: '/identity/outposts',
+          labelZh: 'Outpost',
+          labelEn: 'Outposts',
+          iconKey: 'radio-tower',
+          section: 'provider',
+          sortOrder: 30,
+          enabled: true,
+        },
+        {
+          id: 'identity-policies',
+          parentId: 'identity',
+          path: '/identity/policies',
+          labelZh: '访问策略',
+          labelEn: 'Policies',
+          iconKey: 'shield',
+          section: 'provider',
+          sortOrder: 40,
+          enabled: true,
+        },
+        {
+          id: 'identity-sessions',
+          parentId: 'identity',
+          path: '/identity/sessions',
+          labelZh: '会话',
+          labelEn: 'Sessions',
+          iconKey: 'users',
+          section: 'operations',
+          sortOrder: 10,
+          enabled: true,
+        },
+        {
+          id: 'identity-audit',
+          parentId: 'identity',
+          path: '/identity/audit',
+          labelZh: '审计',
+          labelEn: 'Audit',
+          iconKey: 'file-clock',
+          section: 'operations',
+          sortOrder: 20,
+          enabled: true,
+        },
+        {
+          id: 'system',
+          path: '/system',
+          labelZh: '系统',
+          labelEn: 'System',
+          iconKey: 'panels-top-left',
+          section: 'admin',
+          sortOrder: 225,
+          enabled: true,
+        },
+        {
+          id: 'announcements',
+          parentId: 'system',
+          path: '/system/announcements',
+          labelZh: '通知公告',
+          labelEn: 'Announcements',
+          iconKey: 'megaphone',
+          section: 'operations',
+          sortOrder: 30,
+          enabled: true,
+        },
+        {
+          id: 'menus',
+          parentId: 'system',
+          path: '/system/menus',
+          labelZh: '菜单管理',
+          labelEn: 'Menus',
+          iconKey: 'menu-square',
+          section: 'users',
+          sortOrder: 50,
+          enabled: true,
+        },
+        {
+          id: 'system-online-users',
+          parentId: 'system',
+          path: '/system/online-users',
+          labelZh: '在线用户',
+          labelEn: 'Online Users',
+          iconKey: 'users',
+          section: 'operations',
+          sortOrder: 40,
+          enabled: true,
+        },
+        {
+          id: 'operations',
+          parentId: 'system',
+          path: '/system/operations',
+          labelZh: '操作日志',
+          labelEn: 'Operations',
+          iconKey: 'clipboard-list',
+          section: 'operations',
+          sortOrder: 50,
+          enabled: true,
+        },
+        {
+          id: 'audit',
+          parentId: 'system',
+          path: '/system/audit',
+          labelZh: '审计日志',
+          labelEn: 'Audit',
+          iconKey: 'file-clock',
+          section: 'operations',
+          sortOrder: 60,
+          enabled: true,
+        },
+        {
+          id: 'settings',
+          path: '/settings',
+          labelZh: '设置中心',
+          labelEn: 'Settings Center',
+          iconKey: 'cog',
+          section: 'admin',
+          sortOrder: 260,
+          enabled: true,
+        },
+        {
+          id: 'account-profile',
+          parentId: 'settings',
+          path: '/account/profile',
+          labelZh: '个人中心',
+          labelEn: 'Profile',
+          iconKey: 'user',
+          section: 'account',
+          sortOrder: 10,
+          enabled: true,
+        },
+        {
+          id: 'settings-about',
+          parentId: 'settings',
+          path: '/settings/about',
+          labelZh: '关于',
+          labelEn: 'About',
+          iconKey: 'info',
+          section: 'account',
+          sortOrder: 20,
+          enabled: true,
+        },
+        {
+          id: 'settings-login',
+          parentId: 'settings',
+          path: '/settings/login',
+          labelZh: '登陆设置',
+          labelEn: 'Login Settings',
+          iconKey: 'shield',
+          section: 'users',
+          sortOrder: 60,
+          enabled: true,
+        },
+        {
+          id: 'settings-branding',
+          parentId: 'settings',
+          path: '/settings/branding',
+          labelZh: '品牌设置',
+          labelEn: 'Branding Settings',
+          iconKey: 'palette',
+          section: 'operations',
+          sortOrder: 70,
+          enabled: true,
+        },
       ],
     })
 
@@ -396,6 +770,7 @@ describe('app layout workspace navigation', () => {
     expect(menuText).toContain('角色')
     expect(menuText).toContain('组织')
     expect(menuText).toContain('策略')
+    expect(menuText).toContain('目录同步')
     expect(menuText).toContain('登陆设置')
     expect(menuText).toContain('会话')
     expect(menuText).toContain('通知公告')
@@ -428,9 +803,37 @@ describe('app layout workspace navigation', () => {
       permissionKeys: ['workspace.resource.view', 'platform.workloads.view', 'system.menus.view'],
       visibleMenuIds: ['workloads', 'system', 'menus'],
       visibleMenus: [
-        { id: 'workloads', path: '/workloads', labelZh: '工作负载', labelEn: 'Workloads', iconKey: 'boxes', section: 'platform', sortOrder: 1, enabled: true },
-        { id: 'system', path: '/system', labelZh: '系统管理', labelEn: 'System', iconKey: 'panels-top-left', section: 'admin', sortOrder: 3, enabled: true },
-        { id: 'menus', parentId: 'system', path: '/system/menus', labelZh: '菜单管理', labelEn: 'Menus', iconKey: 'menu-square', section: 'admin', sortOrder: 4, enabled: true },
+        {
+          id: 'workloads',
+          path: '/workloads',
+          labelZh: '工作负载',
+          labelEn: 'Workloads',
+          iconKey: 'boxes',
+          section: 'platform',
+          sortOrder: 1,
+          enabled: true,
+        },
+        {
+          id: 'system',
+          path: '/system',
+          labelZh: '系统管理',
+          labelEn: 'System',
+          iconKey: 'panels-top-left',
+          section: 'admin',
+          sortOrder: 3,
+          enabled: true,
+        },
+        {
+          id: 'menus',
+          parentId: 'system',
+          path: '/system/menus',
+          labelZh: '菜单管理',
+          labelEn: 'Menus',
+          iconKey: 'menu-square',
+          section: 'admin',
+          sortOrder: 4,
+          enabled: true,
+        },
       ],
     })
 
@@ -442,8 +845,26 @@ describe('app layout workspace navigation', () => {
       permissionKeys: ['workspace.resource.view', 'overview.view', 'platform.workloads.view'],
       visibleMenuIds: ['dashboard', 'workloads'],
       visibleMenus: [
-        { id: 'dashboard', path: '/', labelZh: '概览', labelEn: 'Overview', iconKey: 'gauge', section: '', sortOrder: 1, enabled: true },
-        { id: 'workloads', path: '/workloads', labelZh: '工作负载', labelEn: 'Workloads', iconKey: 'boxes', section: '', sortOrder: 2, enabled: true },
+        {
+          id: 'dashboard',
+          path: '/',
+          labelZh: '概览',
+          labelEn: 'Overview',
+          iconKey: 'gauge',
+          section: '',
+          sortOrder: 1,
+          enabled: true,
+        },
+        {
+          id: 'workloads',
+          path: '/workloads',
+          labelZh: '工作负载',
+          labelEn: 'Workloads',
+          iconKey: 'boxes',
+          section: '',
+          sortOrder: 2,
+          enabled: true,
+        },
       ],
     })
 
@@ -475,15 +896,101 @@ describe('app layout workspace navigation', () => {
         'menus',
       ],
       visibleMenus: [
-        { id: 'dashboard', path: '/', labelZh: '概览', labelEn: 'Overview', iconKey: 'gauge', section: 'platform', sortOrder: 1, enabled: true },
-        { id: 'ai-workbench', path: '/ai-workbench', labelZh: 'AI工作台', labelEn: 'AI Workbench', iconKey: 'bot', section: 'ops', sortOrder: 15, enabled: true },
-        { id: 'ai-workbench-chat', parentId: 'ai-workbench', path: '/ai-workbench/chat', labelZh: '通用聊天', labelEn: 'Chat', iconKey: 'bot', section: 'ops', sortOrder: 16, enabled: true },
-        { id: 'ai-workbench-inspection', parentId: 'ai-workbench', path: '/ai-workbench/inspection', labelZh: '巡检', labelEn: 'Inspection', iconKey: 'bot', section: 'ops', sortOrder: 19, enabled: true },
-        { id: 'ai-workbench-model-settings', parentId: 'ai-workbench', path: '/ai-workbench/model-settings', labelZh: '模型设置', labelEn: 'Model Settings', iconKey: 'bot', section: 'ops', sortOrder: 20, enabled: true },
-        { id: 'monitoring-workbench', path: '/monitoring-workbench', labelZh: '监控工作台', labelEn: 'Monitoring Workbench', iconKey: 'gauge', section: 'ops', sortOrder: 60, enabled: true },
-        { id: 'monitoring-workbench-overview', parentId: 'monitoring-workbench', path: '/monitoring-workbench/overview', labelZh: '总览', labelEn: 'Overview', iconKey: 'gauge', section: 'ops', sortOrder: 61, enabled: true },
-        { id: 'system', path: '/system', labelZh: '系统管理', labelEn: 'System', iconKey: 'panels-top-left', section: 'admin', sortOrder: 99, enabled: true },
-        { id: 'menus', parentId: 'system', path: '/system/menus', labelZh: '菜单管理', labelEn: 'Menus', iconKey: 'menu-square', section: 'admin', sortOrder: 100, enabled: true },
+        {
+          id: 'dashboard',
+          path: '/',
+          labelZh: '概览',
+          labelEn: 'Overview',
+          iconKey: 'gauge',
+          section: 'platform',
+          sortOrder: 1,
+          enabled: true,
+        },
+        {
+          id: 'ai-workbench',
+          path: '/ai-workbench',
+          labelZh: 'AI工作台',
+          labelEn: 'AI Workbench',
+          iconKey: 'bot',
+          section: 'ops',
+          sortOrder: 15,
+          enabled: true,
+        },
+        {
+          id: 'ai-workbench-chat',
+          parentId: 'ai-workbench',
+          path: '/ai-workbench/chat',
+          labelZh: '通用聊天',
+          labelEn: 'Chat',
+          iconKey: 'bot',
+          section: 'ops',
+          sortOrder: 16,
+          enabled: true,
+        },
+        {
+          id: 'ai-workbench-inspection',
+          parentId: 'ai-workbench',
+          path: '/ai-workbench/inspection',
+          labelZh: '巡检',
+          labelEn: 'Inspection',
+          iconKey: 'bot',
+          section: 'ops',
+          sortOrder: 19,
+          enabled: true,
+        },
+        {
+          id: 'ai-workbench-model-settings',
+          parentId: 'ai-workbench',
+          path: '/ai-workbench/model-settings',
+          labelZh: '模型设置',
+          labelEn: 'Model Settings',
+          iconKey: 'bot',
+          section: 'ops',
+          sortOrder: 20,
+          enabled: true,
+        },
+        {
+          id: 'monitoring-workbench',
+          path: '/monitoring-workbench',
+          labelZh: '监控工作台',
+          labelEn: 'Monitoring Workbench',
+          iconKey: 'gauge',
+          section: 'ops',
+          sortOrder: 60,
+          enabled: true,
+        },
+        {
+          id: 'monitoring-workbench-overview',
+          parentId: 'monitoring-workbench',
+          path: '/monitoring-workbench/overview',
+          labelZh: '总览',
+          labelEn: 'Overview',
+          iconKey: 'gauge',
+          section: 'ops',
+          sortOrder: 61,
+          enabled: true,
+        },
+        {
+          id: 'system',
+          path: '/system',
+          labelZh: '系统管理',
+          labelEn: 'System',
+          iconKey: 'panels-top-left',
+          section: 'admin',
+          sortOrder: 99,
+          enabled: true,
+        },
+        {
+          id: 'menus',
+          parentId: 'system',
+          path: '/system/menus',
+          labelZh: '菜单管理',
+          labelEn: 'Menus',
+          iconKey: 'menu-square',
+          section: 'admin',
+          sortOrder: 100,
+          enabled: true,
+        },
       ],
     })
 
@@ -528,26 +1035,183 @@ describe('app layout workspace navigation', () => {
         'menus',
       ],
       visibleMenus: [
-        { id: 'dashboard', path: '/', labelZh: '概览', labelEn: 'Overview', iconKey: 'gauge', section: 'platform', sortOrder: 1, enabled: true },
-        { id: 'ai-workbench', path: '/ai-workbench', labelZh: 'AI工作台', labelEn: 'AI Workbench', iconKey: 'bot', section: 'ops', sortOrder: 15, enabled: true },
-        { id: 'ai-workbench-chat', parentId: 'ai-workbench', path: '/ai-workbench/chat', labelZh: '通用聊天', labelEn: 'Chat', iconKey: 'bot', section: 'ops', sortOrder: 16, enabled: true },
-        { id: 'ai-workbench-inspection', parentId: 'ai-workbench', path: '/ai-workbench/inspection', labelZh: '巡检', labelEn: 'Inspection', iconKey: 'bot', section: 'ops', sortOrder: 19, enabled: true },
-        { id: 'ai-workbench-model-settings', parentId: 'ai-workbench', path: '/ai-workbench/model-settings', labelZh: '模型设置', labelEn: 'Model Settings', iconKey: 'bot', section: 'ops', sortOrder: 20, enabled: true },
-        { id: 'ai-gateway', path: '/ai-gateway', labelZh: 'AI Gateway', labelEn: 'AI Gateway', iconKey: 'shield', section: 'ops', sortOrder: 21, enabled: true },
-        { id: 'ai-gateway-overview', parentId: 'ai-gateway', path: '/ai-gateway/overview', labelZh: '概览', labelEn: 'Overview', iconKey: 'gauge', section: 'ops', sortOrder: 22, enabled: true },
-        { id: 'ai-gateway-manifest', parentId: 'ai-gateway', path: '/ai-gateway/manifest', labelZh: '能力清单', labelEn: 'Manifest', iconKey: 'shield', section: 'ops', sortOrder: 23, enabled: true },
-        { id: 'ai-gateway-clients', parentId: 'ai-gateway', path: '/ai-gateway/clients', labelZh: 'AI Clients', labelEn: 'AI Clients', iconKey: 'link', section: 'ops', sortOrder: 24, enabled: true },
-        { id: 'ai-gateway-tokens', parentId: 'ai-gateway', path: '/ai-gateway/tokens', labelZh: 'Tokens', labelEn: 'Tokens', iconKey: 'key', section: 'ops', sortOrder: 25, enabled: true },
-        { id: 'ai-gateway-governance', parentId: 'ai-gateway', path: '/ai-gateway/governance', labelZh: 'Governance', labelEn: 'Governance', iconKey: 'shield', section: 'ops', sortOrder: 26, enabled: true },
-        { id: 'ai-gateway-call-logs', parentId: 'ai-gateway', path: '/ai-gateway/call-logs', labelZh: '调用日志', labelEn: 'Call Logs', iconKey: 'history', section: 'ops', sortOrder: 27, enabled: true },
-        { id: 'monitoring-workbench', path: '/monitoring-workbench', labelZh: '监控工作台', labelEn: 'Monitoring Workbench', iconKey: 'gauge', section: 'ops', sortOrder: 60, enabled: true },
-        { id: 'monitoring-workbench-overview', parentId: 'monitoring-workbench', path: '/monitoring-workbench/overview', labelZh: '总览', labelEn: 'Overview', iconKey: 'gauge', section: 'ops', sortOrder: 61, enabled: true },
-        { id: 'system', path: '/system', labelZh: '系统管理', labelEn: 'System', iconKey: 'panels-top-left', section: 'admin', sortOrder: 99, enabled: true },
-        { id: 'menus', parentId: 'system', path: '/system/menus', labelZh: '菜单管理', labelEn: 'Menus', iconKey: 'menu-square', section: 'admin', sortOrder: 100, enabled: true },
+        {
+          id: 'dashboard',
+          path: '/',
+          labelZh: '概览',
+          labelEn: 'Overview',
+          iconKey: 'gauge',
+          section: 'platform',
+          sortOrder: 1,
+          enabled: true,
+        },
+        {
+          id: 'ai-workbench',
+          path: '/ai-workbench',
+          labelZh: 'AI工作台',
+          labelEn: 'AI Workbench',
+          iconKey: 'bot',
+          section: 'ops',
+          sortOrder: 15,
+          enabled: true,
+        },
+        {
+          id: 'ai-workbench-chat',
+          parentId: 'ai-workbench',
+          path: '/ai-workbench/chat',
+          labelZh: '通用聊天',
+          labelEn: 'Chat',
+          iconKey: 'bot',
+          section: 'ops',
+          sortOrder: 16,
+          enabled: true,
+        },
+        {
+          id: 'ai-workbench-inspection',
+          parentId: 'ai-workbench',
+          path: '/ai-workbench/inspection',
+          labelZh: '巡检',
+          labelEn: 'Inspection',
+          iconKey: 'bot',
+          section: 'ops',
+          sortOrder: 19,
+          enabled: true,
+        },
+        {
+          id: 'ai-workbench-model-settings',
+          parentId: 'ai-workbench',
+          path: '/ai-workbench/model-settings',
+          labelZh: '模型设置',
+          labelEn: 'Model Settings',
+          iconKey: 'bot',
+          section: 'ops',
+          sortOrder: 20,
+          enabled: true,
+        },
+        {
+          id: 'ai-gateway',
+          path: '/ai-gateway',
+          labelZh: 'AI Gateway',
+          labelEn: 'AI Gateway',
+          iconKey: 'shield',
+          section: 'ops',
+          sortOrder: 21,
+          enabled: true,
+        },
+        {
+          id: 'ai-gateway-overview',
+          parentId: 'ai-gateway',
+          path: '/ai-gateway/overview',
+          labelZh: '概览',
+          labelEn: 'Overview',
+          iconKey: 'gauge',
+          section: 'ops',
+          sortOrder: 22,
+          enabled: true,
+        },
+        {
+          id: 'ai-gateway-manifest',
+          parentId: 'ai-gateway',
+          path: '/ai-gateway/manifest',
+          labelZh: '能力清单',
+          labelEn: 'Manifest',
+          iconKey: 'shield',
+          section: 'ops',
+          sortOrder: 23,
+          enabled: true,
+        },
+        {
+          id: 'ai-gateway-clients',
+          parentId: 'ai-gateway',
+          path: '/ai-gateway/clients',
+          labelZh: 'AI Clients',
+          labelEn: 'AI Clients',
+          iconKey: 'link',
+          section: 'ops',
+          sortOrder: 24,
+          enabled: true,
+        },
+        {
+          id: 'ai-gateway-tokens',
+          parentId: 'ai-gateway',
+          path: '/ai-gateway/tokens',
+          labelZh: 'Tokens',
+          labelEn: 'Tokens',
+          iconKey: 'key',
+          section: 'ops',
+          sortOrder: 25,
+          enabled: true,
+        },
+        {
+          id: 'ai-gateway-governance',
+          parentId: 'ai-gateway',
+          path: '/ai-gateway/governance',
+          labelZh: 'Governance',
+          labelEn: 'Governance',
+          iconKey: 'shield',
+          section: 'ops',
+          sortOrder: 26,
+          enabled: true,
+        },
+        {
+          id: 'ai-gateway-call-logs',
+          parentId: 'ai-gateway',
+          path: '/ai-gateway/call-logs',
+          labelZh: '调用日志',
+          labelEn: 'Call Logs',
+          iconKey: 'history',
+          section: 'ops',
+          sortOrder: 27,
+          enabled: true,
+        },
+        {
+          id: 'monitoring-workbench',
+          path: '/monitoring-workbench',
+          labelZh: '监控工作台',
+          labelEn: 'Monitoring Workbench',
+          iconKey: 'gauge',
+          section: 'ops',
+          sortOrder: 60,
+          enabled: true,
+        },
+        {
+          id: 'monitoring-workbench-overview',
+          parentId: 'monitoring-workbench',
+          path: '/monitoring-workbench/overview',
+          labelZh: '总览',
+          labelEn: 'Overview',
+          iconKey: 'gauge',
+          section: 'ops',
+          sortOrder: 61,
+          enabled: true,
+        },
+        {
+          id: 'system',
+          path: '/system',
+          labelZh: '系统管理',
+          labelEn: 'System',
+          iconKey: 'panels-top-left',
+          section: 'admin',
+          sortOrder: 99,
+          enabled: true,
+        },
+        {
+          id: 'menus',
+          parentId: 'system',
+          path: '/system/menus',
+          labelZh: '菜单管理',
+          labelEn: 'Menus',
+          iconKey: 'menu-square',
+          section: 'admin',
+          sortOrder: 100,
+          enabled: true,
+        },
       ],
     })
 
-    expect(container.querySelector('.soha-workbench-switcher__label')?.textContent).toBe('AI Gateway')
+    expect(container.querySelector('.soha-workbench-switcher__label')?.textContent).toBe(
+      'AI Gateway',
+    )
     expect(container.querySelector('.soha-nav-business')).not.toBeNull()
     const businessMenu = container.querySelector('.soha-nav-menu')
     expect(businessMenu?.querySelector('.ant-menu-submenu')).toBeNull()
@@ -588,27 +1252,127 @@ describe('app layout workspace navigation', () => {
         'menus',
       ],
       visibleMenus: [
-        { id: 'dashboard', path: '/', labelZh: '概览', labelEn: 'Overview', iconKey: 'gauge', section: 'platform', sortOrder: 1, enabled: true },
-        { id: 'virtualization-workbench', path: '/virtualization', labelZh: '虚拟化管理工作台', labelEn: 'Virtualization Workbench', iconKey: 'server', section: 'ops', sortOrder: 10, enabled: true },
-        { id: 'virtualization-workbench-overview', parentId: 'virtualization-workbench', path: '/virtualization/overview', labelZh: '总览', labelEn: 'Overview', iconKey: 'server', section: 'ops', sortOrder: 11, enabled: true },
-        { id: 'virtualization-workbench-vms', parentId: 'virtualization-workbench', path: '/virtualization/vms', labelZh: '虚拟机', labelEn: 'Virtual Machines', iconKey: 'server', section: 'ops', sortOrder: 12, enabled: true },
-        { id: 'virtualization-workbench-operations', parentId: 'virtualization-workbench', path: '/virtualization/operations', labelZh: '操作记录', labelEn: 'Operations', iconKey: 'file-clock', section: 'ops', sortOrder: 13, enabled: true },
-        { id: 'virtualization-workbench-sync', parentId: 'virtualization-workbench', path: '/virtualization/sync', labelZh: '同步任务', labelEn: 'Sync', iconKey: 'activity', section: 'ops', sortOrder: 14, enabled: true },
-        { id: 'monitoring-workbench', path: '/monitoring-workbench', labelZh: '监控工作台', labelEn: 'Monitoring Workbench', iconKey: 'gauge', section: 'ops', sortOrder: 60, enabled: true },
-        { id: 'monitoring-workbench-overview', parentId: 'monitoring-workbench', path: '/monitoring-workbench/overview', labelZh: '总览', labelEn: 'Overview', iconKey: 'gauge', section: 'ops', sortOrder: 61, enabled: true },
-        { id: 'system', path: '/system', labelZh: '系统管理', labelEn: 'System', iconKey: 'panels-top-left', section: 'admin', sortOrder: 99, enabled: true },
-        { id: 'menus', parentId: 'system', path: '/system/menus', labelZh: '菜单管理', labelEn: 'Menus', iconKey: 'menu-square', section: 'admin', sortOrder: 100, enabled: true },
+        {
+          id: 'dashboard',
+          path: '/',
+          labelZh: '概览',
+          labelEn: 'Overview',
+          iconKey: 'gauge',
+          section: 'platform',
+          sortOrder: 1,
+          enabled: true,
+        },
+        {
+          id: 'virtualization-workbench',
+          path: '/virtualization',
+          labelZh: '虚拟化管理工作台',
+          labelEn: 'Virtualization Workbench',
+          iconKey: 'server',
+          section: 'ops',
+          sortOrder: 10,
+          enabled: true,
+        },
+        {
+          id: 'virtualization-workbench-overview',
+          parentId: 'virtualization-workbench',
+          path: '/virtualization/overview',
+          labelZh: '总览',
+          labelEn: 'Overview',
+          iconKey: 'server',
+          section: 'ops',
+          sortOrder: 11,
+          enabled: true,
+        },
+        {
+          id: 'virtualization-workbench-vms',
+          parentId: 'virtualization-workbench',
+          path: '/virtualization/vms',
+          labelZh: '虚拟机',
+          labelEn: 'Virtual Machines',
+          iconKey: 'server',
+          section: 'ops',
+          sortOrder: 12,
+          enabled: true,
+        },
+        {
+          id: 'virtualization-workbench-operations',
+          parentId: 'virtualization-workbench',
+          path: '/virtualization/operations',
+          labelZh: '操作记录',
+          labelEn: 'Operations',
+          iconKey: 'file-clock',
+          section: 'ops',
+          sortOrder: 13,
+          enabled: true,
+        },
+        {
+          id: 'virtualization-workbench-sync',
+          parentId: 'virtualization-workbench',
+          path: '/virtualization/sync',
+          labelZh: '同步任务',
+          labelEn: 'Sync',
+          iconKey: 'activity',
+          section: 'ops',
+          sortOrder: 14,
+          enabled: true,
+        },
+        {
+          id: 'monitoring-workbench',
+          path: '/monitoring-workbench',
+          labelZh: '监控工作台',
+          labelEn: 'Monitoring Workbench',
+          iconKey: 'gauge',
+          section: 'ops',
+          sortOrder: 60,
+          enabled: true,
+        },
+        {
+          id: 'monitoring-workbench-overview',
+          parentId: 'monitoring-workbench',
+          path: '/monitoring-workbench/overview',
+          labelZh: '总览',
+          labelEn: 'Overview',
+          iconKey: 'gauge',
+          section: 'ops',
+          sortOrder: 61,
+          enabled: true,
+        },
+        {
+          id: 'system',
+          path: '/system',
+          labelZh: '系统管理',
+          labelEn: 'System',
+          iconKey: 'panels-top-left',
+          section: 'admin',
+          sortOrder: 99,
+          enabled: true,
+        },
+        {
+          id: 'menus',
+          parentId: 'system',
+          path: '/system/menus',
+          labelZh: '菜单管理',
+          labelEn: 'Menus',
+          iconKey: 'menu-square',
+          section: 'admin',
+          sortOrder: 100,
+          enabled: true,
+        },
       ],
     })
 
-    expect(container.querySelector('.soha-workbench-switcher__label')?.textContent).toBe('虚拟化管理工作台')
-    expect(container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent).toContain('虚拟化管理工作台/虚拟机')
+    expect(container.querySelector('.soha-workbench-switcher__label')?.textContent).toBe(
+      '虚拟化管理工作台',
+    )
+    expect(container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent).toContain(
+      '虚拟化管理工作台/虚拟机',
+    )
     expect(container.querySelector('.soha-nav-business')).not.toBeNull()
     expect(container.textContent).toContain('虚拟机')
     expect(container.textContent).toContain('操作记录')
     expect(container.textContent).toContain('同步任务')
     const businessNavText = container.querySelector('.soha-nav-business')?.textContent ?? ''
-    expect((businessNavText.match(/虚拟化/g) ?? [])).toHaveLength(0)
+    expect(businessNavText.match(/虚拟化/g) ?? []).toHaveLength(0)
     expect(businessNavText).not.toContain('Observe')
     expect(container.textContent).not.toContain('监控工作台')
     expect(container.textContent).not.toContain('系统管理')
@@ -632,18 +1396,76 @@ describe('app layout workspace navigation', () => {
         'menus',
       ],
       visibleMenus: [
-        { id: 'dashboard', path: '/', labelZh: '概览', labelEn: 'Overview', iconKey: 'gauge', section: 'platform', sortOrder: 1, enabled: true },
-        { id: 'virtualization-workbench', path: '/virtualization', labelZh: '虚拟化管理工作台', labelEn: 'Virtualization Workbench', iconKey: 'server', section: 'ops', sortOrder: 10, enabled: true },
-        { id: 'virtualization-workbench-overview', parentId: 'virtualization-workbench', path: '/virtualization/overview', labelZh: '总览', labelEn: 'Overview', iconKey: 'server', section: 'ops', sortOrder: 11, enabled: true },
-        { id: 'virtualization-workbench-vms', parentId: 'virtualization-workbench', path: '/virtualization/vms', labelZh: '虚拟机', labelEn: 'Virtual Machines', iconKey: 'server', section: 'ops', sortOrder: 12, enabled: true },
-        { id: 'system', path: '/system', labelZh: '系统管理', labelEn: 'System', iconKey: 'panels-top-left', section: 'admin', sortOrder: 99, enabled: true },
-        { id: 'menus', parentId: 'system', path: '/system/menus', labelZh: '菜单管理', labelEn: 'Menus', iconKey: 'menu-square', section: 'admin', sortOrder: 100, enabled: true },
+        {
+          id: 'dashboard',
+          path: '/',
+          labelZh: '概览',
+          labelEn: 'Overview',
+          iconKey: 'gauge',
+          section: 'platform',
+          sortOrder: 1,
+          enabled: true,
+        },
+        {
+          id: 'virtualization-workbench',
+          path: '/virtualization',
+          labelZh: '虚拟化管理工作台',
+          labelEn: 'Virtualization Workbench',
+          iconKey: 'server',
+          section: 'ops',
+          sortOrder: 10,
+          enabled: true,
+        },
+        {
+          id: 'virtualization-workbench-overview',
+          parentId: 'virtualization-workbench',
+          path: '/virtualization/overview',
+          labelZh: '总览',
+          labelEn: 'Overview',
+          iconKey: 'server',
+          section: 'ops',
+          sortOrder: 11,
+          enabled: true,
+        },
+        {
+          id: 'virtualization-workbench-vms',
+          parentId: 'virtualization-workbench',
+          path: '/virtualization/vms',
+          labelZh: '虚拟机',
+          labelEn: 'Virtual Machines',
+          iconKey: 'server',
+          section: 'ops',
+          sortOrder: 12,
+          enabled: true,
+        },
+        {
+          id: 'system',
+          path: '/system',
+          labelZh: '系统管理',
+          labelEn: 'System',
+          iconKey: 'panels-top-left',
+          section: 'admin',
+          sortOrder: 99,
+          enabled: true,
+        },
+        {
+          id: 'menus',
+          parentId: 'system',
+          path: '/system/menus',
+          labelZh: '菜单管理',
+          labelEn: 'Menus',
+          iconKey: 'menu-square',
+          section: 'admin',
+          sortOrder: 100,
+          enabled: true,
+        },
       ],
     })
 
-    const breadcrumbText = container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent ?? ''
+    const breadcrumbText =
+      container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent ?? ''
     expect(breadcrumbText).toContain('虚拟化管理工作台/总览')
-    expect((breadcrumbText.match(/虚拟化管理工作台/g) ?? [])).toHaveLength(1)
+    expect(breadcrumbText.match(/虚拟化管理工作台/g) ?? []).toHaveLength(1)
   })
 
   it('renders breadcrumb ancestry for nested route content', async () => {
@@ -664,16 +1486,75 @@ describe('app layout workspace navigation', () => {
         'menus',
       ],
       visibleMenus: [
-        { id: 'dashboard', path: '/', labelZh: '概览', labelEn: 'Overview', iconKey: 'gauge', section: 'platform', sortOrder: 1, enabled: true },
-        { id: 'virtualization-workbench', path: '/virtualization', labelZh: '虚拟化管理工作台', labelEn: 'Virtualization Workbench', iconKey: 'server', section: 'ops', sortOrder: 10, enabled: true },
-        { id: 'virtualization-workbench-overview', parentId: 'virtualization-workbench', path: '/virtualization/overview', labelZh: '总览', labelEn: 'Overview', iconKey: 'server', section: 'ops', sortOrder: 11, enabled: true },
-        { id: 'virtualization-workbench-vms', parentId: 'virtualization-workbench', path: '/virtualization/vms', labelZh: '虚拟机', labelEn: 'Virtual Machines', iconKey: 'server', section: 'ops', sortOrder: 12, enabled: true },
-        { id: 'system', path: '/system', labelZh: '系统管理', labelEn: 'System', iconKey: 'panels-top-left', section: 'admin', sortOrder: 99, enabled: true },
-        { id: 'menus', parentId: 'system', path: '/system/menus', labelZh: '菜单管理', labelEn: 'Menus', iconKey: 'menu-square', section: 'admin', sortOrder: 100, enabled: true },
+        {
+          id: 'dashboard',
+          path: '/',
+          labelZh: '概览',
+          labelEn: 'Overview',
+          iconKey: 'gauge',
+          section: 'platform',
+          sortOrder: 1,
+          enabled: true,
+        },
+        {
+          id: 'virtualization-workbench',
+          path: '/virtualization',
+          labelZh: '虚拟化管理工作台',
+          labelEn: 'Virtualization Workbench',
+          iconKey: 'server',
+          section: 'ops',
+          sortOrder: 10,
+          enabled: true,
+        },
+        {
+          id: 'virtualization-workbench-overview',
+          parentId: 'virtualization-workbench',
+          path: '/virtualization/overview',
+          labelZh: '总览',
+          labelEn: 'Overview',
+          iconKey: 'server',
+          section: 'ops',
+          sortOrder: 11,
+          enabled: true,
+        },
+        {
+          id: 'virtualization-workbench-vms',
+          parentId: 'virtualization-workbench',
+          path: '/virtualization/vms',
+          labelZh: '虚拟机',
+          labelEn: 'Virtual Machines',
+          iconKey: 'server',
+          section: 'ops',
+          sortOrder: 12,
+          enabled: true,
+        },
+        {
+          id: 'system',
+          path: '/system',
+          labelZh: '系统管理',
+          labelEn: 'System',
+          iconKey: 'panels-top-left',
+          section: 'admin',
+          sortOrder: 99,
+          enabled: true,
+        },
+        {
+          id: 'menus',
+          parentId: 'system',
+          path: '/system/menus',
+          labelZh: '菜单管理',
+          labelEn: 'Menus',
+          iconKey: 'menu-square',
+          section: 'admin',
+          sortOrder: 100,
+          enabled: true,
+        },
       ],
     })
 
-    expect(container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent).toContain('虚拟化管理工作台/虚拟机/虚拟机详情')
+    expect(container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent).toContain(
+      '虚拟化管理工作台/虚拟机/虚拟机详情',
+    )
   })
 
   it('shows docker workbench menus directly in the business sidebar', async () => {
@@ -698,36 +1579,157 @@ describe('app layout workspace navigation', () => {
         'menus',
       ],
       visibleMenus: [
-        { id: 'dashboard', path: '/', labelZh: '概览', labelEn: 'Overview', iconKey: 'gauge', section: 'platform', sortOrder: 1, enabled: true },
-        { id: 'docker-workbench', path: '/docker', labelZh: 'Docker 工作台', labelEn: 'Docker Workbench', iconKey: 'docker', section: 'ops', sortOrder: 20, enabled: true },
-        { id: 'docker-workbench-overview', parentId: 'docker-workbench', path: '/docker/overview', labelZh: '总览', labelEn: 'Overview', iconKey: 'gauge', section: 'ops', sortOrder: 21, enabled: true },
-        { id: 'docker-workbench-hosts', parentId: 'docker-workbench', path: '/docker/hosts', labelZh: 'Docker 主机', labelEn: 'Docker Hosts', iconKey: 'server', section: 'ops', sortOrder: 22, enabled: true },
-        { id: 'docker-workbench-projects', parentId: 'docker-workbench', path: '/docker/projects', labelZh: '容器管理', labelEn: 'Container Management', iconKey: 'docker', section: 'ops', sortOrder: 23, enabled: true },
-        { id: 'docker-workbench-operations', parentId: 'docker-workbench', path: '/docker/operations', labelZh: '操作记录', labelEn: 'Operations', iconKey: 'history', section: 'ops', sortOrder: 24, enabled: true },
-        { id: 'system', path: '/system', labelZh: '系统管理', labelEn: 'System', iconKey: 'panels-top-left', section: 'admin', sortOrder: 99, enabled: true },
-        { id: 'menus', parentId: 'system', path: '/system/menus', labelZh: '菜单管理', labelEn: 'Menus', iconKey: 'menu-square', section: 'admin', sortOrder: 100, enabled: true },
+        {
+          id: 'dashboard',
+          path: '/',
+          labelZh: '概览',
+          labelEn: 'Overview',
+          iconKey: 'gauge',
+          section: 'platform',
+          sortOrder: 1,
+          enabled: true,
+        },
+        {
+          id: 'docker-workbench',
+          path: '/docker',
+          labelZh: 'Docker 工作台',
+          labelEn: 'Docker Workbench',
+          iconKey: 'docker',
+          section: 'ops',
+          sortOrder: 20,
+          enabled: true,
+        },
+        {
+          id: 'docker-workbench-overview',
+          parentId: 'docker-workbench',
+          path: '/docker/overview',
+          labelZh: '总览',
+          labelEn: 'Overview',
+          iconKey: 'gauge',
+          section: 'ops',
+          sortOrder: 21,
+          enabled: true,
+        },
+        {
+          id: 'docker-workbench-hosts',
+          parentId: 'docker-workbench',
+          path: '/docker/hosts',
+          labelZh: 'Docker 主机',
+          labelEn: 'Docker Hosts',
+          iconKey: 'server',
+          section: 'ops',
+          sortOrder: 22,
+          enabled: true,
+        },
+        {
+          id: 'docker-workbench-projects',
+          parentId: 'docker-workbench',
+          path: '/docker/projects',
+          labelZh: '容器管理',
+          labelEn: 'Container Management',
+          iconKey: 'docker',
+          section: 'ops',
+          sortOrder: 23,
+          enabled: true,
+        },
+        {
+          id: 'docker-workbench-operations',
+          parentId: 'docker-workbench',
+          path: '/docker/operations',
+          labelZh: '操作记录',
+          labelEn: 'Operations',
+          iconKey: 'history',
+          section: 'ops',
+          sortOrder: 24,
+          enabled: true,
+        },
+        {
+          id: 'system',
+          path: '/system',
+          labelZh: '系统管理',
+          labelEn: 'System',
+          iconKey: 'panels-top-left',
+          section: 'admin',
+          sortOrder: 99,
+          enabled: true,
+        },
+        {
+          id: 'menus',
+          parentId: 'system',
+          path: '/system/menus',
+          labelZh: '菜单管理',
+          labelEn: 'Menus',
+          iconKey: 'menu-square',
+          section: 'admin',
+          sortOrder: 100,
+          enabled: true,
+        },
       ],
     })
 
-    expect(container.querySelector('.soha-workbench-switcher__label')?.textContent).toBe('Docker 工作台')
+    expect(container.querySelector('.soha-workbench-switcher__label')?.textContent).toBe(
+      'Docker 工作台',
+    )
     expect(container.querySelector('.soha-nav-business')).not.toBeNull()
     expect(container.textContent).toContain('Docker 主机')
     expect(container.textContent).toContain('容器管理')
     expect(container.textContent).toContain('操作记录')
     const businessNavText = container.querySelector('.soha-nav-business')?.textContent ?? ''
-    expect((businessNavText.match(/Docker 工作台/g) ?? [])).toHaveLength(0)
+    expect(businessNavText.match(/Docker 工作台/g) ?? []).toHaveLength(0)
     expect(container.textContent).not.toContain('系统管理')
   })
 
   it('keeps settings out of the header and routes system navigation through the main sidebar', async () => {
     const container = await renderWithProviders('/', {
-      permissionKeys: ['workspace.resource.view', 'overview.view', 'settings.identity.view', 'system.menus.view'],
+      permissionKeys: [
+        'workspace.resource.view',
+        'overview.view',
+        'settings.identity.view',
+        'system.menus.view',
+      ],
       visibleMenuIds: ['dashboard', 'settings', 'system', 'menus'],
       visibleMenus: [
-        { id: 'dashboard', path: '/', labelZh: '概览', labelEn: 'Overview', iconKey: 'gauge', section: 'platform', sortOrder: 1, enabled: true },
-        { id: 'settings', path: '/settings', labelZh: '设置中心', labelEn: 'Settings', iconKey: 'settings', section: 'admin', sortOrder: 2, enabled: true },
-        { id: 'system', path: '/system', labelZh: '系统管理', labelEn: 'System', iconKey: 'panels-top-left', section: 'admin', sortOrder: 3, enabled: true },
-        { id: 'menus', parentId: 'system', path: '/system/menus', labelZh: '菜单管理', labelEn: 'Menus', iconKey: 'menu-square', section: 'admin', sortOrder: 4, enabled: true },
+        {
+          id: 'dashboard',
+          path: '/',
+          labelZh: '概览',
+          labelEn: 'Overview',
+          iconKey: 'gauge',
+          section: 'platform',
+          sortOrder: 1,
+          enabled: true,
+        },
+        {
+          id: 'settings',
+          path: '/settings',
+          labelZh: '设置中心',
+          labelEn: 'Settings',
+          iconKey: 'settings',
+          section: 'admin',
+          sortOrder: 2,
+          enabled: true,
+        },
+        {
+          id: 'system',
+          path: '/system',
+          labelZh: '系统管理',
+          labelEn: 'System',
+          iconKey: 'panels-top-left',
+          section: 'admin',
+          sortOrder: 3,
+          enabled: true,
+        },
+        {
+          id: 'menus',
+          parentId: 'system',
+          path: '/system/menus',
+          labelZh: '菜单管理',
+          labelEn: 'Menus',
+          iconKey: 'menu-square',
+          section: 'admin',
+          sortOrder: 4,
+          enabled: true,
+        },
       ],
     })
 
@@ -745,8 +1747,9 @@ describe('app layout workspace navigation', () => {
       await Promise.resolve()
     })
 
-    const profileItem = Array.from(document.querySelectorAll('.ant-dropdown-menu-item'))
-      .find((item) => item.textContent?.includes('个人中心')) as HTMLElement | undefined
+    const profileItem = Array.from(document.querySelectorAll('.ant-dropdown-menu-item')).find(
+      (item) => item.textContent?.includes('个人中心'),
+    ) as HTMLElement | undefined
     expect(profileItem).not.toBeUndefined()
 
     await act(async () => {
@@ -754,25 +1757,83 @@ describe('app layout workspace navigation', () => {
       await Promise.resolve()
     })
 
-    expect(container.querySelector('[data-testid="page"]')?.getAttribute('data-pathname')).toBe('/account/profile')
+    expect(container.querySelector('[data-testid="page"]')?.getAttribute('data-pathname')).toBe(
+      '/account/profile',
+    )
     expect(testState.auth.clearAuth).not.toHaveBeenCalled()
   })
 
   it('places account profile breadcrumbs under settings center', async () => {
     const container = await renderWithProviders('/account/profile', {
       permissionKeys: ['workspace.resource.view', 'overview.view', 'settings.identity.view'],
-      visibleMenuIds: ['dashboard', 'settings', 'account-profile', 'settings-about', 'settings-login'],
+      visibleMenuIds: [
+        'dashboard',
+        'settings',
+        'account-profile',
+        'settings-about',
+        'settings-login',
+      ],
       visibleMenus: [
-        { id: 'dashboard', path: '/', labelZh: '概览', labelEn: 'Overview', iconKey: 'gauge', section: 'platform', sortOrder: 1, enabled: true },
-        { id: 'settings', path: '/settings', labelZh: '设置中心', labelEn: 'Settings Center', iconKey: 'settings', section: 'admin', sortOrder: 2, enabled: true },
-        { id: 'account-profile', parentId: 'settings', path: '/account/profile', labelZh: '个人中心', labelEn: 'Profile', iconKey: 'user', section: 'account', sortOrder: 1, enabled: true },
-        { id: 'settings-about', parentId: 'settings', path: '/settings/about', labelZh: '关于', labelEn: 'About', iconKey: 'info', section: 'account', sortOrder: 2, enabled: true },
-        { id: 'settings-login', parentId: 'settings', path: '/settings/login', labelZh: '登陆设置', labelEn: 'Login Settings', iconKey: 'shield', section: 'admin', sortOrder: 3, enabled: true },
+        {
+          id: 'dashboard',
+          path: '/',
+          labelZh: '概览',
+          labelEn: 'Overview',
+          iconKey: 'gauge',
+          section: 'platform',
+          sortOrder: 1,
+          enabled: true,
+        },
+        {
+          id: 'settings',
+          path: '/settings',
+          labelZh: '设置中心',
+          labelEn: 'Settings Center',
+          iconKey: 'settings',
+          section: 'admin',
+          sortOrder: 2,
+          enabled: true,
+        },
+        {
+          id: 'account-profile',
+          parentId: 'settings',
+          path: '/account/profile',
+          labelZh: '个人中心',
+          labelEn: 'Profile',
+          iconKey: 'user',
+          section: 'account',
+          sortOrder: 1,
+          enabled: true,
+        },
+        {
+          id: 'settings-about',
+          parentId: 'settings',
+          path: '/settings/about',
+          labelZh: '关于',
+          labelEn: 'About',
+          iconKey: 'info',
+          section: 'account',
+          sortOrder: 2,
+          enabled: true,
+        },
+        {
+          id: 'settings-login',
+          parentId: 'settings',
+          path: '/settings/login',
+          labelZh: '登陆设置',
+          labelEn: 'Login Settings',
+          iconKey: 'shield',
+          section: 'admin',
+          sortOrder: 3,
+          enabled: true,
+        },
       ],
     })
 
     expect(container.querySelector('.soha-workbench-switcher__label')?.textContent).toBe('设置中心')
-    expect(container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent).toContain('设置中心/个人中心')
+    expect(container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent).toContain(
+      '设置中心/个人中心',
+    )
   })
 
   it('opens password change from the avatar dropdown', async () => {
@@ -785,8 +1846,9 @@ describe('app layout workspace navigation', () => {
       await Promise.resolve()
     })
 
-    const passwordItem = Array.from(document.querySelectorAll('.ant-dropdown-menu-item'))
-      .find((item) => item.textContent?.includes('修改密码')) as HTMLElement | undefined
+    const passwordItem = Array.from(document.querySelectorAll('.ant-dropdown-menu-item')).find(
+      (item) => item.textContent?.includes('修改密码'),
+    ) as HTMLElement | undefined
     expect(passwordItem).not.toBeUndefined()
 
     await act(async () => {
@@ -800,7 +1862,7 @@ describe('app layout workspace navigation', () => {
     expect(testState.auth.clearAuth).not.toHaveBeenCalled()
   })
 
-  it('opens portal and about from the avatar dropdown', async () => {
+  it('opens portal without showing about in the avatar dropdown', async () => {
     const container = await renderWithProviders('/')
     const userButton = container.querySelector('.soha-user-trigger') as HTMLButtonElement | null
     expect(userButton).not.toBeNull()
@@ -810,32 +1872,24 @@ describe('app layout workspace navigation', () => {
       await Promise.resolve()
     })
 
-    const portalItem = Array.from(document.querySelectorAll('.ant-dropdown-menu-item'))
-      .find((item) => item.textContent?.includes('用户门户')) as HTMLElement | undefined
+    const portalItem = Array.from(document.querySelectorAll('.ant-dropdown-menu-item')).find(
+      (item) => item.textContent?.includes('门户首页'),
+    ) as HTMLElement | undefined
     expect(portalItem).not.toBeUndefined()
+    expect(
+      Array.from(document.querySelectorAll('.ant-dropdown-menu-item')).some((item) =>
+        item.textContent?.includes('关于'),
+      ),
+    ).toBe(false)
 
     await act(async () => {
       portalItem?.click()
       await Promise.resolve()
     })
 
-    expect(container.querySelector('[data-testid="page"]')?.getAttribute('data-pathname')).toBe('/portal')
-
-    await act(async () => {
-      userButton?.click()
-      await Promise.resolve()
-    })
-
-    const aboutItem = Array.from(document.querySelectorAll('.ant-dropdown-menu-item'))
-      .find((item) => item.textContent?.includes('关于')) as HTMLElement | undefined
-    expect(aboutItem).not.toBeUndefined()
-
-    await act(async () => {
-      aboutItem?.click()
-      await Promise.resolve()
-    })
-
-    expect(container.querySelector('[data-testid="page"]')?.getAttribute('data-pathname')).toBe('/settings/about')
+    expect(container.querySelector('[data-testid="page"]')?.getAttribute('data-pathname')).toBe(
+      '/portal',
+    )
     expect(testState.auth.clearAuth).not.toHaveBeenCalled()
   })
 })

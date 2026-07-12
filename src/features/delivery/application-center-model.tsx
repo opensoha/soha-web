@@ -2,17 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { App, Button, Form, Input, Modal, Select, Switch } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
-import { api } from '@/services/api-client'
-import type {
-  ApiResponse,
-  ApplicationEnvironment,
-  BuildSource,
-  Cluster,
-  DeliveryApplication,
-  DeliveryTargetCandidate,
-  WorkflowTemplate,
-} from '@/types'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { deliveryMutations } from './mutations'
+import { deliveryQueries } from './queries'
+import type { ApplicationEnvironment, BuildSource, DeliveryApplication } from './types'
 
 function parseJSONObject(raw: unknown, field: string) {
   const value = typeof raw === 'string' ? raw.trim() : ''
@@ -77,7 +70,9 @@ export function buildApplicationGroupOptions(apps: DeliveryApplication[] = []) {
   return Array.from(new Set(apps.flatMap((app) => splitApplicationGroups(app.group))))
 }
 
-function applicationEnvironmentLabel(binding: Pick<ApplicationEnvironment, 'environmentKey' | 'environmentId'>) {
+function applicationEnvironmentLabel(
+  binding: Pick<ApplicationEnvironment, 'environmentKey' | 'environmentId'>,
+) {
   return binding.environmentKey || binding.environmentId || '-'
 }
 
@@ -88,7 +83,9 @@ function normalizeEnvironmentFormValue(value: unknown) {
   return String(value || '').trim()
 }
 
-function initialEnvironmentFormValue(binding: Pick<ApplicationEnvironment, 'environmentKey' | 'environmentId'>) {
+function initialEnvironmentFormValue(
+  binding: Pick<ApplicationEnvironment, 'environmentKey' | 'environmentId'>,
+) {
   const label = applicationEnvironmentLabel(binding)
   return label === '-' ? [] : [label]
 }
@@ -109,25 +106,13 @@ export function useApplicationCenterState() {
   const [buildSources, setBuildSources] = useState<BuildSource[]>([])
   const [selectedApplicationId, setSelectedApplicationId] = useState<string>('')
 
-  const applicationsQuery = useQuery({
-    queryKey: ['applications'],
-    queryFn: () => api.get<ApiResponse<DeliveryApplication[]>>('/applications'),
-  })
-  const bindingsQuery = useQuery({
-    queryKey: ['application-environments'],
-    queryFn: () => api.get<ApiResponse<ApplicationEnvironment[]>>('/application-environments'),
-  })
-  const workflowTemplatesQuery = useQuery({
-    queryKey: ['workflow-templates'],
-    queryFn: () => api.get<ApiResponse<WorkflowTemplate[]>>('/workflow-templates'),
-  })
-  const clustersQuery = useQuery({
-    queryKey: ['clusters'],
-    queryFn: () => api.get<ApiResponse<Cluster[]>>('/clusters'),
-  })
+  const applicationsQuery = useQuery(deliveryQueries.applications.list())
+  const bindingsQuery = useQuery(deliveryQueries.environments.list())
+  const workflowTemplatesQuery = useQuery(deliveryQueries.workflowTemplates.list())
+  const clustersQuery = useQuery(deliveryQueries.dependencies.clusters())
 
   useEffect(() => {
-    const appList = applicationsQuery.data?.data ?? []
+    const appList = applicationsQuery.data ?? []
     if (applicationId && appList.some((item) => item.id === applicationId)) {
       if (selectedApplicationId !== applicationId) {
         setSelectedApplicationId(applicationId)
@@ -140,115 +125,115 @@ export function useApplicationCenterState() {
   }, [applicationId, applicationsQuery.data, selectedApplicationId])
 
   const selectedApplication = useMemo(
-    () => (applicationsQuery.data?.data ?? []).find((item) => item.id === selectedApplicationId) ?? null,
+    () => (applicationsQuery.data ?? []).find((item) => item.id === selectedApplicationId) ?? null,
     [applicationsQuery.data, selectedApplicationId],
   )
   const filteredBindings = useMemo(
-    () => (bindingsQuery.data?.data ?? []).filter((item) => !selectedApplicationId || item.applicationId === selectedApplicationId),
+    () =>
+      (bindingsQuery.data ?? []).filter(
+        (item) => !selectedApplicationId || item.applicationId === selectedApplicationId,
+      ),
     [bindingsQuery.data, selectedApplicationId],
   )
   const workflowTemplateMap = useMemo(
-    () => Object.fromEntries((workflowTemplatesQuery.data?.data ?? []).map((item) => [item.id, item])),
+    () => Object.fromEntries((workflowTemplatesQuery.data ?? []).map((item) => [item.id, item])),
     [workflowTemplatesQuery.data],
   )
   const applicationGroupOptions = useMemo(
-    () => buildApplicationGroupOptions(applicationsQuery.data?.data ?? []),
+    () => buildApplicationGroupOptions(applicationsQuery.data ?? []),
     [applicationsQuery.data],
   )
   const applicationEnvironmentOptions = useMemo(() => {
-    return Array.from(new Set(filteredBindings.map(applicationEnvironmentLabel).filter((item) => item !== '-')))
-      .map((item) => ({ value: item, label: item }))
+    return Array.from(
+      new Set(filteredBindings.map(applicationEnvironmentLabel).filter((item) => item !== '-')),
+    ).map((item) => ({ value: item, label: item }))
   }, [filteredBindings])
 
   const selectedClusterId = Form.useWatch('targetClusterId', bindingForm) as string | undefined
   const selectedNamespace = Form.useWatch('targetNamespace', bindingForm) as string | undefined
 
-  const targetCandidatesQuery = useQuery({
-    queryKey: ['management-target-candidates', selectedClusterId, selectedNamespace],
-    queryFn: () => api.get<ApiResponse<DeliveryTargetCandidate[]>>(`/application-environments/target-candidates?clusterId=${encodeURIComponent(selectedClusterId || '')}&namespace=${encodeURIComponent(selectedNamespace || '')}`),
-    enabled: !!selectedClusterId && !!selectedNamespace && bindingModalVisible,
-  })
+  const targetCandidatesQuery = useQuery(
+    deliveryQueries.environments.targetCandidates(
+      {
+        clusterId: selectedClusterId ?? '',
+        namespace: selectedNamespace ?? '',
+      },
+      Boolean(selectedClusterId && selectedNamespace && bindingModalVisible),
+    ),
+  )
 
   const canCreateApplication = hasPermission(permissionSnapshot, 'delivery.application.create')
   const canUpdateApplication = hasPermission(permissionSnapshot, 'delivery.application.update')
   const canDeleteApplication = hasPermission(permissionSnapshot, 'delivery.application.delete')
-  const canManageBindings = hasPermission(permissionSnapshot, 'delivery.application-environments.manage')
+  const canManageBindings = hasPermission(
+    permissionSnapshot,
+    'delivery.application-environments.manage',
+  )
 
+  const createAppOptions = deliveryMutations.applications.create(queryClient)
   const createAppMutation = useMutation({
-    mutationFn: (values: Record<string, unknown>) => api.post<ApiResponse<DeliveryApplication>>('/applications', values),
-    onSuccess: (result: ApiResponse<DeliveryApplication>) => {
+    ...createAppOptions,
+    onSuccess: (result, variables, onMutateResult, context) => {
+      void createAppOptions.onSuccess?.(result, variables, onMutateResult, context)
       message.success('应用创建成功')
-      void queryClient.invalidateQueries({ queryKey: ['applications'] })
-      void queryClient.invalidateQueries({ queryKey: ['application-detail', result.data?.id || selectedApplicationId] })
-      void queryClient.invalidateQueries({ queryKey: ['application-runtime', result.data?.id || selectedApplicationId] })
-      setSelectedApplicationId(result.data?.id || '')
+      setSelectedApplicationId(result.id || '')
       setAppModalVisible(false)
     },
     onError: (err: Error) => message.error(err.message),
   })
 
+  const updateAppOptions = deliveryMutations.applications.update(queryClient)
   const updateAppMutation = useMutation({
-    mutationFn: ({ id, values }: { id: string; values: Record<string, unknown> }) => api.put(`/applications/${id}`, values),
-    onSuccess: () => {
+    ...updateAppOptions,
+    onSuccess: (result, variables, onMutateResult, context) => {
+      void updateAppOptions.onSuccess?.(result, variables, onMutateResult, context)
       message.success('应用更新成功')
-      void queryClient.invalidateQueries({ queryKey: ['applications'] })
-      void queryClient.invalidateQueries({ queryKey: ['application-detail', selectedApplicationId] })
-      void queryClient.invalidateQueries({ queryKey: ['application-runtime', selectedApplicationId] })
       setAppModalVisible(false)
       setEditingApp(null)
     },
     onError: (err: Error) => message.error(err.message),
   })
 
+  const deleteAppOptions = deliveryMutations.applications.delete(queryClient)
   const deleteAppMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/applications/${id}`),
-    onSuccess: () => {
+    ...deleteAppOptions,
+    onSuccess: (result, variables, onMutateResult, context) => {
+      void deleteAppOptions.onSuccess?.(result, variables, onMutateResult, context)
       message.success('应用已删除')
-      void queryClient.invalidateQueries({ queryKey: ['applications'] })
-      void queryClient.invalidateQueries({ queryKey: ['application-environments'] })
-      void queryClient.invalidateQueries({ queryKey: ['delivery-release-board'] })
-      void queryClient.invalidateQueries({ queryKey: ['application-detail', selectedApplicationId] })
-      void queryClient.invalidateQueries({ queryKey: ['application-runtime', selectedApplicationId] })
       setSelectedApplicationId('')
     },
     onError: (err: Error) => message.error(err.message),
   })
 
+  const createBindingOptions = deliveryMutations.environments.create(queryClient)
   const createBindingMutation = useMutation({
-    mutationFn: (values: Record<string, unknown>) => api.post('/application-environments', values),
-    onSuccess: () => {
+    ...createBindingOptions,
+    onSuccess: (result, variables, onMutateResult, context) => {
+      void createBindingOptions.onSuccess?.(result, variables, onMutateResult, context)
       message.success('环境绑定创建成功')
-      void queryClient.invalidateQueries({ queryKey: ['application-environments'] })
-      void queryClient.invalidateQueries({ queryKey: ['delivery-release-board'] })
-      void queryClient.invalidateQueries({ queryKey: ['application-detail', selectedApplicationId] })
-      void queryClient.invalidateQueries({ queryKey: ['application-runtime', selectedApplicationId] })
       setBindingModalVisible(false)
     },
     onError: (err: Error) => message.error(err.message),
   })
 
+  const updateBindingOptions = deliveryMutations.environments.update(queryClient)
   const updateBindingMutation = useMutation({
-    mutationFn: ({ id, values }: { id: string; values: Record<string, unknown> }) => api.put(`/application-environments/${id}`, values),
-    onSuccess: () => {
+    ...updateBindingOptions,
+    onSuccess: (result, variables, onMutateResult, context) => {
+      void updateBindingOptions.onSuccess?.(result, variables, onMutateResult, context)
       message.success('环境绑定更新成功')
-      void queryClient.invalidateQueries({ queryKey: ['application-environments'] })
-      void queryClient.invalidateQueries({ queryKey: ['delivery-release-board'] })
-      void queryClient.invalidateQueries({ queryKey: ['application-detail', selectedApplicationId] })
-      void queryClient.invalidateQueries({ queryKey: ['application-runtime', selectedApplicationId] })
       setBindingModalVisible(false)
       setEditingBinding(null)
     },
     onError: (err: Error) => message.error(err.message),
   })
 
+  const deleteBindingOptions = deliveryMutations.environments.delete(queryClient)
   const deleteBindingMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/application-environments/${id}`),
-    onSuccess: () => {
+    ...deleteBindingOptions,
+    onSuccess: (result, variables, onMutateResult, context) => {
+      void deleteBindingOptions.onSuccess?.(result, variables, onMutateResult, context)
       message.success('环境绑定已删除')
-      void queryClient.invalidateQueries({ queryKey: ['application-environments'] })
-      void queryClient.invalidateQueries({ queryKey: ['delivery-release-board'] })
-      void queryClient.invalidateQueries({ queryKey: ['application-detail', selectedApplicationId] })
-      void queryClient.invalidateQueries({ queryKey: ['application-runtime', selectedApplicationId] })
     },
     onError: (err: Error) => message.error(err.message),
   })
@@ -296,66 +281,147 @@ export type ApplicationCenterState = ReturnType<typeof useApplicationCenterState
 
 export function ApplicationCenterModals({ state }: { state: ApplicationCenterState }) {
   const selectedTargetCandidate = (record: Record<string, unknown>) =>
-    (state.targetCandidatesQuery.data?.data ?? []).find((item) => `${item.clusterId}/${item.namespace}/${item.workloadName}` === record.targetWorkload)
+    (state.targetCandidatesQuery.data ?? []).find(
+      (item) =>
+        `${item.clusterId}/${item.namespace}/${item.workloadName}` === record.targetWorkload,
+    )
 
   return (
     <>
-      <Modal title={state.editingApp ? '编辑应用档案' : '新建应用档案'} open={state.appModalVisible} onCancel={() => { state.setAppModalVisible(false); state.setEditingApp(null) }} footer={null} destroyOnHidden width={860}>
+      <Modal
+        title={state.editingApp ? '编辑应用档案' : '新建应用档案'}
+        open={state.appModalVisible}
+        onCancel={() => {
+          state.setAppModalVisible(false)
+          state.setEditingApp(null)
+        }}
+        footer={null}
+        destroyOnHidden
+        width={860}
+      >
         <Form
           form={state.appForm}
           key={state.editingApp?.id ?? 'application-center-app'}
           layout="vertical"
-          initialValues={state.editingApp ? { ...state.editingApp, group: splitApplicationGroups(state.editingApp.group), enabled: state.editingApp.enabled } : { enabled: true, language: 'go', group: [] }}
+          initialValues={
+            state.editingApp
+              ? {
+                  ...state.editingApp,
+                  group: splitApplicationGroups(state.editingApp.group),
+                  enabled: state.editingApp.enabled,
+                }
+              : { enabled: true, language: 'go', group: [] }
+          }
           onFinish={(values) => {
-            const payload = { ...values, group: joinApplicationGroups(values.group as string[] | string), buildSources: state.buildSources }
+            const payload = {
+              ...values,
+              group: joinApplicationGroups(values.group as string[] | string),
+              buildSources: state.buildSources,
+            }
             if (state.editingApp) {
-              state.updateAppMutation.mutate({ id: state.editingApp.id, values: payload })
+              state.updateAppMutation.mutate({ id: state.editingApp.id, payload })
             } else {
               state.createAppMutation.mutate(payload)
             }
           }}
         >
-          <Form.Item name="name" label="应用名称" rules={[{ required: true, message: '请输入应用名称' }]}><Input /></Form.Item>
-          <Form.Item name="key" label="应用 Key" rules={[{ required: true, message: '请输入应用 Key' }]}><Input /></Form.Item>
-          <Form.Item name="group" label="应用分组" rules={[{ required: true, message: '请输入应用分组' }]}>
+          <Form.Item
+            name="name"
+            label="应用名称"
+            rules={[{ required: true, message: '请输入应用名称' }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item
+            name="key"
+            label="应用 Key"
+            rules={[{ required: true, message: '请输入应用 Key' }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item
+            name="group"
+            label="应用分组"
+            rules={[{ required: true, message: '请输入应用分组' }]}
+          >
             <Select
               mode="tags"
               tokenSeparators={[',', '，', ';', '；', '/']}
               placeholder="输入一个或多个分组"
               maxTagCount="responsive"
-              options={state.applicationGroupOptions.map((group) => ({ value: group, label: group }))}
+              options={state.applicationGroupOptions.map((group) => ({
+                value: group,
+                label: group,
+              }))}
             />
           </Form.Item>
-          <Form.Item name="language" label="语言"><Select options={[{ value: 'go', label: 'Go' }, { value: 'java', label: 'Java' }, { value: 'node', label: 'Node.js' }, { value: 'python', label: 'Python' }]} /></Form.Item>
-          <Form.Item name="enabled" label="启用" valuePropName="checked"><Switch /></Form.Item>
+          <Form.Item name="language" label="语言">
+            <Select
+              options={[
+                { value: 'go', label: 'Go' },
+                { value: 'java', label: 'Java' },
+                { value: 'node', label: 'Node.js' },
+                { value: 'python', label: 'Python' },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item name="enabled" label="启用" valuePropName="checked">
+            <Switch />
+          </Form.Item>
           <div className="soha-form-actions">
             <Button onClick={() => state.setAppModalVisible(false)}>取消</Button>
-            <Button htmlType="submit" type="primary" loading={state.createAppMutation.isPending || state.updateAppMutation.isPending}>保存</Button>
+            <Button
+              htmlType="submit"
+              type="primary"
+              loading={state.createAppMutation.isPending || state.updateAppMutation.isPending}
+            >
+              保存
+            </Button>
           </div>
         </Form>
       </Modal>
 
-      <Modal title={state.editingBinding ? '编辑环境绑定' : '新建环境绑定'} open={state.bindingModalVisible} onCancel={() => { state.setBindingModalVisible(false); state.setEditingBinding(null) }} footer={null} destroyOnHidden width={760}>
+      <Modal
+        title={state.editingBinding ? '编辑环境绑定' : '新建环境绑定'}
+        open={state.bindingModalVisible}
+        onCancel={() => {
+          state.setBindingModalVisible(false)
+          state.setEditingBinding(null)
+        }}
+        footer={null}
+        destroyOnHidden
+        width={760}
+      >
         <Form
           form={state.bindingForm}
           key={state.editingBinding?.id ?? `binding-${state.selectedApplicationId || 'new'}`}
           layout="vertical"
-          initialValues={state.editingBinding ? {
-            environmentId: initialEnvironmentFormValue(state.editingBinding),
-            workflowTemplateId: state.editingBinding.workflowTemplateId,
-            buildSourceId: state.editingBinding.buildPolicy?.sourceId,
-            actionKind: state.editingBinding.releasePolicy?.actionKind || 'deploy',
-            requiresApproval: state.editingBinding.releasePolicy?.requiresApproval,
-            targetClusterId: state.editingBinding.targets?.[0]?.clusterId,
-            targetNamespace: state.editingBinding.targets?.[0]?.namespace,
-            targetWorkload: state.editingBinding.targets?.[0] ? `${state.editingBinding.targets[0].clusterId}/${state.editingBinding.targets[0].namespace}/${state.editingBinding.targets[0].workloadName}` : undefined,
-            targetContainer: state.editingBinding.targets?.[0]?.containerName,
-            resourceSelectorText: JSON.stringify(state.editingBinding.resourceSelector?.matchLabels ?? {}, null, 2),
-          } : {
-            actionKind: 'deploy',
-            requiresApproval: false,
-            resourceSelectorText: '{}',
-          }}
+          initialValues={
+            state.editingBinding
+              ? {
+                  environmentId: initialEnvironmentFormValue(state.editingBinding),
+                  workflowTemplateId: state.editingBinding.workflowTemplateId,
+                  buildSourceId: state.editingBinding.buildPolicy?.sourceId,
+                  actionKind: state.editingBinding.releasePolicy?.actionKind || 'deploy',
+                  requiresApproval: state.editingBinding.releasePolicy?.requiresApproval,
+                  targetClusterId: state.editingBinding.targets?.[0]?.clusterId,
+                  targetNamespace: state.editingBinding.targets?.[0]?.namespace,
+                  targetWorkload: state.editingBinding.targets?.[0]
+                    ? `${state.editingBinding.targets[0].clusterId}/${state.editingBinding.targets[0].namespace}/${state.editingBinding.targets[0].workloadName}`
+                    : undefined,
+                  targetContainer: state.editingBinding.targets?.[0]?.containerName,
+                  resourceSelectorText: JSON.stringify(
+                    state.editingBinding.resourceSelector?.matchLabels ?? {},
+                    null,
+                    2,
+                  ),
+                }
+              : {
+                  actionKind: 'deploy',
+                  requiresApproval: false,
+                  resourceSelectorText: '{}',
+                }
+          }
           onFinish={(values) => {
             if (!state.selectedApplication) return
             const target = selectedTargetCandidate(values)
@@ -384,20 +450,24 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
               resourceSelector: {
                 matchLabels,
               },
-              targets: target ? [{
-                clusterId: target.clusterId,
-                namespace: target.namespace,
-                targetKind: 'k8s_workload',
-                executorKind: 'k8s_job_runner',
-                workloadKind: target.workloadKind,
-                workloadName: target.workloadName,
-                containerName: String(values.targetContainer || ''),
-                metadata: {},
-                enabled: true,
-              }] : [],
+              targets: target
+                ? [
+                    {
+                      clusterId: target.clusterId,
+                      namespace: target.namespace,
+                      targetKind: 'k8s_workload',
+                      executorKind: 'k8s_job_runner',
+                      workloadKind: target.workloadKind,
+                      workloadName: target.workloadName,
+                      containerName: String(values.targetContainer || ''),
+                      metadata: {},
+                      enabled: true,
+                    },
+                  ]
+                : [],
             }
             if (state.editingBinding) {
-              state.updateBindingMutation.mutate({ id: state.editingBinding.id, values: payload })
+              state.updateBindingMutation.mutate({ id: state.editingBinding.id, payload })
             } else {
               state.createBindingMutation.mutate(payload)
             }
@@ -406,7 +476,11 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
           <Form.Item label="应用">
             <Input value={state.selectedApplication?.name || ''} disabled />
           </Form.Item>
-          <Form.Item name="environmentId" label="环境" rules={[{ required: true, message: '请选择环境' }]}>
+          <Form.Item
+            name="environmentId"
+            label="环境"
+            rules={[{ required: true, message: '请选择环境' }]}
+          >
             <Select
               showSearch
               mode="tags"
@@ -416,19 +490,42 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
             />
           </Form.Item>
           <Form.Item name="workflowTemplateId" label="发布流程模板">
-            <Select allowClear options={(state.workflowTemplatesQuery.data?.data ?? []).map((item) => ({ value: item.id, label: item.name }))} />
+            <Select
+              allowClear
+              options={(state.workflowTemplatesQuery.data ?? []).map((item) => ({
+                value: item.id,
+                label: item.name,
+              }))}
+            />
           </Form.Item>
           <Form.Item name="buildSourceId" label="构建来源">
-            <Select allowClear options={(state.selectedApplication?.buildSources ?? []).map((item) => ({ value: item.id, label: item.name || summarizeBuildSource(item) }))} />
+            <Select
+              allowClear
+              options={(state.selectedApplication?.buildSources ?? []).map((item) => ({
+                value: item.id,
+                label: item.name || summarizeBuildSource(item),
+              }))}
+            />
           </Form.Item>
           <Form.Item name="actionKind" label="动作">
-            <Select options={[{ value: 'deploy', label: 'deploy' }, { value: 'release', label: 'release' }]} />
+            <Select
+              options={[
+                { value: 'deploy', label: 'deploy' },
+                { value: 'release', label: 'release' },
+              ]}
+            />
           </Form.Item>
           <Form.Item name="requiresApproval" label="需要审批" valuePropName="checked">
             <Switch />
           </Form.Item>
           <Form.Item name="targetClusterId" label="目标集群">
-            <Select allowClear options={(state.clustersQuery.data?.data ?? []).map((item) => ({ value: item.id, label: item.name }))} />
+            <Select
+              allowClear
+              options={(state.clustersQuery.data ?? []).map((item) => ({
+                value: item.id,
+                label: item.name,
+              }))}
+            />
           </Form.Item>
           <Form.Item name="targetNamespace" label="目标命名空间">
             <Input />
@@ -437,7 +534,7 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
             <Select
               allowClear
               showSearch
-              options={(state.targetCandidatesQuery.data?.data ?? []).map((item) => ({
+              options={(state.targetCandidatesQuery.data ?? []).map((item) => ({
                 value: `${item.clusterId}/${item.namespace}/${item.workloadName}`,
                 label: `${item.workloadName} · ${item.namespace}`,
               }))}
@@ -451,7 +548,15 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
           </Form.Item>
           <div className="soha-form-actions">
             <Button onClick={() => state.setBindingModalVisible(false)}>取消</Button>
-            <Button htmlType="submit" type="primary" loading={state.createBindingMutation.isPending || state.updateBindingMutation.isPending}>保存</Button>
+            <Button
+              htmlType="submit"
+              type="primary"
+              loading={
+                state.createBindingMutation.isPending || state.updateBindingMutation.isPending
+              }
+            >
+              保存
+            </Button>
           </div>
         </Form>
       </Modal>

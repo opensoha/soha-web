@@ -1,6 +1,5 @@
 import { Progress, Typography } from 'antd'
 import type { Node, NodeTaint } from '@/types'
-import './platform-pages.css'
 
 const { Text } = Typography
 
