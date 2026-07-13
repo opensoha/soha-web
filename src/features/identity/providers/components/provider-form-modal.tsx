@@ -9,6 +9,7 @@ import {
   providerTypeOptions,
   providerValuesFor,
   proxyModeOptions,
+  type ProxyMode,
   type ProviderFormValues,
 } from '../provider-form-model'
 import type { IdentityProvider, IdentityProviderInput, IdentityRuntimeProviderType } from '../types'
@@ -33,9 +34,12 @@ function ProxyConfigFields({
 }: Pick<ProviderFormModalProps, 'outpostLoading' | 'outpostOptions'>) {
   const { localeCode } = useI18n()
   const zh = localeCode === 'zh_CN'
+  const proxyMode = (Form.useWatch('proxyMode') as ProxyMode | undefined) ?? 'forward_auth'
   return (
     <div className="soha-identity-provider-config-section">
-      <div className="soha-identity-provider-section-title">{zh ? 'Proxy 运行配置' : 'Proxy runtime'}</div>
+      <div className="soha-identity-provider-section-title">
+        {zh ? 'Proxy 运行配置' : 'Proxy runtime'}
+      </div>
       <div className="soha-identity-provider-form-grid">
         <Form.Item
           label={zh ? '外部域名' : 'External hosts'}
@@ -44,7 +48,20 @@ function ProxyConfigFields({
         >
           <Select mode="tags" placeholder="grafana.example.com" tokenSeparators={[',']} />
         </Form.Item>
-        <Form.Item label={zh ? '上游地址' : 'Upstream URL'} name="proxyUpstreamUrl">
+        <Form.Item
+          label={zh ? '上游地址' : 'Upstream URL'}
+          name="proxyUpstreamUrl"
+          rules={
+            proxyMode === 'reverse_proxy'
+              ? [
+                  {
+                    required: true,
+                    message: zh ? '请输入反向代理上游地址' : 'Enter the reverse proxy upstream URL',
+                  },
+                ]
+              : undefined
+          }
+        >
           <Input placeholder="http://grafana.monitoring.svc:3000" />
         </Form.Item>
         <Form.Item label={zh ? '模式' : 'Mode'} name="proxyMode">
@@ -54,7 +71,7 @@ function ProxyConfigFields({
               label:
                 option.value === 'reverse_proxy'
                   ? zh
-                    ? '反向代理（规划中）'
+                    ? '反向代理'
                     : option.label
                   : zh
                     ? 'Forward auth（转发认证）'
@@ -68,26 +85,34 @@ function ProxyConfigFields({
         <Form.Item label={zh ? '受保护路径前缀' : 'Protected path prefix'} name="proxyPathPrefix">
           <Input placeholder="/" />
         </Form.Item>
-        <Form.Item label="Outpost" name="proxyOutpostId">
-          <Select
-            allowClear
-            loading={outpostLoading}
-            options={outpostOptions}
-            placeholder={zh ? '内置 forward-auth' : 'Embedded forward-auth'}
-            showSearch={{ optionFilterProp: 'label' }}
-          />
-        </Form.Item>
+        {proxyMode === 'forward_auth' ? (
+          <Form.Item label="Outpost" name="proxyOutpostId">
+            <Select
+              allowClear
+              loading={outpostLoading}
+              options={outpostOptions}
+              placeholder={zh ? '内置 forward-auth' : 'Embedded forward-auth'}
+              showSearch={{ optionFilterProp: 'label' }}
+            />
+          </Form.Item>
+        ) : null}
       </div>
 
       <Form.Item label={zh ? '免认证路径' : 'Skip auth paths'} name="proxySkipAuthPaths">
         <Select mode="tags" placeholder="/healthz, /public" tokenSeparators={[',']} />
       </Form.Item>
 
-      <Form.Item label={zh ? '启用 WebSocket' : 'WebSocket enabled'} name="proxyWebsocketEnabled" valuePropName="checked">
+      <Form.Item
+        label={zh ? '启用 WebSocket' : 'WebSocket enabled'}
+        name="proxyWebsocketEnabled"
+        valuePropName="checked"
+      >
         <Switch />
       </Form.Item>
 
-      <div className="soha-identity-provider-section-title">{zh ? '身份请求头' : 'Identity headers'}</div>
+      <div className="soha-identity-provider-section-title">
+        {zh ? '身份请求头' : 'Identity headers'}
+      </div>
       <div className="soha-identity-provider-form-grid is-three">
         <Form.Item label="User header" name="proxyHeaderUser">
           <Input placeholder={defaultProxyHeaders.user} />
@@ -148,7 +173,9 @@ export function ProviderFormModal({
       footer={null}
       onCancel={onCancel}
       open={open}
-      title={editing ? (zh ? '编辑 Provider' : 'Edit Provider') : (zh ? '新建 Provider' : 'New Provider')}
+      title={
+        editing ? (zh ? '编辑 Provider' : 'Edit Provider') : zh ? '新建 Provider' : 'New Provider'
+      }
       width={860}
     >
       <Form

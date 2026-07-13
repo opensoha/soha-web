@@ -8,12 +8,15 @@ describe('menu section schema helpers', () => {
     expect(normalizeMenuSection('Dashboard')).toBe('platform')
     expect(normalizeMenuSection('observe')).toBe('ops')
     expect(normalizeMenuSection('Delivery')).toBe('delivery')
+    expect(normalizeMenuSection('extension')).toBe('extensions')
     expect(normalizeMenuSection('control')).toBe('control')
   })
 
   it('renders canonical labels for normalized aliases', () => {
     expect(resolveMenuSectionLabel('observe')).toBe('Observe')
     expect(resolveMenuSectionLabel('Dashboard')).toBe('Dashboard')
+    expect(resolveMenuSectionLabel('extensions')).toBe('扩展')
+    expect(resolveMenuSectionLabel('extensions', 'en_US')).toBe('Extensions')
     expect(resolveMenuSectionLabel('control')).toBe('control')
   })
 

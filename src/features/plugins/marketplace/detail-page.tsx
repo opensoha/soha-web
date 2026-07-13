@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { CloudDownloadOutlined } from '@ant-design/icons'
+import { CloudDownloadOutlined, SettingOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { Button, Card, Descriptions, Space, Tag, Typography } from 'antd'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -35,14 +35,14 @@ export function PluginMarketplaceDetailPage() {
 
   if (detailQuery.isLoading) {
     return (
-      <PluginPageShell activeKey="marketplace">
+      <PluginPageShell>
         <ManagementState kind="loading" />
       </PluginPageShell>
     )
   }
   if (!plugin) {
     return (
-      <PluginPageShell activeKey="marketplace">
+      <PluginPageShell>
         <ManagementState kind="not-found" />
       </PluginPageShell>
     )
@@ -50,19 +50,28 @@ export function PluginMarketplaceDetailPage() {
 
   return (
     <PluginPageShell
-      activeKey="marketplace"
       extra={
         <Space>
           <Button onClick={() => navigate('/plugins/marketplace')}>返回市场</Button>
-          <Button
-            disabled={plugin.installed || !canInstallPlugin(snapshot)}
-            icon={<CloudDownloadOutlined />}
-            loading={installAction.loading}
-            type="primary"
-            onClick={() => installAction.confirmInstall(plugin)}
-          >
-            安装
-          </Button>
+          {plugin.installed ? (
+            <Button
+              icon={<SettingOutlined />}
+              type="primary"
+              onClick={() => navigate(`/plugins/installed/${encodeURIComponent(plugin.id)}`)}
+            >
+              管理插件
+            </Button>
+          ) : (
+            <Button
+              disabled={!canInstallPlugin(snapshot)}
+              icon={<CloudDownloadOutlined />}
+              loading={installAction.loading}
+              type="primary"
+              onClick={() => installAction.confirmInstall(plugin)}
+            >
+              安装
+            </Button>
+          )}
         </Space>
       }
     >

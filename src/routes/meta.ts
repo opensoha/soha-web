@@ -191,6 +191,9 @@ function deriveWorkbenchIdFromPath(pathname: string): WorkbenchId | null {
   if (pathname.startsWith('/ai-gateway')) {
     return 'aiGateway'
   }
+  if (pathname.startsWith('/plugins') || pathname.startsWith('/extensions-center')) {
+    return 'settings'
+  }
   if (
     pathname.startsWith('/ai-workbench') ||
     pathname.startsWith('/ai-observe') ||
@@ -312,6 +315,8 @@ export function getRouteScopeMode(route: RouteMeta): NonNullable<RouteMeta['scop
     pathname.startsWith('/observability') ||
     pathname.startsWith('/virtualization') ||
     pathname.startsWith('/docker') ||
+    pathname.startsWith('/plugins') ||
+    pathname.startsWith('/extensions-center') ||
     pathname.startsWith('/ai-gateway') ||
     pathname.startsWith('/ai-workbench') ||
     pathname.startsWith('/ai-observe') ||
@@ -707,7 +712,7 @@ export function filterSidebarNavByWorkbench(
   }
   const flattenedRootIds = [
     flattenedWorkbenchRootIds[workbenchId],
-    ...(workbenchId === 'settings' ? ['identity', 'system', 'access'] : []),
+    ...(workbenchId === 'settings' ? ['identity', 'system', 'access', 'settings-extensions'] : []),
   ].filter((item): item is string => Boolean(item))
 
   if (flattenedRootIds.length === 0) {

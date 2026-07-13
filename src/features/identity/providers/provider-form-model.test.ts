@@ -6,6 +6,7 @@ import {
   oidcClientValuesFor,
   providerInputFromValues,
   providerValuesFor,
+  proxyModeOptions,
 } from './provider-form-model'
 import type { IdentityOIDCClient, IdentityProvider } from './types'
 
@@ -60,6 +61,7 @@ describe('provider form model', () => {
       status: 'enabled',
       type: 'oidc',
     })
+    expect(proxyModeOptions).toContainEqual({ label: 'Reverse proxy', value: 'reverse_proxy' })
   })
 
   it('reads legacy proxy keys and writes one canonical config without losing advanced values', () => {

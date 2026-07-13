@@ -5,7 +5,7 @@ import { isPluginSchemaObject } from './schema'
 
 const { Text } = Typography
 
-function extensionPointEntries(points?: PluginExtensionPoints | null) {
+export function extensionPointEntries(points?: PluginExtensionPoints | null) {
   if (!points) return []
   const entries: Array<{
     key: string

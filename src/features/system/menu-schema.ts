@@ -1,4 +1,4 @@
-export const MENU_SECTION_ORDER = ['account', 'provider', 'users', 'operations', 'platform', 'ops', 'delivery', 'delivery-records', 'delivery-platform', 'catalog', 'admin'] as const
+export const MENU_SECTION_ORDER = ['account', 'provider', 'users', 'operations', 'extensions', 'platform', 'ops', 'delivery', 'delivery-records', 'delivery-platform', 'catalog', 'admin'] as const
 
 export type MenuSectionKey = (typeof MENU_SECTION_ORDER)[number]
 
@@ -7,6 +7,7 @@ const MENU_SECTION_LABELS: Record<MenuSectionKey, { zh: string; en: string }> = 
   provider: { zh: '提供商', en: 'Providers' },
   users: { zh: '用户权限', en: 'Users & Access' },
   operations: { zh: '系统运维', en: 'System Operations' },
+  extensions: { zh: '扩展', en: 'Extensions' },
   platform: { zh: 'Dashboard', en: 'Dashboard' },
   ops: { zh: 'Observe', en: 'Observe' },
   delivery: { zh: '应用交付', en: 'Delivery' },
@@ -28,6 +29,8 @@ const MENU_SECTION_ALIASES: Record<string, MenuSectionKey> = {
   operations: 'operations',
   operation: 'operations',
   system: 'operations',
+  extension: 'extensions',
+  extensions: 'extensions',
   platform: 'platform',
   dashboard: 'platform',
   ops: 'ops',

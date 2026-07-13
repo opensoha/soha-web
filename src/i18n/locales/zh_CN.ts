@@ -399,7 +399,10 @@ export const zhCN: Dictionary = {
   'identity.proxySetup.title': '接入配置',
   'identity.proxySetup.description':
     '选择运行环境并复制配置。所有方式都使用同一个 Soha forward-auth 端点。',
+  'identity.proxySetup.reverseDescription':
+    '通过此地址访问应用，Soha 会在完成身份验证和授权后将请求转发到已配置的上游。',
   'identity.proxySetup.copyEndpoint': '复制认证地址',
+  'identity.proxySetup.copyReverseEndpoint': '复制代理地址',
   'identity.proxySetup.copied': '已复制配置',
   'identity.proxySetup.generated': '已按当前 Provider 参数生成',
   'identity.outposts.search': '搜索名称、endpoint、版本',

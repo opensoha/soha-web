@@ -1429,7 +1429,36 @@ describe('access route authorization', () => {
         path: '/ai-gateway/governance',
       }),
     ).toBe('aiGateway')
+    expect(
+      getMenuWorkbenchId({
+        id: 'settings-extensions-marketplace',
+        path: '/plugins/marketplace',
+      }),
+    ).toBe('settings')
     expect(getMenuWorkbenchId({ id: 'menus', path: '/system/menus' })).toBe('settings')
+  })
+
+  it('exposes plugins through the settings extensions group', () => {
+    const snapshot = buildSnapshot({
+      permissionKeys: ['plugin.view'],
+      visibleMenuIds: ['settings-extensions', 'settings-extensions-marketplace'],
+      visibleMenus: [
+        { id: 'settings-extensions', path: '/settings/extensions' },
+        {
+          id: 'settings-extensions-marketplace',
+          parentId: 'settings-extensions',
+          path: '/plugins/marketplace',
+        },
+      ],
+    })
+
+    expect(getRouteWorkbenchId(getRoute('plugins-marketplace'))).toBe('settings')
+    expect(getRouteWorkspace(getRoute('plugins-marketplace'))).toBe('system')
+    expect(canAccessRoute(getRoute('plugins-marketplace'), snapshot)).toBe(true)
+    expect(findFirstAccessiblePathForWorkbench('settings', snapshot)).toBe(
+      '/plugins/marketplace',
+    )
+    expect(getAccessibleWorkbenchIds(snapshot)).toContain('settings')
   })
 
   it('requires resource workspace, AI Gateway view permission, and menu binding', () => {
