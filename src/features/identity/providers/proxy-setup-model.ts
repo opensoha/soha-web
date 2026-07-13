@@ -37,6 +37,7 @@ export interface ProxySetupContext {
   authURL: string
   host: string
   providerID: string
+  reverseProxyURL: string
   upstreamURL: string
 }
 
@@ -49,6 +50,7 @@ export function proxySetupContext(
     authURL: `${origin}/api/v1/provider/proxy/auth?provider_id=${encodeURIComponent(provider.id)}`,
     host: externalHost(provider),
     providerID: provider.id,
+    reverseProxyURL: `${origin}/api/v1/provider/proxy/reverse/${encodeURIComponent(provider.id)}`,
     upstreamURL: configString(provider, 'upstreamUrl') || 'http://upstream:8080',
   }
 }

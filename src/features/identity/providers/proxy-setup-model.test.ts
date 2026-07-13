@@ -21,6 +21,9 @@ describe('proxy setup model', () => {
     const context = proxySetupContext(provider, 'https://soha.example.com/')
     expect(proxySetupTargets).toHaveLength(7)
     expect(context.authURL).toContain('provider_id=proxy-grafana')
+    expect(context.reverseProxyURL).toBe(
+      'https://soha.example.com/api/v1/provider/proxy/reverse/proxy-grafana',
+    )
     for (const target of proxySetupTargets) {
       const snippet = proxySetupSnippet(target, context)
       expect(snippet).toContain('soha')

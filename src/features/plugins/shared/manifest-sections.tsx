@@ -98,7 +98,7 @@ export function PluginManifestSections({ manifest }: { manifest?: PluginManifest
           <Text type="secondary">无</Text>
         )}
       </Card>
-      <Card title="Extension points" size="small">
+      <Card title="扩展能力" size="small">
         <ExtensionPointList points={manifest.extensionPoints} />
       </Card>
       <Card title="Config schema" size="small">

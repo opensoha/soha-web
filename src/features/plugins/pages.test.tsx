@@ -6,7 +6,6 @@ import { App as AntdApp } from 'antd'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { InstalledPluginsPage } from './installed/list-page'
 import { PluginMarketplacePage } from './marketplace/list-page'
 
 const apiGetMock = vi.hoisted(() => vi.fn())
@@ -56,9 +55,17 @@ vi.mock('@/components/admin-table', () => ({
 vi.mock('@/components/management-list', () => ({
   ManagementDetailHeader: ({ title }: { title?: ReactNode }) => <h1>{title}</h1>,
   ManagementIconButton: () => null,
+  ManagementKeywordField: () => null,
+  ManagementQueryActions: () => null,
+  ManagementQueryField: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  ManagementQueryPanel: ({ actions, children }: { actions?: ReactNode; children?: ReactNode }) => (
+    <div>
+      {children}
+      {actions}
+    </div>
+  ),
   ManagementState: ({ title }: { title?: ReactNode }) => <div>{title}</div>,
   ManagementTableToolbar: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  ManagementToolbarSearch: () => null,
 }))
 
 const mountedRoots: Root[] = []
@@ -72,6 +79,23 @@ beforeAll(() => {
 
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   vi.stubGlobal('ResizeObserver', ResizeObserverMock)
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation(() => ({
+      matches: false,
+      media: '',
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
+  Object.defineProperty(window, 'getComputedStyle', {
+    writable: true,
+    value: vi.fn().mockImplementation(() => ({ getPropertyValue: vi.fn(() => '') })),
+  })
 })
 beforeEach(() => vi.clearAllMocks())
 afterEach(async () => {
@@ -107,43 +131,73 @@ async function renderPage(node: ReactNode, route: string) {
 
 describe('plugin list page data boundaries', () => {
   it('loads marketplace data through the feature API', async () => {
-    apiGetMock.mockResolvedValueOnce({
-      data: [
-        {
-          id: 'plugin-market',
-          name: 'Marketplace Plugin',
-          publisher: 'Soha',
-          type: 'skill',
-          version: '1.0.0',
-          source: 'static',
-          installed: false,
-          manifest: {},
-        },
-      ],
+    apiGetMock.mockImplementation((path: string) => {
+      if (path === '/plugins/installed') return Promise.resolve({ data: [] })
+      return Promise.resolve({
+        data: [
+          {
+            id: 'plugin-market',
+            name: 'Marketplace Plugin',
+            publisher: 'Soha',
+            type: 'skill',
+            version: '1.0.0',
+            source: 'static',
+            installed: false,
+            manifest: {
+              extensionPoints: {
+                alerts: {
+                  notificationChannels: [
+                    { id: 'plugin-market.alerts', label: 'Marketplace Alerts' },
+                  ],
+                },
+              },
+            },
+          },
+        ],
+      })
     })
 
     const container = await renderPage(<PluginMarketplacePage />, '/plugins/marketplace')
     expect(apiGetMock).toHaveBeenCalledWith('/plugins/marketplace')
+    expect(apiGetMock).toHaveBeenCalledWith('/plugins/installed')
     expect(container.textContent).toContain('Marketplace Plugin')
+    expect(container.textContent).not.toContain('alerts.notificationChannels')
+    expect(
+      container.querySelector('.soha-plugin-market-card-link')?.getAttribute('href'),
+    ).toContain('/plugins/marketplace/plugin-market')
+    expect(container.querySelector('.soha-plugin-market-card-metrics')?.textContent).toContain(
+      '1扩展点',
+    )
+    expect(container.querySelectorAll('.soha-plugin-market-card')).toHaveLength(1)
+    expect(container.querySelector('.soha-plugin-market-card-body')).not.toBeNull()
+    expect(container.querySelector('.soha-plugin-market-card-actions')).not.toBeNull()
   })
 
-  it('loads installed data through a separate page leaf', async () => {
-    apiGetMock.mockResolvedValueOnce({
-      data: [
-        {
-          id: 'plugin-installed',
-          name: 'Installed Plugin',
-          publisher: 'Soha',
-          type: 'skill',
-          version: '1.0.0',
-          status: 'enabled',
-          checksumStatus: 'verified',
-          manifest: {},
-        },
-      ],
-    })
+  it('shows installed plugins through the marketplace page', async () => {
+    apiGetMock.mockImplementation((path: string) =>
+      Promise.resolve({
+        data:
+          path === '/plugins/installed'
+            ? [{ id: 'plugin-installed', status: 'enabled', manifest: {} }]
+            : [
+                {
+                  id: 'plugin-installed',
+                  name: 'Installed Plugin',
+                  publisher: 'Soha',
+                  type: 'skill',
+                  version: '1.0.0',
+                  source: 'static',
+                  installed: true,
+                  manifest: {},
+                },
+              ],
+      }),
+    )
 
-    const container = await renderPage(<InstalledPluginsPage />, '/plugins/installed')
+    const container = await renderPage(
+      <PluginMarketplacePage />,
+      '/plugins/marketplace?installation=installed',
+    )
     expect(apiGetMock).toHaveBeenCalledWith('/plugins/installed')
     expect(container.textContent).toContain('Installed Plugin')
   })

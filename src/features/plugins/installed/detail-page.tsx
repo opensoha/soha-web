@@ -51,14 +51,14 @@ export function InstalledPluginDetailPage() {
 
   if (detailQuery.isLoading) {
     return (
-      <PluginPageShell activeKey="installed">
+      <PluginPageShell>
         <ManagementState kind="loading" />
       </PluginPageShell>
     )
   }
   if (!plugin) {
     return (
-      <PluginPageShell activeKey="installed">
+      <PluginPageShell>
         <ManagementState kind="not-found" />
       </PluginPageShell>
     )
@@ -66,10 +66,11 @@ export function InstalledPluginDetailPage() {
 
   return (
     <PluginPageShell
-      activeKey="installed"
       extra={
         <Space>
-          <Button onClick={() => navigate('/plugins/installed')}>返回已安装</Button>
+          <Button onClick={() => navigate('/plugins/marketplace?installation=installed')}>
+            返回插件市场
+          </Button>
           {plugin.status === 'enabled' ? (
             <Button
               disabled={!canManagePlugins(snapshot)}

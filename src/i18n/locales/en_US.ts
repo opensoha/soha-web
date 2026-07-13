@@ -432,7 +432,10 @@ export const enUS: Dictionary = {
   'identity.proxySetup.title': 'Setup',
   'identity.proxySetup.description':
     'Choose a runtime and copy its configuration. Every option uses the same Soha forward-auth endpoint.',
+  'identity.proxySetup.reverseDescription':
+    'Open the application through this URL. Soha authenticates and authorizes the request before forwarding it to the configured upstream.',
   'identity.proxySetup.copyEndpoint': 'Copy auth endpoint',
+  'identity.proxySetup.copyReverseEndpoint': 'Copy proxy endpoint',
   'identity.proxySetup.copied': 'Configuration copied',
   'identity.proxySetup.generated': 'Generated from the current Provider',
   'identity.outposts.search': 'Search name, endpoint, or version',

@@ -62,7 +62,7 @@ const BREADCRUMB_WORKBENCH_ROOT_ROUTE_IDS: Partial<Record<WorkbenchId, string[]>
   aiGateway: ['ai-gateway'],
   docker: ['docker-workbench'],
   monitoring: ['monitoring-workbench'],
-  settings: ['settings'],
+  settings: ['settings', 'extension-center'],
   virtualization: ['virtualization-workbench'],
 }
 
