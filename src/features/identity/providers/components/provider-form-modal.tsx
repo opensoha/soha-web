@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { App, Button, Form, Input, Modal, Select, Switch } from 'antd'
+import { useI18n } from '@/i18n'
 import {
   defaultProviderValues,
   defaultProxyHeaders,
@@ -30,27 +31,41 @@ function ProxyConfigFields({
   outpostLoading,
   outpostOptions,
 }: Pick<ProviderFormModalProps, 'outpostLoading' | 'outpostOptions'>) {
+  const { localeCode } = useI18n()
+  const zh = localeCode === 'zh_CN'
   return (
     <div className="soha-identity-provider-config-section">
-      <div className="soha-identity-provider-section-title">Proxy runtime</div>
+      <div className="soha-identity-provider-section-title">{zh ? 'Proxy 运行配置' : 'Proxy runtime'}</div>
       <div className="soha-identity-provider-form-grid">
         <Form.Item
-          label="External hosts"
+          label={zh ? '外部域名' : 'External hosts'}
           name="proxyExternalHosts"
           rules={[{ required: true, message: '至少配置一个 External host' }]}
         >
           <Select mode="tags" placeholder="grafana.example.com" tokenSeparators={[',']} />
         </Form.Item>
-        <Form.Item label="Upstream URL" name="proxyUpstreamUrl">
+        <Form.Item label={zh ? '上游地址' : 'Upstream URL'} name="proxyUpstreamUrl">
           <Input placeholder="http://grafana.monitoring.svc:3000" />
         </Form.Item>
-        <Form.Item label="Mode" name="proxyMode">
-          <Select options={proxyModeOptions} />
+        <Form.Item label={zh ? '模式' : 'Mode'} name="proxyMode">
+          <Select
+            options={proxyModeOptions.map((option) => ({
+              ...option,
+              label:
+                option.value === 'reverse_proxy'
+                  ? zh
+                    ? '反向代理（规划中）'
+                    : option.label
+                  : zh
+                    ? 'Forward auth（转发认证）'
+                    : option.label,
+            }))}
+          />
         </Form.Item>
-        <Form.Item label="Cookie domain" name="proxyCookieDomain">
+        <Form.Item label={zh ? 'Cookie 域' : 'Cookie domain'} name="proxyCookieDomain">
           <Input placeholder=".example.com" />
         </Form.Item>
-        <Form.Item label="Protected path prefix" name="proxyPathPrefix">
+        <Form.Item label={zh ? '受保护路径前缀' : 'Protected path prefix'} name="proxyPathPrefix">
           <Input placeholder="/" />
         </Form.Item>
         <Form.Item label="Outpost" name="proxyOutpostId">
@@ -58,21 +73,21 @@ function ProxyConfigFields({
             allowClear
             loading={outpostLoading}
             options={outpostOptions}
-            placeholder="Embedded forward-auth"
+            placeholder={zh ? '内置 forward-auth' : 'Embedded forward-auth'}
             showSearch={{ optionFilterProp: 'label' }}
           />
         </Form.Item>
       </div>
 
-      <Form.Item label="Skip auth paths" name="proxySkipAuthPaths">
+      <Form.Item label={zh ? '免认证路径' : 'Skip auth paths'} name="proxySkipAuthPaths">
         <Select mode="tags" placeholder="/healthz, /public" tokenSeparators={[',']} />
       </Form.Item>
 
-      <Form.Item label="WebSocket enabled" name="proxyWebsocketEnabled" valuePropName="checked">
+      <Form.Item label={zh ? '启用 WebSocket' : 'WebSocket enabled'} name="proxyWebsocketEnabled" valuePropName="checked">
         <Switch />
       </Form.Item>
 
-      <div className="soha-identity-provider-section-title">Identity headers</div>
+      <div className="soha-identity-provider-section-title">{zh ? '身份请求头' : 'Identity headers'}</div>
       <div className="soha-identity-provider-form-grid is-three">
         <Form.Item label="User header" name="proxyHeaderUser">
           <Input placeholder={defaultProxyHeaders.user} />
@@ -111,6 +126,8 @@ export function ProviderFormModal({
   submitting,
 }: ProviderFormModalProps) {
   const { message } = App.useApp()
+  const { localeCode } = useI18n()
+  const zh = localeCode === 'zh_CN'
   const [form] = Form.useForm<ProviderFormValues>()
 
   useEffect(() => {
@@ -131,7 +148,7 @@ export function ProviderFormModal({
       footer={null}
       onCancel={onCancel}
       open={open}
-      title={editing ? '编辑 Provider' : '新建 Provider'}
+      title={editing ? (zh ? '编辑 Provider' : 'Edit Provider') : (zh ? '新建 Provider' : 'New Provider')}
       width={860}
     >
       <Form
@@ -146,14 +163,14 @@ export function ProviderFormModal({
       >
         <div className="soha-identity-provider-form-grid">
           <Form.Item
-            label="名称"
+            label={zh ? '名称' : 'Name'}
             name="name"
             rules={[{ required: true, message: '请输入 Provider 名称' }]}
           >
             <Input placeholder="Grafana OIDC" />
           </Form.Item>
           <Form.Item
-            label="Application"
+            label={zh ? '应用' : 'Application'}
             name="applicationId"
             rules={[{ required: true, message: '请选择应用' }]}
           >
@@ -164,15 +181,15 @@ export function ProviderFormModal({
               showSearch={{ optionFilterProp: 'label' }}
             />
           </Form.Item>
-          <Form.Item label="Type" name="type">
+          <Form.Item label={zh ? '类型' : 'Type'} name="type">
             <Select options={providerTypeOptions} />
           </Form.Item>
-          <Form.Item label="Status" name="status">
+          <Form.Item label={zh ? '状态' : 'Status'} name="status">
             <Select options={providerStatusOptions} />
           </Form.Item>
         </div>
 
-        <Form.Item label="Enabled" name="enabled" valuePropName="checked">
+        <Form.Item label={zh ? '启用运行时' : 'Enabled'} name="enabled" valuePropName="checked">
           <Switch />
         </Form.Item>
 
@@ -193,9 +210,9 @@ export function ProviderFormModal({
         </div>
 
         <div className="soha-identity-provider-form-actions">
-          <Button onClick={onCancel}>取消</Button>
+          <Button onClick={onCancel}>{zh ? '取消' : 'Cancel'}</Button>
           <Button htmlType="submit" loading={submitting} type="primary">
-            保存
+            {zh ? '保存' : 'Save'}
           </Button>
         </div>
       </Form>

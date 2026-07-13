@@ -66,6 +66,55 @@
   margin-top: 18px;
 }
 
+.soha-proxy-setup-panel {
+  padding: 6px 4px 10px;
+}
+
+.soha-proxy-setup-heading,
+.soha-proxy-snippet-toolbar,
+.soha-proxy-endpoint-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.soha-proxy-setup-heading .ant-typography {
+  margin-bottom: 0;
+}
+
+.soha-proxy-endpoint-row {
+  margin: 12px 0;
+}
+
+.soha-proxy-endpoint-row .ant-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.soha-proxy-snippet {
+  min-width: 0;
+  border: 1px solid var(--soha-border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.soha-proxy-snippet-toolbar {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--soha-border-color);
+  background: var(--soha-fill-weak);
+}
+
+.soha-proxy-snippet pre {
+  max-height: 420px;
+  margin: 0;
+  padding: 14px;
+  overflow: auto;
+  color: var(--soha-text-color);
+  background: var(--soha-bg-surface);
+  font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  white-space: pre;
+}
+
 .soha-identity-secret-reveal {
   width: 100%;
 }
@@ -83,5 +132,11 @@
   .soha-identity-provider-form-grid.is-three,
   .soha-identity-provider-json-grid {
     grid-template-columns: 1fr;
+  }
+
+  .soha-proxy-setup-heading,
+  .soha-proxy-endpoint-row {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

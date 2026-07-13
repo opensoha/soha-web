@@ -63,9 +63,9 @@ export const providerStatusOptions: Array<{
   { label: 'Disabled', value: 'disabled' },
 ]
 
-export const proxyModeOptions: Array<{ label: string; value: ProxyMode }> = [
+export const proxyModeOptions: Array<{ disabled?: boolean; label: string; value: ProxyMode }> = [
   { label: 'Forward auth', value: 'forward_auth' },
-  { label: 'Reverse proxy', value: 'reverse_proxy' },
+  { disabled: true, label: 'Reverse proxy (planned)', value: 'reverse_proxy' },
 ]
 
 export const oidcClientStatusOptions: Array<{

@@ -55,14 +55,14 @@ export function IdentityApplicationNameCell({ application }: { application: Iden
   )
 }
 
-export function identityApplicationStatusTag(status: IdentityApplicationStatus) {
+export function identityApplicationStatusTag(status: IdentityApplicationStatus, label?: string) {
   const meta = statusTagMeta[status] ?? statusTagMeta.draft
-  return <Tag color={meta.color}>{meta.label}</Tag>
+  return <Tag color={meta.color}>{label ?? meta.label}</Tag>
 }
 
-export function identityApplicationAssignmentsSummary(application: IdentityApplication) {
+export function identityApplicationAssignmentsSummary(application: IdentityApplication, emptyLabel = 'All authenticated users') {
   const assignments = application.assignments ?? []
-  if (!assignments.length) return <Text type="secondary">All authenticated users</Text>
+  if (!assignments.length) return <Text type="secondary">{emptyLabel}</Text>
   return (
     <Space size={[4, 4]} wrap>
       {assignments.slice(0, 4).map((assignment) => (

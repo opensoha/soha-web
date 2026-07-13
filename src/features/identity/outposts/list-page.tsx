@@ -1,16 +1,20 @@
 import { useMemo, useState } from 'react'
-import { App, Button, Popconfirm, Select, Space, Tag, Typography } from 'antd'
+import { App, Button, Form, Popconfirm, Select, Space, Tag, Typography } from 'antd'
 import type { TableColumnsType } from 'antd'
-import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementIconButton,
+  ManagementKeywordField,
+  ManagementQueryActions,
+  ManagementQueryField,
+  ManagementRefreshButton,
   ManagementState,
   ManagementTableToolbar,
-  ManagementToolbarSearch,
 } from '@/components/management-list'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { useI18n } from '@/i18n'
 import { IdentityOutpostFormModal } from './components/outpost-form-modal'
 import {
   IdentityOutpostTokenModal,
@@ -70,7 +74,9 @@ function formatDateTime(value?: string) {
 
 export function IdentityOutpostsPage() {
   const { message } = App.useApp()
+  const { t } = useI18n()
   const queryClient = useQueryClient()
+  const [queryForm] = Form.useForm<IdentityOutpostPageFilters>()
   const [filters, setFilters] = useState<IdentityOutpostPageFilters>({
     mode: '',
     status: '',
@@ -235,53 +241,84 @@ export function IdentityOutpostsPage() {
   return (
     <>
       <ManagementDataPage
-        header={{
-          title: 'Outposts',
-          description: 'Proxy Provider 的边缘运行组件与 embedded forward-auth 控制面。',
+        className="soha-identity-outposts-page"
+        query={{
           actions: (
-            <Space>
-              <Button icon={<ReloadOutlined />} onClick={() => outpostsQuery.refetch()}>
-                刷新
-              </Button>
+            <ManagementQueryActions
+              disabledReset={!filters.query && !filters.mode && !filters.status}
+              loading={outpostsQuery.isFetching}
+              onReset={() => {
+                queryForm.resetFields()
+                setFilters({ mode: '', status: '', query: '' })
+              }}
+            />
+          ),
+          children: (
+            <>
+              <ManagementKeywordField
+                label={t('common.keyword', '关键词')}
+                name="query"
+                placeholder={t('identity.outposts.search', '搜索名称、endpoint、版本')}
+              />
+              <ManagementQueryField
+                label={t('identity.outposts.mode', '模式')}
+                name="mode"
+                width={160}
+              >
+                <Select
+                  allowClear
+                  options={identityOutpostModeOptions}
+                  placeholder={t('identity.outposts.mode', '模式')}
+                />
+              </ManagementQueryField>
+              <ManagementQueryField
+                label={t('identity.outposts.status', '状态')}
+                name="status"
+                width={160}
+              >
+                <Select
+                  allowClear
+                  options={identityOutpostStatusOptions}
+                  placeholder={t('identity.outposts.status', '状态')}
+                />
+              </ManagementQueryField>
+            </>
+          ),
+          form: queryForm,
+          initialValues: { mode: '', status: '', query: '' },
+          onFinish: (values) =>
+            setFilters({
+              mode: values.mode ?? '',
+              status: values.status ?? '',
+              query: String(values.query ?? '').trim(),
+            }),
+        }}
+        table={{
+          columnSettingIconOnly: true,
+          columnSettingPlacement: 'header',
+          columns,
+          dataSource: filteredOutposts,
+          loading: outpostsQuery.isLoading || outpostsQuery.isFetching,
+          rowKey: 'id',
+          scroll: { x: 'max-content' },
+          headerExtra: (
+            <ManagementTableToolbar>
               <Button
+                autoInsertSpace={false}
                 disabled={!canManage}
                 icon={<PlusOutlined />}
                 onClick={openCreate}
+                size="small"
                 type="primary"
               >
-                新建 Outpost
+                {t('identity.outposts.create', '新建 Outpost')}
               </Button>
-            </Space>
-          ),
-        }}
-        table={{
-          columns,
-          dataSource: filteredOutposts,
-          loading: outpostsQuery.isLoading,
-          rowKey: 'id',
-          scroll: { x: 1100 },
-          toolbar: (
-            <ManagementTableToolbar>
-              <ManagementToolbarSearch
-                onChange={(value) => setFilters((current) => ({ ...current, query: value }))}
-                placeholder="搜索名称、endpoint、版本"
-                value={filters.query}
-              />
-              <Select
-                allowClear
-                onChange={(value) => setFilters((current) => ({ ...current, mode: value ?? '' }))}
-                options={identityOutpostModeOptions}
-                placeholder="Mode"
-                style={{ width: 160 }}
-                value={filters.mode || undefined}
-              />
-              <Select
-                allowClear
-                onChange={(value) => setFilters((current) => ({ ...current, status: value ?? '' }))}
-                options={identityOutpostStatusOptions}
-                placeholder="Status"
-                style={{ width: 160 }}
-                value={filters.status || undefined}
+              <ManagementRefreshButton
+                aria-label={t('common.refresh', '刷新')}
+                loading={outpostsQuery.isFetching}
+                onClick={() => void outpostsQuery.refetch()}
+                title={t('common.refresh', '刷新')}
+                tooltip={t('common.refresh', '刷新')}
               />
             </ManagementTableToolbar>
           ),

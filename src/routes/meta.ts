@@ -486,15 +486,11 @@ function sortRuntimeMenuTree(items: RuntimeMenuNode[]): RuntimeMenuNode[] {
       if (left.sortOrder !== right.sortOrder) return left.sortOrder - right.sortOrder
       return left.path.localeCompare(right.path)
     })
-    .map(
-      (item): RuntimeMenuNode => ({
-        ...item,
-        children:
-          item.children && item.children.length > 0
-            ? sortRuntimeMenuTree(item.children)
-            : undefined,
-      }),
-    )
+    .map((item): RuntimeMenuNode => ({
+      ...item,
+      children:
+        item.children && item.children.length > 0 ? sortRuntimeMenuTree(item.children) : undefined,
+    }))
 }
 
 const APPLICATION_SECTION_ORDER: Record<string, number> = {
@@ -544,7 +540,6 @@ const SYSTEM_ROOT_ORDER: Record<string, number> = {
   'identity-overview': 20,
   'identity-applications': 21,
   'identity-providers': 22,
-  'identity-policies': 23,
   'identity-sessions': 24,
   'identity-audit': 25,
   system: 30,

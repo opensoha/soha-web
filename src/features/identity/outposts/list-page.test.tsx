@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { act, type ReactNode } from 'react'
-import { App as AntdApp } from 'antd'
+import { App as AntdApp, Form } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
@@ -44,20 +44,34 @@ interface MockColumn {
 
 vi.mock('@/components/management-data-page', () => ({
   ManagementDataPage: ({
-    header,
+    query,
     table,
   }: {
-    header: { actions?: ReactNode; title: ReactNode }
+    query?: {
+      actions?: ReactNode
+      children?: ReactNode
+      form?: ReturnType<typeof Form.useForm>[0]
+      initialValues?: Record<string, unknown>
+      onFinish?: (values: Record<string, unknown>) => void
+    }
     table: {
       columns: MockColumn[]
       dataSource: Array<Record<string, unknown>>
+      headerExtra?: ReactNode
       toolbar?: ReactNode
     }
   }) => (
     <div>
-      <h1>{header.title}</h1>
-      {header.actions}
+      <Form<unknown>
+        form={query?.form}
+        initialValues={query?.initialValues}
+        onFinish={(values) => query?.onFinish?.(values as Record<string, unknown>)}
+      >
+        {query?.children}
+        {query?.actions}
+      </Form>
       {table.toolbar}
+      {table.headerExtra}
       {table.dataSource.map((record) => (
         <div data-testid={`row-${String(record.id)}`} key={String(record.id)}>
           {table.columns.map((column, columnIndex) => {
@@ -82,7 +96,8 @@ vi.mock('@/components/management-data-page', () => ({
   ),
 }))
 
-vi.mock('@/components/management-list', () => ({
+vi.mock('@/components/management-list', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/management-list')>()),
   ManagementIconButton: ({
     disabled,
     onClick,
@@ -267,6 +282,7 @@ describe('identity outposts page behavior', () => {
       'input[placeholder="搜索名称、endpoint、版本"]',
     ) as HTMLInputElement
     await act(async () => setInputValue(search, 'harbor'))
+    await clickButton('查询')
 
     expect(container.querySelector('[data-testid="row-edge-grafana"]')).toBeNull()
     expect(container.querySelector('[data-testid="row-edge-harbor"]')).not.toBeNull()

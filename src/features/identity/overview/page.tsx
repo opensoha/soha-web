@@ -6,7 +6,6 @@ import {
   KeyOutlined,
   LinkOutlined,
   ReloadOutlined,
-  SafetyCertificateOutlined,
   UserSwitchOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
@@ -116,14 +115,6 @@ export function IdentityOverviewPage() {
     },
   ] satisfies OverviewChipItem[]
   const operationStats = [
-    {
-      key: 'policies',
-      label: '访问策略',
-      value: permissions.policies ? '可查看' : '无权限',
-      helper: 'Provider 与应用访问控制',
-      icon: <SafetyCertificateOutlined />,
-      tone: permissions.policies ? 'success' : 'warning',
-    },
     {
       key: 'audit',
       label: '最近审计',
@@ -287,13 +278,6 @@ export function IdentityOverviewPage() {
             onClick={() => navigate('/identity/outposts')}
           >
             Outpost 管理
-          </Button>
-          <Button
-            disabled={!permissions.policies}
-            icon={<SafetyCertificateOutlined />}
-            onClick={() => navigate('/identity/policies')}
-          >
-            访问策略
           </Button>
           <Button
             disabled={!permissions.sessions}

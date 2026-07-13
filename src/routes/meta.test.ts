@@ -292,7 +292,6 @@ describe('access route authorization', () => {
       'identity-applications',
       'identity-providers',
       'identity-outposts',
-      'identity-policies',
       'access-users',
       'access-roles',
       'access-teams',

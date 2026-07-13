@@ -1,28 +1,26 @@
 import { useMemo, useState } from 'react'
-import { App, Button, Popconfirm, Select, Space, Tag, Typography } from 'antd'
+import { App, Button, Form, Popconfirm, Select, Space, Tag, Typography } from 'antd'
 import type { TableColumnsType } from 'antd'
-import {
-  ApiOutlined,
-  DeleteOutlined,
-  EditOutlined,
-  PlusOutlined,
-  ReloadOutlined,
-} from '@ant-design/icons'
+import { ApiOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AdminTable } from '@/components/admin-table'
+import { ManagementDataPage } from '@/components/management-data-page'
 import {
-  ManagementDetailHeader,
   ManagementIconButton,
+  ManagementKeywordField,
+  ManagementQueryActions,
+  ManagementQueryField,
   ManagementState,
+  ManagementRefreshButton,
   ManagementTableToolbar,
-  ManagementToolbarSearch,
 } from '@/components/management-list'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { useI18n } from '@/i18n'
 import { identityApplicationQueries } from '../applications'
 import type { IdentityApplication } from '../shared/types'
 import { identityOutpostQueries } from '../outposts'
 import { OIDCClientsPanel } from './components/oidc-clients-panel'
 import { ProviderFormModal } from './components/provider-form-modal'
+import { ProxySetupPanel } from './components/proxy-setup-panel'
 import { SecretRevealModal, type IdentityOIDCSecretReveal } from './components/secret-reveal-modal'
 import { identityProviderMutations } from './mutations'
 import { formatIdentityProviderDateTime, identityProviderStatusTag } from './presentation'
@@ -63,7 +61,9 @@ function ProviderNameCell({ provider }: { provider: IdentityProvider }) {
 
 export function IdentityProvidersPage() {
   const { message } = App.useApp()
+  const { t } = useI18n()
   const queryClient = useQueryClient()
+  const [queryForm] = Form.useForm<IdentityProviderPageFilters>()
   const [filters, setFilters] = useState<IdentityProviderPageFilters>({
     query: '',
     status: '',
@@ -134,7 +134,7 @@ export function IdentityProvidersPage() {
         { providerId: editing.id, input },
         {
           onSuccess: (provider) => {
-            message.success(`已更新 ${provider.name}`)
+            message.success(t('identity.providers.updated', `已更新 ${provider.name}`))
             closeModal()
           },
           onError: (error: Error) => message.error(error.message),
@@ -144,7 +144,7 @@ export function IdentityProvidersPage() {
     }
     createMutation.mutate(input, {
       onSuccess: (provider) => {
-        message.success(`已创建 ${provider.name}`)
+        message.success(t('identity.providers.created', `已创建 ${provider.name}`))
         closeModal()
       },
       onError: (error: Error) => message.error(error.message),
@@ -174,13 +174,13 @@ export function IdentityProvidersPage() {
   const columns = useMemo<TableColumnsType<IdentityProvider>>(
     () => [
       {
-        title: 'Provider',
+        title: t('identity.providers.column.provider', 'Provider'),
         dataIndex: 'name',
         width: 300,
         render: (_, record) => <ProviderNameCell provider={record} />,
       },
       {
-        title: 'Type',
+        title: t('identity.providers.column.type', '类型'),
         dataIndex: 'type',
         width: 140,
         render: (value: IdentityRuntimeProviderType) => (
@@ -188,7 +188,7 @@ export function IdentityProvidersPage() {
         ),
       },
       {
-        title: 'Application',
+        title: t('identity.providers.column.application', '应用'),
         dataIndex: 'applicationId',
         width: 260,
         render: (value: string) => {
@@ -204,129 +204,177 @@ export function IdentityProvidersPage() {
         },
       },
       {
-        title: 'Status',
+        title: t('identity.providers.column.status', '状态'),
         dataIndex: 'status',
         width: 150,
         render: (value: IdentityRuntimeProviderStatus, record) => (
           <Space orientation="vertical" size={2}>
             {identityProviderStatusTag(value)}
             <Tag color={record.enabled ? 'green' : 'default'}>
-              {record.enabled ? 'Runtime on' : 'Runtime off'}
+              {record.enabled
+                ? t('identity.providers.runtimeOn', '运行中')
+                : t('identity.providers.runtimeOff', '已停止')}
             </Tag>
           </Space>
         ),
       },
       {
-        title: 'Updated',
+        title: t('identity.providers.column.updated', '更新时间'),
         dataIndex: 'updatedAt',
         width: 140,
         render: formatIdentityProviderDateTime,
       },
       {
-        title: 'Actions',
+        title: t('identity.providers.column.actions', '操作'),
         key: 'actions',
         fixed: 'right',
         width: 128,
         render: (_, record) => (
           <Space size={4}>
             <ManagementIconButton
+              aria-label={t('common.edit', '编辑')}
               disabled={!canManage}
               icon={<EditOutlined />}
               onClick={() => openEdit(record)}
-              tooltip="编辑"
+              tooltip={t('common.edit', '编辑')}
             />
             <Popconfirm
-              cancelText="取消"
+              cancelText={t('common.cancel', '取消')}
               disabled={!canManage}
               okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
-              okText="删除"
+              okText={t('common.delete', '删除')}
               onConfirm={() =>
                 deleteMutation.mutate(record.id, {
-                  onSuccess: () => message.success('Provider 已删除'),
+                  onSuccess: () =>
+                    message.success(t('identity.providers.deleted', 'Provider 已删除')),
                   onError: (error: Error) => message.error(error.message),
                 })
               }
-              title={`删除 ${record.name}`}
+              title={t('identity.providers.deleteConfirm', `删除 ${record.name}`)}
             >
-              <Button danger disabled={!canManage} icon={<DeleteOutlined />} size="small" />
+              <ManagementIconButton
+                aria-label={t('common.delete', '删除')}
+                danger
+                disabled={!canManage}
+                icon={<DeleteOutlined />}
+                tooltip={t('common.delete', '删除')}
+              />
             </Popconfirm>
           </Space>
         ),
       },
     ],
-    [applicationById, canManage, deleteMutation, message],
+    [applicationById, canManage, deleteMutation, message, t],
   )
 
   return (
-    <div className="soha-page soha-identity-providers-page">
-      <ManagementDetailHeader
-        actions={
-          <Space wrap>
-            <Button icon={<ReloadOutlined />} onClick={() => providersQuery.refetch()}>
-              刷新
-            </Button>
-            <Button
-              disabled={!canManage}
-              icon={<PlusOutlined />}
-              onClick={openCreate}
-              type="primary"
-            >
-              新建 Provider
-            </Button>
-          </Space>
-        }
-        description="管理 Soha 对下游应用暴露的 OIDC / Proxy Provider。OIDC client 可在展开行中维护。"
-        title="Identity Providers"
-      />
-
-      <AdminTable
-        rowKey="id"
-        columns={columns}
-        dataSource={filteredProviders}
-        empty={
-          <ManagementState
-            description="创建 Provider 后可为下游应用提供统一登录。"
-            kind="empty"
-            title="暂无 Provider"
-          />
-        }
-        expandable={{
-          expandedRowRender: (record: IdentityProvider) => (
-            <OIDCClientsPanel
-              canManage={canManage}
-              onSecretCreated={setCreatedSecret}
-              provider={record}
+    <>
+      <ManagementDataPage
+        className="soha-identity-providers-page"
+        query={{
+          actions: (
+            <ManagementQueryActions
+              disabledReset={!filters.query && !filters.status && !filters.type}
+              loading={providersQuery.isFetching}
+              onReset={() => {
+                queryForm.resetFields()
+                setFilters({ query: '', status: '', type: '' })
+              }}
             />
           ),
-          rowExpandable: (record: IdentityProvider) => record.type === 'oidc',
+          children: (
+            <>
+              <ManagementKeywordField
+                label={t('identity.providers.keyword', '关键词')}
+                name="query"
+                placeholder={t('identity.providers.search', '搜索 Provider 或应用')}
+              />
+              <ManagementQueryField
+                label={t('identity.providers.type', '类型')}
+                name="type"
+                width={160}
+              >
+                <Select
+                  allowClear
+                  options={providerTypeOptions}
+                  placeholder={t('identity.providers.type', '类型')}
+                />
+              </ManagementQueryField>
+              <ManagementQueryField
+                label={t('identity.providers.status', '状态')}
+                name="status"
+                width={160}
+              >
+                <Select
+                  allowClear
+                  options={providerStatusOptions}
+                  placeholder={t('identity.providers.status', '状态')}
+                />
+              </ManagementQueryField>
+            </>
+          ),
+          form: queryForm,
+          initialValues: { query: '', status: '', type: '' },
+          onFinish: (values) =>
+            setFilters({
+              query: String(values.query ?? '').trim(),
+              status: values.status ?? '',
+              type: values.type ?? '',
+            }),
         }}
-        loading={providersQuery.isLoading || providersQuery.isFetching}
-        title="Provider 列表"
-        toolbar={
-          <ManagementTableToolbar>
-            <ManagementToolbarSearch
-              onChange={(value) => setFilters((current) => ({ ...current, query: value }))}
-              placeholder="搜索 Provider 或应用"
-              value={filters.query}
+        table={{
+          rowKey: 'id',
+          columns,
+          dataSource: filteredProviders,
+          empty: (
+            <ManagementState
+              description={t(
+                'identity.providers.emptyDescription',
+                '创建 Provider 后可为下游应用提供统一登录。',
+              )}
+              kind="empty"
+              title={t('identity.providers.empty', '暂无 Provider')}
             />
-            <Select
-              allowClear
-              onChange={(value) => setFilters((current) => ({ ...current, type: value ?? '' }))}
-              options={providerTypeOptions}
-              placeholder="类型"
-              style={{ width: 140 }}
-              value={filters.type || undefined}
-            />
-            <Select
-              allowClear
-              onChange={(value) => setFilters((current) => ({ ...current, status: value ?? '' }))}
-              options={providerStatusOptions}
-              placeholder="状态"
-              style={{ width: 150 }}
-              value={filters.status || undefined}
-            />
-          </ManagementTableToolbar>
-        }
+          ),
+          expandable: {
+            expandedRowRender: (record: IdentityProvider) =>
+              record.type === 'oidc' ? (
+                <OIDCClientsPanel
+                  canManage={canManage}
+                  onSecretCreated={setCreatedSecret}
+                  provider={record}
+                />
+              ) : (
+                <ProxySetupPanel provider={record} />
+              ),
+            rowExpandable: () => true,
+          },
+          loading: providersQuery.isLoading || providersQuery.isFetching,
+          scroll: { x: 'max-content' },
+          columnSettingIconOnly: true,
+          columnSettingPlacement: 'header',
+          headerExtra: (
+            <ManagementTableToolbar>
+              <Button
+                autoInsertSpace={false}
+                disabled={!canManage}
+                icon={<PlusOutlined />}
+                onClick={openCreate}
+                size="small"
+                type="primary"
+              >
+                {t('identity.providers.create', '新建 Provider')}
+              </Button>
+              <ManagementRefreshButton
+                aria-label={t('common.refresh', '刷新')}
+                loading={providersQuery.isFetching}
+                onClick={() => void providersQuery.refetch()}
+                title={t('common.refresh', '刷新')}
+                tooltip={t('common.refresh', '刷新')}
+              />
+            </ManagementTableToolbar>
+          ),
+        }}
       />
 
       <ProviderFormModal
@@ -344,6 +392,6 @@ export function IdentityProvidersPage() {
       />
 
       <SecretRevealModal onClose={() => setCreatedSecret(null)} value={createdSecret} />
-    </div>
+    </>
   )
 }

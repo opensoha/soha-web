@@ -15,7 +15,6 @@ export function useIdentityOverviewData() {
     applications: hasPermission(snapshot, 'identity.applications.view'),
     providers: hasPermission(snapshot, 'identity.providers.view'),
     outposts: hasPermission(snapshot, 'identity.outposts.view'),
-    policies: hasPermission(snapshot, 'identity.policies.view'),
     sessions: hasAnyPermission(snapshot, ['identity.sessions.view', 'system.online-users.view']),
     audit: hasAnyPermission(snapshot, ['identity.audit.view', 'system.audit.view']),
   }

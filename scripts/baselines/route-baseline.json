@@ -43,20 +43,21 @@
     ]
   },
   "summary": {
-    "runtimePaths": 223,
-    "metadataPaths": 223,
-    "overlappingPaths": 223,
+    "runtimePaths": 224,
+    "metadataPaths": 224,
+    "overlappingPaths": 224,
     "runtimeOnlyPaths": 0,
     "metadataOnlyPaths": 0,
     "inlineJsxPaths": 0,
-    "lazyRouteLoads": 190,
-    "lazySourceModules": 172
+    "lazyRouteLoads": 191,
+    "lazySourceModules": 173
   },
   "paths": {
     "runtime": [
       "*",
       "/",
       "/access",
+      "/access/directory-sync",
       "/access/policies",
       "/access/roles",
       "/access/scope-grants",
@@ -282,6 +283,7 @@
       "*",
       "/",
       "/access",
+      "/access/directory-sync",
       "/access/policies",
       "/access/roles",
       "/access/scope-grants",
@@ -507,6 +509,7 @@
       "*",
       "/",
       "/access",
+      "/access/directory-sync",
       "/access/policies",
       "/access/roles",
       "/access/scope-grants",
@@ -1150,6 +1153,11 @@
         "source": "@/features/platform/workloads/deployments/detail-page"
       },
       {
+        "exportName": "DirectorySyncPage",
+        "moduleExport": "DirectorySyncPage",
+        "source": "@/features/access/directory-sync/page"
+      },
+      {
         "exportName": "DockerHostsPage",
         "moduleExport": "DockerHostsPage",
         "source": "@/features/docker/hosts/page"
@@ -1687,6 +1695,7 @@
     ],
     "sources": [
       "@/features/access/center/page",
+      "@/features/access/directory-sync/page",
       "@/features/access/policies/page",
       "@/features/access/roles/page",
       "@/features/access/scope-grants/page",
@@ -1860,22 +1869,58 @@
       "@/features/virtualization/virtual-machines/list-page"
     ],
     "sourceGroups": {
-      "@/features/access/center/page": ["AccessCenterPage"],
-      "@/features/access/policies/page": ["AccessPoliciesPage"],
-      "@/features/access/roles/page": ["AccessRolesPage"],
-      "@/features/access/scope-grants/page": ["AccessScopeGrantsPage"],
-      "@/features/access/teams/page": ["AccessTeamsPage"],
-      "@/features/access/users/page": ["AccessUsersPage"],
-      "@/features/auth/login-page": ["LoginPage"],
-      "@/features/auth/oidc-callback-page": ["OIDCCallbackPage", "OIDCCallbackPage"],
-      "@/features/auth/user-profile-page": ["UserProfilePage"],
-      "@/features/copilot/gateway/pages/call-logs-page": ["AIGatewayCallLogsPage"],
-      "@/features/copilot/gateway/pages/clients-page": ["AIGatewayClientsPage"],
-      "@/features/copilot/gateway/pages/governance-page": ["AIGatewayGovernancePage"],
-      "@/features/copilot/gateway/pages/manifest-page": ["AIGatewayManifestPage"],
-      "@/features/copilot/gateway/pages/overview-page": ["AIGatewayOverviewPage"],
-      "@/features/copilot/gateway/pages/relay-page": ["AIGatewayRelayPage"],
-      "@/features/copilot/gateway/pages/tokens-page": ["AIGatewayTokensPage"],
+      "@/features/access/center/page": [
+        "AccessCenterPage"
+      ],
+      "@/features/access/directory-sync/page": [
+        "DirectorySyncPage"
+      ],
+      "@/features/access/policies/page": [
+        "AccessPoliciesPage"
+      ],
+      "@/features/access/roles/page": [
+        "AccessRolesPage"
+      ],
+      "@/features/access/scope-grants/page": [
+        "AccessScopeGrantsPage"
+      ],
+      "@/features/access/teams/page": [
+        "AccessTeamsPage"
+      ],
+      "@/features/access/users/page": [
+        "AccessUsersPage"
+      ],
+      "@/features/auth/login-page": [
+        "LoginPage"
+      ],
+      "@/features/auth/oidc-callback-page": [
+        "OIDCCallbackPage",
+        "OIDCCallbackPage"
+      ],
+      "@/features/auth/user-profile-page": [
+        "UserProfilePage"
+      ],
+      "@/features/copilot/gateway/pages/call-logs-page": [
+        "AIGatewayCallLogsPage"
+      ],
+      "@/features/copilot/gateway/pages/clients-page": [
+        "AIGatewayClientsPage"
+      ],
+      "@/features/copilot/gateway/pages/governance-page": [
+        "AIGatewayGovernancePage"
+      ],
+      "@/features/copilot/gateway/pages/manifest-page": [
+        "AIGatewayManifestPage"
+      ],
+      "@/features/copilot/gateway/pages/overview-page": [
+        "AIGatewayOverviewPage"
+      ],
+      "@/features/copilot/gateway/pages/relay-page": [
+        "AIGatewayRelayPage"
+      ],
+      "@/features/copilot/gateway/pages/tokens-page": [
+        "AIGatewayTokensPage"
+      ],
       "@/features/copilot/gateway/redirects": [
         "AIGatewayModelRoutesRedirectPage",
         "AIGatewayRedirectPage",
@@ -1883,8 +1928,12 @@
         "AIGatewayUpstreamsRedirectPage",
         "AIGatewayWildcardRedirectPage"
       ],
-      "@/features/copilot/observe/model-settings/page": ["AIModelSettingsPage"],
-      "@/features/copilot/observe/operations/page": ["AIOperationsPage"],
+      "@/features/copilot/observe/model-settings/page": [
+        "AIModelSettingsPage"
+      ],
+      "@/features/copilot/observe/operations/page": [
+        "AIOperationsPage"
+      ],
       "@/features/copilot/observe/redirects": [
         "AIWorkbenchModeRedirect",
         "AIWorkbenchModeRedirect",
@@ -1900,56 +1949,148 @@
         "AIWorkbenchToolsRedirect",
         "AIWorkbenchToolsRedirect"
       ],
-      "@/features/copilot/observe/tools/page": ["AIToolsPage"],
-      "@/features/copilot/workbench/pages/chat-page": ["AIWorkbenchChatPage"],
-      "@/features/copilot/workbench/pages/performance-page": ["AIWorkbenchPerformancePage"],
-      "@/features/copilot/workbench/pages/root-cause-page": ["AIWorkbenchRootCausePage"],
-      "@/features/delivery/applications/detail-page": ["ApplicationDetailPage"],
-      "@/features/delivery/applications/list-page": ["ApplicationsPage"],
-      "@/features/delivery/blueprints/page": ["DeliveryBlueprintsPage"],
-      "@/features/delivery/build-templates/page": ["BuildTemplatesPage"],
-      "@/features/delivery/builds/detail-page": ["BuildDetailPage"],
-      "@/features/delivery/environments/detail-page": ["ApplicationEnvironmentDetailPage"],
-      "@/features/delivery/environments/list-page": ["ApplicationEnvironmentsPage"],
-      "@/features/delivery/execution-tasks/detail-page": ["ExecutionTaskDetailPage"],
-      "@/features/delivery/execution-tasks/list-page": ["ExecutionTasksPage"],
-      "@/features/delivery/registries/page": ["RegistriesPage"],
-      "@/features/delivery/release-board/page": ["ReleaseBoardPage"],
-      "@/features/delivery/release-bundles/detail-page": ["ReleaseBundleDetailPage"],
-      "@/features/delivery/release-bundles/list-page": ["ReleaseBundlesPage"],
-      "@/features/delivery/releases/detail-page": ["ReleaseDetailPage"],
-      "@/features/delivery/releases/list-page": ["ReleasesPage"],
-      "@/features/delivery/runtime/workload-detail-page": ["ApplicationWorkloadDetailPage"],
-      "@/features/delivery/workbench/analysis-page": ["DeliveryAnalysisPage"],
-      "@/features/delivery/workbench/onboarding-page": ["DeliveryOnboardingPage"],
-      "@/features/delivery/workbench/testing-page": ["DeliveryTestingPage"],
-      "@/features/delivery/workflow-templates/page": ["WorkflowTemplatesPage"],
-      "@/features/delivery/workflows/detail-page": ["WorkflowDetailPage"],
-      "@/features/delivery/workflows/list-page": ["WorkflowsPage"],
-      "@/features/docker/hosts/page": ["DockerHostsPage"],
-      "@/features/docker/operations/page": ["DockerOperationsPage"],
-      "@/features/docker/overview/page": ["DockerOverviewPage"],
-      "@/features/docker/projects/detail-page": ["DockerProjectDetailPage"],
-      "@/features/docker/projects/list-page": ["DockerProjectsPage"],
-      "@/features/docker/templates/page": ["DockerTemplatesPage"],
-      "@/features/identity/applications/list-page": ["IdentityApplicationsPage"],
-      "@/features/identity/outposts/list-page": ["IdentityOutpostsPage"],
-      "@/features/identity/overview/page": ["IdentityOverviewPage"],
-      "@/features/identity/policies/list-page": ["IdentityPoliciesPage"],
-      "@/features/identity/providers/list-page": ["IdentityProvidersPage"],
+      "@/features/copilot/observe/tools/page": [
+        "AIToolsPage"
+      ],
+      "@/features/copilot/workbench/pages/chat-page": [
+        "AIWorkbenchChatPage"
+      ],
+      "@/features/copilot/workbench/pages/performance-page": [
+        "AIWorkbenchPerformancePage"
+      ],
+      "@/features/copilot/workbench/pages/root-cause-page": [
+        "AIWorkbenchRootCausePage"
+      ],
+      "@/features/delivery/applications/detail-page": [
+        "ApplicationDetailPage"
+      ],
+      "@/features/delivery/applications/list-page": [
+        "ApplicationsPage"
+      ],
+      "@/features/delivery/blueprints/page": [
+        "DeliveryBlueprintsPage"
+      ],
+      "@/features/delivery/build-templates/page": [
+        "BuildTemplatesPage"
+      ],
+      "@/features/delivery/builds/detail-page": [
+        "BuildDetailPage"
+      ],
+      "@/features/delivery/environments/detail-page": [
+        "ApplicationEnvironmentDetailPage"
+      ],
+      "@/features/delivery/environments/list-page": [
+        "ApplicationEnvironmentsPage"
+      ],
+      "@/features/delivery/execution-tasks/detail-page": [
+        "ExecutionTaskDetailPage"
+      ],
+      "@/features/delivery/execution-tasks/list-page": [
+        "ExecutionTasksPage"
+      ],
+      "@/features/delivery/registries/page": [
+        "RegistriesPage"
+      ],
+      "@/features/delivery/release-board/page": [
+        "ReleaseBoardPage"
+      ],
+      "@/features/delivery/release-bundles/detail-page": [
+        "ReleaseBundleDetailPage"
+      ],
+      "@/features/delivery/release-bundles/list-page": [
+        "ReleaseBundlesPage"
+      ],
+      "@/features/delivery/releases/detail-page": [
+        "ReleaseDetailPage"
+      ],
+      "@/features/delivery/releases/list-page": [
+        "ReleasesPage"
+      ],
+      "@/features/delivery/runtime/workload-detail-page": [
+        "ApplicationWorkloadDetailPage"
+      ],
+      "@/features/delivery/workbench/analysis-page": [
+        "DeliveryAnalysisPage"
+      ],
+      "@/features/delivery/workbench/onboarding-page": [
+        "DeliveryOnboardingPage"
+      ],
+      "@/features/delivery/workbench/testing-page": [
+        "DeliveryTestingPage"
+      ],
+      "@/features/delivery/workflow-templates/page": [
+        "WorkflowTemplatesPage"
+      ],
+      "@/features/delivery/workflows/detail-page": [
+        "WorkflowDetailPage"
+      ],
+      "@/features/delivery/workflows/list-page": [
+        "WorkflowsPage"
+      ],
+      "@/features/docker/hosts/page": [
+        "DockerHostsPage"
+      ],
+      "@/features/docker/operations/page": [
+        "DockerOperationsPage"
+      ],
+      "@/features/docker/overview/page": [
+        "DockerOverviewPage"
+      ],
+      "@/features/docker/projects/detail-page": [
+        "DockerProjectDetailPage"
+      ],
+      "@/features/docker/projects/list-page": [
+        "DockerProjectsPage"
+      ],
+      "@/features/docker/templates/page": [
+        "DockerTemplatesPage"
+      ],
+      "@/features/identity/applications/list-page": [
+        "IdentityApplicationsPage"
+      ],
+      "@/features/identity/outposts/list-page": [
+        "IdentityOutpostsPage"
+      ],
+      "@/features/identity/overview/page": [
+        "IdentityOverviewPage"
+      ],
+      "@/features/identity/policies/list-page": [
+        "IdentityPoliciesPage"
+      ],
+      "@/features/identity/providers/list-page": [
+        "IdentityProvidersPage"
+      ],
       "@/features/observability/alerts/detail-page": [
         "AlertEventDetailPage",
         "AlertEventDetailPage"
       ],
-      "@/features/observability/alerts/page": ["AlertsPage"],
-      "@/features/observability/events/page": ["EventsPage"],
-      "@/features/observability/healing/page": ["HealingPage"],
-      "@/features/observability/integrations/page": ["AlertIntegrationsPage"],
-      "@/features/observability/notifications/page": ["NotificationsPage"],
-      "@/features/observability/oncall/board-page": ["OnCallBoardPage"],
-      "@/features/observability/oncall/settings-page": ["OnCallSettingsPage"],
-      "@/features/observability/overview/page": ["MonitoringPage"],
-      "@/features/observability/rules/page": ["AlertRulesPage"],
+      "@/features/observability/alerts/page": [
+        "AlertsPage"
+      ],
+      "@/features/observability/events/page": [
+        "EventsPage"
+      ],
+      "@/features/observability/healing/page": [
+        "HealingPage"
+      ],
+      "@/features/observability/integrations/page": [
+        "AlertIntegrationsPage"
+      ],
+      "@/features/observability/notifications/page": [
+        "NotificationsPage"
+      ],
+      "@/features/observability/oncall/board-page": [
+        "OnCallBoardPage"
+      ],
+      "@/features/observability/oncall/settings-page": [
+        "OnCallSettingsPage"
+      ],
+      "@/features/observability/overview/page": [
+        "MonitoringPage"
+      ],
+      "@/features/observability/rules/page": [
+        "AlertRulesPage"
+      ],
       "@/features/platform/access-control/clusterrolebindings/detail-page": [
         "PlatformAccessControlClusterRoleBindingDetailPage"
       ],
@@ -1971,27 +2112,51 @@
       "@/features/platform/access-control/roles/detail-page": [
         "PlatformAccessControlRoleDetailPage"
       ],
-      "@/features/platform/access-control/roles/list-page": ["PlatformAccessControlRolesPage"],
+      "@/features/platform/access-control/roles/list-page": [
+        "PlatformAccessControlRolesPage"
+      ],
       "@/features/platform/access-control/serviceaccounts/detail-page": [
         "PlatformAccessControlServiceAccountDetailPage"
       ],
       "@/features/platform/access-control/serviceaccounts/list-page": [
         "PlatformAccessControlServiceAccountsPage"
       ],
-      "@/features/platform/cluster-resources/namespaces-list-page": ["ClusterNamespacesPage"],
-      "@/features/platform/cluster-resources/node-detail-page": ["NodeDetailPage"],
-      "@/features/platform/cluster-resources/nodes-list-page": ["ClusterNodesPage"],
-      "@/features/platform/clusters/detail-page": ["ClusterDetailPage"],
-      "@/features/platform/clusters/list-page": ["ClustersPage"],
-      "@/features/platform/configuration/configmaps/detail-page": ["ConfigMapDetailPage"],
-      "@/features/platform/configuration/configmaps/list-page": ["ConfigurationConfigMapsPage"],
-      "@/features/platform/configuration/hpas/detail-page": ["ConfigurationHPADetailPage"],
-      "@/features/platform/configuration/hpas/list-page": ["ConfigurationHPAPage"],
-      "@/features/platform/configuration/leases/list-page": ["ConfigurationLeasesPage"],
+      "@/features/platform/cluster-resources/namespaces-list-page": [
+        "ClusterNamespacesPage"
+      ],
+      "@/features/platform/cluster-resources/node-detail-page": [
+        "NodeDetailPage"
+      ],
+      "@/features/platform/cluster-resources/nodes-list-page": [
+        "ClusterNodesPage"
+      ],
+      "@/features/platform/clusters/detail-page": [
+        "ClusterDetailPage"
+      ],
+      "@/features/platform/clusters/list-page": [
+        "ClustersPage"
+      ],
+      "@/features/platform/configuration/configmaps/detail-page": [
+        "ConfigMapDetailPage"
+      ],
+      "@/features/platform/configuration/configmaps/list-page": [
+        "ConfigurationConfigMapsPage"
+      ],
+      "@/features/platform/configuration/hpas/detail-page": [
+        "ConfigurationHPADetailPage"
+      ],
+      "@/features/platform/configuration/hpas/list-page": [
+        "ConfigurationHPAPage"
+      ],
+      "@/features/platform/configuration/leases/list-page": [
+        "ConfigurationLeasesPage"
+      ],
       "@/features/platform/configuration/limitranges/detail-page": [
         "ConfigurationLimitRangeDetailPage"
       ],
-      "@/features/platform/configuration/limitranges/list-page": ["ConfigurationLimitRangesPage"],
+      "@/features/platform/configuration/limitranges/list-page": [
+        "ConfigurationLimitRangesPage"
+      ],
       "@/features/platform/configuration/mutatingwebhookconfigurations/detail-page": [
         "ConfigurationMutatingWebhookConfigurationDetailPage"
       ],
@@ -2016,106 +2181,232 @@
       "@/features/platform/configuration/runtimeclasses/list-page": [
         "ConfigurationRuntimeClassesPage"
       ],
-      "@/features/platform/configuration/secrets/detail-page": ["SecretDetailPage"],
-      "@/features/platform/configuration/secrets/list-page": ["ConfigurationSecretsPage"],
+      "@/features/platform/configuration/secrets/detail-page": [
+        "SecretDetailPage"
+      ],
+      "@/features/platform/configuration/secrets/list-page": [
+        "ConfigurationSecretsPage"
+      ],
       "@/features/platform/configuration/validatingwebhookconfigurations/detail-page": [
         "ConfigurationValidatingWebhookConfigurationDetailPage"
       ],
       "@/features/platform/configuration/validatingwebhookconfigurations/list-page": [
         "ConfigurationValidatingWebhooksPage"
       ],
-      "@/features/platform/extensions/crds/api-group-detail-page": ["CRDApiGroupDetailPage"],
-      "@/features/platform/extensions/crds/list-page": ["CRDPage"],
-      "@/features/platform/extensions/helm/charts/page": ["HelmChartsPage"],
-      "@/features/platform/extensions/helm/releases/detail-page": ["HelmReleaseDetailPage"],
-      "@/features/platform/extensions/helm/releases/list-page": ["HelmReleasesPage"],
+      "@/features/platform/extensions/crds/api-group-detail-page": [
+        "CRDApiGroupDetailPage"
+      ],
+      "@/features/platform/extensions/crds/list-page": [
+        "CRDPage"
+      ],
+      "@/features/platform/extensions/helm/charts/page": [
+        "HelmChartsPage"
+      ],
+      "@/features/platform/extensions/helm/releases/detail-page": [
+        "HelmReleaseDetailPage"
+      ],
+      "@/features/platform/extensions/helm/releases/list-page": [
+        "HelmReleasesPage"
+      ],
       "@/features/platform/network/gateway-api/backend-tls-policies-page": [
         "NetworkBackendTLSPoliciesPage"
       ],
-      "@/features/platform/network/gateway-api/gateway-detail-page": ["GatewayDetailPage"],
+      "@/features/platform/network/gateway-api/gateway-detail-page": [
+        "GatewayDetailPage"
+      ],
       "@/features/platform/network/gateway-api/gatewayclass-detail-page": [
         "GatewayClassDetailPage"
       ],
       "@/features/platform/network/gateway-api/gatewayclasses-list-page": [
         "NetworkGatewayClassesPage"
       ],
-      "@/features/platform/network/gateway-api/gateways-list-page": ["NetworkGatewaysPage"],
-      "@/features/platform/network/gateway-api/grpc-routes-page": ["NetworkGRPCRoutesPage"],
-      "@/features/platform/network/gateway-api/httproutes-page": ["NetworkHTTPRoutesPage"],
+      "@/features/platform/network/gateway-api/gateways-list-page": [
+        "NetworkGatewaysPage"
+      ],
+      "@/features/platform/network/gateway-api/grpc-routes-page": [
+        "NetworkGRPCRoutesPage"
+      ],
+      "@/features/platform/network/gateway-api/httproutes-page": [
+        "NetworkHTTPRoutesPage"
+      ],
       "@/features/platform/network/gateway-api/reference-grants-page": [
         "NetworkReferenceGrantsPage"
       ],
-      "@/features/platform/network/ingresses/detail-page": ["IngressDetailPage"],
-      "@/features/platform/network/ingresses/list-page": ["NetworkIngressesPage"],
-      "@/features/platform/network/port-forward/page": ["NetworkPortForwardPage"],
+      "@/features/platform/network/ingresses/detail-page": [
+        "IngressDetailPage"
+      ],
+      "@/features/platform/network/ingresses/list-page": [
+        "NetworkIngressesPage"
+      ],
+      "@/features/platform/network/port-forward/page": [
+        "NetworkPortForwardPage"
+      ],
       "@/features/platform/network/resources/endpointslice-detail-page": [
         "EndpointSliceDetailPage"
       ],
       "@/features/platform/network/resources/endpointslices-list-page": [
         "NetworkEndpointSlicesPage"
       ],
-      "@/features/platform/network/resources/ingressclass-detail-page": ["IngressClassDetailPage"],
+      "@/features/platform/network/resources/ingressclass-detail-page": [
+        "IngressClassDetailPage"
+      ],
       "@/features/platform/network/resources/ingressclasses-list-page": [
         "NetworkIngressClassesPage"
       ],
-      "@/features/platform/network/resources/networkpolicies-list-page": ["NetworkPoliciesPage"],
+      "@/features/platform/network/resources/networkpolicies-list-page": [
+        "NetworkPoliciesPage"
+      ],
       "@/features/platform/network/resources/networkpolicy-detail-page": [
         "NetworkPolicyDetailPage"
       ],
-      "@/features/platform/network/services/detail-page": ["ServiceDetailPage"],
-      "@/features/platform/network/services/list-page": ["NetworkServicesPage"],
-      "@/features/platform/network/topology/page": ["NetworkTopologyPage"],
-      "@/features/platform/overview-page": ["OverviewPage"],
-      "@/features/platform/storage/persistent-volume-claims/detail-page": ["StoragePvcDetailPage"],
-      "@/features/platform/storage/persistent-volume-claims/list-page": ["StoragePvcPage"],
-      "@/features/platform/storage/persistent-volumes/detail-page": ["StoragePvDetailPage"],
-      "@/features/platform/storage/persistent-volumes/list-page": ["StoragePvPage"],
-      "@/features/platform/storage/storage-classes/detail-page": ["StorageClassDetailPage"],
-      "@/features/platform/storage/storage-classes/list-page": ["StorageClassesPage"],
-      "@/features/platform/workloads/cronjobs/detail-page": ["CronJobDetailPage"],
-      "@/features/platform/workloads/cronjobs/list-page": ["WorkloadsCronJobsPage"],
-      "@/features/platform/workloads/daemonsets/detail-page": ["DaemonSetDetailPage"],
-      "@/features/platform/workloads/daemonsets/list-page": ["WorkloadsDaemonSetsPage"],
-      "@/features/platform/workloads/deployments/detail-page": ["DeploymentDetailPage"],
-      "@/features/platform/workloads/deployments/list-page": ["WorkloadsDeploymentsPage"],
-      "@/features/platform/workloads/jobs/detail-page": ["JobDetailPage"],
-      "@/features/platform/workloads/jobs/list-page": ["WorkloadsJobsPage"],
-      "@/features/platform/workloads/overview/page": ["WorkloadsOverviewPage"],
-      "@/features/platform/workloads/pods/detail-page": ["PodDetailPage"],
-      "@/features/platform/workloads/pods/list-page": ["WorkloadsPodsPage"],
-      "@/features/platform/workloads/replicasets/detail-page": ["ReplicaSetDetailPage"],
-      "@/features/platform/workloads/replicasets/list-page": ["WorkloadsReplicaSetsPage"],
+      "@/features/platform/network/services/detail-page": [
+        "ServiceDetailPage"
+      ],
+      "@/features/platform/network/services/list-page": [
+        "NetworkServicesPage"
+      ],
+      "@/features/platform/network/topology/page": [
+        "NetworkTopologyPage"
+      ],
+      "@/features/platform/overview-page": [
+        "OverviewPage"
+      ],
+      "@/features/platform/storage/persistent-volume-claims/detail-page": [
+        "StoragePvcDetailPage"
+      ],
+      "@/features/platform/storage/persistent-volume-claims/list-page": [
+        "StoragePvcPage"
+      ],
+      "@/features/platform/storage/persistent-volumes/detail-page": [
+        "StoragePvDetailPage"
+      ],
+      "@/features/platform/storage/persistent-volumes/list-page": [
+        "StoragePvPage"
+      ],
+      "@/features/platform/storage/storage-classes/detail-page": [
+        "StorageClassDetailPage"
+      ],
+      "@/features/platform/storage/storage-classes/list-page": [
+        "StorageClassesPage"
+      ],
+      "@/features/platform/workloads/cronjobs/detail-page": [
+        "CronJobDetailPage"
+      ],
+      "@/features/platform/workloads/cronjobs/list-page": [
+        "WorkloadsCronJobsPage"
+      ],
+      "@/features/platform/workloads/daemonsets/detail-page": [
+        "DaemonSetDetailPage"
+      ],
+      "@/features/platform/workloads/daemonsets/list-page": [
+        "WorkloadsDaemonSetsPage"
+      ],
+      "@/features/platform/workloads/deployments/detail-page": [
+        "DeploymentDetailPage"
+      ],
+      "@/features/platform/workloads/deployments/list-page": [
+        "WorkloadsDeploymentsPage"
+      ],
+      "@/features/platform/workloads/jobs/detail-page": [
+        "JobDetailPage"
+      ],
+      "@/features/platform/workloads/jobs/list-page": [
+        "WorkloadsJobsPage"
+      ],
+      "@/features/platform/workloads/overview/page": [
+        "WorkloadsOverviewPage"
+      ],
+      "@/features/platform/workloads/pods/detail-page": [
+        "PodDetailPage"
+      ],
+      "@/features/platform/workloads/pods/list-page": [
+        "WorkloadsPodsPage"
+      ],
+      "@/features/platform/workloads/replicasets/detail-page": [
+        "ReplicaSetDetailPage"
+      ],
+      "@/features/platform/workloads/replicasets/list-page": [
+        "WorkloadsReplicaSetsPage"
+      ],
       "@/features/platform/workloads/replicationcontrollers/detail-page": [
         "ReplicationControllerDetailPage"
       ],
       "@/features/platform/workloads/replicationcontrollers/list-page": [
         "WorkloadsReplicationControllersPage"
       ],
-      "@/features/platform/workloads/statefulsets/detail-page": ["StatefulSetDetailPage"],
-      "@/features/platform/workloads/statefulsets/list-page": ["WorkloadsStatefulSetsPage"],
-      "@/features/plugins/installed/detail-page": ["InstalledPluginDetailPage"],
-      "@/features/plugins/installed/list-page": ["InstalledPluginsPage"],
-      "@/features/plugins/marketplace/detail-page": ["PluginMarketplaceDetailPage"],
-      "@/features/plugins/marketplace/list-page": ["PluginMarketplacePage"],
-      "@/features/provider-portal/application-detail/page": ["PortalApplicationDetailPage"],
-      "@/features/provider-portal/catalog/page": ["SohaProviderPortalPage"],
-      "@/features/provider-portal/security/page": ["PortalSecurityPage"],
-      "@/features/settings/about/page": ["AboutSettingsPage"],
-      "@/features/settings/branding/page": ["BrandingSettingsPage"],
-      "@/features/settings/center/page": ["SettingsCenterPage"],
-      "@/features/settings/identity/page": ["LoginSettingsPage"],
-      "@/features/system/announcements/page": ["AnnouncementsPage"],
-      "@/features/system/menus/page": ["MenusPage"],
-      "@/features/system/operation-logs/page": ["OperationLogsPage"],
-      "@/features/virtualization/clusters/list-page": ["VirtualizationClustersPage"],
-      "@/features/virtualization/flavors/list-page": ["VirtualizationFlavorsPage"],
-      "@/features/virtualization/images/list-page": ["VirtualizationImagesPage"],
-      "@/features/virtualization/operations/page": ["VirtualizationOperationsPage"],
-      "@/features/virtualization/overview/page": ["VirtualizationOverviewPage"],
-      "@/features/virtualization/sync/page": ["VirtualizationSyncPage"],
-      "@/features/virtualization/virtual-machines/detail-page": ["VirtualizationVmDetailPage"],
-      "@/features/virtualization/virtual-machines/list-page": ["VirtualizationVmsPage"]
+      "@/features/platform/workloads/statefulsets/detail-page": [
+        "StatefulSetDetailPage"
+      ],
+      "@/features/platform/workloads/statefulsets/list-page": [
+        "WorkloadsStatefulSetsPage"
+      ],
+      "@/features/plugins/installed/detail-page": [
+        "InstalledPluginDetailPage"
+      ],
+      "@/features/plugins/installed/list-page": [
+        "InstalledPluginsPage"
+      ],
+      "@/features/plugins/marketplace/detail-page": [
+        "PluginMarketplaceDetailPage"
+      ],
+      "@/features/plugins/marketplace/list-page": [
+        "PluginMarketplacePage"
+      ],
+      "@/features/provider-portal/application-detail/page": [
+        "PortalApplicationDetailPage"
+      ],
+      "@/features/provider-portal/catalog/page": [
+        "SohaProviderPortalPage"
+      ],
+      "@/features/provider-portal/security/page": [
+        "PortalSecurityPage"
+      ],
+      "@/features/settings/about/page": [
+        "AboutSettingsPage"
+      ],
+      "@/features/settings/branding/page": [
+        "BrandingSettingsPage"
+      ],
+      "@/features/settings/center/page": [
+        "SettingsCenterPage"
+      ],
+      "@/features/settings/identity/page": [
+        "LoginSettingsPage"
+      ],
+      "@/features/system/announcements/page": [
+        "AnnouncementsPage"
+      ],
+      "@/features/system/menus/page": [
+        "MenusPage"
+      ],
+      "@/features/system/operation-logs/page": [
+        "OperationLogsPage"
+      ],
+      "@/features/virtualization/clusters/list-page": [
+        "VirtualizationClustersPage"
+      ],
+      "@/features/virtualization/flavors/list-page": [
+        "VirtualizationFlavorsPage"
+      ],
+      "@/features/virtualization/images/list-page": [
+        "VirtualizationImagesPage"
+      ],
+      "@/features/virtualization/operations/page": [
+        "VirtualizationOperationsPage"
+      ],
+      "@/features/virtualization/overview/page": [
+        "VirtualizationOverviewPage"
+      ],
+      "@/features/virtualization/sync/page": [
+        "VirtualizationSyncPage"
+      ],
+      "@/features/virtualization/virtual-machines/detail-page": [
+        "VirtualizationVmDetailPage"
+      ],
+      "@/features/virtualization/virtual-machines/list-page": [
+        "VirtualizationVmsPage"
+      ]
     }
   },
-  "generatedAt": "2026-07-10T17:16:45.088Z"
+  "generatedAt": "2026-07-13T03:20:29.581Z"
 }

@@ -765,7 +765,6 @@ describe('app layout workspace navigation', () => {
     expect(menuText).toContain('个人中心')
     expect(menuText).toContain('关于')
     expect(menuText).toContain('应用目录')
-    expect(menuText).toContain('访问策略')
     expect(menuText).toContain('用户')
     expect(menuText).toContain('角色')
     expect(menuText).toContain('组织')

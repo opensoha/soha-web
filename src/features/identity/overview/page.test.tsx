@@ -280,7 +280,6 @@ beforeEach(() => {
       applications: true,
       providers: true,
       outposts: true,
-      policies: true,
       sessions: true,
       audit: true,
     },
@@ -363,7 +362,6 @@ describe('IdentityOverviewPage', () => {
       ['应用目录', '/identity/applications'],
       ['Provider 管理', '/identity/providers'],
       ['Outpost 管理', '/identity/outposts'],
-      ['访问策略', '/identity/policies'],
       ['会话管理', '/identity/sessions'],
       ['审计事件', '/identity/audit'],
       ['门户首页', '/portal'],
@@ -392,7 +390,6 @@ describe('IdentityOverviewPage', () => {
         applications: false,
         providers: false,
         outposts: false,
-        policies: false,
         sessions: false,
         audit: false,
       },
@@ -402,14 +399,7 @@ describe('IdentityOverviewPage', () => {
 
     expect(container.textContent).toContain('无 Provider 权限')
     expect(container.textContent).toContain('无审计权限')
-    for (const label of [
-      '应用目录',
-      'Provider 管理',
-      'Outpost 管理',
-      '访问策略',
-      '会话管理',
-      '审计事件',
-    ]) {
+    for (const label of ['应用目录', 'Provider 管理', 'Outpost 管理', '会话管理', '审计事件']) {
       expect(buttonByText(container, label).disabled).toBe(true)
     }
     expect(buttonByText(container, '门户首页').disabled).toBe(false)
@@ -434,7 +424,6 @@ describe('IdentityOverviewPage', () => {
         applications: true,
         providers: true,
         outposts: true,
-        policies: true,
         sessions: true,
         audit: true,
       },

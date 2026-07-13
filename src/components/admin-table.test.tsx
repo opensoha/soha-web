@@ -153,6 +153,24 @@ describe('AdminTable', () => {
     expect(actionColumn.onCell({}, 0).className).toContain('soha-table-actions-column--auto')
   })
 
+  it('keeps action columns visible and out of column selection', async () => {
+    const container = await renderNode(
+      <AdminTable
+        columns={[
+          { title: '名称', dataIndex: 'name' },
+          { title: '状态', dataIndex: 'status' },
+          { title: '操作', key: 'actions', fixed: 'right', render: () => null },
+        ]}
+        dataSource={[{ id: '1', name: 'demo', status: 'ready' }]}
+        rowKey="id"
+      />,
+    )
+
+    expect(captured.tableProps.columns).toHaveLength(3)
+    expect(captured.tableProps.columns[2].fixed).toBe('right')
+    expect(container.textContent).not.toContain('操作')
+  })
+
   it('preserves explicit K8s action widths while hiding the column title', async () => {
     await renderNode(
       <AdminTable

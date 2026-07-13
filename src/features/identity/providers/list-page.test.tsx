@@ -51,6 +51,7 @@ vi.mock('@/components/admin-table', () => ({
     columns,
     dataSource,
     expandable,
+    headerExtra,
     toolbar,
   }: {
     columns: MockColumn[]
@@ -59,10 +60,12 @@ vi.mock('@/components/admin-table', () => ({
       expandedRowRender?: (record: Record<string, unknown>) => ReactNode
       rowExpandable?: (record: Record<string, unknown>) => boolean
     }
+    headerExtra?: ReactNode
     toolbar?: ReactNode
   }) => (
     <div>
       {toolbar}
+      {headerExtra}
       {dataSource.map((record) => (
         <div data-testid={`row-${String(record.id)}`} key={String(record.id)}>
           {columns.map((column, columnIndex) => {
@@ -80,7 +83,8 @@ vi.mock('@/components/admin-table', () => ({
   ),
 }))
 
-vi.mock('@/components/management-list', () => ({
+vi.mock('@/components/management-list', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/management-list')>()),
   ManagementDetailHeader: ({ actions, title }: { actions?: ReactNode; title: ReactNode }) => (
     <header>
       <h1>{title}</h1>
@@ -334,6 +338,7 @@ describe('identity providers page behavior', () => {
       'input[placeholder="搜索 Provider 或应用"]',
     ) as HTMLInputElement
     await act(async () => setInputValue(search, 'Harbor Registry'))
+    await clickButton('查询')
 
     expect(container.querySelector('[data-testid="row-provider-grafana"]')).toBeNull()
     expect(container.querySelector('[data-testid="row-provider-harbor"]')).not.toBeNull()

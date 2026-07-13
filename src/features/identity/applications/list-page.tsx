@@ -1,17 +1,20 @@
 import { useMemo, useState } from 'react'
-import { App, Button, Popconfirm, Select, Space, Tag, Typography } from 'antd'
+import { App, Button, Form, Popconfirm, Select, Space, Tag, Typography } from 'antd'
 import type { TableColumnsType } from 'antd'
-import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AdminTable } from '@/components/admin-table'
+import { ManagementDataPage } from '@/components/management-data-page'
 import {
-  ManagementDetailHeader,
   ManagementIconButton,
+  ManagementKeywordField,
+  ManagementQueryActions,
+  ManagementQueryField,
+  ManagementRefreshButton,
   ManagementState,
   ManagementTableToolbar,
-  ManagementToolbarSearch,
 } from '@/components/management-list'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { useI18n } from '@/i18n'
 import type {
   IdentityApplication,
   IdentityApplicationInput,
@@ -34,7 +37,9 @@ const { Text } = Typography
 
 export function IdentityApplicationsPage() {
   const { message } = App.useApp()
+  const { t } = useI18n()
   const queryClient = useQueryClient()
+  const [queryForm] = Form.useForm<IdentityApplicationFilters>()
   const [filters, setFilters] = useState<IdentityApplicationFilters>({
     query: '',
     status: '',
@@ -43,6 +48,11 @@ export function IdentityApplicationsPage() {
   const [editing, setEditing] = useState<IdentityApplication | null>(null)
   const snapshot = usePermissionSnapshot().data?.data
   const canManage = hasPermission(snapshot, 'identity.applications.manage')
+
+  const resetFilters = () => {
+    queryForm.resetFields()
+    setFilters({ query: '', status: '' })
+  }
 
   const applicationsQuery = useQuery(identityApplicationQueries.list(filters))
   const providerCapabilitiesQuery = useQuery(identityApplicationQueries.providerCapabilities())
@@ -71,7 +81,7 @@ export function IdentityApplicationsPage() {
         { applicationId: editing.id, input },
         {
           onSuccess: (application) => {
-            message.success(`已更新 ${application.name}`)
+            message.success(t('identity.applications.updated', `已更新 ${application.name}`))
             closeModal()
           },
         },
@@ -80,7 +90,7 @@ export function IdentityApplicationsPage() {
     }
     createMutation.mutate(input, {
       onSuccess: (application) => {
-        message.success(`已创建 ${application.name}`)
+        message.success(t('identity.applications.created', `已创建 ${application.name}`))
         closeModal()
       },
     })
@@ -89,7 +99,7 @@ export function IdentityApplicationsPage() {
   const columns = useMemo<TableColumnsType<IdentityApplication>>(
     () => [
       {
-        title: 'Application',
+        title: t('identity.applications.column.application', '应用'),
         dataIndex: 'name',
         width: 360,
         render: (_, record) => <IdentityApplicationNameCell application={record} />,
@@ -106,27 +116,36 @@ export function IdentityApplicationsPage() {
         ),
       },
       {
-        title: 'Portal',
+        title: t('identity.applications.column.portal', '门户'),
         dataIndex: 'portalVisible',
         width: 150,
         render: (portalVisible: boolean, record) => (
           <Space orientation="vertical" size={2}>
-            {identityApplicationStatusTag(record.status)}
+            {identityApplicationStatusTag(
+              record.status,
+              t(`identity.applications.status.${record.status}`, record.status),
+            )}
             <Tag color={portalVisible ? 'blue' : 'default'}>
-              {portalVisible ? 'Visible' : 'Hidden'}
+              {portalVisible
+                ? t('identity.applications.visible', '可见')
+                : t('identity.applications.hidden', '隐藏')}
             </Tag>
-            {record.featured ? <Tag color="purple">Featured</Tag> : null}
+            {record.featured ? <Tag color="purple">{t('identity.applications.featured', '推荐')}</Tag> : null}
           </Space>
         ),
       },
       {
-        title: 'Assignments',
+        title: t('identity.applications.column.assignments', '访问授权'),
         key: 'assignments',
         width: 260,
-        render: (_, record) => identityApplicationAssignmentsSummary(record),
+        render: (_, record) =>
+          identityApplicationAssignmentsSummary(
+            record,
+            t('identity.applications.allAuthenticatedUsers', '所有已登录用户'),
+          ),
       },
       {
-        title: 'Launch URL',
+        title: t('identity.applications.column.launchUrl', '访问地址'),
         dataIndex: 'launchUrl',
         width: 280,
         render: (value: string | undefined, record) =>
@@ -135,120 +154,154 @@ export function IdentityApplicationsPage() {
               {value}
             </Text>
           ) : record.providerType === 'oidc' ? (
-            <Tag color="blue">Generated authorize URL</Tag>
+            <Tag color="blue">{t('identity.applications.generatedAuthorizeUrl', '自动生成授权地址')}</Tag>
           ) : (
             <Text type="secondary">-</Text>
           ),
       },
       {
-        title: 'Updated',
+        title: t('identity.applications.column.updated', '更新时间'),
         dataIndex: 'updatedAt',
         width: 140,
         render: formatIdentityApplicationDateTime,
       },
       {
-        title: 'Actions',
+        title: t('identity.applications.column.actions', '操作'),
         key: 'actions',
         fixed: 'right',
         width: 128,
         render: (_, record) => (
           <Space size={4}>
             <ManagementIconButton
+              aria-label={t('common.edit', '编辑')}
               disabled={!canManage}
               icon={<EditOutlined />}
-              tooltip="编辑"
+              tooltip={t('common.edit', '编辑')}
               onClick={() => openEdit(record)}
             />
             <Popconfirm
-              cancelText="取消"
+              cancelText={t('common.cancel', '取消')}
               disabled={!canManage}
               okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
-              okText="删除"
+              okText={t('common.delete', '删除')}
               title={`删除 ${record.name}`}
               onConfirm={() =>
                 deleteMutation.mutate(record.id, {
-                  onSuccess: () => message.success('应用已删除'),
+                  onSuccess: () => message.success(t('identity.applications.deleted', '应用已删除')),
                 })
               }
             >
-              <Button danger disabled={!canManage} icon={<DeleteOutlined />} size="small" />
+              <ManagementIconButton
+                aria-label={t('common.delete', '删除')}
+                danger
+                disabled={!canManage}
+                icon={<DeleteOutlined />}
+                tooltip={t('common.delete', '删除')}
+              />
             </Popconfirm>
           </Space>
         ),
       },
     ],
-    [canManage, deleteMutation, message],
+    [canManage, deleteMutation, message, t],
   )
 
   const saving = createMutation.isPending || updateMutation.isPending
   const applications = applicationsQuery.data ?? []
 
-  return (
-    <div className="soha-page soha-identity-applications-page">
-      <ManagementDetailHeader
-        actions={
-          <Space wrap>
-            <Button icon={<ReloadOutlined />} onClick={() => applicationsQuery.refetch()}>
-              刷新
-            </Button>
-            <Button
-              disabled={!canManage}
-              icon={<PlusOutlined />}
-              type="primary"
-              onClick={openCreate}
-            >
-              新建应用
-            </Button>
-          </Space>
-        }
-        description="管理 Soha Provider Portal 中展示和授权的下游应用。OIDC 与 Proxy Provider 可在 Providers 页面配置。"
-        title="Identity Applications"
-      />
-
-      <div className="soha-identity-capability-row">
-        {(providerCapabilitiesQuery.data ?? []).map((capability) => (
-          <div className="soha-identity-capability" key={capability.type}>
-            <div className="soha-identity-capability-title">
-              <Tag>{capability.type.toUpperCase()}</Tag>
-              <Tag color="gold">{capability.status}</Tag>
-            </div>
-            <Text type="secondary">{capability.description}</Text>
+  const capabilitySummary = (
+    <div className="soha-identity-capability-row">
+      {(providerCapabilitiesQuery.data ?? []).map((capability) => (
+        <div className="soha-identity-capability" key={capability.type}>
+          <div className="soha-identity-capability-title">
+            <Tag>{capability.type.toUpperCase()}</Tag>
+            <Tag color="gold">
+              {t(`identity.applications.capabilityStatus.${capability.status}`, capability.status)}
+            </Tag>
           </div>
-        ))}
-      </div>
+          <Text type="secondary">
+            {t(`identity.applications.capability.${capability.type}`, capability.description)}
+          </Text>
+        </div>
+      ))}
+    </div>
+  )
 
-      <AdminTable
-        rowKey="id"
-        columns={columns}
-        dataSource={applications}
-        empty={
-          <ManagementState
-            kind="empty"
-            title="暂无应用"
-            description="创建应用后会出现在门户目录中。"
-          />
-        }
-        loading={applicationsQuery.isLoading || applicationsQuery.isFetching}
-        title="应用目录"
-        toolbar={
-          <ManagementTableToolbar>
-            <ManagementToolbarSearch
-              placeholder="搜索名称、slug、分类"
-              value={filters.query ?? ''}
-              onChange={(value) => setFilters((current) => ({ ...current, query: value }))}
+  return (
+    <>
+      <ManagementDataPage
+        beforeQuery={capabilitySummary}
+        className="soha-identity-applications-page"
+        query={{
+          actions: (
+            <ManagementQueryActions
+              disabledReset={!filters.query && !filters.status}
+              loading={applicationsQuery.isFetching}
+              onReset={resetFilters}
             />
-            <Select
-              allowClear
-              placeholder="状态"
-              style={{ width: 160 }}
-              options={identityApplicationStatusOptions}
-              value={filters.status || undefined}
-              onChange={(value) => setFilters((current) => ({ ...current, status: value ?? '' }))}
+          ),
+          children: (
+            <>
+              <ManagementKeywordField
+                label={t('identity.applications.keyword', '关键词')}
+                name="query"
+                placeholder={t('identity.applications.search', '搜索名称、slug、分类')}
+              />
+              <ManagementQueryField label={t('identity.applications.status', '状态')} name="status" width={180}>
+                <Select
+                  allowClear
+                  options={identityApplicationStatusOptions}
+                  placeholder={t('identity.applications.status', '状态')}
+                />
+              </ManagementQueryField>
+            </>
+          ),
+          form: queryForm,
+          initialValues: { query: '', status: '' },
+          onFinish: (values) =>
+            setFilters({
+              query: String(values.query ?? '').trim(),
+              status: values.status ?? '',
+            }),
+        }}
+        table={{
+          columnSettingIconOnly: true,
+          columnSettingPlacement: 'header',
+          columns,
+          dataSource: applications,
+          empty: (
+            <ManagementState
+              kind="empty"
+              title={t('identity.applications.empty', '暂无应用')}
+              description={t('identity.applications.emptyDescription', '创建应用后会出现在门户目录中。')}
             />
-          </ManagementTableToolbar>
-        }
+          ),
+          headerExtra: (
+            <ManagementTableToolbar>
+              <Button
+                autoInsertSpace={false}
+                disabled={!canManage}
+                icon={<PlusOutlined />}
+                size="small"
+                type="primary"
+                onClick={openCreate}
+              >
+                {t('identity.applications.create', '新建应用')}
+              </Button>
+              <ManagementRefreshButton
+                aria-label={t('common.refresh', '刷新')}
+                loading={applicationsQuery.isFetching}
+                title={t('common.refresh', '刷新')}
+                tooltip={t('common.refresh', '刷新')}
+                onClick={() => void applicationsQuery.refetch()}
+              />
+            </ManagementTableToolbar>
+          ),
+          loading: applicationsQuery.isLoading || applicationsQuery.isFetching,
+          rowKey: 'id',
+          scroll: { x: 'max-content' },
+        }}
       />
-
       <ApplicationFormModal
         application={editing}
         open={modalOpen}
@@ -256,6 +309,6 @@ export function IdentityApplicationsPage() {
         onCancel={closeModal}
         onSubmit={submitForm}
       />
-    </div>
+    </>
   )
 }

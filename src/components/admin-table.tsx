@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { Button, Checkbox, Popover, Table, Typography } from 'antd'
 import { SettingOutlined } from '@ant-design/icons'
 import { ManagementState } from '@/components/management-list'
+import { useI18n } from '@/i18n'
 import './admin-table.css'
 
 const DEFAULT_PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
@@ -157,24 +158,29 @@ export function AdminTable({
   toolbarExtra,
   ...rest
 }: AdminTableProps) {
+  const { t } = useI18n()
   const normalizedColumns = useMemo(() => columns.map(normalizeTableColumn), [columns])
   const columnOptions = useMemo(() => normalizedColumns.map((column, index) => ({
     id: getColumnId(column, index),
     label: getColumnLabel(column, index),
     column,
   })), [normalizedColumns])
+  const selectableColumnOptions = useMemo(
+    () => columnOptions.filter((option) => !isActionColumn(option.column)),
+    [columnOptions],
+  )
   const columnSignature = columnOptions.map((option) => option.id).join('|')
   const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const [currentPageSize, setCurrentPageSize] = useState(pageSize)
 
   useEffect(() => {
-    const nextIds = columnOptions.map((option) => option.id)
+    const nextIds = selectableColumnOptions.map((option) => option.id)
     setVisibleColumnIds((current) => {
       const filtered = current.filter((id) => nextIds.includes(id))
       return filtered.length > 0 ? filtered : nextIds
     })
-  }, [columnSignature, columnOptions])
+  }, [columnSignature, selectableColumnOptions])
 
   useEffect(() => {
     if (pagination && pagination !== false && typeof pagination.currentPage === 'number') {
@@ -189,9 +195,11 @@ export function AdminTable({
     setCurrentPageSize(nextPageSize)
   }, [pageSize, pagination])
 
-  const activeColumnIds = visibleColumnIds.length > 0 ? visibleColumnIds : columnOptions.map((option) => option.id)
+  const activeColumnIds = visibleColumnIds.length > 0
+    ? visibleColumnIds
+    : selectableColumnOptions.map((option) => option.id)
   const activeColumns = columnOptions
-    .filter((option) => activeColumnIds.includes(option.id))
+    .filter((option) => isActionColumn(option.column) || activeColumnIds.includes(option.id))
     .map((option) => option.column)
   const estimatedScrollWidth = useMemo(() => {
     const columnWidth = activeColumns.reduce((total, column) => total + (getColumnWidth(column) ?? 168), 0)
@@ -265,20 +273,20 @@ export function AdminTable({
     y: scroll?.y,
   }), [estimatedScrollWidth, scroll?.x, scroll?.y])
 
-  const columnSetting = enableColumnSelection && columnSettingPlacement !== 'hidden' && columnOptions.length > 1 ? (
+  const columnSetting = enableColumnSelection && columnSettingPlacement !== 'hidden' && selectableColumnOptions.length > 1 ? (
     <Popover
       trigger="click"
       placement="bottomRight"
       content={
         <div className="soha-admin-table-column-popover">
           <div className="soha-admin-table-column-actions">
-            <Button size="small" type="text" onClick={() => setVisibleColumnIds(columnOptions.map((option) => option.id))}>
-              全选
+            <Button size="small" type="text" onClick={() => setVisibleColumnIds(selectableColumnOptions.map((option) => option.id))}>
+              {t('table.columns.selectAll', '全选')}
             </Button>
           </div>
           <Checkbox.Group
             className="soha-admin-table-column-options"
-            options={columnOptions.map((option) => ({ label: option.label, value: option.id }))}
+            options={selectableColumnOptions.map((option) => ({ label: option.label, value: option.id }))}
             value={activeColumnIds}
             onChange={(value) => {
               const next = value as string[]
@@ -286,19 +294,21 @@ export function AdminTable({
               setVisibleColumnIds(next)
             }}
           />
-          <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>列设置仅影响当前页面会话。</Text>
+          <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
+            {t('table.columns.sessionHint', '列设置仅影响当前页面会话。')}
+          </Text>
         </div>
       }
     >
       <Button
-        aria-label="列设置"
+        aria-label={t('table.columns.title', '列设置')}
         className={columnSettingIconOnly ? 'soha-admin-table-column-setting-button is-icon-only' : 'soha-admin-table-column-setting-button'}
         icon={<SettingOutlined />}
         size="small"
-        title="列设置"
+        title={t('table.columns.title', '列设置')}
         type={columnSettingIconOnly ? 'text' : 'default'}
       >
-        {columnSettingIconOnly ? null : '列设置'}
+        {columnSettingIconOnly ? null : t('table.columns.title', '列设置')}
       </Button>
     </Popover>
   ) : null

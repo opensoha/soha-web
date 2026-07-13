@@ -10,6 +10,7 @@ import { IdentityApplicationsPage } from './list-page'
 const testState = vi.hoisted(() => ({
   permissionKeys: ['identity.applications.view', 'identity.applications.manage'],
   apiGet: vi.fn(),
+  apiDelete: vi.fn(),
   apiPost: vi.fn(),
   apiPut: vi.fn(),
 }))
@@ -18,7 +19,9 @@ vi.mock('antd', async (importOriginal) => {
   const actual = await importOriginal<typeof import('antd')>()
   return {
     ...actual,
-    Popconfirm: ({ children }: { children?: ReactNode }) => <>{children}</>,
+    Popconfirm: ({ children, onConfirm }: { children?: ReactNode; onConfirm?: () => void }) => (
+      <span onClick={() => onConfirm?.()}>{children}</span>
+    ),
   }
 })
 
@@ -33,7 +36,7 @@ vi.mock('@/features/auth', () => ({
 
 vi.mock('@/services/api-client', () => ({
   api: {
-    delete: vi.fn(async () => ({ data: { status: 'ok' } })),
+    delete: (path: string) => testState.apiDelete(path),
     get: (path: string) => testState.apiGet(path),
     post: (path: string, body?: unknown) => testState.apiPost(path, body),
     put: (path: string, body?: unknown) => testState.apiPut(path, body),
@@ -50,13 +53,16 @@ vi.mock('@/components/admin-table', () => ({
   AdminTable: ({
     columns,
     dataSource,
+    headerExtra,
     toolbar,
   }: {
     columns: MockColumn[]
     dataSource: Array<Record<string, unknown>>
+    headerExtra?: ReactNode
     toolbar?: ReactNode
   }) => (
     <div>
+      {headerExtra}
       {toolbar}
       {dataSource.map((record) => (
         <div data-testid={`row-${String(record.id)}`} key={String(record.id)}>
@@ -74,13 +80,8 @@ vi.mock('@/components/admin-table', () => ({
   ),
 }))
 
-vi.mock('@/components/management-list', () => ({
-  ManagementDetailHeader: ({ actions, title }: { actions?: ReactNode; title?: ReactNode }) => (
-    <header>
-      <h1>{title}</h1>
-      {actions}
-    </header>
-  ),
+vi.mock('@/components/management-list', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/management-list')>()),
   ManagementIconButton: ({
     disabled,
     onClick,
@@ -94,23 +95,11 @@ vi.mock('@/components/management-list', () => ({
       {tooltip}
     </button>
   ),
+  ManagementRefreshButton: ({ onClick }: { onClick?: () => void }) => (
+    <button aria-label="刷新" onClick={onClick}>刷新</button>
+  ),
   ManagementState: ({ title }: { title?: ReactNode }) => <div>{title}</div>,
   ManagementTableToolbar: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  ManagementToolbarSearch: ({
-    onChange,
-    placeholder,
-    value,
-  }: {
-    onChange: (value: string) => void
-    placeholder?: string
-    value?: string
-  }) => (
-    <input
-      onChange={(event) => onChange(event.target.value)}
-      placeholder={placeholder}
-      value={value}
-    />
-  ),
 }))
 
 vi.mock('./components/application-form-modal', () => ({
@@ -215,6 +204,7 @@ beforeEach(() => {
   })
   testState.apiPost.mockResolvedValue({ data: application })
   testState.apiPut.mockResolvedValue({ data: application })
+  testState.apiDelete.mockResolvedValue({ data: { status: 'ok' } })
 })
 
 afterEach(async () => {
@@ -276,6 +266,12 @@ async function clickButton(container: HTMLElement, label: string) {
   await act(async () => button.click())
 }
 
+async function clickButtonByLabel(container: HTMLElement, label: string) {
+  const button = container.querySelector(`button[aria-label="${label}"]`)
+  if (!(button instanceof HTMLButtonElement)) throw new Error(`Button not found: ${label}`)
+  await act(async () => button.click())
+}
+
 describe('identity applications page behavior', () => {
   it('loads canonical applications and provider capabilities and applies search filters', async () => {
     const { container, queryClient } = await renderPage()
@@ -289,6 +285,7 @@ describe('identity applications page behavior', () => {
       'input[placeholder="搜索名称、slug、分类"]',
     ) as HTMLInputElement
     await act(async () => setInputValue(search, ' harbor '))
+    await clickButton(container, '查询')
     await settle(queryClient)
 
     expect(testState.apiGet).toHaveBeenCalledWith('/identity/applications?q=harbor')
@@ -329,5 +326,14 @@ describe('identity applications page behavior', () => {
       '/identity/applications/grafana',
       expect.objectContaining({ name: 'Grafana', providerId: 'provider-1' }),
     )
+  })
+
+  it('deletes applications through the canonical mutation', async () => {
+    const { container, queryClient } = await renderPage()
+
+    await clickButtonByLabel(container, '删除')
+    await settle(queryClient)
+
+    expect(testState.apiDelete).toHaveBeenCalledWith('/identity/applications/grafana')
   })
 })
