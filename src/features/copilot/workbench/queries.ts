@@ -29,6 +29,11 @@ export const workbenchQueries = {
       queryFn: workbenchApi.catalog,
     }),
   agentRuns: {
+    all: () =>
+      queryOptions({
+        queryKey: workbenchKeys.agentRuns.all(),
+        queryFn: workbenchApi.agentRuns.all,
+      }),
     session: (sessionId?: string) =>
       queryOptions({
         queryKey: workbenchKeys.agentRuns.session(sessionId),

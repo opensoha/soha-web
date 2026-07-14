@@ -1,209 +1,278 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import {
-  AppstoreOutlined,
+  ApiOutlined,
+  BookOutlined,
   PlayCircleOutlined,
-  RadarChartOutlined,
   RobotOutlined,
-  ToolOutlined,
+  SafetyCertificateOutlined,
 } from '@ant-design/icons'
-import { Button, Card, Col, List, Row, Space, Statistic, Tag } from 'antd'
 import { useQuery } from '@tanstack/react-query'
+import { Button, Card, Col, Row, Space, Statistic, Tag, Typography } from 'antd'
 import {
   ManagementDetailHeader,
   ManagementState,
   ManagementTableToolbar,
 } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
-import {
-  getAIOperationsPath,
-  getAIToolsPath,
-  getAIWorkbenchPathForMode,
-  getAIWorkbenchPathForSession,
-} from '../../workbench/navigation'
-import { displayWorkbenchSessionTitle } from '../../workbench/model'
-import { observeQueries } from '../queries'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { gatewayQueries } from '../../gateway/queries'
+import { knowledgeQueries } from '../../knowledge/queries'
+import { getAIWorkbenchPathForMode } from '../../workbench/navigation'
+import { workbenchQueries } from '../../workbench/queries'
 import '../../copilot-pages.css'
 
-const AI_OVERVIEW_ACTIONS = [
-  {
-    key: 'root_cause',
-    label: '根因调查',
-    detail: '告警、事件、异常波动',
-    href: getAIWorkbenchPathForMode('root_cause'),
-    icon: <RobotOutlined />,
-  },
-  {
-    key: 'performance',
-    label: '性能分析',
-    detail: '容量、时延、吞吐',
-    href: getAIWorkbenchPathForMode('performance'),
-    icon: <RadarChartOutlined />,
-  },
-  {
-    key: 'trace',
-    label: '链路分析',
-    detail: '跨服务路径与热点',
-    href: getAIWorkbenchPathForMode('trace'),
-    icon: <AppstoreOutlined />,
-  },
-  {
-    key: 'operations',
-    label: '巡检与自动化',
-    detail: '任务、运行、策略',
-    href: getAIOperationsPath(),
-    icon: <PlayCircleOutlined />,
-  },
-  {
-    key: 'tools',
-    label: '工具与技能',
-    detail: 'MCP、数据源、Skills',
-    href: getAIToolsPath(),
-    icon: <ToolOutlined />,
-  },
-] as const
+const { Text } = Typography
+
+function DomainState({
+  allowed,
+  error,
+  loading,
+  children,
+}: {
+  allowed: boolean
+  error: boolean
+  loading: boolean
+  children: ReactNode
+}) {
+  if (!allowed) {
+    return <ManagementState bordered={false} compact kind="no-permission" />
+  }
+  if (loading) {
+    return <ManagementState bordered={false} compact kind="loading" />
+  }
+  if (error) {
+    return (
+      <ManagementState
+        bordered={false}
+        compact
+        kind="error"
+        description="该领域服务暂时不可用，其他 AI 能力不受影响。"
+      />
+    )
+  }
+  return children
+}
 
 export function AIObserveOverviewPage() {
   const navigate = useNavigate()
-  const sessionsQuery = useQuery(observeQueries.overview.sessions())
-  const insightsQuery = useQuery(observeQueries.overview.insights())
-  const runsQuery = useQuery(observeQueries.overview.analysisRuns())
-  const inspectionRunsQuery = useQuery(observeQueries.overview.inspectionRuns())
+  const permissionQuery = usePermissionSnapshot()
+  const snapshot = permissionQuery.data?.data
+  const canChat = hasPermission(snapshot, 'observe.ai.chat')
+  const canObserve = hasPermission(snapshot, 'observe.ai.view')
+  const canKnowledge = hasPermission(snapshot, 'ai.knowledge.view')
+  const canGateway = hasPermission(snapshot, 'ai.gateway.view')
+  const canRelay =
+    hasPermission(snapshot, 'ai.gateway.relay.view') ||
+    hasPermission(snapshot, 'ai.gateway.relay.manage')
 
-  const sessions = sessionsQuery.data ?? []
-  const insights = insightsQuery.data ?? []
-  const runs = runsQuery.data ?? []
-  const inspectionRuns = inspectionRunsQuery.data ?? []
+  const sessionsQuery = useQuery({
+    ...workbenchQueries.sessions.all(),
+    enabled: canChat || canObserve,
+  })
+  const catalogQuery = useQuery({ ...workbenchQueries.catalog(), enabled: canObserve })
+  const runsQuery = useQuery({ ...workbenchQueries.agentRuns.all(), enabled: canObserve })
+  const basesQuery = useQuery(knowledgeQueries.bases(canKnowledge))
+  const manifestQuery = useQuery(
+    gatewayQueries.manifest({ aiClientId: '', skillId: '', source: '' }, canGateway),
+  )
+  const relayQuery = useQuery(gatewayQueries.relay.metrics(canRelay))
+
+  const sessions = sessionsQuery.data?.data ?? []
+  const catalog = catalogQuery.data?.data
+  const runs = runsQuery.data?.data ?? []
+  const bases = basesQuery.data?.data ?? []
+  const manifest = manifestQuery.data?.data
+  const relay = relayQuery.data?.data
 
   return (
-    <div className="soha-page">
+    <div className="soha-page soha-ai-unified-overview">
       <ManagementDetailHeader
-        title="AI工作台"
-        description="面向全员的 AI 会话入口，统一承接通用问答、巡检复盘、根因、性能与工具链能力。"
+        title="AI 工作台"
+        description="统一查看交互、知识、Agent、模型接入与治理能力。所有摘要均按当前身份权限独立加载。"
         actions={
           <ManagementTableToolbar>
-            <Button icon={<ToolOutlined />} onClick={() => navigate(getAIToolsPath())}>
-              工具与技能
-            </Button>
-            <Button
-              type="primary"
-              icon={<RobotOutlined />}
-              onClick={() => navigate(getAIWorkbenchPathForMode('general'))}
-            >
-              进入通用聊天
-            </Button>
+            {canKnowledge ? (
+              <Button icon={<BookOutlined />} onClick={() => navigate('/ai-workbench/knowledge')}>
+                Knowledge Center
+              </Button>
+            ) : null}
+            {canGateway || canRelay ? (
+              <Button
+                icon={<ApiOutlined />}
+                onClick={() => navigate(canRelay ? '/ai-gateway/relay' : '/ai-gateway/manifest')}
+              >
+                模型与接入
+              </Button>
+            ) : null}
+            {canChat ? (
+              <Button
+                type="primary"
+                icon={<RobotOutlined />}
+                onClick={() => navigate(getAIWorkbenchPathForMode('general'))}
+              >
+                进入通用聊天
+              </Button>
+            ) : null}
           </ManagementTableToolbar>
         }
       />
 
-      <Card
-        size="small"
-        variant="outlined"
-        className="soha-management-panel-card soha-ai-overview-console"
-      >
-        <div className="soha-ai-overview-actions">
-          {AI_OVERVIEW_ACTIONS.map((item) => (
-            <button
-              key={item.key}
-              className="soha-ai-overview-action"
-              type="button"
-              onClick={() => navigate(item.href)}
-            >
-              <span className="soha-ai-overview-action-icon">{item.icon}</span>
-              <span className="soha-ai-overview-action-main">
-                <span className="soha-ai-overview-action-label">{item.label}</span>
-                <span className="soha-ai-overview-action-detail">{item.detail}</span>
-              </span>
-            </button>
-          ))}
-        </div>
-        <div className="soha-ai-overview-metrics">
-          <Statistic title="AI 会话" value={sessions.length} prefix={<RobotOutlined />} />
-          <Statistic title="根因运行" value={runs.length} prefix={<RadarChartOutlined />} />
-          <Statistic title="巡检运行" value={inspectionRuns.length} prefix={<AppstoreOutlined />} />
-          <Statistic title="AI 洞察" value={insights.length} prefix={<ToolOutlined />} />
-        </div>
-      </Card>
-
       <Row gutter={[12, 12]}>
-        <Col xs={24} xl={8}>
-          <Card size="small" variant="outlined" className="soha-compact-note-card" title="最近会话">
-            {sessions.length === 0 ? (
-              <ManagementState
-                bordered={false}
-                compact
-                title="暂无会话"
-                description="创建或进入 AI 工作台后，这里会展示最近会话。"
-              />
-            ) : (
-              <List
-                dataSource={sessions.slice(0, 5)}
-                renderItem={(item) => (
-                  <List.Item
-                    actions={[
-                      <Link key="open" to={getAIWorkbenchPathForSession(item)}>
-                        打开
-                      </Link>,
-                    ]}
-                  >
-                    <List.Item.Meta
-                      title={displayWorkbenchSessionTitle(item.title)}
-                      description={item.metadata?.summary || item.updatedAt}
-                    />
-                    {item.metadata?.mode ? <Tag>{item.metadata.mode}</Tag> : null}
-                  </List.Item>
-                )}
-              />
-            )}
+        <Col xs={24} xl={12}>
+          <Card
+            size="small"
+            variant="outlined"
+            title={
+              <Space>
+                <RobotOutlined />
+                交互与运行
+              </Space>
+            }
+            extra={
+              canObserve ? (
+                <Button type="link" onClick={() => navigate('/ai-workbench/agent-runs')}>
+                  Agent Runs
+                </Button>
+              ) : null
+            }
+          >
+            <DomainState
+              allowed={canChat || canObserve}
+              loading={sessionsQuery.isLoading || runsQuery.isLoading}
+              error={sessionsQuery.isError || runsQuery.isError}
+            >
+              <div className="soha-ai-overview-metrics">
+                <Statistic title="会话" value={sessions.length} />
+                <Statistic title="Agent Runs" value={runs.length} />
+                <Statistic
+                  title="运行中"
+                  value={
+                    runs.filter((run) => ['queued', 'running', 'claimed'].includes(run.status))
+                      .length
+                  }
+                />
+              </div>
+            </DomainState>
           </Card>
         </Col>
-        <Col xs={24} xl={8}>
-          <Card size="small" variant="outlined" className="soha-compact-note-card" title="最近分析">
-            {runs.length === 0 ? (
-              <ManagementState
-                bordered={false}
-                compact
-                title="暂无根因运行"
-                description="运行根因分析后，这里会展示最近结果。"
-              />
-            ) : (
-              <List
-                dataSource={runs.slice(0, 5)}
-                renderItem={(item) => (
-                  <List.Item>
-                    <List.Item.Meta title={item.title} description={item.summary} />
-                    <Space orientation="vertical" size={4}>
-                      <StatusTag value={item.status} />
-                      <StatusTag value={item.severity} />
-                    </Space>
-                  </List.Item>
-                )}
-              />
-            )}
+        <Col xs={24} xl={12}>
+          <Card
+            size="small"
+            variant="outlined"
+            title={
+              <Space>
+                <BookOutlined />
+                Knowledge
+              </Space>
+            }
+            extra={
+              canKnowledge ? (
+                <Button type="link" onClick={() => navigate('/ai-workbench/knowledge')}>
+                  打开
+                </Button>
+              ) : null
+            }
+          >
+            <DomainState
+              allowed={canKnowledge}
+              loading={basesQuery.isLoading}
+              error={basesQuery.isError}
+            >
+              <div className="soha-ai-overview-metrics">
+                <Statistic title="知识库" value={bases.length} />
+                <Statistic
+                  title="可用"
+                  value={bases.filter((base) => base.status === 'active').length}
+                />
+                <Statistic
+                  title="异常"
+                  value={
+                    bases.filter(
+                      (base) => base.status && !['active', 'ready'].includes(base.status),
+                    ).length
+                  }
+                />
+              </div>
+            </DomainState>
           </Card>
         </Col>
-        <Col xs={24} xl={8}>
-          <Card size="small" variant="outlined" className="soha-compact-note-card" title="风险雷达">
-            {insights.length === 0 ? (
-              <ManagementState
-                bordered={false}
-                compact
-                title="暂无风险信号"
-                description="AI 洞察产生后，这里会展示需要关注的信号。"
-              />
-            ) : (
-              <List
-                dataSource={insights.slice(0, 5)}
-                renderItem={(item) => (
-                  <List.Item>
-                    <List.Item.Meta title={item.title} description={item.description} />
-                    <StatusTag value={item.severity} />
-                  </List.Item>
-                )}
-              />
-            )}
+        <Col xs={24} xl={12}>
+          <Card
+            size="small"
+            variant="outlined"
+            title={
+              <Space>
+                <PlayCircleOutlined />
+                Agent Providers
+              </Space>
+            }
+            extra={
+              canObserve ? (
+                <Button type="link" onClick={() => navigate('/ai-workbench/agent-providers')}>
+                  管理
+                </Button>
+              ) : null
+            }
+          >
+            <DomainState
+              allowed={canObserve}
+              loading={catalogQuery.isLoading}
+              error={catalogQuery.isError}
+            >
+              <div className="soha-ai-overview-metrics">
+                <Statistic title="Providers" value={catalog?.agentProviders?.length ?? 0} />
+                <Statistic title="Skills" value={catalog?.skillsRegistry?.length ?? 0} />
+                <Statistic title="Capabilities" value={catalog?.capabilities?.length ?? 0} />
+              </div>
+              {!catalog?.agentProviders?.length ? (
+                <Text type="secondary">
+                  尚无已激活的 Agent Provider。插件已安装后仍需等待运行时 Catalog 同步。
+                </Text>
+              ) : null}
+            </DomainState>
+          </Card>
+        </Col>
+        <Col xs={24} xl={12}>
+          <Card
+            size="small"
+            variant="outlined"
+            title={
+              <Space>
+                <SafetyCertificateOutlined />
+                Gateway 与治理
+              </Space>
+            }
+            extra={
+              canGateway ? (
+                <Button type="link" onClick={() => navigate('/ai-gateway/manifest')}>
+                  能力清单
+                </Button>
+              ) : null
+            }
+          >
+            <DomainState
+              allowed={canGateway || canRelay}
+              loading={manifestQuery.isLoading || relayQuery.isLoading}
+              error={manifestQuery.isError || relayQuery.isError}
+            >
+              <div className="soha-ai-overview-metrics">
+                <Statistic title="Tools" value={manifest?.summary.toolCount ?? '-'} />
+                <Statistic title="Skills" value={manifest?.summary.skillCount ?? '-'} />
+                <Statistic
+                  title="今日模型调用"
+                  value={relay?.requestsToday ?? relay?.totalCalls ?? '-'}
+                />
+              </div>
+              <Space wrap>
+                {manifest ? <Tag color="success">Manifest {manifest.version}</Tag> : null}
+                {typeof relay?.successRate === 'number' ? (
+                  <Tag>成功率 {(relay.successRate * 100).toFixed(1)}%</Tag>
+                ) : null}
+              </Space>
+            </DomainState>
           </Card>
         </Col>
       </Row>
     </div>
   )
 }
+import type { ReactNode } from 'react'

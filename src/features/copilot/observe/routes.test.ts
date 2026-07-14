@@ -13,6 +13,19 @@ const routePages = vi.hoisted(() => ({
   operations: () => null,
   tools: () => null,
   modelSettings: () => null,
+  overview: () => null,
+  knowledge: () => null,
+  context: () => null,
+  agentRuns: () => null,
+  agentProviders: () => null,
+  evaluation: () => null,
+  knowledgePipelines: () => null,
+  environments: () => null,
+  providerFleet: () => null,
+  evaluationLifecycle: () => null,
+  memory: () => null,
+  productionOperations: () => null,
+  overviewRedirect: () => null,
   modeRedirect: () => null,
   operationsRedirect: () => null,
   toolsRedirect: () => null,
@@ -32,7 +45,20 @@ vi.mock('./tools/page', () => ({ AIToolsPage: routePages.tools }))
 vi.mock('./model-settings/page', () => ({
   AIModelSettingsPage: routePages.modelSettings,
 }))
+vi.mock('./overview/page', () => ({ AIObserveOverviewPage: routePages.overview }))
+vi.mock('../knowledge/page', () => ({ KnowledgeCenterPage: routePages.knowledge }))
+vi.mock('../context/page', () => ({ ContextInspectorPage: routePages.context }))
+vi.mock('../agent-runs/page', () => ({ AgentRunsPage: routePages.agentRuns }))
+vi.mock('../agent-providers/page', () => ({ AgentProvidersPage: routePages.agentProviders }))
+vi.mock('../evaluation/page', () => ({ EvaluationStudioPage: routePages.evaluation }))
+vi.mock('../knowledge-production/page', () => ({ KnowledgeProductionPage: routePages.knowledgePipelines }))
+vi.mock('../environments/page', () => ({ EnvironmentsPage: routePages.environments }))
+vi.mock('../provider-fleet/page', () => ({ ProviderFleetPage: routePages.providerFleet }))
+vi.mock('../evaluation-lifecycle/page', () => ({ EvaluationLifecyclePage: routePages.evaluationLifecycle }))
+vi.mock('../memory/page', () => ({ MemoryPoliciesPage: routePages.memory }))
+vi.mock('../production-operations/page', () => ({ AIProductionOperationsPage: routePages.productionOperations }))
 vi.mock('./redirects', () => ({
+  AIWorkbenchOverviewRedirect: routePages.overviewRedirect,
   AIWorkbenchModeRedirect: routePages.modeRedirect,
   AIWorkbenchOperationsRedirect: routePages.operationsRedirect,
   AIWorkbenchToolsRedirect: routePages.toolsRedirect,
@@ -47,7 +73,19 @@ describe('Copilot Observe route manifests', () => {
       loaded.set(route.meta.path, (await route.load()).default)
     }
 
-    expect(loaded.get('/ai-workbench')).toBe(routePages.modeRedirect)
+    expect(loaded.get('/ai-workbench')).toBe(routePages.overviewRedirect)
+    expect(loaded.get('/ai-workbench/overview')).toBe(routePages.overview)
+    expect(loaded.get('/ai-workbench/knowledge')).toBe(routePages.knowledge)
+    expect(loaded.get('/ai-workbench/context')).toBe(routePages.context)
+    expect(loaded.get('/ai-workbench/agent-runs')).toBe(routePages.agentRuns)
+    expect(loaded.get('/ai-workbench/agent-providers')).toBe(routePages.agentProviders)
+    expect(loaded.get('/ai-workbench/evaluations')).toBe(routePages.evaluation)
+    expect(loaded.get('/ai-workbench/knowledge-pipelines')).toBe(routePages.knowledgePipelines)
+    expect(loaded.get('/ai-workbench/environments')).toBe(routePages.environments)
+    expect(loaded.get('/ai-workbench/provider-fleet')).toBe(routePages.providerFleet)
+    expect(loaded.get('/ai-workbench/evaluation-lifecycle')).toBe(routePages.evaluationLifecycle)
+    expect(loaded.get('/ai-workbench/memory')).toBe(routePages.memory)
+    expect(loaded.get('/ai-workbench/production-operations')).toBe(routePages.productionOperations)
     expect(loaded.get('/ai-workbench/chat')).toBe(routePages.chat)
     expect(loaded.get('/ai-workbench/root-cause')).toBe(routePages.rootCause)
     expect(loaded.get('/ai-workbench/performance')).toBe(routePages.performance)
@@ -71,7 +109,7 @@ describe('Copilot Observe route manifests', () => {
 
   it('has unique, valid route definitions', () => {
     const routes = copilotObserveRouteManifests.flatMap((manifest) => [...manifest])
-    expect(routes).toHaveLength(19)
+    expect(routes).toHaveLength(31)
     expect(validateRouteDefinitions(routes)).toEqual([])
   })
 })

@@ -1,6 +1,18 @@
 import dayjs from 'dayjs'
-import { buildMenuSectionOptions, getMenuSectionOrder, normalizeMenuSection, resolveMenuSectionLabel } from '@/features/system/menu-schema'
-import { getMenuWorkbenchId, getMenuWorkspace, resolveRouteMenuId, resolveRoutePermission, routeMeta, type WorkbenchId } from '@/routes/meta'
+import {
+  buildMenuSectionOptions,
+  getMenuSectionOrder,
+  normalizeMenuSection,
+  resolveMenuSectionLabel,
+} from '@/features/system/menu-schema'
+import {
+  getMenuWorkbenchId,
+  getMenuWorkspace,
+  resolveRouteMenuId,
+  resolveRoutePermission,
+  routeMeta,
+  type WorkbenchId,
+} from '@/routes/meta'
 import type { WorkspaceType } from '@/types'
 
 export function compactText(value?: string | null) {
@@ -100,7 +112,10 @@ export function prettifyOperationType(operationType: string) {
 }
 
 export function stringifyPayload(value: unknown) {
-  if (!value || (typeof value === 'object' && Object.keys(value as Record<string, unknown>).length === 0)) {
+  if (
+    !value ||
+    (typeof value === 'object' && Object.keys(value as Record<string, unknown>).length === 0)
+  ) {
     return '无'
   }
   try {
@@ -195,14 +210,23 @@ export interface MenuWorkbenchSummary {
   workspace: WorkspaceType | null
 }
 
-export const MENU_WORKBENCH_ORDER: MenuWorkbenchSurface[] = ['platform', 'virtualization', 'docker', 'delivery', 'ai', 'aiGateway', 'monitoring', 'settings', 'system', 'unmapped']
+export const MENU_WORKBENCH_ORDER: MenuWorkbenchSurface[] = [
+  'platform',
+  'virtualization',
+  'docker',
+  'delivery',
+  'ai',
+  'monitoring',
+  'settings',
+  'system',
+  'unmapped',
+]
 
 export const MENU_WORKBENCH_LABELS: Record<MenuWorkbenchSurface, string> = {
   platform: 'k8s工作台',
   virtualization: '虚拟化管理工作台',
   docker: 'Docker 工作台',
   ai: 'AI工作台',
-  aiGateway: 'AI Gateway',
   monitoring: '监控工作台',
   settings: '设置中心',
   delivery: '应用交付工作台',
@@ -289,68 +313,69 @@ export function buildWorkbenchMenuTree(items: MenuItem[]) {
     groupedByWorkbench.set(summary.key, current)
   }
 
-  return MENU_WORKBENCH_ORDER
-    .map((workbenchKey): MenuItem | null => {
-      const workbenchItems = groupedByWorkbench.get(workbenchKey)
-      if (!workbenchItems?.length) {
-        return null
-      }
+  return MENU_WORKBENCH_ORDER.map((workbenchKey): MenuItem | null => {
+    const workbenchItems = groupedByWorkbench.get(workbenchKey)
+    if (!workbenchItems?.length) {
+      return null
+    }
 
-      const directItems: MenuItem[] = []
-      const sectionGroups = new Map<string, MenuItem[]>()
+    const directItems: MenuItem[] = []
+    const sectionGroups = new Map<string, MenuItem[]>()
 
-      const displayItems = workbenchKey === 'settings'
-        ? workbenchItems.flatMap((item) => (
-            SETTINGS_WORKBENCH_ROOT_MENU_IDS.has(item.id) && item.children?.length ? item.children : [item]
-          ))
+    const displayItems =
+      workbenchKey === 'settings'
+        ? workbenchItems.flatMap((item) =>
+            SETTINGS_WORKBENCH_ROOT_MENU_IDS.has(item.id) && item.children?.length
+              ? item.children
+              : [item],
+          )
         : workbenchItems
 
-      for (const item of displayItems) {
-        const section = normalizeMenuSection(item.section)
-        if (!section) {
-          directItems.push(item)
-          continue
-        }
-        const current = sectionGroups.get(section) ?? []
-        current.push(item)
-        sectionGroups.set(section, current)
+    for (const item of displayItems) {
+      const section = normalizeMenuSection(item.section)
+      if (!section) {
+        directItems.push(item)
+        continue
       }
+      const current = sectionGroups.get(section) ?? []
+      current.push(item)
+      sectionGroups.set(section, current)
+    }
 
-      const sectionNodes = Array.from(sectionGroups.entries())
-        .sort(([left], [right]) => {
-          const sectionCompare = getMenuSectionOrder(left) - getMenuSectionOrder(right)
-          if (sectionCompare !== 0) return sectionCompare
-          return resolveMenuSectionLabel(left).localeCompare(resolveMenuSectionLabel(right))
-        })
-        .map(([section, sectionItems]): MenuItem => ({
-          id: `__section__${workbenchKey}__${section}`,
-          labelZh: resolveMenuSectionLabel(section),
-          labelEn: resolveMenuSectionLabel(section, 'en_US'),
-          path: '',
-          iconKey: '',
-          section,
-          sortOrder: 0,
-          enabled: true,
-          syntheticKind: 'section',
-          syntheticWorkbenchKey: workbenchKey,
-          children: [...sectionItems].sort(compareMenuItems),
-        }))
-
-      return {
-        id: `__workbench__${workbenchKey}`,
-        labelZh: MENU_WORKBENCH_LABELS[workbenchKey],
-        labelEn: MENU_WORKBENCH_LABELS[workbenchKey],
+    const sectionNodes = Array.from(sectionGroups.entries())
+      .sort(([left], [right]) => {
+        const sectionCompare = getMenuSectionOrder(left) - getMenuSectionOrder(right)
+        if (sectionCompare !== 0) return sectionCompare
+        return resolveMenuSectionLabel(left).localeCompare(resolveMenuSectionLabel(right))
+      })
+      .map(([section, sectionItems]): MenuItem => ({
+        id: `__section__${workbenchKey}__${section}`,
+        labelZh: resolveMenuSectionLabel(section),
+        labelEn: resolveMenuSectionLabel(section, 'en_US'),
         path: '',
         iconKey: '',
-        section: '',
-        sortOrder: MENU_WORKBENCH_ORDER.indexOf(workbenchKey),
+        section,
+        sortOrder: 0,
         enabled: true,
-        syntheticKind: 'workbench',
+        syntheticKind: 'section',
         syntheticWorkbenchKey: workbenchKey,
-        children: [...directItems].sort(compareMenuItems).concat(sectionNodes),
-      } satisfies MenuItem
-    })
-    .filter((item): item is MenuItem => Boolean(item))
+        children: [...sectionItems].sort(compareMenuItems),
+      }))
+
+    return {
+      id: `__workbench__${workbenchKey}`,
+      labelZh: MENU_WORKBENCH_LABELS[workbenchKey],
+      labelEn: MENU_WORKBENCH_LABELS[workbenchKey],
+      path: '',
+      iconKey: '',
+      section: '',
+      sortOrder: MENU_WORKBENCH_ORDER.indexOf(workbenchKey),
+      enabled: true,
+      syntheticKind: 'workbench',
+      syntheticWorkbenchKey: workbenchKey,
+      children: [...directItems].sort(compareMenuItems).concat(sectionNodes),
+    } satisfies MenuItem
+  }).filter((item): item is MenuItem => Boolean(item))
 }
 
 export function filterMenuTree(
@@ -367,15 +392,21 @@ export function filterMenuTree(
   const matches = (item: MenuItem) => {
     const summary = summarizeMenuVisibility(item)
     const normalizedSection = normalizeMenuSection(item.section)
-    const matchesSection = !options.section ||
-      (options.section === MENU_UNGROUPED_FILTER ? normalizedSection === '' : normalizedSection === options.section)
-    const matchesWorkbench = !options.workbench || summarizeMenuWorkbench(item, menuLookup).key === options.workbench
-    const matchesEnabled = options.enabled === 'all'
-      ? true
-      : options.enabled === 'enabled'
-        ? item.enabled
-        : !item.enabled
-    const matchesVisibility = options.visibility === 'all' ? true : summary.mode === options.visibility
+    const matchesSection =
+      !options.section ||
+      (options.section === MENU_UNGROUPED_FILTER
+        ? normalizedSection === ''
+        : normalizedSection === options.section)
+    const matchesWorkbench =
+      !options.workbench || summarizeMenuWorkbench(item, menuLookup).key === options.workbench
+    const matchesEnabled =
+      options.enabled === 'all'
+        ? true
+        : options.enabled === 'enabled'
+          ? item.enabled
+          : !item.enabled
+    const matchesVisibility =
+      options.visibility === 'all' ? true : summary.mode === options.visibility
     return matchesSection && matchesWorkbench && matchesEnabled && matchesVisibility
   }
 
@@ -397,9 +428,7 @@ export function filterMenuTree(
     }
   }
 
-  return items
-    .map((item) => visit(item, 0))
-    .filter((item): item is MenuItem => Boolean(item))
+  return items.map((item) => visit(item, 0)).filter((item): item is MenuItem => Boolean(item))
 }
 
 export function findMenuItemByID(items: MenuItem[], id: string): MenuItem | null {
@@ -416,7 +445,8 @@ export function findMenuItemByID(items: MenuItem[], id: string): MenuItem | null
 }
 
 export function normalizeMenuSubmitValues(values: Record<string, unknown>) {
-  const normalizedParentId = typeof values.parentId === 'string' ? values.parentId.trim() : values.parentId
+  const normalizedParentId =
+    typeof values.parentId === 'string' ? values.parentId.trim() : values.parentId
   const roleIds = Array.isArray(values.roleIds)
     ? values.roleIds.map((item) => String(item).trim()).filter(Boolean)
     : []
@@ -469,10 +499,14 @@ export function buildMenuFormValues(editing: MenuItem | null) {
 }
 
 export function compactUniqueStrings(values: string[]) {
-  return Array.from(new Set(values.map((item) => item.trim()).filter(Boolean))).sort((left, right) => left.localeCompare(right))
+  return Array.from(new Set(values.map((item) => item.trim()).filter(Boolean))).sort(
+    (left, right) => left.localeCompare(right),
+  )
 }
 
-export function getMenuDerivedPermissionKeys(item: Pick<MenuItem, 'id' | 'path' | 'derivedPermissionKeys'>) {
+export function getMenuDerivedPermissionKeys(
+  item: Pick<MenuItem, 'id' | 'path' | 'derivedPermissionKeys'>,
+) {
   if (item.derivedPermissionKeys?.length) {
     return compactUniqueStrings(item.derivedPermissionKeys)
   }
@@ -482,12 +516,16 @@ export function getMenuDerivedPermissionKeys(item: Pick<MenuItem, 'id' | 'path' 
         const routeMenuId = resolveRouteMenuId(route)
         return routeMenuId === item.id || route.path === item.path
       })
-      .flatMap((route) => route.permissionKeysAny?.length ? route.permissionKeysAny : [resolveRoutePermission(route)])
+      .flatMap((route) =>
+        route.permissionKeysAny?.length ? route.permissionKeysAny : [resolveRoutePermission(route)],
+      )
       .filter((value): value is string => Boolean(value)),
   )
 }
 
-export function summarizeMenuVisibility(item: Pick<MenuItem, 'id' | 'path' | 'roleIds' | 'visibilityMode' | 'derivedPermissionKeys'>): MenuVisibilitySummary {
+export function summarizeMenuVisibility(
+  item: Pick<MenuItem, 'id' | 'path' | 'roleIds' | 'visibilityMode' | 'derivedPermissionKeys'>,
+): MenuVisibilitySummary {
   const derivedPermissionKeys = getMenuDerivedPermissionKeys(item)
   const explicitRoleIds = compactUniqueStrings(item.roleIds ?? [])
 
@@ -495,7 +533,11 @@ export function summarizeMenuVisibility(item: Pick<MenuItem, 'id' | 'path' | 'ro
     return { derivedPermissionKeys, explicitRoleIds, mode: 'explicit' }
   }
   if (item.visibilityMode === 'derived') {
-    return { derivedPermissionKeys, explicitRoleIds, mode: derivedPermissionKeys.length > 0 ? 'derived' : 'unmapped' }
+    return {
+      derivedPermissionKeys,
+      explicitRoleIds,
+      mode: derivedPermissionKeys.length > 0 ? 'derived' : 'unmapped',
+    }
   }
   if (explicitRoleIds.length > 0) {
     return { derivedPermissionKeys, explicitRoleIds, mode: 'explicit' }

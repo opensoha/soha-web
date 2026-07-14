@@ -65,7 +65,18 @@ vi.mock('@/features/copilot/workbench/pages/chat-page', mockRoutePage('AIWorkben
 vi.mock('@/features/copilot/observe/operations/page', mockRoutePage('AIOperationsPage'))
 vi.mock('@/features/copilot/observe/tools/page', mockRoutePage('AIToolsPage'))
 vi.mock('@/features/copilot/observe/model-settings/page', mockRoutePage('AIModelSettingsPage'))
-vi.mock('@/features/copilot/gateway/pages/overview-page', mockRoutePage('AIGatewayOverviewPage'))
+vi.mock('@/features/copilot/observe/overview/page', mockRoutePage('AIObserveOverviewPage'))
+vi.mock('@/features/copilot/gateway/redirects', async () => {
+  const { createElement } = await import('react')
+  return {
+    AIGatewayOverviewRedirectPage: () =>
+      createElement(
+        'div',
+        { 'data-route-page': 'AIGatewayOverviewRedirectPage' },
+        'AIGatewayOverviewRedirectPage',
+      ),
+  }
+})
 
 vi.mock('@/features/platform/workloads/overview/page', mockRoutePage('WorkloadsOverviewPage'))
 vi.mock('@/features/platform/clusters/list-page', mockRoutePage('ClustersPage'))
@@ -256,7 +267,7 @@ describe('router deep-link baseline', () => {
     ['/ai-workbench/inspection', 'AIOperationsPage'],
     ['/ai-workbench/tool-settings', 'AIToolsPage'],
     ['/ai-workbench/model-settings', 'AIModelSettingsPage'],
-    ['/ai-gateway/overview', 'AIGatewayOverviewPage'],
+    ['/ai-gateway/overview', 'AIGatewayOverviewRedirectPage'],
     ['/storage', 'StoragePvcPage'],
     ['/not-a-real-route', 'OverviewPage'],
   ])('resolves %s to %s', async (path, page) => {

@@ -11,6 +11,7 @@ const routePages = vi.hoisted(() => ({
   governance: () => null,
   callLogs: () => null,
   gatewayRedirect: () => null,
+  gatewayOverviewRedirect: () => null,
   upstreamsRedirect: () => null,
   modelRoutesRedirect: () => null,
   wildcardRedirect: () => null,
@@ -35,6 +36,7 @@ vi.mock('./gateway/pages/call-logs-page', () => ({
 }))
 vi.mock('./gateway/redirects', () => ({
   AIGatewayRedirectPage: routePages.gatewayRedirect,
+  AIGatewayOverviewRedirectPage: routePages.gatewayOverviewRedirect,
   AIGatewayUpstreamsRedirectPage: routePages.upstreamsRedirect,
   AIGatewayModelRoutesRedirectPage: routePages.modelRoutesRedirect,
   AIGatewayWildcardRedirectPage: routePages.wildcardRedirect,
@@ -44,7 +46,7 @@ describe('Copilot route manifests', () => {
   it('loads every Gateway UI route from its own leaf module', async () => {
     const expectedPages = new Map([
       ['/ai-gateway', routePages.gatewayRedirect],
-      ['/ai-gateway/overview', routePages.overview],
+      ['/ai-gateway/overview', routePages.gatewayOverviewRedirect],
       ['/ai-gateway/relay', routePages.relay],
       ['/ai-gateway/upstreams', routePages.upstreamsRedirect],
       ['/ai-gateway/model-routes', routePages.modelRoutesRedirect],
@@ -79,9 +81,31 @@ describe('Copilot route manifests', () => {
     })
   })
 
+  it('places Gateway and AI engineering routes in one workbench', () => {
+    const routes = copilotRouteManifests.flatMap((manifest) => [...manifest])
+    const ids = [
+      'ai-workbench-overview',
+      'ai-workbench-knowledge',
+      'ai-workbench-context',
+      'ai-workbench-agent-runs',
+      'ai-workbench-agent-providers',
+      'ai-workbench-evaluations',
+      'ai-gateway-relay',
+      'ai-gateway-governance',
+    ]
+    for (const id of ids) {
+      const meta = routes.find((route) => route.meta.id === id)?.meta as
+        { workbenchId?: string } | undefined
+      expect(meta?.workbenchId).toBe('ai')
+    }
+    const gatewayOverviewMeta = routes.find((route) => route.meta.id === 'ai-gateway-overview')
+      ?.meta as { redirectTo?: string } | undefined
+    expect(gatewayOverviewMeta?.redirectTo).toBe('/ai-workbench/overview')
+  })
+
   it('forms one valid Copilot registry', () => {
     const routes = copilotRouteManifests.flatMap((manifest) => [...manifest])
-    expect(routes).toHaveLength(31)
+    expect(routes).toHaveLength(43)
     expect(validateRouteDefinitions(routes)).toEqual([])
   })
 })

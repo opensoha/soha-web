@@ -116,6 +116,7 @@ export interface WorkbenchModuleDescriptor {
 export interface WorkbenchModuleStatus {
   descriptor: WorkbenchModuleDescriptor
   enabled: boolean
+  features?: Record<string, boolean>
 }
 
 export interface RuntimeMenuNode {

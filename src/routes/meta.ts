@@ -43,8 +43,7 @@ const WORKBENCH_DEFAULT_PATHS = {
   virtualization: '/virtualization',
   docker: '/docker',
   delivery: '/applications',
-  ai: '/ai-workbench',
-  aiGateway: '/ai-gateway/overview',
+  ai: '/ai-workbench/overview',
   monitoring: '/monitoring-workbench',
   settings: '/identity/overview',
 } as const
@@ -74,7 +73,17 @@ const FRONTEND_MENU_COMPATIBILITY: ReadonlyArray<
     permissionKey: 'access.directory.view',
     requiredParentId: 'access',
   },
+  { id: 'ai-workbench-knowledge-pipelines', parentId: 'ai-workbench', path: '/ai-workbench/knowledge-pipelines', labelZh: 'Knowledge Pipelines', labelEn: 'Knowledge Pipelines', iconKey: 'book', section: 'ai-interaction', sortOrder: 25, enabled: true, permissionKey: 'ai.knowledge.connectors.view', requiredParentId: 'ai-workbench' },
+  { id: 'ai-workbench-evaluation-lifecycle', parentId: 'ai-workbench', path: '/ai-workbench/evaluation-lifecycle', labelZh: 'Evaluation Lifecycle', labelEn: 'Evaluation Lifecycle', iconKey: 'inspect', section: 'ai-interaction', sortOrder: 55, enabled: true, permissionKey: 'ai.evaluations.execute', requiredParentId: 'ai-workbench' },
+  { id: 'ai-workbench-memory', parentId: 'ai-workbench', path: '/ai-workbench/memory', labelZh: 'Memory Policies', labelEn: 'Memory Policies', iconKey: 'inspect', section: 'ai-engineering', sortOrder: 15, enabled: true, permissionKey: 'ai.memory.view', requiredParentId: 'ai-workbench' },
+  { id: 'ai-workbench-provider-fleet', parentId: 'ai-workbench', path: '/ai-workbench/provider-fleet', labelZh: 'Provider Fleet', labelEn: 'Provider Fleet', iconKey: 'puzzle', section: 'ai-engineering', sortOrder: 35, enabled: true, permissionKey: 'ai.agent-fleet.view', requiredParentId: 'ai-workbench' },
+  { id: 'ai-workbench-environments', parentId: 'ai-workbench', path: '/ai-workbench/environments', labelZh: 'Agent Environments', labelEn: 'Agent Environments', iconKey: 'puzzle', section: 'ai-engineering', sortOrder: 40, enabled: true, permissionKey: 'ai.environments.view', requiredParentId: 'ai-workbench' },
+  { id: 'ai-workbench-production-operations', parentId: 'ai-workbench', path: '/ai-workbench/production-operations', labelZh: 'AI Operations', labelEn: 'AI Operations', iconKey: 'gauge', section: 'ai-governance', sortOrder: 40, enabled: true, permissionKey: 'ai.operations.view', requiredParentId: 'ai-workbench' },
 ]
+
+const ROUTE_MENU_COMPATIBILITY: Readonly<Record<string, readonly string[]>> = {
+  'ai-workbench-overview': ['ai-workbench', 'ai-gateway-overview'],
+}
 
 function getCompatibleVisibleMenus(snapshot?: PermissionSnapshot | null): VisibleMenu[] {
   if (!snapshot) return []
@@ -189,7 +198,7 @@ function deriveWorkbenchIdFromPath(pathname: string): WorkbenchId | null {
     return 'docker'
   }
   if (pathname.startsWith('/ai-gateway')) {
-    return 'aiGateway'
+    return 'ai'
   }
   if (pathname.startsWith('/plugins') || pathname.startsWith('/extensions-center')) {
     return 'settings'
@@ -474,7 +483,11 @@ export function canAccessRoute(route: RouteMeta, snapshot?: PermissionSnapshot |
       ? permissionKeysAny.some((key) => snapshot.permissionKeys.includes(key))
       : !permissionKey || snapshot.permissionKeys.includes(permissionKey)
   const hasCompatibleMenu = getCompatibleVisibleMenus(snapshot).some((menu) => menu.id === menuId)
-  const hasMenu = !menuId || snapshot.visibleMenuIds.includes(menuId) || hasCompatibleMenu
+  const hasMenuAlias = (ROUTE_MENU_COMPATIBILITY[menuId ?? ''] ?? []).some((id) =>
+    snapshot.visibleMenuIds.includes(id),
+  )
+  const hasMenu =
+    !menuId || snapshot.visibleMenuIds.includes(menuId) || hasCompatibleMenu || hasMenuAlias
   return hasWorkspacePermission && hasPermission && hasMenu
 }
 
@@ -534,6 +547,29 @@ const APPLICATION_MENU_SECTION_OVERRIDES: Record<string, string> = {
   'application-environments': 'delivery-platform',
 }
 
+const AI_MENU_SECTION_OVERRIDES: Record<string, string> = {
+  'ai-workbench-chat': 'ai-interaction',
+  'ai-workbench-inspection': 'ai-interaction',
+  'ai-workbench-knowledge': 'ai-interaction',
+  'ai-workbench-agent-runs': 'ai-interaction',
+  'ai-workbench-evaluations': 'ai-interaction',
+  'ai-workbench-context': 'ai-engineering',
+  'ai-workbench-tool-settings': 'ai-engineering',
+  'ai-workbench-agent-providers': 'ai-engineering',
+  'ai-workbench-environments': 'ai-engineering',
+  'ai-workbench-knowledge-pipelines': 'ai-interaction',
+  'ai-workbench-evaluation-lifecycle': 'ai-interaction',
+  'ai-workbench-memory': 'ai-engineering',
+  'ai-workbench-provider-fleet': 'ai-engineering',
+  'ai-workbench-production-operations': 'ai-governance',
+  'ai-gateway-relay': 'ai-model-access',
+  'ai-gateway-clients': 'ai-model-access',
+  'ai-gateway-tokens': 'ai-model-access',
+  'ai-gateway-manifest': 'ai-governance',
+  'ai-gateway-governance': 'ai-governance',
+  'ai-gateway-call-logs': 'ai-governance',
+}
+
 const SYSTEM_ROOT_ORDER: Record<string, number> = {
   access: 10,
   'access-users': 11,
@@ -552,6 +588,9 @@ const SYSTEM_ROOT_ORDER: Record<string, number> = {
 }
 
 function deriveRuntimeMenuSection(node: RuntimeMenuNode, workspace: WorkspaceType | null): string {
+  if (node.id in AI_MENU_SECTION_OVERRIDES) {
+    return AI_MENU_SECTION_OVERRIDES[node.id]
+  }
   if (workspace === 'application' && node.id in APPLICATION_MENU_SECTION_OVERRIDES) {
     return APPLICATION_MENU_SECTION_OVERRIDES[node.id]
   }
@@ -704,7 +743,6 @@ export function filterSidebarNavByWorkbench(
   )
 
   const flattenedWorkbenchRootIds: Partial<Record<WorkbenchId, string>> = {
-    aiGateway: 'ai-gateway',
     docker: 'docker-workbench',
     monitoring: 'monitoring-workbench',
     settings: 'settings',
@@ -712,6 +750,7 @@ export function filterSidebarNavByWorkbench(
   }
   const flattenedRootIds = [
     flattenedWorkbenchRootIds[workbenchId],
+    ...(workbenchId === 'ai' ? ['ai-workbench', 'ai-gateway'] : []),
     ...(workbenchId === 'settings' ? ['identity', 'system', 'access', 'settings-extensions'] : []),
   ].filter((item): item is string => Boolean(item))
 

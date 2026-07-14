@@ -14,7 +14,6 @@ import {
   MoonOutlined,
   QuestionCircleOutlined,
   RobotOutlined,
-  SafetyOutlined,
   SettingOutlined,
   SlidersOutlined,
   SunOutlined,
@@ -29,6 +28,7 @@ import { AnnouncementBell } from '@/features/announcements/announcement-center'
 import { logoutAuthSession } from '@/features/auth/auth-api'
 import { usePermissionSnapshot } from '@/features/auth/permission-snapshot'
 import { GlobalAIAssistantProvider } from '@/features/copilot/global-assistant'
+import { filterMenuByModuleFeatures, useModuleStatuses } from '@/features/modules'
 import { resolveMenuIcon } from '@/features/system/menu-icons'
 import { resolveMenuSectionLabel } from '@/features/system/menu-schema'
 import { useI18n } from '@/i18n'
@@ -52,14 +52,13 @@ import { getNormalizedBranding, useBrandingSettings } from '@/features/settings'
 import { useAuthStore } from '@/stores/auth-store'
 import { usePreferencesStore } from '@/stores/preferences-store'
 import { resolveThemeMode, watchSystemThemeMode } from '@/theme/app-theme'
-import type { BusinessWorkspaceType, PermissionSnapshot, RuntimeMenuNode } from '@/types'
+import type { BusinessWorkspaceType, RuntimeMenuNode } from '@/types'
 
 const { Sider, Header, Content } = Layout
 const SIDEBAR_WIDTH = 200
 const SIDEBAR_COLLAPSED_WIDTH = 55
 const BREADCRUMB_WORKBENCH_ROOT_ROUTE_IDS: Partial<Record<WorkbenchId, string[]>> = {
-  ai: ['ai-workbench'],
-  aiGateway: ['ai-gateway'],
+  ai: ['ai-workbench', 'ai-gateway'],
   docker: ['docker-workbench'],
   monitoring: ['monitoring-workbench'],
   settings: ['settings', 'extension-center'],
@@ -72,41 +71,6 @@ interface WorkbenchOption {
   key: WorkbenchId
   label: string
 }
-
-const AI_WORKBENCH_MENU_ENTRIES = [
-  {
-    key: 'ai-workbench-chat',
-    iconKey: 'bot',
-    label: '通用聊天',
-    path: '/ai-workbench/chat',
-    permissionKey: 'observe.ai.chat',
-    legacyMenuIds: ['ai-workbench-investigation'],
-  },
-  {
-    key: 'ai-workbench-inspection',
-    iconKey: 'inspect',
-    label: '巡检',
-    path: '/ai-workbench/inspection',
-    permissionKey: 'observe.ai.view',
-    legacyMenuIds: ['ai-workbench-operations'],
-  },
-  {
-    key: 'ai-workbench-tool-settings',
-    iconKey: 'wrench',
-    label: '工具与技能',
-    path: '/ai-workbench/tool-settings',
-    permissionKey: 'observe.ai.view',
-    legacyMenuIds: ['ai-workbench-tools'],
-  },
-  {
-    key: 'ai-workbench-model-settings',
-    iconKey: 'settings',
-    label: 'AI 设置',
-    path: '/ai-workbench/model-settings',
-    permissionKey: 'settings.ai.view',
-    legacyMenuIds: ['ai-workbench-tools'],
-  },
-] as const
 
 const RUNTIME_MENU_LABEL_OVERRIDES: Record<
   string,
@@ -139,36 +103,6 @@ const RUNTIME_MENU_LABEL_OVERRIDES: Record<
   },
 }
 
-function canUseAIWorkbenchMenuEntry(
-  item: (typeof AI_WORKBENCH_MENU_ENTRIES)[number],
-  snapshot?: PermissionSnapshot | null,
-) {
-  const hasPermissionKey = snapshot?.permissionKeys.includes(item.permissionKey) ?? false
-  const visibleMenuIds = snapshot?.visibleMenuIds ?? []
-  const hasVisibleMenu =
-    visibleMenuIds.includes(item.key) ||
-    item.legacyMenuIds.some((id) => visibleMenuIds.includes(id))
-  return hasPermissionKey && hasVisibleMenu
-}
-
-function buildAIWorkbenchMenuItems(snapshot?: PermissionSnapshot | null): MenuProps['items'] {
-  return AI_WORKBENCH_MENU_ENTRIES.filter((item) => canUseAIWorkbenchMenuEntry(item, snapshot)).map(
-    (item) => ({
-      key: item.key,
-      icon: resolveMenuIcon(item.iconKey),
-      label: item.label,
-    }),
-  )
-}
-
-function buildAIWorkbenchItemKeyToPath(snapshot?: PermissionSnapshot | null) {
-  return Object.fromEntries(
-    AI_WORKBENCH_MENU_ENTRIES.filter((item) => canUseAIWorkbenchMenuEntry(item, snapshot)).map(
-      (item) => [item.key, item.path],
-    ),
-  ) as Record<string, string>
-}
-
 function buildAIWorkbenchSearch(search: string) {
   const source = new URLSearchParams(search)
   const next = new URLSearchParams()
@@ -193,18 +127,6 @@ function buildAIWorkbenchSearch(search: string) {
   })
   const suffix = next.toString()
   return suffix ? `?${suffix}` : ''
-}
-
-function findAIWorkbenchMenuKey(pathname: string, search: string) {
-  if (pathname === '/ai-workbench/investigation') {
-    const mode = new URLSearchParams(search).get('mode')
-    if (mode === 'inspection_review') return 'ai-workbench-inspection'
-    return 'ai-workbench-chat'
-  }
-  if (pathname === '/ai-workbench/root-cause' || pathname === '/ai-workbench/performance') {
-    return 'ai-workbench-chat'
-  }
-  return AI_WORKBENCH_MENU_ENTRIES.find((item) => item.path === pathname)?.key ?? null
 }
 
 function resolveRuntimeMenuLabel(node: RuntimeMenuNode, localeCode: 'zh_CN' | 'en_US') {
@@ -419,12 +341,6 @@ function buildWorkbenchOptions(localeCode: 'zh_CN' | 'en_US'): WorkbenchOption[]
         icon: <RobotOutlined />,
       },
       {
-        key: 'aiGateway',
-        label: 'AI Gateway',
-        description: 'AI clients, MCP access, tokens, policies, approvals, and call logs',
-        icon: <SafetyOutlined />,
-      },
-      {
         key: 'monitoring',
         label: 'Monitoring Workbench',
         description: 'Alerts, routes, notifications, and on-call flows',
@@ -468,12 +384,6 @@ function buildWorkbenchOptions(localeCode: 'zh_CN' | 'en_US'): WorkbenchOption[]
       label: 'AI工作台',
       description: '调查、自动化、工具与技能',
       icon: <RobotOutlined />,
-    },
-    {
-      key: 'aiGateway',
-      label: 'AI Gateway',
-      description: '外部 AI 客户端、MCP、令牌、策略、审批与调用日志',
-      icon: <SafetyOutlined />,
     },
     {
       key: 'monitoring',
@@ -554,6 +464,7 @@ export function AppLayout() {
   const user = useAuthStore((state) => state.user)
   const permissionSnapshotQuery = usePermissionSnapshot()
   const brandingQuery = useBrandingSettings()
+  const moduleStatusesQuery = useModuleStatuses()
   const localeCode = usePreferencesStore((state) => state.localeCode)
   const setLocaleCode = usePreferencesStore((state) => state.setLocaleCode)
   const themeMode = usePreferencesStore((state) => state.themeMode)
@@ -568,7 +479,10 @@ export function AppLayout() {
   const [systemThemeVersion, setSystemThemeVersion] = useState(0)
 
   const snapshot = permissionSnapshotQuery.data?.data
-  const fullSidebarNav = useMemo(() => getAccessibleSidebarNav(snapshot), [snapshot])
+  const fullSidebarNav = useMemo(
+    () => filterMenuByModuleFeatures(getAccessibleSidebarNav(snapshot), moduleStatusesQuery.data),
+    [moduleStatusesQuery.data, snapshot],
+  )
   const accessibleWorkspaces = useMemo(() => getAccessibleWorkspaces(snapshot), [snapshot])
   const accessibleWorkbenchIds = useMemo(() => getAccessibleWorkbenchIds(snapshot), [snapshot])
   const workbenchOptions = useMemo(
@@ -603,8 +517,8 @@ export function AppLayout() {
     }
     if (activeWorkspace === 'resource') {
       return (
-        (['platform', 'virtualization', 'docker', 'ai', 'aiGateway', 'monitoring'] as const).find(
-          (item) => accessibleWorkbenchIds.includes(item),
+        (['platform', 'virtualization', 'docker', 'ai', 'monitoring'] as const).find((item) =>
+          accessibleWorkbenchIds.includes(item),
         ) ?? null
       )
     }
@@ -638,25 +552,17 @@ export function AppLayout() {
   }, [businessNav, isSystemWorkspaceRoute, systemNav, systemWorkbenchNav])
   const primaryMenuItems = useMemo(
     () =>
-      activeWorkbenchId === 'ai'
-        ? buildAIWorkbenchMenuItems(snapshot)
-        : buildMenuItems(primaryNav, localeCode, {
-            grouped: activeWorkbenchId !== 'virtualization' && activeWorkbenchId !== 'docker',
-          }),
-    [activeWorkbenchId, localeCode, primaryNav, snapshot],
+      buildMenuItems(primaryNav, localeCode, {
+        grouped: activeWorkbenchId !== 'virtualization' && activeWorkbenchId !== 'docker',
+      }),
+    [activeWorkbenchId, localeCode, primaryNav],
   )
   const primaryItemKeyToPath = useMemo(() => {
-    if (activeWorkbenchId === 'ai') {
-      const suffix = buildAIWorkbenchSearch(location.search)
-      return Object.fromEntries(
-        Object.entries(buildAIWorkbenchItemKeyToPath(snapshot)).map(([key, path]) => [
-          key,
-          `${path}${suffix}`,
-        ]),
-      )
-    }
-    return buildItemKeyToPath(primaryNav)
-  }, [activeWorkbenchId, location.search, primaryNav, snapshot])
+    const paths = buildItemKeyToPath(primaryNav)
+    if (activeWorkbenchId !== 'ai') return paths
+    const suffix = buildAIWorkbenchSearch(location.search)
+    return Object.fromEntries(Object.entries(paths).map(([key, path]) => [key, `${path}${suffix}`]))
+  }, [activeWorkbenchId, location.search, primaryNav])
   const combinedNav = useMemo(() => [...businessNav, ...systemNav], [businessNav, systemNav])
   const combinedItemKeyToPath = useMemo(
     () => ({ ...buildItemKeyToPath(businessNav), ...buildItemKeyToPath(systemNav) }),
@@ -678,21 +584,13 @@ export function AppLayout() {
 
   const parentMeta = getParentRouteMeta(currentMeta)
   const currentMenuID = useMemo(() => {
-    if (activeWorkbenchId === 'ai') {
-      return (
-        findAIWorkbenchMenuKey(location.pathname, location.search) ??
-        resolveRouteMenuId(currentMeta) ??
-        currentMeta.menuId ??
-        currentMeta.id
-      )
-    }
     return (
       findMenuIDByRoutePath(combinedNav, currentMeta.path) ??
       resolveRouteMenuId(currentMeta) ??
       currentMeta.menuId ??
       currentMeta.id
     )
-  }, [activeWorkbenchId, combinedNav, currentMeta, location.pathname, location.search])
+  }, [combinedNav, currentMeta])
 
   const selectedKeys = useMemo(() => {
     if (activeWorkbenchId === 'ai' && currentMenuID && primaryItemKeyToPath[currentMenuID]) {
@@ -715,9 +613,6 @@ export function AppLayout() {
   ])
 
   const routeOpenKeys = useMemo(() => {
-    if (activeWorkbenchId === 'ai') {
-      return []
-    }
     const keys: string[] = []
     let pointer = currentMenuID
     while (pointer && parentByID.has(pointer)) {
@@ -733,13 +628,7 @@ export function AppLayout() {
       keys.push(currentMenuID)
     }
     return keys
-  }, [
-    activeWorkbenchId,
-    businessExpandableNodeIDs,
-    currentMenuID,
-    parentByID,
-    systemExpandableNodeIDs,
-  ])
+  }, [businessExpandableNodeIDs, currentMenuID, parentByID, systemExpandableNodeIDs])
 
   useEffect(() => {
     if (sidebarCollapsed) {

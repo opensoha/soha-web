@@ -1,12 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/services/api-client'
-import type { ApiResponse, WorkbenchModuleStatus } from '@/types'
+import type { ApiResponse, RuntimeMenuNode, WorkbenchModuleStatus } from '@/types'
 
 export const moduleStatusQueryKey = ['modules'] as const
 
 type ModuleStatusMap = Record<string, { enabled?: boolean } | boolean | undefined>
 
-type ModuleStatusEnvelope =
+export type ModuleStatusEnvelope =
   | ApiResponse<WorkbenchModuleStatus[]>
   | WorkbenchModuleStatus[]
   | {
@@ -41,6 +41,11 @@ export function getWorkbenchModuleEnabled(response: ModuleStatusEnvelope | undef
   return item?.enabled === true
 }
 
+export function getWorkbenchModuleFeature(response: ModuleStatusEnvelope | undefined, moduleId: string, feature: string) {
+  const item = moduleItems(response).find((status) => status.descriptor.id === moduleId)
+  return item?.enabled === true && item.features?.[feature] === true
+}
+
 export function useModuleStatuses() {
   return useQuery({
     queryKey: moduleStatusQueryKey,
@@ -55,4 +60,51 @@ export function useWorkbenchModuleEnabled(moduleId: string) {
     ...query,
     moduleEnabled: getWorkbenchModuleEnabled(query.data, moduleId),
   }
+}
+
+export function useWorkbenchModuleFeature(moduleId: string, feature: string) {
+  const query = useModuleStatuses()
+  return { ...query, featureEnabled: getWorkbenchModuleFeature(query.data, moduleId, feature) }
+}
+
+const AI_WORKBENCH_MENU_FEATURES: Record<string, string[]> = {
+  'ai-workbench-knowledge-pipelines': [
+    'knowledge.external_connectors',
+    'knowledge.async_ingestion',
+  ],
+  'ai-workbench-evaluation-lifecycle': [
+    'evaluation.candidate_executor',
+    'evaluation.isolated_replay',
+    'evaluation.release_gate',
+    'evaluation.feedback_sampling',
+  ],
+  'ai-workbench-memory': ['memory.long_term'],
+  'ai-workbench-provider-fleet': ['agent.fleet_rollout', 'agent.conformance_suite'],
+  'ai-workbench-environments': ['agent.environment_management'],
+  'ai-workbench-production-operations': ['ai.production_operations'],
+}
+
+export function areWorkbenchModuleFeaturesEnabled(
+  response: ModuleStatusEnvelope | undefined,
+  moduleId: string,
+  features: string[],
+) {
+  return features.every((feature) => getWorkbenchModuleFeature(response, moduleId, feature))
+}
+
+export function filterMenuByModuleFeatures(
+  nodes: RuntimeMenuNode[],
+  response: ModuleStatusEnvelope | undefined,
+): RuntimeMenuNode[] {
+  const filterNode = (node: RuntimeMenuNode): RuntimeMenuNode | null => {
+    const requirements = AI_WORKBENCH_MENU_FEATURES[node.id]
+    if (requirements && !areWorkbenchModuleFeaturesEnabled(response, 'ai', requirements)) {
+      return null
+    }
+    const children = (node.children ?? [])
+      .map(filterNode)
+      .filter((item): item is RuntimeMenuNode => Boolean(item))
+    return { ...node, children: children.length > 0 ? children : undefined }
+  }
+  return nodes.map(filterNode).filter((item): item is RuntimeMenuNode => Boolean(item))
 }

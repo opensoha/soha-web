@@ -18,6 +18,11 @@ export function AIWorkbenchModeRedirect() {
   )
 }
 
+export function AIWorkbenchOverviewRedirect() {
+  const location = useLocation()
+  return <Navigate to={`/ai-workbench/overview${location.search}`} replace />
+}
+
 export function AIWorkbenchFixedModeRedirect({ mode }: { mode: string }) {
   const location = useLocation()
   return <Navigate to={getAIWorkbenchPathForMode(mode, location.search)} replace />

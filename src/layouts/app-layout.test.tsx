@@ -1002,7 +1002,7 @@ describe('app layout workspace navigation', () => {
     expect(container.textContent).not.toContain('AI Gateway')
   })
 
-  it('shows AI Gateway child menus directly in the standard business sidebar when the AI Gateway workbench is active', async () => {
+  it('shows Gateway children inside the unified AI workbench sidebar', async () => {
     const container = await renderWithProviders('/ai-gateway/overview', {
       permissionKeys: [
         'workspace.resource.view',
@@ -1208,21 +1208,18 @@ describe('app layout workspace navigation', () => {
       ],
     })
 
-    expect(container.querySelector('.soha-workbench-switcher__label')?.textContent).toBe(
-      'AI Gateway',
-    )
+    expect(container.querySelector('.soha-workbench-switcher__label')?.textContent).toBe('AI工作台')
     expect(container.querySelector('.soha-nav-business')).not.toBeNull()
     const businessMenu = container.querySelector('.soha-nav-menu')
     expect(businessMenu?.querySelector('.ant-menu-submenu')).toBeNull()
     expect(businessMenu?.textContent).not.toContain('AI Gateway')
-    expect(businessMenu?.textContent).toContain('概览')
     expect(businessMenu?.textContent).toContain('能力清单')
     expect(businessMenu?.textContent).toContain('Tokens')
     expect(businessMenu?.textContent).toContain('Governance')
     expect(businessMenu?.textContent).toContain('调用日志')
-    expect(container.textContent).toContain('AI Gateway')
-    expect(container.textContent).not.toContain('通用聊天')
-    expect(container.textContent).not.toContain('巡检')
+    expect(container.textContent).not.toContain('AI Gateway')
+    expect(container.textContent).toContain('通用聊天')
+    expect(container.textContent).toContain('巡检')
     expect(container.textContent).not.toContain('系统管理')
   })
 

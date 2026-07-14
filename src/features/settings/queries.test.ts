@@ -21,6 +21,7 @@ describe('settingsQueries', () => {
     await expect(executeQuery(options)).resolves.toEqual({
       providers: [expect.objectContaining({ id: 'oidc', type: 'oidc', scopes: [] })],
       defaultProviderId: 'oidc',
+      localPasswordLoginEnabled: true,
     })
   })
 

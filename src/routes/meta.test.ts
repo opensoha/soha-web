@@ -1341,11 +1341,20 @@ describe('access route authorization', () => {
     const aiNav = filterSidebarNavByWorkbench(resourceNav, 'ai')
     const virtualizationNav = filterSidebarNavByWorkbench(resourceNav, 'virtualization')
     const dockerNav = filterSidebarNavByWorkbench(resourceNav, 'docker')
-    const aiGatewayNav = filterSidebarNavByWorkbench(resourceNav, 'aiGateway')
     const monitoringNav = filterSidebarNavByWorkbench(resourceNav, 'monitoring')
 
     expect(platformNav.map((item) => item.id)).toEqual(['dashboard'])
-    expect(aiNav.map((item) => item.id)).toEqual(['ai-workbench'])
+    expect(aiNav.map((item) => item.id)).toEqual([
+      'ai-workbench-chat',
+      'ai-workbench-inspection',
+      'ai-workbench-tool-settings',
+      'ai-gateway-relay',
+      'ai-gateway-clients',
+      'ai-gateway-tokens',
+      'ai-gateway-manifest',
+      'ai-gateway-governance',
+      'ai-gateway-call-logs',
+    ])
     expect(virtualizationNav.map((item) => item.id)).toEqual([
       'virtualization-workbench-overview',
       'virtualization-workbench-vms',
@@ -1361,16 +1370,6 @@ describe('access route authorization', () => {
       'docker-workbench-operations',
     ])
     expect(dockerNav.some((item) => item.id === 'docker-workbench')).toBe(false)
-    expect(aiGatewayNav.map((item) => item.id)).toEqual([
-      'ai-gateway-overview',
-      'ai-gateway-relay',
-      'ai-gateway-manifest',
-      'ai-gateway-clients',
-      'ai-gateway-tokens',
-      'ai-gateway-governance',
-      'ai-gateway-call-logs',
-    ])
-    expect(aiGatewayNav.some((item) => item.id === 'ai-gateway')).toBe(false)
     expect(monitoringNav.map((item) => item.id)).toEqual([
       'monitoring-workbench-overview',
       'monitoring-workbench-integrations',
@@ -1422,13 +1421,13 @@ describe('access route authorization', () => {
         id: 'ai-gateway',
         path: '/ai-gateway',
       }),
-    ).toBe('aiGateway')
+    ).toBe('ai')
     expect(
       getMenuWorkbenchId({
         id: 'ai-gateway-governance',
         path: '/ai-gateway/governance',
       }),
-    ).toBe('aiGateway')
+    ).toBe('ai')
     expect(
       getMenuWorkbenchId({
         id: 'settings-extensions-marketplace',
@@ -1455,10 +1454,58 @@ describe('access route authorization', () => {
     expect(getRouteWorkbenchId(getRoute('plugins-marketplace'))).toBe('settings')
     expect(getRouteWorkspace(getRoute('plugins-marketplace'))).toBe('system')
     expect(canAccessRoute(getRoute('plugins-marketplace'), snapshot)).toBe(true)
-    expect(findFirstAccessiblePathForWorkbench('settings', snapshot)).toBe(
-      '/plugins/marketplace',
-    )
+    expect(findFirstAccessiblePathForWorkbench('settings', snapshot)).toBe('/plugins/marketplace')
     expect(getAccessibleWorkbenchIds(snapshot)).toContain('settings')
+  })
+
+  it('gates Knowledge Center and Context Inspector independently', () => {
+    const snapshot = buildSnapshot({
+      permissionKeys: ['workspace.resource.view', 'ai.knowledge.view', 'ai.context.inspect'],
+      visibleMenuIds: [
+        'ai-workbench',
+        'ai-workbench-overview',
+        'ai-workbench-knowledge',
+        'ai-workbench-context',
+      ],
+      visibleMenus: [
+        { id: 'ai-workbench', path: '/ai-workbench' },
+        { id: 'ai-workbench-overview', parentId: 'ai-workbench', path: '/ai-workbench/overview' },
+        { id: 'ai-workbench-knowledge', parentId: 'ai-workbench', path: '/ai-workbench/knowledge' },
+        { id: 'ai-workbench-context', parentId: 'ai-workbench', path: '/ai-workbench/context' },
+      ],
+    })
+
+    expect(canAccessRoute(getRoute('ai-workbench-knowledge'), snapshot)).toBe(true)
+    expect(canAccessRoute(getRoute('ai-workbench-context'), snapshot)).toBe(true)
+    expect(canAccessRoute(getRoute('ai-workbench-chat'), snapshot)).toBe(false)
+    expect(getRouteWorkbenchId(getRoute('ai-workbench-context'))).toBe('ai')
+  })
+
+  it('gates Evaluation with dedicated view and manage permissions', () => {
+    const visibleMenus = [
+      { id: 'ai-workbench', path: '/ai-workbench' },
+      {
+        id: 'ai-workbench-evaluations',
+        parentId: 'ai-workbench',
+        path: '/ai-workbench/evaluations',
+      },
+    ]
+    const visibleMenuIds = visibleMenus.map((item) => item.id)
+    const borrowedPermissionSnapshot = buildSnapshot({
+      permissionKeys: ['workspace.resource.view', 'ai.context.inspect', 'ai.knowledge.view'],
+      visibleMenuIds,
+      visibleMenus,
+    })
+    const viewSnapshot = buildSnapshot({
+      permissionKeys: ['workspace.resource.view', 'ai.evaluations.view'],
+      visibleMenuIds,
+      visibleMenus,
+    })
+
+    expect(canAccessRoute(getRoute('ai-workbench-evaluations'), borrowedPermissionSnapshot)).toBe(
+      false,
+    )
+    expect(canAccessRoute(getRoute('ai-workbench-evaluations'), viewSnapshot)).toBe(true)
   })
 
   it('requires resource workspace, AI Gateway view permission, and menu binding', () => {
@@ -1481,19 +1528,19 @@ describe('access route authorization', () => {
     })
 
     expect(getRouteWorkspace(route)).toBe('resource')
-    expect(getRouteWorkbenchId(route)).toBe('aiGateway')
+    expect(getRouteWorkbenchId(route)).toBe('ai')
     expect(getRouteScopeMode(route)).toBe('passive')
     expect(canAccessRoute(route, allowedSnapshot)).toBe(true)
-    expect(parentRoute.redirectTo).toBe('/ai-gateway/overview')
+    expect(parentRoute.redirectTo).toBe('/ai-workbench/overview')
     expect(canAccessRoute(parentRoute, allowedSnapshot)).toBe(true)
-    expect(findFirstAccessiblePathForWorkbench('aiGateway', allowedSnapshot)).toBe(
-      '/ai-gateway/overview',
+    expect(findFirstAccessiblePathForWorkbench('ai', allowedSnapshot)).toBe(
+      '/ai-workbench/overview',
     )
 
     const compatRoute = getRoute('ai-workbench-gateway-compat')
     expect(compatRoute.navVisible).toBe(false)
-    expect(compatRoute.redirectTo).toBe('/ai-gateway/overview')
-    expect(getRouteWorkbenchId(compatRoute)).toBe('aiGateway')
+    expect(compatRoute.redirectTo).toBe('/ai-workbench/overview')
+    expect(getRouteWorkbenchId(compatRoute)).toBe('ai')
     expect(canAccessRoute(compatRoute, allowedSnapshot)).toBe(true)
     expect(
       canAccessRoute(
@@ -1568,7 +1615,7 @@ describe('access route authorization', () => {
 
     expect(canAccessRoute(tokenRoute, snapshot)).toBe(true)
     expect(canAccessRoute(parentRoute, snapshot)).toBe(true)
-    expect(findFirstAccessiblePathForWorkbench('aiGateway', snapshot)).toBe('/ai-gateway/tokens')
+    expect(findFirstAccessiblePathForWorkbench('ai', snapshot)).toBe('/ai-gateway/tokens')
     expect(canAccessRoute(getRoute('ai-gateway-overview'), snapshot)).toBe(false)
   })
 
@@ -1594,7 +1641,7 @@ describe('access route authorization', () => {
       visibleMenus: viewSnapshot.visibleMenus,
     })
 
-    expect(getRouteWorkbenchId(relayRoute)).toBe('aiGateway')
+    expect(getRouteWorkbenchId(relayRoute)).toBe('ai')
     expect(canAccessRoute(relayRoute, viewSnapshot)).toBe(true)
     expect(canAccessRoute(upstreamRoute, viewSnapshot)).toBe(false)
     expect(canAccessRoute(upstreamRoute, manageSnapshot)).toBe(true)
@@ -1620,7 +1667,7 @@ describe('access route authorization', () => {
       ],
     })
 
-    expect(getRouteWorkbenchId(route)).toBe('aiGateway')
+    expect(getRouteWorkbenchId(route)).toBe('ai')
     expect(canAccessRoute(route, snapshot)).toBe(true)
     expect(
       canAccessRoute(
