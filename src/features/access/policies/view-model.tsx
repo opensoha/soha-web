@@ -1,20 +1,4 @@
-import { Space, Tag } from 'antd'
 import type { AccessPolicy } from '../shared/types'
-
-export function renderMappedTags(
-  values: string[],
-  labelMap: Record<string, string>,
-  emptyText = '-',
-) {
-  if (!values?.length) return emptyText
-  return (
-    <Space wrap size={4}>
-      {values.map((value) => (
-        <Tag key={value}>{labelMap[value] || value}</Tag>
-      ))}
-    </Space>
-  )
-}
 
 export function buildPolicySubjectsSummary(
   policy: AccessPolicy,

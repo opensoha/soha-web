@@ -60,7 +60,6 @@ function isActionColumn(column: any) {
   const title = typeof column?.title === 'string' ? column.title.trim().toLowerCase() : ''
   return (
     key === 'actions' ||
-    dataIndex === 'actions' ||
     dataIndex === '__actions' ||
     (column?.fixed === 'right' && (title === '操作' || title === 'actions'))
   )

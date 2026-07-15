@@ -356,14 +356,14 @@ describe('IdentityOverviewPage', () => {
     expect(refreshAll).toHaveBeenCalledOnce()
   })
 
-  it('keeps all seven runtime navigation targets', async () => {
+  it('uses the canonical system audit route for all audit navigation', async () => {
     const container = await renderPage()
     const targets = [
       ['应用目录', '/identity/applications'],
       ['Provider 管理', '/identity/providers'],
       ['Outpost 管理', '/identity/outposts'],
       ['会话管理', '/identity/sessions'],
-      ['审计事件', '/identity/audit'],
+      ['审计事件', '/system/audit'],
       ['门户首页', '/portal'],
     ] as const
 
@@ -371,6 +371,10 @@ describe('IdentityOverviewPage', () => {
       await clickButton(container, label)
       expect(navigateMock).toHaveBeenLastCalledWith(path)
     }
+
+    await clickButton(container, '审计')
+    expect(navigateMock).toHaveBeenLastCalledWith('/system/audit')
+    expect(navigateMock).not.toHaveBeenCalledWith('/identity/audit')
   })
 
   it('preserves permission states without disabling card-level route links', async () => {
