@@ -147,7 +147,7 @@ describe('useIdentityOverviewData', () => {
       'identity.providers.view',
       'identity.outposts.view',
       'identity.policies.view',
-      'identity.sessions.view',
+      'system.online-users.view',
       'identity.audit.view',
     ]
     const { container, queryClient } = await renderProbe()
@@ -178,7 +178,7 @@ describe('useIdentityOverviewData', () => {
     expect(testState.audit).not.toHaveBeenCalled()
   })
 
-  it('accepts the System permission aliases for sessions and audit only', async () => {
+  it('uses the System permissions for sessions and audit only', async () => {
     testState.permissionKeys = ['system.online-users.view', 'system.audit.view']
     const { container } = await renderProbe()
 

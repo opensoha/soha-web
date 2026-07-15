@@ -17,12 +17,6 @@ function hasId(id: string) {
 }
 
 export const virtualizationQueries = {
-  overview: (enabled = true) =>
-    queryOptions({
-      queryKey: virtualizationKeys.overview(),
-      queryFn: virtualizationApi.overview,
-      enabled,
-    }),
   vms: (params: VirtualizationListParams = {}, enabled = true) => {
     const normalized = normalizeVirtualizationListParams(params)
     return queryOptions({

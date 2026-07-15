@@ -13,7 +13,7 @@ vi.mock('@/services/api-client', () => ({ api: apiMocks }))
 describe('systemApi', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('selects the identity and system endpoint contracts from the route path', async () => {
+  it('uses the canonical online-user endpoint contract', async () => {
     const session = {
       id: 'session-1',
       userId: 'user-1',
@@ -28,11 +28,10 @@ describe('systemApi', () => {
     }
     apiMocks.get.mockResolvedValue({ data: [session] })
 
-    expect(resolveSystemEndpointScope('/identity/sessions')).toBe('identity')
     expect(resolveSystemEndpointScope('/identity/audit')).toBe('identity')
     expect(resolveSystemEndpointScope('/system/online-users')).toBe('system')
     expect(resolveSystemEndpointScope('/system/audit')).toBe('system')
-    await expect(systemApi.sessions.list('identity')).resolves.toEqual([
+    await expect(systemApi.sessions.list()).resolves.toEqual([
       expect.objectContaining({
         id: 'session-1',
         loginTime: session.createdAt,
@@ -40,10 +39,7 @@ describe('systemApi', () => {
         source: 'console',
       }),
     ])
-    await systemApi.sessions.list('system')
-
-    expect(apiMocks.get).toHaveBeenNthCalledWith(1, '/identity/sessions')
-    expect(apiMocks.get).toHaveBeenNthCalledWith(2, '/auth/sessions')
+    expect(apiMocks.get).toHaveBeenCalledWith('/auth/sessions')
   })
 
   it('uses the matching audit endpoint and serializes normalized filters', async () => {

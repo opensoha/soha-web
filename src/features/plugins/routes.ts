@@ -22,25 +22,6 @@ export const pluginRoutes = defineRoutes([
   },
   {
     meta: {
-      id: 'extension-center-legacy',
-      path: '/extensions-center',
-      title: '扩展',
-      description: '兼容旧的扩展中心入口',
-      icon: 'IconPuzzle',
-      group: 'extension-center',
-      workbenchId: 'settings',
-      requiresAuth: true,
-      tabbar: false,
-      navVisible: false,
-      permissionStrategy: 'any-child',
-      scopeMode: 'passive',
-      workspace: 'system',
-    },
-    shell: 'app',
-    redirectTo: '/settings/extensions',
-  },
-  {
-    meta: {
       id: 'extension-center',
       path: '/settings/extensions',
       title: '扩展',
@@ -109,27 +90,6 @@ export const pluginRoutes = defineRoutes([
   },
   {
     meta: {
-      id: 'plugins-installed',
-      path: '/plugins/installed',
-      title: '已安装插件',
-      description: '兼容旧入口，跳转到插件市场',
-      icon: 'IconPuzzle',
-      group: 'extension-center',
-      workbenchId: 'settings',
-      requiresAuth: true,
-      tabbar: false,
-      navVisible: false,
-      parentId: 'extension-center',
-      menuId: 'settings-extensions-marketplace',
-      permissionKey: 'plugin.view',
-      scopeMode: 'passive',
-      workspace: 'system',
-    },
-    shell: 'app',
-    redirectTo: '/plugins/marketplace',
-  },
-  {
-    meta: {
       id: 'plugins-installed-detail',
       path: '/plugins/installed/:pluginId',
       title: '已安装插件详情',
@@ -151,26 +111,5 @@ export const pluginRoutes = defineRoutes([
       const module = await import('./installed/detail-page')
       return { default: module.InstalledPluginDetailPage }
     },
-  },
-  {
-    meta: {
-      id: 'extensions-capabilities-legacy',
-      path: '/plugins/extensions',
-      title: '扩展能力',
-      description: '兼容旧入口，扩展能力已合并到插件详情',
-      icon: 'IconBlocks',
-      group: 'extension-center',
-      workbenchId: 'settings',
-      requiresAuth: true,
-      tabbar: false,
-      navVisible: false,
-      parentId: 'plugins-marketplace',
-      menuId: 'settings-extensions-marketplace',
-      permissionKey: 'plugin.view',
-      scopeMode: 'passive',
-      workspace: 'system',
-    },
-    shell: 'app',
-    redirectTo: '/plugins/marketplace',
   },
 ] as const)

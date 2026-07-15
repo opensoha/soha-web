@@ -37,11 +37,6 @@ export const settingsQueries = {
         }
       },
     }),
-  monitoring: () =>
-    queryOptions({
-      queryKey: settingsKeys.monitoring.detail(),
-      queryFn: async () => (await settingsApi.monitoring.get()).prometheus,
-    }),
   ai: {
     detail: () =>
       queryOptions({
@@ -69,11 +64,6 @@ export const settingsQueries = {
       queryOptions({
         queryKey: settingsKeys.ai.analysisProfiles(),
         queryFn: settingsApi.ai.analysisProfiles,
-      }),
-    automationPolicies: () =>
-      queryOptions({
-        queryKey: settingsKeys.ai.automationPolicies(),
-        queryFn: settingsApi.ai.automationPolicies,
       }),
     dataSourceCapabilities: () =>
       queryOptions({

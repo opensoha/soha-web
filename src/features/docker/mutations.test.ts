@@ -1,6 +1,7 @@
 import { MutationObserver, QueryClient } from '@tanstack/react-query'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { dockerApi } from './docker-api'
+import { computeKeys } from '@/features/compute'
 import { dockerKeys, dockerMutationKeys } from './keys'
 import { dockerMutations, invalidateDockerQueries } from './mutations'
 import type { DockerHostInput, DockerProjectInput } from './docker-types'
@@ -14,13 +15,14 @@ function queryClientWithInvalidationSpy() {
 describe('dockerMutations', () => {
   afterEach(() => vi.restoreAllMocks())
 
-  it('uses one domain-root invalidation policy', async () => {
+  it('invalidates the domain root and canonical Compute overview', async () => {
     const { invalidateQueries, queryClient } = queryClientWithInvalidationSpy()
 
     await invalidateDockerQueries(queryClient)
 
-    expect(invalidateQueries).toHaveBeenCalledOnce()
+    expect(invalidateQueries).toHaveBeenCalledTimes(2)
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: dockerKeys.all })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: computeKeys.overview() })
   })
 
   it('returns domain entities and invalidates the Docker root after success', async () => {

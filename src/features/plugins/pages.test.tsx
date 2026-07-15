@@ -64,7 +64,21 @@ vi.mock('@/components/management-list', () => ({
       {actions}
     </div>
   ),
-  ManagementState: ({ title }: { title?: ReactNode }) => <div>{title}</div>,
+  ManagementState: ({
+    actions,
+    description,
+    title,
+  }: {
+    actions?: ReactNode
+    description?: ReactNode
+    title?: ReactNode
+  }) => (
+    <div>
+      {title}
+      {description}
+      {actions}
+    </div>
+  ),
   ManagementTableToolbar: ({ children }: { children?: ReactNode }) => <>{children}</>,
 }))
 
@@ -200,5 +214,22 @@ describe('plugin list page data boundaries', () => {
     )
     expect(apiGetMock).toHaveBeenCalledWith('/plugins/installed')
     expect(container.textContent).toContain('Installed Plugin')
+  })
+
+  it('shows an actionable error when the marketplace is unavailable', async () => {
+    apiGetMock.mockImplementation((path: string) => {
+      if (path === '/plugins/installed') return Promise.resolve({ data: [] })
+      return Promise.reject(new Error('network unavailable'))
+    })
+
+    const container = await renderPage(<PluginMarketplacePage />, '/plugins/marketplace')
+
+    expect(container.textContent).toContain('无法连接插件市场')
+    expect(container.textContent).toContain('请确认本地插件市场已启动')
+    expect(
+      Array.from(container.querySelectorAll('button')).some(
+        (button) => button.textContent === '重试',
+      ),
+    ).toBe(true)
   })
 })

@@ -54,20 +54,6 @@ export interface SaveIdentitySettingsInput {
   successMessage?: string
 }
 
-export interface PrometheusSettings {
-  enabled: boolean
-  baseUrl: string
-  bearerToken: string
-  defaultRangeMinutes: number
-  stepSeconds: number
-  clusterLabel: string
-  grafanaBaseUrl: string
-}
-
-export interface MonitoringSettingsResponse {
-  prometheus?: PrometheusSettings
-}
-
 export interface DataSourceCapability {
   id: string
   name: string

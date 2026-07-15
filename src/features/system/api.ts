@@ -62,10 +62,6 @@ function withQuery(path: string, filters: Record<string, string | undefined>) {
   return query ? `${path}?${query}` : path
 }
 
-function sessionBasePath(scope: SystemEndpointScope) {
-  return scope === 'identity' ? '/identity/sessions' : '/auth/sessions'
-}
-
 function auditEventsPath(scope: SystemEndpointScope) {
   return scope === 'identity' ? '/identity/audit/events' : '/audit/logs'
 }
@@ -76,10 +72,8 @@ export function resolveSystemEndpointScope(pathname: string): SystemEndpointScop
 
 export const systemApi = {
   sessions: {
-    list: async (scope: SystemEndpointScope): Promise<OnlineUser[]> => {
-      const records = await unwrap(
-        api.get<ApiResponse<SessionWireRecord[]>>(sessionBasePath(scope)),
-      )
+    list: async (): Promise<OnlineUser[]> => {
+      const records = await unwrap(api.get<ApiResponse<SessionWireRecord[]>>('/auth/sessions'))
       return records.map((item) => ({
         id: item.id,
         userId: item.userId,
@@ -95,11 +89,11 @@ export const systemApi = {
         userAgent: item.metadata?.userAgent,
       }))
     },
-    revoke: (scope: SystemEndpointScope, sessionId: string) =>
-      api.post<void>(`${sessionBasePath(scope)}/${encodeURIComponent(sessionId)}/revoke`),
-    revokeMany: (scope: SystemEndpointScope, sessionIds: string[]) =>
+    revoke: (sessionId: string) =>
+      api.post<void>(`/auth/sessions/${encodeURIComponent(sessionId)}/revoke`),
+    revokeMany: (sessionIds: string[]) =>
       Promise.allSettled(
-        sessionIds.map((sessionId) => systemApi.sessions.revoke(scope, sessionId)),
+        sessionIds.map((sessionId) => systemApi.sessions.revoke(sessionId)),
       ),
   },
   announcements: {

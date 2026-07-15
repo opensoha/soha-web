@@ -112,12 +112,8 @@ import {
   upsertGatewayResource,
 } from './mutations'
 import { gatewayQueries } from './queries'
+import { compactList, formatDateTime } from './presentation'
 
-const GatewayOverviewSection = lazy(() =>
-  import('./sections/overview').then((module) => ({
-    default: module.GatewayOverviewSection,
-  })),
-)
 const GatewayRelaySection = lazy(() =>
   import('./sections/models').then((module) => ({
     default: module.GatewayRelaySection,
@@ -155,31 +151,6 @@ const GatewayEditorDrawer = lazy(() =>
 )
 
 const { Paragraph, Text } = Typography
-
-function formatDateTime(value?: string) {
-  if (!value) return '-'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date)
-}
-
-function compactList(values?: string[], max = 3) {
-  const items = values?.filter(Boolean) ?? []
-  if (!items.length) return <Text type="secondary">-</Text>
-  return (
-    <Space size={[4, 4]} wrap>
-      {items.slice(0, max).map((item) => (
-        <Tag key={item}>{item}</Tag>
-      ))}
-      {items.length > max ? <Tag>+{items.length - max}</Tag> : null}
-    </Space>
-  )
-}
 
 function scopeSummary(scopes?: Record<string, unknown>) {
   const entries = scopeFieldDefs.flatMap((field) => {
@@ -686,7 +657,6 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
   const sectionActiveTab = gatewayTabBelongsToSection(activeTab, section)
     ? activeTab
     : defaultGatewayTabForSection(section, focusedApprovalRequestId)
-  const isOverview = section === 'overview'
   const isRelay = section === 'relay'
   const isManifest = section === 'manifest'
   const isClients = section === 'clients'
@@ -697,8 +667,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
   const clientsQuery = useQuery(
     gatewayQueries.clients(
       canManage &&
-        (isOverview ||
-          isManifest ||
+        (isManifest ||
           isClients ||
           isGovernance ||
           (isCallLogs && sectionActiveTab === 'audit')),
@@ -707,23 +676,23 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
   const personalTokensQuery = useQuery(
     gatewayQueries.personalTokens(
       personalTokenScope,
-      (canManage || canView || canInvoke) && (isOverview || isTokens),
+      (canManage || canView || canInvoke) && isTokens,
     ),
   )
   const relayMetricsQuery = useQuery(
-    gatewayQueries.relay.metrics((canRelayManage || canRelayView) && (isOverview || isRelay)),
+    gatewayQueries.relay.metrics((canRelayManage || canRelayView) && isRelay),
   )
   const upstreamsQuery = useQuery(
     gatewayQueries.relay.upstreams(
       { providerKind: upstreamProviderFilter, status: upstreamStatusFilter },
       (canRelayManage || canRelayView) &&
-        (isOverview || isRelay || isTokens || (isCallLogs && sectionActiveTab === 'model-calls')),
+        (isRelay || isTokens || (isCallLogs && sectionActiveTab === 'model-calls')),
     ),
   )
   const modelRoutesQuery = useQuery(
     gatewayQueries.relay.modelRoutes(
       { providerKind: modelRouteProviderFilter, upstreamId: modelRouteUpstreamFilter },
-      (canRelayManage || canRelayView) && (isOverview || isRelay),
+      (canRelayManage || canRelayView) && isRelay,
     ),
   )
   const modelCallsQuery = useQuery(
@@ -735,17 +704,17 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
     ),
   )
   const serviceAccountsQuery = useQuery(
-    gatewayQueries.serviceAccounts(canManage && (isOverview || isTokens)),
+    gatewayQueries.serviceAccounts(canManage && isTokens),
   )
   const serviceAccountTokensQuery = useQuery(gatewayQueries.serviceTokens(canManage && isTokens))
-  const grantsQuery = useQuery(gatewayQueries.grants(canManage && (isOverview || isGovernance)))
-  const policiesQuery = useQuery(gatewayQueries.policies(canManage && (isOverview || isGovernance)))
-  const bindingsQuery = useQuery(gatewayQueries.bindings(canManage && (isOverview || isGovernance)))
+  const grantsQuery = useQuery(gatewayQueries.grants(canManage && isGovernance))
+  const policiesQuery = useQuery(gatewayQueries.policies(canManage && isGovernance))
+  const bindingsQuery = useQuery(gatewayQueries.bindings(canManage && isGovernance))
   const manifestQuery = useQuery(
     gatewayQueries.manifest(
       manifestFilters,
       canView &&
-        (isOverview || isManifest || isGovernance || (isCallLogs && sectionActiveTab === 'audit')),
+        (isManifest || isGovernance || (isCallLogs && sectionActiveTab === 'audit')),
     ),
   )
   const auditQuery = useQuery(
@@ -754,7 +723,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
   const approvalsQuery = useQuery(
     gatewayQueries.approvals(
       approvalFilters,
-      canManage && (isOverview || (isGovernance && sectionActiveTab === 'approvals')),
+      canManage && isGovernance && sectionActiveTab === 'approvals',
     ),
   )
   const governanceQuery = useQuery(
@@ -1011,28 +980,6 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
     onError: (error: Error) => message.error(error.message),
   })
 
-  const summary = useMemo(
-    () => ({
-      clients: clients.length,
-      serviceAccounts: serviceAccounts.length,
-      grants: grants.length,
-      policies: policies.length,
-      bindings: bindings.length,
-      upstreams: upstreams.length,
-      modelRoutes: modelRoutes.length,
-      tools: manifest?.summary.toolCount ?? 0,
-    }),
-    [
-      bindings.length,
-      clients.length,
-      grants.length,
-      manifest,
-      modelRoutes.length,
-      policies.length,
-      serviceAccounts.length,
-      upstreams.length,
-    ],
-  )
   const gatewayPanelMeta = gatewaySectionMeta[section]
 
   const aiClientColumns: TableColumnsType<AIClient> = [
@@ -2278,20 +2225,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
                 />
               }
             >
-              {section === 'overview' ? (
-                <GatewayOverviewSection
-                  summary={summary}
-                  personalTokenCount={personalTokens.length}
-                  approvalCount={approvalRequests.length}
-                  modelCallCount={formatNumber(
-                    relayMetric(relayMetrics, 'totalCalls', 'requestsToday'),
-                  )}
-                  successRate={formatPercent(relayMetric(relayMetrics, 'successRate'))}
-                  canUseRelay={canUseRelay}
-                  canManage={canManage}
-                  onNavigate={navigate}
-                />
-              ) : section === 'relay' ? (
+              {section === 'relay' ? (
                 <GatewayRelaySection
                   activeTab={sectionActiveTab}
                   onTabChange={setActiveTab}

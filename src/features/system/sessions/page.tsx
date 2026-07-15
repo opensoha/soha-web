@@ -3,7 +3,6 @@ import { Button, Popconfirm, Select, Tag, message } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { DeleteOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useLocation } from 'react-router-dom'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementKeywordField,
@@ -16,7 +15,6 @@ import { StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { formatDateTime, formatRelativeTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
-import { resolveSystemEndpointScope } from '../api'
 import { systemMutations } from '../mutations'
 import { systemQueries } from '../queries'
 import type { OnlineUser } from '../system-model'
@@ -31,22 +29,19 @@ function SourceTag({ value }: { value?: string }) {
 }
 
 export function OnlineUsersPage() {
-  const location = useLocation()
-  const endpointScope = resolveSystemEndpointScope(location.pathname)
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([])
   const [providerFilter, setProviderFilter] = useState<string>('')
   const [searchKeyword, setSearchKeyword] = useState('')
-  const canManageOnlineUsers =
-    hasPermission(permissionSnapshotQuery.data?.data, 'system.online-users.manage') ||
-    hasPermission(permissionSnapshotQuery.data?.data, 'identity.sessions.manage')
-
-  const { data: sessions = [], isLoading } = useQuery(systemQueries.sessions(endpointScope))
-  const revokeMutation = useMutation(systemMutations.sessions.revoke(queryClient, endpointScope))
-  const batchRevokeMutation = useMutation(
-    systemMutations.sessions.revokeMany(queryClient, endpointScope),
+  const canManageOnlineUsers = hasPermission(
+    permissionSnapshotQuery.data?.data,
+    'system.online-users.manage',
   )
+
+  const { data: sessions = [], isLoading } = useQuery(systemQueries.sessions())
+  const revokeMutation = useMutation(systemMutations.sessions.revoke(queryClient))
+  const batchRevokeMutation = useMutation(systemMutations.sessions.revokeMany(queryClient))
   const providerOptions = useMemo(
     () =>
       Array.from(new Set(sessions.map((item: OnlineUser) => item.providerType).filter(Boolean)))

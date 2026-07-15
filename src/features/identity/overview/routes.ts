@@ -20,7 +20,6 @@ export const identityOverviewRoutes = defineRoutes([
         'identity.providers.view',
         'identity.outposts.view',
         'identity.policies.view',
-        'identity.sessions.view',
         'identity.audit.view',
       ],
       scopeMode: 'passive',

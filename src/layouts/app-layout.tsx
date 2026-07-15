@@ -62,7 +62,7 @@ const { Sider, Header, Content } = Layout
 const SIDEBAR_WIDTH = 200
 const SIDEBAR_COLLAPSED_WIDTH = 55
 const BREADCRUMB_WORKBENCH_ROOT_ROUTE_IDS: Partial<Record<WorkbenchId, string[]>> = {
-  ai: ['ai-workbench', 'ai-gateway'],
+  ai: ['ai-workbench'],
   compute: ['compute-workbench'],
   monitoring: ['monitoring-workbench'],
   settings: ['settings', 'extension-center'],
@@ -152,7 +152,7 @@ function buildMenuNodeItem(
   localeCode: 'zh_CN' | 'en_US',
 ): NonNullable<MenuProps['items']>[number] {
   const label = resolveRuntimeMenuLabel(node, localeCode)
-  const icon = resolveMenuIcon(resolveRuntimeMenuIconKey(node))
+  const icon = resolveMenuIcon(node.iconKey)
   if (node.children?.length) {
     return {
       key: node.id,
@@ -166,26 +166,6 @@ function buildMenuNodeItem(
     icon,
     label,
   }
-}
-
-const VIRTUALIZATION_MENU_ICON_OVERRIDES: Record<string, { iconKey: string; legacy: string[] }> = {
-  'virtualization-workbench-overview': { iconKey: 'gauge', legacy: ['server', 'gauge'] },
-  'virtualization-workbench-vms': { iconKey: 'desktop', legacy: ['server'] },
-  'virtualization-workbench-clusters': { iconKey: 'cluster', legacy: ['globe'] },
-  'virtualization-workbench-images': { iconKey: 'image', legacy: ['blocks'] },
-  'virtualization-workbench-flavors': { iconKey: 'flavor', legacy: ['code'] },
-  'virtualization-workbench-operations': { iconKey: 'history', legacy: ['activity', 'file-clock'] },
-  'virtualization-workbench-sync': { iconKey: 'sync', legacy: ['activity', 'file-clock'] },
-}
-
-function resolveRuntimeMenuIconKey(node: RuntimeMenuNode) {
-  const override = VIRTUALIZATION_MENU_ICON_OVERRIDES[node.id]
-  if (!override) return node.iconKey
-  const iconKey = String(node.iconKey || '').trim()
-  if (!iconKey || override.legacy.includes(iconKey)) {
-    return override.iconKey
-  }
-  return iconKey
 }
 
 function buildMenuItems(

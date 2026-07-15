@@ -1,6 +1,6 @@
 import { mutationOptions, type QueryClient } from '@tanstack/react-query'
 import { permissionSnapshotQueryKey } from '@/features/auth'
-import { systemApi, type SystemEndpointScope } from './api'
+import { systemApi } from './api'
 import { systemKeys, systemMutationKeys } from './keys'
 
 function invalidateSessions(queryClient: QueryClient) {
@@ -20,16 +20,16 @@ function invalidateMenus(queryClient: QueryClient) {
 
 export const systemMutations = {
   sessions: {
-    revoke: (queryClient: QueryClient, scope: SystemEndpointScope) =>
+    revoke: (queryClient: QueryClient) =>
       mutationOptions({
-        mutationKey: systemMutationKeys.sessions('revoke', scope),
-        mutationFn: (sessionId: string) => systemApi.sessions.revoke(scope, sessionId),
+        mutationKey: systemMutationKeys.sessions('revoke'),
+        mutationFn: systemApi.sessions.revoke,
         onSuccess: () => invalidateSessions(queryClient),
       }),
-    revokeMany: (queryClient: QueryClient, scope: SystemEndpointScope) =>
+    revokeMany: (queryClient: QueryClient) =>
       mutationOptions({
-        mutationKey: systemMutationKeys.sessions('revoke-many', scope),
-        mutationFn: (sessionIds: string[]) => systemApi.sessions.revokeMany(scope, sessionIds),
+        mutationKey: systemMutationKeys.sessions('revoke-many'),
+        mutationFn: systemApi.sessions.revokeMany,
         onSuccess: () => invalidateSessions(queryClient),
       }),
   },

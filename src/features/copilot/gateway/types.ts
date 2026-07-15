@@ -31,7 +31,6 @@ export type GatewayTimeRangeValue =
 export type RiskLevel = ContractRiskLevel
 export type GatewayEffect = 'allow' | 'deny'
 export type GatewaySectionKey =
-  | 'overview'
   | 'relay'
   | 'manifest'
   | 'clients'
@@ -430,10 +429,6 @@ export const gatewayMenuMeta: Record<GatewayTabKey, { description: string; title
 
 export const gatewaySectionMeta: Record<GatewaySectionKey, { description: string; title: string }> =
   {
-    overview: {
-      title: '概览',
-      description: '汇总 AI Gateway 的能力入口、身份对象、授权策略和治理状态。',
-    },
     relay: {
       title: '模型中转',
       description: '管理 AI Gateway 面向外部 SDK 的模型中转、上游、模型路由与模型调用日志。',
@@ -478,28 +473,12 @@ export const gatewayTabSectionMap: Record<GatewayTabKey, GatewaySectionKey> = {
 }
 
 export const gatewaySectionPaths: Record<GatewaySectionKey, string> = {
-  overview: '/ai-gateway/overview',
   relay: '/ai-gateway/relay',
   manifest: '/ai-gateway/manifest',
   clients: '/ai-gateway/clients',
   tokens: '/ai-gateway/tokens',
   governance: '/ai-gateway/governance',
   'call-logs': '/ai-gateway/call-logs',
-}
-
-export function gatewaySectionFromPath(pathname: string): GatewaySectionKey {
-  if (
-    pathname.startsWith('/ai-gateway/relay') ||
-    pathname.startsWith('/ai-gateway/upstreams') ||
-    pathname.startsWith('/ai-gateway/model-routes')
-  )
-    return 'relay'
-  if (pathname.startsWith('/ai-gateway/manifest')) return 'manifest'
-  if (pathname.startsWith('/ai-gateway/clients')) return 'clients'
-  if (pathname.startsWith('/ai-gateway/tokens')) return 'tokens'
-  if (pathname.startsWith('/ai-gateway/governance')) return 'governance'
-  if (pathname.startsWith('/ai-gateway/call-logs')) return 'call-logs'
-  return 'overview'
 }
 
 export function normalizeGatewayTabKey(value: string | null): GatewayTabKey | null {

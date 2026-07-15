@@ -1,4 +1,5 @@
 import { mutationOptions, type QueryClient } from '@tanstack/react-query'
+import { computeKeys } from '@/features/compute'
 import { dockerApi } from './docker-api'
 import { dockerKeys, dockerMutationKeys } from './keys'
 import type {
@@ -41,7 +42,10 @@ export interface UpdateDockerTemplateVariables {
 }
 
 export function invalidateDockerQueries(queryClient: QueryClient) {
-  return queryClient.invalidateQueries({ queryKey: dockerKeys.all })
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: dockerKeys.all }),
+    queryClient.invalidateQueries({ queryKey: computeKeys.overview() }),
+  ])
 }
 
 export const dockerMutations = {

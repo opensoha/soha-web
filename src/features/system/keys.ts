@@ -11,7 +11,7 @@ function normalizeFilters<T extends object>(filters: T) {
 export const systemKeys = {
   sessions: {
     all: ['online-users'] as const,
-    list: (scope: SystemEndpointScope) => ['online-users', scope] as const,
+    list: () => ['online-users', 'list'] as const,
   },
   announcements: {
     all: ['announcements'] as const,
@@ -36,8 +36,8 @@ export const systemKeys = {
 }
 
 export const systemMutationKeys = {
-  sessions: (action: 'revoke' | 'revoke-many', scope: SystemEndpointScope) =>
-    ['online-users', 'mutation', action, scope] as const,
+  sessions: (action: 'revoke' | 'revoke-many') =>
+    ['online-users', 'mutation', action] as const,
   announcements: (action: 'create' | 'update' | 'publish' | 'withdraw' | 'remove') =>
     ['announcements', 'mutation', action] as const,
   menus: (action: 'create' | 'update' | 'remove') => ['menus', 'mutation', action] as const,

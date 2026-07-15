@@ -6,7 +6,6 @@ export {
   invalidateAISettings,
   invalidateBrandingSettings,
   invalidateIdentitySettings,
-  invalidateMonitoringSettings,
   settingsMutations,
 } from './mutations'
 export { settingsQueries } from './queries'

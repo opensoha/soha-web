@@ -19,12 +19,6 @@ function hasId(id: string) {
 }
 
 export const dockerQueries = {
-  overview: (enabled = true) =>
-    queryOptions({
-      queryKey: dockerKeys.overview(),
-      queryFn: dockerApi.overview,
-      enabled,
-    }),
   hosts: (params: DockerListParams = {}, enabled = true) => {
     const normalized = normalizeDockerListParams(params)
     return queryOptions({

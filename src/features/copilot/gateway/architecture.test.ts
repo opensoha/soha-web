@@ -4,7 +4,6 @@ import callLogsPageSource from './pages/call-logs-page.tsx?raw'
 import clientsPageSource from './pages/clients-page.tsx?raw'
 import governancePageSource from './pages/governance-page.tsx?raw'
 import manifestPageSource from './pages/manifest-page.tsx?raw'
-import overviewPageSource from './pages/overview-page.tsx?raw'
 import relayPageSource from './pages/relay-page.tsx?raw'
 import tokensPageSource from './pages/tokens-page.tsx?raw'
 import gatewayGovernanceSource from './sections/governance.tsx?raw'
@@ -14,7 +13,6 @@ const routePageSources = [
   clientsPageSource,
   governancePageSource,
   manifestPageSource,
-  overviewPageSource,
   relayPageSource,
   tokensPageSource,
 ]
@@ -28,7 +26,7 @@ describe('AI Gateway capability boundary', () => {
   })
 
   it('loads every route section through an independent dynamic import', () => {
-    const sections = ['overview', 'models', 'manifest', 'clients', 'tokens', 'governance', 'audit']
+    const sections = ['models', 'manifest', 'clients', 'tokens', 'governance', 'audit']
 
     sections.forEach((section) => {
       expect(gatewayPageSource).toContain(`import('./sections/${section}')`)

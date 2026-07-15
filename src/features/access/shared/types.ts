@@ -88,10 +88,6 @@ export interface AccessLoginProviderRef {
   enabled?: boolean
 }
 
-export interface AccessIdentitySettings {
-  providers?: AccessLoginProviderRef[]
-}
-
 export type AccessMutationValues = Record<string, unknown>
 
 export interface AccessUpdateVariables {

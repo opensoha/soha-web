@@ -393,7 +393,7 @@ export function VirtualizationVmsPage() {
       fixed: 'left',
       width: 190,
       render: (value, record) =>
-        tableTooltipLink(value, `/virtualization/vms/${encodeURIComponent(record.id)}`),
+        tableTooltipLink(value, `/compute/virtualization/vms/${encodeURIComponent(record.id)}`),
       ellipsis: tableEllipsis,
     },
     {

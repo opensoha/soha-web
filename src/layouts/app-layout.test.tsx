@@ -455,7 +455,6 @@ describe('app layout workspace navigation', () => {
         'identity.providers.view',
         'identity.outposts.view',
         'identity.policies.view',
-        'identity.sessions.view',
         'identity.audit.view',
         'system.announcements.view',
         'system.menus.view',
@@ -477,7 +476,6 @@ describe('app layout workspace navigation', () => {
         'identity-providers',
         'identity-outposts',
         'identity-policies',
-        'identity-sessions',
         'identity-audit',
         'system',
         'announcements',
@@ -609,17 +607,6 @@ describe('app layout workspace navigation', () => {
           iconKey: 'shield',
           section: 'provider',
           sortOrder: 40,
-          enabled: true,
-        },
-        {
-          id: 'identity-sessions',
-          parentId: 'identity',
-          path: '/identity/sessions',
-          labelZh: '会话',
-          labelEn: 'Sessions',
-          iconKey: 'users',
-          section: 'operations',
-          sortOrder: 10,
           enabled: true,
         },
         {
@@ -771,7 +758,7 @@ describe('app layout workspace navigation', () => {
     expect(menuText).toContain('策略')
     expect(menuText).toContain('目录同步')
     expect(menuText).toContain('登陆设置')
-    expect(menuText).toContain('会话')
+    expect(menuText).not.toContain('会话')
     expect(menuText).toContain('通知公告')
     expect(menuText).toContain('在线用户')
     expect(menuText).toContain('操作日志')
@@ -1003,7 +990,7 @@ describe('app layout workspace navigation', () => {
   })
 
   it('shows Gateway children inside the unified AI workbench sidebar', async () => {
-    const container = await renderWithProviders('/ai-gateway/overview', {
+    const container = await renderWithProviders('/ai-gateway/manifest', {
       permissionKeys: [
         'workspace.resource.view',
         'ai.gateway.view',
@@ -1021,8 +1008,6 @@ describe('app layout workspace navigation', () => {
         'ai-workbench-chat',
         'ai-workbench-inspection',
         'ai-workbench-model-settings',
-        'ai-gateway',
-        'ai-gateway-overview',
         'ai-gateway-manifest',
         'ai-gateway-clients',
         'ai-gateway-tokens',
@@ -1088,29 +1073,8 @@ describe('app layout workspace navigation', () => {
           enabled: true,
         },
         {
-          id: 'ai-gateway',
-          path: '/ai-gateway',
-          labelZh: 'AI Gateway',
-          labelEn: 'AI Gateway',
-          iconKey: 'shield',
-          section: 'ops',
-          sortOrder: 21,
-          enabled: true,
-        },
-        {
-          id: 'ai-gateway-overview',
-          parentId: 'ai-gateway',
-          path: '/ai-gateway/overview',
-          labelZh: '概览',
-          labelEn: 'Overview',
-          iconKey: 'gauge',
-          section: 'ops',
-          sortOrder: 22,
-          enabled: true,
-        },
-        {
           id: 'ai-gateway-manifest',
-          parentId: 'ai-gateway',
+          parentId: 'ai-workbench',
           path: '/ai-gateway/manifest',
           labelZh: '能力清单',
           labelEn: 'Manifest',
@@ -1121,7 +1085,7 @@ describe('app layout workspace navigation', () => {
         },
         {
           id: 'ai-gateway-clients',
-          parentId: 'ai-gateway',
+          parentId: 'ai-workbench',
           path: '/ai-gateway/clients',
           labelZh: 'AI Clients',
           labelEn: 'AI Clients',
@@ -1132,7 +1096,7 @@ describe('app layout workspace navigation', () => {
         },
         {
           id: 'ai-gateway-tokens',
-          parentId: 'ai-gateway',
+          parentId: 'ai-workbench',
           path: '/ai-gateway/tokens',
           labelZh: 'Tokens',
           labelEn: 'Tokens',
@@ -1143,7 +1107,7 @@ describe('app layout workspace navigation', () => {
         },
         {
           id: 'ai-gateway-governance',
-          parentId: 'ai-gateway',
+          parentId: 'ai-workbench',
           path: '/ai-gateway/governance',
           labelZh: 'Governance',
           labelEn: 'Governance',
@@ -1154,7 +1118,7 @@ describe('app layout workspace navigation', () => {
         },
         {
           id: 'ai-gateway-call-logs',
-          parentId: 'ai-gateway',
+          parentId: 'ai-workbench',
           path: '/ai-gateway/call-logs',
           labelZh: '调用日志',
           labelEn: 'Call Logs',
@@ -1223,161 +1187,6 @@ describe('app layout workspace navigation', () => {
     expect(container.textContent).not.toContain('系统管理')
   })
 
-  it('normalizes legacy virtualization menus inside the compute workbench', async () => {
-    const container = await renderWithProviders('/compute/virtualization/vms', {
-      permissionKeys: [
-        'workspace.resource.view',
-        'overview.view',
-        'virtualization.overview.view',
-        'virtualization.vms.view',
-        'virtualization.operations.view',
-        'virtualization.sync.view',
-        'observe.monitoring.view',
-        'system.menus.view',
-      ],
-      visibleMenuIds: [
-        'dashboard',
-        'virtualization-workbench',
-        'virtualization-workbench-overview',
-        'virtualization-workbench-vms',
-        'virtualization-workbench-operations',
-        'virtualization-workbench-sync',
-        'monitoring-workbench',
-        'monitoring-workbench-overview',
-        'system',
-        'menus',
-      ],
-      visibleMenus: [
-        {
-          id: 'dashboard',
-          path: '/',
-          labelZh: '概览',
-          labelEn: 'Overview',
-          iconKey: 'gauge',
-          section: 'platform',
-          sortOrder: 1,
-          enabled: true,
-        },
-        {
-          id: 'virtualization-workbench',
-          path: '/virtualization',
-          labelZh: '虚拟化管理工作台',
-          labelEn: 'Virtualization Workbench',
-          iconKey: 'server',
-          section: 'ops',
-          sortOrder: 10,
-          enabled: true,
-        },
-        {
-          id: 'virtualization-workbench-overview',
-          parentId: 'virtualization-workbench',
-          path: '/virtualization/overview',
-          labelZh: '总览',
-          labelEn: 'Overview',
-          iconKey: 'server',
-          section: 'ops',
-          sortOrder: 11,
-          enabled: true,
-        },
-        {
-          id: 'virtualization-workbench-vms',
-          parentId: 'virtualization-workbench',
-          path: '/virtualization/vms',
-          labelZh: '虚拟机',
-          labelEn: 'Virtual Machines',
-          iconKey: 'server',
-          section: 'ops',
-          sortOrder: 12,
-          enabled: true,
-        },
-        {
-          id: 'virtualization-workbench-operations',
-          parentId: 'virtualization-workbench',
-          path: '/virtualization/operations',
-          labelZh: '操作记录',
-          labelEn: 'Operations',
-          iconKey: 'file-clock',
-          section: 'ops',
-          sortOrder: 13,
-          enabled: true,
-        },
-        {
-          id: 'virtualization-workbench-sync',
-          parentId: 'virtualization-workbench',
-          path: '/virtualization/sync',
-          labelZh: '同步任务',
-          labelEn: 'Sync',
-          iconKey: 'activity',
-          section: 'ops',
-          sortOrder: 14,
-          enabled: true,
-        },
-        {
-          id: 'monitoring-workbench',
-          path: '/monitoring-workbench',
-          labelZh: '监控工作台',
-          labelEn: 'Monitoring Workbench',
-          iconKey: 'gauge',
-          section: 'ops',
-          sortOrder: 60,
-          enabled: true,
-        },
-        {
-          id: 'monitoring-workbench-overview',
-          parentId: 'monitoring-workbench',
-          path: '/monitoring-workbench/overview',
-          labelZh: '总览',
-          labelEn: 'Overview',
-          iconKey: 'gauge',
-          section: 'ops',
-          sortOrder: 61,
-          enabled: true,
-        },
-        {
-          id: 'system',
-          path: '/system',
-          labelZh: '系统管理',
-          labelEn: 'System',
-          iconKey: 'panels-top-left',
-          section: 'admin',
-          sortOrder: 99,
-          enabled: true,
-        },
-        {
-          id: 'menus',
-          parentId: 'system',
-          path: '/system/menus',
-          labelZh: '菜单管理',
-          labelEn: 'Menus',
-          iconKey: 'menu-square',
-          section: 'admin',
-          sortOrder: 100,
-          enabled: true,
-        },
-      ],
-    })
-
-    expect(container.querySelector('.soha-workbench-switcher__label')?.textContent).toBe(
-      '计算资源工作台',
-    )
-    expect(container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent).toContain(
-      '计算资源工作台/虚拟化/虚拟机',
-    )
-    expect(container.querySelector('.soha-nav-business')).not.toBeNull()
-    expect(container.textContent).toContain('虚拟机')
-    const businessNavText = container.querySelector('.soha-nav-business')?.textContent ?? ''
-    expect(businessNavText).toContain('虚拟化')
-    expect(container.querySelector('.soha-nav-business .ant-menu-submenu')).toBeNull()
-    expect(
-      container.querySelector('.soha-nav-business .ant-menu-item-group-title')?.textContent,
-    ).toBe('虚拟化')
-    expect(businessNavText).not.toContain('操作记录')
-    expect(businessNavText).not.toContain('同步任务')
-    expect(businessNavText).not.toContain('Observe')
-    expect(container.textContent).not.toContain('监控工作台')
-    expect(container.textContent).not.toContain('系统管理')
-  })
-
   it('does not repeat flattened workbench root menu in breadcrumbs', async () => {
     const container = await renderWithProviders('/compute/overview', {
       permissionKeys: [
@@ -1389,8 +1198,9 @@ describe('app layout workspace navigation', () => {
       ],
       visibleMenuIds: [
         'dashboard',
+        'compute-workbench',
+        'compute-workbench-overview',
         'virtualization-workbench',
-        'virtualization-workbench-overview',
         'virtualization-workbench-vms',
         'system',
         'menus',
@@ -1407,30 +1217,41 @@ describe('app layout workspace navigation', () => {
           enabled: true,
         },
         {
-          id: 'virtualization-workbench',
-          path: '/virtualization',
-          labelZh: '虚拟化管理工作台',
-          labelEn: 'Virtualization Workbench',
+          id: 'compute-workbench',
+          path: '/compute',
+          labelZh: '计算资源工作台',
+          labelEn: 'Compute Workbench',
           iconKey: 'server',
           section: 'ops',
           sortOrder: 10,
           enabled: true,
         },
         {
-          id: 'virtualization-workbench-overview',
-          parentId: 'virtualization-workbench',
-          path: '/virtualization/overview',
+          id: 'compute-workbench-overview',
+          parentId: 'compute-workbench',
+          path: '/compute/overview',
           labelZh: '总览',
           labelEn: 'Overview',
-          iconKey: 'server',
+          iconKey: 'gauge',
           section: 'ops',
           sortOrder: 11,
           enabled: true,
         },
         {
+          id: 'virtualization-workbench',
+          parentId: 'compute-workbench',
+          path: '/compute/virtualization',
+          labelZh: '虚拟化',
+          labelEn: 'Virtualization',
+          iconKey: 'server',
+          section: 'ops',
+          sortOrder: 12,
+          enabled: true,
+        },
+        {
           id: 'virtualization-workbench-vms',
           parentId: 'virtualization-workbench',
-          path: '/virtualization/vms',
+          path: '/compute/virtualization/vms',
           labelZh: '虚拟机',
           labelEn: 'Virtual Machines',
           iconKey: 'server',
@@ -1468,41 +1289,6 @@ describe('app layout workspace navigation', () => {
     expect(breadcrumbText.match(/计算资源工作台/g) ?? []).toHaveLength(1)
   })
 
-  it('uses the visible settings menu section in breadcrumbs for flattened routes', async () => {
-    const container = await renderWithProviders('/identity/sessions', {
-      permissionKeys: ['identity.sessions.view'],
-      visibleMenuIds: ['identity', 'identity-sessions'],
-      visibleMenus: [
-        {
-          id: 'identity',
-          path: '/identity',
-          labelZh: '身份',
-          labelEn: 'Identity',
-          iconKey: 'shield',
-          section: 'admin',
-          sortOrder: 1,
-          enabled: true,
-        },
-        {
-          id: 'identity-sessions',
-          parentId: 'identity',
-          path: '/identity/sessions',
-          labelZh: '会话',
-          labelEn: 'Sessions',
-          iconKey: 'users',
-          section: 'operations',
-          sortOrder: 2,
-          enabled: true,
-        },
-      ],
-    })
-
-    const breadcrumbText =
-      container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent ?? ''
-    expect(breadcrumbText).toContain('设置中心/operations/会话')
-    expect(breadcrumbText).not.toContain('身份')
-  })
-
   it('renders breadcrumb ancestry for nested route content', async () => {
     const container = await renderWithProviders('/compute/virtualization/vms/vm-1', {
       permissionKeys: [
@@ -1514,8 +1300,9 @@ describe('app layout workspace navigation', () => {
       ],
       visibleMenuIds: [
         'dashboard',
+        'compute-workbench',
+        'compute-workbench-overview',
         'virtualization-workbench',
-        'virtualization-workbench-overview',
         'virtualization-workbench-vms',
         'system',
         'menus',
@@ -1532,30 +1319,41 @@ describe('app layout workspace navigation', () => {
           enabled: true,
         },
         {
-          id: 'virtualization-workbench',
-          path: '/virtualization',
-          labelZh: '虚拟化管理工作台',
-          labelEn: 'Virtualization Workbench',
+          id: 'compute-workbench',
+          path: '/compute',
+          labelZh: '计算资源工作台',
+          labelEn: 'Compute Workbench',
           iconKey: 'server',
           section: 'ops',
           sortOrder: 10,
           enabled: true,
         },
         {
-          id: 'virtualization-workbench-overview',
-          parentId: 'virtualization-workbench',
-          path: '/virtualization/overview',
+          id: 'compute-workbench-overview',
+          parentId: 'compute-workbench',
+          path: '/compute/overview',
           labelZh: '总览',
           labelEn: 'Overview',
-          iconKey: 'server',
+          iconKey: 'gauge',
           section: 'ops',
           sortOrder: 11,
           enabled: true,
         },
         {
+          id: 'virtualization-workbench',
+          parentId: 'compute-workbench',
+          path: '/compute/virtualization',
+          labelZh: '虚拟化',
+          labelEn: 'Virtualization',
+          iconKey: 'server',
+          section: 'ops',
+          sortOrder: 12,
+          enabled: true,
+        },
+        {
           id: 'virtualization-workbench-vms',
           parentId: 'virtualization-workbench',
-          path: '/virtualization/vms',
+          path: '/compute/virtualization/vms',
           labelZh: '虚拟机',
           labelEn: 'Virtual Machines',
           iconKey: 'server',
@@ -1590,132 +1388,6 @@ describe('app layout workspace navigation', () => {
     expect(container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent).toContain(
       '虚拟化/虚拟机/虚拟机详情',
     )
-  })
-
-  it('normalizes legacy Docker menus inside the compute workbench', async () => {
-    const container = await renderWithProviders('/compute/runtimes/projects', {
-      permissionKeys: [
-        'workspace.resource.view',
-        'overview.view',
-        'docker.overview.view',
-        'docker.hosts.view',
-        'docker.projects.view',
-        'docker.operations.view',
-        'system.menus.view',
-      ],
-      visibleMenuIds: [
-        'dashboard',
-        'docker-workbench',
-        'docker-workbench-overview',
-        'docker-workbench-hosts',
-        'docker-workbench-projects',
-        'docker-workbench-operations',
-        'system',
-        'menus',
-      ],
-      visibleMenus: [
-        {
-          id: 'dashboard',
-          path: '/',
-          labelZh: '概览',
-          labelEn: 'Overview',
-          iconKey: 'gauge',
-          section: 'platform',
-          sortOrder: 1,
-          enabled: true,
-        },
-        {
-          id: 'docker-workbench',
-          path: '/docker',
-          labelZh: 'Docker 工作台',
-          labelEn: 'Docker Workbench',
-          iconKey: 'docker',
-          section: 'ops',
-          sortOrder: 20,
-          enabled: true,
-        },
-        {
-          id: 'docker-workbench-overview',
-          parentId: 'docker-workbench',
-          path: '/docker/overview',
-          labelZh: '总览',
-          labelEn: 'Overview',
-          iconKey: 'gauge',
-          section: 'ops',
-          sortOrder: 21,
-          enabled: true,
-        },
-        {
-          id: 'docker-workbench-hosts',
-          parentId: 'docker-workbench',
-          path: '/docker/hosts',
-          labelZh: 'Docker 主机',
-          labelEn: 'Docker Hosts',
-          iconKey: 'server',
-          section: 'ops',
-          sortOrder: 22,
-          enabled: true,
-        },
-        {
-          id: 'docker-workbench-projects',
-          parentId: 'docker-workbench',
-          path: '/docker/projects',
-          labelZh: '容器管理',
-          labelEn: 'Container Management',
-          iconKey: 'docker',
-          section: 'ops',
-          sortOrder: 23,
-          enabled: true,
-        },
-        {
-          id: 'docker-workbench-operations',
-          parentId: 'docker-workbench',
-          path: '/docker/operations',
-          labelZh: '操作记录',
-          labelEn: 'Operations',
-          iconKey: 'history',
-          section: 'ops',
-          sortOrder: 24,
-          enabled: true,
-        },
-        {
-          id: 'system',
-          path: '/system',
-          labelZh: '系统管理',
-          labelEn: 'System',
-          iconKey: 'panels-top-left',
-          section: 'admin',
-          sortOrder: 99,
-          enabled: true,
-        },
-        {
-          id: 'menus',
-          parentId: 'system',
-          path: '/system/menus',
-          labelZh: '菜单管理',
-          labelEn: 'Menus',
-          iconKey: 'menu-square',
-          section: 'admin',
-          sortOrder: 100,
-          enabled: true,
-        },
-      ],
-    })
-
-    expect(container.querySelector('.soha-workbench-switcher__label')?.textContent).toBe(
-      '计算资源工作台',
-    )
-    expect(container.querySelector('.soha-nav-business')).not.toBeNull()
-    expect(container.textContent).toContain('运行时主机')
-    expect(container.textContent).toContain('容器管理')
-    const businessNavText = container.querySelector('.soha-nav-business')?.textContent ?? ''
-    expect(businessNavText).toContain('容器运行时')
-    expect(container.querySelector('.soha-nav-business .ant-menu-submenu')).toBeNull()
-    expect(
-      container.querySelector('.soha-nav-business .ant-menu-item-group-title')?.textContent,
-    ).toBe('容器运行时')
-    expect(businessNavText).not.toContain('操作记录')
-    expect(container.textContent).not.toContain('系统管理')
   })
 
   it('keeps settings out of the header and routes system navigation through the main sidebar', async () => {

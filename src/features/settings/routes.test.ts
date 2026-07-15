@@ -31,19 +31,11 @@ describe('Settings route manifest', () => {
     expect(loaded.get('/settings/about')).toBe(routePages.about)
   })
 
-  it('keeps identity, monitoring, and AI compatibility routes loader-free', () => {
-    const routes = new Map(settingsRoutes.map((route) => [route.meta.path, route]))
+  it('does not register obsolete settings aliases', () => {
+    const paths = new Set<string>(settingsRoutes.map((route) => route.meta.path))
 
-    expect(routes.get('/settings/identity')).toMatchObject({
-      redirectTo: '/settings/login',
-    })
-    expect(routes.get('/settings/monitoring')).toMatchObject({
-      redirectTo: '/settings',
-    })
-    expect(routes.get('/settings/ai')).toMatchObject({
-      redirectTo: '/ai-workbench/model-settings',
-      meta: { id: 'settings-ai', permissionKey: 'settings.ai.view' },
-    })
-    expect(routes.get('/settings/ai')).not.toHaveProperty('load')
+    expect(paths.has('/settings/identity')).toBe(false)
+    expect(paths.has('/settings/monitoring')).toBe(false)
+    expect(paths.has('/settings/ai')).toBe(false)
   })
 })

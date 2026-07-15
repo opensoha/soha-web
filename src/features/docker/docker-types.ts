@@ -58,26 +58,6 @@ export interface DockerPage<T> {
   pageSize: number
 }
 
-export interface DockerOverview {
-  stats?: {
-    hostCount?: number
-    onlineHostCount?: number
-    projectCount?: number
-    runningProjectCount?: number
-    serviceCount?: number
-    runningServiceCount?: number
-    portMappingCount?: number
-    pendingTaskCount?: number
-    failedTaskCount?: number
-  }
-  hostSummary?: Record<string, number>
-  projectSummary?: Record<string, number>
-  serviceSummary?: Record<string, number>
-  portSummary?: Record<string, number>
-  recentOperations?: DockerOperation[]
-  expiringProjects?: DockerProject[]
-}
-
 export interface DockerHost {
   id: string
   name: string

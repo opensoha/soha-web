@@ -78,6 +78,5 @@ describe('dockerQueries', () => {
         true,
       ).enabled,
     ).toBe(false)
-    expect(dockerQueries.overview(false).enabled).toBe(false)
   })
 })

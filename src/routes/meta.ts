@@ -152,10 +152,6 @@ const FRONTEND_MENU_COMPATIBILITY: ReadonlyArray<
   },
 ]
 
-const ROUTE_MENU_COMPATIBILITY: Readonly<Record<string, readonly string[]>> = {
-  'ai-workbench-overview': ['ai-workbench', 'ai-gateway-overview'],
-}
-
 function getCompatibleVisibleMenus(snapshot?: PermissionSnapshot | null): VisibleMenu[] {
   if (!snapshot) return []
   const visibleMenuIds = new Set(snapshot.visibleMenuIds)
@@ -275,14 +271,10 @@ function deriveWorkbenchIdFromPath(pathname: string): WorkbenchId | null {
   if (pathname.startsWith('/ai-gateway')) {
     return 'ai'
   }
-  if (pathname.startsWith('/plugins') || pathname.startsWith('/extensions-center')) {
+  if (pathname.startsWith('/plugins')) {
     return 'settings'
   }
-  if (
-    pathname.startsWith('/ai-workbench') ||
-    pathname.startsWith('/ai-observe') ||
-    pathname.startsWith('/chat')
-  ) {
+  if (pathname.startsWith('/ai-workbench')) {
     return 'ai'
   }
   if (pathname.startsWith('/monitoring-workbench') || pathname.startsWith('/observability')) {
@@ -398,13 +390,9 @@ export function getRouteScopeMode(route: RouteMeta): NonNullable<RouteMeta['scop
     pathname.startsWith('/monitoring-workbench') ||
     pathname.startsWith('/observability') ||
     pathname.startsWith('/compute') ||
-    pathname.startsWith('/virtualization') ||
-    pathname.startsWith('/docker') ||
     pathname.startsWith('/plugins') ||
-    pathname.startsWith('/extensions-center') ||
     pathname.startsWith('/ai-gateway') ||
     pathname.startsWith('/ai-workbench') ||
-    pathname.startsWith('/ai-observe') ||
     pathname.startsWith('/account')
   ) {
     return 'passive'
@@ -559,11 +547,7 @@ export function canAccessRoute(route: RouteMeta, snapshot?: PermissionSnapshot |
       ? permissionKeysAny.some((key) => snapshot.permissionKeys.includes(key))
       : !permissionKey || snapshot.permissionKeys.includes(permissionKey)
   const hasCompatibleMenu = getCompatibleVisibleMenus(snapshot).some((menu) => menu.id === menuId)
-  const hasMenuAlias = (ROUTE_MENU_COMPATIBILITY[menuId ?? ''] ?? []).some((id) =>
-    snapshot.visibleMenuIds.includes(id),
-  )
-  const hasMenu =
-    !menuId || snapshot.visibleMenuIds.includes(menuId) || hasCompatibleMenu || hasMenuAlias
+  const hasMenu = !menuId || snapshot.visibleMenuIds.includes(menuId) || hasCompatibleMenu
   return hasWorkspacePermission && hasPermission && hasMenu
 }
 
@@ -661,7 +645,6 @@ const SYSTEM_ROOT_ORDER: Record<string, number> = {
   'identity-overview': 20,
   'identity-applications': 21,
   'identity-providers': 22,
-  'identity-sessions': 24,
   system: 30,
   settings: 40,
 }
@@ -828,7 +811,7 @@ export function filterSidebarNavByWorkbench(
   }
   const flattenedRootIds = [
     flattenedWorkbenchRootIds[workbenchId],
-    ...(workbenchId === 'ai' ? ['ai-workbench', 'ai-gateway'] : []),
+    ...(workbenchId === 'ai' ? ['ai-workbench'] : []),
     ...(workbenchId === 'settings' ? ['identity', 'system', 'access', 'settings-extensions'] : []),
   ].filter((item): item is string => Boolean(item))
 

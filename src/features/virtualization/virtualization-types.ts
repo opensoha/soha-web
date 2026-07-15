@@ -65,68 +65,6 @@ export interface VirtualizationImageConfig extends VirtualizationPayloadMap {
 export type VirtualizationOperationPayload = VirtualizationPayloadMap
 export type VirtualizationProviderRaw = VirtualizationPayloadMap | string | null
 
-export interface VirtualizationConnectionHealth {
-  total: number
-  healthy: number
-  degraded: number
-  unavailable: number
-}
-
-export interface VirtualizationOverviewConnectionSummary {
-  total?: number
-  healthy?: number
-  degraded?: number
-  unavailable?: number
-  neverSynced?: number
-  credentialMissing?: number
-}
-
-export interface VirtualizationOverviewTaskSummary {
-  queued?: number
-  running?: number
-  failed?: number
-  timeout?: number
-  canceled?: number
-  completed?: number
-}
-
-export interface VirtualizationOverviewProviderSummary {
-  provider: string
-  connections?: number
-  healthy?: number
-  degraded?: number
-  unavailable?: number
-  vms?: number
-  runningVms?: number
-}
-
-export interface VirtualizationOverviewAttention {
-  riskyConnections?: VirtualizationCluster[]
-  failedSyncTasks?: VirtualizationOperation[]
-  failedOperations?: VirtualizationOperation[]
-}
-
-export interface VirtualizationOverviewStats {
-  connections?: VirtualizationConnectionHealth
-  vmCount?: number
-  runningVmCount?: number
-  stoppedVmCount?: number
-  imageCount?: number
-  flavorCount?: number
-  pendingTaskCount?: number
-  failedTaskCount?: number
-}
-
-export interface VirtualizationOverview {
-  stats?: VirtualizationOverviewStats
-  recentOperations?: VirtualizationOperation[]
-  lastSyncTask?: VirtualizationOperation | null
-  connectionSummary?: VirtualizationOverviewConnectionSummary
-  taskSummary?: VirtualizationOverviewTaskSummary
-  providerSummary?: VirtualizationOverviewProviderSummary[]
-  attention?: VirtualizationOverviewAttention
-}
-
 export interface VirtualMachine {
   id: string
   name: string

@@ -17,7 +17,6 @@ import type {
   VirtualizationOperation,
   VirtualizationOperationListParams,
   VirtualizationOperationLog,
-  VirtualizationOverview,
   VirtualizationPage,
   VirtualizationVMMetrics,
 } from './virtualization-types'
@@ -37,10 +36,6 @@ export const virtualizationApi = {
   platformClusters: async () => {
     const response = await api.get<ApiResponse<Cluster[]>>('/clusters')
     return response.data ?? []
-  },
-  overview: async () => {
-    const response = await api.get<ApiResponse<VirtualizationOverview>>(`${BASE}/overview`)
-    return response.data
   },
   vms: async (params: VirtualizationListParams = {}) => {
     const response = await api.get<

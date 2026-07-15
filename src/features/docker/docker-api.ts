@@ -7,7 +7,6 @@ import type {
   DockerListParams,
   DockerOperation,
   DockerOperationLog,
-  DockerOverview,
   DockerPage,
   DockerPortMapping,
   DockerPortMappingInput,
@@ -46,7 +45,6 @@ function withQuery(path: string, params: object = {}) {
 }
 
 export const dockerApi = {
-  overview: () => unwrap(api.get<ApiResponse<DockerOverview>>(`${BASE}/overview`)),
   hosts: (params: DockerListParams = {}) =>
     unwrap(api.get<ApiResponse<DockerPage<DockerHost>>>(withQuery(`${BASE}/hosts`, params))),
   host: (id: string) =>

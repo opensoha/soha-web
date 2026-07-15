@@ -39,11 +39,11 @@ const audit: AuditLog = {
 describe('identity overview api', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('keeps the identity session read model wire contract', async () => {
+  it('uses the canonical online-user read model wire contract', async () => {
     apiMocks.get.mockResolvedValueOnce({ data: [session] })
 
     await expect(listIdentityOverviewSessions()).resolves.toEqual([session])
-    expect(apiMocks.get).toHaveBeenCalledWith('/identity/sessions')
+    expect(apiMocks.get).toHaveBeenCalledWith('/auth/sessions')
   })
 
   it('requests exactly eight identity audit events', async () => {

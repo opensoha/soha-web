@@ -18,6 +18,26 @@ const RULES = {
   SHARED_PAGE_DEPENDENCY: 'shared-capability-page-dependency',
 }
 
+const COMPUTE_ROUTE_LEAF_IMPORTS = new Set([
+  'src/features/virtualization/virtual-machines/list-page.tsx',
+  'src/features/virtualization/virtual-machines/detail-page.tsx',
+  'src/features/virtualization/clusters/list-page.tsx',
+  'src/features/virtualization/images/list-page.tsx',
+  'src/features/virtualization/flavors/list-page.tsx',
+  'src/features/docker/hosts/page.tsx',
+  'src/features/docker/projects/list-page.tsx',
+  'src/features/docker/projects/detail-page.tsx',
+  'src/features/docker/templates/page.tsx',
+])
+
+function isComputeRouteLeafImport(sourcePath, targetPath, referenceKind) {
+  return (
+    sourcePath === 'src/features/compute/routes.ts' &&
+    referenceKind === 'dynamic-import' &&
+    COMPUTE_ROUTE_LEAF_IMPORTS.has(targetPath)
+  )
+}
+
 const scriptDirectory = dirname(fileURLToPath(import.meta.url))
 const projectRoot = resolve(scriptDirectory, '..')
 
@@ -452,7 +472,8 @@ function scanSources(sources) {
         if (
           sourceFeature.domain !== targetFeature.domain &&
           targetFeature.rest.length > 0 &&
-          !(targetFeature.rest.length === 1 && fileStem(targetFeature.rest[0]) === 'index')
+          !(targetFeature.rest.length === 1 && fileStem(targetFeature.rest[0]) === 'index') &&
+          !isComputeRouteLeafImport(filePath, targetPath, reference.kind)
         ) {
           violations.push(
             makeViolation({

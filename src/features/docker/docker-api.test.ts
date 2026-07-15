@@ -14,27 +14,23 @@ vi.mock('@/services/api-client', () => ({ api: apiMocks }))
 describe('dockerApi', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('unwraps overview, list, and detail responses while preserving query wire behavior', async () => {
-    const overview = { stats: { hostCount: 2 } }
+  it('unwraps list and detail responses while preserving query wire behavior', async () => {
     const page = { items: [{ id: 'host-1', name: 'Host 1' }], total: 1, page: 0, pageSize: 20 }
     const host = { id: 'host/a', name: 'Host A' }
     apiMocks.get
-      .mockResolvedValueOnce({ data: overview })
       .mockResolvedValueOnce({ data: page })
       .mockResolvedValueOnce({ data: host })
 
-    await expect(dockerApi.overview()).resolves.toEqual(overview)
     await expect(
       dockerApi.hosts({ search: '', status: 'online', page: 0, pageSize: 20 }),
     ).resolves.toEqual(page)
     await expect(dockerApi.host('host/a')).resolves.toEqual(host)
 
-    expect(apiMocks.get).toHaveBeenNthCalledWith(1, '/docker/overview')
     expect(apiMocks.get).toHaveBeenNthCalledWith(
-      2,
+      1,
       '/docker/hosts?status=online&page=0&pageSize=20',
     )
-    expect(apiMocks.get).toHaveBeenNthCalledWith(3, '/docker/hosts/host%2Fa')
+    expect(apiMocks.get).toHaveBeenNthCalledWith(2, '/docker/hosts/host%2Fa')
   })
 
   it('unwraps runtime values and serializes required volume file parameters', async () => {

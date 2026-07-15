@@ -13,7 +13,6 @@ import { AISettingsPage } from './ai/page'
 import { BrandingSettingsPage } from './branding/page'
 import { SettingsCenterPage } from './center/page'
 import { LoginSettingsPage } from './identity/page'
-import { MonitoringSettingsPage } from './monitoring/page'
 import { TRACES_BACKEND_OPTIONS } from './ai-settings-model'
 
 const testState = vi.hoisted(() => ({
@@ -197,17 +196,6 @@ function setDefaultResponses() {
       expandedLogoUrl: 'https://cdn.example.com/logo.svg',
       collapsedLogoUrl: '',
       faviconUrl: '',
-    },
-    '/settings/monitoring': {
-      prometheus: {
-        enabled: true,
-        baseUrl: 'http://prometheus:9090',
-        bearerToken: '',
-        defaultRangeMinutes: 60,
-        stepSeconds: 30,
-        clusterLabel: 'cluster',
-        grafanaBaseUrl: 'http://grafana:3000',
-      },
     },
     '/settings/ai': {
       workbenchModel: {
@@ -520,27 +508,6 @@ describe('settings ai page rendering', () => {
     expect(apiPutMock).toHaveBeenCalledWith(
       '/settings/branding',
       expect.objectContaining({ appTitle: 'Soha', sidebarTitle: 'Soha' }),
-    )
-  })
-
-  it('renders and saves Prometheus preferences through the monitoring contract', async () => {
-    const container = await renderWithProviders(<MonitoringSettingsPage />, '/settings/monitoring')
-
-    expect(container.textContent).toContain('Prometheus URL')
-    expect(container.querySelector('input[value="http://prometheus:9090"]')).not.toBeNull()
-
-    const saveButton = Array.from(container.querySelectorAll('button')).find((button) =>
-      button.textContent?.includes('保存设置'),
-    )
-    await act(async () => {
-      saveButton?.click()
-      await Promise.resolve()
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    })
-
-    expect(apiPutMock).toHaveBeenCalledWith(
-      '/settings/monitoring/prometheus',
-      expect.objectContaining({ baseUrl: 'http://prometheus:9090' }),
     )
   })
 

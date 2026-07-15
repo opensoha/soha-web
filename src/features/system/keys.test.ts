@@ -2,15 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { systemKeys, systemMutationKeys } from './keys'
 
 describe('systemKeys', () => {
-  it('keeps identity and system session caches separate under one canonical root', () => {
-    expect(systemKeys.sessions.list('identity')).toEqual(['online-users', 'identity'])
-    expect(systemKeys.sessions.list('system')).toEqual(['online-users', 'system'])
-    expect(systemMutationKeys.sessions('revoke', 'identity')).toEqual([
-      'online-users',
-      'mutation',
-      'revoke',
-      'identity',
-    ])
+  it('keeps online-user queries and mutations under one canonical root', () => {
+    expect(systemKeys.sessions.list()).toEqual(['online-users', 'list'])
+    expect(systemMutationKeys.sessions('revoke')).toEqual(['online-users', 'mutation', 'revoke'])
   })
 
   it('normalizes audit and operation filters for stable cache identity', () => {

@@ -13,24 +13,19 @@ vi.mock('@/services/api-client', () => ({ api: apiMocks }))
 describe('settingsApi', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('unwraps branding, identity, monitoring, and AI response envelopes', async () => {
+  it('unwraps branding, identity, and AI response envelopes', async () => {
     apiMocks.get
       .mockResolvedValueOnce({ data: { appTitle: 'Soha' } })
       .mockResolvedValueOnce({ data: { providers: [] } })
-      .mockResolvedValueOnce({ data: { prometheus: { enabled: true } } })
       .mockResolvedValueOnce({ data: { skillsRegistry: [] } })
 
     await expect(settingsApi.branding.get()).resolves.toEqual({ appTitle: 'Soha' })
     await expect(settingsApi.identity.get()).resolves.toEqual({ providers: [] })
-    await expect(settingsApi.monitoring.get()).resolves.toEqual({
-      prometheus: { enabled: true },
-    })
     await expect(settingsApi.ai.get()).resolves.toEqual({ skillsRegistry: [] })
 
     expect(apiMocks.get.mock.calls.map(([path]) => path)).toEqual([
       '/settings/branding',
       '/settings/identity',
-      '/settings/monitoring',
       '/settings/ai',
     ])
   })

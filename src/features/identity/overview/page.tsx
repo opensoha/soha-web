@@ -282,9 +282,9 @@ export function IdentityOverviewPage() {
           <Button
             disabled={!permissions.sessions}
             icon={<UserSwitchOutlined />}
-            onClick={() => navigate('/identity/sessions')}
+            onClick={() => navigate('/system/online-users')}
           >
-            会话管理
+            在线用户
           </Button>
           <Button
             disabled={!permissions.audit}

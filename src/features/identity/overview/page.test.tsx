@@ -362,7 +362,7 @@ describe('IdentityOverviewPage', () => {
       ['应用目录', '/identity/applications'],
       ['Provider 管理', '/identity/providers'],
       ['Outpost 管理', '/identity/outposts'],
-      ['会话管理', '/identity/sessions'],
+      ['在线用户', '/system/online-users'],
       ['审计事件', '/system/audit'],
       ['门户首页', '/portal'],
     ] as const
@@ -403,7 +403,7 @@ describe('IdentityOverviewPage', () => {
 
     expect(container.textContent).toContain('无 Provider 权限')
     expect(container.textContent).toContain('无审计权限')
-    for (const label of ['应用目录', 'Provider 管理', 'Outpost 管理', '会话管理', '审计事件']) {
+    for (const label of ['应用目录', 'Provider 管理', 'Outpost 管理', '在线用户', '审计事件']) {
       expect(buttonByText(container, label).disabled).toBe(true)
     }
     expect(buttonByText(container, '门户首页').disabled).toBe(false)

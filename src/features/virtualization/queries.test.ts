@@ -47,7 +47,6 @@ describe('virtualizationQueries', () => {
   })
 
   it('covers every domain query with a factory key', async () => {
-    const overview = vi.spyOn(virtualizationApi, 'overview').mockResolvedValue(undefined as never)
     const vmDetail = vi.spyOn(virtualizationApi, 'vmDetail').mockResolvedValue(undefined as never)
     const vmMetrics = vi.spyOn(virtualizationApi, 'vmMetrics').mockResolvedValue(undefined as never)
     const vmConsole = vi
@@ -61,7 +60,6 @@ describe('virtualizationQueries', () => {
       .mockResolvedValue(undefined as never)
 
     const options = [
-      virtualizationQueries.overview(),
       virtualizationQueries.vmDetail(' vm-1 '),
       virtualizationQueries.vmMetrics(' vm-1 ', { rangeMinutes: 15, stepSeconds: 30 }, true),
       virtualizationQueries.vmConsole(' vm-1 '),
@@ -73,7 +71,6 @@ describe('virtualizationQueries', () => {
 
     await Promise.all(options.map(executeQuery))
 
-    expect(overview).toHaveBeenCalledOnce()
     expect(vmDetail).toHaveBeenCalledWith('vm-1')
     expect(vmMetrics).toHaveBeenCalledWith('vm-1', 15, 30)
     expect(vmConsole).toHaveBeenCalledWith('vm-1')
@@ -88,6 +85,5 @@ describe('virtualizationQueries', () => {
     expect(virtualizationQueries.vmMetrics('', {}, true).enabled).toBe(false)
     expect(virtualizationQueries.vmConsole('', true).enabled).toBe(false)
     expect(virtualizationQueries.operationLogs('', true).enabled).toBe(false)
-    expect(virtualizationQueries.overview(false).enabled).toBe(false)
   })
 })

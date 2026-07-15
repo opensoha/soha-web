@@ -16,7 +16,7 @@ vi.mock('./installed/detail-page', () => ({
 }))
 
 describe('plugin route manifest', () => {
-  it('maps settings extension pages and keeps legacy installed list as a redirect', async () => {
+  it('maps only canonical plugin pages and parent redirects', async () => {
     const expectedPages = new Map([
       ['plugins-marketplace', routePages.marketplaceList],
       ['plugins-marketplace-detail', routePages.marketplaceDetail],
@@ -48,27 +48,9 @@ describe('plugin route manifest', () => {
       },
       redirectTo: '/plugins/marketplace',
     })
-    expect(pluginRoutes.find((route) => route.meta.id === 'extension-center-legacy')).toMatchObject({
-      meta: { path: '/extensions-center', navVisible: false },
-      redirectTo: '/settings/extensions',
-    })
-    expect(pluginRoutes.find((route) => route.meta.id === 'plugins-installed')).toMatchObject({
-      meta: {
-        id: 'plugins-installed',
-        navVisible: false,
-        menuId: 'settings-extensions-marketplace',
-      },
-      redirectTo: '/plugins/marketplace',
-    })
-    expect(
-      pluginRoutes.find((route) => route.meta.id === 'extensions-capabilities-legacy'),
-    ).toMatchObject({
-      meta: {
-        path: '/plugins/extensions',
-        navVisible: false,
-        menuId: 'settings-extensions-marketplace',
-      },
-      redirectTo: '/plugins/marketplace',
-    })
+    const paths = new Set<string>(pluginRoutes.map((route) => route.meta.path))
+    expect(paths.has('/extensions-center')).toBe(false)
+    expect(paths.has('/plugins/installed')).toBe(false)
+    expect(paths.has('/plugins/extensions')).toBe(false)
   })
 })

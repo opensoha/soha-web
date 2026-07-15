@@ -11,14 +11,14 @@ async function executeQuery(options: { queryFn?: unknown }) {
 describe('systemQueries', () => {
   afterEach(() => vi.restoreAllMocks())
 
-  it('binds canonical session keys to the matching scoped API', async () => {
+  it('binds the canonical online-user key to the sessions API', async () => {
     const sessions = vi.spyOn(systemApi.sessions, 'list').mockResolvedValue([])
-    const options = systemQueries.sessions('identity')
+    const options = systemQueries.sessions()
 
-    expect(options.queryKey).toEqual(systemKeys.sessions.list('identity'))
+    expect(options.queryKey).toEqual(systemKeys.sessions.list())
     expect(options.refetchInterval).toBe(10_000)
     await executeQuery(options)
-    expect(sessions).toHaveBeenCalledWith('identity')
+    expect(sessions).toHaveBeenCalledOnce()
   })
 
   it('passes audit and operation filters to keys and APIs unchanged', async () => {

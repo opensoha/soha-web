@@ -35,17 +35,6 @@ const TASK_CATEGORY_LABELS: Record<ComputeTaskCategory, string> = {
   operation: '操作',
 }
 
-function legacyFilters(pathname: string): Partial<ComputeTaskFilters> {
-  if (pathname === '/virtualization/sync') return { domain: 'virtualization', category: 'sync' }
-  if (pathname === '/virtualization/operations') {
-    return { domain: 'virtualization', category: 'operation' }
-  }
-  if (pathname === '/docker/operations') {
-    return { domain: 'container_runtime', category: 'operation' }
-  }
-  return {}
-}
-
 export function computeTaskCategoryFromPath(pathname: string): ComputeTaskCategory | undefined {
   if (pathname.endsWith('/sync')) return 'sync'
   if (pathname.endsWith('/build')) return 'build'
@@ -56,23 +45,12 @@ export function computeTaskFiltersFromLocation(
   pathname: string,
   search: URLSearchParams,
 ): ComputeTaskFilters {
-  const legacy = legacyFilters(pathname)
-  const legacyStatus =
-    search.get('abnormal') === 'true'
-      ? 'failed'
-      : search.get('pending') === 'true'
-        ? 'running'
-        : undefined
-  const legacyCategory = search.get('assetType') === 'asset_sync' ? 'sync' : undefined
   return {
-    domain: (search.get('domain') as ComputeTaskDomain | null) ?? legacy.domain,
+    domain: (search.get('domain') as ComputeTaskDomain | null) ?? undefined,
     providerKey: search.get('providerKey') || undefined,
-    status: (search.get('status') as ComputeTaskStatus | null) ?? legacyStatus,
+    status: (search.get('status') as ComputeTaskStatus | null) ?? undefined,
     category:
-      (search.get('category') as ComputeTaskCategory | null) ??
-      legacyCategory ??
-      legacy.category ??
-      computeTaskCategoryFromPath(pathname),
+      (search.get('category') as ComputeTaskCategory | null) ?? computeTaskCategoryFromPath(pathname),
     limit: 100,
   }
 }

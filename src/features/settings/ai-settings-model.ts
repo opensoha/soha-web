@@ -243,19 +243,6 @@ export interface AnalysisProfile {
   outputStyle?: Record<string, unknown>
 }
 
-export interface AutomationPolicy {
-  id: string
-  name: string
-  triggerType: string
-  analysisKinds?: string[]
-  analysisProfileId: string
-  remediationPolicy: string
-  enabled: boolean
-  dedupWindowSeconds: number
-  triggerConditions?: Record<string, unknown>
-  approvalPolicy?: Record<string, unknown>
-}
-
 export const PLAYBOOK_OPTIONS = [
   { value: 'release-correlation', label: 'release-correlation' },
   { value: 'cluster-health', label: 'cluster-health' },
@@ -265,17 +252,6 @@ export const PLAYBOOK_OPTIONS = [
   { value: 'build-queue', label: 'build-queue' },
   { value: 'error-burst', label: 'error-burst' },
   { value: 'dependency-timeout', label: 'dependency-timeout' },
-]
-
-export const SEVERITY_OPTIONS = [
-  { value: 'critical', label: 'critical' },
-  { value: 'warning', label: 'warning' },
-  { value: 'info', label: 'info' },
-]
-
-export const STATUS_OPTIONS = [
-  { value: 'firing', label: 'firing' },
-  { value: 'resolved', label: 'resolved' },
 ]
 
 export function buildDataSourceFormValues(item?: DataSource | null) {
@@ -434,64 +410,6 @@ export function buildProfilePayload(values: Record<string, unknown>) {
       includeEvidenceDetail: Boolean(values.outputIncludeEvidenceDetail),
       includeRecommendations: Boolean(values.outputIncludeRecommendations),
       includeTimeline: Boolean(values.outputIncludeTimeline),
-    },
-  }
-}
-
-export function buildPolicyFormValues(item?: AutomationPolicy | null) {
-  const conditions = item?.triggerConditions ?? {}
-  const labels = (conditions.labels as Record<string, unknown> | undefined) ?? {}
-  const approval = item?.approvalPolicy ?? {}
-  return {
-    id: item?.id,
-    name: item?.name ?? '',
-    triggerType: item?.triggerType ?? 'alert_webhook',
-    analysisKinds: item?.analysisKinds ?? ['root_cause'],
-    analysisProfileId: item?.analysisProfileId ?? '',
-    remediationPolicy: item?.remediationPolicy ?? 'suggest_only',
-    enabled: item?.enabled ?? true,
-    dedupWindowSeconds: Number(item?.dedupWindowSeconds ?? 900),
-    cooldownSeconds: Number(
-      (item as unknown as { cooldownSeconds?: number } | undefined)?.cooldownSeconds ?? 0,
-    ),
-    triggerSeverity: Array.isArray(conditions.severity) ? (conditions.severity as string[]) : [],
-    triggerStatus: Array.isArray(conditions.status) ? (conditions.status as string[]) : [],
-    triggerMinDurationSeconds: Number(conditions.min_duration_seconds ?? 120),
-    triggerLabelKey: Object.keys(labels)[0] ?? '',
-    triggerLabelValue: String(Object.values(labels)[0] ?? ''),
-    triggerTimeRangeMinutes: Number(conditions.time_range_minutes ?? 60),
-    approvalRequired: Boolean(approval.required ?? false),
-    approvalRoles: Array.isArray(approval.approverRoles)
-      ? (approval.approverRoles as string[])
-      : [],
-  }
-}
-
-export function buildPolicyPayload(values: Record<string, unknown>) {
-  const labels: Record<string, unknown> = {}
-  if (values.triggerLabelKey && values.triggerLabelValue) {
-    labels[String(values.triggerLabelKey)] = values.triggerLabelValue
-  }
-  return {
-    id: values.id,
-    name: values.name,
-    enabled: values.enabled,
-    triggerType: values.triggerType,
-    analysisKinds: values.analysisKinds || ['root_cause'],
-    analysisProfileId: values.analysisProfileId,
-    remediationPolicy: values.remediationPolicy,
-    dedupWindowSeconds: Number(values.dedupWindowSeconds || 0),
-    cooldownSeconds: Number(values.cooldownSeconds || 0),
-    triggerConditions: {
-      severity: values.triggerSeverity || [],
-      status: values.triggerStatus || [],
-      min_duration_seconds: Number(values.triggerMinDurationSeconds || 0),
-      time_range_minutes: Number(values.triggerTimeRangeMinutes || 0),
-      labels,
-    },
-    approvalPolicy: {
-      required: Boolean(values.approvalRequired),
-      approverRoles: values.approvalRoles || [],
     },
   }
 }

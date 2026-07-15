@@ -23,26 +23,18 @@ function menuNode(id: string, children?: RuntimeMenuNode[]): RuntimeMenuNode {
 describe('compute workbench navigation', () => {
   it('matches the unified information architecture', () => {
     const result = normalizeComputeWorkbenchNav([
-      menuNode('compute-workbench-tasks', [
-        menuNode('compute-workbench-tasks-all'),
-        menuNode('compute-workbench-tasks-sync'),
-        menuNode('compute-workbench-tasks-build'),
-        menuNode('compute-workbench-tasks-operations'),
-      ]),
+      menuNode('compute-workbench-tasks-sync'),
+      menuNode('compute-workbench-tasks-build'),
+      menuNode('compute-workbench-tasks-operations'),
       menuNode('compute-workbench-access'),
       menuNode('virtualization-workbench', [
-        menuNode('virtualization-workbench-overview'),
         menuNode('virtualization-workbench-clusters'),
         menuNode('virtualization-workbench-vms'),
-        menuNode('virtualization-workbench-operations'),
-        menuNode('virtualization-workbench-sync'),
       ]),
       menuNode('docker-workbench', [
-        menuNode('docker-workbench-overview'),
         menuNode('docker-workbench-hosts'),
         menuNode('docker-workbench-projects'),
         menuNode('docker-workbench-templates'),
-        menuNode('docker-workbench-operations'),
       ]),
       menuNode('compute-workbench-overview'),
     ])

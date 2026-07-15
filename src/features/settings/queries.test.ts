@@ -25,19 +25,14 @@ describe('settingsQueries', () => {
     })
   })
 
-  it('keeps branding and monitoring values unwrapped for page consumers', async () => {
+  it('keeps branding values unwrapped for page consumers', async () => {
     const branding = vi
       .spyOn(settingsApi.branding, 'get')
       .mockResolvedValue({ appTitle: 'OpenSoha' } as never)
-    const monitoring = vi
-      .spyOn(settingsApi.monitoring, 'get')
-      .mockResolvedValue({ prometheus: { enabled: true } as never })
 
     await expect(executeQuery(settingsQueries.branding())).resolves.toEqual({
       appTitle: 'OpenSoha',
     })
-    await expect(executeQuery(settingsQueries.monitoring())).resolves.toEqual({ enabled: true })
     expect(branding).toHaveBeenCalledOnce()
-    expect(monitoring).toHaveBeenCalledOnce()
   })
 })

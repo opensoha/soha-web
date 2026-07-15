@@ -66,55 +66,11 @@ vi.mock('@/features/copilot/observe/operations/page', mockRoutePage('AIOperation
 vi.mock('@/features/copilot/observe/tools/page', mockRoutePage('AIToolsPage'))
 vi.mock('@/features/copilot/observe/model-settings/page', mockRoutePage('AIModelSettingsPage'))
 vi.mock('@/features/copilot/observe/overview/page', mockRoutePage('AIObserveOverviewPage'))
-vi.mock('@/features/copilot/gateway/redirects', async () => {
-  const { createElement } = await import('react')
-  return {
-    AIGatewayOverviewRedirectPage: () =>
-      createElement(
-        'div',
-        { 'data-route-page': 'AIGatewayOverviewRedirectPage' },
-        'AIGatewayOverviewRedirectPage',
-      ),
-  }
-})
-
-vi.mock('@/features/virtualization', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/features/virtualization')>()
-  const { createElement } = await import('react')
-  return {
-    ...actual,
-    virtualizationRouteLoaders: {
-      ...actual.virtualizationRouteLoaders,
-      vmDetail: async () => ({
-        default: () =>
-          createElement(
-            'div',
-            { 'data-route-page': 'VirtualizationVmDetailPage' },
-            'VirtualizationVmDetailPage',
-          ),
-      }),
-    },
-  }
-})
-
-vi.mock('@/features/docker', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/features/docker')>()
-  const { createElement } = await import('react')
-  return {
-    ...actual,
-    dockerRouteLoaders: {
-      ...actual.dockerRouteLoaders,
-      projectDetail: async () => ({
-        default: () =>
-          createElement(
-            'div',
-            { 'data-route-page': 'DockerProjectDetailPage' },
-            'DockerProjectDetailPage',
-          ),
-      }),
-    },
-  }
-})
+vi.mock(
+  '@/features/virtualization/virtual-machines/detail-page',
+  mockRoutePage('VirtualizationVmDetailPage'),
+)
+vi.mock('@/features/docker/projects/detail-page', mockRoutePage('DockerProjectDetailPage'))
 
 vi.mock('@/features/platform/workloads/overview/page', mockRoutePage('WorkloadsOverviewPage'))
 vi.mock('@/features/platform/clusters/list-page', mockRoutePage('ClustersPage'))
@@ -252,7 +208,6 @@ describe('router deep-link baseline', () => {
     ['/identity/providers', 'IdentityProvidersPage'],
     ['/identity/outposts', 'IdentityOutpostsPage'],
     ['/identity/policies', 'IdentityPoliciesPage'],
-    ['/identity/sessions', 'OnlineUsersPage'],
     ['/identity/audit', 'AuditLogsPage'],
     ['/access', 'AccessCenterPage'],
     ['/access/users', 'AccessUsersPage'],
@@ -312,7 +267,6 @@ describe('router deep-link baseline', () => {
     ['/ai-workbench/inspection', 'AIOperationsPage'],
     ['/ai-workbench/tool-settings', 'AIToolsPage'],
     ['/ai-workbench/model-settings', 'AIModelSettingsPage'],
-    ['/ai-gateway/overview', 'AIGatewayOverviewRedirectPage'],
     ['/storage', 'StoragePvcPage'],
     ['/not-a-real-route', 'OverviewPage'],
   ])('resolves %s to %s', async (path, page) => {

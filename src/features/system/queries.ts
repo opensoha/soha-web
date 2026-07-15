@@ -8,10 +8,10 @@ import {
 import { systemKeys } from './keys'
 
 export const systemQueries = {
-  sessions: (scope: SystemEndpointScope) =>
+  sessions: () =>
     queryOptions({
-      queryKey: systemKeys.sessions.list(scope),
-      queryFn: () => systemApi.sessions.list(scope),
+      queryKey: systemKeys.sessions.list(),
+      queryFn: systemApi.sessions.list,
       refetchInterval: 10_000,
     }),
   announcements: () =>

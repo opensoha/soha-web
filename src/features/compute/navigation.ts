@@ -1,14 +1,5 @@
 import type { RuntimeMenuNode } from '@/types'
 
-const HIDDEN_LEGACY_MENU_IDS = new Set([
-  'virtualization-workbench-overview',
-  'virtualization-workbench-operations',
-  'virtualization-workbench-sync',
-  'docker-workbench-overview',
-  'docker-workbench-operations',
-  'compute-workbench-tasks-all',
-])
-
 const COMPUTE_MENU_ORDER = new Map(
   [
     'compute-workbench-overview',
@@ -56,10 +47,6 @@ const COMPUTE_MENU_LABELS: Record<string, { labelEn: string; labelZh: string }> 
 export function normalizeComputeWorkbenchNav(nodes: RuntimeMenuNode[]): RuntimeMenuNode[] {
   return nodes
     .flatMap((node) => {
-      if (node.id === 'compute-workbench-tasks') {
-        return node.children ? normalizeComputeWorkbenchNav(node.children) : []
-      }
-      if (HIDDEN_LEGACY_MENU_IDS.has(node.id)) return []
       const labels = COMPUTE_MENU_LABELS[node.id]
       const children = node.children ? normalizeComputeWorkbenchNav(node.children) : undefined
       return [{ ...node, ...labels, children: children?.length ? children : undefined }]

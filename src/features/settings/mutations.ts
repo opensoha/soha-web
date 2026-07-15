@@ -14,10 +14,6 @@ export function invalidateIdentitySettings(queryClient: QueryClient) {
   ])
 }
 
-export function invalidateMonitoringSettings(queryClient: QueryClient) {
-  return queryClient.invalidateQueries({ queryKey: settingsKeys.monitoring.all })
-}
-
 export function invalidateAISettings(queryClient: QueryClient) {
   return queryClient.invalidateQueries({ queryKey: settingsKeys.ai.all })
 }
@@ -42,14 +38,6 @@ export const settingsMutations = {
         mutationKey: settingsMutationKeys.identity('save'),
         mutationFn: settingsApi.identity.save,
         onSuccess: () => invalidateIdentitySettings(queryClient),
-      }),
-  },
-  monitoring: {
-    save: (queryClient: QueryClient) =>
-      mutationOptions({
-        mutationKey: settingsMutationKeys.monitoring('save'),
-        mutationFn: settingsApi.monitoring.savePrometheus,
-        onSuccess: () => invalidateMonitoringSettings(queryClient),
       }),
   },
   ai: {
@@ -83,13 +71,6 @@ export const settingsMutations = {
         mutationFn: settingsApi.ai.upsertAnalysisProfile,
         onSuccess: () =>
           queryClient.invalidateQueries({ queryKey: settingsKeys.ai.analysisProfiles() }),
-      }),
-    upsertAutomationPolicy: (queryClient: QueryClient) =>
-      mutationOptions({
-        mutationKey: settingsMutationKeys.ai('upsert-automation-policy'),
-        mutationFn: settingsApi.ai.upsertAutomationPolicy,
-        onSuccess: () =>
-          queryClient.invalidateQueries({ queryKey: settingsKeys.ai.automationPolicies() }),
       }),
   },
 }

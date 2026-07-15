@@ -11,9 +11,6 @@ import { VirtualizationConnectionStepModal } from './clusters/create-page'
 import { VirtualizationClustersPage } from './clusters/list-page'
 import { VirtualizationFlavorsPage } from './flavors/list-page'
 import { VirtualizationImagesPage } from './images/list-page'
-import { VirtualizationOperationsPage } from './operations/page'
-import { VirtualizationOverviewPage } from './overview/page'
-import { VirtualizationSyncPage } from './sync/page'
 import { VirtualizationVmDetailPage } from './virtual-machines/detail-page'
 import { VirtualizationVmsPage } from './virtual-machines/list-page'
 import { buildClusterPayload, buildCreateVmPayload } from './virtualization-model'
@@ -183,78 +180,6 @@ const testState = vi.hoisted(() => ({
     }
     if (path === '/virtualization/vms/vm-1/console') {
       return { data: { ready: false, message: 'Console disabled in tests' } }
-    }
-    if (path === '/virtualization/overview') {
-      return {
-        data: {
-          stats: {
-            connections: { total: 2, healthy: 0, degraded: 1, unavailable: 1 },
-            vmCount: 3,
-            runningVmCount: 2,
-            stoppedVmCount: 1,
-            pendingTaskCount: 1,
-            failedTaskCount: 1,
-          },
-          connectionSummary: {
-            total: 2,
-            healthy: 0,
-            degraded: 1,
-            unavailable: 1,
-            neverSynced: 1,
-            credentialMissing: 1,
-          },
-          taskSummary: { queued: 0, running: 1, failed: 1, timeout: 0, canceled: 0, completed: 1 },
-          providerSummary: [
-            { provider: 'pve', connections: 1, unavailable: 1 },
-            { provider: 'kubevirt', connections: 1, degraded: 1 },
-          ],
-          recentOperations: [
-            {
-              id: 'op-recent',
-              operationType: 'vm_create',
-              status: 'running',
-              targetName: 'build-vm',
-              createdAt: '2026-05-21T00:00:00Z',
-            },
-          ],
-          attention: {
-            riskyConnections: [
-              {
-                id: 'conn-pve',
-                name: 'pve-a',
-                provider: 'pve',
-                endpoint: 'https://pve.example:8006',
-                enabled: true,
-                verifyTls: true,
-                health: 'unavailable',
-                credentialConfigured: false,
-                riskLevel: 'critical',
-                riskReasons: ['连接不可用', '未配置凭证', '尚未同步'],
-              },
-            ],
-            failedSyncTasks: [
-              {
-                id: 'op-retry',
-                operationType: 'asset_sync',
-                status: 'failed',
-                targetName: 'conn-a',
-                message: 'sync failed',
-                allowedActions: ['retry'],
-              },
-            ],
-            failedOperations: [
-              {
-                id: 'op-retry',
-                operationType: 'asset_sync',
-                status: 'failed',
-                targetName: 'conn-a',
-                message: 'sync failed',
-                allowedActions: ['retry'],
-              },
-            ],
-          },
-        },
-      }
     }
     if (path === '/virtualization/clusters') {
       return {
@@ -702,22 +627,6 @@ describe('virtualization pages', () => {
     vi.clearAllMocks()
   })
 
-  it('surfaces abnormal clusters and failed operations in overview', async () => {
-    const container = await renderWithProviders(
-      <VirtualizationOverviewPage />,
-      '/virtualization/overview',
-    )
-
-    expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/overview')
-    expect(testState.apiGet).not.toHaveBeenCalledWith('/virtualization/clusters')
-    expect(testState.apiGet).not.toHaveBeenCalledWith('/virtualization/operations')
-    expect(container.textContent).toContain('高风险连接')
-    expect(container.textContent).toContain('失败与超时任务')
-    expect(container.textContent).toContain('连接不可用')
-    expect(container.textContent).toContain('sync failed')
-    expect(container.textContent).toContain('Provider 分布')
-  })
-
   it('loads paginated VMs and creates from flavor plus image with provider fields', async () => {
     const container = await renderWithProviders(<VirtualizationVmsPage />)
 
@@ -796,8 +705,6 @@ describe('virtualization pages', () => {
       [<VirtualizationClustersPage />, '/virtualization/clusters'],
       [<VirtualizationImagesPage />, '/virtualization/images'],
       [<VirtualizationFlavorsPage />, '/virtualization/flavors'],
-      [<VirtualizationOperationsPage />, '/virtualization/operations'],
-      [<VirtualizationSyncPage />, '/virtualization/sync'],
     ]
 
     for (const [page, route] of pages) {
@@ -1066,19 +973,6 @@ describe('virtualization pages', () => {
     )
   })
 
-  it('uses asset_sync filtering for the sync task page', async () => {
-    const container = await renderWithProviders(<VirtualizationSyncPage />, '/virtualization/sync')
-
-    expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/operations?assetType=asset_sync')
-    expect(container.textContent).toContain('asset_sync')
-
-    await clickButtonByLabel(container, '查看日志')
-    await waitForText('sync completed')
-
-    expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/operations/op-1/logs')
-    expect(document.body.textContent).toContain('sync completed')
-  })
-
   it('shows provider-specific cluster connection fields', async () => {
     await renderWithProviders(
       <VirtualizationConnectionStepModal
@@ -1196,50 +1090,4 @@ describe('virtualization pages', () => {
     expect(hasButtonByLabel(flavorContainer, '删除规格')).toBe(false)
   })
 
-  it('initializes operations view from abnormal query preset', async () => {
-    const container = await renderWithProviders(
-      <VirtualizationOperationsPage />,
-      '/virtualization/operations?abnormal=true',
-    )
-
-    expect(container.textContent).toContain('失败/超时')
-    expect(container.textContent).toContain('sync failed')
-    expect(container.textContent).not.toContain('vm-a')
-  })
-
-  it('initializes operations view from connection abnormal query preset', async () => {
-    const container = await renderWithProviders(
-      <VirtualizationOperationsPage />,
-      '/virtualization/operations?connectionId=conn-a&abnormal=true',
-    )
-
-    expect(testState.apiGet).toHaveBeenCalledWith(
-      '/virtualization/operations?abnormal=true&connectionId=conn-a',
-    )
-    expect(container.textContent).toContain('sync failed')
-    expect(container.textContent).not.toContain('vm-a')
-  })
-
-  it('gates operation cancel and retry by manage permission and allowed actions', async () => {
-    const container = await renderWithProviders(
-      <VirtualizationOperationsPage />,
-      '/virtualization/operations',
-    )
-
-    expect(hasButtonByLabel(container, '取消任务')).toBe(true)
-    expect(hasButtonByLabel(container, '重试任务')).toBe(true)
-
-    testState.permissionSnapshot = {
-      permissionKeys: ['virtualization.operations.view'],
-      visibleMenuIds: [],
-      visibleMenus: [],
-    }
-    const readonlyContainer = await renderWithProviders(
-      <VirtualizationOperationsPage />,
-      '/virtualization/operations',
-    )
-
-    expect(hasButtonByLabel(readonlyContainer, '取消任务')).toBe(false)
-    expect(hasButtonByLabel(readonlyContainer, '重试任务')).toBe(false)
-  })
 })

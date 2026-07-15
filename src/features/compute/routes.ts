@@ -118,8 +118,8 @@ export const computeRoutes = defineRoutes([
     },
     shell: 'app',
     load: async () => {
-      const feature = await import('@/features/virtualization')
-      return feature.virtualizationRouteLoaders.vms()
+      const module = await import('@/features/virtualization/virtual-machines/list-page')
+      return { default: module.VirtualizationVmsPage }
     },
   },
   {
@@ -137,8 +137,8 @@ export const computeRoutes = defineRoutes([
     },
     shell: 'app',
     load: async () => {
-      const feature = await import('@/features/virtualization')
-      return feature.virtualizationRouteLoaders.vmDetail()
+      const module = await import('@/features/virtualization/virtual-machines/detail-page')
+      return { default: module.VirtualizationVmDetailPage }
     },
   },
   {
@@ -157,8 +157,8 @@ export const computeRoutes = defineRoutes([
     },
     shell: 'app',
     load: async () => {
-      const feature = await import('@/features/virtualization')
-      return feature.virtualizationRouteLoaders.clusters()
+      const module = await import('@/features/virtualization/clusters/list-page')
+      return { default: module.VirtualizationClustersPage }
     },
   },
   {
@@ -177,8 +177,8 @@ export const computeRoutes = defineRoutes([
     },
     shell: 'app',
     load: async () => {
-      const feature = await import('@/features/virtualization')
-      return feature.virtualizationRouteLoaders.images()
+      const module = await import('@/features/virtualization/images/list-page')
+      return { default: module.VirtualizationImagesPage }
     },
   },
   {
@@ -197,8 +197,8 @@ export const computeRoutes = defineRoutes([
     },
     shell: 'app',
     load: async () => {
-      const feature = await import('@/features/virtualization')
-      return feature.virtualizationRouteLoaders.flavors()
+      const module = await import('@/features/virtualization/flavors/list-page')
+      return { default: module.VirtualizationFlavorsPage }
     },
   },
   {
@@ -234,8 +234,8 @@ export const computeRoutes = defineRoutes([
     },
     shell: 'app',
     load: async () => {
-      const feature = await import('@/features/docker')
-      return feature.dockerRouteLoaders.hosts()
+      const module = await import('@/features/docker/hosts/page')
+      return { default: module.DockerHostsPage }
     },
   },
   {
@@ -254,8 +254,8 @@ export const computeRoutes = defineRoutes([
     },
     shell: 'app',
     load: async () => {
-      const feature = await import('@/features/docker')
-      return feature.dockerRouteLoaders.projects()
+      const module = await import('@/features/docker/projects/list-page')
+      return { default: module.DockerProjectsPage }
     },
   },
   {
@@ -273,8 +273,8 @@ export const computeRoutes = defineRoutes([
     },
     shell: 'app',
     load: async () => {
-      const feature = await import('@/features/docker')
-      return feature.dockerRouteLoaders.projectDetail()
+      const module = await import('@/features/docker/projects/detail-page')
+      return { default: module.DockerProjectDetailPage }
     },
   },
   {
@@ -293,8 +293,8 @@ export const computeRoutes = defineRoutes([
     },
     shell: 'app',
     load: async () => {
-      const feature = await import('@/features/docker')
-      return feature.dockerRouteLoaders.templates()
+      const module = await import('@/features/docker/templates/page')
+      return { default: module.DockerTemplatesPage }
     },
   },
   {

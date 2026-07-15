@@ -294,7 +294,18 @@ export function PluginMarketplacePage() {
         </ManagementTableToolbar>
       </div>
 
-      {isLoading ? (
+      {marketplaceQuery.isError ? (
+        <ManagementState
+          kind="error"
+          title="无法连接插件市场"
+          description="请确认本地插件市场已启动，或检查后端插件市场地址配置后重试。"
+          actions={
+            <Button icon={<ReloadOutlined />} onClick={() => void marketplaceQuery.refetch()}>
+              重试
+            </Button>
+          }
+        />
+      ) : isLoading ? (
         <div className="soha-plugin-market-grid" aria-label="正在加载插件">
           {Array.from({ length: 6 }, (_, index) => (
             <Card key={index} loading className="soha-plugin-market-card" />

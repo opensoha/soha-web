@@ -113,7 +113,6 @@ function normalizeProjectVolumeFileParams(params: DockerProjectVolumeFileParams)
 
 export const dockerKeys = {
   all: ['docker'] as const,
-  overview: () => [...dockerKeys.all, 'overview'] as const,
   hosts: () => [...dockerKeys.all, 'hosts'] as const,
   hostLists: () => [...dockerKeys.hosts(), 'list'] as const,
   hostList: (params: DockerListParams = {}) =>

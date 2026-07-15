@@ -5,7 +5,7 @@ import type { AuditLog, OnlineUser } from '@/features/system'
 export const IDENTITY_OVERVIEW_AUDIT_LIMIT = 8
 
 export async function listIdentityOverviewSessions(): Promise<OnlineUser[]> {
-  const response = await api.get<ApiResponse<OnlineUser[]>>('/identity/sessions')
+  const response = await api.get<ApiResponse<OnlineUser[]>>('/auth/sessions')
   return response.data ?? []
 }
 

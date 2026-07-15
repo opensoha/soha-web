@@ -220,8 +220,6 @@ export const consolePermissionGroups: PermissionCatalogGroup[] = [
       { value: "identity.outposts.manage", label: "管理身份 Outpost" },
       { value: "identity.policies.view", label: "查看身份访问策略" },
       { value: "identity.policies.manage", label: "管理身份访问策略" },
-      { value: "identity.sessions.view", label: "查看身份会话" },
-      { value: "identity.sessions.manage", label: "管理身份会话" },
       { value: "identity.audit.view", label: "查看身份审计" },
     ],
   },

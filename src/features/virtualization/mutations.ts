@@ -4,6 +4,7 @@ import {
   type QueryKey,
   type UseMutationOptions,
 } from '@tanstack/react-query'
+import { computeKeys } from '@/features/compute'
 import { virtualizationApi } from './virtualization-api'
 import { virtualizationKeys, virtualizationMutationKeys } from './keys'
 import type {
@@ -72,20 +73,20 @@ export function withVirtualizationMutationSuccess<TData, TError, TVariables, TOn
 const invalidationKeys = {
   vmChanged: (id?: string) => [
     virtualizationKeys.vmLists(),
-    virtualizationKeys.overview(),
+    computeKeys.overview(),
     virtualizationKeys.operations(),
     ...(id ? [virtualizationKeys.vmDetail(id)] : []),
   ],
   clusterChanged: () => [
     virtualizationKeys.clusters(),
-    virtualizationKeys.overview(),
+    computeKeys.overview(),
     virtualizationKeys.operations(),
   ],
   imageChanged: () => [virtualizationKeys.images()],
   flavorChanged: () => [virtualizationKeys.flavors()],
   operationChanged: (operation?: VirtualizationOperation) => [
     virtualizationKeys.operations(),
-    virtualizationKeys.overview(),
+    computeKeys.overview(),
     ...(operation?.vmId ? [virtualizationKeys.vmDetail(operation.vmId)] : []),
   ],
 } satisfies Record<string, (...args: never[]) => QueryKey[]>

@@ -1,24 +1,10 @@
 import { ReloadOutlined } from '@ant-design/icons'
 import type { TableColumnsType } from 'antd'
-import { Button, Descriptions, Input, Select, Space, Tag, Typography } from 'antd'
+import { Button, Descriptions, Input, Select, Space } from 'antd'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementState } from '@/components/management-list'
 import type { AIClient, GatewayManifest, GatewayTool } from '../types'
-
-const { Text } = Typography
-
-function compactList(values?: string[], max = 3) {
-  const items = values?.filter(Boolean) ?? []
-  if (!items.length) return <Text type="secondary">-</Text>
-  return (
-    <Space size={[4, 4]} wrap>
-      {items.slice(0, max).map((item) => (
-        <Tag key={item}>{item}</Tag>
-      ))}
-      {items.length > max ? <Tag>+{items.length - max}</Tag> : null}
-    </Space>
-  )
-}
+import { compactList } from '../presentation'
 
 export interface GatewayManifestSectionProps {
   manifest?: GatewayManifest

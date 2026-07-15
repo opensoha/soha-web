@@ -1,6 +1,7 @@
 import { QueryClient } from '@tanstack/react-query'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { virtualizationApi } from './virtualization-api'
+import { computeKeys } from '@/features/compute'
 import { virtualizationKeys, virtualizationMutationKeys } from './keys'
 import { invalidateVirtualizationQueries, virtualizationMutations } from './mutations'
 
@@ -31,12 +32,12 @@ describe('virtualizationMutations', () => {
     await invalidateVirtualizationQueries(queryClient, [
       virtualizationKeys.images(),
       virtualizationKeys.images(),
-      virtualizationKeys.overview(),
+      computeKeys.overview(),
     ])
 
     expect(invalidateQueries).toHaveBeenCalledTimes(2)
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: virtualizationKeys.images() })
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: virtualizationKeys.overview() })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: computeKeys.overview() })
   })
 
   it('wraps action variables and uses stable mutation keys', async () => {
@@ -69,7 +70,7 @@ describe('virtualizationMutations', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: virtualizationKeys.images() })
   })
 
-  it('invalidates VM lists, detail, overview and operations after a power action', async () => {
+  it('invalidates VM lists, detail, Compute overview and operations after a power action', async () => {
     const { invalidateQueries, queryClient } = createQueryClient()
     const options = virtualizationMutations.powerVm(queryClient)
 
@@ -80,7 +81,7 @@ describe('virtualizationMutations', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: virtualizationKeys.vmDetail('vm-1'),
     })
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: virtualizationKeys.overview() })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: computeKeys.overview() })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: virtualizationKeys.operations() })
   })
 

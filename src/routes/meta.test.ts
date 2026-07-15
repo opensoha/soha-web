@@ -118,7 +118,6 @@ describe('access route authorization', () => {
         'identity.providers.view',
         'identity.outposts.view',
         'identity.policies.view',
-        'identity.sessions.view',
         'identity.audit.view',
         'system.online-users.view',
         'system.announcements.view',
@@ -140,7 +139,6 @@ describe('access route authorization', () => {
         'identity-providers',
         'identity-outposts',
         'identity-policies',
-        'identity-sessions',
         'system',
         'system-online-users',
         'announcements',
@@ -194,13 +192,6 @@ describe('access route authorization', () => {
           path: '/identity/policies',
           section: 'provider',
           sortOrder: 40,
-        },
-        {
-          id: 'identity-sessions',
-          parentId: 'identity',
-          path: '/identity/sessions',
-          section: 'operations',
-          sortOrder: 10,
         },
         { id: 'system', path: '/system', section: 'admin', sortOrder: 225 },
         {
@@ -290,7 +281,6 @@ describe('access route authorization', () => {
       'access-policies',
       'menus',
       'settings-login',
-      'identity-sessions',
       'announcements',
       'system-online-users',
       'operations',
@@ -928,433 +918,73 @@ describe('access route authorization', () => {
     expect(platformNav.every((item) => item.section === '')).toBe(true)
   })
 
-  it('filters resource sidebar trees by workbench so AI and monitoring menus do not remain under platform', () => {
+  it('filters canonical resource menus by unified workbench ownership', () => {
+    const visibleMenus = [
+      { id: 'dashboard', path: '/' },
+      { id: 'compute-workbench', path: '/compute' },
+      {
+        id: 'virtualization-workbench',
+        parentId: 'compute-workbench',
+        path: '/compute/virtualization',
+      },
+      {
+        id: 'virtualization-workbench-vms',
+        parentId: 'virtualization-workbench',
+        path: '/compute/virtualization/vms',
+      },
+      { id: 'docker-workbench', parentId: 'compute-workbench', path: '/compute/runtimes' },
+      {
+        id: 'docker-workbench-projects',
+        parentId: 'docker-workbench',
+        path: '/compute/runtimes/projects',
+      },
+      { id: 'ai-workbench', path: '/ai-workbench' },
+      {
+        id: 'ai-workbench-chat',
+        parentId: 'ai-workbench',
+        path: '/ai-workbench/chat',
+      },
+      {
+        id: 'ai-gateway-manifest',
+        parentId: 'ai-workbench',
+        path: '/ai-gateway/manifest',
+      },
+      { id: 'monitoring-workbench', path: '/monitoring-workbench' },
+      {
+        id: 'monitoring-workbench-overview',
+        parentId: 'monitoring-workbench',
+        path: '/monitoring-workbench/overview',
+      },
+    ]
     const snapshot = buildSnapshot({
       permissionKeys: [
         'workspace.resource.view',
         'overview.view',
-        'virtualization.overview.view',
         'virtualization.vms.view',
-        'virtualization.operations.view',
-        'virtualization.sync.view',
-        'docker.overview.view',
-        'docker.hosts.view',
         'docker.projects.view',
-        'docker.services.view',
-        'docker.ports.view',
-        'docker.templates.view',
-        'docker.operations.view',
-        'observe.ai.view',
         'observe.ai.chat',
         'ai.gateway.view',
-        'ai.gateway.manage',
-        'ai.gateway.relay.view',
-        'ai.gateway.relay.manage',
         'observe.monitoring.view',
-        'observe.alert-integrations.view',
-        'observe.alert-rules.view',
       ],
-      visibleMenuIds: [
-        'dashboard',
-        'virtualization-workbench',
-        'virtualization-workbench-overview',
-        'virtualization-workbench-vms',
-        'virtualization-workbench-operations',
-        'virtualization-workbench-sync',
-        'docker-workbench',
-        'docker-workbench-overview',
-        'docker-workbench-hosts',
-        'docker-workbench-projects',
-        'docker-workbench-templates',
-        'docker-workbench-operations',
-        'ai-workbench',
-        'ai-workbench-chat',
-        'ai-workbench-root-cause',
-        'ai-workbench-performance',
-        'ai-workbench-inspection',
-        'ai-workbench-tool-settings',
-        'ai-workbench-model-settings',
-        'ai-gateway',
-        'ai-gateway-overview',
-        'ai-gateway-relay',
-        'ai-gateway-manifest',
-        'ai-gateway-clients',
-        'ai-gateway-tokens',
-        'ai-gateway-governance',
-        'ai-gateway-call-logs',
-        'monitoring-workbench',
-        'monitoring-workbench-overview',
-        'monitoring-workbench-integrations',
-        'monitoring-workbench-rules',
-      ],
-      visibleMenus: [
-        {
-          id: 'dashboard',
-          path: '/',
-          labelZh: '概览',
-          labelEn: 'Overview',
-          iconKey: 'gauge',
-          section: 'platform',
-          sortOrder: 1,
-          enabled: true,
-        },
-        {
-          id: 'virtualization-workbench',
-          path: '/virtualization',
-          labelZh: '虚拟化',
-          labelEn: 'Virtualization',
-          iconKey: 'server',
-          section: 'ops',
-          sortOrder: 10,
-          enabled: true,
-        },
-        {
-          id: 'virtualization-workbench-overview',
-          parentId: 'virtualization-workbench',
-          path: '/virtualization/overview',
-          labelZh: '总览',
-          labelEn: 'Overview',
-          iconKey: 'server',
-          section: 'ops',
-          sortOrder: 11,
-          enabled: true,
-        },
-        {
-          id: 'virtualization-workbench-vms',
-          parentId: 'virtualization-workbench',
-          path: '/virtualization/vms',
-          labelZh: '虚拟机',
-          labelEn: 'VMs',
-          iconKey: 'server',
-          section: 'ops',
-          sortOrder: 12,
-          enabled: true,
-        },
-        {
-          id: 'virtualization-workbench-operations',
-          parentId: 'virtualization-workbench',
-          path: '/virtualization/operations',
-          labelZh: '操作记录',
-          labelEn: 'Operations',
-          iconKey: 'file-clock',
-          section: 'ops',
-          sortOrder: 13,
-          enabled: true,
-        },
-        {
-          id: 'virtualization-workbench-sync',
-          parentId: 'virtualization-workbench',
-          path: '/virtualization/sync',
-          labelZh: '同步任务',
-          labelEn: 'Sync',
-          iconKey: 'activity',
-          section: 'ops',
-          sortOrder: 14,
-          enabled: true,
-        },
-        {
-          id: 'docker-workbench',
-          path: '/docker',
-          labelZh: 'Docker 工作台',
-          labelEn: 'Docker Workbench',
-          iconKey: 'docker',
-          section: 'ops',
-          sortOrder: 30,
-          enabled: true,
-        },
-        {
-          id: 'docker-workbench-overview',
-          parentId: 'docker-workbench',
-          path: '/docker/overview',
-          labelZh: '总览',
-          labelEn: 'Overview',
-          iconKey: 'gauge',
-          section: 'ops',
-          sortOrder: 31,
-          enabled: true,
-        },
-        {
-          id: 'docker-workbench-hosts',
-          parentId: 'docker-workbench',
-          path: '/docker/hosts',
-          labelZh: 'Docker 主机',
-          labelEn: 'Docker Hosts',
-          iconKey: 'server',
-          section: 'ops',
-          sortOrder: 32,
-          enabled: true,
-        },
-        {
-          id: 'docker-workbench-projects',
-          parentId: 'docker-workbench',
-          path: '/docker/projects',
-          labelZh: '容器管理',
-          labelEn: 'Container Management',
-          iconKey: 'docker',
-          section: 'ops',
-          sortOrder: 33,
-          enabled: true,
-        },
-        {
-          id: 'docker-workbench-templates',
-          parentId: 'docker-workbench',
-          path: '/docker/templates',
-          labelZh: '模板',
-          labelEn: 'Templates',
-          iconKey: 'code',
-          section: 'ops',
-          sortOrder: 36,
-          enabled: true,
-        },
-        {
-          id: 'docker-workbench-operations',
-          parentId: 'docker-workbench',
-          path: '/docker/operations',
-          labelZh: '操作记录',
-          labelEn: 'Operations',
-          iconKey: 'history',
-          section: 'ops',
-          sortOrder: 37,
-          enabled: true,
-        },
-        {
-          id: 'ai-workbench',
-          path: '/ai-workbench',
-          labelZh: 'AI工作台',
-          labelEn: 'AI Workbench',
-          iconKey: 'bot',
-          section: 'ops',
-          sortOrder: 15,
-          enabled: true,
-        },
-        {
-          id: 'ai-workbench-chat',
-          parentId: 'ai-workbench',
-          path: '/ai-workbench/chat',
-          labelZh: '通用聊天',
-          labelEn: 'Chat',
-          iconKey: 'bot',
-          section: 'ops',
-          sortOrder: 16,
-          enabled: true,
-        },
-        {
-          id: 'ai-workbench-root-cause',
-          parentId: 'ai-workbench',
-          path: '/ai-workbench/root-cause',
-          labelZh: '根因分析',
-          labelEn: 'Root Cause',
-          iconKey: 'bot',
-          section: 'ops',
-          sortOrder: 17,
-          enabled: true,
-        },
-        {
-          id: 'ai-workbench-performance',
-          parentId: 'ai-workbench',
-          path: '/ai-workbench/performance',
-          labelZh: '性能分析',
-          labelEn: 'Performance',
-          iconKey: 'bot',
-          section: 'ops',
-          sortOrder: 18,
-          enabled: true,
-        },
-        {
-          id: 'ai-workbench-inspection',
-          parentId: 'ai-workbench',
-          path: '/ai-workbench/inspection',
-          labelZh: '巡检',
-          labelEn: 'Inspection',
-          iconKey: 'bot',
-          section: 'ops',
-          sortOrder: 19,
-          enabled: true,
-        },
-        {
-          id: 'ai-workbench-tool-settings',
-          parentId: 'ai-workbench',
-          path: '/ai-workbench/tool-settings',
-          labelZh: '工具与技能',
-          labelEn: 'Tools & Skills',
-          iconKey: 'bot',
-          section: 'ops',
-          sortOrder: 19,
-          enabled: true,
-        },
-        {
-          id: 'ai-workbench-model-settings',
-          parentId: 'ai-workbench',
-          path: '/ai-workbench/model-settings',
-          labelZh: '模型设置',
-          labelEn: 'Model Settings',
-          iconKey: 'bot',
-          section: 'ops',
-          sortOrder: 21,
-          enabled: true,
-        },
-        {
-          id: 'ai-gateway',
-          path: '/ai-gateway',
-          labelZh: 'AI Gateway',
-          labelEn: 'AI Gateway',
-          iconKey: 'shield',
-          section: 'ops',
-          sortOrder: 22,
-          enabled: true,
-        },
-        {
-          id: 'ai-gateway-overview',
-          parentId: 'ai-gateway',
-          path: '/ai-gateway/overview',
-          labelZh: '概览',
-          labelEn: 'Overview',
-          iconKey: 'gauge',
-          section: 'ops',
-          sortOrder: 23,
-          enabled: true,
-        },
-        {
-          id: 'ai-gateway-relay',
-          parentId: 'ai-gateway',
-          path: '/ai-gateway/relay',
-          labelZh: '模型中转',
-          labelEn: 'Model Relay',
-          iconKey: 'link',
-          section: 'ops',
-          sortOrder: 24,
-          enabled: true,
-        },
-        {
-          id: 'ai-gateway-manifest',
-          parentId: 'ai-gateway',
-          path: '/ai-gateway/manifest',
-          labelZh: '能力清单',
-          labelEn: 'Manifest',
-          iconKey: 'shield',
-          section: 'ops',
-          sortOrder: 25,
-          enabled: true,
-        },
-        {
-          id: 'ai-gateway-clients',
-          parentId: 'ai-gateway',
-          path: '/ai-gateway/clients',
-          labelZh: 'AI Clients',
-          labelEn: 'AI Clients',
-          iconKey: 'link',
-          section: 'ops',
-          sortOrder: 26,
-          enabled: true,
-        },
-        {
-          id: 'ai-gateway-tokens',
-          parentId: 'ai-gateway',
-          path: '/ai-gateway/tokens',
-          labelZh: 'Tokens',
-          labelEn: 'Tokens',
-          iconKey: 'key',
-          section: 'ops',
-          sortOrder: 27,
-          enabled: true,
-        },
-        {
-          id: 'ai-gateway-governance',
-          parentId: 'ai-gateway',
-          path: '/ai-gateway/governance',
-          labelZh: 'Governance',
-          labelEn: 'Governance',
-          iconKey: 'shield',
-          section: 'ops',
-          sortOrder: 28,
-          enabled: true,
-        },
-        {
-          id: 'ai-gateway-call-logs',
-          parentId: 'ai-gateway',
-          path: '/ai-gateway/call-logs',
-          labelZh: '调用日志',
-          labelEn: 'Call Logs',
-          iconKey: 'history',
-          section: 'ops',
-          sortOrder: 29,
-          enabled: true,
-        },
-        {
-          id: 'monitoring-workbench',
-          path: '/monitoring-workbench',
-          labelZh: '监控工作台',
-          labelEn: 'Monitoring Workbench',
-          iconKey: 'gauge',
-          section: 'ops',
-          sortOrder: 60,
-          enabled: true,
-        },
-        {
-          id: 'monitoring-workbench-overview',
-          parentId: 'monitoring-workbench',
-          path: '/monitoring-workbench/overview',
-          labelZh: '总览',
-          labelEn: 'Overview',
-          iconKey: 'gauge',
-          section: 'ops',
-          sortOrder: 61,
-          enabled: true,
-        },
-        {
-          id: 'monitoring-workbench-integrations',
-          parentId: 'monitoring-workbench',
-          path: '/monitoring-workbench/integrations',
-          labelZh: '告警集成',
-          labelEn: 'Alert Integrations',
-          iconKey: 'link',
-          section: 'ops',
-          sortOrder: 62,
-          enabled: true,
-        },
-        {
-          id: 'monitoring-workbench-rules',
-          parentId: 'monitoring-workbench',
-          path: '/monitoring-workbench/rules',
-          labelZh: '告警规则',
-          labelEn: 'Alert Rules',
-          iconKey: 'siren',
-          section: 'ops',
-          sortOrder: 63,
-          enabled: true,
-        },
-      ],
+      visibleMenuIds: visibleMenus.map((item) => item.id),
+      visibleMenus,
     })
 
-    const nav = getAccessibleSidebarNav(snapshot)
-    const resourceNav = filterSidebarNavByWorkspace(nav, 'resource')
-    const platformNav = filterSidebarNavByWorkbench(resourceNav, 'platform')
-    const aiNav = filterSidebarNavByWorkbench(resourceNav, 'ai')
-    const computeNav = filterSidebarNavByWorkbench(resourceNav, 'compute')
-    const monitoringNav = filterSidebarNavByWorkbench(resourceNav, 'monitoring')
-
-    expect(platformNav.map((item) => item.id)).toEqual(['dashboard'])
-    expect(aiNav.map((item) => item.id)).toEqual([
+    const resourceNav = filterSidebarNavByWorkspace(getAccessibleSidebarNav(snapshot), 'resource')
+    expect(filterSidebarNavByWorkbench(resourceNav, 'platform').map((item) => item.id)).toEqual([
+      'dashboard',
+    ])
+    expect(filterSidebarNavByWorkbench(resourceNav, 'ai').map((item) => item.id)).toEqual([
       'ai-workbench-chat',
-      'ai-workbench-inspection',
-      'ai-workbench-tool-settings',
-      'ai-gateway-relay',
-      'ai-gateway-clients',
-      'ai-gateway-tokens',
       'ai-gateway-manifest',
-      'ai-gateway-governance',
-      'ai-gateway-call-logs',
     ])
-    expect(computeNav.map((item) => item.id)).toEqual([
-      'virtualization-workbench',
+    expect(filterSidebarNavByWorkbench(resourceNav, 'compute').map((item) => item.id)).toEqual([
       'docker-workbench',
+      'virtualization-workbench',
     ])
-    expect(monitoringNav.map((item) => item.id)).toEqual([
+    expect(filterSidebarNavByWorkbench(resourceNav, 'monitoring').map((item) => item.id)).toEqual([
       'monitoring-workbench-overview',
-      'monitoring-workbench-integrations',
-      'monitoring-workbench-rules',
     ])
-    expect(monitoringNav.some((item) => item.id === 'monitoring-workbench')).toBe(false)
   })
 
   it('derives menu workbench ownership from route mappings', () => {
@@ -1395,12 +1025,6 @@ describe('access route authorization', () => {
         path: '/compute/runtimes/projects',
       }),
     ).toBe('compute')
-    expect(
-      getMenuWorkbenchId({
-        id: 'ai-gateway',
-        path: '/ai-gateway',
-      }),
-    ).toBe('ai')
     expect(
       getMenuWorkbenchId({
         id: 'ai-gateway-governance',
@@ -1488,20 +1112,20 @@ describe('access route authorization', () => {
   })
 
   it('requires resource workspace, AI Gateway view permission, and menu binding', () => {
-    const route = getRoute('ai-gateway-overview')
-    const parentRoute = getRoute('ai-gateway')
+    const route = getRoute('ai-gateway-manifest')
+    const parentRoute = getRoute('ai-workbench')
     const allowedSnapshot = buildSnapshot({
       permissionKeys: ['workspace.resource.view', 'ai.gateway.view'],
-      visibleMenuIds: ['ai-gateway', 'ai-gateway-overview'],
+      visibleMenuIds: ['ai-workbench', 'ai-gateway-manifest'],
       visibleMenus: [
         {
-          id: 'ai-gateway',
-          path: '/ai-gateway',
+          id: 'ai-workbench',
+          path: '/ai-workbench',
         },
         {
-          id: 'ai-gateway-overview',
-          parentId: 'ai-gateway',
-          path: '/ai-gateway/overview',
+          id: 'ai-gateway-manifest',
+          parentId: 'ai-workbench',
+          path: '/ai-gateway/manifest',
         },
       ],
     })
@@ -1513,29 +1137,24 @@ describe('access route authorization', () => {
     expect(parentRoute.redirectTo).toBe('/ai-workbench/overview')
     expect(canAccessRoute(parentRoute, allowedSnapshot)).toBe(true)
     expect(findFirstAccessiblePathForWorkbench('ai', allowedSnapshot)).toBe(
-      '/ai-workbench/overview',
+      '/ai-gateway/manifest',
     )
 
-    const compatRoute = getRoute('ai-workbench-gateway-compat')
-    expect(compatRoute.navVisible).toBe(false)
-    expect(compatRoute.redirectTo).toBe('/ai-workbench/overview')
-    expect(getRouteWorkbenchId(compatRoute)).toBe('ai')
-    expect(canAccessRoute(compatRoute, allowedSnapshot)).toBe(true)
     expect(
       canAccessRoute(
         route,
         buildSnapshot({
           permissionKeys: ['ai.gateway.view'],
-          visibleMenuIds: ['ai-gateway', 'ai-gateway-overview'],
+          visibleMenuIds: ['ai-workbench', 'ai-gateway-manifest'],
           visibleMenus: [
             {
-              id: 'ai-gateway',
-              path: '/ai-gateway',
+              id: 'ai-workbench',
+              path: '/ai-workbench',
             },
             {
-              id: 'ai-gateway-overview',
-              parentId: 'ai-gateway',
-              path: '/ai-gateway/overview',
+              id: 'ai-gateway-manifest',
+              parentId: 'ai-workbench',
+              path: '/ai-gateway/manifest',
             },
           ],
         }),
@@ -1546,16 +1165,16 @@ describe('access route authorization', () => {
         route,
         buildSnapshot({
           permissionKeys: ['workspace.resource.view'],
-          visibleMenuIds: ['ai-gateway', 'ai-gateway-overview'],
+          visibleMenuIds: ['ai-workbench', 'ai-gateway-manifest'],
           visibleMenus: [
             {
-              id: 'ai-gateway',
-              path: '/ai-gateway',
+              id: 'ai-workbench',
+              path: '/ai-workbench',
             },
             {
-              id: 'ai-gateway-overview',
-              parentId: 'ai-gateway',
-              path: '/ai-gateway/overview',
+              id: 'ai-gateway-manifest',
+              parentId: 'ai-workbench',
+              path: '/ai-gateway/manifest',
             },
           ],
         }),
@@ -1575,18 +1194,18 @@ describe('access route authorization', () => {
 
   it('allows AI Gateway token routing from invoke-only permission', () => {
     const tokenRoute = getRoute('ai-gateway-tokens')
-    const parentRoute = getRoute('ai-gateway')
+    const parentRoute = getRoute('ai-workbench')
     const snapshot = buildSnapshot({
       permissionKeys: ['workspace.resource.view', 'ai.gateway.invoke'],
-      visibleMenuIds: ['ai-gateway', 'ai-gateway-tokens'],
+      visibleMenuIds: ['ai-workbench', 'ai-gateway-tokens'],
       visibleMenus: [
         {
-          id: 'ai-gateway',
-          path: '/ai-gateway',
+          id: 'ai-workbench',
+          path: '/ai-workbench',
         },
         {
           id: 'ai-gateway-tokens',
-          parentId: 'ai-gateway',
+          parentId: 'ai-workbench',
           path: '/ai-gateway/tokens',
         },
       ],
@@ -1595,52 +1214,40 @@ describe('access route authorization', () => {
     expect(canAccessRoute(tokenRoute, snapshot)).toBe(true)
     expect(canAccessRoute(parentRoute, snapshot)).toBe(true)
     expect(findFirstAccessiblePathForWorkbench('ai', snapshot)).toBe('/ai-gateway/tokens')
-    expect(canAccessRoute(getRoute('ai-gateway-overview'), snapshot)).toBe(false)
+    expect(canAccessRoute(getRoute('ai-gateway-manifest'), snapshot)).toBe(false)
   })
 
-  it('exposes AI Gateway model relay under the standalone Gateway workbench', () => {
+  it('exposes AI Gateway model relay under the unified AI workbench', () => {
     const relayRoute = getRoute('ai-gateway-relay')
-    const upstreamRoute = getRoute('ai-gateway-upstreams')
-    const modelRoutesRoute = getRoute('ai-gateway-model-routes')
     const viewSnapshot = buildSnapshot({
       permissionKeys: ['workspace.resource.view', 'ai.gateway.relay.view'],
-      visibleMenuIds: ['ai-gateway', 'ai-gateway-relay'],
+      visibleMenuIds: ['ai-workbench', 'ai-gateway-relay'],
       visibleMenus: [
-        { id: 'ai-gateway', path: '/ai-gateway' },
+        { id: 'ai-workbench', path: '/ai-workbench' },
         {
           id: 'ai-gateway-relay',
-          parentId: 'ai-gateway',
+          parentId: 'ai-workbench',
           path: '/ai-gateway/relay',
         },
       ],
     })
-    const manageSnapshot = buildSnapshot({
-      permissionKeys: ['workspace.resource.view', 'ai.gateway.relay.manage'],
-      visibleMenuIds: ['ai-gateway', 'ai-gateway-relay'],
-      visibleMenus: viewSnapshot.visibleMenus,
-    })
-
     expect(getRouteWorkbenchId(relayRoute)).toBe('ai')
     expect(canAccessRoute(relayRoute, viewSnapshot)).toBe(true)
-    expect(canAccessRoute(upstreamRoute, viewSnapshot)).toBe(false)
-    expect(canAccessRoute(upstreamRoute, manageSnapshot)).toBe(true)
-    expect(upstreamRoute.redirectTo).toBe('/ai-gateway/relay?tab=upstreams')
-    expect(modelRoutesRoute.redirectTo).toBe('/ai-gateway/relay?tab=model-routes')
   })
 
   it('requires AI Gateway manage permission for call logs', () => {
     const route = getRoute('ai-gateway-call-logs')
     const snapshot = buildSnapshot({
       permissionKeys: ['workspace.resource.view', 'ai.gateway.manage'],
-      visibleMenuIds: ['ai-gateway', 'ai-gateway-call-logs'],
+      visibleMenuIds: ['ai-workbench', 'ai-gateway-call-logs'],
       visibleMenus: [
         {
-          id: 'ai-gateway',
-          path: '/ai-gateway',
+          id: 'ai-workbench',
+          path: '/ai-workbench',
         },
         {
           id: 'ai-gateway-call-logs',
-          parentId: 'ai-gateway',
+          parentId: 'ai-workbench',
           path: '/ai-gateway/call-logs',
         },
       ],
@@ -1653,7 +1260,7 @@ describe('access route authorization', () => {
         route,
         buildSnapshot({
           permissionKeys: ['workspace.resource.view', 'ai.gateway.view'],
-          visibleMenuIds: ['ai-gateway', 'ai-gateway-call-logs'],
+          visibleMenuIds: ['ai-workbench', 'ai-gateway-call-logs'],
           visibleMenus: snapshot.visibleMenus,
         }),
       ),
@@ -1669,7 +1276,7 @@ describe('access route authorization', () => {
         {
           id: 'virtualization-workbench-vms',
           parentId: 'virtualization-workbench',
-          path: '/virtualization/vms',
+          path: '/compute/virtualization/vms',
         },
       ],
     })
@@ -1698,7 +1305,7 @@ describe('access route authorization', () => {
             {
               id: 'virtualization-workbench-vms',
               parentId: 'virtualization-workbench',
-              path: '/virtualization/vms',
+              path: '/compute/virtualization/vms',
             },
           ],
         }),
@@ -1736,7 +1343,7 @@ describe('access route authorization', () => {
         {
           id: 'docker-workbench-projects',
           parentId: 'docker-workbench',
-          path: '/docker/projects',
+          path: '/compute/runtimes/projects',
         },
       ],
     })
@@ -1765,7 +1372,7 @@ describe('access route authorization', () => {
             {
               id: 'docker-workbench-projects',
               parentId: 'docker-workbench',
-              path: '/docker/projects',
+              path: '/compute/runtimes/projects',
             },
           ],
         }),

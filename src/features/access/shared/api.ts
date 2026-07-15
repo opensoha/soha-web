@@ -1,8 +1,8 @@
 import { api } from '@/services/api-client'
 import type { ApiResponse } from '@/types'
+import { settingsApi } from '@/features/settings'
 import type {
   AccessApplicationOption,
-  AccessIdentitySettings,
   AccessMutationValues,
   AccessPolicy,
   AccessRole,
@@ -64,9 +64,7 @@ export const accessApi = {
   dependencies: {
     applications: () => unwrap(api.get<ApiResponse<AccessApplicationOption[]>>('/applications')),
     loginProviders: async () => {
-      const settings = await unwrap(
-        api.get<ApiResponse<AccessIdentitySettings>>('/settings/identity'),
-      )
+      const settings = await settingsApi.identity.get()
       return Array.isArray(settings?.providers) ? settings.providers : []
     },
   },

@@ -37,15 +37,11 @@ import {
 } from '@ant-design/icons'
 import {
   PLAYBOOK_OPTIONS,
-  SEVERITY_OPTIONS,
-  STATUS_OPTIONS,
   TRACES_BACKEND_OPTIONS,
   AGENT_RUNTIME_STATE_LABELS,
   agentCapabilityLabels,
   buildDataSourceFormValues,
   buildDataSourcePayload,
-  buildPolicyFormValues,
-  buildPolicyPayload,
   buildProfileFormValues,
   buildProfilePayload,
   resolveAgentRuntimeState,
@@ -57,7 +53,6 @@ import type {
   AIWorkbenchModelSettings,
   AISkillSetting,
   AnalysisProfile,
-  AutomationPolicy,
   DataSource,
 } from '../ai-settings-model'
 import { settingsKeys } from '../keys'
@@ -146,10 +141,8 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
   const [workbenchModelForm] = Form.useForm<AIWorkbenchModelSettings>()
   const [dataSourceModalVisible, setDataSourceModalVisible] = useState(false)
   const [profileModalVisible, setProfileModalVisible] = useState(false)
-  const [policyModalVisible, setPolicyModalVisible] = useState(false)
   const [editingDataSource, setEditingDataSource] = useState<DataSource | null>(null)
   const [editingProfile, setEditingProfile] = useState<AnalysisProfile | null>(null)
-  const [editingPolicy, setEditingPolicy] = useState<AutomationPolicy | null>(null)
   const [skillsModalVisible, setSkillsModalVisible] = useState(false)
   const [editingSkill, setEditingSkill] = useState<AISkillSetting | null>(null)
   const [skillsRegistryDraft, setSkillsRegistryDraft] = useState<AISkillSetting[]>([])
@@ -178,7 +171,6 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
   const modelRoutesQuery = useQuery(settingsQueries.ai.modelRoutes(canViewAISettings))
   const dataSourcesQuery = useQuery(settingsQueries.ai.dataSources())
   const profilesQuery = useQuery(settingsQueries.ai.analysisProfiles())
-  const policiesQuery = useQuery(settingsQueries.ai.automationPolicies())
   const capabilitiesQuery = useQuery(settingsQueries.ai.dataSourceCapabilities())
   const workbenchCatalogQuery = useQuery(settingsQueries.ai.workbenchCatalog(canViewAISettings))
   const agentRunsQuery = useQuery(
@@ -194,7 +186,6 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
     settingsMutations.ai.validateDataSource(queryClient),
   )
   const profileMutation = useMutation(settingsMutations.ai.upsertAnalysisProfile(queryClient))
-  const policyMutation = useMutation(settingsMutations.ai.upsertAutomationPolicy(queryClient))
 
   const saveWorkbenchModel = (values: AIWorkbenchModelSettings) =>
     saveWorkbenchModelMutation.mutate(values, {
@@ -236,19 +227,6 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
         onError: (err) => void message.error(err.message),
       },
     )
-  const savePolicy = (input: { id?: string; values: Record<string, unknown> }) =>
-    policyMutation.mutate(
-      { ...input, values: buildPolicyPayload(input.values) },
-      {
-        onSuccess: () => {
-          void message.success('自动化策略已保存')
-          setPolicyModalVisible(false)
-          setEditingPolicy(null)
-        },
-        onError: (err) => void message.error(err.message),
-      },
-    )
-
   const settings = data
   const modelRoutes = modelRoutesQuery.data ?? []
   const enabledModelRoutes = modelRoutes.filter((route) => route.enabled)
@@ -323,7 +301,6 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
 
   const dataSources = dataSourcesQuery.data ?? []
   const profiles = profilesQuery.data ?? []
-  const policies = policiesQuery.data ?? []
   const capabilityOptions = capabilitiesQuery.data ?? []
   const filteredCapabilityOptions = capabilityOptions.filter(
     (item) => item.sourceKind === dataSourceSourceKind,
@@ -460,39 +437,6 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
             onClick={() => {
               setEditingProfile(record)
               setProfileModalVisible(true)
-            }}
-          />
-        ) : (
-          '-'
-        ),
-    },
-  ]
-
-  const policyColumns: TableColumnsType<AutomationPolicy> = [
-    { title: '名称', dataIndex: 'name' },
-    { title: '触发类型', dataIndex: 'triggerType' },
-    { title: '分析模板', dataIndex: 'analysisProfileId' },
-    { title: 'Dedup(s)', dataIndex: 'dedupWindowSeconds' },
-    { title: '策略', dataIndex: 'remediationPolicy' },
-    {
-      title: '启用',
-      dataIndex: 'enabled',
-      render: (value: boolean) => <StatusTag value={value ? 'success' : 'default'} />,
-    },
-    {
-      ...tableColumnPresets.action,
-      title: '操作',
-      dataIndex: 'id',
-      render: (_: unknown, record: AutomationPolicy) =>
-        canManageAISettings ? (
-          <ManagementIconButton
-            aria-label="编辑自动化策略"
-            tooltip="编辑"
-            icon={<EditOutlined />}
-            size="small"
-            onClick={() => {
-              setEditingPolicy(record)
-              setPolicyModalVisible(true)
             }}
           />
         ) : (
@@ -1032,28 +976,6 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
           loading={profilesQuery.isLoading}
         />
       </div>
-      <div className="soha-settings-table-section">
-        <SettingsAdminTable
-          headerExtra={
-            canManageAISettings ? (
-              <Button
-                type="primary"
-                onClick={() => {
-                  setEditingPolicy(null)
-                  setPolicyModalVisible(true)
-                }}
-              >
-                新增
-              </Button>
-            ) : null
-          }
-          columns={policyColumns}
-          dataSource={policies}
-          rowKey="id"
-          loading={policiesQuery.isLoading}
-        />
-      </div>
-
       <Modal
         title={editingSkill ? '编辑 Skill' : '新增 Skill'}
         open={skillsModalVisible}
@@ -1566,107 +1488,6 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
         </Form>
       </Modal>
 
-      <Modal
-        title={editingPolicy ? '编辑自动化策略' : '新增自动化策略'}
-        open={policyModalVisible}
-        footer={null}
-        onCancel={() => {
-          setPolicyModalVisible(false)
-          setEditingPolicy(null)
-        }}
-        destroyOnHidden
-      >
-        <Form
-          {...DEFAULT_FORM_LAYOUT}
-          initialValues={buildPolicyFormValues(editingPolicy)}
-          onFinish={(values) => {
-            if (!canManageAISettings) return
-            savePolicy({
-              id: editingPolicy?.id,
-              values: values as Record<string, unknown>,
-            })
-          }}
-        >
-          <Form.Item name="id" hidden>
-            <Input />
-          </Form.Item>
-          <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="triggerType" label="触发类型">
-            <Select options={[{ value: 'alert_webhook', label: 'alert_webhook' }]} />
-          </Form.Item>
-          <Form.Item name="analysisKinds" label="分析类型">
-            <Select
-              mode="multiple"
-              options={[
-                { value: 'root_cause', label: 'root_cause' },
-                { value: 'performance', label: 'performance' },
-                { value: 'trace', label: 'trace' },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="analysisProfileId" label="分析模板">
-            <Select
-              options={profiles.map((item) => ({
-                value: item.id,
-                label: item.name,
-              }))}
-            />
-          </Form.Item>
-          <Form.Item name="remediationPolicy" label="修复策略">
-            <Input />
-          </Form.Item>
-          <Form.Item name="dedupWindowSeconds" label="Dedup 窗口(s)">
-            <InputNumber min={0} style={fullWidthStyle} />
-          </Form.Item>
-          <Form.Item name="cooldownSeconds" label="Cooldown(s)">
-            <InputNumber min={0} style={fullWidthStyle} />
-          </Form.Item>
-          <Form.Item name="triggerSeverity" label="告警级别">
-            <Select mode="multiple" options={SEVERITY_OPTIONS} />
-          </Form.Item>
-          <Form.Item name="triggerStatus" label="告警状态">
-            <Select mode="multiple" options={STATUS_OPTIONS} />
-          </Form.Item>
-          <Form.Item name="triggerMinDurationSeconds" label="最小持续(s)">
-            <InputNumber min={0} style={fullWidthStyle} />
-          </Form.Item>
-          <Form.Item name="triggerLabelKey" label="标签 Key">
-            <Input />
-          </Form.Item>
-          <Form.Item name="triggerLabelValue" label="标签 Value">
-            <Input />
-          </Form.Item>
-          <Form.Item name="triggerTimeRangeMinutes" label="分析时间范围(分钟)">
-            <InputNumber min={5} style={fullWidthStyle} />
-          </Form.Item>
-          <Form.Item name="approvalRequired" label="需要审批" valuePropName="checked">
-            <Switch />
-          </Form.Item>
-          <Form.Item name="approvalRoles" label="审批角色">
-            <TagSelect mode="tags" />
-          </Form.Item>
-          <Form.Item name="enabled" label="启用" valuePropName="checked">
-            <Switch />
-          </Form.Item>
-          <div className="soha-form-actions">
-            <Button
-              onClick={() => {
-                setPolicyModalVisible(false)
-                setEditingPolicy(null)
-              }}
-            >
-              取消
-            </Button>
-            {canManageAISettings ? (
-              <Button htmlType="submit" type="primary" loading={policyMutation.isPending}>
-                保存
-              </Button>
-            ) : null}
-          </div>
-        </Form>
-      </Modal>
     </>
   )
 

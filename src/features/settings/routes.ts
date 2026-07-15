@@ -49,25 +49,6 @@ export const settingsRoutes = defineRoutes([
   },
   {
     meta: {
-      id: 'settings-identity',
-      path: '/settings/identity',
-      title: '身份设置',
-      description: '兼容旧入口，跳转到登陆设置',
-      icon: 'IconSetting',
-      group: 'settings',
-      requiresAuth: true,
-      tabbar: false,
-      navVisible: false,
-      parentId: 'settings',
-      menuId: 'settings-login',
-      permissionKey: 'settings.identity.view',
-      scopeMode: 'passive',
-    },
-    shell: 'app',
-    redirectTo: '/settings/login',
-  },
-  {
-    meta: {
       id: 'settings-branding',
       path: '/settings/branding',
       title: '品牌设置',
@@ -87,43 +68,6 @@ export const settingsRoutes = defineRoutes([
       const module = await import('./branding/page')
       return { default: module.BrandingSettingsPage }
     },
-  },
-  {
-    meta: {
-      id: 'settings-monitoring',
-      path: '/settings/monitoring',
-      title: '监控设置',
-      description: 'Prometheus 配置',
-      icon: 'IconSetting',
-      group: 'settings',
-      requiresAuth: true,
-      tabbar: false,
-      navVisible: false,
-      menuId: 'settings',
-      permissionKey: 'settings.monitoring.view',
-      scopeMode: 'passive',
-    },
-    shell: 'app',
-    redirectTo: '/settings',
-  },
-  {
-    meta: {
-      id: 'settings-ai',
-      path: '/settings/ai',
-      title: 'AI 设置',
-      description: '兼容旧入口，跳转到 AI 工作台设置页',
-      icon: 'IconSetting',
-      group: 'settings',
-      requiresAuth: true,
-      tabbar: false,
-      navVisible: false,
-      parentId: 'settings',
-      menuId: 'settings',
-      permissionKey: 'settings.ai.view',
-      scopeMode: 'passive',
-    },
-    shell: 'app',
-    redirectTo: '/ai-workbench/model-settings',
   },
   {
     meta: {

@@ -34,17 +34,14 @@ describe('systemMutations', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: permissionSnapshotQueryKey })
   })
 
-  it('keeps scoped session invalidation under the shared sessions root', async () => {
+  it('keeps session invalidation under the online-users root', async () => {
     vi.spyOn(systemApi.sessions, 'revoke').mockResolvedValue(undefined)
     const { invalidateQueries, queryClient } = queryClientWithInvalidationSpy()
-    const observer = new MutationObserver(
-      queryClient,
-      systemMutations.sessions.revoke(queryClient, 'identity'),
-    )
+    const observer = new MutationObserver(queryClient, systemMutations.sessions.revoke(queryClient))
 
     await observer.mutate('session-1')
 
-    expect(observer.options.mutationKey).toEqual(systemMutationKeys.sessions('revoke', 'identity'))
+    expect(observer.options.mutationKey).toEqual(systemMutationKeys.sessions('revoke'))
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: systemKeys.sessions.all })
   })
 })

@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import type { TableColumnsType } from 'antd'
-import { Alert, Button, Descriptions, Select, Space, Tabs, Tag, Typography } from 'antd'
+import { Alert, Button, Descriptions, Select, Space, Tabs } from 'antd'
 import { AdminTable } from '@/components/admin-table'
 import {
   ManagementState,
@@ -26,6 +26,7 @@ import type {
   SkillBinding,
   ToolGrant,
 } from '../types'
+import { compactList, formatDateTime } from '../presentation'
 import {
   governanceApprovalQueueRows,
   governanceCoverageRows,
@@ -35,39 +36,12 @@ import {
   governanceWindowOptions,
 } from '../types'
 
-const { Text } = Typography
-
 const GatewayPoliciesSection = lazy(() =>
   import('./policies').then((module) => ({ default: module.GatewayPoliciesSection })),
 )
 const GatewayApprovalsSection = lazy(() =>
   import('./approvals').then((module) => ({ default: module.GatewayApprovalsSection })),
 )
-
-function formatDateTime(value?: string) {
-  if (!value) return '-'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date)
-}
-
-function compactList(values?: string[], max = 3) {
-  const items = values?.filter(Boolean) ?? []
-  if (!items.length) return <Text type="secondary">-</Text>
-  return (
-    <Space size={[4, 4]} wrap>
-      {items.slice(0, max).map((item) => (
-        <Tag key={item}>{item}</Tag>
-      ))}
-      {items.length > max ? <Tag>+{items.length - max}</Tag> : null}
-    </Space>
-  )
-}
 
 export interface GatewayGovernanceSectionProps {
   activeTab: GatewayTabKey

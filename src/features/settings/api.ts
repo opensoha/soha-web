@@ -6,14 +6,11 @@ import type {
   AISkillSetting,
   AIWorkbenchModelSettings,
   AnalysisProfile,
-  AutomationPolicy,
   DataSource,
 } from './ai-settings-model'
 import type {
   DataSourceCapability,
   IdentitySettingsResponse,
-  MonitoringSettingsResponse,
-  PrometheusSettings,
   SaveIdentitySettingsInput,
 } from './types'
 
@@ -39,11 +36,6 @@ export const settingsApi = {
     save: (input: SaveIdentitySettingsInput) =>
       api.put<void>('/settings/identity/providers', input.values),
   },
-  monitoring: {
-    get: () => unwrap(api.get<ApiResponse<MonitoringSettingsResponse>>('/settings/monitoring')),
-    savePrometheus: (values: PrometheusSettings) =>
-      api.put<void>('/settings/monitoring/prometheus', values),
-  },
   ai: {
     get: () => unwrap(api.get<ApiResponse<AISettings>>('/settings/ai')),
     modelRoutes: () =>
@@ -55,8 +47,6 @@ export const settingsApi = {
     dataSources: () => unwrap(api.get<ApiResponse<DataSource[]>>('/copilot/data-sources')),
     analysisProfiles: () =>
       unwrap(api.get<ApiResponse<AnalysisProfile[]>>('/copilot/analysis-profiles')),
-    automationPolicies: () =>
-      unwrap(api.get<ApiResponse<AutomationPolicy[]>>('/copilot/automation-policies')),
     dataSourceCapabilities: () =>
       unwrap(api.get<ApiResponse<DataSourceCapability[]>>('/copilot/data-source-capabilities')),
     workbenchCatalog: () =>
@@ -80,9 +70,5 @@ export const settingsApi = {
       id
         ? api.put<void>(`/copilot/analysis-profiles/${encodeURIComponent(id)}`, values)
         : api.post<void>('/copilot/analysis-profiles', values),
-    upsertAutomationPolicy: ({ id, values }: UpsertSettingsRecordInput) =>
-      id
-        ? api.put<void>(`/copilot/automation-policies/${encodeURIComponent(id)}`, values)
-        : api.post<void>('/copilot/automation-policies', values),
   },
 }

@@ -1,10 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { validateRouteDefinitions } from '@/routes/definitions'
-import {
-  copilotObserveCompatibilityRoutes,
-  copilotObserveRouteManifests,
-  copilotObserveRoutes,
-} from './routes'
+import { copilotObserveRouteManifests, copilotObserveRoutes } from './routes'
 
 const routePages = vi.hoisted(() => ({
   chat: () => null,
@@ -25,12 +21,6 @@ const routePages = vi.hoisted(() => ({
   evaluationLifecycle: () => null,
   memory: () => null,
   productionOperations: () => null,
-  overviewRedirect: () => null,
-  modeRedirect: () => null,
-  operationsRedirect: () => null,
-  toolsRedirect: () => null,
-  rootCauseRedirect: () => null,
-  performanceRedirect: () => null,
 }))
 
 vi.mock('../workbench/pages/chat-page', () => ({ AIWorkbenchChatPage: routePages.chat }))
@@ -57,23 +47,14 @@ vi.mock('../provider-fleet/page', () => ({ ProviderFleetPage: routePages.provide
 vi.mock('../evaluation-lifecycle/page', () => ({ EvaluationLifecyclePage: routePages.evaluationLifecycle }))
 vi.mock('../memory/page', () => ({ MemoryPoliciesPage: routePages.memory }))
 vi.mock('../production-operations/page', () => ({ AIProductionOperationsPage: routePages.productionOperations }))
-vi.mock('./redirects', () => ({
-  AIWorkbenchOverviewRedirect: routePages.overviewRedirect,
-  AIWorkbenchModeRedirect: routePages.modeRedirect,
-  AIWorkbenchOperationsRedirect: routePages.operationsRedirect,
-  AIWorkbenchToolsRedirect: routePages.toolsRedirect,
-  AIWorkbenchRootCauseRedirect: routePages.rootCauseRedirect,
-  AIWorkbenchPerformanceRedirect: routePages.performanceRedirect,
-}))
-
 describe('Copilot Observe route manifests', () => {
   it('loads each canonical UI from its leaf module', async () => {
     const loaded = new Map<string, unknown>()
     for (const route of copilotObserveRoutes) {
-      loaded.set(route.meta.path, (await route.load()).default)
+      if ('load' in route) loaded.set(route.meta.path, (await route.load()).default)
     }
 
-    expect(loaded.get('/ai-workbench')).toBe(routePages.overviewRedirect)
+    expect(copilotObserveRoutes[0].redirectTo).toBe('/ai-workbench/overview')
     expect(loaded.get('/ai-workbench/overview')).toBe(routePages.overview)
     expect(loaded.get('/ai-workbench/knowledge')).toBe(routePages.knowledge)
     expect(loaded.get('/ai-workbench/context')).toBe(routePages.context)
@@ -94,22 +75,9 @@ describe('Copilot Observe route manifests', () => {
     expect(loaded.get('/ai-workbench/model-settings')).toBe(routePages.modelSettings)
   })
 
-  it('preserves compatibility URLs as loader-backed redirects', async () => {
-    const loaded = new Map<string, unknown>()
-    for (const route of copilotObserveCompatibilityRoutes) {
-      loaded.set(route.meta.path, (await route.load()).default)
-    }
-
-    expect(loaded.get('/ai-workbench/automation')).toBe(routePages.operationsRedirect)
-    expect(loaded.get('/ai-workbench/tools')).toBe(routePages.toolsRedirect)
-    expect(loaded.get('/ai-observe/root-cause')).toBe(routePages.rootCauseRedirect)
-    expect(loaded.get('/ai-observe/performance')).toBe(routePages.performanceRedirect)
-    expect(loaded.get('/chat')).toBe(routePages.modeRedirect)
-  })
-
   it('has unique, valid route definitions', () => {
     const routes = copilotObserveRouteManifests.flatMap((manifest) => [...manifest])
-    expect(routes).toHaveLength(31)
+    expect(routes).toHaveLength(19)
     expect(validateRouteDefinitions(routes)).toEqual([])
   })
 })

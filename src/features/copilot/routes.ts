@@ -4,55 +4,6 @@ import { copilotObserveRouteManifests } from './observe/routes'
 export const copilotGatewayRoutes = defineRoutes([
   {
     meta: {
-      id: 'ai-gateway',
-      path: '/ai-gateway',
-      title: 'AI Gateway',
-      description: 'AI 工作台中的模型接入与治理能力',
-      icon: 'IconShield',
-      group: 'ai-gateway',
-      workbenchId: 'ai',
-      requiresAuth: true,
-      tabbar: false,
-      navVisible: true,
-      redirectTo: '/ai-workbench/overview',
-      menuId: 'ai-gateway',
-      permissionStrategy: 'any-child',
-      scopeMode: 'passive',
-      workspace: 'resource',
-    },
-    shell: 'app',
-    permissionExemptReason: 'Redirect-only route; child routes enforce Gateway permissions.',
-    load: async () => {
-      const module = await import('./gateway/redirects')
-      return { default: module.AIGatewayRedirectPage }
-    },
-  },
-  {
-    meta: {
-      id: 'ai-gateway-overview',
-      path: '/ai-gateway/overview',
-      title: '概览',
-      description: 'AI Gateway 能力、身份与治理摘要',
-      icon: 'IconShield',
-      group: 'ai-gateway',
-      workbenchId: 'ai',
-      requiresAuth: true,
-      tabbar: false,
-      navVisible: false,
-      redirectTo: '/ai-workbench/overview',
-      parentId: 'ai-gateway',
-      menuId: 'ai-gateway-overview',
-      permissionKey: 'ai.gateway.view',
-      scopeMode: 'passive',
-    },
-    shell: 'app',
-    load: async () => {
-      const module = await import('./gateway/redirects')
-      return { default: module.AIGatewayOverviewRedirectPage }
-    },
-  },
-  {
-    meta: {
       id: 'ai-gateway-relay',
       path: '/ai-gateway/relay',
       title: '模型中转',
@@ -63,7 +14,7 @@ export const copilotGatewayRoutes = defineRoutes([
       requiresAuth: true,
       tabbar: true,
       navVisible: true,
-      parentId: 'ai-gateway',
+      parentId: 'ai-workbench',
       menuId: 'ai-gateway-relay',
       permissionKeysAny: ['ai.gateway.relay.view', 'ai.gateway.relay.manage'],
       scopeMode: 'passive',
@@ -72,54 +23,6 @@ export const copilotGatewayRoutes = defineRoutes([
     load: async () => {
       const module = await import('./gateway/pages/relay-page')
       return { default: module.AIGatewayRelayPage }
-    },
-  },
-  {
-    meta: {
-      id: 'ai-gateway-upstreams',
-      path: '/ai-gateway/upstreams',
-      title: '上游管理',
-      description: '模型中转上游管理入口',
-      icon: 'IconLink',
-      group: 'ai-gateway',
-      workbenchId: 'ai',
-      requiresAuth: true,
-      tabbar: false,
-      navVisible: false,
-      redirectTo: '/ai-gateway/relay?tab=upstreams',
-      parentId: 'ai-gateway-relay',
-      menuId: 'ai-gateway-relay',
-      permissionKey: 'ai.gateway.relay.manage',
-      scopeMode: 'passive',
-    },
-    shell: 'app',
-    load: async () => {
-      const module = await import('./gateway/redirects')
-      return { default: module.AIGatewayUpstreamsRedirectPage }
-    },
-  },
-  {
-    meta: {
-      id: 'ai-gateway-model-routes',
-      path: '/ai-gateway/model-routes',
-      title: '模型路由',
-      description: '模型中转路由管理入口',
-      icon: 'IconLink',
-      group: 'ai-gateway',
-      workbenchId: 'ai',
-      requiresAuth: true,
-      tabbar: false,
-      navVisible: false,
-      redirectTo: '/ai-gateway/relay?tab=model-routes',
-      parentId: 'ai-gateway-relay',
-      menuId: 'ai-gateway-relay',
-      permissionKey: 'ai.gateway.relay.manage',
-      scopeMode: 'passive',
-    },
-    shell: 'app',
-    load: async () => {
-      const module = await import('./gateway/redirects')
-      return { default: module.AIGatewayModelRoutesRedirectPage }
     },
   },
   {
@@ -134,7 +37,7 @@ export const copilotGatewayRoutes = defineRoutes([
       requiresAuth: true,
       tabbar: true,
       navVisible: true,
-      parentId: 'ai-gateway',
+      parentId: 'ai-workbench',
       menuId: 'ai-gateway-manifest',
       permissionKey: 'ai.gateway.view',
       scopeMode: 'passive',
@@ -157,7 +60,7 @@ export const copilotGatewayRoutes = defineRoutes([
       requiresAuth: true,
       tabbar: true,
       navVisible: true,
-      parentId: 'ai-gateway',
+      parentId: 'ai-workbench',
       menuId: 'ai-gateway-clients',
       permissionKey: 'ai.gateway.manage',
       scopeMode: 'passive',
@@ -180,7 +83,7 @@ export const copilotGatewayRoutes = defineRoutes([
       requiresAuth: true,
       tabbar: true,
       navVisible: true,
-      parentId: 'ai-gateway',
+      parentId: 'ai-workbench',
       menuId: 'ai-gateway-tokens',
       permissionKeysAny: ['ai.gateway.view', 'ai.gateway.invoke', 'ai.gateway.manage'],
       scopeMode: 'passive',
@@ -203,7 +106,7 @@ export const copilotGatewayRoutes = defineRoutes([
       requiresAuth: true,
       tabbar: true,
       navVisible: true,
-      parentId: 'ai-gateway',
+      parentId: 'ai-workbench',
       menuId: 'ai-gateway-governance',
       permissionKey: 'ai.gateway.manage',
       scopeMode: 'passive',
@@ -226,7 +129,7 @@ export const copilotGatewayRoutes = defineRoutes([
       requiresAuth: true,
       tabbar: true,
       navVisible: true,
-      parentId: 'ai-gateway',
+      parentId: 'ai-workbench',
       menuId: 'ai-gateway-call-logs',
       permissionKey: 'ai.gateway.manage',
       scopeMode: 'passive',
@@ -235,47 +138,6 @@ export const copilotGatewayRoutes = defineRoutes([
     load: async () => {
       const module = await import('./gateway/pages/call-logs-page')
       return { default: module.AIGatewayCallLogsPage }
-    },
-  },
-  {
-    meta: {
-      id: 'ai-workbench-gateway-compat',
-      path: '/ai-workbench/gateway',
-      title: 'AI Gateway',
-      description: '兼容旧入口，跳转到 AI 工作台的模型与接入能力',
-      icon: 'IconShield',
-      group: 'ai-gateway',
-      workbenchId: 'ai',
-      requiresAuth: true,
-      tabbar: false,
-      navVisible: false,
-      redirectTo: '/ai-workbench/overview',
-      menuId: 'ai-gateway',
-      permissionKeysAny: ['ai.gateway.view', 'ai.gateway.invoke', 'ai.gateway.manage'],
-      scopeMode: 'passive',
-      workspace: 'resource',
-    },
-    shell: 'app',
-    load: async () => {
-      const module = await import('./gateway/redirects')
-      return { default: module.AIGatewayRedirectPage }
-    },
-  },
-  {
-    meta: {
-      id: 'ai-gateway-wildcard',
-      path: '/ai-gateway/*',
-      title: 'AI Gateway',
-      description: 'AI Gateway 未知入口回退',
-      requiresAuth: true,
-      navVisible: false,
-    },
-    shell: 'app',
-    wildcard: true,
-    inheritMetaFrom: 'ai-gateway',
-    load: async () => {
-      const module = await import('./gateway/redirects')
-      return { default: module.AIGatewayWildcardRedirectPage }
     },
   },
 ] as const)

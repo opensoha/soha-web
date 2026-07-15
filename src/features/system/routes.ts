@@ -146,27 +146,6 @@ export const systemRoutes = defineRoutes([
   },
   {
     meta: {
-      id: 'identity-sessions',
-      path: '/identity/sessions',
-      title: 'Sessions',
-      description: '身份会话管理',
-      icon: 'IconUser',
-      group: 'identity',
-      workbenchId: 'settings',
-      requiresAuth: true,
-      tabbar: true,
-      navVisible: true,
-      parentId: 'identity',
-      menuId: 'identity-sessions',
-      permissionKey: 'identity.sessions.view',
-      scopeMode: 'passive',
-      workspace: 'system',
-    },
-    shell: 'app',
-    load: loadSessionsPage,
-  },
-  {
-    meta: {
       id: 'identity-audit',
       path: '/identity/audit',
       title: 'Audit',
