@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   App,
   Button,
-  Drawer,
   Form,
   Input,
   InputNumber,
@@ -14,13 +13,13 @@ import {
   Tag,
   Tooltip,
 } from 'antd'
-import type { DrawerProps } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type { ComponentProps } from 'react'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { hasAllowedAction } from '@/features/auth'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { AdminTable } from '@/components/admin-table'
+import { StepFormModal } from '@/components/step-form-modal'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementIconButton,
@@ -47,8 +46,6 @@ import type {
   VirtualizationFlavor,
   VirtualizationFlavorInput,
 } from '@/features/virtualization/virtualization-types'
-
-const stableDrawerMotion = null as unknown as DrawerProps['motion']
 
 const tableEllipsis = { showTitle: false } as const
 
@@ -89,6 +86,7 @@ function VirtualizationAdminTable({
 export function VirtualizationFlavorsPage() {
   const [editing, setEditing] = useState<VirtualizationFlavor | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [currentStep, setCurrentStep] = useState(0)
   const [flavorFilters, setFlavorFilters] = useState<{ enabled?: EnabledFilter; search?: string }>({
     enabled: 'all',
   })
@@ -133,6 +131,8 @@ export function VirtualizationFlavorsPage() {
   const savePending = createMutation.isPending || updateMutation.isPending
   function openEditor(record?: VirtualizationFlavor) {
     setEditing(record ?? null)
+    setCurrentStep(0)
+    form.resetFields()
     form.setFieldsValue(record ?? { enabled: true })
     setDrawerOpen(true)
   }
@@ -243,51 +243,60 @@ export function VirtualizationFlavorsPage() {
         />
       }
       afterTable={
-        <Drawer
+        <StepFormModal
           title={editing ? '编辑规格' : '新增规格'}
-          size="large"
-          motion={stableDrawerMotion}
+          current={currentStep}
+          form={form}
+          loading={savePending}
           open={drawerOpen}
           onClose={() => setDrawerOpen(false)}
-        >
-          <Form
-            form={form}
-            layout="vertical"
-            initialValues={{ cpu: 2, memoryMiB: 4096, diskGiB: 40, enabled: true }}
-            onFinish={(values) =>
-              editing
-                ? updateMutation.mutate({ id: editing.id, payload: values })
-                : createMutation.mutate(values)
-            }
-          >
-            <Form.Item name="name" label="名称" rules={[{ required: true }]}>
-              <Input />
-            </Form.Item>
-            <div className="grid gap-3 md:grid-cols-3">
-              <Form.Item name="cpu" label="CPU" rules={[{ required: true }]}>
-                <InputNumber min={1} className="w-full" />
-              </Form.Item>
-              <Form.Item name="memoryMiB" label="内存 MiB" rules={[{ required: true }]}>
-                <InputNumber min={128} className="w-full" />
-              </Form.Item>
-              <Form.Item name="diskGiB" label="磁盘 GiB" rules={[{ required: true }]}>
-                <InputNumber min={1} className="w-full" />
-              </Form.Item>
-            </div>
-            <Form.Item name="description" label="描述">
-              <Input.TextArea rows={3} />
-            </Form.Item>
-            <Form.Item name="enabled" label="启用" valuePropName="checked">
-              <Switch />
-            </Form.Item>
-            <Space>
-              <Button type="primary" htmlType="submit" loading={savePending}>
-                保存
-              </Button>
-              <Button onClick={() => setDrawerOpen(false)}>取消</Button>
-            </Space>
-          </Form>
-        </Drawer>
+          onCurrentChange={setCurrentStep}
+          onFinish={(values) =>
+            editing
+              ? updateMutation.mutate({ id: editing.id, payload: values })
+              : createMutation.mutate(values)
+          }
+          initialValues={{ cpu: 2, memoryMiB: 4096, diskGiB: 40, enabled: true }}
+          steps={[
+            {
+              title: '基本信息',
+              fieldNames: ['name'],
+              children: (
+                <>
+                  <Form.Item name="name" label="名称" rules={[{ required: true }]}>
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name="enabled" label="启用" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                </>
+              ),
+            },
+            {
+              title: '资源规格',
+              fieldNames: ['cpu', 'memoryMiB', 'diskGiB'],
+              children: (
+                <>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <Form.Item name="cpu" label="CPU" rules={[{ required: true }]}>
+                      <InputNumber min={1} className="w-full" />
+                    </Form.Item>
+                    <Form.Item name="memoryMiB" label="内存 MiB" rules={[{ required: true }]}>
+                      <InputNumber min={128} className="w-full" />
+                    </Form.Item>
+                    <Form.Item name="diskGiB" label="磁盘 GiB" rules={[{ required: true }]}>
+                      <InputNumber min={1} className="w-full" />
+                    </Form.Item>
+                  </div>
+                  <Form.Item name="description" label="描述">
+                    <Input.TextArea rows={3} />
+                  </Form.Item>
+                </>
+              ),
+            },
+          ]}
+          submitText="保存"
+        />
       }
     />
   )

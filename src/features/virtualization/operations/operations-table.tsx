@@ -319,7 +319,7 @@ export function OperationsTable({
                 icon={<FileTextOutlined />}
                 onClick={() =>
                   navigate(
-                    `/virtualization/vms/${encodeURIComponent(record.vmId || '')}?focus=operations`,
+                    `/compute/virtualization/vms/${encodeURIComponent(record.vmId || '')}?focus=operations`,
                   )
                 }
               />

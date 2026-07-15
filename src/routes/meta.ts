@@ -1,5 +1,5 @@
 import { getMenuSectionOrder, normalizeMenuSection } from '@/features/system/menu-schema'
-import { routeMeta } from './registry'
+import { registeredRouteDefinitions, routeMeta } from './registry'
 import type {
   BusinessWorkspaceType,
   PermissionSnapshot,
@@ -40,8 +40,7 @@ const APPLICATION_PATH_PREFIXES = [
 
 const WORKBENCH_DEFAULT_PATHS = {
   platform: '/',
-  virtualization: '/virtualization',
-  docker: '/docker',
+  compute: '/compute',
   delivery: '/applications',
   ai: '/ai-workbench',
   aiGateway: '/ai-gateway/overview',
@@ -96,17 +95,24 @@ function matchesRoutePrefix(pathname: string, prefixes: string[]) {
 export { routeMeta } from './registry'
 
 export function getRouteMeta(pathname: string): RouteMeta {
-  const candidates = [...routeMeta].sort((a, b) => b.path.length - a.path.length)
+  const candidates = registeredRouteDefinitions
+    .flatMap((definition) =>
+      [definition.meta.path, ...(definition.aliases ?? [])].map((path) => ({
+        meta: definition.meta,
+        path,
+      })),
+    )
+    .sort((a, b) => b.path.length - a.path.length)
   return (
-    candidates.find((r) => {
-      if (r.path === '/') return pathname === '/'
-      const routeSegments = r.path.split('/').filter(Boolean)
+    candidates.find((candidate) => {
+      if (candidate.path === '/') return pathname === '/'
+      const routeSegments = candidate.path.split('/').filter(Boolean)
       const pathSegments = pathname.split('/').filter(Boolean)
       if (routeSegments.length > pathSegments.length) return false
       return routeSegments.every(
         (segment, index) => segment.startsWith(':') || segment === pathSegments[index],
       )
-    }) ?? routeMeta[0]
+    })?.meta ?? routeMeta[0]
   )
 }
 
@@ -182,11 +188,8 @@ function deriveWorkbenchIdFromPath(pathname: string): WorkbenchId | null {
   if (matchesRoutePrefix(pathname, APPLICATION_PATH_PREFIXES)) {
     return 'delivery'
   }
-  if (pathname.startsWith('/virtualization')) {
-    return 'virtualization'
-  }
-  if (pathname.startsWith('/docker')) {
-    return 'docker'
+  if (pathname.startsWith('/compute')) {
+    return 'compute'
   }
   if (pathname.startsWith('/ai-gateway')) {
     return 'aiGateway'
@@ -313,6 +316,7 @@ export function getRouteScopeMode(route: RouteMeta): NonNullable<RouteMeta['scop
     pathname.startsWith('/registries') ||
     pathname.startsWith('/monitoring-workbench') ||
     pathname.startsWith('/observability') ||
+    pathname.startsWith('/compute') ||
     pathname.startsWith('/virtualization') ||
     pathname.startsWith('/docker') ||
     pathname.startsWith('/plugins') ||
@@ -491,11 +495,15 @@ function sortRuntimeMenuTree(items: RuntimeMenuNode[]): RuntimeMenuNode[] {
       if (left.sortOrder !== right.sortOrder) return left.sortOrder - right.sortOrder
       return left.path.localeCompare(right.path)
     })
-    .map((item): RuntimeMenuNode => ({
-      ...item,
-      children:
-        item.children && item.children.length > 0 ? sortRuntimeMenuTree(item.children) : undefined,
-    }))
+    .map(
+      (item): RuntimeMenuNode => ({
+        ...item,
+        children:
+          item.children && item.children.length > 0
+            ? sortRuntimeMenuTree(item.children)
+            : undefined,
+      }),
+    )
 }
 
 const APPLICATION_SECTION_ORDER: Record<string, number> = {
@@ -705,10 +713,9 @@ export function filterSidebarNavByWorkbench(
 
   const flattenedWorkbenchRootIds: Partial<Record<WorkbenchId, string>> = {
     aiGateway: 'ai-gateway',
-    docker: 'docker-workbench',
+    compute: 'compute-workbench',
     monitoring: 'monitoring-workbench',
     settings: 'settings',
-    virtualization: 'virtualization-workbench',
   }
   const flattenedRootIds = [
     flattenedWorkbenchRootIds[workbenchId],

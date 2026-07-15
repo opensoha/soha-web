@@ -1226,8 +1226,8 @@ describe('app layout workspace navigation', () => {
     expect(container.textContent).not.toContain('系统管理')
   })
 
-  it('shows virtualization workbench menus directly in the business sidebar', async () => {
-    const container = await renderWithProviders('/virtualization/vms', {
+  it('normalizes legacy virtualization menus inside the compute workbench', async () => {
+    const container = await renderWithProviders('/compute/virtualization/vms', {
       permissionKeys: [
         'workspace.resource.view',
         'overview.view',
@@ -1361,24 +1361,28 @@ describe('app layout workspace navigation', () => {
     })
 
     expect(container.querySelector('.soha-workbench-switcher__label')?.textContent).toBe(
-      '虚拟化管理工作台',
+      '计算资源工作台',
     )
     expect(container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent).toContain(
-      '虚拟化管理工作台/虚拟机',
+      '计算资源工作台/虚拟化/虚拟机',
     )
     expect(container.querySelector('.soha-nav-business')).not.toBeNull()
     expect(container.textContent).toContain('虚拟机')
-    expect(container.textContent).toContain('操作记录')
-    expect(container.textContent).toContain('同步任务')
     const businessNavText = container.querySelector('.soha-nav-business')?.textContent ?? ''
-    expect(businessNavText.match(/虚拟化/g) ?? []).toHaveLength(0)
+    expect(businessNavText).toContain('虚拟化')
+    expect(container.querySelector('.soha-nav-business .ant-menu-submenu')).toBeNull()
+    expect(
+      container.querySelector('.soha-nav-business .ant-menu-item-group-title')?.textContent,
+    ).toBe('虚拟化')
+    expect(businessNavText).not.toContain('操作记录')
+    expect(businessNavText).not.toContain('同步任务')
     expect(businessNavText).not.toContain('Observe')
     expect(container.textContent).not.toContain('监控工作台')
     expect(container.textContent).not.toContain('系统管理')
   })
 
   it('does not repeat flattened workbench root menu in breadcrumbs', async () => {
-    const container = await renderWithProviders('/virtualization/overview', {
+    const container = await renderWithProviders('/compute/overview', {
       permissionKeys: [
         'workspace.resource.view',
         'overview.view',
@@ -1463,12 +1467,12 @@ describe('app layout workspace navigation', () => {
 
     const breadcrumbText =
       container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent ?? ''
-    expect(breadcrumbText).toContain('虚拟化管理工作台/总览')
-    expect(breadcrumbText.match(/虚拟化管理工作台/g) ?? []).toHaveLength(1)
+    expect(breadcrumbText).toContain('计算资源工作台/总览')
+    expect(breadcrumbText.match(/计算资源工作台/g) ?? []).toHaveLength(1)
   })
 
   it('renders breadcrumb ancestry for nested route content', async () => {
-    const container = await renderWithProviders('/virtualization/vms/vm-1', {
+    const container = await renderWithProviders('/compute/virtualization/vms/vm-1', {
       permissionKeys: [
         'workspace.resource.view',
         'overview.view',
@@ -1552,12 +1556,12 @@ describe('app layout workspace navigation', () => {
     })
 
     expect(container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent).toContain(
-      '虚拟化管理工作台/虚拟机/虚拟机详情',
+      '虚拟化/虚拟机/虚拟机详情',
     )
   })
 
-  it('shows docker workbench menus directly in the business sidebar', async () => {
-    const container = await renderWithProviders('/docker/projects', {
+  it('normalizes legacy Docker menus inside the compute workbench', async () => {
+    const container = await renderWithProviders('/compute/runtimes/projects', {
       permissionKeys: [
         'workspace.resource.view',
         'overview.view',
@@ -1667,14 +1671,18 @@ describe('app layout workspace navigation', () => {
     })
 
     expect(container.querySelector('.soha-workbench-switcher__label')?.textContent).toBe(
-      'Docker 工作台',
+      '计算资源工作台',
     )
     expect(container.querySelector('.soha-nav-business')).not.toBeNull()
-    expect(container.textContent).toContain('Docker 主机')
+    expect(container.textContent).toContain('运行时主机')
     expect(container.textContent).toContain('容器管理')
-    expect(container.textContent).toContain('操作记录')
     const businessNavText = container.querySelector('.soha-nav-business')?.textContent ?? ''
-    expect(businessNavText.match(/Docker 工作台/g) ?? []).toHaveLength(0)
+    expect(businessNavText).toContain('容器运行时')
+    expect(container.querySelector('.soha-nav-business .ant-menu-submenu')).toBeNull()
+    expect(
+      container.querySelector('.soha-nav-business .ant-menu-item-group-title')?.textContent,
+    ).toBe('容器运行时')
+    expect(businessNavText).not.toContain('操作记录')
     expect(container.textContent).not.toContain('系统管理')
   })
 

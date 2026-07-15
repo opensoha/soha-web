@@ -130,7 +130,7 @@ export function VirtualizationVmDetailPage() {
   const isRunning =
     !isStaleVirtualMachine(vm) && (vm?.powerState === 'running' || vm?.status === 'running')
   useAIPageContext({
-    sourceWorkbench: 'virtualization',
+    sourceWorkbench: 'compute',
     sourceTitle: vm?.name ? `虚拟机 ${vm.name}` : '虚拟机详情',
     entityKind: 'virtualization.vm',
     entityName: vm?.name ?? vmId,
@@ -174,7 +174,7 @@ export function VirtualizationVmDetailPage() {
           </>
         }
         actions={
-          <Link to="/virtualization/vms">
+          <Link to="/compute/virtualization/vms">
             <Button>返回列表</Button>
           </Link>
         }

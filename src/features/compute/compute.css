@@ -1,0 +1,50 @@
+.soha-compute-page {
+  display: grid;
+  gap: 16px;
+}
+
+.soha-compute-view-tabs.ant-tabs > .ant-tabs-nav {
+  margin: 0;
+}
+
+.soha-compute-view-tabs.ant-tabs > .ant-tabs-nav::before {
+  border-color: var(--soha-border-color);
+}
+
+.soha-compute-view-tabs .ant-tabs-tab {
+  padding-block: 8px;
+}
+
+.soha-compute-view-tabs .ant-tabs-tab-btn {
+  font-size: 13px;
+}
+
+.soha-compute-view-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
+  font-weight: 600;
+}
+
+.soha-compute-view-tabs > .ant-tabs-content-holder {
+  display: none;
+}
+
+.soha-compute-chip-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.soha-compute-attention-row.is-critical {
+  border-inline-start: 3px solid var(--soha-danger);
+}
+
+.soha-compute-attention-row.is-warning {
+  border-inline-start: 3px solid var(--soha-warning);
+}
+
+.soha-compute-attention-row.is-info {
+  border-inline-start: 3px solid var(--soha-primary);
+}
+
+@media (max-width: 768px) {
+  .soha-compute-overview-page .soha-overview-panel-card .ant-card-extra {
+    margin-inline-end: 44px;
+  }
+}

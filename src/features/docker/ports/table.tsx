@@ -2,7 +2,6 @@ import { useState } from 'react'
 import {
   App,
   Button,
-  Drawer,
   Form,
   Input,
   InputNumber,
@@ -23,12 +22,12 @@ import {
   ManagementQueryField,
   ManagementQueryPanel,
 } from '@/components/management-list'
+import { StepFormModal } from '@/components/step-form-modal'
 import { dockerApi } from '../docker-api'
 import { dockerQueries } from '../queries'
 import type { DockerPortMapping, DockerPortMappingInput } from '../docker-types'
 import {
   DockerAdminTable,
-  DrawerFooter,
   compactRecord,
   formatAccessURL,
   formatPort,
@@ -75,6 +74,7 @@ export function PortsTable({
   const [filterForm] = Form.useForm<DockerFilterState>()
   const [form] = Form.useForm<DockerPortFormValues>()
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [currentStep, setCurrentStep] = useState(0)
   const [editing, setEditing] = useState<DockerPortMapping | null>(null)
   const { dockerModuleEnabled, canManagePorts } = useDockerPermissions()
   const { hostOptions, projectOptions, serviceOptions } = useDockerOptions()
@@ -181,6 +181,7 @@ export function PortsTable({
               onClick={() => {
                 setEditing(record)
                 form.setFieldsValue(record)
+                setCurrentStep(0)
                 setDrawerOpen(true)
               }}
             />
@@ -289,6 +290,7 @@ export function PortsTable({
                     domainScheme: 'http',
                     domainTlsEnabled: false,
                   })
+                  setCurrentStep(0)
                   setDrawerOpen(true)
                 }}
               >
@@ -303,107 +305,119 @@ export function PortsTable({
         showRefresh={!embedded}
         onRefresh={() => portsQuery.refetch()}
       />
-      <Drawer
+      <StepFormModal
         title={editing ? '编辑端口映射' : '新增端口映射'}
-        size="large"
+        current={currentStep}
+        form={form}
+        loading={saveMutation.isPending}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        extra={
-          <DrawerFooter
-            form={form}
-            loading={saveMutation.isPending}
-            onCancel={() => setDrawerOpen(false)}
-          />
-        }
-      >
-        <Form form={form} layout="vertical" onFinish={(values) => saveMutation.mutate(values)}>
-          <Form.Item name="name" label="名称" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <div className="grid gap-3 md:grid-cols-2">
-            <Form.Item
-              name="hostId"
-              label="Docker 主机"
-              rules={[{ required: true }]}
-              hidden={Boolean(fixedHostId)}
-            >
-              <Select showSearch={{ optionFilterProp: 'label' }} options={hostOptions} />
-            </Form.Item>
-            <Form.Item name="hostIp" label="监听 IP">
-              <Input placeholder="0.0.0.0" />
-            </Form.Item>
-            <Form.Item name="hostPort" label="主机端口" rules={[{ required: true }]}>
-              <InputNumber min={1} max={65535} className="w-full" />
-            </Form.Item>
-            <Form.Item name="containerPort" label="容器端口" rules={[{ required: true }]}>
-              <InputNumber min={1} max={65535} className="w-full" />
-            </Form.Item>
-            <Form.Item name="protocol" label="协议">
-              <Select
-                options={[
-                  { value: 'tcp', label: 'tcp' },
-                  { value: 'udp', label: 'udp' },
-                ]}
-              />
-            </Form.Item>
-            <Form.Item name="exposureScope" label="暴露范围">
-              <Select
-                options={['internal', 'vpn', 'public'].map((item) => ({
-                  value: item,
-                  label: item,
-                }))}
-              />
-            </Form.Item>
-            <Form.Item name="status" label="状态">
-              <Select
-                options={['active', 'reserved', 'released', 'expired'].map((item) => ({
-                  value: item,
-                  label: item,
-                }))}
-              />
-            </Form.Item>
-            <Form.Item name="owner" label="负责人">
-              <Input />
-            </Form.Item>
-            <Form.Item name="projectId" label="项目" hidden={Boolean(fixedProjectId)}>
-              <Select
-                allowClear
-                showSearch={{ optionFilterProp: 'label' }}
-                options={projectOptions}
-              />
-            </Form.Item>
-            <Form.Item name="serviceId" label="服务">
-              <Select
-                allowClear
-                showSearch={{ optionFilterProp: 'label' }}
-                options={serviceOptions}
-              />
-            </Form.Item>
-          </div>
-          <div className="grid gap-3 md:grid-cols-[1fr_160px_120px]">
-            <Form.Item name="domainName" label="访问域名">
-              <Input placeholder="preview.internal.example.com" />
-            </Form.Item>
-            <Form.Item name="domainScheme" label="域名协议">
-              <Select
-                options={[
-                  { value: 'http', label: 'http' },
-                  { value: 'https', label: 'https' },
-                ]}
-              />
-            </Form.Item>
-            <Form.Item name="domainTlsEnabled" label="TLS" valuePropName="checked">
-              <Switch />
-            </Form.Item>
-          </div>
-          <Form.Item name="accessUrl" label="访问地址">
-            <Input placeholder="http://10.0.0.10:8080" />
-          </Form.Item>
-          <Form.Item name="expiresAt" label="到期时间">
-            <Input placeholder="2026-06-01T10:00:00Z" />
-          </Form.Item>
-        </Form>
-      </Drawer>
+        onCurrentChange={setCurrentStep}
+        onFinish={(values) => saveMutation.mutate(values)}
+        steps={[
+          {
+            title: '端口配置',
+            fieldNames: ['name', 'hostId', 'hostPort', 'containerPort'],
+            children: (
+              <>
+                <Form.Item name="name" label="名称" rules={[{ required: true }]}>
+                  <Input />
+                </Form.Item>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Form.Item
+                    name="hostId"
+                    label="Docker 主机"
+                    rules={[{ required: true }]}
+                    hidden={Boolean(fixedHostId)}
+                  >
+                    <Select showSearch={{ optionFilterProp: 'label' }} options={hostOptions} />
+                  </Form.Item>
+                  <Form.Item name="hostIp" label="监听 IP">
+                    <Input placeholder="0.0.0.0" />
+                  </Form.Item>
+                  <Form.Item name="hostPort" label="主机端口" rules={[{ required: true }]}>
+                    <InputNumber min={1} max={65535} className="w-full" />
+                  </Form.Item>
+                  <Form.Item name="containerPort" label="容器端口" rules={[{ required: true }]}>
+                    <InputNumber min={1} max={65535} className="w-full" />
+                  </Form.Item>
+                  <Form.Item name="protocol" label="协议">
+                    <Select
+                      options={[
+                        { value: 'tcp', label: 'tcp' },
+                        { value: 'udp', label: 'udp' },
+                      ]}
+                    />
+                  </Form.Item>
+                  <Form.Item name="exposureScope" label="暴露范围">
+                    <Select
+                      options={['internal', 'vpn', 'public'].map((item) => ({
+                        value: item,
+                        label: item,
+                      }))}
+                    />
+                  </Form.Item>
+                  <Form.Item name="status" label="状态">
+                    <Select
+                      options={['active', 'reserved', 'released', 'expired'].map((item) => ({
+                        value: item,
+                        label: item,
+                      }))}
+                    />
+                  </Form.Item>
+                  <Form.Item name="owner" label="负责人">
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name="projectId" label="项目" hidden={Boolean(fixedProjectId)}>
+                    <Select
+                      allowClear
+                      showSearch={{ optionFilterProp: 'label' }}
+                      options={projectOptions}
+                    />
+                  </Form.Item>
+                  <Form.Item name="serviceId" label="服务">
+                    <Select
+                      allowClear
+                      showSearch={{ optionFilterProp: 'label' }}
+                      options={serviceOptions}
+                    />
+                  </Form.Item>
+                </div>
+              </>
+            ),
+          },
+          {
+            title: '访问配置',
+            children: (
+              <>
+                <div className="grid gap-3 md:grid-cols-[1fr_160px_120px]">
+                  <Form.Item name="domainName" label="访问域名">
+                    <Input placeholder="preview.internal.example.com" />
+                  </Form.Item>
+                  <Form.Item name="domainScheme" label="域名协议">
+                    <Select
+                      options={[
+                        { value: 'http', label: 'http' },
+                        { value: 'https', label: 'https' },
+                      ]}
+                    />
+                  </Form.Item>
+                  <Form.Item name="domainTlsEnabled" label="TLS" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                </div>
+                <Form.Item name="accessUrl" label="访问地址">
+                  <Input placeholder="http://10.0.0.10:8080" />
+                </Form.Item>
+                <Form.Item name="expiresAt" label="到期时间">
+                  <Input placeholder="2026-06-01T10:00:00Z" />
+                </Form.Item>
+              </>
+            ),
+          },
+        ]}
+        submitText="保存"
+      />
     </>
   )
 }

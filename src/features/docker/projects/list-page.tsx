@@ -2,7 +2,6 @@ import { useState } from 'react'
 import {
   App,
   Button,
-  Drawer,
   Form,
   Input,
   InputNumber,
@@ -27,13 +26,13 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import {
-  ManagementDetailHeader,
   ManagementIconButton,
   ManagementKeywordField,
   ManagementQueryActions,
   ManagementQueryField,
   ManagementQueryPanel,
 } from '@/components/management-list'
+import { StepFormModal } from '@/components/step-form-modal'
 import { formatDateTime } from '@/utils/time'
 import { dockerApi } from '../docker-api'
 import { dockerQueries } from '../queries'
@@ -43,7 +42,6 @@ import {
   DEFAULT_COMPOSE,
   DEFAULT_CONTAINER_PORTS,
   DockerAdminTable,
-  DrawerFooter,
   bytesFromMiB,
   compactRecord,
   normalizePage,
@@ -158,6 +156,8 @@ function ProjectsTable({
   const [form] = Form.useForm<DockerProjectInput>()
   const [containerForm] = Form.useForm<ContainerStartFormValues>()
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [currentStep, setCurrentStep] = useState(0)
+  const [containerStep, setContainerStep] = useState(0)
   const [containerDrawerOpen, setContainerDrawerOpen] = useState(false)
   const [editing, setEditing] = useState<DockerProject | null>(null)
   const { dockerModuleEnabled, canManageProjects, canDeployProjects, canManagePorts } =
@@ -221,7 +221,7 @@ function ProjectsTable({
       width: 210,
       render: (value, record) => (
         <Space orientation="vertical" size={0}>
-          <Link to={`/docker/projects/${record.id}`}>
+          <Link to={`/compute/runtimes/projects/${record.id}`}>
             <Text strong>{value}</Text>
           </Link>
           <Text type="secondary">{record.slug}</Text>
@@ -295,7 +295,7 @@ function ProjectsTable({
               onClick={() => deployMutation.mutate({ id: record.id, action: 'down' })}
             />
           ) : null}
-          <Link to={`/docker/projects/${record.id}`}>
+          <Link to={`/compute/runtimes/projects/${record.id}`}>
             <ManagementIconButton
               aria-label="查看容器详情"
               size="small"
@@ -312,6 +312,7 @@ function ProjectsTable({
               onClick={() => {
                 setEditing(record)
                 form.setFieldsValue(record)
+                setCurrentStep(0)
                 setDrawerOpen(true)
               }}
             />
@@ -403,6 +404,7 @@ function ProjectsTable({
                       domainTlsEnabled: false,
                       ports: DEFAULT_CONTAINER_PORTS,
                     })
+                    setContainerStep(0)
                     setContainerDrawerOpen(true)
                   }}
                 >
@@ -420,6 +422,7 @@ function ProjectsTable({
                       status: 'draft',
                       sourceKind: 'inline_compose',
                     })
+                    setCurrentStep(0)
                     setDrawerOpen(true)
                   }}
                 >
@@ -435,374 +438,399 @@ function ProjectsTable({
         showRefresh={!embedded}
         onRefresh={() => projectsQuery.refetch()}
       />
-      <Drawer
+      <StepFormModal
         title={editing ? '编辑 Compose 项目' : '创建 Compose 项目'}
-        size="large"
+        current={currentStep}
+        form={form}
+        loading={saveMutation.isPending}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        extra={
-          <DrawerFooter
-            form={form}
-            loading={saveMutation.isPending}
-            onCancel={() => setDrawerOpen(false)}
-          />
-        }
-      >
-        <Form form={form} layout="vertical" onFinish={(values) => saveMutation.mutate(values)}>
-          <Form.Item name="name" label="名称" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <div className="grid gap-3 md:grid-cols-2">
-            <Form.Item name="hostId" label="Docker 主机" rules={[{ required: true }]}>
-              <Select showSearch={{ optionFilterProp: 'label' }} options={hostOptions} />
-            </Form.Item>
-            <Form.Item name="slug" label="Slug">
-              <Input />
-            </Form.Item>
-            <Form.Item name="environment" label="环境">
-              <Input />
-            </Form.Item>
-            <Form.Item name="owner" label="负责人">
-              <Input />
-            </Form.Item>
-            <Form.Item name="team" label="团队">
-              <Input />
-            </Form.Item>
-            <Form.Item name="status" label="状态">
-              <Select
-                options={['draft', 'defined', 'running', 'stopped', 'failed'].map((item) => ({
-                  value: item,
-                  label: item,
-                }))}
-              />
-            </Form.Item>
-            <Form.Item name="desiredState" label="目标态">
-              <Select
-                allowClear
-                options={['running', 'stopped'].map((item) => ({ value: item, label: item }))}
-              />
-            </Form.Item>
-            <Form.Item name="ttlSeconds" label="TTL 秒数">
-              <InputNumber min={0} className="w-full" />
-            </Form.Item>
-            <Form.Item name="sourceKind" label="来源类型">
-              <Select
-                options={['inline_compose', 'git', 'template'].map((item) => ({
-                  value: item,
-                  label: item,
-                }))}
-              />
-            </Form.Item>
-            <Form.Item name="sourceRef" label="来源引用">
-              <Input />
-            </Form.Item>
-            <Form.Item name="templateId" label="模板 ID">
-              <Input />
-            </Form.Item>
-          </div>
-          <Form.Item name="description" label="描述">
-            <Input />
-          </Form.Item>
-          <Tabs
-            items={[
-              {
-                key: 'compose',
-                label: 'Compose',
-                children: (
-                  <Form.Item name="composeContent" rules={[{ required: true }]}>
-                    <TextArea rows={16} spellCheck={false} />
+        onCurrentChange={setCurrentStep}
+        onFinish={(values) => saveMutation.mutate(values)}
+        steps={[
+          {
+            title: '项目配置',
+            fieldNames: ['name', 'hostId'],
+            children: (
+              <>
+                <Form.Item name="name" label="名称" rules={[{ required: true }]}>
+                  <Input />
+                </Form.Item>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Form.Item name="hostId" label="Docker 主机" rules={[{ required: true }]}>
+                    <Select showSearch={{ optionFilterProp: 'label' }} options={hostOptions} />
                   </Form.Item>
-                ),
-              },
-              {
-                key: 'env',
-                label: '.env',
-                children: (
-                  <Form.Item name="envContent">
-                    <TextArea rows={12} spellCheck={false} />
+                  <Form.Item name="slug" label="Slug">
+                    <Input />
                   </Form.Item>
-                ),
-              },
-            ]}
-          />
-        </Form>
-      </Drawer>
-      <Drawer
+                  <Form.Item name="environment" label="环境">
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name="owner" label="负责人">
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name="team" label="团队">
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name="status" label="状态">
+                    <Select
+                      options={['draft', 'defined', 'running', 'stopped', 'failed'].map((item) => ({
+                        value: item,
+                        label: item,
+                      }))}
+                    />
+                  </Form.Item>
+                  <Form.Item name="desiredState" label="目标态">
+                    <Select
+                      allowClear
+                      options={['running', 'stopped'].map((item) => ({ value: item, label: item }))}
+                    />
+                  </Form.Item>
+                  <Form.Item name="ttlSeconds" label="TTL 秒数">
+                    <InputNumber min={0} className="w-full" />
+                  </Form.Item>
+                </div>
+                <Form.Item name="description" label="描述">
+                  <Input />
+                </Form.Item>
+              </>
+            ),
+          },
+          {
+            title: '部署来源',
+            fieldNames: ['sourceKind', 'composeContent'],
+            children: (
+              <>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Form.Item name="sourceKind" label="来源类型">
+                    <Select
+                      options={['inline_compose', 'git', 'template'].map((item) => ({
+                        value: item,
+                        label: item,
+                      }))}
+                    />
+                  </Form.Item>
+                  <Form.Item name="sourceRef" label="来源引用">
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name="templateId" label="模板 ID">
+                    <Input />
+                  </Form.Item>
+                </div>
+                <Tabs
+                  items={[
+                    {
+                      key: 'compose',
+                      label: 'Compose',
+                      children: (
+                        <Form.Item name="composeContent" rules={[{ required: true }]}>
+                          <TextArea rows={16} spellCheck={false} />
+                        </Form.Item>
+                      ),
+                    },
+                    {
+                      key: 'env',
+                      label: '.env',
+                      children: (
+                        <Form.Item name="envContent">
+                          <TextArea rows={12} spellCheck={false} />
+                        </Form.Item>
+                      ),
+                    },
+                  ]}
+                />
+              </>
+            ),
+          },
+        ]}
+        submitText="保存"
+        width={780}
+      />
+      <StepFormModal
         title="快速启动 Docker 应用"
-        size="large"
+        current={containerStep}
+        form={containerForm}
+        loading={containerStartMutation.isPending}
         open={containerDrawerOpen}
         onClose={() => setContainerDrawerOpen(false)}
-        extra={
-          <DrawerFooter
-            form={containerForm}
-            loading={containerStartMutation.isPending}
-            onCancel={() => setContainerDrawerOpen(false)}
-            submitLabel="启动"
-          />
-        }
-      >
-        <Form
-          form={containerForm}
-          layout="vertical"
-          onFinish={(values) => containerStartMutation.mutate(values)}
-        >
-          <Form.Item name="name" label="容器名称" rules={[{ required: true }]}>
-            <Input placeholder="preview-api" />
-          </Form.Item>
-          <div className="grid gap-3 md:grid-cols-2">
-            <Form.Item name="hostId" label="Docker 主机" rules={[{ required: true }]}>
-              <Select
-                showSearch={{ optionFilterProp: 'label' }}
-                options={hostOptions}
-                onChange={applyContainerHostDefaults}
-              />
-            </Form.Item>
-            <Form.Item name="image" label="镜像" rules={[{ required: true }]}>
-              <Input placeholder="nginx:alpine" />
-            </Form.Item>
-            <Form.Item name="architecture" label="架构">
-              <Select options={ARCHITECTURE_OPTIONS} />
-            </Form.Item>
-            <Form.Item name="restartPolicy" label="重启策略">
-              <Select
-                options={['unless-stopped', 'always', 'on-failure', 'no'].map((item) => ({
-                  value: item,
-                  label: item,
-                }))}
-              />
-            </Form.Item>
-            <Form.Item name="environment" label="环境">
-              <Input />
-            </Form.Item>
-            <Form.Item name="owner" label="负责人">
-              <Input />
-            </Form.Item>
-            <Form.Item name="team" label="团队">
-              <Input />
-            </Form.Item>
-            <Form.Item name="ttlSeconds" label="TTL 秒数">
-              <InputNumber min={0} className="w-full" />
-            </Form.Item>
-            <Form.Item name="command" label="启动命令">
-              <Input />
-            </Form.Item>
-            <Form.Item name="entrypoint" label="Entrypoint">
-              <Input />
-            </Form.Item>
-          </div>
-          <Form.List name="ports">
-            {(fields, { add, remove }) => (
-              <div className="mb-3 space-y-3">
-                {fields.map((field, index) => (
-                  <div
-                    key={field.key}
-                    className="rounded border border-[var(--soha-border-color)] p-3"
-                  >
-                    <div className="mb-2 flex items-center justify-between">
-                      <Text strong>端口 {index + 1}</Text>
-                      {fields.length > 1 ? (
-                        <Button
-                          type="text"
-                          danger
-                          icon={<MinusCircleOutlined />}
-                          onClick={() => remove(field.name)}
-                        />
-                      ) : null}
-                    </div>
-                    <div className="grid gap-3 md:grid-cols-4">
-                      <Form.Item name={[field.name, 'name']} label="名称">
-                        <Input placeholder="http" />
-                      </Form.Item>
-                      <Form.Item
-                        name={[field.name, 'containerPort']}
-                        label="容器端口"
-                        rules={[{ required: true }]}
-                      >
-                        <InputNumber min={1} max={65535} className="w-full" />
-                      </Form.Item>
-                      <Form.Item
-                        name={[field.name, 'hostPort']}
-                        label="主机端口"
-                        rules={[{ required: true }]}
-                      >
-                        <InputNumber min={1} max={65535} className="w-full" />
-                      </Form.Item>
-                      <Form.Item name={[field.name, 'hostIp']} label="监听 IP">
-                        <Input placeholder="0.0.0.0" />
-                      </Form.Item>
-                      <Form.Item name={[field.name, 'protocol']} label="协议">
-                        <Select
-                          options={[
-                            { value: 'tcp', label: 'tcp' },
-                            { value: 'udp', label: 'udp' },
-                          ]}
-                        />
-                      </Form.Item>
-                      <Form.Item name={[field.name, 'exposureScope']} label="暴露范围">
-                        <Select
-                          options={['internal', 'vpn', 'public'].map((item) => ({
-                            value: item,
-                            label: item,
-                          }))}
-                        />
-                      </Form.Item>
-                      <Form.Item name={[field.name, 'domainName']} label="访问域名">
-                        <Input placeholder="preview.internal.example.com" />
-                      </Form.Item>
-                      <Form.Item name={[field.name, 'domainScheme']} label="域名协议">
-                        <Select
-                          options={[
-                            { value: 'http', label: 'http' },
-                            { value: 'https', label: 'https' },
-                          ]}
-                        />
-                      </Form.Item>
-                      <Form.Item
-                        name={[field.name, 'domainTlsEnabled']}
-                        label="TLS"
-                        valuePropName="checked"
-                      >
-                        <Switch />
-                      </Form.Item>
-                    </div>
-                  </div>
-                ))}
-                <Button
-                  type="dashed"
-                  icon={<PlusOutlined />}
-                  onClick={() =>
-                    add({
-                      hostIp: '0.0.0.0',
-                      protocol: 'tcp',
-                      exposureScope: 'internal',
-                      domainScheme: 'http',
-                      domainTlsEnabled: false,
-                    })
-                  }
-                >
-                  添加端口
-                </Button>
-              </div>
-            )}
-          </Form.List>
-          <Form.List name="volumes">
-            {(fields, { add, remove }) => (
-              <div className="mb-3 space-y-3">
-                {fields.map((field, index) => (
-                  <div
-                    key={field.key}
-                    className="rounded border border-[var(--soha-border-color)] p-3"
-                  >
-                    <div className="mb-2 flex items-center justify-between">
-                      <Text strong>卷 {index + 1}</Text>
-                      <Button
-                        type="text"
-                        danger
-                        icon={<MinusCircleOutlined />}
-                        onClick={() => remove(field.name)}
-                      />
-                    </div>
-                    <div className="grid gap-3 md:grid-cols-4">
-                      <Form.Item name={[field.name, 'name']} label="名称">
-                        <Input placeholder="data" />
-                      </Form.Item>
-                      <Form.Item name={[field.name, 'type']} label="类型">
-                        <Select
-                          options={[
-                            { value: 'bind', label: 'bind' },
-                            { value: 'volume', label: 'volume' },
-                          ]}
-                        />
-                      </Form.Item>
-                      <Form.Item name={[field.name, 'source']} label="来源">
-                        <Input placeholder="/data/app 或 app-data" />
-                      </Form.Item>
-                      <Form.Item name={[field.name, 'target']} label="挂载路径">
-                        <Input placeholder="/var/lib/app" />
-                      </Form.Item>
-                      <Form.Item
-                        name={[field.name, 'readOnly']}
-                        label="只读"
-                        valuePropName="checked"
-                      >
-                        <Switch />
-                      </Form.Item>
-                    </div>
-                  </div>
-                ))}
-                <Button
-                  type="dashed"
-                  icon={<PlusOutlined />}
-                  onClick={() => add({ type: 'bind', readOnly: false })}
-                >
-                  添加卷
-                </Button>
-              </div>
-            )}
-          </Form.List>
-          <Form.List name="environmentVariables">
-            {(fields, { add, remove }) => (
-              <div className="mb-3 space-y-3">
-                {fields.map((field, index) => (
-                  <div
-                    key={field.key}
-                    className="grid items-start gap-3 md:grid-cols-[1fr_1fr_40px]"
-                  >
-                    <Form.Item
-                      name={[field.name, 'name']}
-                      label={index === 0 ? '变量名' : undefined}
-                    >
-                      <Input placeholder="APP_ENV" />
-                    </Form.Item>
-                    <Form.Item
-                      name={[field.name, 'value']}
-                      label={index === 0 ? '变量值' : undefined}
-                    >
-                      <Input />
-                    </Form.Item>
-                    <Button
-                      className={index === 0 ? 'mt-8' : undefined}
-                      type="text"
-                      danger
-                      icon={<MinusCircleOutlined />}
-                      onClick={() => remove(field.name)}
+        onCurrentChange={setContainerStep}
+        onFinish={(values) => containerStartMutation.mutate(values)}
+        steps={[
+          {
+            title: '容器配置',
+            fieldNames: ['name', 'hostId', 'image'],
+            children: (
+              <>
+                <Form.Item name="name" label="容器名称" rules={[{ required: true }]}>
+                  <Input placeholder="preview-api" />
+                </Form.Item>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Form.Item name="hostId" label="Docker 主机" rules={[{ required: true }]}>
+                    <Select
+                      showSearch={{ optionFilterProp: 'label' }}
+                      options={hostOptions}
+                      onChange={applyContainerHostDefaults}
                     />
-                  </div>
-                ))}
-                <Button type="dashed" icon={<PlusOutlined />} onClick={() => add({})}>
-                  添加环境变量
-                </Button>
-              </div>
-            )}
-          </Form.List>
-          <div className="grid gap-3 md:grid-cols-3">
-            <Form.Item name={['resources', 'cpus']} label="CPU 限制">
-              <InputNumber min={0} step={0.1} className="w-full" />
-            </Form.Item>
-            <Form.Item name={['resources', 'memoryMiB']} label="内存限制 MiB">
-              <InputNumber min={0} className="w-full" />
-            </Form.Item>
-            <Form.Item name={['resources', 'memoryReservationMiB']} label="内存预留 MiB">
-              <InputNumber min={0} className="w-full" />
-            </Form.Item>
-          </div>
-          <Form.Item name="network" label="外部网络">
-            <Input placeholder="traefik 或已有 Docker network" />
-          </Form.Item>
-          <Form.Item name="imagePullPolicy" label="拉取策略">
-            <Select
-              allowClear
-              options={['always', 'missing', 'never', 'build'].map((item) => ({
-                value: item,
-                label: item,
-              }))}
-            />
-          </Form.Item>
-          <Form.Item name="envContent" label=".env">
-            <TextArea rows={8} spellCheck={false} placeholder="KEY=value" />
-          </Form.Item>
-        </Form>
-      </Drawer>
+                  </Form.Item>
+                  <Form.Item name="image" label="镜像" rules={[{ required: true }]}>
+                    <Input placeholder="nginx:alpine" />
+                  </Form.Item>
+                  <Form.Item name="architecture" label="架构">
+                    <Select options={ARCHITECTURE_OPTIONS} />
+                  </Form.Item>
+                  <Form.Item name="restartPolicy" label="重启策略">
+                    <Select
+                      options={['unless-stopped', 'always', 'on-failure', 'no'].map((item) => ({
+                        value: item,
+                        label: item,
+                      }))}
+                    />
+                  </Form.Item>
+                  <Form.Item name="environment" label="环境">
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name="owner" label="负责人">
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name="team" label="团队">
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name="ttlSeconds" label="TTL 秒数">
+                    <InputNumber min={0} className="w-full" />
+                  </Form.Item>
+                  <Form.Item name="command" label="启动命令">
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name="entrypoint" label="Entrypoint">
+                    <Input />
+                  </Form.Item>
+                </div>
+                <Form.List name="ports">
+                  {(fields, { add, remove }) => (
+                    <div className="mb-3 space-y-3">
+                      {fields.map((field, index) => (
+                        <div
+                          key={field.key}
+                          className="rounded border border-[var(--soha-border-color)] p-3"
+                        >
+                          <div className="mb-2 flex items-center justify-between">
+                            <Text strong>端口 {index + 1}</Text>
+                            {fields.length > 1 ? (
+                              <Button
+                                type="text"
+                                danger
+                                icon={<MinusCircleOutlined />}
+                                onClick={() => remove(field.name)}
+                              />
+                            ) : null}
+                          </div>
+                          <div className="grid gap-3 md:grid-cols-4">
+                            <Form.Item name={[field.name, 'name']} label="名称">
+                              <Input placeholder="http" />
+                            </Form.Item>
+                            <Form.Item
+                              name={[field.name, 'containerPort']}
+                              label="容器端口"
+                              rules={[{ required: true }]}
+                            >
+                              <InputNumber min={1} max={65535} className="w-full" />
+                            </Form.Item>
+                            <Form.Item
+                              name={[field.name, 'hostPort']}
+                              label="主机端口"
+                              rules={[{ required: true }]}
+                            >
+                              <InputNumber min={1} max={65535} className="w-full" />
+                            </Form.Item>
+                            <Form.Item name={[field.name, 'hostIp']} label="监听 IP">
+                              <Input placeholder="0.0.0.0" />
+                            </Form.Item>
+                            <Form.Item name={[field.name, 'protocol']} label="协议">
+                              <Select
+                                options={[
+                                  { value: 'tcp', label: 'tcp' },
+                                  { value: 'udp', label: 'udp' },
+                                ]}
+                              />
+                            </Form.Item>
+                            <Form.Item name={[field.name, 'exposureScope']} label="暴露范围">
+                              <Select
+                                options={['internal', 'vpn', 'public'].map((item) => ({
+                                  value: item,
+                                  label: item,
+                                }))}
+                              />
+                            </Form.Item>
+                            <Form.Item name={[field.name, 'domainName']} label="访问域名">
+                              <Input placeholder="preview.internal.example.com" />
+                            </Form.Item>
+                            <Form.Item name={[field.name, 'domainScheme']} label="域名协议">
+                              <Select
+                                options={[
+                                  { value: 'http', label: 'http' },
+                                  { value: 'https', label: 'https' },
+                                ]}
+                              />
+                            </Form.Item>
+                            <Form.Item
+                              name={[field.name, 'domainTlsEnabled']}
+                              label="TLS"
+                              valuePropName="checked"
+                            >
+                              <Switch />
+                            </Form.Item>
+                          </div>
+                        </div>
+                      ))}
+                      <Button
+                        type="dashed"
+                        icon={<PlusOutlined />}
+                        onClick={() =>
+                          add({
+                            hostIp: '0.0.0.0',
+                            protocol: 'tcp',
+                            exposureScope: 'internal',
+                            domainScheme: 'http',
+                            domainTlsEnabled: false,
+                          })
+                        }
+                      >
+                        添加端口
+                      </Button>
+                    </div>
+                  )}
+                </Form.List>
+                <Form.List name="volumes">
+                  {(fields, { add, remove }) => (
+                    <div className="mb-3 space-y-3">
+                      {fields.map((field, index) => (
+                        <div
+                          key={field.key}
+                          className="rounded border border-[var(--soha-border-color)] p-3"
+                        >
+                          <div className="mb-2 flex items-center justify-between">
+                            <Text strong>卷 {index + 1}</Text>
+                            <Button
+                              type="text"
+                              danger
+                              icon={<MinusCircleOutlined />}
+                              onClick={() => remove(field.name)}
+                            />
+                          </div>
+                          <div className="grid gap-3 md:grid-cols-4">
+                            <Form.Item name={[field.name, 'name']} label="名称">
+                              <Input placeholder="data" />
+                            </Form.Item>
+                            <Form.Item name={[field.name, 'type']} label="类型">
+                              <Select
+                                options={[
+                                  { value: 'bind', label: 'bind' },
+                                  { value: 'volume', label: 'volume' },
+                                ]}
+                              />
+                            </Form.Item>
+                            <Form.Item name={[field.name, 'source']} label="来源">
+                              <Input placeholder="/data/app 或 app-data" />
+                            </Form.Item>
+                            <Form.Item name={[field.name, 'target']} label="挂载路径">
+                              <Input placeholder="/var/lib/app" />
+                            </Form.Item>
+                            <Form.Item
+                              name={[field.name, 'readOnly']}
+                              label="只读"
+                              valuePropName="checked"
+                            >
+                              <Switch />
+                            </Form.Item>
+                          </div>
+                        </div>
+                      ))}
+                      <Button
+                        type="dashed"
+                        icon={<PlusOutlined />}
+                        onClick={() => add({ type: 'bind', readOnly: false })}
+                      >
+                        添加卷
+                      </Button>
+                    </div>
+                  )}
+                </Form.List>
+                <Form.List name="environmentVariables">
+                  {(fields, { add, remove }) => (
+                    <div className="mb-3 space-y-3">
+                      {fields.map((field, index) => (
+                        <div
+                          key={field.key}
+                          className="grid items-start gap-3 md:grid-cols-[1fr_1fr_40px]"
+                        >
+                          <Form.Item
+                            name={[field.name, 'name']}
+                            label={index === 0 ? '变量名' : undefined}
+                          >
+                            <Input placeholder="APP_ENV" />
+                          </Form.Item>
+                          <Form.Item
+                            name={[field.name, 'value']}
+                            label={index === 0 ? '变量值' : undefined}
+                          >
+                            <Input />
+                          </Form.Item>
+                          <Button
+                            className={index === 0 ? 'mt-8' : undefined}
+                            type="text"
+                            danger
+                            icon={<MinusCircleOutlined />}
+                            onClick={() => remove(field.name)}
+                          />
+                        </div>
+                      ))}
+                      <Button type="dashed" icon={<PlusOutlined />} onClick={() => add({})}>
+                        添加环境变量
+                      </Button>
+                    </div>
+                  )}
+                </Form.List>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <Form.Item name={['resources', 'cpus']} label="CPU 限制">
+                    <InputNumber min={0} step={0.1} className="w-full" />
+                  </Form.Item>
+                  <Form.Item name={['resources', 'memoryMiB']} label="内存限制 MiB">
+                    <InputNumber min={0} className="w-full" />
+                  </Form.Item>
+                  <Form.Item name={['resources', 'memoryReservationMiB']} label="内存预留 MiB">
+                    <InputNumber min={0} className="w-full" />
+                  </Form.Item>
+                </div>
+                <Form.Item name="network" label="外部网络">
+                  <Input placeholder="traefik 或已有 Docker network" />
+                </Form.Item>
+                <Form.Item name="imagePullPolicy" label="拉取策略">
+                  <Select
+                    allowClear
+                    options={['always', 'missing', 'never', 'build'].map((item) => ({
+                      value: item,
+                      label: item,
+                    }))}
+                  />
+                </Form.Item>
+                <Form.Item name="envContent" label=".env">
+                  <TextArea rows={8} spellCheck={false} placeholder="KEY=value" />
+                </Form.Item>
+              </>
+            ),
+          },
+          {
+            title: '确认启动',
+            children: (
+              <Typography.Text type="secondary">
+                确认后将创建单容器服务并提交启动任务。
+              </Typography.Text>
+            ),
+          },
+        ]}
+        submitText="启动"
+        width={820}
+      />
     </>
   )
 }
@@ -810,15 +838,6 @@ function ProjectsTable({
 function ContainerManagementPage() {
   return (
     <div className="soha-page soha-docker-page">
-      <ManagementDetailHeader
-        title="容器管理"
-        meta={
-          <>
-            <span>Compose</span>
-            <span>单容器服务</span>
-          </>
-        }
-      />
       <Tabs
         className="soha-docker-management-tabs"
         items={[

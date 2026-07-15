@@ -68,7 +68,7 @@ function ProjectDetailWorkspace() {
   }, [projectConfig, runtimeServices])
   const defaultRuntimeServiceName = runtimeServiceOptions[0]?.value || ''
   useAIPageContext({
-    sourceWorkbench: 'docker',
+    sourceWorkbench: 'compute',
     sourceTitle: project?.name ? `Docker 项目 ${project.name}` : 'Docker 项目详情',
     entityKind: 'docker.project',
     entityName: project?.name ?? resolvedProjectId,
@@ -97,7 +97,7 @@ function ProjectDetailWorkspace() {
     }
   }, [defaultRuntimeServiceName, runtimeServiceName, runtimeServiceOptions])
   if (!resolvedProjectId) {
-    return <Navigate to="/docker/projects" replace />
+    return <Navigate to="/compute/runtimes/projects" replace />
   }
   const runtimeConfigTab = isSingleContainerProject
     ? {
@@ -317,7 +317,7 @@ function ProjectDetailWorkspace() {
           ) : null
         }
         actions={
-          <Link to="/docker/projects">
+          <Link to="/compute/runtimes/projects">
             <Button>返回</Button>
           </Link>
         }

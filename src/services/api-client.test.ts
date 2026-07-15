@@ -48,6 +48,20 @@ describe('api client error handling', () => {
     vi.clearAllMocks()
   })
 
+  it('preserves contract envelopes for exact SDK consumers', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        jsonResponse({ items: [{ id: 'task-1' }], nextCursor: 'next' }, { status: 200 }),
+      ),
+    )
+
+    await expect(api.getEnvelope('/compute/tasks')).resolves.toEqual({
+      items: [{ id: 'task-1' }],
+      nextCursor: 'next',
+    })
+  })
+
   it('clears auth and emits a typed event when refresh cannot recover a 401', async () => {
     vi.stubGlobal(
       'fetch',

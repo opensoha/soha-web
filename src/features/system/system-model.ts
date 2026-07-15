@@ -195,12 +195,11 @@ export interface MenuWorkbenchSummary {
   workspace: WorkspaceType | null
 }
 
-export const MENU_WORKBENCH_ORDER: MenuWorkbenchSurface[] = ['platform', 'virtualization', 'docker', 'delivery', 'ai', 'aiGateway', 'monitoring', 'settings', 'system', 'unmapped']
+export const MENU_WORKBENCH_ORDER: MenuWorkbenchSurface[] = ['platform', 'compute', 'delivery', 'ai', 'aiGateway', 'monitoring', 'settings', 'system', 'unmapped']
 
 export const MENU_WORKBENCH_LABELS: Record<MenuWorkbenchSurface, string> = {
   platform: 'k8s工作台',
-  virtualization: '虚拟化管理工作台',
-  docker: 'Docker 工作台',
+  compute: '计算资源工作台',
   ai: 'AI工作台',
   aiGateway: 'AI Gateway',
   monitoring: '监控工作台',

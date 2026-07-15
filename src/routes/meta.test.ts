@@ -1339,28 +1339,16 @@ describe('access route authorization', () => {
     const resourceNav = filterSidebarNavByWorkspace(nav, 'resource')
     const platformNav = filterSidebarNavByWorkbench(resourceNav, 'platform')
     const aiNav = filterSidebarNavByWorkbench(resourceNav, 'ai')
-    const virtualizationNav = filterSidebarNavByWorkbench(resourceNav, 'virtualization')
-    const dockerNav = filterSidebarNavByWorkbench(resourceNav, 'docker')
+    const computeNav = filterSidebarNavByWorkbench(resourceNav, 'compute')
     const aiGatewayNav = filterSidebarNavByWorkbench(resourceNav, 'aiGateway')
     const monitoringNav = filterSidebarNavByWorkbench(resourceNav, 'monitoring')
 
     expect(platformNav.map((item) => item.id)).toEqual(['dashboard'])
     expect(aiNav.map((item) => item.id)).toEqual(['ai-workbench'])
-    expect(virtualizationNav.map((item) => item.id)).toEqual([
-      'virtualization-workbench-overview',
-      'virtualization-workbench-vms',
-      'virtualization-workbench-operations',
-      'virtualization-workbench-sync',
+    expect(computeNav.map((item) => item.id)).toEqual([
+      'virtualization-workbench',
+      'docker-workbench',
     ])
-    expect(virtualizationNav.some((item) => item.id === 'virtualization-workbench')).toBe(false)
-    expect(dockerNav.map((item) => item.id)).toEqual([
-      'docker-workbench-overview',
-      'docker-workbench-hosts',
-      'docker-workbench-projects',
-      'docker-workbench-templates',
-      'docker-workbench-operations',
-    ])
-    expect(dockerNav.some((item) => item.id === 'docker-workbench')).toBe(false)
     expect(aiGatewayNav.map((item) => item.id)).toEqual([
       'ai-gateway-overview',
       'ai-gateway-relay',
@@ -1402,21 +1390,21 @@ describe('access route authorization', () => {
     expect(
       getMenuWorkbenchId({
         id: 'virtualization-workbench-vms',
-        path: '/virtualization/vms',
+        path: '/compute/virtualization/vms',
       }),
-    ).toBe('virtualization')
+    ).toBe('compute')
     expect(
       getMenuWorkbenchId({
         id: 'virtualization-workbench-sync',
-        path: '/virtualization/sync',
+        path: '/compute/tasks/sync',
       }),
-    ).toBe('virtualization')
+    ).toBe('compute')
     expect(
       getMenuWorkbenchId({
         id: 'docker-workbench-projects',
-        path: '/docker/projects',
+        path: '/compute/runtimes/projects',
       }),
-    ).toBe('docker')
+    ).toBe('compute')
     expect(
       getMenuWorkbenchId({
         id: 'ai-gateway',
@@ -1455,9 +1443,7 @@ describe('access route authorization', () => {
     expect(getRouteWorkbenchId(getRoute('plugins-marketplace'))).toBe('settings')
     expect(getRouteWorkspace(getRoute('plugins-marketplace'))).toBe('system')
     expect(canAccessRoute(getRoute('plugins-marketplace'), snapshot)).toBe(true)
-    expect(findFirstAccessiblePathForWorkbench('settings', snapshot)).toBe(
-      '/plugins/marketplace',
-    )
+    expect(findFirstAccessiblePathForWorkbench('settings', snapshot)).toBe('/plugins/marketplace')
     expect(getAccessibleWorkbenchIds(snapshot)).toContain('settings')
   })
 
@@ -1649,7 +1635,7 @@ describe('access route authorization', () => {
     })
 
     expect(getRouteWorkspace(route)).toBe('resource')
-    expect(getRouteWorkbenchId(route)).toBe('virtualization')
+    expect(getRouteWorkbenchId(route)).toBe('compute')
     expect(getRouteScopeMode(route)).toBe('passive')
     expect(canAccessRoute(route, allowedSnapshot)).toBe(true)
     expect(
@@ -1680,23 +1666,23 @@ describe('access route authorization', () => {
     ).toBe(false)
   })
 
-  it('maps virtualization sync to backend menu id and view permission', () => {
-    const route = getRoute('virtualization-workbench-sync')
+  it('maps virtualization sync into the compute resource management group', () => {
+    const route = getRoute('compute-workbench-tasks-sync')
     const snapshot = buildSnapshot({
       permissionKeys: ['workspace.resource.view', 'virtualization.sync.view'],
-      visibleMenuIds: ['virtualization-workbench-sync'],
+      visibleMenuIds: ['compute-workbench-tasks-sync'],
       visibleMenus: [
         {
-          id: 'virtualization-workbench-sync',
-          parentId: 'virtualization-workbench',
-          path: '/virtualization/sync',
+          id: 'compute-workbench-tasks-sync',
+          parentId: 'compute-workbench',
+          path: '/compute/tasks/sync',
         },
       ],
     })
 
-    expect(route.menuId).toBe('virtualization-workbench-sync')
-    expect(route.permissionKey).toBe('virtualization.sync.view')
-    expect(getRouteWorkbenchId(route)).toBe('virtualization')
+    expect(route.menuId).toBe('compute-workbench-tasks-sync')
+    expect(route.permissionKeysAny).toContain('virtualization.sync.view')
+    expect(getRouteWorkbenchId(route)).toBe('compute')
     expect(getRouteScopeMode(route)).toBe('passive')
     expect(canAccessRoute(route, snapshot)).toBe(true)
   })
@@ -1716,7 +1702,7 @@ describe('access route authorization', () => {
     })
 
     expect(getRouteWorkspace(route)).toBe('resource')
-    expect(getRouteWorkbenchId(route)).toBe('docker')
+    expect(getRouteWorkbenchId(route)).toBe('compute')
     expect(getRouteScopeMode(route)).toBe('passive')
     expect(canAccessRoute(route, allowedSnapshot)).toBe(true)
     expect(

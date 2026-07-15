@@ -6,10 +6,10 @@
     "manifests": [
       "src/features/access/routes.ts",
       "src/features/auth/routes.ts",
+      "src/features/compute/routes.ts",
       "src/features/copilot/observe/routes.ts",
       "src/features/copilot/routes.ts",
       "src/features/delivery/routes.ts",
-      "src/features/docker/routes.ts",
       "src/features/identity/applications/routes.ts",
       "src/features/identity/outposts/routes.ts",
       "src/features/identity/overview/routes.ts",
@@ -38,19 +38,18 @@
       "src/features/provider-portal/routes.ts",
       "src/features/settings/routes.ts",
       "src/features/system/routes.ts",
-      "src/features/virtualization/routes.ts",
       "src/routes/fallback-routes.ts"
     ]
   },
   "summary": {
-    "runtimePaths": 224,
-    "metadataPaths": 224,
-    "overlappingPaths": 224,
+    "runtimePaths": 226,
+    "metadataPaths": 226,
+    "overlappingPaths": 226,
     "runtimeOnlyPaths": 0,
     "metadataOnlyPaths": 0,
     "inlineJsxPaths": 0,
-    "lazyRouteLoads": 191,
-    "lazySourceModules": 173
+    "lazyRouteLoads": 190,
+    "lazySourceModules": 165
   },
   "paths": {
     "runtime": [
@@ -109,6 +108,23 @@
       "/cluster-resources/nodes/:nodeName",
       "/clusters",
       "/clusters/:clusterId",
+      "/compute",
+      "/compute/access",
+      "/compute/overview",
+      "/compute/runtimes",
+      "/compute/runtimes/hosts",
+      "/compute/runtimes/projects",
+      "/compute/runtimes/projects/:projectId",
+      "/compute/runtimes/templates",
+      "/compute/tasks/build",
+      "/compute/tasks/operations",
+      "/compute/tasks/sync",
+      "/compute/virtualization",
+      "/compute/virtualization/clusters",
+      "/compute/virtualization/flavors",
+      "/compute/virtualization/images",
+      "/compute/virtualization/vms",
+      "/compute/virtualization/vms/:id",
       "/configuration",
       "/configuration/configmaps",
       "/configuration/configmaps/:configMapName",
@@ -137,16 +153,8 @@
       "/delivery/release-bundles",
       "/delivery/release-bundles/:releaseBundleId",
       "/delivery/testing",
-      "/docker",
-      "/docker/hosts",
-      "/docker/operations",
-      "/docker/overview",
-      "/docker/ports",
-      "/docker/projects",
-      "/docker/projects/:projectId",
-      "/docker/services",
-      "/docker/templates",
       "/extensions",
+      "/extensions-center",
       "/extensions/apis/:groupName",
       "/helm",
       "/helm/charts",
@@ -217,6 +225,7 @@
       "/platform-access-control/serviceaccounts",
       "/platform-access-control/serviceaccounts/:name",
       "/plugins",
+      "/plugins/extensions",
       "/plugins/installed",
       "/plugins/installed/:pluginId",
       "/plugins/marketplace",
@@ -232,6 +241,7 @@
       "/settings/about",
       "/settings/ai",
       "/settings/branding",
+      "/settings/extensions",
       "/settings/identity",
       "/settings/login",
       "/settings/monitoring",
@@ -248,15 +258,6 @@
       "/system/menus",
       "/system/online-users",
       "/system/operations",
-      "/virtualization",
-      "/virtualization/clusters",
-      "/virtualization/flavors",
-      "/virtualization/images",
-      "/virtualization/operations",
-      "/virtualization/overview",
-      "/virtualization/sync",
-      "/virtualization/vms",
-      "/virtualization/vms/:id",
       "/workflow-templates",
       "/workflows",
       "/workflows/:workflowId",
@@ -335,6 +336,23 @@
       "/cluster-resources/nodes/:nodeName",
       "/clusters",
       "/clusters/:clusterId",
+      "/compute",
+      "/compute/access",
+      "/compute/overview",
+      "/compute/runtimes",
+      "/compute/runtimes/hosts",
+      "/compute/runtimes/projects",
+      "/compute/runtimes/projects/:projectId",
+      "/compute/runtimes/templates",
+      "/compute/tasks/build",
+      "/compute/tasks/operations",
+      "/compute/tasks/sync",
+      "/compute/virtualization",
+      "/compute/virtualization/clusters",
+      "/compute/virtualization/flavors",
+      "/compute/virtualization/images",
+      "/compute/virtualization/vms",
+      "/compute/virtualization/vms/:id",
       "/configuration",
       "/configuration/configmaps",
       "/configuration/configmaps/:configMapName",
@@ -363,16 +381,8 @@
       "/delivery/release-bundles",
       "/delivery/release-bundles/:releaseBundleId",
       "/delivery/testing",
-      "/docker",
-      "/docker/hosts",
-      "/docker/operations",
-      "/docker/overview",
-      "/docker/ports",
-      "/docker/projects",
-      "/docker/projects/:projectId",
-      "/docker/services",
-      "/docker/templates",
       "/extensions",
+      "/extensions-center",
       "/extensions/apis/:groupName",
       "/helm",
       "/helm/charts",
@@ -443,6 +453,7 @@
       "/platform-access-control/serviceaccounts",
       "/platform-access-control/serviceaccounts/:name",
       "/plugins",
+      "/plugins/extensions",
       "/plugins/installed",
       "/plugins/installed/:pluginId",
       "/plugins/marketplace",
@@ -458,6 +469,7 @@
       "/settings/about",
       "/settings/ai",
       "/settings/branding",
+      "/settings/extensions",
       "/settings/identity",
       "/settings/login",
       "/settings/monitoring",
@@ -474,15 +486,6 @@
       "/system/menus",
       "/system/online-users",
       "/system/operations",
-      "/virtualization",
-      "/virtualization/clusters",
-      "/virtualization/flavors",
-      "/virtualization/images",
-      "/virtualization/operations",
-      "/virtualization/overview",
-      "/virtualization/sync",
-      "/virtualization/vms",
-      "/virtualization/vms/:id",
       "/workflow-templates",
       "/workflows",
       "/workflows/:workflowId",
@@ -561,6 +564,23 @@
       "/cluster-resources/nodes/:nodeName",
       "/clusters",
       "/clusters/:clusterId",
+      "/compute",
+      "/compute/access",
+      "/compute/overview",
+      "/compute/runtimes",
+      "/compute/runtimes/hosts",
+      "/compute/runtimes/projects",
+      "/compute/runtimes/projects/:projectId",
+      "/compute/runtimes/templates",
+      "/compute/tasks/build",
+      "/compute/tasks/operations",
+      "/compute/tasks/sync",
+      "/compute/virtualization",
+      "/compute/virtualization/clusters",
+      "/compute/virtualization/flavors",
+      "/compute/virtualization/images",
+      "/compute/virtualization/vms",
+      "/compute/virtualization/vms/:id",
       "/configuration",
       "/configuration/configmaps",
       "/configuration/configmaps/:configMapName",
@@ -589,16 +609,8 @@
       "/delivery/release-bundles",
       "/delivery/release-bundles/:releaseBundleId",
       "/delivery/testing",
-      "/docker",
-      "/docker/hosts",
-      "/docker/operations",
-      "/docker/overview",
-      "/docker/ports",
-      "/docker/projects",
-      "/docker/projects/:projectId",
-      "/docker/services",
-      "/docker/templates",
       "/extensions",
+      "/extensions-center",
       "/extensions/apis/:groupName",
       "/helm",
       "/helm/charts",
@@ -669,6 +681,7 @@
       "/platform-access-control/serviceaccounts",
       "/platform-access-control/serviceaccounts/:name",
       "/plugins",
+      "/plugins/extensions",
       "/plugins/installed",
       "/plugins/installed/:pluginId",
       "/plugins/marketplace",
@@ -684,6 +697,7 @@
       "/settings/about",
       "/settings/ai",
       "/settings/branding",
+      "/settings/extensions",
       "/settings/identity",
       "/settings/login",
       "/settings/monitoring",
@@ -700,15 +714,6 @@
       "/system/menus",
       "/system/online-users",
       "/system/operations",
-      "/virtualization",
-      "/virtualization/clusters",
-      "/virtualization/flavors",
-      "/virtualization/images",
-      "/virtualization/operations",
-      "/virtualization/overview",
-      "/virtualization/sync",
-      "/virtualization/vms",
-      "/virtualization/vms/:id",
       "/workflow-templates",
       "/workflows",
       "/workflows/:workflowId",
@@ -1018,6 +1023,31 @@
         "source": "@/features/platform/clusters/list-page"
       },
       {
+        "exportName": "ComputeAccessPage",
+        "moduleExport": "ComputeAccessPage",
+        "source": "@/features/compute/access/page"
+      },
+      {
+        "exportName": "ComputeBuildTasksPage",
+        "moduleExport": "ComputeBuildTasksPage",
+        "source": "@/features/compute/tasks/build-page"
+      },
+      {
+        "exportName": "ComputeOperationRecordsPage",
+        "moduleExport": "ComputeOperationRecordsPage",
+        "source": "@/features/compute/tasks/operations-page"
+      },
+      {
+        "exportName": "ComputeOverviewPage",
+        "moduleExport": "ComputeOverviewPage",
+        "source": "@/features/compute/overview/page"
+      },
+      {
+        "exportName": "ComputeSyncTasksPage",
+        "moduleExport": "ComputeSyncTasksPage",
+        "source": "@/features/compute/tasks/sync-page"
+      },
+      {
         "exportName": "ConfigMapDetailPage",
         "moduleExport": "ConfigMapDetailPage",
         "source": "@/features/platform/configuration/configmaps/detail-page"
@@ -1158,34 +1188,24 @@
         "source": "@/features/access/directory-sync/page"
       },
       {
-        "exportName": "DockerHostsPage",
-        "moduleExport": "DockerHostsPage",
-        "source": "@/features/docker/hosts/page"
+        "exportName": "docker-workbench-hosts:default",
+        "moduleExport": "default",
+        "source": "@/features/docker"
       },
       {
-        "exportName": "DockerOperationsPage",
-        "moduleExport": "DockerOperationsPage",
-        "source": "@/features/docker/operations/page"
+        "exportName": "docker-workbench-project-detail:default",
+        "moduleExport": "default",
+        "source": "@/features/docker"
       },
       {
-        "exportName": "DockerOverviewPage",
-        "moduleExport": "DockerOverviewPage",
-        "source": "@/features/docker/overview/page"
+        "exportName": "docker-workbench-projects:default",
+        "moduleExport": "default",
+        "source": "@/features/docker"
       },
       {
-        "exportName": "DockerProjectDetailPage",
-        "moduleExport": "DockerProjectDetailPage",
-        "source": "@/features/docker/projects/detail-page"
-      },
-      {
-        "exportName": "DockerProjectsPage",
-        "moduleExport": "DockerProjectsPage",
-        "source": "@/features/docker/projects/list-page"
-      },
-      {
-        "exportName": "DockerTemplatesPage",
-        "moduleExport": "DockerTemplatesPage",
-        "source": "@/features/docker/templates/page"
+        "exportName": "docker-workbench-templates:default",
+        "moduleExport": "default",
+        "source": "@/features/docker"
       },
       {
         "exportName": "EndpointSliceDetailPage",
@@ -1276,11 +1296,6 @@
         "exportName": "InstalledPluginDetailPage",
         "moduleExport": "InstalledPluginDetailPage",
         "source": "@/features/plugins/installed/detail-page"
-      },
-      {
-        "exportName": "InstalledPluginsPage",
-        "moduleExport": "InstalledPluginsPage",
-        "source": "@/features/plugins/installed/list-page"
       },
       {
         "exportName": "JobDetailPage",
@@ -1593,44 +1608,29 @@
         "source": "@/features/auth/user-profile-page"
       },
       {
-        "exportName": "VirtualizationClustersPage",
-        "moduleExport": "VirtualizationClustersPage",
-        "source": "@/features/virtualization/clusters/list-page"
+        "exportName": "virtualization-workbench-clusters:default",
+        "moduleExport": "default",
+        "source": "@/features/virtualization"
       },
       {
-        "exportName": "VirtualizationFlavorsPage",
-        "moduleExport": "VirtualizationFlavorsPage",
-        "source": "@/features/virtualization/flavors/list-page"
+        "exportName": "virtualization-workbench-flavors:default",
+        "moduleExport": "default",
+        "source": "@/features/virtualization"
       },
       {
-        "exportName": "VirtualizationImagesPage",
-        "moduleExport": "VirtualizationImagesPage",
-        "source": "@/features/virtualization/images/list-page"
+        "exportName": "virtualization-workbench-images:default",
+        "moduleExport": "default",
+        "source": "@/features/virtualization"
       },
       {
-        "exportName": "VirtualizationOperationsPage",
-        "moduleExport": "VirtualizationOperationsPage",
-        "source": "@/features/virtualization/operations/page"
+        "exportName": "virtualization-workbench-vm-detail:default",
+        "moduleExport": "default",
+        "source": "@/features/virtualization"
       },
       {
-        "exportName": "VirtualizationOverviewPage",
-        "moduleExport": "VirtualizationOverviewPage",
-        "source": "@/features/virtualization/overview/page"
-      },
-      {
-        "exportName": "VirtualizationSyncPage",
-        "moduleExport": "VirtualizationSyncPage",
-        "source": "@/features/virtualization/sync/page"
-      },
-      {
-        "exportName": "VirtualizationVmDetailPage",
-        "moduleExport": "VirtualizationVmDetailPage",
-        "source": "@/features/virtualization/virtual-machines/detail-page"
-      },
-      {
-        "exportName": "VirtualizationVmsPage",
-        "moduleExport": "VirtualizationVmsPage",
-        "source": "@/features/virtualization/virtual-machines/list-page"
+        "exportName": "virtualization-workbench-vms:default",
+        "moduleExport": "default",
+        "source": "@/features/virtualization"
       },
       {
         "exportName": "WorkflowDetailPage",
@@ -1704,6 +1704,11 @@
       "@/features/auth/login-page",
       "@/features/auth/oidc-callback-page",
       "@/features/auth/user-profile-page",
+      "@/features/compute/access/page",
+      "@/features/compute/overview/page",
+      "@/features/compute/tasks/build-page",
+      "@/features/compute/tasks/operations-page",
+      "@/features/compute/tasks/sync-page",
       "@/features/copilot/gateway/pages/call-logs-page",
       "@/features/copilot/gateway/pages/clients-page",
       "@/features/copilot/gateway/pages/governance-page",
@@ -1741,12 +1746,7 @@
       "@/features/delivery/workflow-templates/page",
       "@/features/delivery/workflows/detail-page",
       "@/features/delivery/workflows/list-page",
-      "@/features/docker/hosts/page",
-      "@/features/docker/operations/page",
-      "@/features/docker/overview/page",
-      "@/features/docker/projects/detail-page",
-      "@/features/docker/projects/list-page",
-      "@/features/docker/templates/page",
+      "@/features/docker",
       "@/features/identity/applications/list-page",
       "@/features/identity/outposts/list-page",
       "@/features/identity/overview/page",
@@ -1846,7 +1846,6 @@
       "@/features/platform/workloads/statefulsets/detail-page",
       "@/features/platform/workloads/statefulsets/list-page",
       "@/features/plugins/installed/detail-page",
-      "@/features/plugins/installed/list-page",
       "@/features/plugins/marketplace/detail-page",
       "@/features/plugins/marketplace/list-page",
       "@/features/provider-portal/application-detail/page",
@@ -1859,14 +1858,7 @@
       "@/features/system/announcements/page",
       "@/features/system/menus/page",
       "@/features/system/operation-logs/page",
-      "@/features/virtualization/clusters/list-page",
-      "@/features/virtualization/flavors/list-page",
-      "@/features/virtualization/images/list-page",
-      "@/features/virtualization/operations/page",
-      "@/features/virtualization/overview/page",
-      "@/features/virtualization/sync/page",
-      "@/features/virtualization/virtual-machines/detail-page",
-      "@/features/virtualization/virtual-machines/list-page"
+      "@/features/virtualization"
     ],
     "sourceGroups": {
       "@/features/access/center/page": [
@@ -1899,6 +1891,21 @@
       ],
       "@/features/auth/user-profile-page": [
         "UserProfilePage"
+      ],
+      "@/features/compute/access/page": [
+        "ComputeAccessPage"
+      ],
+      "@/features/compute/overview/page": [
+        "ComputeOverviewPage"
+      ],
+      "@/features/compute/tasks/build-page": [
+        "ComputeBuildTasksPage"
+      ],
+      "@/features/compute/tasks/operations-page": [
+        "ComputeOperationRecordsPage"
+      ],
+      "@/features/compute/tasks/sync-page": [
+        "ComputeSyncTasksPage"
       ],
       "@/features/copilot/gateway/pages/call-logs-page": [
         "AIGatewayCallLogsPage"
@@ -2027,23 +2034,11 @@
       "@/features/delivery/workflows/list-page": [
         "WorkflowsPage"
       ],
-      "@/features/docker/hosts/page": [
-        "DockerHostsPage"
-      ],
-      "@/features/docker/operations/page": [
-        "DockerOperationsPage"
-      ],
-      "@/features/docker/overview/page": [
-        "DockerOverviewPage"
-      ],
-      "@/features/docker/projects/detail-page": [
-        "DockerProjectDetailPage"
-      ],
-      "@/features/docker/projects/list-page": [
-        "DockerProjectsPage"
-      ],
-      "@/features/docker/templates/page": [
-        "DockerTemplatesPage"
+      "@/features/docker": [
+        "docker-workbench-hosts:default",
+        "docker-workbench-project-detail:default",
+        "docker-workbench-projects:default",
+        "docker-workbench-templates:default"
       ],
       "@/features/identity/applications/list-page": [
         "IdentityApplicationsPage"
@@ -2343,9 +2338,6 @@
       "@/features/plugins/installed/detail-page": [
         "InstalledPluginDetailPage"
       ],
-      "@/features/plugins/installed/list-page": [
-        "InstalledPluginsPage"
-      ],
       "@/features/plugins/marketplace/detail-page": [
         "PluginMarketplaceDetailPage"
       ],
@@ -2382,31 +2374,14 @@
       "@/features/system/operation-logs/page": [
         "OperationLogsPage"
       ],
-      "@/features/virtualization/clusters/list-page": [
-        "VirtualizationClustersPage"
-      ],
-      "@/features/virtualization/flavors/list-page": [
-        "VirtualizationFlavorsPage"
-      ],
-      "@/features/virtualization/images/list-page": [
-        "VirtualizationImagesPage"
-      ],
-      "@/features/virtualization/operations/page": [
-        "VirtualizationOperationsPage"
-      ],
-      "@/features/virtualization/overview/page": [
-        "VirtualizationOverviewPage"
-      ],
-      "@/features/virtualization/sync/page": [
-        "VirtualizationSyncPage"
-      ],
-      "@/features/virtualization/virtual-machines/detail-page": [
-        "VirtualizationVmDetailPage"
-      ],
-      "@/features/virtualization/virtual-machines/list-page": [
-        "VirtualizationVmsPage"
+      "@/features/virtualization": [
+        "virtualization-workbench-clusters:default",
+        "virtualization-workbench-flavors:default",
+        "virtualization-workbench-images:default",
+        "virtualization-workbench-vm-detail:default",
+        "virtualization-workbench-vms:default"
       ]
     }
   },
-  "generatedAt": "2026-07-13T03:20:29.581Z"
+  "generatedAt": "2026-07-14T11:02:10.756Z"
 }

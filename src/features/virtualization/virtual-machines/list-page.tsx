@@ -5,7 +5,6 @@ import {
   App,
   Alert,
   Button,
-  Drawer,
   Form,
   Input,
   Popconfirm,
@@ -17,7 +16,6 @@ import {
   Tooltip,
   Typography,
 } from 'antd'
-import type { DrawerProps } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type { ComponentProps } from 'react'
 import {
@@ -32,6 +30,7 @@ import { useAIPageContext } from '@/features/copilot'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { AdminTable } from '@/components/admin-table'
+import { StepFormModal } from '@/components/step-form-modal'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementIconButton,
@@ -68,8 +67,6 @@ import type {
 } from '@/features/virtualization/virtualization-types'
 
 const { Text } = Typography
-
-const stableDrawerMotion = null as unknown as DrawerProps['motion']
 
 const tableEllipsis = { showTitle: false } as const
 
@@ -194,6 +191,7 @@ function pageTablePagination<T>(
 
 export function VirtualizationVmsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [currentStep, setCurrentStep] = useState(0)
   const [filters, setFilters] = useState<VirtualizationListParams>({ page: 1, pageSize: 10 })
   const [filterForm] = Form.useForm<VirtualizationListParams>()
   const [form] = Form.useForm<VirtualMachineFormValues>()
@@ -368,7 +366,7 @@ export function VirtualizationVmsPage() {
   const selectedFlavorId = Form.useWatch('flavorId', form)
   const selectedFlavor = flavors.find((item) => item.id === selectedFlavorId)
   useAIPageContext({
-    sourceWorkbench: 'virtualization',
+    sourceWorkbench: 'compute',
     sourceTitle: '虚拟机列表',
     entityKind: 'virtualization.vm-list',
     entityName: '虚拟机列表',
@@ -576,7 +574,15 @@ export function VirtualizationVmsPage() {
           headerExtra={
             canManageVMs ? (
               <ManagementTableToolbar>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => setDrawerOpen(true)}>
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={() => {
+                    setCurrentStep(0)
+                    form.resetFields()
+                    setDrawerOpen(true)
+                  }}
+                >
                   创建虚拟机
                 </Button>
               </ManagementTableToolbar>
@@ -591,261 +597,292 @@ export function VirtualizationVmsPage() {
         />
       }
       afterTable={
-        <Drawer
+        <StepFormModal
           title="创建虚拟机"
-          size="large"
-          motion={stableDrawerMotion}
+          current={currentStep}
+          form={form}
+          loading={createMutation.isPending}
           open={drawerOpen}
           onClose={() => setDrawerOpen(false)}
-        >
-          <Form
-            form={form}
-            layout="vertical"
-            initialValues={{
-              provider: 'kubevirt',
-              sourceMode: 'datasource_clone',
-              kubevirtNetworkType: 'pod',
-              kubevirtInterfaceBinding: 'bridge',
-              startAfterCreate: true,
-            }}
-            onFinish={(values) => createMutation.mutate(buildCreateVmPayload(values))}
-          >
-            <Form.Item name="name" label="名称" rules={[{ required: true }]}>
-              <Input />
-            </Form.Item>
-            <div className="grid gap-3 md:grid-cols-2">
-              <Form.Item name="provider" label="Provider" rules={[{ required: true }]}>
-                <Select
-                  options={[
-                    { value: 'kubevirt', label: 'KubeVirt' },
-                    { value: 'pve', label: 'PVE' },
-                  ]}
-                />
-              </Form.Item>
-              <Form.Item name="connectionId" label="连接" rules={[{ required: true }]}>
-                <Select
-                  showSearch={{ optionFilterProp: 'label' }}
-                  options={clusters
-                    .filter((item) => !createProvider || item.provider === createProvider)
-                    .map((item) => ({ value: item.id, label: item.name }))}
-                />
-              </Form.Item>
-            </div>
-            <Form.Item name="sourceMode" label="创建模式" rules={[{ required: true }]}>
-              <Select
-                options={
-                  createProvider === 'pve'
-                    ? [
-                        { value: 'template_clone', label: '模板克隆' },
-                        { value: 'iso_install', label: 'ISO 安装' },
-                      ]
-                    : [
-                        { value: 'datasource_clone', label: 'DataSource 克隆' },
-                        { value: 'pvc_clone', label: 'PVC 克隆' },
-                      ]
-                }
-              />
-            </Form.Item>
-            <Form.Item name="flavorId" label="规格" rules={[{ required: true }]}>
-              <Select
-                showSearch={{ optionFilterProp: 'label' }}
-                options={flavors
-                  .filter((item) => item.enabled !== false)
-                  .map((item) => ({
-                    value: item.id,
-                    label: `${item.name} (${item.cpu}C / ${item.memoryMiB}MiB / ${item.diskGiB}GiB)`,
-                  }))}
-              />
-            </Form.Item>
-            {selectedFlavor ? (
-              <Alert
-                className="mb-3"
-                type="info"
-                showIcon
-                title={`已选择 ${selectedFlavor.name}: ${selectedFlavor.cpu}C / ${selectedFlavor.memoryMiB}MiB / ${selectedFlavor.diskGiB}GiB`}
-              />
-            ) : null}
-            <Form.Item
-              name="bootImageId"
-              label={
-                createProvider === 'pve'
-                  ? createSourceMode === 'iso_install'
-                    ? '安装 ISO'
-                    : '模板'
-                  : '启动镜像'
-              }
-              rules={[{ required: true }]}
-            >
-              <Select
-                showSearch={{ optionFilterProp: 'label' }}
-                options={images
-                  .filter(
-                    (item) => !createProvider || item.provider === createProvider || !item.provider,
-                  )
-                  .filter(
-                    (item) =>
-                      createProvider !== 'pve' ||
-                      (createSourceMode === 'iso_install'
-                        ? item.assetKind === 'iso' || item.sourceKind === 'iso'
-                        : item.assetKind === 'template' || item.sourceKind === 'template'),
-                  )
-                  .map((item) => ({
-                    value: item.id,
-                    label: item.connectionName
-                      ? `${item.name} (${item.connectionName})`
-                      : item.name,
-                  }))}
-              />
-            </Form.Item>
-            <div className="grid gap-3 md:grid-cols-2">
-              <Form.Item name="namespace" label="命名空间">
-                <Input />
-              </Form.Item>
-              <Form.Item name="node" label="节点">
-                {createProvider === 'pve' && pveNodeOptions.length > 0 ? (
-                  <Select allowClear options={pveNodeOptions} />
-                ) : (
-                  <Input
-                    disabled={createProvider === 'kubevirt'}
-                    placeholder={createProvider === 'kubevirt' ? '当前由集群调度' : undefined}
-                  />
-                )}
-              </Form.Item>
-            </div>
-            {createProvider === 'kubevirt' ? (
-              <div className="grid gap-3 md:grid-cols-2">
-                <Form.Item name="kubevirtNetworkType" label="KubeVirt 网络类型">
-                  <Select
-                    options={[
-                      { value: 'pod', label: 'Pod 默认网络' },
-                      { value: 'multus', label: 'Multus' },
-                    ]}
-                  />
-                </Form.Item>
-                <Form.Item
-                  name="network"
-                  label={kubevirtNetworkType === 'multus' ? 'NetworkAttachmentDefinition' : '网络'}
-                >
-                  <Input
-                    placeholder={kubevirtNetworkType === 'multus' ? 'namespace/nad-name' : 'pod'}
-                  />
-                </Form.Item>
-                {kubevirtNetworkType === 'multus' ? (
-                  <Form.Item name="kubevirtNetworkAttachmentDefinition" label="NAD 引用">
-                    <Input placeholder="apps/docker-build-net" />
+          onCurrentChange={setCurrentStep}
+          initialValues={{
+            provider: 'kubevirt',
+            sourceMode: 'datasource_clone',
+            kubevirtNetworkType: 'pod',
+            kubevirtInterfaceBinding: 'bridge',
+            startAfterCreate: true,
+          }}
+          onFinish={(values) => createMutation.mutate(buildCreateVmPayload(values))}
+          steps={[
+            {
+              title: '创建配置',
+              fieldNames: [
+                'name',
+                'provider',
+                'connectionId',
+                'sourceMode',
+                'flavorId',
+                'bootImageId',
+              ],
+              children: (
+                <>
+                  <Form.Item name="name" label="名称" rules={[{ required: true }]}>
+                    <Input />
                   </Form.Item>
-                ) : null}
-                <Form.Item name="kubevirtInterfaceModel" label="Interface Model">
-                  <Input placeholder="virtio" />
-                </Form.Item>
-                <Form.Item name="kubevirtInterfaceBinding" label="Interface Binding">
-                  <Select
-                    allowClear
-                    options={[
-                      { value: 'bridge', label: 'bridge' },
-                      { value: 'masquerade', label: 'masquerade' },
-                      { value: 'sriov', label: 'sriov' },
-                    ]}
-                  />
-                </Form.Item>
-                <Form.Item name="kubevirtInterfaceName" label="Interface Name">
-                  <Input placeholder="net1" />
-                </Form.Item>
-              </div>
-            ) : (
-              <Form.Item name="network" label="网络">
-                <Input placeholder="vmbr0" />
-              </Form.Item>
-            )}
-            {createProvider === 'pve' ? (
-              <>
-                <div className="grid gap-3 md:grid-cols-3">
-                  <Form.Item name="pveStorage" label="PVE 存储">
-                    {pveStorageOptions.length > 0 ? (
-                      <Select allowClear options={pveStorageOptions} />
-                    ) : (
-                      <Input placeholder="local-lvm" />
-                    )}
-                  </Form.Item>
-                  <Form.Item name="pveBridge" label="PVE 网桥">
-                    {pveBridgeOptions.length > 0 ? (
-                      <Select allowClear options={pveBridgeOptions} placeholder="选择已同步网桥" />
-                    ) : (
-                      <Input placeholder="vmbr0" />
-                    )}
-                  </Form.Item>
-                  {createSourceMode === 'iso_install' ? (
-                    <Form.Item name="pveIso" label="安装 ISO">
-                      <Input placeholder="local:iso/ubuntu.iso" />
-                    </Form.Item>
-                  ) : (
-                    <Form.Item label="模板模式">
-                      <Alert
-                        type="info"
-                        showIcon
-                        title="当前将按模板克隆模式创建 VM，启动镜像字段会作为模板来源。"
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <Form.Item name="provider" label="Provider" rules={[{ required: true }]}>
+                      <Select
+                        options={[
+                          { value: 'kubevirt', label: 'KubeVirt' },
+                          { value: 'pve', label: 'PVE' },
+                        ]}
                       />
+                    </Form.Item>
+                    <Form.Item name="connectionId" label="连接" rules={[{ required: true }]}>
+                      <Select
+                        showSearch={{ optionFilterProp: 'label' }}
+                        options={clusters
+                          .filter((item) => !createProvider || item.provider === createProvider)
+                          .map((item) => ({ value: item.id, label: item.name }))}
+                      />
+                    </Form.Item>
+                  </div>
+                  <Form.Item name="sourceMode" label="创建模式" rules={[{ required: true }]}>
+                    <Select
+                      options={
+                        createProvider === 'pve'
+                          ? [
+                              { value: 'template_clone', label: '模板克隆' },
+                              { value: 'iso_install', label: 'ISO 安装' },
+                            ]
+                          : [
+                              { value: 'datasource_clone', label: 'DataSource 克隆' },
+                              { value: 'pvc_clone', label: 'PVC 克隆' },
+                            ]
+                      }
+                    />
+                  </Form.Item>
+                  <Form.Item name="flavorId" label="规格" rules={[{ required: true }]}>
+                    <Select
+                      showSearch={{ optionFilterProp: 'label' }}
+                      options={flavors
+                        .filter((item) => item.enabled !== false)
+                        .map((item) => ({
+                          value: item.id,
+                          label: `${item.name} (${item.cpu}C / ${item.memoryMiB}MiB / ${item.diskGiB}GiB)`,
+                        }))}
+                    />
+                  </Form.Item>
+                  {selectedFlavor ? (
+                    <Alert
+                      className="mb-3"
+                      type="info"
+                      showIcon
+                      title={`已选择 ${selectedFlavor.name}: ${selectedFlavor.cpu}C / ${selectedFlavor.memoryMiB}MiB / ${selectedFlavor.diskGiB}GiB`}
+                    />
+                  ) : null}
+                  <Form.Item
+                    name="bootImageId"
+                    label={
+                      createProvider === 'pve'
+                        ? createSourceMode === 'iso_install'
+                          ? '安装 ISO'
+                          : '模板'
+                        : '启动镜像'
+                    }
+                    rules={[{ required: true }]}
+                  >
+                    <Select
+                      showSearch={{ optionFilterProp: 'label' }}
+                      options={images
+                        .filter(
+                          (item) =>
+                            !createProvider || item.provider === createProvider || !item.provider,
+                        )
+                        .filter(
+                          (item) =>
+                            createProvider !== 'pve' ||
+                            (createSourceMode === 'iso_install'
+                              ? item.assetKind === 'iso' || item.sourceKind === 'iso'
+                              : item.assetKind === 'template' || item.sourceKind === 'template'),
+                        )
+                        .map((item) => ({
+                          value: item.id,
+                          label: item.connectionName
+                            ? `${item.name} (${item.connectionName})`
+                            : item.name,
+                        }))}
+                    />
+                  </Form.Item>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <Form.Item name="namespace" label="命名空间">
+                      <Input />
+                    </Form.Item>
+                    <Form.Item name="node" label="节点">
+                      {createProvider === 'pve' && pveNodeOptions.length > 0 ? (
+                        <Select allowClear options={pveNodeOptions} />
+                      ) : (
+                        <Input
+                          disabled={createProvider === 'kubevirt'}
+                          placeholder={createProvider === 'kubevirt' ? '当前由集群调度' : undefined}
+                        />
+                      )}
+                    </Form.Item>
+                  </div>
+                  {createProvider === 'kubevirt' ? (
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <Form.Item name="kubevirtNetworkType" label="KubeVirt 网络类型">
+                        <Select
+                          options={[
+                            { value: 'pod', label: 'Pod 默认网络' },
+                            { value: 'multus', label: 'Multus' },
+                          ]}
+                        />
+                      </Form.Item>
+                      <Form.Item
+                        name="network"
+                        label={
+                          kubevirtNetworkType === 'multus' ? 'NetworkAttachmentDefinition' : '网络'
+                        }
+                      >
+                        <Input
+                          placeholder={
+                            kubevirtNetworkType === 'multus' ? 'namespace/nad-name' : 'pod'
+                          }
+                        />
+                      </Form.Item>
+                      {kubevirtNetworkType === 'multus' ? (
+                        <Form.Item name="kubevirtNetworkAttachmentDefinition" label="NAD 引用">
+                          <Input placeholder="apps/docker-build-net" />
+                        </Form.Item>
+                      ) : null}
+                      <Form.Item name="kubevirtInterfaceModel" label="Interface Model">
+                        <Input placeholder="virtio" />
+                      </Form.Item>
+                      <Form.Item name="kubevirtInterfaceBinding" label="Interface Binding">
+                        <Select
+                          allowClear
+                          options={[
+                            { value: 'bridge', label: 'bridge' },
+                            { value: 'masquerade', label: 'masquerade' },
+                            { value: 'sriov', label: 'sriov' },
+                          ]}
+                        />
+                      </Form.Item>
+                      <Form.Item name="kubevirtInterfaceName" label="Interface Name">
+                        <Input placeholder="net1" />
+                      </Form.Item>
+                    </div>
+                  ) : (
+                    <Form.Item name="network" label="网络">
+                      <Input placeholder="vmbr0" />
                     </Form.Item>
                   )}
-                </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <Form.Item name="pveCloudInitUser" label="PVE Cloud-Init 用户名">
-                    <Input placeholder="ubuntu" />
+                  {createProvider === 'pve' ? (
+                    <>
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <Form.Item name="pveStorage" label="PVE 存储">
+                          {pveStorageOptions.length > 0 ? (
+                            <Select allowClear options={pveStorageOptions} />
+                          ) : (
+                            <Input placeholder="local-lvm" />
+                          )}
+                        </Form.Item>
+                        <Form.Item name="pveBridge" label="PVE 网桥">
+                          {pveBridgeOptions.length > 0 ? (
+                            <Select
+                              allowClear
+                              options={pveBridgeOptions}
+                              placeholder="选择已同步网桥"
+                            />
+                          ) : (
+                            <Input placeholder="vmbr0" />
+                          )}
+                        </Form.Item>
+                        {createSourceMode === 'iso_install' ? (
+                          <Form.Item name="pveIso" label="安装 ISO">
+                            <Input placeholder="local:iso/ubuntu.iso" />
+                          </Form.Item>
+                        ) : (
+                          <Form.Item label="模板模式">
+                            <Alert
+                              type="info"
+                              showIcon
+                              title="当前将按模板克隆模式创建 VM，启动镜像字段会作为模板来源。"
+                            />
+                          </Form.Item>
+                        )}
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <Form.Item name="pveCloudInitUser" label="PVE Cloud-Init 用户名">
+                          <Input placeholder="ubuntu" />
+                        </Form.Item>
+                        <Form.Item name="pveSnippetStorage" label="PVE Snippet Storage">
+                          {pveSnippetStorageOptions.length > 0 ? (
+                            <Select
+                              allowClear
+                              options={pveSnippetStorageOptions}
+                              placeholder="选择支持 snippets 的存储"
+                            />
+                          ) : (
+                            <Input placeholder="local" />
+                          )}
+                        </Form.Item>
+                        <Form.Item name="pveCloudInitSSHKeys" label="PVE Cloud-Init SSH Keys">
+                          <Input.TextArea rows={3} placeholder="ssh-rsa AAAA..." />
+                        </Form.Item>
+                        <Form.Item name="pveCICustom" label="PVE cicustom 引用">
+                          <Input placeholder="user=local:snippets/docker-agent.yaml" />
+                        </Form.Item>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <Form.Item name="kubevirtStorageClass" label="StorageClass">
+                        <Input placeholder="fast-ssd" />
+                      </Form.Item>
+                      {createSourceMode === 'pvc_clone' ? (
+                        <Form.Item name="kubevirtDataVolumeName" label="PVC 名称">
+                          <Input placeholder="existing-root-pvc" />
+                        </Form.Item>
+                      ) : (
+                        <Form.Item name="kubevirtDataVolumeName" label="DataVolume 名称">
+                          <Input placeholder="demo-rootdisk" />
+                        </Form.Item>
+                      )}
+                    </div>
+                  )}
+                  <Form.Item
+                    name="cloudInit"
+                    label={
+                      createProvider === 'pve'
+                        ? 'PVE raw Cloud-Init user-data'
+                        : 'Cloud Init userData'
+                    }
+                  >
+                    <Input.TextArea rows={5} placeholder="#cloud-config" />
                   </Form.Item>
-                  <Form.Item name="pveSnippetStorage" label="PVE Snippet Storage">
-                    {pveSnippetStorageOptions.length > 0 ? (
-                      <Select
-                        allowClear
-                        options={pveSnippetStorageOptions}
-                        placeholder="选择支持 snippets 的存储"
-                      />
-                    ) : (
-                      <Input placeholder="local" />
-                    )}
+                  <Form.Item name="startAfterCreate" label="创建后启动" valuePropName="checked">
+                    <Switch />
                   </Form.Item>
-                  <Form.Item name="pveCloudInitSSHKeys" label="PVE Cloud-Init SSH Keys">
-                    <Input.TextArea rows={3} placeholder="ssh-rsa AAAA..." />
-                  </Form.Item>
-                  <Form.Item name="pveCICustom" label="PVE cicustom 引用">
-                    <Input placeholder="user=local:snippets/docker-agent.yaml" />
-                  </Form.Item>
-                </div>
-              </>
-            ) : (
-              <div className="grid gap-3 md:grid-cols-2">
-                <Form.Item name="kubevirtStorageClass" label="StorageClass">
-                  <Input placeholder="fast-ssd" />
-                </Form.Item>
-                {createSourceMode === 'pvc_clone' ? (
-                  <Form.Item name="kubevirtDataVolumeName" label="PVC 名称">
-                    <Input placeholder="existing-root-pvc" />
-                  </Form.Item>
-                ) : (
-                  <Form.Item name="kubevirtDataVolumeName" label="DataVolume 名称">
-                    <Input placeholder="demo-rootdisk" />
-                  </Form.Item>
-                )}
-              </div>
-            )}
-            <Form.Item
-              name="cloudInit"
-              label={
-                createProvider === 'pve' ? 'PVE raw Cloud-Init user-data' : 'Cloud Init userData'
-              }
-            >
-              <Input.TextArea rows={5} placeholder="#cloud-config" />
-            </Form.Item>
-            <Form.Item name="startAfterCreate" label="创建后启动" valuePropName="checked">
-              <Switch />
-            </Form.Item>
-            <Space>
-              <Button type="primary" htmlType="submit" loading={createMutation.isPending}>
-                提交
-              </Button>
-              <Button onClick={() => setDrawerOpen(false)}>取消</Button>
-            </Space>
-          </Form>
-        </Drawer>
+                </>
+              ),
+            },
+            {
+              title: '确认创建',
+              children: (
+                <Alert
+                  showIcon
+                  type="info"
+                  title="确认提交虚拟机创建任务"
+                  description="PVE 模板克隆、raw cloud-init、Snippet Storage 与创建后启动配置将按上一步内容提交。"
+                />
+              ),
+            },
+          ]}
+          submitText="提交创建"
+          width={820}
+        />
       }
     />
   )

@@ -7,6 +7,7 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from 'antd'
+import { VirtualizationConnectionStepModal } from './clusters/create-page'
 import { VirtualizationClustersPage } from './clusters/list-page'
 import { VirtualizationFlavorsPage } from './flavors/list-page'
 import { VirtualizationImagesPage } from './images/list-page'
@@ -1079,18 +1080,14 @@ describe('virtualization pages', () => {
   })
 
   it('shows provider-specific cluster connection fields', async () => {
-    const container = await renderWithProviders(
-      <VirtualizationClustersPage />,
-      '/virtualization/clusters',
+    await renderWithProviders(
+      <VirtualizationConnectionStepModal
+        initialProvider="kubevirt"
+        onClose={() => undefined}
+        open
+      />,
+      '/compute/virtualization/clusters',
     )
-
-    await act(async () => {
-      const addButton = Array.from(container.querySelectorAll('button')).find((button) =>
-        button.textContent?.includes('新增连接'),
-      )
-      addButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-      await Promise.resolve()
-    })
 
     expect(testState.apiGet).toHaveBeenCalledWith('/clusters')
     expect(document.body.textContent).toContain('Kubernetes 集群')

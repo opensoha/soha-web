@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   App,
   Button,
-  Drawer,
   Form,
   Input,
   InputNumber,
@@ -14,7 +13,6 @@ import {
   Tooltip,
   Typography,
 } from 'antd'
-import type { DrawerProps } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type { ComponentProps } from 'react'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
@@ -22,6 +20,7 @@ import { hasAllowedAction } from '@/features/auth'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { AdminTable } from '@/components/admin-table'
+import { StepFormModal } from '@/components/step-form-modal'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementIconButton,
@@ -54,8 +53,6 @@ import type {
 } from '@/features/virtualization/virtualization-types'
 
 const { Text } = Typography
-
-const stableDrawerMotion = null as unknown as DrawerProps['motion']
 
 const tableEllipsis = { showTitle: false } as const
 
@@ -117,6 +114,7 @@ function pageTablePagination<T>(
 export function VirtualizationImagesPage() {
   const [editing, setEditing] = useState<VirtualizationImage | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [currentStep, setCurrentStep] = useState(0)
   const [filters, setFilters] = useState<VirtualizationListParams>({ page: 1, pageSize: 10 })
   const [filterForm] = Form.useForm<VirtualizationListParams>()
   const [form] = Form.useForm<VirtualizationImageInput>()
@@ -148,6 +146,8 @@ export function VirtualizationImagesPage() {
   const savePending = createMutation.isPending || updateMutation.isPending
   function openImageEditor(record?: VirtualizationImage) {
     setEditing(record ?? null)
+    setCurrentStep(0)
+    form.resetFields()
     form.setFieldsValue(
       record
         ? {
@@ -340,94 +340,101 @@ export function VirtualizationImagesPage() {
         />
       }
       afterTable={
-        <Drawer
+        <StepFormModal
           title={editing ? '编辑镜像入口' : '新增镜像入口'}
-          size="large"
-          motion={stableDrawerMotion}
+          current={currentStep}
+          form={form}
+          loading={savePending}
           open={drawerOpen}
           onClose={() => setDrawerOpen(false)}
-        >
-          <Form
-            form={form}
-            layout="vertical"
-            initialValues={{ provider: 'kubevirt', sourceKind: 'datasource' }}
-            onFinish={(values) => {
-              const payload = buildImagePayload(values)
-              if (editing) updateMutation.mutate({ id: editing.id, payload })
-              else createMutation.mutate(payload)
-            }}
-          >
-            <Form.Item name="name" label="名称" rules={[{ required: true }]}>
-              <Input />
-            </Form.Item>
-            <div className="grid gap-3 md:grid-cols-2">
-              <Form.Item name="provider" label="Provider" rules={[{ required: true }]}>
-                <Select
-                  options={[
-                    { value: 'kubevirt', label: 'KubeVirt' },
-                    { value: 'pve', label: 'PVE' },
-                  ]}
-                />
-              </Form.Item>
-              <Form.Item name="connectionId" label="连接" rules={[{ required: true }]}>
-                <Select
-                  showSearch={{ optionFilterProp: 'label' }}
-                  options={clusters
-                    .filter((item) => !imageProvider || item.provider === imageProvider)
-                    .map((item) => ({ value: item.id, label: item.name }))}
-                />
-              </Form.Item>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <Form.Item name="sourceKind" label="来源类型" rules={[{ required: true }]}>
-                <Select
-                  options={
-                    imageProvider === 'pve'
-                      ? [
-                          { value: 'template', label: 'PVE template' },
-                          { value: 'iso', label: 'PVE ISO' },
-                        ]
-                      : [
-                          { value: 'datasource', label: 'KubeVirt DataSource' },
-                          { value: 'pvc', label: 'PVC' },
-                        ]
-                  }
-                />
-              </Form.Item>
-              <Form.Item name="sourceRef" label="来源引用" rules={[{ required: true }]}>
-                <Input
-                  placeholder={
-                    imageProvider === 'pve'
-                      ? 'local:vztmpl/ubuntu.tar.zst 或 local:iso/ubuntu.iso'
-                      : 'namespace/name'
-                  }
-                />
-              </Form.Item>
-            </div>
-            {imageProvider === 'kubevirt' ? (
-              <Form.Item name="namespace" label="命名空间">
-                <Input />
-              </Form.Item>
-            ) : null}
-            <div className="grid gap-3 md:grid-cols-2">
-              <Form.Item name="osType" label="操作系统">
-                <Input placeholder="ubuntu / windows / centos" />
-              </Form.Item>
-              <Form.Item name="sizeGiB" label="大小 GiB">
-                <InputNumber min={1} className="w-full" />
-              </Form.Item>
-            </div>
-            <Form.Item name="description" label="描述">
-              <Input.TextArea rows={3} />
-            </Form.Item>
-            <Space>
-              <Button type="primary" htmlType="submit" loading={savePending}>
-                保存
-              </Button>
-              <Button onClick={() => setDrawerOpen(false)}>取消</Button>
-            </Space>
-          </Form>
-        </Drawer>
+          onCurrentChange={setCurrentStep}
+          initialValues={{ provider: 'kubevirt', sourceKind: 'datasource' }}
+          onFinish={(values) => {
+            const payload = buildImagePayload(values)
+            if (editing) updateMutation.mutate({ id: editing.id, payload })
+            else createMutation.mutate(payload)
+          }}
+          steps={[
+            {
+              title: '基本信息',
+              fieldNames: ['name', 'provider', 'connectionId'],
+              children: (
+                <>
+                  <Form.Item name="name" label="名称" rules={[{ required: true }]}>
+                    <Input />
+                  </Form.Item>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <Form.Item name="provider" label="Provider" rules={[{ required: true }]}>
+                      <Select
+                        options={[
+                          { value: 'kubevirt', label: 'KubeVirt' },
+                          { value: 'pve', label: 'PVE' },
+                        ]}
+                      />
+                    </Form.Item>
+                    <Form.Item name="connectionId" label="连接" rules={[{ required: true }]}>
+                      <Select
+                        showSearch={{ optionFilterProp: 'label' }}
+                        options={clusters
+                          .filter((item) => !imageProvider || item.provider === imageProvider)
+                          .map((item) => ({ value: item.id, label: item.name }))}
+                      />
+                    </Form.Item>
+                  </div>
+                </>
+              ),
+            },
+            {
+              title: '来源配置',
+              fieldNames: ['sourceKind', 'sourceRef'],
+              children: (
+                <>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <Form.Item name="sourceKind" label="来源类型" rules={[{ required: true }]}>
+                      <Select
+                        options={
+                          imageProvider === 'pve'
+                            ? [
+                                { value: 'template', label: 'PVE template' },
+                                { value: 'iso', label: 'PVE ISO' },
+                              ]
+                            : [
+                                { value: 'datasource', label: 'KubeVirt DataSource' },
+                                { value: 'pvc', label: 'PVC' },
+                              ]
+                        }
+                      />
+                    </Form.Item>
+                    <Form.Item name="sourceRef" label="来源引用" rules={[{ required: true }]}>
+                      <Input
+                        placeholder={
+                          imageProvider === 'pve' ? 'VMID 或 storage:volume' : 'namespace/name'
+                        }
+                      />
+                    </Form.Item>
+                  </div>
+                  {imageProvider === 'kubevirt' ? (
+                    <Form.Item name="namespace" label="命名空间">
+                      <Input />
+                    </Form.Item>
+                  ) : null}
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <Form.Item name="osType" label="操作系统">
+                      <Input placeholder="alpine / ubuntu / windows" />
+                    </Form.Item>
+                    <Form.Item name="sizeGiB" label="大小 GiB">
+                      <InputNumber min={1} className="w-full" />
+                    </Form.Item>
+                  </div>
+                  <Form.Item name="description" label="描述">
+                    <Input.TextArea rows={3} />
+                  </Form.Item>
+                </>
+              ),
+            },
+          ]}
+          submitText="保存"
+        />
       }
     />
   )
