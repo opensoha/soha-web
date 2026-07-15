@@ -78,6 +78,44 @@ vi.mock('@/features/copilot/gateway/redirects', async () => {
   }
 })
 
+vi.mock('@/features/virtualization', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/virtualization')>()
+  const { createElement } = await import('react')
+  return {
+    ...actual,
+    virtualizationRouteLoaders: {
+      ...actual.virtualizationRouteLoaders,
+      vmDetail: async () => ({
+        default: () =>
+          createElement(
+            'div',
+            { 'data-route-page': 'VirtualizationVmDetailPage' },
+            'VirtualizationVmDetailPage',
+          ),
+      }),
+    },
+  }
+})
+
+vi.mock('@/features/docker', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/docker')>()
+  const { createElement } = await import('react')
+  return {
+    ...actual,
+    dockerRouteLoaders: {
+      ...actual.dockerRouteLoaders,
+      projectDetail: async () => ({
+        default: () =>
+          createElement(
+            'div',
+            { 'data-route-page': 'DockerProjectDetailPage' },
+            'DockerProjectDetailPage',
+          ),
+      }),
+    },
+  }
+})
+
 vi.mock('@/features/platform/workloads/overview/page', mockRoutePage('WorkloadsOverviewPage'))
 vi.mock('@/features/platform/clusters/list-page', mockRoutePage('ClustersPage'))
 vi.mock('@/features/platform/clusters/detail-page', mockRoutePage('ClusterDetailPage'))
@@ -155,11 +193,6 @@ vi.mock('@/features/platform/workloads/jobs/list-page', mockRoutePage('Workloads
 vi.mock('@/features/platform/workloads/jobs/detail-page', mockRoutePage('JobDetailPage'))
 vi.mock('@/features/platform/workloads/cronjobs/list-page', mockRoutePage('WorkloadsCronJobsPage'))
 vi.mock('@/features/platform/workloads/cronjobs/detail-page', mockRoutePage('CronJobDetailPage'))
-vi.mock(
-  '@/features/virtualization/virtual-machines/detail-page',
-  mockRoutePage('VirtualizationVmDetailPage'),
-)
-vi.mock('@/features/docker/projects/detail-page', mockRoutePage('DockerProjectDetailPage'))
 vi.mock('@/features/observability/alerts/detail-page', mockRoutePage('AlertEventDetailPage'))
 
 const mountedRoots: Root[] = []
@@ -182,6 +215,18 @@ async function renderRoute(path: string) {
     )
   })
   return container
+}
+
+async function waitForRoutePage(container: HTMLElement, page: string) {
+  const selector = `[data-route-page="${page}"]`
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const element = container.querySelector(selector)
+    if (element) return element
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+  }
+  return container.querySelector(selector)
 }
 
 afterEach(async () => {
@@ -259,8 +304,8 @@ describe('router deep-link baseline', () => {
     ['/workloads/jobs/migration', 'JobDetailPage'],
     ['/workloads/cronjobs', 'WorkloadsCronJobsPage'],
     ['/workloads/cronjobs/backup', 'CronJobDetailPage'],
-    ['/virtualization/vms/vm-1', 'VirtualizationVmDetailPage'],
-    ['/docker/projects/project-1', 'DockerProjectDetailPage'],
+    ['/compute/virtualization/vms/vm-1', 'VirtualizationVmDetailPage'],
+    ['/compute/runtimes/projects/project-1', 'DockerProjectDetailPage'],
     ['/monitoring-workbench/alerts/event-1', 'AlertEventDetailPage'],
     ['/observability/alerts/event-1', 'AlertEventDetailPage'],
     ['/ai-workbench/chat', 'AIWorkbenchChatPage'],
@@ -272,6 +317,6 @@ describe('router deep-link baseline', () => {
     ['/not-a-real-route', 'OverviewPage'],
   ])('resolves %s to %s', async (path, page) => {
     const container = await renderRoute(path)
-    expect(container.querySelector(`[data-route-page="${page}"]`)).not.toBeNull()
+    expect(await waitForRoutePage(container, page), container.innerHTML).not.toBeNull()
   })
 })

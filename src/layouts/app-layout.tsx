@@ -7,7 +7,6 @@ import {
   AlertOutlined,
   AppstoreOutlined,
   CloudServerOutlined,
-  DockerOutlined,
   DownOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -27,6 +26,11 @@ import { PlatformScopeTrigger } from '@/components/platform-scope-toolbar'
 import { AnnouncementBell } from '@/features/announcements/announcement-center'
 import { logoutAuthSession } from '@/features/auth/auth-api'
 import { usePermissionSnapshot } from '@/features/auth/permission-snapshot'
+import {
+  isComputeWorkbenchManagementMenu,
+  isComputeWorkbenchMenuGroup,
+  normalizeComputeWorkbenchNav,
+} from '@/features/compute/navigation'
 import { GlobalAIAssistantProvider } from '@/features/copilot/global-assistant'
 import { filterMenuByModuleFeatures, useModuleStatuses } from '@/features/modules'
 import { resolveMenuIcon } from '@/features/system/menu-icons'
@@ -59,10 +63,9 @@ const SIDEBAR_WIDTH = 200
 const SIDEBAR_COLLAPSED_WIDTH = 55
 const BREADCRUMB_WORKBENCH_ROOT_ROUTE_IDS: Partial<Record<WorkbenchId, string[]>> = {
   ai: ['ai-workbench', 'ai-gateway'],
-  docker: ['docker-workbench'],
+  compute: ['compute-workbench'],
   monitoring: ['monitoring-workbench'],
   settings: ['settings', 'extension-center'],
-  virtualization: ['virtualization-workbench'],
 }
 
 interface WorkbenchOption {
@@ -188,11 +191,7 @@ function resolveRuntimeMenuIconKey(node: RuntimeMenuNode) {
 function buildMenuItems(
   sidebarNav: RuntimeMenuNode[],
   localeCode: 'zh_CN' | 'en_US',
-  options: { grouped?: boolean } = {},
 ): MenuProps['items'] {
-  if (options.grouped === false) {
-    return sidebarNav.map((item) => buildMenuNodeItem(item, localeCode))
-  }
   const directItems: NonNullable<MenuProps['items']>[number][] = []
   const groups = new Map<string, NonNullable<MenuProps['items']>[number][]>()
 
@@ -220,6 +219,50 @@ function buildMenuItems(
   }))
 
   return [...directItems, ...groupedItems]
+}
+
+function buildComputeMenuItems(
+  sidebarNav: RuntimeMenuNode[],
+  localeCode: 'zh_CN' | 'en_US',
+): MenuProps['items'] {
+  const managementNodes = sidebarNav.filter((node) => isComputeWorkbenchManagementMenu(node.id))
+  const managementAnchorID = managementNodes[0]?.id
+
+  return sidebarNav.flatMap((node) => {
+    if (isComputeWorkbenchManagementMenu(node.id)) {
+      if (node.id !== managementAnchorID) return []
+      return [
+        {
+          key: 'group-compute-workbench-management',
+          type: 'group' as const,
+          label: (
+            <span className="soha-nav-section-title">
+              {localeCode === 'en_US' ? 'Resource Management' : '资源管理'}
+            </span>
+          ),
+          children: managementNodes.map((item) => buildMenuNodeItem(item, localeCode)),
+        },
+      ]
+    }
+    if (!isComputeWorkbenchMenuGroup(node.id)) {
+      return [buildMenuNodeItem(node, localeCode)]
+    }
+    if (!node.children?.length) {
+      return []
+    }
+    return [
+      {
+        key: `group-${node.id}`,
+        type: 'group' as const,
+        label: (
+          <span className="soha-nav-section-title">
+            {resolveRuntimeMenuLabel(node, localeCode)}
+          </span>
+        ),
+        children: node.children.map((child) => buildMenuNodeItem(child, localeCode)),
+      },
+    ]
+  })
 }
 
 function buildItemKeyToPath(sidebarNav: RuntimeMenuNode[]): Record<string, string> {
@@ -317,16 +360,10 @@ function buildWorkbenchOptions(localeCode: 'zh_CN' | 'en_US'): WorkbenchOption[]
         icon: <AppstoreOutlined />,
       },
       {
-        key: 'virtualization',
-        label: 'Virtualization Workbench',
-        description: 'Virtual machines, clusters, images, flavors, and operation records',
+        key: 'compute',
+        label: 'Compute Resources',
+        description: 'Virtualization, runtime hosts, containers, and operation tasks',
         icon: <SlidersOutlined />,
-      },
-      {
-        key: 'docker',
-        label: 'Docker Workbench',
-        description: 'Docker hosts, container management, templates, and operations',
-        icon: <DockerOutlined />,
       },
       {
         key: 'delivery',
@@ -362,16 +399,10 @@ function buildWorkbenchOptions(localeCode: 'zh_CN' | 'en_US'): WorkbenchOption[]
       icon: <AppstoreOutlined />,
     },
     {
-      key: 'virtualization',
-      label: '虚拟化管理工作台',
-      description: '虚拟机、集群、镜像、规格与操作记录',
+      key: 'compute',
+      label: '计算资源工作台',
+      description: '虚拟化、运行时主机、容器管理与任务追踪',
       icon: <SlidersOutlined />,
-    },
-    {
-      key: 'docker',
-      label: 'Docker 工作台',
-      description: '主机、容器管理、模板与操作记录',
-      icon: <DockerOutlined />,
     },
     {
       key: 'delivery',
@@ -517,7 +548,7 @@ export function AppLayout() {
     }
     if (activeWorkspace === 'resource') {
       return (
-        (['platform', 'virtualization', 'docker', 'ai', 'monitoring'] as const).find((item) =>
+        (['platform', 'compute', 'ai', 'monitoring'] as const).find((item) =>
           accessibleWorkbenchIds.includes(item),
         ) ?? null
       )
@@ -532,7 +563,8 @@ export function AppLayout() {
     if (!activeWorkbenchId) {
       return businessWorkspaceNav
     }
-    return filterSidebarNavByWorkbench(businessWorkspaceNav, activeWorkbenchId)
+    const filtered = filterSidebarNavByWorkbench(businessWorkspaceNav, activeWorkbenchId)
+    return activeWorkbenchId === 'compute' ? normalizeComputeWorkbenchNav(filtered) : filtered
   }, [activeWorkbenchId, businessWorkspaceNav])
   const systemNav = useMemo(
     () => filterSidebarNavByWorkspace(fullSidebarNav, 'system'),
@@ -552,9 +584,9 @@ export function AppLayout() {
   }, [businessNav, isSystemWorkspaceRoute, systemNav, systemWorkbenchNav])
   const primaryMenuItems = useMemo(
     () =>
-      buildMenuItems(primaryNav, localeCode, {
-        grouped: activeWorkbenchId !== 'virtualization' && activeWorkbenchId !== 'docker',
-      }),
+      activeWorkbenchId === 'compute'
+        ? buildComputeMenuItems(primaryNav, localeCode)
+        : buildMenuItems(primaryNav, localeCode),
     [activeWorkbenchId, localeCode, primaryNav],
   )
   const primaryItemKeyToPath = useMemo(() => {

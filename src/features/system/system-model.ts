@@ -212,8 +212,7 @@ export interface MenuWorkbenchSummary {
 
 export const MENU_WORKBENCH_ORDER: MenuWorkbenchSurface[] = [
   'platform',
-  'virtualization',
-  'docker',
+  'compute',
   'delivery',
   'ai',
   'monitoring',
@@ -224,8 +223,7 @@ export const MENU_WORKBENCH_ORDER: MenuWorkbenchSurface[] = [
 
 export const MENU_WORKBENCH_LABELS: Record<MenuWorkbenchSurface, string> = {
   platform: 'k8s工作台',
-  virtualization: '虚拟化管理工作台',
-  docker: 'Docker 工作台',
+  compute: '计算资源工作台',
   ai: 'AI工作台',
   monitoring: '监控工作台',
   settings: '设置中心',
@@ -348,19 +346,21 @@ export function buildWorkbenchMenuTree(items: MenuItem[]) {
         if (sectionCompare !== 0) return sectionCompare
         return resolveMenuSectionLabel(left).localeCompare(resolveMenuSectionLabel(right))
       })
-      .map(([section, sectionItems]): MenuItem => ({
-        id: `__section__${workbenchKey}__${section}`,
-        labelZh: resolveMenuSectionLabel(section),
-        labelEn: resolveMenuSectionLabel(section, 'en_US'),
-        path: '',
-        iconKey: '',
-        section,
-        sortOrder: 0,
-        enabled: true,
-        syntheticKind: 'section',
-        syntheticWorkbenchKey: workbenchKey,
-        children: [...sectionItems].sort(compareMenuItems),
-      }))
+      .map(
+        ([section, sectionItems]): MenuItem => ({
+          id: `__section__${workbenchKey}__${section}`,
+          labelZh: resolveMenuSectionLabel(section),
+          labelEn: resolveMenuSectionLabel(section, 'en_US'),
+          path: '',
+          iconKey: '',
+          section,
+          sortOrder: 0,
+          enabled: true,
+          syntheticKind: 'section',
+          syntheticWorkbenchKey: workbenchKey,
+          children: [...sectionItems].sort(compareMenuItems),
+        }),
+      )
 
     return {
       id: `__workbench__${workbenchKey}`,

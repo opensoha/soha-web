@@ -1,7 +1,7 @@
 import { accessRoutes } from '@/features/access/routes'
 import { authRoutes, authUtilityRoutes } from '@/features/auth/routes'
 import { copilotRouteManifests } from '@/features/copilot/routes'
-import { dockerRoutes } from '@/features/docker/routes'
+import { computeRoutes } from '@/features/compute/routes'
 import { deliveryRoutes } from '@/features/delivery/routes'
 import { identityRouteManifests } from '@/features/identity/routes'
 import { observabilityRouteManifests } from '@/features/observability/routes'
@@ -10,7 +10,6 @@ import { pluginRoutes } from '@/features/plugins/routes'
 import { providerPortalRoutes } from '@/features/provider-portal/routes'
 import { settingsRoutes } from '@/features/settings/routes'
 import { systemRoutes } from '@/features/system/routes'
-import { virtualizationRoutes } from '@/features/virtualization/routes'
 import { assertValidRouteDefinitions, resolveRouteDefinitions } from './definitions'
 import { fallbackRoutes } from './fallback-routes'
 import type { AppRouteDefinition, AppRouteShell } from './route-types'
@@ -20,8 +19,7 @@ export const featureRouteManifests = [
   authRoutes,
   ...copilotRouteManifests,
   ...platformRouteManifests,
-  virtualizationRoutes,
-  dockerRoutes,
+  computeRoutes,
   deliveryRoutes,
   ...observabilityRouteManifests,
   providerPortalRoutes,

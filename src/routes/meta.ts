@@ -1,5 +1,5 @@
 import { getMenuSectionOrder, normalizeMenuSection } from '@/features/system/menu-schema'
-import { routeMeta } from './registry'
+import { registeredRouteDefinitions, routeMeta } from './registry'
 import type {
   BusinessWorkspaceType,
   PermissionSnapshot,
@@ -40,8 +40,7 @@ const APPLICATION_PATH_PREFIXES = [
 
 const WORKBENCH_DEFAULT_PATHS = {
   platform: '/',
-  virtualization: '/virtualization',
-  docker: '/docker',
+  compute: '/compute',
   delivery: '/applications',
   ai: '/ai-workbench/overview',
   monitoring: '/monitoring-workbench',
@@ -73,12 +72,84 @@ const FRONTEND_MENU_COMPATIBILITY: ReadonlyArray<
     permissionKey: 'access.directory.view',
     requiredParentId: 'access',
   },
-  { id: 'ai-workbench-knowledge-pipelines', parentId: 'ai-workbench', path: '/ai-workbench/knowledge-pipelines', labelZh: 'Knowledge Pipelines', labelEn: 'Knowledge Pipelines', iconKey: 'book', section: 'ai-interaction', sortOrder: 25, enabled: true, permissionKey: 'ai.knowledge.connectors.view', requiredParentId: 'ai-workbench' },
-  { id: 'ai-workbench-evaluation-lifecycle', parentId: 'ai-workbench', path: '/ai-workbench/evaluation-lifecycle', labelZh: 'Evaluation Lifecycle', labelEn: 'Evaluation Lifecycle', iconKey: 'inspect', section: 'ai-interaction', sortOrder: 55, enabled: true, permissionKey: 'ai.evaluations.execute', requiredParentId: 'ai-workbench' },
-  { id: 'ai-workbench-memory', parentId: 'ai-workbench', path: '/ai-workbench/memory', labelZh: 'Memory Policies', labelEn: 'Memory Policies', iconKey: 'inspect', section: 'ai-engineering', sortOrder: 15, enabled: true, permissionKey: 'ai.memory.view', requiredParentId: 'ai-workbench' },
-  { id: 'ai-workbench-provider-fleet', parentId: 'ai-workbench', path: '/ai-workbench/provider-fleet', labelZh: 'Provider Fleet', labelEn: 'Provider Fleet', iconKey: 'puzzle', section: 'ai-engineering', sortOrder: 35, enabled: true, permissionKey: 'ai.agent-fleet.view', requiredParentId: 'ai-workbench' },
-  { id: 'ai-workbench-environments', parentId: 'ai-workbench', path: '/ai-workbench/environments', labelZh: 'Agent Environments', labelEn: 'Agent Environments', iconKey: 'puzzle', section: 'ai-engineering', sortOrder: 40, enabled: true, permissionKey: 'ai.environments.view', requiredParentId: 'ai-workbench' },
-  { id: 'ai-workbench-production-operations', parentId: 'ai-workbench', path: '/ai-workbench/production-operations', labelZh: 'AI Operations', labelEn: 'AI Operations', iconKey: 'gauge', section: 'ai-governance', sortOrder: 40, enabled: true, permissionKey: 'ai.operations.view', requiredParentId: 'ai-workbench' },
+  {
+    id: 'ai-workbench-knowledge-pipelines',
+    parentId: 'ai-workbench',
+    path: '/ai-workbench/knowledge-pipelines',
+    labelZh: 'Knowledge Pipelines',
+    labelEn: 'Knowledge Pipelines',
+    iconKey: 'book',
+    section: 'ai-interaction',
+    sortOrder: 25,
+    enabled: true,
+    permissionKey: 'ai.knowledge.connectors.view',
+    requiredParentId: 'ai-workbench',
+  },
+  {
+    id: 'ai-workbench-evaluation-lifecycle',
+    parentId: 'ai-workbench',
+    path: '/ai-workbench/evaluation-lifecycle',
+    labelZh: 'Evaluation Lifecycle',
+    labelEn: 'Evaluation Lifecycle',
+    iconKey: 'inspect',
+    section: 'ai-interaction',
+    sortOrder: 55,
+    enabled: true,
+    permissionKey: 'ai.evaluations.execute',
+    requiredParentId: 'ai-workbench',
+  },
+  {
+    id: 'ai-workbench-memory',
+    parentId: 'ai-workbench',
+    path: '/ai-workbench/memory',
+    labelZh: 'Memory Policies',
+    labelEn: 'Memory Policies',
+    iconKey: 'inspect',
+    section: 'ai-engineering',
+    sortOrder: 15,
+    enabled: true,
+    permissionKey: 'ai.memory.view',
+    requiredParentId: 'ai-workbench',
+  },
+  {
+    id: 'ai-workbench-provider-fleet',
+    parentId: 'ai-workbench',
+    path: '/ai-workbench/provider-fleet',
+    labelZh: 'Provider Fleet',
+    labelEn: 'Provider Fleet',
+    iconKey: 'puzzle',
+    section: 'ai-engineering',
+    sortOrder: 35,
+    enabled: true,
+    permissionKey: 'ai.agent-fleet.view',
+    requiredParentId: 'ai-workbench',
+  },
+  {
+    id: 'ai-workbench-environments',
+    parentId: 'ai-workbench',
+    path: '/ai-workbench/environments',
+    labelZh: 'Agent Environments',
+    labelEn: 'Agent Environments',
+    iconKey: 'puzzle',
+    section: 'ai-engineering',
+    sortOrder: 40,
+    enabled: true,
+    permissionKey: 'ai.environments.view',
+    requiredParentId: 'ai-workbench',
+  },
+  {
+    id: 'ai-workbench-production-operations',
+    parentId: 'ai-workbench',
+    path: '/ai-workbench/production-operations',
+    labelZh: 'AI Operations',
+    labelEn: 'AI Operations',
+    iconKey: 'gauge',
+    section: 'ai-governance',
+    sortOrder: 40,
+    enabled: true,
+    permissionKey: 'ai.operations.view',
+    requiredParentId: 'ai-workbench',
+  },
 ]
 
 const ROUTE_MENU_COMPATIBILITY: Readonly<Record<string, readonly string[]>> = {
@@ -105,17 +176,24 @@ function matchesRoutePrefix(pathname: string, prefixes: string[]) {
 export { routeMeta } from './registry'
 
 export function getRouteMeta(pathname: string): RouteMeta {
-  const candidates = [...routeMeta].sort((a, b) => b.path.length - a.path.length)
+  const candidates = registeredRouteDefinitions
+    .flatMap((definition) =>
+      [definition.meta.path, ...(definition.aliases ?? [])].map((path) => ({
+        meta: definition.meta,
+        path,
+      })),
+    )
+    .sort((a, b) => b.path.length - a.path.length)
   return (
-    candidates.find((r) => {
-      if (r.path === '/') return pathname === '/'
-      const routeSegments = r.path.split('/').filter(Boolean)
+    candidates.find((candidate) => {
+      if (candidate.path === '/') return pathname === '/'
+      const routeSegments = candidate.path.split('/').filter(Boolean)
       const pathSegments = pathname.split('/').filter(Boolean)
       if (routeSegments.length > pathSegments.length) return false
       return routeSegments.every(
         (segment, index) => segment.startsWith(':') || segment === pathSegments[index],
       )
-    }) ?? routeMeta[0]
+    })?.meta ?? routeMeta[0]
   )
 }
 
@@ -191,11 +269,8 @@ function deriveWorkbenchIdFromPath(pathname: string): WorkbenchId | null {
   if (matchesRoutePrefix(pathname, APPLICATION_PATH_PREFIXES)) {
     return 'delivery'
   }
-  if (pathname.startsWith('/virtualization')) {
-    return 'virtualization'
-  }
-  if (pathname.startsWith('/docker')) {
-    return 'docker'
+  if (pathname.startsWith('/compute')) {
+    return 'compute'
   }
   if (pathname.startsWith('/ai-gateway')) {
     return 'ai'
@@ -322,6 +397,7 @@ export function getRouteScopeMode(route: RouteMeta): NonNullable<RouteMeta['scop
     pathname.startsWith('/registries') ||
     pathname.startsWith('/monitoring-workbench') ||
     pathname.startsWith('/observability') ||
+    pathname.startsWith('/compute') ||
     pathname.startsWith('/virtualization') ||
     pathname.startsWith('/docker') ||
     pathname.startsWith('/plugins') ||
@@ -504,11 +580,15 @@ function sortRuntimeMenuTree(items: RuntimeMenuNode[]): RuntimeMenuNode[] {
       if (left.sortOrder !== right.sortOrder) return left.sortOrder - right.sortOrder
       return left.path.localeCompare(right.path)
     })
-    .map((item): RuntimeMenuNode => ({
-      ...item,
-      children:
-        item.children && item.children.length > 0 ? sortRuntimeMenuTree(item.children) : undefined,
-    }))
+    .map(
+      (item): RuntimeMenuNode => ({
+        ...item,
+        children:
+          item.children && item.children.length > 0
+            ? sortRuntimeMenuTree(item.children)
+            : undefined,
+      }),
+    )
 }
 
 const APPLICATION_SECTION_ORDER: Record<string, number> = {
@@ -743,10 +823,9 @@ export function filterSidebarNavByWorkbench(
   )
 
   const flattenedWorkbenchRootIds: Partial<Record<WorkbenchId, string>> = {
-    docker: 'docker-workbench',
+    compute: 'compute-workbench',
     monitoring: 'monitoring-workbench',
     settings: 'settings',
-    virtualization: 'virtualization-workbench',
   }
   const flattenedRootIds = [
     flattenedWorkbenchRootIds[workbenchId],

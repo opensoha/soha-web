@@ -7,8 +7,6 @@ import {
   Button,
   Descriptions,
   Drawer,
-  Form,
-  Input,
   Modal,
   Popconfirm,
   Select,
@@ -47,7 +45,6 @@ import {
   ENABLED_FILTER_OPTIONS,
   STATUS_COLORS,
   VIRTUALIZATION_PROVIDER_FILTER_OPTIONS,
-  buildClusterPayload,
   bulkActionSummary,
   classNames,
   clusterRiskScore,
@@ -60,11 +57,8 @@ import {
   providerLabel,
   riskReasons,
 } from '@/features/virtualization/virtualization-model'
-import type {
-  EnabledFilter,
-  ProviderFilter,
-  VirtualizationClusterFormValues,
-} from '@/features/virtualization/virtualization-model'
+import type { EnabledFilter, ProviderFilter } from '@/features/virtualization/virtualization-model'
+import { VirtualizationConnectionStepModal } from './create-page'
 import '@/features/virtualization/virtualization-workbench.css'
 import type {
   VirtualizationCluster,
@@ -194,8 +188,7 @@ function VirtualizationAdminTable({
 export function VirtualizationClustersPage() {
   const navigate = useNavigate()
   const [editing, setEditing] = useState<VirtualizationCluster | null>(null)
-  const [drawerOpen, setDrawerOpen] = useState(false)
-  const [form] = Form.useForm<VirtualizationClusterFormValues>()
+  const [editorOpen, setEditorOpen] = useState(false)
   const [showOnlyAbnormal, setShowOnlyAbnormal] = useState(false)
   const [enabledFilter, setEnabledFilter] = useState<EnabledFilter>('all')
   const [providerFilter, setProviderFilter] = useState<ProviderFilter>('all')
@@ -210,32 +203,9 @@ export function VirtualizationClustersPage() {
   const { virtualizationModuleEnabled, canManageClusters, canSync } = useVirtualizationPermissions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
-  const provider = Form.useWatch('provider', form) ?? 'kubevirt'
-  const selectedKubernetesClusterId = Form.useWatch('kubernetesClusterId', form)
   const clustersQuery = useQuery(virtualizationQueries.clusters(virtualizationModuleEnabled))
   const clusterOperationsQuery = useQuery(
     virtualizationQueries.operations({}, virtualizationModuleEnabled),
-  )
-  const platformClustersQuery = useQuery(
-    virtualizationQueries.platformClusterOptions(virtualizationModuleEnabled && canManageClusters),
-  )
-  const afterSave = () => {
-    message.success('连接已保存')
-    setDrawerOpen(false)
-    setEditing(null)
-    form.resetFields()
-  }
-  const createMutation = useMutation(
-    withVirtualizationMutationSuccess(
-      virtualizationMutations.createCluster(queryClient),
-      afterSave,
-    ),
-  )
-  const updateMutation = useMutation(
-    withVirtualizationMutationSuccess(
-      virtualizationMutations.updateCluster(queryClient),
-      afterSave,
-    ),
   )
   const deletePreviewMutation = useMutation(virtualizationMutations.clusterDeleteDependencies())
   const deleteMutation = useMutation(
@@ -272,57 +242,9 @@ export function VirtualizationClustersPage() {
       },
     ),
   )
-  const savePending = createMutation.isPending || updateMutation.isPending
-
   function openEditor(record?: VirtualizationCluster) {
     setEditing(record ?? null)
-    form.resetFields()
-    form.setFieldsValue(
-      record
-        ? {
-            name: record.name,
-            provider: record.provider === 'pve' ? 'pve' : 'kubevirt',
-            endpoint: record.endpoint,
-            kubernetesClusterId: record.kubernetesClusterId,
-            defaultNamespace: record.defaultNamespace,
-            enabled: record.enabled !== false,
-            verifyTls: record.verifyTls !== false,
-            region: record.region,
-            description: record.description,
-            defaultNode:
-              typeof record.config?.defaultNode === 'string'
-                ? record.config.defaultNode
-                : undefined,
-            defaultStorage:
-              typeof record.config?.defaultStorage === 'string'
-                ? record.config.defaultStorage
-                : undefined,
-            defaultBridge:
-              typeof record.config?.defaultBridge === 'string'
-                ? record.config.defaultBridge
-                : undefined,
-            defaultSnippetStorage:
-              typeof record.config?.defaultSnippetStorage === 'string'
-                ? record.config.defaultSnippetStorage
-                : typeof record.config?.snippetStorage === 'string'
-                  ? record.config.snippetStorage
-                  : undefined,
-            backendUrl:
-              typeof record.config?.backendUrl === 'string' ? record.config.backendUrl : undefined,
-            prometheusUrl:
-              typeof record.config?.prometheusUrl === 'string'
-                ? record.config.prometheusUrl
-                : undefined,
-            prometheusBearerToken: undefined,
-            prometheusBearerTokenSecretRef:
-              typeof record.config?.prometheusBearerTokenSecretRef === 'string'
-                ? record.config.prometheusBearerTokenSecretRef
-                : undefined,
-            mode: typeof record.config?.mode === 'string' ? record.config.mode : undefined,
-          }
-        : { provider: 'kubevirt', enabled: true, verifyTls: true },
-    )
-    setDrawerOpen(true)
+    setEditorOpen(true)
   }
 
   const clusterRows = useMemo(() => {
@@ -341,11 +263,6 @@ export function VirtualizationClustersPage() {
           clusterRiskScore(left) - clusterRiskScore(right) || left.name.localeCompare(right.name),
       )
   }, [clustersQuery.data, enabledFilter, providerFilter, showNeverSynced, showOnlyAbnormal])
-  const selectedPlatformCluster = useMemo(
-    () =>
-      (platformClustersQuery.data ?? []).find((item) => item.id === selectedKubernetesClusterId),
-    [platformClustersQuery.data, selectedKubernetesClusterId],
-  )
   const clusterOperations = clusterOperationsQuery.data ?? []
   function operationsForConnection(connectionId?: string) {
     if (!connectionId) return []
@@ -698,163 +615,14 @@ export function VirtualizationClustersPage() {
           <ConnectionDeletePreview dependencies={deletePreview.dependencies} />
         ) : null}
       </Modal>
-      <Drawer
-        title={editing ? '编辑连接' : '新增连接'}
-        size="large"
-        motion={stableDrawerMotion}
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-      >
-        <Form
-          form={form}
-          layout="vertical"
-          initialValues={{ provider: 'kubevirt', enabled: true, verifyTls: true }}
-          onFinish={(values) => {
-            const payload = buildClusterPayload(values)
-            if (editing) updateMutation.mutate({ id: editing.id, payload })
-            else createMutation.mutate(payload)
-          }}
-        >
-          <Form.Item name="name" label="名称" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="provider" label="Provider" rules={[{ required: true }]}>
-            <Select
-              options={[
-                { value: 'kubevirt', label: 'KubeVirt' },
-                { value: 'pve', label: 'PVE' },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="mode" hidden>
-            <Input />
-          </Form.Item>
-          {provider === 'kubevirt' ? (
-            <>
-              <Alert
-                className="mb-3"
-                type={selectedPlatformCluster?.connectionMode === 'agent' ? 'warning' : 'info'}
-                showIcon
-                title={
-                  selectedPlatformCluster?.connectionMode === 'agent'
-                    ? '当前 Kubernetes 集群为 Agent 模式，KubeVirt 连接测试会返回 unsupported，真实创建需等待 Agent 侧适配。'
-                    : '当前按直连 kubeconfig 模式保存 KubeVirt 连接参数。'
-                }
-              />
-              <Form.Item
-                name="kubernetesClusterId"
-                label="Kubernetes 集群"
-                rules={[{ required: true }]}
-              >
-                <Select
-                  showSearch={{ optionFilterProp: 'label' }}
-                  loading={platformClustersQuery.isLoading}
-                  options={(platformClustersQuery.data ?? []).map((item) => ({
-                    value: item.id,
-                    label: `${item.name} (${item.id} · ${item.connectionMode})`,
-                  }))}
-                  onChange={(value) => {
-                    const cluster = (platformClustersQuery.data ?? []).find(
-                      (item) => item.id === value,
-                    )
-                    form.setFieldValue(
-                      'mode',
-                      cluster?.connectionMode === 'agent' ? 'agent' : 'direct_kubeconfig',
-                    )
-                  }}
-                />
-              </Form.Item>
-              <Form.Item name="defaultNamespace" label="默认命名空间">
-                <Input />
-              </Form.Item>
-              <Form.Item name="backendUrl" label="Console Backend URL">
-                <Input placeholder="https://kube-api.example:6443" />
-              </Form.Item>
-              <div className="grid gap-3 md:grid-cols-2">
-                <Form.Item name="prometheusUrl" label="Prometheus URL">
-                  <Input placeholder="https://prometheus.example" />
-                </Form.Item>
-                <Form.Item name="prometheusBearerToken" label="Prometheus Bearer Token">
-                  <Input.Password
-                    placeholder={
-                      editing?.config?.prometheusBearerTokenConfigured
-                        ? '留空表示保留已配置 Token'
-                        : '保存到加密凭证'
-                    }
-                  />
-                </Form.Item>
-                <Form.Item name="prometheusBearerTokenSecretRef" label="Prometheus Token SecretRef">
-                  <Input placeholder="observability/prometheus-token" />
-                </Form.Item>
-              </div>
-            </>
-          ) : (
-            <>
-              <Form.Item name="endpoint" label="Endpoint" rules={[{ required: true }]}>
-                <Input placeholder="https://pve.example:8006" />
-              </Form.Item>
-              <div className="grid gap-3 md:grid-cols-2">
-                <Form.Item name="username" label="Username">
-                  <Input placeholder="root@pam" />
-                </Form.Item>
-                <Form.Item name="password" label="Password">
-                  <Input.Password placeholder="保存到加密凭证" />
-                </Form.Item>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2">
-                <Form.Item name="tokenID" label="Token ID">
-                  <Input />
-                </Form.Item>
-                <Form.Item name="tokenSecret" label="Token Secret">
-                  <Input.Password />
-                </Form.Item>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2">
-                <Form.Item name="ticket" label="Ticket">
-                  <Input.Password />
-                </Form.Item>
-                <Form.Item name="csrfToken" label="CSRF Token">
-                  <Input.Password />
-                </Form.Item>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2">
-                <Form.Item name="defaultNode" label="默认节点">
-                  <Input />
-                </Form.Item>
-                <Form.Item name="defaultStorage" label="默认存储">
-                  <Input />
-                </Form.Item>
-              </div>
-              <Form.Item name="defaultBridge" label="默认网桥">
-                <Input placeholder="vmbr0" />
-              </Form.Item>
-              <Form.Item name="defaultSnippetStorage" label="默认 Snippet Storage">
-                <Input placeholder="local" />
-              </Form.Item>
-            </>
-          )}
-          <div className="grid gap-3 md:grid-cols-2">
-            <Form.Item name="enabled" label="启用" valuePropName="checked">
-              <Switch />
-            </Form.Item>
-            <Form.Item name="verifyTls" label="校验 TLS" valuePropName="checked">
-              <Switch />
-            </Form.Item>
-          </div>
-          <Form.Item name="region" label="Region">
-            <Input />
-          </Form.Item>
-          <Form.Item name="description" label="描述">
-            <Input.TextArea rows={3} />
-          </Form.Item>
-          <Space>
-            <Button type="primary" htmlType="submit" loading={savePending}>
-              保存
-            </Button>
-            <Button onClick={() => setDrawerOpen(false)}>取消</Button>
-          </Space>
-        </Form>
-      </Drawer>
+      <VirtualizationConnectionStepModal
+        editing={editing}
+        open={editorOpen}
+        onClose={() => {
+          setEditorOpen(false)
+          setEditing(null)
+        }}
+      />
       <Drawer
         title="连接关联异常任务"
         size="large"
@@ -893,7 +661,7 @@ export function VirtualizationClustersPage() {
           <Button
             onClick={() =>
               navigate(
-                `/virtualization/operations?connectionId=${encodeURIComponent(selectedConnectionOperation?.connectionId || '')}&abnormal=true`,
+                `/compute/tasks/operations?domain=virtualization&connectionId=${encodeURIComponent(selectedConnectionOperation?.connectionId || '')}&abnormal=true`,
               )
             }
           >

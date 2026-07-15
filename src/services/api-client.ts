@@ -110,7 +110,11 @@ async function throwApiError(response: Response, path: string, method: string): 
   throw error
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(
+  path: string,
+  options: RequestInit = {},
+  normalizeBody = true,
+): Promise<T> {
   const accessToken = getStoredAccessToken()
   const method = getRequestMethod(options)
 
@@ -132,11 +136,12 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (res.status === 204) return undefined as T
   const body = await parseJsonStrictly<unknown>(res, path, method)
-  return normalizeResponseBody<T>(body)
+  return normalizeBody ? normalizeResponseBody<T>(body) : (body as T)
 }
 
 export const api = {
   get: <T>(path: string) => request<T>(path),
+  getEnvelope: <T>(path: string) => request<T>(path, {}, false),
   post: <T>(path: string, body?: unknown) =>
     request<T>(path, {
       method: 'POST',

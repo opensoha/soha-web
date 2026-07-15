@@ -7,7 +7,8 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from 'antd'
-import { DockerHostsPage, buildQuickHostPayload } from './hosts/page'
+import { RuntimeHostStepModal } from './hosts/create-page'
+import { buildQuickHostPayload } from './hosts/page'
 import { DockerProjectDetailPage } from './projects/detail-page'
 import {
   DockerProjectsPage,
@@ -284,19 +285,6 @@ async function flush() {
   })
 }
 
-async function clickButtonByText(text: string) {
-  const button = Array.from(document.querySelectorAll('button')).find((node) =>
-    node.textContent?.includes(text),
-  )
-  if (!(button instanceof HTMLButtonElement)) {
-    throw new Error(`button not found by text: ${text}`)
-  }
-  await act(async () => {
-    button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    await Promise.resolve()
-  })
-}
-
 describe('docker pages', () => {
   beforeEach(() => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
@@ -535,12 +523,13 @@ describe('docker pages', () => {
     })
   })
 
-  it('loads virtualization resources for the Docker host quick-create drawer', async () => {
-    await renderWithProviders(<DockerHostsPage />)
-    await clickButtonByText('虚拟化快速构建')
-    await flush()
+  it('loads virtualization resources for the runtime host provision step form', async () => {
+    await renderWithProviders(
+      <RuntimeHostStepModal initialMode="provision" onClose={() => undefined} open />,
+      '/compute/runtimes/hosts',
+    )
 
-    expect(document.body.textContent).toContain('虚拟化快速构建 Docker 主机')
+    expect(document.body.textContent).toContain('新增运行时主机')
     expect(document.body.textContent).toContain('虚拟化连接')
     expect(document.body.textContent).toContain('镜像 / 模板')
     expect(document.body.textContent).toContain('规格')

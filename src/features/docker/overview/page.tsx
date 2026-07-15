@@ -39,7 +39,7 @@ export function DockerOverviewPage() {
           ? 'success'
           : 'default'
   useAIPageContext({
-    sourceWorkbench: 'docker',
+    sourceWorkbench: 'compute',
     sourceTitle: 'Docker 工作台',
     entityKind: 'docker.overview',
     entityName: 'Docker 工作台',
@@ -84,7 +84,7 @@ export function DockerOverviewPage() {
         </div>
         {canManageProjects ? (
           <div className="soha-vrt-commandbar-actions">
-            <Link to="/docker/projects">
+            <Link to="/compute/runtimes/projects">
               <Button type="primary" icon={<PlusOutlined />}>
                 创建 Compose 项目
               </Button>

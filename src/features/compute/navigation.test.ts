@@ -1,0 +1,69 @@
+import { describe, expect, it } from 'vitest'
+import type { RuntimeMenuNode } from '@/types'
+import {
+  isComputeWorkbenchManagementMenu,
+  isComputeWorkbenchMenuGroup,
+  normalizeComputeWorkbenchNav,
+} from './navigation'
+
+function menuNode(id: string, children?: RuntimeMenuNode[]): RuntimeMenuNode {
+  return {
+    id,
+    path: `/${id}`,
+    labelZh: id,
+    labelEn: id,
+    iconKey: 'server',
+    section: 'ops',
+    sortOrder: 1,
+    enabled: true,
+    children,
+  }
+}
+
+describe('compute workbench navigation', () => {
+  it('matches the unified information architecture', () => {
+    const result = normalizeComputeWorkbenchNav([
+      menuNode('compute-workbench-tasks', [
+        menuNode('compute-workbench-tasks-all'),
+        menuNode('compute-workbench-tasks-sync'),
+        menuNode('compute-workbench-tasks-build'),
+        menuNode('compute-workbench-tasks-operations'),
+      ]),
+      menuNode('compute-workbench-access'),
+      menuNode('virtualization-workbench', [
+        menuNode('virtualization-workbench-overview'),
+        menuNode('virtualization-workbench-clusters'),
+        menuNode('virtualization-workbench-vms'),
+        menuNode('virtualization-workbench-operations'),
+        menuNode('virtualization-workbench-sync'),
+      ]),
+      menuNode('docker-workbench', [
+        menuNode('docker-workbench-overview'),
+        menuNode('docker-workbench-hosts'),
+        menuNode('docker-workbench-projects'),
+        menuNode('docker-workbench-templates'),
+        menuNode('docker-workbench-operations'),
+      ]),
+      menuNode('compute-workbench-overview'),
+    ])
+
+    expect(result.map((node) => node.labelZh)).toEqual([
+      '总览',
+      '虚拟化',
+      '容器运行时',
+      '资源接入',
+      '同步任务',
+      '构建任务',
+      '操作记录',
+    ])
+    expect(result[1].children?.map((node) => node.labelZh)).toEqual(['虚拟机', '集群'])
+    expect(result[2].children?.map((node) => node.labelZh)).toEqual([
+      '运行时主机',
+      '容器管理',
+      '部署模板',
+    ])
+    expect(isComputeWorkbenchMenuGroup(result[1].id)).toBe(true)
+    expect(isComputeWorkbenchMenuGroup(result[2].id)).toBe(true)
+    expect(result.slice(3).every((node) => isComputeWorkbenchManagementMenu(node.id))).toBe(true)
+  })
+})

@@ -302,7 +302,7 @@ describe('menus page modal state', () => {
 
     await clickButton(getRowEditButton('virtualization-workbench'))
 
-    expect(document.body.textContent).toContain('当前菜单会在 虚拟化管理工作台 的导航树内展示。')
+    expect(document.body.textContent).toContain('当前菜单会在 计算资源工作台 的导航树内展示。')
   })
 
   it('flattens settings containers before grouping the workbench menu view', async () => {

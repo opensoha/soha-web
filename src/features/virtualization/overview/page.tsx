@@ -381,7 +381,7 @@ export function VirtualizationOverviewPage() {
           ? '运行正常'
           : '待接入'
   useAIPageContext({
-    sourceWorkbench: 'virtualization',
+    sourceWorkbench: 'compute',
     sourceTitle: '虚拟化工作台',
     entityKind: 'virtualization.overview',
     entityName: '虚拟化工作台',
@@ -445,7 +445,7 @@ export function VirtualizationOverviewPage() {
       helper: `健康 ${healthyConnections} / 总计 ${totalConnections}`,
       tone: unhealthyConnections > 0 ? 'danger' : totalConnections > 0 ? 'success' : 'default',
       icon: unhealthyConnections > 0 ? <WarningOutlined /> : <CheckCircleOutlined />,
-      action: () => navigate('/virtualization/clusters'),
+      action: () => navigate('/compute/virtualization/clusters'),
     },
     {
       key: 'pending',
@@ -454,7 +454,7 @@ export function VirtualizationOverviewPage() {
       helper: '排队与执行中任务',
       tone: pendingTasks > 0 ? 'warning' : 'default',
       icon: <CloudSyncOutlined />,
-      action: () => navigate('/virtualization/operations?pending=true'),
+      action: () => navigate('/compute/tasks/operations?domain=virtualization&status=running'),
     },
     {
       key: 'failed',
@@ -463,7 +463,7 @@ export function VirtualizationOverviewPage() {
       helper: '失败与回调超时',
       tone: failedTaskTotal > 0 ? 'danger' : 'default',
       icon: failedTaskTotal > 0 ? <CloseCircleOutlined /> : <CheckCircleOutlined />,
-      action: () => navigate('/virtualization/operations?abnormal=true'),
+      action: () => navigate('/compute/tasks/operations?domain=virtualization&status=failed'),
     },
     {
       key: 'sync',
@@ -479,7 +479,7 @@ export function VirtualizationOverviewPage() {
         : '尚无同步记录',
       tone: lastSyncTone,
       icon: <ReloadOutlined />,
-      action: () => navigate('/virtualization/sync'),
+      action: () => navigate('/compute/tasks/sync?domain=virtualization'),
     },
     {
       key: 'vm',
@@ -488,7 +488,7 @@ export function VirtualizationOverviewPage() {
       helper: `停机 ${stats.stoppedVmCount ?? 0}`,
       tone: 'default',
       icon: <PlayCircleOutlined />,
-      action: () => navigate('/virtualization/vms'),
+      action: () => navigate('/compute/virtualization/vms'),
     },
   ]
 
@@ -521,7 +521,7 @@ export function VirtualizationOverviewPage() {
         actions={
           canSync ? (
             <>
-              <Link to="/virtualization/sync">
+              <Link to="/compute/tasks/sync?domain=virtualization">
                 <Button icon={<CloudSyncOutlined />}>同步任务</Button>
               </Link>
               <Button
@@ -579,7 +579,7 @@ export function VirtualizationOverviewPage() {
                   tooltip="查看全部"
                   icon={<EyeOutlined />}
                   size="small"
-                  onClick={() => navigate('/virtualization/clusters')}
+                  onClick={() => navigate('/compute/virtualization/clusters')}
                 />
               }
               items={abnormalClusters.map((item) => ({
@@ -659,7 +659,7 @@ export function VirtualizationOverviewPage() {
                   tooltip="进入同步任务"
                   icon={<CloudSyncOutlined />}
                   size="small"
-                  onClick={() => navigate('/virtualization/sync')}
+                  onClick={() => navigate('/compute/tasks/sync?domain=virtualization')}
                 />
               }
               items={failedSyncOperations.map((item) => ({
@@ -725,7 +725,7 @@ export function VirtualizationOverviewPage() {
                   tooltip="任务中心"
                   icon={<FileTextOutlined />}
                   size="small"
-                  onClick={() => navigate('/virtualization/operations')}
+                  onClick={() => navigate('/compute/tasks/operations?domain=virtualization')}
                 />
               }
               items={failedOperations.map((item) => ({
@@ -776,7 +776,7 @@ export function VirtualizationOverviewPage() {
                         size="small"
                         onClick={() =>
                           navigate(
-                            `/virtualization/vms/${encodeURIComponent(operation.vmId || '')}?focus=operations`,
+                            `/compute/virtualization/vms/${encodeURIComponent(operation.vmId || '')}?focus=operations`,
                           )
                         }
                       />
@@ -798,7 +798,7 @@ export function VirtualizationOverviewPage() {
                 tooltip="查看全部"
                 icon={<EyeOutlined />}
                 size="small"
-                onClick={() => navigate('/virtualization/operations')}
+                onClick={() => navigate('/compute/tasks/operations?domain=virtualization')}
               />
             </div>
             <div className="soha-vrt-panel-body">
@@ -882,7 +882,7 @@ export function VirtualizationOverviewPage() {
                 tooltip="连接页"
                 icon={<EyeOutlined />}
                 size="small"
-                onClick={() => navigate('/virtualization/clusters')}
+                onClick={() => navigate('/compute/virtualization/clusters')}
               />
             </div>
             <div className="soha-vrt-panel-body">
@@ -929,7 +929,7 @@ export function VirtualizationOverviewPage() {
                 tooltip="任务中心"
                 icon={<FileTextOutlined />}
                 size="small"
-                onClick={() => navigate('/virtualization/operations')}
+                onClick={() => navigate('/compute/tasks/operations?domain=virtualization')}
               />
             </div>
             <div className="soha-vrt-panel-body">
@@ -1145,7 +1145,7 @@ export function VirtualizationOverviewPage() {
             </Button>
           ) : null}
           {selectedCluster ? (
-            <Button onClick={() => navigate('/virtualization/clusters')}>前往连接页</Button>
+            <Button onClick={() => navigate('/compute/virtualization/clusters')}>前往连接页</Button>
           ) : null}
         </Space>
       </Drawer>

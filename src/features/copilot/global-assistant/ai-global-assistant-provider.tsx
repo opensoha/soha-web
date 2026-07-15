@@ -69,9 +69,7 @@ function sourceWorkbenchFromPath(pathname: string): AIPageContext['sourceWorkben
   if (pathname.startsWith('/platform')) return 'platform'
   if (pathname.startsWith('/monitoring-workbench')) return 'monitoring'
   if (pathname.startsWith('/delivery') || pathname.startsWith('/applications')) return 'delivery'
-  if (pathname.startsWith('/docker') || pathname.startsWith('/docker-workbench')) return 'docker'
-  if (pathname.startsWith('/virtualization') || pathname.startsWith('/virtualization-workbench'))
-    return 'virtualization'
+  if (pathname.startsWith('/compute')) return 'compute'
   return 'ai'
 }
 
