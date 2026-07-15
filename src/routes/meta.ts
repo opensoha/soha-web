@@ -662,7 +662,6 @@ const SYSTEM_ROOT_ORDER: Record<string, number> = {
   'identity-applications': 21,
   'identity-providers': 22,
   'identity-sessions': 24,
-  'identity-audit': 25,
   system: 30,
   settings: 40,
 }

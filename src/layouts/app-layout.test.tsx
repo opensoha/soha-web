@@ -340,7 +340,7 @@ describe('app layout workspace navigation', () => {
       'k8s工作台',
     )
     expect(container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent).toContain(
-      'k8s工作台/概览',
+      'k8s工作台/platform/概览',
     )
     expect(container.querySelector('[data-testid="platform-scope-trigger"]')?.textContent).toBe(
       'cluster',
@@ -409,7 +409,7 @@ describe('app layout workspace navigation', () => {
       'namespace',
     )
     expect(container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent).toContain(
-      'k8s工作台/工作负载/概览',
+      'k8s工作台/platform/工作负载/概览',
     )
   })
 
@@ -1468,6 +1468,41 @@ describe('app layout workspace navigation', () => {
     expect(breadcrumbText.match(/计算资源工作台/g) ?? []).toHaveLength(1)
   })
 
+  it('uses the visible settings menu section in breadcrumbs for flattened routes', async () => {
+    const container = await renderWithProviders('/identity/sessions', {
+      permissionKeys: ['identity.sessions.view'],
+      visibleMenuIds: ['identity', 'identity-sessions'],
+      visibleMenus: [
+        {
+          id: 'identity',
+          path: '/identity',
+          labelZh: '身份',
+          labelEn: 'Identity',
+          iconKey: 'shield',
+          section: 'admin',
+          sortOrder: 1,
+          enabled: true,
+        },
+        {
+          id: 'identity-sessions',
+          parentId: 'identity',
+          path: '/identity/sessions',
+          labelZh: '会话',
+          labelEn: 'Sessions',
+          iconKey: 'users',
+          section: 'operations',
+          sortOrder: 2,
+          enabled: true,
+        },
+      ],
+    })
+
+    const breadcrumbText =
+      container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent ?? ''
+    expect(breadcrumbText).toContain('设置中心/operations/会话')
+    expect(breadcrumbText).not.toContain('身份')
+  })
+
   it('renders breadcrumb ancestry for nested route content', async () => {
     const container = await renderWithProviders('/compute/virtualization/vms/vm-1', {
       permissionKeys: [
@@ -1836,7 +1871,7 @@ describe('app layout workspace navigation', () => {
 
     expect(container.querySelector('.soha-workbench-switcher__label')?.textContent).toBe('设置中心')
     expect(container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent).toContain(
-      '设置中心/个人中心',
+      '设置中心/account/个人中心',
     )
   })
 

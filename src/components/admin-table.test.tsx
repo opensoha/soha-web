@@ -153,6 +153,22 @@ describe('AdminTable', () => {
     expect(actionColumn.onCell({}, 0).className).toContain('soha-table-actions-column--auto')
   })
 
+  it('keeps business action data as a regular visible column', async () => {
+    await renderNode(
+      <AdminTable
+        columns={[{ title: '动作', dataIndex: 'actions', render: () => null }]}
+        dataSource={[{ id: '1', actions: ['view'] }]}
+        rowKey="id"
+      />,
+    )
+
+    expect(captured.tableProps.columns[0]).toMatchObject({
+      title: '动作',
+      dataIndex: 'actions',
+    })
+    expect(captured.tableProps.columns[0].fixed).toBeUndefined()
+  })
+
   it('keeps action columns visible and out of column selection', async () => {
     const container = await renderNode(
       <AdminTable

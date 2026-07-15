@@ -589,6 +589,8 @@ export function AppLayout() {
         : buildMenuItems(primaryNav, localeCode),
     [activeWorkbenchId, localeCode, primaryNav],
   )
+  const primaryParentByID = useMemo(() => buildParentMap(primaryNav), [primaryNav])
+  const primaryNodeByID = useMemo(() => buildNodeByID(primaryNav), [primaryNav])
   const primaryItemKeyToPath = useMemo(() => {
     const paths = buildItemKeyToPath(primaryNav)
     if (activeWorkbenchId !== 'ai') return paths
@@ -733,6 +735,40 @@ export function AppLayout() {
       routes.push({ name: currentWorkbenchOption.label })
     }
 
+    const menuChain: RuntimeMenuNode[] = []
+    const seenMenuIds = new Set<string>()
+    let menuPointer = currentMenuID ? primaryNodeByID.get(currentMenuID) : null
+    while (menuPointer && !seenMenuIds.has(menuPointer.id)) {
+      menuChain.unshift(menuPointer)
+      seenMenuIds.add(menuPointer.id)
+      const parentID = primaryParentByID.get(menuPointer.id)
+      menuPointer = parentID ? (primaryNodeByID.get(parentID) ?? null) : null
+    }
+    if (menuChain.length > 0) {
+      const menuSection = menuChain[0].section
+      if (activeWorkbenchId !== 'compute' && menuSection) {
+        routes.push({ name: resolveMenuSectionLabel(menuSection, localeCode) })
+      }
+      menuChain.forEach((menuNode) => {
+        const isCurrentMenuRoute = menuNode.route?.id === currentMeta.id
+        routes.push({
+          name: getRuntimeMenuNodeLabel(menuNode, localeCode),
+          path: isCurrentMenuRoute
+            ? undefined
+            : (menuNode.route?.redirectTo ?? menuNode.route?.path),
+        })
+      })
+      const currentMenuRoute = menuChain[menuChain.length - 1].route
+      if (currentMenuRoute?.id !== currentMeta.id) {
+        routes.push({ name: resolveBreadcrumbTitle(currentMeta) })
+      }
+      return routes
+    }
+
+    const workbenchRootRouteIds = activeWorkbenchId
+      ? (BREADCRUMB_WORKBENCH_ROOT_ROUTE_IDS[activeWorkbenchId] ?? [])
+      : []
+
     const routeChain: (typeof currentMeta)[] = []
     const seenRouteIds = new Set<string>()
     let pointer: typeof currentMeta | null = currentMeta
@@ -741,10 +777,6 @@ export function AppLayout() {
       seenRouteIds.add(pointer.id)
       pointer = getParentRouteMeta(pointer)
     }
-
-    const workbenchRootRouteIds = activeWorkbenchId
-      ? (BREADCRUMB_WORKBENCH_ROOT_ROUTE_IDS[activeWorkbenchId] ?? [])
-      : []
 
     for (const route of routeChain) {
       if (workbenchRootRouteIds.includes(route.id)) {
@@ -762,7 +794,18 @@ export function AppLayout() {
     }
 
     return routes
-  }, [activeWorkbenchId, combinedNav, currentMeta, currentWorkbenchOption, localeCode, nodeByID, t])
+  }, [
+    activeWorkbenchId,
+    combinedNav,
+    currentMenuID,
+    currentMeta,
+    currentWorkbenchOption,
+    localeCode,
+    nodeByID,
+    primaryNodeByID,
+    primaryParentByID,
+    t,
+  ])
 
   const userDisplayName = user?.userName ?? user?.email ?? 'User'
   const userAvatarFit =

@@ -210,7 +210,7 @@ export function IdentityOverviewPage() {
             <Button
               size="small"
               icon={<AuditOutlined />}
-              onClick={() => navigate('/identity/audit')}
+              onClick={() => navigate('/system/audit')}
             >
               审计
             </Button>
@@ -289,7 +289,7 @@ export function IdentityOverviewPage() {
           <Button
             disabled={!permissions.audit}
             icon={<AuditOutlined />}
-            onClick={() => navigate('/identity/audit')}
+            onClick={() => navigate('/system/audit')}
           >
             审计事件
           </Button>

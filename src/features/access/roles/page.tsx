@@ -10,6 +10,7 @@ import {
 import { consolePermissionLabelMap, hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { AccessManagementTablePage } from '../shared/management-page'
+import { renderCompactMappedTags } from '../shared/compact-mapped-tags'
 import { accessMutations, invalidateAccessRoles } from '../shared/mutations'
 import { accessQueries } from '../shared/queries'
 import type { AccessRole } from '../shared/types'
@@ -21,7 +22,6 @@ import {
   checkedPermissionTreeKeys,
   extractPermissionKeysFromTreeCheck,
   normalizePermissionKeys,
-  renderCompactMappedTags,
   rolePermissionTreeData,
 } from './permission-model'
 import '../shared/styles.css'

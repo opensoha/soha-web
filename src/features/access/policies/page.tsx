@@ -12,17 +12,14 @@ import { StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { AccessManagementTablePage } from '../shared/management-page'
+import { renderCompactMappedTags } from '../shared/compact-mapped-tags'
 import { accessMutations, invalidateAccessPolicies } from '../shared/mutations'
 import { ACCESS_ACTION_OPTIONS } from '../shared/options'
 import { accessQueries } from '../shared/queries'
 import type { AccessPolicy } from '../shared/types'
 import { useAccessResourceCrud } from '../shared/use-resource-crud'
 import { joinCSV, parseCSV, toStringArray } from '../shared/utils'
-import {
-  buildPolicySubjectsSummary,
-  buildPolicyTargetsSummary,
-  renderMappedTags,
-} from './view-model'
+import { buildPolicySubjectsSummary, buildPolicyTargetsSummary } from './view-model'
 import '../shared/styles.css'
 
 type ColumnProps<T> = TableColumnsType<T>[number]
@@ -74,7 +71,8 @@ export function AccessPoliciesPage() {
     {
       title: '动作',
       dataIndex: 'actions',
-      render: (values: string[]) => renderMappedTags(values, {}, '未配置'),
+      width: 180,
+      render: (values: string[]) => renderCompactMappedTags(values, {}, '未配置', 2, '动作'),
     },
     {
       title: '主体',

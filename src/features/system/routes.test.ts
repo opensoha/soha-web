@@ -16,7 +16,7 @@ vi.mock('./audit/page', () => ({ AuditLogsPage: routePages.audit }))
 vi.mock('./operation-logs/page', () => ({ OperationLogsPage: routePages.operationLogs }))
 
 describe('System route manifest', () => {
-  it('maps five canonical UI routes to leaves and reuses sessions/audit for identity', async () => {
+  it('maps five canonical UI routes to leaves and keeps only sessions under identity', async () => {
     type SystemRoute = (typeof systemRoutes)[number]
     type SystemPageRoute = Extract<SystemRoute, { readonly load: unknown }>
     const pageRoutes = systemRoutes.filter((route): route is SystemPageRoute => 'load' in route)
@@ -26,7 +26,7 @@ describe('System route manifest', () => {
       ),
     )
 
-    expect(pageRoutes).toHaveLength(7)
+    expect(pageRoutes).toHaveLength(6)
     expect(loaded.get('/system/online-users')).toBe(routePages.sessions)
     expect(loaded.get('/system/audit')).toBe(routePages.audit)
     expect(loaded.get('/system/announcements')).toBe(routePages.announcements)
@@ -37,9 +37,16 @@ describe('System route manifest', () => {
     expect(pageRouteByPath.get('/identity/sessions')?.load).toBe(
       pageRouteByPath.get('/system/online-users')?.load,
     )
-    expect(pageRouteByPath.get('/identity/audit')?.load).toBe(
-      pageRouteByPath.get('/system/audit')?.load,
-    )
+
+    const identityAuditRoute = systemRoutes.find((route) => route.meta.path === '/identity/audit')
+    expect(identityAuditRoute).toMatchObject({
+      redirectTo: '/system/audit',
+      meta: {
+        navVisible: false,
+        tabbar: false,
+        permissionKey: 'system.audit.view',
+      },
+    })
   })
 
   it('preserves distinct permissions for canonical and identity routes', () => {
@@ -53,6 +60,6 @@ describe('System route manifest', () => {
     expect(permissions['/system/online-users']).toBe('system.online-users.view')
     expect(permissions['/identity/sessions']).toBe('identity.sessions.view')
     expect(permissions['/system/audit']).toBe('system.audit.view')
-    expect(permissions['/identity/audit']).toBe('identity.audit.view')
+    expect(permissions['/identity/audit']).toBe('system.audit.view')
   })
 })
