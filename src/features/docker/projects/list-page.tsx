@@ -270,6 +270,7 @@ function ProjectsTable({
     { title: '部署时间', dataIndex: 'lastDeployedAt', width: 155, render: formatDateTime },
     {
       title: '最近任务',
+      fixed: 'right',
       width: 188,
       render: (_value, record) => (
         <ResourceTaskActions

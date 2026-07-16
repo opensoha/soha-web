@@ -121,6 +121,7 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
     { title: '心跳', dataIndex: 'lastHeartbeatAt', width: 155, render: formatDateTime },
     {
       title: '最近任务',
+      fixed: 'right',
       width: 188,
       render: (_value, record) => (
         <ResourceTaskActions
