@@ -9,9 +9,7 @@
 }
 
 .soha-table-actions-column {
-  width: var(--soha-table-actions-column-width, 52px) !important;
   min-width: var(--soha-table-actions-column-width, 52px) !important;
-  max-width: var(--soha-table-actions-column-width, 52px) !important;
   padding-left: 4px !important;
   padding-right: 4px !important;
   text-align: center !important;

@@ -260,10 +260,15 @@ export function AdminTable({
             )
           : inheritedPagination?.showTotal,
         onChange: (nextPage: number, nextPageSize: number) => {
+          if (nextPageSize !== currentPageSize) {
+            setCurrentPage(nextPage)
+            setCurrentPageSize(nextPageSize)
+            inheritedPagination?.onPageSizeChange?.(nextPageSize)
+            return
+          }
+          if (nextPage === currentPage) return
           setCurrentPage(nextPage)
-          setCurrentPageSize(nextPageSize)
           inheritedPagination?.onPageChange?.(nextPage)
-          inheritedPagination?.onPageSizeChange?.(nextPageSize)
         },
       }
 

@@ -96,6 +96,7 @@ function TemplatesTable() {
     {
       title: '操作',
       align: 'center',
+      className: 'soha-table-actions-column',
       fixed: 'right',
       width: 96,
       render: (_value, record) =>

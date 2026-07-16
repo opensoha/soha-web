@@ -1,3 +1,5 @@
 export { computeApi } from './api'
 export { computeKeys } from './keys'
 export { computeQueries } from './queries'
+export { computeMutations } from './mutations'
+export { ResourceTaskActions, latestTaskForResource } from './tasks/resource-task-actions'

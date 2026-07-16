@@ -12,6 +12,7 @@ import {
   ManagementQueryPanel,
 } from '@/components/management-list'
 import { formatDateTime } from '@/utils/time'
+import { computeQueries, latestTaskForResource, ResourceTaskActions } from '@/features/compute'
 import { dockerApi } from '../docker-api'
 import { dockerQueries } from '../queries'
 import type { DockerHost, DockerQuickCreateHostInput } from '../docker-types'
@@ -59,10 +60,14 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
   const [editorOpen, setEditorOpen] = useState(false)
   const [initialMode, setInitialMode] = useState<'existing' | 'provision'>('existing')
   const [editing, setEditing] = useState<DockerHost | null>(null)
-  const { dockerModuleEnabled, canManageHosts } = useDockerPermissions()
+  const { dockerModuleEnabled, canManageHosts, canViewOperations } = useDockerPermissions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const hostsQuery = useQuery(dockerQueries.hosts(filters, dockerModuleEnabled))
+  const tasksQuery = useQuery({
+    ...computeQueries.tasks({ domain: 'container_runtime', limit: 100 }),
+    enabled: dockerModuleEnabled && canViewOperations,
+  })
   const deleteMutation = useMutation({
     mutationFn: dockerApi.deleteHost,
     onSuccess: () => {
@@ -115,8 +120,21 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
     },
     { title: '心跳', dataIndex: 'lastHeartbeatAt', width: 155, render: formatDateTime },
     {
+      title: '最近任务',
+      fixed: 'right',
+      width: 188,
+      render: (_value, record) => (
+        <ResourceTaskActions
+          task={latestTaskForResource(tasksQuery.data?.items ?? [], 'runtime_host', record.id)}
+          resourceKind="runtime_host"
+          resourceId={record.id}
+        />
+      ),
+    },
+    {
       title: '操作',
       align: 'center',
+      className: 'soha-table-actions-column',
       fixed: 'right',
       width: 96,
       render: (_value, record) =>
@@ -189,7 +207,7 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
         loading={hostsQuery.isLoading}
         dataSource={page.items}
         columns={columns}
-        scroll={{ x: 1340 }}
+        scroll={{ x: 1528 }}
         pagination={pageTablePagination(page, embedded, setFilters)}
         actions={
           canManageHosts && !embedded ? (

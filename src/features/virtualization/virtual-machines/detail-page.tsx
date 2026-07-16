@@ -18,7 +18,6 @@ import { PlayCircleOutlined } from '@ant-design/icons'
 import { getAIWorkbenchPathForMode, useAIPageContext } from '@/features/copilot'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
-import { AdminTable } from '@/components/admin-table'
 import {
   ManagementDetailHeader,
   ManagementIconButton,
@@ -26,6 +25,7 @@ import {
 } from '@/components/management-list'
 import { virtualizationQueries } from '@/features/virtualization/queries'
 import { useVirtualizationPermissions } from '@/features/virtualization/shared/use-virtualization-permissions'
+import { VirtualizationAdminTable } from '@/features/virtualization/shared/ui'
 import {
   STATUS_COLORS,
   badgeStatusForTone,
@@ -305,13 +305,13 @@ export function VirtualizationVmDetailPage() {
             forceRender: true,
             children: (
               <Card size="small">
-                <AdminTable
+                <VirtualizationAdminTable
                   rowKey="id"
-                  tableSize="small"
                   dataSource={sortedOperations}
                   pageSize={10}
-                  columnSettingIconOnly
-                  columnSettingPlacement="header"
+                  enableDensity={false}
+                  showColumnSettings={false}
+                  showRefresh={false}
                   columns={[
                     {
                       title: '类型',

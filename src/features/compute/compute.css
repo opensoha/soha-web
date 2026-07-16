@@ -3,6 +3,10 @@
   gap: 16px;
 }
 
+.soha-compute-task-actions-column {
+  --soha-table-actions-column-width: 96px;
+}
+
 .soha-compute-view-tabs.ant-tabs > .ant-tabs-nav {
   margin: 0;
 }

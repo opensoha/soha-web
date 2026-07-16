@@ -363,6 +363,7 @@ export function useDockerPermissions() {
     canViewPorts: hasDockerPermission('docker.ports.view'),
     canManagePorts: hasDockerPermission('docker.ports.manage'),
     canManageTemplates: hasDockerPermission('docker.templates.manage'),
+    canViewOperations: hasDockerPermission('docker.operations.view'),
     canManageOperations: hasDockerPermission('docker.operations.manage'),
   }
 }

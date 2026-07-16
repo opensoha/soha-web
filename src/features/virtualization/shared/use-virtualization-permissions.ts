@@ -16,6 +16,10 @@ export function useVirtualizationPermissions() {
     canManageClusters: hasVirtualizationPermission('virtualization.clusters.manage'),
     canManageImages: hasVirtualizationPermission('virtualization.images.manage'),
     canManageFlavors: hasVirtualizationPermission('virtualization.flavors.manage'),
+    canViewTasks:
+      hasVirtualizationPermission('virtualization.operations.view') ||
+      hasVirtualizationPermission('virtualization.sync.view') ||
+      hasVirtualizationPermission('virtualization.sync.manage'),
     canManageOperations: hasVirtualizationPermission('virtualization.operations.manage'),
     canSync: hasVirtualizationPermission('virtualization.sync.manage'),
     canViewMetrics: hasVirtualizationPermission('virtualization.vms.metrics'),
