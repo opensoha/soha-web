@@ -12,13 +12,25 @@ const captured = vi.hoisted(() => ({
 }))
 
 vi.mock('antd', () => ({
-  Alert: ({ description, message }: { description?: ReactNode; message?: ReactNode }) => <div>{message}{description}</div>,
-  Button: ({ children, ...props }: { children?: ReactNode }) => <button {...props}>{children}</button>,
+  Alert: ({ description, message }: { description?: ReactNode; message?: ReactNode }) => (
+    <div>
+      {message}
+      {description}
+    </div>
+  ),
+  Button: ({ children, ...props }: { children?: ReactNode }) => (
+    <button {...props}>{children}</button>
+  ),
   Checkbox: {
     Group: () => <div data-testid="checkbox-group" />,
   },
   Empty: Object.assign(
-    ({ children, description }: { children?: ReactNode; description?: ReactNode }) => <div>{description}{children}</div>,
+    ({ children, description }: { children?: ReactNode; description?: ReactNode }) => (
+      <div>
+        {description}
+        {children}
+      </div>
+    ),
     { PRESENTED_IMAGE_SIMPLE: 'simple-empty' },
   ),
   Form: {
@@ -157,6 +169,27 @@ describe('AdminTable', () => {
 
   it('pins the shared action preset to the right side', () => {
     expect(tableColumnPresets.action.fixed).toBe('right')
+    expect(tableColumnPresets.action.className).toBe('soha-table-actions-column')
+    expect(tableColumnPresets.action.width).toBe(140)
+  })
+
+  it('preserves the explicit width from the shared action preset', async () => {
+    await renderNode(
+      <AdminTable
+        columns={[
+          { title: '名称', dataIndex: 'name' },
+          { ...tableColumnPresets.action, title: '操作', render: () => null },
+        ]}
+        dataSource={[{ id: '1', name: 'demo' }]}
+        rowKey="id"
+      />,
+    )
+
+    expect(captured.tableProps.columns[1]).toMatchObject({
+      className: expect.stringContaining('soha-table-actions-column'),
+      fixed: 'right',
+      width: 140,
+    })
   })
 
   it('normalizes legacy action columns through the shared table contract', async () => {

@@ -8,6 +8,7 @@ export const tableColumnPresets = {
   action: {
     width: 140,
     align: 'center' as const,
+    className: 'soha-table-actions-column',
     fixed: 'right' as const,
   },
 }

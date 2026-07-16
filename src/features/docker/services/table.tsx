@@ -102,6 +102,7 @@ export function ServicesTable({
     {
       title: '操作',
       align: 'center',
+      className: 'soha-table-actions-column',
       fixed: 'right',
       width: 130,
       render: (_value, record) =>

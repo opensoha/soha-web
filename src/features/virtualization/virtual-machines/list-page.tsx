@@ -17,7 +17,6 @@ import {
   Typography,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import type { ComponentProps } from 'react'
 import {
   DeleteOutlined,
   PlayCircleOutlined,
@@ -29,7 +28,6 @@ import { hasAllowedAction } from '@/features/auth'
 import { useAIPageContext } from '@/features/copilot'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
-import { AdminTable } from '@/components/admin-table'
 import { StepFormModal } from '@/components/step-form-modal'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
@@ -37,7 +35,6 @@ import {
   ManagementKeywordField,
   ManagementQueryActions,
   ManagementQueryField,
-  ManagementTableToolbar,
 } from '@/components/management-list'
 import { virtualizationKeys } from '@/features/virtualization/keys'
 import {
@@ -47,11 +44,11 @@ import {
 } from '@/features/virtualization/mutations'
 import { virtualizationQueries } from '@/features/virtualization/queries'
 import { useVirtualizationPermissions } from '@/features/virtualization/shared/use-virtualization-permissions'
+import { VirtualizationAdminTable } from '@/features/virtualization/shared/ui'
 import {
   STATUS_COLORS,
   VIRTUALIZATION_PROVIDER_OPTIONS,
   buildCreateVmPayload,
-  classNames,
   normalizePage,
   virtualMachineDisplayStatus,
   virtualizationPageSummary,
@@ -150,26 +147,6 @@ function TaskProgressBanner({
           </Button>
         ) : null
       }
-    />
-  )
-}
-
-function VirtualizationAdminTable({
-  className,
-  columnSettingIconOnly = true,
-  columnSettingPlacement = 'header',
-  shellClassName,
-  tableSize = 'small',
-  ...props
-}: ComponentProps<typeof AdminTable>) {
-  return (
-    <AdminTable
-      {...props}
-      className={classNames('soha-vrt-table', className)}
-      columnSettingIconOnly={columnSettingIconOnly}
-      columnSettingPlacement={columnSettingPlacement}
-      shellClassName={classNames('soha-management-table-shell', shellClassName)}
-      tableSize={tableSize}
     />
   )
 }
@@ -571,23 +548,23 @@ export function VirtualizationVmsPage() {
       tableNode={
         <VirtualizationAdminTable
           rowKey="id"
-          headerExtra={
+          actions={
             canManageVMs ? (
-              <ManagementTableToolbar>
-                <Button
-                  type="primary"
-                  icon={<PlusOutlined />}
-                  onClick={() => {
-                    setCurrentStep(0)
-                    form.resetFields()
-                    setDrawerOpen(true)
-                  }}
-                >
-                  创建虚拟机
-                </Button>
-              </ManagementTableToolbar>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  setCurrentStep(0)
+                  form.resetFields()
+                  setDrawerOpen(true)
+                }}
+              >
+                创建虚拟机
+              </Button>
             ) : null
           }
+          refreshing={vmsQuery.isFetching}
+          onRefresh={() => void vmsQuery.refetch()}
           loading={vmsQuery.isLoading}
           dataSource={vmPage.items}
           columns={columns}

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Button, Form, Input, Space, Tabs, Tag, Typography } from 'antd'
 import type { TabsProps } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { LeftOutlined, PlusOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons'
+import { LeftOutlined, PlusOutlined, RightOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 import type {
@@ -12,10 +12,12 @@ import type {
 import { AdminTable } from '@/components/admin-table'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
+  ManagementDensityButton,
   ManagementIconButton,
   ManagementQueryActions,
   ManagementQueryField,
   ManagementQueryPanel,
+  ManagementRefreshButton,
   ManagementTableToolbar,
 } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
@@ -70,6 +72,7 @@ export function ComputeAccessPage() {
   const [cursorHistory, setCursorHistory] = useState<string[]>([])
   const [connectionEditorOpen, setConnectionEditorOpen] = useState(false)
   const [runtimeEditorOpen, setRuntimeEditorOpen] = useState(false)
+  const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const [form] = Form.useForm<ComputeAccessFilters>()
   const accessQuery = useQuery(computeQueries.accessSources(filters))
   const permissionSnapshot = usePermissionSnapshot().data?.data
@@ -231,6 +234,8 @@ export function ComputeAccessPage() {
             dataSource={items}
             loading={accessQuery.isLoading}
             empty={accessQuery.isError ? '资源接入列表加载失败' : '暂无已授权接入资源'}
+            columnSettingIconOnly
+            tableSize={tableSize}
             toolbarExtra={
               <ManagementTableToolbar>
                 {canCreateAccess ? (
@@ -270,9 +275,15 @@ export function ComputeAccessPage() {
                     setFilters((current) => ({ ...current, cursor: accessQuery.data?.nextCursor }))
                   }}
                 />
-                <ManagementIconButton
+                <ManagementDensityButton
+                  aria-label="切换表格密度"
+                  tooltip={tableSize === 'small' ? '切换为宽松密度' : '切换为紧凑密度'}
+                  onClick={() =>
+                    setTableSize((current) => (current === 'small' ? 'middle' : 'small'))
+                  }
+                />
+                <ManagementRefreshButton
                   aria-label="刷新资源接入列表"
-                  icon={<ReloadOutlined />}
                   loading={accessQuery.isFetching}
                   tooltip="刷新"
                   onClick={() => void accessQuery.refetch()}

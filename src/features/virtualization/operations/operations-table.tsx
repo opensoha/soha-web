@@ -16,7 +16,7 @@ import {
 } from 'antd'
 import type { DrawerProps } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import type { ComponentProps, Key } from 'react'
+import type { Key } from 'react'
 import {
   FileTextOutlined,
   PoweroffOutlined,
@@ -27,12 +27,10 @@ import { hasAllowedAction } from '@/features/auth'
 import { getAIWorkbenchPathForMode } from '@/features/copilot'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
-import { AdminTable } from '@/components/admin-table'
 import {
   ManagementIconButton,
   ManagementQueryField,
   ManagementQueryPanel,
-  ManagementTableToolbar,
 } from '@/components/management-list'
 import {
   virtualizationMutations,
@@ -40,12 +38,12 @@ import {
 } from '@/features/virtualization/mutations'
 import { virtualizationQueries } from '@/features/virtualization/queries'
 import { useVirtualizationPermissions } from '@/features/virtualization/shared/use-virtualization-permissions'
+import { VirtualizationAdminTable } from '@/features/virtualization/shared/ui'
 import {
   OPERATION_FILTER_PRESETS,
   STATUS_COLORS,
   buildOperationFilter,
   bulkActionSummary,
-  classNames,
   formatOperationDuration,
   isAbnormalOperation,
   isPendingOperation,
@@ -89,26 +87,6 @@ function tableTooltipText(value: unknown) {
     >
       {content}
     </Tooltip>
-  )
-}
-
-function VirtualizationAdminTable({
-  className,
-  columnSettingIconOnly = true,
-  columnSettingPlacement = 'header',
-  shellClassName,
-  tableSize = 'small',
-  ...props
-}: ComponentProps<typeof AdminTable>) {
-  return (
-    <AdminTable
-      {...props}
-      className={classNames('soha-vrt-table', className)}
-      columnSettingIconOnly={columnSettingIconOnly}
-      columnSettingPlacement={columnSettingPlacement}
-      shellClassName={classNames('soha-management-table-shell', shellClassName)}
-      tableSize={tableSize}
-    />
   )
 }
 
@@ -400,18 +378,7 @@ export function OperationsTable({
       <div className="soha-vrt-query soha-vrt-operations-query">
         <ManagementQueryPanel
           collapsible
-          actions={
-            <Space size={8}>
-              <Button onClick={resetOperationFilters}>重置</Button>
-              <Button
-                icon={<ReloadOutlined />}
-                loading={operationsQuery.isFetching}
-                onClick={() => operationsQuery.refetch()}
-              >
-                刷新
-              </Button>
-            </Space>
-          }
+          actions={<Button onClick={resetOperationFilters}>重置</Button>}
         >
           <ManagementQueryField label="任务视图" minWidth={300} width={360}>
             {assetType === 'asset_sync' ? (
@@ -442,9 +409,7 @@ export function OperationsTable({
       </div>
       <VirtualizationAdminTable
         rowKey="id"
-        headerExtra={
-          toolbarExtra ? <ManagementTableToolbar>{toolbarExtra}</ManagementTableToolbar> : null
-        }
+        actions={toolbarExtra}
         toolbarExtra={
           selectedTaskRowKeys.length > 0 ? (
             <div className="soha-vrt-selection-bar">
@@ -508,6 +473,8 @@ export function OperationsTable({
           onChange: (keys: Key[]) => setSelectedTaskRowKeys(keys),
         }}
         loading={operationsQuery.isLoading}
+        refreshing={operationsQuery.isFetching}
+        onRefresh={() => void operationsQuery.refetch()}
         dataSource={filteredOperations}
         columns={columns}
         paginationSummary={localTableSummary(filteredOperations.length, operations.length)}

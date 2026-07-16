@@ -14,12 +14,10 @@ import {
   Typography,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import type { ComponentProps } from 'react'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { hasAllowedAction } from '@/features/auth'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
-import { AdminTable } from '@/components/admin-table'
 import { StepFormModal } from '@/components/step-form-modal'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
@@ -27,7 +25,6 @@ import {
   ManagementKeywordField,
   ManagementQueryActions,
   ManagementQueryField,
-  ManagementTableToolbar,
 } from '@/components/management-list'
 import {
   virtualizationMutations,
@@ -35,11 +32,11 @@ import {
 } from '@/features/virtualization/mutations'
 import { virtualizationQueries } from '@/features/virtualization/queries'
 import { useVirtualizationPermissions } from '@/features/virtualization/shared/use-virtualization-permissions'
+import { VirtualizationAdminTable } from '@/features/virtualization/shared/ui'
 import {
   STATUS_COLORS,
   VIRTUALIZATION_PROVIDER_OPTIONS,
   buildImagePayload,
-  classNames,
   normalizePage,
   providerLabel,
   virtualizationPageSummary,
@@ -73,26 +70,6 @@ function tableTooltipText(value: unknown) {
     >
       {content}
     </Tooltip>
-  )
-}
-
-function VirtualizationAdminTable({
-  className,
-  columnSettingIconOnly = true,
-  columnSettingPlacement = 'header',
-  shellClassName,
-  tableSize = 'small',
-  ...props
-}: ComponentProps<typeof AdminTable>) {
-  return (
-    <AdminTable
-      {...props}
-      className={classNames('soha-vrt-table', className)}
-      columnSettingIconOnly={columnSettingIconOnly}
-      columnSettingPlacement={columnSettingPlacement}
-      shellClassName={classNames('soha-management-table-shell', shellClassName)}
-      tableSize={tableSize}
-    />
   )
 }
 
@@ -322,15 +299,15 @@ export function VirtualizationImagesPage() {
       tableNode={
         <VirtualizationAdminTable
           rowKey="id"
-          headerExtra={
+          actions={
             canManageImages ? (
-              <ManagementTableToolbar>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => openImageEditor()}>
-                  新增镜像入口
-                </Button>
-              </ManagementTableToolbar>
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => openImageEditor()}>
+                新增镜像入口
+              </Button>
             ) : null
           }
+          refreshing={imagesQuery.isFetching}
+          onRefresh={() => void imagesQuery.refetch()}
           loading={imagesQuery.isLoading}
           dataSource={imagesPage.items}
           columns={columns}

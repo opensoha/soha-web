@@ -18,7 +18,7 @@ import {
 } from 'antd'
 import type { DrawerProps } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import type { ComponentProps, Key } from 'react'
+import type { Key } from 'react'
 import {
   CloudSyncOutlined,
   DeleteOutlined,
@@ -29,12 +29,10 @@ import {
 import { formatDateTime } from '@/utils/time'
 import { computeQueries, latestTaskForResource, ResourceTaskActions } from '@/features/compute'
 import { tableColumnPresets } from '@/utils/table-columns'
-import { AdminTable } from '@/components/admin-table'
 import {
   ManagementIconButton,
   ManagementQueryField,
   ManagementQueryPanel,
-  ManagementTableToolbar,
 } from '@/components/management-list'
 import {
   virtualizationMutations,
@@ -42,12 +40,12 @@ import {
 } from '@/features/virtualization/mutations'
 import { virtualizationQueries } from '@/features/virtualization/queries'
 import { useVirtualizationPermissions } from '@/features/virtualization/shared/use-virtualization-permissions'
+import { VirtualizationAdminTable } from '@/features/virtualization/shared/ui'
 import {
   ENABLED_FILTER_OPTIONS,
   STATUS_COLORS,
   VIRTUALIZATION_PROVIDER_FILTER_OPTIONS,
   bulkActionSummary,
-  classNames,
   clusterRiskScore,
   isAbnormalOperation,
   isSyncOperation,
@@ -163,26 +161,6 @@ function ConnectionDeletePreview({
         </Descriptions.Item>
       </Descriptions>
     </Space>
-  )
-}
-
-function VirtualizationAdminTable({
-  className,
-  columnSettingIconOnly = true,
-  columnSettingPlacement = 'header',
-  shellClassName,
-  tableSize = 'small',
-  ...props
-}: ComponentProps<typeof AdminTable>) {
-  return (
-    <AdminTable
-      {...props}
-      className={classNames('soha-vrt-table', className)}
-      columnSettingIconOnly={columnSettingIconOnly}
-      columnSettingPlacement={columnSettingPlacement}
-      shellClassName={classNames('soha-management-table-shell', shellClassName)}
-      tableSize={tableSize}
-    />
   )
 }
 
@@ -496,13 +474,11 @@ export function VirtualizationClustersPage() {
       </div>
       <VirtualizationAdminTable
         rowKey="id"
-        headerExtra={
+        actions={
           canManageClusters ? (
-            <ManagementTableToolbar>
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor()}>
-                新增连接
-              </Button>
-            </ManagementTableToolbar>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor()}>
+              新增连接
+            </Button>
           ) : null
         }
         toolbarExtra={
@@ -549,7 +525,12 @@ export function VirtualizationClustersPage() {
           selectedRowKeys: selectedClusterRowKeys,
           onChange: (keys: Key[]) => setSelectedClusterRowKeys(keys),
         }}
-        tableSize="small"
+        refreshing={clustersQuery.isFetching || clusterOperationsQuery.isFetching}
+        onRefresh={() => {
+          void clustersQuery.refetch()
+          void clusterOperationsQuery.refetch()
+          void computeTasksQuery.refetch()
+        }}
         loading={clustersQuery.isLoading || clusterOperationsQuery.isLoading}
         dataSource={clusterRows}
         columns={columns}

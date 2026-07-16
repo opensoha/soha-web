@@ -14,11 +14,9 @@ import {
   Tooltip,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import type { ComponentProps } from 'react'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { hasAllowedAction } from '@/features/auth'
 import { tableColumnPresets } from '@/utils/table-columns'
-import { AdminTable } from '@/components/admin-table'
 import { StepFormModal } from '@/components/step-form-modal'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
@@ -26,7 +24,6 @@ import {
   ManagementKeywordField,
   ManagementQueryActions,
   ManagementQueryField,
-  ManagementTableToolbar,
   useManagementTextFilter,
 } from '@/components/management-list'
 import {
@@ -35,9 +32,9 @@ import {
 } from '@/features/virtualization/mutations'
 import { virtualizationQueries } from '@/features/virtualization/queries'
 import { useVirtualizationPermissions } from '@/features/virtualization/shared/use-virtualization-permissions'
+import { VirtualizationAdminTable } from '@/features/virtualization/shared/ui'
 import {
   ENABLED_FILTER_OPTIONS,
-  classNames,
   localTableSummary,
 } from '@/features/virtualization/virtualization-model'
 import type { EnabledFilter } from '@/features/virtualization/virtualization-model'
@@ -60,26 +57,6 @@ function tableTooltipText(value: unknown) {
     >
       {content}
     </Tooltip>
-  )
-}
-
-function VirtualizationAdminTable({
-  className,
-  columnSettingIconOnly = true,
-  columnSettingPlacement = 'header',
-  shellClassName,
-  tableSize = 'small',
-  ...props
-}: ComponentProps<typeof AdminTable>) {
-  return (
-    <AdminTable
-      {...props}
-      className={classNames('soha-vrt-table', className)}
-      columnSettingIconOnly={columnSettingIconOnly}
-      columnSettingPlacement={columnSettingPlacement}
-      shellClassName={classNames('soha-management-table-shell', shellClassName)}
-      tableSize={tableSize}
-    />
   )
 }
 
@@ -226,15 +203,15 @@ export function VirtualizationFlavorsPage() {
       tableNode={
         <VirtualizationAdminTable
           rowKey="id"
-          headerExtra={
+          actions={
             canManageFlavors ? (
-              <ManagementTableToolbar>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor()}>
-                  新增规格
-                </Button>
-              </ManagementTableToolbar>
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor()}>
+                新增规格
+              </Button>
             ) : null
           }
+          refreshing={flavorsQuery.isFetching}
+          onRefresh={() => void flavorsQuery.refetch()}
           loading={flavorsQuery.isLoading}
           dataSource={flavorRows}
           columns={columns}
