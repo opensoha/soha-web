@@ -27,6 +27,7 @@ import {
   ThunderboltOutlined,
 } from '@ant-design/icons'
 import { formatDateTime } from '@/utils/time'
+import { computeQueries, latestTaskForResource, ResourceTaskActions } from '@/features/compute'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { AdminTable } from '@/components/admin-table'
 import {
@@ -200,13 +201,18 @@ export function VirtualizationClustersPage() {
     cluster: VirtualizationCluster
     dependencies: VirtualizationConnectionDeleteDependencies
   } | null>(null)
-  const { virtualizationModuleEnabled, canManageClusters, canSync } = useVirtualizationPermissions()
+  const { virtualizationModuleEnabled, canManageClusters, canSync, canViewTasks } =
+    useVirtualizationPermissions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const clustersQuery = useQuery(virtualizationQueries.clusters(virtualizationModuleEnabled))
   const clusterOperationsQuery = useQuery(
     virtualizationQueries.operations({}, virtualizationModuleEnabled),
   )
+  const computeTasksQuery = useQuery({
+    ...computeQueries.tasks({ domain: 'virtualization', limit: 100 }),
+    enabled: virtualizationModuleEnabled && canViewTasks,
+  })
   const deletePreviewMutation = useMutation(virtualizationMutations.clusterDeleteDependencies())
   const deleteMutation = useMutation(
     withVirtualizationMutationSuccess(virtualizationMutations.deleteCluster(queryClient), () => {
@@ -375,6 +381,17 @@ export function VirtualizationClustersPage() {
       width: 120,
     },
     {
+      title: '最近任务',
+      width: 188,
+      render: (_value, record) => (
+        <ResourceTaskActions
+          task={latestTaskForResource(computeTasksQuery.data?.items ?? [], 'connection', record.id)}
+          resourceKind="connection"
+          resourceId={record.id}
+        />
+      ),
+    },
+    {
       ...tableColumnPresets.datetime,
       title: '最近同步',
       dataIndex: 'lastSyncedAt',
@@ -535,7 +552,7 @@ export function VirtualizationClustersPage() {
         loading={clustersQuery.isLoading || clusterOperationsQuery.isLoading}
         dataSource={clusterRows}
         columns={columns}
-        scroll={{ x: 1970 }}
+        scroll={{ x: 2158 }}
         paginationSummary={localTableSummary(clusterRows.length, clustersQuery.data?.length ?? 0)}
         expandable={{
           expandedRowRender: (record: VirtualizationCluster) => {
@@ -661,11 +678,11 @@ export function VirtualizationClustersPage() {
           <Button
             onClick={() =>
               navigate(
-                `/compute/tasks/operations?domain=virtualization&connectionId=${encodeURIComponent(selectedConnectionOperation?.connectionId || '')}&abnormal=true`,
+                `/compute/tasks/operations?domain=virtualization&resourceKind=connection&resourceId=${encodeURIComponent(selectedConnectionOperation?.connectionId || '')}`,
               )
             }
           >
-            查看该连接全部异常任务
+            查看该连接全部任务
           </Button>
         </div>
       </Drawer>

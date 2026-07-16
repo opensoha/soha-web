@@ -83,6 +83,22 @@ describe('compute route manifest', () => {
     )
   })
 
+  it('exposes one Task Center menu and keeps old task routes hidden', () => {
+    const taskRoutes = computeRoutes.filter((route) =>
+      route.meta.path.startsWith('/compute/tasks/'),
+    )
+    expect(
+      taskRoutes.filter((route) => route.meta.navVisible).map((route) => route.meta.title),
+    ).toEqual(['任务中心'])
+    expect(
+      taskRoutes
+        .filter((route) =>
+          ['/compute/tasks/sync', '/compute/tasks/build'].includes(route.meta.path),
+        )
+        .every((route) => !route.meta.navVisible),
+    ).toBe(true)
+  })
+
   it('allows the overview for every permission accepted by the backend projection', () => {
     const overview = computeRoutes.find((route) => route.meta.id === 'compute-workbench-overview')
     if (!overview || !('permissionKeysAny' in overview.meta)) {

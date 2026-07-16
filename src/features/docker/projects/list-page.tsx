@@ -34,6 +34,7 @@ import {
 } from '@/components/management-list'
 import { StepFormModal } from '@/components/step-form-modal'
 import { formatDateTime } from '@/utils/time'
+import { computeQueries, latestTaskForResource, ResourceTaskActions } from '@/features/compute'
 import { dockerApi } from '../docker-api'
 import { dockerQueries } from '../queries'
 import type { DockerContainerStartInput, DockerProject, DockerProjectInput } from '../docker-types'
@@ -160,12 +161,21 @@ function ProjectsTable({
   const [containerStep, setContainerStep] = useState(0)
   const [containerDrawerOpen, setContainerDrawerOpen] = useState(false)
   const [editing, setEditing] = useState<DockerProject | null>(null)
-  const { dockerModuleEnabled, canManageProjects, canDeployProjects, canManagePorts } =
-    useDockerPermissions()
+  const {
+    dockerModuleEnabled,
+    canManageProjects,
+    canDeployProjects,
+    canManagePorts,
+    canViewOperations,
+  } = useDockerPermissions()
   const { hosts, hostOptions } = useDockerOptions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const projectsQuery = useQuery(dockerQueries.projects(filters, dockerModuleEnabled))
+  const tasksQuery = useQuery({
+    ...computeQueries.tasks({ domain: 'container_runtime', limit: 100 }),
+    enabled: dockerModuleEnabled && canViewOperations,
+  })
   const saveMutation = useMutation({
     mutationFn: (values: DockerProjectInput) =>
       editing
@@ -258,6 +268,17 @@ function ProjectsTable({
     { title: '目标态', dataIndex: 'desiredState', width: 120, render: (value) => value || '-' },
     { title: '到期', dataIndex: 'expiresAt', width: 155, render: formatDateTime },
     { title: '部署时间', dataIndex: 'lastDeployedAt', width: 155, render: formatDateTime },
+    {
+      title: '最近任务',
+      width: 188,
+      render: (_value, record) => (
+        <ResourceTaskActions
+          task={latestTaskForResource(tasksQuery.data?.items ?? [], 'project', record.id)}
+          resourceKind="project"
+          resourceId={record.id}
+        />
+      ),
+    },
     {
       title: '操作',
       align: 'center',
@@ -385,7 +406,7 @@ function ProjectsTable({
         loading={projectsQuery.isLoading}
         dataSource={page.items}
         columns={columns}
-        scroll={{ x: isSingleContainer ? 1690 : 1430 }}
+        scroll={{ x: isSingleContainer ? 1878 : 1618 }}
         pagination={pageTablePagination(page, embedded, setFilters)}
         actions={
           !embedded ? (

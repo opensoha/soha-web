@@ -13,8 +13,6 @@ const COMPUTE_MENU_ORDER = new Map(
     'docker-workbench-projects',
     'docker-workbench-templates',
     'compute-workbench-access',
-    'compute-workbench-tasks-sync',
-    'compute-workbench-tasks-build',
     'compute-workbench-tasks-operations',
   ].map((id, index) => [id, index]),
 )
@@ -22,8 +20,6 @@ const COMPUTE_MENU_ORDER = new Map(
 const COMPUTE_MENU_GROUP_IDS = new Set(['virtualization-workbench', 'docker-workbench'])
 const COMPUTE_MANAGEMENT_MENU_IDS = new Set([
   'compute-workbench-access',
-  'compute-workbench-tasks-sync',
-  'compute-workbench-tasks-build',
   'compute-workbench-tasks-operations',
 ])
 
@@ -39,14 +35,18 @@ const COMPUTE_MENU_LABELS: Record<string, { labelEn: string; labelZh: string }> 
   'docker-workbench-hosts': { labelZh: '运行时主机', labelEn: 'Runtime Hosts' },
   'docker-workbench-projects': { labelZh: '容器管理', labelEn: 'Container Management' },
   'docker-workbench-templates': { labelZh: '部署模板', labelEn: 'Deployment Templates' },
-  'compute-workbench-tasks-sync': { labelZh: '同步任务', labelEn: 'Sync Tasks' },
-  'compute-workbench-tasks-build': { labelZh: '构建任务', labelEn: 'Build Tasks' },
-  'compute-workbench-tasks-operations': { labelZh: '操作记录', labelEn: 'Operation Records' },
+  'compute-workbench-tasks-operations': { labelZh: '任务中心', labelEn: 'Task Center' },
 }
+
+const LEGACY_COMPUTE_TASK_MENU_IDS = new Set([
+  'compute-workbench-tasks-sync',
+  'compute-workbench-tasks-build',
+])
 
 export function normalizeComputeWorkbenchNav(nodes: RuntimeMenuNode[]): RuntimeMenuNode[] {
   return nodes
     .flatMap((node) => {
+      if (LEGACY_COMPUTE_TASK_MENU_IDS.has(node.id)) return []
       const labels = COMPUTE_MENU_LABELS[node.id]
       const children = node.children ? normalizeComputeWorkbenchNav(node.children) : undefined
       return [{ ...node, ...labels, children: children?.length ? children : undefined }]

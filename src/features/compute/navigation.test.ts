@@ -44,9 +44,7 @@ describe('compute workbench navigation', () => {
       '虚拟化',
       '容器运行时',
       '资源接入',
-      '同步任务',
-      '构建任务',
-      '操作记录',
+      '任务中心',
     ])
     expect(result[1].children?.map((node) => node.labelZh)).toEqual(['虚拟机', '集群'])
     expect(result[2].children?.map((node) => node.labelZh)).toEqual([
