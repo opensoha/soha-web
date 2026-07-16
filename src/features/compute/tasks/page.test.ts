@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { computeTaskCategoryFromPath, searchFromTaskFilters } from './page'
+import {
+  computeTaskCategoryFromPath,
+  computeTaskCursorForPage,
+  computeTaskPaginationTotal,
+  searchFromTaskFilters,
+} from './page'
 
 describe('compute task filters', () => {
   it('maps task-center routes onto category filters', () => {
@@ -18,5 +23,12 @@ describe('compute task filters', () => {
     ).toBe(
       'category=sync&resourceKind=connection&resourceId=cluster-1&domain=virtualization&taskId=task-1&view=logs',
     )
+  })
+
+  it('derives bounded pagination from cursor-backed task pages', () => {
+    expect(computeTaskPaginationTotal(1, 20, 20, true)).toBe(21)
+    expect(computeTaskPaginationTotal(3, 20, 7, false)).toBe(47)
+    expect(computeTaskCursorForPage(1, ['', 'cursor-2'], 3)).toBeUndefined()
+    expect(computeTaskCursorForPage(2, ['', 'cursor-2'], 3)).toBe('cursor-2')
   })
 })

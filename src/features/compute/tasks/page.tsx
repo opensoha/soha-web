@@ -17,10 +17,7 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import {
   FileTextOutlined,
-  LeftOutlined,
   RedoOutlined,
-  ReloadOutlined,
-  RightOutlined,
   StopOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -31,13 +28,14 @@ import type {
   ComputeTaskStatus,
   ComputeTaskView,
 } from '@opensoha/contracts/gen/ts/sohaapi'
-import { AdminTable } from '@/components/admin-table'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
+  ManagementDensityButton,
   ManagementIconButton,
   ManagementQueryActions,
   ManagementQueryField,
   ManagementQueryPanel,
+  ManagementRefreshButton,
   ManagementTableToolbar,
 } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
@@ -49,6 +47,8 @@ import { computeQueries } from '../queries'
 import '../compute.css'
 
 const { Text } = Typography
+const DEFAULT_TASK_PAGE_SIZE = 20
+const TASK_PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
 
 const TASK_CATEGORY_LABELS: Record<ComputeTaskCategory, string> = {
   sync: '同步',
@@ -76,8 +76,26 @@ export function computeTaskFiltersFromLocation(
       computeTaskCategoryFromPath(pathname),
     resourceKind: search.get('resourceKind') || undefined,
     resourceId: search.get('resourceId') || undefined,
-    limit: 100,
+    limit: DEFAULT_TASK_PAGE_SIZE,
   }
+}
+
+export function computeTaskPaginationTotal(
+  currentPage: number,
+  pageSize: number,
+  itemCount: number,
+  hasNextPage: boolean,
+) {
+  return (currentPage - 1) * pageSize + itemCount + (hasNextPage ? 1 : 0)
+}
+
+export function computeTaskCursorForPage(
+  nextPage: number,
+  cursorHistory: string[],
+  currentPage: number,
+) {
+  if (nextPage < 1 || nextPage >= currentPage) return undefined
+  return cursorHistory[nextPage - 1] || undefined
 }
 
 export function searchFromTaskFilters(
@@ -108,6 +126,7 @@ export function ComputeTasksPage() {
   )
   const [filters, setFilters] = useState<ComputeTaskFilters>(initialFilters)
   const [cursorHistory, setCursorHistory] = useState<string[]>([])
+  const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const [form] = Form.useForm<ComputeTaskFilters>()
   const queryClient = useQueryClient()
   const tasksQuery = useQuery(computeQueries.tasks(filters))
@@ -122,6 +141,14 @@ export function ComputeTasksPage() {
   const selectedTask =
     items.find((item) => item.domain === selectedDomain && item.id === selectedTaskId) ??
     taskQuery.data
+  const pageSize = filters.limit ?? DEFAULT_TASK_PAGE_SIZE
+  const currentPage = cursorHistory.length + 1
+  const paginationTotal = computeTaskPaginationTotal(
+    currentPage,
+    pageSize,
+    items.length,
+    Boolean(tasksQuery.data?.nextCursor),
+  )
 
   useEffect(() => {
     setFilters(initialFilters)
@@ -139,10 +166,37 @@ export function ComputeTasksPage() {
   })
 
   const updateFilters = (next: ComputeTaskFilters) => {
-    const normalized = { ...next, cursor: undefined, limit: 100 }
+    const normalized = {
+      ...next,
+      cursor: undefined,
+      limit: next.limit ?? filters.limit ?? DEFAULT_TASK_PAGE_SIZE,
+    }
     setCursorHistory([])
     setFilters(normalized)
     setSearchParams(searchFromTaskFilters(normalized), { replace: true })
+  }
+
+  const changePage = (nextPage: number) => {
+    if (nextPage === currentPage) return
+    if (nextPage < currentPage) {
+      const cursor = computeTaskCursorForPage(nextPage, cursorHistory, currentPage)
+      setCursorHistory((current) => current.slice(0, nextPage - 1))
+      setFilters((current) => ({ ...current, cursor }))
+      return
+    }
+    if (nextPage === currentPage + 1 && tasksQuery.data?.nextCursor) {
+      setCursorHistory((current) => [...current, filters.cursor ?? ''])
+      setFilters((current) => ({ ...current, cursor: tasksQuery.data.nextCursor }))
+    }
+  }
+
+  const changePageSize = (nextPageSize: number) => {
+    setCursorHistory([])
+    setFilters((current) => ({
+      ...current,
+      cursor: undefined,
+      limit: nextPageSize,
+    }))
   }
 
   const openLogs = (task: ComputeTaskView) => {
@@ -215,14 +269,17 @@ export function ComputeTasksPage() {
     { title: '摘要', dataIndex: 'summary', width: 260, render: (value) => value || '-' },
     {
       title: '操作',
+      key: 'actions',
+      className: 'soha-compute-task-actions-column soha-table-actions-column',
       fixed: 'right',
-      width: 128,
+      width: 96,
       render: (_value, record) => (
-        <Space size={4}>
+        <Space className="soha-row-action-icons" size={4}>
           {record.availableActions.includes('logs') ? (
             <ManagementIconButton
               aria-label="查看任务日志"
               icon={<FileTextOutlined />}
+              size="small"
               tooltip="查看日志"
               onClick={() => openLogs(record)}
             />
@@ -233,6 +290,7 @@ export function ComputeTasksPage() {
                 aria-label="取消任务"
                 danger
                 icon={<StopOutlined />}
+                size="small"
                 loading={cancelMutation.isPending && cancelMutation.variables?.taskId === record.id}
                 tooltip="取消"
               />
@@ -243,6 +301,7 @@ export function ComputeTasksPage() {
               <ManagementIconButton
                 aria-label="重试任务"
                 icon={<RedoOutlined />}
+                size="small"
                 loading={retryMutation.isPending && retryMutation.variables?.taskId === record.id}
                 tooltip="重试"
               />
@@ -288,7 +347,7 @@ export function ComputeTasksPage() {
                       status: undefined,
                       category: undefined,
                     })
-                    updateFilters({ limit: 100 })
+                    updateFilters({ limit: DEFAULT_TASK_PAGE_SIZE })
                   }}
                   submitLabel="筛选"
                 />
@@ -328,50 +387,50 @@ export function ComputeTasksPage() {
             </ManagementQueryPanel>
           </>
         }
-        tableNode={
-          <AdminTable
-            rowKey={(record: ComputeTaskView) => `${record.domain}:${record.id}`}
-            columns={columns}
-            dataSource={items}
-            loading={tasksQuery.isLoading}
-            empty={tasksQuery.isError ? '任务列表加载失败' : '暂无匹配任务'}
-            toolbarExtra={
-              <ManagementTableToolbar>
-                <ManagementIconButton
-                  aria-label="上一页"
-                  disabled={cursorHistory.length === 0}
-                  icon={<LeftOutlined />}
-                  tooltip="上一页"
-                  onClick={() => {
-                    const previous = cursorHistory[cursorHistory.length - 1]
-                    setCursorHistory((current) => current.slice(0, -1))
-                    setFilters((current) => ({ ...current, cursor: previous || undefined }))
-                  }}
-                />
-                <ManagementIconButton
-                  aria-label="下一页"
-                  disabled={!tasksQuery.data?.nextCursor}
-                  icon={<RightOutlined />}
-                  tooltip="下一页"
-                  onClick={() => {
-                    if (!tasksQuery.data?.nextCursor) return
-                    setCursorHistory((current) => [...current, filters.cursor ?? ''])
-                    setFilters((current) => ({ ...current, cursor: tasksQuery.data?.nextCursor }))
-                  }}
-                />
-                <ManagementIconButton
-                  aria-label="刷新任务列表"
-                  icon={<ReloadOutlined />}
-                  loading={tasksQuery.isFetching}
-                  tooltip="刷新"
-                  onClick={() => void tasksQuery.refetch()}
-                />
-              </ManagementTableToolbar>
-            }
-            pagination={false}
-            scroll={{ x: 1908 }}
-          />
-        }
+        table={{
+          rowKey: (record: ComputeTaskView) => `${record.domain}:${record.id}`,
+          columns,
+          dataSource: items,
+          loading: tasksQuery.isLoading,
+          empty: tasksQuery.isError ? '任务列表加载失败' : '暂无匹配任务',
+          columnSettingIconOnly: true,
+          columnSettingPlacement: 'header',
+          headerExtra: (
+            <ManagementTableToolbar>
+              <ManagementDensityButton
+                aria-label="切换表格密度"
+                size="small"
+                tooltip={tableSize === 'small' ? '切换为宽松密度' : '切换为紧凑密度'}
+                onClick={() => setTableSize((current) => (current === 'small' ? 'middle' : 'small'))}
+              />
+              <ManagementRefreshButton
+                aria-label="刷新任务列表"
+                loading={tasksQuery.isFetching}
+                size="small"
+                tooltip="刷新"
+                onClick={() => void tasksQuery.refetch()}
+              />
+            </ManagementTableToolbar>
+          ),
+          pageSize,
+          pagination: {
+            current: currentPage,
+            currentPage,
+            pageSize,
+            pageSizeOptions: TASK_PAGE_SIZE_OPTIONS,
+            total: paginationTotal,
+            onPageChange: changePage,
+            onPageSizeChange: changePageSize,
+          },
+          paginationSummary: (
+            <Text type="secondary">
+              当前第 {currentPage} 页，本页 {items.length} 条
+              {tasksQuery.data?.nextCursor ? '，还有更多' : ''}
+            </Text>
+          ),
+          scroll: { x: 'max-content' },
+          tableSize,
+        }}
       />
       <Drawer
         title="任务日志"

@@ -123,6 +123,38 @@ describe('AdminTable', () => {
     expect(captured.tableProps?.pagination.showTotal(1, [1, 1])).toBe('当前 1 / 3 条')
   })
 
+  it('separates server page and page-size callbacks', async () => {
+    const onPageChange = vi.fn()
+    const onPageSizeChange = vi.fn()
+    await renderNode(
+      <AdminTable
+        columns={[{ title: 'A', dataIndex: 'a' }]}
+        dataSource={[{ id: '1', a: 'a' }]}
+        pagination={{
+          current: 2,
+          currentPage: 2,
+          pageSize: 20,
+          total: 41,
+          onPageChange,
+          onPageSizeChange,
+        }}
+        rowKey="id"
+      />,
+    )
+
+    await act(async () => {
+      captured.tableProps.pagination.onChange(3, 20)
+    })
+    expect(onPageChange).toHaveBeenCalledWith(3)
+    expect(onPageSizeChange).not.toHaveBeenCalled()
+
+    await act(async () => {
+      captured.tableProps.pagination.onChange(1, 50)
+    })
+    expect(onPageSizeChange).toHaveBeenCalledWith(50)
+    expect(onPageChange).toHaveBeenCalledTimes(1)
+  })
+
   it('pins the shared action preset to the right side', () => {
     expect(tableColumnPresets.action.fixed).toBe('right')
   })
