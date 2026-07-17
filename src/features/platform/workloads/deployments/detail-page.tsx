@@ -1,28 +1,12 @@
-import { lazy, Suspense, useState, useEffect, useMemo } from 'react'
-import {
-  Tag,
-  Button,
-  Card,
-  Spin,
-  List,
-  Space,
-  Modal,
-  InputNumber,
-  Tooltip,
-  Typography,
-  message,
-} from 'antd'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { lazy, Suspense, useState, useMemo } from 'react'
+import { Tag, Button, Card, Spin, List, Tooltip, Typography } from 'antd'
+import { useQuery } from '@tanstack/react-query'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
 import { useAIPageContext } from '@/features/copilot'
 import { useI18n } from '@/i18n'
 import { ResourceEventsTimeline } from '@/components/resource-events-timeline'
 import { StatusTag } from '@/components/status-tag'
-import {
-  capabilityActionTooltip,
-  useClusterCapability,
-} from '@/features/platform/cluster-capabilities'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { formatAgeSeconds, formatDateTime } from '@/utils/time'
 import {
@@ -35,7 +19,6 @@ import { toScopeKey } from '@/types'
 import type { Pod } from '@/types'
 import type { TabsProps } from 'antd'
 import { WorkloadDetailShell } from '../shared/detail-shell'
-import { deploymentMutations } from './mutations'
 import { deploymentQueries } from './queries'
 import { deploymentLinkageQueries } from './linkage-queries'
 import type { ApplicationEnvironment } from './types'
@@ -56,14 +39,8 @@ export function DeploymentDetailPage() {
   const { clusterId, namespace } = usePlatformScopeStore()
   const detailNamespace = resolveWorkloadNamespace(namespace, searchParams.get('namespace'))
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const [scaleVisible, setScaleVisible] = useState(false)
-  const [scaleReplicas, setScaleReplicas] = useState(1)
   const [activeTabKey, setActiveTabKey] = useState('overview')
-  const workloadMutationCapability = useClusterCapability('workload.mutations', localeCode)
-  const workloadMutationDisabled = workloadMutationCapability.disabled
   const detailScope = toScopeKey(clusterId, detailNamespace)
-  const deploymentTarget = { scope: detailScope, name: deploymentName }
   const deploymentDetailQuery = useQuery(deploymentQueries.detail(detailScope, deploymentName))
 
   const bindingsQuery = useQuery(deploymentLinkageQueries.applicationEnvironments())
@@ -131,15 +108,6 @@ export function DeploymentDetailPage() {
         : (rolloutStatus?.conditions ?? []).map(conditionToTimelineEvent),
     [deploymentEventsQuery.data, rolloutStatus],
   )
-  useEffect(() => {
-    if (rolloutStatus?.desiredReplicas != null) {
-      setScaleReplicas(rolloutStatus.desiredReplicas)
-    }
-  }, [rolloutStatus])
-
-  const restartDeploymentMutation = useMutation(deploymentMutations.restart(queryClient))
-  const scaleDeploymentMutation = useMutation(deploymentMutations.scale(queryClient))
-
   const linkageOverview = (
     <div className="soha-detail-stack">
       <Card
@@ -385,90 +353,15 @@ export function DeploymentDetailPage() {
   }
 
   return (
-    <>
-      <WorkloadDetailShell
-        title="Deployment"
-        resource="deployments"
-        paramKey="deploymentName"
-        activeTabKey={activeTabKey}
-        onTabChange={setActiveTabKey}
-        extraOverview={linkageOverview}
-        extraTabPanes={[metricsTab, eventsTab]}
-        yamlLast
-        actions={
-          <Space>
-            <Tooltip
-              title={capabilityActionTooltip(
-                localeCode === 'zh_CN' ? '重启' : 'Restart',
-                workloadMutationCapability,
-              )}
-            >
-              <span>
-                <Button
-                  autoInsertSpace={false}
-                  variant="outlined"
-                  disabled={workloadMutationDisabled}
-                  loading={restartDeploymentMutation.isPending}
-                  onClick={() =>
-                    restartDeploymentMutation.mutate(deploymentTarget, {
-                      onSuccess: () =>
-                        void message.success(
-                          localeCode === 'zh_CN' ? '已触发重启' : 'Restart triggered',
-                        ),
-                      onError: (error) => void message.error(error.message),
-                    })
-                  }
-                >
-                  {localeCode === 'zh_CN' ? '重启' : 'Restart'}
-                </Button>
-              </span>
-            </Tooltip>
-            <Tooltip
-              title={capabilityActionTooltip(
-                localeCode === 'zh_CN' ? '扩缩容' : 'Scale',
-                workloadMutationCapability,
-              )}
-            >
-              <span>
-                <Button
-                  variant="outlined"
-                  disabled={workloadMutationDisabled}
-                  onClick={() => setScaleVisible(true)}
-                >
-                  {localeCode === 'zh_CN' ? '扩缩容' : 'Scale'}
-                </Button>
-              </span>
-            </Tooltip>
-          </Space>
-        }
-      />
-      <Modal
-        title={localeCode === 'zh_CN' ? 'Deployment 扩缩容' : 'Scale deployment'}
-        open={scaleVisible}
-        onOk={() =>
-          scaleDeploymentMutation.mutate(
-            { ...deploymentTarget, replicas: scaleReplicas },
-            {
-              onSuccess: () => {
-                void message.success(localeCode === 'zh_CN' ? '已触发扩缩容' : 'Scale triggered')
-                setScaleVisible(false)
-              },
-              onError: (error) => void message.error(error.message),
-            },
-          )
-        }
-        onCancel={() => setScaleVisible(false)}
-        confirmLoading={scaleDeploymentMutation.isPending}
-      >
-        <div className="flex items-center gap-2">
-          <Text>{localeCode === 'zh_CN' ? '副本数:' : 'Replicas:'}</Text>
-          <InputNumber
-            value={scaleReplicas}
-            min={0}
-            onChange={(value) => setScaleReplicas(Number(value) || 0)}
-          />
-        </div>
-      </Modal>
-    </>
+    <WorkloadDetailShell
+      title="Deployment"
+      resource="deployments"
+      paramKey="deploymentName"
+      activeTabKey={activeTabKey}
+      onTabChange={setActiveTabKey}
+      extraOverview={linkageOverview}
+      extraTabPanes={[metricsTab, eventsTab]}
+      yamlLast
+    />
   )
 }

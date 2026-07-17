@@ -1,6 +1,6 @@
-import { lazy, Suspense, useDeferredValue, useMemo, useState } from 'react'
-import { Button, Popconfirm, Spin, Tooltip, Typography, message } from 'antd'
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import { useDeferredValue, useMemo, useState } from 'react'
+import { Popconfirm, Typography, message } from 'antd'
+import { DeleteOutlined } from '@ant-design/icons'
 import {
   useMutation,
   useQuery,
@@ -20,15 +20,15 @@ import {
   ManagementTableToolbar,
 } from '@/components/management-list'
 import { hasAllowedAction } from '@/features/auth'
+import { CreateEntry } from '@/features/platform/resource-creation/components/create-entry'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
-import type { ResourceYAMLView, ScopeKey } from '@/types'
+import type { ScopeKey } from '@/types'
 import { toClusterStorageScope, toStorageScope } from './scope'
-import type { CreateStorageVariables, StorageTarget } from './types'
+import type { StorageTarget } from './types'
 import '../styles.css'
 
 const { Text } = Typography
-const StorageCreateModal = lazy(() => import('./create-modal'))
 
 function includesSearch(values: Array<string | undefined | null>, keyword: string) {
   if (!keyword) return true
@@ -39,7 +39,6 @@ export function StorageListPage<T extends { allowedActions?: string[]; name: str
   clusterScoped,
   columns,
   createDefaultTemplate,
-  createOptions,
   emptyLabel,
   getRecordNamespace,
   kind,
@@ -53,9 +52,6 @@ export function StorageListPage<T extends { allowedActions?: string[]; name: str
   clusterScoped: boolean
   columns: TableColumnsType<T>
   createDefaultTemplate: string
-  createOptions: (
-    queryClient: ReturnType<typeof useQueryClient>,
-  ) => MutationOptions<ResourceYAMLView, Error, CreateStorageVariables>
   emptyLabel: { zh_CN: string; en_US: string }
   getRecordNamespace?: (record: T) => string
   kind: string
@@ -74,10 +70,8 @@ export function StorageListPage<T extends { allowedActions?: string[]; name: str
   const listScope = clusterScoped
     ? toClusterStorageScope(clusterId)
     : toStorageScope(clusterId, namespace)
-  const createScope = clusterScoped ? listScope : toStorageScope(clusterId, namespace || 'default')
   const query = useQuery(listQuery(listScope))
   const removeMutation = useMutation(removeOptions(queryClient))
-  const [createVisible, setCreateVisible] = useState(false)
   const [searchKeyword, setSearchKeyword] = useState('')
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const normalizedKeyword = useDeferredValue(searchKeyword).trim().toLowerCase()
@@ -147,19 +141,6 @@ export function StorageListPage<T extends { allowedActions?: string[]; name: str
 
   return (
     <ManagementDataPage
-      beforeQuery={
-        createVisible ? (
-          <Suspense fallback={<Spin size="large" />}>
-            <StorageCreateModal
-              createOptions={createOptions}
-              defaultTemplate={createDefaultTemplate}
-              kind={kind}
-              onClose={() => setCreateVisible(false)}
-              scope={createScope}
-            />
-          </Suspense>
-        ) : null
-      }
       query={{
         onFinish: () => undefined,
         actions: (
@@ -202,28 +183,18 @@ export function StorageListPage<T extends { allowedActions?: string[]; name: str
         scroll: { x: 'max-content' },
         headerExtra: (
           <ManagementTableToolbar>
-            <Tooltip
-              title={
-                !clusterId
-                  ? localeCode === 'zh_CN'
-                    ? '请先选择集群。'
-                    : 'Select a cluster first.'
-                  : ''
-              }
-            >
-              <span>
-                <Button
-                  autoInsertSpace={false}
-                  size="small"
-                  type="primary"
-                  icon={<PlusOutlined />}
-                  disabled={!clusterId}
-                  onClick={() => setCreateVisible(true)}
-                >
-                  {localeCode === 'zh_CN' ? '新增' : 'Create'}
-                </Button>
-              </span>
-            </Tooltip>
+            <CreateEntry
+              context={{
+                clusterId: clusterId || '',
+                defaultNamespace: clusterScoped ? undefined : namespace || undefined,
+                expectedKind: kind,
+                resourceGroup: 'storage',
+                scopeMode: clusterScoped ? 'cluster' : 'namespace',
+                source: 'list',
+              }}
+              defaultTemplate={createDefaultTemplate}
+              label={resourceLabel}
+            />
             <ManagementDensityButton
               aria-label={densityLabel}
               title={densityLabel}

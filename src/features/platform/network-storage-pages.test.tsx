@@ -249,7 +249,7 @@ describe('network resource list pages', () => {
     const headerButtons = Array.from(
       container.querySelectorAll('[data-testid="header-extra"] button'),
     ).map((button) => button.textContent?.trim() || button.getAttribute('aria-label'))
-    expect(headerButtons).toEqual(['切换表格密度', '刷新'])
+    expect(headerButtons).toEqual(['新增', '选择创建方式', '切换表格密度', '刷新'])
 
     const input = container.querySelector(
       'input[placeholder="搜索 Service / namespace / type / port"]',
@@ -349,7 +349,7 @@ describe('network resource list pages', () => {
     const headerButtons = Array.from(
       container.querySelectorAll('[data-testid="header-extra"] button'),
     ).map((button) => button.textContent?.trim() || button.getAttribute('aria-label'))
-    expect(headerButtons).toEqual(['新增', '切换表格密度', '刷新'])
+    expect(headerButtons).toEqual(['新增', '选择创建方式', '切换表格密度', '刷新'])
 
     const input = container.querySelector(
       'input[placeholder="搜索 PVC / namespace / storageClass"]',

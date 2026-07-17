@@ -20,6 +20,7 @@ import {
   ManagementQueryField,
   ManagementTableToolbar,
 } from '@/components/management-list'
+import { WorkloadCreateEntry } from '../shared/create-entry'
 import { TABLE_ACTIONS_COLUMN_CLASS_NAME } from '@/components/resource-actions'
 import { hasAllowedAction } from '@/features/auth'
 import { encodeAIContextForElement, useAIPageContext } from '@/features/copilot'
@@ -527,6 +528,7 @@ export function WorkloadsDeploymentsPage() {
 
   const deploymentToolbarExtra = (
     <ManagementTableToolbar>
+      <WorkloadCreateEntry kind="Deployment" />
       {workloadMutationDisabled && workloadMutationCapability.reason ? (
         <Text type="danger" style={{ fontSize: 12 }}>
           {workloadMutationCapability.reason}

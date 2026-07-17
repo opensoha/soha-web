@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import type { TableColumnsType } from 'antd'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementIconButton, ManagementTableToolbar } from '@/components/management-list'
+import { WorkloadCreateEntry } from '../shared/create-entry'
 import { TABLE_ACTIONS_COLUMN_CLASS_NAME } from '@/components/resource-actions'
 import { hasAllowedAction } from '@/features/auth'
 import {
@@ -210,6 +211,7 @@ export function WorkloadsDaemonSetsPage() {
         shellClassName="soha-management-table-shell"
         headerExtra={
           <ManagementTableToolbar>
+            <WorkloadCreateEntry kind="DaemonSet" />
             {densityButton}
             <WorkloadRefreshButton
               disabled={!clusterId}

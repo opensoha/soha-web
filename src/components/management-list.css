@@ -56,6 +56,21 @@
   flex-grow: 1;
 }
 
+.soha-management-query-scope.ant-form-item {
+  flex: 0 0 auto;
+  width: max-content;
+  min-width: max-content;
+}
+
+.soha-management-query-scope .ant-form-item-control {
+  flex: 0 0 auto;
+}
+
+.soha-management-query-scope .ant-segmented {
+  width: max-content;
+  white-space: nowrap;
+}
+
 .soha-management-query-field .ant-form-item-row {
   flex-wrap: nowrap;
 }

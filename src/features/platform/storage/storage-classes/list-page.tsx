@@ -51,7 +51,6 @@ export function StorageClassesPage() {
       clusterScoped
       columns={columns}
       createDefaultTemplate={DEFAULT_TEMPLATE}
-      createOptions={storageClassMutations.create}
       emptyLabel={{
         zh_CN: '当前集群没有 StorageClass',
         en_US: 'No storage classes in this cluster',

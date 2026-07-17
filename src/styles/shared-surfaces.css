@@ -1,5 +1,38 @@
 /* Styles moved from web/src/styles/globals.css; keep scoped to this shared/component or feature owner. */
 
+.soha-resource-tabs.ant-tabs > .ant-tabs-nav {
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--soha-border-color);
+}
+
+.soha-resource-tabs.ant-tabs > .ant-tabs-nav::before {
+  border-bottom: none;
+}
+
+.soha-resource-tabs .ant-tabs-tab {
+  padding: 9px 0 10px;
+}
+
+.soha-resource-tabs .ant-tabs-tab-btn {
+  color: var(--soha-text-secondary);
+  font-size: 13px;
+}
+
+.soha-resource-tabs.ant-tabs .ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--soha-text-primary);
+  font-weight: 600;
+}
+
+.soha-resource-tabs .ant-tabs-ink-bar {
+  height: 2px;
+  border-radius: 999px 999px 0 0;
+  background: var(--soha-text-primary);
+}
+
+.soha-resource-tabs.is-header-only > .ant-tabs-content-holder {
+  display: none;
+}
+
 /* Right-fixed column: force an opaque sticky surface so underlying cells never bleed through */
 .soha-table-actions-column {
   border-left: 1px solid var(--soha-border-color) !important;
@@ -63,7 +96,7 @@
   border-radius: 12px;
   background: var(--soha-bg-surface-muted);
   color: var(--soha-text-secondary);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
   font-size: 12px;
   line-height: 1.6;
   white-space: pre-wrap;
@@ -355,7 +388,7 @@
   inset: auto 0 0;
   height: 2px;
   background: var(--soha-overview-current-color);
-  content: "";
+  content: '';
   opacity: 0.72;
 }
 
@@ -422,7 +455,8 @@
   justify-content: flex-end;
 }
 
-.soha-status-tag.ant-tag {
+.soha-status-tag.ant-tag,
+.soha-metadata-tag.ant-tag {
   display: inline-flex;
   align-items: center;
   align-self: flex-start;
@@ -457,6 +491,12 @@
 }
 
 .soha-status-tag.ant-tag .ant-tag-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.soha-metadata-tag.ant-tag .ant-tag-text {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -762,7 +802,7 @@
   inset: auto 0 0;
   height: 2px;
   background: var(--soha-overview-current-color);
-  content: "";
+  content: '';
   opacity: 0.72;
 }
 
@@ -974,12 +1014,12 @@
   }
 
   .soha-overview-summary-grid,
-.soha-overview-runtime-layout {
+  .soha-overview-runtime-layout {
     grid-template-columns: 1fr;
   }
 
   .soha-overview-metric-grid,
-.soha-overview-pod-grid {
+  .soha-overview-pod-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -989,9 +1029,8 @@
 }
 
 @media (max-width: 768px) {
-
   .soha-overview-panel-card.ant-card .ant-card-body,
-.soha-overview-runtime-card.ant-card .ant-card-body {
+  .soha-overview-runtime-card.ant-card .ant-card-body {
     padding: 14px;
   }
 
@@ -1000,28 +1039,28 @@
   }
 
   .soha-overview-metric-grid,
-.soha-overview-pod-grid,
-.soha-overview-chip-grid {
+  .soha-overview-pod-grid,
+  .soha-overview-chip-grid {
     grid-template-columns: 1fr;
   }
 
   .soha-overview-cluster-row,
-.soha-overview-attention-row,
-.soha-overview-namespace-row,
-.soha-overview-section-bar,
-.soha-overview-subpanel-head {
+  .soha-overview-attention-row,
+  .soha-overview-namespace-row,
+  .soha-overview-section-bar,
+  .soha-overview-subpanel-head {
     flex-direction: column;
   }
 
   .soha-overview-cluster-meta,
-.soha-overview-attention-meta,
-.soha-overview-namespace-meta,
-.soha-overview-runtime-card-extra {
+  .soha-overview-attention-meta,
+  .soha-overview-namespace-meta,
+  .soha-overview-runtime-card-extra {
     justify-content: flex-start;
   }
 
   .soha-overview-attention-list,
-.soha-overview-namespace-list {
+  .soha-overview-namespace-list {
     max-height: none;
     padding-right: 0;
   }
@@ -1042,7 +1081,7 @@
   }
 
   .soha-page-context-bar__controls,
-.soha-page-context-bar__summary {
+  .soha-page-context-bar__summary {
     justify-content: flex-start;
   }
 
@@ -1062,7 +1101,6 @@
 }
 
 @media (max-width: 640px) {
-
   .soha-overview-scopebar {
     flex-direction: column;
     align-items: stretch;

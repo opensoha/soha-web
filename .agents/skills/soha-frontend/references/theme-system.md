@@ -15,7 +15,7 @@ This reference is the concise operating standard for `soha-web` theme, layout, m
 ## Shared Components
 
 - `ManagementDataPage` is the default shell for ordinary management list pages.
-- `ManagementQueryPanel`, `ManagementQueryField`, `ManagementKeywordField`, `ManagementQueryActions`, `ManagementToolbarSearch`, `ManagementSearchableListPane`, `ManagementTableToolbar`, and `AdminTable` are the primary shared building blocks.
+- `ManagementQueryPanel`, `ManagementQueryField`, `ManagementQueryScope`, `ManagementKeywordField`, `ManagementQueryActions`, `ManagementToolbarSearch`, `ManagementSearchableListPane`, `ManagementTableToolbar`, and `AdminTable` are the primary shared building blocks.
 - `ManagementQueryPanel` / `ManagementQueryGrid` own responsive query collapse. Query fields must stay mounted; the shared grid decides whether fields fit in one row and only shows expand/collapse when the container actually wraps.
 - `ManagementQueryActions` is the default reset/search button group. Only the submit action should be primary; reset and expand/collapse remain neutral.
 - `ManagementKeywordField` is the default main query keyword field.
@@ -29,9 +29,48 @@ This reference is the concise operating standard for `soha-web` theme, layout, m
 - Query inputs and toolbar searches should read as white surfaces in light mode.
 - Ordinary management buttons in query areas should stay neutral; only the core submit action should use the theme color.
 
+## Tags And Pagination
+
+- Use `StatusTag` for stateful values and `MetadataTag` for categorical labels. Both use compact
+  Ant Design `filled` tags with semantic colors; ordinary management pages must not add outlined
+  tag variants or local color maps.
+- Wrap groups of tags at the collection level while keeping each tag on one line. Large value
+  sets need an overflow or summary treatment instead of unbounded table-row growth.
+- Top-level `AdminTable` lists keep the shared pagination footer and summary, including when the
+  backend uses cursors. Toolbar previous/next buttons do not replace the footer. Disable
+  pagination only for intentional embedded tables.
+
+## Resource Tabs
+
+- Use the shared `soha-resource-tabs` class for peer resource categories and resource-detail
+  content views. Keep the compact 13px label, 600 active weight, 2px centered indicator, and
+  token-driven divider treatment consistent across workbenches.
+- Add `is-header-only` when Tabs only selects the dataset and the page owns the content below it;
+  omit it when each tab item owns a content panel.
+- Do not use resource Tabs for shortcuts that filter one dataset. Those belong in
+  `ManagementQueryScope` inside the query panel.
+
+## Breadcrumbs
+
+- Detail pages must preserve the navigable list-route ancestor and use the decoded resource
+  identifier from the final dynamic path segment as the terminal breadcrumb. Do not expose a
+  generic `Detail` label when a stable route parameter is available.
+- Keep workbench, menu-group, and menu labels sourced from the runtime navigation. Route-only
+  ancestors use their route titles so a shared menu ID does not collapse distinct list levels.
+- Standard K8s resource detail pages must not repeat the resource kind and name below a
+  breadcrumb that already identifies the resource. Keep workload mutation commands such as
+  restart and scale in the management list table's row or batch actions instead of the detail
+  tab bar. Keep a dedicated detail header only when it carries additional workspace context or
+  cross-page actions that the breadcrumb and tabs cannot represent.
+
 ## Shared Query Behavior
 
 - Keep all query fields mounted in the DOM.
+- Use `ManagementQueryScope` for a stable set of two to six single-select shortcuts that filter
+  one dataset. It must remain one intrinsic-width layout unit: never shrink, wrap, split, or
+  truncate its Segmented options. Use a Select for longer, dynamic, or larger option sets.
+- Label quick filters by their meaning, such as `业务域`, `日志范围`, or `快捷范围`. Reserve
+  `视图` for changes in presentation such as list, tree, timeline, or saved query layouts.
 - Let the shared grid decide whether the row wraps.
 - If everything fits in one row, do not show expand/collapse.
 - If the fields wrap to a second row, show the expand button.

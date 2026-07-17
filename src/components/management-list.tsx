@@ -1,6 +1,6 @@
 import { forwardRef, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
-import { Alert, Button, Card, Empty, Form, Input, Space, Spin, Tooltip, Typography } from 'antd'
+import { Alert, Button, Card, Empty, Form, Input, Segmented, Space, Spin, Tooltip, Typography } from 'antd'
 import type { AlertProps, ButtonProps, FormProps } from 'antd'
 import { ColumnHeightOutlined, DownOutlined, ReloadOutlined, SearchOutlined, UpOutlined } from '@ant-design/icons'
 import './management-list.css'
@@ -48,6 +48,10 @@ interface ManagementQueryFieldProps extends React.ComponentProps<typeof Form.Ite
   grow?: boolean
   minWidth?: number | string
   width?: number | string
+}
+
+interface ManagementQueryScopeProps extends Omit<React.ComponentProps<typeof Segmented>, 'block' | 'label' | 'size'> {
+  label?: ReactNode
 }
 
 interface ManagementKeywordFieldProps extends Omit<ManagementQueryFieldProps, 'children'> {
@@ -392,6 +396,14 @@ export function ManagementQueryField({ grow = false, minWidth, style, width, ...
       className={classNames('soha-management-query-field', grow && 'is-fluid', props.className)}
       style={fieldStyle}
     />
+  )
+}
+
+export function ManagementQueryScope({ label = '范围', ...props }: ManagementQueryScopeProps) {
+  return (
+    <ManagementQueryField className="soha-management-query-scope" label={label}>
+      <Segmented {...props} size="small" />
+    </ManagementQueryField>
   )
 }
 

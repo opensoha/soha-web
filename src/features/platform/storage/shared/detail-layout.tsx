@@ -9,28 +9,12 @@ const { Text } = Typography
 
 export function StorageDetailShell({
   children,
-  kind,
-  name,
 }: {
   children: ReactNode
   kind: string
   name: string
 }) {
-  return (
-    <div className="soha-page soha-workload-detail-page">
-      <div className="soha-workload-detail-heading">
-        <div className="soha-workload-detail-heading-main">
-          <Text type="secondary" className="soha-workload-detail-kind">
-            {kind}
-          </Text>
-          <Text strong className="soha-workload-detail-name">
-            {name}
-          </Text>
-        </div>
-      </div>
-      {children}
-    </div>
-  )
+  return <div className="soha-page soha-workload-detail-page">{children}</div>
 }
 
 export function StorageDetailTabs({
@@ -45,7 +29,7 @@ export function StorageDetailTabs({
   return (
     <Tabs
       activeKey={activeKey}
-      className="soha-workload-detail-tabs"
+      className="soha-resource-tabs soha-workload-detail-tabs"
       indicator={{ size: (origin) => Math.max(16, origin - 16), align: 'center' }}
       items={items}
       onChange={onChange}

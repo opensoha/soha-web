@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Card, Descriptions, Drawer, Input, Select, Segmented, Space, Tabs, Typography } from 'antd'
+import { Card, Descriptions, Drawer, Input, Select, Space, Tabs, Typography } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { EyeOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
@@ -9,6 +9,7 @@ import {
   ManagementIconButton,
   ManagementQueryActions,
   ManagementQueryField,
+  ManagementQueryScope,
 } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
 import { formatDateTime } from '@/utils/time'
@@ -296,31 +297,29 @@ export function OperationLogsPage() {
         ),
         children: (
           <>
-            <ManagementQueryField label="视图" minWidth={260} width={300}>
-              <Segmented
-                size="small"
-                value={moduleView}
-                onChange={(value) =>
-                  setModuleView(
-                    value as
-                      | 'all'
-                      | 'system'
-                      | 'access'
-                      | 'platform'
-                      | 'virtualization'
-                      | 'delivery',
-                  )
-                }
-                options={[
-                  { value: 'all', label: '全部' },
-                  { value: 'system', label: '系统' },
-                  { value: 'access', label: '访问控制' },
-                  { value: 'platform', label: '平台' },
-                  { value: 'virtualization', label: '虚拟化' },
-                  { value: 'delivery', label: '交付' },
-                ]}
-              />
-            </ManagementQueryField>
+            <ManagementQueryScope
+              label="业务域"
+              value={moduleView}
+              onChange={(value) =>
+                setModuleView(
+                  value as
+                    | 'all'
+                    | 'system'
+                    | 'access'
+                    | 'platform'
+                    | 'virtualization'
+                    | 'delivery',
+                )
+              }
+              options={[
+                { value: 'all', label: '全部' },
+                { value: 'system', label: '系统' },
+                { value: 'access', label: '访问控制' },
+                { value: 'platform', label: '平台' },
+                { value: 'virtualization', label: '虚拟化' },
+                { value: 'delivery', label: '交付' },
+              ]}
+            />
             <ManagementQueryField minWidth={180} width={220} label="操作类型">
               <Input
                 allowClear

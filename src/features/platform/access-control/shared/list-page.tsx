@@ -1,6 +1,6 @@
 import { useDeferredValue, useMemo, useState } from 'react'
-import { Alert, Button, Popconfirm, Tooltip, Typography, message } from 'antd'
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import { Alert, Popconfirm, Typography, message } from 'antd'
+import { DeleteOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
@@ -15,10 +15,10 @@ import {
 import { TABLE_ACTIONS_COLUMN_CLASS_NAME } from '@/components/resource-actions'
 import { hasAllowedAction } from '@/features/auth'
 import { useClusterCapability } from '@/features/platform/cluster-capabilities'
+import { CreateEntry } from '@/features/platform/resource-creation/components/create-entry'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import type { TableColumnsType } from 'antd'
-import { CreateAccessControlResourceModal } from './create-resource-modal'
 import { accessControlMutations } from './mutations'
 import { accessControlQueries } from './queries'
 import { accessControlScopeFromSelection, accessControlTargetFromRecord } from './scope'
@@ -66,7 +66,6 @@ export function AccessControlResourceListPage<T extends AccessControlResourceRec
   const { clusterId, namespace } = usePlatformScopeStore()
   const queryClient = useQueryClient()
   const yamlCapability = useClusterCapability('resource.yaml.apply', localeCode)
-  const [createOpen, setCreateOpen] = useState(false)
   const [searchKeyword, setSearchKeyword] = useState('')
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const deferredSearchKeyword = useDeferredValue(searchKeyword)
@@ -82,19 +81,6 @@ export function AccessControlResourceListPage<T extends AccessControlResourceRec
   const actionsAvailable = !yamlCapability.isLoading && !yamlCapability.disabled
   const shouldShowActions =
     actionsAvailable && rawItems.some((item) => hasAllowedAction(item.allowedActions, 'delete'))
-  const createDisabled = !clusterId || !actionsAvailable
-  const createDisabledReason = !clusterId
-    ? localeCode === 'zh_CN'
-      ? '请先选择集群。'
-      : 'Select a cluster first.'
-    : yamlCapability.isLoading
-      ? localeCode === 'zh_CN'
-        ? '正在检查 YAML 操作能力。'
-        : 'Checking YAML operation capability.'
-      : yamlCapability.reason ||
-        (localeCode === 'zh_CN'
-          ? '当前集群暂不支持 YAML 新增。'
-          : 'YAML create is not supported for the current cluster.')
   const effectiveEmptyDescription = !clusterId
     ? localeCode === 'zh_CN'
       ? '请选择集群查看 RBAC 资源。'
@@ -214,20 +200,32 @@ export function AccessControlResourceListPage<T extends AccessControlResourceRec
         ),
         headerExtra: (
           <ManagementTableToolbar>
-            <Tooltip title={createDisabled ? createDisabledReason : ''}>
-              <span>
-                <Button
-                  autoInsertSpace={false}
-                  disabled={createDisabled}
-                  icon={<PlusOutlined />}
-                  onClick={() => setCreateOpen(true)}
-                  size="small"
-                  type="primary"
-                >
-                  {localeCode === 'zh_CN' ? '新增' : 'Create'}
-                </Button>
-              </span>
-            </Tooltip>
+            <CreateEntry
+              context={{
+                clusterId: clusterId || '',
+                defaultNamespace:
+                  kind === 'roles' || kind === 'rolebindings' || kind === 'serviceaccounts'
+                    ? namespace || undefined
+                    : undefined,
+                expectedApiVersion:
+                  kind === 'serviceaccounts' ? 'v1' : 'rbac.authorization.k8s.io/v1',
+                expectedKind: {
+                  serviceaccounts: 'ServiceAccount',
+                  roles: 'Role',
+                  rolebindings: 'RoleBinding',
+                  clusterroles: 'ClusterRole',
+                  clusterrolebindings: 'ClusterRoleBinding',
+                }[kind],
+                resourceGroup: 'access-control',
+                scopeMode:
+                  kind === 'clusterroles' || kind === 'clusterrolebindings'
+                    ? 'cluster'
+                    : 'namespace',
+                source: 'list',
+              }}
+              defaultTemplate={defaultTemplate}
+              label={label.replace(/s$/, '')}
+            />
             <ManagementDensityButton
               aria-label={densityLabel}
               onClick={() => setTableSize((current) => (current === 'middle' ? 'small' : 'middle'))}
@@ -258,14 +256,6 @@ export function AccessControlResourceListPage<T extends AccessControlResourceRec
         scroll: { x: 'max-content' },
         tableSize,
       }}
-    >
-      <CreateAccessControlResourceModal
-        defaultTemplate={defaultTemplate}
-        kind={kind}
-        label={label.replace(/s$/, '')}
-        onClose={() => setCreateOpen(false)}
-        open={createOpen}
-      />
-    </ManagementDataPage>
+    />
   )
 }

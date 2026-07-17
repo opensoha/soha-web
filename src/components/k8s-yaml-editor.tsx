@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import Editor, { useMonaco } from '@monaco-editor/react'
 import { ReloadOutlined } from '@ant-design/icons'
 import { Button, Card, Space, Tooltip, Typography } from 'antd'
@@ -47,6 +47,7 @@ export function K8sYamlEditor({
   applyDisabledReason,
   applying,
   editorHeight = 620,
+  applyLabel,
 }: {
   value: string
   onChange: (value: string) => void
@@ -58,6 +59,7 @@ export function K8sYamlEditor({
   applyDisabledReason?: string
   applying?: boolean
   editorHeight?: number | string
+  applyLabel?: ReactNode
 }) {
   const { t } = useI18n()
   const monaco = useMonaco()
@@ -127,7 +129,7 @@ export function K8sYamlEditor({
           <Tooltip title={applyDisabledReason}>
             <span>
               <Button type="primary" onClick={onApply} loading={applying} disabled={applyDisabled}>
-                {t('common.apply', 'Apply')}
+                {applyLabel ?? t('common.apply', 'Apply')}
               </Button>
             </span>
           </Tooltip>

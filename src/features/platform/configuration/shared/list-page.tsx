@@ -1,6 +1,6 @@
 import { useDeferredValue, useMemo, useState } from 'react'
 import { Button, Popconfirm, Typography, message } from 'antd'
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import { DeleteOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { ManagementDataPage } from '@/components/management-data-page'
@@ -15,11 +15,11 @@ import {
 } from '@/components/management-list'
 import { TABLE_ACTIONS_COLUMN_CLASS_NAME } from '@/components/resource-actions'
 import { hasAllowedAction } from '@/features/auth'
+import { CreateEntry } from '@/features/platform/resource-creation/components/create-entry'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
 import type { TableColumnsType } from 'antd'
-import { CreateConfigurationResourceModal } from './create-resource-modal'
 import { configurationMutations } from './mutations'
 import { configurationQueries } from './queries'
 import { configurationTargetFromRecord } from './scope'
@@ -84,7 +84,6 @@ export function ConfigurationResourceListPage<T extends ConfigurationResourceRec
   const { localeCode } = useI18n()
   const { clusterId, namespace } = usePlatformScopeStore()
   const queryClient = useQueryClient()
-  const [createOpen, setCreateOpen] = useState(false)
   const [searchKeyword, setSearchKeyword] = useState('')
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const deferredSearchKeyword = useDeferredValue(searchKeyword)
@@ -196,15 +195,19 @@ export function ConfigurationResourceListPage<T extends ConfigurationResourceRec
         headerExtra: (
           <ManagementTableToolbar>
             {canCreate ? (
-              <Button
-                autoInsertSpace={false}
-                size="small"
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => setCreateOpen(true)}
-              >
-                {localeCode === 'zh_CN' ? '新增' : 'Create'}
-              </Button>
+              <CreateEntry
+                context={{
+                  clusterId: clusterId || '',
+                  defaultNamespace:
+                    scopeMode === 'namespace' ? namespace || undefined : undefined,
+                  expectedKind: singularLabel,
+                  resourceGroup: 'configuration',
+                  scopeMode,
+                  source: 'list',
+                }}
+                defaultTemplate={defaultTemplate || ''}
+                label={singularLabel || label}
+              />
             ) : null}
             <ManagementDensityButton
               aria-label={densityLabel}
@@ -246,16 +249,6 @@ export function ConfigurationResourceListPage<T extends ConfigurationResourceRec
         tableSize,
         scroll: { x: 'max-content' },
       }}
-    >
-      {defaultTemplate && singularLabel ? (
-        <CreateConfigurationResourceModal
-          defaultTemplate={defaultTemplate}
-          kind={kind}
-          label={singularLabel}
-          onClose={() => setCreateOpen(false)}
-          open={createOpen}
-        />
-      ) : null}
-    </ManagementDataPage>
+    />
   )
 }

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { App, Card, Spin, Tabs, Typography } from 'antd'
+import { App, Card, Spin, Tabs } from 'antd'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
@@ -13,7 +13,6 @@ import { workloadQueries } from './queries'
 import type { WorkloadKind } from './types'
 import '@/features/platform/workloads/styles.css'
 
-const { Text } = Typography
 const K8sYamlEditor = lazy(async () => {
   const module = await import('@/components/k8s-yaml-editor')
   return { default: module.K8sYamlEditor }
@@ -58,18 +57,8 @@ export function WorkloadYAMLOnlyDetailPage({
 
   return (
     <div className="soha-page soha-workload-detail-page">
-      <div className="soha-workload-detail-heading">
-        <div className="soha-workload-detail-heading-main">
-          <Text type="secondary" className="soha-workload-detail-kind">
-            {title}
-          </Text>
-          <Text strong className="soha-workload-detail-name">
-            {name}
-          </Text>
-        </div>
-      </div>
       <Tabs
-        className="soha-workload-detail-tabs"
+        className="soha-resource-tabs soha-workload-detail-tabs"
         defaultActiveKey="yaml"
         indicator={{ size: (origin) => Math.max(16, origin - 16), align: 'center' }}
         size="small"

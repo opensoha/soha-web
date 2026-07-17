@@ -209,18 +209,6 @@
   word-break: break-word;
 }
 
-.soha-workload-detail-actions {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: flex-end;
-  min-width: 0;
-}
-
-.soha-workload-detail-actions .ant-space {
-  row-gap: 6px;
-}
-
 .soha-related-pod-card.ant-card .ant-card-body {
   padding: 10px 20px 12px;
 }
@@ -406,17 +394,6 @@
 }
 
 @media (max-width: 768px) {
-  .soha-workload-detail-actions {
-    justify-content: flex-start;
-    width: 100%;
-  }
-
-  .soha-workload-detail-actions .ant-space {
-    display: flex;
-    flex-wrap: wrap;
-    max-width: 100%;
-  }
-
   .soha-related-pod-item.ant-list-item {
     grid-template-columns: minmax(0, 1fr);
   }

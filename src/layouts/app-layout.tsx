@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Avatar, Breadcrumb, Button, Dropdown, Layout, Menu, Spin } from 'antd'
 import type { MenuProps } from 'antd'
@@ -8,6 +8,7 @@ import {
   AppstoreOutlined,
   CloudServerOutlined,
   DownOutlined,
+  FileAddOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   MoonOutlined,
@@ -25,7 +26,7 @@ import { HeaderActionButton } from '@/components/header-action-button'
 import { PlatformScopeTrigger } from '@/components/platform-scope-toolbar'
 import { AnnouncementBell } from '@/features/announcements/announcement-center'
 import { logoutAuthSession } from '@/features/auth/auth-api'
-import { usePermissionSnapshot } from '@/features/auth/permission-snapshot'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
 import {
   isComputeWorkbenchManagementMenu,
   isComputeWorkbenchMenuGroup,
@@ -61,6 +62,11 @@ import type { BusinessWorkspaceType, RuntimeMenuNode } from '@/types'
 const { Sider, Header, Content } = Layout
 const SIDEBAR_WIDTH = 200
 const SIDEBAR_COLLAPSED_WIDTH = 55
+const GlobalResourceCreateModal = lazy(async () => {
+  const module =
+    await import('@/features/platform/resource-creation/components/global-create-modal')
+  return { default: module.GlobalResourceCreateModal }
+})
 const BREADCRUMB_WORKBENCH_ROOT_ROUTE_IDS: Partial<Record<WorkbenchId, string[]>> = {
   ai: ['ai-workbench'],
   compute: ['compute-workbench'],
@@ -130,6 +136,23 @@ function buildAIWorkbenchSearch(search: string) {
   })
   const suffix = next.toString()
   return suffix ? `?${suffix}` : ''
+}
+
+export function resolveDynamicBreadcrumbName(routePath: string, pathname: string) {
+  const routeSegments = routePath.split('/').filter(Boolean)
+  const pathSegments = pathname.split('/').filter(Boolean)
+  const finalRouteSegment = routeSegments[routeSegments.length - 1]
+  if (!finalRouteSegment?.startsWith(':') || routeSegments.length !== pathSegments.length) {
+    return undefined
+  }
+
+  const value = pathSegments[pathSegments.length - 1]
+  if (!value) return undefined
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
 }
 
 function resolveRuntimeMenuLabel(node: RuntimeMenuNode, localeCode: 'zh_CN' | 'en_US') {
@@ -483,6 +506,12 @@ export function AppLayout() {
   const sidebarCollapsed = usePreferencesStore((state) => state.sidebarCollapsed)
   const setSidebarCollapsed = usePreferencesStore((state) => state.setSidebarCollapsed)
   const currentWorkspace = usePreferencesStore((state) => state.currentWorkspace)
+  const [resourceCreateOpenedByAction, setResourceCreateOpenedByAction] = useState(false)
+  const resourceCreateRequested = useMemo(
+    () => new URLSearchParams(location.search).get('createResource') === '1',
+    [location.search],
+  )
+  const resourceCreateOpen = resourceCreateOpenedByAction || resourceCreateRequested
   const setCurrentWorkspace = usePreferencesStore((state) => state.setCurrentWorkspace)
   const { t } = useI18n()
   const [businessOpenKeys, setBusinessOpenKeys] = useState<string[]>([])
@@ -696,9 +725,16 @@ export function AppLayout() {
     null
   const breadcrumbRoutes = useMemo(() => {
     const routes: Array<{ name: string; path?: string }> = []
-    const resolveBreadcrumbTitle = (route: typeof currentMeta) => {
+    const resolveBreadcrumbTitle = (
+      route: typeof currentMeta,
+      options: { preferRouteTitle?: boolean } = {},
+    ) => {
+      if (route.id === currentMeta.id) {
+        const dynamicName = resolveDynamicBreadcrumbName(route.path, location.pathname)
+        if (dynamicName) return dynamicName
+      }
       const menuID =
-        route.navVisible !== false
+        !options.preferRouteTitle && route.navVisible !== false
           ? (findMenuIDByRoutePath(combinedNav, route.path) ?? route.menuId)
           : undefined
       const menuNode = menuID ? nodeByID.get(menuID) : null
@@ -738,6 +774,22 @@ export function AppLayout() {
             : (menuNode.route?.redirectTo ?? menuNode.route?.path),
         })
       })
+
+      const representedRouteIds = new Set(
+        menuChain.map((menuNode) => menuNode.route?.id).filter(Boolean),
+      )
+      const missingRouteAncestors: (typeof currentMeta)[] = []
+      let routePointer = getParentRouteMeta(currentMeta)
+      while (routePointer && !representedRouteIds.has(routePointer.id)) {
+        missingRouteAncestors.unshift(routePointer)
+        routePointer = getParentRouteMeta(routePointer)
+      }
+      missingRouteAncestors.forEach((route) => {
+        const name = resolveBreadcrumbTitle(route, { preferRouteTitle: true })
+        if (routes.some((breadcrumb) => breadcrumb.name === name)) return
+        routes.push({ name, path: route.redirectTo ?? route.path })
+      })
+
       const currentMenuRoute = menuChain[menuChain.length - 1].route
       if (currentMenuRoute?.id !== currentMeta.id) {
         routes.push({ name: resolveBreadcrumbTitle(currentMeta) })
@@ -780,6 +832,7 @@ export function AppLayout() {
     currentMenuID,
     currentMeta,
     currentWorkbenchOption,
+    location.pathname,
     localeCode,
     nodeByID,
     primaryNodeByID,
@@ -821,6 +874,17 @@ export function AppLayout() {
     (currentScopeMode === 'cluster' || currentScopeMode === 'namespace')
       ? currentScopeMode
       : 'hidden'
+  const showResourceCreateAction =
+    currentWorkbenchId === 'platform' && hasPermission(snapshot, 'platform.resource.create')
+
+  function closeResourceCreate() {
+    setResourceCreateOpenedByAction(false)
+    if (!resourceCreateRequested) return
+    const searchParams = new URLSearchParams(location.search)
+    searchParams.delete('createResource')
+    const search = searchParams.toString()
+    navigate({ pathname: location.pathname, search: search ? `?${search}` : '' }, { replace: true })
+  }
 
   if (permissionSnapshotQuery.isLoading) {
     return (
@@ -946,6 +1010,16 @@ export function AppLayout() {
                 </div>
               ) : null}
               <div className="soha-header-right">
+                {showResourceCreateAction ? (
+                  <HeaderActionButton
+                    ariaLabel={t('platform.resourceCreation.createResource', '创建资源')}
+                    className="soha-header-resource-create"
+                    icon={<FileAddOutlined />}
+                    label={t('platform.resourceCreation.createResource', '创建资源')}
+                    title={t('platform.resourceCreation.createResource', '创建资源')}
+                    onClick={() => setResourceCreateOpenedByAction(true)}
+                  />
+                ) : null}
                 <HeaderActionButton
                   ariaLabel={t('layout.docs', 'Docs')}
                   title={t('layout.docs', 'Docs')}
@@ -1047,6 +1121,11 @@ export function AppLayout() {
           </Content>
         </Layout>
       </Layout>
+      {resourceCreateOpen ? (
+        <Suspense fallback={null}>
+          <GlobalResourceCreateModal onClose={closeResourceCreate} open />
+        </Suspense>
+      ) : null}
     </GlobalAIAssistantProvider>
   )
 }

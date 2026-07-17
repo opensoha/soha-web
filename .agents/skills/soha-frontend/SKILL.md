@@ -57,12 +57,21 @@ defined in the architecture reference.
 - Treat `src/theme/app-theme.ts` as the source of truth for antd tokens and Soha CSS variables.
 - Prefer existing Soha page shells, management components, tokenized search controls, and
   semantic status treatments over page-local variants.
+- Use `StatusTag` for lifecycle, health, result, and severity values. Use `MetadataTag` for
+  categorical metadata such as task category, access mode, and capability labels. Both use the
+  compact Ant Design `filled` treatment; do not introduce raw outlined tags or page-local tag
+  colors for ordinary management surfaces.
+- Keep tag collections single-line per tag and wrap the collection container. Do not let a long
+  tag list increase a management-table row without a deliberate overflow or summary treatment.
 - Use `ManagementDataPage`, `ManagementQueryPanel`, `ManagementQueryField`,
-  `ManagementKeywordField`, `ManagementQueryActions`, `ManagementTableToolbar`, and
-  `AdminTable` for ordinary management pages.
+  `ManagementQueryScope`, `ManagementKeywordField`, `ManagementQueryActions`,
+  `ManagementTableToolbar`, and `AdminTable` for ordinary management pages.
 - Keep DAG, topology, terminal, noVNC, charts, and AI graph as token-driven scene exceptions.
 - Prefer current Ant Design 6 APIs such as `Card.styles.body`, `Alert.title`, and
   `showSearch={{ optionFilterProp: 'label' }}`.
+- Top-level management lists must retain the `AdminTable` pagination footer and summary. Map
+  cursor APIs onto its page/page-size callbacks; do not replace the footer with toolbar arrow
+  buttons. Use `pagination={false}` only for deliberately embedded, non-paged tables.
 
 ## AI Workbench
 

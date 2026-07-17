@@ -204,19 +204,9 @@ export function AccessControlResourceDetailPage<TDetail extends AccessControlDet
 
   return (
     <div className="soha-page soha-workload-detail-page">
-      <div className="soha-workload-detail-heading">
-        <div className="soha-workload-detail-heading-main">
-          <Text className="soha-workload-detail-kind" type="secondary">
-            {label}
-          </Text>
-          <Text strong className="soha-workload-detail-name">
-            {name}
-          </Text>
-        </div>
-      </div>
       <Tabs
         activeKey={activeTabKey}
-        className="soha-workload-detail-tabs"
+        className="soha-resource-tabs soha-workload-detail-tabs"
         indicator={{ size: (origin) => Math.max(16, origin - 16), align: 'center' }}
         items={items}
         onChange={setActiveTabKey}

@@ -15,6 +15,8 @@ import {
 } from '@/components/management-list'
 import { TABLE_ACTIONS_COLUMN_CLASS_NAME } from '@/components/resource-actions'
 import { hasAllowedAction } from '@/features/auth'
+import { CreateEntry } from '@/features/platform/resource-creation/components/create-entry'
+import { getResourceCreateTemplate } from '@/features/platform/resource-creation/templates'
 import { useAIPageContext } from '@/features/copilot'
 import type { AIPageContext } from '@/features/copilot'
 import { useI18n } from '@/i18n'
@@ -66,7 +68,7 @@ export function NetworkResourceListPage<T extends NetworkResourceRecord>({
   searchValues: (record: T) => Array<string | undefined | null>
 }) {
   const { localeCode } = useI18n()
-  const { clusterId } = usePlatformScopeStore()
+  const { clusterId, namespace } = usePlatformScopeStore()
   const queryClient = useQueryClient()
   const [searchKeyword, setSearchKeyword] = useState('')
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
@@ -85,6 +87,7 @@ export function NetworkResourceListPage<T extends NetworkResourceRecord>({
   useAIPageContext(buildAIPageContext(rawItems, searchKeyword))
   const removeMutation = useMutation(networkMutations.remove(kind, queryClient))
   const densityLabel = localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'
+  const createKind = kind === 'services' ? 'Service' : kind === 'ingresses' ? 'Ingress' : null
   const effectiveEmpty = !clusterId
     ? localeCode === 'zh_CN'
       ? '请选择集群'
@@ -195,6 +198,21 @@ export function NetworkResourceListPage<T extends NetworkResourceRecord>({
         scroll: { x: 'max-content' },
         headerExtra: (
           <ManagementTableToolbar>
+            {createKind ? (
+              <CreateEntry
+                context={{
+                  clusterId: clusterId || '',
+                  defaultNamespace: namespace || undefined,
+                  expectedApiVersion: createKind === 'Service' ? 'v1' : 'networking.k8s.io/v1',
+                  expectedKind: createKind,
+                  resourceGroup: 'network',
+                  scopeMode: 'namespace',
+                  source: 'list',
+                }}
+                defaultTemplate={getResourceCreateTemplate(createKind)}
+                label={createKind}
+              />
+            ) : null}
             <ManagementDensityButton
               aria-label={densityLabel}
               title={densityLabel}

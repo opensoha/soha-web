@@ -8,18 +8,12 @@ import {
   Input,
   List,
   Popconfirm,
-  Segmented,
   Select,
   Space,
-  Tag,
   Typography,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import {
-  FileTextOutlined,
-  RedoOutlined,
-  StopOutlined,
-} from '@ant-design/icons'
+import { FileTextOutlined, RedoOutlined, StopOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useSearchParams } from 'react-router-dom'
 import type {
@@ -35,10 +29,11 @@ import {
   ManagementQueryActions,
   ManagementQueryField,
   ManagementQueryPanel,
+  ManagementQueryScope,
   ManagementRefreshButton,
   ManagementTableToolbar,
 } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
+import { MetadataTag, StatusTag, type MetadataTagTone } from '@/components/status-tag'
 import { useAIPageContext } from '@/features/copilot'
 import { formatDateTime } from '@/utils/time'
 import type { ComputeTaskFilters } from '../api'
@@ -55,6 +50,13 @@ const TASK_CATEGORY_LABELS: Record<ComputeTaskCategory, string> = {
   build: '构建',
   lifecycle: '生命周期',
   operation: '操作',
+}
+
+const TASK_CATEGORY_TONES: Record<ComputeTaskCategory, MetadataTagTone> = {
+  sync: 'cyan',
+  build: 'purple',
+  lifecycle: 'blue',
+  operation: 'default',
 }
 
 export function computeTaskCategoryFromPath(pathname: string): ComputeTaskCategory | undefined {
@@ -127,6 +129,7 @@ export function ComputeTasksPage() {
   const [filters, setFilters] = useState<ComputeTaskFilters>(initialFilters)
   const [cursorHistory, setCursorHistory] = useState<string[]>([])
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
+  const [queryExpanded, setQueryExpanded] = useState(false)
   const [form] = Form.useForm<ComputeTaskFilters>()
   const queryClient = useQueryClient()
   const tasksQuery = useQuery(computeQueries.tasks(filters))
@@ -238,7 +241,9 @@ export function ComputeTasksPage() {
       title: '类别',
       dataIndex: 'category',
       width: 110,
-      render: (value: ComputeTaskCategory) => <Tag>{TASK_CATEGORY_LABELS[value]}</Tag>,
+      render: (value: ComputeTaskCategory) => (
+        <MetadataTag label={TASK_CATEGORY_LABELS[value]} tone={TASK_CATEGORY_TONES[value]} />
+      ),
     },
     {
       title: '状态',
@@ -317,9 +322,31 @@ export function ComputeTasksPage() {
       <ManagementDataPage
         className="soha-compute-page"
         beforeQuery={
-          <>
-            <Segmented
-              aria-label="任务领域"
+          <ManagementQueryPanel
+            form={form}
+            initialValues={filters}
+            expanded={queryExpanded}
+            onExpandedChange={setQueryExpanded}
+            onFinish={(values) => updateFilters({ ...filters, ...values })}
+            actions={
+              <ManagementQueryActions
+                onReset={() => {
+                  setQueryExpanded(false)
+                  form.resetFields()
+                  form.setFieldsValue({
+                    domain: undefined,
+                    providerKey: undefined,
+                    status: undefined,
+                    category: undefined,
+                  })
+                  updateFilters({ limit: DEFAULT_TASK_PAGE_SIZE })
+                }}
+                submitLabel="筛选"
+              />
+            }
+          >
+            <ManagementQueryScope
+              label="任务领域"
               options={[
                 { label: '全部', value: 'all' },
                 { label: '虚拟化', value: 'virtualization' },
@@ -332,60 +359,38 @@ export function ComputeTasksPage() {
                 updateFilters({ ...filters, domain })
               }}
             />
-            <ManagementQueryPanel
-              form={form}
-              initialValues={filters}
-              collapsible={false}
-              onFinish={(values) => updateFilters({ ...filters, ...values })}
-              actions={
-                <ManagementQueryActions
-                  onReset={() => {
-                    form.resetFields()
-                    form.setFieldsValue({
-                      domain: undefined,
-                      providerKey: undefined,
-                      status: undefined,
-                      category: undefined,
-                    })
-                    updateFilters({ limit: DEFAULT_TASK_PAGE_SIZE })
-                  }}
-                  submitLabel="筛选"
-                />
-              }
-            >
-              <Form.Item name="domain" hidden>
-                <Input />
-              </Form.Item>
-              <ManagementQueryField label="状态" name="status">
-                <Select
-                  allowClear
-                  placeholder="全部状态"
-                  options={[
-                    'queued',
-                    'running',
-                    'succeeded',
-                    'failed',
-                    'canceled',
-                    'timeout',
-                    'unknown',
-                  ].map((value) => ({ value, label: value }))}
-                />
-              </ManagementQueryField>
-              <ManagementQueryField label="Provider" name="providerKey">
-                <Input allowClear placeholder="Provider key" />
-              </ManagementQueryField>
-              <ManagementQueryField label="类别" name="category">
-                <Select
-                  allowClear
-                  placeholder="全部类别"
-                  options={Object.entries(TASK_CATEGORY_LABELS).map(([value, label]) => ({
-                    value,
-                    label,
-                  }))}
-                />
-              </ManagementQueryField>
-            </ManagementQueryPanel>
-          </>
+            <Form.Item name="domain" hidden>
+              <Input />
+            </Form.Item>
+            <ManagementQueryField label="状态" name="status">
+              <Select
+                allowClear
+                placeholder="全部状态"
+                options={[
+                  'queued',
+                  'running',
+                  'succeeded',
+                  'failed',
+                  'canceled',
+                  'timeout',
+                  'unknown',
+                ].map((value) => ({ value, label: value }))}
+              />
+            </ManagementQueryField>
+            <ManagementQueryField label="Provider" name="providerKey">
+              <Input allowClear placeholder="Provider key" />
+            </ManagementQueryField>
+            <ManagementQueryField label="类别" name="category">
+              <Select
+                allowClear
+                placeholder="全部类别"
+                options={Object.entries(TASK_CATEGORY_LABELS).map(([value, label]) => ({
+                  value,
+                  label,
+                }))}
+              />
+            </ManagementQueryField>
+          </ManagementQueryPanel>
         }
         table={{
           rowKey: (record: ComputeTaskView) => `${record.domain}:${record.id}`,
@@ -401,7 +406,9 @@ export function ComputeTasksPage() {
                 aria-label="切换表格密度"
                 size="small"
                 tooltip={tableSize === 'small' ? '切换为宽松密度' : '切换为紧凑密度'}
-                onClick={() => setTableSize((current) => (current === 'small' ? 'middle' : 'small'))}
+                onClick={() =>
+                  setTableSize((current) => (current === 'small' ? 'middle' : 'small'))
+                }
               />
               <ManagementRefreshButton
                 aria-label="刷新任务列表"
@@ -466,7 +473,7 @@ export function ComputeTasksPage() {
                 <List.Item>
                   <Space orientation="vertical" size={2} style={{ width: '100%' }}>
                     <Space wrap>
-                      <Tag>{log.logLevel}</Tag>
+                      <StatusTag value={log.logLevel} />
                       <Text type="secondary">{formatDateTime(log.createdAt)}</Text>
                     </Space>
                     <Text>{log.message}</Text>

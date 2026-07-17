@@ -81,7 +81,6 @@ export function StoragePvPage() {
       clusterScoped
       columns={columns}
       createDefaultTemplate={DEFAULT_TEMPLATE}
-      createOptions={persistentVolumeMutations.create}
       emptyLabel={{ zh_CN: '当前集群没有 PV', en_US: 'No PVs in this cluster' }}
       kind="PersistentVolume"
       listQuery={persistentVolumeQueries.list}

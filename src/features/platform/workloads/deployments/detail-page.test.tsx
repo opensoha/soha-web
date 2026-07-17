@@ -179,6 +179,15 @@ function clickTab(container: HTMLElement, label: string) {
 }
 
 describe('deployment detail page boundaries', () => {
+  it('keeps mutation actions out of the read-only detail tabs', async () => {
+    const container = await renderDetail()
+
+    expect(container.querySelector('.soha-workload-detail-heading')).toBeNull()
+    const tabsNav = container.querySelector('.soha-workload-detail-tabs > .ant-tabs-nav')
+    expect(tabsNav?.textContent).not.toContain('重启')
+    expect(tabsNav?.textContent).not.toContain('扩缩容')
+  })
+
   it('deduplicates detail data and loads tab data only when activated', async () => {
     const container = await renderDetail()
     const requestedPaths = () => apiGetMock.mock.calls.map(([path]) => String(path))

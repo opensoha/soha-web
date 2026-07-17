@@ -5,6 +5,7 @@ import { clusterRoutes } from './clusters/routes'
 import { configurationRoutes } from './configuration/routes'
 import { extensionRoutes } from './extensions/routes'
 import { networkRoutes } from './network/routes'
+import { resourceCreationRoutes } from './resource-creation/routes'
 import { storageRoutes } from './storage/routes'
 import { workloadRoutes } from './workloads/routes'
 
@@ -119,4 +120,5 @@ export const platformRouteManifests = [
   extensionRoutes,
   networkRoutes,
   storageRoutes,
+  resourceCreationRoutes,
 ] as const

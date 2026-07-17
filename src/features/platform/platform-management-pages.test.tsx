@@ -312,7 +312,7 @@ describe('platform RBAC list pages', () => {
     const headerButtons = Array.from(
       container.querySelectorAll('[data-testid="header-extra"] button'),
     ).map((button) => button.textContent?.trim() || button.getAttribute('aria-label'))
-    expect(headerButtons).toEqual(['新增', '切换表格密度', '刷新'])
+    expect(headerButtons).toEqual(['新增', '选择创建方式', '切换表格密度', '刷新'])
   })
 
   it('shows subject chips with overflow summary', async () => {
@@ -479,7 +479,7 @@ describe('platform configuration list pages', () => {
     const headerButtons = Array.from(
       container.querySelectorAll('[data-testid="header-extra"] button'),
     ).map((button) => button.textContent?.trim() || button.getAttribute('aria-label'))
-    expect(headerButtons).toEqual(['新增', '切换表格密度', '刷新'])
+    expect(headerButtons).toEqual(['新增', '选择创建方式', '切换表格密度', '刷新'])
 
     const input = container.querySelector(
       'input[placeholder="搜索 ConfigMaps 名称 / 命名空间"]',

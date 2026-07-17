@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Card, Descriptions, Drawer, Input, Select, Segmented, Space, Tabs, Typography } from 'antd'
+import { Card, Descriptions, Drawer, Input, Select, Space, Tabs, Typography } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { EyeOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
@@ -9,6 +9,7 @@ import {
   ManagementIconButton,
   ManagementQueryActions,
   ManagementQueryField,
+  ManagementQueryScope,
 } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
 import { formatDateTime } from '@/utils/time'
@@ -281,18 +282,16 @@ export function AuditLogsPage() {
         ),
         children: (
           <>
-            <ManagementQueryField label="视图" minWidth={260} width={300}>
-              <Segmented
-                size="small"
-                value={viewMode}
-                onChange={(value) => setViewMode(value as 'all' | 'abnormal' | 'today')}
-                options={[
-                  { value: 'all', label: '全部' },
-                  { value: 'abnormal', label: '异常 / 拒绝' },
-                  { value: 'today', label: '今日' },
-                ]}
-              />
-            </ManagementQueryField>
+            <ManagementQueryScope
+              label="快捷范围"
+              value={viewMode}
+              onChange={(value) => setViewMode(value as 'all' | 'abnormal' | 'today')}
+              options={[
+                { value: 'all', label: '全部' },
+                { value: 'abnormal', label: '异常 / 拒绝' },
+                { value: 'today', label: '今日' },
+              ]}
+            />
             <ManagementQueryField minWidth={140} width={160} label="动作">
               <Select
                 allowClear

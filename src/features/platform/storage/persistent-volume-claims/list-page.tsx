@@ -93,7 +93,6 @@ export function StoragePvcPage() {
       clusterScoped={false}
       columns={columns}
       createDefaultTemplate={DEFAULT_TEMPLATE}
-      createOptions={persistentVolumeClaimMutations.create}
       emptyLabel={{ zh_CN: '当前范围没有 PVC', en_US: 'No PVCs in the current scope' }}
       getRecordNamespace={(record) => record.namespace}
       kind="PersistentVolumeClaim"

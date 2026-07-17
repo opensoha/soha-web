@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import type { TableColumnsType } from 'antd'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementIconButton, ManagementTableToolbar } from '@/components/management-list'
+import { WorkloadCreateEntry } from '../shared/create-entry'
 import { hasAllowedAction } from '@/features/auth'
 import { useI18n } from '@/i18n'
 import {
@@ -170,6 +171,7 @@ export function WorkloadsJobsPage() {
         shellClassName="soha-management-table-shell"
         headerExtra={
           <ManagementTableToolbar>
+            <WorkloadCreateEntry kind="Job" />
             {densityButton}
             <WorkloadRefreshButton
               disabled={!clusterId}

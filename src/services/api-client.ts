@@ -147,6 +147,12 @@ export const api = {
       method: 'POST',
       body: body === undefined ? undefined : JSON.stringify(body),
     }),
+  postWithHeaders: <T>(path: string, body: unknown, headers: HeadersInit) =>
+    request<T>(path, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers,
+    }),
   put: <T>(path: string, body?: unknown) =>
     request<T>(path, {
       method: 'PUT',

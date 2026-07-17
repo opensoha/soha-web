@@ -41,8 +41,6 @@ export type WorkloadDetailExtraTabPanes =
   | NonNullable<TabsProps['items']>
   | ((detail: WorkloadMeta) => NonNullable<TabsProps['items']>)
 
-export type WorkloadDetailActions = ReactNode | ((detail: WorkloadMeta) => ReactNode)
-
 function WorkloadMetadataSection({
   items,
   title,
@@ -89,7 +87,6 @@ export function WorkloadDetailShell({
   paramKey,
   extraTabPanes,
   extraOverview,
-  actions,
   activeTabKey,
   onTabChange,
   yamlLast = false,
@@ -99,7 +96,6 @@ export function WorkloadDetailShell({
   paramKey: string
   extraTabPanes?: WorkloadDetailExtraTabPanes
   extraOverview?: WorkloadDetailExtraOverview
-  actions?: WorkloadDetailActions
   activeTabKey?: string
   onTabChange?: (activeKey: string) => void
   yamlLast?: boolean
@@ -179,26 +175,12 @@ export function WorkloadDetailShell({
     typeof extraOverview === 'function' ? extraOverview(detail) : extraOverview
   const resolvedExtraTabPanes =
     typeof extraTabPanes === 'function' ? extraTabPanes(detail) : (extraTabPanes ?? [])
-  const resolvedActions = typeof actions === 'function' ? actions(detail) : actions
 
   return (
     <div className="soha-page soha-workload-detail-page">
-      <div className="soha-workload-detail-heading">
-        <div className="soha-workload-detail-heading-main">
-          <Text type="secondary" className="soha-workload-detail-kind">
-            {title}
-          </Text>
-          <Text strong className="soha-workload-detail-name">
-            {name}
-          </Text>
-        </div>
-        {resolvedActions ? (
-          <div className="soha-workload-detail-actions">{resolvedActions}</div>
-        ) : null}
-      </div>
       <Tabs
         activeKey={resolvedActiveTabKey}
-        className="soha-workload-detail-tabs"
+        className="soha-resource-tabs soha-workload-detail-tabs"
         onChange={(nextActiveKey) => {
           setInternalActiveTabKey(nextActiveKey)
           onTabChange?.(nextActiveKey)

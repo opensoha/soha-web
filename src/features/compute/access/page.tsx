@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Form, Input, Space, Tabs, Tag, Typography } from 'antd'
+import { Button, Form, Input, Space, Tabs, Typography } from 'antd'
 import type { TabsProps } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { LeftOutlined, PlusOutlined, RightOutlined } from '@ant-design/icons'
+import { PlusOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 import type {
@@ -13,14 +13,13 @@ import { AdminTable } from '@/components/admin-table'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementDensityButton,
-  ManagementIconButton,
   ManagementQueryActions,
   ManagementQueryField,
   ManagementQueryPanel,
   ManagementRefreshButton,
   ManagementTableToolbar,
 } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useAIPageContext } from '@/features/copilot'
 import { RuntimeHostStepModal } from '@/features/docker'
@@ -32,6 +31,8 @@ import { computeRelatedResourcePath } from './related-resource-path'
 import '../compute.css'
 
 const { Text } = Typography
+const DEFAULT_ACCESS_PAGE_SIZE = 20
+const ACCESS_PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
 
 const SOURCE_LABELS: Record<ComputeAccessSourceType, string> = {
   virtualization_connection: '虚拟化',
@@ -54,8 +55,26 @@ export function computeAccessFiltersFromSearch(search: URLSearchParams): Compute
     sourceType:
       sourceType && ACCESS_SOURCE_TYPES.has(sourceType) ? sourceType : 'virtualization_connection',
     providerKey: search.get('providerKey') || undefined,
-    limit: 100,
+    limit: DEFAULT_ACCESS_PAGE_SIZE,
   }
+}
+
+export function computeAccessPaginationTotal(
+  currentPage: number,
+  pageSize: number,
+  itemCount: number,
+  hasNextPage: boolean,
+) {
+  return (currentPage - 1) * pageSize + itemCount + (hasNextPage ? 1 : 0)
+}
+
+export function computeAccessCursorForPage(
+  nextPage: number,
+  cursorHistory: string[],
+  currentPage: number,
+) {
+  if (nextPage < 1 || nextPage >= currentPage) return undefined
+  return cursorHistory[nextPage - 1] || undefined
 }
 
 function searchFromFilters(filters: ComputeAccessFilters) {
@@ -87,6 +106,14 @@ export function ComputeAccessPage() {
         ? canCreateRuntime
         : false
   const items = accessQuery.data?.items ?? []
+  const pageSize = filters.limit ?? DEFAULT_ACCESS_PAGE_SIZE
+  const currentPage = cursorHistory.length + 1
+  const paginationTotal = computeAccessPaginationTotal(
+    currentPage,
+    pageSize,
+    items.length,
+    Boolean(accessQuery.data?.nextCursor),
+  )
 
   useEffect(() => {
     setFilters(initialFilters)
@@ -104,10 +131,37 @@ export function ComputeAccessPage() {
   })
 
   const updateFilters = (next: ComputeAccessFilters) => {
-    const normalized = { ...next, cursor: undefined, limit: 100 }
+    const normalized = {
+      ...next,
+      cursor: undefined,
+      limit: next.limit ?? filters.limit ?? DEFAULT_ACCESS_PAGE_SIZE,
+    }
     setCursorHistory([])
     setFilters(normalized)
     setSearchParams(searchFromFilters(normalized), { replace: true })
+  }
+
+  const changePage = (nextPage: number) => {
+    if (nextPage === currentPage) return
+    if (nextPage < currentPage) {
+      const cursor = computeAccessCursorForPage(nextPage, cursorHistory, currentPage)
+      setCursorHistory((current) => current.slice(0, nextPage - 1))
+      setFilters((current) => ({ ...current, cursor }))
+      return
+    }
+    if (nextPage === currentPage + 1 && accessQuery.data?.nextCursor) {
+      setCursorHistory((current) => [...current, filters.cursor ?? ''])
+      setFilters((current) => ({ ...current, cursor: accessQuery.data.nextCursor }))
+    }
+  }
+
+  const changePageSize = (nextPageSize: number) => {
+    setCursorHistory([])
+    setFilters((current) => ({
+      ...current,
+      cursor: undefined,
+      limit: nextPageSize,
+    }))
   }
 
   const columns: ColumnsType<ComputeAccessSource> = [
@@ -151,7 +205,7 @@ export function ComputeAccessPage() {
       title: '接入方式',
       dataIndex: 'accessMode',
       width: 130,
-      render: (value) => <Tag>{value || '-'}</Tag>,
+      render: (value) => <MetadataTag label={value || '-'} />,
     },
     {
       title: '关联资源',
@@ -181,7 +235,7 @@ export function ComputeAccessPage() {
         record.availableActions?.length ? (
           <Space size={[4, 4]} wrap>
             {record.availableActions.map((action) => (
-              <Tag key={action}>{action}</Tag>
+              <MetadataTag key={action} label={action} />
             ))}
           </Space>
         ) : (
@@ -199,11 +253,14 @@ export function ComputeAccessPage() {
           <>
             <Tabs
               activeKey={filters.sourceType}
-              className="soha-compute-view-tabs"
+              className="soha-resource-tabs is-header-only"
+              indicator={{ size: (origin) => Math.max(16, origin - 16), align: 'center' }}
               items={ACCESS_VIEW_ITEMS}
               onChange={(sourceType) =>
                 updateFilters({ ...filters, sourceType: sourceType as ComputeAccessSourceType })
               }
+              size="small"
+              tabBarGutter={18}
             />
             <ManagementQueryPanel
               form={form}
@@ -215,7 +272,10 @@ export function ComputeAccessPage() {
                   onReset={() => {
                     form.resetFields()
                     form.setFieldValue('providerKey', undefined)
-                    updateFilters({ sourceType: filters.sourceType, limit: 100 })
+                    updateFilters({
+                      sourceType: filters.sourceType,
+                      limit: DEFAULT_ACCESS_PAGE_SIZE,
+                    })
                   }}
                   submitLabel="筛选"
                 />
@@ -253,28 +313,6 @@ export function ComputeAccessPage() {
                     新增接入
                   </Button>
                 ) : null}
-                <ManagementIconButton
-                  aria-label="上一页"
-                  disabled={cursorHistory.length === 0}
-                  icon={<LeftOutlined />}
-                  tooltip="上一页"
-                  onClick={() => {
-                    const previous = cursorHistory[cursorHistory.length - 1]
-                    setCursorHistory((current) => current.slice(0, -1))
-                    setFilters((current) => ({ ...current, cursor: previous || undefined }))
-                  }}
-                />
-                <ManagementIconButton
-                  aria-label="下一页"
-                  disabled={!accessQuery.data?.nextCursor}
-                  icon={<RightOutlined />}
-                  tooltip="下一页"
-                  onClick={() => {
-                    if (!accessQuery.data?.nextCursor) return
-                    setCursorHistory((current) => [...current, filters.cursor ?? ''])
-                    setFilters((current) => ({ ...current, cursor: accessQuery.data?.nextCursor }))
-                  }}
-                />
                 <ManagementDensityButton
                   aria-label="切换表格密度"
                   tooltip={tableSize === 'small' ? '切换为宽松密度' : '切换为紧凑密度'}
@@ -290,7 +328,22 @@ export function ComputeAccessPage() {
                 />
               </ManagementTableToolbar>
             }
-            pagination={false}
+            pageSize={pageSize}
+            pagination={{
+              current: currentPage,
+              currentPage,
+              pageSize,
+              pageSizeOptions: ACCESS_PAGE_SIZE_OPTIONS,
+              total: paginationTotal,
+              onPageChange: changePage,
+              onPageSizeChange: changePageSize,
+            }}
+            paginationSummary={
+              <Text type="secondary">
+                当前第 {currentPage} 页，本页 {items.length} 条
+                {accessQuery.data?.nextCursor ? '，还有更多' : ''}
+              </Text>
+            }
             scroll={{ x: 1320 }}
           />
         }

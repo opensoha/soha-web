@@ -31,6 +31,7 @@
       "src/features/platform/configuration/routes.ts",
       "src/features/platform/extensions/routes.ts",
       "src/features/platform/network/routes.ts",
+      "src/features/platform/resource-creation/routes.ts",
       "src/features/platform/routes.ts",
       "src/features/platform/storage/routes.ts",
       "src/features/platform/workloads/routes.ts",
@@ -42,14 +43,14 @@
     ]
   },
   "summary": {
-    "runtimePaths": 213,
-    "metadataPaths": 213,
-    "overlappingPaths": 213,
+    "runtimePaths": 214,
+    "metadataPaths": 214,
+    "overlappingPaths": 214,
     "runtimeOnlyPaths": 0,
     "metadataOnlyPaths": 0,
     "inlineJsxPaths": 0,
-    "lazyRouteLoads": 183,
-    "lazySourceModules": 181
+    "lazyRouteLoads": 184,
+    "lazySourceModules": 182
   },
   "paths": {
     "runtime": [
@@ -227,6 +228,7 @@
       "/release-board",
       "/releases",
       "/releases/:releaseId",
+      "/resource-creation",
       "/settings",
       "/settings/about",
       "/settings/branding",
@@ -442,6 +444,7 @@
       "/release-board",
       "/releases",
       "/releases/:releaseId",
+      "/resource-creation",
       "/settings",
       "/settings/about",
       "/settings/branding",
@@ -657,6 +660,7 @@
       "/release-board",
       "/releases",
       "/releases/:releaseId",
+      "/resource-creation",
       "/settings",
       "/settings/about",
       "/settings/branding",
@@ -1474,6 +1478,11 @@
         "source": "@/features/platform/workloads/replicationcontrollers/detail-page"
       },
       {
+        "exportName": "ResourceCreationPage",
+        "moduleExport": "ResourceCreationPage",
+        "source": "@/features/platform/resource-creation/page"
+      },
+      {
         "exportName": "SecretDetailPage",
         "moduleExport": "SecretDetailPage",
         "source": "@/features/platform/configuration/secrets/detail-page"
@@ -1760,6 +1769,7 @@
       "@/features/platform/network/services/list-page",
       "@/features/platform/network/topology/page",
       "@/features/platform/overview-page",
+      "@/features/platform/resource-creation/page",
       "@/features/platform/storage/persistent-volume-claims/detail-page",
       "@/features/platform/storage/persistent-volume-claims/list-page",
       "@/features/platform/storage/persistent-volumes/detail-page",
@@ -2002,6 +2012,7 @@
       "@/features/platform/network/services/list-page": ["NetworkServicesPage"],
       "@/features/platform/network/topology/page": ["NetworkTopologyPage"],
       "@/features/platform/overview-page": ["OverviewPage"],
+      "@/features/platform/resource-creation/page": ["ResourceCreationPage"],
       "@/features/platform/storage/persistent-volume-claims/detail-page": ["StoragePvcDetailPage"],
       "@/features/platform/storage/persistent-volume-claims/list-page": ["StoragePvcPage"],
       "@/features/platform/storage/persistent-volumes/detail-page": ["StoragePvDetailPage"],
@@ -2049,5 +2060,5 @@
       "@/features/virtualization/virtual-machines/list-page": ["VirtualizationVmsPage"]
     }
   },
-  "generatedAt": "2026-07-15T17:25:26.333Z"
+  "generatedAt": "2026-07-17T08:38:42.259Z"
 }

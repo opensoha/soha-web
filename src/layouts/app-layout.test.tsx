@@ -101,6 +101,17 @@ vi.mock('@/components/platform-scope-toolbar', () => ({
   ),
 }))
 
+vi.mock('@/features/platform/resource-creation/components/global-create-modal', () => ({
+  GlobalResourceCreateModal: ({ onClose, open }: { onClose: () => void; open: boolean }) =>
+    open ? (
+      <div aria-label="创建资源" role="dialog">
+        <button type="button" onClick={onClose}>
+          关闭
+        </button>
+      </div>
+    ) : null,
+}))
+
 vi.mock('@/features/system/menu-icons', () => ({
   resolveMenuIcon: () => null,
 }))
@@ -346,6 +357,73 @@ describe('app layout workspace navigation', () => {
       'cluster',
     )
     expect(container.querySelector('.soha-workspace-switcher-shell')).toBeNull()
+  })
+
+  it('places the permitted resource action before docs in the k8s header', async () => {
+    const container = await renderWithProviders('/', {
+      permissionKeys: ['workspace.resource.view', 'overview.view', 'platform.resource.create'],
+    })
+
+    const headerActions = container.querySelector('.soha-header-right')
+    const createButton = headerActions?.querySelector<HTMLButtonElement>(
+      '.soha-header-resource-create',
+    )
+    const docsButton = headerActions?.querySelector<HTMLButtonElement>('button[title="Docs"]')
+
+    expect(createButton?.textContent).toContain('创建资源')
+    expect(createButton?.nextElementSibling).toBe(docsButton)
+
+    await act(async () => {
+      createButton?.click()
+      await Promise.resolve()
+    })
+    expect(container.querySelector('[data-testid="page"]')?.getAttribute('data-pathname')).toBe('/')
+    expect(container.querySelector('[role="dialog"][aria-label="创建资源"]')).not.toBeNull()
+  })
+
+  it('opens the resource modal from the compatibility query and clears it on close', async () => {
+    const container = await renderWithProviders('/?createResource=1', {
+      permissionKeys: ['workspace.resource.view', 'overview.view', 'platform.resource.create'],
+    })
+
+    const dialog = container.querySelector('[role="dialog"][aria-label="创建资源"]')
+    expect(dialog).not.toBeNull()
+    expect(container.querySelector('[data-testid="page"]')?.getAttribute('data-search')).toBe(
+      '?createResource=1',
+    )
+
+    await act(async () => {
+      dialog?.querySelector<HTMLButtonElement>('button')?.click()
+      await Promise.resolve()
+    })
+    expect(container.querySelector('[role="dialog"][aria-label="创建资源"]')).toBeNull()
+    expect(container.querySelector('[data-testid="page"]')?.getAttribute('data-search')).toBe('')
+  })
+
+  it('hides resource creation without permission', async () => {
+    const withoutPermission = await renderWithProviders('/')
+    expect(withoutPermission.querySelector('.soha-header-resource-create')).toBeNull()
+  })
+
+  it('keeps resource creation global to the k8s workbench', async () => {
+    const clusterPage = await renderWithProviders('/clusters', {
+      permissionKeys: [
+        'workspace.resource.view',
+        'platform.clusters.view',
+        'platform.resource.create',
+      ],
+    })
+    expect(clusterPage.querySelector('.soha-header-resource-create')).not.toBeNull()
+    expect(clusterPage.querySelector('[data-testid="platform-scope-trigger"]')).toBeNull()
+
+    const applicationPage = await renderWithProviders('/applications', {
+      permissionKeys: [
+        'workspace.application.view',
+        'delivery.applications.view',
+        'platform.resource.create',
+      ],
+    })
+    expect(applicationPage.querySelector('.soha-header-resource-create')).toBeNull()
   })
 
   it('does not render copyright inside the authenticated app shell', async () => {
@@ -1386,8 +1464,32 @@ describe('app layout workspace navigation', () => {
     })
 
     expect(container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent).toContain(
-      '虚拟化/虚拟机/虚拟机详情',
+      '虚拟化/虚拟机/vm-1',
     )
+  })
+
+  it('adds the list route and resource name to dynamic detail breadcrumbs', async () => {
+    const container = await renderWithProviders('/workloads/pods/alidns-webhook-f7645fd4b-lkvn8', {
+      permissionKeys: ['workspace.resource.view', 'platform.workloads.view'],
+      visibleMenuIds: ['workloads'],
+      visibleMenus: [
+        {
+          id: 'workloads',
+          path: '/workloads',
+          labelZh: '工作负载',
+          labelEn: 'Workloads',
+          iconKey: 'boxes',
+          section: 'platform',
+          sortOrder: 1,
+          enabled: true,
+        },
+      ],
+    })
+
+    const breadcrumbText =
+      container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent ?? ''
+    expect(breadcrumbText).toContain('工作负载/Pods/alidns-webhook-f7645fd4b-lkvn8')
+    expect(breadcrumbText).not.toContain('Pod Detail')
   })
 
   it('keeps settings out of the header and routes system navigation through the main sidebar', async () => {
