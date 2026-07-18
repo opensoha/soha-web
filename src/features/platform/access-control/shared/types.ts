@@ -1,11 +1,7 @@
 import type { ResourceYAMLView, ScopeKey } from '@/types'
 
 export type AccessControlKind =
-  | 'serviceaccounts'
-  | 'roles'
-  | 'rolebindings'
-  | 'clusterroles'
-  | 'clusterrolebindings'
+  'serviceaccounts' | 'roles' | 'rolebindings' | 'clusterroles' | 'clusterrolebindings'
 
 export type AccessControlScopeMode = 'cluster' | 'namespace'
 
@@ -29,7 +25,12 @@ export interface AccessControlDetailBase extends AccessControlResourceRecord {
 
 export interface AccessControlBindingRecord extends AccessControlResourceRecord {
   readonly roleRef: string
-  readonly subjects?: string[]
+}
+
+export interface AccessControlListFilter {
+  readonly subjectKind?: string
+  readonly subjectName?: string
+  readonly subjectNamespace?: string
 }
 
 export interface AccessControlSubject {

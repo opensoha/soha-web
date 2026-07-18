@@ -1,7 +1,7 @@
 import { buildClusterScopedPath } from '@/features/platform/platform-scope-query'
 import type { ScopeKey } from '@/types'
 import { normalizeAccessControlScope, requireAccessControlClusterId } from './scope'
-import type { AccessControlKind } from './types'
+import type { AccessControlKind, AccessControlListFilter } from './types'
 
 function normalizeName(name: string) {
   const normalized = name.trim()
@@ -9,17 +9,27 @@ function normalizeName(name: string) {
   return normalized
 }
 
-function accessControlPath(kind: AccessControlKind, scope: ScopeKey, suffix = '') {
+function accessControlPath(
+  kind: AccessControlKind,
+  scope: ScopeKey,
+  suffix = '',
+  filter?: AccessControlListFilter,
+) {
   const normalizedScope = normalizeAccessControlScope(kind, scope)
   return buildClusterScopedPath(
     requireAccessControlClusterId(normalizedScope),
     `access-control/${kind}${suffix}`,
     normalizedScope.namespace,
+    filter ? { ...filter } : undefined,
   )
 }
 
-export function buildAccessControlListPath(kind: AccessControlKind, scope: ScopeKey) {
-  return accessControlPath(kind, scope)
+export function buildAccessControlListPath(
+  kind: AccessControlKind,
+  scope: ScopeKey,
+  filter?: AccessControlListFilter,
+) {
+  return accessControlPath(kind, scope, '', filter)
 }
 
 export function buildAccessControlItemPath(kind: AccessControlKind, scope: ScopeKey, name: string) {

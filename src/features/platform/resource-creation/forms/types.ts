@@ -38,10 +38,10 @@ export type KubernetesManifest = {
 }
 
 export interface ResourceFormRendererProps<Values> {
-  cancelText?: ReactNode
   localeCode?: string
   loading?: boolean
-  onCancel?: () => void
+  namespaceLoading?: boolean
+  namespaceOptions?: readonly string[]
   onChange: (value: Values) => void
   onSubmit?: (value: Values) => void
   submitText?: ReactNode

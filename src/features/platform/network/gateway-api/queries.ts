@@ -12,12 +12,7 @@ export const gatewayAPIQueries = {
       queryFn: () => listGatewayAPIResources<T>(kind, scope),
       enabled: hasNetworkCluster(scope),
     }),
-  detail: <T extends { name: string }>(
-    kind: Extract<GatewayAPIKind, 'gatewayclasses' | 'gateways'>,
-    scope: ScopeKey,
-    name: string,
-    clusterScoped = false,
-  ) =>
+  detail: <T>(kind: GatewayAPIKind, scope: ScopeKey, name: string, clusterScoped = false) =>
     queryOptions({
       queryKey: gatewayAPIKeys.detail(kind, scope, name),
       queryFn: () => getGatewayAPIResource<T>(kind, scope, name),

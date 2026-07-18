@@ -8,9 +8,11 @@ vi.mock('@/services/api-client', () => ({ api: apiMocks }))
 describe('network core resource contracts', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('uses canonical cluster and namespace scope for list-backed detail', async () => {
+  it('uses canonical cluster and namespace scope for detail and list endpoints', async () => {
     const scope = toScopeKey(' cluster-a ', ' team/a ')
-    apiMocks.get.mockResolvedValue({ data: [{ name: 'web-policy' }] })
+    apiMocks.get
+      .mockResolvedValueOnce({ data: { name: 'web-policy' } })
+      .mockResolvedValueOnce({ data: [{ name: 'web-policy' }] })
 
     await expect(
       getNetworkCoreResource<{ name: string }>('networkpolicies', scope, 'web-policy'),
@@ -20,7 +22,7 @@ describe('network core resource contracts', () => {
     ).resolves.toEqual([{ name: 'web-policy' }])
     expect(apiMocks.get).toHaveBeenNthCalledWith(
       1,
-      '/clusters/cluster-a/network/networkpolicies?namespace=team%2Fa',
+      '/clusters/cluster-a/network/networkpolicies/web-policy/detail?namespace=team%2Fa',
     )
     expect(apiMocks.get).toHaveBeenNthCalledWith(
       2,

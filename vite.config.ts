@@ -70,24 +70,6 @@ export default defineConfig({
           if (id.includes('@xterm')) {
             return 'xterm'
           }
-          if (id.includes('@visactor/react-vchart')) {
-            return 'vchart-react'
-          }
-          if (id.includes('@visactor/vchart') || id.includes('@visactor/vchart-extension')) {
-            return 'vchart-core'
-          }
-          if (id.includes('@visactor/vrender-')) {
-            return 'vchart-render'
-          }
-          if (
-            id.includes('@visactor/vdataset') ||
-            id.includes('@visactor/vutils') ||
-            id.includes('@visactor/vutils-extension') ||
-            id.includes('@visactor/vscale') ||
-            id.includes('@visactor/vlayouts')
-          ) {
-            return 'vchart-runtime'
-          }
           if (id.includes('echarts')) {
             return 'charts'
           }

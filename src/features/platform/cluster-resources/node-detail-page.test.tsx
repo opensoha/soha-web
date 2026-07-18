@@ -27,12 +27,30 @@ const apiGetMock = vi.hoisted(() =>
           roles: ['worker'],
           version: 'v1.32.0',
           internalIp: '10.0.0.1',
-          podCount: 1,
+          podCount: 2,
           ageSeconds: 60,
-          labels: {},
-          taints: [],
+          labels: { 'node-role.kubernetes.io/worker': 'true' },
+          annotations: { 'example.com/hardware': 'bare-metal' },
+          taints: [{ key: 'dedicated', value: 'gpu', effect: 'NoSchedule' }],
           conditions: [],
-          pods: [],
+          pods: [
+            {
+              name: 'api-0',
+              namespace: 'apps',
+              phase: 'Running',
+              readyContainers: '1/1',
+              restarts: 0,
+              ageSeconds: 30,
+            },
+            {
+              name: 'monitor-0',
+              namespace: 'monitoring',
+              phase: 'Running',
+              readyContainers: '1/1',
+              restarts: 0,
+              ageSeconds: 30,
+            },
+          ],
         },
       }
     }
@@ -149,6 +167,17 @@ async function renderDetail() {
 }
 
 describe('node detail lazy YAML boundary', () => {
+  it('uses the shared overview without duplicating metadata and summarizes scheduled namespaces', async () => {
+    const container = await renderDetail()
+    const content = container.textContent ?? ''
+
+    expect(content).toContain('node-role.kubernetes.io/worker')
+    expect(content).toContain('example.com/hardware')
+    expect(content).toContain('dedicated=gpu:NoSchedule')
+    expect(content).toContain('承载命名空间')
+    expect(content).not.toContain('基础信息')
+  })
+
   it('prefers the URL cluster and loads YAML code and data only after tab activation', async () => {
     const container = await renderDetail()
     const requestedPaths = () => apiGetMock.mock.calls.map(([path]) => String(path))

@@ -5,8 +5,8 @@ import {
   hasNamespacedWorkloadScope,
   hasWorkloadCluster,
 } from '@/features/platform/workloads/shared/scope'
-import { getJobDetail, listJobEvents, listJobPods, listJobs } from './api'
-import type { Job, JobDetail, Pod } from './types'
+import { getJobDetail, listJobEvents, listJobs } from './api'
+import type { Job, JobDetail } from './types'
 
 function target(scope: ScopeKey, name: string) {
   return { scope, name }
@@ -33,12 +33,6 @@ export const jobQueries = {
     queryOptions({
       queryKey: workloadKeys.events('jobs', scope, name),
       queryFn: () => listJobEvents(target(scope, name)),
-      enabled: hasJobReference(scope, name),
-    }),
-  pods: (scope: ScopeKey, name: string) =>
-    queryOptions<Pod[]>({
-      queryKey: workloadKeys.relatedPods('jobs', scope, name),
-      queryFn: () => listJobPods(target(scope, name)),
       enabled: hasJobReference(scope, name),
     }),
 }

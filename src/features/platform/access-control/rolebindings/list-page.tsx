@@ -3,12 +3,7 @@ import { formatAgeSeconds } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import type { TableColumnsType } from 'antd'
 import { AccessControlResourceListPage } from '../shared/list-page'
-import {
-  AccessControlNameLink,
-  AccessControlRoleRefNameLink,
-  renderAccessControlSubjectKinds,
-  renderAccessControlSubjectPreview,
-} from '../shared/relationships'
+import { AccessControlNameLink, AccessControlRoleRefNameLink } from '../shared/relationships'
 import { ROLE_BINDING_DEFAULT_TEMPLATE } from '../shared/templates'
 import type { RoleBindingResource } from './types'
 
@@ -35,24 +30,6 @@ export function PlatformAccessControlRoleBindingsPage() {
       ),
     },
     {
-      title: localeCode === 'zh_CN' ? '主体预览' : 'Subjects',
-      dataIndex: 'subjects',
-      ellipsis: { showTitle: false },
-      width: 290,
-      render: (value: string[] | undefined, record) =>
-        renderAccessControlSubjectPreview(
-          value,
-          localeCode === 'zh_CN' ? '无主体' : 'No subjects',
-          record.namespace,
-        ),
-    },
-    {
-      title: localeCode === 'zh_CN' ? '主体类型' : 'Subject Types',
-      dataIndex: 'subjects',
-      width: 150,
-      render: (value: string[] | undefined) => renderAccessControlSubjectKinds(value, localeCode),
-    },
-    {
       ...tableColumnPresets.datetime,
       title: 'Age',
       dataIndex: 'ageSeconds',
@@ -71,12 +48,7 @@ export function PlatformAccessControlRoleBindingsPage() {
       kind="rolebindings"
       label="RoleBindings"
       rowKey={(record) => `${record.namespace}/${record.name}`}
-      searchValues={(record) => [
-        record.name,
-        record.namespace,
-        record.roleRef,
-        ...(record.subjects ?? []),
-      ]}
+      searchValues={(record) => [record.name, record.namespace, record.roleRef]}
     />
   )
 }

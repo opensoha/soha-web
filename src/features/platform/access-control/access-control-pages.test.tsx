@@ -10,6 +10,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { PlatformAccessControlClusterRolesPage } from './clusterroles/list-page'
 import { PlatformAccessControlRoleDetailPage } from './roles/detail-page'
 import { PlatformAccessControlRoleBindingsPage } from './rolebindings/list-page'
+import { PlatformAccessControlServiceAccountDetailPage } from './serviceaccounts/detail-page'
 import { PlatformAccessControlServiceAccountsPage } from './serviceaccounts/list-page'
 
 const testState = vi.hoisted(() => ({
@@ -240,13 +241,12 @@ describe('platform access-control leaf pages', () => {
     )
   })
 
-  it('renders RoleBinding role and subject relationship links', async () => {
+  it('renders RoleBinding role without list-only subject details', async () => {
     testState.responses['/clusters/cluster-a/access-control/rolebindings?namespace=team-a'] = [
       {
         name: 'readers',
         namespace: 'team-a',
         roleRef: 'Role/reader',
-        subjects: ['ServiceAccount:team-a/builder', 'User:alice', 'Group:platform'],
         ageSeconds: 60,
       },
     ]
@@ -257,9 +257,7 @@ describe('platform access-control leaf pages', () => {
     )
 
     expect(container.textContent).toContain('Role/reader')
-    expect(container.textContent).toContain('ServiceAccount team-a/builder')
-    expect(container.textContent).toContain('User alice')
-    expect(container.textContent).toContain('+1')
+    expect(container.textContent).not.toContain('Subjects')
   })
 
   it('loads detail, reverse relationships, and YAML only from their active tabs', async () => {
@@ -310,6 +308,38 @@ describe('platform access-control leaf pages', () => {
       '/clusters/cluster-a/access-control/roles/reader/yaml?namespace=team-a',
     )
     expect(container.querySelector('[data-testid="yaml-editor"]')).not.toBeNull()
+  })
+
+  it('loads ServiceAccount references through server-side subject filters', async () => {
+    testState.responses[
+      '/clusters/cluster-a/access-control/serviceaccounts/builder/detail?namespace=team-a'
+    ] = {
+      name: 'builder',
+      namespace: 'team-a',
+      ageSeconds: 60,
+    }
+    testState.responses[
+      '/clusters/cluster-a/access-control/rolebindings?namespace=team-a&subjectKind=ServiceAccount&subjectName=builder&subjectNamespace=team-a'
+    ] = [{ name: 'builder-role', namespace: 'team-a', roleRef: 'Role/editor', ageSeconds: 60 }]
+    testState.responses[
+      '/clusters/cluster-a/access-control/clusterrolebindings?subjectKind=ServiceAccount&subjectName=builder&subjectNamespace=team-a'
+    ] = [{ name: 'builder-cluster-role', roleRef: 'ClusterRole/viewer', ageSeconds: 60 }]
+
+    const container = await renderPage(
+      <PlatformAccessControlServiceAccountDetailPage />,
+      '/platform-access-control/serviceaccounts/builder',
+      '/platform-access-control/serviceaccounts/:name',
+    )
+    await clickTab(container, '关联关系')
+
+    expect(container.textContent).toContain('RoleBinding team-a/builder-role')
+    expect(container.textContent).toContain('ClusterRoleBinding builder-cluster-role')
+    expect(apiGetMock).toHaveBeenCalledWith(
+      '/clusters/cluster-a/access-control/rolebindings?namespace=team-a&subjectKind=ServiceAccount&subjectName=builder&subjectNamespace=team-a',
+    )
+    expect(apiGetMock).toHaveBeenCalledWith(
+      '/clusters/cluster-a/access-control/clusterrolebindings?subjectKind=ServiceAccount&subjectName=builder&subjectNamespace=team-a',
+    )
   })
 
   it('blocks list mutations and YAML fetch when the capability is unsupported', async () => {

@@ -51,6 +51,16 @@ describe('access-control contracts', () => {
       ...accessControlKeys.detail('roles', namespacedScope, 'reader'),
       'yaml',
     ])
+    expect(
+      accessControlKeys.list('rolebindings', namespacedScope, {
+        subjectKind: ' ServiceAccount ',
+        subjectName: ' builder ',
+        subjectNamespace: ' team/a ',
+      }),
+    ).toEqual([
+      ...accessControlKeys.list('rolebindings', namespacedScope),
+      { subjectKind: 'ServiceAccount', subjectName: 'builder', subjectNamespace: 'team/a' },
+    ])
     expect(parseAccessControlSubject('ServiceAccount:team-a/builder')).toEqual({
       kind: 'ServiceAccount',
       label: 'ServiceAccount team-a/builder',

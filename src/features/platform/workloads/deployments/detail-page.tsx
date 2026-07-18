@@ -1,24 +1,23 @@
 import { lazy, Suspense, useState, useMemo } from 'react'
-import { Tag, Button, Card, Spin, List, Tooltip, Typography } from 'antd'
+import { Tag, Card, Spin, Tooltip, Typography } from 'antd'
 import { useQuery } from '@tanstack/react-query'
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
 import { useAIPageContext } from '@/features/copilot'
 import { useI18n } from '@/i18n'
 import { ResourceEventsTimeline } from '@/components/resource-events-timeline'
 import { StatusTag } from '@/components/status-tag'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
-import { formatAgeSeconds, formatDateTime } from '@/utils/time'
+import { formatDateTime } from '@/utils/time'
 import {
-  buildWorkloadDetailPath,
   conditionToTimelineEvent,
   resolveWorkloadNamespace,
   targetMatchesDeployment,
 } from '@/features/platform/workloads-model'
 import { toScopeKey } from '@/types'
-import type { Pod } from '@/types'
 import type { TabsProps } from 'antd'
 import { WorkloadDetailShell } from '../shared/detail-shell'
+import { WorkloadPodsCard, WorkloadRelationsCard } from '../shared/workload-relations'
 import { deploymentQueries } from './queries'
 import { deploymentLinkageQueries } from './linkage-queries'
 import type { ApplicationEnvironment } from './types'
@@ -38,7 +37,6 @@ export function DeploymentDetailPage() {
   const deploymentName = params.deploymentName as string
   const { clusterId, namespace } = usePlatformScopeStore()
   const detailNamespace = resolveWorkloadNamespace(namespace, searchParams.get('namespace'))
-  const navigate = useNavigate()
   const [activeTabKey, setActiveTabKey] = useState('overview')
   const detailScope = toScopeKey(clusterId, detailNamespace)
   const deploymentDetailQuery = useQuery(deploymentQueries.detail(detailScope, deploymentName))
@@ -60,10 +58,6 @@ export function DeploymentDetailPage() {
     ...deploymentEventsQueryOptions,
     enabled: Boolean(deploymentEventsQueryOptions.enabled) && activeTabKey === 'events',
   })
-  const deploymentPodsQuery = useQuery(
-    deploymentQueries.pods(detailScope, deploymentName, deploymentDetailQuery.data?.selector ?? {}),
-  )
-
   const matchedBindings = useMemo<ApplicationEnvironment[]>(() => {
     if (!clusterId || !detailNamespace) return []
     return (bindingsQuery.data ?? []).filter((binding) =>
@@ -84,7 +78,7 @@ export function DeploymentDetailPage() {
 
   const rolloutStatus = rolloutStatusQuery.data
   const rolloutHistory = rolloutHistoryQuery.data ?? []
-  const deploymentPods = deploymentPodsQuery.data ?? []
+  const deploymentPods = deploymentDetailQuery.data?.pods ?? []
   useAIPageContext({
     sourceWorkbench: 'platform',
     sourceTitle: `Deployment ${deploymentName}`,
@@ -110,70 +104,11 @@ export function DeploymentDetailPage() {
   )
   const linkageOverview = (
     <div className="soha-detail-stack">
-      <Card
-        className="soha-detail-card soha-related-pod-card"
-        size="small"
-        title={localeCode === 'zh_CN' ? '关联 Pods' : 'Related Pods'}
-      >
-        <List
-          className="soha-related-pod-list"
-          dataSource={deploymentPods}
-          loading={deploymentPodsQuery.isLoading}
-          rowKey={(record) => `${record.namespace}/${record.name}`}
-          locale={{
-            emptyText: (
-              <ManagementState
-                bordered={false}
-                compact
-                title={localeCode === 'zh_CN' ? '暂无关联 Pods' : 'No related Pods'}
-              />
-            ),
-          }}
-          renderItem={(pod: Pod) => (
-            <List.Item className="soha-related-pod-item">
-              <div className="soha-related-pod-line">
-                <Tooltip title={pod.name}>
-                  <Button
-                    type="link"
-                    className="soha-related-pod-name"
-                    onClick={() =>
-                      navigate(
-                        buildWorkloadDetailPath('pods', pod.name, detailNamespace, pod.namespace),
-                      )
-                    }
-                  >
-                    {pod.name}
-                  </Button>
-                </Tooltip>
-                <StatusTag value={pod.phase} />
-                <Tag color="blue" className="soha-related-pod-tag">
-                  {pod.namespace || detailNamespace || '-'}
-                </Tag>
-                <Tag color="cyan" className="soha-related-pod-tag">
-                  {pod.podIp || '-'}
-                </Tag>
-                <Tag color="success" className="soha-related-pod-tag">
-                  {`Ready ${pod.readyContainers || '-'}`}
-                </Tag>
-                <Tag
-                  color={(pod.restarts ?? 0) > 0 ? 'warning' : 'default'}
-                  className="soha-related-pod-tag"
-                >
-                  {`${localeCode === 'zh_CN' ? '重启' : 'Restarts'} ${pod.restarts ?? 0}`}
-                </Tag>
-                <Tooltip title={pod.nodeName || '-'}>
-                  <Tag color="purple" className="soha-related-pod-tag soha-related-pod-tag-node">
-                    {pod.nodeName || '-'}
-                  </Tag>
-                </Tooltip>
-                <Tag color="geekblue" className="soha-related-pod-tag">
-                  {formatAgeSeconds(pod.ageSeconds)}
-                </Tag>
-              </div>
-            </List.Item>
-          )}
-        />
-      </Card>
+      <WorkloadPodsCard pods={deploymentPods} namespace={detailNamespace} />
+      <WorkloadRelationsCard
+        resources={deploymentDetailQuery.data?.relatedResources}
+        namespace={detailNamespace}
+      />
       <Card
         className="soha-detail-card soha-rollout-card"
         size="small"

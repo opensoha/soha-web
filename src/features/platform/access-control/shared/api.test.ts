@@ -83,4 +83,18 @@ describe('access-control API', () => {
       '/clusters/cluster-a/access-control/roles/reader%2Fall?namespace=team%2Fa',
     )
   })
+
+  it('passes ServiceAccount subject filters through list requests', async () => {
+    apiMocks.get.mockResolvedValueOnce({ data: [{ name: 'builders', roleRef: 'Role/edit' }] })
+    await expect(
+      listAccessControlResources('rolebindings', namespacedScope, {
+        subjectKind: ' ServiceAccount ',
+        subjectName: ' build/bot ',
+        subjectNamespace: ' team/a ',
+      }),
+    ).resolves.toHaveLength(1)
+    expect(apiMocks.get).toHaveBeenCalledWith(
+      '/clusters/cluster-a/access-control/rolebindings?namespace=team%2Fa&subjectKind=ServiceAccount&subjectName=build%2Fbot&subjectNamespace=team%2Fa',
+    )
+  })
 })

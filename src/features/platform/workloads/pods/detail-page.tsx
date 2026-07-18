@@ -228,6 +228,27 @@ export function PodDetailPage() {
   const containerColumns: TableColumnsType<WorkloadContainer> = [
     { title: localeCode === 'zh_CN' ? '容器' : 'Container', dataIndex: 'name' },
     { title: localeCode === 'zh_CN' ? '镜像' : 'Image', dataIndex: 'image', ellipsis: true },
+    { title: localeCode === 'zh_CN' ? '重启次数' : 'Restarts', dataIndex: 'restartCount' },
+    {
+      title: (
+        <Tooltip
+          title={
+            localeCode === 'zh_CN'
+              ? '平台展示约定：初始化容器、首个普通容器为主容器，其余普通容器为辅助容器。'
+              : 'Platform display convention: init containers, the first regular container as main, and remaining regular containers as sidecars.'
+          }
+        >
+          {localeCode === 'zh_CN' ? '角色' : 'Role'}
+        </Tooltip>
+      ),
+      dataIndex: 'role',
+      render: (value?: string) => {
+        const labels: Record<string, string> = localeCode === 'zh_CN'
+          ? { init: '初始化容器', main: '主容器', sidecar: '辅助容器' }
+          : { init: 'Init', main: 'Main', sidecar: 'Sidecar' }
+        return <Tag>{(value && labels[value]) || value || '-'}</Tag>
+      },
+    },
     {
       title: localeCode === 'zh_CN' ? '就绪' : 'Ready',
       dataIndex: 'ready',
@@ -248,7 +269,6 @@ export function PodDetailPage() {
       dataIndex: 'lastState',
       render: (value: string) => formatContainerStateLabel(value),
     },
-    { title: localeCode === 'zh_CN' ? '重启次数' : 'Restarts', dataIndex: 'restartCount' },
     {
       title: localeCode === 'zh_CN' ? '启动时间' : 'Started At',
       dataIndex: 'startedAt',
@@ -482,26 +502,6 @@ export function PodDetailPage() {
     ),
   }
 
-  const containersTab: NonNullable<TabsProps['items']>[number] = {
-    key: 'containers',
-    label: localeCode === 'zh_CN' ? '容器' : 'Containers',
-    children: (
-      <Card
-        className="soha-detail-card"
-        title={localeCode === 'zh_CN' ? '容器状态' : 'Container Status'}
-      >
-        <AdminTable
-          shellClassName="soha-management-table-shell"
-          columns={containerColumns}
-          dataSource={podDetail?.containers ?? []}
-          rowKey={(record) => record.name}
-          pageSize={10}
-          enableColumnSelection={false}
-        />
-      </Card>
-    ),
-  }
-
   const volumesTab: NonNullable<TabsProps['items']>[number] = {
     key: 'volumes',
     label: localeCode === 'zh_CN' ? '卷' : 'Volumes',
@@ -676,7 +676,6 @@ export function PodDetailPage() {
       paramKey="podName"
       extraOverview={runtimeOverview}
       extraTabPanes={[
-        containersTab,
         logsTab,
         terminalTab,
         eventsTab,

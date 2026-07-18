@@ -1,5 +1,5 @@
 import { queryOptions } from '@tanstack/react-query'
-import type { Pod, ScopeKey } from '@/types'
+import type { ScopeKey } from '@/types'
 import { workloadKeys } from '@/features/platform/workloads/shared/keys'
 import {
   hasNamespacedWorkloadScope,
@@ -10,7 +10,6 @@ import {
   getDeploymentMetrics,
   getDeploymentRolloutStatus,
   listDeploymentEvents,
-  listDeploymentPods,
   listDeploymentRollouts,
   listDeployments,
 } from './api'
@@ -66,11 +65,5 @@ export const deploymentQueries = {
       queryKey: workloadKeys.events('deployments', scope, name),
       queryFn: () => listDeploymentEvents(target(scope, name)),
       enabled: hasDeploymentReference(scope, name),
-    }),
-  pods: (scope: ScopeKey, name: string, selector: Record<string, string>) =>
-    queryOptions<Pod[]>({
-      queryKey: workloadKeys.relatedPods('deployments', scope, name, selector),
-      queryFn: () => listDeploymentPods(target(scope, name), selector),
-      enabled: hasDeploymentReference(scope, name) && Object.keys(selector).length > 0,
     }),
 }

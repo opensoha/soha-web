@@ -33,7 +33,15 @@ export function KeyValueFields({ label, name }: { label: string; name: NamePath 
   )
 }
 
-export function MetadataFields({ namespaced = true }: { namespaced?: boolean }) {
+export function MetadataFields({
+  namespaced = true,
+  namespaceLoading = false,
+  namespaceOptions = [],
+}: {
+  namespaced?: boolean
+  namespaceLoading?: boolean
+  namespaceOptions?: readonly string[]
+}) {
   return (
     <>
       <Row gutter={16}>
@@ -53,7 +61,12 @@ export function MetadataFields({ namespaced = true }: { namespaced?: boolean }) 
               name="namespace"
               rules={[{ required: true, message: '请选择命名空间' }]}
             >
-              <Input placeholder="default" />
+              <Select
+                loading={namespaceLoading}
+                options={namespaceOptions.map((value) => ({ label: value, value }))}
+                placeholder="请选择命名空间"
+                showSearch={{ optionFilterProp: 'label' }}
+              />
             </Form.Item>
           </Col>
         ) : null}

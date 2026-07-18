@@ -1,5 +1,5 @@
-import type { ConfigurationDetailBase } from '../shared/types'
+import type { AdmissionWebhook, ConfigurationDetailBase } from '../shared/types'
 
 export interface MutatingWebhookConfigurationResource extends ConfigurationDetailBase {
-  readonly webhooks: number
+  readonly webhooks: number | AdmissionWebhook[]
 }

@@ -35,10 +35,17 @@ import {
 function metadataDefaults(context: ResourceFormContext) {
   return {
     name: '',
-    namespace: context.namespace || 'default',
+    namespace: context.namespace || undefined,
     labels: [],
     annotations: [],
   }
+}
+
+function NamespacedMetadataFields<Values>({
+  namespaceLoading,
+  namespaceOptions,
+}: Pick<ResourceFormRendererProps<Values>, 'namespaceLoading' | 'namespaceOptions'>) {
+  return <MetadataFields namespaceLoading={namespaceLoading} namespaceOptions={namespaceOptions} />
 }
 
 function podDefaults() {
@@ -71,7 +78,11 @@ function workloadDefinition(kind: 'Deployment' | 'StatefulSet' | 'DaemonSet') {
     buildManifest: (values) => buildControllerManifest(kind, values),
     renderForm: (props) =>
       renderWithSteps(props, [
-        { title: '基本信息', fieldNames: ['name', 'namespace'], children: <MetadataFields /> },
+        {
+          title: '基本信息',
+          fieldNames: ['name', 'namespace'],
+          children: <NamespacedMetadataFields {...props} />,
+        },
         {
           title: '工作负载',
           fieldNames: kind === 'DaemonSet' ? [] : ['replicas'],
@@ -105,7 +116,11 @@ function jobDefinition(kind: 'Job' | 'CronJob') {
     buildManifest: (values) => buildJobManifest(kind, values),
     renderForm: (props) =>
       renderWithSteps(props, [
-        { title: '基本信息', fieldNames: ['name', 'namespace'], children: <MetadataFields /> },
+        {
+          title: '基本信息',
+          fieldNames: ['name', 'namespace'],
+          children: <NamespacedMetadataFields {...props} />,
+        },
         {
           title: kind === 'CronJob' ? '调度与策略' : '执行策略',
           fieldNames: kind === 'CronJob' ? ['schedule', 'restartPolicy'] : ['restartPolicy'],
@@ -174,7 +189,11 @@ function serviceDefinition() {
     buildManifest: buildServiceManifest,
     renderForm: (props) =>
       renderWithSteps(props, [
-        { title: '基本信息', fieldNames: ['name', 'namespace'], children: <MetadataFields /> },
+        {
+          title: '基本信息',
+          fieldNames: ['name', 'namespace'],
+          children: <NamespacedMetadataFields {...props} />,
+        },
         {
           title: '服务配置',
           fieldNames: ['type', 'ports'],
@@ -242,7 +261,11 @@ function ingressDefinition() {
     buildManifest: buildIngressManifest,
     renderForm: (props) =>
       renderWithSteps(props, [
-        { title: '基本信息', fieldNames: ['name', 'namespace'], children: <MetadataFields /> },
+        {
+          title: '基本信息',
+          fieldNames: ['name', 'namespace'],
+          children: <NamespacedMetadataFields {...props} />,
+        },
         {
           title: '路由规则',
           fieldNames: ['paths'],
@@ -281,7 +304,11 @@ function configMapDefinition() {
     buildManifest: buildConfigMapManifest,
     renderForm: (props) =>
       renderWithSteps(props, [
-        { title: '基本信息', fieldNames: ['name', 'namespace'], children: <MetadataFields /> },
+        {
+          title: '基本信息',
+          fieldNames: ['name', 'namespace'],
+          children: <NamespacedMetadataFields {...props} />,
+        },
         {
           title: '配置数据',
           fieldNames: ['data'],
@@ -301,7 +328,11 @@ function secretDefinition() {
     buildManifest: buildSecretManifest,
     renderForm: (props) =>
       renderWithSteps(props, [
-        { title: '基本信息', fieldNames: ['name', 'namespace'], children: <MetadataFields /> },
+        {
+          title: '基本信息',
+          fieldNames: ['name', 'namespace'],
+          children: <NamespacedMetadataFields {...props} />,
+        },
         {
           title: 'Secret 数据',
           fieldNames: ['type', 'data'],
@@ -334,7 +365,11 @@ function pvcDefinition() {
     buildManifest: buildPersistentVolumeClaimManifest,
     renderForm: (props) =>
       renderWithSteps(props, [
-        { title: '基本信息', fieldNames: ['name', 'namespace'], children: <MetadataFields /> },
+        {
+          title: '基本信息',
+          fieldNames: ['name', 'namespace'],
+          children: <NamespacedMetadataFields {...props} />,
+        },
         {
           title: '存储配置',
           fieldNames: ['accessModes', 'storage'],
@@ -401,7 +436,11 @@ function serviceAccountDefinition() {
     buildManifest: buildServiceAccountManifest,
     renderForm: (props) =>
       renderWithSteps(props, [
-        { title: '基本信息', fieldNames: ['name', 'namespace'], children: <MetadataFields /> },
+        {
+          title: '基本信息',
+          fieldNames: ['name', 'namespace'],
+          children: <NamespacedMetadataFields {...props} />,
+        },
         {
           title: '账户配置',
           children: (

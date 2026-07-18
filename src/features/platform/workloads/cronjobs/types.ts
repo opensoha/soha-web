@@ -1,4 +1,4 @@
-import type { ScopeKey } from '@/types'
+import type { ScopeKey, WorkloadRelation } from '@/types'
 
 export interface CronJob {
   name: string
@@ -17,6 +17,8 @@ export interface CronJobDetail extends CronJob {
   createdAt?: string
   labels?: Record<string, string>
   annotations?: Record<string, string>
+  jobs?: CronJobChildJob[]
+  relatedResources?: WorkloadRelation[]
 }
 
 export interface CronJobTarget {

@@ -7,13 +7,7 @@ import {
 } from '@/features/platform/workloads/shared/api'
 import { buildWorkloadItemPath } from '@/features/platform/workloads/shared/paths'
 import type { WorkloadEvent } from '@/features/platform/workloads/shared/types'
-import type {
-  CronJob,
-  CronJobChildJob,
-  CronJobDetail,
-  CronJobTarget,
-  SuspendCronJobVariables,
-} from './types'
+import type { CronJob, CronJobDetail, CronJobTarget, SuspendCronJobVariables } from './types'
 
 const cronJobKind = 'cronjobs' as const
 
@@ -47,12 +41,6 @@ export async function listCronJobEvents(target: CronJobTarget): Promise<Workload
       event.involvedName === name &&
       (!event.involvedKind || event.involvedKind.toLowerCase() === 'cronjob'),
   )
-}
-
-export async function listCronJobChildJobs(target: CronJobTarget): Promise<CronJobChildJob[]> {
-  const prefix = `${normalizedCronJobName(target.name)}-`
-  const jobs = await listWorkloads<CronJobChildJob>('jobs', target.scope)
-  return jobs.filter((job) => job.name.startsWith(prefix))
 }
 
 export async function suspendCronJob({

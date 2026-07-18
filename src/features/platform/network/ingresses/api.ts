@@ -1,5 +1,8 @@
 import type { ScopeKey } from '@/types'
+import { api } from '@/services/api-client'
+import type { ApiResponse } from '@/types'
 import { listNetworkResources } from '../shared/api'
+import { buildNetworkDetailPath } from '../shared/paths'
 import type { Ingress } from './types'
 
 export function listIngresses(scope: ScopeKey) {
@@ -7,6 +10,8 @@ export function listIngresses(scope: ScopeKey) {
 }
 
 export async function getIngress(scope: ScopeKey, name: string) {
-  const ingresses = await listIngresses(scope)
-  return ingresses.find((ingress) => ingress.name === name.trim())
+  const response = await api.get<ApiResponse<Ingress>>(
+    buildNetworkDetailPath('ingresses', scope, name),
+  )
+  return response.data
 }

@@ -199,26 +199,26 @@ export function AccessControlReferencedByRelationships({
     clusterId,
     null,
   )
+  const subjectFilter =
+    kind === 'ServiceAccount'
+      ? { subjectKind: kind, subjectName: name, subjectNamespace: namespace }
+      : undefined
   const roleBindingsQuery = useQuery(
-    accessControlQueries.list<AccessControlBindingRecord>('rolebindings', roleBindingScope),
+    accessControlQueries.list<AccessControlBindingRecord>(
+      'rolebindings',
+      roleBindingScope,
+      subjectFilter,
+    ),
   )
   const clusterRoleBindingsQuery = useQuery(
     accessControlQueries.list<AccessControlBindingRecord>(
       'clusterrolebindings',
       clusterRoleBindingScope,
+      subjectFilter,
     ),
   )
   const roleBindings = (roleBindingsQuery.data ?? []).filter((binding) => {
-    if (kind === 'ServiceAccount') {
-      return (binding.subjects ?? []).some((value) => {
-        const subject = parseAccessControlSubject(value)
-        return (
-          subject.kind === 'ServiceAccount' &&
-          subject.name === name &&
-          (subject.namespace || binding.namespace) === namespace
-        )
-      })
-    }
+    if (kind === 'ServiceAccount') return true
     const ref = splitAccessControlRoleRef(binding.roleRef)
     return (
       ref?.kind === kind &&
@@ -227,16 +227,7 @@ export function AccessControlReferencedByRelationships({
     )
   })
   const clusterRoleBindings = (clusterRoleBindingsQuery.data ?? []).filter((binding) => {
-    if (kind === 'ServiceAccount') {
-      return (binding.subjects ?? []).some((value) => {
-        const subject = parseAccessControlSubject(value)
-        return (
-          subject.kind === 'ServiceAccount' &&
-          subject.name === name &&
-          (!namespace || subject.namespace === namespace)
-        )
-      })
-    }
+    if (kind === 'ServiceAccount') return true
     const ref = splitAccessControlRoleRef(binding.roleRef)
     return ref?.kind === kind && ref.name === name
   })
@@ -291,57 +282,6 @@ export function AccessControlReferencedByRelationships({
         },
       ]}
     />
-  )
-}
-
-export function renderAccessControlSubjectPreview(
-  subjects: string[] | undefined,
-  emptyLabel: string,
-  fallbackNamespace?: string,
-) {
-  if (!subjects?.length) return <Text type="secondary">{emptyLabel}</Text>
-  const visibleSubjects = subjects.slice(0, 2)
-  const hiddenCount = subjects.length - visibleSubjects.length
-  return (
-    <div className="soha-rbac-subject-list is-table-preview">
-      {visibleSubjects.map((value) => {
-        const subject = parseAccessControlSubject(value)
-        const namespace =
-          subject.kind === 'ServiceAccount'
-            ? subject.namespace || fallbackNamespace
-            : subject.namespace
-        return (
-          <AccessControlRelationshipLink
-            key={value}
-            kind={subject.kind}
-            name={subject.name}
-            namespace={namespace}
-          />
-        )
-      })}
-      {hiddenCount > 0 ? <Tag className="soha-rbac-subject-chip">{`+${hiddenCount}`}</Tag> : null}
-    </div>
-  )
-}
-
-export function renderAccessControlSubjectKinds(
-  subjects: string[] | undefined,
-  localeCode: 'zh_CN' | 'en_US',
-) {
-  if (!subjects?.length) return <Text type="secondary">-</Text>
-  const counts = new Map<string, number>()
-  subjects.forEach((value) => {
-    const subject = parseAccessControlSubject(value)
-    counts.set(subject.kind, (counts.get(subject.kind) ?? 0) + 1)
-  })
-  const summary = [
-    ...[...counts.entries()].map(([kind, count]) => `${kind} ${count}`),
-    localeCode === 'zh_CN' ? `共 ${subjects.length}` : `${subjects.length} total`,
-  ].join(' / ')
-  return (
-    <Text className="soha-rbac-kind-summary" title={summary}>
-      {summary}
-    </Text>
   )
 }
 

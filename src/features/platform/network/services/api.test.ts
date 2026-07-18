@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { toScopeKey } from '@/types'
-import { getServiceMetrics, listServiceBackendPods, listServiceEvents } from './api'
+import { getService, getServiceMetrics, listServiceEvents } from './api'
 
 const apiMocks = vi.hoisted(() => ({ get: vi.fn() }))
 
@@ -11,19 +11,15 @@ describe('service API', () => {
     vi.clearAllMocks()
   })
 
-  it('unwraps and filters backend pods by the Service selector', async () => {
+  it('loads the Service detail without listing all Services or Pods', async () => {
     const scope = toScopeKey('cluster-a', 'team-a')
-    apiMocks.get.mockResolvedValue({
-      data: [
-        { name: 'api-1', labels: { app: 'api', tier: 'web' } },
-        { name: 'worker-1', labels: { app: 'worker', tier: 'jobs' } },
-      ],
-    })
+    const detail = { name: 'api', labels: { app: 'api' }, endpoints: [], backendPods: [] }
+    apiMocks.get.mockResolvedValue({ data: detail })
 
-    await expect(listServiceBackendPods(scope, { app: 'api', tier: 'web' })).resolves.toEqual([
-      { name: 'api-1', labels: { app: 'api', tier: 'web' } },
-    ])
-    expect(apiMocks.get).toHaveBeenCalledWith('/clusters/cluster-a/workloads/pods?namespace=team-a')
+    await expect(getService(scope, 'api')).resolves.toBe(detail)
+    expect(apiMocks.get).toHaveBeenCalledWith(
+      '/clusters/cluster-a/network/services/api/detail?namespace=team-a',
+    )
   })
 
   it('uses the existing metrics and events endpoints and returns domain values', async () => {

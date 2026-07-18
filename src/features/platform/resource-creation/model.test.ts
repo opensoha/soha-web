@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { isPreflightCurrent, resolveCreateEntryAvailability } from './model'
+import {
+  isPreflightCurrent,
+  resolveCreateEntryAvailability,
+  resolveResourceCreateDefaultNamespace,
+  resourceCreateRequestFingerprint,
+} from './model'
 
 const scope = {
   clusterIds: ['cluster-a'],
@@ -9,6 +14,23 @@ const scope = {
 }
 
 describe('resource creation model', () => {
+  it('uses the namespace selected in a registry form as the request target', () => {
+    expect(
+      resolveResourceCreateDefaultNamespace({
+        contextNamespace: undefined,
+        formNamespace: ' infra ',
+        mode: 'form',
+      }),
+    ).toBe('infra')
+    expect(
+      resolveResourceCreateDefaultNamespace({
+        contextNamespace: 'platform',
+        formNamespace: 'infra',
+        mode: 'yaml',
+      }),
+    ).toBe('platform')
+  })
+
   it('keeps authorization denial distinct from capability unsupported', () => {
     const denied = resolveCreateEntryAvailability({
       clusterId: 'cluster-a',
@@ -43,9 +65,41 @@ describe('resource creation model', () => {
     expect(unsupported).toEqual({ disabled: true, reason: 'Agent create is unavailable' })
   })
 
-  it('invalidates a successful preflight as soon as content changes', () => {
+  it('invalidates a successful preflight when content or target scope changes', () => {
     const preflight = { ready: true, contentHash: 'abc', items: [] }
-    expect(isPreflightCurrent('kind: ConfigMap', 'kind: ConfigMap', preflight)).toBe(true)
-    expect(isPreflightCurrent('kind: Secret', 'kind: ConfigMap', preflight)).toBe(false)
+    const request = {
+      source: 'list' as const,
+      defaultNamespace: 'minio',
+      resourceGroup: 'configuration',
+      expectedKind: 'ConfigMap',
+      content: 'kind: ConfigMap',
+    }
+    const fingerprint = resourceCreateRequestFingerprint('cluster-a', request)
+
+    expect(isPreflightCurrent(fingerprint, fingerprint, preflight)).toBe(true)
+    expect(
+      isPreflightCurrent(
+        resourceCreateRequestFingerprint('cluster-b', request),
+        fingerprint,
+        preflight,
+      ),
+    ).toBe(false)
+    expect(
+      isPreflightCurrent(
+        resourceCreateRequestFingerprint('cluster-a', {
+          ...request,
+          defaultNamespace: 'ops',
+        }),
+        fingerprint,
+        preflight,
+      ),
+    ).toBe(false)
+    expect(
+      isPreflightCurrent(
+        resourceCreateRequestFingerprint('cluster-a', { ...request, content: 'kind: Secret' }),
+        fingerprint,
+        preflight,
+      ),
+    ).toBe(false)
   })
 })

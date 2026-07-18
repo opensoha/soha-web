@@ -13,23 +13,19 @@
   min-width: 0;
 }
 
-.soha-resource-create-toolbar .ant-select {
-  width: min(320px, 48%);
+.soha-resource-create-toolbar .soha-resource-tabs {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
-.soha-resource-create-scope .ant-descriptions-view,
+.soha-resource-create-cluster-hint {
+  flex: 0 0 auto;
+  font-size: 12px;
+}
+
 .soha-resource-create-table-section .ant-table-wrapper,
 .soha-resource-create-form {
   border-radius: var(--soha-radius-panel);
-}
-
-.soha-resource-create-scope table {
-  table-layout: fixed;
-}
-
-.soha-resource-create-scope .ant-descriptions-item-content {
-  min-width: 0;
-  overflow-wrap: anywhere;
 }
 
 .soha-resource-create-shell .ant-alert-message {
@@ -82,12 +78,8 @@
     flex-direction: column;
   }
 
-  .soha-resource-create-toolbar .ant-select {
-    width: 100%;
-  }
-
-  .soha-resource-create-scope .ant-descriptions-item-label {
-    width: 112px;
+  .soha-resource-create-cluster-hint {
+    align-self: flex-end;
   }
 
   .soha-resource-create-shell .soha-yaml-toolbar-meta,

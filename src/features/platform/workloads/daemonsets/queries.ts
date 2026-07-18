@@ -1,17 +1,11 @@
 import { queryOptions } from '@tanstack/react-query'
-import type { Pod, ScopeKey } from '@/types'
+import type { ScopeKey } from '@/types'
 import { workloadKeys } from '@/features/platform/workloads/shared/keys'
 import {
   hasNamespacedWorkloadScope,
   hasWorkloadCluster,
 } from '@/features/platform/workloads/shared/scope'
-import {
-  getDaemonSetDetail,
-  getDaemonSetMetrics,
-  listDaemonSetEvents,
-  listDaemonSetPods,
-  listDaemonSets,
-} from './api'
+import { getDaemonSetDetail, getDaemonSetMetrics, listDaemonSetEvents, listDaemonSets } from './api'
 import type { DaemonSet, DaemonSetDetail, ResourceMetrics } from './types'
 
 function target(scope: ScopeKey, name: string) {
@@ -46,11 +40,5 @@ export const daemonSetQueries = {
       queryKey: workloadKeys.events('daemonsets', scope, name),
       queryFn: () => listDaemonSetEvents(target(scope, name)),
       enabled: hasDaemonSetReference(scope, name),
-    }),
-  pods: (scope: ScopeKey, name: string, selector: Record<string, string>) =>
-    queryOptions<Pod[]>({
-      queryKey: workloadKeys.relatedPods('daemonsets', scope, name, selector),
-      queryFn: () => listDaemonSetPods(target(scope, name), selector),
-      enabled: hasDaemonSetReference(scope, name) && Object.keys(selector).length > 0,
     }),
 }

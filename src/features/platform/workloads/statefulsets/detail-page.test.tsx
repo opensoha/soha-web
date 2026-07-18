@@ -21,22 +21,26 @@ const apiGetMock = vi.hoisted(() =>
           createdAt: '2026-01-01T00:00:00Z',
           selector: { app: 'database' },
           serviceName: 'database',
+          pods: [
+            {
+              name: 'database-0',
+              namespace: 'selected-ns',
+              phase: 'Running',
+              readyContainers: '1/1',
+              restarts: 0,
+              ageSeconds: 60,
+              labels: { app: 'database' },
+            },
+          ],
+          relatedResources: [
+            {
+              kind: 'Service',
+              name: 'database',
+              namespace: 'selected-ns',
+              relation: 'selected-by-service',
+            },
+          ],
         },
-      }
-    }
-    if (path.includes('/workloads/pods?')) {
-      return {
-        data: [
-          {
-            name: 'database-0',
-            namespace: 'selected-ns',
-            phase: 'Running',
-            readyContainers: '1/1',
-            restarts: 0,
-            ageSeconds: 60,
-            labels: { app: 'database' },
-          },
-        ],
       }
     }
     if (path.includes('/metrics?')) return { data: { rangeMinutes: 60, series: [] } }
@@ -168,6 +172,9 @@ describe('statefulset detail boundaries', () => {
     expect(requestedPaths().some((path) => path.includes('/metrics?'))).toBe(false)
     expect(requestedPaths().some((path) => path.includes('/events?'))).toBe(false)
     expect(requestedPaths().some((path) => path.includes('/yaml?'))).toBe(false)
+    expect(requestedPaths().some((path) => path.includes('/workloads/pods?'))).toBe(false)
+    expect(container.textContent).toContain('database-0')
+    expect(container.textContent).toContain('database')
 
     await act(async () => clickTab(container, '指标'))
     await flushAsyncWork()

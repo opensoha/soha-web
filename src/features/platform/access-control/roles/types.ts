@@ -2,7 +2,6 @@ import type { AccessControlDetailBase, AccessControlResourceRecord } from '../sh
 
 export interface RoleResource extends AccessControlResourceRecord {
   readonly namespace: string
-  readonly rules: number
 }
 
 export interface RoleDetail extends AccessControlDetailBase {

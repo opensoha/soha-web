@@ -1,13 +1,13 @@
 import { lazy, Suspense, useState, useEffect, useMemo } from 'react'
 import type { ReactNode } from 'react'
-import { App, Tabs, Card, Spin, Descriptions, Tooltip, Typography } from 'antd'
+import { App, Tabs, Card, Spin } from 'antd'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
+import { PlatformResourceOverview } from '@/features/platform/shared/resource-overview'
 import { useI18n } from '@/i18n'
 import { useClusterCapability } from '@/features/platform/cluster-capabilities'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
-import { formatRelativeTime } from '@/utils/time'
 import { resolveWorkloadNamespace } from '@/features/platform/workloads-model'
 import { toScopeKey } from '@/types'
 import type { TabsProps } from 'antd'
@@ -15,8 +15,6 @@ import { updateWorkloadYAML } from '@/features/platform/workloads/shared/api'
 import { workloadQueries } from '@/features/platform/workloads/shared/queries'
 import type { WorkloadKind } from '@/features/platform/workloads/shared/types'
 import '@/features/platform/workloads/styles.css'
-
-const { Text } = Typography
 
 const K8sYamlEditor = lazy(async () => {
   const mod = await import('@/components/k8s-yaml-editor')
@@ -38,48 +36,7 @@ export interface WorkloadMeta {
 export type WorkloadDetailExtraOverview = ReactNode | ((detail: WorkloadMeta) => ReactNode)
 
 export type WorkloadDetailExtraTabPanes =
-  | NonNullable<TabsProps['items']>
-  | ((detail: WorkloadMeta) => NonNullable<TabsProps['items']>)
-
-function WorkloadMetadataSection({
-  items,
-  title,
-}: {
-  items?: Record<string, string>
-  title: ReactNode
-}) {
-  const entries = Object.entries(items ?? {}).filter(([key]) => key.trim())
-  if (entries.length === 0) return null
-
-  return (
-    <div className="soha-workload-metadata-section">
-      <Text strong className="soha-workload-metadata-title">
-        {title}
-      </Text>
-      <div className="soha-workload-kv-grid">
-        {entries.map(([key, value]) => {
-          const displayValue = value || '-'
-          return (
-            <Tooltip
-              key={key}
-              title={
-                <div className="soha-workload-kv-tooltip">
-                  <div>{key}</div>
-                  <div>{displayValue}</div>
-                </div>
-              }
-            >
-              <div className="soha-workload-kv-item" title={`${key}: ${displayValue}`}>
-                <span className="soha-workload-kv-key">{`${key}:`}</span>
-                <span className="soha-workload-kv-value">{displayValue}</span>
-              </div>
-            </Tooltip>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
+  NonNullable<TabsProps['items']> | ((detail: WorkloadMeta) => NonNullable<TabsProps['items']>)
 
 export function WorkloadDetailShell({
   title,
@@ -193,42 +150,16 @@ export function WorkloadDetailShell({
             key: 'overview',
             label: t('common.overview', 'Overview'),
             children: (
-              <>
-                <Card className="soha-detail-card">
-                  <Descriptions
-                    column={{ xs: 1, sm: 2, md: 3 }}
-                    size="small"
-                    items={[
-                      {
-                        key: t('common.name', 'Name'),
-                        label: t('common.name', 'Name'),
-                        children: detail.name,
-                      },
-                      {
-                        key: t('common.namespace', 'Namespace'),
-                        label: t('common.namespace', 'Namespace'),
-                        children: detail.namespace,
-                      },
-                      {
-                        key: t('common.createdAt', 'Created At'),
-                        label: t('common.createdAt', 'Created At'),
-                        children: detail.createdAt ? formatRelativeTime(detail.createdAt) : '-',
-                      },
-                    ]}
-                  />
-                  <div className="soha-workload-metadata-stack">
-                    <WorkloadMetadataSection
-                      items={detail.labels}
-                      title={t('common.labels', 'Labels')}
-                    />
-                    <WorkloadMetadataSection
-                      items={detail.annotations}
-                      title={localeCode === 'zh_CN' ? '注解' : 'Annotations'}
-                    />
-                  </div>
-                </Card>
+              <div className="soha-detail-stack">
+                <PlatformResourceOverview
+                  annotations={detail.annotations}
+                  createdAt={detail.createdAt}
+                  labels={detail.labels}
+                  name={detail.name}
+                  namespace={detail.namespace}
+                />
                 {resolvedExtraOverview}
-              </>
+              </div>
             ),
           },
           ...(yamlLast ? resolvedExtraTabPanes : []),

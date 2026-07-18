@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   deleteCronJob,
   getCronJobDetail,
-  listCronJobChildJobs,
   listCronJobEvents,
   listCronJobs,
   suspendCronJob,
@@ -23,24 +22,31 @@ const target = { scope, name: 'nightly/report' }
 describe('cron job api', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('unwraps list/detail and filters events and child Jobs', async () => {
+  it('unwraps list/detail and filters events', async () => {
     apiMocks.get
       .mockResolvedValueOnce({ data: [{ name: 'nightly/report' }] })
-      .mockResolvedValueOnce({ data: { name: 'nightly/report', namespace: 'team/a' } })
+      .mockResolvedValueOnce({
+        data: {
+          name: 'nightly/report',
+          namespace: 'team/a',
+          jobs: [{ name: 'nightly-report-123' }],
+          relatedResources: [{ kind: 'ConfigMap', name: 'job-config' }],
+        },
+      })
       .mockResolvedValueOnce({
         data: [
           { involvedKind: 'CronJob', involvedName: 'nightly/report' },
           { involvedKind: 'Job', involvedName: 'nightly/report' },
         ],
       })
-      .mockResolvedValueOnce({
-        data: [{ name: 'nightly/report-123' }, { name: 'nightly-other-123' }],
-      })
 
     await expect(listCronJobs(scope)).resolves.toEqual([{ name: 'nightly/report' }])
-    await expect(getCronJobDetail(target)).resolves.toMatchObject({ name: 'nightly/report' })
+    await expect(getCronJobDetail(target)).resolves.toMatchObject({
+      name: 'nightly/report',
+      jobs: [{ name: 'nightly-report-123' }],
+      relatedResources: [{ kind: 'ConfigMap', name: 'job-config' }],
+    })
     await expect(listCronJobEvents(target)).resolves.toHaveLength(1)
-    await expect(listCronJobChildJobs(target)).resolves.toEqual([{ name: 'nightly/report-123' }])
   })
 
   it('suspends and deletes in the record namespace', async () => {

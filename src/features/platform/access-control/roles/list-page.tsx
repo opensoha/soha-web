@@ -18,7 +18,6 @@ export function PlatformAccessControlRolesPage() {
       ),
     },
     { title: localeCode === 'zh_CN' ? '命名空间' : 'Namespace', dataIndex: 'namespace' },
-    { title: localeCode === 'zh_CN' ? '规则数' : 'Rules', dataIndex: 'rules', width: 88 },
     {
       ...tableColumnPresets.datetime,
       title: 'Age',

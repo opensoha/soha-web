@@ -185,7 +185,16 @@ export interface PersistentVolumeClaimDetail {
   annotations?: Record<string, string>
   createdAt?: string
   ageSeconds: number
+  pods?: StoragePodReference[]
+  podsTruncated?: boolean
   allowedActions?: string[]
+}
+
+export interface StoragePodReference {
+  name: string
+  namespace: string
+  phase?: string
+  nodeName?: string
 }
 
 export interface PersistentVolume {
@@ -193,6 +202,8 @@ export interface PersistentVolume {
   status: string
   storageClass?: string
   claimRef?: string
+  claimNamespace?: string
+  claimName?: string
   accessModes?: string[]
   capacity?: string
   reclaimPolicy?: string
@@ -206,6 +217,8 @@ export interface PersistentVolumeDetail {
   status: string
   storageClass?: string
   claimRef?: string
+  claimNamespace?: string
+  claimName?: string
   accessModes?: string[]
   capacity?: string
   reclaimPolicy?: string
@@ -223,7 +236,6 @@ export interface StorageClass {
   reclaimPolicy?: string
   volumeBindingMode?: string
   allowVolumeExpansion: boolean
-  parameters?: Record<string, string>
   ageSeconds: number
   allowedActions?: string[]
 }
@@ -239,6 +251,10 @@ export interface StorageClassDetail {
   annotations?: Record<string, string>
   createdAt?: string
   ageSeconds: number
+  volumes?: PersistentVolume[]
+  claims?: PersistentVolumeClaim[]
+  volumesTruncated?: boolean
+  claimsTruncated?: boolean
   allowedActions?: string[]
 }
 
@@ -265,6 +281,7 @@ export interface WorkloadCondition {
 export interface WorkloadContainer {
   name: string
   image: string
+  role?: 'init' | 'main' | 'sidecar' | string
   ready: boolean
   restartCount: number
   state?: string
@@ -301,6 +318,13 @@ export interface PodRelatedResource {
   namespace?: string
   relations?: string[]
   details?: string[]
+}
+
+export interface WorkloadRelation {
+  kind: string
+  name: string
+  namespace?: string
+  relation?: string
 }
 
 export interface MetricPoint {
@@ -449,6 +473,8 @@ export interface DeploymentDetail {
   selector?: Record<string, string>
   containers?: WorkloadContainer[]
   conditions?: WorkloadCondition[]
+  pods?: Pod[]
+  relatedResources?: WorkloadRelation[]
   allowedActions?: string[]
 }
 

@@ -5,8 +5,8 @@ import {
   hasNamespacedWorkloadScope,
   hasWorkloadCluster,
 } from '@/features/platform/workloads/shared/scope'
-import { getCronJobDetail, listCronJobChildJobs, listCronJobEvents, listCronJobs } from './api'
-import type { CronJob, CronJobChildJob, CronJobDetail } from './types'
+import { getCronJobDetail, listCronJobEvents, listCronJobs } from './api'
+import type { CronJob, CronJobDetail } from './types'
 
 function target(scope: ScopeKey, name: string) {
   return { scope, name }
@@ -33,12 +33,6 @@ export const cronJobQueries = {
     queryOptions({
       queryKey: workloadKeys.events('cronjobs', scope, name),
       queryFn: () => listCronJobEvents(target(scope, name)),
-      enabled: hasCronJobReference(scope, name),
-    }),
-  childJobs: (scope: ScopeKey, name: string) =>
-    queryOptions<CronJobChildJob[]>({
-      queryKey: workloadKeys.childJobs(scope, name),
-      queryFn: () => listCronJobChildJobs(target(scope, name)),
       enabled: hasCronJobReference(scope, name),
     }),
 }

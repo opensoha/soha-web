@@ -1,4 +1,4 @@
-import type { Pod, ResourceMetrics, ScopeKey } from '@/types'
+import type { Pod, ResourceMetrics, ScopeKey, WorkloadRelation } from '@/types'
 
 export interface DaemonSet {
   name: string
@@ -25,6 +25,8 @@ export interface DaemonSetDetail {
   updateStrategy?: string
   createdAt: string
   selector?: Record<string, string>
+  pods?: Pod[]
+  relatedResources?: WorkloadRelation[]
 }
 
 export interface DaemonSetTarget {
@@ -32,4 +34,4 @@ export interface DaemonSetTarget {
   readonly name: string
 }
 
-export type { Pod, ResourceMetrics }
+export type { Pod, ResourceMetrics, WorkloadRelation }

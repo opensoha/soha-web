@@ -42,19 +42,23 @@ describe('resource step form', () => {
     await act(async () => {
       root?.render(
         definition?.renderForm({
+          namespaceOptions: ['minio', 'platform'],
           value,
           onChange: vi.fn(),
           onSubmit: vi.fn(),
         }),
       )
     })
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
 
     expect(container.textContent).toContain('基本信息')
     expect(container.textContent).toContain('工作负载')
     expect(container.textContent).toContain('Pod 模板')
     expect(container.textContent).toContain('下一步')
-    expect((container.querySelector('input#namespace') as HTMLInputElement | null)?.value).toBe(
-      'minio',
-    )
+    expect(container.querySelector('#namespace')?.getAttribute('role')).toBe('combobox')
+    expect(container.querySelector('.ant-select-content')?.getAttribute('title')).toBe('minio')
+    expect(container.textContent).not.toContain('切换到 YAML')
   })
 })

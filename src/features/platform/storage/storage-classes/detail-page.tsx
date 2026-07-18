@@ -1,11 +1,13 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { Card, Descriptions, Spin, message } from 'antd'
+import { Button, Card, Descriptions, Spin, message } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
+import { AdminTable } from '@/components/admin-table'
 import { BooleanTag } from '@/components/status-tag'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import type { PersistentVolume, PersistentVolumeClaim } from '@/types/platform'
 import {
   StorageDetailShell,
   StorageDetailTabs,
@@ -19,6 +21,7 @@ const StorageYAMLPanel = lazy(() => import('../shared/yaml-panel'))
 
 export function StorageClassDetailPage() {
   const { localeCode } = useI18n()
+  const navigate = useNavigate()
   const { name = '' } = useParams()
   const { clusterId } = usePlatformScopeStore()
   const scope = toClusterStorageScope(clusterId)
@@ -69,7 +72,7 @@ export function StorageClassDetailPage() {
             key: 'overview',
             label: localeCode === 'zh_CN' ? '概览' : 'Overview',
             children: (
-              <>
+              <div className="soha-storage-detail-stack">
                 <StorageResourceOverview
                   name={detail.name}
                   namespace="-"
@@ -114,7 +117,112 @@ export function StorageClassDetailPage() {
                     />
                   )}
                 </Card>
-              </>
+                <Card
+                  className="soha-detail-card"
+                  title={`${localeCode === 'zh_CN' ? '关联 PV' : 'Related PVs'}${detail.volumesTruncated ? ' (first 200)' : ''}`}
+                >
+                  <AdminTable
+                    dataSource={detail.volumes ?? []}
+                    rowKey="name"
+                    pageSize={10}
+                    tableSize="small"
+                    enableColumnSelection={false}
+                    columns={[
+                      {
+                        title: 'PV',
+                        dataIndex: 'name',
+                        render: (value: string) => (
+                          <Button
+                            type="link"
+                            onClick={() =>
+                              navigate(`/storage/persistentvolumes/${encodeURIComponent(value)}`)
+                            }
+                          >
+                            {value}
+                          </Button>
+                        ),
+                      },
+                      { title: localeCode === 'zh_CN' ? '状态' : 'Status', dataIndex: 'status' },
+                      {
+                        title: localeCode === 'zh_CN' ? '容量' : 'Capacity',
+                        dataIndex: 'capacity',
+                        render: (value?: string) => value || '-',
+                      },
+                      {
+                        title: 'Claim',
+                        dataIndex: 'claimRef',
+                        render: (value: string | undefined, volume: PersistentVolume) =>
+                          volume.claimName && volume.claimNamespace ? (
+                            <Button
+                              type="link"
+                              onClick={() =>
+                                navigate(
+                                  `/storage/persistentvolumeclaims/${encodeURIComponent(volume.claimName!)}?namespace=${encodeURIComponent(volume.claimNamespace!)}`,
+                                )
+                              }
+                            >
+                              {value || `${volume.claimNamespace}/${volume.claimName}`}
+                            </Button>
+                          ) : (
+                            value || '-'
+                          ),
+                      },
+                    ]}
+                  />
+                </Card>
+                <Card
+                  className="soha-detail-card"
+                  title={`${localeCode === 'zh_CN' ? '关联 PVC' : 'Related PVCs'}${detail.claimsTruncated ? ' (first 200)' : ''}`}
+                >
+                  <AdminTable
+                    dataSource={detail.claims ?? []}
+                    rowKey={(claim) => `${claim.namespace}/${claim.name}`}
+                    pageSize={10}
+                    tableSize="small"
+                    enableColumnSelection={false}
+                    columns={[
+                      {
+                        title: 'PVC',
+                        dataIndex: 'name',
+                        render: (value: string, claim: PersistentVolumeClaim) => (
+                          <Button
+                            type="link"
+                            onClick={() =>
+                              navigate(
+                                `/storage/persistentvolumeclaims/${encodeURIComponent(value)}?namespace=${encodeURIComponent(claim.namespace)}`,
+                              )
+                            }
+                          >
+                            {value}
+                          </Button>
+                        ),
+                      },
+                      {
+                        title: localeCode === 'zh_CN' ? '命名空间' : 'Namespace',
+                        dataIndex: 'namespace',
+                      },
+                      { title: localeCode === 'zh_CN' ? '状态' : 'Status', dataIndex: 'status' },
+                      {
+                        title: 'PV',
+                        dataIndex: 'volumeName',
+                        render: (value?: string) =>
+                          value ? (
+                            <Button
+                              type="link"
+                              onClick={() =>
+                                navigate(`/storage/persistentvolumes/${encodeURIComponent(value)}`)
+                              }
+                            >
+                              {value}
+                            </Button>
+                          ) : (
+                            '-'
+                          ),
+                      },
+                    ]}
+                  />
+                </Card>
+              </div>
             ),
           },
           {

@@ -5,7 +5,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementState } from '@/components/management-list'
 import { ResourceEventsTimeline } from '@/components/resource-events-timeline'
-import { StatusTag } from '@/components/status-tag'
+import { BooleanTag, StatusTag } from '@/components/status-tag'
 import { useAIPageContext } from '@/features/copilot'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
@@ -15,7 +15,7 @@ import type { TableColumnsType, TabsProps } from 'antd'
 import { NetworkDetailShell } from '../shared/detail-shell'
 import { resolveNetworkNamespace } from '../shared/scope'
 import { serviceQueries } from './queries'
-import type { ServiceBackendPod } from './types'
+import type { ServiceBackendPod, ServiceEndpoint } from './types'
 
 const ResourceMetricsPanel = lazy(async () => {
   const module = await import('@/components/resource-metrics-panel')
@@ -40,11 +40,6 @@ export function ServiceDetailPage() {
   const detailQuery = useQuery(serviceQueries.detail(scope, serviceName))
   const service = detailQuery.data
 
-  const backendPodsOptions = serviceQueries.backendPods(scope, serviceName, service?.selector)
-  const backendPodsQuery = useQuery({
-    ...backendPodsOptions,
-    enabled: Boolean(backendPodsOptions.enabled) && activeTabKey === 'backends' && Boolean(service),
-  })
   const metricsOptions = serviceQueries.metrics(scope, serviceName)
   const metricsQuery = useQuery({
     ...metricsOptions,
@@ -100,6 +95,31 @@ export function ServiceDetailPage() {
     { title: 'Age', dataIndex: 'ageSeconds', render: (value: number) => formatAgeSeconds(value) },
   ]
 
+  const endpointColumns: TableColumnsType<ServiceEndpoint> = [
+    { title: localeCode === 'zh_CN' ? '地址' : 'Address', dataIndex: 'address' },
+    {
+      title: localeCode === 'zh_CN' ? '就绪' : 'Ready',
+      dataIndex: 'ready',
+      render: (value?: boolean) =>
+        value === undefined ? '-' : <BooleanTag value={value} trueLabel="Yes" falseLabel="No" />,
+    },
+    {
+      title: localeCode === 'zh_CN' ? '目标' : 'Target',
+      dataIndex: 'targetRef',
+      render: (value?: string) => value || '-',
+    },
+    {
+      title: localeCode === 'zh_CN' ? '节点' : 'Node',
+      dataIndex: 'nodeName',
+      render: (value?: string) => value || '-',
+    },
+    {
+      title: localeCode === 'zh_CN' ? '区域' : 'Zone',
+      dataIndex: 'zone',
+      render: (value?: string) => value || '-',
+    },
+  ]
+
   if (!clusterId || !detailNamespace) {
     return (
       <div className="soha-page">
@@ -125,27 +145,6 @@ export function ServiceDetailPage() {
   }
 
   const extraTabs: NonNullable<TabsProps['items']> = [
-    {
-      key: 'backends',
-      label: localeCode === 'zh_CN' ? '后端 Pods' : 'Backend Pods',
-      children:
-        activeTabKey === 'backends' ? (
-          <AdminTable
-            className="soha-platform-table"
-            columnSettingIconOnly
-            columnSettingPlacement="header"
-            shellClassName="soha-management-table-shell"
-            title={localeCode === 'zh_CN' ? '后端 Pods' : 'Backend Pods'}
-            columns={backendPodColumns}
-            dataSource={backendPodsQuery.data ?? []}
-            rowKey={(record) => `${record.namespace}/${record.name}`}
-            loading={backendPodsQuery.isLoading}
-            pageSize={10}
-            tableSize="small"
-            scroll={{ x: 'max-content' }}
-          />
-        ) : null,
-    },
     {
       key: 'metrics',
       label: localeCode === 'zh_CN' ? '指标' : 'Metrics',
@@ -197,6 +196,39 @@ export function ServiceDetailPage() {
         { key: 'Cluster IP', value: service.clusterIp || '-' },
         { key: 'Ports', value: service.ports?.join(', ') || '-' },
       ]}
+      overviewContent={
+        <>
+          <Card
+            className="soha-detail-card"
+            title={localeCode === 'zh_CN' ? 'Endpoints' : 'Endpoints'}
+          >
+            <AdminTable
+              shellClassName="soha-management-table-shell"
+              columns={endpointColumns}
+              dataSource={service.endpoints ?? []}
+              rowKey={(record) => `${record.address}/${record.targetRef ?? ''}`}
+              pageSize={10}
+              tableSize="small"
+              enableColumnSelection={false}
+            />
+          </Card>
+          <Card
+            className="soha-detail-card"
+            title={localeCode === 'zh_CN' ? '关联 Pods' : 'Related Pods'}
+          >
+            <AdminTable
+              shellClassName="soha-management-table-shell"
+              columns={backendPodColumns}
+              dataSource={service.backendPods ?? []}
+              rowKey={(record) => `${record.namespace}/${record.name}`}
+              pageSize={10}
+              tableSize="small"
+              scroll={{ x: 'max-content' }}
+              enableColumnSelection={false}
+            />
+          </Card>
+        </>
+      }
       target={{ scope, name: serviceName }}
     />
   )

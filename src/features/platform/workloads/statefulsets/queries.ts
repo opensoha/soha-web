@@ -1,5 +1,5 @@
 import { queryOptions } from '@tanstack/react-query'
-import type { Pod, ScopeKey } from '@/types'
+import type { ScopeKey } from '@/types'
 import { workloadKeys } from '@/features/platform/workloads/shared/keys'
 import {
   hasNamespacedWorkloadScope,
@@ -9,7 +9,6 @@ import {
   getStatefulSetDetail,
   getStatefulSetMetrics,
   listStatefulSetEvents,
-  listStatefulSetPods,
   listStatefulSets,
 } from './api'
 import type { ResourceMetrics, StatefulSet, StatefulSetDetail } from './types'
@@ -46,11 +45,5 @@ export const statefulSetQueries = {
       queryKey: workloadKeys.events('statefulsets', scope, name),
       queryFn: () => listStatefulSetEvents(target(scope, name)),
       enabled: hasStatefulSetReference(scope, name),
-    }),
-  pods: (scope: ScopeKey, name: string, selector: Record<string, string>) =>
-    queryOptions<Pod[]>({
-      queryKey: workloadKeys.relatedPods('statefulsets', scope, name, selector),
-      queryFn: () => listStatefulSetPods(target(scope, name), selector),
-      enabled: hasStatefulSetReference(scope, name) && Object.keys(selector).length > 0,
     }),
 }

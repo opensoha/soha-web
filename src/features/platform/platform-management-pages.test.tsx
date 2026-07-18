@@ -315,14 +315,13 @@ describe('platform RBAC list pages', () => {
     expect(headerButtons).toEqual(['新增', '选择创建方式', '切换表格密度', '刷新'])
   })
 
-  it('shows subject chips with overflow summary', async () => {
+  it('keeps subject details out of role binding lists', async () => {
     setResponses({
       '/clusters/cluster-a/access-control/rolebindings?namespace=team-a': [
         {
           name: 'viewer-binding',
           namespace: 'team-a',
           roleRef: 'Role/viewer',
-          subjects: ['User:alice', 'Group:platform', 'ServiceAccount:team-a/viewer'],
           ageSeconds: 60,
           allowedActions: ['view'],
         },
@@ -334,9 +333,8 @@ describe('platform RBAC list pages', () => {
       '/platform-access-control/rolebindings',
     )
 
-    expect(container.textContent).toContain('User alice')
-    expect(container.textContent).toContain('Group platform')
-    expect(container.textContent).toContain('+1')
+    expect(container.textContent).toContain('Role/viewer')
+    expect(container.textContent).not.toContain('User alice')
   })
 
   it('hides destructive actions when delete is not allowed', async () => {

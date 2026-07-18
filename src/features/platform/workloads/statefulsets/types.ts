@@ -1,4 +1,4 @@
-import type { Pod, ResourceMetrics, ScopeKey } from '@/types'
+import type { Pod, ResourceMetrics, ScopeKey, WorkloadRelation } from '@/types'
 
 export interface StatefulSet {
   name: string
@@ -25,6 +25,8 @@ export interface StatefulSetDetail {
   updateRevision?: string
   createdAt: string
   selector?: Record<string, string>
+  pods?: Pod[]
+  relatedResources?: WorkloadRelation[]
 }
 
 export interface StatefulSetTarget {
@@ -36,4 +38,4 @@ export interface ScaleStatefulSetVariables extends StatefulSetTarget {
   readonly replicas: number
 }
 
-export type { Pod, ResourceMetrics }
+export type { Pod, ResourceMetrics, WorkloadRelation }

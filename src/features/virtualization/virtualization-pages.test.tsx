@@ -530,7 +530,7 @@ async function clickTabByText(container: ParentNode, text: string) {
     throw new Error(`tab not found by text: ${text}`)
   }
   await act(async () => {
-    tab.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    tab.click()
     await new Promise((resolve) => setTimeout(resolve, 0))
   })
 }

@@ -1,5 +1,8 @@
 import type { ScopeKey } from '@/types'
+import { api } from '@/services/api-client'
+import type { ApiResponse } from '@/types'
 import { listNetworkResources } from '../shared/api'
+import { buildNetworkDetailPath } from '../shared/paths'
 import type { NetworkCoreKind } from './types'
 
 export function listNetworkCoreResources<T>(kind: NetworkCoreKind, scope: ScopeKey) {
@@ -11,6 +14,6 @@ export async function getNetworkCoreResource<T extends { name: string }>(
   scope: ScopeKey,
   name: string,
 ) {
-  const items = await listNetworkCoreResources<T>(kind, scope)
-  return items.find((item) => item.name === name.trim())
+  const response = await api.get<ApiResponse<T>>(buildNetworkDetailPath(kind, scope, name))
+  return response.data
 }

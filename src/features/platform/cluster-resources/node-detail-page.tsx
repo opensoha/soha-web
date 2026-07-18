@@ -1,17 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import {
-  App,
-  Button,
-  Card,
-  Descriptions,
-  Form,
-  Input,
-  Space,
-  Spin,
-  Tabs,
-  Tag,
-  Typography,
-} from 'antd'
+import { App, Button, Card, Form, Input, Space, Spin, Tabs, Tag, Typography } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import type { TableColumnsType } from 'antd'
@@ -19,6 +7,7 @@ import { AdminTable } from '@/components/admin-table'
 import { ManagementDetailHeader, ManagementState } from '@/components/management-list'
 import { PlatformClusterScopeHint } from '@/components/platform-cluster-scope-hint'
 import { StatusTag } from '@/components/status-tag'
+import { PlatformResourceOverview } from '@/features/platform/shared/resource-overview'
 import {
   NodeResourcePanel,
   parseStringMap,
@@ -203,6 +192,8 @@ export function NodeDetailPage() {
       },
     )
 
+  const namespaceCount = new Set((nodeDetail.pods ?? []).map((pod) => pod.namespace)).size
+
   return (
     <div className="soha-page">
       <ManagementDetailHeader
@@ -233,81 +224,68 @@ export function NodeDetailPage() {
             key: 'overview',
             label: t('common.overview', 'Overview'),
             children: (
-              <>
-                <div className="grid gap-4 xl:grid-cols-2">
-                  <Card
-                    className="soha-detail-card"
-                    title={localeCode === 'zh_CN' ? '基础信息' : 'Summary'}
-                  >
-                    <Descriptions
-                      items={[
-                        {
-                          key: 'name',
-                          label: t('common.name', 'Name'),
-                          children: nodeDetail.name,
-                        },
-                        {
-                          key: 'cluster',
-                          label: t('common.cluster', 'Cluster'),
-                          children: clusterId,
-                        },
-                        {
-                          key: 'status',
-                          label: t('common.status', 'Status'),
-                          children: <StatusTag value={nodeDetail.status || 'unknown'} />,
-                        },
-                        {
-                          key: 'version',
-                          label: localeCode === 'zh_CN' ? '版本' : 'Version',
-                          children: nodeDetail.version || '-',
-                        },
-                        { key: 'ip', label: 'IP', children: nodeDetail.internalIp || '-' },
-                        {
-                          key: 'pods',
-                          label: localeCode === 'zh_CN' ? 'Pod 数量' : 'Pods',
-                          children: nodeDetail.podCount,
-                        },
-                        {
-                          key: 'age',
-                          label: localeCode === 'zh_CN' ? '存活时长' : 'Age',
-                          children: formatAgeSeconds(nodeDetail.ageSeconds),
-                        },
-                      ]}
-                    />
-                    <div className="soha-detail-meta">
-                      <Text strong>{localeCode === 'zh_CN' ? '节点角色:' : 'Roles:'}</Text>
-                      {nodeDetail.roles?.length ? (
-                        <div className="soha-tag-list">
+              <div className="soha-detail-stack">
+                <PlatformResourceOverview
+                  name={nodeDetail.name}
+                  ageSeconds={nodeDetail.ageSeconds}
+                  labels={nodeDetail.labels}
+                  annotations={nodeDetail.annotations}
+                  facts={[
+                    {
+                      key: 'status',
+                      label: t('common.status', 'Status'),
+                      value: <StatusTag value={nodeDetail.status || 'unknown'} />,
+                    },
+                    {
+                      key: 'version',
+                      label: localeCode === 'zh_CN' ? '版本' : 'Version',
+                      value: nodeDetail.version || '-',
+                    },
+                    { key: 'ip', label: 'IP', value: nodeDetail.internalIp || '-' },
+                    {
+                      key: 'pods',
+                      label: localeCode === 'zh_CN' ? 'Pod 数量' : 'Pods',
+                      value: nodeDetail.podCount,
+                    },
+                    {
+                      key: 'namespaces',
+                      label: localeCode === 'zh_CN' ? '承载命名空间' : 'Namespaces',
+                      value: namespaceCount,
+                    },
+                    {
+                      key: 'roles',
+                      label: localeCode === 'zh_CN' ? '节点角色' : 'Roles',
+                      value: nodeDetail.roles?.length ? (
+                        <Space size={[4, 4]} wrap>
                           {nodeDetail.roles.map((role) => (
                             <Tag key={role}>{role}</Tag>
                           ))}
-                        </div>
+                        </Space>
                       ) : (
-                        <Text type="secondary" className="text-xs">
-                          {localeCode === 'zh_CN'
-                            ? '未声明角色标签'
-                            : 'No explicit node role labels'}
-                        </Text>
-                      )}
-                    </div>
+                        '-'
+                      ),
+                    },
+                  ]}
+                />
+
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <Card
+                    className="soha-detail-card"
+                    title={localeCode === 'zh_CN' ? '资源分配' : 'Resource Allocation'}
+                  >
+                    <NodeResourcePanel node={nodeDetail} />
+                    {nodeDetail.metricsMessage ? (
+                      <div className="soha-detail-meta">
+                        <Text type="secondary">{nodeDetail.metricsMessage}</Text>
+                      </div>
+                    ) : null}
+                  </Card>
+
+                  <Card
+                    className="soha-detail-card"
+                    title={localeCode === 'zh_CN' ? '污点' : 'Taints'}
+                  >
                     <div className="soha-detail-meta">
-                      <Text strong>{t('common.labels', 'Labels')}:</Text>
-                      {Object.keys(nodeDetail.labels || {}).length ? (
-                        <div className="soha-tag-list">
-                          {Object.entries(nodeDetail.labels || {}).map(([key, value]) => (
-                            <Tag key={key}>
-                              {key}={value}
-                            </Tag>
-                          ))}
-                        </div>
-                      ) : (
-                        <Text type="secondary" className="text-xs">
-                          {localeCode === 'zh_CN' ? '未配置标签' : 'No labels configured'}
-                        </Text>
-                      )}
-                    </div>
-                    <div className="soha-detail-meta">
-                      <Text strong>{localeCode === 'zh_CN' ? '污点:' : 'Taints:'}</Text>
                       {nodeDetail.taints?.length ? (
                         <div className="soha-tag-list">
                           {nodeDetail.taints.map((item) => (
@@ -325,26 +303,6 @@ export function NodeDetailPage() {
                         </Text>
                       )}
                     </div>
-                    {nodeDetail.annotations && Object.keys(nodeDetail.annotations).length > 0 ? (
-                      <div className="soha-detail-meta">
-                        <Text strong>{localeCode === 'zh_CN' ? '注解:' : 'Annotations:'}</Text>
-                        <pre className="soha-json-block">
-                          {JSON.stringify(nodeDetail.annotations, null, 2)}
-                        </pre>
-                      </div>
-                    ) : null}
-                  </Card>
-
-                  <Card
-                    className="soha-detail-card"
-                    title={localeCode === 'zh_CN' ? '资源分配' : 'Resource Allocation'}
-                  >
-                    <NodeResourcePanel node={nodeDetail} />
-                    {nodeDetail.metricsMessage ? (
-                      <div className="soha-detail-meta">
-                        <Text type="secondary">{nodeDetail.metricsMessage}</Text>
-                      </div>
-                    ) : null}
                   </Card>
                 </div>
 
@@ -412,7 +370,7 @@ export function NodeDetailPage() {
                     enableColumnSelection={false}
                   />
                 </Card>
-              </>
+              </div>
             ),
           },
           {

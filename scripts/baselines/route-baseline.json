@@ -43,14 +43,14 @@
     ]
   },
   "summary": {
-    "runtimePaths": 214,
-    "metadataPaths": 214,
-    "overlappingPaths": 214,
+    "runtimePaths": 218,
+    "metadataPaths": 218,
+    "overlappingPaths": 218,
     "runtimeOnlyPaths": 0,
     "metadataOnlyPaths": 0,
     "inlineJsxPaths": 0,
-    "lazyRouteLoads": 184,
-    "lazySourceModules": 182
+    "lazyRouteLoads": 188,
+    "lazySourceModules": 186
   },
   "paths": {
     "runtime": [
@@ -179,13 +179,17 @@
       "/network/endpointslices/:name",
       "/network/gateway-api",
       "/network/gateway-api/backendtlspolicies",
+      "/network/gateway-api/backendtlspolicies/:name",
       "/network/gateway-api/gatewayclasses",
       "/network/gateway-api/gatewayclasses/:name",
       "/network/gateway-api/gateways",
       "/network/gateway-api/gateways/:name",
       "/network/gateway-api/grpcroutes",
+      "/network/gateway-api/grpcroutes/:name",
       "/network/gateway-api/httproutes",
+      "/network/gateway-api/httproutes/:name",
       "/network/gateway-api/referencegrants",
+      "/network/gateway-api/referencegrants/:name",
       "/network/gateways",
       "/network/ingressclasses",
       "/network/ingressclasses/:name",
@@ -395,13 +399,17 @@
       "/network/endpointslices/:name",
       "/network/gateway-api",
       "/network/gateway-api/backendtlspolicies",
+      "/network/gateway-api/backendtlspolicies/:name",
       "/network/gateway-api/gatewayclasses",
       "/network/gateway-api/gatewayclasses/:name",
       "/network/gateway-api/gateways",
       "/network/gateway-api/gateways/:name",
       "/network/gateway-api/grpcroutes",
+      "/network/gateway-api/grpcroutes/:name",
       "/network/gateway-api/httproutes",
+      "/network/gateway-api/httproutes/:name",
       "/network/gateway-api/referencegrants",
+      "/network/gateway-api/referencegrants/:name",
       "/network/gateways",
       "/network/ingressclasses",
       "/network/ingressclasses/:name",
@@ -611,13 +619,17 @@
       "/network/endpointslices/:name",
       "/network/gateway-api",
       "/network/gateway-api/backendtlspolicies",
+      "/network/gateway-api/backendtlspolicies/:name",
       "/network/gateway-api/gatewayclasses",
       "/network/gateway-api/gatewayclasses/:name",
       "/network/gateway-api/gateways",
       "/network/gateway-api/gateways/:name",
       "/network/gateway-api/grpcroutes",
+      "/network/gateway-api/grpcroutes/:name",
       "/network/gateway-api/httproutes",
+      "/network/gateway-api/httproutes/:name",
       "/network/gateway-api/referencegrants",
+      "/network/gateway-api/referencegrants/:name",
       "/network/gateways",
       "/network/ingressclasses",
       "/network/ingressclasses/:name",
@@ -876,6 +888,11 @@
         "exportName": "ApplicationWorkloadDetailPage",
         "moduleExport": "ApplicationWorkloadDetailPage",
         "source": "@/features/delivery/runtime/workload-detail-page"
+      },
+      {
+        "exportName": "BackendTLSPolicyDetailPage",
+        "moduleExport": "BackendTLSPolicyDetailPage",
+        "source": "@/features/platform/network/gateway-api/backend-tls-policy-detail-page"
       },
       {
         "exportName": "BrandingSettingsPage",
@@ -1148,6 +1165,11 @@
         "source": "@/features/platform/network/gateway-api/gateway-detail-page"
       },
       {
+        "exportName": "GRPCRouteDetailPage",
+        "moduleExport": "GRPCRouteDetailPage",
+        "source": "@/features/platform/network/gateway-api/grpcroute-detail-page"
+      },
+      {
         "exportName": "HealingPage",
         "moduleExport": "HealingPage",
         "source": "@/features/observability/healing/page"
@@ -1166,6 +1188,11 @@
         "exportName": "HelmReleasesPage",
         "moduleExport": "HelmReleasesPage",
         "source": "@/features/platform/extensions/helm/releases/list-page"
+      },
+      {
+        "exportName": "HTTPRouteDetailPage",
+        "moduleExport": "HTTPRouteDetailPage",
+        "source": "@/features/platform/network/gateway-api/httproute-detail-page"
       },
       {
         "exportName": "IdentityApplicationsPage",
@@ -1438,6 +1465,11 @@
         "source": "@/features/copilot/provider-fleet/page"
       },
       {
+        "exportName": "ReferenceGrantDetailPage",
+        "moduleExport": "ReferenceGrantDetailPage",
+        "source": "@/features/platform/network/gateway-api/reference-grant-detail-page"
+      },
+      {
         "exportName": "RegistriesPage",
         "moduleExport": "RegistriesPage",
         "source": "@/features/delivery/registries/page"
@@ -1478,9 +1510,9 @@
         "source": "@/features/platform/workloads/replicationcontrollers/detail-page"
       },
       {
-        "exportName": "ResourceCreationPage",
-        "moduleExport": "ResourceCreationPage",
-        "source": "@/features/platform/resource-creation/page"
+        "exportName": "ResourceCreationModalRedirect",
+        "moduleExport": "ResourceCreationModalRedirect",
+        "source": "@/features/platform/resource-creation/modal-redirect"
       },
       {
         "exportName": "SecretDetailPage",
@@ -1749,12 +1781,16 @@
       "@/features/platform/extensions/helm/releases/detail-page",
       "@/features/platform/extensions/helm/releases/list-page",
       "@/features/platform/network/gateway-api/backend-tls-policies-page",
+      "@/features/platform/network/gateway-api/backend-tls-policy-detail-page",
       "@/features/platform/network/gateway-api/gateway-detail-page",
       "@/features/platform/network/gateway-api/gatewayclass-detail-page",
       "@/features/platform/network/gateway-api/gatewayclasses-list-page",
       "@/features/platform/network/gateway-api/gateways-list-page",
       "@/features/platform/network/gateway-api/grpc-routes-page",
+      "@/features/platform/network/gateway-api/grpcroute-detail-page",
+      "@/features/platform/network/gateway-api/httproute-detail-page",
       "@/features/platform/network/gateway-api/httproutes-page",
+      "@/features/platform/network/gateway-api/reference-grant-detail-page",
       "@/features/platform/network/gateway-api/reference-grants-page",
       "@/features/platform/network/ingresses/detail-page",
       "@/features/platform/network/ingresses/list-page",
@@ -1769,7 +1805,7 @@
       "@/features/platform/network/services/list-page",
       "@/features/platform/network/topology/page",
       "@/features/platform/overview-page",
-      "@/features/platform/resource-creation/page",
+      "@/features/platform/resource-creation/modal-redirect",
       "@/features/platform/storage/persistent-volume-claims/detail-page",
       "@/features/platform/storage/persistent-volume-claims/list-page",
       "@/features/platform/storage/persistent-volumes/detail-page",
@@ -1978,6 +2014,9 @@
       "@/features/platform/network/gateway-api/backend-tls-policies-page": [
         "NetworkBackendTLSPoliciesPage"
       ],
+      "@/features/platform/network/gateway-api/backend-tls-policy-detail-page": [
+        "BackendTLSPolicyDetailPage"
+      ],
       "@/features/platform/network/gateway-api/gateway-detail-page": ["GatewayDetailPage"],
       "@/features/platform/network/gateway-api/gatewayclass-detail-page": [
         "GatewayClassDetailPage"
@@ -1987,7 +2026,12 @@
       ],
       "@/features/platform/network/gateway-api/gateways-list-page": ["NetworkGatewaysPage"],
       "@/features/platform/network/gateway-api/grpc-routes-page": ["NetworkGRPCRoutesPage"],
+      "@/features/platform/network/gateway-api/grpcroute-detail-page": ["GRPCRouteDetailPage"],
+      "@/features/platform/network/gateway-api/httproute-detail-page": ["HTTPRouteDetailPage"],
       "@/features/platform/network/gateway-api/httproutes-page": ["NetworkHTTPRoutesPage"],
+      "@/features/platform/network/gateway-api/reference-grant-detail-page": [
+        "ReferenceGrantDetailPage"
+      ],
       "@/features/platform/network/gateway-api/reference-grants-page": [
         "NetworkReferenceGrantsPage"
       ],
@@ -2012,7 +2056,7 @@
       "@/features/platform/network/services/list-page": ["NetworkServicesPage"],
       "@/features/platform/network/topology/page": ["NetworkTopologyPage"],
       "@/features/platform/overview-page": ["OverviewPage"],
-      "@/features/platform/resource-creation/page": ["ResourceCreationPage"],
+      "@/features/platform/resource-creation/modal-redirect": ["ResourceCreationModalRedirect"],
       "@/features/platform/storage/persistent-volume-claims/detail-page": ["StoragePvcDetailPage"],
       "@/features/platform/storage/persistent-volume-claims/list-page": ["StoragePvcPage"],
       "@/features/platform/storage/persistent-volumes/detail-page": ["StoragePvDetailPage"],
@@ -2060,5 +2104,5 @@
       "@/features/virtualization/virtual-machines/list-page": ["VirtualizationVmsPage"]
     }
   },
-  "generatedAt": "2026-07-17T08:38:42.259Z"
+  "generatedAt": "2026-07-18T08:09:18.925Z"
 }

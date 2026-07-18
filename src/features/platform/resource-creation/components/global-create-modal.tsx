@@ -17,13 +17,12 @@ interface GlobalResourceCreateModalProps {
 
 export function GlobalResourceCreateModal({ onClose, open }: GlobalResourceCreateModalProps) {
   const { localeCode } = useI18n()
-  const { clusterId, namespace } = usePlatformScopeStore()
+  const { clusterId } = usePlatformScopeStore()
 
   return (
     <CreateShell
       context={{
         clusterId: clusterId || '',
-        defaultNamespace: namespace || undefined,
         source: 'global_yaml',
       }}
       defaultTemplate={GLOBAL_TEMPLATE}

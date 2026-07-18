@@ -17,3 +17,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.soha-storage-detail-stack {
+  display: grid;
+  gap: 12px;
+}

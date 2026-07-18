@@ -29,11 +29,16 @@ export const configurationQueries = {
       queryFn: () => listConfigurationResources<T>(kind, scope),
       enabled: hasConfigurationCluster(scope),
     }),
-  detail: <T>(kind: ConfigurationKind, scope: ScopeKey, name: string) =>
+  detail: <T>(
+    kind: ConfigurationKind,
+    scope: ScopeKey,
+    name: string,
+    scopeMode: ConfigurationScopeMode = 'namespace',
+  ) =>
     queryOptions<T>({
       queryKey: configurationKeys.detail(kind, scope, name),
       queryFn: () => getConfigurationDetail<T>(kind, target(scope, name)),
-      enabled: hasReference(scope, name, 'namespace'),
+      enabled: hasReference(scope, name, scopeMode),
     }),
   references: (kind: ConfigurationKind, scope: ScopeKey, name: string) =>
     queryOptions({

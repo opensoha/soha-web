@@ -34,30 +34,6 @@
   max-width: 260px;
 }
 
-.soha-rbac-kind-summary {
-  display: inline-block;
-  max-width: 100%;
-}
-
-.soha-rbac-subject-list.is-table-preview {
-  flex-wrap: nowrap;
-  max-width: 100%;
-  overflow: hidden;
-}
-
-.soha-rbac-subject-list.is-table-preview .soha-rbac-subject-chip.ant-tag {
-  flex: 0 1 auto;
-  max-width: 100%;
-  overflow: hidden;
-}
-
-.soha-rbac-subject-list.is-table-preview .soha-rbac-subject-chip .ant-typography,
-.soha-rbac-subject-list.is-table-preview .soha-rbac-subject-chip a {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .soha-rbac-subject-popover {
   display: flex;
   flex-wrap: wrap;

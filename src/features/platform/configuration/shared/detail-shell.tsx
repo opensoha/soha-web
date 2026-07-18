@@ -1,12 +1,12 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Card, Descriptions, Spin, Table, Tabs, Tag, Tooltip, Typography, message } from 'antd'
+import { Card, Spin, Table, Tabs, Tag, Typography, message } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementState } from '@/components/management-list'
+import { PlatformResourceOverview } from '@/features/platform/shared/resource-overview'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
-import { formatAgeSeconds, formatRelativeTime } from '@/utils/time'
 import type { TabsProps, TableColumnsType } from 'antd'
 import { configurationMutations } from './mutations'
 import { configurationQueries } from './queries'
@@ -26,46 +26,6 @@ const K8sYamlEditor = lazy(async () => {
   return { default: module.K8sYamlEditor }
 })
 
-function ResourceMetadataSection({
-  items,
-  title,
-}: {
-  items?: Record<string, string>
-  title: ReactNode
-}) {
-  const entries = Object.entries(items ?? {}).filter(([key]) => key.trim())
-  if (entries.length === 0) return null
-
-  return (
-    <div className="soha-workload-metadata-section">
-      <Text strong className="soha-workload-metadata-title">
-        {title}
-      </Text>
-      <div className="soha-workload-kv-grid">
-        {entries.map(([key, value]) => {
-          const displayValue = value || '-'
-          return (
-            <Tooltip
-              key={key}
-              title={
-                <div className="soha-workload-kv-tooltip">
-                  <div>{key}</div>
-                  <div>{displayValue}</div>
-                </div>
-              }
-            >
-              <div className="soha-workload-kv-item" title={`${key}: ${displayValue}`}>
-                <span className="soha-workload-kv-key">{`${key}:`}</span>
-                <span className="soha-workload-kv-value">{displayValue}</span>
-              </div>
-            </Tooltip>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
 export function ConfigurationResourceOverview({
   detail,
   extra,
@@ -73,53 +33,16 @@ export function ConfigurationResourceOverview({
   detail: ConfigurationDetailBase
   extra?: Array<{ key: string; value: ReactNode }>
 }) {
-  const { t, localeCode } = useI18n()
-  const hasLabels = Boolean(detail.labels && Object.keys(detail.labels).length > 0)
-  const hasAnnotations = Boolean(detail.annotations && Object.keys(detail.annotations).length > 0)
   return (
-    <Card className="soha-detail-card">
-      <Descriptions
-        column={{ xs: 1, sm: 2, md: 3 }}
-        size="small"
-        items={[
-          {
-            key: t('common.name', 'Name'),
-            label: t('common.name', 'Name'),
-            children: detail.name,
-          },
-          ...(detail.namespace
-            ? [
-                {
-                  key: t('common.namespace', 'Namespace'),
-                  label: t('common.namespace', 'Namespace'),
-                  children: detail.namespace,
-                },
-              ]
-            : []),
-          {
-            key: t('common.createdAt', 'Created At'),
-            label: t('common.createdAt', 'Created At'),
-            children: detail.createdAt
-              ? formatRelativeTime(detail.createdAt)
-              : formatAgeSeconds(detail.ageSeconds),
-          },
-          ...(extra ?? []).map((item) => ({
-            key: item.key,
-            label: item.key,
-            children: item.value,
-          })),
-        ]}
-      />
-      {hasLabels || hasAnnotations ? (
-        <div className="soha-workload-metadata-stack">
-          <ResourceMetadataSection items={detail.labels} title={t('common.labels', 'Labels')} />
-          <ResourceMetadataSection
-            items={detail.annotations}
-            title={localeCode === 'zh_CN' ? '注解' : 'Annotations'}
-          />
-        </div>
-      ) : null}
-    </Card>
+    <PlatformResourceOverview
+      ageSeconds={detail.ageSeconds}
+      annotations={detail.annotations}
+      createdAt={detail.createdAt}
+      facts={(extra ?? []).map((item) => ({ ...item, label: item.key }))}
+      labels={detail.labels}
+      name={detail.name}
+      namespace={detail.namespace || undefined}
+    />
   )
 }
 
@@ -254,6 +177,7 @@ export function ConfigurationDetailShell<TDetail extends ConfigurationDetailBase
   detail,
   kind,
   overviewExtra,
+  overviewContent,
   scopeMode = 'namespace',
   showReferences = true,
   target,
@@ -263,6 +187,7 @@ export function ConfigurationDetailShell<TDetail extends ConfigurationDetailBase
   kind: ConfigurationKind
   label: string
   overviewExtra?: Array<{ key: string; value: ReactNode }>
+  overviewContent?: ReactNode
   scopeMode?: ConfigurationScopeMode
   showReferences?: boolean
   target: ConfigurationTarget
@@ -273,7 +198,12 @@ export function ConfigurationDetailShell<TDetail extends ConfigurationDetailBase
     {
       key: 'overview',
       label: t('common.overview', 'Overview'),
-      children: <ConfigurationResourceOverview detail={detail} extra={overviewExtra} />,
+      children: (
+        <div className="soha-detail-stack">
+          <ConfigurationResourceOverview detail={detail} extra={overviewExtra} />
+          {overviewContent}
+        </div>
+      ),
     },
     ...(dataTab === undefined
       ? []
@@ -321,12 +251,13 @@ export function ConfigurationDetailShell<TDetail extends ConfigurationDetailBase
   )
 }
 
-export function ConfigurationListDetailPage<TDetail extends ConfigurationDetailBase>({
+export function ConfigurationQueryDetailPage<TDetail extends ConfigurationDetailBase>({
   kind,
   label,
   name,
   namespace,
   overviewExtra,
+  renderOverview,
   scopeMode = 'namespace',
 }: {
   kind: ConfigurationKind
@@ -334,17 +265,14 @@ export function ConfigurationListDetailPage<TDetail extends ConfigurationDetailB
   name: string
   namespace?: string
   overviewExtra?: (detail: TDetail) => Array<{ key: string; value: ReactNode }>
+  renderOverview?: (detail: TDetail) => ReactNode
   scopeMode?: ConfigurationScopeMode
 }) {
   const { localeCode } = useI18n()
   const { clusterId } = usePlatformScopeStore()
   const scope = toScopeKey(clusterId, scopeMode === 'namespace' ? namespace : null)
-  const listQuery = useQuery(configurationQueries.list<TDetail>(kind, scope))
-  const detail = listQuery.data?.find(
-    (record) =>
-      record.name === name &&
-      (scopeMode === 'cluster' || !namespace || record.namespace === namespace),
-  )
+  const detailQuery = useQuery(configurationQueries.detail<TDetail>(kind, scope, name, scopeMode))
+  const detail = detailQuery.data
   const scopeMissing = !clusterId || (scopeMode === 'namespace' && !namespace)
 
   if (scopeMissing) {
@@ -367,7 +295,7 @@ export function ConfigurationListDetailPage<TDetail extends ConfigurationDetailB
     )
   }
 
-  if (listQuery.isLoading) {
+  if (detailQuery.isLoading) {
     return (
       <ManagementState
         compact
@@ -376,14 +304,14 @@ export function ConfigurationListDetailPage<TDetail extends ConfigurationDetailB
       />
     )
   }
-  if (listQuery.isError) {
+  if (detailQuery.isError) {
     return (
       <div className="soha-page">
         <ManagementState
           kind="error"
           description={
-            listQuery.error instanceof Error
-              ? listQuery.error.message
+            detailQuery.error instanceof Error
+              ? detailQuery.error.message
               : localeCode === 'zh_CN'
                 ? '加载失败'
                 : 'Load failed'
@@ -413,6 +341,7 @@ export function ConfigurationListDetailPage<TDetail extends ConfigurationDetailB
       kind={kind}
       label={label}
       overviewExtra={overviewExtra?.(detail)}
+      overviewContent={renderOverview?.(detail)}
       scopeMode={scopeMode}
       showReferences={false}
       target={target}

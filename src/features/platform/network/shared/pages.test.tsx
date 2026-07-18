@@ -262,33 +262,31 @@ describe('network core pages', () => {
   })
 
   it('enables Service backend pods, metrics, events, and YAML only on their tabs', async () => {
-    const listPath = '/clusters/cluster-a/network/services?namespace=team-a'
-    const podsPath = '/clusters/cluster-a/workloads/pods?namespace=team-a'
+    const detailPath = '/clusters/cluster-a/network/services/api/detail?namespace=team-a'
     const metricsPath = '/clusters/cluster-a/network/services/api/metrics?namespace=team-a'
     const eventsPath = '/clusters/cluster-a/events?namespace=team-a&limit=100'
     const yamlPath = '/clusters/cluster-a/network/services/api/yaml?namespace=team-a'
-    testState.responses[listPath] = [
-      {
-        name: 'api',
-        namespace: 'team-a',
-        type: 'ClusterIP',
-        clusterIp: '10.43.0.20',
-        ports: ['80/TCP'],
-        selector: { app: 'api' },
-        ageSeconds: 60,
-      },
-    ]
-    testState.responses[podsPath] = [
-      {
-        name: 'api-1',
-        namespace: 'team-a',
-        phase: 'Running',
-        readyContainers: '1/1',
-        restarts: 0,
-        labels: { app: 'api' },
-        ageSeconds: 30,
-      },
-    ]
+    testState.responses[detailPath] = {
+      name: 'api',
+      namespace: 'team-a',
+      type: 'ClusterIP',
+      clusterIp: '10.43.0.20',
+      ports: ['80/TCP'],
+      selector: { app: 'api' },
+      ageSeconds: 60,
+      backendPods: [
+        {
+          name: 'api-1',
+          namespace: 'team-a',
+          phase: 'Running',
+          readyContainers: '1/1',
+          restarts: 0,
+          labels: { app: 'api' },
+          ageSeconds: 30,
+        },
+      ],
+      endpoints: [],
+    }
     testState.responses[metricsPath] = { rangeMinutes: 60 }
     testState.responses[eventsPath] = []
     testState.responses[yamlPath] = {
@@ -304,9 +302,8 @@ describe('network core pages', () => {
     )
     const requested = () => apiMocks.get.mock.calls.map(([path]) => path as string)
 
-    expect(requested()).toEqual([listPath])
-    await clickTab(container, '后端 Pods')
-    expect(requested()).toContain(podsPath)
+    expect(requested()).toEqual([detailPath])
+    expect(container.textContent).toContain('api-1')
     expect(requested()).not.toContain(metricsPath)
     expect(requested()).not.toContain(eventsPath)
     expect(requested()).not.toContain(yamlPath)
@@ -324,19 +321,26 @@ describe('network core pages', () => {
   })
 
   it('keeps Ingress YAML request behind the YAML tab', async () => {
-    const listPath = '/clusters/cluster-a/network/ingresses?namespace=team-a'
+    const detailPath = '/clusters/cluster-a/network/ingresses/web/detail?namespace=team-a'
     const yamlPath = '/clusters/cluster-a/network/ingresses/web/yaml?namespace=team-a'
-    testState.responses[listPath] = [
-      {
-        name: 'web',
-        namespace: 'team-a',
-        className: 'nginx',
-        hosts: ['example.test'],
-        address: '10.0.0.1',
-        backendServices: ['web'],
-        ageSeconds: 60,
-      },
-    ]
+    testState.responses[detailPath] = {
+      name: 'web',
+      namespace: 'team-a',
+      className: 'nginx',
+      routes: [
+        {
+          host: 'example.test',
+          path: '/',
+          pathType: 'Prefix',
+          tls: false,
+          serviceName: 'web',
+          servicePort: '80',
+        },
+      ],
+      address: '10.0.0.1',
+      backendServices: ['web'],
+      ageSeconds: 60,
+    }
     testState.responses[yamlPath] = {
       kind: 'Ingress',
       name: 'web',
@@ -350,7 +354,7 @@ describe('network core pages', () => {
     )
     const requested = () => apiMocks.get.mock.calls.map(([path]) => path as string)
 
-    expect(requested()).toEqual([listPath])
+    expect(requested()).toEqual([detailPath])
     await clickTab(container, 'YAML')
     expect(requested()).toContain(yamlPath)
   })

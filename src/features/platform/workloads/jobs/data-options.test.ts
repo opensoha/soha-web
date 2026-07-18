@@ -8,7 +8,6 @@ const apiMocks = vi.hoisted(() => ({
   deleteJob: vi.fn(),
   getJobDetail: vi.fn(),
   listJobEvents: vi.fn(),
-  listJobPods: vi.fn(),
   listJobs: vi.fn(),
 }))
 
@@ -20,16 +19,13 @@ const target = { scope, name: 'nightly' }
 describe('job query and mutation options', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('uses canonical list, detail, event, and related pod keys', () => {
+  it('uses canonical list, detail, and event keys', () => {
     expect(jobQueries.list(scope).queryKey).toEqual(workloadKeys.list('jobs', scope))
     expect(jobQueries.detail(scope, 'nightly').queryKey).toEqual(
       workloadKeys.detail('jobs', scope, 'nightly'),
     )
     expect(jobQueries.events(scope, 'nightly').queryKey).toEqual(
       workloadKeys.events('jobs', scope, 'nightly'),
-    )
-    expect(jobQueries.pods(scope, 'nightly').queryKey).toEqual(
-      workloadKeys.relatedPods('jobs', scope, 'nightly'),
     )
     expect(jobQueries.detail({ clusterId: 'cluster-a', namespace: null }, 'nightly').enabled).toBe(
       false,

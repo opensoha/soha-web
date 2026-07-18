@@ -9,8 +9,9 @@ import { toScopeKey } from '@/types'
 import { NetworkDetailShell } from '../shared/detail-shell'
 import { renderNetworkTextList } from '../shared/renderers'
 import { resolveNetworkNamespace } from '../shared/scope'
+import { ConditionsSection, GatewayListenersSection, GatewayRoutesSection } from './detail-sections'
 import { gatewayAPIQueries } from './queries'
-import type { Gateway } from './types'
+import type { GatewayDetail } from './types'
 
 export function GatewayDetailPage() {
   const { localeCode } = useI18n()
@@ -20,7 +21,7 @@ export function GatewayDetailPage() {
   const detailNamespace = resolveNetworkNamespace(namespace, searchParams.get('namespace'))
   const scope = toScopeKey(clusterId, detailNamespace)
   const [activeTabKey, setActiveTabKey] = useState('overview')
-  const query = useQuery(gatewayAPIQueries.detail<Gateway>('gateways', scope, name))
+  const query = useQuery(gatewayAPIQueries.detail<GatewayDetail>('gateways', scope, name))
   const detail = query.data
 
   if (!clusterId || !detailNamespace)
@@ -57,6 +58,13 @@ export function GatewayDetailPage() {
         { key: 'Addresses', value: renderNetworkTextList(detail.addresses) },
         { key: 'Listeners', value: detail.listenerCount },
       ]}
+      overviewContent={
+        <>
+          <GatewayListenersSection listeners={detail.listeners} />
+          <GatewayRoutesSection routes={detail.routes} />
+          <ConditionsSection conditions={detail.conditions} />
+        </>
+      }
       target={{ scope, name }}
     />
   )

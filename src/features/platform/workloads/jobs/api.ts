@@ -6,7 +6,7 @@ import {
   listWorkloads,
 } from '@/features/platform/workloads/shared/api'
 import type { WorkloadEvent } from '@/features/platform/workloads/shared/types'
-import type { Job, JobDetail, JobTarget, Pod } from './types'
+import type { Job, JobDetail, JobTarget } from './types'
 
 const jobKind = 'jobs' as const
 
@@ -31,15 +31,6 @@ export async function listJobEvents(target: JobTarget): Promise<WorkloadEvent[]>
     (event) =>
       event.involvedName === name &&
       (!event.involvedKind || event.involvedKind.toLowerCase() === 'job'),
-  )
-}
-
-export async function listJobPods(target: JobTarget): Promise<Pod[]> {
-  const name = normalizedJobName(target.name)
-  const pods = await listWorkloads<Pod>('pods', target.scope)
-  return pods.filter(
-    (pod) =>
-      pod.labels?.['job-name'] === name || pod.labels?.['batch.kubernetes.io/job-name'] === name,
   )
 }
 

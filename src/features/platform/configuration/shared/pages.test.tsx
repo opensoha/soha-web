@@ -9,9 +9,14 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConfigMapDetailPage } from '../configmaps/detail-page'
 import { ConfigurationConfigMapsPage } from '../configmaps/list-page'
+import { ConfigurationHPADetailPage } from '../hpas/detail-page'
+import { ConfigurationLimitRangeDetailPage } from '../limitranges/detail-page'
+import { ConfigurationMutatingWebhookConfigurationDetailPage } from '../mutatingwebhookconfigurations/detail-page'
+import { ConfigurationPDBDetailPage } from '../poddisruptionbudgets/detail-page'
 import { ConfigurationResourceQuotaDetailPage } from '../resourcequotas/detail-page'
 import { SecretDetailPage } from '../secrets/detail-page'
 import { ConfigurationSecretsPage } from '../secrets/list-page'
+import { ConfigurationValidatingWebhookConfigurationDetailPage } from '../validatingwebhookconfigurations/detail-page'
 
 const testState = vi.hoisted(() => ({
   responses: {} as Record<string, unknown>,
@@ -47,6 +52,7 @@ vi.mock('@/i18n', () => ({
 
 vi.mock('@/components/status-tag', () => ({
   BooleanTag: ({ value }: { value: boolean }) => <span>{String(value)}</span>,
+  StatusTag: ({ value }: { value: string }) => <span>{value}</span>,
 }))
 
 vi.mock('@/components/k8s-yaml-editor', () => ({
@@ -293,5 +299,116 @@ describe('configuration leaf pages', () => {
 
     expect(container.textContent).toContain('请选择集群和命名空间')
     expect(apiGetMock).not.toHaveBeenCalled()
+  })
+
+  it('loads structured configuration details from dedicated detail routes', async () => {
+    testState.responses['/clusters/cluster-a/configuration/hpas/demo/detail?namespace=team-a'] = {
+      name: 'demo',
+      namespace: 'team-a',
+      targetRef: 'Deployment/api',
+      minReplicas: 1,
+      maxReplicas: 5,
+      currentReplicas: 2,
+      desiredReplicas: 3,
+      ageSeconds: 60,
+      metrics: [{ type: 'Resource', name: 'cpu', target: '70%', current: '55%' }],
+      conditions: [],
+    }
+    testState.responses[
+      '/clusters/cluster-a/configuration/poddisruptionbudgets/demo/detail?namespace=team-a'
+    ] = {
+      name: 'demo',
+      namespace: 'team-a',
+      minAvailable: '1',
+      currentHealthy: 2,
+      desiredHealthy: 2,
+      disruptionsAllowed: 1,
+      selector: 'app=api',
+      ageSeconds: 60,
+      pods: [],
+      conditions: [],
+    }
+    testState.responses[
+      '/clusters/cluster-a/configuration/resourcequotas/demo/detail?namespace=team-a'
+    ] = {
+      name: 'demo',
+      namespace: 'team-a',
+      scopes: ['BestEffort'],
+      hard: { pods: '10' },
+      used: { pods: '4' },
+      ageSeconds: 60,
+    }
+    testState.responses[
+      '/clusters/cluster-a/configuration/limitranges/demo/detail?namespace=team-a'
+    ] = {
+      name: 'demo',
+      namespace: 'team-a',
+      limits: 1,
+      ageSeconds: 60,
+      rules: [{ type: 'Container', min: { cpu: '100m' }, max: { cpu: '2' } }],
+    }
+    const webhook = {
+      name: 'admission.demo',
+      clientTarget: 'team-a/admission',
+      serviceName: 'admission',
+      serviceNamespace: 'team-a',
+      caBundleConfigured: true,
+      failurePolicy: 'Fail',
+      rules: [{ operations: ['CREATE'], resources: ['pods'] }],
+    }
+    testState.responses[
+      '/clusters/cluster-a/configuration/mutatingwebhookconfigurations/demo/detail'
+    ] = { name: 'demo', ageSeconds: 60, webhooks: [webhook] }
+    testState.responses[
+      '/clusters/cluster-a/configuration/validatingwebhookconfigurations/demo/detail'
+    ] = { name: 'demo', ageSeconds: 60, webhooks: [webhook] }
+
+    const cases: Array<[ReactNode, string, string, string]> = [
+      [
+        <ConfigurationHPADetailPage />,
+        '/configuration/hpas/demo',
+        '/configuration/hpas/:name',
+        '55%',
+      ],
+      [
+        <ConfigurationPDBDetailPage />,
+        '/configuration/poddisruptionbudgets/demo',
+        '/configuration/poddisruptionbudgets/:name',
+        'app=api',
+      ],
+      [
+        <ConfigurationResourceQuotaDetailPage />,
+        '/configuration/resourcequotas/demo',
+        '/configuration/resourcequotas/:name',
+        '10',
+      ],
+      [
+        <ConfigurationLimitRangeDetailPage />,
+        '/configuration/limitranges/demo',
+        '/configuration/limitranges/:name',
+        'cpu: 100m',
+      ],
+      [
+        <ConfigurationMutatingWebhookConfigurationDetailPage />,
+        '/configuration/mutatingwebhookconfigurations/demo',
+        '/configuration/mutatingwebhookconfigurations/:name',
+        'CREATE',
+      ],
+      [
+        <ConfigurationValidatingWebhookConfigurationDetailPage />,
+        '/configuration/validatingwebhookconfigurations/demo',
+        '/configuration/validatingwebhookconfigurations/:name',
+        'team-a/admission',
+      ],
+    ]
+    for (const [page, route, routePath, expected] of cases) {
+      const container = await renderPage(page, route, routePath)
+      expect(container.textContent).toContain(expected)
+    }
+
+    const paths = apiGetMock.mock.calls.map(([path]) => String(path))
+    expect(paths.filter((path) => path.includes('/detail')).sort()).toEqual(
+      Object.keys(testState.responses).sort(),
+    )
   })
 })

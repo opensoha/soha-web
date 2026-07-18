@@ -4,7 +4,6 @@ import {
   getDaemonSetDetail,
   getDaemonSetMetrics,
   listDaemonSetEvents,
-  listDaemonSetPods,
   listDaemonSets,
   restartDaemonSet,
 } from './api'
@@ -26,11 +25,16 @@ describe('daemonset api', () => {
   it('unwraps list, detail, and metrics endpoints', async () => {
     apiMocks.get
       .mockResolvedValueOnce({ data: [{ name: 'node/agent' }] })
-      .mockResolvedValueOnce({ data: { name: 'node/agent', namespace: 'team/a' } })
+      .mockResolvedValueOnce({
+        data: { name: 'node/agent', namespace: 'team/a', pods: [{ name: 'agent-1' }] },
+      })
       .mockResolvedValueOnce({ data: { resourceKind: 'DaemonSet' } })
 
     await expect(listDaemonSets(scope)).resolves.toEqual([{ name: 'node/agent' }])
-    await expect(getDaemonSetDetail(target)).resolves.toMatchObject({ name: 'node/agent' })
+    await expect(getDaemonSetDetail(target)).resolves.toMatchObject({
+      name: 'node/agent',
+      pods: [{ name: 'agent-1' }],
+    })
     await expect(getDaemonSetMetrics(target)).resolves.toMatchObject({ resourceKind: 'DaemonSet' })
 
     expect(apiMocks.get.mock.calls[0][0]).toBe(
@@ -40,31 +44,19 @@ describe('daemonset api', () => {
     expect(apiMocks.get.mock.calls[2][0]).toContain('/daemonsets/node%2Fagent/metrics?')
   })
 
-  it('filters shared events and pods by kind and selector', async () => {
-    apiMocks.get
-      .mockResolvedValueOnce({
-        data: [
-          { involvedKind: 'DaemonSet', involvedName: 'node/agent' },
-          { involvedKind: 'Pod', involvedName: 'node/agent' },
-        ],
-      })
-      .mockResolvedValueOnce({
-        data: [
-          { name: 'matched', labels: { app: 'agent' } },
-          { name: 'other', labels: { app: 'api' } },
-        ],
-      })
+  it('filters shared events without loading a Pod list', async () => {
+    apiMocks.get.mockResolvedValueOnce({
+      data: [
+        { involvedKind: 'DaemonSet', involvedName: 'node/agent' },
+        { involvedKind: 'Pod', involvedName: 'node/agent' },
+      ],
+    })
 
     await expect(listDaemonSetEvents(target)).resolves.toEqual([
       { involvedKind: 'DaemonSet', involvedName: 'node/agent' },
     ])
-    await expect(listDaemonSetPods(target, { app: 'agent' })).resolves.toEqual([
-      { name: 'matched', labels: { app: 'agent' } },
-    ])
     expect(apiMocks.get.mock.calls[0][0]).toContain('/events?namespace=team%2Fa&limit=100')
-    expect(apiMocks.get.mock.calls[1][0]).toBe(
-      '/clusters/cluster-a/workloads/pods?namespace=team%2Fa',
-    )
+    expect(apiMocks.get).toHaveBeenCalledTimes(1)
   })
 
   it('preserves action bodies and encoded delete paths', async () => {

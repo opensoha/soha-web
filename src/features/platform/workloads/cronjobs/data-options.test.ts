@@ -7,7 +7,6 @@ import { cronJobQueries } from './queries'
 const apiMocks = vi.hoisted(() => ({
   deleteCronJob: vi.fn(),
   getCronJobDetail: vi.fn(),
-  listCronJobChildJobs: vi.fn(),
   listCronJobEvents: vi.fn(),
   listCronJobs: vi.fn(),
   suspendCronJob: vi.fn(),
@@ -21,16 +20,13 @@ const target = { scope, name: 'nightly' }
 describe('cron job query and mutation options', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('uses canonical keys for details, events, and child Jobs', () => {
+  it('uses canonical keys for details and events', () => {
     expect(cronJobQueries.list(scope).queryKey).toEqual(workloadKeys.list('cronjobs', scope))
     expect(cronJobQueries.detail(scope, 'nightly').queryKey).toEqual(
       workloadKeys.detail('cronjobs', scope, 'nightly'),
     )
     expect(cronJobQueries.events(scope, 'nightly').queryKey).toEqual(
       workloadKeys.events('cronjobs', scope, 'nightly'),
-    )
-    expect(cronJobQueries.childJobs(scope, 'nightly').queryKey).toEqual(
-      workloadKeys.childJobs(scope, 'nightly'),
     )
   })
 

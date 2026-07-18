@@ -1,5 +1,4 @@
 import { api } from '@/services/api-client'
-import type { Pod } from '@/types'
 import {
   getWorkloadDetail,
   getWorkloadMetrics,
@@ -28,11 +27,6 @@ function normalizeName(name: string) {
   return normalized
 }
 
-function matchesSelector(selector: Record<string, string>, labels?: Record<string, string>) {
-  const entries = Object.entries(selector)
-  return entries.length > 0 && entries.every(([key, value]) => labels?.[key] === value)
-}
-
 export function listStatefulSets(scope: StatefulSetTarget['scope']): Promise<StatefulSet[]> {
   return listWorkloads<StatefulSet>(statefulSetKind, scope)
 }
@@ -53,14 +47,6 @@ export async function listStatefulSetEvents(target: StatefulSetTarget): Promise<
       event.involvedName === name &&
       (!event.involvedKind || event.involvedKind.toLowerCase() === 'statefulset'),
   )
-}
-
-export async function listStatefulSetPods(
-  target: StatefulSetTarget,
-  selector: Record<string, string>,
-): Promise<Pod[]> {
-  const pods = await listWorkloads<Pod>('pods', target.scope)
-  return pods.filter((pod) => matchesSelector(selector, pod.labels))
 }
 
 export async function restartStatefulSet(target: StatefulSetTarget): Promise<void> {

@@ -6,9 +6,6 @@ export const gatewayAPIKeys = {
   all: [...networkKeys.all, 'gateway-api'] as const,
   lists: (kind: GatewayAPIKind) => networkKeys.lists(kind),
   list: (kind: GatewayAPIKind, scope: ScopeKey) => networkKeys.list(kind, scope),
-  detail: (
-    kind: Extract<GatewayAPIKind, 'gatewayclasses' | 'gateways'>,
-    scope: ScopeKey,
-    name: string,
-  ) => networkKeys.detail(kind, scope, name),
+  detail: (kind: GatewayAPIKind, scope: ScopeKey, name: string) =>
+    networkKeys.detail(kind, scope, name),
 }

@@ -17,6 +17,14 @@ function unwrap<T>(response: Envelope<T>) {
   return response.data
 }
 
+export async function listAuthorizedNamespaces(clusterId: string) {
+  const normalized = clusterId.trim()
+  if (!normalized) return []
+  return unwrap(
+    await api.get<Envelope<Namespace[]>>(`/clusters/${encodeURIComponent(normalized)}/namespaces`),
+  )
+}
+
 export async function decideResourceCreateScope(
   clusterId: string,
   request: ResourceCreateScopeDecisionRequest,
@@ -49,13 +57,5 @@ export async function executeResourceCreate(
       request,
       { 'Idempotency-Key': idempotencyKey },
     ),
-  )
-}
-
-export async function listAuthorizedNamespaces(clusterId: string) {
-  const normalized = clusterId.trim()
-  if (!normalized) return []
-  return unwrap(
-    await api.get<Envelope<Namespace[]>>(`/clusters/${encodeURIComponent(normalized)}/namespaces`),
   )
 }

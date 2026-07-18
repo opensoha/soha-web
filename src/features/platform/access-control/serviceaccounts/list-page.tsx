@@ -1,4 +1,3 @@
-import { BooleanTag } from '@/components/status-tag'
 import { useI18n } from '@/i18n'
 import { formatAgeSeconds } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
@@ -19,24 +18,6 @@ export function PlatformAccessControlServiceAccountsPage() {
       ),
     },
     { title: localeCode === 'zh_CN' ? '命名空间' : 'Namespace', dataIndex: 'namespace' },
-    { title: 'Secrets', dataIndex: 'secrets', width: 88 },
-    {
-      title: localeCode === 'zh_CN' ? '镜像拉取密钥' : 'Image Pull Secrets',
-      dataIndex: 'imagePullSecrets',
-      width: 138,
-    },
-    {
-      title: localeCode === 'zh_CN' ? '自动挂载 Token' : 'Automount Token',
-      dataIndex: 'automountServiceAccountToken',
-      width: 132,
-      render: (value: boolean) => (
-        <BooleanTag
-          falseLabel={localeCode === 'zh_CN' ? '否' : 'No'}
-          trueLabel={localeCode === 'zh_CN' ? '是' : 'Yes'}
-          value={value}
-        />
-      ),
-    },
     {
       ...tableColumnPresets.datetime,
       title: 'Age',

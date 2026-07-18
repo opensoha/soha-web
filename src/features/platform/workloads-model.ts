@@ -61,8 +61,11 @@ export function localizeRelatedResourceKind(kind: string, localeCode: 'zh_CN' | 
     Secret: { zh_CN: 'Secret', en_US: 'Secret' },
     Service: { zh_CN: 'Service', en_US: 'Service' },
     Ingress: { zh_CN: 'Ingress', en_US: 'Ingress' },
+    HTTPRoute: { zh_CN: 'HTTPRoute', en_US: 'HTTPRoute' },
+    GRPCRoute: { zh_CN: 'GRPCRoute', en_US: 'GRPCRoute' },
     Deployment: { zh_CN: 'Deployment', en_US: 'Deployment' },
     ReplicaSet: { zh_CN: 'ReplicaSet', en_US: 'ReplicaSet' },
+    ReplicationController: { zh_CN: 'ReplicationController', en_US: 'ReplicationController' },
     ServiceAccount: { zh_CN: 'ServiceAccount', en_US: 'ServiceAccount' },
     PersistentVolumeClaim: { zh_CN: 'PVC', en_US: 'PVC' },
     StatefulSet: { zh_CN: 'StatefulSet', en_US: 'StatefulSet' },
@@ -98,6 +101,12 @@ export function buildRelatedResourcePath(
   switch (resource.kind) {
     case 'Service':
       return `/network/services/${encodeURIComponent(resource.name)}${buildNamespacedDetailQuery(effectiveNamespace)}`
+    case 'Ingress':
+      return `/network/ingresses/${encodeURIComponent(resource.name)}${buildNamespacedDetailQuery(effectiveNamespace)}`
+    case 'HTTPRoute':
+      return `/network/gateway-api/httproutes/${encodeURIComponent(resource.name)}${buildNamespacedDetailQuery(effectiveNamespace)}`
+    case 'GRPCRoute':
+      return `/network/gateway-api/grpcroutes/${encodeURIComponent(resource.name)}${buildNamespacedDetailQuery(effectiveNamespace)}`
     case 'ConfigMap':
       return `/configuration/configmaps/${encodeURIComponent(resource.name)}${buildNamespacedDetailQuery(effectiveNamespace)}`
     case 'Secret':
@@ -105,6 +114,20 @@ export function buildRelatedResourcePath(
     case 'Deployment':
       return buildWorkloadDetailPath(
         'deployments',
+        resource.name,
+        selectedNamespace,
+        effectiveNamespace,
+      )
+    case 'ReplicaSet':
+      return buildWorkloadDetailPath(
+        'replicasets',
+        resource.name,
+        selectedNamespace,
+        effectiveNamespace,
+      )
+    case 'ReplicationController':
+      return buildWorkloadDetailPath(
+        'replicationcontrollers',
         resource.name,
         selectedNamespace,
         effectiveNamespace,

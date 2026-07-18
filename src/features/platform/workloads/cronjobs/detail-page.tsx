@@ -11,6 +11,7 @@ import { toScopeKey } from '@/types'
 import { formatAgeSeconds, formatDateTime } from '@/utils/time'
 import { buildWorkloadDetailPath } from '@/features/platform/workloads-model'
 import { WorkloadDetailShell } from '@/features/platform/workloads/shared/detail-shell'
+import { WorkloadRelationsCard } from '@/features/platform/workloads/shared/workload-relations'
 import { cronJobQueries } from './queries'
 import type { CronJobChildJob, CronJobDetail } from './types'
 import '@/features/platform/workloads/styles.css'
@@ -18,11 +19,7 @@ import '@/features/platform/workloads/styles.css'
 function CronJobOverview({ detail }: { detail: CronJobDetail }) {
   const { localeCode } = useI18n()
   const navigate = useNavigate()
-  const { clusterId } = usePlatformScopeStore()
-  const jobsQuery = useQuery(
-    cronJobQueries.childJobs(toScopeKey(clusterId, detail.namespace), detail.name),
-  )
-  const jobs = jobsQuery.data ?? []
+  const jobs = detail.jobs ?? []
 
   return (
     <div className="soha-detail-stack">
@@ -72,7 +69,6 @@ function CronJobOverview({ detail }: { detail: CronJobDetail }) {
         <List
           className="soha-related-pod-list"
           dataSource={jobs}
-          loading={jobsQuery.isLoading}
           rowKey={(record) => `${record.namespace}/${record.name}`}
           locale={{
             emptyText: (
@@ -125,6 +121,7 @@ function CronJobOverview({ detail }: { detail: CronJobDetail }) {
           )}
         />
       </Card>
+      <WorkloadRelationsCard resources={detail.relatedResources} namespace={detail.namespace} />
     </div>
   )
 }

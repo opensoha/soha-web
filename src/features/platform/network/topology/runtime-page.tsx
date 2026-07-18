@@ -20,7 +20,7 @@ import type { TableColumnsType } from 'antd'
 import '@xyflow/react/dist/style.css'
 import './topology.css'
 import { AdminTable } from '@/components/admin-table'
-import { ManagementDetailHeader, ManagementState } from '@/components/management-list'
+import { ManagementState } from '@/components/management-list'
 import { StatGrid } from '@/components/stat-grid'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
@@ -943,23 +943,6 @@ export function NetworkTopologyRuntimePage() {
           ? 'default'
           : 'orange'
 
-  const viewDescription =
-    topologyViewState === 'live'
-      ? localeCode === 'zh_CN'
-        ? 'Ingress(controller)、Gateway / HTTPRoute 和 Service 后端已经统一进入同一张入口网络拓扑；未挂接 HTTPRoute 的 Gateway 会以待接路由节点保留在图里。'
-        : 'Ingress controllers, Gateway / HTTPRoute, and service backends now share one topology; gateways without HTTPRoute bindings remain visible as pending-route nodes.'
-      : topologyViewState === 'loading'
-        ? localeCode === 'zh_CN'
-          ? '正在从 Ingress、Gateway、HTTPRoute、Service 和 Pod 资源装载实时入口拓扑。'
-          : 'Loading the live entry topology from ingress, gateway, HTTPRoute, service, and pod resources.'
-        : topologyViewState === 'cluster-required'
-          ? localeCode === 'zh_CN'
-            ? '先选择一个集群，再加载当前 scope 下的实时入口拓扑。'
-            : 'Select a cluster first to load the live entry topology for the current scope.'
-          : localeCode === 'zh_CN'
-            ? '当前 scope 下没有检测到实时入口拓扑，因此页面不会回退到演示或预览链路。请检查 Ingress、Gateway、HTTPRoute 和 Service 关系是否在当前集群或命名空间可见。'
-            : 'No live entry topology was detected in the current scope, so the page does not fall back to demo or preview traces. Verify that ingress, gateway, HTTPRoute, and service relations are visible in the selected cluster or namespace.'
-
   const emptyStateTitle =
     topologyViewState === 'loading'
       ? localeCode === 'zh_CN'
@@ -1137,19 +1120,29 @@ export function NetworkTopologyRuntimePage() {
 
   return (
     <div className="soha-page">
-      <ManagementDetailHeader
-        title={localeCode === 'zh_CN' ? '网络拓扑' : 'Network Topology'}
-        actions={
-          <Space wrap>
-            <Tag color={viewTagColor}>{viewTag}</Tag>
-            {liveErrors.length > 0 ? (
-              <Tag color="red">
-                {localeCode === 'zh_CN' ? '实时数据部分失败' : 'Partial live data failure'}
-              </Tag>
-            ) : null}
-          </Space>
-        }
+      <StatGrid
+        items={[
+          {
+            label: localeCode === 'zh_CN' ? '入口节点' : 'Entry nodes',
+            value: topologySummary?.entryCount ?? topologyGraph.entryCount,
+          },
+          {
+            label: localeCode === 'zh_CN' ? '路由节点' : 'Route nodes',
+            value: topologySummary?.routeCount ?? topologyGraph.routeCount,
+          },
+          {
+            label: localeCode === 'zh_CN' ? 'Service 节点' : 'Service nodes',
+            value: topologySummary
+              ? topologySummary.serviceCount + topologySummary.missingServiceCount
+              : topologyGraph.serviceCount,
+          },
+          {
+            label: localeCode === 'zh_CN' ? '后端 Pods' : 'Backend pods',
+            value: topologySummary?.backendPodCount ?? topologyGraph.podCount,
+          },
+        ]}
       />
+
       <Card className="soha-detail-card">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-[280px] flex-1 flex-wrap items-center gap-3">
@@ -1164,11 +1157,14 @@ export function NetworkTopologyRuntimePage() {
               style={{ width: 340 }}
               className="soha-platform-compact-field"
             />
-            <Text type="secondary" className="text-xs">
-              {viewDescription}
-            </Text>
           </div>
           <Space wrap>
+            <Tag color={viewTagColor}>{viewTag}</Tag>
+            {liveErrors.length > 0 ? (
+              <Tag color="red">
+                {localeCode === 'zh_CN' ? '实时数据部分失败' : 'Partial live data failure'}
+              </Tag>
+            ) : null}
             <Tag color={LEGEND_TAG_COLORS.entry}>{localeCode === 'zh_CN' ? '入口' : 'Entry'}</Tag>
             <Tag color={LEGEND_TAG_COLORS['ingress-route']}>Ingress</Tag>
             <Tag color={LEGEND_TAG_COLORS['http-route']}>HTTPRoute</Tag>
@@ -1196,29 +1192,6 @@ export function NetworkTopologyRuntimePage() {
           </div>
         ) : null}
       </Card>
-
-      <StatGrid
-        items={[
-          {
-            label: localeCode === 'zh_CN' ? '入口节点' : 'Entry nodes',
-            value: topologySummary?.entryCount ?? topologyGraph.entryCount,
-          },
-          {
-            label: localeCode === 'zh_CN' ? '路由节点' : 'Route nodes',
-            value: topologySummary?.routeCount ?? topologyGraph.routeCount,
-          },
-          {
-            label: localeCode === 'zh_CN' ? 'Service 节点' : 'Service nodes',
-            value: topologySummary
-              ? topologySummary.serviceCount + topologySummary.missingServiceCount
-              : topologyGraph.serviceCount,
-          },
-          {
-            label: localeCode === 'zh_CN' ? '后端 Pods' : 'Backend pods',
-            value: topologySummary?.backendPodCount ?? topologyGraph.podCount,
-          },
-        ]}
-      />
 
       <Card
         className="soha-detail-card"

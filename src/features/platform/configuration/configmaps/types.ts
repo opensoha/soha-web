@@ -2,9 +2,7 @@ import type { ConfigurationDetailBase, ConfigurationResourceRecord } from '../sh
 
 export interface ConfigMapResource extends ConfigurationResourceRecord {
   readonly namespace: string
-  readonly immutable: boolean
   readonly dataEntries: number
-  readonly binaryEntries: number
 }
 
 export interface ConfigMapDetail extends ConfigurationDetailBase {

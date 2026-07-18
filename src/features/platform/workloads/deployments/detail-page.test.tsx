@@ -24,6 +24,24 @@ const apiGetMock = vi.hoisted(() =>
           namespace: 'monitoring',
           createdAt: '2026-01-01T00:00:00Z',
           selector: { app: 'prometheus' },
+          pods: [
+            {
+              name: 'prometheus-0',
+              namespace: 'monitoring',
+              phase: 'Running',
+              readyContainers: '1/1',
+              restarts: 0,
+              ageSeconds: 60,
+            },
+          ],
+          relatedResources: [
+            {
+              kind: 'Service',
+              name: 'prometheus',
+              namespace: 'monitoring',
+              relation: 'selected-by-service',
+            },
+          ],
         },
       }
     }
@@ -198,6 +216,9 @@ describe('deployment detail page boundaries', () => {
     expect(requestedPaths().some((path) => path.includes('/metrics?'))).toBe(false)
     expect(requestedPaths().some((path) => path.includes('/events?'))).toBe(false)
     expect(requestedPaths().some((path) => path.includes('/yaml?'))).toBe(false)
+    expect(requestedPaths().some((path) => path.includes('/workloads/pods?'))).toBe(false)
+    expect(container.textContent).toContain('prometheus-0')
+    expect(container.textContent).toContain('Service 选择器命中')
 
     await act(async () => clickTab(container, '指标'))
     await flushAsyncWork()

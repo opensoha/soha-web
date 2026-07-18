@@ -6,6 +6,18 @@ export interface Service extends NetworkResourceRecord {
   readonly clusterIp: string
   readonly ports: string[]
   readonly selector?: Record<string, string>
+  readonly endpoints?: ServiceEndpoint[]
+  readonly backendPods?: ServiceBackendPod[]
+}
+
+export interface ServiceEndpoint {
+  readonly address: string
+  readonly ready?: boolean
+  readonly serving?: boolean
+  readonly terminating?: boolean
+  readonly targetRef?: string
+  readonly nodeName?: string
+  readonly zone?: string
 }
 
 export interface ServiceBackendPod {

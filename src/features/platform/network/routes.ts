@@ -213,6 +213,24 @@ export const networkRoutes = defineRoutes([
   },
   {
     meta: {
+      id: 'network-gateway-api-httproute-detail',
+      path: '/network/gateway-api/httproutes/:name',
+      title: 'HTTPRoute Detail',
+      description: 'HTTPRoute 详情',
+      requiresAuth: true,
+      tabbar: false,
+      navVisible: false,
+      scopeMode: 'namespace',
+    },
+    shell: 'app',
+    inheritMetaFrom: 'network-gateway-api-httproutes',
+    load: async () => {
+      const module = await import('./gateway-api/httproute-detail-page')
+      return { default: module.HTTPRouteDetailPage }
+    },
+  },
+  {
+    meta: {
       id: 'network-gateway-api-backendtlspolicies',
       path: '/network/gateway-api/backendtlspolicies',
       title: 'BackendTLSPolicies',
@@ -232,6 +250,24 @@ export const networkRoutes = defineRoutes([
     load: async () => {
       const module = await import('./gateway-api/backend-tls-policies-page')
       return { default: module.NetworkBackendTLSPoliciesPage }
+    },
+  },
+  {
+    meta: {
+      id: 'network-gateway-api-backendtlspolicy-detail',
+      path: '/network/gateway-api/backendtlspolicies/:name',
+      title: 'BackendTLSPolicy Detail',
+      description: 'BackendTLSPolicy 详情',
+      requiresAuth: true,
+      tabbar: false,
+      navVisible: false,
+      scopeMode: 'namespace',
+    },
+    shell: 'app',
+    inheritMetaFrom: 'network-gateway-api-backendtlspolicies',
+    load: async () => {
+      const module = await import('./gateway-api/backend-tls-policy-detail-page')
+      return { default: module.BackendTLSPolicyDetailPage }
     },
   },
   {
@@ -259,6 +295,24 @@ export const networkRoutes = defineRoutes([
   },
   {
     meta: {
+      id: 'network-gateway-api-grpcroute-detail',
+      path: '/network/gateway-api/grpcroutes/:name',
+      title: 'GRPCRoute Detail',
+      description: 'GRPCRoute 详情',
+      requiresAuth: true,
+      tabbar: false,
+      navVisible: false,
+      scopeMode: 'namespace',
+    },
+    shell: 'app',
+    inheritMetaFrom: 'network-gateway-api-grpcroutes',
+    load: async () => {
+      const module = await import('./gateway-api/grpcroute-detail-page')
+      return { default: module.GRPCRouteDetailPage }
+    },
+  },
+  {
+    meta: {
       id: 'network-gateway-api-referencegrants',
       path: '/network/gateway-api/referencegrants',
       title: 'ReferenceGrants',
@@ -278,6 +332,24 @@ export const networkRoutes = defineRoutes([
     load: async () => {
       const module = await import('./gateway-api/reference-grants-page')
       return { default: module.NetworkReferenceGrantsPage }
+    },
+  },
+  {
+    meta: {
+      id: 'network-gateway-api-referencegrant-detail',
+      path: '/network/gateway-api/referencegrants/:name',
+      title: 'ReferenceGrant Detail',
+      description: 'ReferenceGrant 详情',
+      requiresAuth: true,
+      tabbar: false,
+      navVisible: false,
+      scopeMode: 'namespace',
+    },
+    shell: 'app',
+    inheritMetaFrom: 'network-gateway-api-referencegrants',
+    load: async () => {
+      const module = await import('./gateway-api/reference-grant-detail-page')
+      return { default: module.ReferenceGrantDetailPage }
     },
   },
   {

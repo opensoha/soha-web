@@ -4,7 +4,6 @@ import {
   getStatefulSetDetail,
   getStatefulSetMetrics,
   listStatefulSetEvents,
-  listStatefulSetPods,
   listStatefulSets,
   restartStatefulSet,
   scaleStatefulSet,
@@ -27,11 +26,16 @@ describe('statefulset api', () => {
   it('unwraps list, detail, and metrics endpoints', async () => {
     apiMocks.get
       .mockResolvedValueOnce({ data: [{ name: 'db/server' }] })
-      .mockResolvedValueOnce({ data: { name: 'db/server', namespace: 'team/a' } })
+      .mockResolvedValueOnce({
+        data: { name: 'db/server', namespace: 'team/a', pods: [{ name: 'db-0' }] },
+      })
       .mockResolvedValueOnce({ data: { resourceKind: 'StatefulSet' } })
 
     await expect(listStatefulSets(scope)).resolves.toEqual([{ name: 'db/server' }])
-    await expect(getStatefulSetDetail(target)).resolves.toMatchObject({ name: 'db/server' })
+    await expect(getStatefulSetDetail(target)).resolves.toMatchObject({
+      name: 'db/server',
+      pods: [{ name: 'db-0' }],
+    })
     await expect(getStatefulSetMetrics(target)).resolves.toMatchObject({
       resourceKind: 'StatefulSet',
     })
@@ -43,31 +47,19 @@ describe('statefulset api', () => {
     expect(apiMocks.get.mock.calls[2][0]).toContain('/statefulsets/db%2Fserver/metrics?')
   })
 
-  it('filters shared events and pods by kind and selector', async () => {
-    apiMocks.get
-      .mockResolvedValueOnce({
-        data: [
-          { involvedKind: 'StatefulSet', involvedName: 'db/server' },
-          { involvedKind: 'Pod', involvedName: 'db/server' },
-        ],
-      })
-      .mockResolvedValueOnce({
-        data: [
-          { name: 'matched', labels: { app: 'db', tier: 'data' } },
-          { name: 'other', labels: { app: 'api' } },
-        ],
-      })
+  it('filters shared events without loading a Pod list', async () => {
+    apiMocks.get.mockResolvedValueOnce({
+      data: [
+        { involvedKind: 'StatefulSet', involvedName: 'db/server' },
+        { involvedKind: 'Pod', involvedName: 'db/server' },
+      ],
+    })
 
     await expect(listStatefulSetEvents(target)).resolves.toEqual([
       { involvedKind: 'StatefulSet', involvedName: 'db/server' },
     ])
-    await expect(listStatefulSetPods(target, { app: 'db', tier: 'data' })).resolves.toEqual([
-      { name: 'matched', labels: { app: 'db', tier: 'data' } },
-    ])
     expect(apiMocks.get.mock.calls[0][0]).toContain('/events?namespace=team%2Fa&limit=100')
-    expect(apiMocks.get.mock.calls[1][0]).toBe(
-      '/clusters/cluster-a/workloads/pods?namespace=team%2Fa',
-    )
+    expect(apiMocks.get).toHaveBeenCalledTimes(1)
   })
 
   it('preserves action request bodies and encoded delete paths', async () => {

@@ -7,8 +7,8 @@ const emptyPage = async () => ({ default: () => null })
 describe('route registry validation', () => {
   it('keeps registered ids and canonical paths unique', () => {
     expect(validateRouteDefinitions(appRouteDefinitions)).toEqual([])
-    expect(registeredRouteDefinitions).toHaveLength(214)
-    expect(routeMeta).toHaveLength(214)
+    expect(registeredRouteDefinitions).toHaveLength(218)
+    expect(routeMeta).toHaveLength(218)
     expect(new Set(routeMeta.map((meta) => meta.id)).size).toBe(routeMeta.length)
     expect(new Set(routeMeta.map((meta) => meta.path)).size).toBe(routeMeta.length)
   })

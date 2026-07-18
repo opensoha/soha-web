@@ -1,19 +1,46 @@
 import { useState } from 'react'
-import { Card } from 'antd'
+import { Button, Card, Typography } from 'antd'
 import { useQuery } from '@tanstack/react-query'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { AdminTable } from '@/components/admin-table'
 import { ManagementState } from '@/components/management-list'
+import { BooleanTag, StatusTag } from '@/components/status-tag'
 import { useAIPageContext } from '@/features/copilot'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
+import type { TableColumnsType } from 'antd'
 import { NetworkDetailShell } from '../shared/detail-shell'
-import { renderNetworkTextList } from '../shared/renderers'
 import { resolveNetworkNamespace } from '../shared/scope'
 import { ingressQueries } from './queries'
+import type { IngressPod, IngressRoute, IngressWorkload } from './types'
+
+function resourcePath(kind: string, name: string, namespace: string) {
+  const paths: Record<string, string> = {
+    Deployment: 'deployments',
+    ReplicaSet: 'replicasets',
+    StatefulSet: 'statefulsets',
+    DaemonSet: 'daemonsets',
+    Job: 'jobs',
+    CronJob: 'cronjobs',
+  }
+  const segment = paths[kind]
+  if (!segment) return undefined
+  return `/workloads/${segment}/${encodeURIComponent(name)}?${new URLSearchParams({ namespace })}`
+}
+
+function publicIngressURL(route: IngressRoute) {
+  const host = route.host?.trim()
+  const path = route.path?.trim() || '/'
+  if (!host || host.includes('*') || !path.startsWith('/') || /[\\^$+?()[\]{}|]/.test(path)) {
+    return undefined
+  }
+  return `${route.tls ? 'https' : 'http'}://${host}${path}`
+}
 
 export function IngressDetailPage() {
   const { localeCode } = useI18n()
+  const navigate = useNavigate()
   const params = useParams()
   const [searchParams] = useSearchParams()
   const { clusterId, namespace } = usePlatformScopeStore()
@@ -34,7 +61,7 @@ export function IngressDetailPage() {
     timeRangeMinutes: 60,
     pinnedData: {
       className: ingress?.className,
-      hosts: ingress?.hosts,
+      hosts: ingress?.routes?.map((route) => route.host).filter(Boolean),
       address: ingress?.address,
       backendServices: ingress?.backendServices,
       activeTab: activeTabKey,
@@ -66,6 +93,137 @@ export function IngressDetailPage() {
     )
   }
 
+  const backendByService = new Map((ingress.backends ?? []).map((item) => [item.serviceName, item]))
+  const routeColumns: TableColumnsType<IngressRoute> = [
+    {
+      title: localeCode === 'zh_CN' ? '域名' : 'Host',
+      dataIndex: 'host',
+      render: (value: string | undefined, record) => {
+        const href = publicIngressURL(record)
+        return href ? (
+          <Typography.Link href={href} rel="noreferrer" target="_blank">
+            {value}
+          </Typography.Link>
+        ) : (
+          value || '-'
+        )
+      },
+    },
+    {
+      title: 'TLS',
+      dataIndex: 'tls',
+      width: 80,
+      render: (value: boolean) => <BooleanTag value={value} trueLabel="Yes" falseLabel="No" />,
+    },
+    {
+      title: localeCode === 'zh_CN' ? '路径' : 'Path',
+      dataIndex: 'path',
+      render: (value?: string) => value || '/',
+    },
+    { title: 'PathType', dataIndex: 'pathType', render: (value?: string) => value || '-' },
+    {
+      title: 'Service',
+      dataIndex: 'serviceName',
+      render: (value: string) => (
+        <Button
+          type="text"
+          onClick={() =>
+            navigate(
+              `/network/services/${encodeURIComponent(value)}?${new URLSearchParams({ namespace: ingress.namespace })}`,
+            )
+          }
+        >
+          {value}
+        </Button>
+      ),
+    },
+    {
+      title: localeCode === 'zh_CN' ? '端口' : 'Port',
+      dataIndex: 'servicePort',
+      width: 100,
+      render: (value?: string) => value || '-',
+    },
+    {
+      title: 'Endpoints',
+      width: 110,
+      render: (_, record) => backendByService.get(record.serviceName)?.endpoints?.length ?? 0,
+    },
+    {
+      title: 'Pods',
+      width: 80,
+      render: (_, record) => backendByService.get(record.serviceName)?.pods?.length ?? 0,
+    },
+  ]
+  const relatedPods = (ingress.backends ?? []).flatMap((backend) =>
+    (backend.pods ?? []).map((pod) => ({ ...pod, serviceName: backend.serviceName })),
+  )
+  const podColumns: TableColumnsType<IngressPod & { serviceName: string }> = [
+    {
+      title: 'Service',
+      dataIndex: 'serviceName',
+      render: (value: string) => (
+        <Button
+          type="text"
+          onClick={() =>
+            navigate(
+              `/network/services/${encodeURIComponent(value)}?${new URLSearchParams({ namespace: ingress.namespace })}`,
+            )
+          }
+        >
+          {value}
+        </Button>
+      ),
+    },
+    {
+      title: 'Pod',
+      dataIndex: 'name',
+      render: (value: string, record) => (
+        <Button
+          type="text"
+          onClick={() =>
+            navigate(
+              `/workloads/pods/${encodeURIComponent(value)}?${new URLSearchParams({ namespace: record.namespace })}`,
+            )
+          }
+        >
+          {value}
+        </Button>
+      ),
+    },
+    {
+      title: localeCode === 'zh_CN' ? '状态' : 'Status',
+      dataIndex: 'phase',
+      render: (value: string) => <StatusTag value={value} />,
+    },
+    { title: 'Ready', dataIndex: 'readyContainers' },
+    {
+      title: localeCode === 'zh_CN' ? '关联工作负载' : 'Workloads',
+      dataIndex: 'workloads',
+      render: (items?: IngressWorkload[], record?) =>
+        items?.length
+          ? items.map((item, index) => {
+              const path = resourcePath(
+                item.kind,
+                item.name,
+                item.namespace || record?.namespace || ingress.namespace,
+              )
+              return (
+                <span key={`${item.kind}/${item.name}`}>
+                  {index ? ', ' : ''}
+                  {path ? (
+                    <Button type="link" size="small" onClick={() => navigate(path)}>
+                      {item.kind}/{item.name}
+                    </Button>
+                  ) : (
+                    `${item.kind}/${item.name}`
+                  )}
+                </span>
+              )
+            })
+          : '-',
+    },
+  ]
+
   return (
     <NetworkDetailShell
       activeTabKey={activeTabKey}
@@ -75,10 +233,42 @@ export function IngressDetailPage() {
       onTabChange={setActiveTabKey}
       overviewExtra={[
         { key: 'IngressClass', value: ingress.className || '-' },
-        { key: 'Hosts', value: renderNetworkTextList(ingress.hosts) },
         { key: 'Address', value: ingress.address || '-' },
-        { key: 'Backend Services', value: renderNetworkTextList(ingress.backendServices) },
       ]}
+      overviewContent={
+        <>
+          <Card
+            className="soha-detail-card"
+            title={localeCode === 'zh_CN' ? '域名与路由' : 'Hosts and routes'}
+          >
+            <AdminTable
+              columns={routeColumns}
+              dataSource={ingress.routes ?? []}
+              rowKey={(record) =>
+                `${record.host}/${record.path}/${record.serviceName}/${record.servicePort}`
+              }
+              pageSize={10}
+              tableSize="small"
+              scroll={{ x: 'max-content' }}
+              enableColumnSelection={false}
+            />
+          </Card>
+          <Card
+            className="soha-detail-card"
+            title={localeCode === 'zh_CN' ? '关联 Pods 与工作负载' : 'Related pods and workloads'}
+          >
+            <AdminTable
+              columns={podColumns}
+              dataSource={relatedPods}
+              rowKey={(record) => `${record.serviceName}/${record.namespace}/${record.name}`}
+              pageSize={10}
+              tableSize="small"
+              scroll={{ x: 'max-content' }}
+              enableColumnSelection={false}
+            />
+          </Card>
+        </>
+      }
       target={{ scope, name }}
     />
   )

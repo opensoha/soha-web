@@ -8,8 +8,9 @@ import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
 import { NetworkDetailShell } from '../shared/detail-shell'
+import { ConditionsSection, GatewaysSection } from './detail-sections'
 import { gatewayAPIQueries } from './queries'
-import type { GatewayClass } from './types'
+import type { GatewayClassDetail } from './types'
 
 export function GatewayClassDetailPage() {
   const { localeCode } = useI18n()
@@ -18,7 +19,7 @@ export function GatewayClassDetailPage() {
   const scope = toScopeKey(clusterId, null)
   const [activeTabKey, setActiveTabKey] = useState('overview')
   const query = useQuery(
-    gatewayAPIQueries.detail<GatewayClass>('gatewayclasses', scope, name, true),
+    gatewayAPIQueries.detail<GatewayClassDetail>('gatewayclasses', scope, name, true),
   )
   const detail = query.data
 
@@ -55,6 +56,12 @@ export function GatewayClassDetailPage() {
         { key: 'Accepted', value: detail.accepted ? <StatusTag value={detail.accepted} /> : '-' },
         { key: 'Parameters', value: detail.parametersRef || '-' },
       ]}
+      overviewContent={
+        <>
+          <GatewaysSection gateways={detail.gateways} />
+          <ConditionsSection conditions={detail.conditions} />
+        </>
+      }
       target={{ scope, name }}
     />
   )

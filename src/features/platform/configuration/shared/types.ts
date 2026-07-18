@@ -40,6 +40,33 @@ export interface ConfigurationReference {
   readonly path: string
 }
 
+export interface AdmissionWebhookRule {
+  readonly operations?: string[]
+  readonly apiGroups?: string[]
+  readonly apiVersions?: string[]
+  readonly resources?: string[]
+  readonly scope?: string
+}
+
+export interface AdmissionWebhook {
+  readonly name: string
+  readonly clientTarget: string
+  readonly url?: string
+  readonly serviceName?: string
+  readonly serviceNamespace?: string
+  readonly servicePath?: string
+  readonly servicePort?: number
+  readonly caBundleConfigured: boolean
+  readonly failurePolicy?: string
+  readonly matchPolicy?: string
+  readonly sideEffects?: string
+  readonly timeoutSeconds?: number
+  readonly admissionReviewVersions?: string[]
+  readonly namespaceSelector?: string
+  readonly objectSelector?: string
+  readonly rules?: AdmissionWebhookRule[]
+}
+
 export interface CreateConfigurationVariables {
   readonly scope: ScopeKey
   readonly content: string

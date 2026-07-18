@@ -1,4 +1,3 @@
-import { QueryClient } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { workloadKeys } from '@/features/platform/workloads/shared/keys'
 import { daemonSetQueries } from './queries'
@@ -7,7 +6,6 @@ const apiMocks = vi.hoisted(() => ({
   getDaemonSetDetail: vi.fn(),
   getDaemonSetMetrics: vi.fn(),
   listDaemonSetEvents: vi.fn(),
-  listDaemonSetPods: vi.fn(),
   listDaemonSets: vi.fn(),
 }))
 
@@ -25,20 +23,5 @@ describe('daemonset query options', () => {
     expect(
       daemonSetQueries.detail({ clusterId: 'cluster-a', namespace: null }, 'agent').enabled,
     ).toBe(false)
-    expect(daemonSetQueries.pods(scope, 'agent', {}).enabled).toBe(false)
-  })
-
-  it('keeps selector and target in the related pods query', async () => {
-    apiMocks.listDaemonSetPods.mockResolvedValueOnce([{ name: 'agent-1' }])
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    const selector = { app: 'agent' }
-
-    await expect(
-      queryClient.fetchQuery(daemonSetQueries.pods(scope, 'agent', selector)),
-    ).resolves.toEqual([{ name: 'agent-1' }])
-    expect(apiMocks.listDaemonSetPods).toHaveBeenCalledWith({ scope, name: 'agent' }, selector)
-    expect(daemonSetQueries.pods(scope, 'agent', selector).queryKey).toEqual(
-      workloadKeys.relatedPods('daemonsets', scope, 'agent', selector),
-    )
   })
 })

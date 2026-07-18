@@ -1,10 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
 import { formatAgeSeconds } from '@/utils/time'
 import type { TableColumnsType } from 'antd'
 import { NetworkResourceListPage } from '../shared/list-page'
+import { buildGatewayAPIRoutePath } from '../shared/paths'
 import { renderNetworkTextList } from '../shared/renderers'
 import { gatewayAPIQueries } from './queries'
 import type { HTTPRoute } from './types'
@@ -16,7 +18,14 @@ export function NetworkHTTPRoutesPage() {
     gatewayAPIQueries.list<HTTPRoute>('httproutes', toScopeKey(clusterId, namespace)),
   )
   const columns: TableColumnsType<HTTPRoute> = [
-    { title: localeCode === 'zh_CN' ? '名称' : 'Name', dataIndex: 'name', width: 260 },
+    {
+      title: localeCode === 'zh_CN' ? '名称' : 'Name',
+      dataIndex: 'name',
+      width: 260,
+      render: (value: string, record) => (
+        <Link to={buildGatewayAPIRoutePath('httproutes', value, record.namespace)}>{value}</Link>
+      ),
+    },
     {
       title: localeCode === 'zh_CN' ? '命名空间' : 'Namespace',
       dataIndex: 'namespace',

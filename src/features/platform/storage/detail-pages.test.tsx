@@ -24,18 +24,33 @@ const apiGetMock = vi.hoisted(() =>
           name: 'claim-a',
           namespace: 'selected-ns',
           status: 'Bound',
+          volumeName: 'pv-a',
+          storageClass: 'fast',
+          pods: [{ name: 'api-0', namespace: 'selected-ns', phase: 'Running' }],
           ageSeconds: 60,
         },
       }
     }
     if (path.includes('/persistentvolumes/')) {
-      return { data: { name: 'pv-a', status: 'Available', ageSeconds: 60 } }
+      return {
+        data: {
+          name: 'pv-a',
+          status: 'Bound',
+          storageClass: 'fast',
+          claimRef: 'selected-ns/claim-a',
+          claimNamespace: 'selected-ns',
+          claimName: 'claim-a',
+          ageSeconds: 60,
+        },
+      }
     }
     return {
       data: {
         name: 'fast',
         provisioner: 'csi.example.io',
         allowVolumeExpansion: true,
+        volumes: [{ name: 'pv-a', status: 'Bound' }],
+        claims: [{ name: 'claim-a', namespace: 'selected-ns', status: 'Bound' }],
         ageSeconds: 60,
       },
     }
@@ -162,12 +177,12 @@ describe('storage detail pages', () => {
   })
 
   it('keeps PV and StorageClass detail requests cluster scoped', async () => {
-    await renderDetail(
+    const pv = await renderDetail(
       '/storage/persistentvolumes/pv-a',
       '/storage/persistentvolumes/:name',
       <StoragePvDetailPage />,
     )
-    await renderDetail(
+    const storageClass = await renderDetail(
       '/storage/storageclasses/fast',
       '/storage/storageclasses/:name',
       <StorageClassDetailPage />,
@@ -184,5 +199,18 @@ describe('storage detail pages', () => {
     expect(
       apiGetMock.mock.calls.some(([path]) => String(path).endsWith('/storageclasses/fast/yaml')),
     ).toBe(false)
+    expect(pv.textContent).toContain('selected-ns/claim-a')
+    expect(storageClass.textContent).toContain('关联 PV')
+    expect(storageClass.textContent).toContain('关联 PVC')
+  })
+
+  it('shows pods using the PVC', async () => {
+    const container = await renderDetail(
+      '/storage/persistentvolumeclaims/claim-a?namespace=selected-ns',
+      '/storage/persistentvolumeclaims/:name',
+      <StoragePvcDetailPage />,
+    )
+    expect(container.textContent).toContain('使用此 PVC 的 Pods')
+    expect(container.textContent).toContain('api-0')
   })
 })

@@ -3,17 +3,17 @@ import type { ScopeKey } from '@/types'
 import { getAccessControlDetail, getAccessControlYAML, listAccessControlResources } from './api'
 import { accessControlKeys } from './keys'
 import { hasAccessControlCluster, hasAccessControlTargetScope } from './scope'
-import type { AccessControlKind } from './types'
+import type { AccessControlKind, AccessControlListFilter } from './types'
 
 function target(scope: ScopeKey, name: string) {
   return { scope, name }
 }
 
 export const accessControlQueries = {
-  list: <T>(kind: AccessControlKind, scope: ScopeKey) =>
+  list: <T>(kind: AccessControlKind, scope: ScopeKey, filter?: AccessControlListFilter) =>
     queryOptions<T[]>({
-      queryKey: accessControlKeys.list(kind, scope),
-      queryFn: () => listAccessControlResources<T>(kind, scope),
+      queryKey: accessControlKeys.list(kind, scope, filter),
+      queryFn: () => listAccessControlResources<T>(kind, scope, filter),
       enabled: hasAccessControlCluster(scope),
     }),
   detail: <T>(kind: AccessControlKind, scope: ScopeKey, name: string) =>

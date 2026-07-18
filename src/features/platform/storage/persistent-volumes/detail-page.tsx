@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { Card, Spin, message } from 'antd'
+import { Button, Card, Spin, message } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
 import { useI18n } from '@/i18n'
@@ -19,6 +19,7 @@ const StorageYAMLPanel = lazy(() => import('../shared/yaml-panel'))
 
 export function StoragePvDetailPage() {
   const { localeCode } = useI18n()
+  const navigate = useNavigate()
   const { name = '' } = useParams()
   const { clusterId } = usePlatformScopeStore()
   const scope = toClusterStorageScope(clusterId)
@@ -85,8 +86,41 @@ export function StoragePvDetailPage() {
                     key: localeCode === 'zh_CN' ? '容量' : 'Capacity',
                     value: detail.capacity || '-',
                   },
-                  { key: 'StorageClass', value: detail.storageClass || '-' },
-                  { key: 'Claim', value: detail.claimRef || '-' },
+                  {
+                    key: 'StorageClass',
+                    value: detail.storageClass ? (
+                      <Button
+                        type="link"
+                        onClick={() =>
+                          navigate(
+                            `/storage/storageclasses/${encodeURIComponent(detail.storageClass!)}`,
+                          )
+                        }
+                      >
+                        {detail.storageClass}
+                      </Button>
+                    ) : (
+                      '-'
+                    ),
+                  },
+                  {
+                    key: 'Claim',
+                    value:
+                      detail.claimName && detail.claimNamespace ? (
+                        <Button
+                          type="link"
+                          onClick={() =>
+                            navigate(
+                              `/storage/persistentvolumeclaims/${encodeURIComponent(detail.claimName!)}?namespace=${encodeURIComponent(detail.claimNamespace!)}`,
+                            )
+                          }
+                        >
+                          {detail.claimRef || `${detail.claimNamespace}/${detail.claimName}`}
+                        </Button>
+                      ) : (
+                        detail.claimRef || '-'
+                      ),
+                  },
                   { key: 'AccessModes', value: detail.accessModes?.join(', ') || '-' },
                   { key: 'ReclaimPolicy', value: detail.reclaimPolicy || '-' },
                   { key: 'VolumeMode', value: detail.volumeMode || '-' },

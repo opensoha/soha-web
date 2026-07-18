@@ -13,13 +13,15 @@ vi.mock('@/services/api-client', () => ({ api: apiMocks }))
 describe('Network Topology contracts', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('unwraps the existing topology endpoint with canonical scope', async () => {
+  it('unwraps the compact topology response with canonical scope', async () => {
     const scope = toScopeKey('cluster-a', 'team-a')
     const topology = {
       clusterId: 'cluster-a',
       source: 'kubernetes',
       generatedAt: 'now',
       summary: {},
+      traces: [],
+      warnings: [],
     }
     apiMocks.get.mockResolvedValue({ data: topology })
 
@@ -33,6 +35,11 @@ describe('Network Topology contracts', () => {
       'topology',
       { clusterId: 'cluster-a', namespace: 'team-a' },
     ])
+    expect(topology).not.toHaveProperty('services')
+    expect(topology).not.toHaveProperty('ingresses')
+    expect(topology).not.toHaveProperty('httpRoutes')
+    expect(topology).not.toHaveProperty('gateways')
+    expect(topology).not.toHaveProperty('pods')
   })
 
   it('keeps Flow and dagre exclusively in the dynamically imported runtime', () => {

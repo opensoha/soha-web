@@ -2,7 +2,7 @@ import type { ConfigurationDetailBase, ConfigurationResourceRecord } from '../sh
 
 export interface SecretResource extends ConfigurationResourceRecord {
   readonly namespace: string
-  readonly immutable: boolean
+  readonly immutable?: boolean | null
   readonly type: string
   readonly dataEntries: number
 }

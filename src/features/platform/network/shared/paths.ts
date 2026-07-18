@@ -32,6 +32,10 @@ export function buildNetworkItemPath(kind: NetworkKind, scope: ScopeKey, name: s
   return networkPath(kind, scope, `/${encodeURIComponent(normalizeName(name))}`)
 }
 
+export function buildNetworkDetailPath(kind: NetworkKind, scope: ScopeKey, name: string) {
+  return networkPath(kind, scope, `/${encodeURIComponent(normalizeName(name))}/detail`)
+}
+
 export function buildNetworkYAMLPath(kind: NetworkKind, scope: ScopeKey, name: string) {
   return networkPath(kind, scope, `/${encodeURIComponent(normalizeName(name))}/yaml`)
 }

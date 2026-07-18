@@ -20,22 +20,26 @@ const apiGetMock = vi.hoisted(() =>
           namespace: 'selected-ns',
           createdAt: '2026-01-01T00:00:00Z',
           selector: { app: 'node-agent' },
+          pods: [
+            {
+              name: 'node-agent-1',
+              namespace: 'selected-ns',
+              phase: 'Running',
+              readyContainers: '1/1',
+              restarts: 0,
+              ageSeconds: 60,
+              labels: { app: 'node-agent' },
+            },
+          ],
+          relatedResources: [
+            {
+              kind: 'ConfigMap',
+              name: 'node-agent-config',
+              namespace: 'selected-ns',
+              relation: 'config',
+            },
+          ],
         },
-      }
-    }
-    if (path.includes('/workloads/pods?')) {
-      return {
-        data: [
-          {
-            name: 'node-agent-1',
-            namespace: 'selected-ns',
-            phase: 'Running',
-            readyContainers: '1/1',
-            restarts: 0,
-            ageSeconds: 60,
-            labels: { app: 'node-agent' },
-          },
-        ],
       }
     }
     if (path.includes('/metrics?')) return { data: { rangeMinutes: 60, series: [] } }
@@ -167,6 +171,9 @@ describe('daemonset detail boundaries', () => {
     expect(requestedPaths().some((path) => path.includes('/metrics?'))).toBe(false)
     expect(requestedPaths().some((path) => path.includes('/events?'))).toBe(false)
     expect(requestedPaths().some((path) => path.includes('/yaml?'))).toBe(false)
+    expect(requestedPaths().some((path) => path.includes('/workloads/pods?'))).toBe(false)
+    expect(container.textContent).toContain('node-agent-1')
+    expect(container.textContent).toContain('node-agent-config')
 
     await act(async () => clickTab(container, '指标'))
     await flushAsyncWork()

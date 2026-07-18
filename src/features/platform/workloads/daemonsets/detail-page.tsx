@@ -1,19 +1,17 @@
 import { lazy, Suspense, useState } from 'react'
-import { Button, Card, Descriptions, Spin, Tag, Tooltip } from 'antd'
+import { Card, Descriptions, Spin } from 'antd'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ManagementState } from '@/components/management-list'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { ResourceEventsTimeline } from '@/components/resource-events-timeline'
-import { StatusTag } from '@/components/status-tag'
-import {
-  buildWorkloadDetailPath,
-  resolveWorkloadNamespace,
-} from '@/features/platform/workloads-model'
+import { resolveWorkloadNamespace } from '@/features/platform/workloads-model'
 import { WorkloadDetailShell } from '@/features/platform/workloads/shared/detail-shell'
+import {
+  WorkloadPodsCard,
+  WorkloadRelationsCard,
+} from '@/features/platform/workloads/shared/workload-relations'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
-import { formatAgeSeconds } from '@/utils/time'
 import { daemonSetQueries } from './queries'
 import type { DaemonSetDetail } from './types'
 import '@/features/platform/workloads/styles.css'
@@ -25,14 +23,6 @@ const ResourceMetricsPanel = lazy(async () => {
 
 function DaemonSetOverview({ detail }: { detail: DaemonSetDetail }) {
   const { localeCode } = useI18n()
-  const navigate = useNavigate()
-  const { clusterId } = usePlatformScopeStore()
-  const selector = detail.selector ?? {}
-  const podsQuery = useQuery(
-    daemonSetQueries.pods(toScopeKey(clusterId, detail.namespace), detail.name, selector),
-  )
-  const pods = podsQuery.data ?? []
-
   return (
     <div className="soha-detail-stack">
       <Card
@@ -57,71 +47,8 @@ function DaemonSetOverview({ detail }: { detail: DaemonSetDetail }) {
           ]}
         />
       </Card>
-      <Card
-        className="soha-detail-card soha-related-pod-card"
-        size="small"
-        title={localeCode === 'zh_CN' ? '关联 Pods' : 'Related Pods'}
-      >
-        <Spin spinning={podsQuery.isLoading}>
-          <div className="soha-related-pod-list">
-            {pods.length === 0 ? (
-              <ManagementState
-                bordered={false}
-                compact
-                title={localeCode === 'zh_CN' ? '暂无关联 Pods' : 'No related Pods'}
-              />
-            ) : null}
-            {pods.map((pod) => (
-              <div className="soha-related-pod-item" key={`${pod.namespace}/${pod.name}`}>
-                <div className="soha-related-pod-line">
-                  <Tooltip title={pod.name}>
-                    <Button
-                      type="link"
-                      className="soha-related-pod-name"
-                      onClick={() =>
-                        navigate(
-                          buildWorkloadDetailPath(
-                            'pods',
-                            pod.name,
-                            detail.namespace,
-                            pod.namespace,
-                          ),
-                        )
-                      }
-                    >
-                      {pod.name}
-                    </Button>
-                  </Tooltip>
-                  <StatusTag value={pod.phase} />
-                  <Tag color="blue" className="soha-related-pod-tag">
-                    {pod.namespace || detail.namespace || '-'}
-                  </Tag>
-                  <Tag color="cyan" className="soha-related-pod-tag">
-                    {pod.podIp || '-'}
-                  </Tag>
-                  <Tag color="success" className="soha-related-pod-tag">
-                    {`Ready ${pod.readyContainers || '-'}`}
-                  </Tag>
-                  <Tag
-                    color={(pod.restarts ?? 0) > 0 ? 'warning' : 'default'}
-                    className="soha-related-pod-tag"
-                  >
-                    {`${localeCode === 'zh_CN' ? '重启' : 'Restarts'} ${pod.restarts ?? 0}`}
-                  </Tag>
-                  <Tooltip title={pod.nodeName || '-'}>
-                    <Tag color="purple" className="soha-related-pod-tag soha-related-pod-tag-node">
-                      {pod.nodeName || '-'}
-                    </Tag>
-                  </Tooltip>
-                  <Tag color="geekblue" className="soha-related-pod-tag">
-                    {formatAgeSeconds(pod.ageSeconds)}
-                  </Tag>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Spin>
-      </Card>
+      <WorkloadPodsCard pods={detail.pods} namespace={detail.namespace} />
+      <WorkloadRelationsCard resources={detail.relatedResources} namespace={detail.namespace} />
     </div>
   )
 }

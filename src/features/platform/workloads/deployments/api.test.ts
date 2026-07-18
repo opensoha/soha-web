@@ -5,7 +5,6 @@ import {
   getDeploymentMetrics,
   getDeploymentRolloutStatus,
   listDeploymentEvents,
-  listDeploymentPods,
   listDeploymentRollouts,
   listDeployments,
   restartDeployment,
@@ -33,11 +32,16 @@ describe('deployment api', () => {
   it('unwraps list and detail endpoints with encoded resource names', async () => {
     apiMocks.get
       .mockResolvedValueOnce({ data: [{ name: 'api/server' }] })
-      .mockResolvedValueOnce({ data: { name: 'api/server', namespace: 'team/a' } })
+      .mockResolvedValueOnce({
+        data: { name: 'api/server', namespace: 'team/a', pods: [{ name: 'api-1' }] },
+      })
       .mockResolvedValueOnce({ data: { resourceKind: 'Deployment' } })
 
     await expect(listDeployments(scope)).resolves.toEqual([{ name: 'api/server' }])
-    await expect(getDeploymentDetail(target)).resolves.toMatchObject({ name: 'api/server' })
+    await expect(getDeploymentDetail(target)).resolves.toMatchObject({
+      name: 'api/server',
+      pods: [{ name: 'api-1' }],
+    })
     await expect(getDeploymentMetrics(target)).resolves.toMatchObject({
       resourceKind: 'Deployment',
     })
@@ -62,31 +66,19 @@ describe('deployment api', () => {
     expect(apiMocks.get.mock.calls[1][0]).toContain('/api%2Fserver/rollouts?')
   })
 
-  it('filters shared events and pods without changing their wire endpoints', async () => {
-    apiMocks.get
-      .mockResolvedValueOnce({
-        data: [
-          { involvedKind: 'Deployment', involvedName: 'api/server' },
-          { involvedKind: 'Pod', involvedName: 'api/server' },
-        ],
-      })
-      .mockResolvedValueOnce({
-        data: [
-          { name: 'matched', labels: { app: 'api', tier: 'web' } },
-          { name: 'other', labels: { app: 'worker' } },
-        ],
-      })
+  it('filters shared events without loading a Pod list', async () => {
+    apiMocks.get.mockResolvedValueOnce({
+      data: [
+        { involvedKind: 'Deployment', involvedName: 'api/server' },
+        { involvedKind: 'Pod', involvedName: 'api/server' },
+      ],
+    })
 
     await expect(listDeploymentEvents(target)).resolves.toEqual([
       { involvedKind: 'Deployment', involvedName: 'api/server' },
     ])
-    await expect(listDeploymentPods(target, { app: 'api', tier: 'web' })).resolves.toEqual([
-      { name: 'matched', labels: { app: 'api', tier: 'web' } },
-    ])
     expect(apiMocks.get.mock.calls[0][0]).toContain('/events?namespace=team%2Fa&limit=100')
-    expect(apiMocks.get.mock.calls[1][0]).toBe(
-      '/clusters/cluster-a/workloads/pods?namespace=team%2Fa',
-    )
+    expect(apiMocks.get).toHaveBeenCalledTimes(1)
   })
 
   it('keeps mutation transport responses out of the domain return type', async () => {

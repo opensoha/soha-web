@@ -1,4 +1,3 @@
-import { QueryClient } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { workloadKeys } from '@/features/platform/workloads/shared/keys'
 import { statefulSetQueries } from './queries'
@@ -7,7 +6,6 @@ const apiMocks = vi.hoisted(() => ({
   getStatefulSetDetail: vi.fn(),
   getStatefulSetMetrics: vi.fn(),
   listStatefulSetEvents: vi.fn(),
-  listStatefulSetPods: vi.fn(),
   listStatefulSets: vi.fn(),
 }))
 
@@ -27,20 +25,5 @@ describe('statefulset query options', () => {
     expect(
       statefulSetQueries.detail({ clusterId: 'cluster-a', namespace: null }, 'db').enabled,
     ).toBe(false)
-    expect(statefulSetQueries.pods(scope, 'db', {}).enabled).toBe(false)
-  })
-
-  it('keeps selector and target in the related pods query', async () => {
-    apiMocks.listStatefulSetPods.mockResolvedValueOnce([{ name: 'db-0' }])
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    const selector = { app: 'db' }
-
-    await expect(
-      queryClient.fetchQuery(statefulSetQueries.pods(scope, 'db', selector)),
-    ).resolves.toEqual([{ name: 'db-0' }])
-    expect(apiMocks.listStatefulSetPods).toHaveBeenCalledWith({ scope, name: 'db' }, selector)
-    expect(statefulSetQueries.pods(scope, 'db', selector).queryKey).toEqual(
-      workloadKeys.relatedPods('statefulsets', scope, 'db', selector),
-    )
   })
 })

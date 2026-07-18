@@ -1,4 +1,4 @@
-import type { Pod, ScopeKey } from '@/types'
+import type { Pod, ScopeKey, WorkloadRelation } from '@/types'
 
 export interface Job {
   name: string
@@ -19,6 +19,8 @@ export interface JobDetail extends Job {
   completionTime?: string
   labels?: Record<string, string>
   annotations?: Record<string, string>
+  pods?: Pod[]
+  relatedResources?: WorkloadRelation[]
 }
 
 export interface JobTarget {
@@ -26,4 +28,4 @@ export interface JobTarget {
   readonly name: string
 }
 
-export type { Pod }
+export type { Pod, WorkloadRelation }

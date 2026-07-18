@@ -1,4 +1,4 @@
-import type { ResourceCreateScopeDecision, ResourcePreflight } from './types'
+import type { ResourceCreateRequest, ResourceCreateScopeDecision, ResourcePreflight } from './types'
 
 export function resolveCreateEntryAvailability({
   clusterId,
@@ -45,10 +45,41 @@ export function resolveCreateEntryAvailability({
   return { disabled: false, reason: '' }
 }
 
+export function resourceCreateRequestFingerprint(
+  clusterId: string,
+  request: ResourceCreateRequest,
+) {
+  return JSON.stringify({
+    clusterId: clusterId.trim(),
+    source: request.source,
+    defaultNamespace: request.defaultNamespace?.trim() || null,
+    resourceGroup: request.resourceGroup?.trim() || null,
+    expectedApiVersion: request.expectedApiVersion?.trim() || null,
+    expectedKind: request.expectedKind?.trim() || null,
+    content: request.content,
+  })
+}
+
+export function resolveResourceCreateDefaultNamespace({
+  contextNamespace,
+  formNamespace,
+  mode,
+}: {
+  contextNamespace?: string
+  formNamespace?: string
+  mode: 'form' | 'yaml'
+}) {
+  if (mode === 'form') {
+    const normalizedFormNamespace = formNamespace?.trim()
+    if (normalizedFormNamespace) return normalizedFormNamespace
+  }
+  return contextNamespace?.trim() || undefined
+}
+
 export function isPreflightCurrent(
-  content: string,
-  preflightContent: string | null,
+  requestFingerprint: string,
+  preflightRequestFingerprint: string | null,
   preflight?: ResourcePreflight,
 ) {
-  return Boolean(preflight?.contentHash && preflightContent === content)
+  return Boolean(preflight?.contentHash && preflightRequestFingerprint === requestFingerprint)
 }

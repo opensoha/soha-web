@@ -1,4 +1,3 @@
-import { BooleanTag } from '@/components/status-tag'
 import { formatAgeSeconds } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import type { TableColumnsType } from 'antd'
@@ -16,11 +15,6 @@ const secretColumns: TableColumnsType<SecretResource> = [
   { title: 'Namespace', dataIndex: 'namespace' },
   { title: 'Type', dataIndex: 'type', render: (value: string) => value || '-' },
   { title: 'Data', dataIndex: 'dataEntries' },
-  {
-    title: 'Immutable',
-    dataIndex: 'immutable',
-    render: (value: boolean) => <BooleanTag value={value} />,
-  },
   {
     ...tableColumnPresets.datetime,
     title: 'Age',

@@ -2,9 +2,6 @@ import type { AccessControlDetailBase, AccessControlResourceRecord } from '../sh
 
 export interface ServiceAccountResource extends AccessControlResourceRecord {
   readonly namespace: string
-  readonly automountServiceAccountToken: boolean
-  readonly imagePullSecrets: number
-  readonly secrets: number
 }
 
 export interface ServiceAccountDetail extends AccessControlDetailBase {

@@ -3,6 +3,13 @@ import { resourceCreationKeys } from './keys'
 
 describe('resource creation keys', () => {
   it('normalizes scope decisions and fingerprints content without storing YAML in the key', () => {
+    expect(resourceCreationKeys.namespaces(' cluster-a ')).toEqual([
+      'platform',
+      'resource-creation',
+      'namespaces',
+      'cluster-a',
+    ])
+
     const decision = resourceCreationKeys.scopeDecision(' cluster-a ', {
       namespace: ' minio ',
       resourceGroup: ' configuration ',

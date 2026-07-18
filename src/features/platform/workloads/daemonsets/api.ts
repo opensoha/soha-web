@@ -1,5 +1,4 @@
 import { api } from '@/services/api-client'
-import type { Pod } from '@/types'
 import {
   getWorkloadDetail,
   getWorkloadMetrics,
@@ -22,11 +21,6 @@ function normalizeName(name: string) {
   return normalized
 }
 
-function matchesSelector(selector: Record<string, string>, labels?: Record<string, string>) {
-  const entries = Object.entries(selector)
-  return entries.length > 0 && entries.every(([key, value]) => labels?.[key] === value)
-}
-
 export function listDaemonSets(scope: DaemonSetTarget['scope']): Promise<DaemonSet[]> {
   return listWorkloads<DaemonSet>(daemonSetKind, scope)
 }
@@ -47,14 +41,6 @@ export async function listDaemonSetEvents(target: DaemonSetTarget): Promise<Work
       event.involvedName === name &&
       (!event.involvedKind || event.involvedKind.toLowerCase() === 'daemonset'),
   )
-}
-
-export async function listDaemonSetPods(
-  target: DaemonSetTarget,
-  selector: Record<string, string>,
-): Promise<Pod[]> {
-  const pods = await listWorkloads<Pod>('pods', target.scope)
-  return pods.filter((pod) => matchesSelector(selector, pod.labels))
 }
 
 export async function restartDaemonSet(target: DaemonSetTarget): Promise<void> {

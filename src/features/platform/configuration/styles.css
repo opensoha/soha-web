@@ -57,6 +57,23 @@
   white-space: nowrap;
 }
 
+.soha-config-detail-sections {
+  width: 100%;
+}
+
+.soha-config-webhook-selector {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.5fr) minmax(240px, 1fr) minmax(240px, 1fr);
+  gap: 12px;
+  padding: 8px 0;
+}
+
+@media (max-width: 900px) {
+  .soha-config-webhook-selector {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .soha-config-reference-path {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
 }

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { deleteJob, getJobDetail, listJobEvents, listJobPods, listJobs } from './api'
+import { deleteJob, getJobDetail, listJobEvents, listJobs } from './api'
 
 const apiMocks = vi.hoisted(() => ({
   delete: vi.fn(),
@@ -19,10 +19,21 @@ describe('job api', () => {
   it('unwraps list and detail data while preserving encoded scope and name', async () => {
     apiMocks.get
       .mockResolvedValueOnce({ data: [{ name: 'nightly/report' }] })
-      .mockResolvedValueOnce({ data: { name: 'nightly/report', namespace: 'team/a' } })
+      .mockResolvedValueOnce({
+        data: {
+          name: 'nightly/report',
+          namespace: 'team/a',
+          pods: [{ name: 'nightly-report-1' }],
+          relatedResources: [{ kind: 'CronJob', name: 'nightly' }],
+        },
+      })
 
     await expect(listJobs(scope)).resolves.toEqual([{ name: 'nightly/report' }])
-    await expect(getJobDetail(target)).resolves.toMatchObject({ name: 'nightly/report' })
+    await expect(getJobDetail(target)).resolves.toMatchObject({
+      name: 'nightly/report',
+      pods: [{ name: 'nightly-report-1' }],
+      relatedResources: [{ kind: 'CronJob', name: 'nightly' }],
+    })
     expect(apiMocks.get.mock.calls[0][0]).toBe(
       '/clusters/cluster-a/workloads/jobs?namespace=team%2Fa',
     )
@@ -31,27 +42,14 @@ describe('job api', () => {
     )
   })
 
-  it('filters events and related pods for only the requested Job', async () => {
-    apiMocks.get
-      .mockResolvedValueOnce({
-        data: [
-          { involvedKind: 'Job', involvedName: 'nightly/report' },
-          { involvedKind: 'CronJob', involvedName: 'nightly/report' },
-        ],
-      })
-      .mockResolvedValueOnce({
-        data: [
-          { name: 'legacy', labels: { 'job-name': 'nightly/report' } },
-          { name: 'batch', labels: { 'batch.kubernetes.io/job-name': 'nightly/report' } },
-          { name: 'other', labels: { 'job-name': 'other' } },
-        ],
-      })
-
+  it('filters events for only the requested Job', async () => {
+    apiMocks.get.mockResolvedValueOnce({
+      data: [
+        { involvedKind: 'Job', involvedName: 'nightly/report' },
+        { involvedKind: 'CronJob', involvedName: 'nightly/report' },
+      ],
+    })
     await expect(listJobEvents(target)).resolves.toHaveLength(1)
-    await expect(listJobPods(target)).resolves.toEqual([
-      { name: 'legacy', labels: { 'job-name': 'nightly/report' } },
-      { name: 'batch', labels: { 'batch.kubernetes.io/job-name': 'nightly/report' } },
-    ])
   })
 
   it('deletes the record in its own namespace', async () => {

@@ -4,7 +4,6 @@ import { hasNamespacedNetworkScope, hasNetworkCluster } from '../shared/scope'
 import {
   getService,
   getServiceMetrics,
-  listServiceBackendPods,
   listServiceEvents,
   listServices,
 } from './api'
@@ -25,12 +24,6 @@ export const serviceQueries = {
     queryOptions({
       queryKey: serviceKeys.detail(scope, name),
       queryFn: () => getService(scope, name),
-      enabled: hasReference(scope, name),
-    }),
-  backendPods: (scope: ScopeKey, name: string, selector?: Record<string, string>) =>
-    queryOptions({
-      queryKey: serviceKeys.backendPods(scope, name, selector),
-      queryFn: () => listServiceBackendPods(scope, selector),
       enabled: hasReference(scope, name),
     }),
   metrics: (scope: ScopeKey, name: string) =>

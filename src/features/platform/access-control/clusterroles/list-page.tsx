@@ -15,12 +15,6 @@ export function PlatformAccessControlClusterRolesPage() {
       dataIndex: 'name',
       render: (value: string) => <AccessControlNameLink kind="clusterroles" name={value} />,
     },
-    { title: localeCode === 'zh_CN' ? '规则数' : 'Rules', dataIndex: 'rules', width: 88 },
-    {
-      title: localeCode === 'zh_CN' ? '聚合规则' : 'Aggregation',
-      dataIndex: 'aggregationRules',
-      width: 108,
-    },
     {
       ...tableColumnPresets.datetime,
       title: 'Age',

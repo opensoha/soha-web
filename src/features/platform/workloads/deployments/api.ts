@@ -1,5 +1,5 @@
 import { api } from '@/services/api-client'
-import type { ApiResponse, Pod } from '@/types'
+import type { ApiResponse } from '@/types'
 import {
   buildWorkloadActionPath,
   buildWorkloadItemPath,
@@ -44,11 +44,6 @@ function deploymentSubresourcePath(
   return `${item}/${subresource}${query}`
 }
 
-function matchesSelector(selector: Record<string, string>, labels?: Record<string, string>) {
-  const entries = Object.entries(selector)
-  return entries.length > 0 && entries.every(([key, value]) => labels?.[key] === value)
-}
-
 export function listDeployments(scope: DeploymentTarget['scope']): Promise<Deployment[]> {
   return listWorkloads<Deployment>(deploymentKind, scope)
 }
@@ -85,14 +80,6 @@ export async function listDeploymentEvents(target: DeploymentTarget): Promise<Wo
       event.involvedName === name &&
       (!event.involvedKind || event.involvedKind.toLowerCase() === 'deployment'),
   )
-}
-
-export async function listDeploymentPods(
-  target: DeploymentTarget,
-  selector: Record<string, string>,
-): Promise<Pod[]> {
-  const pods = await listWorkloads<Pod>('pods', target.scope)
-  return pods.filter((pod) => matchesSelector(selector, pod.labels))
 }
 
 export async function restartDeployment(target: DeploymentTarget): Promise<void> {

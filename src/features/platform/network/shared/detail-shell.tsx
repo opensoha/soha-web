@@ -1,46 +1,19 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Card, Descriptions, Spin, Tabs, Tooltip, Typography, message } from 'antd'
+import { Card, Spin, Tabs, message } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { PlatformResourceOverview } from '@/features/platform/shared/resource-overview'
 import { useI18n } from '@/i18n'
-import { formatAgeSeconds } from '@/utils/time'
 import type { TabsProps } from 'antd'
 import { networkMutations } from './mutations'
 import { networkQueries } from './queries'
 import type { NetworkKind, NetworkResourceRecord, NetworkTarget } from './types'
 import '../styles.css'
 
-const { Text } = Typography
-
 const K8sYamlEditor = lazy(async () => {
   const module = await import('@/components/k8s-yaml-editor')
   return { default: module.K8sYamlEditor }
 })
-
-function MetadataSection({ items, title }: { items?: Record<string, string>; title: ReactNode }) {
-  const entries = Object.entries(items ?? {}).filter(([key]) => key.trim())
-  if (entries.length === 0) return null
-  return (
-    <div className="soha-workload-metadata-section">
-      <Text strong className="soha-workload-metadata-title">
-        {title}
-      </Text>
-      <div className="soha-workload-kv-grid">
-        {entries.map(([key, value]) => {
-          const displayValue = value || '-'
-          return (
-            <Tooltip key={key} title={`${key}: ${displayValue}`}>
-              <div className="soha-workload-kv-item" title={`${key}: ${displayValue}`}>
-                <span className="soha-workload-kv-key">{`${key}:`}</span>
-                <span className="soha-workload-kv-value">{displayValue}</span>
-              </div>
-            </Tooltip>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
 
 export function NetworkResourceOverview({
   ageLabel,
@@ -51,43 +24,16 @@ export function NetworkResourceOverview({
   detail: NetworkResourceRecord
   extra?: Array<{ key: string; value: ReactNode }>
 }) {
-  const { t, localeCode } = useI18n()
-  const hasLabels = Boolean(detail.labels && Object.keys(detail.labels).length > 0)
-  const hasAnnotations = Boolean(detail.annotations && Object.keys(detail.annotations).length > 0)
   return (
-    <Card className="soha-detail-card">
-      <Descriptions
-        column={{ xs: 1, sm: 2, md: 3 }}
-        size="small"
-        items={[
-          { key: 'name', label: t('common.name', 'Name'), children: detail.name },
-          {
-            key: 'namespace',
-            label: t('common.namespace', 'Namespace'),
-            children: detail.namespace || '-',
-          },
-          {
-            key: 'age',
-            label: ageLabel ?? t('common.createdAt', 'Created At'),
-            children: formatAgeSeconds(detail.ageSeconds),
-          },
-          ...(extra ?? []).map((item) => ({
-            key: item.key,
-            label: item.key,
-            children: item.value,
-          })),
-        ]}
-      />
-      {hasLabels || hasAnnotations ? (
-        <div className="soha-workload-metadata-stack">
-          <MetadataSection items={detail.labels} title={t('common.labels', 'Labels')} />
-          <MetadataSection
-            items={detail.annotations}
-            title={localeCode === 'zh_CN' ? '注解' : 'Annotations'}
-          />
-        </div>
-      ) : null}
-    </Card>
+    <PlatformResourceOverview
+      ageSeconds={detail.ageSeconds}
+      annotations={detail.annotations}
+      createdAtLabel={ageLabel}
+      facts={(extra ?? []).map((item) => ({ ...item, label: item.key }))}
+      labels={detail.labels}
+      name={detail.name}
+      namespace={detail.namespace || '-'}
+    />
   )
 }
 
@@ -167,6 +113,7 @@ export function NetworkDetailShell({
   kind,
   onTabChange,
   overviewExtra,
+  overviewContent,
   target,
 }: {
   activeTabKey: string
@@ -178,6 +125,7 @@ export function NetworkDetailShell({
   label: string
   onTabChange: (key: string) => void
   overviewExtra?: Array<{ key: string; value: ReactNode }>
+  overviewContent?: ReactNode
   target: NetworkTarget
 }) {
   const { t } = useI18n()
@@ -186,7 +134,10 @@ export function NetworkDetailShell({
       key: 'overview',
       label: t('common.overview', 'Overview'),
       children: (
-        <NetworkResourceOverview ageLabel={ageLabel} detail={detail} extra={overviewExtra} />
+        <div className="soha-detail-stack">
+          <NetworkResourceOverview ageLabel={ageLabel} detail={detail} extra={overviewExtra} />
+          {overviewContent}
+        </div>
       ),
     },
     ...extraTabs,

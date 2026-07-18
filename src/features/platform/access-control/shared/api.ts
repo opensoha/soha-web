@@ -9,6 +9,7 @@ import {
 import { accessControlScopeMode, requireAccessControlNamespace } from './scope'
 import type {
   AccessControlKind,
+  AccessControlListFilter,
   AccessControlTarget,
   AccessControlYAML,
   CreateAccessControlVariables,
@@ -18,8 +19,9 @@ import type {
 export async function listAccessControlResources<T>(
   kind: AccessControlKind,
   scope: AccessControlTarget['scope'],
+  filter?: AccessControlListFilter,
 ): Promise<T[]> {
-  const response = await api.get<ApiResponse<T[]>>(buildAccessControlListPath(kind, scope))
+  const response = await api.get<ApiResponse<T[]>>(buildAccessControlListPath(kind, scope, filter))
   return response.data ?? []
 }
 

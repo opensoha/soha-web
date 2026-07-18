@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { decideResourceCreateScope, executeResourceCreate, preflightResourceCreate } from './api'
+import {
+  decideResourceCreateScope,
+  executeResourceCreate,
+  listAuthorizedNamespaces,
+  preflightResourceCreate,
+} from './api'
 
 const apiMocks = vi.hoisted(() => ({
+  get: vi.fn(),
   post: vi.fn(),
   postWithHeaders: vi.fn(),
 }))
@@ -10,6 +16,18 @@ vi.mock('@/services/api-client', () => ({ api: apiMocks }))
 
 describe('resource creation api', () => {
   beforeEach(() => vi.clearAllMocks())
+
+  it('lists namespaces authorized for the current user', async () => {
+    const namespaces = [
+      { name: 'minio', status: 'Active', labels: {}, annotations: {} },
+      { name: 'platform', status: 'Active', labels: {}, annotations: {} },
+    ]
+    apiMocks.get.mockResolvedValue({ data: namespaces })
+
+    await expect(listAuthorizedNamespaces(' cluster/a ')).resolves.toEqual(namespaces)
+
+    expect(apiMocks.get).toHaveBeenCalledWith('/clusters/cluster%2Fa/namespaces')
+  })
 
   it('uses the cluster-scoped decision and preflight endpoints', async () => {
     apiMocks.post

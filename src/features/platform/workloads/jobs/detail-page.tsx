@@ -1,26 +1,22 @@
 import { useState } from 'react'
-import { Button, Card, Descriptions, List, Tag, Tooltip } from 'antd'
+import { Card, Descriptions } from 'antd'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
-import { ManagementState } from '@/components/management-list'
 import { ResourceEventsTimeline } from '@/components/resource-events-timeline'
-import { StatusTag } from '@/components/status-tag'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
-import { formatAgeSeconds, formatDateTime } from '@/utils/time'
-import { buildWorkloadDetailPath } from '@/features/platform/workloads-model'
+import { formatDateTime } from '@/utils/time'
 import { WorkloadDetailShell } from '@/features/platform/workloads/shared/detail-shell'
+import {
+  WorkloadPodsCard,
+  WorkloadRelationsCard,
+} from '@/features/platform/workloads/shared/workload-relations'
 import { jobQueries } from './queries'
-import type { JobDetail, Pod } from './types'
+import type { JobDetail } from './types'
 import '@/features/platform/workloads/styles.css'
 
 function JobOverview({ detail }: { detail: JobDetail }) {
   const { localeCode } = useI18n()
-  const navigate = useNavigate()
-  const { clusterId } = usePlatformScopeStore()
-  const podsQuery = useQuery(jobQueries.pods(toScopeKey(clusterId, detail.namespace), detail.name))
-  const pods = podsQuery.data ?? []
 
   return (
     <div className="soha-detail-stack">
@@ -52,70 +48,8 @@ function JobOverview({ detail }: { detail: JobDetail }) {
           ]}
         />
       </Card>
-      <Card
-        className="soha-detail-card soha-related-pod-card"
-        size="small"
-        title={localeCode === 'zh_CN' ? '关联 Pods' : 'Related Pods'}
-      >
-        <List
-          className="soha-related-pod-list"
-          dataSource={pods}
-          loading={podsQuery.isLoading}
-          rowKey={(record) => `${record.namespace}/${record.name}`}
-          locale={{
-            emptyText: (
-              <ManagementState
-                bordered={false}
-                compact
-                title={localeCode === 'zh_CN' ? '暂无关联 Pods' : 'No related Pods'}
-              />
-            ),
-          }}
-          renderItem={(pod: Pod) => (
-            <List.Item className="soha-related-pod-item">
-              <div className="soha-related-pod-line">
-                <Tooltip title={pod.name}>
-                  <Button
-                    type="link"
-                    className="soha-related-pod-name"
-                    onClick={() =>
-                      navigate(
-                        buildWorkloadDetailPath('pods', pod.name, detail.namespace, pod.namespace),
-                      )
-                    }
-                  >
-                    {pod.name}
-                  </Button>
-                </Tooltip>
-                <StatusTag value={pod.phase} />
-                <Tag color="blue" className="soha-related-pod-tag">
-                  {pod.namespace || detail.namespace || '-'}
-                </Tag>
-                <Tag color="cyan" className="soha-related-pod-tag">
-                  {pod.podIp || '-'}
-                </Tag>
-                <Tag color="success" className="soha-related-pod-tag">
-                  {`Ready ${pod.readyContainers || '-'}`}
-                </Tag>
-                <Tag
-                  color={(pod.restarts ?? 0) > 0 ? 'warning' : 'default'}
-                  className="soha-related-pod-tag"
-                >
-                  {`${localeCode === 'zh_CN' ? '重启' : 'Restarts'} ${pod.restarts ?? 0}`}
-                </Tag>
-                <Tooltip title={pod.nodeName || '-'}>
-                  <Tag color="purple" className="soha-related-pod-tag soha-related-pod-tag-node">
-                    {pod.nodeName || '-'}
-                  </Tag>
-                </Tooltip>
-                <Tag color="geekblue" className="soha-related-pod-tag">
-                  {formatAgeSeconds(pod.ageSeconds)}
-                </Tag>
-              </div>
-            </List.Item>
-          )}
-        />
-      </Card>
+      <WorkloadRelationsCard resources={detail.relatedResources} namespace={detail.namespace} />
+      <WorkloadPodsCard pods={detail.pods} namespace={detail.namespace} />
     </div>
   )
 }

@@ -5,9 +5,7 @@ import type { StepFormStep } from '@/components/step-form'
 import type { ResourceFormRendererProps } from './types'
 
 export function ResourceStepForm<Values extends object>({
-  cancelText,
   loading,
-  onCancel,
   onChange,
   onSubmit,
   steps,
@@ -23,12 +21,10 @@ export function ResourceStepForm<Values extends object>({
 
   return (
     <StepForm
-      cancelText={cancelText}
       current={current}
       form={form}
       initialValues={value}
       loading={loading}
-      onCancel={onCancel}
       onCurrentChange={setCurrent}
       onFinish={(values) => onSubmit?.(values as Values)}
       onValuesChange={(_, values) => onChange(values as Values)}
