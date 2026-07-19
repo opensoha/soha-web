@@ -3,6 +3,7 @@ import './styles.css'
 import {
   App,
   Button,
+  Collapse,
   Form,
   Input,
   InputNumber,
@@ -42,6 +43,7 @@ import { deliveryMutations } from '../mutations'
 import { deliveryQueries } from '../queries'
 import type { BlueprintBootstrapResult, DeliveryBlueprint, RenderedDeliverySpec } from '../types'
 import { formatDateTime } from '@/utils/time'
+import { parseReleaseTargets } from '../release-targets'
 
 const { Text } = Typography
 
@@ -49,6 +51,11 @@ const BUILD_SOURCE_TYPE_OPTIONS = [
   { value: 'repo_dockerfile', label: '仓库 Dockerfile' },
   { value: 'platform_build_template', label: '平台构建模板' },
   { value: 'external_pipeline', label: '外部流水线' },
+]
+
+const REPOSITORY_PROVIDER_OPTIONS = [
+  { value: 'git', label: '标准 Git' },
+  { value: 'gitlab', label: 'GitLab' },
 ]
 
 const LANGUAGE_OPTIONS = [
@@ -83,12 +90,39 @@ const VERIFICATION_MODE_OPTIONS = [
 
 const FILE_KIND_OPTIONS = [
   { value: 'dockerfile', label: 'Dockerfile' },
+  { value: 'yaml_manifest', label: 'Kubernetes YAML' },
   { value: 'helm_values', label: 'Helm Values' },
-  { value: 'deployment', label: 'Deployment' },
-  { value: 'service', label: 'Service' },
+  { value: 'helm_chart', label: 'Helm Chart' },
+  { value: 'kustomization', label: 'Kustomize' },
+  { value: 'deployment', label: 'Deployment（兼容）' },
+  { value: 'service', label: 'Service（兼容）' },
   { value: 'readme', label: 'README' },
   { value: 'other', label: 'Other' },
 ]
+
+type FileTemplatePreset =
+  'dockerfile' | 'yaml_manifest' | 'helm_values' | 'helm_chart' | 'kustomization'
+
+interface FileTemplateDraft {
+  path: string
+  kind: string
+  purpose: string
+  required: boolean
+  content: string
+}
+
+const FILE_TEMPLATE_PRESET_OPTIONS: Array<{ value: FileTemplatePreset; label: string }> = [
+  { value: 'dockerfile', label: 'Dockerfile 模板' },
+  { value: 'yaml_manifest', label: 'YAML 模板' },
+  { value: 'helm_values', label: 'Helm Values 模板' },
+  { value: 'helm_chart', label: 'Helm Chart 模板' },
+  { value: 'kustomization', label: 'Kustomize 模板' },
+]
+
+const DEFAULT_ENVIRONMENT_OPTIONS = ['dev', 'test', 'staging', 'prod'].map((value) => ({
+  value,
+  label: value,
+}))
 
 type BlueprintFormValues = Record<string, unknown>
 
@@ -164,16 +198,6 @@ function parseJSONObject(raw: unknown, field: string) {
   return value as Record<string, unknown>
 }
 
-function parseJSONArray(raw: unknown, field: string) {
-  const text = trimString(raw)
-  if (!text) return []
-  const value = JSON.parse(text)
-  if (!Array.isArray(value)) {
-    throw new Error(`${field} 需要是 JSON 数组`)
-  }
-  return value
-}
-
 function createDefaultBuildSource(index = 0) {
   return {
     id: `source-${index + 1}`,
@@ -183,6 +207,10 @@ function createDefaultBuildSource(index = 0) {
     isDefault: index === 0,
     buildImage: '',
     defaultTag: '',
+    buildTemplateId: '',
+    contextDir: '.',
+    dockerfilePath: 'Dockerfile',
+    pipelineUrl: '',
     configText: '{\n  "contextDir": ".",\n  "dockerfilePath": "Dockerfile"\n}',
   }
 }
@@ -209,17 +237,51 @@ function createDefaultEnvironmentBinding(index = 0) {
   }
 }
 
-function createDefaultFileTemplate(index = 0) {
-  return {
-    path: index === 0 ? 'Dockerfile' : '',
-    kind: index === 0 ? 'dockerfile' : 'other',
-    purpose: index === 0 ? '平台规范 Dockerfile 草稿' : '',
-    required: index === 0,
-    content:
-      index === 0
-        ? 'FROM node:22-alpine\nWORKDIR /app\nCOPY . .\nRUN npm ci && npm run build\nCMD ["npm", "start"]\n'
-        : '',
+function createDefaultFileTemplate(
+  index = 0,
+  preset: FileTemplatePreset = 'dockerfile',
+): FileTemplateDraft {
+  const templates: Record<FileTemplatePreset, FileTemplateDraft> = {
+    dockerfile: {
+      path: 'Dockerfile',
+      kind: 'dockerfile',
+      purpose: '平台规范 Dockerfile 草稿',
+      required: index === 0,
+      content:
+        'FROM node:22-alpine\nWORKDIR /app\nCOPY . .\nRUN npm ci && npm run build\nCMD ["npm", "start"]\n',
+    },
+    yaml_manifest: {
+      path: 'deploy/deployment.yaml',
+      kind: 'yaml_manifest',
+      purpose: 'Kubernetes 工作负载清单',
+      required: false,
+      content:
+        'apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: {{appKey}}\nspec:\n  replicas: 1\n',
+    },
+    helm_values: {
+      path: 'deploy/values.yaml',
+      kind: 'helm_values',
+      purpose: 'Helm 环境 Values',
+      required: false,
+      content: 'replicaCount: 1\nimage:\n  repository: {{imageRepository}}\n  tag: {{imageTag}}\n',
+    },
+    helm_chart: {
+      path: 'deploy/Chart.yaml',
+      kind: 'helm_chart',
+      purpose: 'Helm Chart 元数据',
+      required: false,
+      content: 'apiVersion: v2\nname: {{appKey}}\nversion: 0.1.0\nappVersion: {{imageTag}}\n',
+    },
+    kustomization: {
+      path: 'deploy/overlays/dev/kustomization.yaml',
+      kind: 'kustomization',
+      purpose: 'Kustomize 环境 Overlay',
+      required: false,
+      content:
+        'apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - ../../base\n',
+    },
   }
+  return templates[preset]
 }
 
 function createBlueprintDraftValues(
@@ -279,16 +341,23 @@ function blueprintToFormValues(blueprint: DeliveryBlueprint): BlueprintFormValue
     dockerfilePath: draft.dockerfilePath ?? 'Dockerfile',
     appEnabled: draft.enabled !== false,
     metadataText: stringify(draft.metadata ?? {}, '{}'),
-    buildSources: (blueprint.buildSources ?? []).map((source) => ({
-      id: source.id,
-      name: source.name,
-      type: source.type,
-      enabled: source.enabled,
-      isDefault: source.isDefault,
-      buildImage: source.buildImage ?? '',
-      defaultTag: source.defaultTag ?? '',
-      configText: stringify(source.config ?? {}, '{}'),
-    })),
+    buildSources: (blueprint.buildSources ?? []).map((source) => {
+      const config = source.config ?? {}
+      return {
+        id: source.id,
+        name: source.name,
+        type: source.type,
+        enabled: source.enabled,
+        isDefault: source.isDefault,
+        buildImage: source.buildImage ?? '',
+        defaultTag: source.defaultTag ?? '',
+        buildTemplateId: String(config.buildTemplateId ?? ''),
+        contextDir: String(config.contextDir ?? '.'),
+        dockerfilePath: String(config.dockerfilePath ?? 'Dockerfile'),
+        pipelineUrl: String(config.pipelineUrl ?? ''),
+        configText: stringify(config, '{}'),
+      }
+    }),
     environmentBindings: (blueprint.environmentBindings ?? []).map((binding) => ({
       environmentId: binding.environmentId ?? '',
       environmentKey: binding.environmentKey ?? '',
@@ -335,7 +404,13 @@ function buildBlueprintPayload(values: BlueprintFormValues, id?: string) {
       isDefault: Boolean(source.isDefault),
       buildImage: optionalString(source.buildImage),
       defaultTag: optionalString(source.defaultTag),
-      config: parseJSONObject(source.configText, `构建源 ${index + 1} 配置`),
+      config: compactRecord({
+        ...parseJSONObject(source.configText, `构建源 ${index + 1} 配置`),
+        buildTemplateId: optionalString(source.buildTemplateId),
+        contextDir: optionalString(source.contextDir),
+        dockerfilePath: optionalString(source.dockerfilePath),
+        pipelineUrl: optionalString(source.pipelineUrl),
+      }),
     }),
   )
 
@@ -370,7 +445,7 @@ function buildBlueprintPayload(values: BlueprintFormValues, id?: string) {
           binding.resourceSelectorText,
           `环境绑定 ${index + 1} 资源选择器`,
         ),
-        targets: parseJSONArray(binding.targetsText, `环境绑定 ${index + 1} 发布目标`),
+        targets: parseReleaseTargets(binding.targetsText, `环境绑定 ${index + 1} 发布目标`),
       }),
   )
 
@@ -466,9 +541,11 @@ export function DeliveryBlueprintsPage() {
   const canManage = hasPermission(permissionSnapshotQuery.data?.data, 'delivery.application.update')
   const [searchParams, setSearchParams] = useSearchParams()
   const [form] = Form.useForm<BlueprintFormValues>()
+  const repositoryProvider = Form.useWatch('repositoryProvider', form)
   const [selectedBlueprintId, setSelectedBlueprintId] = useState('')
   const [searchText, setSearchText] = useState('')
   const [activeTabKey, setActiveTabKey] = useState('basic')
+  const [filePreset, setFilePreset] = useState<FileTemplatePreset>('dockerfile')
   const [isDirty, setIsDirty] = useState(false)
   const [formSnapshot, setFormSnapshot] = useState<BlueprintFormValues>({})
   const [specModalVisible, setSpecModalVisible] = useState(false)
@@ -478,6 +555,12 @@ export function DeliveryBlueprintsPage() {
   const suppressFormChangeRef = useRef(false)
 
   const blueprintsQuery = useQuery(deliveryQueries.blueprints.list())
+  const environmentsQuery = useQuery(deliveryQueries.environments.list())
+  const buildTemplatesQuery = useQuery(deliveryQueries.buildTemplates.list())
+  const workflowTemplatesQuery = useQuery(deliveryQueries.workflowTemplates.list())
+  const gitProjectsQuery = useQuery(
+    deliveryQueries.repositories.gitProjects({ limit: 100 }, repositoryProvider === 'gitlab'),
+  )
   const createMutation = useMutation(deliveryMutations.blueprints.create(queryClient))
   const updateMutation = useMutation(deliveryMutations.blueprints.update(queryClient))
   const renderMutation = useMutation(deliveryMutations.blueprints.renderSpec())
@@ -544,12 +627,29 @@ export function DeliveryBlueprintsPage() {
         ...options?.formOverrides,
       }
       setSelectedBlueprintId(blueprint.id)
-      setActiveTabKey(options?.tabKey ?? 'basic')
+      setActiveTabKey(options?.tabKey ?? searchParams.get('tab') ?? 'basic')
       applyFormValues(values, Boolean(options?.dirtyAfterLoad))
       updateSearchParam(blueprint.id)
     },
-    [applyFormValues, updateSearchParam],
+    [applyFormValues, searchParams, updateSearchParam],
   )
+
+  useEffect(() => {
+    const requestedTab = searchParams.get('tab')
+    if (
+      requestedTab &&
+      ['basic', 'application', 'build', 'environment', 'files', 'advanced'].includes(requestedTab)
+    ) {
+      setActiveTabKey(requestedTab)
+    }
+    const requestedPreset = searchParams.get('preset') as FileTemplatePreset | null
+    if (
+      requestedPreset &&
+      FILE_TEMPLATE_PRESET_OPTIONS.some((item) => item.value === requestedPreset)
+    ) {
+      setFilePreset(requestedPreset)
+    }
+  }, [searchParams])
 
   useEffect(() => {
     if (!blueprints.length) return
@@ -740,6 +840,31 @@ export function DeliveryBlueprintsPage() {
     label: trimString(item.name) || `构建源 ${index + 1}`,
   }))
 
+  const environmentOptions = Array.from(
+    new Map(
+      [
+        ...DEFAULT_ENVIRONMENT_OPTIONS,
+        ...(environmentsQuery.data ?? []).map((item) => ({
+          value: item.environmentKey || item.environmentId,
+          label: item.environmentKey || item.environmentId,
+          environmentId: item.environmentId,
+        })),
+      ].map((item) => [item.value, item]),
+    ).values(),
+  )
+  const workflowTemplateOptions = (workflowTemplatesQuery.data ?? []).map((item) => ({
+    value: item.id,
+    label: item.name,
+  }))
+  const buildTemplateOptions = (buildTemplatesQuery.data ?? []).map((item) => ({
+    value: item.id,
+    label: item.name,
+  }))
+  const gitProjectOptions = (gitProjectsQuery.data ?? []).map((item) => ({
+    value: item.id,
+    label: `${item.path} (${item.id})`,
+  }))
+
   const designerTabs = [
     {
       key: 'basic',
@@ -829,10 +954,20 @@ export function DeliveryBlueprintsPage() {
             <Input placeholder="payments-dev" />
           </Form.Item>
           <Form.Item name="repositoryProvider" label="代码源">
-            <Input placeholder="gitlab / github / gitea" />
+            <Select options={REPOSITORY_PROVIDER_OPTIONS} />
           </Form.Item>
           <Form.Item name="repositoryProjectId" label="仓库项目 ID">
-            <Input placeholder="project-id" />
+            {repositoryProvider === 'gitlab' && gitProjectOptions.length ? (
+              <Select
+                allowClear
+                showSearch={{ optionFilterProp: 'label' }}
+                loading={gitProjectsQuery.isLoading}
+                options={gitProjectOptions}
+                placeholder="选择 GitLab 项目"
+              />
+            ) : (
+              <Input placeholder="project-id" />
+            )}
           </Form.Item>
           <Form.Item
             className="soha-delivery-blueprint-form-grid__wide"
@@ -846,15 +981,6 @@ export function DeliveryBlueprintsPage() {
           </Form.Item>
           <Form.Item name="defaultTag" label="默认 Tag">
             <Input placeholder="v1.0.0" />
-          </Form.Item>
-          <Form.Item name="buildImage" label="构建镜像">
-            <Input placeholder="golang:1.23 / node:22" />
-          </Form.Item>
-          <Form.Item name="buildContextDir" label="构建目录">
-            <Input placeholder="." />
-          </Form.Item>
-          <Form.Item name="dockerfilePath" label="Dockerfile 路径">
-            <Input placeholder="Dockerfile" />
           </Form.Item>
           <Form.Item
             className="soha-delivery-blueprint-switch-field"
@@ -871,16 +997,14 @@ export function DeliveryBlueprintsPage() {
           >
             <Input.TextArea rows={3} />
           </Form.Item>
-          <Form.Item
-            className="soha-delivery-blueprint-form-grid__wide"
-            name="metadataText"
-            label="应用元数据(JSON)"
-          >
-            <Input.TextArea
-              rows={5}
-              spellCheck={false}
-              placeholder='{"serviceKind":"kubernetes_workload"}'
-            />
+          <Form.Item noStyle name="buildImage">
+            <Input type="hidden" />
+          </Form.Item>
+          <Form.Item noStyle name="buildContextDir">
+            <Input type="hidden" />
+          </Form.Item>
+          <Form.Item noStyle name="dockerfilePath">
+            <Input type="hidden" />
           </Form.Item>
         </div>
       ),
@@ -963,17 +1087,71 @@ export function DeliveryBlueprintsPage() {
                     >
                       <Switch />
                     </Form.Item>
-                    <Form.Item
-                      className="soha-delivery-blueprint-form-grid__wide"
-                      name={[field.name, 'configText']}
-                      label="构建配置(JSON)"
-                    >
-                      <Input.TextArea
-                        rows={5}
-                        spellCheck={false}
-                        placeholder='{"contextDir":".","dockerfilePath":"Dockerfile"}'
-                      />
+                    <Form.Item noStyle shouldUpdate>
+                      {({ getFieldValue }) => {
+                        const sourceType = getFieldValue(['buildSources', field.name, 'type'])
+                        if (sourceType === 'platform_build_template') {
+                          return (
+                            <Form.Item
+                              className="soha-delivery-blueprint-form-grid__wide"
+                              name={[field.name, 'buildTemplateId']}
+                              label="平台构建模板"
+                            >
+                              <Select
+                                allowClear
+                                showSearch={{ optionFilterProp: 'label' }}
+                                loading={buildTemplatesQuery.isLoading}
+                                options={buildTemplateOptions}
+                                placeholder="选择构建模板"
+                              />
+                            </Form.Item>
+                          )
+                        }
+                        if (sourceType === 'external_pipeline') {
+                          return (
+                            <Form.Item
+                              className="soha-delivery-blueprint-form-grid__wide"
+                              name={[field.name, 'pipelineUrl']}
+                              label="外部流水线地址"
+                            >
+                              <Input placeholder="https://gitlab.example.com/group/project/-/pipelines" />
+                            </Form.Item>
+                          )
+                        }
+                        return (
+                          <>
+                            <Form.Item name={[field.name, 'contextDir']} label="构建目录">
+                              <Input placeholder="." />
+                            </Form.Item>
+                            <Form.Item
+                              name={[field.name, 'dockerfilePath']}
+                              label="Dockerfile 路径"
+                            >
+                              <Input placeholder="Dockerfile" />
+                            </Form.Item>
+                          </>
+                        )
+                      }}
                     </Form.Item>
+                    <Collapse
+                      className="soha-delivery-blueprint-form-grid__wide"
+                      ghost
+                      items={[
+                        {
+                          key: 'source-json',
+                          label: '高级扩展配置（JSON，兼容旧模板）',
+                          children: (
+                            <Form.Item name={[field.name, 'configText']} noStyle>
+                              <Input.TextArea
+                                rows={4}
+                                spellCheck={false}
+                                placeholder="可选：保留执行器专用扩展字段"
+                              />
+                            </Form.Item>
+                          ),
+                        },
+                      ]}
+                    />
                   </div>
                 </div>
               ))}
@@ -984,20 +1162,20 @@ export function DeliveryBlueprintsPage() {
     },
     {
       key: 'environment',
-      label: '环境绑定',
+      label: '发布计划',
       children: (
         <Form.List name="environmentBindings">
           {(fields, { add, remove }) => (
             <div className="soha-delivery-blueprint-repeat-list">
               <div className="soha-delivery-blueprint-repeat-list__toolbar">
                 <Text type="secondary">
-                  定义接入后默认环境、发布流程、构建策略和目标资源选择方式。
+                  用环境、构建来源和发布流程组成可复用的发布计划；复杂策略放在高级配置中。
                 </Text>
                 <Button
                   icon={<PlusOutlined />}
                   onClick={() => add(createDefaultEnvironmentBinding(fields.length))}
                 >
-                  添加环境绑定
+                  添加发布计划
                 </Button>
               </div>
               {fields.length === 0 ? (
@@ -1005,14 +1183,14 @@ export function DeliveryBlueprintsPage() {
                   bordered={false}
                   compact
                   kind="empty"
-                  title="暂无环境绑定"
-                  description="可以先保存应用档案模板，后续再补环境绑定。"
+                  title="暂无发布计划"
+                  description="可以先保存应用档案模板，后续再补发布计划。"
                 />
               ) : null}
               {fields.map((field, index) => (
                 <div className="soha-delivery-blueprint-repeat-item" key={field.key}>
                   <div className="soha-delivery-blueprint-repeat-item__head">
-                    <strong>{`环境绑定 ${index + 1}`}</strong>
+                    <strong>{`发布计划 ${index + 1}`}</strong>
                     <Button
                       danger
                       icon={<DeleteOutlined />}
@@ -1023,26 +1201,31 @@ export function DeliveryBlueprintsPage() {
                     </Button>
                   </div>
                   <div className="soha-delivery-blueprint-form-grid">
-                    <Form.Item name={[field.name, 'environmentKey']} label="环境 Key">
-                      <Input placeholder="dev / test / prod" />
+                    <Form.Item name={[field.name, 'environmentKey']} label="环境">
+                      <Select
+                        showSearch={{ optionFilterProp: 'label' }}
+                        options={environmentOptions}
+                        placeholder="选择 dev / test / prod"
+                        onChange={(value) => {
+                          const option = environmentOptions.find((item) => item.value === value)
+                          form.setFieldValue(
+                            ['environmentBindings', field.name, 'environmentId'],
+                            option && 'environmentId' in option ? option.environmentId : undefined,
+                          )
+                        }}
+                      />
                     </Form.Item>
-                    <Form.Item name={[field.name, 'environmentId']} label="环境 ID">
-                      <Input placeholder="env-id" />
+                    <Form.Item noStyle name={[field.name, 'environmentId']}>
+                      <Input type="hidden" />
                     </Form.Item>
-                    <Form.Item name={[field.name, 'businessLineId']} label="业务线 ID">
-                      <Input />
-                    </Form.Item>
-                    <Form.Item name={[field.name, 'workflowTemplateId']} label="发布流程模板 ID">
-                      <Input placeholder="workflow-template-id" />
-                    </Form.Item>
-                    <Form.Item name={[field.name, 'strategyProfileId']} label="发布策略 Profile">
-                      <Input placeholder="rolling-default" />
-                    </Form.Item>
-                    <Form.Item name={[field.name, 'promotionPolicyId']} label="晋级策略">
-                      <Input />
-                    </Form.Item>
-                    <Form.Item name={[field.name, 'artifactPolicyId']} label="制品策略">
-                      <Input />
+                    <Form.Item name={[field.name, 'workflowTemplateId']} label="发布流程模板">
+                      <Select
+                        allowClear
+                        showSearch={{ optionFilterProp: 'label' }}
+                        loading={workflowTemplatesQuery.isLoading}
+                        options={workflowTemplateOptions}
+                        placeholder="选择发布流程模板"
+                      />
                     </Form.Item>
                     <Form.Item name={[field.name, 'buildSourceId']} label="构建来源">
                       <Select allowClear options={buildSourceOptions} />
@@ -1091,42 +1274,71 @@ export function DeliveryBlueprintsPage() {
                     <Form.Item name={[field.name, 'verificationMode']} label="验证模式">
                       <Select options={VERIFICATION_MODE_OPTIONS} />
                     </Form.Item>
-                    <Form.Item
+                    <Collapse
                       className="soha-delivery-blueprint-form-grid__wide"
-                      name={[field.name, 'buildVariablesText']}
-                      label="构建变量(JSON)"
-                    >
-                      <Input.TextArea rows={4} spellCheck={false} />
-                    </Form.Item>
-                    <Form.Item
-                      className="soha-delivery-blueprint-form-grid__wide"
-                      name={[field.name, 'buildArgsText']}
-                      label="构建参数(JSON)"
-                    >
-                      <Input.TextArea rows={4} spellCheck={false} />
-                    </Form.Item>
-                    <Form.Item
-                      className="soha-delivery-blueprint-form-grid__wide"
-                      name={[field.name, 'resourceSelectorText']}
-                      label="资源选择器(JSON)"
-                    >
-                      <Input.TextArea
-                        rows={4}
-                        spellCheck={false}
-                        placeholder='{"matchLabels":{"app":"sample"}}'
-                      />
-                    </Form.Item>
-                    <Form.Item
-                      className="soha-delivery-blueprint-form-grid__wide"
-                      name={[field.name, 'targetsText']}
-                      label="发布目标(JSON Array)"
-                    >
-                      <Input.TextArea
-                        rows={5}
-                        spellCheck={false}
-                        placeholder='[{"clusterId":"dev","namespace":"default","workloadKind":"Deployment","workloadName":"sample"}]'
-                      />
-                    </Form.Item>
+                      ghost
+                      items={[
+                        {
+                          key: 'plan-advanced',
+                          label: '高级策略与目标（可选）',
+                          children: (
+                            <div className="soha-delivery-blueprint-form-grid">
+                              <Form.Item name={[field.name, 'businessLineId']} label="业务线 ID">
+                                <Input />
+                              </Form.Item>
+                              <Form.Item
+                                name={[field.name, 'strategyProfileId']}
+                                label="发布策略 Profile"
+                              >
+                                <Input placeholder="rolling-default" />
+                              </Form.Item>
+                              <Form.Item name={[field.name, 'promotionPolicyId']} label="晋级策略">
+                                <Input />
+                              </Form.Item>
+                              <Form.Item name={[field.name, 'artifactPolicyId']} label="制品策略">
+                                <Input />
+                              </Form.Item>
+                              <Form.Item
+                                className="soha-delivery-blueprint-form-grid__wide"
+                                name={[field.name, 'buildVariablesText']}
+                                label="构建变量(JSON)"
+                              >
+                                <Input.TextArea rows={3} spellCheck={false} />
+                              </Form.Item>
+                              <Form.Item
+                                className="soha-delivery-blueprint-form-grid__wide"
+                                name={[field.name, 'buildArgsText']}
+                                label="构建参数(JSON)"
+                              >
+                                <Input.TextArea rows={3} spellCheck={false} />
+                              </Form.Item>
+                              <Form.Item
+                                className="soha-delivery-blueprint-form-grid__wide"
+                                name={[field.name, 'resourceSelectorText']}
+                                label="资源选择器(JSON)"
+                              >
+                                <Input.TextArea
+                                  rows={3}
+                                  spellCheck={false}
+                                  placeholder='{"matchLabels":{"app":"sample"}}'
+                                />
+                              </Form.Item>
+                              <Form.Item
+                                className="soha-delivery-blueprint-form-grid__wide"
+                                name={[field.name, 'targetsText']}
+                                label="发布目标矩阵(JSON Array)"
+                              >
+                                <Input.TextArea
+                                  rows={6}
+                                  spellCheck={false}
+                                  placeholder='[{"clusterId":"dev","namespace":"default","targetKind":"k8s_workload","workloadKind":"Deployment","workloadName":"sample","enabled":true}]'
+                                />
+                              </Form.Item>
+                            </div>
+                          ),
+                        },
+                      ]}
+                    />
                   </div>
                 </div>
               ))}
@@ -1137,33 +1349,42 @@ export function DeliveryBlueprintsPage() {
     },
     {
       key: 'files',
-      label: '规范文件',
+      label: '文件模板',
       children: (
         <Form.List name="files">
           {(fields, { add, remove }) => (
             <div className="soha-delivery-blueprint-repeat-list">
               <div className="soha-delivery-blueprint-repeat-list__toolbar">
-                <Text type="secondary">维护 Dockerfile、Helm Values、Deployment 等规范草稿。</Text>
-                <Button
-                  icon={<PlusOutlined />}
-                  onClick={() => add(createDefaultFileTemplate(fields.length))}
-                >
-                  添加文件模板
-                </Button>
+                <Text type="secondary">
+                  按预设快速添加 Dockerfile、YAML、Helm 或 Kustomize 模板。
+                </Text>
+                <Space className="soha-delivery-blueprint-file-preset-actions">
+                  <Select
+                    value={filePreset}
+                    options={FILE_TEMPLATE_PRESET_OPTIONS}
+                    onChange={(value: FileTemplatePreset) => setFilePreset(value)}
+                  />
+                  <Button
+                    icon={<PlusOutlined />}
+                    onClick={() => add(createDefaultFileTemplate(fields.length, filePreset))}
+                  >
+                    添加预设
+                  </Button>
+                </Space>
               </div>
               {fields.length === 0 ? (
                 <ManagementState
                   bordered={false}
                   compact
                   kind="empty"
-                  title="暂无规范文件"
-                  description="模板可以只创建平台对象，也可以附带规范文件草稿。"
+                  title="暂无文件模板"
+                  description="模板可以只创建平台对象，也可以附带可复用的文件模板。"
                 />
               ) : null}
               {fields.map((field, index) => (
                 <div className="soha-delivery-blueprint-repeat-item" key={field.key}>
                   <div className="soha-delivery-blueprint-repeat-item__head">
-                    <strong>{`规范文件 ${index + 1}`}</strong>
+                    <strong>{`文件模板 ${index + 1}`}</strong>
                     <Button
                       danger
                       icon={<DeleteOutlined />}
@@ -1200,7 +1421,11 @@ export function DeliveryBlueprintsPage() {
                       name={[field.name, 'content']}
                       label="内容"
                     >
-                      <Input.TextArea rows={10} spellCheck={false} />
+                      <Input.TextArea
+                        className="soha-delivery-blueprint-code-area"
+                        rows={10}
+                        spellCheck={false}
+                      />
                     </Form.Item>
                   </div>
                 </div>
@@ -1212,9 +1437,16 @@ export function DeliveryBlueprintsPage() {
     },
     {
       key: 'advanced',
-      label: '高级预览',
+      label: '高级配置',
       children: (
         <div className="soha-delivery-blueprint-advanced">
+          <Form.Item name="metadataText" label="应用元数据(JSON)">
+            <Input.TextArea
+              rows={4}
+              spellCheck={false}
+              placeholder='{"serviceKind":"kubernetes_workload"}'
+            />
+          </Form.Item>
           <Form.Item name="executionHintsText" label="执行提示(JSON)">
             <Input.TextArea
               rows={5}
@@ -1289,7 +1521,7 @@ export function DeliveryBlueprintsPage() {
     <ManagementSearchableListPane
       activeKey={selectedBlueprintId}
       className="soha-delivery-blueprint-list"
-      emptyDescription="新建模板后，可在右侧维护应用档案、构建源、环境绑定和规范文件。"
+      emptyDescription="新建模板后，可在右侧维护应用档案、构建源、发布计划和文件模板。"
       emptyTitle="暂无接入模板"
       getItemKey={(item) => item.id}
       isLoading={blueprintsQuery.isLoading}
@@ -1332,8 +1564,8 @@ export function DeliveryBlueprintsPage() {
           <span className="soha-delivery-blueprint-list__item-meta">
             <StatusTag value={item.enabled ? 'enabled' : 'disabled'} />
             <Tag>{`构建 ${item.buildSourceCount}`}</Tag>
-            <Tag>{`环境 ${item.bindingCount}`}</Tag>
-            <Tag>{`文件 ${item.fileCount}`}</Tag>
+            <Tag>{`计划 ${item.bindingCount}`}</Tag>
+            <Tag>{`模板 ${item.fileCount}`}</Tag>
             {item.isDraft ? <Tag color="gold">草稿</Tag> : null}
           </span>
           <Text type="secondary" className="text-xs">
@@ -1369,7 +1601,17 @@ export function DeliveryBlueprintsPage() {
         className="soha-delivery-blueprint-tabs"
         destroyOnHidden={false}
         items={designerTabs}
-        onChange={setActiveTabKey}
+        onChange={(key) => {
+          setActiveTabKey(key)
+          setSearchParams(
+            (current) => {
+              const next = new URLSearchParams(current)
+              next.set('tab', key)
+              return next
+            },
+            { replace: true },
+          )
+        }}
       />
     </Form>
   ) : (
@@ -1377,7 +1619,7 @@ export function DeliveryBlueprintsPage() {
       bordered={false}
       kind="select-scope"
       title="选择或新建接入模板"
-      description="左侧选择模板后，在右侧设计应用档案、构建源、环境绑定和规范文件。"
+      description="左侧选择模板后，在右侧设计应用档案、构建源、发布计划和文件模板。"
     />
   )
 

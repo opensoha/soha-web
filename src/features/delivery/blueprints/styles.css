@@ -93,6 +93,14 @@
   min-width: 0;
 }
 
+.soha-delivery-blueprint-file-preset-actions {
+  flex: 0 0 auto;
+}
+
+.soha-delivery-blueprint-file-preset-actions .ant-select {
+  min-width: 180px;
+}
+
 .soha-delivery-blueprint-repeat-item {
   display: flex;
   flex-direction: column;
@@ -118,4 +126,9 @@
   max-height: calc(100vh - 420px);
   margin: 0;
   overflow: auto;
+}
+
+.soha-delivery-blueprint-code-area textarea,
+.soha-delivery-blueprint-code-area.ant-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
 }

@@ -23,6 +23,13 @@ import type {
   DeliveryGatewayManifest,
   DeliveryGatewayReadinessParams,
   DeliveryListParams,
+  RepositoryListParams,
+  GitReferenceParams,
+  GitCommitParams,
+  DeliveryRepository,
+  GitProject,
+  GitReference,
+  GitCommit,
   DeliveryPlan,
   DeliveryPlanConfirmResult,
   DeliveryPlanRequest,
@@ -131,6 +138,32 @@ function gatewayReadinessPath(params: DeliveryGatewayReadinessParams) {
 }
 
 export const deliveryApi = {
+  repositories: {
+    list: (params: RepositoryListParams = {}) =>
+      unwrap(api.get<ApiResponse<DeliveryRepository[]>>(withQuery('/repositories', { applicationId: params.applicationId?.trim(), search: params.search?.trim(), limit: params.limit }))),
+    create: (payload: DeliveryRecordInput) =>
+      unwrap(api.post<ApiResponse<DeliveryRepository>>('/repositories', payload)),
+    update: (id: string, payload: DeliveryRecordInput) =>
+      unwrap(api.put<ApiResponse<DeliveryRepository>>(`/repositories/${segment(id)}`, payload)),
+    delete: (id: string) => discard(api.delete(`/repositories/${segment(id)}`)),
+  },
+  gitlab: {
+    projects: async (params: Omit<RepositoryListParams, 'applicationId'> = {}) =>
+      (await api.get<{ items: GitProject[] }>(withQuery('/integrations/gitlab/projects', { search: params.search?.trim(), limit: params.limit }))).items,
+    branches: async (params: GitReferenceParams) =>
+      (await api.get<{ items: GitReference[] }>(withQuery('/integrations/gitlab/branches', { projectId: params.projectId, search: params.search, limit: params.limit }))).items,
+    tags: async (params: GitReferenceParams) =>
+      (await api.get<{ items: GitReference[] }>(withQuery('/integrations/gitlab/tags', { projectId: params.projectId, search: params.search, limit: params.limit }))).items,
+    commits: (params: GitCommitParams) =>
+      api.get<{ items: GitCommit[]; page: number; limit: number; hasMore: boolean }>(
+        withQuery('/integrations/gitlab/commits', {
+          projectId: params.projectId,
+          search: params.search,
+          limit: params.limit,
+          page: params.page,
+        }),
+      ),
+  },
   applications: {
     list: () => unwrap(api.get<ApiResponse<DeliveryApplication[]>>('/applications')),
     detail: (id: string) =>
@@ -345,6 +378,8 @@ export const deliveryApi = {
           {},
         ),
       ),
+    approval: (id: string, payload: { action: 'approve' | 'reject'; comment?: string }) =>
+      unwrap(api.post<ApiResponse<DeliveryPlan>>(`/delivery/plans/${segment(id)}/approval`, payload)),
   },
   dependencies: {
     clusters: () => unwrap(api.get<ApiResponse<DeliveryClusterList>>('/clusters')),

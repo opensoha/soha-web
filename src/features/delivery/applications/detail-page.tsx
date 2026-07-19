@@ -67,6 +67,7 @@ import type {
   ApplicationDeliveryActionKind,
   ApplicationDeliveryActionRequest,
   ApplicationEnvironment,
+  ApplicationRuntimeDetail,
   ApplicationRuntimeWorkload,
   ApplicationServiceComponent,
   ApplicationServiceContainer,
@@ -103,6 +104,20 @@ type ServiceFormValues = Omit<
     }
   >
 }
+
+type RepositoryFormValues = {
+  id?: string
+  name: string
+  provider: 'gitlab' | 'git'
+  protocol: 'https' | 'ssh'
+  url: string
+  path: string
+  gitlabProjectId?: string
+  credentialRef?: string
+  defaultBranch: string
+}
+
+type BuildSourceFormValues = Omit<BuildSource, 'id'> & { id?: string }
 
 type DeliveryActionFormValues = {
   applicationEnvironmentId?: string
@@ -400,6 +415,12 @@ function renderSelectorLabels(selector?: ApplicationEnvironment['resourceSelecto
   return labels.map(([key, value]) => `${key}=${value}`).join(', ')
 }
 
+function runtimeWorkloadForService(runtime: ApplicationRuntimeDetail | undefined, service: ApplicationServiceComponent) {
+  return runtime?.environments
+    ?.flatMap((environment) => environment.workloads ?? [])
+    .find((workload) => workload.serviceId === service.id || workload.serviceKey === service.key)
+}
+
 function deliveryTargetSummary(target?: {
   clusterId: string
   namespace: string
@@ -480,11 +501,17 @@ export function ApplicationDetailPage() {
   const [activeTab, setActiveTab] = useState(initialTab)
   const [serviceModalVisible, setServiceModalVisible] = useState(false)
   const [editingService, setEditingService] = useState<ApplicationServiceComponent | null>(null)
+  const [repositoryModalVisible, setRepositoryModalVisible] = useState(false)
+  const [editingRepositoryId, setEditingRepositoryId] = useState('')
+  const [buildSourceModalVisible, setBuildSourceModalVisible] = useState(false)
+  const [editingBuildSourceId, setEditingBuildSourceId] = useState('')
   const [deliveryPlanModalVisible, setDeliveryPlanModalVisible] = useState(false)
   const [pendingDeliveryPlan, setPendingDeliveryPlan] = useState<DeliveryPlan | null>(null)
   const [confirmedDeliveryPlan, setConfirmedDeliveryPlan] =
     useState<DeliveryPlanConfirmResult | null>(null)
   const [serviceForm] = Form.useForm<ServiceFormValues>()
+  const [repositoryForm] = Form.useForm<RepositoryFormValues>()
+  const [buildSourceForm] = Form.useForm<BuildSourceFormValues>()
   const [deliveryForm] = Form.useForm<DeliveryActionFormValues>()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const managementState = useApplicationCenterState()
@@ -492,6 +519,7 @@ export function ApplicationDetailPage() {
     permissionSnapshotQuery.data?.data,
     'delivery.application-services.manage',
   )
+  const canManageRepositories = managementState.canUpdateApplication
   const canTriggerBuild = hasPermission(
     permissionSnapshotQuery.data?.data,
     'delivery.builds.trigger',
@@ -514,15 +542,28 @@ export function ApplicationDetailPage() {
   const servicesQuery = useQuery(
     deliveryQueries.applications.services(applicationId ?? '', Boolean(applicationId)),
   )
+  const repositoriesQuery = useQuery(
+    deliveryQueries.repositories.list({ applicationId }, Boolean(applicationId)),
+  )
+  const selectedRepositoryProvider = Form.useWatch('provider', repositoryForm)
+  const selectedGitLabProjectId = Form.useWatch('gitlabProjectId', repositoryForm)
+  const gitProjectsQuery = useQuery(
+    deliveryQueries.repositories.gitProjects({}, repositoryModalVisible && selectedRepositoryProvider === 'gitlab'),
+  )
+  const gitBranchesQuery = useQuery(
+    deliveryQueries.repositories.gitBranches({ projectId: selectedGitLabProjectId ?? '' }, repositoryModalVisible && selectedRepositoryProvider === 'gitlab' && Boolean(selectedGitLabProjectId)),
+  )
 
   const runtime = runtimeQuery.data
   const detail = detailQuery.data
   const environments = runtime?.environments ?? []
   const services = servicesQuery.data ?? []
+  const repositories = repositoriesQuery.data ?? []
   const bindings = detail?.bindings ?? []
   const selectedDeliveryBindingId = Form.useWatch('applicationEnvironmentId', deliveryForm)
   const selectedTargetId = Form.useWatch('targetId', deliveryForm)
   const selectedBuildSourceId = Form.useWatch('buildSourceId', deliveryForm)
+  const selectedRefType = Form.useWatch('refType', deliveryForm) as DeliveryActionFormValues['refType']
   const selectedImageTag = Form.useWatch('imageTag', deliveryForm)
 
   useAIPageContext({
@@ -597,8 +638,18 @@ export function ApplicationDetailPage() {
     onSuccess: (result, variables, onMutateResult, context) => {
       void confirmDeliveryPlanOptions.onSuccess?.(result, variables, onMutateResult, context)
       setPendingDeliveryPlan(result.plan)
-      setConfirmedDeliveryPlan(result)
-      message.success(`${DELIVERY_ACTION_LABELS[result.plan.action]}已触发`)
+      setConfirmedDeliveryPlan(result.plan.status === 'confirmed' ? result : null)
+      message.success(result.plan.status === 'waiting_approval' ? 'DeliveryPlan 已提交审批' : `${DELIVERY_ACTION_LABELS[result.plan.action]}已触发`)
+    },
+    onError: (err: Error) => message.error(err.message),
+  })
+  const approvalOptions = deliveryMutations.plans.approval(queryClient)
+  const approvalMutation = useMutation({
+    ...approvalOptions,
+    onSuccess: (plan, variables, onMutateResult, context) => {
+      void approvalOptions.onSuccess?.(plan, variables, onMutateResult, context)
+      setPendingDeliveryPlan(plan)
+      message.success(variables.action === 'approve' ? 'DeliveryPlan 已批准，可再次确认执行' : 'DeliveryPlan 已拒绝')
     },
     onError: (err: Error) => message.error(err.message),
   })
@@ -637,11 +688,57 @@ export function ApplicationDetailPage() {
     onError: (err: Error) => message.error(err.message),
   })
 
+  const createRepositoryOptions = deliveryMutations.repositories.create(queryClient)
+  const createRepositoryMutation = useMutation({
+    ...createRepositoryOptions,
+    onSuccess: (result, variables, onMutateResult, context) => {
+      void createRepositoryOptions.onSuccess?.(result, variables, onMutateResult, context)
+      message.success('代码仓库已创建')
+      setRepositoryModalVisible(false)
+      repositoryForm.resetFields()
+    },
+    onError: (err: Error) => message.error(err.message),
+  })
+  const updateRepositoryOptions = deliveryMutations.repositories.update(queryClient)
+  const updateRepositoryMutation = useMutation({
+    ...updateRepositoryOptions,
+    onSuccess: (result, variables, onMutateResult, context) => {
+      void updateRepositoryOptions.onSuccess?.(result, variables, onMutateResult, context)
+      message.success('代码仓库已更新')
+      setRepositoryModalVisible(false)
+      setEditingRepositoryId('')
+      repositoryForm.resetFields()
+    },
+    onError: (err: Error) => message.error(err.message),
+  })
+  const deleteRepositoryOptions = deliveryMutations.repositories.delete(queryClient)
+  const deleteRepositoryMutation = useMutation({
+    ...deleteRepositoryOptions,
+    onSuccess: (result, variables, onMutateResult, context) => {
+      void deleteRepositoryOptions.onSuccess?.(result, variables, onMutateResult, context)
+      message.success('代码仓库已删除')
+    },
+    onError: (err: Error) => message.error(err.message),
+  })
+
   const openServiceModal = (service?: ApplicationServiceComponent) => {
     const nextService = service ?? null
     setEditingService(nextService)
     setServiceModalVisible(true)
     serviceForm.setFieldsValue(serviceInitialValues(nextService))
+  }
+
+  const openRepositoryModal = (repositoryId = '') => {
+    const repository = repositories.find((item) => item.id === repositoryId)
+    setEditingRepositoryId(repositoryId)
+    setRepositoryModalVisible(true)
+    repositoryForm.setFieldsValue(repository ? { ...repository } : { provider: 'gitlab', protocol: 'https', defaultBranch: 'main' })
+  }
+
+  const openBuildSourceModal = (source?: BuildSource) => {
+    setEditingBuildSourceId(source?.id ?? '')
+    setBuildSourceModalVisible(true)
+    buildSourceForm.setFieldsValue(source ? { ...source } : { name: '', type: 'repo_dockerfile', enabled: true, isDefault: !(runtime?.application.buildSources?.length), config: { repositoryId: repositories[0]?.id, contextDir: '.', dockerfilePath: 'Dockerfile', builderKind: 'docker' } })
   }
 
   useEffect(() => {
@@ -706,6 +803,27 @@ export function ApplicationDetailPage() {
     selectedDeliveryBinding?.buildSource ??
     runtime?.application.buildSources?.find((item) => item.isDefault) ??
     runtime?.application.buildSources?.[0]
+  const selectedRepositoryId = String(selectedBuildSource?.config?.repositoryId ?? '')
+  const selectedRepository = repositories.find((item) => item.id === selectedRepositoryId)
+  const selectedGitProjectId = selectedRepository?.gitlabProjectId ?? ''
+  const deliveryBranchesQuery = useQuery(
+    deliveryQueries.repositories.gitBranches(
+      { projectId: selectedGitProjectId },
+      Boolean(selectedGitProjectId && selectedRefType === 'branch'),
+    ),
+  )
+  const deliveryTagsQuery = useQuery(
+    deliveryQueries.repositories.gitTags(
+      { projectId: selectedGitProjectId },
+      Boolean(selectedGitProjectId && selectedRefType === 'tag'),
+    ),
+  )
+  const deliveryCommitsQuery = useQuery(
+    deliveryQueries.repositories.gitCommits(
+      { projectId: selectedGitProjectId, page: 1, limit: 50 },
+      Boolean(selectedGitProjectId && selectedRefType === 'commit'),
+    ),
+  )
   const effectiveImageTag =
     selectedImageTag || selectedBuildSource?.defaultTag || runtime?.application.defaultTag || ''
   const deliverySignal = summarizeDeliveryBuildSignal([detail ?? {}, ...bindings])
@@ -989,7 +1107,30 @@ export function ApplicationDetailPage() {
               <Select options={REF_TYPE_OPTIONS} />
             </Form.Item>
             <Form.Item name="refName" label="分支 / Tag / Commit">
-              <Input placeholder="main" />
+              {selectedGitProjectId && selectedRefType === 'branch' ? (
+                <Select
+                  showSearch
+                  allowClear
+                  loading={deliveryBranchesQuery.isFetching}
+                  options={(deliveryBranchesQuery.data ?? []).map((item) => ({ value: item.name, label: item.name }))}
+                />
+              ) : selectedGitProjectId && selectedRefType === 'tag' ? (
+                <Select
+                  showSearch
+                  allowClear
+                  loading={deliveryTagsQuery.isFetching}
+                  options={(deliveryTagsQuery.data ?? []).map((item) => ({ value: item.name, label: item.name }))}
+                />
+              ) : selectedGitProjectId && selectedRefType === 'commit' ? (
+                <Select
+                  showSearch
+                  allowClear
+                  loading={deliveryCommitsQuery.isFetching}
+                  options={(deliveryCommitsQuery.data?.items ?? []).map((item) => ({ value: item.id, label: `${item.shortId} ${item.title}` }))}
+                />
+              ) : (
+                <Input placeholder="main" />
+              )}
             </Form.Item>
             <Form.Item name="imageTag" label="镜像 Tag">
               <Input
@@ -1089,6 +1230,12 @@ export function ApplicationDetailPage() {
           <Button key="close" onClick={() => setDeliveryPlanModalVisible(false)}>
             关闭
           </Button>,
+          ...(pendingDeliveryPlan?.status === 'waiting_approval'
+            ? [
+                <Button key="reject" danger loading={approvalMutation.isPending} onClick={() => approvalMutation.mutate({ id: pendingDeliveryPlan.id, action: 'reject' })}>拒绝</Button>,
+                <Button key="approve" type="primary" loading={approvalMutation.isPending} onClick={() => approvalMutation.mutate({ id: pendingDeliveryPlan.id, action: 'approve' })}>批准</Button>,
+              ]
+            : []),
           <Button
             key="confirm"
             type="primary"
@@ -1327,7 +1474,29 @@ export function ApplicationDetailPage() {
                   />
                 </Card>
                 <DeliveryTable
+                  title="代码仓库"
+                  actions={canManageRepositories ? <Button type="primary" icon={<PlusOutlined />} onClick={() => openRepositoryModal()}>添加仓库</Button> : null}
+                  rowKey="id"
+                  pagination={false}
+                  dataSource={repositories}
+                  loading={repositoriesQuery.isLoading}
+                  columns={[
+                    { title: '名称', dataIndex: 'name' },
+                    { title: '提供方', dataIndex: 'provider', render: (value: string) => <Tag>{value}</Tag> },
+                    { title: '路径', dataIndex: 'path' },
+                    { title: '默认分支', dataIndex: 'defaultBranch' },
+                    { title: '协议', dataIndex: 'protocol' },
+                    ...(canManageRepositories ? [{
+                      title: '操作', dataIndex: 'id', width: 96, render: (id: string) => <Space size={2}>
+                        <ManagementIconButton aria-label="编辑代码仓库" icon={<EditOutlined />} tooltip="编辑" onClick={() => openRepositoryModal(id)} />
+                        <Popconfirm title="确认删除该代码仓库？" onConfirm={() => deleteRepositoryMutation.mutate(id)}><ManagementIconButton aria-label="删除代码仓库" danger icon={<DeleteOutlined />} tooltip="删除" /></Popconfirm>
+                      </Space>,
+                    }] : []),
+                  ]}
+                />
+                <DeliveryTable
                   title="构建来源"
+                  actions={managementState.canUpdateApplication ? <Button type="primary" icon={<PlusOutlined />} onClick={() => openBuildSourceModal()}>添加构建源</Button> : null}
                   rowKey="id"
                   pagination={false}
                   dataSource={runtime.application.buildSources ?? []}
@@ -1364,6 +1533,12 @@ export function ApplicationDetailPage() {
                         <StatusTag value={value ? 'enabled' : 'disabled'} />
                       ),
                     },
+                    ...(managementState.canUpdateApplication ? [{
+                      title: '操作', dataIndex: 'id', width: 96, render: (id: string, record: BuildSource) => <Space size={2}>
+                        <ManagementIconButton aria-label="编辑构建源" icon={<EditOutlined />} tooltip="编辑" onClick={() => openBuildSourceModal(record)} />
+                        <Popconfirm title="确认删除该构建源？" onConfirm={() => managementState.updateAppMutation.mutate({ id: runtime.application.id, payload: { ...runtime.application, buildSources: (runtime.application.buildSources ?? []).filter((item) => item.id !== id) } })}><ManagementIconButton aria-label="删除构建源" danger icon={<DeleteOutlined />} tooltip="删除" /></Popconfirm>
+                      </Space>,
+                    }] : []),
                   ]}
                 />
                 <DeliveryTable
@@ -1658,6 +1833,21 @@ export function ApplicationDetailPage() {
                               <Text type="secondary">尚未配置容器</Text>
                             ) : null}
                           </div>
+                          {runtimeWorkloadForService(runtime, service) ? (
+                            <Button
+                              size="small"
+                              icon={<LinkOutlined />}
+                              onClick={() => {
+                                const workload = runtimeWorkloadForService(runtime, service)
+                                if (!workload) return
+                                navigate(
+                                  `/applications/${runtime.application.id}/application-environments/${workload.applicationEnvironmentId}/workloads/${encodeURIComponent(workload.workloadName)}`,
+                                )
+                              }}
+                            >
+                              运行态
+                            </Button>
+                          ) : null}
                         </div>
                       </Card>
                     ))}
@@ -2144,6 +2334,14 @@ export function ApplicationDetailPage() {
             <Form.Item name="buildSourceId" label="构建来源">
               <Select allowClear options={serviceBuildSourceOptions} />
             </Form.Item>
+            <Form.Item name="repositoryId" label="代码仓库">
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                options={repositories.map((item) => ({ value: item.id, label: item.name }))}
+              />
+            </Form.Item>
             <Form.Item name="repositoryPath" label="服务仓库">
               <Input placeholder="group/project" />
             </Form.Item>
@@ -2222,6 +2420,48 @@ export function ApplicationDetailPage() {
               保存
             </Button>
           </div>
+        </Form>
+      </Modal>
+      <Modal title={editingRepositoryId ? '编辑代码仓库' : '添加代码仓库'} open={repositoryModalVisible} footer={null} destroyOnHidden width={720} onCancel={() => { setRepositoryModalVisible(false); setEditingRepositoryId(''); repositoryForm.resetFields() }}>
+        <Form form={repositoryForm} layout="vertical" onFinish={(values) => {
+          const payload = { ...values, applicationIds: [applicationId], gitlabProjectId: values.provider === 'gitlab' ? values.gitlabProjectId : undefined }
+          if (editingRepositoryId) updateRepositoryMutation.mutate({ id: editingRepositoryId, payload })
+          else createRepositoryMutation.mutate(payload)
+        }}>
+          <div className="soha-application-service-form-grid">
+            <Form.Item name="provider" label="提供方" rules={[{ required: true }]}><Select options={[{ value: 'gitlab', label: 'GitLab' }, { value: 'git', label: 'Git URL' }]} /></Form.Item>
+            <Form.Item name="protocol" label="协议" rules={[{ required: true }]}><Select options={[{ value: 'https', label: 'HTTPS' }, { value: 'ssh', label: 'SSH' }]} /></Form.Item>
+            {selectedRepositoryProvider === 'gitlab' ? <Form.Item name="gitlabProjectId" label="GitLab Project" rules={[{ required: true, message: '请选择 GitLab Project' }]}><Select showSearch={{ optionFilterProp: 'label' }} loading={gitProjectsQuery.isFetching} options={(gitProjectsQuery.data ?? []).map((item) => ({ value: item.id, label: item.pathWithNamespace }))} onChange={(id) => { const project = gitProjectsQuery.data?.find((item) => item.id === id); if (project) repositoryForm.setFieldsValue({ name: project.name, path: project.pathWithNamespace, url: project.webUrl, defaultBranch: project.defaultBranch || 'main' }) }} /></Form.Item> : null}
+            <Form.Item name="name" label="仓库名称" rules={[{ required: true }]}><Input /></Form.Item>
+            <Form.Item name="path" label="仓库路径" rules={[{ required: true }]}><Input placeholder="group/project" /></Form.Item>
+            <Form.Item name="url" label="Git URL" rules={[{ required: true }]}><Input placeholder="https://git.example.com/group/project.git" /></Form.Item>
+            <Form.Item name="defaultBranch" label="默认分支" rules={[{ required: true }]}>{selectedRepositoryProvider === 'gitlab' ? <Select showSearch={{ optionFilterProp: 'label' }} loading={gitBranchesQuery.isFetching} options={(gitBranchesQuery.data ?? []).map((item) => ({ value: item.name, label: item.name }))} /> : <Input placeholder="main" />}</Form.Item>
+            <Form.Item name="credentialRef" label="凭据引用"><Input placeholder="server-side credential ref" /></Form.Item>
+          </div>
+          <div className="soha-form-actions"><Button onClick={() => setRepositoryModalVisible(false)}>取消</Button><Button htmlType="submit" type="primary" loading={createRepositoryMutation.isPending || updateRepositoryMutation.isPending}>保存</Button></div>
+        </Form>
+      </Modal>
+      <Modal title={editingBuildSourceId ? '编辑构建源' : '添加构建源'} open={buildSourceModalVisible} footer={null} destroyOnHidden width={720} onCancel={() => { setBuildSourceModalVisible(false); setEditingBuildSourceId(''); buildSourceForm.resetFields() }}>
+        <Form form={buildSourceForm} layout="vertical" onFinish={(values) => {
+          const sources = [...(runtime?.application.buildSources ?? [])]
+          const source = { ...values, id: editingBuildSourceId || `source-${Date.now()}` }
+          const normalized = (source.isDefault ? sources.map((item) => ({ ...item, isDefault: false })) : sources).filter((item) => item.id !== source.id).concat(source as BuildSource)
+          managementState.updateAppMutation.mutate({ id: runtime?.application.id ?? '', payload: { ...runtime?.application, buildSources: normalized } }, { onSuccess: () => { setBuildSourceModalVisible(false); setEditingBuildSourceId(''); buildSourceForm.resetFields() } })
+        }}>
+          <div className="soha-application-service-form-grid">
+            <Form.Item name="name" label="名称" rules={[{ required: true }]}><Input /></Form.Item>
+            <Form.Item name="type" label="类型" rules={[{ required: true }]}><Select options={[{ value: 'repo_dockerfile', label: 'Repository Dockerfile' }, { value: 'platform_build_template', label: 'Platform Build Template' }, { value: 'external_pipeline', label: 'External Pipeline' }]} /></Form.Item>
+            <Form.Item name={['config', 'repositoryId']} label="代码仓库"><Select allowClear options={repositories.map((item) => ({ value: item.id, label: item.name }))} /></Form.Item>
+            <Form.Item name="buildImage" label="构建镜像"><Input /></Form.Item>
+            <Form.Item name="defaultTag" label="默认 Tag"><Input /></Form.Item>
+            <Form.Item name={['config', 'dockerfilePath']} label="Dockerfile"><Input placeholder="Dockerfile" /></Form.Item>
+            <Form.Item name={['config', 'contextDir']} label="构建上下文"><Input placeholder="." /></Form.Item>
+            <Form.Item name={['config', 'buildTemplateId']} label="构建模板 ID"><Input /></Form.Item>
+            <Form.Item name={['config', 'pipelineUrl']} label="外部流水线 URL"><Input /></Form.Item>
+            <Form.Item name="isDefault" label="默认构建源" valuePropName="checked"><Switch /></Form.Item>
+            <Form.Item name="enabled" label="启用" valuePropName="checked"><Switch /></Form.Item>
+          </div>
+          <div className="soha-form-actions"><Button onClick={() => setBuildSourceModalVisible(false)}>取消</Button><Button htmlType="submit" type="primary" loading={managementState.updateAppMutation.isPending}>保存</Button></div>
         </Form>
       </Modal>
       <ApplicationCenterModals state={managementState} />

@@ -11,7 +11,7 @@ import {
   Tag,
   Typography,
 } from 'antd'
-import { ApiOutlined, FileTextOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
+import { FileTextOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { ManagementIconButton } from '@/components/management-list'
@@ -29,6 +29,7 @@ import { deliveryQueries } from '@/features/delivery/queries'
 import type { ExecutionArtifact, ExecutionTask } from '@/features/delivery/types'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
+import { summarizeDeliveryGovernance } from '../workbench/governance'
 
 const { Text } = Typography
 
@@ -51,7 +52,6 @@ export function ExecutionTasksPage() {
       refetchInterval: selectedTask?.id ? 5000 : false,
     }),
   )
-  const callbackMutation = useMutation(deliveryMutations.executionTasks.callback(queryClient))
   const cancelMutation = useMutation(deliveryMutations.executionTasks.cancel(queryClient))
   const retryMutation = useMutation(deliveryMutations.executionTasks.retry(queryClient))
   const executionTasks = tasksQuery.data ?? []
@@ -71,23 +71,6 @@ export function ExecutionTasksPage() {
   function refreshTaskEvidence() {
     void tasksQuery.refetch()
     if (selectedTask?.id) void logsQuery.refetch()
-  }
-
-  function handleCallback(task: ExecutionTask) {
-    callbackMutation.mutate(
-      {
-        callbackToken: task.callbackToken,
-        status: 'completed',
-        payload: { logs: [`manual callback for ${task.id}`] },
-      },
-      {
-        onSuccess: () => {
-          message.success('回调已记录')
-          refreshTaskEvidence()
-        },
-        onError: (error) => message.error(error.message),
-      },
-    )
   }
 
   function handleCancel(task: ExecutionTask) {
@@ -201,6 +184,30 @@ export function ExecutionTasksPage() {
             render: (value: string) => <StatusTag value={value} />,
           },
           {
+            title: '治理证据',
+            dataIndex: 'releaseBundleId',
+            render: (value: string, record: ExecutionTask) => {
+              if (!value) return '-'
+              const bundle = {
+                id: value,
+                applicationId: record.applicationId,
+                version: '-',
+                sourceType: '-',
+                status: 'completed',
+                createdAt: record.createdAt,
+                updatedAt: record.updatedAt,
+              }
+              const governance = summarizeDeliveryGovernance(bundle, [record])
+              return (
+                <Space size={4} wrap>
+                  <StatusTag value={governance.label} />
+                  {governance.aiAuditRefs.length ? <Tag color="purple">AI审计</Tag> : null}
+                  {governance.approvalRequestId ? <Tag color="gold">审批</Tag> : null}
+                </Space>
+              )
+            },
+          },
+          {
             title: 'Retries',
             dataIndex: 'attemptCount',
             render: (value: number, record: ExecutionTask) => `${value}/${record.maxRetries}`,
@@ -251,15 +258,6 @@ export function ExecutionTasksPage() {
                     onClick={() => handleRetry(record)}
                   />
                 ) : null}
-                {canManage && record.providerKind !== 'k8s_job_runner' && record.callbackToken ? (
-                  <ManagementIconButton
-                    aria-label="模拟执行回调"
-                    icon={<ApiOutlined />}
-                    size="small"
-                    tooltip="模拟回调"
-                    onClick={() => handleCallback(record)}
-                  />
-                ) : null}
               </Space>
             ),
           },
@@ -294,11 +292,6 @@ export function ExecutionTasksPage() {
                     children: selectedTask.lastHeartbeatAt
                       ? formatDateTime(selectedTask.lastHeartbeatAt)
                       : '-',
-                  },
-                  {
-                    key: 'callback',
-                    label: 'Callback Token',
-                    children: selectedTask.callbackToken || '-',
                   },
                 ]
               : []

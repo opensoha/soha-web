@@ -22,6 +22,11 @@ import { DeliveryTable } from '../delivery-table'
 import { deliveryMutations } from '../mutations'
 import { deliveryQueries } from '../queries'
 import type { ApplicationEnvironment, BuildSource, WorkflowTemplate } from '../types'
+import {
+  parseReleaseTargets,
+  RELEASE_TARGET_KIND_OPTIONS,
+  summarizeReleaseTargets,
+} from '../release-targets'
 
 type ColumnProps<T> = TableColumnsType<T>[number]
 
@@ -173,7 +178,11 @@ export function ApplicationEnvironmentsPage() {
     {
       title: '目标数',
       dataIndex: 'targets',
-      render: (targets: ApplicationEnvironment['targets']) => targets?.length ?? 0,
+      render: (targets: ApplicationEnvironment['targets']) => (
+        <span title={summarizeReleaseTargets(targets)}>
+          {targets?.length ?? 0} · {summarizeReleaseTargets(targets)}
+        </span>
+      ),
     },
     {
       ...tableColumnPresets.datetime,
@@ -268,10 +277,12 @@ export function ApplicationEnvironmentsPage() {
             let variables: Record<string, unknown>
             let buildArgs: Record<string, unknown>
             let targetMetadata: Record<string, unknown>
+            let matrixTargets: ReturnType<typeof parseReleaseTargets>
             try {
               variables = parseJSONObject(values.buildVariablesText, '构建变量')
               buildArgs = parseJSONObject(values.buildArgsText, '构建参数')
               targetMetadata = parseJSONObject(values.targetMetadataText, '目标元数据')
+              matrixTargets = parseReleaseTargets(values.targetsText)
             } catch (err) {
               message.error((err as Error).message)
               return
@@ -321,7 +332,9 @@ export function ApplicationEnvironmentsPage() {
                 rolloutTimeoutSeconds: Number(values.rolloutTimeoutSeconds || 300),
                 verificationMode: values.verificationMode || 'workflow',
               },
-              targets: targetRecord.workloadName
+              targets: matrixTargets.length
+                ? matrixTargets
+                : targetRecord.workloadName
                 ? [
                     {
                       clusterId: targetRecord.clusterId,
@@ -385,6 +398,7 @@ export function ApplicationEnvironmentsPage() {
                   targetWorkloadKind: editing.targets?.[0]?.workloadKind || 'Deployment',
                   targetContainer: editing.targets?.[0]?.containerName,
                   targetMetadataText: JSON.stringify(editing.targets?.[0]?.metadata ?? {}, null, 2),
+                  targetsText: JSON.stringify(editing.targets ?? [], null, 2),
                 }
               : {
                   refType: 'branch',
@@ -398,6 +412,7 @@ export function ApplicationEnvironmentsPage() {
                   executorKind: 'k8s_job_runner',
                   targetWorkloadKind: 'Deployment',
                   targetMetadataText: '{}',
+                  targetsText: '[]',
                 }
           }
         >
@@ -528,12 +543,7 @@ export function ApplicationEnvironmentsPage() {
           </Form.Item>
           <Form.Item name="targetKind" label="目标类型">
             <Select
-              options={[
-                { value: 'k8s_workload', label: 'k8s_workload' },
-                { value: 'host_service', label: 'host_service' },
-                { value: 'helm_release', label: 'helm_release' },
-                { value: 'kustomize_overlay', label: 'kustomize_overlay' },
-              ]}
+              options={[...RELEASE_TARGET_KIND_OPTIONS]}
             />
           </Form.Item>
           <Form.Item name="executorKind" label="执行器">
@@ -604,6 +614,17 @@ export function ApplicationEnvironmentsPage() {
             <Input.TextArea
               rows={5}
               placeholder='{"commands":["systemctl restart billing"],"serviceUnit":"billing.service"}'
+            />
+          </Form.Item>
+          <Form.Item
+            name="targetsText"
+            label="多目标矩阵(JSON Array，非空时覆盖上方单目标)"
+            extra="YAML: metadata.manifestPath；Helm: metadata.chartRef/valuesRef；Kustomize: metadata.basePath/overlayPath。可用 groupKey、waveKey、regionKey 编排发布批次。"
+          >
+            <Input.TextArea
+              rows={10}
+              spellCheck={false}
+              placeholder='[{"clusterId":"prod-cn","namespace":"app","targetKind":"helm_release","executorKind":"k8s_job_runner","groupKey":"core","waveKey":"wave-1","regionKey":"cn","workloadKind":"Release","workloadName":"billing","metadata":{"chartRef":"charts/billing","valuesRef":"values/prod.yaml"},"enabled":true}]'
             />
           </Form.Item>
           <div className="soha-form-actions">

@@ -48,10 +48,6 @@ export function CRDApiGroupDetailPage() {
     <div className="soha-page">
       <ManagementDetailHeader
         title={decodedGroupName || t('route.extensions-group-detail.title', 'API Detail')}
-        description={t(
-          'page.extensions.crd.kindCatalogDesc',
-          'Select a CRD resource card to inspect its kind and resource instances.',
-        )}
         actions={
           <ManagementTableToolbar>
             <Button
@@ -91,14 +87,6 @@ export function CRDApiGroupDetailPage() {
             <div className="soha-crd-sidebar-body">
               <div>
                 <Text strong>{t('page.extensions.crd.kindCatalogTitle', 'CRD Resources')}</Text>
-                <div>
-                  <Text type="secondary">
-                    {t(
-                      'page.extensions.crd.kindCatalogDesc',
-                      'Select a CRD resource card to inspect its kind and resource instances.',
-                    )}
-                  </Text>
-                </div>
               </div>
               <div className="soha-tag-list">
                 <Tag color="geekblue">{groupSummary.crdCount} Kinds</Tag>

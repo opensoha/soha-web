@@ -66,6 +66,23 @@ export function invalidateRuntimeQueries(queryClient: QueryClient) {
 }
 
 export const deliveryMutations = {
+  repositories: {
+    create: (queryClient: QueryClient) => mutationOptions({
+      mutationKey: deliveryMutationKeys.repositories('create'),
+      mutationFn: (payload: DeliveryRecordInput) => deliveryApi.repositories.create(payload),
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: deliveryKeys.repositories.all }),
+    }),
+    update: (queryClient: QueryClient) => mutationOptions({
+      mutationKey: deliveryMutationKeys.repositories('update'),
+      mutationFn: ({ id, payload }: DeliveryUpdateInput<DeliveryRecordInput>) => deliveryApi.repositories.update(id, payload),
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: deliveryKeys.repositories.all }),
+    }),
+    delete: (queryClient: QueryClient) => mutationOptions({
+      mutationKey: deliveryMutationKeys.repositories('delete'),
+      mutationFn: deliveryApi.repositories.delete,
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: deliveryKeys.repositories.all }),
+    }),
+  },
   applications: {
     create: (queryClient: QueryClient) =>
       mutationOptions({
@@ -365,6 +382,13 @@ export const deliveryMutations = {
       mutationOptions({
         mutationKey: deliveryMutationKeys.plans('confirm'),
         mutationFn: deliveryApi.plans.confirm,
+        onSuccess: () => invalidateRuntimeQueries(queryClient),
+      }),
+    approval: (queryClient: QueryClient) =>
+      mutationOptions({
+        mutationKey: deliveryMutationKeys.plans('approval'),
+        mutationFn: ({ id, action }: { id: string; action: 'approve' | 'reject' }) =>
+          deliveryApi.plans.approval(id, { action }),
         onSuccess: () => invalidateRuntimeQueries(queryClient),
       }),
   },

@@ -1,8 +1,8 @@
 import { CheckCircleOutlined, ExperimentOutlined, RocketOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { Button, Card, Space, Steps, Tag, Typography, type TableColumnsType } from 'antd'
+import { Button, Card, Space, Steps, Typography, type TableColumnsType } from 'antd'
 import { useNavigate } from 'react-router-dom'
-import { StatusTag } from '@/components/status-tag'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { DeliveryGatewayReadinessPanel } from '../delivery-gateway-readiness'
@@ -22,6 +22,7 @@ import {
   WorkbenchHeader,
   workflowValidationCount,
 } from './shared'
+import { summarizeDeliveryGovernance } from './governance'
 
 const { Text } = Typography
 type ColumnProps<T> = TableColumnsType<T>[number]
@@ -44,8 +45,14 @@ export function DeliveryTestingPage() {
       taskKind.includes('check')
     )
   })
-  const candidateBundles = bundles.filter((bundle) => !isBlockedStatus(bundle.status))
   const latestBundles = sortByLatest(bundles, releaseBundleUpdatedAt).slice(0, 8)
+  const governanceByBundle = new Map(
+    bundles.map((bundle) => [bundle.id, summarizeDeliveryGovernance(bundle, tasks)]),
+  )
+  const governance = bundles.map((bundle) => governanceByBundle.get(bundle.id)!)
+  const candidateBundles = bundles.filter(
+    (bundle) => governanceByBundle.get(bundle.id)?.decision !== 'blocked',
+  )
   const testingStats = [
     {
       label: '候选版本',
@@ -68,6 +75,11 @@ export function DeliveryTestingPage() {
       label: 'DAG 验证节点',
       value: board.reduce((sum, item) => sum + workflowValidationCount(item), 0),
       hint: '来自工作流节点执行记录',
+    },
+    {
+      label: '晋级门禁',
+      value: governance.filter((item) => item.decision === 'passed').length,
+      hint: `${governance.filter((item) => item.decision === 'blocked').length} 个禁止晋级`,
     },
   ]
   const loading = bundlesQuery.isLoading || tasksQuery.isLoading || releaseBoardQuery.isLoading
@@ -98,15 +110,39 @@ export function DeliveryTestingPage() {
     { title: '状态', dataIndex: 'status', render: (value: string) => <StatusTag value={value} /> },
     {
       title: '验证判断',
-      dataIndex: 'status',
-      render: (value: string) =>
-        isBlockedStatus(value) ? (
-          <Tag color="error">阻塞</Tag>
-        ) : isReadyStatus(value) ? (
-          <Tag color="success">可晋级</Tag>
-        ) : (
-          <Tag color="warning">待验证</Tag>
-        ),
+      dataIndex: 'id',
+      render: (_: string, record: ReleaseBundle) => {
+        const result = governanceByBundle.get(record.id)
+        return result ? <StatusTag value={result.label} /> : <StatusTag value="未验证" />
+      },
+    },
+    {
+      title: '治理证据',
+      dataIndex: 'id',
+      render: (_: string, record: ReleaseBundle) => {
+        const result = governanceByBundle.get(record.id)
+        if (!result) return '-'
+        return (
+          <Space size={4} wrap>
+            {result.approvalStatus ? (
+              <MetadataTag label={`审批:${result.approvalStatus}`} tone="gold" />
+            ) : null}
+            {result.approvalRequestId ? (
+              <MetadataTag label={`审批单:${result.approvalRequestId}`} tone="orange" />
+            ) : null}
+            {result.rollbackTaskCount ? (
+              <MetadataTag label={`回滚:${result.rollbackTaskCount}`} tone="blue" />
+            ) : null}
+            {result.evidenceRefs.length ? (
+              <MetadataTag label={`报告:${result.evidenceRefs.length}`} tone="cyan" />
+            ) : null}
+            {result.aiAuditRefs.length ? (
+              <MetadataTag label={`AI审计:${result.aiAuditRefs.length}`} tone="purple" />
+            ) : null}
+            {result.reason ? <Text type="danger">{result.reason}</Text> : null}
+          </Space>
+        )
+      },
     },
     {
       ...tableColumnPresets.datetime,

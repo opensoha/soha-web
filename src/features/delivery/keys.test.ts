@@ -59,6 +59,15 @@ describe('deliveryKeys', () => {
     ])
   })
 
+  it('normalizes repository and GitLab reference keys', () => {
+    expect(deliveryKeys.repositories.list({ applicationId: ' app-1 ', search: ' api ' })).toEqual([
+      'delivery', 'repositories', 'list', { applicationId: 'app-1', search: 'api', limit: undefined },
+    ])
+    expect(deliveryKeys.repositories.gitBranches({ projectId: ' project-1 ' })).toEqual([
+      'delivery', 'repositories', 'gitlab', 'branches', { projectId: 'project-1', search: undefined, limit: undefined },
+    ])
+  })
+
   it('provides canonical mutation keys', () => {
     expect(deliveryMutationKeys.plans('confirm')).toEqual([
       'delivery',

@@ -6,6 +6,9 @@ import type {
   DeliveryTargetCandidateParams,
   DeliveryWorkloadMetricsRef,
   DeliveryWorkloadRef,
+  RepositoryListParams,
+  GitReferenceParams,
+  GitCommitParams,
 } from './types'
 
 const ROOT = ['delivery'] as const
@@ -28,6 +31,7 @@ const GATEWAY = [...ROOT, 'gateway'] as const
 const DRAFTS = [...ROOT, 'drafts'] as const
 const PLANS = [...ROOT, 'plans'] as const
 const DEPENDENCIES = [...ROOT, 'dependencies'] as const
+const REPOSITORIES = [...ROOT, 'repositories'] as const
 
 export function normalizeDeliveryId(id: string) {
   return id.trim()
@@ -36,6 +40,16 @@ export function normalizeDeliveryId(id: string) {
 export function normalizeDeliveryListParams(params: DeliveryListParams = {}): DeliveryListParams {
   const applicationId = params.applicationId?.trim()
   return applicationId ? { applicationId } : {}
+}
+
+export function normalizeRepositoryListParams(params: RepositoryListParams = {}) {
+  return { applicationId: params.applicationId?.trim() || undefined, search: params.search?.trim() || undefined, limit: params.limit }
+}
+export function normalizeGitReferenceParams(params: GitReferenceParams) {
+  return { projectId: params.projectId.trim(), search: params.search?.trim() || undefined, limit: params.limit }
+}
+export function normalizeGitCommitParams(params: GitCommitParams) {
+  return { ...normalizeGitReferenceParams(params), page: params.page }
 }
 
 export function normalizeTargetCandidateParams(
@@ -197,11 +211,20 @@ export const deliveryKeys = {
     all: DEPENDENCIES,
     clusters: () => [...DEPENDENCIES, 'clusters'] as const,
   },
+  repositories: {
+    all: REPOSITORIES,
+    list: (params: RepositoryListParams = {}) => [...REPOSITORIES, 'list', normalizeRepositoryListParams(params)] as const,
+    gitProjects: (params: RepositoryListParams = {}) => [...REPOSITORIES, 'gitlab', 'projects', normalizeRepositoryListParams(params)] as const,
+    gitBranches: (params: GitReferenceParams) => [...REPOSITORIES, 'gitlab', 'branches', normalizeGitReferenceParams(params)] as const,
+    gitTags: (params: GitReferenceParams) => [...REPOSITORIES, 'gitlab', 'tags', normalizeGitReferenceParams(params)] as const,
+    gitCommits: (params: GitCommitParams) => [...REPOSITORIES, 'gitlab', 'commits', normalizeGitCommitParams(params)] as const,
+  },
 }
 
 export const deliveryMutationKeys = {
   all: [...ROOT, 'mutation'] as const,
   applications: (action: string) => [...deliveryMutationKeys.all, 'applications', action] as const,
+  repositories: (action: string) => [...deliveryMutationKeys.all, 'repositories', action] as const,
   applicationServices: (action: string) =>
     [...deliveryMutationKeys.all, 'application-services', action] as const,
   environments: (action: string) => [...deliveryMutationKeys.all, 'environments', action] as const,

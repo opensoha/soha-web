@@ -44,8 +44,8 @@
 
 .soha-crd-workspace {
   display: grid;
-  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
+  gap: 12px;
   align-items: start;
 }
 
@@ -137,14 +137,14 @@
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
-  padding: 20px;
+  padding: 16px;
   overflow: hidden;
 }
 
 .soha-crd-sidebar-body {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   flex: 1 1 auto;
   width: 100%;
   min-height: 0;
@@ -213,7 +213,7 @@
 .soha-crd-detail-column {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   min-width: 0;
 }
 

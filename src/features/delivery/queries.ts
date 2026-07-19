@@ -9,6 +9,9 @@ import {
   normalizeTargetCandidateParams,
   normalizeWorkloadMetricsRef,
   normalizeWorkloadRef,
+  normalizeRepositoryListParams,
+  normalizeGitReferenceParams,
+  normalizeGitCommitParams,
 } from './keys'
 import type {
   DeliveryDeploymentRef,
@@ -18,6 +21,9 @@ import type {
   DeliveryTargetCandidateParams,
   DeliveryWorkloadMetricsRef,
   DeliveryWorkloadRef,
+  RepositoryListParams,
+  GitReferenceParams,
+  GitCommitParams,
 } from './types'
 
 export interface DeliveryQueryOptions {
@@ -37,6 +43,28 @@ function pollingOptions(options: DeliveryQueryOptions) {
 }
 
 export const deliveryQueries = {
+  repositories: {
+    list: (params: RepositoryListParams = {}, enabled = true) => {
+      const normalized = normalizeRepositoryListParams(params)
+      return queryOptions({ queryKey: deliveryKeys.repositories.list(normalized), queryFn: () => deliveryApi.repositories.list(normalized), enabled })
+    },
+    gitProjects: (params: RepositoryListParams = {}, enabled = true) => {
+      const normalized = normalizeRepositoryListParams(params)
+      return queryOptions({ queryKey: deliveryKeys.repositories.gitProjects(normalized), queryFn: () => deliveryApi.gitlab.projects(normalized), enabled })
+    },
+    gitBranches: (params: GitReferenceParams, enabled = true) => {
+      const normalized = normalizeGitReferenceParams(params)
+      return queryOptions({ queryKey: deliveryKeys.repositories.gitBranches(normalized), queryFn: () => deliveryApi.gitlab.branches(normalized), enabled: enabled && hasValue(normalized.projectId) })
+    },
+    gitTags: (params: GitReferenceParams, enabled = true) => {
+      const normalized = normalizeGitReferenceParams(params)
+      return queryOptions({ queryKey: deliveryKeys.repositories.gitTags(normalized), queryFn: () => deliveryApi.gitlab.tags(normalized), enabled: enabled && hasValue(normalized.projectId) })
+    },
+    gitCommits: (params: GitCommitParams, enabled = true) => {
+      const normalized = normalizeGitCommitParams(params)
+      return queryOptions({ queryKey: deliveryKeys.repositories.gitCommits(normalized), queryFn: () => deliveryApi.gitlab.commits(normalized), enabled: enabled && hasValue(normalized.projectId) })
+    },
+  },
   applications: {
     list: (enabled = true) =>
       queryOptions({

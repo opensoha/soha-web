@@ -57,6 +57,29 @@ describe('deliveryApi', () => {
     ])
   })
 
+  it('uses repository and GitLab project, branch, tag, and commit endpoints', async () => {
+    apiMocks.get
+      .mockResolvedValueOnce({ data: [] })
+      .mockResolvedValueOnce({ items: [] })
+      .mockResolvedValueOnce({ items: [] })
+      .mockResolvedValueOnce({ items: [] })
+      .mockResolvedValueOnce({ items: [], page: 1, limit: 20, hasMore: false })
+
+    await deliveryApi.repositories.list({ applicationId: ' app/1 ', search: ' api ' })
+    await deliveryApi.gitlab.projects({ search: ' api ' })
+    await deliveryApi.gitlab.branches({ projectId: 'group/api', search: 'main' })
+    await deliveryApi.gitlab.tags({ projectId: 'group/api' })
+    await deliveryApi.gitlab.commits({ projectId: 'group/api', page: 1, limit: 20 })
+
+    expect(apiMocks.get.mock.calls.map(([path]) => path)).toEqual([
+      '/repositories?applicationId=app%2F1&search=api',
+      '/integrations/gitlab/projects?search=api',
+      '/integrations/gitlab/branches?projectId=group%2Fapi&search=main',
+      '/integrations/gitlab/tags?projectId=group%2Fapi',
+      '/integrations/gitlab/commits?projectId=group%2Fapi&limit=20&page=1',
+    ])
+  })
+
   it('uses the five canonical runtime detail endpoints and unwraps details', async () => {
     apiMocks.get.mockResolvedValue({ data: { id: 'runtime-1', object: { id: 'record-1' } } })
 

@@ -5,6 +5,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { deliveryMutations } from './mutations'
 import { deliveryQueries } from './queries'
+import { parseReleaseTargets } from './release-targets'
 import type { ApplicationEnvironment, BuildSource, DeliveryApplication } from './types'
 
 function parseJSONObject(raw: unknown, field: string) {
@@ -402,6 +403,12 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
                   environmentId: initialEnvironmentFormValue(state.editingBinding),
                   workflowTemplateId: state.editingBinding.workflowTemplateId,
                   buildSourceId: state.editingBinding.buildPolicy?.sourceId,
+                  refType: state.editingBinding.buildPolicy?.refType || 'branch',
+                  refValue: state.editingBinding.buildPolicy?.refValue,
+                  imageTagTemplate: state.editingBinding.buildPolicy?.imageTagTemplate,
+                  buildVariablesText: JSON.stringify(state.editingBinding.buildPolicy?.variables ?? {}, null, 2),
+                  buildArgsText: JSON.stringify(state.editingBinding.buildPolicy?.buildArgs ?? {}, null, 2),
+                  targetsText: JSON.stringify(state.editingBinding.targets ?? [], null, 2),
                   actionKind: state.editingBinding.releasePolicy?.actionKind || 'deploy',
                   requiresApproval: state.editingBinding.releasePolicy?.requiresApproval,
                   targetClusterId: state.editingBinding.targets?.[0]?.clusterId,
@@ -419,6 +426,10 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
               : {
                   actionKind: 'deploy',
                   requiresApproval: false,
+                  refType: 'branch',
+                  buildVariablesText: '{}',
+                  buildArgsText: '{}',
+                  targetsText: '[]',
                   resourceSelectorText: '{}',
                 }
           }
@@ -426,18 +437,19 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
             if (!state.selectedApplication) return
             const target = selectedTargetCandidate(values)
             const matchLabels = parseJSONObject(values.resourceSelectorText, '选择器标签')
+            const configuredTargets = parseReleaseTargets(values.targetsText)
             const payload: Record<string, unknown> = {
               applicationId: state.selectedApplication.id,
               environmentId: normalizeEnvironmentFormValue(values.environmentId),
               workflowTemplateId: values.workflowTemplateId,
               buildPolicy: {
                 sourceId: values.buildSourceId,
-                refType: 'branch',
-                refValue: '',
+                refType: values.refType || 'branch',
+                refValue: values.refValue || '',
                 imageTagMode: 'input',
-                imageTagTemplate: '',
-                variables: {},
-                buildArgs: {},
+                imageTagTemplate: values.imageTagTemplate || '',
+                variables: parseJSONObject(values.buildVariablesText, '构建变量'),
+                buildArgs: parseJSONObject(values.buildArgsText, '构建参数'),
               },
               releasePolicy: {
                 actionKind: values.actionKind || 'deploy',
@@ -450,7 +462,7 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
               resourceSelector: {
                 matchLabels,
               },
-              targets: target
+              targets: configuredTargets.length ? configuredTargets : target
                 ? [
                     {
                       clusterId: target.clusterId,
@@ -507,6 +519,21 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
               }))}
             />
           </Form.Item>
+          <Form.Item name="refType" label="Ref 类型">
+            <Select options={[{ value: 'branch', label: 'Branch' }, { value: 'tag', label: 'Tag' }, { value: 'commit', label: 'Commit' }]} />
+          </Form.Item>
+          <Form.Item name="refValue" label="环境默认 Ref">
+            <Input placeholder="main / v1.0.0 / commit SHA" />
+          </Form.Item>
+          <Form.Item name="imageTagTemplate" label="镜像 Tag 模板">
+            <Input placeholder="{{branch}}-{{sha}}" />
+          </Form.Item>
+          <Form.Item name="buildVariablesText" label="构建变量(JSON)">
+            <Input.TextArea rows={3} />
+          </Form.Item>
+          <Form.Item name="buildArgsText" label="Build Args(JSON)">
+            <Input.TextArea rows={3} />
+          </Form.Item>
           <Form.Item name="actionKind" label="动作">
             <Select
               options={[
@@ -542,6 +569,9 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
           </Form.Item>
           <Form.Item name="targetContainer" label="容器">
             <Input />
+          </Form.Item>
+          <Form.Item name="targetsText" label="发布目标矩阵(JSON)">
+            <Input.TextArea rows={8} placeholder='[{"targetKind":"helm_release",...}]' />
           </Form.Item>
           <Form.Item name="resourceSelectorText" label="资源选择器标签(JSON)">
             <Input.TextArea rows={4} placeholder={`{\n  "app": "erp-front"\n}`} />

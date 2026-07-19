@@ -7,6 +7,7 @@ import type {
   BuildRecord,
   BuildTemplate,
   DeliveryApplication,
+  DeliveryRepository,
   DeliveryApplicationEnvironmentDetail,
   DeliveryApplicationDetail,
   DeliveryBlueprint,
@@ -26,6 +27,9 @@ import type {
   TemplateUsageSummary,
   WorkflowRun,
   WorkflowTemplate,
+  GitProject,
+  GitReference,
+  GitCommit,
 } from './domain-types'
 import type { Cluster, DeploymentDetail, Pod, ResourceMetrics } from '@/types/platform'
 import type { GatewayManifest, GatewayTool } from '@/features/copilot'
@@ -107,6 +111,22 @@ export interface RegistryRecord {
 
 export interface DeliveryListParams {
   applicationId?: string
+}
+
+export interface RepositoryListParams {
+  applicationId?: string
+  search?: string
+  limit?: number
+}
+
+export interface GitReferenceParams {
+  projectId: string
+  search?: string
+  limit?: number
+}
+
+export interface GitCommitParams extends GitReferenceParams {
+  page?: number
 }
 
 export interface DeliveryTargetCandidateParams {
@@ -228,6 +248,7 @@ export type {
   BuildTemplate,
   Cluster,
   DeliveryApplication,
+  DeliveryRepository,
   DeliveryApplicationEnvironmentDetail,
   DeliveryApplicationDetail,
   DeliveryBlueprint,
@@ -249,4 +270,7 @@ export type {
   TemplateUsageSummary,
   WorkflowRun,
   WorkflowTemplate,
+  GitProject,
+  GitReference,
+  GitCommit,
 }

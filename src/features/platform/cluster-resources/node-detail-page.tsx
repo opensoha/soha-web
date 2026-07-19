@@ -5,7 +5,6 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import type { TableColumnsType } from 'antd'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementDetailHeader, ManagementState } from '@/components/management-list'
-import { PlatformClusterScopeHint } from '@/components/platform-cluster-scope-hint'
 import { StatusTag } from '@/components/status-tag'
 import { PlatformResourceOverview } from '@/features/platform/shared/resource-overview'
 import {
@@ -196,25 +195,6 @@ export function NodeDetailPage() {
 
   return (
     <div className="soha-page">
-      <ManagementDetailHeader
-        title={`${localeCode === 'zh_CN' ? '节点详情' : 'Node Detail'}: ${nodeDetail.name}`}
-        description={
-          localeCode === 'zh_CN'
-            ? '查看节点资源分配、污点、YAML 与承载 Pod，并支持独立编辑。'
-            : 'Inspect node allocation, taints, YAML, and scheduled pods with standalone editing support.'
-        }
-        actions={
-          <Space>
-            <Button onClick={() => navigate(`/clusters/${encodeURIComponent(clusterId)}`)}>
-              {localeCode === 'zh_CN' ? '集群详情' : 'Cluster Detail'}
-            </Button>
-            <Button type="primary" onClick={() => navigate('/cluster-resources/nodes')}>
-              {t('common.back', 'Back')}
-            </Button>
-          </Space>
-        }
-      />
-      <PlatformClusterScopeHint resourceLabel={localeCode === 'zh_CN' ? '节点详情' : 'Node'} />
       <Tabs
         activeKey={activeTab}
         destroyOnHidden
@@ -283,9 +263,9 @@ export function NodeDetailPage() {
 
                   <Card
                     className="soha-detail-card"
-                    title={localeCode === 'zh_CN' ? '污点' : 'Taints'}
+                    title={localeCode === 'zh_CN' ? '标签与污点' : 'Labels & Taints'}
                   >
-                    <div className="soha-detail-meta">
+                    <div className="soha-detail-meta mb-4">
                       {nodeDetail.taints?.length ? (
                         <div className="soha-tag-list">
                           {nodeDetail.taints.map((item) => (
@@ -303,41 +283,35 @@ export function NodeDetailPage() {
                         </Text>
                       )}
                     </div>
+                    <Form
+                      key={`node-edit:${clusterId}:${nodeName}:${nodeDetailQuery.dataUpdatedAt}`}
+                      layout="vertical"
+                      initialValues={nodeFormInitValues}
+                      onFinish={updateNode}
+                    >
+                      <div className="grid gap-4 xl:grid-cols-2">
+                        <Form.Item name="labels" label="Labels(JSON)">
+                          <Input.TextArea rows={8} />
+                        </Form.Item>
+                        <Form.Item name="taints" label="Taints(JSON Array)">
+                          <Input.TextArea rows={8} />
+                        </Form.Item>
+                      </div>
+                      <div className="soha-form-actions">
+                        <Button onClick={() => void nodeDetailQuery.refetch()}>
+                          {t('common.refresh', 'Refresh')}
+                        </Button>
+                        <Button
+                          htmlType="submit"
+                          type="primary"
+                          loading={updateNodeMutation.isPending}
+                        >
+                          {t('common.save', 'Save')}
+                        </Button>
+                      </div>
+                    </Form>
                   </Card>
                 </div>
-
-                <Card
-                  className="soha-detail-card"
-                  title={
-                    localeCode === 'zh_CN' ? '快速编辑 Labels / 污点' : 'Quick Edit Labels / Taints'
-                  }
-                >
-                  <Form
-                    key={`node-edit:${clusterId}:${nodeName}:${nodeDetailQuery.dataUpdatedAt}`}
-                    layout="vertical"
-                    initialValues={nodeFormInitValues}
-                    onFinish={updateNode}
-                  >
-                    <Form.Item name="labels" label="Labels(JSON)">
-                      <Input.TextArea rows={8} />
-                    </Form.Item>
-                    <Form.Item name="taints" label="Taints(JSON Array)">
-                      <Input.TextArea rows={8} />
-                    </Form.Item>
-                    <div className="soha-form-actions">
-                      <Button onClick={() => void nodeDetailQuery.refetch()}>
-                        {t('common.refresh', 'Refresh')}
-                      </Button>
-                      <Button
-                        htmlType="submit"
-                        type="primary"
-                        loading={updateNodeMutation.isPending}
-                      >
-                        {t('common.save', 'Save')}
-                      </Button>
-                    </div>
-                  </Form>
-                </Card>
 
                 <Card
                   className="soha-detail-card"

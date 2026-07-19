@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Button, Input, Modal, Table, Typography, message } from 'antd'
-import { EditOutlined } from '@ant-design/icons'
+import { ArrowsAltOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { ManagementState } from '@/components/management-list'
 import { useI18n } from '@/i18n'
 import type { TableColumnsType } from 'antd'
@@ -73,10 +73,12 @@ export function EditConfigurationDataModal({
   value: Record<string, string>
 }) {
   const { localeCode } = useI18n()
-  const [draft, setDraft] = useState('')
+  const [draft, setDraft] = useState<Array<{ key: string; value: string }>>([])
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null)
+  const expandedItem = expandedIndex === null ? undefined : draft[expandedIndex]
 
   useEffect(() => {
-    if (open) setDraft(JSON.stringify(value, null, 2))
+    if (open) setDraft(Object.entries(value).map(([key, item]) => ({ key, value: item })))
   }, [open, value])
 
   return (
@@ -91,34 +93,114 @@ export function EditConfigurationDataModal({
       width={760}
       onCancel={onCancel}
       onOk={() => {
-        try {
-          const parsed = JSON.parse(draft) as unknown
-          if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
-            throw new Error('data must be an object')
-          }
-          onSubmit(
-            Object.fromEntries(
-              Object.entries(parsed as Record<string, unknown>).map(([key, item]) => [
-                key,
-                item == null ? '' : String(item),
-              ]),
-            ),
-          )
-        } catch (error) {
-          void message.error(
-            localeCode === 'zh_CN'
-              ? `JSON 格式无效：${(error as Error).message}`
-              : `Invalid JSON: ${(error as Error).message}`,
-          )
+        const keys = draft.map((item) => item.key.trim())
+        const duplicate = keys.find((key, index) => key && keys.indexOf(key) !== index)
+        if (keys.some((key) => !key)) {
+          void message.error(localeCode === 'zh_CN' ? '键不能为空' : 'Keys cannot be empty')
+          return
         }
+        if (duplicate) {
+          void message.error(
+            localeCode === 'zh_CN' ? `键重复：${duplicate}` : `Duplicate key: ${duplicate}`,
+          )
+          return
+        }
+        onSubmit(Object.fromEntries(draft.map((item, index) => [keys[index], item.value])))
       }}
     >
-      <Input.TextArea
-        autoSize={{ minRows: 12, maxRows: 20 }}
-        className="soha-config-data-editor"
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-      />
+      <div className="soha-config-data-editor">
+        {draft.map((item, index) => (
+          <div className="soha-config-data-editor-row" key={`${item.key}-${index}`}>
+            <Input
+              aria-label={localeCode === 'zh_CN' ? '数据键' : 'Data key'}
+              placeholder={localeCode === 'zh_CN' ? '键' : 'Key'}
+              value={item.key}
+              onChange={(event) =>
+                setDraft((current) =>
+                  current.map((entry, entryIndex) =>
+                    entryIndex === index ? { ...entry, key: event.target.value } : entry,
+                  ),
+                )
+              }
+            />
+            <div className="soha-config-data-editor-value">
+              <Input.TextArea
+                aria-label={localeCode === 'zh_CN' ? '数据值' : 'Data value'}
+                autoSize={{ minRows: 3, maxRows: 12 }}
+                placeholder={
+                  localeCode === 'zh_CN' ? '值（支持换行）' : 'Value (multiline supported)'
+                }
+                value={item.value}
+                onChange={(event) =>
+                  setDraft((current) =>
+                    current.map((entry, entryIndex) =>
+                      entryIndex === index ? { ...entry, value: event.target.value } : entry,
+                    ),
+                  )
+                }
+              />
+              <Button
+                aria-label={localeCode === 'zh_CN' ? '展开编辑数据值' : 'Expand data value editor'}
+                className="soha-config-data-editor-expand"
+                icon={<ArrowsAltOutlined />}
+                size="small"
+                title={localeCode === 'zh_CN' ? '展开编辑' : 'Expand editor'}
+                type="text"
+                onClick={() => setExpandedIndex(index)}
+              />
+            </div>
+            <Button
+              aria-label={localeCode === 'zh_CN' ? '删除数据键' : 'Delete data key'}
+              danger
+              icon={<DeleteOutlined />}
+              type="text"
+              onClick={() =>
+                setDraft((current) => current.filter((_entry, entryIndex) => entryIndex !== index))
+              }
+            />
+          </div>
+        ))}
+        <Button
+          block
+          icon={<PlusOutlined />}
+          type="dashed"
+          onClick={() => setDraft((current) => [...current, { key: '', value: '' }])}
+        >
+          {localeCode === 'zh_CN' ? '新增数据键' : 'Add data key'}
+        </Button>
+      </div>
+      <Modal
+        centered
+        destroyOnHidden
+        okText={localeCode === 'zh_CN' ? '完成' : 'Done'}
+        cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
+        open={expandedItem !== undefined}
+        title={
+          expandedItem
+            ? `${localeCode === 'zh_CN' ? '展开编辑' : 'Expanded editor'}：${expandedItem.key || (localeCode === 'zh_CN' ? '未命名键' : 'Unnamed key')}`
+            : ''
+        }
+        width={1080}
+        onCancel={() => setExpandedIndex(null)}
+        onOk={() => setExpandedIndex(null)}
+      >
+        {expandedItem ? (
+          <Input.TextArea
+            aria-label={localeCode === 'zh_CN' ? '展开数据值' : 'Expanded data value'}
+            autoSize={{ minRows: 18, maxRows: 32 }}
+            className="soha-config-data-expanded-editor"
+            value={expandedItem.value}
+            onChange={(event) => {
+              const nextValue = event.target.value
+              setDraft((current) =>
+                current.map((entry, entryIndex) =>
+                  entryIndex === expandedIndex ? { ...entry, value: nextValue } : entry,
+                ),
+              )
+            }}
+          />
+        ) : null}
+      </Modal>
     </Modal>
   )
 }

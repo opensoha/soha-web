@@ -53,6 +53,8 @@ describe('deliveryQueries', () => {
       }).enabled,
     ).toBe(false)
     expect(deliveryQueries.releaseBoard.list({ enabled: false }).enabled).toBe(false)
+    expect(deliveryQueries.repositories.gitBranches({ projectId: '' }).enabled).toBe(false)
+    expect(deliveryQueries.repositories.gitCommits({ projectId: '' }).enabled).toBe(false)
   })
 
   it('provides the canonical runtime detail query factory', async () => {

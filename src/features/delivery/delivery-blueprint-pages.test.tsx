@@ -74,14 +74,16 @@ const testState = vi.hoisted(() => ({
           riskReasons: ['1 spec file templates'],
           recommendedAction: 'save_with_standard_review',
           applications: [{ id: 'app-1', name: 'Node Service', key: 'node-service' }],
-          buildSources: [{
-            applicationId: 'app-1',
-            buildSourceId: 'source-1',
-            buildSourceName: 'Repo Dockerfile',
-            application: { id: 'app-1', name: 'Node Service', key: 'node-service' },
-            bindingCount: 1,
-            riskLevel: 'low',
-          }],
+          buildSources: [
+            {
+              applicationId: 'app-1',
+              buildSourceId: 'source-1',
+              buildSourceName: 'Repo Dockerfile',
+              application: { id: 'app-1', name: 'Node Service', key: 'node-service' },
+              bindingCount: 1,
+              riskLevel: 'low',
+            },
+          ],
           fileKindCounts: { dockerfile: 1 },
           lastExecutionSummary: {
             source: 'delivery_blueprint_runtime',
@@ -120,12 +122,19 @@ const testState = vi.hoisted(() => ({
         },
       }
     }
+    if (path === '/application-environments')
+      return { data: [{ id: 'binding-1', environmentId: 'env-dev', environmentKey: 'dev' }] }
+    if (path === '/build-templates')
+      return { data: [{ id: 'build-1', name: 'Node Docker', key: 'node-docker', enabled: true }] }
+    if (path === '/workflow-templates')
+      return { data: [{ id: 'wf-dev', name: '开发发布流程', key: 'dev-release', enabled: true }] }
     throw new Error(`Unhandled GET ${path}`)
   }),
 }))
 
 vi.mock('@/features/auth/permission-snapshot', () => ({
-  hasPermission: (snapshot: { permissionKeys?: string[] } | undefined, key: string) => snapshot?.permissionKeys?.includes(key) ?? false,
+  hasPermission: (snapshot: { permissionKeys?: string[] } | undefined, key: string) =>
+    snapshot?.permissionKeys?.includes(key) ?? false,
   usePermissionSnapshot: () => ({
     data: { data: testState.permissionSnapshot },
     isLoading: false,
@@ -162,9 +171,7 @@ async function renderWithProviders(node: ReactNode, route = '/delivery/blueprint
     root.render(
       <AntdApp>
         <QueryClientProvider client={queryClient}>
-          <MemoryRouter initialEntries={[route]}>
-            {node}
-          </MemoryRouter>
+          <MemoryRouter initialEntries={[route]}>{node}</MemoryRouter>
         </QueryClientProvider>
       </AntdApp>,
     )
@@ -239,14 +246,14 @@ describe('DeliveryBlueprintsPage', () => {
     expect(container.textContent).toContain('Node Service')
     expect(container.textContent).toContain('node-service')
     expect(container.textContent).toContain('构建 1')
-    expect(container.textContent).toContain('环境 1')
-    expect(container.textContent).toContain('文件 1')
+    expect(container.textContent).toContain('计划 1')
+    expect(container.textContent).toContain('模板 1')
     expect(container.textContent).toContain('基础信息')
     expect(container.textContent).toContain('应用档案')
     expect(container.textContent).toContain('构建源')
-    expect(container.textContent).toContain('环境绑定')
-    expect(container.textContent).toContain('规范文件')
-    expect(container.textContent).toContain('高级预览')
+    expect(container.textContent).toContain('发布计划')
+    expect(container.textContent).toContain('文件模板')
+    expect(container.textContent).toContain('高级配置')
     expect(container.textContent).toContain('模板影响面')
     await waitForText(container, '成功 1')
     expect(container.textContent).toContain('成功 1')
@@ -256,5 +263,18 @@ describe('DeliveryBlueprintsPage', () => {
     expect(container.textContent).not.toContain('Application Draft(JSON)')
     expect(container.textContent).not.toContain('Build Sources(JSON Array)')
     expect(container.textContent).not.toContain('Environment Bindings(JSON Array)')
+  })
+
+  it('opens the file-template preset view from a shared URL', async () => {
+    const container = await renderWithProviders(
+      <DeliveryBlueprintsPage />,
+      '/delivery/blueprints?tab=files&preset=helm_values',
+    )
+
+    expect(container.textContent).toContain(
+      '按预设快速添加 Dockerfile、YAML、Helm 或 Kustomize 模板。',
+    )
+    expect(container.textContent).toContain('Helm Values 模板')
+    expect(container.textContent).toContain('文件模板')
   })
 })

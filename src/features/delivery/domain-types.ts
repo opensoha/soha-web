@@ -5,6 +5,10 @@ type SohaAPISchemas = SohaAPIComponents['schemas']
 type ContractWorkflowNodeRun = SohaAPISchemas['WorkflowNodeRun']
 type ContractReleaseTarget = SohaAPISchemas['ReleaseTarget']
 type ContractBuildSource = SohaAPISchemas['BuildSource']
+type ContractRepository = SohaAPISchemas['Repository']
+type ContractGitProject = SohaAPISchemas['GitProject']
+type ContractGitReference = SohaAPISchemas['GitReference']
+type ContractGitCommit = SohaAPISchemas['GitCommit']
 type ContractApplicationServiceContainer = SohaAPISchemas['ApplicationServiceContainer']
 type ContractApplicationService = SohaAPISchemas['ApplicationService']
 type ContractBuildPolicy = SohaAPISchemas['BuildPolicy']
@@ -211,6 +215,39 @@ export interface BuildSource extends ContractBuildSource {
   config?: Record<string, unknown>
 }
 
+export interface DeliveryRepository extends ContractRepository {
+  id: string
+  name: string
+  provider: 'gitlab' | 'git'
+  url: string
+  protocol: 'https' | 'ssh'
+  path: string
+  defaultBranch: string
+  applicationIds?: string[]
+}
+
+export interface GitProject extends ContractGitProject {
+  id: string
+  name: string
+  path: string
+  pathWithNamespace: string
+  defaultBranch?: string
+}
+
+export interface GitReference extends ContractGitReference {
+  name: string
+  commitSha?: string
+  protected: boolean
+}
+
+export interface GitCommit extends ContractGitCommit {
+  id: string
+  shortId: string
+  title: string
+  message?: string
+  committedAt: string
+}
+
 export type ApplicationServiceKind =
   | 'kubernetes_workload'
   | 'helm_release'
@@ -243,6 +280,7 @@ export interface ApplicationServiceComponent extends ContractApplicationService 
   serviceKind: ApplicationServiceKind
   ownerTeam?: string
   repositoryProvider?: string
+  repositoryId?: string
   repositoryProjectId?: string
   repositoryPath?: string
   defaultBranch?: string
@@ -639,7 +677,7 @@ export interface ApplicationDeliveryActionResponse {
 }
 
 export type DeliveryPlanSource = 'manual' | 'ai'
-export type DeliveryPlanStatus = 'draft' | 'confirming' | 'confirmed'
+export type DeliveryPlanStatus = 'draft' | 'waiting_approval' | 'confirming' | 'confirmed'
 
 export interface DeliveryPlanRequest extends ApplicationDeliveryActionRequest {
   id?: string
@@ -690,6 +728,9 @@ export interface ApplicationRuntimeWorkload {
   namespace: string
   workloadKind: string
   workloadName: string
+  serviceId?: string
+  serviceKey?: string
+  healthStatus?: string
   labels?: Record<string, string>
   selector?: Record<string, string>
   desiredReplicas: number
@@ -720,6 +761,16 @@ export interface ApplicationRuntimeEnvironment {
 
 export interface ApplicationRuntimeDetail {
   application: DeliveryApplication
+  services?: ApplicationServiceComponent[]
+  summary?: {
+    serviceCount: number
+    environmentCount: number
+    workloadCount: number
+    healthyWorkloadCount: number
+    healthStatus: string
+    latestVersion?: string
+    latestExecutionStatus?: string
+  }
   environments?: ApplicationRuntimeEnvironment[]
 }
 

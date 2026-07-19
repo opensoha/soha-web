@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Alert, Card, Space, Tag, Typography } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { StatusTag } from '@/components/status-tag'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { DeliveryTable } from '@/features/delivery/delivery-table'
 import {
   summarizeReleaseBundleArtifact,
@@ -12,6 +12,7 @@ import { deliveryQueries } from '@/features/delivery/queries'
 import type { ReleaseBundle } from '@/features/delivery/types'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
+import { summarizeDeliveryGovernance } from '../workbench/governance'
 
 const { Text } = Typography
 
@@ -24,6 +25,7 @@ export function ReleaseBundlesPage() {
     ? bundles.find((item) => item.id === focusedReleaseBundleId)
     : undefined
   const bundleSummary = useMemo(() => summarizeReleaseBundleStatus(bundles), [bundles])
+  const tasksQuery = useQuery(deliveryQueries.executionTasks.list())
 
   return (
     <div className="soha-page">
@@ -94,6 +96,24 @@ export function ReleaseBundlesPage() {
             title: 'Status',
             dataIndex: 'status',
             render: (value: string) => <StatusTag value={value} />,
+          },
+          {
+            title: '治理门禁',
+            dataIndex: 'id',
+            render: (_: string, record: ReleaseBundle) => {
+              const governance = summarizeDeliveryGovernance(record, tasksQuery.data ?? [])
+              return (
+                <Space size={4} wrap>
+                  <StatusTag value={governance.label} />
+                  {governance.approvalStatus ? (
+                    <MetadataTag label={`审批:${governance.approvalStatus}`} tone="gold" />
+                  ) : null}
+                  {governance.rollbackTaskCount ? (
+                    <MetadataTag label={`回滚:${governance.rollbackTaskCount}`} tone="blue" />
+                  ) : null}
+                </Space>
+              )
+            },
           },
           {
             ...tableColumnPresets.datetime,
