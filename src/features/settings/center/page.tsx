@@ -5,9 +5,25 @@ import { usePermissionSnapshot } from '@/features/auth'
 import type { PermissionSnapshot } from '@/types'
 import { SettingsCard } from '../shared/components'
 
+const PERSONAL_SETTINGS_MENU_IDS = new Set(['account-profile', 'settings-about'])
+
+function isPersonalSettingsMenu(menu: PermissionSnapshot['visibleMenus'][number]) {
+  return (
+    PERSONAL_SETTINGS_MENU_IDS.has(menu.id) ||
+    menu.path === '/about' ||
+    menu.path === '/settings/about' ||
+    menu.path.startsWith('/account/')
+  )
+}
+
 export function getSettingsLandingMenus(snapshot?: PermissionSnapshot) {
   return (snapshot?.visibleMenus ?? [])
-    .filter((menu) => menu.parentId === 'settings' && menu.path !== '/settings')
+    .filter(
+      (menu) =>
+        menu.parentId === 'settings' &&
+        menu.path !== '/settings' &&
+        !isPersonalSettingsMenu(menu),
+    )
     .sort((left, right) => {
       const leftOrder = typeof left.sortOrder === 'number' ? left.sortOrder : 0
       const rightOrder = typeof right.sortOrder === 'number' ? right.sortOrder : 0

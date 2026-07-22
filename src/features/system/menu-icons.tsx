@@ -15,6 +15,7 @@ import {
   GlobalOutlined,
   HddOutlined,
   HistoryOutlined,
+  HomeOutlined,
   InfoCircleOutlined,
   MenuOutlined,
   OrderedListOutlined,
@@ -28,6 +29,7 @@ import {
 } from '@ant-design/icons'
 
 const ICONS: Record<string, ReactNode> = {
+  home: <HomeOutlined />,
   gauge: <DashboardOutlined />,
   server: <HddOutlined />,
   desktop: <DesktopOutlined />,
@@ -61,6 +63,7 @@ const ICONS: Record<string, ReactNode> = {
 }
 
 export const MENU_ICON_OPTIONS = [
+  { value: 'home', label: 'Home' },
   { value: 'gauge', label: 'Dashboard' },
   { value: 'server', label: 'Server' },
   { value: 'desktop', label: 'Desktop' },

@@ -8,7 +8,6 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PermissionSnapshot } from '@/types'
-import { AboutSettingsPage } from './about/page'
 import { AISettingsPage } from './ai/page'
 import { BrandingSettingsPage } from './branding/page'
 import { SettingsCenterPage } from './center/page'
@@ -22,8 +21,6 @@ const testState = vi.hoisted(() => ({
       'settings.identity.manage',
       'settings.branding.view',
       'settings.branding.manage',
-      'settings.monitoring.view',
-      'settings.monitoring.manage',
       'settings.ai.view',
       'settings.ai.manage',
       'observe.ai.view',
@@ -368,8 +365,6 @@ describe('settings ai page rendering', () => {
         'settings.identity.manage',
         'settings.branding.view',
         'settings.branding.manage',
-        'settings.monitoring.view',
-        'settings.monitoring.manage',
         'settings.ai.view',
         'settings.ai.manage',
         'observe.ai.view',
@@ -435,8 +430,8 @@ describe('settings ai page rendering', () => {
 
     expect(container.textContent).not.toContain('AI 设置')
     expect(container.textContent).not.toContain('Provider Connections')
-    expect(container.textContent).toContain('个人中心')
-    expect(container.textContent).toContain('关于')
+    expect(container.textContent).not.toContain('个人中心')
+    expect(container.textContent).not.toContain('关于')
     expect(container.textContent).toContain('登陆设置')
     expect(container.textContent).toContain('品牌设置')
   })
@@ -465,27 +460,14 @@ describe('settings ai page rendering', () => {
     expect(container.textContent).not.toContain('品牌设置')
   })
 
-  it('renders about page without admin settings permissions', async () => {
-    testState.snapshot = {
-      permissionKeys: [],
-      visibleMenuIds: ['settings', 'settings-about'],
-      visibleMenus: [
-        { id: 'settings', path: '/settings' },
-        { id: 'settings-about', parentId: 'settings', path: '/settings/about' },
-      ],
-    }
-
-    const container = await renderWithProviders(<AboutSettingsPage />, '/settings/about')
-
-    expect(container.textContent).toContain('关于 OpenSoha')
-    expect(container.textContent).toContain('Apache-2.0')
-  })
-
   it('renders login settings on /settings/login', async () => {
     const container = await renderWithProviders(<LoginSettingsPage />, '/settings/login')
 
     expect(container.textContent).toContain('新增登录源')
     expect(container.textContent).toContain('OIDC')
+    expect(container.querySelector('button[aria-label="本地账号密码登录"]')).not.toBeNull()
+    expect(container.querySelector('button[aria-label="切换表格密度"]')).not.toBeNull()
+    expect(container.querySelector('button[aria-label="刷新登录源"]')).not.toBeNull()
     expect(container.textContent).not.toContain(
       '配置 OIDC、飞书、钉钉、企业微信、OAuth2 与 SAML 登录源。',
     )

@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { act } from 'react'
+import { act, useState } from 'react'
 import { App as AntdApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot } from 'react-dom/client'
@@ -22,7 +22,9 @@ import { clampFloatPosition, snapFloatPosition } from './draggable-float-shell'
 
 vi.mock('@/services/api-client', () => ({
   api: {
+    delete: vi.fn(),
     post: vi.fn(),
+    postWithSignal: vi.fn(),
   },
 }))
 
@@ -84,7 +86,25 @@ function Harness() {
   )
 }
 
-async function renderProvider() {
+function ToggleableProviderHarness() {
+  const [enabled, setEnabled] = useState(true)
+  return (
+    <>
+      <button
+        data-testid="toggle-assistant"
+        type="button"
+        onClick={() => setEnabled((value) => !value)}
+      >
+        toggle
+      </button>
+      <GlobalAIAssistantProvider enabled={enabled} permissionSnapshot={permissionSnapshot}>
+        <Harness />
+      </GlobalAIAssistantProvider>
+    </>
+  )
+}
+
+async function renderProvider({ enabled = true }: { enabled?: boolean } = {}) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   containers.push(container)
@@ -99,7 +119,7 @@ async function renderProvider() {
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={['/network/services/payment-api?namespace=payments']}>
           <AntdApp>
-            <GlobalAIAssistantProvider permissionSnapshot={permissionSnapshot}>
+            <GlobalAIAssistantProvider enabled={enabled} permissionSnapshot={permissionSnapshot}>
               <Harness />
             </GlobalAIAssistantProvider>
           </AntdApp>
@@ -110,6 +130,28 @@ async function renderProvider() {
 
   await act(async () => {
     await Promise.resolve()
+  })
+  return container
+}
+
+async function renderToggleableProvider() {
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  containers.push(container)
+  const root = createRoot(container)
+  roots.push(root)
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+
+  await act(async () => {
+    root.render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/network/services/payment-api?namespace=payments']}>
+          <AntdApp>
+            <ToggleableProviderHarness />
+          </AntdApp>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
   })
   return container
 }
@@ -268,7 +310,7 @@ describe('GlobalAIAssistantProvider', () => {
   })
 
   beforeEach(() => {
-    vi.mocked(api.post).mockResolvedValue({
+    vi.mocked(api.postWithSignal).mockResolvedValue({
       data: {
         id: 'session-global',
         title: 'Service payment-api',
@@ -302,7 +344,7 @@ describe('GlobalAIAssistantProvider', () => {
       await Promise.resolve()
     })
 
-    expect(api.post).toHaveBeenCalledWith(
+    expect(api.postWithSignal).toHaveBeenCalledWith(
       '/copilot/sessions',
       expect.objectContaining({
         mode: 'root_cause',
@@ -313,9 +355,49 @@ describe('GlobalAIAssistantProvider', () => {
         }),
         tags: ['global-assistant'],
       }),
+      expect.any(AbortSignal),
     )
     await waitForText(container, '已完成当前服务分析。')
     expect(String(container.textContent)).toContain('已完成当前服务分析。')
+  })
+
+  it('cancels session creation work and archives a new empty session when the panel closes', async () => {
+    let streamSignal: AbortSignal | undefined
+    vi.spyOn(window, 'fetch').mockImplementation((_input, init) => {
+      streamSignal = init?.signal ?? undefined
+      return new Promise<Response>((_resolve, reject) => {
+        streamSignal?.addEventListener(
+          'abort',
+          () => reject(new DOMException('The operation was aborted.', 'AbortError')),
+          { once: true },
+        )
+      })
+    })
+    vi.mocked(api.delete).mockResolvedValue(undefined)
+    const container = await renderProvider()
+    const askButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'ask',
+    )
+
+    await act(async () => {
+      askButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const closeButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="关闭 AI 助手"]',
+    )
+    expect(closeButton).not.toBeNull()
+
+    await act(async () => {
+      closeButton?.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(streamSignal?.aborted).toBe(true)
+    expect(api.delete).toHaveBeenCalledWith('/copilot/sessions/session-global')
+    expect(container.querySelector('[data-testid="soha-ai-panel"]')).toBeNull()
   })
 
   it('shows a selection toolbar only after an explicit text selection', async () => {
@@ -349,6 +431,68 @@ describe('GlobalAIAssistantProvider', () => {
     expect(container.querySelector('[data-testid="soha-ai-context-menu"]')).toBeNull()
   })
 
+  it('removes every global assistant entrypoint when the capability is disabled', async () => {
+    const container = await renderProvider({ enabled: false })
+    const row = container.querySelector('[data-testid="row-context"]')
+    const selectable = container.querySelector('[data-testid="selectable-text"]')
+    expect(selectable?.firstChild).toBeTruthy()
+    mockSelection(selectable!.firstChild!, 'ERROR payment-api timeout')
+
+    await act(async () => {
+      document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    const event = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 80,
+      clientY: 80,
+    })
+    row?.dispatchEvent(event)
+
+    expect(container.querySelector('.soha-ai-float-button')).toBeNull()
+    expect(container.querySelector('[data-testid="soha-ai-selection-toolbar"]')).toBeNull()
+    expect(container.querySelector('[data-testid="soha-ai-context-menu"]')).toBeNull()
+    expect(event.defaultPrevented).toBe(false)
+
+    const askButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'ask',
+    )
+    await act(async () => {
+      askButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+    expect(api.post).not.toHaveBeenCalled()
+    expect(api.postWithSignal).not.toHaveBeenCalled()
+  })
+
+  it('clears stale selection state while toggling the capability off and on', async () => {
+    const container = await renderToggleableProvider()
+    const selectable = container.querySelector('[data-testid="selectable-text"]')
+    expect(selectable?.firstChild).toBeTruthy()
+    mockSelection(selectable!.firstChild!, 'ERROR payment-api timeout')
+
+    await act(async () => {
+      document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+    expect(container.querySelector('[data-testid="soha-ai-selection-toolbar"]')).toBeTruthy()
+
+    const toggle = container.querySelector('[data-testid="toggle-assistant"]')
+    await act(async () => {
+      toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(container.querySelector('.soha-ai-float-button')).toBeNull()
+    expect(container.querySelector('[data-testid="soha-ai-selection-toolbar"]')).toBeNull()
+
+    await act(async () => {
+      toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(container.querySelector('.soha-ai-float-button')).toBeTruthy()
+    expect(container.querySelector('[data-testid="soha-ai-selection-toolbar"]')).toBeNull()
+  })
+
   it('uses row-level AI context from the controlled context menu', async () => {
     const container = await renderProvider()
     const row = container.querySelector('[data-testid="row-context"]')
@@ -380,7 +524,7 @@ describe('GlobalAIAssistantProvider', () => {
       await Promise.resolve()
     })
 
-    expect(api.post).toHaveBeenCalledWith(
+    expect(api.postWithSignal).toHaveBeenCalledWith(
       '/copilot/sessions',
       expect.objectContaining({
         scope: expect.objectContaining({
@@ -389,6 +533,7 @@ describe('GlobalAIAssistantProvider', () => {
           pod: 'demo-pod',
         }),
       }),
+      expect.any(AbortSignal),
     )
   })
 })

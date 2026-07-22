@@ -8,6 +8,12 @@
   gap: 14px;
 }
 
+.soha-virtualization-page .soha-step-form__content {
+  max-height: min(62vh, 620px);
+  overflow-y: auto;
+  padding-inline-end: 8px;
+}
+
 .soha-vrt-query .soha-management-query-card .ant-card-body {
   padding-inline: 12px;
 }

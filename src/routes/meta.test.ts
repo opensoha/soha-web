@@ -36,12 +36,22 @@ function getRoute(id: string): RouteMeta {
 }
 
 describe('access route authorization', () => {
-  it('allows the portal home from its permission without a runtime menu binding', () => {
+  it('requires the enabled home workbench menu binding for the portal', () => {
     const snapshot = buildSnapshot({
       permissionKeys: ['identity.portal.view'],
+      visibleMenuIds: ['home-workbench'],
+      visibleMenus: [{ id: 'home-workbench', path: '/portal' }],
     })
 
     expect(canAccessRoute(getRoute('provider-portal'), snapshot)).toBe(true)
+    expect(getAccessibleWorkbenchIds(snapshot)).toContain('home')
+    expect(
+      canAccessRoute(
+        getRoute('provider-portal'),
+        buildSnapshot({ permissionKeys: ['identity.portal.view'] }),
+      ),
+    ).toBe(false)
+    expect(findLandingPath(snapshot)).toBe('/portal')
   })
 
   it('allows the access parent route when any visible child permission is present', () => {
@@ -77,20 +87,12 @@ describe('access route authorization', () => {
     ).toBe(true)
   })
 
-  it('allows basic account routes and admin settings from visible menu bindings', () => {
+  it('keeps account utilities independent from admin settings menu bindings', () => {
     const snapshot = buildSnapshot({
       permissionKeys: ['settings.identity.view', 'settings.branding.view'],
-      visibleMenuIds: [
-        'settings',
-        'account-profile',
-        'settings-about',
-        'settings-login',
-        'settings-branding',
-      ],
+      visibleMenuIds: ['settings', 'settings-login', 'settings-branding'],
       visibleMenus: [
         { id: 'settings', path: '/settings' },
-        { id: 'account-profile', parentId: 'settings', path: '/account/profile' },
-        { id: 'settings-about', parentId: 'settings', path: '/settings/about' },
         { id: 'settings-login', parentId: 'settings', path: '/settings/login' },
         {
           id: 'settings-branding',
@@ -101,8 +103,9 @@ describe('access route authorization', () => {
     })
 
     expect(canAccessRoute(getRoute('settings'))).toBe(false)
+    expect(canAccessRoute(getRoute('account-settings'), snapshot)).toBe(true)
     expect(canAccessRoute(getRoute('account-profile'), snapshot)).toBe(true)
-    expect(canAccessRoute(getRoute('settings-about'), snapshot)).toBe(true)
+    expect(canAccessRoute(getRoute('about'), snapshot)).toBe(true)
     expect(canAccessRoute(getRoute('settings-login'), snapshot)).toBe(true)
     expect(canAccessRoute(getRoute('settings-branding'), snapshot)).toBe(true)
   })
@@ -259,8 +262,9 @@ describe('access route authorization', () => {
     const settingsNav = filterSidebarNavByWorkbench(systemNav, 'settings')
 
     expect(getRouteWorkbenchId(getRoute('settings-login'))).toBe('settings')
-    expect(getRouteWorkbenchId(getRoute('account-profile'))).toBe('settings')
-    expect(getRouteWorkbenchId(getRoute('settings-about'))).toBe('settings')
+    expect(getRouteWorkbenchId(getRoute('account-settings'))).toBeNull()
+    expect(getRouteWorkbenchId(getRoute('account-profile'))).toBeNull()
+    expect(getRouteWorkbenchId(getRoute('about'))).toBeNull()
     expect(getRouteWorkbenchId(getRoute('access-users'))).toBe('settings')
     expect(getRouteWorkbenchId(getRoute('system-menus'))).toBe('settings')
     expect(getMenuWorkbenchId({ id: 'settings-login', path: '/settings/login' })).toBe('settings')
@@ -270,8 +274,6 @@ describe('access route authorization', () => {
     expect(findFirstAccessiblePathForWorkbench('settings', snapshot)).toBe('/identity/overview')
     expect(settingsNav.map((item) => item.id)).toEqual([
       'identity-overview',
-      'account-profile',
-      'settings-about',
       'identity-applications',
       'identity-providers',
       'identity-outposts',
@@ -309,32 +311,14 @@ describe('access route authorization', () => {
     expect(findFirstAccessiblePathForWorkbench('settings', hiddenSettingsOnlySnapshot)).toBeNull()
   })
 
-  it('exposes basic settings menus without admin settings permissions', () => {
-    const snapshot = buildSnapshot({
-      visibleMenuIds: ['settings', 'account-profile', 'settings-about'],
-      visibleMenus: [
-        { id: 'settings', path: '/settings', section: 'admin', sortOrder: 260 },
-        {
-          id: 'account-profile',
-          parentId: 'settings',
-          path: '/account/profile',
-          section: 'account',
-          sortOrder: 10,
-        },
-        {
-          id: 'settings-about',
-          parentId: 'settings',
-          path: '/settings/about',
-          section: 'account',
-          sortOrder: 20,
-        },
-      ],
-    })
+  it('allows account utilities without exposing the settings workbench', () => {
+    const snapshot = buildSnapshot()
 
+    expect(canAccessRoute(getRoute('account-settings'), snapshot)).toBe(true)
     expect(canAccessRoute(getRoute('account-profile'), snapshot)).toBe(true)
-    expect(canAccessRoute(getRoute('settings-about'), snapshot)).toBe(true)
-    expect(getAccessibleWorkbenchIds(snapshot)).toContain('settings')
-    expect(findFirstAccessiblePathForWorkbench('settings', snapshot)).toBe('/settings/about')
+    expect(canAccessRoute(getRoute('about'), snapshot)).toBe(true)
+    expect(getAccessibleWorkbenchIds(snapshot)).not.toContain('settings')
+    expect(findFirstAccessiblePathForWorkbench('settings', snapshot)).toBeNull()
   })
 
   it('keeps the access parent route blocked when the access menu binding is missing', () => {
@@ -495,8 +479,9 @@ describe('access route authorization', () => {
     expect(getRouteWorkspace(getRoute('delivery-analysis'))).toBe('application')
     expect(getRouteWorkspace(getRoute('workloads-pods'))).toBe('resource')
     expect(getRouteWorkspace(getRoute('system-menus'))).toBe('system')
-    expect(getRouteWorkspace(getRoute('account-profile'))).toBe('system')
-    expect(getRouteWorkspace(getRoute('settings-about'))).toBe('system')
+    expect(getRouteWorkspace(getRoute('account-settings'))).toBeNull()
+    expect(getRouteWorkspace(getRoute('account-profile'))).toBeNull()
+    expect(getRouteWorkspace(getRoute('about'))).toBeNull()
   })
 
   it('requires workspace permissions for business routes', () => {
@@ -1136,9 +1121,7 @@ describe('access route authorization', () => {
     expect(canAccessRoute(route, allowedSnapshot)).toBe(true)
     expect(parentRoute.redirectTo).toBe('/ai-workbench/overview')
     expect(canAccessRoute(parentRoute, allowedSnapshot)).toBe(true)
-    expect(findFirstAccessiblePathForWorkbench('ai', allowedSnapshot)).toBe(
-      '/ai-gateway/manifest',
-    )
+    expect(findFirstAccessiblePathForWorkbench('ai', allowedSnapshot)).toBe('/ai-gateway/manifest')
 
     expect(
       canAccessRoute(

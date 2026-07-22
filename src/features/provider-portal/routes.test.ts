@@ -26,10 +26,11 @@ describe('Provider Portal route manifest', () => {
     expect(providerPortalRoutes[0].meta).toMatchObject({
       path: '/portal',
       title: '门户首页',
-      navVisible: false,
+      navVisible: true,
+      workbenchId: 'home',
+      menuId: 'home-workbench',
       permissionKey: 'identity.portal.view',
     })
-    expect(providerPortalRoutes[0].meta).not.toHaveProperty('menuId')
     const loadedPages = await Promise.all(
       providerPortalRoutes.map(async (route) => {
         const module = await route.load()

@@ -66,6 +66,7 @@ export const virtualizationKeys = {
     [...virtualizationKeys.vmLists(), normalizeVirtualizationListParams(params)] as const,
   vmDetails: () => [...virtualizationKeys.vms(), 'detail'] as const,
   vmDetail: (id: string) => [...virtualizationKeys.vmDetails(), normalizeId(id)] as const,
+  vmDevices: (id: string) => [...virtualizationKeys.vmDetail(id), 'devices'] as const,
   vmMetrics: (id: string, params: VirtualizationVMMetricsQueryParams = {}) =>
     [
       ...virtualizationKeys.vmDetail(id),

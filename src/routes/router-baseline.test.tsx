@@ -24,7 +24,6 @@ vi.mock('@/features/auth/login-page', async () => {
     LoginPage: () => createElement('div', { 'data-route-page': 'LoginPage' }, 'LoginPage'),
   }
 })
-
 const mockRoutePage = vi.hoisted(() => (exportName: string) => async () => {
   const { createElement } = await import('react')
   return {
@@ -60,7 +59,7 @@ vi.mock('@/features/system/operation-logs/page', mockRoutePage('OperationLogsPag
 vi.mock('@/features/settings/center/page', mockRoutePage('SettingsCenterPage'))
 vi.mock('@/features/settings/identity/page', mockRoutePage('LoginSettingsPage'))
 vi.mock('@/features/settings/branding/page', mockRoutePage('BrandingSettingsPage'))
-vi.mock('@/features/settings/about/page', mockRoutePage('AboutSettingsPage'))
+vi.mock('@/features/auth/about-page', mockRoutePage('AboutPage'))
 vi.mock('@/features/copilot/workbench/pages/chat-page', mockRoutePage('AIWorkbenchChatPage'))
 vi.mock('@/features/copilot/observe/operations/page', mockRoutePage('AIOperationsPage'))
 vi.mock('@/features/copilot/observe/tools/page', mockRoutePage('AIToolsPage'))
@@ -199,6 +198,7 @@ describe('router deep-link baseline', () => {
     ['/auth/oidc/callback', 'OIDCCallbackPage'],
     ['/login/callback', 'OIDCCallbackPage'],
     ['/account/profile', 'UserProfilePage'],
+    ['/account/settings', 'UserProfilePage'],
     ['/portal', 'SohaProviderPortalPage'],
     ['/portal/applications/application-1', 'PortalApplicationDetailPage'],
     ['/portal/security', 'PortalSecurityPage'],
@@ -224,7 +224,7 @@ describe('router deep-link baseline', () => {
     ['/settings', 'SettingsCenterPage'],
     ['/settings/login', 'LoginSettingsPage'],
     ['/settings/branding', 'BrandingSettingsPage'],
-    ['/settings/about', 'AboutSettingsPage'],
+    ['/about', 'AboutPage'],
     ['/clusters', 'ClustersPage'],
     ['/clusters/cluster-1', 'ClusterDetailPage'],
     ['/cluster-resources/nodes', 'ClusterNodesPage'],

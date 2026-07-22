@@ -14,6 +14,7 @@ import {
   Spin,
   Switch,
   Tag,
+  Typography,
   message,
 } from 'antd'
 import type { TableColumnsType } from 'antd'
@@ -21,14 +22,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { StepForm } from '@/components/step-form'
 import type { StepFormStep } from '@/components/step-form'
 import {
+  ManagementDensityButton,
   ManagementIconButton,
+  ManagementRefreshButton,
   ManagementState,
   ManagementTableToolbar,
 } from '@/components/management-list'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { accessQueries } from '@/features/access/shared/queries'
 import { tableColumnPresets } from '@/utils/table-columns'
-import { DeleteOutlined, EditOutlined, StarOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, PlusOutlined, StarOutlined } from '@ant-design/icons'
 import {
   applyProviderPreset,
   defaultFrontendRedirectPath,
@@ -43,6 +46,8 @@ import { SettingsAdminTable, TagSelect } from '../shared/components'
 import type { LoginProviderSettings, SaveIdentitySettingsInput, SettingsPageProps } from '../types'
 import '../shared/styles.css'
 
+const { Text } = Typography
+
 export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) {
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
@@ -52,6 +57,7 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
   const [providerModalVisible, setProviderModalVisible] = useState(false)
   const [editingProvider, setEditingProvider] = useState<LoginProviderSettings | null>(null)
   const [providerStep, setProviderStep] = useState(0)
+  const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const canViewLoginSettings = hasPermission(
     permissionSnapshotQuery.data?.data,
     'settings.identity.view',
@@ -61,23 +67,27 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
     'settings.identity.manage',
   )
 
-  const { data, isLoading } = useQuery(settingsQueries.identity())
+  const identityQuery = useQuery(settingsQueries.identity())
+  const { data, isLoading } = identityQuery
   const rolesQuery = useQuery({
     ...accessQueries.roles(),
     enabled: canViewLoginSettings,
   })
   const saveMutation = useMutation(settingsMutations.identity.save(queryClient))
   const saveIdentity = (input: SaveIdentitySettingsInput) =>
-    saveMutation.mutate({
-      ...input,
-      values: {
-        localPasswordLoginEnabled: settings?.localPasswordLoginEnabled ?? true,
-        ...input.values,
+    saveMutation.mutate(
+      {
+        ...input,
+        values: {
+          localPasswordLoginEnabled: settings?.localPasswordLoginEnabled ?? true,
+          ...input.values,
+        },
       },
-    }, {
-      onSuccess: () => void message.success(input.successMessage || '登陆设置已保存'),
-      onError: (err) => void message.error(err.message),
-    })
+      {
+        onSuccess: () => void message.success(input.successMessage || '登陆设置已保存'),
+        onError: (err) => void message.error(err.message),
+      },
+    )
 
   const settings = data
   const providers = settings?.providers ?? []
@@ -489,7 +499,8 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
   const content = (
     <div className="soha-settings-table-section">
       <SettingsAdminTable
-        headerExtra={
+        columnSettingPlacement="toolbar"
+        toolbarExtra={
           <ManagementTableToolbar>
             <Space size={6}>
               <Switch
@@ -505,9 +516,7 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
                       defaultProviderId: settings?.defaultProviderId,
                       localPasswordLoginEnabled: checked,
                     },
-                    successMessage: checked
-                      ? '本地账号密码登录已开启'
-                      : '本地账号密码登录已关闭',
+                    successMessage: checked ? '本地账号密码登录已开启' : '本地账号密码登录已关闭',
                   })
                 }
               />
@@ -515,6 +524,7 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
             </Space>
             {canManageLoginSettings ? (
               <Button
+                icon={<PlusOutlined />}
                 size="small"
                 type="primary"
                 onClick={() => {
@@ -526,11 +536,26 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
                 新增登录源
               </Button>
             ) : null}
+            <ManagementDensityButton
+              aria-label="切换表格密度"
+              tooltip={tableSize === 'small' ? '切换为舒展密度' : '切换为紧凑密度'}
+              onClick={() => setTableSize((current) => (current === 'small' ? 'middle' : 'small'))}
+            />
+            <ManagementRefreshButton
+              aria-label="刷新登录源"
+              loading={identityQuery.isFetching}
+              tooltip="刷新"
+              onClick={() => void identityQuery.refetch()}
+            />
           </ManagementTableToolbar>
         }
         rowKey="id"
-        tableSize="small"
-        pagination={false}
+        tableSize={tableSize}
+        paginationSummary={(total, range) => (
+          <Text type="secondary">
+            当前 {range[0]}-{range[1]} / {total} 条
+          </Text>
+        )}
         dataSource={providers}
         columns={providerColumns}
         empty={

@@ -56,7 +56,7 @@ export const OPERATION_FILTER_PRESETS = [
 export type OperationFilterPreset = (typeof OPERATION_FILTER_PRESETS)[number]['key']
 export type OverviewTone = 'default' | 'success' | 'warning' | 'danger'
 export type VirtualizationProvider = 'kubevirt' | 'pve'
-export type ProviderFilter = 'all' | VirtualizationProvider
+export type ProviderFilter = 'all' | string
 export type EnabledFilter = 'all' | 'enabled' | 'disabled'
 
 export function isAbnormalOperation(status?: string) {
@@ -369,12 +369,15 @@ export function buildVmPayload(values: CreateVirtualMachineInput): CreateVirtual
     cloudInit: values.cloudInit || undefined,
     providerParams: values.providerParams,
     startAfterCreate: Boolean(values.startAfterCreate),
+    disks: values.disks,
+    networks: values.networks,
   }
 }
 
 export interface VirtualMachineFormValues extends CreateVirtualMachineInput {
   provider?: string
   sourceMode?: string
+  enableCloudInit?: boolean
   pveStorage?: string
   pveBridge?: string
   pveIso?: string
@@ -392,14 +395,15 @@ export interface VirtualMachineFormValues extends CreateVirtualMachineInput {
 }
 
 export function buildCreateVmPayload(values: VirtualMachineFormValues): CreateVirtualMachineInput {
+  const cloudInitEnabled = values.enableCloudInit === true
   const providerParams = compactRecord<VirtualizationVmProviderParams>({
     storage: values.pveStorage,
     bridge: values.pveBridge,
     iso: values.pveIso,
-    ciuser: values.pveCloudInitUser,
-    sshkeys: values.pveCloudInitSSHKeys,
-    snippetStorage: values.pveSnippetStorage,
-    cicustom: values.pveCICustom,
+    ciuser: cloudInitEnabled ? values.pveCloudInitUser : undefined,
+    sshkeys: cloudInitEnabled ? values.pveCloudInitSSHKeys : undefined,
+    snippetStorage: cloudInitEnabled ? values.pveSnippetStorage : undefined,
+    cicustom: cloudInitEnabled ? values.pveCICustom : undefined,
     storageClass: values.kubevirtStorageClass,
     dataVolumeName: values.kubevirtDataVolumeName,
     networkType: values.kubevirtNetworkType,
@@ -412,6 +416,7 @@ export function buildCreateVmPayload(values: VirtualMachineFormValues): CreateVi
     values.sourceMode || (values.provider === 'pve' ? 'template_clone' : 'datasource_clone')
   return buildVmPayload({
     ...values,
+    cloudInit: cloudInitEnabled ? values.cloudInit : undefined,
     sourceMode,
     sourceId: values.bootImageId,
     imageId: values.bootImageId,

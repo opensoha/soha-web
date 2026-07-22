@@ -76,8 +76,10 @@ export function PortsTable({
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [currentStep, setCurrentStep] = useState(0)
   const [editing, setEditing] = useState<DockerPortMapping | null>(null)
-  const { dockerModuleEnabled, canManagePorts } = useDockerPermissions()
-  const { hostOptions, projectOptions, serviceOptions } = useDockerOptions()
+  const { dockerModuleEnabled, canManagePorts, canViewServices } = useDockerPermissions()
+  const { hostOptions, projectOptions, serviceOptions } = useDockerOptions({
+    includeServices: canViewServices,
+  })
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const portsQuery = useQuery(dockerQueries.ports(filters, dockerModuleEnabled))

@@ -62,6 +62,7 @@ interface AIPageContextRegistration {
 
 interface GlobalAIAssistantProviderProps {
   children: ReactNode
+  enabled?: boolean
   permissionSnapshot?: PermissionSnapshot
 }
 
@@ -193,6 +194,7 @@ class WorkbenchStreamEventError extends Error {
 
 export function GlobalAIAssistantProvider({
   children,
+  enabled = true,
   permissionSnapshot,
 }: GlobalAIAssistantProviderProps) {
   const location = useLocation()
@@ -219,6 +221,7 @@ export function GlobalAIAssistantProvider({
   const [selectionToolbar, setSelectionToolbar] = useState<AISelectionToolbarState | null>(null)
   const [contextMenu, setContextMenu] = useState<AIContextMenuState | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const selectionTimerRef = useRef<number | null>(null)
 
   const activeContext = useMemo(() => mergeAIPageContext(pageContext), [pageContext])
 
@@ -236,24 +239,32 @@ export function GlobalAIAssistantProvider({
   }, [])
 
   const ensureSession = useCallback(
-    async (context: AIPageContext, action: AIGlobalAssistantAction) => {
+    async (context: AIPageContext, action: AIGlobalAssistantAction, signal: AbortSignal) => {
       const key = contextIdentityKey(context)
       if (currentSession && currentSessionContextKey === key) {
-        return currentSession
+        return { session: currentSession, created: false }
       }
 
-      const response = await api.post<ApiResponse<WorkbenchSession>>('/copilot/sessions', {
-        title: buildGlobalAssistantTitle(action, context),
-        mode: 'root_cause',
-        scope: workbenchScopeFromAIContext(context),
-        pinnedContext: pinnedContextFromAIContext(context),
-        source: 'global-assistant',
-        tags: ['global-assistant'],
-      })
+      const response = await api.postWithSignal<ApiResponse<WorkbenchSession>>(
+        '/copilot/sessions',
+        {
+          title: buildGlobalAssistantTitle(action, context),
+          mode: 'root_cause',
+          scope: workbenchScopeFromAIContext(context),
+          pinnedContext: pinnedContextFromAIContext(context),
+          source: 'global-assistant',
+          tags: ['global-assistant'],
+        },
+        signal,
+      )
+      if (signal.aborted) {
+        void api.delete(`/copilot/sessions/${response.data.id}`).catch(() => undefined)
+        throw new DOMException('The operation was aborted.', 'AbortError')
+      }
       setCurrentSession(response.data)
       setCurrentSessionContextKey(key)
       await queryClient.invalidateQueries({ queryKey: workbenchKeys.sessions.all() })
-      return response.data
+      return { session: response.data, created: true }
     },
     [currentSession, currentSessionContextKey, queryClient],
   )
@@ -291,9 +302,12 @@ export function GlobalAIAssistantProvider({
 
       const controller = new AbortController()
       abortRef.current = controller
+      let createdSessionId: string | null = null
 
       try {
-        const session = await ensureSession(context, action)
+        const ensured = await ensureSession(context, action, controller.signal)
+        const session = ensured.session
+        createdSessionId = ensured.created ? session.id : null
         let nextStreamState = createWorkbenchStreamState()
         const seenEvents = new Set<string>()
         const request: WorkbenchSendMessageStreamRequest = {
@@ -346,6 +360,13 @@ export function GlobalAIAssistantProvider({
         await queryClient.invalidateQueries({ queryKey: workbenchKeys.agentRuns.all() })
       } catch (error) {
         const isAbort = error instanceof DOMException && error.name === 'AbortError'
+        if (isAbort && createdSessionId) {
+          const sessionId = createdSessionId
+          setCurrentSession((current) => (current?.id === sessionId ? null : current))
+          setCurrentSessionContextKey(null)
+          await api.delete(`/copilot/sessions/${sessionId}`).catch(() => undefined)
+          await queryClient.invalidateQueries({ queryKey: workbenchKeys.sessions.all() })
+        }
         setMessages((items) =>
           items.map((item) =>
             item.id === assistantMessageId
@@ -374,6 +395,7 @@ export function GlobalAIAssistantProvider({
 
   const launchAssistant = useCallback(
     async (request: AIGlobalAssistantLaunchRequest) => {
+      if (!enabled) return
       const context = mergeAIPageContext(activeContext, request.contextOverride)
       const selection =
         request.selection ??
@@ -386,7 +408,7 @@ export function GlobalAIAssistantProvider({
       const prompt = buildGlobalAssistantPrompt(request.action, context, selection, request.prompt)
       await sendPrompt(request.action, context, prompt, selection)
     },
-    [activeContext, currentSession?.id, selectionContext, sendPrompt],
+    [activeContext, currentSession?.id, enabled, selectionContext, sendPrompt],
   )
 
   const openWorkbench = useCallback(() => {
@@ -410,14 +432,34 @@ export function GlobalAIAssistantProvider({
     abortRef.current?.abort()
   }, [])
 
+  const closeAssistant = useCallback(() => {
+    abortRef.current?.abort()
+    setPanelOpen(false)
+  }, [])
+
   useEffect(() => {
-    if (!canUseChat) {
+    if (enabled) return
+    abortRef.current?.abort()
+    if (selectionTimerRef.current !== null) {
+      window.clearTimeout(selectionTimerRef.current)
+      selectionTimerRef.current = null
+    }
+    setPanelOpen(false)
+    setSelectionContext(null)
+    setSelectionToolbar(null)
+    setContextMenu(null)
+  }, [enabled])
+
+  useEffect(() => {
+    if (!enabled || !canUseChat) {
       setSelectionToolbar(null)
       return undefined
     }
 
     const updateSelection = () => {
-      window.setTimeout(() => {
+      if (selectionTimerRef.current !== null) window.clearTimeout(selectionTimerRef.current)
+      selectionTimerRef.current = window.setTimeout(() => {
+        selectionTimerRef.current = null
         const snapshot = selectionSnapshotFromWindow()
         setSelectionContext(snapshot?.context ?? null)
         setSelectionToolbar(snapshot?.toolbar ?? null)
@@ -437,16 +479,20 @@ export function GlobalAIAssistantProvider({
     document.addEventListener('keydown', onKeyDown)
     window.addEventListener('scroll', clearSelection, true)
     return () => {
+      if (selectionTimerRef.current !== null) {
+        window.clearTimeout(selectionTimerRef.current)
+        selectionTimerRef.current = null
+      }
       document.removeEventListener('mouseup', updateSelection)
       document.removeEventListener('keyup', updateSelection)
       document.removeEventListener('selectionchange', updateSelection)
       document.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('scroll', clearSelection, true)
     }
-  }, [canUseChat])
+  }, [canUseChat, enabled])
 
   useEffect(() => {
-    if (!canUseChat) return undefined
+    if (!enabled || !canUseChat) return undefined
 
     const onContextMenu = (event: MouseEvent) => {
       if (!canUseWorkspaceSelection(event.target)) return
@@ -473,33 +519,37 @@ export function GlobalAIAssistantProvider({
       document.removeEventListener('contextmenu', onContextMenu)
       document.removeEventListener('click', closeMenu)
     }
-  }, [canUseChat, selectionContext?.text])
+  }, [canUseChat, enabled, selectionContext?.text])
 
   const contextValue = useMemo<AIPageContextRegistryValue>(
     () => ({
       currentContext: activeContext,
       launchAssistant,
-      openAssistant: () => setPanelOpen(true),
+      openAssistant: () => {
+        if (enabled) setPanelOpen(true)
+      },
       openWorkbench,
       registerPageContext,
     }),
-    [activeContext, launchAssistant, openWorkbench, registerPageContext],
+    [activeContext, enabled, launchAssistant, openWorkbench, registerPageContext],
   )
 
   return (
     <AIPageContextRegistry.Provider value={contextValue}>
       {children}
-      <AIFloatButton
-        disabled={!canUseChat}
-        hasSelection={Boolean(selectionContext?.text)}
-        running={running}
-        onAction={(action) => {
-          void launchAssistant({ action })
-        }}
-        onOpenAssistant={() => setPanelOpen(true)}
-        onOpenWorkbench={openWorkbench}
-      />
-      {panelOpen ? (
+      {enabled ? (
+        <AIFloatButton
+          disabled={!canUseChat}
+          hasSelection={Boolean(selectionContext?.text)}
+          running={running}
+          onAction={(action) => {
+            void launchAssistant({ action })
+          }}
+          onOpenAssistant={() => setPanelOpen(true)}
+          onOpenWorkbench={openWorkbench}
+        />
+      ) : null}
+      {enabled && panelOpen ? (
         <Suspense fallback={null}>
           <AIFloatingAssistantPanel
             context={activeContext}
@@ -512,7 +562,7 @@ export function GlobalAIAssistantProvider({
             thinkingSummary={streamState.thinking?.summary}
             toolCalls={streamState.toolCalls}
             onCancel={cancelStream}
-            onClose={() => setPanelOpen(false)}
+            onClose={closeAssistant}
             onInputChange={setAssistantInput}
             onOpenWorkbench={openWorkbench}
             onQuickPrompt={(prompt) => {
@@ -527,23 +577,27 @@ export function GlobalAIAssistantProvider({
           />
         </Suspense>
       ) : null}
-      <AISelectionToolbar
-        disabled={!canUseChat}
-        state={selectionToolbar}
-        onAction={(action) => {
-          void launchAssistant({ action })
-        }}
-        onClose={() => setSelectionToolbar(null)}
-      />
-      <AIContextMenu
-        disabled={!canUseChat}
-        state={contextMenu}
-        onAction={(action) => {
-          void launchAssistant({ action, contextOverride: contextMenu?.contextOverride })
-        }}
-        onClose={() => setContextMenu(null)}
-        onOpenWorkbench={openWorkbench}
-      />
+      {enabled ? (
+        <>
+          <AISelectionToolbar
+            disabled={!canUseChat}
+            state={selectionToolbar}
+            onAction={(action) => {
+              void launchAssistant({ action })
+            }}
+            onClose={() => setSelectionToolbar(null)}
+          />
+          <AIContextMenu
+            disabled={!canUseChat}
+            state={contextMenu}
+            onAction={(action) => {
+              void launchAssistant({ action, contextOverride: contextMenu?.contextOverride })
+            }}
+            onClose={() => setContextMenu(null)}
+            onOpenWorkbench={openWorkbench}
+          />
+        </>
+      ) : null}
     </AIPageContextRegistry.Provider>
   )
 }

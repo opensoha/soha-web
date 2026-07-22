@@ -41,6 +41,7 @@ import {
 } from '../shared/application-ui'
 import { formatPortalDateTime, portalApplicationSearchText } from '../shared/formatters'
 import type { PortalSecuritySummary } from '../shared/types'
+import { PortalAccountMenu } from '../shared/account-menu'
 import '../provider-portal-pages.css'
 
 const { Paragraph, Text, Title } = Typography
@@ -302,9 +303,7 @@ export function SohaProviderPortalPage() {
           <Button icon={<SafetyCertificateOutlined />} onClick={() => navigate('/portal/security')}>
             Security
           </Button>
-          <Button icon={<UserOutlined />} onClick={() => navigate('/account/profile')}>
-            Profile
-          </Button>
+          <PortalAccountMenu />
         </Space>
       </header>
 

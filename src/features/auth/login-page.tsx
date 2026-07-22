@@ -63,11 +63,11 @@ const CAPABILITY_QUESTIONS = [
     answer: '多集群、工作负载、网络、存储、YAML 统一入口',
   },
   {
-    question: '虚拟化管理工作台',
+    question: '虚拟化资源',
     answer: '虚拟机、集群、镜像、规格、同步和操作记录',
   },
   {
-    question: 'Docker 工作台',
+    question: '容器运行时',
     answer: '主机、容器、Compose、模板和操作任务',
   },
   {

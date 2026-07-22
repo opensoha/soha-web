@@ -211,6 +211,7 @@ export interface MenuWorkbenchSummary {
 }
 
 export const MENU_WORKBENCH_ORDER: MenuWorkbenchSurface[] = [
+  'home',
   'platform',
   'compute',
   'delivery',
@@ -222,6 +223,7 @@ export const MENU_WORKBENCH_ORDER: MenuWorkbenchSurface[] = [
 ]
 
 export const MENU_WORKBENCH_LABELS: Record<MenuWorkbenchSurface, string> = {
+  home: '首页',
   platform: 'k8s工作台',
   compute: '计算资源工作台',
   ai: 'AI工作台',

@@ -39,6 +39,7 @@ const APPLICATION_PATH_PREFIXES = [
 ]
 
 const WORKBENCH_DEFAULT_PATHS = {
+  home: '/portal',
   platform: '/',
   compute: '/compute',
   delivery: '/applications',
@@ -49,9 +50,7 @@ const WORKBENCH_DEFAULT_PATHS = {
 
 const WORKBENCH_FALLBACK_PATHS: Partial<
   Record<keyof typeof WORKBENCH_DEFAULT_PATHS, readonly string[]>
-> = {
-  settings: ['/settings/about'],
-}
+> = {}
 
 // Compatibility entries keep newly shipped frontend routes reachable while an
 // older permission snapshot still lacks the corresponding seeded menu record.
@@ -216,6 +215,7 @@ export function resolveRouteMenuId(route: RouteMeta): string | undefined {
 function deriveWorkspaceFromPath(pathname: string, requiresAuth: boolean): WorkspaceType | null {
   if (
     pathname === '/login' ||
+    pathname === '/about' ||
     pathname.startsWith('/auth/') ||
     pathname.startsWith('/login/') ||
     pathname.startsWith('/account/')
@@ -248,6 +248,9 @@ export function getRouteWorkspace(route: RouteMeta): WorkspaceType | null {
 }
 
 function deriveWorkbenchIdFromPath(pathname: string): WorkbenchId | null {
+  if (pathname.startsWith('/portal')) {
+    return 'home'
+  }
   if (
     pathname === '/' ||
     pathname.startsWith('/cluster-resources') ||
@@ -880,6 +883,10 @@ export function findLandingPath(
   persistedWorkspace?: BusinessWorkspaceType | null,
   roles: string[] = [],
 ): string | null {
+  const homePath = findFirstAccessiblePathForWorkbench('home', snapshot)
+  if (homePath) {
+    return homePath
+  }
   const workspace = findPreferredWorkspace(snapshot, persistedWorkspace, roles)
   return findFirstAccessiblePath(snapshot, workspace)
 }

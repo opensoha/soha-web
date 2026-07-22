@@ -139,6 +139,7 @@ describe('Provider Portal catalog page', () => {
     expect(container.textContent).toContain('Operations Console')
     expect(container.textContent).toContain('1 available')
     expect(container.textContent).toContain('Enabled')
+    expect(container.querySelector('button[aria-label="Account menu"]')).not.toBeNull()
 
     const securityButton = [...container.querySelectorAll('button')].find(
       (button) => button.textContent?.trim() === 'Security',

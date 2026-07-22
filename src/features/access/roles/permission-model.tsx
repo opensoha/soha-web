@@ -12,8 +12,8 @@ const ROLE_PERMISSION_WORKBENCH_LABELS: Record<string, string> = {
   monitoring: '可观测与值班',
   ai: 'AI 工作台',
   aiGateway: 'AI Gateway',
-  virtualization: '虚拟化',
-  docker: 'Docker 工作台',
+  virtualization: '虚拟化资源',
+  docker: '容器运行时',
   settings: '设置中心',
   unknown: '其他菜单',
 }

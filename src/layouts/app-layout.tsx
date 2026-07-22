@@ -9,6 +9,8 @@ import {
   CloudServerOutlined,
   DownOutlined,
   FileAddOutlined,
+  HomeOutlined,
+  InfoCircleOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   MoonOutlined,
@@ -33,7 +35,12 @@ import {
   normalizeComputeWorkbenchNav,
 } from '@/features/compute/navigation'
 import { GlobalAIAssistantProvider } from '@/features/copilot/global-assistant'
-import { filterMenuByModuleFeatures, useModuleStatuses } from '@/features/modules'
+import {
+  filterMenuByModuleFeatures,
+  GLOBAL_ASSISTANT_FEATURE,
+  getWorkbenchModuleFeature,
+  useModuleStatuses,
+} from '@/features/modules'
 import { resolveMenuIcon } from '@/features/system/menu-icons'
 import { resolveMenuSectionLabel } from '@/features/system/menu-schema'
 import { useI18n } from '@/i18n'
@@ -68,6 +75,7 @@ const GlobalResourceCreateModal = lazy(async () => {
   return { default: module.GlobalResourceCreateModal }
 })
 const BREADCRUMB_WORKBENCH_ROOT_ROUTE_IDS: Partial<Record<WorkbenchId, string[]>> = {
+  home: ['provider-portal'],
   ai: ['ai-workbench'],
   compute: ['compute-workbench'],
   monitoring: ['monitoring-workbench'],
@@ -77,7 +85,7 @@ const BREADCRUMB_WORKBENCH_ROOT_ROUTE_IDS: Partial<Record<WorkbenchId, string[]>
 interface WorkbenchOption {
   description: string
   icon: ReactNode
-  key: WorkbenchId
+  key: WorkbenchId | 'account'
   label: string
 }
 
@@ -356,6 +364,12 @@ function buildWorkbenchOptions(localeCode: 'zh_CN' | 'en_US'): WorkbenchOption[]
   if (localeCode === 'en_US') {
     return [
       {
+        key: 'home',
+        label: 'Home',
+        description: 'Application portal and unified workspace entry',
+        icon: <HomeOutlined />,
+      },
+      {
         key: 'platform',
         label: 'K8s Workbench',
         description:
@@ -395,6 +409,12 @@ function buildWorkbenchOptions(localeCode: 'zh_CN' | 'en_US'): WorkbenchOption[]
     ]
   }
   return [
+    {
+      key: 'home',
+      label: '首页',
+      description: '应用门户与统一工作台入口',
+      icon: <HomeOutlined />,
+    },
     {
       key: 'platform',
       label: 'k8s工作台',
@@ -527,14 +547,38 @@ export function AppLayout() {
   const accessibleWorkbenchIds = useMemo(() => getAccessibleWorkbenchIds(snapshot), [snapshot])
   const workbenchOptions = useMemo(
     () =>
-      buildWorkbenchOptions(localeCode).filter((item) => accessibleWorkbenchIds.includes(item.key)),
+      buildWorkbenchOptions(localeCode).filter(
+        (item) => item.key !== 'account' && accessibleWorkbenchIds.includes(item.key),
+      ),
     [accessibleWorkbenchIds, localeCode],
   )
+  const accountWorkbenchOption = useMemo<WorkbenchOption>(
+    () => ({
+      key: 'account',
+      label: t('layout.accountSettings', '个人设置'),
+      description: t('layout.accountCenterDescription', '个人中心与账号信息'),
+      icon: <SettingOutlined />,
+    }),
+    [t],
+  )
+  const accountSidebarItems = useMemo<NonNullable<MenuProps['items']>>(
+    () => [
+      {
+        key: '/account/profile',
+        icon: <UserOutlined />,
+        label: t('layout.profile', '个人中心'),
+      },
+      { key: '/about', icon: <InfoCircleOutlined />, label: t('layout.about', '关于') },
+    ],
+    [t],
+  )
+  const homePath = useMemo(() => findFirstAccessiblePathForWorkbench('home', snapshot), [snapshot])
   const preferredWorkspace = useMemo(
     () => findPreferredWorkspace(snapshot, currentWorkspace, user?.roles ?? []),
     [snapshot, currentWorkspace, user?.roles],
   )
   const currentMeta = getRouteMeta(location.pathname)
+  const isAccountUtilityRoute = currentMeta.group === 'account'
   const currentWorkbenchId = getRouteWorkbenchId(currentMeta)
   const currentScopeMode = getRouteScopeMode(currentMeta)
   const currentRouteWorkspace = getRouteWorkspace(currentMeta)
@@ -747,6 +791,12 @@ export function AppLayout() {
       return t(`route.${route.id}.title`, route.title)
     }
 
+    if (isAccountUtilityRoute) {
+      routes.push({ name: accountWorkbenchOption.label, path: '/account/profile' })
+      routes.push({ name: resolveBreadcrumbTitle(currentMeta) })
+      return routes
+    }
+
     if (currentWorkbenchOption) {
       routes.push({ name: currentWorkbenchOption.label })
     }
@@ -827,11 +877,13 @@ export function AppLayout() {
 
     return routes
   }, [
+    accountWorkbenchOption,
     activeWorkbenchId,
     combinedNav,
     currentMenuID,
     currentMeta,
     currentWorkbenchOption,
+    isAccountUtilityRoute,
     location.pathname,
     localeCode,
     nodeByID,
@@ -876,6 +928,11 @@ export function AppLayout() {
       : 'hidden'
   const showResourceCreateAction =
     currentWorkbenchId === 'platform' && hasPermission(snapshot, 'platform.resource.create')
+  const globalAssistantEnabled = getWorkbenchModuleFeature(
+    moduleStatusesQuery.data,
+    'ai',
+    GLOBAL_ASSISTANT_FEATURE,
+  )
 
   function closeResourceCreate() {
     setResourceCreateOpenedByAction(false)
@@ -895,8 +952,8 @@ export function AppLayout() {
   }
 
   return (
-    <GlobalAIAssistantProvider permissionSnapshot={snapshot}>
-      <Layout className="soha-shell">
+    <GlobalAIAssistantProvider enabled={globalAssistantEnabled} permissionSnapshot={snapshot}>
+      <Layout className="soha-shell" hasSider>
         <Sider
           breakpoint="md"
           className="soha-sider"
@@ -914,7 +971,7 @@ export function AppLayout() {
                 type="button"
                 className="soha-sider-brand"
                 aria-label={localeCode === 'zh_CN' ? '返回首页' : 'Go to overview'}
-                onClick={() => navigate('/')}
+                onClick={() => navigate(homePath ?? '/')}
               >
                 {activeLogo ? (
                   <img className="soha-brand-logo" src={activeLogo} alt={branding.sidebarTitle} />
@@ -924,48 +981,80 @@ export function AppLayout() {
               </button>
             </div>
 
-            {workbenchOptions.length > 0 && currentWorkbenchOption ? (
-              <div className="soha-workbench-switcher-shell">
-                <WorkbenchSwitcher
-                  collapsed={sidebarCollapsed}
-                  current={currentWorkbenchOption}
-                  options={workbenchOptions}
-                  onSelect={(workbench) => {
-                    const targetPath = findFirstAccessiblePathForWorkbench(workbench, snapshot)
-                    if (!targetPath) {
-                      return
-                    }
-                    navigate(targetPath)
-                  }}
-                />
-              </div>
-            ) : null}
-
-            {
-              <div className="soha-nav-business">
-                <Menu
-                  className="soha-nav-menu"
-                  mode="inline"
-                  items={primaryMenuItems}
-                  selectedKeys={primarySelectedKeys}
-                  openKeys={sidebarCollapsed ? [] : primaryOpenKeys}
-                  onOpenChange={(keys) => {
-                    if (isSystemWorkspaceRoute) {
-                      setSystemOpenKeys(keys as string[])
-                      return
-                    }
-                    setBusinessOpenKeys(keys as string[])
-                  }}
-                  onClick={({ key }) => {
-                    const path = primaryItemKeyToPath[String(key)]
-                    if (path) navigate(path)
-                  }}
-                  inlineIndent={8}
-                  inlineCollapsed={sidebarCollapsed}
-                  theme={resolvedThemeMode}
-                />
-              </div>
-            }
+            {isAccountUtilityRoute ? (
+              <>
+                <div className="soha-workbench-switcher-shell">
+                  <WorkbenchSwitcher
+                    collapsed={sidebarCollapsed}
+                    current={accountWorkbenchOption}
+                    options={[...workbenchOptions, accountWorkbenchOption]}
+                    onSelect={(workbench) => {
+                      if (workbench === 'account') {
+                        navigate('/account/profile')
+                        return
+                      }
+                      const targetPath = findFirstAccessiblePathForWorkbench(workbench, snapshot)
+                      if (targetPath) navigate(targetPath)
+                    }}
+                  />
+                </div>
+                <div className="soha-nav-business">
+                  <Menu
+                    className="soha-nav-menu"
+                    mode="inline"
+                    items={accountSidebarItems}
+                    selectedKeys={[location.pathname]}
+                    onClick={({ key }) => navigate(String(key))}
+                    inlineIndent={8}
+                    inlineCollapsed={sidebarCollapsed}
+                    theme={resolvedThemeMode}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                {workbenchOptions.length > 0 && currentWorkbenchOption ? (
+                  <div className="soha-workbench-switcher-shell">
+                    <WorkbenchSwitcher
+                      collapsed={sidebarCollapsed}
+                      current={currentWorkbenchOption}
+                      options={workbenchOptions}
+                      onSelect={(workbench) => {
+                        if (workbench === 'account') return
+                        const targetPath = findFirstAccessiblePathForWorkbench(workbench, snapshot)
+                        if (!targetPath) {
+                          return
+                        }
+                        navigate(targetPath)
+                      }}
+                    />
+                  </div>
+                ) : null}
+                <div className="soha-nav-business">
+                  <Menu
+                    className="soha-nav-menu"
+                    mode="inline"
+                    items={primaryMenuItems}
+                    selectedKeys={primarySelectedKeys}
+                    openKeys={sidebarCollapsed ? [] : primaryOpenKeys}
+                    onOpenChange={(keys) => {
+                      if (isSystemWorkspaceRoute) {
+                        setSystemOpenKeys(keys as string[])
+                        return
+                      }
+                      setBusinessOpenKeys(keys as string[])
+                    }}
+                    onClick={({ key }) => {
+                      const path = primaryItemKeyToPath[String(key)]
+                      if (path) navigate(path)
+                    }}
+                    inlineIndent={8}
+                    inlineCollapsed={sidebarCollapsed}
+                    theme={resolvedThemeMode}
+                  />
+                </div>
+              </>
+            )}
           </div>
         </Sider>
 
@@ -1004,7 +1093,7 @@ export function AppLayout() {
                   />
                 </div>
               </div>
-              {platformHeaderScopeMode !== 'hidden' ? (
+              {platformHeaderScopeMode !== 'hidden' && !isAccountUtilityRoute ? (
                 <div className="soha-header-context">
                   <PlatformScopeTrigger scopeMode={platformHeaderScopeMode} />
                 </div>
@@ -1050,15 +1139,19 @@ export function AppLayout() {
                     items: [
                       { key: 'user', label: userDisplayName, disabled: true },
                       { type: 'divider' },
+                      ...(homePath
+                        ? [
+                            {
+                              key: 'portal',
+                              icon: <AppstoreOutlined />,
+                              label: t('layout.portal', '门户首页'),
+                            },
+                          ]
+                        : []),
                       {
-                        key: 'portal',
-                        icon: <AppstoreOutlined />,
-                        label: t('layout.portal', '门户首页'),
-                      },
-                      {
-                        key: 'profile',
-                        icon: <UserOutlined />,
-                        label: t('layout.profile', '个人中心'),
+                        key: 'accountSettings',
+                        icon: <SettingOutlined />,
+                        label: t('layout.accountSettings', '个人设置'),
                       },
                       {
                         key: 'changePassword',
@@ -1074,11 +1167,11 @@ export function AppLayout() {
                     ],
                     onClick: ({ key }) => {
                       if (key === 'portal') {
-                        navigate('/portal')
+                        navigate(homePath ?? '/')
                         return
                       }
-                      if (key === 'profile') {
-                        navigate('/account/profile')
+                      if (key === 'accountSettings') {
+                        navigate('/account/settings')
                         return
                       }
                       if (key === 'changePassword') {

@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom'
 import { providerPortalQueries } from '../queries'
 import { PortalTagsOrEmpty } from '../shared/application-ui'
 import { formatPortalDateTime } from '../shared/formatters'
+import { PortalAccountMenu } from '../shared/account-menu'
 import '../provider-portal-pages.css'
 
 const { Text, Title } = Typography
@@ -49,9 +50,7 @@ export function PortalSecurityPage() {
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/portal')}>
             Portal
           </Button>
-          <Button icon={<UserOutlined />} onClick={() => navigate('/account/profile')}>
-            Profile
-          </Button>
+          <PortalAccountMenu />
         </Space>
       </header>
 

@@ -12,7 +12,7 @@ import { VirtualizationClustersPage } from './clusters/list-page'
 import { VirtualizationFlavorsPage } from './flavors/list-page'
 import { VirtualizationImagesPage } from './images/list-page'
 import { VirtualizationVmDetailPage } from './virtual-machines/detail-page'
-import { VirtualizationVmsPage } from './virtual-machines/list-page'
+import { defaultRootDisk, VirtualizationVmsPage } from './virtual-machines/list-page'
 import { buildClusterPayload, buildCreateVmPayload } from './virtualization-model'
 import type { CreateVirtualMachineInput, VirtualizationClusterInput } from './virtualization-types'
 
@@ -568,6 +568,23 @@ function hasButtonByLabel(container: ParentNode, label: string) {
 }
 
 describe('virtualization pages', () => {
+  it('selects the real zero-slot boot disk across PVE bus types', () => {
+    const disks = [
+      { id: 'sata0', kind: 'disk', sizeGiB: 40 },
+      { id: 'scsi1', kind: 'disk', sizeGiB: 100 },
+    ] as const
+
+    expect(defaultRootDisk([...disks], 40)?.id).toBe('sata0')
+    expect(
+      defaultRootDisk(
+        [
+          { id: 'virtio0', kind: 'disk', sizeGiB: 20 },
+          { id: 'virtio1', kind: 'disk', sizeGiB: 80 },
+        ],
+        20,
+      )?.id,
+    ).toBe('virtio0')
+  })
   beforeEach(() => {
     testState.modules = {
       virtualization: true,
@@ -644,7 +661,8 @@ describe('virtualization pages', () => {
       await Promise.resolve()
     })
 
-    expect(document.body.textContent).toContain('Cloud Init')
+    expect(document.body.textContent).toContain('Cloud-Init')
+    expect(document.body.textContent).toContain('存储网络')
     expect(document.body.textContent).toContain('规格')
     expect(document.body.textContent).toContain('启动镜像')
     expect(document.body.textContent).toContain('StorageClass')
@@ -652,6 +670,7 @@ describe('virtualization pages', () => {
     expect(document.body.textContent).toContain('DataVolume')
     expect(document.body.textContent).toContain('KubeVirt 网络类型')
     expect(document.body.textContent).toContain('Interface Model')
+    expect(document.body.textContent).not.toContain('Raw Cloud-Init user-data')
     expect(document.body.textContent).not.toContain('raw YAML')
     expect(document.body.textContent).not.toContain('raw PVE config')
   })
@@ -755,6 +774,7 @@ describe('virtualization pages', () => {
       flavorId: 'flavor-1',
       bootImageId: 'image-pve-template',
       sourceMode: 'template_clone',
+      enableCloudInit: true,
       cloudInit: '#cloud-config\npackages:\n  - docker.io',
       pveStorage: 'local-lvm',
       pveBridge: 'vmbr0',
@@ -779,6 +799,26 @@ describe('virtualization pages', () => {
     })
     expect(payload).not.toHaveProperty('pveSnippetStorage')
     expect(payload).not.toHaveProperty('pveCICustom')
+  })
+
+  it('omits Cloud-Init fields when the create option is disabled', () => {
+    const payload = buildCreateVmPayload({
+      provider: 'pve',
+      connectionId: 'conn-pve',
+      name: 'pve-vm',
+      bootImageId: 'image-pve-template',
+      enableCloudInit: false,
+      cloudInit: '#cloud-config',
+      pveStorage: 'local-lvm',
+      pveBridge: 'vmbr0',
+      pveCloudInitUser: 'ubuntu',
+      pveCloudInitSSHKeys: 'ssh-rsa AAAA',
+      pveSnippetStorage: 'local',
+      pveCICustom: 'user=local:snippets/docker-agent.yaml',
+    })
+
+    expect(payload.cloudInit).toBeUndefined()
+    expect(payload.providerParams).toEqual({ storage: 'local-lvm', bridge: 'vmbr0' })
   })
 
   it('builds provider connection config for PVE and KubeVirt runtime fields', () => {
@@ -835,6 +875,7 @@ describe('virtualization pages', () => {
 
     expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/vms/vm-1/detail')
     expect(container.textContent).toContain('build-vm')
+    expect(container.textContent).toContain('概览')
     expect(container.textContent).toContain('standard-2c4g')
     expect(container.textContent).toContain('ubuntu-24.04')
     expect(container.textContent).toContain('10.0.0.8')
@@ -846,8 +887,16 @@ describe('virtualization pages', () => {
     expect(container.textContent).toContain('AI调查')
     expect(container.textContent).toContain('来源模式')
     expect(container.textContent).toContain('来源引用')
-    expect(container.textContent).toContain('Console 能力摘要')
-    expect(container.textContent).toContain('Metrics 能力摘要')
+    expect(container.textContent).not.toContain('Console 能力摘要')
+    expect(container.textContent).not.toContain('Metrics 能力摘要')
+    expect(container.querySelector('.soha-management-detail-header')).toBeNull()
+    expect(container.querySelector('.ant-tabs-tabpane-active > .soha-detail-stack')).not.toBeNull()
+    expect(container.textContent).not.toContain('返回列表')
+    expect(container.querySelector('.ant-tabs-tab-active')?.textContent).toContain('概览')
+    const tabTexts = Array.from(container.querySelectorAll('.ant-tabs-tab-btn')).map((node) =>
+      node.textContent?.trim(),
+    )
+    expect(tabTexts).not.toContain('Provider Raw')
   })
 
   it('hides VM actions without manage permission', async () => {
@@ -965,7 +1014,8 @@ describe('virtualization pages', () => {
     const tabTexts = Array.from(container.querySelectorAll('.ant-tabs-tab-btn'))
       .map((node) => node.textContent?.trim())
       .filter(Boolean)
-    expect(tabTexts).toContain('Provider Raw')
+    expect(tabTexts).toContain('概览')
+    expect(tabTexts).not.toContain('Provider Raw')
     expect(tabTexts).not.toContain('监控指标')
     expect(tabTexts).not.toContain('控制台')
     expect(testState.apiGet).not.toHaveBeenCalledWith(
@@ -1089,5 +1139,4 @@ describe('virtualization pages', () => {
     expect(hasButtonByLabel(flavorContainer, '编辑规格')).toBe(false)
     expect(hasButtonByLabel(flavorContainer, '删除规格')).toBe(false)
   })
-
 })

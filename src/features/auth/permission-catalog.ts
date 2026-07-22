@@ -106,8 +106,8 @@ export const consolePermissionGroups: PermissionCatalogGroup[] = [
   },
   {
     key: "docker",
-    label: "Docker 工作台",
-    description: "控制 Docker 主机、容器管理、模板和操作记录能力。",
+    label: "容器运行时",
+    description: "控制计算资源工作台中的运行时主机、容器项目、模板和操作记录能力。",
     options: [
       { value: "docker.overview.view", label: "查看 Docker 总览" },
       { value: "docker.hosts.view", label: "查看 Docker 主机" },
@@ -198,12 +198,14 @@ export const consolePermissionGroups: PermissionCatalogGroup[] = [
     options: [
       { value: "settings.identity.view", label: "查看登陆设置" },
       { value: "settings.identity.manage", label: "管理登陆设置" },
-      { value: "settings.monitoring.view", label: "查看监控设置" },
-      { value: "settings.monitoring.manage", label: "管理监控设置" },
       { value: "settings.ai.view", label: "查看 AI 设置" },
       { value: "settings.ai.manage", label: "管理 AI 设置" },
       { value: "settings.branding.view", label: "查看品牌设置" },
       { value: "settings.branding.manage", label: "管理品牌设置" },
+      { value: "settings.system-integrations.view", label: "查看系统集成" },
+      { value: "settings.system-integrations.manage", label: "管理系统集成" },
+      { value: "settings.runtime-config.view", label: "查看运行时配置" },
+      { value: "settings.runtime-config.manage", label: "管理运行时配置" },
     ],
   },
   {

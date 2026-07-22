@@ -94,5 +94,6 @@ describe('Provider Portal security page', () => {
     expect(container.textContent).toContain('operations')
     expect(container.textContent).toContain('on-call')
     expect(container.textContent).toContain('oidc')
+    expect(container.querySelector('button[aria-label="Account menu"]')).not.toBeNull()
   })
 })

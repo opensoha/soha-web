@@ -14,6 +14,7 @@ describe('menu section schema helpers', () => {
     expect(normalizeMenuSection('ai-operations')).toBe('ai-governance')
     expect(normalizeMenuSection('Delivery')).toBe('delivery')
     expect(normalizeMenuSection('extension')).toBe('extensions')
+    expect(normalizeMenuSection('system-integrations')).toBe('integrations')
     expect(normalizeMenuSection('control')).toBe('control')
   })
 
@@ -22,6 +23,8 @@ describe('menu section schema helpers', () => {
     expect(resolveMenuSectionLabel('Dashboard')).toBe('Dashboard')
     expect(resolveMenuSectionLabel('extensions')).toBe('扩展')
     expect(resolveMenuSectionLabel('extensions', 'en_US')).toBe('Extensions')
+    expect(resolveMenuSectionLabel('integrations')).toBe('系统集成')
+    expect(resolveMenuSectionLabel('integrations', 'en_US')).toBe('System Integrations')
     expect(resolveMenuSectionLabel('control')).toBe('control')
     expect(resolveMenuSectionLabel('ai-interaction')).toBe('交互')
     expect(resolveMenuSectionLabel('ai-engineering')).toBe('AI 工程')

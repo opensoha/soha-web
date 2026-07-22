@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { Key } from 'react'
 import {
   App,
   Button,
@@ -23,7 +24,7 @@ import {
   PoweroffOutlined,
   ReloadOutlined,
 } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import {
   ManagementIconButton,
@@ -37,7 +38,12 @@ import { formatDateTime } from '@/utils/time'
 import { computeQueries, latestTaskForResource, ResourceTaskActions } from '@/features/compute'
 import { dockerApi } from '../docker-api'
 import { dockerQueries } from '../queries'
-import type { DockerContainerStartInput, DockerProject, DockerProjectInput } from '../docker-types'
+import type {
+  DockerContainerStartInput,
+  DockerProject,
+  DockerProjectInput,
+  DockerService,
+} from '../docker-types'
 import {
   ARCHITECTURE_OPTIONS,
   DEFAULT_COMPOSE,
@@ -52,7 +58,6 @@ import {
   renderProjectPortSummary,
   statusTag,
   type DockerFilterState,
-  type DockerProjectSourceKind,
   useDockerOptions,
   useDockerPermissions,
 } from '../shared/ui'
@@ -67,6 +72,22 @@ type ContainerStartResourceFormValues = NonNullable<DockerContainerStartInput['r
 
 interface ContainerStartFormValues extends Omit<DockerContainerStartInput, 'resources'> {
   resources?: ContainerStartResourceFormValues
+}
+
+interface DockerProjectTreeRow {
+  key: string
+  kind: 'project' | 'service'
+  project: DockerProject
+  service?: DockerService
+  children?: DockerProjectTreeRow[]
+}
+
+function isSingleContainerProject(project: DockerProject) {
+  return project.sourceKind === 'single_container'
+}
+
+function projectTypeLabel(project: DockerProject) {
+  return isSingleContainerProject(project) ? '单容器' : 'Compose'
 }
 
 export function buildProjectPayload(values: DockerProjectInput): DockerProjectInput {
@@ -141,17 +162,10 @@ export function buildContainerStartPayload(
   })
 }
 
-function ProjectsTable({
-  embedded = false,
-  sourceKind = 'compose' as DockerProjectSourceKind,
-}: {
-  embedded?: boolean
-  sourceKind?: DockerProjectSourceKind
-}) {
+function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
   const [filters, setFilters] = useState<DockerFilterState>({
     page: 1,
     pageSize: embedded ? 5 : 10,
-    sourceKind,
   })
   const [filterForm] = Form.useForm<DockerFilterState>()
   const [form] = Form.useForm<DockerProjectInput>()
@@ -166,9 +180,14 @@ function ProjectsTable({
     canManageProjects,
     canDeployProjects,
     canManagePorts,
+    canManageServices,
+    canViewServices,
     canViewOperations,
   } = useDockerPermissions()
-  const { hosts, hostOptions } = useDockerOptions()
+  const { hosts, hostOptions } = useDockerOptions({
+    includeProjects: false,
+    includeServices: false,
+  })
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const projectsQuery = useQuery(dockerQueries.projects(filters, dockerModuleEnabled))
@@ -214,71 +233,165 @@ function ProjectsTable({
       refreshDocker(queryClient)
     },
   })
+  const serviceActionMutation = useMutation({
+    mutationFn: ({ id, action }: { id: string; action: string }) =>
+      dockerApi.serviceAction(id, action),
+    onSuccess: (_response, variables) => {
+      message.success(`${operationActionLabel(variables.action)}服务任务已提交`)
+      refreshDocker(queryClient)
+    },
+  })
   const page = normalizePage(projectsQuery.data, filters.page ?? 1, filters.pageSize ?? 10)
+  const projectServiceQueries = useQueries({
+    queries: page.items.map((project) =>
+      dockerQueries.projectServices(
+        project.id,
+        dockerModuleEnabled && canViewServices && !isSingleContainerProject(project),
+      ),
+    ),
+  })
   const canStartContainer = canManageProjects && canDeployProjects && canManagePorts
-  const isSingleContainer = sourceKind === 'single_container'
+  const [expandedRowKeys, setExpandedRowKeys] = useState<string[]>([])
+  const autoExpandedProjectKeys = useRef(new Set<string>())
+  const servicesByProject = useMemo(() => {
+    const grouped = new Map<string, DockerService[]>()
+    page.items.forEach((project, index) => {
+      const services = projectServiceQueries[index]?.data?.items ?? []
+      if (services.length > 0) grouped.set(project.id, services)
+    })
+    return grouped
+  }, [page.items, projectServiceQueries])
+  const treeRows = useMemo<DockerProjectTreeRow[]>(
+    () =>
+      page.items.map((project) => {
+        const children = isSingleContainerProject(project)
+          ? []
+          : (servicesByProject.get(project.id) ?? []).map<DockerProjectTreeRow>((service) => ({
+              key: `${project.id}:service:${service.id}`,
+              kind: 'service',
+              project,
+              service,
+            }))
+        return {
+          key: project.id,
+          kind: 'project',
+          project,
+          children: children.length > 0 ? children : undefined,
+        }
+      }),
+    [page.items, servicesByProject],
+  )
+  useEffect(() => {
+    const newlyExpandableKeys = treeRows
+      .filter((row) => (row.children?.length ?? 0) > 0)
+      .map((row) => row.key)
+      .filter((key) => !autoExpandedProjectKeys.current.has(key))
+    if (newlyExpandableKeys.length === 0) return
+    newlyExpandableKeys.forEach((key) => autoExpandedProjectKeys.current.add(key))
+    setExpandedRowKeys((current) => {
+      const next = Array.from(new Set([...current, ...newlyExpandableKeys]))
+      return next.length === current.length && next.every((key, index) => key === current[index])
+        ? current
+        : next
+    })
+  }, [treeRows])
   const applyContainerHostDefaults = (hostID?: string) => {
     const host = hosts.find((item) => item.id === hostID)
     if (host?.architecture) {
       containerForm.setFieldsValue({ architecture: host.architecture })
     }
   }
-  const columns: ColumnsType<DockerProject> = [
+  const columns: ColumnsType<DockerProjectTreeRow> = [
     {
-      title: isSingleContainer ? '单容器服务' : 'Compose',
-      dataIndex: 'name',
+      title: '服务 / 项目',
       fixed: 'left',
-      width: 210,
-      render: (value, record) => (
-        <Space orientation="vertical" size={0}>
-          <Link to={`/compute/runtimes/projects/${record.id}`}>
-            <Text strong>{value}</Text>
-          </Link>
-          <Text type="secondary">{record.slug}</Text>
-        </Space>
-      ),
+      width: 250,
+      render: (_value, record) => {
+        if (record.kind === 'service' && record.service) {
+          return (
+            <Space orientation="vertical" size={0}>
+              <Text>{record.service.name}</Text>
+              <Text type="secondary">{record.service.containerId || record.service.id}</Text>
+            </Space>
+          )
+        }
+        return (
+          <Space orientation="vertical" size={0}>
+            <Link to={`/compute/runtimes/projects/${record.project.id}`}>
+              <Text strong>{record.project.name}</Text>
+            </Link>
+            <Text type="secondary">{record.project.slug}</Text>
+          </Space>
+        )
+      },
     },
-    { title: '状态', dataIndex: 'status', width: 110, render: statusTag },
+    {
+      title: '状态',
+      width: 110,
+      render: (_value, record) =>
+        statusTag(record.kind === 'service' ? record.service?.status : record.project.status),
+    },
     {
       title: '主机',
-      dataIndex: 'hostId',
       width: 190,
-      render: (value) => hostOptions.find((item) => item.value === value)?.label || value,
+      render: (_value, record) => {
+        const hostId = record.kind === 'service' ? record.service?.hostId : record.project.hostId
+        return hostOptions.find((item) => item.value === hostId)?.label || hostId || '-'
+      },
     },
     {
-      title: '来源',
-      width: 160,
-      render: (_value, record) => record.sourceKind || record.templateId || 'inline_compose',
+      title: '类型',
+      width: 120,
+      render: (_value, record) =>
+        record.kind === 'service' ? '服务' : projectTypeLabel(record.project),
     },
-    ...(isSingleContainer
-      ? ([
-          {
-            title: '端口映射',
-            width: 260,
-            render: (_value, record) => renderProjectPortSummary(record),
-          },
-        ] satisfies ColumnsType<DockerProject>)
-      : []),
+    {
+      title: '镜像 / 端口',
+      width: 280,
+      render: (_value, record) => {
+        if (record.kind === 'service') return record.service?.image || '-'
+        if (isSingleContainerProject(record.project))
+          return renderProjectPortSummary(record.project)
+        const count = record.children?.length ?? 0
+        return count > 0 ? `${count} 个服务` : '暂无服务'
+      },
+    },
     {
       title: '环境/归属',
       width: 180,
       render: (_value, record) =>
-        [record.environment, record.owner || record.team].filter(Boolean).join(' / ') || '-',
+        [record.project.environment, record.project.owner || record.project.team]
+          .filter(Boolean)
+          .join(' / ') || '-',
     },
-    { title: '目标态', dataIndex: 'desiredState', width: 120, render: (value) => value || '-' },
-    { title: '到期', dataIndex: 'expiresAt', width: 155, render: formatDateTime },
-    { title: '部署时间', dataIndex: 'lastDeployedAt', width: 155, render: formatDateTime },
+    {
+      title: '目标态',
+      width: 120,
+      render: (_value, record) =>
+        record.kind === 'service' ? '-' : record.project.desiredState || '-',
+    },
+    {
+      title: '部署时间',
+      width: 155,
+      render: (_value, record) =>
+        record.kind === 'service'
+          ? formatDateTime(record.service?.lastSeenAt)
+          : formatDateTime(record.project.lastDeployedAt),
+    },
     {
       title: '最近任务',
       fixed: 'right',
       width: 188,
-      render: (_value, record) => (
-        <ResourceTaskActions
-          task={latestTaskForResource(tasksQuery.data?.items ?? [], 'project', record.id)}
-          resourceKind="project"
-          resourceId={record.id}
-        />
-      ),
+      render: (_value, record) =>
+        record.kind === 'service' ? (
+          <Text type="secondary">-</Text>
+        ) : (
+          <ResourceTaskActions
+            task={latestTaskForResource(tasksQuery.data?.items ?? [], 'project', record.project.id)}
+            resourceKind="project"
+            resourceId={record.project.id}
+          />
+        ),
     },
     {
       title: '操作',
@@ -286,76 +399,112 @@ function ProjectsTable({
       className: 'soha-table-actions-column',
       fixed: 'right',
       width: 160,
-      render: (_value, record) => (
-        <Space className="soha-row-action-icons">
-          {canDeployProjects ? (
-            <ManagementIconButton
-              aria-label="部署项目"
-              size="small"
-              tooltip="部署"
-              icon={<PlayCircleOutlined />}
-              loading={deployMutation.isPending}
-              onClick={() => deployMutation.mutate({ id: record.id, action: 'deploy' })}
-            />
-          ) : null}
-          {canDeployProjects ? (
-            <ManagementIconButton
-              aria-label="重启项目"
-              size="small"
-              tooltip="重启"
-              icon={<ReloadOutlined />}
-              loading={deployMutation.isPending}
-              onClick={() => deployMutation.mutate({ id: record.id, action: 'restart' })}
-            />
-          ) : null}
-          {canDeployProjects ? (
-            <ManagementIconButton
-              aria-label="停止项目"
-              size="small"
-              tooltip="停止"
-              icon={<PoweroffOutlined />}
-              loading={deployMutation.isPending}
-              onClick={() => deployMutation.mutate({ id: record.id, action: 'down' })}
-            />
-          ) : null}
-          <Link to={`/compute/runtimes/projects/${record.id}`}>
-            <ManagementIconButton
-              aria-label="查看容器详情"
-              size="small"
-              tooltip="详情"
-              icon={<FileTextOutlined />}
-            />
-          </Link>
-          {canManageProjects ? (
-            <ManagementIconButton
-              aria-label="编辑项目"
-              size="small"
-              tooltip="编辑"
-              icon={<EditOutlined />}
-              onClick={() => {
-                setEditing(record)
-                form.setFieldsValue(record)
-                setCurrentStep(0)
-                setDrawerOpen(true)
-              }}
-            />
-          ) : null}
-          {canManageProjects ? (
-            <Popconfirm
-              title={isSingleContainer ? '确认删除单容器服务？' : '确认删除 Compose 项目？'}
-              onConfirm={() => deleteMutation.mutate(record.id)}
-            >
+      render: (_value, record) => {
+        if (record.kind === 'service' && record.service) {
+          return (
+            <Space className="soha-row-action-icons">
+              {canManageServices
+                ? (['restart', 'start', 'stop'] as const).map((action) => (
+                    <ManagementIconButton
+                      key={action}
+                      aria-label={`${operationActionLabel(action)}服务`}
+                      size="small"
+                      tooltip={operationActionLabel(action)}
+                      icon={
+                        action === 'restart' ? (
+                          <ReloadOutlined />
+                        ) : action === 'start' ? (
+                          <PlayCircleOutlined />
+                        ) : (
+                          <PoweroffOutlined />
+                        )
+                      }
+                      loading={serviceActionMutation.isPending}
+                      onClick={() =>
+                        serviceActionMutation.mutate({ id: record.service!.id, action })
+                      }
+                    />
+                  ))
+                : null}
+            </Space>
+          )
+        }
+        const project = record.project
+        return (
+          <Space className="soha-row-action-icons">
+            {canDeployProjects ? (
               <ManagementIconButton
-                aria-label="删除项目"
+                aria-label="部署项目"
                 size="small"
-                tooltip="删除"
-                danger
-                icon={<DeleteOutlined />}
+                tooltip="部署"
+                icon={<PlayCircleOutlined />}
+                loading={deployMutation.isPending}
+                onClick={() => deployMutation.mutate({ id: project.id, action: 'deploy' })}
               />
-            </Popconfirm>
-          ) : null}
-        </Space>
-      ),
+            ) : null}
+            {canDeployProjects ? (
+              <ManagementIconButton
+                aria-label="重启项目"
+                size="small"
+                tooltip="重启"
+                icon={<ReloadOutlined />}
+                loading={deployMutation.isPending}
+                onClick={() => deployMutation.mutate({ id: project.id, action: 'restart' })}
+              />
+            ) : null}
+            {canDeployProjects ? (
+              <ManagementIconButton
+                aria-label="停止项目"
+                size="small"
+                tooltip="停止"
+                icon={<PoweroffOutlined />}
+                loading={deployMutation.isPending}
+                onClick={() => deployMutation.mutate({ id: project.id, action: 'down' })}
+              />
+            ) : null}
+            <Link to={`/compute/runtimes/projects/${project.id}`}>
+              <ManagementIconButton
+                aria-label="查看容器详情"
+                size="small"
+                tooltip="详情"
+                icon={<FileTextOutlined />}
+              />
+            </Link>
+            {canManageProjects ? (
+              <ManagementIconButton
+                aria-label="编辑项目"
+                size="small"
+                tooltip="编辑"
+                icon={<EditOutlined />}
+                onClick={() => {
+                  setEditing(project)
+                  form.setFieldsValue(project)
+                  setCurrentStep(0)
+                  setDrawerOpen(true)
+                }}
+              />
+            ) : null}
+            {canManageProjects ? (
+              <Popconfirm
+                title={
+                  isSingleContainerProject(project)
+                    ? '确认删除单容器服务？'
+                    : '确认删除 Compose 项目？'
+                }
+                onConfirm={() => deleteMutation.mutate(project.id)}
+              >
+                <ManagementIconButton
+                  aria-label="删除项目"
+                  size="small"
+                  tooltip="删除"
+                  danger
+                  icon={<DeleteOutlined />}
+                />
+              </Popconfirm>
+            ) : null}
+          </Space>
+        )
+      },
     },
   ]
   return (
@@ -369,13 +518,11 @@ function ProjectsTable({
                 loading={projectsQuery.isFetching}
                 onReset={() => {
                   filterForm.resetFields()
-                  setFilters({ page: 1, pageSize: filters.pageSize ?? 10, sourceKind })
+                  setFilters({ page: 1, pageSize: filters.pageSize ?? 10 })
                 }}
               />
             }
-            onFinish={(values) =>
-              setFilters((current) => ({ ...current, ...values, sourceKind, page: 1 }))
-            }
+            onFinish={(values) => setFilters((current) => ({ ...current, ...values, page: 1 }))}
           >
             <ManagementKeywordField placeholder="项目、Slug 或来源" />
             <ManagementQueryField minWidth={180} width={220} name="hostId" label="主机">
@@ -396,6 +543,16 @@ function ProjectsTable({
                 }))}
               />
             </ManagementQueryField>
+            <ManagementQueryField minWidth={132} width={150} name="sourceKind" label="类型">
+              <Select
+                allowClear
+                placeholder="全部"
+                options={[
+                  { value: 'compose', label: 'Compose' },
+                  { value: 'single_container', label: '单容器' },
+                ]}
+              />
+            </ManagementQueryField>
             <ManagementQueryField minWidth={150} width={180} name="environment" label="环境">
               <Input allowClear placeholder="dev / test" />
             </ManagementQueryField>
@@ -403,17 +560,22 @@ function ProjectsTable({
         </div>
       ) : null}
       <DockerAdminTable
-        rowKey="id"
+        rowKey="key"
+        expandable={{
+          expandedRowKeys,
+          onExpandedRowsChange: (keys: readonly Key[]) => setExpandedRowKeys(keys.map(String)),
+          rowExpandable: (record: DockerProjectTreeRow) => (record.children?.length ?? 0) > 0,
+        }}
         enableColumnSelection={!embedded}
-        loading={projectsQuery.isLoading}
-        dataSource={page.items}
+        loading={projectsQuery.isLoading || projectServiceQueries.some((query) => query.isLoading)}
+        dataSource={treeRows}
         columns={columns}
-        scroll={{ x: isSingleContainer ? 1878 : 1618 }}
+        scroll={{ x: 1850 }}
         pagination={pageTablePagination(page, embedded, setFilters)}
         actions={
           !embedded ? (
             <>
-              {isSingleContainer && canStartContainer ? (
+              {canStartContainer ? (
                 <Button
                   type="primary"
                   icon={<PlayCircleOutlined />}
@@ -434,7 +596,7 @@ function ProjectsTable({
                   快速启动
                 </Button>
               ) : null}
-              {!isSingleContainer && canManageProjects ? (
+              {canManageProjects ? (
                 <Button
                   type="primary"
                   icon={<PlusOutlined />}
@@ -459,7 +621,10 @@ function ProjectsTable({
         refreshing={projectsQuery.isFetching}
         showColumnSettings={!embedded}
         showRefresh={!embedded}
-        onRefresh={() => projectsQuery.refetch()}
+        onRefresh={() => {
+          void projectsQuery.refetch()
+          projectServiceQueries.forEach((query) => void query.refetch())
+        }}
       />
       <StepFormModal
         title={editing ? '编辑 Compose 项目' : '创建 Compose 项目'}
@@ -858,24 +1023,10 @@ function ProjectsTable({
   )
 }
 
-function ContainerManagementPage() {
+export function DockerProjectsPage() {
   return (
     <div className="soha-page soha-docker-page">
-      <Tabs
-        className="soha-docker-management-tabs"
-        items={[
-          { key: 'compose', label: 'Compose', children: <ProjectsTable sourceKind="compose" /> },
-          {
-            key: 'single',
-            label: '单容器服务',
-            children: <ProjectsTable sourceKind="single_container" />,
-          },
-        ]}
-      />
+      <ProjectsTable />
     </div>
   )
-}
-
-export function DockerProjectsPage() {
-  return <ContainerManagementPage />
 }

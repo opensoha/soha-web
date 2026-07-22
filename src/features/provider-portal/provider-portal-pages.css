@@ -21,6 +21,15 @@
   background: var(--soha-bg-surface);
 }
 
+.soha-portal-account-trigger.ant-btn {
+  max-width: 220px;
+}
+
+.soha-portal-account-trigger.ant-btn > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .soha-portal-brand {
   display: flex;
   align-items: center;

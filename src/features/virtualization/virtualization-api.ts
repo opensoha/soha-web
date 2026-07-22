@@ -3,8 +3,10 @@ import type { ApiResponse, Cluster } from '@/types'
 import type {
   CreateVirtualMachineInput,
   VirtualMachine,
+  VirtualMachineDevice,
   VirtualMachineDetail,
   VirtualMachinePowerAction,
+  VirtualMachineResizeInput,
   VirtualizationListParams,
   VirtualizationCluster,
   VirtualizationConnectionDeleteDependencies,
@@ -49,6 +51,12 @@ export const virtualizationApi = {
     )
     return response.data
   },
+  vmDevices: async (id: string) => {
+    const response = await api.get<ApiResponse<VirtualMachineDevice[]>>(
+      `${BASE}/vms/${encodeURIComponent(id)}/devices`,
+    )
+    return response.data ?? []
+  },
   createVm: async (payload: CreateVirtualMachineInput) => {
     const response = await api.post<ApiResponse<VirtualizationOperation>>(`${BASE}/vms`, payload)
     return response.data
@@ -57,6 +65,13 @@ export const virtualizationApi = {
     const response = await api.post<ApiResponse<VirtualizationOperation>>(
       `${BASE}/vms/${encodeURIComponent(id)}/power`,
       { action },
+    )
+    return response.data
+  },
+  resizeVm: async (id: string, payload: VirtualMachineResizeInput) => {
+    const response = await api.post<ApiResponse<VirtualizationOperation>>(
+      `${BASE}/vms/${encodeURIComponent(id)}/actions`,
+      { action: 'resize', ...payload },
     )
     return response.data
   },

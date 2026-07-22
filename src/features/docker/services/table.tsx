@@ -49,7 +49,7 @@ export function ServicesTable({
   })
   const [filterForm] = Form.useForm<DockerFilterState>()
   const { dockerModuleEnabled, canManageServices } = useDockerPermissions()
-  const { hostOptions, projectOptions } = useDockerOptions()
+  const { hostOptions, projectOptions } = useDockerOptions({ includeServices: false })
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const servicesQuery = useQuery(dockerQueries.services(filters, dockerModuleEnabled))

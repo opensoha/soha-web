@@ -25,26 +25,76 @@ export const authRoutes = defineRoutes([
 export const authUtilityRoutes = defineRoutes([
   {
     meta: {
+      id: 'account-settings',
+      path: '/account/settings',
+      title: '个人设置',
+      description: '当前账号的个人工具入口',
+      icon: 'IconSetting',
+      group: 'account',
+      requiresAuth: true,
+      tabbar: false,
+      navVisible: false,
+      scopeMode: 'passive',
+    },
+    shell: 'app',
+    permissionExemptReason: 'Every authenticated user can access their personal settings.',
+    redirectTo: '/account/profile',
+  },
+  {
+    meta: {
       id: 'account-profile',
       path: '/account/profile',
       title: '个人中心',
       description: '当前账号资料、登录安全与 AI Gateway key',
       icon: 'IconUser',
-      group: 'settings',
-      workbenchId: 'settings',
+      group: 'account',
       requiresAuth: true,
       tabbar: false,
-      navVisible: true,
-      parentId: 'settings',
-      menuId: 'account-profile',
+      navVisible: false,
       scopeMode: 'passive',
-      workspace: 'system',
     },
     shell: 'app',
     permissionExemptReason: 'Every authenticated user can manage their own account profile.',
     load: async () => {
       const module = await import('./user-profile-page')
       return { default: module.UserProfilePage }
+    },
+  },
+  {
+    meta: {
+      id: 'settings-about-legacy-redirect',
+      path: '/settings/about',
+      title: '关于',
+      description: '旧关于页面入口兼容跳转',
+      icon: 'IconInfoCircle',
+      group: 'account',
+      requiresAuth: true,
+      tabbar: false,
+      navVisible: false,
+      scopeMode: 'passive',
+    },
+    shell: 'app',
+    permissionExemptReason: 'Compatibility redirect for authenticated users.',
+    redirectTo: '/about',
+  },
+  {
+    meta: {
+      id: 'about',
+      path: '/about',
+      title: '关于',
+      description: 'OpenSoha 版本与项目信息',
+      icon: 'IconInfoCircle',
+      group: 'account',
+      requiresAuth: true,
+      tabbar: false,
+      navVisible: false,
+      scopeMode: 'passive',
+    },
+    shell: 'app',
+    permissionExemptReason: 'Product information is available to every authenticated user.',
+    load: async () => {
+      const module = await import('./about-page')
+      return { default: module.AboutPage }
     },
   },
   {

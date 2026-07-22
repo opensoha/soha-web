@@ -543,11 +543,21 @@ export function DrawerFooter({
   )
 }
 
-export function useDockerOptions() {
+export function useDockerOptions({
+  includeProjects = true,
+  includeServices = true,
+}: {
+  includeProjects?: boolean
+  includeServices?: boolean
+} = {}) {
   const { moduleEnabled: dockerModuleEnabled } = useWorkbenchModuleEnabled('docker')
   const hostsQuery = useQuery(dockerQueries.hostOptions(dockerModuleEnabled))
-  const projectsQuery = useQuery(dockerQueries.projectOptions(dockerModuleEnabled))
-  const servicesQuery = useQuery(dockerQueries.serviceOptions(dockerModuleEnabled))
+  const projectsQuery = useQuery(
+    dockerQueries.projectOptions(dockerModuleEnabled && includeProjects),
+  )
+  const servicesQuery = useQuery(
+    dockerQueries.serviceOptions(dockerModuleEnabled && includeServices),
+  )
   const hosts = normalizePage(hostsQuery.data, 1, 200).items
   const projects = normalizePage(projectsQuery.data, 1, 200).items
   const services = normalizePage(servicesQuery.data, 1, 300).items

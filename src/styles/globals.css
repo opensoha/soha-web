@@ -534,6 +534,29 @@ a {
   min-width: 0;
 }
 
+.soha-account-brand {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 31px;
+  height: 31px;
+  padding: 0;
+  border: none;
+  border-radius: var(--soha-radius);
+  background: transparent;
+  cursor: pointer;
+}
+
+.soha-account-brand:hover {
+  background: var(--soha-fill-weak);
+}
+
+.soha-account-brand:focus-visible {
+  outline: 2px solid rgba(var(--soha-primary-rgb), 0.36);
+  outline-offset: 2px;
+}
+
 .soha-header-context {
   display: flex;
   align-items: center;

@@ -33,6 +33,14 @@ export const virtualizationQueries = {
       enabled: enabled && hasId(vmId),
     })
   },
+  vmDevices: (id: string, enabled = true) => {
+    const vmId = id.trim()
+    return queryOptions({
+      queryKey: virtualizationKeys.vmDevices(vmId),
+      queryFn: () => virtualizationApi.vmDevices(vmId),
+      enabled: enabled && hasId(vmId),
+    })
+  },
   vmMetrics: (id: string, params: VirtualizationVMMetricsQueryParams = {}, enabled = true) => {
     const vmId = id.trim()
     const normalized = normalizeVirtualizationVMMetricsParams(params)

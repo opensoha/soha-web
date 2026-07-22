@@ -89,6 +89,34 @@ export interface VirtualMachine {
   createdAt?: string
   updatedAt?: string
   allowedActions?: string[]
+  capabilities?: string[]
+}
+
+export interface VirtualMachineDiskChange {
+  id?: string
+  name?: string
+  storage?: string
+  bus?: string
+  sizeGiB: number
+  add?: boolean
+}
+export interface VirtualMachineNetworkChange {
+  id?: string
+  name?: string
+  network: string
+  model?: string
+  binding?: string
+  add?: boolean
+  remove?: boolean
+}
+export interface VirtualMachineDevice {
+  id: string
+  kind: 'disk' | 'network'
+  name?: string
+  sizeGiB?: number
+  storage?: string
+  network?: string
+  model?: string
 }
 
 export interface CreateVirtualMachineInput {
@@ -108,9 +136,18 @@ export interface CreateVirtualMachineInput {
   cloudInit?: string
   providerParams?: VirtualizationVmProviderParams
   startAfterCreate?: boolean
+  disks?: VirtualMachineDiskChange[]
+  networks?: VirtualMachineNetworkChange[]
 }
 
 export type VirtualMachinePowerAction = 'start' | 'stop' | 'restart' | 'shutdown' | 'delete'
+export interface VirtualMachineResizeInput {
+  cpu?: number
+  memoryMiB?: number
+  diskGiB?: number
+  disks?: VirtualMachineDiskChange[]
+  networks?: VirtualMachineNetworkChange[]
+}
 
 export interface VirtualizationCluster {
   id: string
@@ -134,6 +171,7 @@ export interface VirtualizationCluster {
   createdAt?: string
   updatedAt?: string
   allowedActions?: string[]
+  capabilities?: string[]
 }
 
 export interface VirtualizationDeleteDependencySample {

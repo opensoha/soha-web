@@ -1,4 +1,4 @@
-export { API_BASE_URL, getStoredAccessToken } from './auth-api'
+export { API_BASE_URL, getStoredAccessToken, logoutAuthSession } from './auth-api'
 export { consolePermissionGroups, consolePermissionLabelMap } from './permission-catalog'
 export {
   hasAllowedAction,

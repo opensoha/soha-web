@@ -10,6 +10,7 @@ import { virtualizationKeys, virtualizationMutationKeys } from './keys'
 import type {
   CreateVirtualMachineInput,
   VirtualMachinePowerAction,
+  VirtualMachineResizeInput,
   VirtualizationClusterInput,
   VirtualizationFlavorInput,
   VirtualizationImageInput,
@@ -19,6 +20,10 @@ import type {
 export interface PowerVirtualMachineVariables {
   id: string
   action: VirtualMachinePowerAction
+}
+export interface ResizeVirtualMachineVariables {
+  id: string
+  payload: VirtualMachineResizeInput
 }
 
 export interface UpdateVirtualizationClusterVariables {
@@ -113,6 +118,14 @@ export const virtualizationMutations = {
       mutationKey: virtualizationMutationKeys.vm('power'),
       mutationFn: ({ id, action }: PowerVirtualMachineVariables) =>
         virtualizationApi.powerVm(id, action),
+      onSuccess: (_response, variables) =>
+        invalidateVirtualizationQueries(queryClient, invalidationKeys.vmChanged(variables.id)),
+    }),
+  resizeVm: (queryClient: QueryClient) =>
+    mutationOptions({
+      mutationKey: virtualizationMutationKeys.vm('resize'),
+      mutationFn: ({ id, payload }: ResizeVirtualMachineVariables) =>
+        virtualizationApi.resizeVm(id, payload),
       onSuccess: (_response, variables) =>
         invalidateVirtualizationQueries(queryClient, invalidationKeys.vmChanged(variables.id)),
     }),

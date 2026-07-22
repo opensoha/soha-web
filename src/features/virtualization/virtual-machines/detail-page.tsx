@@ -1,9 +1,8 @@
 import { lazy, Suspense, useMemo, useState } from 'react'
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   Alert,
-  Badge,
   Button,
   Card,
   Descriptions,
@@ -18,17 +17,12 @@ import { PlayCircleOutlined } from '@ant-design/icons'
 import { getAIWorkbenchPathForMode, useAIPageContext } from '@/features/copilot'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
-import {
-  ManagementDetailHeader,
-  ManagementIconButton,
-  ManagementState,
-} from '@/components/management-list'
+import { ManagementIconButton, ManagementState } from '@/components/management-list'
 import { virtualizationQueries } from '@/features/virtualization/queries'
 import { useVirtualizationPermissions } from '@/features/virtualization/shared/use-virtualization-permissions'
 import { VirtualizationAdminTable } from '@/features/virtualization/shared/ui'
 import {
   STATUS_COLORS,
-  badgeStatusForTone,
   isAbnormalOperation,
   isStaleVirtualMachine,
   latestNonEmptyOperationMessage,
@@ -107,7 +101,7 @@ export function VirtualizationVmDetailPage() {
     if (params.get('focus') === 'operations' || params.get('focus') === 'logs') {
       return params.get('focus') || 'operations'
     }
-    return 'raw'
+    return 'overview'
   })
   const detailQuery = useQuery(
     virtualizationQueries.vmDetail(vmId, virtualizationModuleEnabled && Boolean(vmId)),
@@ -154,31 +148,6 @@ export function VirtualizationVmDetailPage() {
 
   return (
     <div className="soha-page soha-virtualization-page">
-      <ManagementDetailHeader
-        title={vm?.name ?? '虚拟机详情'}
-        description={
-          <Space size={8} wrap>
-            <Badge
-              status={badgeStatusForTone(
-                latestAbnormalOperation ? 'danger' : isRunning ? 'success' : 'default',
-              )}
-              text={vmDisplayStatus || (detailQuery.isLoading ? '加载中' : '-')}
-            />
-          </Space>
-        }
-        meta={
-          <>
-            <span>{`Provider ${vm?.provider ?? '-'}`}</span>
-            <span>{`连接 ${vm?.connectionName || vm?.connectionId || '-'}`}</span>
-            <span>{`节点 ${vm?.node || '-'}`}</span>
-          </>
-        }
-        actions={
-          <Link to="/compute/virtualization/vms">
-            <Button>返回列表</Button>
-          </Link>
-        }
-      />
       {!vm && !detailQuery.isLoading ? (
         <Card size="small" variant="outlined" className="soha-management-panel-card">
           <ManagementState
@@ -189,114 +158,112 @@ export function VirtualizationVmDetailPage() {
           />
         </Card>
       ) : null}
-      {latestAbnormalOperation ? (
-        <Alert
-          type="error"
-          showIcon
-          title={`最近异常任务：${operationKind(latestAbnormalOperation)}`}
-          description={latestNonEmptyOperationMessage(latestAbnormalOperation)}
-          action={
-            <Space>
-              <Button size="small" onClick={() => setActiveTab('operations')}>
-                查看任务历史
-              </Button>
-              <Button
-                size="small"
-                onClick={() =>
-                  navigate(
-                    buildInvestigationPath({
-                      connectionId: vm?.connectionId,
-                      vmId: vm?.id,
-                      namespace: vm?.namespace,
-                      workload: vm?.name,
-                      timeRangeMinutes: 60,
-                    }),
-                  )
-                }
-              >
-                AI调查
-              </Button>
-            </Space>
-          }
-        />
-      ) : null}
-      <Card
-        size="small"
-        variant="outlined"
-        className="soha-management-panel-card"
-        loading={detailQuery.isLoading}
-      >
-        <Descriptions size="small" column={{ xs: 1, md: 2, xl: 3 }} bordered>
-          <Descriptions.Item label="ID">{vm?.id ?? '-'}</Descriptions.Item>
-          <Descriptions.Item label="Provider">{vm?.provider ?? '-'}</Descriptions.Item>
-          <Descriptions.Item label="连接">
-            {vm?.connectionName || vm?.connectionId || '-'}
-          </Descriptions.Item>
-          <Descriptions.Item label="状态">{statusTag(vmDisplayStatus)}</Descriptions.Item>
-          <Descriptions.Item label="命名空间">{vm?.namespace || '-'}</Descriptions.Item>
-          <Descriptions.Item label="节点">{vm?.node || '-'}</Descriptions.Item>
-          <Descriptions.Item label="规格">
-            {vm?.flavorName || vm?.flavorId || '-'}
-          </Descriptions.Item>
-          <Descriptions.Item label="来源模式">{vm?.sourceMode || '-'}</Descriptions.Item>
-          <Descriptions.Item label="来源引用">{vm?.sourceRef || '-'}</Descriptions.Item>
-          <Descriptions.Item label="来源资产">
-            {detail?.image?.name || vm?.bootImageName || vm?.bootImageId || '-'}
-          </Descriptions.Item>
-          <Descriptions.Item label="资产类型">
-            {detail?.image?.assetKind || detail?.image?.sourceKind || '-'}
-          </Descriptions.Item>
-          <Descriptions.Item label="StorageClass / 存储">
-            {detail?.image
-              ? [detail.image.storageClass, detail.image.storage].filter(Boolean).join(' / ') || '-'
-              : '-'}
-          </Descriptions.Item>
-          <Descriptions.Item label="CPU">{vm?.cpu ?? '-'}</Descriptions.Item>
-          <Descriptions.Item label="内存">
-            {vm?.memoryMiB ? `${vm.memoryMiB} MiB` : '-'}
-          </Descriptions.Item>
-          <Descriptions.Item label="磁盘">
-            {vm?.diskGiB ? `${vm.diskGiB} GiB` : '-'}
-          </Descriptions.Item>
-          <Descriptions.Item label="镜像">
-            {vm?.bootImageName || vm?.bootImageId || '-'}
-          </Descriptions.Item>
-          <Descriptions.Item label="网络">{vm?.network || '-'}</Descriptions.Item>
-          <Descriptions.Item label="IP">{vm?.ipAddresses?.join(', ') || '-'}</Descriptions.Item>
-          <Descriptions.Item label="创建时间">{formatDateTime(vm?.createdAt)}</Descriptions.Item>
-          <Descriptions.Item label="更新时间">{formatDateTime(vm?.updatedAt)}</Descriptions.Item>
-        </Descriptions>
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <Card size="small" title="Console 能力摘要">
-            <Text type="secondary">
-              {canAccessConsole
-                ? `已启用控制台入口（Provider: ${vm?.provider || '-'})，运行中时可尝试建立连接。`
-                : '当前角色无控制台权限。'}
-            </Text>
-          </Card>
-          <Card size="small" title="Metrics 能力摘要">
-            <Text type="secondary">
-              {canViewMetrics
-                ? `已启用指标入口（Provider: ${vm?.provider || '-'})，是否可用取决于 provider 与连接配置。`
-                : '当前角色无指标查看权限。'}
-            </Text>
-          </Card>
-        </div>
-      </Card>
       <Tabs
         activeKey={activeTab}
+        className="soha-resource-tabs soha-workload-detail-tabs"
+        indicator={{ size: (origin) => Math.max(16, origin - 16), align: 'center' }}
         onChange={setActiveTab}
+        size="small"
+        tabBarGutter={18}
         items={[
           {
-            key: 'raw',
-            label: 'Provider Raw',
-            forceRender: true,
+            key: 'overview',
+            label: '概览',
             children: (
-              <Card size="small">
-                <pre className="max-h-[520px] overflow-auto rounded border border-[var(--soha-border-color)] bg-[var(--soha-bg-surface-muted)] p-3 text-xs">
-                  {providerRaw || '暂无 provider raw 数据'}
-                </pre>
-              </Card>
+              <div className="soha-detail-stack">
+                {latestAbnormalOperation ? (
+                  <Alert
+                    type="error"
+                    showIcon
+                    title={`最近异常任务：${operationKind(latestAbnormalOperation)}`}
+                    description={latestNonEmptyOperationMessage(latestAbnormalOperation)}
+                    action={
+                      <Space>
+                        <Button size="small" onClick={() => setActiveTab('operations')}>
+                          查看任务历史
+                        </Button>
+                        <Button
+                          size="small"
+                          onClick={() =>
+                            navigate(
+                              buildInvestigationPath({
+                                connectionId: vm?.connectionId,
+                                vmId: vm?.id,
+                                namespace: vm?.namespace,
+                                workload: vm?.name,
+                                timeRangeMinutes: 60,
+                              }),
+                            )
+                          }
+                        >
+                          AI调查
+                        </Button>
+                      </Space>
+                    }
+                  />
+                ) : null}
+                <Card
+                  size="small"
+                  variant="outlined"
+                  className="soha-management-panel-card"
+                  loading={detailQuery.isLoading}
+                >
+                  <Descriptions size="small" column={{ xs: 1, md: 2, xl: 3 }} bordered>
+                    <Descriptions.Item label="名称">{vm?.name ?? '-'}</Descriptions.Item>
+                    <Descriptions.Item label="ID">{vm?.id ?? '-'}</Descriptions.Item>
+                    <Descriptions.Item label="Provider">{vm?.provider ?? '-'}</Descriptions.Item>
+                    <Descriptions.Item label="连接">
+                      {vm?.connectionName || vm?.connectionId || '-'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="状态">{statusTag(vmDisplayStatus)}</Descriptions.Item>
+                    <Descriptions.Item label="命名空间">{vm?.namespace || '-'}</Descriptions.Item>
+                    <Descriptions.Item label="节点">{vm?.node || '-'}</Descriptions.Item>
+                    <Descriptions.Item label="规格">
+                      {vm?.flavorName || vm?.flavorId || '-'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="来源模式">{vm?.sourceMode || '-'}</Descriptions.Item>
+                    <Descriptions.Item label="来源引用">{vm?.sourceRef || '-'}</Descriptions.Item>
+                    <Descriptions.Item label="来源资产">
+                      {detail?.image?.name || vm?.bootImageName || vm?.bootImageId || '-'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="资产类型">
+                      {detail?.image?.assetKind || detail?.image?.sourceKind || '-'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="StorageClass / 存储">
+                      {detail?.image
+                        ? [detail.image.storageClass, detail.image.storage]
+                            .filter(Boolean)
+                            .join(' / ') || '-'
+                        : '-'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="CPU">{vm?.cpu ?? '-'}</Descriptions.Item>
+                    <Descriptions.Item label="内存">
+                      {vm?.memoryMiB ? `${vm.memoryMiB} MiB` : '-'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="磁盘">
+                      {vm?.diskGiB ? `${vm.diskGiB} GiB` : '-'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="镜像">
+                      {vm?.bootImageName || vm?.bootImageId || '-'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="网络">{vm?.network || '-'}</Descriptions.Item>
+                    <Descriptions.Item label="IP">
+                      {vm?.ipAddresses?.join(', ') || '-'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="创建时间">
+                      {formatDateTime(vm?.createdAt)}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="更新时间">
+                      {formatDateTime(vm?.updatedAt)}
+                    </Descriptions.Item>
+                  </Descriptions>
+                </Card>
+                <Card size="small" title="Provider Raw" className="soha-management-panel-card">
+                  <pre className="max-h-[520px] overflow-auto rounded border border-[var(--soha-border-color)] bg-[var(--soha-bg-surface-muted)] p-3 text-xs">
+                    {providerRaw || '暂无 provider raw 数据'}
+                  </pre>
+                </Card>
+              </div>
             ),
           },
           {

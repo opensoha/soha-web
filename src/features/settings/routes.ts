@@ -71,24 +71,128 @@ export const settingsRoutes = defineRoutes([
   },
   {
     meta: {
-      id: 'settings-about',
-      path: '/settings/about',
-      title: '关于',
-      description: 'OpenSoha 版本与项目信息',
-      icon: 'IconInfoCircle',
+      id: 'settings-source-control',
+      path: '/settings/source-control',
+      title: '代码源',
+      description: '管理全局代码源连接',
+      icon: 'IconGitBranch',
       group: 'settings',
       requiresAuth: true,
-      tabbar: false,
+      tabbar: true,
       navVisible: true,
       parentId: 'settings',
-      menuId: 'settings-about',
+      menuId: 'settings-source-control',
+      permissionKey: 'settings.system-integrations.view',
       scopeMode: 'passive',
     },
     shell: 'app',
-    permissionExemptReason: 'About is intentionally available through its visible settings menu.',
     load: async () => {
-      const module = await import('./about/page')
-      return { default: module.AboutSettingsPage }
+      const module = await import('./system-integrations/source-list-page')
+      return { default: module.SourceConnectionsPage }
+    },
+  },
+  {
+    meta: {
+      id: 'settings-source-control-detail',
+      path: '/settings/source-control/:integrationId',
+      title: '代码源连接',
+      description: '新建或编辑代码源连接',
+      icon: 'IconGitBranch',
+      group: 'settings',
+      requiresAuth: true,
+      tabbar: true,
+      navVisible: false,
+      parentId: 'settings-source-control',
+      menuId: 'settings-source-control',
+      permissionKey: 'settings.system-integrations.view',
+      scopeMode: 'passive',
+    },
+    shell: 'app',
+    load: async () => {
+      const module = await import('./system-integrations/source-detail-page')
+      return { default: module.SourceConnectionDetailPage }
+    },
+  },
+  {
+    meta: {
+      id: 'settings-system-integrations-legacy-redirect',
+      path: '/settings/system-integrations',
+      title: '代码源',
+      description: '旧系统集成入口兼容跳转',
+      icon: 'IconGitBranch',
+      group: 'settings',
+      requiresAuth: true,
+      tabbar: false,
+      navVisible: false,
+      parentId: 'settings',
+      menuId: 'settings-source-control',
+      permissionKey: 'settings.system-integrations.view',
+      scopeMode: 'passive',
+    },
+    shell: 'app',
+    redirectTo: '/settings/source-control',
+  },
+  {
+    meta: {
+      id: 'settings-system-integrations-source-control-legacy-redirect',
+      path: '/settings/system-integrations/source-control',
+      title: '代码源',
+      description: '旧代码源入口兼容跳转',
+      icon: 'IconGitBranch',
+      group: 'settings',
+      requiresAuth: true,
+      tabbar: false,
+      navVisible: false,
+      parentId: 'settings',
+      menuId: 'settings-source-control',
+      permissionKey: 'settings.system-integrations.view',
+      scopeMode: 'passive',
+    },
+    shell: 'app',
+    redirectTo: '/settings/source-control',
+  },
+  {
+    meta: {
+      id: 'settings-system-integrations-source-control-detail-legacy-redirect',
+      path: '/settings/system-integrations/source-control/:integrationId',
+      title: '代码源连接',
+      description: '旧代码源详情入口兼容跳转',
+      icon: 'IconGitBranch',
+      group: 'settings',
+      requiresAuth: true,
+      tabbar: false,
+      navVisible: false,
+      parentId: 'settings',
+      menuId: 'settings-source-control',
+      permissionKey: 'settings.system-integrations.view',
+      scopeMode: 'passive',
+    },
+    shell: 'app',
+    load: async () => {
+      const module = await import('./system-integrations/legacy-detail-redirect')
+      return { default: module.LegacySourceConnectionDetailRedirect }
+    },
+  },
+  {
+    meta: {
+      id: 'settings-runtime-configuration',
+      path: '/settings/runtime-configuration',
+      title: '运行时配置',
+      description: '校验、应用与回滚运行时配置',
+      icon: 'IconAdjustments',
+      group: 'settings',
+      requiresAuth: true,
+      tabbar: true,
+      navVisible: true,
+      parentId: 'settings',
+      menuId: 'settings-runtime-configuration',
+      permissionKey: 'settings.runtime-config.view',
+      scopeMode: 'passive',
+    },
+    shell: 'app',
+    load: async () => {
+      const module = await import('./runtime-configuration/page')
+      return { default: module.RuntimeConfigurationPage }
     },
   },
 ] as const)

@@ -61,6 +61,7 @@ async function fetchApi(path: string, options: RequestInit, accessToken: string 
       headers,
     })
   } catch (cause) {
+    if (cause instanceof DOMException && cause.name === 'AbortError') throw cause
     const error = createNetworkApiError(path, method, cause)
     emitApiError(error)
     throw error
@@ -146,6 +147,12 @@ export const api = {
     request<T>(path, {
       method: 'POST',
       body: body === undefined ? undefined : JSON.stringify(body),
+    }),
+  postWithSignal: <T>(path: string, body: unknown, signal: AbortSignal) =>
+    request<T>(path, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      signal,
     }),
   postWithHeaders: <T>(path: string, body: unknown, headers: HeadersInit) =>
     request<T>(path, {

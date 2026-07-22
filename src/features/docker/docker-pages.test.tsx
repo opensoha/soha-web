@@ -82,6 +82,45 @@ const testState = vi.hoisted(() => ({
         },
       }
     }
+    if (path === '/docker/projects?page=1&pageSize=10') {
+      return {
+        data: {
+          items: [
+            {
+              id: 'project-compose',
+              hostId: 'host-1',
+              name: 'soha-compose-stack',
+              slug: 'soha-compose-stack',
+              sourceKind: 'inline_compose',
+              status: 'running',
+              desiredState: 'running',
+              environment: 'local',
+            },
+            {
+              id: 'project-1',
+              hostId: 'host-1',
+              name: 'soha-orbstack-smoke',
+              slug: 'soha-orbstack-smoke',
+              sourceKind: 'single_container',
+              status: 'running',
+              desiredState: 'running',
+              environment: 'local',
+              owner: 'admin',
+              config: {
+                image: 'nginx:alpine',
+                architecture: 'arm64',
+                ports: [
+                  { hostIp: '127.0.0.1', hostPort: 18083, containerPort: 80, protocol: 'tcp' },
+                ],
+              },
+            },
+          ],
+          total: 2,
+          page: 1,
+          pageSize: 10,
+        },
+      }
+    }
     if (path === '/docker/projects/project-1') {
       return {
         data: {
@@ -109,8 +148,25 @@ const testState = vi.hoisted(() => ({
         },
       }
     }
-    if (path === '/docker/services?page=1&pageSize=300') {
-      return { data: { items: [], total: 0, page: 1, pageSize: 300 } }
+    if (path === '/docker/services?projectId=project-compose&page=1&pageSize=100') {
+      return {
+        data: {
+          items: [
+            {
+              id: 'service-compose-web',
+              projectId: 'project-compose',
+              hostId: 'host-1',
+              name: 'web',
+              image: 'nginx:alpine',
+              status: 'running',
+              containerId: 'compose-web-1',
+            },
+          ],
+          total: 1,
+          page: 1,
+          pageSize: 100,
+        },
+      }
     }
     if (path === '/docker/projects?page=1&pageSize=10&sourceKind=compose') {
       return { data: { items: [], total: 0, page: 1, pageSize: 10 } }
@@ -275,14 +331,6 @@ async function settleQueries(queryClient: QueryClient) {
       idleTicks = 0
     }
   }
-}
-
-async function flush() {
-  await act(async () => {
-    for (let index = 0; index < 8; index += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    }
-  })
 }
 
 describe('docker pages', () => {
@@ -540,7 +588,7 @@ describe('docker pages', () => {
     expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/flavors')
   })
 
-  it('keeps port mappings in container detail context and summarizes them in the single-container table', async () => {
+  it('aggregates compose and single-container projects in one tree table', async () => {
     testState.permissionSnapshot = {
       permissionKeys: [
         'docker.projects.view',
@@ -553,27 +601,34 @@ describe('docker pages', () => {
     }
     await renderWithProviders(<DockerProjectsPage />)
 
-    let tabTexts = Array.from(document.querySelectorAll('.ant-tabs-tab-btn'))
-      .map((node) => node.textContent?.trim())
-      .filter(Boolean)
-    expect(tabTexts).toEqual(['Compose', '单容器服务'])
-
-    const singleContainerTab = Array.from(document.querySelectorAll('.ant-tabs-tab-btn')).find(
-      (node) => node.textContent?.trim() === '单容器服务',
-    ) as HTMLElement | undefined
-    expect(singleContainerTab).not.toBeUndefined()
-    await act(async () => {
-      singleContainerTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-      await Promise.resolve()
-    })
-    await flush()
-
-    tabTexts = Array.from(document.querySelectorAll('.ant-tabs-tab-btn'))
-      .map((node) => node.textContent?.trim())
-      .filter(Boolean)
-    expect(tabTexts).toEqual(['Compose', '单容器服务'])
-    expect(document.body.textContent).toContain('端口映射')
+    expect(document.querySelector('.soha-docker-management-tabs')).toBeNull()
+    expect(document.body.textContent).toContain('soha-compose-stack')
+    expect(document.body.textContent).toContain('soha-orbstack-smoke')
+    expect(document.body.textContent).toContain('Compose')
+    expect(document.body.textContent).toContain('单容器')
+    expect(document.body.textContent).toContain('镜像 / 端口')
     expect(document.body.textContent).toContain('127.0.0.1:18083 -> 80/tcp')
+  })
+
+  it('expands compose projects with their services when service access is available', async () => {
+    testState.permissionSnapshot = {
+      permissionKeys: ['docker.projects.view', 'docker.services.view'],
+      visibleMenuIds: [],
+      visibleMenus: [],
+    }
+
+    const container = await renderWithProviders(<DockerProjectsPage />)
+
+    expect(container.textContent).toContain('soha-compose-stack')
+    expect(container.textContent).toContain('web')
+    expect(container.textContent).toContain('compose-web-1')
+    expect(testState.apiGet).toHaveBeenCalledWith(
+      '/docker/services?projectId=project-compose&page=1&pageSize=100',
+    )
+    expect(testState.apiGet).not.toHaveBeenCalledWith('/docker/services?page=1&pageSize=300')
+    expect(
+      container.querySelector('[data-row-key="project-compose:service:service-compose-web"]'),
+    ).not.toBeNull()
   })
 
   it('fails closed when the Docker module is disabled', async () => {
@@ -597,9 +652,7 @@ describe('docker pages', () => {
     await renderWithProviders(<DockerProjectsPage />)
 
     expect(testState.apiGet).toHaveBeenCalledWith('/modules')
-    expect(testState.apiGet).not.toHaveBeenCalledWith(
-      '/docker/projects?page=1&pageSize=10&sourceKind=compose',
-    )
+    expect(testState.apiGet).not.toHaveBeenCalledWith('/docker/projects?page=1&pageSize=10')
     expect(testState.apiGet).not.toHaveBeenCalledWith('/docker/hosts?page=1&pageSize=200')
     expect(document.body.textContent).not.toContain('创建 Compose')
     expect(document.body.textContent).not.toContain('快速启动')

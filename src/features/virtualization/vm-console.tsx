@@ -40,9 +40,12 @@ export function VMConsole({ vmId }: { vmId: string }) {
     }
 
     let disposed = false
+    let disconnected = false
     let rfbInstance: RFB | null = null
     void (async () => {
       try {
+        setStatus('connecting')
+        setErrorMessage('')
         const baseURL = buildSameOriginStreamURL(consoleData.url, 'ws')
         const wsUrl = await withStreamTicket(baseURL)
         if (disposed || !containerRef.current) return
@@ -59,6 +62,7 @@ export function VMConsole({ vmId }: { vmId: string }) {
         })
 
         rfbInstance.addEventListener('disconnect', (e: any) => {
+          disconnected = true
           setStatus('disconnected')
           if (e.detail.clean === false) {
             setErrorMessage(e.detail.reason || 'Connection closed unexpectedly')
@@ -79,7 +83,9 @@ export function VMConsole({ vmId }: { vmId: string }) {
 
     return () => {
       disposed = true
-      rfbInstance?.disconnect()
+      if (!disconnected) {
+        rfbInstance?.disconnect()
+      }
     }
   }, [consoleQuery.data, vmId])
 
@@ -180,7 +186,14 @@ export function VMConsole({ vmId }: { vmId: string }) {
         </Space>
       }
     >
-      {status === 'disconnected' && <Alert type="warning" title="控制台已断开" className="mb-2" />}
+      {status === 'disconnected' && (
+        <Alert
+          type="warning"
+          title="控制台已断开"
+          description={errorMessage || '连接已关闭，请重新进入控制台后重试。'}
+          className="mb-2"
+        />
+      )}
       {status === 'error' && (
         <Alert type="error" title="连接失败" description={errorMessage} className="mb-2" />
       )}

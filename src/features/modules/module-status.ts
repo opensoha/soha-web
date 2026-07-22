@@ -3,6 +3,7 @@ import { api } from '@/services/api-client'
 import type { ApiResponse, RuntimeMenuNode, WorkbenchModuleStatus } from '@/types'
 
 export const moduleStatusQueryKey = ['modules'] as const
+export const GLOBAL_ASSISTANT_FEATURE = 'assistant.global'
 
 type ModuleStatusMap = Record<string, { enabled?: boolean } | boolean | undefined>
 
@@ -10,10 +11,10 @@ export type ModuleStatusEnvelope =
   | ApiResponse<WorkbenchModuleStatus[]>
   | WorkbenchModuleStatus[]
   | {
-    data?: WorkbenchModuleStatus[] | { modules?: ModuleStatusMap }
-    items?: WorkbenchModuleStatus[]
-    modules?: ModuleStatusMap
-  }
+      data?: WorkbenchModuleStatus[] | { modules?: ModuleStatusMap }
+      items?: WorkbenchModuleStatus[]
+      modules?: ModuleStatusMap
+    }
 
 function moduleItems(response: ModuleStatusEnvelope | undefined): WorkbenchModuleStatus[] {
   if (!response) return []
@@ -32,16 +33,24 @@ function moduleMap(response: ModuleStatusEnvelope | undefined): ModuleStatusMap 
   return undefined
 }
 
-export function getWorkbenchModuleEnabled(response: ModuleStatusEnvelope | undefined, moduleId: string) {
+export function getWorkbenchModuleEnabled(
+  response: ModuleStatusEnvelope | undefined,
+  moduleId: string,
+) {
   const mapped = moduleMap(response)?.[moduleId]
   if (typeof mapped === 'boolean') return mapped
-  if (mapped && typeof mapped === 'object' && typeof mapped.enabled === 'boolean') return mapped.enabled
+  if (mapped && typeof mapped === 'object' && typeof mapped.enabled === 'boolean')
+    return mapped.enabled
 
   const item = moduleItems(response).find((status) => status.descriptor.id === moduleId)
   return item?.enabled === true
 }
 
-export function getWorkbenchModuleFeature(response: ModuleStatusEnvelope | undefined, moduleId: string, feature: string) {
+export function getWorkbenchModuleFeature(
+  response: ModuleStatusEnvelope | undefined,
+  moduleId: string,
+  feature: string,
+) {
   const item = moduleItems(response).find((status) => status.descriptor.id === moduleId)
   return item?.enabled === true && item.features?.[feature] === true
 }

@@ -521,6 +521,37 @@ describe('app layout workspace navigation', () => {
     expect(testState.prefs.setCurrentWorkspace).not.toHaveBeenCalled()
   })
 
+  it('renders account utilities in a dedicated personal settings workbench', async () => {
+    const container = await renderWithProviders('/account/settings')
+
+    expect(container.querySelector('.soha-sider')).not.toBeNull()
+    expect(container.querySelector('.soha-shell')?.classList.contains('ant-layout-has-sider')).toBe(
+      true,
+    )
+    expect(container.querySelector('.soha-workbench-switcher__label')?.textContent).toBe('个人设置')
+    expect(container.textContent).toContain('个人中心')
+    expect(container.textContent).toContain('关于')
+    expect(container.querySelector('.soha-header-sider-toggle')).not.toBeNull()
+    expect(container.querySelector('.soha-account-brand')).toBeNull()
+    expect(container.querySelector('[data-testid="platform-scope-trigger"]')).toBeNull()
+    expect(container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent).toContain(
+      '个人设置',
+    )
+    expect(testState.prefs.setCurrentWorkspace).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['/account/profile', '个人中心'],
+    ['/about', '关于'],
+  ])('keeps %s in the hidden account shell', async (route, breadcrumb) => {
+    const container = await renderWithProviders(route)
+
+    expect(container.querySelector('.soha-sider')).not.toBeNull()
+    expect(container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent).toContain(
+      breadcrumb,
+    )
+  })
+
   it('shows access-control pages as direct settings menu items', async () => {
     const container = await renderWithProviders('/settings/login', {
       permissionKeys: [
@@ -822,13 +853,12 @@ describe('app layout workspace navigation', () => {
 
     const menu = container.querySelector('.soha-nav-menu')
     const menuText = menu?.textContent ?? ''
-    expect(menuText).toContain('account')
     expect(menuText).toContain('provider')
     expect(menuText).toContain('users')
     expect(menuText).toContain('operations')
     expect(menuText).toContain('总览')
-    expect(menuText).toContain('个人中心')
-    expect(menuText).toContain('关于')
+    expect(menuText).not.toContain('个人中心')
+    expect(menuText).not.toContain('关于')
     expect(menuText).toContain('应用目录')
     expect(menuText).toContain('用户')
     expect(menuText).toContain('角色')
@@ -1550,7 +1580,7 @@ describe('app layout workspace navigation', () => {
     expect(container.querySelector('.soha-nav-business')).not.toBeNull()
   })
 
-  it('opens profile from the avatar dropdown', async () => {
+  it('opens personal settings from the avatar dropdown', async () => {
     const container = await renderWithProviders('/')
     const userButton = container.querySelector('.soha-user-trigger') as HTMLButtonElement | null
     expect(userButton).not.toBeNull()
@@ -1560,93 +1590,42 @@ describe('app layout workspace navigation', () => {
       await Promise.resolve()
     })
 
-    const profileItem = Array.from(document.querySelectorAll('.ant-dropdown-menu-item')).find(
-      (item) => item.textContent?.includes('个人中心'),
+    const settingsItem = Array.from(document.querySelectorAll('.ant-dropdown-menu-item')).find(
+      (item) => item.textContent?.includes('个人设置'),
     ) as HTMLElement | undefined
-    expect(profileItem).not.toBeUndefined()
+    expect(settingsItem).not.toBeUndefined()
 
     await act(async () => {
-      profileItem?.click()
+      settingsItem?.click()
       await Promise.resolve()
     })
 
     expect(container.querySelector('[data-testid="page"]')?.getAttribute('data-pathname')).toBe(
-      '/account/profile',
+      '/account/settings',
     )
     expect(testState.auth.clearAuth).not.toHaveBeenCalled()
   })
 
-  it('places account profile breadcrumbs under settings center', async () => {
-    const container = await renderWithProviders('/account/profile', {
-      permissionKeys: ['workspace.resource.view', 'overview.view', 'settings.identity.view'],
-      visibleMenuIds: [
-        'dashboard',
-        'settings',
-        'account-profile',
-        'settings-about',
-        'settings-login',
-      ],
-      visibleMenus: [
-        {
-          id: 'dashboard',
-          path: '/',
-          labelZh: '概览',
-          labelEn: 'Overview',
-          iconKey: 'gauge',
-          section: 'platform',
-          sortOrder: 1,
-          enabled: true,
-        },
-        {
-          id: 'settings',
-          path: '/settings',
-          labelZh: '设置中心',
-          labelEn: 'Settings Center',
-          iconKey: 'settings',
-          section: 'admin',
-          sortOrder: 2,
-          enabled: true,
-        },
-        {
-          id: 'account-profile',
-          parentId: 'settings',
-          path: '/account/profile',
-          labelZh: '个人中心',
-          labelEn: 'Profile',
-          iconKey: 'user',
-          section: 'account',
-          sortOrder: 1,
-          enabled: true,
-        },
-        {
-          id: 'settings-about',
-          parentId: 'settings',
-          path: '/settings/about',
-          labelZh: '关于',
-          labelEn: 'About',
-          iconKey: 'info',
-          section: 'account',
-          sortOrder: 2,
-          enabled: true,
-        },
-        {
-          id: 'settings-login',
-          parentId: 'settings',
-          path: '/settings/login',
-          labelZh: '登陆设置',
-          labelEn: 'Login Settings',
-          iconKey: 'shield',
-          section: 'admin',
-          sortOrder: 3,
-          enabled: true,
-        },
-      ],
+  it('does not expose profile and about as separate avatar actions', async () => {
+    const container = await renderWithProviders('/')
+    const userButton = container.querySelector('.soha-user-trigger') as HTMLButtonElement | null
+
+    await act(async () => {
+      userButton?.click()
+      await Promise.resolve()
     })
 
-    expect(container.querySelector('.soha-workbench-switcher__label')?.textContent).toBe('设置中心')
-    expect(container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent).toContain(
-      '设置中心/account/个人中心',
-    )
+    expect(
+      Array.from(document.querySelectorAll('.ant-dropdown-menu-item')).some((item) =>
+        item.textContent?.includes('个人中心'),
+      ),
+    ).toBe(false)
+    expect(
+      Array.from(document.querySelectorAll('.ant-dropdown-menu-item')).some((item) =>
+        item.textContent?.includes('关于'),
+      ),
+    ).toBe(false)
+    expect(testState.auth.clearAuth).not.toHaveBeenCalled()
   })
 
   it('opens password change from the avatar dropdown', async () => {
@@ -1675,8 +1654,24 @@ describe('app layout workspace navigation', () => {
     expect(testState.auth.clearAuth).not.toHaveBeenCalled()
   })
 
-  it('opens portal without showing about in the avatar dropdown', async () => {
-    const container = await renderWithProviders('/')
+  it('shows portal and personal settings in the avatar dropdown', async () => {
+    const container = await renderWithProviders('/', {
+      permissionKeys: [...testState.snapshot.permissionKeys, 'identity.portal.view'],
+      visibleMenuIds: [...testState.snapshot.visibleMenuIds, 'home-workbench'],
+      visibleMenus: [
+        ...testState.snapshot.visibleMenus,
+        {
+          id: 'home-workbench',
+          path: '/portal',
+          labelZh: '首页',
+          labelEn: 'Home',
+          iconKey: 'home',
+          section: '',
+          sortOrder: 1,
+          enabled: true,
+        },
+      ],
+    })
     const userButton = container.querySelector('.soha-user-trigger') as HTMLButtonElement | null
     expect(userButton).not.toBeNull()
 
@@ -1690,10 +1685,10 @@ describe('app layout workspace navigation', () => {
     ) as HTMLElement | undefined
     expect(portalItem).not.toBeUndefined()
     expect(
-      Array.from(document.querySelectorAll('.ant-dropdown-menu-item')).some((item) =>
-        item.textContent?.includes('关于'),
+        Array.from(document.querySelectorAll('.ant-dropdown-menu-item')).some((item) =>
+        item.textContent?.includes('个人设置'),
       ),
-    ).toBe(false)
+    ).toBe(true)
 
     await act(async () => {
       portalItem?.click()
@@ -1704,5 +1699,21 @@ describe('app layout workspace navigation', () => {
       '/portal',
     )
     expect(testState.auth.clearAuth).not.toHaveBeenCalled()
+  })
+
+  it('hides the portal shortcut when the home workbench menu is disabled', async () => {
+    const container = await renderWithProviders('/')
+    const userButton = container.querySelector('.soha-user-trigger') as HTMLButtonElement | null
+
+    await act(async () => {
+      userButton?.click()
+      await Promise.resolve()
+    })
+
+    expect(
+      Array.from(document.querySelectorAll('.ant-dropdown-menu-item')).some((item) =>
+        item.textContent?.includes('门户首页'),
+      ),
+    ).toBe(false)
   })
 })
