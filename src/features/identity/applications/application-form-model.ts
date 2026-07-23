@@ -6,13 +6,17 @@ import type {
   IdentityProviderType,
 } from '../shared/types'
 
+export interface IdentityApplicationTagOption {
+  label: string
+  value: string
+}
+
 export interface IdentityApplicationFormValues {
   assignments: Array<{
     effect: 'allow'
     subjectId: string
     subjectType: IdentityAssignmentSubjectType
   }>
-  category: string
   description: string
   featured: boolean
   iconUrl: string
@@ -68,6 +72,20 @@ export const identityApplicationOIDCScopeOptions = [
   { label: 'projects', value: 'projects' },
   { label: 'tags', value: 'tags' },
 ]
+
+export function identityApplicationTagOptions(
+  applications: IdentityApplication[],
+): IdentityApplicationTagOption[] {
+  return Array.from(
+    new Set(
+      applications.flatMap((application) =>
+        (application.tags ?? []).map((tag) => String(tag).trim()).filter(Boolean),
+      ),
+    ),
+  )
+    .sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }))
+    .map((tag) => ({ label: tag, value: tag }))
+}
 
 function compactStrings(values: string[] = []) {
   const seen = new Set<string>()
@@ -125,7 +143,6 @@ function metadataStringList(metadata: Record<string, unknown> | undefined, keys:
 export function defaultIdentityApplicationFormValues(): IdentityApplicationFormValues {
   return {
     assignments: [],
-    category: '',
     description: '',
     featured: false,
     iconUrl: '',
@@ -153,7 +170,6 @@ export function identityApplicationFormValuesFor(
       subjectId: assignment.subjectId,
       subjectType: assignment.subjectType,
     })),
-    category: application.category ?? '',
     description: application.description ?? '',
     featured: application.featured,
     iconUrl: application.iconUrl ?? '',
@@ -215,7 +231,6 @@ export function buildIdentityApplicationInput(
         subjectId: assignment.subjectId.trim(),
         subjectType: assignment.subjectType || 'role',
       })),
-    category: values.category?.trim() ?? '',
     description: values.description?.trim() ?? '',
     featured: Boolean(values.featured),
     iconUrl: values.iconUrl?.trim() ?? '',

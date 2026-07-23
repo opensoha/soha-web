@@ -14,7 +14,7 @@ export const identityParentRoutes = defineRoutes([
       description: '身份工作台',
       icon: 'IconShield',
       group: 'identity',
-      workbenchId: 'settings',
+      workbenchId: 'security',
       requiresAuth: true,
       tabbar: false,
       navVisible: true,

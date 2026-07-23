@@ -1,6 +1,7 @@
 import { AppstoreOutlined } from '@ant-design/icons'
 import { Avatar, Space, Tag, Typography } from 'antd'
 import type { IdentityApplication, IdentityProviderType } from '@/features/identity'
+import { useI18n } from '@/i18n'
 
 const { Text } = Typography
 
@@ -49,6 +50,9 @@ export function PortalTags({ values, max = 3 }: { values?: string[]; max?: numbe
 }
 
 export function PortalTagsOrEmpty({ values, max = 8 }: { values?: string[]; max?: number }) {
-  if (!values?.some(Boolean)) return <Text type="secondary">None</Text>
+  const { t } = useI18n()
+  if (!values?.some(Boolean)) {
+    return <Text type="secondary">{t('providerPortal.empty.none', 'None')}</Text>
+  }
   return <PortalTags values={values} max={max} />
 }

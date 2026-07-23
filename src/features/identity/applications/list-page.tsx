@@ -20,7 +20,11 @@ import type {
   IdentityApplicationInput,
   IdentityProviderType,
 } from '../shared/types'
-import { identityApplicationStatusOptions } from './application-form-model'
+import { identityProviderQueries } from '../providers'
+import {
+  identityApplicationStatusOptions,
+  identityApplicationTagOptions,
+} from './application-form-model'
 import { ApplicationFormModal } from './components/application-form-modal'
 import { identityApplicationMutations } from './mutations'
 import {
@@ -55,7 +59,12 @@ export function IdentityApplicationsPage() {
   }
 
   const applicationsQuery = useQuery(identityApplicationQueries.list(filters))
+  const allApplicationsQuery = useQuery(identityApplicationQueries.list({ query: '', status: '' }))
   const providerCapabilitiesQuery = useQuery(identityApplicationQueries.providerCapabilities())
+  const providersQuery = useQuery({
+    ...identityProviderQueries.list({ applicationId: editing?.id ?? '' }),
+    enabled: modalOpen && Boolean(editing?.id),
+  })
   const createMutation = useMutation(identityApplicationMutations.create(queryClient))
   const updateMutation = useMutation(identityApplicationMutations.update(queryClient))
   const deleteMutation = useMutation(identityApplicationMutations.remove(queryClient))
@@ -130,7 +139,9 @@ export function IdentityApplicationsPage() {
                 ? t('identity.applications.visible', '可见')
                 : t('identity.applications.hidden', '隐藏')}
             </Tag>
-            {record.featured ? <Tag color="purple">{t('identity.applications.featured', '推荐')}</Tag> : null}
+            {record.featured ? (
+              <Tag color="purple">{t('identity.applications.featured', '推荐')}</Tag>
+            ) : null}
           </Space>
         ),
       },
@@ -154,7 +165,9 @@ export function IdentityApplicationsPage() {
               {value}
             </Text>
           ) : record.providerType === 'oidc' ? (
-            <Tag color="blue">{t('identity.applications.generatedAuthorizeUrl', '自动生成授权地址')}</Tag>
+            <Tag color="blue">
+              {t('identity.applications.generatedAuthorizeUrl', '自动生成授权地址')}
+            </Tag>
           ) : (
             <Text type="secondary">-</Text>
           ),
@@ -187,7 +200,8 @@ export function IdentityApplicationsPage() {
               title={`删除 ${record.name}`}
               onConfirm={() =>
                 deleteMutation.mutate(record.id, {
-                  onSuccess: () => message.success(t('identity.applications.deleted', '应用已删除')),
+                  onSuccess: () =>
+                    message.success(t('identity.applications.deleted', '应用已删除')),
                 })
               }
             >
@@ -208,6 +222,10 @@ export function IdentityApplicationsPage() {
 
   const saving = createMutation.isPending || updateMutation.isPending
   const applications = applicationsQuery.data ?? []
+  const applicationTagOptions = useMemo(
+    () => identityApplicationTagOptions(allApplicationsQuery.data ?? applications),
+    [allApplicationsQuery.data, applications],
+  )
 
   const capabilitySummary = (
     <div className="soha-identity-capability-row">
@@ -245,9 +263,13 @@ export function IdentityApplicationsPage() {
               <ManagementKeywordField
                 label={t('identity.applications.keyword', '关键词')}
                 name="query"
-                placeholder={t('identity.applications.search', '搜索名称、slug、分类')}
+                placeholder={t('identity.applications.search', '搜索名称、slug')}
               />
-              <ManagementQueryField label={t('identity.applications.status', '状态')} name="status" width={180}>
+              <ManagementQueryField
+                label={t('identity.applications.status', '状态')}
+                name="status"
+                width={180}
+              >
                 <Select
                   allowClear
                   options={identityApplicationStatusOptions}
@@ -273,7 +295,10 @@ export function IdentityApplicationsPage() {
             <ManagementState
               kind="empty"
               title={t('identity.applications.empty', '暂无应用')}
-              description={t('identity.applications.emptyDescription', '创建应用后会出现在门户目录中。')}
+              description={t(
+                'identity.applications.emptyDescription',
+                '创建应用后会出现在门户目录中。',
+              )}
             />
           ),
           headerExtra: (
@@ -305,7 +330,10 @@ export function IdentityApplicationsPage() {
       <ApplicationFormModal
         application={editing}
         open={modalOpen}
+        providerOptions={providersQuery.data ?? []}
+        providerOptionsLoading={providersQuery.isFetching}
         saving={saving}
+        tagOptions={applicationTagOptions}
         onCancel={closeModal}
         onSubmit={submitForm}
       />

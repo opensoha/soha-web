@@ -18,7 +18,6 @@ export interface PortalBootstrap {
   applications: IdentityApplication[]
   favorites: IdentityApplication[]
   recent: IdentityApplicationLaunch[]
-  categories: string[]
   security: PortalSecuritySummary
 }
 

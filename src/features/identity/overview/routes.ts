@@ -9,7 +9,7 @@ export const identityOverviewRoutes = defineRoutes([
       description: '身份工作台总览',
       icon: 'IconDesktop',
       group: 'identity',
-      workbenchId: 'settings',
+      workbenchId: 'security',
       requiresAuth: true,
       tabbar: true,
       navVisible: true,

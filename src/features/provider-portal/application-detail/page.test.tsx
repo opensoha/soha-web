@@ -21,7 +21,6 @@ const application = {
   slug: 'console',
   name: 'Operations Console',
   description: 'Manage production services',
-  category: 'Operations',
   tags: ['production'],
   launchUrl: 'https://console.example.test',
   providerId: 'provider-1',

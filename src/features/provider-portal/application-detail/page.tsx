@@ -104,7 +104,6 @@ export function PortalApplicationDetailPage() {
           <PortalApplicationAvatar application={application} />
           <div>
             <Title level={3}>{application.name}</Title>
-            <Text type="secondary">{application.category || application.slug}</Text>
           </div>
         </div>
         <Space wrap>
@@ -155,7 +154,6 @@ export function PortalApplicationDetailPage() {
                 size="small"
                 items={[
                   { key: 'slug', label: 'Slug', children: application.slug },
-                  { key: 'category', label: 'Category', children: application.category || '-' },
                   { key: 'providerType', label: 'Provider type', children: providerLabel },
                   {
                     key: 'providerId',

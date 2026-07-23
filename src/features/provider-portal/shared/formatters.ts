@@ -1,10 +1,11 @@
 import type { IdentityApplication } from '@/features/identity'
+import type { LocaleCode } from '@/i18n'
 
-export function formatPortalDateTime(value?: string) {
+export function formatPortalDateTime(value?: string, localeCode: LocaleCode = 'zh_CN') {
   if (!value) return '-'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat('zh-CN', {
+  return new Intl.DateTimeFormat(localeCode === 'en_US' ? 'en-US' : 'zh-CN', {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
@@ -17,7 +18,6 @@ export function portalApplicationSearchText(application: IdentityApplication) {
     application.name,
     application.slug,
     application.description,
-    application.category,
     application.providerType,
     ...(application.tags ?? []),
   ]

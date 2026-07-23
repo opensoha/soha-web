@@ -9,7 +9,7 @@ export const identityPolicyRoutes = defineRoutes([
       description: 'Provider Portal 访问策略兼容入口',
       icon: 'IconShield',
       group: 'identity',
-      workbenchId: 'settings',
+      workbenchId: 'security',
       requiresAuth: true,
       tabbar: false,
       navVisible: false,

@@ -36,7 +36,6 @@ const input: IdentityApplicationInput = {
   name: application.name,
   description: '',
   iconUrl: '',
-  category: 'Observability',
   tags: application.tags,
   launchUrl: '',
   providerId: '',

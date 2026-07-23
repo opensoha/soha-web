@@ -80,6 +80,7 @@ const BREADCRUMB_WORKBENCH_ROOT_ROUTE_IDS: Partial<Record<WorkbenchId, string[]>
   compute: ['compute-workbench'],
   monitoring: ['monitoring-workbench'],
   settings: ['settings', 'extension-center'],
+  security: ['identity'],
 }
 
 interface WorkbenchOption {
@@ -401,6 +402,12 @@ function buildWorkbenchOptions(localeCode: 'zh_CN' | 'en_US'): WorkbenchOption[]
         icon: <AlertOutlined />,
       },
       {
+        key: 'security',
+        label: 'Internal Workbench',
+        description: 'Identity providers, applications, and access integrations',
+        icon: <LockOutlined />,
+      },
+      {
         key: 'settings',
         label: 'Settings Center',
         description: 'Login, branding, monitoring, and AI settings',
@@ -444,6 +451,12 @@ function buildWorkbenchOptions(localeCode: 'zh_CN' | 'en_US'): WorkbenchOption[]
       label: '监控工作台',
       description: '告警、路由、通知和值班协同',
       icon: <AlertOutlined />,
+    },
+    {
+      key: 'security',
+      label: '内网工作台',
+      description: '身份提供商、应用目录与接入集成',
+      icon: <LockOutlined />,
     },
     {
       key: 'settings',

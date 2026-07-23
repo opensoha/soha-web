@@ -9,6 +9,7 @@ describe('Identity route manifests', () => {
           id: 'identity',
           path: '/identity',
           menuId: 'identity',
+          workbenchId: 'security',
           permissionStrategy: 'any-child',
         }),
         redirectTo: '/identity/overview',

@@ -4,6 +4,7 @@ import {
   buildIdentityApplicationInput,
   defaultIdentityApplicationFormValues,
   identityApplicationFormValuesFor,
+  identityApplicationTagOptions,
 } from './application-form-model'
 
 const application: IdentityApplication = {
@@ -12,7 +13,6 @@ const application: IdentityApplication = {
   name: 'Grafana',
   description: 'Dashboards',
   iconUrl: 'https://grafana.example/icon.png',
-  category: 'Observability',
   tags: ['metrics'],
   launchUrl: '',
   providerId: 'provider-1',
@@ -55,6 +55,20 @@ describe('identity application form model', () => {
       sortOrder: 1000,
       status: 'draft',
     })
+    expect(defaultIdentityApplicationFormValues()).not.toHaveProperty('category')
+  })
+
+  it('builds reusable tag options from existing applications', () => {
+    expect(
+      identityApplicationTagOptions([
+        { ...application, tags: [' platform ', 'metrics'] },
+        { ...application, id: 'loki', tags: ['alerts', 'platform'] },
+      ]),
+    ).toEqual([
+      { label: 'alerts', value: 'alerts' },
+      { label: 'metrics', value: 'metrics' },
+      { label: 'platform', value: 'platform' },
+    ])
   })
 
   it('reads legacy top-level OIDC fields before nested fields', () => {

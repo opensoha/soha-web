@@ -853,13 +853,13 @@ describe('app layout workspace navigation', () => {
 
     const menu = container.querySelector('.soha-nav-menu')
     const menuText = menu?.textContent ?? ''
-    expect(menuText).toContain('provider')
+    expect(menuText).not.toContain('provider')
     expect(menuText).toContain('users')
     expect(menuText).toContain('operations')
-    expect(menuText).toContain('总览')
+    expect(menuText).not.toContain('总览')
     expect(menuText).not.toContain('个人中心')
     expect(menuText).not.toContain('关于')
-    expect(menuText).toContain('应用目录')
+    expect(menuText).not.toContain('应用目录')
     expect(menuText).toContain('用户')
     expect(menuText).toContain('角色')
     expect(menuText).toContain('组织')

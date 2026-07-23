@@ -45,7 +45,8 @@ const WORKBENCH_DEFAULT_PATHS = {
   delivery: '/applications',
   ai: '/ai-workbench/overview',
   monitoring: '/monitoring-workbench',
-  settings: '/identity/overview',
+  settings: '/settings/login',
+  security: '/identity/overview',
 } as const
 
 const WORKBENCH_FALLBACK_PATHS: Partial<
@@ -811,11 +812,12 @@ export function filterSidebarNavByWorkbench(
     compute: 'compute-workbench',
     monitoring: 'monitoring-workbench',
     settings: 'settings',
+    security: 'identity',
   }
   const flattenedRootIds = [
     flattenedWorkbenchRootIds[workbenchId],
     ...(workbenchId === 'ai' ? ['ai-workbench'] : []),
-    ...(workbenchId === 'settings' ? ['identity', 'system', 'access', 'settings-extensions'] : []),
+    ...(workbenchId === 'settings' ? ['system', 'access', 'settings-extensions'] : []),
   ].filter((item): item is string => Boolean(item))
 
   if (flattenedRootIds.length === 0) {

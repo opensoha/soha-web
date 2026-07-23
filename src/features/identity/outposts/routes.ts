@@ -9,7 +9,7 @@ export const identityOutpostRoutes = defineRoutes([
       description: 'Proxy Provider Outpost 管理',
       icon: 'IconShield',
       group: 'identity',
-      workbenchId: 'settings',
+      workbenchId: 'security',
       requiresAuth: true,
       tabbar: true,
       navVisible: true,

@@ -36,7 +36,7 @@ function getRoute(id: string): RouteMeta {
 }
 
 describe('access route authorization', () => {
-  it('requires the enabled home workbench menu binding for the portal', () => {
+  it('requires the enabled internal workbench menu binding for the portal', () => {
     const snapshot = buildSnapshot({
       permissionKeys: ['identity.portal.view'],
       visibleMenuIds: ['home-workbench'],
@@ -262,6 +262,8 @@ describe('access route authorization', () => {
     const settingsNav = filterSidebarNavByWorkbench(systemNav, 'settings')
 
     expect(getRouteWorkbenchId(getRoute('settings-login'))).toBe('settings')
+    expect(getRouteWorkbenchId(getRoute('identity-providers'))).toBe('security')
+    expect(getRouteWorkbenchId(getRoute('provider-portal'))).toBe('home')
     expect(getRouteWorkbenchId(getRoute('account-settings'))).toBeNull()
     expect(getRouteWorkbenchId(getRoute('account-profile'))).toBeNull()
     expect(getRouteWorkbenchId(getRoute('about'))).toBeNull()
@@ -271,12 +273,8 @@ describe('access route authorization', () => {
     expect(getMenuWorkbenchId({ id: 'access', path: '/access' })).toBe('settings')
     expect(getMenuWorkbenchId({ id: 'menus', path: '/system/menus' })).toBe('settings')
     expect(getAccessibleWorkbenchIds(snapshot)).toContain('settings')
-    expect(findFirstAccessiblePathForWorkbench('settings', snapshot)).toBe('/identity/overview')
+    expect(findFirstAccessiblePathForWorkbench('settings', snapshot)).toBe('/settings/login')
     expect(settingsNav.map((item) => item.id)).toEqual([
-      'identity-overview',
-      'identity-applications',
-      'identity-providers',
-      'identity-outposts',
       'access-users',
       'access-roles',
       'access-teams',

@@ -217,6 +217,7 @@ export const MENU_WORKBENCH_ORDER: MenuWorkbenchSurface[] = [
   'delivery',
   'ai',
   'monitoring',
+  'security',
   'settings',
   'system',
   'unmapped',
@@ -228,6 +229,7 @@ export const MENU_WORKBENCH_LABELS: Record<MenuWorkbenchSurface, string> = {
   compute: '计算资源工作台',
   ai: 'AI工作台',
   monitoring: '监控工作台',
+  security: '内网工作台',
   settings: '设置中心',
   delivery: '应用交付工作台',
   system: '系统管理',
@@ -235,7 +237,8 @@ export const MENU_WORKBENCH_LABELS: Record<MenuWorkbenchSurface, string> = {
 }
 
 export const MENU_UNGROUPED_FILTER = '__ungrouped__'
-const SETTINGS_WORKBENCH_ROOT_MENU_IDS = new Set(['settings', 'identity', 'system', 'access'])
+const SETTINGS_WORKBENCH_ROOT_MENU_IDS = new Set(['settings', 'system', 'access'])
+const SECURITY_WORKBENCH_ROOT_MENU_IDS = new Set(['identity'])
 
 export function resolveMenuWorkbenchKey(item: Pick<MenuItem, 'id' | 'path'>): MenuWorkbenchSurface {
   const workbenchId = getMenuWorkbenchId(item)
@@ -329,6 +332,12 @@ export function buildWorkbenchMenuTree(items: MenuItem[]) {
               ? item.children
               : [item],
           )
+        : workbenchKey === 'security'
+          ? workbenchItems.flatMap((item) =>
+              SECURITY_WORKBENCH_ROOT_MENU_IDS.has(item.id) && item.children?.length
+                ? item.children
+                : [item],
+            )
         : workbenchItems
 
     for (const item of displayItems) {

@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Badge, Button, List, Modal, Popover, Space, Tag, Tabs, Typography, message } from 'antd'
 import { BellOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { HeaderActionButton } from '@/components/header-action-button'
 import { ManagementState } from '@/components/management-list'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { formatDateTime } from '@/utils/time'
 import { markAnnouncementRead } from './api'
 import { announcementKeys } from './keys'
-import { announcementQueries } from './queries'
 import type { AnnouncementInboxItem } from './types'
+import { useAnnouncementInbox } from './use-inbox'
 
 export type { AnnouncementInboxItem } from './types'
 
@@ -108,16 +108,6 @@ function AnnouncementList({
       )}
     />
   )
-}
-
-export function useAnnouncementInbox(limit = 10) {
-  const permissionSnapshotQuery = usePermissionSnapshot()
-  const canViewAnnouncements = hasPermission(
-    permissionSnapshotQuery.data?.data,
-    'system.announcements.view',
-  )
-
-  return useQuery(announcementQueries.inbox(limit, canViewAnnouncements))
 }
 
 export function AnnouncementBell() {

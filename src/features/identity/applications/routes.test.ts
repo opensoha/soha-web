@@ -17,7 +17,7 @@ describe('identity application route manifest', () => {
       description: 'Provider Portal 应用目录',
       icon: 'IconGridView',
       group: 'identity',
-      workbenchId: 'settings',
+      workbenchId: 'security',
       requiresAuth: true,
       tabbar: true,
       navVisible: true,

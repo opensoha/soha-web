@@ -29,7 +29,6 @@ export interface IdentityApplication {
   name: string
   description?: string
   iconUrl?: string
-  category?: string
   tags: string[]
   launchUrl?: string
   providerId?: string
@@ -53,7 +52,6 @@ export interface IdentityApplicationInput {
   name: string
   description: string
   iconUrl: string
-  category: string
   tags: string[]
   launchUrl: string
   providerId: string

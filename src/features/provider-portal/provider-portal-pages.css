@@ -64,53 +64,9 @@
   padding: 18px clamp(18px, 3vw, 36px) 36px;
 }
 
-.soha-portal-toolbar {
-  display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(160px, 220px) auto;
-  gap: 10px;
-  align-items: center;
-}
-
-.soha-portal-search,
-.soha-portal-category {
+.soha-portal-search {
   min-width: 0;
-}
-
-.soha-portal-mode {
-  justify-self: end;
-}
-
-.soha-portal-shortcuts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.soha-portal-shortcut-group {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  gap: 8px;
-  padding: 12px;
-  border: 1px solid var(--soha-border-color);
-  border-radius: 8px;
-  background: var(--soha-bg-surface);
-}
-
-.soha-portal-shortcut-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  min-height: 32px;
-}
-
-.soha-portal-shortcut-row .ant-btn {
-  max-width: 220px;
-}
-
-.soha-portal-shortcut-row .ant-btn > span:not(.anticon) {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  width: 100%;
 }
 
 .soha-portal-workspace {
@@ -392,7 +348,6 @@
   padding-top: 16px;
 }
 
-.soha-provider-portal-home .soha-portal-header,
 .soha-provider-portal-home .soha-portal-main {
   box-sizing: border-box;
   width: min(1320px, calc(100% - 48px));
@@ -400,39 +355,12 @@
   margin-left: auto;
 }
 
-.soha-provider-portal-home .soha-portal-header {
-  min-height: 58px;
-  padding: 10px 14px;
-  border: 1px solid var(--soha-border-color);
-  border-radius: var(--soha-radius-panel, 8px);
-  background: var(--soha-bg-surface);
-  box-shadow: none;
-}
-
-.soha-provider-portal-home .soha-portal-brand {
-  gap: 10px;
-}
-
-.soha-provider-portal-home .soha-portal-brand h3.ant-typography {
-  font-size: 16px;
-  line-height: 22px;
-}
-
-.soha-provider-portal-home .soha-portal-mark {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--soha-radius-control, 6px);
-  font-size: 16px;
-}
-
 .soha-provider-portal-home .soha-portal-main {
   gap: 12px;
   padding: 12px 0 32px;
 }
 
-.soha-provider-portal-home .soha-portal-toolbar,
 .soha-provider-portal-home .soha-portal-apps,
-.soha-provider-portal-home .soha-portal-shortcut-group,
 .soha-provider-portal-home .soha-portal-side-panel {
   border-color: var(--soha-border-color);
   border-radius: var(--soha-radius-panel, 8px);
@@ -440,26 +368,52 @@
   box-shadow: none;
 }
 
-.soha-provider-portal-home .soha-portal-toolbar {
-  padding: 10px 12px;
-  border: 1px solid var(--soha-border-color);
-  grid-template-columns: minmax(260px, 1fr) minmax(160px, 220px) auto;
-  gap: 8px;
-}
-
-.soha-provider-portal-home .soha-portal-shortcuts,
 .soha-provider-portal-home .soha-portal-workspace {
   gap: 12px;
 }
 
-.soha-provider-portal-home .soha-portal-shortcut-group {
-  min-height: 58px;
-  padding: 10px 12px;
-  gap: 6px;
-}
-
 .soha-provider-portal-home .soha-portal-workspace {
   grid-template-columns: minmax(0, 1fr) 300px;
+}
+
+.soha-provider-portal-home .soha-portal-workspace.is-side-collapsed {
+  grid-template-columns: minmax(0, 1fr) 32px;
+}
+
+.soha-provider-portal-home .soha-portal-side {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.soha-provider-portal-home .soha-portal-side-toggle {
+  position: absolute;
+  z-index: 1;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--soha-border-color);
+  border-radius: var(--soha-radius-control, 6px);
+  background: var(--soha-bg-surface);
+  color: var(--soha-text-secondary);
+}
+
+.soha-provider-portal-home .soha-portal-side.is-collapsed {
+  min-height: 32px;
+  border: 1px solid var(--soha-border-color);
+  border-radius: var(--soha-radius-panel, 8px);
+  background: var(--soha-bg-surface);
+}
+
+.soha-provider-portal-home .soha-portal-side.is-collapsed .soha-portal-side-toggle {
+  top: 1px;
+  right: 1px;
+  border: 0;
+  background: transparent;
 }
 
 .soha-provider-portal-home .soha-portal-apps {
@@ -467,23 +421,136 @@
   border: 1px solid var(--soha-border-color);
 }
 
-.soha-provider-portal-home .soha-portal-section-heading {
-  margin-bottom: 10px;
+.soha-provider-portal-home .soha-portal-app-tag-filter {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(
+      0,
+      var(--soha-management-toolbar-search-width, 300px)
+    );
+  align-items: center;
+  gap: 8px 12px;
+  min-height: 48px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--soha-border-color-secondary, var(--soha-border-color));
 }
 
-.soha-provider-portal-home .soha-portal-section-heading h4.ant-typography {
-  font-size: 15px;
-  line-height: 22px;
+.soha-provider-portal-home .soha-portal-tag-filter-tabs.ant-tabs > .ant-tabs-nav {
+  border-bottom: 0;
+}
+
+.soha-provider-portal-home .soha-portal-tag-filter-tabs {
+  min-width: 0;
+}
+
+.soha-provider-portal-home .soha-portal-tag-filter-tabs .ant-tabs-nav-wrap {
+  min-width: 0;
+}
+
+.soha-provider-portal-home .soha-portal-tag-filter-tabs .ant-tabs-nav-list {
+  min-width: max-content;
+}
+
+.soha-provider-portal-home .soha-portal-tag-filter-search {
+  width: 100%;
+  max-width: var(--soha-management-toolbar-search-width, 300px);
+  justify-self: end;
+}
+
+.soha-provider-portal-home .soha-portal-announcements {
+  margin-bottom: 12px;
+  padding: 10px 0 12px;
+  border-top: 1px solid var(--soha-border-color-secondary, var(--soha-border-color));
+  border-bottom: 1px solid var(--soha-border-color-secondary, var(--soha-border-color));
+}
+
+.soha-provider-portal-home .soha-portal-announcement-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.soha-provider-portal-home .soha-portal-announcement-track {
+  display: flex;
+  gap: 0;
+  min-width: 0;
+  overflow: hidden;
+  scroll-behavior: smooth;
+  scroll-snap-type: x mandatory;
+}
+
+.soha-provider-portal-home .soha-portal-announcement-item {
+  display: flex;
+  flex: 0 0 100%;
+  flex-direction: column;
+  min-width: 100%;
+  min-height: 82px;
+  gap: 6px;
+  padding: 9px 10px;
+  border: 1px solid var(--soha-border-color);
+  border-radius: var(--soha-radius-control, 6px);
+  background: var(--soha-bg-surface);
+  scroll-snap-align: start;
+}
+
+.soha-provider-portal-home .soha-portal-announcement-item-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.soha-provider-portal-home .soha-portal-announcement-item-meta > .ant-typography {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.soha-provider-portal-home .soha-portal-announcement-summary.ant-typography,
+.soha-provider-portal-home .soha-portal-announcement-content.ant-typography {
+  margin: 0;
+  color: var(--soha-text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.soha-provider-portal-home .soha-portal-announcement-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
 }
 
 .soha-provider-portal-home .soha-portal-app-grid {
   grid-template-columns: repeat(auto-fill, minmax(224px, 248px));
-  gap: 10px;
+  gap: 12px;
+  padding-top: 12px;
+  align-items: stretch;
+}
+
+.soha-provider-portal-home .soha-portal-app-grid.is-small {
+  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.soha-provider-portal-home .soha-portal-app-grid.is-medium {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
 }
 
 .soha-provider-portal-home .soha-portal-app-card.ant-card {
+  height: 100%;
   border-color: var(--soha-border-color);
   box-shadow: none;
+}
+
+.soha-provider-portal-home .soha-portal-app-card-extra {
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .soha-provider-portal-home .soha-portal-app-card .ant-card-head {
@@ -493,6 +560,49 @@
 .soha-provider-portal-home .soha-portal-app-card-body {
   min-height: 154px;
   gap: 8px;
+}
+
+.soha-provider-portal-home .soha-portal-app-card.is-medium .ant-card-head {
+  min-height: 68px;
+  padding-inline: 14px;
+}
+
+.soha-provider-portal-home .soha-portal-app-card.is-medium .ant-card-body {
+  padding: 14px;
+}
+
+.soha-provider-portal-home .soha-portal-app-card.is-medium .soha-portal-app-card-body {
+  min-height: 172px;
+  gap: 10px;
+}
+
+.soha-provider-portal-home .soha-portal-app-card.is-medium .soha-portal-app-description {
+  min-height: 22px;
+}
+
+.soha-provider-portal-home .soha-portal-app-card.is-small .ant-card-head {
+  min-height: 54px;
+  padding-inline: 10px;
+}
+
+.soha-provider-portal-home .soha-portal-app-card.is-small .ant-card-body {
+  display: none;
+}
+
+.soha-provider-portal-home .soha-portal-app-card.is-small .soha-portal-app-title {
+  gap: 8px;
+}
+
+.soha-provider-portal-home .soha-portal-app-card.is-small .soha-portal-app-avatar {
+  width: 32px;
+  height: 32px;
+  line-height: 32px;
+}
+
+.soha-provider-portal-home .soha-portal-side-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .soha-provider-portal-home .soha-portal-app-avatar {
@@ -515,31 +625,46 @@
   .soha-portal-security-overview {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .soha-provider-portal-home .soha-portal-workspace.is-side-collapsed {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 760px) {
-  .soha-provider-portal-home .soha-portal-header,
   .soha-provider-portal-home .soha-portal-main {
     width: calc(100% - 24px);
   }
 
-  .soha-provider-portal-home .soha-portal-toolbar,
-  .soha-provider-portal-home .soha-portal-shortcuts,
   .soha-provider-portal-home .soha-portal-workspace,
-  .soha-provider-portal-home .soha-portal-app-grid {
+  .soha-provider-portal-home .soha-portal-app-grid,
+  .soha-provider-portal-home .soha-portal-app-grid.is-small,
+  .soha-provider-portal-home .soha-portal-app-grid.is-medium {
     grid-template-columns: 1fr;
   }
 
-  .soha-provider-portal-home .soha-portal-mode,
-  .soha-provider-portal-home .soha-portal-search,
-  .soha-provider-portal-home .soha-portal-category {
-    width: 100%;
-    max-width: 100%;
+  .soha-provider-portal-home .soha-portal-app-tag-filter {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .soha-provider-portal-home .soha-portal-tag-filter-search {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    max-width: none;
+  }
+
+  .soha-provider-portal-home .soha-portal-view-toggle {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .soha-provider-portal-home .soha-portal-section-heading {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .soha-portal-header,
-  .soha-portal-toolbar,
-  .soha-portal-shortcuts,
   .soha-portal-side {
     grid-template-columns: 1fr;
   }
@@ -547,11 +672,6 @@
   .soha-portal-header {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .soha-portal-mode {
-    justify-self: stretch;
-    overflow-x: auto;
   }
 
   .soha-portal-detail-heading {

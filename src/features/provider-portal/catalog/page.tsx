@@ -1,12 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  AppstoreOutlined,
+  BellOutlined,
   ClockCircleOutlined,
-  DashboardOutlined,
   InfoCircleOutlined,
   LinkOutlined,
-  ReloadOutlined,
-  SafetyCertificateOutlined,
+  LeftOutlined,
+  RightOutlined,
   SearchOutlined,
   StarFilled,
   StarOutlined,
@@ -21,16 +20,18 @@ import {
   Card,
   Empty,
   Input,
-  Segmented,
-  Select,
-  Space,
   Spin,
   Tag,
+  Tabs,
   Tooltip,
   Typography,
 } from 'antd'
+import type { TabsProps } from 'antd'
 import { useNavigate } from 'react-router-dom'
+import { ManagementDensityButton } from '@/components/management-list'
+import { useAnnouncementInbox, type AnnouncementInboxItem } from '@/features/announcements'
 import type { IdentityApplication, IdentityApplicationLaunch } from '@/features/identity'
+import { useI18n } from '@/i18n'
 import { providerPortalMutations } from '../mutations'
 import { providerPortalQueries } from '../queries'
 import {
@@ -41,17 +42,30 @@ import {
 } from '../shared/application-ui'
 import { formatPortalDateTime, portalApplicationSearchText } from '../shared/formatters'
 import type { PortalSecuritySummary } from '../shared/types'
-import { PortalAccountMenu } from '../shared/account-menu'
 import '../provider-portal-pages.css'
 
-const { Paragraph, Text, Title } = Typography
+const { Paragraph, Text } = Typography
 
-type PortalFilterMode = 'all' | 'favorites' | 'recent' | 'featured'
+type PortalApplicationView = 'small' | 'medium' | 'large'
+
+const APPLICATION_VIEW_ORDER: PortalApplicationView[] = ['large', 'medium', 'small']
+const ALL_APPLICATIONS_TAB_KEY = '__all_applications__'
+const APPLICATION_TAG_TAB_PREFIX = 'tag:'
+
+function applicationTagTabKey(tag: string) {
+  return `${APPLICATION_TAG_TAB_PREFIX}${tag}`
+}
+
+function cycleApplicationView(view: PortalApplicationView) {
+  const currentIndex = APPLICATION_VIEW_ORDER.indexOf(view)
+  return APPLICATION_VIEW_ORDER[(currentIndex + 1) % APPLICATION_VIEW_ORDER.length]
+}
 
 function ApplicationCard({
   application,
   favoriteLoading,
   launchLoading,
+  viewMode,
   onFavoriteToggle,
   onLaunch,
   onViewDetails,
@@ -59,15 +73,26 @@ function ApplicationCard({
   application: IdentityApplication
   favoriteLoading: boolean
   launchLoading: boolean
+  viewMode: PortalApplicationView
   onFavoriteToggle: (application: IdentityApplication) => void
   onLaunch: (application: IdentityApplication) => void
   onViewDetails: (application: IdentityApplication) => void
 }) {
+  const { t } = useI18n()
   const status = portalStatusLabels[application.status] ?? portalStatusLabels.draft
   const providerLabel = portalProviderLabels[application.providerType] ?? application.providerType
+  const statusLabel = t(`providerPortal.application.status.${application.status}`, status.label)
+  const localizedProviderLabel = t(
+    `providerPortal.application.provider.${application.providerType}`,
+    providerLabel,
+  )
+  const favoriteLabel = application.favorite
+    ? t('providerPortal.home.unfavorite', 'Unfavorite')
+    : t('providerPortal.home.favorite', 'Favorite')
+  const openLabel = t('providerPortal.home.open', 'Open')
   return (
     <Card
-      className="soha-portal-app-card"
+      className={`soha-portal-app-card is-${viewMode}`}
       hoverable
       size="small"
       title={
@@ -77,74 +102,87 @@ function ApplicationCard({
             <Text strong ellipsis title={application.name}>
               {application.name}
             </Text>
-            <Text type="secondary" ellipsis title={application.category || application.slug}>
-              {application.category || application.slug}
-            </Text>
           </div>
         </div>
       }
       extra={
-        <Tooltip title={application.favorite ? '取消收藏' : '收藏'}>
-          <Button
-            aria-label={application.favorite ? '取消收藏' : '收藏'}
-            icon={application.favorite ? <StarFilled /> : <StarOutlined />}
-            loading={favoriteLoading}
-            size="small"
-            type="text"
-            onClick={(event) => {
-              event.stopPropagation()
-              onFavoriteToggle(application)
-            }}
-          />
-        </Tooltip>
+        <div className="soha-portal-app-card-extra">
+          {viewMode === 'small' ? (
+            <Tooltip title={openLabel}>
+              <Button
+                aria-label={`${openLabel} ${application.name}`}
+                disabled={application.status !== 'enabled'}
+                icon={<LinkOutlined />}
+                loading={launchLoading}
+                size="small"
+                type="text"
+                onClick={() => onLaunch(application)}
+              />
+            </Tooltip>
+          ) : null}
+          <Tooltip title={favoriteLabel}>
+            <Button
+              aria-label={favoriteLabel}
+              icon={application.favorite ? <StarFilled /> : <StarOutlined />}
+              loading={favoriteLoading}
+              size="small"
+              type="text"
+              onClick={(event) => {
+                event.stopPropagation()
+                onFavoriteToggle(application)
+              }}
+            />
+          </Tooltip>
+        </div>
       }
     >
-      <div className="soha-portal-app-card-body">
-        <Paragraph
-          className="soha-portal-app-description"
-          ellipsis={{ rows: 2, tooltip: application.description }}
-        >
-          {application.description || 'No description'}
-        </Paragraph>
-        <div className="soha-portal-app-meta">
-          <Tag color={status.color}>{status.label}</Tag>
-          <Tag>{providerLabel}</Tag>
-          {application.featured ? <Tag color="blue">Featured</Tag> : null}
-        </div>
-        <div className="soha-portal-app-tags">
-          <PortalTags values={application.tags} />
-        </div>
-        <div className="soha-portal-app-actions">
-          <Button icon={<InfoCircleOutlined />} onClick={() => onViewDetails(application)}>
-            Details
-          </Button>
-          <Button
-            disabled={application.status !== 'enabled'}
-            icon={<LinkOutlined />}
-            loading={launchLoading}
-            type="primary"
-            onClick={() => onLaunch(application)}
+      {viewMode === 'small' ? null : (
+        <div className="soha-portal-app-card-body">
+          <Paragraph
+            className="soha-portal-app-description"
+            ellipsis={{ rows: viewMode === 'medium' ? 1 : 2, tooltip: application.description }}
           >
-            Open
-          </Button>
+            {application.description || t('providerPortal.home.noDescription', 'No description')}
+          </Paragraph>
+          <div className="soha-portal-app-meta">
+            <Tag color={status.color}>{statusLabel}</Tag>
+            <Tag>{localizedProviderLabel}</Tag>
+            {application.featured ? (
+              <Tag color="blue">{t('providerPortal.home.featured', 'Featured')}</Tag>
+            ) : null}
+          </div>
+          <div className="soha-portal-app-tags">
+            <PortalTags values={application.tags} max={viewMode === 'medium' ? 2 : 3} />
+          </div>
+          <div className="soha-portal-app-actions">
+            <Button icon={<InfoCircleOutlined />} onClick={() => onViewDetails(application)}>
+              {t('providerPortal.home.details', 'Details')}
+            </Button>
+            <Button
+              disabled={application.status !== 'enabled'}
+              icon={<LinkOutlined />}
+              loading={launchLoading}
+              type="primary"
+              onClick={() => onLaunch(application)}
+            >
+              {openLabel}
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
     </Card>
   )
 }
 
-function PortalSecurityPanel({ security }: { security?: PortalSecuritySummary }) {
+function PortalUserPanel({ security }: { security?: PortalSecuritySummary }) {
+  const { t, localeCode } = useI18n()
   const principal = security?.principal
   return (
-    <section className="soha-portal-side-panel" aria-label="Security summary">
-      <div className="soha-portal-side-title">
-        <SafetyCertificateOutlined />
-        <span>Security</span>
-      </div>
+    <div className="soha-portal-side-body">
       <div className="soha-portal-principal">
         <Avatar icon={<UserOutlined />} size={40} />
         <div className="soha-portal-principal-copy">
-          <Text strong>{principal?.userName || 'User'}</Text>
+          <Text strong>{principal?.userName || t('layout.user', 'User')}</Text>
           <Text type="secondary" ellipsis title={principal?.email}>
             {principal?.email || principal?.userId || '-'}
           </Text>
@@ -152,30 +190,34 @@ function PortalSecurityPanel({ security }: { security?: PortalSecuritySummary })
       </div>
       <div className="soha-portal-security-grid">
         <div>
-          <Text type="secondary">MFA</Text>
+          <Text type="secondary">{t('providerPortal.home.mfa', 'MFA')}</Text>
           <div>
             <Badge
               status={security?.mfaEnabled ? 'success' : 'default'}
-              text={security?.mfaEnabled ? 'Enabled' : 'Not enabled'}
+              text={
+                security?.mfaEnabled
+                  ? t('providerPortal.home.enabled', 'Enabled')
+                  : t('providerPortal.home.notEnabled', 'Not enabled')
+              }
             />
           </div>
         </div>
         <div>
-          <Text type="secondary">Sessions</Text>
+          <Text type="secondary">{t('providerPortal.home.sessions', 'Sessions')}</Text>
           <div className="soha-portal-side-value">{security?.activeSession ?? 0}</div>
         </div>
         <div>
-          <Text type="secondary">Sources</Text>
+          <Text type="secondary">{t('providerPortal.home.sources', 'Sources')}</Text>
           <div className="soha-portal-side-value">{security?.linkedSources.length ?? 0}</div>
         </div>
         <div>
-          <Text type="secondary">Recent login</Text>
+          <Text type="secondary">{t('providerPortal.home.recentLogin', 'Recent login')}</Text>
           <div className="soha-portal-side-value">
-            {formatPortalDateTime(security?.recentLoginAt)}
+            {formatPortalDateTime(security?.recentLoginAt, localeCode)}
           </div>
         </div>
       </div>
-    </section>
+    </div>
   )
 }
 
@@ -190,16 +232,13 @@ function RecentLaunchList({
   launchLoadingId?: string
   onLaunch: (application: IdentityApplication) => void
 }) {
+  const { t, localeCode } = useI18n()
   const appById = useMemo(
     () => new Map(applications.map((application) => [application.id, application])),
     [applications],
   )
   return (
-    <section className="soha-portal-side-panel" aria-label="Recent launches">
-      <div className="soha-portal-side-title">
-        <ClockCircleOutlined />
-        <span>Recent</span>
-      </div>
+    <div className="soha-portal-side-body">
       {launches.length ? (
         <div className="soha-portal-recent-list">
           {launches.slice(0, 6).map((launch) => {
@@ -217,7 +256,7 @@ function RecentLaunchList({
                     {launch.applicationName || application?.name || launch.applicationId}
                   </span>
                   <span className="soha-portal-recent-time">
-                    {formatPortalDateTime(launch.createdAt)}
+                    {formatPortalDateTime(launch.createdAt, localeCode)}
                   </span>
                 </span>
                 {launchLoadingId === application?.id ? <Spin size="small" /> : <LinkOutlined />}
@@ -226,7 +265,132 @@ function RecentLaunchList({
           })}
         </div>
       ) : (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No recent launches" />
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={t('providerPortal.home.noRecentLaunches', 'No recent launches')}
+        />
+      )}
+    </div>
+  )
+}
+
+function announcementLevel(
+  item: AnnouncementInboxItem,
+  t: (key: string, fallback?: string) => string,
+) {
+  const normalized = String(item.level || '').toLowerCase()
+  if (normalized === 'critical') {
+    return {
+      status: 'error' as const,
+      label: t('providerPortal.home.announcementLevel.critical', 'Critical'),
+    }
+  }
+  if (normalized === 'warning') {
+    return {
+      status: 'warning' as const,
+      label: t('providerPortal.home.announcementLevel.warning', 'Warning'),
+    }
+  }
+  return {
+    status: 'processing' as const,
+    label: t('providerPortal.home.announcementLevel.info', 'Info'),
+  }
+}
+
+function PortalAnnouncementPanel({
+  items,
+  isLoading,
+  unreadCount,
+}: {
+  items: AnnouncementInboxItem[]
+  isLoading: boolean
+  unreadCount: number
+}) {
+  const { t, localeCode } = useI18n()
+  const trackRef = useRef<HTMLDivElement>(null)
+  const [activeIndex, setActiveIndex] = useState(0)
+
+  useEffect(() => {
+    setActiveIndex((current) => Math.min(current, Math.max(items.length - 1, 0)))
+  }, [items.length])
+
+  useEffect(() => {
+    const track = trackRef.current
+    const item = track?.children.item(activeIndex)
+    if (!track || !(item instanceof HTMLElement)) return
+    track.scrollTo?.({ behavior: 'smooth', left: item.offsetLeft })
+  }, [activeIndex])
+
+  useEffect(() => {
+    if (items.length < 2) return
+    const intervalID = window.setInterval(() => {
+      setActiveIndex((current) => (current + 1) % items.length)
+    }, 6000)
+    return () => window.clearInterval(intervalID)
+  }, [items.length])
+
+  if (!isLoading && items.length === 0) return null
+
+  return (
+    <section
+      aria-label={t('providerPortal.home.announcements', 'Announcements')}
+      className="soha-portal-announcements"
+    >
+      <div className="soha-portal-announcement-heading">
+        <div className="soha-portal-side-title">
+          <BellOutlined />
+          <span>{t('providerPortal.home.announcements', 'Announcements')}</span>
+          {unreadCount > 0 ? (
+            <Badge
+              className="soha-portal-announcement-unread"
+              count={unreadCount}
+              size="small"
+              overflowCount={99}
+            />
+          ) : null}
+        </div>
+      </div>
+      {isLoading ? (
+        <div className="soha-portal-announcement-empty">
+          <Spin size="small" />
+        </div>
+      ) : items.length ? (
+        <div
+          ref={trackRef}
+          className="soha-portal-announcement-track"
+          data-active-index={activeIndex}
+          aria-live="polite"
+        >
+          {items.map((item) => {
+            const level = announcementLevel(item, t)
+            return (
+              <article className="soha-portal-announcement-item" key={item.id}>
+                <div className="soha-portal-announcement-item-meta">
+                  <Badge status={level.status} text={level.label} />
+                  <Text type="secondary">
+                    {formatPortalDateTime(
+                      item.publishedAt || item.updatedAt || item.createdAt,
+                      localeCode,
+                    )}
+                  </Text>
+                </div>
+                <Text strong>{item.title}</Text>
+                {item.summary ? (
+                  <Paragraph className="soha-portal-announcement-summary">{item.summary}</Paragraph>
+                ) : null}
+                {item.content ? (
+                  <Paragraph className="soha-portal-announcement-content">{item.content}</Paragraph>
+                ) : null}
+              </article>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="soha-portal-announcement-empty">
+          <Text type="secondary">
+            {t('providerPortal.home.noAnnouncements', 'No announcements')}
+          </Text>
+        </div>
       )}
     </section>
   )
@@ -235,20 +399,28 @@ function RecentLaunchList({
 export function SohaProviderPortalPage() {
   const navigate = useNavigate()
   const { message } = App.useApp()
+  const { t } = useI18n()
   const queryClient = useQueryClient()
   const [query, setQuery] = useState('')
-  const [category, setCategory] = useState<string>()
-  const [mode, setMode] = useState<PortalFilterMode>('all')
+  const [selectedTag, setSelectedTag] = useState<string>()
+  const [applicationView, setApplicationView] = useState<PortalApplicationView>('large')
+  const [isSideCollapsed, setIsSideCollapsed] = useState(false)
 
   const bootstrapQuery = useQuery(providerPortalQueries.bootstrap())
   const launchMutation = useMutation(providerPortalMutations.launch(queryClient))
   const favoriteMutation = useMutation(providerPortalMutations.toggleFavorite(queryClient))
+  const announcementQuery = useAnnouncementInbox(10, true)
 
   const launchApplication = (application: IdentityApplication) => {
     launchMutation.mutate(application, {
       onSuccess: (decision) => {
         if (!decision.launchUrl) {
-          message.warning('Application launch URL is not configured')
+          message.warning(
+            t(
+              'providerPortal.home.launchUrlNotConfigured',
+              'Application launch URL is not configured',
+            ),
+          )
           return
         }
         window.location.assign(decision.launchUrl)
@@ -258,23 +430,37 @@ export function SohaProviderPortalPage() {
 
   const bootstrap = bootstrapQuery.data
   const applications = bootstrap?.applications ?? []
-  const favoriteApplications = applications.filter((application) => application.favorite)
-  const recentApplications = new Set(
-    (bootstrap?.recent ?? []).map((launch) => launch.applicationId),
+  const announcementItems = announcementQuery.data?.data.items ?? []
+  const announcementUnreadCount = announcementQuery.data?.data.unreadCount ?? 0
+  const applicationTags = useMemo(
+    () =>
+      Array.from(
+        new Set(applications.flatMap((application) => application.tags?.filter(Boolean) ?? [])),
+      ),
+    [applications],
   )
-  const categories = bootstrap?.categories ?? []
+  const applicationTagItems = useMemo<TabsProps['items']>(
+    () => [
+      {
+        key: ALL_APPLICATIONS_TAB_KEY,
+        label: t('providerPortal.home.allTags', 'All'),
+      },
+      ...applicationTags.map((tag) => ({
+        key: applicationTagTabKey(tag),
+        label: tag,
+      })),
+    ],
+    [applicationTags, t],
+  )
 
   const filteredApplications = useMemo(() => {
     const keyword = query.trim().toLowerCase()
     return applications.filter((application) => {
-      if (category && application.category !== category) return false
+      if (selectedTag && !application.tags?.includes(selectedTag)) return false
       if (keyword && !portalApplicationSearchText(application).includes(keyword)) return false
-      if (mode === 'favorites' && !application.favorite) return false
-      if (mode === 'recent' && !recentApplications.has(application.id)) return false
-      if (mode === 'featured' && !application.featured) return false
       return true
     })
-  }, [applications, category, mode, query, recentApplications])
+  }, [applications, query, selectedTag])
 
   if (bootstrapQuery.isLoading) {
     return (
@@ -286,112 +472,61 @@ export function SohaProviderPortalPage() {
 
   return (
     <div className="soha-provider-portal soha-provider-portal-home">
-      <header className="soha-portal-header">
-        <div className="soha-portal-brand">
-          <div className="soha-portal-mark">
-            <DashboardOutlined />
-          </div>
-          <div>
-            <Title level={3}>门户首页</Title>
-            <Text type="secondary">Application access and identity workspace</Text>
-          </div>
-        </div>
-        <Space wrap>
-          <Button icon={<ReloadOutlined />} onClick={() => bootstrapQuery.refetch()}>
-            Refresh
-          </Button>
-          <Button icon={<SafetyCertificateOutlined />} onClick={() => navigate('/portal/security')}>
-            Security
-          </Button>
-          <PortalAccountMenu />
-        </Space>
-      </header>
-
       <main className="soha-portal-main">
-        <section className="soha-portal-toolbar">
-          <Input
-            allowClear
-            className="soha-portal-search"
-            placeholder="Search applications"
-            prefix={<SearchOutlined />}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          <Select
-            allowClear
-            className="soha-portal-category"
-            placeholder="Category"
-            options={categories.map((item) => ({ label: item, value: item }))}
-            value={category}
-            onChange={setCategory}
-          />
-          <Segmented
-            className="soha-portal-mode"
-            options={[
-              { label: 'All', value: 'all' },
-              { label: 'Favorites', value: 'favorites' },
-              { label: 'Recent', value: 'recent' },
-              { label: 'Featured', value: 'featured' },
-            ]}
-            value={mode}
-            onChange={(value) => setMode(value as PortalFilterMode)}
-          />
-        </section>
-
-        <section className="soha-portal-shortcuts">
-          <div className="soha-portal-shortcut-group">
-            <Text type="secondary">Favorites</Text>
-            <div className="soha-portal-shortcut-row">
-              {favoriteApplications.slice(0, 5).map((application) => (
-                <Button
-                  key={application.id}
-                  icon={<StarFilled />}
-                  loading={
-                    launchMutation.variables?.id === application.id && launchMutation.isPending
-                  }
-                  onClick={() => launchApplication(application)}
-                >
-                  {application.name}
-                </Button>
-              ))}
-              {!favoriteApplications.length ? <Text type="secondary">No favorites</Text> : null}
-            </div>
-          </div>
-          <div className="soha-portal-shortcut-group">
-            <Text type="secondary">Pinned</Text>
-            <div className="soha-portal-shortcut-row">
-              {applications
-                .filter((item) => item.featured)
-                .slice(0, 5)
-                .map((application) => (
-                  <Button
-                    key={application.id}
-                    icon={<AppstoreOutlined />}
-                    loading={
-                      launchMutation.variables?.id === application.id && launchMutation.isPending
-                    }
-                    onClick={() => launchApplication(application)}
-                  >
-                    {application.name}
-                  </Button>
-                ))}
-              {!applications.some((item) => item.featured) ? (
-                <Text type="secondary">No pinned apps</Text>
-              ) : null}
-            </div>
-          </div>
-        </section>
-
-        <div className="soha-portal-workspace">
+        <div className={`soha-portal-workspace${isSideCollapsed ? ' is-side-collapsed' : ''}`}>
           <section className="soha-portal-apps">
-            <div className="soha-portal-section-heading">
-              <div>
-                <Title level={4}>Applications</Title>
-                <Text type="secondary">{filteredApplications.length} available</Text>
-              </div>
+            <PortalAnnouncementPanel
+              isLoading={announcementQuery.isLoading}
+              items={announcementItems}
+              unreadCount={announcementUnreadCount}
+            />
+            <div
+              className="soha-portal-app-tag-filter"
+              aria-label={t('providerPortal.home.tagFilter', 'Filter applications by tag')}
+            >
+              <Tabs
+                activeKey={
+                  selectedTag ? applicationTagTabKey(selectedTag) : ALL_APPLICATIONS_TAB_KEY
+                }
+                aria-label={t('providerPortal.home.tags', 'Tags')}
+                className="soha-resource-tabs soha-portal-tag-filter-tabs is-header-only"
+                indicator={{ size: (origin) => Math.max(16, origin - 16), align: 'center' }}
+                items={applicationTagItems}
+                onChange={(activeKey) =>
+                  setSelectedTag(
+                    activeKey === ALL_APPLICATIONS_TAB_KEY
+                      ? undefined
+                      : activeKey.startsWith(APPLICATION_TAG_TAB_PREFIX)
+                        ? activeKey.slice(APPLICATION_TAG_TAB_PREFIX.length)
+                        : undefined,
+                  )
+                }
+                size="small"
+                tabBarGutter={18}
+              />
+              <ManagementDensityButton
+                aria-label={t(
+                  'providerPortal.home.cycleApplicationView',
+                  'Switch application card size',
+                )}
+                className="soha-portal-view-toggle"
+                tooltip={t(
+                  'providerPortal.home.cycleApplicationView',
+                  'Switch application card size',
+                )}
+                onClick={() => setApplicationView((current) => cycleApplicationView(current))}
+              />
+              <Input
+                allowClear
+                className="soha-portal-search soha-portal-tag-filter-search"
+                placeholder={t('providerPortal.home.searchApplications', 'Search applications')}
+                prefix={<SearchOutlined />}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
             </div>
             {filteredApplications.length ? (
-              <div className="soha-portal-app-grid">
+              <div className={`soha-portal-app-grid is-${applicationView}`}>
                 {filteredApplications.map((application) => (
                   <ApplicationCard
                     application={application}
@@ -400,6 +535,7 @@ export function SohaProviderPortalPage() {
                       favoriteMutation.variables?.id === application.id
                     }
                     key={application.id}
+                    viewMode={applicationView}
                     launchLoading={
                       launchMutation.isPending && launchMutation.variables?.id === application.id
                     }
@@ -415,20 +551,61 @@ export function SohaProviderPortalPage() {
               <div className="soha-portal-empty">
                 <Empty
                   image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description="No matching applications"
+                  description={t(
+                    'providerPortal.home.noMatchingApplications',
+                    'No matching applications',
+                  )}
                 />
               </div>
             )}
           </section>
 
-          <aside className="soha-portal-side">
-            <PortalSecurityPanel security={bootstrap?.security} />
-            <RecentLaunchList
-              applications={applications}
-              launchLoadingId={launchMutation.variables?.id}
-              launches={bootstrap?.recent ?? []}
-              onLaunch={launchApplication}
-            />
+          <aside className={`soha-portal-side${isSideCollapsed ? ' is-collapsed' : ''}`}>
+            <Tooltip
+              title={t(
+                isSideCollapsed
+                  ? 'providerPortal.home.expandSidebar'
+                  : 'providerPortal.home.collapseSidebar',
+                isSideCollapsed ? 'Expand sidebar' : 'Collapse sidebar',
+              )}
+            >
+              <Button
+                aria-label={t(
+                  isSideCollapsed
+                    ? 'providerPortal.home.expandSidebar'
+                    : 'providerPortal.home.collapseSidebar',
+                  isSideCollapsed ? 'Expand sidebar' : 'Collapse sidebar',
+                )}
+                className="soha-portal-side-toggle"
+                icon={isSideCollapsed ? <LeftOutlined /> : <RightOutlined />}
+                size="small"
+                type="text"
+                onClick={() => setIsSideCollapsed((current) => !current)}
+              />
+            </Tooltip>
+            {isSideCollapsed ? null : (
+              <>
+                <section className="soha-portal-side-panel">
+                  <div className="soha-portal-side-title">
+                    <UserOutlined />
+                    <span>{t('providerPortal.home.user', 'User')}</span>
+                  </div>
+                  <PortalUserPanel security={bootstrap?.security} />
+                </section>
+                <section className="soha-portal-side-panel">
+                  <div className="soha-portal-side-title">
+                    <ClockCircleOutlined />
+                    <span>{t('providerPortal.home.recent', 'Recent')}</span>
+                  </div>
+                  <RecentLaunchList
+                    applications={applications}
+                    launchLoadingId={launchMutation.variables?.id}
+                    launches={bootstrap?.recent ?? []}
+                    onLaunch={launchApplication}
+                  />
+                </section>
+              </>
+            )}
           </aside>
         </div>
       </main>

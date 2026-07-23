@@ -96,7 +96,9 @@ vi.mock('@/components/management-list', async (importOriginal) => ({
     </button>
   ),
   ManagementRefreshButton: ({ onClick }: { onClick?: () => void }) => (
-    <button aria-label="刷新" onClick={onClick}>刷新</button>
+    <button aria-label="刷新" onClick={onClick}>
+      刷新
+    </button>
   ),
   ManagementState: ({ title }: { title?: ReactNode }) => <div>{title}</div>,
   ManagementTableToolbar: ({ children }: { children?: ReactNode }) => <>{children}</>,
@@ -107,19 +109,36 @@ vi.mock('./components/application-form-modal', () => ({
     application,
     onSubmit,
     open,
+    providerOptions,
+    tagOptions,
   }: {
     application: { id: string } | null
     onSubmit: (input: Record<string, unknown>) => void
     open: boolean
+    providerOptions: Array<{ id: string; name: string; type: string }>
+    tagOptions: Array<{ label: string; value: string }>
   }) =>
     open ? (
       <div data-testid="application-form-modal">
         <span>{application ? `editing:${application.id}` : 'creating'}</span>
+        <div data-testid="application-tag-options">
+          {tagOptions.map((option) => (
+            <span data-testid={`application-tag-option-${option.value}`} key={option.value}>
+              {option.label}
+            </span>
+          ))}
+        </div>
+        <div data-testid="application-provider-options">
+          {providerOptions.map((option) => (
+            <span data-testid={`application-provider-option-${option.id}`} key={option.id}>
+              {option.name} ({option.type})
+            </span>
+          ))}
+        </div>
         <button
           onClick={() =>
             onSubmit({
               assignments: [],
-              category: 'Observability',
               description: 'Dashboards',
               featured: false,
               iconUrl: '',
@@ -157,6 +176,17 @@ const application = {
   updatedAt: '2026-07-10T00:00:00Z',
 }
 
+const provider = {
+  id: 'provider-1',
+  applicationId: 'grafana',
+  name: 'Grafana OIDC',
+  type: 'oidc',
+  enabled: true,
+  status: 'enabled',
+  createdAt: '2026-07-10T00:00:00Z',
+  updatedAt: '2026-07-10T00:00:00Z',
+}
+
 const roots: Root[] = []
 const containers: HTMLElement[] = []
 
@@ -188,6 +218,7 @@ beforeEach(() => {
   testState.permissionKeys = ['identity.applications.view', 'identity.applications.manage']
   testState.apiGet.mockImplementation(async (path: string) => {
     if (path.startsWith('/identity/applications')) return { data: [application] }
+    if (path.startsWith('/identity/providers')) return { data: [provider] }
     if (path === '/identity/provider-capabilities') {
       return {
         data: [
@@ -281,9 +312,8 @@ describe('identity applications page behavior', () => {
     expect(container.querySelector('[data-testid="row-grafana"]')).not.toBeNull()
     expect(container.textContent).toContain('OIDC provider ready')
 
-    const search = container.querySelector(
-      'input[placeholder="搜索名称、slug、分类"]',
-    ) as HTMLInputElement
+    const search = container.querySelector('.soha-management-query-field input')
+    if (!(search instanceof HTMLInputElement)) throw new Error('Application search input not found')
     await act(async () => setInputValue(search, ' harbor '))
     await clickButton(container, '查询')
     await settle(queryClient)
@@ -309,6 +339,7 @@ describe('identity applications page behavior', () => {
 
     await clickButton(container, '新建应用')
     expect(container.textContent).toContain('creating')
+    expect(container.querySelector('[data-testid="application-tag-option-metrics"]')).not.toBeNull()
     await clickButton(container, '提交应用')
     await settle(queryClient)
 
@@ -318,7 +349,12 @@ describe('identity applications page behavior', () => {
     )
 
     await clickButton(container, '编辑')
+    await settle(queryClient)
     expect(container.textContent).toContain('editing:grafana')
+    expect(testState.apiGet).toHaveBeenCalledWith('/identity/providers?applicationId=grafana')
+    expect(
+      container.querySelector('[data-testid="application-provider-option-provider-1"]'),
+    ).not.toBeNull()
     await clickButton(container, '提交应用')
     await settle(queryClient)
 

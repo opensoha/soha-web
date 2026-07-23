@@ -13,7 +13,7 @@ describe('providerPortalApi', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('unwraps bootstrap, application lists, and application detail responses', async () => {
-    const bootstrap = { applications: [], categories: [] }
+    const bootstrap = { applications: [] }
     const applications = [{ id: 'app-1', name: 'Console' }]
     const application = { id: 'app/1', name: 'Console' }
     apiMocks.get
