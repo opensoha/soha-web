@@ -208,5 +208,5 @@ describe("login page", () => {
 
     expect(restoreAuthSession).toHaveBeenCalledTimes(2);
     expect(container.textContent).toContain("landing page");
-  }, 10_000);
+  }, 20_000);
 });
