@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { accessRoutes } from './routes'
 
 const routePages = vi.hoisted(() => ({
-  center: () => null,
   users: () => null,
   roles: () => null,
   teams: () => null,
@@ -11,7 +10,6 @@ const routePages = vi.hoisted(() => ({
   scopeGrants: () => null,
 }))
 
-vi.mock('./center/page', () => ({ AccessCenterPage: routePages.center }))
 vi.mock('./users/page', () => ({ AccessUsersPage: routePages.users }))
 vi.mock('./roles/page', () => ({ AccessRolesPage: routePages.roles }))
 vi.mock('./teams/page', () => ({ AccessTeamsPage: routePages.teams }))
@@ -22,7 +20,6 @@ vi.mock('./scope-grants/page', () => ({ AccessScopeGrantsPage: routePages.scopeG
 describe('access route manifest', () => {
   it('maps all access routes to distinct leaf modules', async () => {
     const expectedPages = new Map([
-      ['access', routePages.center],
       ['access-users', routePages.users],
       ['access-roles', routePages.roles],
       ['access-teams', routePages.teams],
@@ -39,8 +36,8 @@ describe('access route manifest', () => {
       }),
     )
 
-    expect(loadedPages).toHaveLength(7)
-    expect(new Set(loadedPages).size).toBe(7)
+    expect(loadedPages).toHaveLength(6)
+    expect(new Set(loadedPages).size).toBe(6)
   })
 
   it('preserves access paths, permissions, and navigation metadata', () => {
@@ -52,7 +49,6 @@ describe('access route manifest', () => {
         permissionKey: route.meta.permissionKey,
       })),
     ).toEqual([
-      { id: 'access', navVisible: false, path: '/access', permissionKey: 'access.users.view' },
       {
         id: 'access-users',
         navVisible: true,

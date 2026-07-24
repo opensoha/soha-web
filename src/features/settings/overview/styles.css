@@ -1,0 +1,23 @@
+.soha-settings-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.soha-settings-overview-chip-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.soha-settings-overview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .soha-settings-overview-chip-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

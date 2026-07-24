@@ -3,30 +3,6 @@ import { defineRoutes } from '@/routes/definitions'
 export const accessRoutes = defineRoutes([
   {
     meta: {
-      id: 'access',
-      path: '/access',
-      title: '访问控制',
-      description: '身份、组织、角色与策略',
-      icon: 'IconShield',
-      group: 'access',
-      requiresAuth: true,
-      tabbar: false,
-      navVisible: false,
-      menuId: 'access',
-      workbenchId: 'settings',
-      permissionKey: 'access.users.view',
-      permissionStrategy: 'any-child',
-      scopeMode: 'passive',
-      workspace: 'system',
-    },
-    shell: 'app',
-    load: async () => {
-      const module = await import('./center/page')
-      return { default: module.AccessCenterPage }
-    },
-  },
-  {
-    meta: {
       id: 'access-users',
       path: '/access/users',
       title: '用户',
@@ -36,7 +12,6 @@ export const accessRoutes = defineRoutes([
       requiresAuth: true,
       tabbar: true,
       navVisible: true,
-      parentId: 'access',
       menuId: 'access-users',
       permissionKey: 'access.users.view',
       scopeMode: 'passive',
@@ -58,7 +33,6 @@ export const accessRoutes = defineRoutes([
       requiresAuth: true,
       tabbar: true,
       navVisible: true,
-      parentId: 'access',
       menuId: 'access-roles',
       permissionKey: 'access.roles.view',
       scopeMode: 'passive',
@@ -80,7 +54,6 @@ export const accessRoutes = defineRoutes([
       requiresAuth: true,
       tabbar: true,
       navVisible: true,
-      parentId: 'access',
       menuId: 'access-teams',
       permissionKey: 'access.groups.view',
       scopeMode: 'passive',
@@ -102,7 +75,6 @@ export const accessRoutes = defineRoutes([
       requiresAuth: true,
       tabbar: true,
       navVisible: true,
-      parentId: 'access',
       menuId: 'access-policies',
       permissionKey: 'access.policies.view',
       scopeMode: 'passive',
@@ -124,7 +96,6 @@ export const accessRoutes = defineRoutes([
       requiresAuth: true,
       tabbar: true,
       navVisible: true,
-      parentId: 'access',
       menuId: 'access-directory-sync',
       permissionKey: 'access.directory.view',
       scopeMode: 'passive',

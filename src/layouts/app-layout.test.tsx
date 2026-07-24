@@ -122,7 +122,7 @@ vi.mock('@/features/system/menu-schema', async () => {
   )
   return {
     ...actual,
-    resolveMenuSectionLabel: (key: string) => key,
+    resolveMenuSectionLabel: (key: string) => (key === 'users' ? '用户管理' : key),
   }
 })
 
@@ -574,11 +574,11 @@ describe('app layout workspace navigation', () => {
         'settings.branding.view',
       ],
       visibleMenuIds: [
-        'access',
         'access-users',
         'access-roles',
         'access-teams',
         'access-policies',
+        'access-directory-sync',
         'identity',
         'identity-overview',
         'identity-applications',
@@ -600,18 +600,7 @@ describe('app layout workspace navigation', () => {
       ],
       visibleMenus: [
         {
-          id: 'access',
-          path: '/access',
-          labelZh: '访问控制',
-          labelEn: 'Access Control',
-          iconKey: 'shield',
-          section: 'admin',
-          sortOrder: 240,
-          enabled: true,
-        },
-        {
           id: 'access-users',
-          parentId: 'access',
           path: '/access/users',
           labelZh: '用户',
           labelEn: 'Users',
@@ -622,7 +611,6 @@ describe('app layout workspace navigation', () => {
         },
         {
           id: 'access-roles',
-          parentId: 'access',
           path: '/access/roles',
           labelZh: '角色',
           labelEn: 'Roles',
@@ -633,7 +621,6 @@ describe('app layout workspace navigation', () => {
         },
         {
           id: 'access-teams',
-          parentId: 'access',
           path: '/access/teams',
           labelZh: '组织',
           labelEn: 'Organizations',
@@ -644,13 +631,22 @@ describe('app layout workspace navigation', () => {
         },
         {
           id: 'access-policies',
-          parentId: 'access',
           path: '/access/policies',
           labelZh: '策略',
           labelEn: 'Policies',
           iconKey: 'shield',
           section: 'users',
           sortOrder: 40,
+          enabled: true,
+        },
+        {
+          id: 'access-directory-sync',
+          path: '/access/directory-sync',
+          labelZh: '目录同步',
+          labelEn: 'Directory Sync',
+          iconKey: 'sync',
+          section: 'users',
+          sortOrder: 50,
           enabled: true,
         },
         {
@@ -854,7 +850,7 @@ describe('app layout workspace navigation', () => {
     const menu = container.querySelector('.soha-nav-menu')
     const menuText = menu?.textContent ?? ''
     expect(menuText).not.toContain('provider')
-    expect(menuText).toContain('users')
+    expect(menuText).toContain('用户管理')
     expect(menuText).toContain('operations')
     expect(menuText).not.toContain('总览')
     expect(menuText).not.toContain('个人中心')
@@ -875,6 +871,39 @@ describe('app layout workspace navigation', () => {
     expect(menuText).not.toContain('访问控制')
     expect(menu?.querySelector('.ant-menu-submenu')).toBeNull()
   })
+
+  it.each([
+    ['/access/users', 'access-users', 'access.users.view', '用户'],
+    ['/access/roles', 'access-roles', 'access.roles.view', '角色'],
+    ['/access/teams', 'access-teams', 'access.groups.view', '组织'],
+    ['/access/policies', 'access-policies', 'access.policies.view', '策略'],
+    ['/access/directory-sync', 'access-directory-sync', 'access.directory.view', '目录同步'],
+  ])(
+    'renders the flat user-management breadcrumb for %s',
+    async (route, menuId, permissionKey, label) => {
+      const container = await renderWithProviders(route, {
+        permissionKeys: [permissionKey],
+        visibleMenuIds: [menuId],
+        visibleMenus: [
+          {
+            id: menuId,
+            path: route,
+            labelZh: label,
+            labelEn: label,
+            iconKey: 'shield',
+            section: 'users',
+            sortOrder: 10,
+            enabled: true,
+          },
+        ],
+      })
+
+      const breadcrumbText =
+        container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent ?? ''
+      expect(breadcrumbText).toContain(`用户管理/${label}`)
+      expect(breadcrumbText).not.toContain('访问控制')
+    },
+  )
 
   it('renders the workbench switcher below the brand bar and above the business menu', async () => {
     const container = await renderWithProviders('/')
@@ -1685,7 +1714,7 @@ describe('app layout workspace navigation', () => {
     ) as HTMLElement | undefined
     expect(portalItem).not.toBeUndefined()
     expect(
-        Array.from(document.querySelectorAll('.ant-dropdown-menu-item')).some((item) =>
+      Array.from(document.querySelectorAll('.ant-dropdown-menu-item')).some((item) =>
         item.textContent?.includes('个人设置'),
       ),
     ).toBe(true)

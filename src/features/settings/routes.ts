@@ -6,7 +6,7 @@ export const settingsRoutes = defineRoutes([
       id: 'settings',
       path: '/settings',
       title: '设置中心',
-      description: '登陆与品牌配置',
+      description: '设置中心总览与配置入口',
       icon: 'IconSetting',
       group: 'settings',
       requiresAuth: true,
@@ -20,9 +20,39 @@ export const settingsRoutes = defineRoutes([
     },
     shell: 'app',
     permissionExemptReason: 'Settings center visibility is resolved from accessible child menus.',
+    redirectTo: '/settings/overview',
+  },
+  {
+    meta: {
+      id: 'settings-overview',
+      path: '/settings/overview',
+      title: '总览',
+      description: '设置中心总览',
+      icon: 'IconDashboard',
+      group: 'settings',
+      requiresAuth: true,
+      tabbar: true,
+      navVisible: true,
+      parentId: 'settings',
+      menuId: 'settings-overview',
+      permissionKeysAny: [
+        'access.users.view',
+        'access.roles.view',
+        'access.groups.view',
+        'access.policies.view',
+        'settings.identity.view',
+        'settings.ai.view',
+        'settings.branding.view',
+        'settings.system-integrations.view',
+        'settings.runtime-config.view',
+        'system.menus.view',
+      ],
+      scopeMode: 'passive',
+    },
+    shell: 'app',
     load: async () => {
-      const module = await import('./center/page')
-      return { default: module.SettingsCenterPage }
+      const module = await import('./overview/page')
+      return { default: module.SettingsOverviewPage }
     },
   },
   {

@@ -7,7 +7,6 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PermissionSnapshot } from '@/types'
-import { AccessCenterPage } from './center/page'
 import { AccessRolesPage } from './roles/page'
 import { AccessScopeGrantsPage } from './scope-grants/page'
 
@@ -180,16 +179,12 @@ describe('frontend access authorization splits', () => {
     vi.clearAllMocks()
   })
 
-  it('renders an empty redirect shell for the access parent route when a child is accessible', async () => {
-    setSnapshot(['access.roles.view'], ['access'], [{ id: 'access', path: '/access' }])
-
-    const container = await renderWithProviders(<AccessCenterPage />, '/access/roles')
-
-    expect(container.textContent?.trim() ?? '').toBe('')
-  })
-
   it('shows the role page and hides manage actions for view-only role access', async () => {
-    setSnapshot(['access.roles.view'], ['access'], [{ id: 'access', path: '/access' }])
+    setSnapshot(
+      ['access.roles.view'],
+      ['access-roles'],
+      [{ id: 'access-roles', path: '/access/roles' }],
+    )
 
     const container = await renderWithProviders(<AccessRolesPage />, '/access/roles')
 
@@ -200,8 +195,8 @@ describe('frontend access authorization splits', () => {
   it('shows the role create action when the manage permission is present', async () => {
     setSnapshot(
       ['access.roles.view', 'access.roles.manage'],
-      ['access'],
-      [{ id: 'access', path: '/access' }],
+      ['access-roles'],
+      [{ id: 'access-roles', path: '/access/roles' }],
     )
 
     const container = await renderWithProviders(<AccessRolesPage />, '/access/roles')

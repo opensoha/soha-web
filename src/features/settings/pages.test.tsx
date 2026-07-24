@@ -10,19 +10,25 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import type { PermissionSnapshot } from '@/types'
 import { AISettingsPage } from './ai/page'
 import { BrandingSettingsPage } from './branding/page'
-import { SettingsCenterPage } from './center/page'
 import { LoginSettingsPage } from './identity/page'
+import { SettingsOverviewPage } from './overview/page'
 import { TRACES_BACKEND_OPTIONS } from './ai-settings-model'
 
 const testState = vi.hoisted(() => ({
   snapshot: {
     permissionKeys: [
+      'access.users.view',
+      'access.roles.view',
+      'access.groups.view',
+      'access.policies.view',
       'settings.identity.view',
       'settings.identity.manage',
       'settings.branding.view',
       'settings.branding.manage',
       'settings.ai.view',
       'settings.ai.manage',
+      'settings.system-integrations.view',
+      'settings.runtime-config.view',
       'observe.ai.view',
     ],
     visibleMenuIds: [
@@ -185,6 +191,44 @@ function setDefaultResponses() {
         capabilities: [],
         userCount: 1,
       },
+    ],
+    '/access/users': [
+      {
+        id: 'user-1',
+        username: 'admin',
+        email: 'admin@example.com',
+        displayName: 'Admin',
+        status: 'active',
+        tags: [],
+        roles: ['admin'],
+        teams: ['team-1'],
+        projects: [],
+        loginSources: [],
+      },
+      {
+        id: 'user-2',
+        username: 'disabled',
+        email: 'disabled@example.com',
+        displayName: 'Disabled',
+        status: 'disabled',
+        tags: [],
+        roles: [],
+        teams: [],
+        projects: [],
+        loginSources: [],
+      },
+    ],
+    '/access/teams': [
+      {
+        id: 'team-1',
+        name: '平台组',
+        slug: 'platform',
+        metadata: {},
+        userCount: 1,
+      },
+    ],
+    '/access/policies': [
+      { id: 'policy-1', name: '管理员策略', effect: 'allow', priority: 100 },
     ],
     '/settings/branding': {
       appTitle: 'Soha',
@@ -361,12 +405,18 @@ describe('settings ai page rendering', () => {
   beforeEach(() => {
     testState.snapshot = {
       permissionKeys: [
+        'access.users.view',
+        'access.roles.view',
+        'access.groups.view',
+        'access.policies.view',
         'settings.identity.view',
         'settings.identity.manage',
         'settings.branding.view',
         'settings.branding.manage',
         'settings.ai.view',
         'settings.ai.manage',
+        'settings.system-integrations.view',
+        'settings.runtime-config.view',
         'observe.ai.view',
       ],
       visibleMenuIds: [
@@ -425,39 +475,42 @@ describe('settings ai page rendering', () => {
     vi.clearAllMocks()
   })
 
-  it('does not render AI settings as a settings-center tab anymore', async () => {
-    const container = await renderWithProviders(<SettingsCenterPage />, '/settings')
+  it('renders user management metrics and frequent actions', async () => {
+    const container = await renderWithProviders(<SettingsOverviewPage />, '/settings/overview')
 
-    expect(container.textContent).not.toContain('AI 设置')
-    expect(container.textContent).not.toContain('Provider Connections')
-    expect(container.textContent).not.toContain('个人中心')
-    expect(container.textContent).not.toContain('关于')
-    expect(container.textContent).toContain('登陆设置')
-    expect(container.textContent).toContain('品牌设置')
+    expect(container.textContent).toContain('用户总数')
+    expect(container.textContent).toContain('角色数')
+    expect(container.textContent).toContain('组织数')
+    expect(container.textContent).toContain('访问策略')
+    expect(container.textContent).toContain('常用操作')
+    expect(container.textContent).toContain('用户管理')
+    expect(container.textContent).not.toContain('品牌配置')
+    expect(container.textContent).not.toContain('认证与品牌')
   })
 
-  it('renders settings landing from visible menus only', async () => {
+  it('only loads overview data allowed by access permissions', async () => {
     testState.snapshot = {
-      permissionKeys: ['settings.identity.view', 'settings.branding.view'],
-      visibleMenuIds: ['settings', 'settings-login'],
+      permissionKeys: ['access.users.view'],
+      visibleMenuIds: ['settings', 'settings-overview'],
       visibleMenus: [
         { id: 'settings', path: '/settings', labelZh: '设置中心' },
         {
-          id: 'settings-login',
+          id: 'settings-overview',
           parentId: 'settings',
-          path: '/settings/login',
-          labelZh: '登陆设置',
-          sortOrder: 261,
+          path: '/settings/overview',
+          labelZh: '总览',
+          sortOrder: 1,
         },
       ],
     }
 
-    const container = await renderWithProviders(<SettingsCenterPage />, '/settings')
+    const container = await renderWithProviders(<SettingsOverviewPage />, '/settings/overview')
 
-    expect(container.textContent).toContain('登陆设置')
-    expect(container.textContent).not.toContain('个人中心')
-    expect(container.textContent).not.toContain('关于')
-    expect(container.textContent).not.toContain('品牌设置')
+    expect(container.textContent).toContain('用户总数')
+    expect(apiGetMock).toHaveBeenCalledWith('/access/users')
+    expect(apiGetMock).not.toHaveBeenCalledWith('/access/roles')
+    expect(apiGetMock).not.toHaveBeenCalledWith('/access/teams')
+    expect(apiGetMock).not.toHaveBeenCalledWith('/access/policies')
   })
 
   it('renders login settings on /settings/login', async () => {

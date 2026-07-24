@@ -844,7 +844,9 @@ export function AppLayout() {
       const missingRouteAncestors: (typeof currentMeta)[] = []
       let routePointer = getParentRouteMeta(currentMeta)
       while (routePointer && !representedRouteIds.has(routePointer.id)) {
-        missingRouteAncestors.unshift(routePointer)
+        if (routePointer.navVisible !== false) {
+          missingRouteAncestors.unshift(routePointer)
+        }
         routePointer = getParentRouteMeta(routePointer)
       }
       missingRouteAncestors.forEach((route) => {

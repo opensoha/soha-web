@@ -45,13 +45,15 @@ const WORKBENCH_DEFAULT_PATHS = {
   delivery: '/applications',
   ai: '/ai-workbench/overview',
   monitoring: '/monitoring-workbench',
-  settings: '/settings/login',
+  settings: '/settings/overview',
   security: '/identity/overview',
 } as const
 
 const WORKBENCH_FALLBACK_PATHS: Partial<
   Record<keyof typeof WORKBENCH_DEFAULT_PATHS, readonly string[]>
-> = {}
+> = {
+  settings: ['/settings/login'],
+}
 
 // Compatibility entries keep newly shipped frontend routes reachable while an
 // older permission snapshot still lacks the corresponding seeded menu record.
@@ -59,19 +61,6 @@ const WORKBENCH_FALLBACK_PATHS: Partial<
 const FRONTEND_MENU_COMPATIBILITY: ReadonlyArray<
   VisibleMenu & { permissionKey: string; requiredParentId: string }
 > = [
-  {
-    id: 'access-directory-sync',
-    parentId: 'access',
-    path: '/access/directory-sync',
-    labelZh: '目录同步',
-    labelEn: 'Directory Sync',
-    iconKey: 'sync',
-    section: 'users',
-    sortOrder: 50,
-    enabled: true,
-    permissionKey: 'access.directory.view',
-    requiredParentId: 'access',
-  },
   {
     id: 'ai-workbench-knowledge-pipelines',
     parentId: 'ai-workbench',
@@ -285,6 +274,7 @@ function deriveWorkbenchIdFromPath(pathname: string): WorkbenchId | null {
     return 'monitoring'
   }
   if (
+    pathname.startsWith('/access') ||
     pathname.startsWith('/identity') ||
     pathname.startsWith('/system') ||
     pathname.startsWith('/settings')

@@ -3,25 +3,29 @@ import { accessApi } from './api'
 import { accessKeys } from './keys'
 
 export const accessQueries = {
-  users: () =>
+  users: (enabled = true) =>
     queryOptions({
       queryKey: accessKeys.userList(),
       queryFn: accessApi.users.list,
+      enabled,
     }),
-  roles: () =>
+  roles: (enabled = true) =>
     queryOptions({
       queryKey: accessKeys.roleList(),
       queryFn: accessApi.roles.list,
+      enabled,
     }),
-  teams: () =>
+  teams: (enabled = true) =>
     queryOptions({
       queryKey: accessKeys.teamList(),
       queryFn: accessApi.teams.list,
+      enabled,
     }),
-  policies: () =>
+  policies: (enabled = true) =>
     queryOptions({
       queryKey: accessKeys.policyList(),
       queryFn: accessApi.policies.list,
+      enabled,
     }),
   scopeGrants: (enabled = true) =>
     queryOptions({

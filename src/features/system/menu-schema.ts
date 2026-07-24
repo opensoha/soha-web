@@ -24,7 +24,7 @@ const MENU_SECTION_LABELS: Record<MenuSectionKey, { zh: string; en: string }> = 
   account: { zh: '基础', en: 'Basics' },
   provider: { zh: '提供商', en: 'Providers' },
   integrations: { zh: '系统集成', en: 'System Integrations' },
-  users: { zh: '用户权限', en: 'Users & Access' },
+  users: { zh: '用户管理', en: 'User Management' },
   operations: { zh: '系统运维', en: 'System Operations' },
   extensions: { zh: '扩展', en: 'Extensions' },
   platform: { zh: 'Dashboard', en: 'Dashboard' },

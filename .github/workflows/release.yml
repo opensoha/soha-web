@@ -9,7 +9,7 @@ on:
       contracts_version:
         description: '@opensoha/contracts npm version to consume'
         required: true
-        default: '0.1.0'
+        default: '0.1.3'
 
 permissions:
   contents: write
@@ -18,7 +18,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     env:
-      CONTRACTS_VERSION: ${{ inputs.contracts_version || '0.1.0' }}
+      CONTRACTS_VERSION: ${{ inputs.contracts_version || '0.1.3' }}
     steps:
       - name: Checkout web
         uses: actions/checkout@v7

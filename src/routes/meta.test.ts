@@ -54,37 +54,15 @@ describe('access route authorization', () => {
     expect(findLandingPath(snapshot)).toBe('/portal')
   })
 
-  it('allows the access parent route when any visible child permission is present', () => {
+  it('authorizes each user-management route from its own menu binding and permission', () => {
     const snapshot = buildSnapshot({
       permissionKeys: ['access.roles.view'],
       visibleMenuIds: ['access-roles'],
       visibleMenus: [{ id: 'access-roles', path: '/access/roles' }],
     })
 
-    expect(canAccessRoute(getRoute('access'), snapshot)).toBe(true)
     expect(canAccessRoute(getRoute('access-roles'), snapshot)).toBe(true)
     expect(canAccessRoute(getRoute('access-users'), snapshot)).toBe(false)
-  })
-
-  it('keeps directory sync reachable while an older snapshot lacks its seeded menu', () => {
-    const allowedSnapshot = buildSnapshot({
-      permissionKeys: ['access.directory.view'],
-      visibleMenuIds: ['access'],
-      visibleMenus: [{ id: 'access', path: '/access' }],
-    })
-    const deniedSnapshot = buildSnapshot({
-      visibleMenuIds: ['access'],
-      visibleMenus: [{ id: 'access', path: '/access' }],
-    })
-
-    expect(canAccessRoute(getRoute('access-directory-sync'), allowedSnapshot)).toBe(true)
-    expect(canAccessRoute(getRoute('access-directory-sync'), deniedSnapshot)).toBe(false)
-    expect(
-      filterSidebarNavByWorkbench(
-        filterSidebarNavByWorkspace(getAccessibleSidebarNav(allowedSnapshot), 'system'),
-        'settings',
-      ).some((item) => item.id === 'access-directory-sync'),
-    ).toBe(true)
   })
 
   it('keeps account utilities independent from admin settings menu bindings', () => {
@@ -131,7 +109,6 @@ describe('access route authorization', () => {
         'settings.branding.view',
       ],
       visibleMenuIds: [
-        'access',
         'access-users',
         'access-roles',
         'access-teams',
@@ -149,13 +126,13 @@ describe('access route authorization', () => {
         'audit',
         'operations',
         'settings',
+        'settings-overview',
         'account-profile',
         'settings-about',
         'settings-login',
         'settings-branding',
       ],
       visibleMenus: [
-        { id: 'access', path: '/access', section: 'admin', sortOrder: 240 },
         { id: 'access-users', path: '/access/users', section: 'users', sortOrder: 10 },
         { id: 'access-roles', path: '/access/roles', section: 'users', sortOrder: 20 },
         { id: 'access-teams', path: '/access/teams', section: 'users', sortOrder: 30 },
@@ -228,6 +205,13 @@ describe('access route authorization', () => {
         },
         { id: 'settings', path: '/settings', section: 'admin', sortOrder: 260 },
         {
+          id: 'settings-overview',
+          parentId: 'settings',
+          path: '/settings/overview',
+          section: '',
+          sortOrder: 1,
+        },
+        {
           id: 'account-profile',
           parentId: 'settings',
           path: '/account/profile',
@@ -270,11 +254,12 @@ describe('access route authorization', () => {
     expect(getRouteWorkbenchId(getRoute('access-users'))).toBe('settings')
     expect(getRouteWorkbenchId(getRoute('system-menus'))).toBe('settings')
     expect(getMenuWorkbenchId({ id: 'settings-login', path: '/settings/login' })).toBe('settings')
-    expect(getMenuWorkbenchId({ id: 'access', path: '/access' })).toBe('settings')
+    expect(getMenuWorkbenchId({ id: 'access-users', path: '/access/users' })).toBe('settings')
     expect(getMenuWorkbenchId({ id: 'menus', path: '/system/menus' })).toBe('settings')
     expect(getAccessibleWorkbenchIds(snapshot)).toContain('settings')
-    expect(findFirstAccessiblePathForWorkbench('settings', snapshot)).toBe('/settings/login')
+    expect(findFirstAccessiblePathForWorkbench('settings', snapshot)).toBe('/settings/overview')
     expect(settingsNav.map((item) => item.id)).toEqual([
+      'settings-overview',
       'access-users',
       'access-roles',
       'access-teams',
@@ -319,14 +304,13 @@ describe('access route authorization', () => {
     expect(findFirstAccessiblePathForWorkbench('settings', snapshot)).toBeNull()
   })
 
-  it('keeps the access parent route blocked when the access menu binding is missing', () => {
+  it('keeps user-management routes blocked when their menu binding is missing', () => {
     const snapshot = buildSnapshot({
       permissionKeys: ['access.roles.view'],
       visibleMenuIds: [],
       visibleMenus: [],
     })
 
-    expect(canAccessRoute(getRoute('access'), snapshot)).toBe(false)
     expect(canAccessRoute(getRoute('access-roles'), snapshot)).toBe(false)
   })
 
@@ -336,7 +320,7 @@ describe('access route authorization', () => {
     })
 
     expect(canAccessRoute(getRoute('access-scope-grants'), snapshot)).toBe(true)
-    expect(canAccessRoute(getRoute('access'), snapshot)).toBe(false)
+    expect(canAccessRoute(getRoute('access-roles'), snapshot)).toBe(false)
   })
 
   it('allows RBAC platform child routes from visible menu bindings without a dedicated permission key', () => {

@@ -15,8 +15,8 @@ import { AccessUsersPage } from './users/page'
 const testState = vi.hoisted(() => ({
   snapshot: {
     permissionKeys: ['access.users.view'],
-    visibleMenuIds: ['access'],
-    visibleMenus: [{ id: 'access', path: '/access' }],
+    visibleMenuIds: ['access-users'],
+    visibleMenus: [{ id: 'access-users', path: '/access/users' }],
   } as PermissionSnapshot,
   responses: {} as Record<string, unknown>,
 }))

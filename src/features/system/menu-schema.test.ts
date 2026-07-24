@@ -25,6 +25,8 @@ describe('menu section schema helpers', () => {
     expect(resolveMenuSectionLabel('extensions', 'en_US')).toBe('Extensions')
     expect(resolveMenuSectionLabel('integrations')).toBe('系统集成')
     expect(resolveMenuSectionLabel('integrations', 'en_US')).toBe('System Integrations')
+    expect(resolveMenuSectionLabel('users')).toBe('用户管理')
+    expect(resolveMenuSectionLabel('users', 'en_US')).toBe('User Management')
     expect(resolveMenuSectionLabel('control')).toBe('control')
     expect(resolveMenuSectionLabel('ai-interaction')).toBe('交互')
     expect(resolveMenuSectionLabel('ai-engineering')).toBe('AI 工程')

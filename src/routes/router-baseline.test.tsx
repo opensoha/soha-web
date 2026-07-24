@@ -45,7 +45,6 @@ vi.mock('@/features/identity/policies/list-page', mockRoutePage('IdentityPolicie
 vi.mock('@/features/identity/applications/list-page', mockRoutePage('IdentityApplicationsPage'))
 vi.mock('@/features/identity/overview/page', mockRoutePage('IdentityOverviewPage'))
 vi.mock('@/features/identity/providers/list-page', mockRoutePage('IdentityProvidersPage'))
-vi.mock('@/features/access/center/page', mockRoutePage('AccessCenterPage'))
 vi.mock('@/features/access/users/page', mockRoutePage('AccessUsersPage'))
 vi.mock('@/features/access/roles/page', mockRoutePage('AccessRolesPage'))
 vi.mock('@/features/access/teams/page', mockRoutePage('AccessTeamsPage'))
@@ -56,7 +55,7 @@ vi.mock('@/features/system/announcements/page', mockRoutePage('AnnouncementsPage
 vi.mock('@/features/system/menus/page', mockRoutePage('MenusPage'))
 vi.mock('@/features/system/audit/page', mockRoutePage('AuditLogsPage'))
 vi.mock('@/features/system/operation-logs/page', mockRoutePage('OperationLogsPage'))
-vi.mock('@/features/settings/center/page', mockRoutePage('SettingsCenterPage'))
+vi.mock('@/features/settings/overview/page', mockRoutePage('SettingsOverviewPage'))
 vi.mock('@/features/settings/identity/page', mockRoutePage('LoginSettingsPage'))
 vi.mock('@/features/settings/branding/page', mockRoutePage('BrandingSettingsPage'))
 vi.mock('@/features/auth/about-page', mockRoutePage('AboutPage'))
@@ -209,7 +208,6 @@ describe('router deep-link baseline', () => {
     ['/identity/outposts', 'IdentityOutpostsPage'],
     ['/identity/policies', 'IdentityPoliciesPage'],
     ['/identity/audit', 'AuditLogsPage'],
-    ['/access', 'AccessCenterPage'],
     ['/access/users', 'AccessUsersPage'],
     ['/access/roles', 'AccessRolesPage'],
     ['/access/teams', 'AccessTeamsPage'],
@@ -221,7 +219,8 @@ describe('router deep-link baseline', () => {
     ['/system/menus', 'MenusPage'],
     ['/system/audit', 'AuditLogsPage'],
     ['/system/operations', 'OperationLogsPage'],
-    ['/settings', 'SettingsCenterPage'],
+    ['/settings', 'SettingsOverviewPage'],
+    ['/settings/overview', 'SettingsOverviewPage'],
     ['/settings/login', 'LoginSettingsPage'],
     ['/settings/branding', 'BrandingSettingsPage'],
     ['/about', 'AboutPage'],

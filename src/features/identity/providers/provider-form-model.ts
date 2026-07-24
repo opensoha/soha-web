@@ -78,7 +78,10 @@ export const oidcClientStatusOptions: Array<{
 
 export const defaultScopes = ['openid', 'profile', 'email']
 export const defaultGrantTypes = ['authorization_code']
-export const oidcGrantTypeOptions = [{ label: 'authorization_code', value: 'authorization_code' }]
+export const oidcGrantTypeOptions = [
+  { label: 'authorization_code', value: 'authorization_code' },
+  { label: 'refresh_token', value: 'refresh_token' },
+]
 export const defaultProxyHeaders = {
   email: 'X-Soha-Email',
   groups: 'X-Soha-Groups',
@@ -331,13 +334,15 @@ export function defaultOIDCClientValues(): OIDCClientFormValues {
 export function oidcClientValuesFor(client: IdentityOIDCClient): OIDCClientFormValues {
   return {
     accessTokenTtlSeconds: client.accessTokenTtlSeconds,
-    allowedGrantTypes: defaultGrantTypes,
+    allowedGrantTypes: client.allowedGrantTypes?.length
+      ? client.allowedGrantTypes
+      : defaultGrantTypes,
     allowedScopes: client.allowedScopes ?? defaultScopes,
     clientId: client.clientId,
     clientSecret: '',
     idTokenTtlSeconds: client.idTokenTtlSeconds,
     redirectUris: client.redirectUris ?? [],
-    refreshTokenTtlSeconds: 0,
+    refreshTokenTtlSeconds: client.refreshTokenTtlSeconds || 0,
     requirePkce: client.requirePkce,
     status: client.status,
   }
@@ -350,14 +355,14 @@ export function oidcClientInputFromValues(
   const clientSecret = values.clientSecret.trim()
   return {
     accessTokenTtlSeconds: Number(values.accessTokenTtlSeconds || 3600),
-    allowedGrantTypes: defaultGrantTypes,
+    allowedGrantTypes: compactStrings(values.allowedGrantTypes),
     allowedScopes: compactStrings(values.allowedScopes),
     clientId: values.clientId.trim(),
     clientSecret: clientSecret || undefined,
     idTokenTtlSeconds: Number(values.idTokenTtlSeconds || 300),
     providerId,
     redirectUris: compactStrings(values.redirectUris),
-    refreshTokenTtlSeconds: 0,
+    refreshTokenTtlSeconds: Number(values.refreshTokenTtlSeconds || 0),
     requirePkce: Boolean(values.requirePkce),
     status: values.status || 'enabled',
   }

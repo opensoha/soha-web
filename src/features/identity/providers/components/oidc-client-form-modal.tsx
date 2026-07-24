@@ -86,11 +86,11 @@ export function OIDCClientFormModal({
             <Select mode="tags" tokenSeparators={[',']} />
           </Form.Item>
           <Form.Item
-            extra="当前 Provider baseline 仅启用 Authorization Code，Refresh Token flow 预留。"
+            extra="启用 refresh_token 后，授权请求还需包含 offline_access 才会签发刷新令牌。"
             label="Allowed grant types"
             name="allowedGrantTypes"
           >
-            <Select disabled mode="multiple" options={oidcGrantTypeOptions} />
+            <Select mode="multiple" options={oidcGrantTypeOptions} />
           </Form.Item>
         </div>
 
@@ -102,11 +102,11 @@ export function OIDCClientFormModal({
             <InputNumber min={60} precision={0} style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item
-            extra="Refresh Token 尚未签发，当前固定为 0。"
+            extra="留空或填 0 使用服务端默认绝对过期时间。"
             label="Refresh token TTL"
             name="refreshTokenTtlSeconds"
           >
-            <InputNumber disabled min={0} precision={0} style={{ width: '100%' }} />
+            <InputNumber min={0} precision={0} style={{ width: '100%' }} />
           </Form.Item>
         </div>
 

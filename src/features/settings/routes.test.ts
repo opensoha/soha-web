@@ -3,17 +3,17 @@ import { settingsRoutes } from './routes'
 
 const routePages = vi.hoisted(() => ({
   branding: () => null,
-  center: () => null,
   legacySourceConnectionDetail: () => null,
   login: () => null,
+  overview: () => null,
   runtimeConfiguration: () => null,
   sourceConnections: () => null,
   sourceConnectionDetail: () => null,
 }))
 
 vi.mock('./branding/page', () => ({ BrandingSettingsPage: routePages.branding }))
-vi.mock('./center/page', () => ({ SettingsCenterPage: routePages.center }))
 vi.mock('./identity/page', () => ({ LoginSettingsPage: routePages.login }))
+vi.mock('./overview/page', () => ({ SettingsOverviewPage: routePages.overview }))
 vi.mock('./runtime-configuration/page', () => ({
   RuntimeConfigurationPage: routePages.runtimeConfiguration,
 }))
@@ -39,7 +39,7 @@ describe('Settings route manifest', () => {
     )
 
     expect(pageRoutes).toHaveLength(7)
-    expect(loaded.get('/settings')).toBe(routePages.center)
+    expect(loaded.get('/settings/overview')).toBe(routePages.overview)
     expect(loaded.get('/settings/login')).toBe(routePages.login)
     expect(loaded.get('/settings/branding')).toBe(routePages.branding)
     expect(loaded.get('/settings/runtime-configuration')).toBe(routePages.runtimeConfiguration)
@@ -71,6 +71,7 @@ describe('Settings route manifest', () => {
         .map((route) => [route.meta.path, route.redirectTo]),
     )
 
+    expect(redirectByPath.get('/settings')).toBe('/settings/overview')
     expect(redirectByPath.get('/settings/system-integrations')).toBe('/settings/source-control')
     expect(redirectByPath.get('/settings/system-integrations/source-control')).toBe(
       '/settings/source-control',
