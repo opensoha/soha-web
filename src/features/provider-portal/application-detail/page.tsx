@@ -5,7 +5,6 @@ import {
   LinkOutlined,
   StarFilled,
   StarOutlined,
-  TeamOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -191,24 +190,6 @@ export function PortalApplicationDetailPage() {
                 </Text>
               ) : (
                 <Alert showIcon type="warning" title="Launch URL is not configured" />
-              )}
-            </section>
-
-            <section className="soha-portal-side-panel">
-              <div className="soha-portal-side-title">
-                <TeamOutlined />
-                <span>Access scope</span>
-              </div>
-              {application.assignments?.length ? (
-                <div className="soha-portal-assignment-list">
-                  {application.assignments.map((assignment) => (
-                    <Tag key={assignment.id || `${assignment.subjectType}:${assignment.subjectId}`}>
-                      {assignment.subjectType}:{assignment.subjectId}
-                    </Tag>
-                  ))}
-                </div>
-              ) : (
-                <Text type="secondary">Available to authenticated users</Text>
               )}
             </section>
           </div>

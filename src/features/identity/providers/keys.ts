@@ -46,4 +46,5 @@ export const identityProviderMutationKeys = {
   createOIDCClient: [...identityProviderKeys.all, 'mutation', 'oidc-client', 'create'] as const,
   updateOIDCClient: [...identityProviderKeys.all, 'mutation', 'oidc-client', 'update'] as const,
   removeOIDCClient: [...identityProviderKeys.all, 'mutation', 'oidc-client', 'delete'] as const,
+  rotateSigningKey: [...identityProviderKeys.all, 'mutation', 'signing-key', 'rotate'] as const,
 }

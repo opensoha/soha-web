@@ -6,6 +6,7 @@ export {
   getIdentityProvider,
   listIdentityOIDCClients,
   listIdentityProviders,
+  rotateIdentityProviderSigningKey,
   updateIdentityOIDCClient,
   updateIdentityProvider,
 } from './api'

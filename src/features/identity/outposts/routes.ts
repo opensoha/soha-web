@@ -13,7 +13,7 @@ export const identityOutpostRoutes = defineRoutes([
       requiresAuth: true,
       tabbar: true,
       navVisible: true,
-      parentId: 'identity',
+      parentId: 'internal-workbench',
       menuId: 'identity-outposts',
       permissionKey: 'identity.outposts.view',
       scopeMode: 'passive',

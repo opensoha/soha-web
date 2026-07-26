@@ -1,8 +1,9 @@
 import { useEffect } from 'react'
-import { Button, Form, Input, Modal, Select, Typography } from 'antd'
+import { Button, Form, Input, Modal, Select, Switch, Typography } from 'antd'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import {
   assignmentSubjectOptions,
+  assignmentEffectOptions,
   identityPolicyInputFromValues,
   policyFormValues,
   type IdentityPolicyFormValues,
@@ -44,7 +45,7 @@ export function PolicyFormModal({
       <Form
         form={form}
         className="soha-identity-policy-form"
-        initialValues={{ assignments: [] }}
+        initialValues={{ allowedCidrs: [], assignments: [], endTimeUtc: '', requireMfa: false, startTimeUtc: '' }}
         layout="vertical"
         onFinish={(values) => onSubmit(identityPolicyInputFromValues(values))}
       >
@@ -74,7 +75,7 @@ export function PolicyFormModal({
                       <Input placeholder="admin / team-a / user-id" />
                     </Form.Item>
                     <Form.Item name={[field.name, 'effect']}>
-                      <Select disabled options={[{ label: 'Allow', value: 'allow' }]} />
+                      <Select options={assignmentEffectOptions} />
                     </Form.Item>
                     <Button
                       aria-label="删除 assignment"
@@ -90,6 +91,23 @@ export function PolicyFormModal({
             </div>
           )}
         </Form.List>
+
+        <div className="soha-identity-policy-conditions">
+          <Form.Item label="Require MFA" name="requireMfa" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+          <Form.Item label="Allowed CIDRs" name="allowedCidrs">
+            <Select mode="tags" placeholder="10.0.0.0/8" tokenSeparators={[',']} />
+          </Form.Item>
+          <div className="soha-identity-policy-time-window">
+            <Form.Item label="UTC Start" name="startTimeUtc">
+              <Input type="time" />
+            </Form.Item>
+            <Form.Item label="UTC End" name="endTimeUtc">
+              <Input type="time" />
+            </Form.Item>
+          </div>
+        </div>
 
         <div className="soha-identity-policy-form-actions">
           <Button onClick={onCancel}>取消</Button>

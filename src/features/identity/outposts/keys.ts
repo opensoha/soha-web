@@ -40,4 +40,5 @@ export const identityOutpostMutationKeys = {
   create: [...identityOutpostKeys.all, 'mutation', 'create'] as const,
   update: [...identityOutpostKeys.all, 'mutation', 'update'] as const,
   remove: [...identityOutpostKeys.all, 'mutation', 'delete'] as const,
+  rotateToken: [...identityOutpostKeys.all, 'mutation', 'token', 'rotate'] as const,
 }

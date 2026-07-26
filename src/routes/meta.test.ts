@@ -137,11 +137,11 @@ describe('access route authorization', () => {
         { id: 'access-roles', path: '/access/roles', section: 'users', sortOrder: 20 },
         { id: 'access-teams', path: '/access/teams', section: 'users', sortOrder: 30 },
         { id: 'access-policies', path: '/access/policies', section: 'users', sortOrder: 40 },
-        { id: 'identity', path: '/identity', section: 'admin', sortOrder: 220 },
+        { id: 'identity', path: '/internal-workbench', section: 'admin', sortOrder: 220 },
         {
           id: 'identity-overview',
           parentId: 'identity',
-          path: '/identity/overview',
+          path: '/internal-workbench/overview',
           section: '',
           sortOrder: 1,
         },

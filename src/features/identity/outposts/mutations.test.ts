@@ -7,6 +7,7 @@ import type { IdentityOutpost, IdentityOutpostInput } from './types'
 const apiMocks = vi.hoisted(() => ({
   createIdentityOutpost: vi.fn(),
   deleteIdentityOutpost: vi.fn(),
+  rotateIdentityOutpostToken: vi.fn(),
   updateIdentityOutpost: vi.fn(),
 }))
 

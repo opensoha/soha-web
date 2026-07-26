@@ -30,6 +30,7 @@ describe('system integration model', () => {
       groupId: '42',
       perPage: 50,
       timeout: '20s',
+      authMode: 'access_token',
       token: '',
     })
   })
@@ -43,6 +44,7 @@ describe('system integration model', () => {
         groupId: ' 42 ',
         perPage: 100,
         timeout: '15s',
+        authMode: 'access_token',
         token: ' secret ',
       }),
     ).toMatchObject({
@@ -60,8 +62,31 @@ describe('system integration model', () => {
       name: 'Company GitLab',
       description: 'Primary source',
       enabled: true,
-      configuration: integration.configuration,
+      configuration: expect.arrayContaining([
+        { key: 'auth_mode', value: 'access_token' },
+        { key: 'base_url', value: 'https://gitlab.example.com/api/v4' },
+      ]),
       credentials: undefined,
+      clearCredentialKeys: ['client_secret', 'access_token', 'refresh_token'],
+    })
+  })
+
+  it('creates OAuth application payloads without a static token', () => {
+    const values = {
+      ...gitLabFormValues(),
+      authMode: 'oauth' as const,
+      clientId: 'app-id',
+      clientSecret: 'app-secret',
+      oauthRedirectUri: 'https://soha.example/api/v1/system-integrations/oauth/gitlab/callback',
+    }
+
+    expect(createGitLabIntegration(values)).toMatchObject({
+      configuration: expect.arrayContaining([
+        { key: 'auth_mode', value: 'oauth' },
+        { key: 'client_id', value: 'app-id' },
+        { key: 'oauth_return_uri', value: 'http://localhost' },
+      ]),
+      credentials: [{ key: 'client_secret', value: 'app-secret' }],
     })
   })
 })

@@ -60,8 +60,11 @@ export function IdentityPoliciesPage() {
           assignments.length ? (
             <Space size={[4, 4]} wrap>
               {assignments.map((assignment) => (
-                <Tag key={`${assignment.subjectType}:${assignment.subjectId}`}>
-                  {assignment.subjectType}:{assignment.subjectId}
+                <Tag
+                  color={assignment.effect === 'deny' ? 'red' : 'green'}
+                  key={`${assignment.effect}:${assignment.subjectType}:${assignment.subjectId}`}
+                >
+                  {assignment.effect} {assignment.subjectType}:{assignment.subjectId}
                 </Tag>
               ))}
             </Space>

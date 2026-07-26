@@ -96,6 +96,38 @@
   margin-bottom: 0;
 }
 
+.soha-delivery-onboarding-services {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.soha-delivery-onboarding-services__toolbar,
+.soha-delivery-onboarding-service__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.soha-delivery-onboarding-services__toolbar > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.soha-delivery-onboarding-service {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--soha-border-color);
+  border-radius: var(--soha-radius-control);
+  background: var(--soha-fill-weak);
+}
+
 .soha-delivery-draft-preview {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

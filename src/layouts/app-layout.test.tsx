@@ -651,7 +651,7 @@ describe('app layout workspace navigation', () => {
         },
         {
           id: 'identity',
-          path: '/identity',
+          path: '/internal-workbench',
           labelZh: '身份',
           labelEn: 'Identity',
           iconKey: 'shield',
@@ -662,7 +662,7 @@ describe('app layout workspace navigation', () => {
         {
           id: 'identity-overview',
           parentId: 'identity',
-          path: '/identity/overview',
+          path: '/internal-workbench/overview',
           labelZh: '总览',
           labelEn: 'Overview',
           iconKey: 'gauge',
@@ -904,6 +904,32 @@ describe('app layout workspace navigation', () => {
       expect(breadcrumbText).not.toContain('访问控制')
     },
   )
+
+  it('does not append the legacy identity parent to workbench breadcrumbs', async () => {
+    const container = await renderWithProviders('/identity/applications', {
+      permissionKeys: ['identity.applications.view'],
+      visibleMenuIds: ['identity-applications'],
+      visibleMenus: [
+        {
+          id: 'identity-applications',
+          path: '/identity/applications',
+          labelZh: '应用目录',
+          labelEn: 'Applications',
+          iconKey: 'blocks',
+          section: 'provider',
+          sortOrder: 10,
+          enabled: true,
+        },
+      ],
+    })
+
+    const breadcrumbText =
+      container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent ?? ''
+    expect(breadcrumbText).toContain('内网工作台')
+    expect(breadcrumbText).toContain('应用目录')
+    expect(breadcrumbText).not.toContain('Identity')
+    expect(breadcrumbText).not.toContain('Internal Workbench')
+  })
 
   it('renders the workbench switcher below the brand bar and above the business menu', async () => {
     const container = await renderWithProviders('/')

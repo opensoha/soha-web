@@ -1,6 +1,7 @@
 export type IdentityRuntimeProviderType = 'oidc' | 'proxy'
 export type IdentityRuntimeProviderStatus = 'enabled' | 'disabled'
 export type IdentityOIDCClientStatus = 'enabled' | 'disabled'
+export type IdentityOIDCClientType = 'public' | 'confidential'
 
 export interface IdentityProvider {
   id: string
@@ -39,7 +40,9 @@ export interface IdentityOIDCClient {
   id: string
   providerId: string
   clientId: string
+  clientType: IdentityOIDCClientType
   redirectUris: string[]
+  postLogoutRedirectUris: string[]
   allowedScopes: string[]
   allowedGrantTypes: string[]
   requirePkce: boolean
@@ -54,8 +57,10 @@ export interface IdentityOIDCClient {
 export interface IdentityOIDCClientInput {
   providerId?: string
   clientId: string
+  clientType: IdentityOIDCClientType
   clientSecret?: string
   redirectUris: string[]
+  postLogoutRedirectUris: string[]
   allowedScopes: string[]
   allowedGrantTypes: string[]
   requirePkce: boolean
@@ -87,4 +92,13 @@ export interface UpdateIdentityOIDCClientVariables extends CreateIdentityOIDCCli
 export interface DeleteIdentityOIDCClientVariables {
   providerId: string
   clientId: string
+}
+
+export interface IdentitySigningKey {
+  id: string
+  providerId: string
+  kid: string
+  alg: string
+  active: boolean
+  createdAt: string
 }

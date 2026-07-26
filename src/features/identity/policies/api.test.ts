@@ -45,6 +45,12 @@ describe('identity policies api', () => {
     expect(apiMocks.get).toHaveBeenCalledWith('/identity/policies')
   })
 
+  it('normalizes legacy policies with null assignments', async () => {
+    apiMocks.get.mockResolvedValueOnce({ data: [{ ...policy, assignments: null }] })
+
+    await expect(listIdentityPolicies()).resolves.toEqual([{ ...policy, assignments: [] }])
+  })
+
   it('unwraps detail/update values and encodes trimmed application ids', async () => {
     apiMocks.get.mockResolvedValueOnce({ data: policy })
     apiMocks.put.mockResolvedValueOnce({ data: policy })

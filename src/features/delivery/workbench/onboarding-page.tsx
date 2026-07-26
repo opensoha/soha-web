@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   ArrowRightOutlined,
   CodeOutlined,
+  DeleteOutlined,
   FileTextOutlined,
+  PlusOutlined,
   RocketOutlined,
   SendOutlined,
 } from '@ant-design/icons'
@@ -22,7 +24,7 @@ import {
   Typography,
   type TableColumnsType,
 } from 'antd'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
@@ -31,6 +33,7 @@ import { deliveryMutations } from '../mutations'
 import { deliveryQueries } from '../queries'
 import { DeliveryTable } from '../delivery-table'
 import type {
+  ApplicationServiceKind,
   DeliveryApplication,
   DeliveryBlueprint,
   DeliveryDraft,
@@ -67,9 +70,30 @@ interface OnboardingDraftFormValues {
   language?: string
   namespace?: string
   repositoryPath?: string
-  serviceKey?: string
-  serviceName?: string
+  repositoryUrl?: string
+  services?: OnboardingServiceFormValues[]
+}
+
+interface OnboardingServiceFormValues {
+  buildContextDir?: string
+  dockerfilePath?: string
+  key?: string
+  name?: string
+  serviceKind?: ApplicationServiceKind
   workloadName?: string
+}
+
+const SERVICE_KIND_OPTIONS = [
+  { value: 'kubernetes_workload', label: 'Kubernetes 工作负载' },
+  { value: 'helm_release', label: 'Helm Release' },
+  { value: 'job', label: 'Job' },
+  { value: 'external_service', label: '外部服务' },
+]
+
+function createOnboardingService(): OnboardingServiceFormValues {
+  return {
+    serviceKind: 'kubernetes_workload',
+  }
 }
 
 function OnboardingBoundaryCards() {
@@ -166,13 +190,17 @@ function buildManualDeliveryDraftPayload(
     'sample-app',
   )
   const appName = String(values.appName || blueprint?.applicationDraft?.name || appKey).trim()
-  const serviceKey = slugFrom(values.serviceKey || appKey, appKey)
-  const serviceName = String(values.serviceName || appName).trim()
   const defaultBranch = String(
     values.defaultBranch || blueprint?.applicationDraft?.defaultBranch || 'main',
   ).trim()
   const repositoryPath = String(
     values.repositoryPath || blueprint?.applicationDraft?.repositoryPath || '',
+  ).trim()
+  const repositoryUrl = String(
+    values.repositoryUrl ||
+      blueprint?.applicationDraft?.metadata?.repositoryURL ||
+      blueprint?.buildSources?.[0]?.config?.repositoryURL ||
+      '',
   ).trim()
   const buildSourceId = blueprint?.buildSources?.[0]?.id || 'source-1'
   const environmentKey = String(
@@ -180,7 +208,55 @@ function buildManualDeliveryDraftPayload(
   ).trim()
   const clusterId = String(values.clusterId || '').trim()
   const namespace = String(values.namespace || '').trim()
-  const workloadName = String(values.workloadName || serviceKey).trim()
+  const serviceValues = values.services?.length ? values.services : [createOnboardingService()]
+  const services = serviceValues.map((service, index) => {
+    const serviceKey = slugFrom(service.key || service.name, `service-${index + 1}`)
+    return {
+      key: serviceKey,
+      name: String(service.name || serviceKey).trim(),
+      serviceKind: service.serviceKind || 'kubernetes_workload',
+      repositoryPath: repositoryPath || undefined,
+      defaultBranch,
+      buildSourceId,
+      enabled: true,
+      metadata: {},
+      containers: [
+        {
+          name: serviceKey,
+          imageRepository: '',
+          dockerfilePath:
+            String(service.dockerfilePath || '').trim() ||
+            blueprint?.applicationDraft?.dockerfilePath ||
+            'Dockerfile',
+          buildContextDir:
+            String(service.buildContextDir || '').trim() ||
+            blueprint?.applicationDraft?.buildContextDir ||
+            '.',
+          metadata: {},
+        },
+      ],
+    }
+  })
+  const buildSources = blueprint?.buildSources?.length
+    ? blueprint.buildSources.map((source, index) =>
+        index === 0 && repositoryUrl
+          ? { ...source, config: { ...source.config, repositoryURL: repositoryUrl } }
+          : source,
+      )
+    : [
+        {
+          id: buildSourceId,
+          name: 'Repo Dockerfile',
+          type: 'repo_dockerfile' as const,
+          enabled: true,
+          isDefault: true,
+          config: {
+            contextDir: blueprint?.applicationDraft?.buildContextDir || '.',
+            dockerfilePath: blueprint?.applicationDraft?.dockerfilePath || 'Dockerfile',
+            ...(repositoryUrl ? { repositoryURL: repositoryUrl } : {}),
+          },
+        },
+      ]
 
   return {
     source: blueprint ? 'blueprint' : 'manual',
@@ -193,44 +269,13 @@ function buildManualDeliveryDraftPayload(
       repositoryPath: repositoryPath || undefined,
       defaultBranch,
       enabled: true,
-      metadata: blueprint?.applicationDraft?.metadata ?? {},
-    },
-    services: [
-      {
-        key: serviceKey,
-        name: serviceName,
-        serviceKind: 'kubernetes_workload',
-        repositoryPath: repositoryPath || undefined,
-        defaultBranch,
-        buildSourceId,
-        enabled: true,
-        metadata: {},
-        containers: [
-          {
-            name: serviceKey,
-            imageRepository: '',
-            dockerfilePath: blueprint?.applicationDraft?.dockerfilePath || 'Dockerfile',
-            buildContextDir: blueprint?.applicationDraft?.buildContextDir || '.',
-            metadata: {},
-          },
-        ],
+      metadata: {
+        ...(blueprint?.applicationDraft?.metadata ?? {}),
+        ...(repositoryUrl ? { repositoryURL: repositoryUrl } : {}),
       },
-    ],
-    buildSources: blueprint?.buildSources?.length
-      ? blueprint.buildSources
-      : [
-          {
-            id: buildSourceId,
-            name: 'Repo Dockerfile',
-            type: 'repo_dockerfile',
-            enabled: true,
-            isDefault: true,
-            config: {
-              contextDir: blueprint?.applicationDraft?.buildContextDir || '.',
-              dockerfilePath: blueprint?.applicationDraft?.dockerfilePath || 'Dockerfile',
-            },
-          },
-        ],
+    },
+    services,
+    buildSources,
     environmentBindings: [
       {
         ...(blueprint?.environmentBindings?.[0] ?? {}),
@@ -249,18 +294,23 @@ function buildManualDeliveryDraftPayload(
           verificationMode: 'workflow',
         },
         targets:
-          clusterId && namespace && workloadName
-            ? [
-                {
-                  id: 'target-1',
-                  clusterId,
-                  namespace,
-                  workloadKind: 'Deployment',
-                  workloadName,
-                  containerName: serviceKey,
-                  enabled: true,
-                },
-              ]
+          clusterId && namespace
+            ? services.flatMap((service, index) =>
+                service.serviceKind === 'external_service'
+                  ? []
+                  : [
+                      {
+                        id: `target-${index + 1}`,
+                        clusterId,
+                        namespace,
+                        workloadKind: service.serviceKind === 'job' ? 'Job' : 'Deployment',
+                        workloadName:
+                          String(serviceValues[index]?.workloadName || '').trim() || service.key,
+                        containerName: service.containers?.[0]?.name || service.key,
+                        enabled: true,
+                      },
+                    ],
+              )
             : (blueprint?.environmentBindings?.[0]?.targets ?? []),
       },
     ],
@@ -366,6 +416,8 @@ export function DeliveryOnboardingPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [form] = Form.useForm<OnboardingDraftFormValues>()
+  const [searchParams] = useSearchParams()
+  const templateId = searchParams.get('templateId')
   const [draftModalVisible, setDraftModalVisible] = useState(false)
   const [createdDraft, setCreatedDraft] = useState<DeliveryDraft | null>(null)
   const [confirmedResult, setConfirmedResult] = useState<DeliveryDraftConfirmResult | null>(null)
@@ -425,6 +477,38 @@ export function DeliveryOnboardingPage() {
   const selectedBlueprint = selectedBlueprintId
     ? blueprints.find((item) => item.id === selectedBlueprintId)
     : undefined
+
+  useEffect(() => {
+    if (templateId && blueprints.some((item) => item.id === templateId)) {
+      form.setFieldValue('blueprintId', templateId)
+    }
+  }, [blueprints, form, templateId])
+
+  useEffect(() => {
+    if (!selectedBlueprint) return
+    form.setFieldsValue({
+      appName: selectedBlueprint.applicationDraft?.name ?? form.getFieldValue('appName'),
+      appKey: selectedBlueprint.applicationDraft?.key ?? form.getFieldValue('appKey'),
+      appGroup: selectedBlueprint.applicationDraft?.group ?? form.getFieldValue('appGroup'),
+      language: selectedBlueprint.applicationDraft?.language ?? form.getFieldValue('language'),
+      repositoryPath:
+        selectedBlueprint.applicationDraft?.repositoryPath ?? form.getFieldValue('repositoryPath'),
+      defaultBranch:
+        selectedBlueprint.applicationDraft?.defaultBranch ?? form.getFieldValue('defaultBranch'),
+      environmentKey:
+        selectedBlueprint.environmentBindings?.[0]?.environmentKey ??
+        form.getFieldValue('environmentKey'),
+      services: selectedBlueprint.services?.length
+        ? selectedBlueprint.services.map((service) => ({
+            key: service.key,
+            name: service.name,
+            serviceKind: service.serviceKind,
+            dockerfilePath: service.containers?.[0]?.dockerfilePath,
+            buildContextDir: service.containers?.[0]?.buildContextDir,
+          }))
+        : [createOnboardingService()],
+    })
+  }, [form, selectedBlueprint])
 
   const onboardingColumns: ColumnProps<OnboardingRow>[] = [
     {
@@ -549,6 +633,7 @@ export function DeliveryOnboardingPage() {
             language: 'go',
             defaultBranch: 'main',
             environmentKey: 'dev',
+            services: [createOnboardingService()],
           }}
         >
           <div className="soha-delivery-onboarding-form-grid">
@@ -593,22 +678,18 @@ export function DeliveryOnboardingPage() {
             <Form.Item label="仓库路径" name="repositoryPath">
               <Input placeholder="group/project" />
             </Form.Item>
+            <Form.Item
+              label="仓库 Clone URL"
+              name="repositoryUrl"
+              rules={[
+                { type: 'url', message: '请输入有效的 HTTP(S) URL' },
+                { pattern: /^https?:\/\/\S+$/i, message: '仓库 URL 仅支持 HTTP(S)' },
+              ]}
+            >
+              <Input placeholder="https://github.com/org/repository.git" />
+            </Form.Item>
             <Form.Item label="默认分支" name="defaultBranch">
               <Input />
-            </Form.Item>
-            <Form.Item
-              label="服务名称"
-              name="serviceName"
-              rules={[{ required: true, message: '请输入服务名称' }]}
-            >
-              <Input placeholder="API" />
-            </Form.Item>
-            <Form.Item
-              label="服务 Key"
-              name="serviceKey"
-              rules={[{ required: true, message: '请输入服务 Key' }]}
-            >
-              <Input placeholder="api" />
             </Form.Item>
             <Form.Item
               label="环境 Key"
@@ -623,10 +704,81 @@ export function DeliveryOnboardingPage() {
             <Form.Item label="命名空间" name="namespace">
               <Input placeholder="可选" />
             </Form.Item>
-            <Form.Item label="工作负载" name="workloadName">
-              <Input placeholder="可选，默认使用服务 Key" />
-            </Form.Item>
           </div>
+          <Form.List
+            name="services"
+            rules={[
+              {
+                validator: async (_, services) => {
+                  if (!services?.length) throw new Error('至少配置一个服务组件')
+                  const keys = services
+                    .map((service: OnboardingServiceFormValues) =>
+                      String(service?.key ?? '').trim(),
+                    )
+                    .filter(Boolean)
+                  if (new Set(keys).size !== keys.length) throw new Error('服务 Key 不能重复')
+                },
+              },
+            ]}
+          >
+            {(fields, { add, remove }, { errors }) => (
+              <div className="soha-delivery-onboarding-services">
+                <div className="soha-delivery-onboarding-services__toolbar">
+                  <div>
+                    <Text strong>服务组件</Text>
+                    <Text type="secondary">每个服务独立生成组件、容器和发布目标。</Text>
+                  </div>
+                  <Button icon={<PlusOutlined />} onClick={() => add(createOnboardingService())}>
+                    添加服务
+                  </Button>
+                </div>
+                {fields.map((field, index) => (
+                  <div className="soha-delivery-onboarding-service" key={field.key}>
+                    <div className="soha-delivery-onboarding-service__head">
+                      <Text strong>{`服务 ${index + 1}`}</Text>
+                      <Button
+                        danger
+                        disabled={fields.length === 1}
+                        icon={<DeleteOutlined />}
+                        onClick={() => remove(field.name)}
+                      >
+                        删除
+                      </Button>
+                    </div>
+                    <div className="soha-delivery-onboarding-form-grid">
+                      <Form.Item
+                        label="服务名称"
+                        name={[field.name, 'name']}
+                        rules={[{ required: true, message: '请输入服务名称' }]}
+                      >
+                        <Input placeholder="API" />
+                      </Form.Item>
+                      <Form.Item
+                        label="服务 Key"
+                        name={[field.name, 'key']}
+                        rules={[{ required: true, message: '请输入服务 Key' }]}
+                      >
+                        <Input placeholder="api" />
+                      </Form.Item>
+                      <Form.Item label="服务类型" name={[field.name, 'serviceKind']}>
+                        <Select options={SERVICE_KIND_OPTIONS} />
+                      </Form.Item>
+                      <Form.Item label="工作负载" name={[field.name, 'workloadName']}>
+                        <Input placeholder="可选，默认使用服务 Key" />
+                      </Form.Item>
+                      <Form.Item label="Dockerfile" name={[field.name, 'dockerfilePath']}>
+                        <Input placeholder="Dockerfile" />
+                      </Form.Item>
+                      <Form.Item label="构建目录" name={[field.name, 'buildContextDir']}>
+                        <Input placeholder="." />
+                      </Form.Item>
+                    </div>
+                  </div>
+                ))}
+                <Form.ErrorList errors={errors} />
+              </div>
+            )}
+          </Form.List>
         </Form>
       </Card>
       <div className="soha-delivery-workbench-grid">

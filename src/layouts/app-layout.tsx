@@ -80,7 +80,7 @@ const BREADCRUMB_WORKBENCH_ROOT_ROUTE_IDS: Partial<Record<WorkbenchId, string[]>
   compute: ['compute-workbench'],
   monitoring: ['monitoring-workbench'],
   settings: ['settings', 'extension-center'],
-  security: ['identity'],
+  security: ['internal-workbench'],
 }
 
 interface WorkbenchOption {
@@ -823,6 +823,9 @@ export function AppLayout() {
       const parentID = primaryParentByID.get(menuPointer.id)
       menuPointer = parentID ? (primaryNodeByID.get(parentID) ?? null) : null
     }
+    const workbenchRootRouteIds = activeWorkbenchId
+      ? (BREADCRUMB_WORKBENCH_ROOT_ROUTE_IDS[activeWorkbenchId] ?? [])
+      : []
     if (menuChain.length > 0) {
       const menuSection = menuChain[0].section
       if (activeWorkbenchId !== 'compute' && menuSection) {
@@ -844,7 +847,10 @@ export function AppLayout() {
       const missingRouteAncestors: (typeof currentMeta)[] = []
       let routePointer = getParentRouteMeta(currentMeta)
       while (routePointer && !representedRouteIds.has(routePointer.id)) {
-        if (routePointer.navVisible !== false) {
+        if (
+          routePointer.navVisible !== false &&
+          !workbenchRootRouteIds.includes(routePointer.id)
+        ) {
           missingRouteAncestors.unshift(routePointer)
         }
         routePointer = getParentRouteMeta(routePointer)
@@ -861,10 +867,6 @@ export function AppLayout() {
       }
       return routes
     }
-
-    const workbenchRootRouteIds = activeWorkbenchId
-      ? (BREADCRUMB_WORKBENCH_ROOT_ROUTE_IDS[activeWorkbenchId] ?? [])
-      : []
 
     const routeChain: (typeof currentMeta)[] = []
     const seenRouteIds = new Set<string>()

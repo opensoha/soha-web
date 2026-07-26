@@ -9,6 +9,7 @@ import type {
   IdentityProvider,
   IdentityProviderFilters,
   IdentityProviderInput,
+  IdentitySigningKey,
   UpdateIdentityOIDCClientVariables,
   UpdateIdentityProviderVariables,
 } from './types'
@@ -100,4 +101,13 @@ export async function deleteIdentityOIDCClient({
   await api.delete<ApiResponse<{ status: string }>>(
     `/identity/oidc-clients/${encodeURIComponent(clientId.trim())}`,
   )
+}
+
+export async function rotateIdentityProviderSigningKey(
+  providerId: string,
+): Promise<IdentitySigningKey> {
+  const response = await api.post<ApiResponse<IdentitySigningKey>>(
+    `/identity/providers/${encodeURIComponent(providerId.trim())}/signing-keys/rotate`,
+  )
+  return response.data
 }

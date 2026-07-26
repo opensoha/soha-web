@@ -46,7 +46,7 @@ const WORKBENCH_DEFAULT_PATHS = {
   ai: '/ai-workbench/overview',
   monitoring: '/monitoring-workbench',
   settings: '/settings/overview',
-  security: '/identity/overview',
+  security: '/internal-workbench/overview',
 } as const
 
 const WORKBENCH_FALLBACK_PATHS: Partial<

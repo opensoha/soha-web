@@ -1,27 +1,39 @@
 import { describe, expect, it, vi } from 'vitest'
-import { identityOverviewRoutes } from './routes'
+import { internalWorkbenchOverviewRoutes } from './routes'
 
 const routePage = vi.hoisted(() => () => null)
 
 vi.mock('./page', () => ({ IdentityOverviewPage: routePage }))
 
-describe('identity overview route manifest', () => {
-  it('preserves metadata and loads the capability leaf directly', async () => {
-    expect(identityOverviewRoutes).toHaveLength(1)
-    const [route] = identityOverviewRoutes
+describe('internal workbench overview route manifest', () => {
+  it('owns the canonical workbench path', async () => {
+    expect(internalWorkbenchOverviewRoutes).toHaveLength(2)
+    const [parentRoute, route] = internalWorkbenchOverviewRoutes
+
+    expect(parentRoute).toEqual(
+      expect.objectContaining({
+        redirectTo: '/internal-workbench/overview',
+        meta: expect.objectContaining({
+          id: 'internal-workbench',
+          path: '/internal-workbench',
+          menuId: 'identity',
+          permissionStrategy: 'any-child',
+        }),
+      }),
+    )
 
     expect(route.meta).toEqual({
-      id: 'identity-overview',
-      path: '/identity/overview',
+      id: 'internal-workbench-overview',
+      path: '/internal-workbench/overview',
       title: 'Overview',
-      description: '身份工作台总览',
+      description: '内网工作台总览',
       icon: 'IconDesktop',
       group: 'identity',
       workbenchId: 'security',
       requiresAuth: true,
       tabbar: true,
       navVisible: true,
-      parentId: 'identity',
+      parentId: 'internal-workbench',
       menuId: 'identity-overview',
       permissionKeysAny: [
         'identity.applications.view',

@@ -18,20 +18,24 @@ function queryString(filters: IdentityPolicyFilters) {
   return suffix ? `?${suffix}` : ''
 }
 
+function normalizePolicy(policy: IdentityApplicationPolicy): IdentityApplicationPolicy {
+  return policy.assignments == null ? { ...policy, assignments: [] } : policy
+}
+
 export async function listIdentityPolicies(
   filters: IdentityPolicyFilters = {},
 ): Promise<IdentityApplicationPolicy[]> {
   const response = await api.get<ApiResponse<IdentityApplicationPolicy[]>>(
     `/identity/policies${queryString(filters)}`,
   )
-  return response.data ?? []
+  return (response.data ?? []).map(normalizePolicy)
 }
 
 export async function getIdentityPolicy(applicationId: string): Promise<IdentityApplicationPolicy> {
   const response = await api.get<ApiResponse<IdentityApplicationPolicy>>(
     `/identity/policies/${encodeURIComponent(applicationId.trim())}`,
   )
-  return response.data
+  return normalizePolicy(response.data)
 }
 
 export async function updateIdentityPolicy({
@@ -42,5 +46,5 @@ export async function updateIdentityPolicy({
     `/identity/policies/${encodeURIComponent(applicationId.trim())}`,
     input,
   )
-  return response.data
+  return normalizePolicy(response.data)
 }

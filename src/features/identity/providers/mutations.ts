@@ -4,6 +4,7 @@ import {
   createIdentityProvider,
   deleteIdentityOIDCClient,
   deleteIdentityProvider,
+  rotateIdentityProviderSigningKey,
   updateIdentityOIDCClient,
   updateIdentityProvider,
 } from './api'
@@ -70,5 +71,10 @@ export const identityProviderMutations = {
         queryClient.invalidateQueries({
           queryKey: identityProviderKeys.oidcClients(variables.providerId),
         }),
+    }),
+  rotateSigningKey: () =>
+    mutationOptions({
+      mutationKey: identityProviderMutationKeys.rotateSigningKey,
+      mutationFn: rotateIdentityProviderSigningKey,
     }),
 }

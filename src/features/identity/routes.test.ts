@@ -12,7 +12,7 @@ describe('Identity route manifests', () => {
           workbenchId: 'security',
           permissionStrategy: 'any-child',
         }),
-        redirectTo: '/identity/overview',
+        redirectTo: '/internal-workbench/overview',
       }),
     ])
 
@@ -20,7 +20,8 @@ describe('Identity route manifests', () => {
       identityRouteManifests.flatMap((manifest) => manifest.map((route) => route.meta.id)),
     ).toEqual([
       'identity',
-      'identity-overview',
+      'internal-workbench',
+      'internal-workbench-overview',
       'identity-applications',
       'identity-providers',
       'identity-outposts',

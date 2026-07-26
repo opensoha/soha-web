@@ -20,9 +20,20 @@ const announcementMocks = vi.hoisted(() => ({
   useAnnouncementInbox: vi.fn(),
 }))
 
+const permissionMocks = vi.hoisted(() => ({
+  permissionKeys: ['identity.applications.view'],
+}))
+
 vi.mock('@/services/api-client', () => ({ api: apiMocks }))
 vi.mock('@/features/announcements', () => ({
   useAnnouncementInbox: announcementMocks.useAnnouncementInbox,
+}))
+vi.mock('@/features/auth', () => ({
+  hasPermission: (_snapshot: unknown, permissionKey?: string) =>
+    !permissionKey || permissionMocks.permissionKeys.includes(permissionKey),
+  usePermissionSnapshot: () => ({
+    data: { data: { permissionKeys: permissionMocks.permissionKeys } },
+  }),
 }))
 
 const application = {
@@ -107,6 +118,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  permissionMocks.permissionKeys = ['identity.applications.view']
   usePreferencesStore.setState({ localeCode: 'en_US' })
   apiMocks.get.mockResolvedValue({ data: bootstrap })
   announcementMocks.useAnnouncementInbox.mockReturnValue({
@@ -229,15 +241,19 @@ describe('Provider Portal catalog page', () => {
     expect(container.querySelector('.soha-portal-workspace')?.className).toContain(
       'is-side-collapsed',
     )
+    expect(container.querySelector('.soha-portal-side')).toBeNull()
     expect(container.querySelectorAll('.soha-portal-side-panel')).toHaveLength(0)
 
-    const expandSidebarButton = container.querySelector('button[aria-label="Expand sidebar"]')
+    const expandSidebarButton = container.querySelector(
+      '.soha-portal-view-actions button[aria-label="Expand sidebar"]',
+    )
     await act(async () =>
       expandSidebarButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })),
     )
     expect(container.querySelector('.soha-portal-workspace')?.className).not.toContain(
       'is-side-collapsed',
     )
+    expect(container.querySelector('.soha-portal-side')).not.toBeNull()
     expect(container.querySelectorAll('.soha-portal-side-panel')).toHaveLength(2)
   })
 
@@ -249,8 +265,6 @@ describe('Provider Portal catalog page', () => {
     )
     expect(container.querySelector('.soha-portal-app-grid')?.className).toContain('is-large')
     await act(async () => densityButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
-    expect(container.querySelector('.soha-portal-app-grid')?.className).toContain('is-medium')
-    await act(async () => densityButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     expect(container.querySelector('.soha-portal-app-grid')?.className).toContain('is-small')
     expect(container.querySelectorAll('.soha-portal-app-card.is-small')).toHaveLength(2)
     expect(
@@ -260,7 +274,9 @@ describe('Provider Portal catalog page', () => {
       container.querySelectorAll(
         '.soha-portal-app-card.is-small .ant-card-extra button[aria-label^="Open "]',
       ),
-    ).toHaveLength(2)
+    ).toHaveLength(0)
+    await act(async () => densityButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(container.querySelector('.soha-portal-app-grid')?.className).toContain('is-medium')
     await act(async () => densityButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     expect(container.querySelector('.soha-portal-app-grid')?.className).toContain('is-large')
 
@@ -274,6 +290,27 @@ describe('Provider Portal catalog page', () => {
     expect(visibleCards).toHaveLength(1)
     expect(visibleCards[0]?.textContent).toContain('Build Dashboard')
     expect(visibleCards[0]?.textContent).not.toContain('Operations Console')
+  })
+
+  it('launches an enabled application when its card is clicked', async () => {
+    apiMocks.post.mockImplementation(() => new Promise(() => {}))
+    const container = await renderPage()
+
+    await act(async () =>
+      container
+        .querySelector('.soha-portal-app-card .soha-portal-app-title')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true })),
+    )
+
+    expect(apiMocks.post).toHaveBeenCalledWith('/portal/applications/app-1/launch')
+  })
+
+  it('hides application details without the identity application permission', async () => {
+    permissionMocks.permissionKeys = []
+    const container = await renderPage()
+
+    expect(container.textContent).not.toContain('Details')
+    expect(container.querySelectorAll('.soha-portal-app-actions button')).toHaveLength(2)
   })
 
   it('renders the portal home from the global Chinese dictionary', async () => {

@@ -30,6 +30,7 @@ import type { TabsProps } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { ManagementDensityButton } from '@/components/management-list'
 import { useAnnouncementInbox, type AnnouncementInboxItem } from '@/features/announcements'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import type { IdentityApplication, IdentityApplicationLaunch } from '@/features/identity'
 import { useI18n } from '@/i18n'
 import { providerPortalMutations } from '../mutations'
@@ -48,7 +49,7 @@ const { Paragraph, Text } = Typography
 
 type PortalApplicationView = 'small' | 'medium' | 'large'
 
-const APPLICATION_VIEW_ORDER: PortalApplicationView[] = ['large', 'medium', 'small']
+const APPLICATION_VIEW_ORDER: PortalApplicationView[] = ['small', 'medium', 'large']
 const ALL_APPLICATIONS_TAB_KEY = '__all_applications__'
 const APPLICATION_TAG_TAB_PREFIX = 'tag:'
 
@@ -63,6 +64,7 @@ function cycleApplicationView(view: PortalApplicationView) {
 
 function ApplicationCard({
   application,
+  canViewDetails,
   favoriteLoading,
   launchLoading,
   viewMode,
@@ -71,6 +73,7 @@ function ApplicationCard({
   onViewDetails,
 }: {
   application: IdentityApplication
+  canViewDetails: boolean
   favoriteLoading: boolean
   launchLoading: boolean
   viewMode: PortalApplicationView
@@ -92,9 +95,10 @@ function ApplicationCard({
   const openLabel = t('providerPortal.home.open', 'Open')
   return (
     <Card
-      className={`soha-portal-app-card is-${viewMode}`}
+      className={`soha-portal-app-card is-${viewMode}${application.status === 'enabled' ? ' is-launchable' : ''}`}
       hoverable
       size="small"
+      onClick={() => application.status === 'enabled' && onLaunch(application)}
       title={
         <div className="soha-portal-app-title">
           <PortalApplicationAvatar application={application} />
@@ -107,19 +111,6 @@ function ApplicationCard({
       }
       extra={
         <div className="soha-portal-app-card-extra">
-          {viewMode === 'small' ? (
-            <Tooltip title={openLabel}>
-              <Button
-                aria-label={`${openLabel} ${application.name}`}
-                disabled={application.status !== 'enabled'}
-                icon={<LinkOutlined />}
-                loading={launchLoading}
-                size="small"
-                type="text"
-                onClick={() => onLaunch(application)}
-              />
-            </Tooltip>
-          ) : null}
           <Tooltip title={favoriteLabel}>
             <Button
               aria-label={favoriteLabel}
@@ -155,15 +146,26 @@ function ApplicationCard({
             <PortalTags values={application.tags} max={viewMode === 'medium' ? 2 : 3} />
           </div>
           <div className="soha-portal-app-actions">
-            <Button icon={<InfoCircleOutlined />} onClick={() => onViewDetails(application)}>
-              {t('providerPortal.home.details', 'Details')}
-            </Button>
+            {canViewDetails ? (
+              <Button
+                icon={<InfoCircleOutlined />}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onViewDetails(application)
+                }}
+              >
+                {t('providerPortal.home.details', 'Details')}
+              </Button>
+            ) : null}
             <Button
               disabled={application.status !== 'enabled'}
               icon={<LinkOutlined />}
               loading={launchLoading}
               type="primary"
-              onClick={() => onLaunch(application)}
+              onClick={(event) => {
+                event.stopPropagation()
+                onLaunch(application)
+              }}
             >
               {openLabel}
             </Button>
@@ -407,6 +409,7 @@ export function SohaProviderPortalPage() {
   const [isSideCollapsed, setIsSideCollapsed] = useState(false)
 
   const bootstrapQuery = useQuery(providerPortalQueries.bootstrap())
+  const permissionSnapshotQuery = usePermissionSnapshot()
   const launchMutation = useMutation(providerPortalMutations.launch(queryClient))
   const favoriteMutation = useMutation(providerPortalMutations.toggleFavorite(queryClient))
   const announcementQuery = useAnnouncementInbox(10, true)
@@ -429,6 +432,10 @@ export function SohaProviderPortalPage() {
   }
 
   const bootstrap = bootstrapQuery.data
+  const canViewApplicationDetails = hasPermission(
+    permissionSnapshotQuery.data?.data,
+    'identity.applications.view',
+  )
   const applications = bootstrap?.applications ?? []
   const announcementItems = announcementQuery.data?.data.items ?? []
   const announcementUnreadCount = announcementQuery.data?.data.unreadCount ?? 0
@@ -504,18 +511,30 @@ export function SohaProviderPortalPage() {
                 size="small"
                 tabBarGutter={18}
               />
-              <ManagementDensityButton
-                aria-label={t(
-                  'providerPortal.home.cycleApplicationView',
-                  'Switch application card size',
-                )}
-                className="soha-portal-view-toggle"
-                tooltip={t(
-                  'providerPortal.home.cycleApplicationView',
-                  'Switch application card size',
-                )}
-                onClick={() => setApplicationView((current) => cycleApplicationView(current))}
-              />
+              <div className="soha-portal-view-actions">
+                {isSideCollapsed ? (
+                  <Tooltip title={t('providerPortal.home.expandSidebar', 'Expand sidebar')}>
+                    <Button
+                      aria-label={t('providerPortal.home.expandSidebar', 'Expand sidebar')}
+                      icon={<LeftOutlined />}
+                      size="small"
+                      type="text"
+                      onClick={() => setIsSideCollapsed(false)}
+                    />
+                  </Tooltip>
+                ) : null}
+                <ManagementDensityButton
+                  aria-label={t(
+                    'providerPortal.home.cycleApplicationView',
+                    'Switch application card size',
+                  )}
+                  tooltip={t(
+                    'providerPortal.home.cycleApplicationView',
+                    'Switch application card size',
+                  )}
+                  onClick={() => setApplicationView((current) => cycleApplicationView(current))}
+                />
+              </div>
               <Input
                 allowClear
                 className="soha-portal-search soha-portal-tag-filter-search"
@@ -530,6 +549,7 @@ export function SohaProviderPortalPage() {
                 {filteredApplications.map((application) => (
                   <ApplicationCard
                     application={application}
+                    canViewDetails={canViewApplicationDetails}
                     favoriteLoading={
                       favoriteMutation.isPending &&
                       favoriteMutation.variables?.id === application.id
@@ -560,53 +580,39 @@ export function SohaProviderPortalPage() {
             )}
           </section>
 
-          <aside className={`soha-portal-side${isSideCollapsed ? ' is-collapsed' : ''}`}>
-            <Tooltip
-              title={t(
-                isSideCollapsed
-                  ? 'providerPortal.home.expandSidebar'
-                  : 'providerPortal.home.collapseSidebar',
-                isSideCollapsed ? 'Expand sidebar' : 'Collapse sidebar',
-              )}
-            >
-              <Button
-                aria-label={t(
-                  isSideCollapsed
-                    ? 'providerPortal.home.expandSidebar'
-                    : 'providerPortal.home.collapseSidebar',
-                  isSideCollapsed ? 'Expand sidebar' : 'Collapse sidebar',
-                )}
-                className="soha-portal-side-toggle"
-                icon={isSideCollapsed ? <LeftOutlined /> : <RightOutlined />}
-                size="small"
-                type="text"
-                onClick={() => setIsSideCollapsed((current) => !current)}
-              />
-            </Tooltip>
-            {isSideCollapsed ? null : (
-              <>
-                <section className="soha-portal-side-panel">
-                  <div className="soha-portal-side-title">
-                    <UserOutlined />
-                    <span>{t('providerPortal.home.user', 'User')}</span>
-                  </div>
-                  <PortalUserPanel security={bootstrap?.security} />
-                </section>
-                <section className="soha-portal-side-panel">
-                  <div className="soha-portal-side-title">
-                    <ClockCircleOutlined />
-                    <span>{t('providerPortal.home.recent', 'Recent')}</span>
-                  </div>
-                  <RecentLaunchList
-                    applications={applications}
-                    launchLoadingId={launchMutation.variables?.id}
-                    launches={bootstrap?.recent ?? []}
-                    onLaunch={launchApplication}
-                  />
-                </section>
-              </>
-            )}
-          </aside>
+          {isSideCollapsed ? null : (
+            <aside className="soha-portal-side">
+              <Tooltip title={t('providerPortal.home.collapseSidebar', 'Collapse sidebar')}>
+                <Button
+                  aria-label={t('providerPortal.home.collapseSidebar', 'Collapse sidebar')}
+                  className="soha-portal-side-toggle"
+                  icon={<RightOutlined />}
+                  size="small"
+                  type="text"
+                  onClick={() => setIsSideCollapsed(true)}
+                />
+              </Tooltip>
+              <section className="soha-portal-side-panel">
+                <div className="soha-portal-side-title">
+                  <UserOutlined />
+                  <span>{t('providerPortal.home.user', 'User')}</span>
+                </div>
+                <PortalUserPanel security={bootstrap?.security} />
+              </section>
+              <section className="soha-portal-side-panel">
+                <div className="soha-portal-side-title">
+                  <ClockCircleOutlined />
+                  <span>{t('providerPortal.home.recent', 'Recent')}</span>
+                </div>
+                <RecentLaunchList
+                  applications={applications}
+                  launchLoadingId={launchMutation.variables?.id}
+                  launches={bootstrap?.recent ?? []}
+                  onLaunch={launchApplication}
+                />
+              </section>
+            </aside>
+          )}
         </div>
       </main>
     </div>

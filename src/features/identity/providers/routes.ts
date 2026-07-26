@@ -13,7 +13,7 @@ export const identityProviderRoutes = defineRoutes([
       requiresAuth: true,
       tabbar: true,
       navVisible: true,
-      parentId: 'identity',
+      parentId: 'internal-workbench',
       menuId: 'identity-providers',
       permissionKey: 'identity.providers.view',
       scopeMode: 'passive',

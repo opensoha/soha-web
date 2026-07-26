@@ -22,4 +22,5 @@ export const systemIntegrationMutationKeys = {
   update: () => ['settings', 'system-integrations', 'mutation', 'update'] as const,
   remove: () => ['settings', 'system-integrations', 'mutation', 'remove'] as const,
   test: () => ['settings', 'system-integrations', 'mutation', 'test'] as const,
+  authorizeOAuth: () => ['settings', 'system-integrations', 'mutation', 'authorize-oauth'] as const,
 }

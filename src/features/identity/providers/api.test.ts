@@ -7,6 +7,7 @@ import {
   getIdentityProvider,
   listIdentityOIDCClients,
   listIdentityProviders,
+  rotateIdentityProviderSigningKey,
   updateIdentityOIDCClient,
   updateIdentityProvider,
 } from './api'
@@ -51,7 +52,9 @@ const client: IdentityOIDCClient = {
   id: 'client/id',
   providerId: provider.id,
   clientId: 'grafana',
+  clientType: 'confidential',
   redirectUris: ['https://grafana.example/login'],
+  postLogoutRedirectUris: ['https://grafana.example/logout'],
   allowedScopes: ['openid'],
   allowedGrantTypes: ['authorization_code'],
   requirePkce: true,
@@ -65,7 +68,9 @@ const client: IdentityOIDCClient = {
 
 const clientInput: IdentityOIDCClientInput = {
   clientId: client.clientId,
+  clientType: client.clientType,
   redirectUris: client.redirectUris,
+  postLogoutRedirectUris: client.postLogoutRedirectUris,
   allowedScopes: client.allowedScopes,
   allowedGrantTypes: client.allowedGrantTypes,
   requirePkce: client.requirePkce,
@@ -156,5 +161,13 @@ describe('identity providers api', () => {
 
     expect(apiMocks.delete).toHaveBeenNthCalledWith(1, '/identity/providers/provider%2Fid')
     expect(apiMocks.delete).toHaveBeenNthCalledWith(2, '/identity/oidc-clients/client%2Fid')
+  })
+
+  it('rotates a provider signing key without sending secret material', async () => {
+    const key = { id: 'key-1', providerId: provider.id, kid: 'kid-1', alg: 'ES256', active: true, createdAt: '2026-07-10T00:00:00Z' }
+    apiMocks.post.mockResolvedValueOnce({ data: key })
+
+    await expect(rotateIdentityProviderSigningKey(' provider/id ')).resolves.toBe(key)
+    expect(apiMocks.post).toHaveBeenCalledWith('/identity/providers/provider%2Fid/signing-keys/rotate')
   })
 })

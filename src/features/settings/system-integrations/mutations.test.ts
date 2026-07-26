@@ -23,4 +23,10 @@ describe('systemIntegrationMutations', () => {
     await options.onSettled?.(undefined, null, 'gitlab-main', undefined, {} as never)
     expect(invalidate).toHaveBeenCalledWith({ queryKey: systemIntegrationKeys.all })
   })
+
+  it('uses a dedicated OAuth authorization mutation key', () => {
+    const options = systemIntegrationMutations.authorizeOAuth()
+
+    expect(options.mutationKey).toEqual(systemIntegrationMutationKeys.authorizeOAuth())
+  })
 })

@@ -38,7 +38,7 @@ export const providerPortalRoutes = defineRoutes([
       navVisible: false,
       parentId: 'provider-portal',
       menuId: 'home-workbench',
-      permissionKey: 'identity.portal.view',
+      permissionKey: 'identity.applications.view',
       scopeMode: 'passive',
       workspace: 'system',
     },

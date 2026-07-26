@@ -1,6 +1,7 @@
 export type IdentityProviderType = 'link' | 'oidc' | 'proxy'
 export type IdentityApplicationStatus = 'draft' | 'enabled' | 'disabled' | 'maintenance'
 export type IdentityAssignmentSubjectType = 'user' | 'role' | 'team' | 'tag'
+export type IdentityAssignmentEffect = 'allow' | 'deny'
 
 export interface IdentityPrincipal {
   userId: string
@@ -18,7 +19,7 @@ export interface IdentityApplicationAssignment {
   applicationId?: string
   subjectType: IdentityAssignmentSubjectType
   subjectId: string
-  effect: 'allow'
+  effect: IdentityAssignmentEffect
   createdBy?: string
   createdAt?: string
 }
@@ -74,11 +75,20 @@ export interface IdentityApplicationPolicy {
   portalVisible: boolean
   status: IdentityApplicationStatus
   assignments: IdentityApplicationAssignment[]
+  conditions?: IdentityApplicationPolicyConditions
   updatedAt: string
 }
 
 export interface IdentityApplicationPolicyInput {
   assignments: IdentityApplicationAssignment[]
+  conditions?: IdentityApplicationPolicyConditions
+}
+
+export interface IdentityApplicationPolicyConditions {
+  requireMfa: boolean
+  allowedCidrs: string[]
+  startTimeUtc: string
+  endTimeUtc: string
 }
 
 export interface IdentityApplicationLaunch {

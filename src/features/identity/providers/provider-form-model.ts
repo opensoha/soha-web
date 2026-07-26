@@ -2,6 +2,7 @@ import type {
   IdentityOIDCClient,
   IdentityOIDCClientInput,
   IdentityOIDCClientStatus,
+  IdentityOIDCClientType,
   IdentityProvider,
   IdentityProviderInput,
   IdentityRuntimeProviderStatus,
@@ -40,7 +41,9 @@ export interface OIDCClientFormValues {
   allowedScopes: string[]
   clientId: string
   clientSecret: string
+  clientType: IdentityOIDCClientType
   idTokenTtlSeconds: number
+  postLogoutRedirectUris: string[]
   redirectUris: string[]
   refreshTokenTtlSeconds: number
   requirePkce: boolean
@@ -74,6 +77,14 @@ export const oidcClientStatusOptions: Array<{
 }> = [
   { label: 'Enabled', value: 'enabled' },
   { label: 'Disabled', value: 'disabled' },
+]
+
+export const oidcClientTypeOptions: Array<{
+  label: string
+  value: IdentityOIDCClientType
+}> = [
+  { label: 'Confidential', value: 'confidential' },
+  { label: 'Public', value: 'public' },
 ]
 
 export const defaultScopes = ['openid', 'profile', 'email']
@@ -323,7 +334,9 @@ export function defaultOIDCClientValues(): OIDCClientFormValues {
     allowedScopes: defaultScopes,
     clientId: '',
     clientSecret: '',
+    clientType: 'confidential',
     idTokenTtlSeconds: 300,
+    postLogoutRedirectUris: [],
     redirectUris: [],
     refreshTokenTtlSeconds: 0,
     requirePkce: true,
@@ -340,7 +353,9 @@ export function oidcClientValuesFor(client: IdentityOIDCClient): OIDCClientFormV
     allowedScopes: client.allowedScopes ?? defaultScopes,
     clientId: client.clientId,
     clientSecret: '',
+    clientType: client.clientType || 'confidential',
     idTokenTtlSeconds: client.idTokenTtlSeconds,
+    postLogoutRedirectUris: client.postLogoutRedirectUris ?? [],
     redirectUris: client.redirectUris ?? [],
     refreshTokenTtlSeconds: client.refreshTokenTtlSeconds || 0,
     requirePkce: client.requirePkce,
@@ -359,11 +374,13 @@ export function oidcClientInputFromValues(
     allowedScopes: compactStrings(values.allowedScopes),
     clientId: values.clientId.trim(),
     clientSecret: clientSecret || undefined,
+    clientType: values.clientType || 'confidential',
     idTokenTtlSeconds: Number(values.idTokenTtlSeconds || 300),
     providerId,
+    postLogoutRedirectUris: compactStrings(values.postLogoutRedirectUris),
     redirectUris: compactStrings(values.redirectUris),
     refreshTokenTtlSeconds: Number(values.refreshTokenTtlSeconds || 0),
-    requirePkce: Boolean(values.requirePkce),
+    requirePkce: values.clientType === 'public' || Boolean(values.requirePkce),
     status: values.status || 'enabled',
   }
 }

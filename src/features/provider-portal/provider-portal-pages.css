@@ -56,6 +56,7 @@
 }
 
 .soha-portal-main {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -311,16 +312,10 @@
   word-break: break-all;
 }
 
-.soha-portal-assignment-list,
 .soha-portal-metadata-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-.soha-portal-assignment-list {
-  flex-direction: row;
-  flex-wrap: wrap;
 }
 
 .soha-portal-metadata-row {
@@ -377,7 +372,8 @@
 }
 
 .soha-provider-portal-home .soha-portal-workspace.is-side-collapsed {
-  grid-template-columns: minmax(0, 1fr) 32px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
 }
 
 .soha-provider-portal-home .soha-portal-side {
@@ -402,20 +398,6 @@
   color: var(--soha-text-secondary);
 }
 
-.soha-provider-portal-home .soha-portal-side.is-collapsed {
-  min-height: 32px;
-  border: 1px solid var(--soha-border-color);
-  border-radius: var(--soha-radius-panel, 8px);
-  background: var(--soha-bg-surface);
-}
-
-.soha-provider-portal-home .soha-portal-side.is-collapsed .soha-portal-side-toggle {
-  top: 1px;
-  right: 1px;
-  border: 0;
-  background: transparent;
-}
-
 .soha-provider-portal-home .soha-portal-apps {
   padding: 14px;
   border: 1px solid var(--soha-border-color);
@@ -432,6 +414,12 @@
   min-height: 48px;
   padding: 8px 0;
   border-bottom: 1px solid var(--soha-border-color-secondary, var(--soha-border-color));
+}
+
+.soha-provider-portal-home .soha-portal-view-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .soha-provider-portal-home .soha-portal-tag-filter-tabs.ant-tabs > .ant-tabs-nav {
@@ -537,14 +525,19 @@
 }
 
 .soha-provider-portal-home .soha-portal-app-grid.is-medium {
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(208px, 224px));
+  gap: 10px;
+  padding-top: 10px;
 }
 
 .soha-provider-portal-home .soha-portal-app-card.ant-card {
   height: 100%;
   border-color: var(--soha-border-color);
   box-shadow: none;
+}
+
+.soha-provider-portal-home .soha-portal-app-card.is-launchable {
+  cursor: pointer;
 }
 
 .soha-provider-portal-home .soha-portal-app-card-extra {
@@ -563,21 +556,28 @@
 }
 
 .soha-provider-portal-home .soha-portal-app-card.is-medium .ant-card-head {
-  min-height: 68px;
-  padding-inline: 14px;
+  min-height: 56px;
+  padding-inline: 10px;
 }
 
 .soha-provider-portal-home .soha-portal-app-card.is-medium .ant-card-body {
-  padding: 14px;
+  padding: 10px;
 }
 
 .soha-provider-portal-home .soha-portal-app-card.is-medium .soha-portal-app-card-body {
-  min-height: 172px;
-  gap: 10px;
+  min-height: 126px;
+  gap: 6px;
 }
 
 .soha-provider-portal-home .soha-portal-app-card.is-medium .soha-portal-app-description {
   min-height: 22px;
+}
+
+.soha-provider-portal-home .soha-portal-app-card.is-medium .soha-portal-app-meta,
+.soha-provider-portal-home .soha-portal-app-card.is-medium .soha-portal-app-tags {
+  min-height: 20px;
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 
 .soha-provider-portal-home .soha-portal-app-card.is-small .ant-card-head {
@@ -653,7 +653,7 @@
     max-width: none;
   }
 
-  .soha-provider-portal-home .soha-portal-view-toggle {
+  .soha-provider-portal-home .soha-portal-view-actions {
     grid-column: 2;
     grid-row: 1;
     justify-self: end;

@@ -30,9 +30,33 @@ const workflowDefinition = {
   schemaVersion: 2,
   mode: 'release_dag',
   nodes: [
-    { id: 'build', type: 'build_image', name: '构建镜像', position: { x: 80, y: 120 }, timeoutSeconds: 300, continueOnFailure: false, config: {} },
-    { id: 'deploy', type: 'deploy_update_image', name: '更新镜像', position: { x: 280, y: 120 }, timeoutSeconds: 300, continueOnFailure: false, config: {} },
-    { id: 'verify', type: 'check_http', name: 'HTTP 验证', position: { x: 480, y: 120 }, timeoutSeconds: 300, continueOnFailure: false, config: { url: 'https://example.com/healthz' } },
+    {
+      id: 'build',
+      type: 'build_image',
+      name: '构建镜像',
+      position: { x: 80, y: 120 },
+      timeoutSeconds: 300,
+      continueOnFailure: false,
+      config: {},
+    },
+    {
+      id: 'deploy',
+      type: 'deploy_update_image',
+      name: '更新镜像',
+      position: { x: 280, y: 120 },
+      timeoutSeconds: 300,
+      continueOnFailure: false,
+      config: {},
+    },
+    {
+      id: 'verify',
+      type: 'check_http',
+      name: 'HTTP 验证',
+      position: { x: 480, y: 120 },
+      timeoutSeconds: 300,
+      continueOnFailure: false,
+      config: { url: 'https://example.com/healthz' },
+    },
   ],
   edges: [
     { id: 'edge-build-deploy', source: 'build', target: 'deploy', condition: 'success' },
@@ -110,29 +134,46 @@ const testState = vi.hoisted(() => ({
         'k8s.pods.logs',
         'k8s.deployments.events',
       ]
-      const tools = testState.gatewayManifestMode === 'restricted'
-        ? deliveryTools
-            .filter((name) => ['delivery.applications.list', 'delivery.release_bundles.list'].includes(name))
-            .map((name) => ({
+      const tools =
+        testState.gatewayManifestMode === 'restricted'
+          ? deliveryTools
+              .filter((name) =>
+                ['delivery.applications.list', 'delivery.release_bundles.list'].includes(name),
+              )
+              .map((name) => ({
+                name,
+                title: name,
+                domain: name.startsWith('delivery.') ? 'delivery' : 'diagnosis',
+                action: 'read',
+                riskLevel: 'read',
+                permissionKeys: ['ai.gateway.invoke'],
+                requiredScopes: ['application'],
+                requiresApproval: false,
+              }))
+          : deliveryTools.map((name) => ({
               name,
               title: name,
-              domain: name.startsWith('delivery.') ? 'delivery' : 'diagnosis',
-              action: 'read',
-              riskLevel: 'read',
+              domain: name.startsWith('delivery.')
+                ? 'delivery'
+                : name.startsWith('k8s.')
+                  ? 'kubernetes'
+                  : 'diagnosis',
+              action: name.includes('trigger')
+                ? 'execute'
+                : name.includes('generate') || name.includes('plan')
+                  ? 'analyze'
+                  : 'read',
+              riskLevel:
+                name === 'delivery.actions.trigger' || name === 'delivery.release.plan'
+                  ? 'execute'
+                  : 'read',
               permissionKeys: ['ai.gateway.invoke'],
-              requiredScopes: ['application'],
-              requiresApproval: false,
+              requiredScopes: name.startsWith('k8s.')
+                ? ['cluster', 'namespace']
+                : ['application', 'environment'],
+              requiresApproval:
+                name === 'delivery.actions.trigger' || name === 'delivery.release.plan',
             }))
-        : deliveryTools.map((name) => ({
-            name,
-            title: name,
-            domain: name.startsWith('delivery.') ? 'delivery' : name.startsWith('k8s.') ? 'kubernetes' : 'diagnosis',
-            action: name.includes('trigger') ? 'execute' : name.includes('generate') || name.includes('plan') ? 'analyze' : 'read',
-            riskLevel: name === 'delivery.actions.trigger' || name === 'delivery.release.plan' ? 'execute' : 'read',
-            permissionKeys: ['ai.gateway.invoke'],
-            requiredScopes: name.startsWith('k8s.') ? ['cluster', 'namespace'] : ['application', 'environment'],
-            requiresApproval: name === 'delivery.actions.trigger' || name === 'delivery.release.plan',
-          }))
       return {
         data: {
           name: 'soha AI Gateway',
@@ -240,7 +281,11 @@ const testState = vi.hoisted(() => ({
               updatedAt: '2026-05-08T12:00:00Z',
             },
             buildPolicy: { sourceId: 'source-1', refType: 'branch', imageTagMode: 'input' },
-            releasePolicy: { actionKind: 'deploy', requiresApproval: false, verificationMode: 'workflow' },
+            releasePolicy: {
+              actionKind: 'deploy',
+              requiresApproval: false,
+              verificationMode: 'workflow',
+            },
             targets: [
               {
                 id: 'target-1',
@@ -293,17 +338,25 @@ const testState = vi.hoisted(() => ({
           riskReasons: ['1 release targets'],
           recommendedAction: 'save_with_standard_review',
           applications: [{ id: 'app-1', name: 'ERP Front Main', key: 'erp-front-main' }],
-          bindings: [{
-            id: 'binding-1',
-            applicationId: 'app-1',
-            environmentId: 'env-test',
-            environmentKey: 'test',
-            requiresApproval: false,
-            targetCount: 1,
-            riskLevel: 'low',
-            application: { id: 'app-1', name: 'ERP Front Main', key: 'erp-front-main' },
-            environment: { id: 'env-test', key: 'test', name: '测试环境', isProduction: false, requiresApproval: false },
-          }],
+          bindings: [
+            {
+              id: 'binding-1',
+              applicationId: 'app-1',
+              environmentId: 'env-test',
+              environmentKey: 'test',
+              requiresApproval: false,
+              targetCount: 1,
+              riskLevel: 'low',
+              application: { id: 'app-1', name: 'ERP Front Main', key: 'erp-front-main' },
+              environment: {
+                id: 'env-test',
+                key: 'test',
+                name: '测试环境',
+                isProduction: false,
+                requiresApproval: false,
+              },
+            },
+          ],
           lastExecutionSummary: {
             source: 'workflow_template_runtime',
             stateCounts: { succeeded: 1, failed: 1, running: 1, pending: 0 },
@@ -350,7 +403,16 @@ const testState = vi.hoisted(() => ({
             key: 'node-service',
             name: 'Node Service',
             description: 'Node.js service onboarding',
-            applicationDraft: { key: 'node-service', name: 'Node Service', group: 'frontend', language: 'node' },
+            applicationDraft: {
+              key: 'node-service',
+              name: 'Node Service',
+              group: 'frontend',
+              language: 'node',
+            },
+            services: [
+              { key: 'web', name: 'Web', serviceKind: 'kubernetes_workload', enabled: true },
+              { key: 'worker', name: 'Worker', serviceKind: 'job', enabled: true },
+            ],
             buildSources: [],
             environmentBindings: [],
             files: [],
@@ -393,10 +455,40 @@ const testState = vi.hoisted(() => ({
             environmentId: 'env-test',
             environmentName: '测试环境',
             requiresApproval: false,
-            buildSource: { id: 'source-1', name: 'Repo Dockerfile', type: 'repo_dockerfile', enabled: true, isDefault: true },
-            targets: [{ clusterId: 'cluster-a', namespace: 'erp-test', workloadName: 'erp-front', workloadKind: 'deployment' }],
-            latestBuild: { id: 'build-1', applicationId: 'app-1', status: 'completed', sourceSystem: 'application', createdAt: '2026-05-08T10:00:00Z', updatedAt: '2026-05-08T10:30:00Z' },
-            latestBundle: { id: 'bundle-1', applicationId: 'app-1', applicationEnvironmentId: 'binding-1', version: '1.2.3', sourceType: 'build', status: 'completed', artifactRef: 'registry.local/erp-front:1.2.3', createdAt: '2026-05-08T10:30:00Z', updatedAt: '2026-05-08T10:40:00Z' },
+            buildSource: {
+              id: 'source-1',
+              name: 'Repo Dockerfile',
+              type: 'repo_dockerfile',
+              enabled: true,
+              isDefault: true,
+            },
+            targets: [
+              {
+                clusterId: 'cluster-a',
+                namespace: 'erp-test',
+                workloadName: 'erp-front',
+                workloadKind: 'deployment',
+              },
+            ],
+            latestBuild: {
+              id: 'build-1',
+              applicationId: 'app-1',
+              status: 'completed',
+              sourceSystem: 'application',
+              createdAt: '2026-05-08T10:00:00Z',
+              updatedAt: '2026-05-08T10:30:00Z',
+            },
+            latestBundle: {
+              id: 'bundle-1',
+              applicationId: 'app-1',
+              applicationEnvironmentId: 'binding-1',
+              version: '1.2.3',
+              sourceType: 'build',
+              status: 'completed',
+              artifactRef: 'registry.local/erp-front:1.2.3',
+              createdAt: '2026-05-08T10:30:00Z',
+              updatedAt: '2026-05-08T10:40:00Z',
+            },
             latestExecutionTask: {
               id: 'task-1',
               releaseBundleId: 'bundle-1',
@@ -409,7 +501,9 @@ const testState = vi.hoisted(() => ({
               maxRetries: 1,
               attemptCount: 1,
               timeoutSeconds: 600,
-              artifacts: [{ kind: 'image', name: 'erp-front', ref: 'registry.local/erp-front:1.2.3' }],
+              artifacts: [
+                { kind: 'image', name: 'erp-front', ref: 'registry.local/erp-front:1.2.3' },
+              ],
               createdAt: '2026-05-08T10:40:00Z',
               updatedAt: '2026-05-08T11:20:00Z',
             },
@@ -419,11 +513,22 @@ const testState = vi.hoisted(() => ({
               workflowName: 'deploy',
               status: 'running',
               steps: [],
-              nodeRuns: [{ nodeId: 'smoke', name: 'Smoke', type: 'smoke_test', status: 'completed' }],
+              nodeRuns: [
+                { nodeId: 'smoke', name: 'Smoke', type: 'smoke_test', status: 'completed' },
+              ],
               createdAt: '2026-05-08T11:00:00Z',
               updatedAt: '2026-05-08T11:30:00Z',
             },
-            latestRelease: { id: 'release-1', applicationId: 'app-1', clusterId: 'cluster-a', namespace: 'erp-test', deploymentName: 'erp-front', status: 'running', createdAt: '2026-05-08T11:15:00Z', updatedAt: '2026-05-08T11:25:00Z' },
+            latestRelease: {
+              id: 'release-1',
+              applicationId: 'app-1',
+              clusterId: 'cluster-a',
+              namespace: 'erp-test',
+              deploymentName: 'erp-front',
+              status: 'running',
+              createdAt: '2026-05-08T11:15:00Z',
+              updatedAt: '2026-05-08T11:25:00Z',
+            },
           },
           {
             applicationEnvironmentId: 'binding-2',
@@ -432,8 +537,23 @@ const testState = vi.hoisted(() => ({
             environmentId: 'env-staging',
             environmentName: '预发环境',
             requiresApproval: false,
-            targets: [{ clusterId: 'cluster-b', namespace: 'mall-staging', workloadName: 'mall-api', workloadKind: 'deployment' }],
-            latestWorkflow: { id: 'wf-2', applicationId: 'app-2', workflowName: 'deploy', status: 'failed', steps: [], createdAt: '2026-05-08T11:00:00Z', updatedAt: '2026-05-08T11:30:00Z' },
+            targets: [
+              {
+                clusterId: 'cluster-b',
+                namespace: 'mall-staging',
+                workloadName: 'mall-api',
+                workloadKind: 'deployment',
+              },
+            ],
+            latestWorkflow: {
+              id: 'wf-2',
+              applicationId: 'app-2',
+              workflowName: 'deploy',
+              status: 'failed',
+              steps: [],
+              createdAt: '2026-05-08T11:00:00Z',
+              updatedAt: '2026-05-08T11:30:00Z',
+            },
           },
         ],
       }
@@ -470,17 +590,23 @@ const testState = vi.hoisted(() => ({
           approvalBindingCount: testState.forceHighBuildTemplateUsage ? 1 : 0,
           targetCount: 1,
           riskLevel: testState.forceHighBuildTemplateUsage ? 'high' : 'low',
-          riskReasons: testState.forceHighBuildTemplateUsage ? ['1 production environment bindings'] : ['1 release targets'],
-          recommendedAction: testState.forceHighBuildTemplateUsage ? 'copy_template_before_editing' : 'save_with_standard_review',
+          riskReasons: testState.forceHighBuildTemplateUsage
+            ? ['1 production environment bindings']
+            : ['1 release targets'],
+          recommendedAction: testState.forceHighBuildTemplateUsage
+            ? 'copy_template_before_editing'
+            : 'save_with_standard_review',
           applications: [{ id: 'app-2', name: 'Mall API', key: 'mall-api' }],
-          buildSources: [{
-            applicationId: 'app-2',
-            buildSourceId: 'source-2',
-            buildSourceName: 'Platform Template',
-            application: { id: 'app-2', name: 'Mall API', key: 'mall-api' },
-            bindingCount: 1,
-            riskLevel: 'low',
-          }],
+          buildSources: [
+            {
+              applicationId: 'app-2',
+              buildSourceId: 'source-2',
+              buildSourceName: 'Platform Template',
+              application: { id: 'app-2', name: 'Mall API', key: 'mall-api' },
+              bindingCount: 1,
+              riskLevel: 'low',
+            },
+          ],
           lastExecutionSummary: {
             source: 'build_template_runtime',
             stateCounts: { succeeded: 1, failed: 0, running: 1, pending: 0 },
@@ -562,7 +688,9 @@ const testState = vi.hoisted(() => ({
             attemptCount: 1,
             timeoutSeconds: 600,
             callbackToken: 'token-running',
-            artifacts: [{ kind: 'image', name: 'erp-front', ref: 'registry.local/erp-front:1.2.3' }],
+            artifacts: [
+              { kind: 'image', name: 'erp-front', ref: 'registry.local/erp-front:1.2.3' },
+            ],
             lastHeartbeatAt: '2026-05-08T11:20:00Z',
             createdAt: '2026-05-08T10:40:00Z',
             updatedAt: '2026-05-08T11:20:00Z',
@@ -586,7 +714,10 @@ const testState = vi.hoisted(() => ({
         ],
       }
     }
-    if (path === '/delivery/execution-tasks/task-running/logs' || path === '/delivery/execution-tasks/task-failed/logs') {
+    if (
+      path === '/delivery/execution-tasks/task-running/logs' ||
+      path === '/delivery/execution-tasks/task-failed/logs'
+    ) {
       return { data: [] }
     }
     if (path === '/workflows') {
@@ -701,8 +832,16 @@ const testState = vi.hoisted(() => ({
             id: 'draft-1',
             source: 'manual',
             status: 'confirmed',
-            applicationDraft: { name: 'Draft Demo', key: 'draft-demo', group: 'default', language: 'go', enabled: true },
-            services: [{ key: 'api', name: 'API', serviceKind: 'kubernetes_workload', enabled: true }],
+            applicationDraft: {
+              name: 'Draft Demo',
+              key: 'draft-demo',
+              group: 'default',
+              language: 'go',
+              enabled: true,
+            },
+            services: [
+              { key: 'api', name: 'API', serviceKind: 'kubernetes_workload', enabled: true },
+            ],
             buildSources: [],
             environmentBindings: [],
             files: [],
@@ -721,9 +860,26 @@ const testState = vi.hoisted(() => ({
             createdAt: '2026-05-08T12:01:00Z',
             updatedAt: '2026-05-08T12:01:00Z',
           },
-          services: [{ id: 'svc-api', applicationId: 'app-draft', key: 'api', name: 'API', serviceKind: 'kubernetes_workload', enabled: true }],
+          services: [
+            {
+              id: 'svc-api',
+              applicationId: 'app-draft',
+              key: 'api',
+              name: 'API',
+              serviceKind: 'kubernetes_workload',
+              enabled: true,
+            },
+          ],
           environmentBindings: [],
-          spec: { applicationDraft: { name: 'Draft Demo', key: 'draft-demo', group: 'default', language: 'go', enabled: true } },
+          spec: {
+            applicationDraft: {
+              name: 'Draft Demo',
+              key: 'draft-demo',
+              group: 'default',
+              language: 'go',
+              enabled: true,
+            },
+          },
         },
       }
     }
@@ -732,7 +888,8 @@ const testState = vi.hoisted(() => ({
 }))
 
 vi.mock('@/features/auth/permission-snapshot', () => ({
-  hasPermission: (snapshot: { permissionKeys?: string[] } | undefined, key: string) => snapshot?.permissionKeys?.includes(key) ?? false,
+  hasPermission: (snapshot: { permissionKeys?: string[] } | undefined, key: string) =>
+    snapshot?.permissionKeys?.includes(key) ?? false,
   usePermissionSnapshot: () => ({
     data: { data: testState.permissionSnapshot },
     isLoading: false,
@@ -757,13 +914,13 @@ vi.mock('@/components/release-flow-dag-editor', () => ({
     <div className={props.className} data-testid="release-flow-dag-editor">
       <button
         type="button"
-        onClick={() => props.onChange?.({
-          ...(props.initialDefinition ?? {}),
-          nodes: [
-            { id: 'mock-build', type: 'build_image', name: 'Mock Build' },
-          ],
-          edges: [],
-        })}
+        onClick={() =>
+          props.onChange?.({
+            ...(props.initialDefinition ?? {}),
+            nodes: [{ id: 'mock-build', type: 'build_image', name: 'Mock Build' }],
+            edges: [],
+          })
+        }
       >
         Mock DAG change
       </button>
@@ -799,9 +956,7 @@ async function renderWithProviders(node: ReactNode, route = '/applications') {
     root.render(
       <QueryClientProvider client={queryClient}>
         <AntApp>
-          <MemoryRouter initialEntries={[route]}>
-            {node}
-          </MemoryRouter>
+          <MemoryRouter initialEntries={[route]}>{node}</MemoryRouter>
         </AntApp>
       </QueryClientProvider>,
     )
@@ -817,7 +972,9 @@ async function renderWithProviders(node: ReactNode, route = '/applications') {
 }
 
 function findButton(container: ParentNode, text: string) {
-  const button = Array.from(container.querySelectorAll('button')).find((item) => item.textContent?.includes(text)) as HTMLButtonElement | undefined
+  const button = Array.from(container.querySelectorAll('button')).find((item) =>
+    item.textContent?.includes(text),
+  ) as HTMLButtonElement | undefined
   if (!button) {
     throw new Error(`button not found: ${text}`)
   }
@@ -833,7 +990,9 @@ function findToolbarButton(container: HTMLElement, toolbarSelector: string, text
 }
 
 function hasButtonText(container: ParentNode, text: string) {
-  return Array.from(container.querySelectorAll('button')).some((item) => item.textContent?.includes(text))
+  return Array.from(container.querySelectorAll('button')).some((item) =>
+    item.textContent?.includes(text),
+  )
 }
 
 async function clickButton(button: HTMLButtonElement) {
@@ -855,7 +1014,9 @@ async function setInputValue(input: HTMLInputElement, value: string) {
 }
 
 async function clickTab(container: HTMLElement, text: string) {
-  const tab = Array.from(container.querySelectorAll('[role="tab"]')).find((item) => item.textContent?.includes(text)) as HTMLElement | undefined
+  const tab = Array.from(container.querySelectorAll('[role="tab"]')).find((item) =>
+    item.textContent?.includes(text),
+  ) as HTMLElement | undefined
   if (!tab) {
     throw new Error(`tab not found: ${text}`)
   }
@@ -918,7 +1079,7 @@ describe('ApplicationsPage workspace layout', () => {
 
   afterEach(async () => {
     await act(async () => {
-    for (const root of roots) root.unmount()
+      for (const root of roots) root.unmount()
     })
     roots = []
     for (const container of containers) container.remove()
@@ -1035,11 +1196,19 @@ describe('ApplicationsPage workspace layout', () => {
   it('covers build template edit, variable, enable switch, and JSON preview interactions', async () => {
     const container = await renderWithProviders(<BuildTemplatesPage />, '/build-templates')
 
-    expect(findToolbarButton(container, '.soha-build-template-toolbar', '新建模板').disabled).toBe(false)
-    expect(findToolbarButton(container, '.soha-build-template-toolbar', '保存').disabled).toBe(false)
-    expect(findToolbarButton(container, '.soha-build-template-toolbar', '删除').disabled).toBe(false)
+    expect(findToolbarButton(container, '.soha-build-template-toolbar', '新建模板').disabled).toBe(
+      false,
+    )
+    expect(findToolbarButton(container, '.soha-build-template-toolbar', '保存').disabled).toBe(
+      false,
+    )
+    expect(findToolbarButton(container, '.soha-build-template-toolbar', '删除').disabled).toBe(
+      false,
+    )
 
-    const enabledSwitch = container.querySelector('.soha-build-template-list__item-actions button[role="switch"]') as HTMLButtonElement | null
+    const enabledSwitch = container.querySelector(
+      '.soha-build-template-list__item-actions button[role="switch"]',
+    ) as HTMLButtonElement | null
     expect(enabledSwitch).not.toBeNull()
     expect(enabledSwitch?.disabled).toBe(false)
 
@@ -1051,8 +1220,12 @@ describe('ApplicationsPage workspace layout', () => {
     expect(container.textContent).toContain('变量 2')
 
     await clickTab(container, '高级预览')
-    expect(container.querySelector('.soha-build-template-json-preview')?.textContent).toContain('"variableSchema"')
-    expect(container.querySelector('.soha-build-template-json-preview')?.textContent).toContain('"imageTag"')
+    expect(container.querySelector('.soha-build-template-json-preview')?.textContent).toContain(
+      '"variableSchema"',
+    )
+    expect(container.querySelector('.soha-build-template-json-preview')?.textContent).toContain(
+      '"imageTag"',
+    )
   })
 
   it('requires secondary confirmation before saving high-risk build template usage', async () => {
@@ -1071,14 +1244,23 @@ describe('ApplicationsPage workspace layout', () => {
     testState.permissionSnapshot.permissionKeys = [...readonlyPermissionKeys]
     const container = await renderWithProviders(<BuildTemplatesPage />, '/build-templates')
 
-    expect(findToolbarButton(container, '.soha-build-template-toolbar', '新建模板').disabled).toBe(true)
+    expect(findToolbarButton(container, '.soha-build-template-toolbar', '新建模板').disabled).toBe(
+      true,
+    )
     expect(findToolbarButton(container, '.soha-build-template-toolbar', '保存').disabled).toBe(true)
     expect(findToolbarButton(container, '.soha-build-template-toolbar', '删除').disabled).toBe(true)
-    expect(container.querySelector<HTMLButtonElement>('.soha-build-template-list__item-actions button[role="switch"]')?.disabled).toBe(true)
+    expect(
+      container.querySelector<HTMLButtonElement>(
+        '.soha-build-template-list__item-actions button[role="switch"]',
+      )?.disabled,
+    ).toBe(true)
   })
 
   it('renders application environment bindings and create/edit/delete entry points for managers', async () => {
-    const container = await renderWithProviders(<ApplicationEnvironmentsPage />, '/application-environments')
+    const container = await renderWithProviders(
+      <ApplicationEnvironmentsPage />,
+      '/application-environments',
+    )
 
     expect(testState.apiGet).toHaveBeenCalledWith('/application-environments')
     expect(testState.apiGet).toHaveBeenCalledWith('/applications')
@@ -1098,7 +1280,10 @@ describe('ApplicationsPage workspace layout', () => {
 
   it('hides application environment binding writes for readonly users', async () => {
     testState.permissionSnapshot.permissionKeys = [...readonlyPermissionKeys]
-    const container = await renderWithProviders(<ApplicationEnvironmentsPage />, '/application-environments')
+    const container = await renderWithProviders(
+      <ApplicationEnvironmentsPage />,
+      '/application-environments',
+    )
 
     expect(container.textContent).toContain('ERP Front Main')
     expect(hasButtonText(container, '新建绑定')).toBe(false)
@@ -1117,7 +1302,9 @@ describe('ApplicationsPage workspace layout', () => {
     expect(container.querySelector('[data-testid="release-flow-dag-editor"]')).not.toBeNull()
 
     await clickButton(findToolbarButton(container, '.soha-workflow-template-toolbar', 'JSON'))
-    expect(container.querySelector('.soha-workflow-template-json-panel')?.textContent).toContain('"mode": "release_dag"')
+    expect(container.querySelector('.soha-workflow-template-json-panel')?.textContent).toContain(
+      '"mode": "release_dag"',
+    )
 
     await clickButton(container.querySelector<HTMLButtonElement>('[aria-label="编辑模板设置"]')!)
     expect(document.body.textContent).toContain('模板影响面')
@@ -1134,14 +1321,28 @@ describe('ApplicationsPage workspace layout', () => {
     testState.permissionSnapshot.permissionKeys = [...readonlyPermissionKeys]
     const container = await renderWithProviders(<WorkflowTemplatesPage />, '/workflow-templates')
 
-    expect(findToolbarButton(container, '.soha-workflow-template-toolbar', '新建模板').disabled).toBe(true)
-    expect(findToolbarButton(container, '.soha-workflow-template-toolbar', '保存').disabled).toBe(true)
-    expect(findToolbarButton(container, '.soha-workflow-template-toolbar', '复制模板').disabled).toBe(true)
-    expect(findToolbarButton(container, '.soha-workflow-template-toolbar', '删除').disabled).toBe(true)
-    expect(container.querySelector<HTMLButtonElement>('.soha-workflow-template-list__item-actions button[role="switch"]')?.disabled).toBe(true)
+    expect(
+      findToolbarButton(container, '.soha-workflow-template-toolbar', '新建模板').disabled,
+    ).toBe(true)
+    expect(findToolbarButton(container, '.soha-workflow-template-toolbar', '保存').disabled).toBe(
+      true,
+    )
+    expect(
+      findToolbarButton(container, '.soha-workflow-template-toolbar', '复制模板').disabled,
+    ).toBe(true)
+    expect(findToolbarButton(container, '.soha-workflow-template-toolbar', '删除').disabled).toBe(
+      true,
+    )
+    expect(
+      container.querySelector<HTMLButtonElement>(
+        '.soha-workflow-template-list__item-actions button[role="switch"]',
+      )?.disabled,
+    ).toBe(true)
 
     await clickButton(findToolbarButton(container, '.soha-workflow-template-toolbar', 'JSON'))
-    expect(container.querySelector('.soha-workflow-template-json-panel')?.textContent).toContain('"mode": "release_dag"')
+    expect(container.querySelector('.soha-workflow-template-json-panel')?.textContent).toContain(
+      '"mode": "release_dag"',
+    )
   })
 
   it('hides registry save actions for readonly users', async () => {
@@ -1192,7 +1393,9 @@ describe('ApplicationsPage workspace layout', () => {
     expect(container.textContent).toContain('执行中')
     expect(container.textContent).toContain('阻塞')
     expect(container.textContent).toContain('Task')
-    expect(testState.apiGet).toHaveBeenCalledWith('/ai-gateway/capabilities?source=delivery-workbench&skillId=delivery-developer')
+    expect(testState.apiGet).toHaveBeenCalledWith(
+      '/ai-gateway/capabilities?source=delivery-workbench&skillId=delivery-developer',
+    )
     expect(container.textContent).toContain('AI Gateway 构建发布辅助')
     expect(container.textContent).toContain('需要审批')
     expect(container.textContent).toContain('AI Gateway 可用，调用需要审批')
@@ -1258,11 +1461,21 @@ describe('ApplicationsPage workspace layout', () => {
   })
 
   it('routes runtime evidence directly to dedicated detail pages', () => {
-    expect(runtimeEvidencePath({ kind: 'build', id: 'build-1' } as any)).toBe('/builds/build-1?highlight=build-1')
-    expect(runtimeEvidencePath({ kind: 'workflow', id: 'workflow-1' } as any)).toBe('/workflows/workflow-1?highlight=workflow-1')
-    expect(runtimeEvidencePath({ kind: 'release', id: 'release-1' } as any)).toBe('/releases/release-1?highlight=release-1')
-    expect(runtimeEvidencePath({ kind: 'release_bundle', id: 'bundle-1' } as any)).toBe('/delivery/release-bundles/bundle-1?highlight=bundle-1')
-    expect(runtimeEvidencePath({ kind: 'execution_task', id: 'task-running' } as any)).toBe('/delivery/execution-tasks/task-running?highlight=task-running')
+    expect(runtimeEvidencePath({ kind: 'build', id: 'build-1' } as any)).toBe(
+      '/builds/build-1?highlight=build-1',
+    )
+    expect(runtimeEvidencePath({ kind: 'workflow', id: 'workflow-1' } as any)).toBe(
+      '/workflows/workflow-1?highlight=workflow-1',
+    )
+    expect(runtimeEvidencePath({ kind: 'release', id: 'release-1' } as any)).toBe(
+      '/releases/release-1?highlight=release-1',
+    )
+    expect(runtimeEvidencePath({ kind: 'release_bundle', id: 'bundle-1' } as any)).toBe(
+      '/delivery/release-bundles/bundle-1?highlight=bundle-1',
+    )
+    expect(runtimeEvidencePath({ kind: 'execution_task', id: 'task-running' } as any)).toBe(
+      '/delivery/execution-tasks/task-running?highlight=task-running',
+    )
   })
 
   it('renders application onboarding as a dual-mode workbench entry', async () => {
@@ -1275,7 +1488,9 @@ describe('ApplicationsPage workspace layout', () => {
     expect(container.textContent).toContain('常规模式保持完整可用')
     expect(container.textContent).toContain('接入对象边界')
     expect(container.textContent).toContain('AI Gateway 接入辅助')
-    expect(testState.apiGet).toHaveBeenCalledWith('/ai-gateway/capabilities?source=delivery-workbench&skillId=delivery-developer')
+    expect(testState.apiGet).toHaveBeenCalledWith(
+      '/ai-gateway/capabilities?source=delivery-workbench&skillId=delivery-developer',
+    )
     expect(container.textContent).toContain('AI Gateway 可直接辅助')
     expect(container.textContent).toContain('可见能力')
     expect(container.textContent).toContain('服务组件')
@@ -1290,16 +1505,63 @@ describe('ApplicationsPage workspace layout', () => {
 
     await setInputValue(container.querySelector('#appName') as HTMLInputElement, 'Draft Demo')
     await setInputValue(container.querySelector('#appKey') as HTMLInputElement, 'draft-demo')
-    await setInputValue(container.querySelector('#serviceName') as HTMLInputElement, 'API')
-    await setInputValue(container.querySelector('#serviceKey') as HTMLInputElement, 'api')
+    await setInputValue(
+      container.querySelector('#repositoryUrl') as HTMLInputElement,
+      'https://github.com/octocat/Hello-World.git',
+    )
+    await setInputValue(container.querySelector('#clusterId') as HTMLInputElement, 'cluster-test')
+    await setInputValue(container.querySelector('#namespace') as HTMLInputElement, 'delivery-smoke')
+    await setInputValue(container.querySelector('#services_0_name') as HTMLInputElement, 'API')
+    await setInputValue(container.querySelector('#services_0_key') as HTMLInputElement, 'api')
+    await setInputValue(
+      container.querySelector('#services_0_workloadName') as HTMLInputElement,
+      'draft-demo-api',
+    )
+    await clickButton(findButton(container, '添加服务'))
+    await setInputValue(container.querySelector('#services_1_name') as HTMLInputElement, 'Worker')
+    await setInputValue(container.querySelector('#services_1_key') as HTMLInputElement, 'worker')
+    await setInputValue(
+      container.querySelector('#services_1_workloadName') as HTMLInputElement,
+      'draft-demo-worker',
+    )
     await setInputValue(container.querySelector('#environmentKey') as HTMLInputElement, 'dev')
     await clickButton(findButton(container, '生成草稿'))
 
-    expect(testState.apiPost).toHaveBeenCalledWith('/delivery/drafts', expect.objectContaining({
-      applicationDraft: expect.objectContaining({ name: 'Draft Demo', key: 'draft-demo' }),
-      services: expect.arrayContaining([expect.objectContaining({ key: 'api', name: 'API' })]),
-      environmentBindings: expect.arrayContaining([expect.objectContaining({ environmentKey: 'dev' })]),
-    }))
+    expect(testState.apiPost).toHaveBeenCalledWith(
+      '/delivery/drafts',
+      expect.objectContaining({
+        applicationDraft: expect.objectContaining({
+          name: 'Draft Demo',
+          key: 'draft-demo',
+          metadata: expect.objectContaining({
+            repositoryURL: 'https://github.com/octocat/Hello-World.git',
+          }),
+        }),
+        buildSources: expect.arrayContaining([
+          expect.objectContaining({
+            config: expect.objectContaining({
+              repositoryURL: 'https://github.com/octocat/Hello-World.git',
+            }),
+          }),
+        ]),
+        services: [
+          expect.objectContaining({ key: 'api', name: 'API' }),
+          expect.objectContaining({ key: 'worker', name: 'Worker' }),
+        ],
+        environmentBindings: expect.arrayContaining([
+          expect.objectContaining({
+            environmentKey: 'dev',
+            targets: [
+              expect.objectContaining({ workloadName: 'draft-demo-api', containerName: 'api' }),
+              expect.objectContaining({
+                workloadName: 'draft-demo-worker',
+                containerName: 'worker',
+              }),
+            ],
+          }),
+        ]),
+      }),
+    )
     expect(document.body.textContent).toContain('DeliveryDraft 预览确认')
     expect(document.body.textContent).toContain('确认前不会创建或修改平台对象')
 
@@ -1307,6 +1569,28 @@ describe('ApplicationsPage workspace layout', () => {
 
     expect(testState.apiPost).toHaveBeenCalledWith('/delivery/drafts/draft-1/confirm', {})
     expect(document.body.textContent).toContain('草稿已确认')
+  })
+
+  it('initializes all services from the selected blueprint', async () => {
+    const container = await renderWithProviders(
+      <DeliveryOnboardingPage />,
+      '/delivery/onboarding?templateId=blueprint-1',
+    )
+
+    expect((container.querySelector('#services_0_key') as HTMLInputElement).value).toBe('web')
+    expect((container.querySelector('#services_1_key') as HTMLInputElement).value).toBe('worker')
+    await clickButton(findButton(container, '生成草稿'))
+
+    expect(testState.apiPost).toHaveBeenCalledWith(
+      '/delivery/drafts',
+      expect.objectContaining({
+        source: 'blueprint',
+        services: [
+          expect.objectContaining({ key: 'web', name: 'Web' }),
+          expect.objectContaining({ key: 'worker', name: 'Worker' }),
+        ],
+      }),
+    )
   })
 
   it('renders testing verification with candidate evidence and AI assist boundary', async () => {
@@ -1319,7 +1603,9 @@ describe('ApplicationsPage workspace layout', () => {
     expect(container.textContent).toContain('候选版本')
     expect(container.textContent).toContain('验证任务')
     expect(container.textContent).toContain('AI Gateway 验证辅助')
-    expect(testState.apiGet).toHaveBeenCalledWith('/ai-gateway/capabilities?source=delivery-workbench&skillId=delivery-tester')
+    expect(testState.apiGet).toHaveBeenCalledWith(
+      '/ai-gateway/capabilities?source=delivery-workbench&skillId=delivery-tester',
+    )
     expect(container.textContent).toContain('需要审批')
     expect(container.textContent).toContain('常规模式保持完整可用')
     expect(container.textContent).toContain('1.2.3')
@@ -1335,7 +1621,9 @@ describe('ApplicationsPage workspace layout', () => {
     expect(container.textContent).toContain('问题分析')
     expect(container.textContent).toContain('失败任务')
     expect(container.textContent).toContain('AI Gateway 故障分析')
-    expect(testState.apiGet).toHaveBeenCalledWith('/ai-gateway/capabilities?source=delivery-workbench&skillId=delivery-tester')
+    expect(testState.apiGet).toHaveBeenCalledWith(
+      '/ai-gateway/capabilities?source=delivery-workbench&skillId=delivery-tester',
+    )
     expect(container.textContent).toContain('AI Gateway 可直接辅助')
     expect(container.textContent).toContain('任务日志')
     expect(container.textContent).toContain('task-failed')
@@ -1347,7 +1635,9 @@ describe('ApplicationsPage workspace layout', () => {
     testState.gatewayManifestMode = 'restricted'
     const container = await renderWithProviders(<DeliveryOnboardingPage />, '/delivery/onboarding')
 
-    expect(testState.apiGet).toHaveBeenCalledWith('/ai-gateway/capabilities?source=delivery-workbench&skillId=delivery-developer')
+    expect(testState.apiGet).toHaveBeenCalledWith(
+      '/ai-gateway/capabilities?source=delivery-workbench&skillId=delivery-developer',
+    )
     expect(container.textContent).toContain('AI Gateway 能力受限')
     expect(container.textContent).toContain('缺失能力')
     expect(container.textContent).toContain('delivery.onboarding.analyze_repo')

@@ -2,6 +2,7 @@ import type {
   SystemIntegrationEnvelope,
   SystemIntegrationListEnvelope,
   SystemIntegrationTestResultEnvelope,
+  SystemIntegrationOAuthAuthorizationEnvelope,
 } from '@opensoha/contracts/gen/ts/sohaapi'
 import { api } from '@/services/api-client'
 import type {
@@ -39,6 +40,12 @@ export const systemIntegrationsApi = {
     (
       await api.post<SystemIntegrationTestResultEnvelope>(
         `/system-integrations/${encodeURIComponent(id)}/test`,
+      )
+    ).data,
+  authorizeOAuth: async (id: string) =>
+    (
+      await api.post<SystemIntegrationOAuthAuthorizationEnvelope>(
+        `/system-integrations/${encodeURIComponent(id)}/oauth/authorize`,
       )
     ).data,
 }

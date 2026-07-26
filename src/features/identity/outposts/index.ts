@@ -3,6 +3,7 @@ export {
   deleteIdentityOutpost,
   getIdentityOutpost,
   listIdentityOutposts,
+  rotateIdentityOutpostToken,
   updateIdentityOutpost,
 } from './api'
 export {

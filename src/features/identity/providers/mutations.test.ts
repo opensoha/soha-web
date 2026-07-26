@@ -9,6 +9,7 @@ const apiMocks = vi.hoisted(() => ({
   createIdentityProvider: vi.fn(),
   deleteIdentityOIDCClient: vi.fn(),
   deleteIdentityProvider: vi.fn(),
+  rotateIdentityProviderSigningKey: vi.fn(),
   updateIdentityOIDCClient: vi.fn(),
   updateIdentityProvider: vi.fn(),
 }))

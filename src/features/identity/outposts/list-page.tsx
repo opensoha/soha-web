@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { App, Button, Form, Popconfirm, Select, Space, Tag, Typography } from 'antd'
 import type { TableColumnsType } from 'antd'
-import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, KeyOutlined, PlusOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
@@ -102,6 +102,10 @@ export function IdentityOutpostsPage() {
   })
   const deleteMutation = useMutation({
     ...identityOutpostMutations.remove(queryClient),
+    onError: (error: Error) => message.error(error.message),
+  })
+  const rotateTokenMutation = useMutation({
+    ...identityOutpostMutations.rotateToken(queryClient),
     onError: (error: Error) => message.error(error.message),
   })
 
@@ -206,7 +210,7 @@ export function IdentityOutpostsPage() {
       title: 'Actions',
       key: 'actions',
       fixed: 'right',
-      width: 104,
+      width: 136,
       render: (_value, record) => (
         <Space size={4}>
           <ManagementIconButton
@@ -215,6 +219,26 @@ export function IdentityOutpostsPage() {
             onClick={() => openEdit(record)}
             tooltip="编辑 Outpost"
           />
+          <Popconfirm
+            title="轮换 Outpost token"
+            description="旧 token 将立即失效。确认已准备更新 Outpost 配置。"
+            okButtonProps={{ loading: rotateTokenMutation.isPending }}
+            okText="轮换"
+            onConfirm={() =>
+              rotateTokenMutation.mutate(record.id, {
+                onSuccess: (outpost) => {
+                  message.success(`已轮换 ${outpost.name} token`)
+                  if (outpost.token) setCreatedToken({ name: outpost.name, token: outpost.token })
+                },
+              })
+            }
+          >
+            <ManagementIconButton
+              disabled={!canManage}
+              icon={<KeyOutlined />}
+              tooltip="轮换 token"
+            />
+          </Popconfirm>
           <Popconfirm
             title="删除 Outpost"
             description={`确认删除 ${record.name}？`}

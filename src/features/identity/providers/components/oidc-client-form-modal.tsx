@@ -4,6 +4,7 @@ import {
   defaultOIDCClientValues,
   oidcClientInputFromValues,
   oidcClientStatusOptions,
+  oidcClientTypeOptions,
   oidcClientValuesFor,
   oidcGrantTypeOptions,
   type OIDCClientFormValues,
@@ -28,6 +29,7 @@ export function OIDCClientFormModal({
   submitting,
 }: OIDCClientFormModalProps) {
   const [form] = Form.useForm<OIDCClientFormValues>()
+  const clientType = Form.useWatch('clientType', form)
 
   useEffect(() => {
     if (open)
@@ -59,13 +61,28 @@ export function OIDCClientFormModal({
             <Input placeholder="grafana" />
           </Form.Item>
           <Form.Item label="Client Secret" name="clientSecret">
-            <Input.Password placeholder={editing ? '留空表示不轮换' : '留空自动生成'} />
+            <Input.Password
+              disabled={clientType === 'public'}
+              placeholder={
+                clientType === 'public' ? 'Public client 不使用 secret' : editing ? '留空表示不轮换' : '留空自动生成'
+              }
+            />
+          </Form.Item>
+          <Form.Item label="Client Type" name="clientType">
+            <Select
+              onChange={(value) => {
+                if (value === 'public') {
+                  form.setFieldsValue({ clientSecret: '', requirePkce: true })
+                }
+              }}
+              options={oidcClientTypeOptions}
+            />
           </Form.Item>
           <Form.Item label="Status" name="status">
             <Select options={oidcClientStatusOptions} />
           </Form.Item>
           <Form.Item label="Require PKCE" name="requirePkce" valuePropName="checked">
-            <Switch />
+            <Switch disabled={clientType === 'public'} />
           </Form.Item>
         </div>
 
@@ -77,6 +94,14 @@ export function OIDCClientFormModal({
           <Select
             mode="tags"
             placeholder="https://grafana.example.com/login/generic_oauth"
+            tokenSeparators={[',']}
+          />
+        </Form.Item>
+
+        <Form.Item label="Post Logout Redirect URIs" name="postLogoutRedirectUris">
+          <Select
+            mode="tags"
+            placeholder="https://grafana.example.com/logout"
             tokenSeparators={[',']}
           />
         </Form.Item>

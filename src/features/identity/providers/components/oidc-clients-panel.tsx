@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { App, Button, Popconfirm, Space, Tag, Typography } from 'antd'
 import type { TableColumnsType } from 'antd'
-import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, KeyOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
 import {
@@ -45,6 +45,7 @@ export function OIDCClientsPanel({ canManage, onSecretCreated, provider }: OIDCC
   const createMutation = useMutation(identityProviderMutations.createOIDCClient(queryClient))
   const updateMutation = useMutation(identityProviderMutations.updateOIDCClient(queryClient))
   const deleteMutation = useMutation(identityProviderMutations.removeOIDCClient(queryClient))
+  const rotateSigningKeyMutation = useMutation(identityProviderMutations.rotateSigningKey())
 
   const closeModal = () => {
     setModalOpen(false)
@@ -115,6 +116,12 @@ export function OIDCClientsPanel({ canManage, onSecretCreated, provider }: OIDCC
         dataIndex: 'redirectUris',
         width: 320,
         render: (values: string[]) => identityProviderTagsSummary(values),
+      },
+      {
+        title: 'Client Type',
+        dataIndex: 'clientType',
+        width: 120,
+        render: (value: string) => <Tag>{value || 'confidential'}</Tag>,
       },
       {
         title: 'Scopes',
@@ -200,9 +207,9 @@ export function OIDCClientsPanel({ canManage, onSecretCreated, provider }: OIDCC
     return (
       <ManagementState
         compact
-        description="当前阶段只管理 OIDC client。"
+        description="OIDC client 仅适用于 OIDC Provider。"
         kind="unsupported"
-        title="Proxy Provider runtime 尚未启用"
+        title="非 OIDC Provider"
       />
     )
   }
@@ -224,6 +231,24 @@ export function OIDCClientsPanel({ canManage, onSecretCreated, provider }: OIDCC
         title="OIDC Clients"
         toolbar={
           <ManagementTableToolbar>
+            <Popconfirm
+              cancelText="取消"
+              description="旧公钥会保留 24 小时，之后使用旧密钥签发的令牌将无法验证。"
+              disabled={!canManage}
+              okButtonProps={{ loading: rotateSigningKeyMutation.isPending }}
+              okText="轮换"
+              onConfirm={() =>
+                rotateSigningKeyMutation.mutate(provider.id, {
+                  onSuccess: (key) => message.success(`签名密钥已轮换，kid: ${key.kid}`),
+                  onError: (error: Error) => message.error(error.message),
+                })
+              }
+              title="轮换 OIDC 签名密钥"
+            >
+              <Button disabled={!canManage} icon={<KeyOutlined />} size="small">
+                轮换签名密钥
+              </Button>
+            </Popconfirm>
             <Button
               disabled={!canManage}
               icon={<PlusOutlined />}

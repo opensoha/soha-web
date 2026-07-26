@@ -21,7 +21,7 @@ describe('identity application route manifest', () => {
       requiresAuth: true,
       tabbar: true,
       navVisible: true,
-      parentId: 'identity',
+      parentId: 'internal-workbench',
       menuId: 'identity-applications',
       permissionKey: 'identity.applications.view',
       scopeMode: 'passive',

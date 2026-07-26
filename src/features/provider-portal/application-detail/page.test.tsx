@@ -31,7 +31,16 @@ const application = {
   sortOrder: 1,
   status: 'enabled',
   metadata: { owner: 'platform' },
-  assignments: [],
+  assignments: [
+    {
+      id: 'assignment-1',
+      applicationId: 'app/1',
+      subjectType: 'role',
+      subjectId: 'platform-admin',
+      effect: 'allow',
+      createdAt: '2026-01-01T00:00:00Z',
+    },
+  ],
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-02T00:00:00Z',
 }
@@ -101,5 +110,7 @@ describe('Provider Portal application detail page', () => {
     expect(container.textContent).toContain('https://console.example.test')
     expect(container.textContent).toContain('owner')
     expect(container.textContent).toContain('platform')
+    expect(container.textContent).not.toContain('Access scope')
+    expect(container.textContent).not.toContain('platform-admin')
   })
 })

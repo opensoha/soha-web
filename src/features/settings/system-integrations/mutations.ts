@@ -31,4 +31,9 @@ export const systemIntegrationMutations = {
       mutationFn: systemIntegrationsApi.test,
       onSettled: () => invalidateSystemIntegrations(queryClient),
     }),
+  authorizeOAuth: () =>
+    mutationOptions({
+      mutationKey: systemIntegrationMutationKeys.authorizeOAuth(),
+      mutationFn: systemIntegrationsApi.authorizeOAuth,
+    }),
 }

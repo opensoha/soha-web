@@ -1,5 +1,10 @@
 import { mutationOptions, type QueryClient } from '@tanstack/react-query'
-import { createIdentityOutpost, deleteIdentityOutpost, updateIdentityOutpost } from './api'
+import {
+  createIdentityOutpost,
+  deleteIdentityOutpost,
+  rotateIdentityOutpostToken,
+  updateIdentityOutpost,
+} from './api'
 import { identityOutpostKeys, identityOutpostMutationKeys } from './keys'
 
 async function invalidateLists(queryClient: QueryClient) {
@@ -36,5 +41,12 @@ export const identityOutpostMutations = {
           queryClient.invalidateQueries({ queryKey: identityOutpostKeys.detail(outpostId) }),
         ])
       },
+    }),
+  rotateToken: (queryClient: QueryClient) =>
+    mutationOptions({
+      mutationKey: identityOutpostMutationKeys.rotateToken,
+      mutationFn: rotateIdentityOutpostToken,
+      onSuccess: (_outpost, outpostId) =>
+        queryClient.invalidateQueries({ queryKey: identityOutpostKeys.detail(outpostId) }),
     }),
 }

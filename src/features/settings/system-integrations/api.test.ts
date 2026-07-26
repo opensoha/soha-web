@@ -30,7 +30,7 @@ describe('systemIntegrationsApi', () => {
     )
   })
 
-  it('uses encoded detail, update, delete, and test paths', async () => {
+  it('uses encoded detail, update, delete, test, and OAuth paths', async () => {
     vi.mocked(api.get).mockResolvedValue({ data: { id: 'gitlab/main' } })
     vi.mocked(api.patch).mockResolvedValue({ data: { id: 'gitlab/main', version: 2 } })
     vi.mocked(api.post).mockResolvedValue({ data: { status: 'succeeded' } })
@@ -42,6 +42,7 @@ describe('systemIntegrationsApi', () => {
     })
     await systemIntegrationsApi.remove('gitlab/main')
     await systemIntegrationsApi.test('gitlab/main')
+    await systemIntegrationsApi.authorizeOAuth('gitlab/main')
 
     expect(api.get).toHaveBeenCalledWith('/system-integrations/gitlab%2Fmain')
     expect(api.patch).toHaveBeenCalledWith('/system-integrations/gitlab%2Fmain', {
@@ -50,6 +51,7 @@ describe('systemIntegrationsApi', () => {
     })
     expect(api.delete).toHaveBeenCalledWith('/system-integrations/gitlab%2Fmain')
     expect(api.post).toHaveBeenCalledWith('/system-integrations/gitlab%2Fmain/test')
+    expect(api.post).toHaveBeenCalledWith('/system-integrations/gitlab%2Fmain/oauth/authorize')
   })
 
   it('creates a GitLab integration without changing the contract payload', async () => {

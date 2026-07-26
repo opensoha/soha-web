@@ -56,3 +56,10 @@ export async function deleteIdentityOutpost(outpostId: string): Promise<void> {
     `/identity/outposts/${encodeURIComponent(outpostId.trim())}`,
   )
 }
+
+export async function rotateIdentityOutpostToken(outpostId: string): Promise<IdentityOutpost> {
+  const response = await api.post<ApiResponse<IdentityOutpost>>(
+    `/identity/outposts/${encodeURIComponent(outpostId.trim())}/token/rotate`,
+  )
+  return response.data
+}

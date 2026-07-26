@@ -41,7 +41,7 @@ import {
 } from '../template-usage-impact'
 import { deliveryMutations } from '../mutations'
 import { deliveryQueries } from '../queries'
-import type { BlueprintBootstrapResult, DeliveryBlueprint, RenderedDeliverySpec } from '../types'
+import type { DeliveryBlueprint, RenderedDeliverySpec } from '../types'
 import { formatDateTime } from '@/utils/time'
 import { parseReleaseTargets } from '../release-targets'
 
@@ -64,6 +64,13 @@ const LANGUAGE_OPTIONS = [
   { value: 'java', label: 'Java' },
   { value: 'python', label: 'Python' },
   { value: 'other', label: 'Other' },
+]
+
+const SERVICE_KIND_OPTIONS = [
+  { value: 'kubernetes_workload', label: 'Kubernetes 工作负载' },
+  { value: 'helm_release', label: 'Helm Release' },
+  { value: 'job', label: 'Job' },
+  { value: 'external_service', label: '外部服务' },
 ]
 
 const REF_TYPE_OPTIONS = [
@@ -101,7 +108,11 @@ const FILE_KIND_OPTIONS = [
 ]
 
 type FileTemplatePreset =
-  'dockerfile' | 'yaml_manifest' | 'helm_values' | 'helm_chart' | 'kustomization'
+  | 'dockerfile'
+  | 'yaml_manifest'
+  | 'helm_values'
+  | 'helm_chart'
+  | 'kustomization'
 
 interface FileTemplateDraft {
   path: string
@@ -215,6 +226,19 @@ function createDefaultBuildSource(index = 0) {
   }
 }
 
+function createDefaultService(index = 0) {
+  const key = index === 0 ? 'api' : `service-${index + 1}`
+  return {
+    key,
+    name: index === 0 ? 'API' : `服务 ${index + 1}`,
+    serviceKind: 'kubernetes_workload',
+    buildSourceId: 'source-1',
+    enabled: true,
+    dockerfilePath: 'Dockerfile',
+    buildContextDir: '.',
+  }
+}
+
 function createDefaultEnvironmentBinding(index = 0) {
   return {
     environmentKey: index === 0 ? 'dev' : '',
@@ -309,6 +333,7 @@ function createBlueprintDraftValues(
     dockerfilePath: 'Dockerfile',
     appEnabled: true,
     metadataText: '{}',
+    services: [createDefaultService()],
     buildSources: [createDefaultBuildSource()],
     environmentBindings: [createDefaultEnvironmentBinding()],
     files: [createDefaultFileTemplate()],
@@ -341,6 +366,18 @@ function blueprintToFormValues(blueprint: DeliveryBlueprint): BlueprintFormValue
     dockerfilePath: draft.dockerfilePath ?? 'Dockerfile',
     appEnabled: draft.enabled !== false,
     metadataText: stringify(draft.metadata ?? {}, '{}'),
+    services: (blueprint.services ?? []).map((service) => ({
+      key: service.key,
+      name: service.name,
+      serviceKind: service.serviceKind,
+      ownerTeam: service.ownerTeam ?? '',
+      repositoryPath: service.repositoryPath ?? '',
+      defaultBranch: service.defaultBranch ?? '',
+      buildSourceId: service.buildSourceId ?? '',
+      enabled: service.enabled,
+      dockerfilePath: service.containers?.[0]?.dockerfilePath ?? 'Dockerfile',
+      buildContextDir: service.containers?.[0]?.buildContextDir ?? '.',
+    })),
     buildSources: (blueprint.buildSources ?? []).map((source) => {
       const config = source.config ?? {}
       return {
@@ -395,6 +432,28 @@ function blueprintToFormValues(blueprint: DeliveryBlueprint): BlueprintFormValue
 }
 
 function buildBlueprintPayload(values: BlueprintFormValues, id?: string) {
+  const services = normalizeObjectArray(values.services).map((service, index) => {
+    const key = trimString(service.key) || `service-${index + 1}`
+    return compactRecord({
+      key,
+      name: trimString(service.name) || key,
+      serviceKind: trimString(service.serviceKind) || 'kubernetes_workload',
+      ownerTeam: optionalString(service.ownerTeam),
+      repositoryPath: optionalString(service.repositoryPath),
+      defaultBranch: optionalString(service.defaultBranch),
+      buildSourceId: optionalString(service.buildSourceId),
+      enabled: service.enabled !== false,
+      metadata: {},
+      containers: [
+        {
+          name: key,
+          dockerfilePath: trimString(service.dockerfilePath) || 'Dockerfile',
+          buildContextDir: trimString(service.buildContextDir) || '.',
+          metadata: {},
+        },
+      ],
+    })
+  })
   const buildSources = normalizeObjectArray(values.buildSources).map((source, index) =>
     compactRecord({
       id: optionalString(source.id) ?? slugFrom(source.name, `source-${index + 1}`),
@@ -483,6 +542,7 @@ function buildBlueprintPayload(values: BlueprintFormValues, id?: string) {
       enabled: values.appEnabled !== false,
       metadata: parseJSONObject(values.metadataText, '应用元数据'),
     }),
+    services,
     buildSources,
     environmentBindings,
     files,
@@ -549,9 +609,7 @@ export function DeliveryBlueprintsPage() {
   const [isDirty, setIsDirty] = useState(false)
   const [formSnapshot, setFormSnapshot] = useState<BlueprintFormValues>({})
   const [specModalVisible, setSpecModalVisible] = useState(false)
-  const [bootstrapModalVisible, setBootstrapModalVisible] = useState(false)
   const [renderedSpec, setRenderedSpec] = useState<RenderedDeliverySpec | null>(null)
-  const [bootstrapResult, setBootstrapResult] = useState<BlueprintBootstrapResult | null>(null)
   const suppressFormChangeRef = useRef(false)
 
   const blueprintsQuery = useQuery(deliveryQueries.blueprints.list())
@@ -564,9 +622,6 @@ export function DeliveryBlueprintsPage() {
   const createMutation = useMutation(deliveryMutations.blueprints.create(queryClient))
   const updateMutation = useMutation(deliveryMutations.blueprints.update(queryClient))
   const renderMutation = useMutation(deliveryMutations.blueprints.renderSpec())
-  const bootstrapMutation = useMutation(
-    deliveryMutations.blueprints.bootstrapApplication(queryClient),
-  )
 
   const blueprints = blueprintsQuery.data ?? []
   const selectedBlueprint =
@@ -825,14 +880,7 @@ export function DeliveryBlueprintsPage() {
       void message.warning('请先保存模板，再执行平台接入')
       return
     }
-    bootstrapMutation.mutate(selectedBlueprint.id, {
-      onSuccess: (payload) => {
-        setBootstrapResult(payload)
-        setBootstrapModalVisible(true)
-      },
-      onError: (error) =>
-        void message.error(error instanceof Error ? error.message : '平台接入失败'),
-    })
+    navigate(`/delivery/onboarding?templateId=${encodeURIComponent(selectedBlueprint.id)}`)
   }
 
   const buildSourceOptions = normalizeObjectArray(formSnapshot.buildSources).map((item, index) => ({
@@ -1007,6 +1055,95 @@ export function DeliveryBlueprintsPage() {
             <Input type="hidden" />
           </Form.Item>
         </div>
+      ),
+    },
+    {
+      key: 'services',
+      label: '服务组件',
+      children: (
+        <Form.List
+          name="services"
+          rules={[
+            {
+              validator: async (_, services) => {
+                if (!services?.length) throw new Error('至少配置一个服务组件')
+                const keys = services
+                  .map((service: Record<string, unknown>) => trimString(service?.key))
+                  .filter(Boolean)
+                if (new Set(keys).size !== keys.length) throw new Error('服务 Key 不能重复')
+              },
+            },
+          ]}
+        >
+          {(fields, { add, remove }, { errors }) => (
+            <div className="soha-delivery-blueprint-repeat-list">
+              <div className="soha-delivery-blueprint-repeat-list__toolbar">
+                <Text type="secondary">定义模板生成的多个独立构建和发布服务。</Text>
+                <Button
+                  icon={<PlusOutlined />}
+                  onClick={() => add(createDefaultService(fields.length))}
+                >
+                  添加服务
+                </Button>
+              </div>
+              {fields.map((field, index) => (
+                <div className="soha-delivery-blueprint-repeat-item" key={field.key}>
+                  <div className="soha-delivery-blueprint-repeat-item__head">
+                    <strong>{`服务 ${index + 1}`}</strong>
+                    <Button
+                      danger
+                      icon={<DeleteOutlined />}
+                      size="small"
+                      onClick={() => remove(field.name)}
+                    >
+                      删除
+                    </Button>
+                  </div>
+                  <div className="soha-delivery-blueprint-form-grid">
+                    <Form.Item
+                      name={[field.name, 'name']}
+                      label="服务名称"
+                      rules={[{ required: true, message: '请输入服务名称' }]}
+                    >
+                      <Input placeholder="API" />
+                    </Form.Item>
+                    <Form.Item
+                      name={[field.name, 'key']}
+                      label="服务 Key"
+                      rules={[{ required: true, message: '请输入服务 Key' }]}
+                    >
+                      <Input placeholder="api" />
+                    </Form.Item>
+                    <Form.Item name={[field.name, 'serviceKind']} label="服务类型">
+                      <Select options={SERVICE_KIND_OPTIONS} />
+                    </Form.Item>
+                    <Form.Item name={[field.name, 'buildSourceId']} label="构建源">
+                      <Select allowClear options={buildSourceOptions} />
+                    </Form.Item>
+                    <Form.Item name={[field.name, 'dockerfilePath']} label="Dockerfile">
+                      <Input placeholder="Dockerfile" />
+                    </Form.Item>
+                    <Form.Item name={[field.name, 'buildContextDir']} label="构建目录">
+                      <Input placeholder="." />
+                    </Form.Item>
+                    <Form.Item name={[field.name, 'repositoryPath']} label="仓库子路径">
+                      <Input placeholder="services/api" />
+                    </Form.Item>
+                    <Form.Item
+                      className="soha-delivery-blueprint-switch-field"
+                      name={[field.name, 'enabled']}
+                      label="启用"
+                      valuePropName="checked"
+                    >
+                      <Switch />
+                    </Form.Item>
+                  </div>
+                </div>
+              ))}
+              <Form.ErrorList errors={errors} />
+            </div>
+          )}
+        </Form.List>
       ),
     },
     {
@@ -1493,12 +1630,7 @@ export function DeliveryBlueprintsPage() {
         >
           渲染规范
         </Button>
-        <Button
-          icon={<PlayCircleOutlined />}
-          disabled={!hasSelection}
-          loading={bootstrapMutation.isPending}
-          onClick={handleBootstrap}
-        >
+        <Button icon={<PlayCircleOutlined />} disabled={!hasSelection} onClick={handleBootstrap}>
           平台接入
         </Button>
       </Space>
@@ -1641,16 +1773,6 @@ export function DeliveryBlueprintsPage() {
         footer={null}
       >
         <pre className="soha-json-block">{JSON.stringify(renderedSpec ?? {}, null, 2)}</pre>
-      </Modal>
-
-      <Modal
-        width={960}
-        title="平台接入结果"
-        open={bootstrapModalVisible}
-        onCancel={() => setBootstrapModalVisible(false)}
-        footer={null}
-      >
-        <pre className="soha-json-block">{JSON.stringify(bootstrapResult ?? {}, null, 2)}</pre>
       </Modal>
     </TemplateDesignerShell>
   )

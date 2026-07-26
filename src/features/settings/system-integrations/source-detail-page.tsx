@@ -1,8 +1,18 @@
 import { useEffect } from 'react'
-import { App as AntdApp, Button, Form, Input, InputNumber, Space, Switch } from 'antd'
-import { SaveOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import {
+  Alert,
+  App as AntdApp,
+  Button,
+  Form,
+  Input,
+  InputNumber,
+  Segmented,
+  Space,
+  Switch,
+} from 'antd'
+import { LinkOutlined, SaveOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ManagementDataPage } from '@/components/management-data-page'
 import { ManagementState } from '@/components/management-list'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
@@ -22,6 +32,7 @@ export function SourceConnectionDetailPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const params = useParams<{ integrationId: string }>()
+  const [searchParams] = useSearchParams()
   const integrationId = params.integrationId ?? ''
   const isNew = integrationId === 'new'
   const permissionQuery = usePermissionSnapshot()
@@ -31,8 +42,17 @@ export function SourceConnectionDetailPage() {
   const createMutation = useMutation(systemIntegrationMutations.create(queryClient))
   const updateMutation = useMutation(systemIntegrationMutations.update(queryClient))
   const testMutation = useMutation(systemIntegrationMutations.test(queryClient))
+  const authorizeOAuthMutation = useMutation(systemIntegrationMutations.authorizeOAuth())
   const [form] = Form.useForm<GitLabFormValues>()
   const saving = createMutation.isPending || updateMutation.isPending
+  const authMode = Form.useWatch('authMode', form) ?? 'access_token'
+  const configuredAuthMode = detailQuery.data?.configuration.find(
+    (field) => field.key === 'auth_mode',
+  )?.value
+  const oauthMode = configuredAuthMode === 'oauth'
+  const connectionReady = detailQuery.data?.credentialKeys.includes(
+    oauthMode ? 'access_token' : 'token',
+  )
 
   useEffect(() => {
     if (isNew) {
@@ -94,7 +114,7 @@ export function SourceConnectionDetailPage() {
             <Button onClick={() => navigate('/settings/source-control')}>返回</Button>
             {!isNew && detailQuery.data ? (
               <Button
-                disabled={!canManage || !detailQuery.data.enabled}
+                disabled={!canManage || !detailQuery.data.enabled || !connectionReady}
                 icon={<ThunderboltOutlined />}
                 loading={testMutation.isPending}
                 onClick={() =>
@@ -109,6 +129,21 @@ export function SourceConnectionDetailPage() {
                 }
               >
                 测试连接
+              </Button>
+            ) : null}
+            {!isNew && detailQuery.data && oauthMode ? (
+              <Button
+                disabled={!canManage || !detailQuery.data.credentialKeys.includes('client_secret')}
+                icon={<LinkOutlined />}
+                loading={authorizeOAuthMutation.isPending}
+                onClick={() =>
+                  authorizeOAuthMutation.mutate(detailQuery.data!.id, {
+                    onSuccess: (result) => window.location.assign(result.authorizationUrl),
+                    onError: (error) => void message.error(error.message),
+                  })
+                }
+              >
+                {connectionReady ? '重新授权' : '授权 GitLab'}
               </Button>
             ) : null}
             {canManage ? (
@@ -126,6 +161,22 @@ export function SourceConnectionDetailPage() {
       }}
       tableNode={
         <SettingsCard>
+          {searchParams.get('oauth') === 'success' ? (
+            <Alert
+              className="soha-system-integration-oauth-alert"
+              showIcon
+              type="success"
+              title="GitLab OAuth 授权成功"
+            />
+          ) : null}
+          {searchParams.get('oauth') === 'error' ? (
+            <Alert
+              className="soha-system-integration-oauth-alert"
+              showIcon
+              type="error"
+              title="GitLab OAuth 授权失败，请重新授权"
+            />
+          ) : null}
           <Form<GitLabFormValues>
             form={form}
             layout="vertical"
@@ -143,6 +194,19 @@ export function SourceConnectionDetailPage() {
               </Form.Item>
               <Form.Item name="enabled" label="启用" valuePropName="checked">
                 <Switch />
+              </Form.Item>
+              <Form.Item
+                name="authMode"
+                label="认证方式"
+                rules={[{ required: true, message: '请选择认证方式' }]}
+              >
+                <Segmented
+                  block
+                  options={[
+                    { label: 'Access Token', value: 'access_token' },
+                    { label: 'OAuth Application', value: 'oauth' },
+                  ]}
+                />
               </Form.Item>
               <Form.Item
                 name="baseUrl"
@@ -171,17 +235,62 @@ export function SourceConnectionDetailPage() {
               >
                 <Input placeholder="15s" />
               </Form.Item>
-              <Form.Item
-                name="token"
-                label={
-                  detailQuery.data?.credentialKeys.includes('token')
-                    ? '访问令牌（已配置，留空保持不变）'
-                    : '访问令牌'
-                }
-                rules={isNew ? [{ required: true, message: '请输入访问令牌' }] : undefined}
-              >
-                <Input.Password autoComplete="new-password" placeholder="GitLab access token" />
-              </Form.Item>
+              {authMode === 'access_token' ? (
+                <Form.Item
+                  name="token"
+                  label={
+                    detailQuery.data?.credentialKeys.includes('token')
+                      ? '访问令牌（已配置，留空保持不变）'
+                      : '访问令牌'
+                  }
+                  rules={isNew ? [{ required: true, message: '请输入访问令牌' }] : undefined}
+                >
+                  <Input.Password autoComplete="new-password" placeholder="GitLab access token" />
+                </Form.Item>
+              ) : (
+                <>
+                  <Form.Item
+                    name="clientId"
+                    label="Application ID"
+                    rules={[{ required: true, message: '请输入 GitLab Application ID' }]}
+                  >
+                    <Input autoComplete="off" />
+                  </Form.Item>
+                  <Form.Item
+                    name="clientSecret"
+                    label={
+                      detailQuery.data?.credentialKeys.includes('client_secret')
+                        ? 'Application Secret（已配置，留空保持不变）'
+                        : 'Application Secret'
+                    }
+                    rules={
+                      isNew || !detailQuery.data?.credentialKeys.includes('client_secret')
+                        ? [{ required: true, message: '请输入 GitLab Application Secret' }]
+                        : undefined
+                    }
+                  >
+                    <Input.Password autoComplete="new-password" />
+                  </Form.Item>
+                  <Form.Item
+                    name="oauthRedirectUri"
+                    label="GitLab Application Redirect URI"
+                    rules={[
+                      { required: true, message: '请输入 OAuth 回调地址' },
+                      { type: 'url', message: '请输入有效的 URL' },
+                    ]}
+                  >
+                    <Input />
+                  </Form.Item>
+                  <Alert
+                    className="soha-system-integration-oauth-alert"
+                    showIcon
+                    type={connectionReady ? 'success' : 'info'}
+                    title={
+                      connectionReady ? 'OAuth 已授权' : '保存连接后，点击“授权 GitLab”完成授权'
+                    }
+                  />
+                </>
+              )}
               <Form.Item name="description" label="说明">
                 <Input.TextArea maxLength={1000} rows={3} />
               </Form.Item>

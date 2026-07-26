@@ -4,6 +4,7 @@ import {
   deleteIdentityOutpost,
   getIdentityOutpost,
   listIdentityOutposts,
+  rotateIdentityOutpostToken,
   updateIdentityOutpost,
 } from './api'
 import type { IdentityOutpost, IdentityOutpostInput } from './types'
@@ -85,5 +86,12 @@ describe('identity outposts api', () => {
 
     await expect(deleteIdentityOutpost(' edge/id ')).resolves.toBeUndefined()
     expect(apiMocks.delete).toHaveBeenCalledWith('/identity/outposts/edge%2Fid')
+  })
+
+  it('returns a rotated token only from the one-time response', async () => {
+    apiMocks.post.mockResolvedValueOnce({ data: outpost })
+
+    await expect(rotateIdentityOutpostToken(' edge/id ')).resolves.toBe(outpost)
+    expect(apiMocks.post).toHaveBeenCalledWith('/identity/outposts/edge%2Fid/token/rotate')
   })
 })

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AuditLog, OnlineUser } from '@/features/system'
 import {
+  IDENTITY_AUDIT_ACTION_PREFIXES,
   IDENTITY_OVERVIEW_AUDIT_LIMIT,
   listIdentityOverviewAudit,
   listIdentityOverviewSessions,
@@ -46,12 +47,12 @@ describe('identity overview api', () => {
     expect(apiMocks.get).toHaveBeenCalledWith('/auth/sessions')
   })
 
-  it('requests exactly eight identity audit events', async () => {
+  it('requests exactly eight identity-only audit events', async () => {
     apiMocks.get.mockResolvedValueOnce({ data: [audit] })
 
     await expect(listIdentityOverviewAudit()).resolves.toEqual([audit])
     expect(apiMocks.get).toHaveBeenCalledWith(
-      `/identity/audit/events?limit=${IDENTITY_OVERVIEW_AUDIT_LIMIT}`,
+      `/identity/audit/events?limit=${IDENTITY_OVERVIEW_AUDIT_LIMIT}&actionPrefixes=${encodeURIComponent(IDENTITY_AUDIT_ACTION_PREFIXES.join(','))}`,
     )
   })
 

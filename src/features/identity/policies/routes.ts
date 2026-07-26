@@ -13,7 +13,7 @@ export const identityPolicyRoutes = defineRoutes([
       requiresAuth: true,
       tabbar: false,
       navVisible: false,
-      parentId: 'identity',
+      parentId: 'internal-workbench',
       permissionKey: 'identity.policies.view',
       scopeMode: 'passive',
       workspace: 'system',

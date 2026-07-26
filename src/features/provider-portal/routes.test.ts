@@ -31,6 +31,10 @@ describe('Provider Portal route manifest', () => {
       menuId: 'home-workbench',
       permissionKey: 'identity.portal.view',
     })
+    expect(providerPortalRoutes[1].meta).toMatchObject({
+      path: '/portal/applications/:applicationId',
+      permissionKey: 'identity.applications.view',
+    })
     const loadedPages = await Promise.all(
       providerPortalRoutes.map(async (route) => {
         const module = await route.load()

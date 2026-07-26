@@ -9,6 +9,7 @@ export type {
   SystemIntegrationCreateRequest,
   SystemIntegrationTestResult,
   SystemIntegrationUpdateRequest,
+  SystemIntegrationOAuthAuthorization,
 } from '@opensoha/contracts/gen/ts/sohaapi'
 
 export interface SystemIntegrationFilters {

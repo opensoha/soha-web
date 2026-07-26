@@ -1,7 +1,7 @@
 import { defineRoutes } from '@/routes/definitions'
 import { identityApplicationRoutes } from './applications/routes'
 import { identityOutpostRoutes } from './outposts/routes'
-import { identityOverviewRoutes } from './overview/routes'
+import { internalWorkbenchOverviewRoutes } from './overview/routes'
 import { identityPolicyRoutes } from './policies/routes'
 import { identityProviderRoutes } from './providers/routes'
 
@@ -24,13 +24,13 @@ export const identityParentRoutes = defineRoutes([
       workspace: 'system',
     },
     shell: 'app',
-    redirectTo: '/identity/overview',
+    redirectTo: '/internal-workbench/overview',
   },
 ] as const)
 
 export const identityRouteManifests = [
   identityParentRoutes,
-  identityOverviewRoutes,
+  internalWorkbenchOverviewRoutes,
   identityApplicationRoutes,
   identityProviderRoutes,
   identityOutpostRoutes,

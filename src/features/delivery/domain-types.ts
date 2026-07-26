@@ -118,6 +118,7 @@ export interface DeliveryBlueprint {
   name: string
   description?: string
   applicationDraft: BlueprintApplicationDraft
+  services?: DeliveryDraftServiceInput[]
   buildSources?: BuildSource[]
   environmentBindings?: BlueprintEnvironmentBindingTemplate[]
   files?: BlueprintFileTemplate[]
@@ -190,9 +191,7 @@ export interface RenderedDeliverySpec {
 }
 
 export interface BlueprintBootstrapResult {
-  application: DeliveryApplication
-  services?: ApplicationServiceComponent[]
-  environmentBindings?: ApplicationEnvironment[]
+  draft: DeliveryDraft
   spec: RenderedDeliverySpec
 }
 

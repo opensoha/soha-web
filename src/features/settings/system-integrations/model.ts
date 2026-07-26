@@ -3,6 +3,9 @@ import type {
   SystemIntegrationCreateRequest,
   SystemIntegrationUpdateRequest,
 } from './types'
+import { API_BASE_URL } from '@/features/auth'
+
+export type GitLabAuthMode = 'access_token' | 'oauth'
 
 export interface GitLabFormValues {
   name: string
@@ -12,7 +15,11 @@ export interface GitLabFormValues {
   groupId?: string
   perPage: number
   timeout: string
+  authMode: GitLabAuthMode
   token?: string
+  clientId?: string
+  clientSecret?: string
+  oauthRedirectUri?: string
 }
 
 function configurationValue(item: SystemIntegration, key: string) {
@@ -20,6 +27,7 @@ function configurationValue(item: SystemIntegration, key: string) {
 }
 
 export function gitLabFormValues(item?: SystemIntegration): GitLabFormValues {
+  const authMode = item ? configurationValue(item, 'auth_mode') : 'access_token'
   return {
     name: item?.name ?? 'GitLab',
     description: item?.description ?? '',
@@ -28,8 +36,23 @@ export function gitLabFormValues(item?: SystemIntegration): GitLabFormValues {
     groupId: item ? configurationValue(item, 'group_id') : '',
     perPage: Number(item ? configurationValue(item, 'per_page') : '100') || 100,
     timeout: item ? configurationValue(item, 'timeout') || '15s' : '15s',
+    authMode: authMode === 'oauth' ? 'oauth' : 'access_token',
     token: '',
+    clientId: item ? configurationValue(item, 'client_id') : '',
+    clientSecret: '',
+    oauthRedirectUri: item
+      ? configurationValue(item, 'oauth_redirect_uri')
+      : gitLabOAuthCallbackURL(),
   }
+}
+
+export function gitLabOAuthCallbackURL(origin?: string) {
+  const baseOrigin = origin ?? globalThis.location?.origin ?? 'http://localhost'
+  return new URL(`${API_BASE_URL}/system-integrations/oauth/gitlab/callback`, baseOrigin).toString()
+}
+
+export function gitLabOAuthReturnURL(origin?: string) {
+  return origin ?? globalThis.location?.origin ?? 'http://localhost'
 }
 
 function gitLabConfiguration(values: GitLabFormValues) {
@@ -38,7 +61,20 @@ function gitLabConfiguration(values: GitLabFormValues) {
     { key: 'group_id', value: values.groupId?.trim() ?? '' },
     { key: 'per_page', value: String(values.perPage) },
     { key: 'timeout', value: values.timeout.trim() },
+    { key: 'auth_mode', value: values.authMode },
+    { key: 'client_id', value: values.clientId?.trim() ?? '' },
+    { key: 'oauth_redirect_uri', value: values.oauthRedirectUri?.trim() ?? '' },
+    { key: 'oauth_return_uri', value: gitLabOAuthReturnURL() },
   ]
+}
+
+function gitLabCredentials(values: GitLabFormValues) {
+  if (values.authMode === 'oauth') {
+    return values.clientSecret?.trim()
+      ? [{ key: 'client_secret', value: values.clientSecret.trim() }]
+      : undefined
+  }
+  return values.token?.trim() ? [{ key: 'token', value: values.token.trim() }] : undefined
 }
 
 export function createGitLabIntegration(values: GitLabFormValues): SystemIntegrationCreateRequest {
@@ -49,7 +85,7 @@ export function createGitLabIntegration(values: GitLabFormValues): SystemIntegra
     description: values.description?.trim() || undefined,
     enabled: values.enabled,
     configuration: gitLabConfiguration(values),
-    credentials: values.token?.trim() ? [{ key: 'token', value: values.token.trim() }] : undefined,
+    credentials: gitLabCredentials(values),
   }
 }
 
@@ -63,6 +99,8 @@ export function updateGitLabIntegration(
     description: values.description?.trim() ?? '',
     enabled: values.enabled,
     configuration: gitLabConfiguration(values),
-    credentials: values.token?.trim() ? [{ key: 'token', value: values.token.trim() }] : undefined,
+    credentials: gitLabCredentials(values),
+    clearCredentialKeys:
+      values.authMode === 'oauth' ? ['token'] : ['client_secret', 'access_token', 'refresh_token'],
   }
 }

@@ -67,21 +67,25 @@ export function invalidateRuntimeQueries(queryClient: QueryClient) {
 
 export const deliveryMutations = {
   repositories: {
-    create: (queryClient: QueryClient) => mutationOptions({
-      mutationKey: deliveryMutationKeys.repositories('create'),
-      mutationFn: (payload: DeliveryRecordInput) => deliveryApi.repositories.create(payload),
-      onSuccess: () => queryClient.invalidateQueries({ queryKey: deliveryKeys.repositories.all }),
-    }),
-    update: (queryClient: QueryClient) => mutationOptions({
-      mutationKey: deliveryMutationKeys.repositories('update'),
-      mutationFn: ({ id, payload }: DeliveryUpdateInput<DeliveryRecordInput>) => deliveryApi.repositories.update(id, payload),
-      onSuccess: () => queryClient.invalidateQueries({ queryKey: deliveryKeys.repositories.all }),
-    }),
-    delete: (queryClient: QueryClient) => mutationOptions({
-      mutationKey: deliveryMutationKeys.repositories('delete'),
-      mutationFn: deliveryApi.repositories.delete,
-      onSuccess: () => queryClient.invalidateQueries({ queryKey: deliveryKeys.repositories.all }),
-    }),
+    create: (queryClient: QueryClient) =>
+      mutationOptions({
+        mutationKey: deliveryMutationKeys.repositories('create'),
+        mutationFn: (payload: DeliveryRecordInput) => deliveryApi.repositories.create(payload),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: deliveryKeys.repositories.all }),
+      }),
+    update: (queryClient: QueryClient) =>
+      mutationOptions({
+        mutationKey: deliveryMutationKeys.repositories('update'),
+        mutationFn: ({ id, payload }: DeliveryUpdateInput<DeliveryRecordInput>) =>
+          deliveryApi.repositories.update(id, payload),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: deliveryKeys.repositories.all }),
+      }),
+    delete: (queryClient: QueryClient) =>
+      mutationOptions({
+        mutationKey: deliveryMutationKeys.repositories('delete'),
+        mutationFn: deliveryApi.repositories.delete,
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: deliveryKeys.repositories.all }),
+      }),
   },
   applications: {
     create: (queryClient: QueryClient) =>
@@ -241,9 +245,7 @@ export const deliveryMutations = {
         onSuccess: () =>
           invalidateDeliveryKeys(queryClient, [
             deliveryKeys.blueprints.all,
-            deliveryKeys.applications.all,
-            deliveryKeys.environments.all,
-            deliveryKeys.releaseBoard.all,
+            deliveryKeys.drafts.all,
           ]),
       }),
   },

@@ -43,9 +43,9 @@
     ]
   },
   "summary": {
-    "runtimePaths": 226,
-    "metadataPaths": 226,
-    "overlappingPaths": 226,
+    "runtimePaths": 227,
+    "metadataPaths": 227,
+    "overlappingPaths": 227,
     "runtimeOnlyPaths": 0,
     "metadataOnlyPaths": 0,
     "inlineJsxPaths": 0,
@@ -159,9 +159,10 @@
       "/identity/applications",
       "/identity/audit",
       "/identity/outposts",
-      "/identity/overview",
       "/identity/policies",
       "/identity/providers",
+      "/internal-workbench",
+      "/internal-workbench/overview",
       "/login",
       "/login/callback",
       "/monitoring-workbench",
@@ -387,9 +388,10 @@
       "/identity/applications",
       "/identity/audit",
       "/identity/outposts",
-      "/identity/overview",
       "/identity/policies",
       "/identity/providers",
+      "/internal-workbench",
+      "/internal-workbench/overview",
       "/login",
       "/login/callback",
       "/monitoring-workbench",
@@ -615,9 +617,10 @@
       "/identity/applications",
       "/identity/audit",
       "/identity/outposts",
-      "/identity/overview",
       "/identity/policies",
       "/identity/providers",
+      "/internal-workbench",
+      "/internal-workbench/overview",
       "/login",
       "/login/callback",
       "/monitoring-workbench",
@@ -2151,5 +2154,5 @@
       "@/features/virtualization/virtual-machines/list-page": ["VirtualizationVmsPage"]
     }
   },
-  "generatedAt": "2026-07-24T03:52:22.532Z"
+  "generatedAt": "2026-07-24T21:49:04.233Z"
 }
