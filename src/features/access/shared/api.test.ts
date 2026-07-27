@@ -38,4 +38,26 @@ describe('access api', () => {
     await expect(accessApi.dependencies.loginProviders()).resolves.toEqual([])
     expect(apiMock.get).toHaveBeenCalledWith('/settings/identity')
   })
+
+  it('resets MFA through the encoded identity user endpoint without exposing secrets', async () => {
+    const result = {
+      userId: 'user/1',
+      revokedCredentialCount: 2,
+      recoveryCodesRevoked: 1,
+      sessionsRevoked: 3,
+      resetAt: '2026-07-27T00:00:00Z',
+    }
+    apiMock.post.mockResolvedValueOnce({ data: result })
+
+    await expect(
+      accessApi.users.resetMFA({
+        id: 'user/1',
+        input: { reason: 'Administrative reset', revokeSessions: true },
+      }),
+    ).resolves.toBe(result)
+    expect(apiMock.post).toHaveBeenCalledWith('/identity/users/user%2F1/mfa/reset', {
+      reason: 'Administrative reset',
+      revokeSessions: true,
+    })
+  })
 })

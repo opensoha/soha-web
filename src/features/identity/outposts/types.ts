@@ -10,6 +10,11 @@ export interface IdentityOutpost {
   status: IdentityOutpostStatus
   version?: string
   lastSeenAt?: string
+  configurationVersion?: number
+  runtimeStatus?: 'available' | 'degraded' | 'unavailable'
+  runtimeReason?: string
+  claimedAgentId?: string
+  lastHeartbeatAt?: string
   metadata?: Record<string, unknown>
   createdBy?: string
   updatedBy?: string

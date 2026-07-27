@@ -13,6 +13,7 @@ const testState = vi.hoisted(() => ({
   outposts: vi.fn(),
   sessions: vi.fn(),
   audit: vi.fn(),
+  runtime: vi.fn(),
 }))
 
 vi.mock('@/features/auth', () => ({
@@ -63,6 +64,15 @@ vi.mock('./queries', () => ({
   },
 }))
 
+vi.mock('../runtime', () => ({
+  identityRuntimeQueries: {
+    capabilities: () => ({
+      queryKey: ['test', 'identity-overview', 'runtime'],
+      queryFn: testState.runtime,
+    }),
+  },
+}))
+
 const roots: Root[] = []
 const containers: HTMLElement[] = []
 
@@ -78,6 +88,7 @@ beforeEach(() => {
   testState.outposts.mockResolvedValue([])
   testState.sessions.mockResolvedValue([])
   testState.audit.mockResolvedValue([])
+  testState.runtime.mockResolvedValue({})
 })
 
 afterEach(async () => {

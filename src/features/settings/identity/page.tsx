@@ -29,6 +29,7 @@ import {
   ManagementTableToolbar,
 } from '@/components/management-list'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { identityRuntimeQueries } from '@/features/identity'
 import { accessQueries } from '@/features/access/shared/queries'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { DeleteOutlined, EditOutlined, PlusOutlined, StarOutlined } from '@ant-design/icons'
@@ -68,6 +69,10 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
   )
 
   const identityQuery = useQuery(settingsQueries.identity())
+  const runtimeQuery = useQuery({
+    ...identityRuntimeQueries.capabilities(),
+    enabled: canViewLoginSettings,
+  })
   const { data, isLoading } = identityQuery
   const rolesQuery = useQuery({
     ...accessQueries.roles(),
@@ -91,6 +96,12 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
 
   const settings = data
   const providers = settings?.providers ?? []
+  const samlAvailable = runtimeQuery.data?.samlLoginSource?.available === true
+  const providerTypeOptions = LOGIN_PROVIDER_TYPE_OPTIONS.filter(
+    (item) => item.value !== 'saml' || samlAvailable || editingProvider?.type === 'saml',
+  ).map((item) =>
+    item.value === 'saml' && !samlAvailable ? { ...item, disabled: true } : item,
+  )
   const roleOptions = (rolesQuery.data ?? []).map((role) => ({
     value: role.id,
     label: role.name || role.id,
@@ -173,7 +184,9 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
         <Switch
           checked={value}
           aria-label={`启用 ${record.name}`}
-          disabled={!canManageLoginSettings || saveMutation.isPending}
+          disabled={
+            !canManageLoginSettings || saveMutation.isPending || (record.type === 'saml' && !samlAvailable)
+          }
           loading={saveMutation.isPending}
           size="small"
           onChange={(checked) => {
@@ -255,6 +268,7 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
                     },
                   })
                 }
+                disabled={record.type === 'saml' && !samlAvailable}
               />
             ) : null}
           </Space>
@@ -306,7 +320,8 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
                 rules={[{ required: true, message: '请选择登录类型' }]}
               >
                 <Select
-                  options={LOGIN_PROVIDER_TYPE_OPTIONS}
+                  loading={runtimeQuery.isLoading}
+                  options={providerTypeOptions}
                   onChange={(value) => {
                     const current = providerForm.getFieldsValue()
                     providerForm.setFieldsValue(
@@ -337,8 +352,13 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
                       type="warning"
                       showIcon
                       style={{ marginBottom: 16 }}
-                      title="SAML 当前为配置态"
-                      description="本次改动已支持 SAML 配置保存和菜单/登录入口展示，但后端断言消费与 ACS 运行链路尚未启用。"
+                      title={samlAvailable ? 'SAML Runtime 已启用' : 'SAML Runtime 不可用'}
+                      description={
+                        samlAvailable
+                          ? '此登录源将使用服务端 SAML SP runtime。'
+                          : runtimeQuery.data?.samlLoginSource?.reason ||
+                            '服务端尚未提供 SAML 登录运行时，历史配置仅可查看。'
+                      }
                     />
                   ) : null}
                   {type === 'oidc' ? (
@@ -595,6 +615,10 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
           onFinish={(values) => {
             if (!canManageLoginSettings) return
             const sourceType = String(values.type || 'oidc')
+            if (sourceType === 'saml' && !samlAvailable) {
+              void message.error('SAML Runtime 不可用，无法启用或保存该登录源')
+              return
+            }
             const sourceID = String(values.id || editingProvider?.id || newLoginProviderID()).trim()
             const nextProvider = applyProviderPreset(sourceType, {
               ...values,

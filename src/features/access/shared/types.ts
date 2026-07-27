@@ -1,3 +1,5 @@
+import type { MFAAdminResetRequest } from '@opensoha/contracts/gen/ts/sohaapi'
+
 export interface AccessUser {
   id: string
   username: string
@@ -93,6 +95,11 @@ export type AccessMutationValues = Record<string, unknown>
 export interface AccessUpdateVariables {
   id: string
   values: AccessMutationValues
+}
+
+export interface ResetAccessUserMFAVariables {
+  id: string
+  input: MFAAdminResetRequest
 }
 
 export interface AccessScopeGrant {

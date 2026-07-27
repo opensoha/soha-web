@@ -23,6 +23,7 @@ import {
   EditOutlined,
   FolderOpenOutlined,
   PlusOutlined,
+  SafetyCertificateOutlined,
 } from '@ant-design/icons'
 import type { TableColumnsType } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -175,6 +176,16 @@ export function AccessUsersPage() {
     },
     onError: (error) => message.error(error.message),
   })
+  const resetMFAMutation = useMutation({
+    ...accessMutations.users.resetMFA(),
+    onSuccess: async (result) => {
+      message.success(
+        `MFA 已重置，撤销 ${result.revokedCredentialCount} 个凭据和 ${result.sessionsRevoked} 个会话`,
+      )
+      await invalidateAccessUsers(queryClient)
+    },
+    onError: (error) => message.error(error.message),
+  })
 
   const closeModal = () => {
     setModalVisible(false)
@@ -277,7 +288,7 @@ export function AccessUsersPage() {
     {
       ...tableColumnPresets.action,
       title: '操作',
-      width: 164,
+      width: 204,
       dataIndex: 'id',
       render: (_: unknown, record: AccessUser) => (
         <Space className="soha-row-action-icons">
@@ -303,6 +314,30 @@ export function AccessUsersPage() {
                     setModalVisible(true)
                   }}
                 />
+              ) : null}
+              {canManageUsers ? (
+                <Popconfirm
+                  title="确认重置此用户的 MFA？"
+                  description="所有 MFA 凭据和恢复码将失效，并撤销现有会话。"
+                  onConfirm={() =>
+                    resetMFAMutation.mutate({
+                      id: record.id,
+                      input: {
+                        reason: 'Reset by administrator from user management',
+                        revokeSessions: true,
+                      },
+                    })
+                  }
+                >
+                  <ManagementIconButton
+                    aria-label="重置 MFA"
+                    danger
+                    icon={<SafetyCertificateOutlined />}
+                    loading={resetMFAMutation.isPending}
+                    size="small"
+                    tooltip="重置 MFA"
+                  />
+                </Popconfirm>
               ) : null}
               {canManageUsers ? (
                 <Popconfirm title="确认删除？" onConfirm={() => deleteMutation.mutate(record.id)}>

@@ -30,6 +30,12 @@ export interface ProviderFormValues {
   proxySkipAuthPaths: string[]
   proxyUpstreamUrl: string
   proxyWebsocketEnabled: boolean
+  samlAcsUrls: string[]
+  samlAttributeMappingsJson: string
+  samlEntityId: string
+  samlNameIdFormat: 'persistent' | 'transient' | 'emailAddress' | 'unspecified'
+  samlSpCertificatePem: string
+  samlWantAuthnRequestsSigned: boolean
   secretRefsJson: string
   status: IdentityRuntimeProviderStatus
   type: IdentityRuntimeProviderType
@@ -56,6 +62,7 @@ export const providerTypeOptions: Array<{
 }> = [
   { label: 'OIDC', value: 'oidc' },
   { label: 'Proxy', value: 'proxy' },
+  { label: 'SAML', value: 'saml' },
 ]
 
 export const providerStatusOptions: Array<{
@@ -264,6 +271,12 @@ export function defaultProviderValues(): ProviderFormValues {
     proxySkipAuthPaths: [],
     proxyUpstreamUrl: '',
     proxyWebsocketEnabled: true,
+    samlAcsUrls: [],
+    samlAttributeMappingsJson: '[]',
+    samlEntityId: '',
+    samlNameIdFormat: 'persistent',
+    samlSpCertificatePem: '',
+    samlWantAuthnRequestsSigned: false,
     secretRefsJson: '{}',
     status: 'enabled',
     type: 'oidc',
@@ -307,6 +320,21 @@ export function providerValuesFor(item: IdentityProvider): ProviderFormValues {
     proxySkipAuthPaths: configStringArray(config, 'skipAuthPaths', 'skip_auth_paths'),
     proxyUpstreamUrl: configString(config, 'upstreamUrl', 'upstreamURL', 'upstream_url'),
     proxyWebsocketEnabled: configBoolean(config, 'websocketEnabled', 'websocket_enabled'),
+    samlAcsUrls: configStringArray(config, 'acsUrls', 'acs_urls'),
+    samlAttributeMappingsJson: JSON.stringify(config.attributeMappings ?? [], null, 2),
+    samlEntityId: configString(config, 'entityId', 'entity_id'),
+    samlNameIdFormat:
+      (configString(
+        config,
+        'nameIdFormat',
+        'name_id_format',
+      ) as ProviderFormValues['samlNameIdFormat']) || 'persistent',
+    samlSpCertificatePem: configString(config, 'spCertificatePem', 'sp_certificate_pem'),
+    samlWantAuthnRequestsSigned: configBoolean(
+      config,
+      'wantAuthnRequestsSigned',
+      'want_authn_requests_signed',
+    ),
     secretRefsJson: jsonText(item.secretRefs),
     status: item.status,
     type: item.type,
@@ -315,10 +343,27 @@ export function providerValuesFor(item: IdentityProvider): ProviderFormValues {
 
 export function providerInputFromValues(values: ProviderFormValues): IdentityProviderInput {
   const advancedConfig = parseRecordJSON(values.configJson, 'Config')
+  const mappings = JSON.parse(values.samlAttributeMappingsJson || '[]') as unknown
+  if (values.type === 'saml' && !Array.isArray(mappings)) {
+    throw new Error('Attribute mappings 必须是 JSON array')
+  }
+  const samlConfig = {
+    ...advancedConfig,
+    entityId: values.samlEntityId.trim(),
+    acsUrls: compactStrings(values.samlAcsUrls),
+    nameIdFormat: values.samlNameIdFormat,
+    spCertificatePem: values.samlSpCertificatePem.trim() || undefined,
+    wantAuthnRequestsSigned: Boolean(values.samlWantAuthnRequestsSigned),
+    attributeMappings: mappings,
+  }
   return {
     applicationId: values.applicationId.trim(),
     config:
-      values.type === 'proxy' ? proxyConfigFromValues(values, advancedConfig) : advancedConfig,
+      values.type === 'proxy'
+        ? proxyConfigFromValues(values, advancedConfig)
+        : values.type === 'saml'
+          ? samlConfig
+          : advancedConfig,
     enabled: Boolean(values.enabled),
     name: values.name.trim(),
     secretRefs: parseRecordJSON(values.secretRefsJson, 'Secret refs'),

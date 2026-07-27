@@ -36,6 +36,8 @@ export {
   identityProviderMutations,
   identityProviderQueries,
 } from './providers'
+export { identityRuntimeKeys, identityRuntimeQueries } from './runtime'
+export type { IdentityRuntimeCapability } from './runtime'
 export { identityPolicyKeys, identityPolicyMutations, identityPolicyQueries } from './policies'
 export type { IdentityPolicyFilters, UpdateIdentityPolicyVariables } from './policies'
 export type {

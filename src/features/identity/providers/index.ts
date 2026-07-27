@@ -4,11 +4,14 @@ export {
   deleteIdentityOIDCClient,
   deleteIdentityProvider,
   getIdentityProvider,
+  importSAMLLoginSourceMetadata,
   listIdentityOIDCClients,
   listIdentityProviders,
   rotateIdentityProviderSigningKey,
+  rotateSAMLCertificate,
   updateIdentityOIDCClient,
   updateIdentityProvider,
+  validateSAMLMetadata,
 } from './api'
 export {
   identityProviderKeys,

@@ -1,4 +1,14 @@
-export type IdentityRuntimeProviderType = 'oidc' | 'proxy'
+import type {
+  SAMLCertificateRotation,
+  SAMLCertificateRotateRequest,
+  SAMLMetadataInput,
+  SAMLMetadataImportRequest,
+  SAMLMetadataValidation,
+  SAMLLoginSource,
+  SAMLServiceProviderInput,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+
+export type IdentityRuntimeProviderType = 'oidc' | 'proxy' | 'saml'
 export type IdentityRuntimeProviderStatus = 'enabled' | 'disabled'
 export type IdentityOIDCClientStatus = 'enabled' | 'disabled'
 export type IdentityOIDCClientType = 'public' | 'confidential'
@@ -101,4 +111,14 @@ export interface IdentitySigningKey {
   alg: string
   active: boolean
   createdAt: string
+}
+
+export type {
+  SAMLCertificateRotation,
+  SAMLCertificateRotateRequest,
+  SAMLMetadataInput,
+  SAMLMetadataImportRequest,
+  SAMLMetadataValidation,
+  SAMLLoginSource,
+  SAMLServiceProviderInput,
 }

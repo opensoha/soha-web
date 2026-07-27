@@ -53,4 +53,39 @@ describe('providerPortalMutations', () => {
     expect(unfavorite).toHaveBeenCalledWith('app-1')
     expect(invalidateQueries).toHaveBeenCalledTimes(2)
   })
+
+  it('returns recovery codes without writing them to the query cache', async () => {
+    const result = { codes: ['one-time-code'], generatedAt: '2026-07-27T00:00:00Z' }
+    vi.spyOn(providerPortalApi, 'regenerateRecoveryCodes').mockResolvedValue(result)
+    const queryClient = new QueryClient()
+    const setQueryData = vi.spyOn(queryClient, 'setQueryData')
+    const observer = new MutationObserver(
+      queryClient,
+      providerPortalMutations.regenerateRecoveryCodes(),
+    )
+
+    await expect(observer.mutate()).resolves.toBe(result)
+    expect(setQueryData).not.toHaveBeenCalled()
+  })
+
+  it('passes the WebAuthn authentication purpose through unchanged', async () => {
+    const options = {
+      challengeId: 'challenge-1',
+      challenge: 'AQID',
+      rpId: 'soha.example.test',
+      timeoutMilliseconds: 60_000,
+      userVerification: 'required' as const,
+      expiresAt: '2026-07-27T00:01:00Z',
+    }
+    const begin = vi
+      .spyOn(providerPortalApi, 'beginWebAuthnAuthentication')
+      .mockResolvedValue(options)
+    const observer = new MutationObserver(
+      new QueryClient(),
+      providerPortalMutations.beginWebAuthnAuthentication(),
+    )
+
+    await expect(observer.mutate({ purpose: 'step_up' })).resolves.toBe(options)
+    expect(begin).toHaveBeenCalledWith({ purpose: 'step_up' })
+  })
 })

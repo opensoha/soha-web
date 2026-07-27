@@ -8,6 +8,58 @@ export function invalidateProviderPortalQueries(queryClient: QueryClient) {
 }
 
 export const providerPortalMutations = {
+  revokeMFACredential: (queryClient: QueryClient) =>
+    mutationOptions({
+      mutationKey: [...providerPortalKeys.all, 'mutation', 'revoke-mfa'] as const,
+      mutationFn: providerPortalApi.revokeMFACredential,
+      onSuccess: () =>
+        queryClient.invalidateQueries({ queryKey: providerPortalKeys.mfaCredentials() }),
+    }),
+  beginTOTPEnrollment: () =>
+    mutationOptions({
+      mutationKey: [...providerPortalKeys.all, 'mutation', 'totp-enroll'] as const,
+      mutationFn: providerPortalApi.beginTOTPEnrollment,
+    }),
+  verifyMFAChallenge: (queryClient: QueryClient) =>
+    mutationOptions({
+      mutationKey: [...providerPortalKeys.all, 'mutation', 'mfa-verify'] as const,
+      mutationFn: ({ challengeId, response }: { challengeId: string; response: string }) =>
+        providerPortalApi.verifyMFAChallenge(challengeId, response),
+      onSuccess: () => invalidateProviderPortalQueries(queryClient),
+    }),
+  beginRecoveryChallenge: () =>
+    mutationOptions({
+      mutationKey: [...providerPortalKeys.all, 'mutation', 'recovery-challenge'] as const,
+      mutationFn: providerPortalApi.beginRecoveryChallenge,
+    }),
+  beginWebAuthnEnrollment: () =>
+    mutationOptions({
+      mutationKey: [...providerPortalKeys.all, 'mutation', 'webauthn-enroll'] as const,
+      mutationFn: providerPortalApi.beginWebAuthnEnrollment,
+    }),
+  beginWebAuthnAuthentication: () =>
+    mutationOptions({
+      mutationKey: [...providerPortalKeys.all, 'mutation', 'webauthn-authenticate'] as const,
+      mutationFn: (input: Parameters<typeof providerPortalApi.beginWebAuthnAuthentication>[0]) =>
+        providerPortalApi.beginWebAuthnAuthentication(input),
+    }),
+  verifyWebAuthnChallenge: (queryClient: QueryClient) =>
+    mutationOptions({
+      mutationKey: [...providerPortalKeys.all, 'mutation', 'webauthn-verify'] as const,
+      mutationFn: ({
+        challengeId,
+        response,
+      }: {
+        challengeId: string
+        response: Parameters<typeof providerPortalApi.verifyWebAuthnChallenge>[1]
+      }) => providerPortalApi.verifyWebAuthnChallenge(challengeId, response),
+      onSuccess: () => invalidateProviderPortalQueries(queryClient),
+    }),
+  regenerateRecoveryCodes: () =>
+    mutationOptions({
+      mutationKey: [...providerPortalKeys.all, 'mutation', 'recovery-codes'] as const,
+      mutationFn: providerPortalApi.regenerateRecoveryCodes,
+    }),
   launch: (queryClient: QueryClient) =>
     mutationOptions({
       mutationKey: [...providerPortalKeys.all, 'mutation', 'launch'] as const,

@@ -5,11 +5,14 @@ import {
   deleteIdentityOIDCClient,
   deleteIdentityProvider,
   getIdentityProvider,
+  importSAMLLoginSourceMetadata,
   listIdentityOIDCClients,
   listIdentityProviders,
   rotateIdentityProviderSigningKey,
+  rotateSAMLCertificate,
   updateIdentityOIDCClient,
   updateIdentityProvider,
+  validateSAMLMetadata,
 } from './api'
 import type {
   IdentityOIDCClient,
@@ -164,10 +167,52 @@ describe('identity providers api', () => {
   })
 
   it('rotates a provider signing key without sending secret material', async () => {
-    const key = { id: 'key-1', providerId: provider.id, kid: 'kid-1', alg: 'ES256', active: true, createdAt: '2026-07-10T00:00:00Z' }
+    const key = {
+      id: 'key-1',
+      providerId: provider.id,
+      kid: 'kid-1',
+      alg: 'ES256',
+      active: true,
+      createdAt: '2026-07-10T00:00:00Z',
+    }
     apiMocks.post.mockResolvedValueOnce({ data: key })
 
     await expect(rotateIdentityProviderSigningKey(' provider/id ')).resolves.toBe(key)
-    expect(apiMocks.post).toHaveBeenCalledWith('/identity/providers/provider%2Fid/signing-keys/rotate')
+    expect(apiMocks.post).toHaveBeenCalledWith(
+      '/identity/providers/provider%2Fid/signing-keys/rotate',
+    )
+  })
+
+  it('wires SAML metadata validation, import, and certificate rotation endpoints', async () => {
+    const validation = { valid: true, entityId: 'idp', singleSignOnUrls: [], certificates: [] }
+    const source = { id: 'source-1' }
+    const rotation = { active: { id: 'active' }, retiring: { id: 'old' } }
+    apiMocks.post
+      .mockResolvedValueOnce({ data: validation })
+      .mockResolvedValueOnce({ data: source })
+      .mockResolvedValueOnce({ data: rotation })
+
+    await expect(
+      validateSAMLMetadata({ source: 'url', url: 'https://idp.example/metadata' }),
+    ).resolves.toBe(validation)
+    await expect(
+      importSAMLLoginSourceMetadata({
+        name: 'Enterprise',
+        status: 'active',
+        metadata: { source: 'url', url: 'https://idp.example/metadata' },
+      }),
+    ).resolves.toBe(source)
+    await expect(rotateSAMLCertificate(' cert/id ', { overlapSeconds: 3600 })).resolves.toBe(
+      rotation,
+    )
+    expect(apiMocks.post).toHaveBeenNthCalledWith(1, '/identity/saml/metadata/validate', {
+      source: 'url',
+      url: 'https://idp.example/metadata',
+    })
+    expect(apiMocks.post).toHaveBeenNthCalledWith(
+      3,
+      '/identity/saml/certificates/cert%2Fid/rotate',
+      { overlapSeconds: 3600 },
+    )
   })
 })

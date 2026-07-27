@@ -1,5 +1,16 @@
 import { useMemo, useState } from 'react'
-import { App, Button, Form, Popconfirm, Select, Space, Tag, Typography } from 'antd'
+import {
+  Alert,
+  App,
+  Button,
+  Descriptions,
+  Form,
+  Popconfirm,
+  Select,
+  Space,
+  Tag,
+  Typography,
+} from 'antd'
 import type { TableColumnsType } from 'antd'
 import { ApiOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -18,6 +29,7 @@ import { useI18n } from '@/i18n'
 import { identityApplicationQueries } from '../applications'
 import type { IdentityApplication } from '../shared/types'
 import { identityOutpostQueries } from '../outposts'
+import { identityRuntimeQueries } from '../runtime'
 import { OIDCClientsPanel } from './components/oidc-clients-panel'
 import { ProviderFormModal } from './components/provider-form-modal'
 import { ProxySetupPanel } from './components/proxy-setup-panel'
@@ -59,6 +71,41 @@ function ProviderNameCell({ provider }: { provider: IdentityProvider }) {
   )
 }
 
+function SAMLProviderPanel({ provider }: { provider: IdentityProvider }) {
+  const config = provider.config ?? {}
+  const stringValue = (key: string) => (typeof config[key] === 'string' ? config[key] : '-')
+  const listValue = (key: string) =>
+    Array.isArray(config[key]) ? (config[key] as unknown[]).join(', ') || '-' : '-'
+  return (
+    <Descriptions
+      bordered
+      column={{ xs: 1, md: 2 }}
+      items={[
+        { key: 'entityId', label: 'Entity ID', children: stringValue('entityId') },
+        { key: 'nameId', label: 'NameID', children: stringValue('nameIdFormat') },
+        { key: 'acs', label: 'ACS URLs', children: listValue('acsUrls'), span: 2 },
+        { key: 'audience', label: 'Audience', children: stringValue('audience') },
+        { key: 'recipient', label: 'Recipient', children: stringValue('recipient') },
+        {
+          key: 'metadata',
+          label: 'IdP metadata',
+          children: (
+            <a
+              href={`/api/v1/saml2/idp/${encodeURIComponent(provider.id)}/metadata`}
+              rel="noreferrer"
+              target="_blank"
+            >
+              Download metadata
+            </a>
+          ),
+          span: 2,
+        },
+      ]}
+      size="small"
+    />
+  )
+}
+
 export function IdentityProvidersPage() {
   const { message } = App.useApp()
   const { t } = useI18n()
@@ -84,6 +131,9 @@ export function IdentityProvidersPage() {
     ...identityOutpostQueries.list(),
     enabled: modalOpen && formProviderType === 'proxy',
   })
+  const runtimeQuery = useQuery(identityRuntimeQueries.capabilities())
+  const samlCapability = runtimeQuery.data?.samlApplicationProvider
+  const samlAvailable = samlCapability?.available === true
   const createMutation = useMutation(identityProviderMutations.create(queryClient))
   const updateMutation = useMutation(identityProviderMutations.update(queryClient))
   const deleteMutation = useMutation(identityProviderMutations.remove(queryClient))
@@ -184,7 +234,9 @@ export function IdentityProvidersPage() {
         dataIndex: 'type',
         width: 140,
         render: (value: IdentityRuntimeProviderType) => (
-          <Tag color={value === 'oidc' ? 'blue' : 'gold'}>{value.toUpperCase()}</Tag>
+          <Tag color={value === 'oidc' ? 'blue' : value === 'saml' ? 'cyan' : 'gold'}>
+            {value.toUpperCase()}
+          </Tag>
         ),
       },
       {
@@ -344,8 +396,12 @@ export function IdentityProvidersPage() {
                   onSecretCreated={setCreatedSecret}
                   provider={record}
                 />
-              ) : (
+              ) : record.type === 'proxy' ? (
                 <ProxySetupPanel provider={record} />
+              ) : record.type === 'saml' ? (
+                <SAMLProviderPanel provider={record} />
+              ) : (
+                <Alert showIcon title="Unknown provider type" type="warning" />
               ),
             rowExpandable: () => true,
           },
@@ -388,6 +444,8 @@ export function IdentityProvidersPage() {
         outpostLoading={outpostsQuery.isLoading || outpostsQuery.isFetching}
         outpostOptions={outpostOptions}
         providerType={formProviderType}
+        samlAvailable={samlAvailable}
+        samlUnavailableReason={samlCapability?.reason}
         submitting={createMutation.isPending || updateMutation.isPending}
       />
 

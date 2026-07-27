@@ -10,6 +10,12 @@ import type {
   IdentityProviderFilters,
   IdentityProviderInput,
   IdentitySigningKey,
+  SAMLCertificateRotation,
+  SAMLCertificateRotateRequest,
+  SAMLMetadataInput,
+  SAMLMetadataImportRequest,
+  SAMLMetadataValidation,
+  SAMLLoginSource,
   UpdateIdentityOIDCClientVariables,
   UpdateIdentityProviderVariables,
 } from './types'
@@ -108,6 +114,37 @@ export async function rotateIdentityProviderSigningKey(
 ): Promise<IdentitySigningKey> {
   const response = await api.post<ApiResponse<IdentitySigningKey>>(
     `/identity/providers/${encodeURIComponent(providerId.trim())}/signing-keys/rotate`,
+  )
+  return response.data
+}
+
+export async function validateSAMLMetadata(
+  input: SAMLMetadataInput,
+): Promise<SAMLMetadataValidation> {
+  const response = await api.post<ApiResponse<SAMLMetadataValidation>>(
+    '/identity/saml/metadata/validate',
+    input,
+  )
+  return response.data
+}
+
+export async function importSAMLLoginSourceMetadata(
+  input: SAMLMetadataImportRequest,
+): Promise<SAMLLoginSource> {
+  const response = await api.post<ApiResponse<SAMLLoginSource>>(
+    '/identity/saml/login-sources/import',
+    input,
+  )
+  return response.data
+}
+
+export async function rotateSAMLCertificate(
+  certificateId: string,
+  input: SAMLCertificateRotateRequest,
+): Promise<SAMLCertificateRotation> {
+  const response = await api.post<ApiResponse<SAMLCertificateRotation>>(
+    `/identity/saml/certificates/${encodeURIComponent(certificateId.trim())}/rotate`,
+    input,
   )
   return response.data
 }

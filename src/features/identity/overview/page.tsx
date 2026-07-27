@@ -6,6 +6,7 @@ import {
   KeyOutlined,
   LinkOutlined,
   ReloadOutlined,
+  SafetyCertificateOutlined,
   UserSwitchOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
@@ -43,10 +44,20 @@ function latestUpdated(items: Array<{ updatedAt?: string; createdAt?: string }>)
 
 export function IdentityOverviewPage() {
   const navigate = useNavigate()
-  const { applications, providers, outposts, sessions, audits, loading, permissions, refreshAll } =
-    useIdentityOverviewData()
+  const {
+    applications,
+    providers,
+    outposts,
+    sessions,
+    audits,
+    runtime,
+    loading,
+    permissions,
+    refreshAll,
+  } = useIdentityOverviewData()
   const oidcProviders = providers.filter((provider) => provider.type === 'oidc')
   const proxyProviders = providers.filter((provider) => provider.type === 'proxy')
+  const samlProviders = providers.filter((provider) => provider.type === 'saml')
   const enabledProviders = providers.filter(
     (provider) => provider.enabled && provider.status === 'enabled',
   )
@@ -72,7 +83,7 @@ export function IdentityOverviewPage() {
       key: 'providers',
       label: 'Provider',
       value: providers.length,
-      helper: `${enabledProviders.length} 个已启用 / ${oidcProviders.length} OIDC / ${proxyProviders.length} Proxy`,
+      helper: `${enabledProviders.length} 个已启用 / ${oidcProviders.length} OIDC / ${proxyProviders.length} Proxy / ${samlProviders.length} SAML`,
       icon: <ApiOutlined />,
       loading: loading.providers,
       tone: enabledProviders.length > 0 ? 'success' : 'default',
@@ -81,7 +92,16 @@ export function IdentityOverviewPage() {
       key: 'outposts',
       label: 'Outpost',
       value: outposts.length,
-      helper: `${onlineOutposts.length} 个在线 / 支持 Embedded、agent、Kubernetes 和 external`,
+      helper: `${onlineOutposts.length} 个在线 / ${
+        [
+          runtime?.outpost.embeddedRuntime.available && 'Embedded',
+          runtime?.outpost.agentRuntime.available && 'Agent',
+          runtime?.outpost.kubernetesArtifact.available && 'Kubernetes',
+          runtime?.outpost.externalProtocol.available && 'External-compatible',
+        ]
+          .filter(Boolean)
+          .join('、') || '无可用执行端'
+      }`,
       icon: <LinkOutlined />,
       loading: loading.outposts,
       tone: onlineOutposts.length > 0 ? 'success' : 'default',
@@ -104,6 +124,18 @@ export function IdentityOverviewPage() {
       helper: oidcEnabled ? '已启用' : '未启用',
       icon: <KeyOutlined />,
       tone: oidcEnabled ? 'success' : 'default',
+    },
+    {
+      key: 'saml',
+      label: 'SAML Provider',
+      value: samlProviders.length,
+      helper: runtime?.samlApplicationProvider.available
+        ? samlProviders.some((provider) => provider.enabled && provider.status === 'enabled')
+          ? '已启用'
+          : '运行时可用，未启用'
+        : runtime?.samlApplicationProvider.reason || '运行时不可用',
+      icon: <SafetyCertificateOutlined />,
+      tone: runtime?.samlApplicationProvider.available ? 'success' : 'default',
     },
     {
       key: 'proxy',
@@ -169,7 +201,7 @@ export function IdentityOverviewPage() {
             <div className="soha-overview-alert-stack">
               <OverviewSectionBar
                 title="协议层"
-                description="统一查看 OIDC 与 Proxy Provider 的启用状态。"
+                description="按后端 runtime capability 查看协议支持与启用状态。"
                 extra={
                   <Button
                     type="text"
@@ -207,11 +239,7 @@ export function IdentityOverviewPage() {
           className="soha-overview-panel-card soha-identity-overview-audit-card"
           title="最近审计"
           extra={
-            <Button
-              size="small"
-              icon={<AuditOutlined />}
-              onClick={() => navigate('/system/audit')}
-            >
+            <Button size="small" icon={<AuditOutlined />} onClick={() => navigate('/system/audit')}>
               审计
             </Button>
           }

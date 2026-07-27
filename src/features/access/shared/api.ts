@@ -1,11 +1,13 @@
 import { api } from '@/services/api-client'
 import type { ApiResponse } from '@/types'
+import type { MFAAdminResetResult } from '@opensoha/contracts/gen/ts/sohaapi'
 import { settingsApi } from '@/features/settings'
 import type {
   AccessApplicationOption,
   AccessMutationValues,
   AccessPolicy,
   AccessRole,
+  ResetAccessUserMFAVariables,
   AccessScopeGrant,
   AccessTeam,
   AccessUpdateVariables,
@@ -32,6 +34,13 @@ export const accessApi = {
     update: ({ id, values }: AccessUpdateVariables) =>
       discard(api.put(resourcePath('access/users', id), values)),
     delete: (id: string) => discard(api.delete(resourcePath('access/users', id))),
+    resetMFA: ({ id, input }: ResetAccessUserMFAVariables) =>
+      unwrap(
+        api.post<ApiResponse<MFAAdminResetResult>>(
+          `/identity/users/${encodeURIComponent(id.trim())}/mfa/reset`,
+          input,
+        ),
+      ),
   },
   roles: {
     list: () => unwrap(api.get<ApiResponse<AccessRole[]>>('/access/roles')),

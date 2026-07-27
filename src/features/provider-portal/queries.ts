@@ -35,4 +35,10 @@ export const providerPortalQueries = {
       queryFn: providerPortalApi.security,
       enabled,
     }),
+  mfaCredentials: (enabled = true) =>
+    queryOptions({
+      queryKey: providerPortalKeys.mfaCredentials(),
+      queryFn: providerPortalApi.mfaCredentials,
+      enabled,
+    }),
 }

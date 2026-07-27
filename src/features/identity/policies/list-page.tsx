@@ -16,6 +16,7 @@ import {
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useI18n } from '@/i18n'
 import type { IdentityApplicationPolicy, IdentityApplicationPolicyInput } from '../shared/types'
+import { identityRuntimeQueries } from '../runtime'
 import { PolicyFormModal } from './components/policy-form-modal'
 import { identityPolicyMutations } from './mutations'
 import { identityPolicyQueries } from './queries'
@@ -40,6 +41,8 @@ export function IdentityPoliciesPage() {
   const canManage = hasPermission(snapshot, 'identity.policies.manage')
   const policiesQuery = useQuery(identityPolicyQueries.list(filters))
   const updateMutation = useMutation(identityPolicyMutations.update(queryClient))
+  const runtimeQuery = useQuery(identityRuntimeQueries.capabilities())
+  const stepUpCapability = runtimeQuery.data?.stepUp
 
   const columns = useMemo<TableColumnsType<IdentityApplicationPolicy>>(
     () => [
@@ -93,6 +96,10 @@ export function IdentityPoliciesPage() {
 
   const submit = (input: IdentityApplicationPolicyInput) => {
     if (!editing) return
+    if (input.conditions?.requireMfa && stepUpCapability?.available !== true) {
+      void message.error(stepUpCapability?.reason || 'MFA step-up runtime unavailable')
+      return
+    }
     updateMutation.mutate(
       { applicationId: editing.applicationId, input },
       {
@@ -169,6 +176,8 @@ export function IdentityPoliciesPage() {
         onSubmit={submit}
         open={Boolean(editing)}
         submitting={updateMutation.isPending}
+        stepUpAvailable={stepUpCapability?.available === true}
+        stepUpReason={stepUpCapability?.reason}
       />
     </>
   )

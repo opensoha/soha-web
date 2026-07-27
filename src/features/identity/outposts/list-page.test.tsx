@@ -169,27 +169,48 @@ beforeEach(() => {
   testState.permissionKeys = ['identity.outposts.view', 'identity.outposts.manage']
   testState.apiGet.mockReset()
   testState.apiPost.mockReset()
-  testState.apiGet.mockResolvedValue({
-    data: [
-      {
-        id: 'edge-grafana',
-        name: 'Edge Grafana',
-        mode: 'embedded',
-        status: 'online',
-        endpoint: 'https://grafana.example.com',
-        createdAt: '2026-07-10T00:00:00Z',
-        updatedAt: '2026-07-10T00:00:00Z',
-      },
-      {
-        id: 'edge-harbor',
-        name: 'Edge Harbor',
-        mode: 'agent',
-        status: 'offline',
-        endpoint: 'https://harbor.example.com',
-        createdAt: '2026-07-10T00:00:00Z',
-        updatedAt: '2026-07-10T00:00:00Z',
-      },
-    ],
+  testState.apiGet.mockImplementation(async (path: string) => {
+    if (path === '/identity/capabilities') {
+      return {
+        data: {
+          samlApplicationProvider: { available: false, status: 'unavailable' },
+          samlLoginSource: { available: false, status: 'unavailable' },
+          totp: { available: false, status: 'unavailable' },
+          webauthn: { available: false, status: 'unavailable' },
+          recoveryCodes: { available: false, status: 'unavailable' },
+          stepUp: { available: false, status: 'unavailable' },
+          outpost: {
+            controlPlane: { available: true, status: 'available' },
+            embeddedRuntime: { available: true, status: 'available' },
+            agentRuntime: { available: false, status: 'unavailable' },
+            kubernetesArtifact: { available: false, status: 'unavailable' },
+            externalProtocol: { available: false, status: 'unavailable' },
+          },
+        },
+      }
+    }
+    return {
+      data: [
+        {
+          id: 'edge-grafana',
+          name: 'Edge Grafana',
+          mode: 'embedded',
+          status: 'online',
+          endpoint: 'https://grafana.example.com',
+          createdAt: '2026-07-10T00:00:00Z',
+          updatedAt: '2026-07-10T00:00:00Z',
+        },
+        {
+          id: 'edge-harbor',
+          name: 'Edge Harbor',
+          mode: 'agent',
+          status: 'offline',
+          endpoint: 'https://harbor.example.com',
+          createdAt: '2026-07-10T00:00:00Z',
+          updatedAt: '2026-07-10T00:00:00Z',
+        },
+      ],
+    }
   })
   testState.apiPost.mockResolvedValue({
     data: {

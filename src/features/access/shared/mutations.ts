@@ -53,6 +53,12 @@ export const accessMutations = {
         mutationKey: accessMutationKeys.users('delete'),
         mutationFn: accessApi.users.delete,
       }),
+    resetMFA: () =>
+      mutationOptions({
+        mutationKey: accessMutationKeys.users('reset-mfa'),
+        mutationFn: (variables: Parameters<typeof accessApi.users.resetMFA>[0]) =>
+          accessApi.users.resetMFA(variables),
+      }),
   },
   roles: {
     create: () =>

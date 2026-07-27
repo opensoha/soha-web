@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { App, Button, Form, Input, Modal, Select, Switch } from 'antd'
+import { Alert, App, Button, Form, Input, Modal, Select, Switch } from 'antd'
 import { useI18n } from '@/i18n'
 import {
   defaultProviderValues,
@@ -25,7 +25,46 @@ interface ProviderFormModalProps {
   outpostLoading: boolean
   outpostOptions: Array<{ label: string; value: string }>
   providerType: IdentityRuntimeProviderType
+  samlAvailable: boolean
+  samlUnavailableReason?: string
   submitting: boolean
+}
+
+function SAMLConfigFields() {
+  return (
+    <div className="soha-identity-provider-config-section">
+      <div className="soha-identity-provider-section-title">SAML Service Provider</div>
+      <div className="soha-identity-provider-form-grid">
+        <Form.Item label="Entity ID" name="samlEntityId" rules={[{ required: true }]}>
+          <Input placeholder="https://grafana.example/saml/metadata" />
+        </Form.Item>
+        <Form.Item label="NameID format" name="samlNameIdFormat">
+          <Select
+            options={['persistent', 'transient', 'emailAddress', 'unspecified'].map((value) => ({
+              label: value,
+              value,
+            }))}
+          />
+        </Form.Item>
+        <Form.Item label="ACS URLs" name="samlAcsUrls" rules={[{ required: true }]}>
+          <Select mode="tags" placeholder="https://grafana.example/saml/acs" />
+        </Form.Item>
+      </div>
+      <Form.Item
+        label="Require signed AuthnRequest"
+        name="samlWantAuthnRequestsSigned"
+        valuePropName="checked"
+      >
+        <Switch />
+      </Form.Item>
+      <Form.Item label="SP certificate (PEM)" name="samlSpCertificatePem">
+        <Input.TextArea autoSize={{ minRows: 3, maxRows: 8 }} />
+      </Form.Item>
+      <Form.Item label="Attribute mappings JSON" name="samlAttributeMappingsJson">
+        <Input.TextArea autoSize={{ minRows: 3, maxRows: 8 }} />
+      </Form.Item>
+    </div>
+  )
 }
 
 function ProxyConfigFields({
@@ -148,6 +187,8 @@ export function ProviderFormModal({
   outpostLoading,
   outpostOptions,
   providerType,
+  samlAvailable,
+  samlUnavailableReason,
   submitting,
 }: ProviderFormModalProps) {
   const { message } = App.useApp()
@@ -209,7 +250,12 @@ export function ProviderFormModal({
             />
           </Form.Item>
           <Form.Item label={zh ? '类型' : 'Type'} name="type">
-            <Select options={providerTypeOptions} />
+            <Select
+              options={providerTypeOptions.map((option) => ({
+                ...option,
+                disabled: option.value === 'saml' && !samlAvailable && editing?.type !== 'saml',
+              }))}
+            />
           </Form.Item>
           <Form.Item label={zh ? '状态' : 'Status'} name="status">
             <Select options={providerStatusOptions} />
@@ -224,9 +270,23 @@ export function ProviderFormModal({
           <ProxyConfigFields outpostLoading={outpostLoading} outpostOptions={outpostOptions} />
         ) : null}
 
+        {providerType === 'saml' ? (
+          <>
+            {!samlAvailable ? (
+              <Alert
+                showIcon
+                title="SAML runtime unavailable"
+                description={samlUnavailableReason || 'The server has not enabled SAML providers.'}
+                type="warning"
+              />
+            ) : null}
+            <SAMLConfigFields />
+          </>
+        ) : null}
+
         <div className="soha-identity-provider-json-grid">
           <Form.Item
-            label={providerType === 'proxy' ? 'Advanced config JSON' : 'Config JSON'}
+            label={providerType === 'oidc' ? 'Config JSON' : 'Advanced config JSON'}
             name="configJson"
           >
             <Input.TextArea autoSize={{ minRows: 5, maxRows: 10 }} />
@@ -238,7 +298,12 @@ export function ProviderFormModal({
 
         <div className="soha-identity-provider-form-actions">
           <Button onClick={onCancel}>{zh ? '取消' : 'Cancel'}</Button>
-          <Button htmlType="submit" loading={submitting} type="primary">
+          <Button
+            disabled={providerType === 'saml' && !samlAvailable}
+            htmlType="submit"
+            loading={submitting}
+            type="primary"
+          >
             {zh ? '保存' : 'Save'}
           </Button>
         </div>

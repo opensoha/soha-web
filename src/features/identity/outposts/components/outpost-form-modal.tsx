@@ -18,6 +18,7 @@ export interface IdentityOutpostFormValues {
 }
 
 interface IdentityOutpostFormModalProps {
+  allowedModes?: IdentityOutpostMode[]
   editing: IdentityOutpost | null
   onCancel: () => void
   onSubmit: (input: IdentityOutpostInput) => void
@@ -58,6 +59,7 @@ export function buildIdentityOutpostInput(values: IdentityOutpostFormValues): Id
 }
 
 export function IdentityOutpostFormModal({
+  allowedModes = ['embedded'],
   editing,
   onCancel,
   onSubmit,
@@ -101,7 +103,12 @@ export function IdentityOutpostFormModal({
         </Form.Item>
         <Space.Compact block>
           <Form.Item name="mode" label="Mode" style={{ width: '50%' }} rules={[{ required: true }]}>
-            <Select options={identityOutpostModeOptions} />
+            <Select
+              options={identityOutpostModeOptions.map((option) => ({
+                ...option,
+                disabled: !allowedModes.includes(option.value) && editing?.mode !== option.value,
+              }))}
+            />
           </Form.Item>
           <Form.Item
             name="status"

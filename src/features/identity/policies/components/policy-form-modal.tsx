@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Button, Form, Input, Modal, Select, Switch, Typography } from 'antd'
+import { Alert, Button, Form, Input, Modal, Select, Switch, Typography } from 'antd'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import {
   assignmentSubjectOptions,
@@ -18,6 +18,8 @@ interface PolicyFormModalProps {
   onSubmit: (input: IdentityApplicationPolicyInput) => void
   open: boolean
   submitting: boolean
+  stepUpAvailable: boolean
+  stepUpReason?: string
 }
 
 export function PolicyFormModal({
@@ -26,6 +28,8 @@ export function PolicyFormModal({
   onSubmit,
   open,
   submitting,
+  stepUpAvailable,
+  stepUpReason,
 }: PolicyFormModalProps) {
   const [form] = Form.useForm<IdentityPolicyFormValues>()
 
@@ -45,7 +49,13 @@ export function PolicyFormModal({
       <Form
         form={form}
         className="soha-identity-policy-form"
-        initialValues={{ allowedCidrs: [], assignments: [], endTimeUtc: '', requireMfa: false, startTimeUtc: '' }}
+        initialValues={{
+          allowedCidrs: [],
+          assignments: [],
+          endTimeUtc: '',
+          requireMfa: false,
+          startTimeUtc: '',
+        }}
         layout="vertical"
         onFinish={(values) => onSubmit(identityPolicyInputFromValues(values))}
       >
@@ -93,8 +103,16 @@ export function PolicyFormModal({
         </Form.List>
 
         <div className="soha-identity-policy-conditions">
+          {!stepUpAvailable ? (
+            <Alert
+              showIcon
+              title="MFA step-up unavailable"
+              description={stepUpReason || 'Require MFA cannot be enabled on this runtime.'}
+              type="warning"
+            />
+          ) : null}
           <Form.Item label="Require MFA" name="requireMfa" valuePropName="checked">
-            <Switch />
+            <Switch disabled={!stepUpAvailable} />
           </Form.Item>
           <Form.Item label="Allowed CIDRs" name="allowedCidrs">
             <Select mode="tags" placeholder="10.0.0.0/8" tokenSeparators={[',']} />

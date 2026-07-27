@@ -19,6 +19,7 @@ const testState = vi.hoisted(() => ({
     visibleMenus: [{ id: 'access-users', path: '/access/users' }],
   } as PermissionSnapshot,
   responses: {} as Record<string, unknown>,
+  post: vi.fn(),
 }))
 
 vi.mock('@/features/auth/permission-snapshot', async () => {
@@ -37,7 +38,7 @@ vi.mock('@/features/auth/permission-snapshot', async () => {
 vi.mock('@/services/api-client', () => ({
   api: {
     get: vi.fn((path: string) => Promise.resolve({ data: testState.responses[path] ?? [] })),
-    post: vi.fn(),
+    post: testState.post,
     put: vi.fn(),
     delete: vi.fn(),
   },
@@ -206,6 +207,8 @@ describe('access users page columns', () => {
 
   beforeEach(() => {
     setDefaultResponses()
+    testState.snapshot.permissionKeys = ['access.users.view']
+    testState.post.mockResolvedValue({ data: {} })
   })
 
   afterEach(async () => {
@@ -263,6 +266,45 @@ describe('access users page columns', () => {
     expect(displayNameCell?.textContent).toContain('Admin')
     expect(container.textContent).toContain('飞书')
     expect(container.querySelector('.ant-tag-success')?.textContent).toBe('飞书')
+  })
+
+  it('permission-gates and confirms the administrative MFA reset action', async () => {
+    const viewOnlyContainer = await renderWithProviders(<AccessUsersPage />, '/access/users')
+    await waitForRow(viewOnlyContainer, 'row-u-admin')
+    expect(viewOnlyContainer.querySelector('button[aria-label="重置 MFA"]')).toBeNull()
+
+    testState.snapshot.permissionKeys = ['access.users.view', 'access.users.manage']
+    const result = {
+      userId: 'u-admin',
+      revokedCredentialCount: 2,
+      recoveryCodesRevoked: 1,
+      sessionsRevoked: 3,
+      resetAt: '2026-07-27T00:00:00Z',
+    }
+    testState.post.mockResolvedValue({ data: result })
+    const managerContainer = await renderWithProviders(<AccessUsersPage />, '/access/users')
+    await waitForRow(managerContainer, 'row-u-admin')
+
+    const resetButton = managerContainer.querySelector(
+      'button[aria-label="重置 MFA"]',
+    ) as HTMLButtonElement | null
+    expect(resetButton).not.toBeNull()
+    await act(async () => resetButton?.click())
+    const confirmButton = document.body.querySelector(
+      '.ant-popconfirm-buttons .ant-btn-primary',
+    ) as HTMLButtonElement | null
+    expect(confirmButton).not.toBeNull()
+    await act(async () => confirmButton?.click())
+    await act(async () => {
+      await Promise.resolve()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(testState.post).toHaveBeenCalledWith('/identity/users/u-admin/mfa/reset', {
+      reason: 'Reset by administrator from user management',
+      revokeSessions: true,
+    })
+    expect(document.body.textContent).not.toContain('secret')
   })
 
   it('filters users from the query card search input without rendering a table title', async () => {

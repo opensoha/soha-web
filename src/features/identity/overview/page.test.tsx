@@ -270,6 +270,7 @@ beforeEach(() => {
     outposts,
     sessions,
     audits,
+    runtime: undefined,
     loading: {
       applications: false,
       providers: false,
@@ -384,6 +385,7 @@ describe('IdentityOverviewPage', () => {
       outposts: [],
       sessions: [],
       audits: [],
+      runtime: undefined,
       loading: {
         applications: false,
         providers: false,
@@ -418,6 +420,7 @@ describe('IdentityOverviewPage', () => {
       outposts,
       sessions,
       audits: [],
+      runtime: undefined,
       loading: {
         applications: false,
         providers: false,

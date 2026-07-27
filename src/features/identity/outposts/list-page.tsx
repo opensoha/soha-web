@@ -15,6 +15,7 @@ import {
 } from '@/components/management-list'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useI18n } from '@/i18n'
+import { identityRuntimeQueries } from '../runtime'
 import { IdentityOutpostFormModal } from './components/outpost-form-modal'
 import {
   IdentityOutpostTokenModal,
@@ -91,6 +92,17 @@ export function IdentityOutpostsPage() {
   const outpostsQuery = useQuery(
     identityOutpostQueries.list({ mode: filters.mode, status: filters.status }),
   )
+  const runtimeQuery = useQuery(identityRuntimeQueries.capabilities())
+  const allowedModes = useMemo<IdentityOutpostMode[]>(() => {
+    const capability = runtimeQuery.data?.outpost
+    if (!capability) return []
+    return [
+      capability.embeddedRuntime.available && 'embedded',
+      capability.agentRuntime.available && 'agent',
+      capability.kubernetesArtifact.available && 'kubernetes',
+      capability.externalProtocol.available && 'external',
+    ].filter((mode): mode is IdentityOutpostMode => Boolean(mode))
+  }, [runtimeQuery.data])
 
   const createMutation = useMutation({
     ...identityOutpostMutations.create(queryClient),
@@ -183,6 +195,19 @@ export function IdentityOutpostsPage() {
       render: (value: IdentityOutpostStatus) => statusTag(value),
     },
     {
+      title: 'Runtime',
+      dataIndex: 'runtimeStatus',
+      width: 180,
+      render: (value: IdentityOutpost['runtimeStatus'], record) => (
+        <Space orientation="vertical" size={0}>
+          <Tag color={value === 'available' ? 'green' : value === 'degraded' ? 'gold' : 'default'}>
+            {value || 'unknown'}
+          </Tag>
+          {record.runtimeReason ? <Text type="secondary">{record.runtimeReason}</Text> : null}
+        </Space>
+      ),
+    },
+    {
       title: 'Endpoint',
       dataIndex: 'endpoint',
       ellipsis: true,
@@ -196,9 +221,9 @@ export function IdentityOutpostsPage() {
     },
     {
       title: 'Last Seen',
-      dataIndex: 'lastSeenAt',
+      dataIndex: 'lastHeartbeatAt',
       width: 160,
-      render: (value?: string) => formatDateTime(value),
+      render: (value: string | undefined, record) => formatDateTime(value || record.lastSeenAt),
     },
     {
       title: 'Updated',
@@ -329,7 +354,7 @@ export function IdentityOutpostsPage() {
             <ManagementTableToolbar>
               <Button
                 autoInsertSpace={false}
-                disabled={!canManage}
+                disabled={!canManage || allowedModes.length === 0}
                 icon={<PlusOutlined />}
                 onClick={openCreate}
                 size="small"
@@ -357,6 +382,7 @@ export function IdentityOutpostsPage() {
       />
 
       <IdentityOutpostFormModal
+        allowedModes={allowedModes}
         editing={editing}
         onCancel={() => setModalOpen(false)}
         onSubmit={submitForm}

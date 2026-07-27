@@ -3,6 +3,7 @@ import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { identityApplicationQueries } from '../applications'
 import { identityOutpostQueries } from '../outposts'
 import { identityProviderQueries } from '../providers'
+import { identityRuntimeQueries } from '../runtime'
 import { identityOverviewQueries } from './queries'
 
 function hasAnyPermission(snapshot: Parameters<typeof hasPermission>[0], keys: string[]) {
@@ -39,6 +40,7 @@ export function useIdentityOverviewData() {
     ...identityOverviewQueries.audit(),
     enabled: permissions.audit,
   })
+  const runtimeQuery = useQuery(identityRuntimeQueries.capabilities())
 
   const refreshAll = () => {
     if (permissions.applications) void applicationsQuery.refetch()
@@ -46,6 +48,7 @@ export function useIdentityOverviewData() {
     if (permissions.outposts) void outpostsQuery.refetch()
     if (permissions.sessions) void sessionsQuery.refetch()
     if (permissions.audit) void auditQuery.refetch()
+    void runtimeQuery.refetch()
   }
 
   return {
@@ -54,6 +57,7 @@ export function useIdentityOverviewData() {
     outposts: outpostsQuery.data ?? [],
     sessions: sessionsQuery.data ?? [],
     audits: auditQuery.data ?? [],
+    runtime: runtimeQuery.data,
     loading: {
       applications: applicationsQuery.isLoading,
       providers: providersQuery.isLoading,

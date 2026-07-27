@@ -109,6 +109,27 @@ describe('provider form model', () => {
     ).toThrow('Secret refs 必须是 JSON object')
   })
 
+  it('builds a typed SAML service provider config instead of proxy config', () => {
+    expect(
+      providerInputFromValues({
+        ...defaultProviderValues(),
+        type: 'saml',
+        samlEntityId: ' https://grafana.example/saml/metadata ',
+        samlAcsUrls: [' https://grafana.example/saml/acs '],
+        samlAttributeMappingsJson: '[{"source":"email","target":"email","required":true}]',
+      }),
+    ).toMatchObject({
+      type: 'saml',
+      config: {
+        entityId: 'https://grafana.example/saml/metadata',
+        acsUrls: ['https://grafana.example/saml/acs'],
+        nameIdFormat: 'persistent',
+        wantAuthnRequestsSigned: false,
+        attributeMappings: [{ source: 'email', target: 'email', required: true }],
+      },
+    })
+  })
+
   it('normalizes OIDC arrays and leaves an empty edit secret undefined', () => {
     const values = oidcClientValuesFor(client)
     expect(values.clientSecret).toBe('')

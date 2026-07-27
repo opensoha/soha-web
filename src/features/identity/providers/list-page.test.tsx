@@ -249,6 +249,25 @@ beforeEach(() => {
         ],
       }
     }
+    if (path === '/identity/capabilities') {
+      return {
+        data: {
+          samlApplicationProvider: { available: true, status: 'available' },
+          samlLoginSource: { available: true, status: 'available' },
+          totp: { available: false, status: 'unavailable' },
+          webauthn: { available: false, status: 'unavailable' },
+          recoveryCodes: { available: false, status: 'unavailable' },
+          stepUp: { available: false, status: 'unavailable' },
+          outpost: {
+            controlPlane: { available: true, status: 'available' },
+            embeddedRuntime: { available: true, status: 'available' },
+            agentRuntime: { available: false, status: 'unavailable' },
+            kubernetesArtifact: { available: false, status: 'unavailable' },
+            externalProtocol: { available: true, status: 'available' },
+          },
+        },
+      }
+    }
     throw new Error(`Unhandled GET ${path}`)
   })
   testState.apiPost.mockResolvedValue({

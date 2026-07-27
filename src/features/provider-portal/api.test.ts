@@ -57,4 +57,41 @@ describe('providerPortalApi', () => {
     expect(apiMocks.get).toHaveBeenNthCalledWith(1, '/portal/recent?limit=6')
     expect(apiMocks.get).toHaveBeenNthCalledWith(2, '/portal/security')
   })
+
+  it('keeps MFA enrollment and recovery secrets in direct mutation responses', async () => {
+    const challenge = { challengeId: 'challenge-1', provisioningUri: 'otpauth://secret' }
+    const recoveryChallenge = { challengeId: 'recovery-1', expiresAt: '2026-07-27T00:01:00Z' }
+    const codes = { codes: ['one-time-code'], generatedAt: '2026-07-27T00:00:00Z' }
+    apiMocks.post
+      .mockResolvedValueOnce({ data: challenge })
+      .mockResolvedValueOnce({ data: recoveryChallenge })
+      .mockResolvedValueOnce({ data: codes })
+
+    await expect(providerPortalApi.beginTOTPEnrollment()).resolves.toBe(challenge)
+    await expect(providerPortalApi.beginRecoveryChallenge()).resolves.toBe(recoveryChallenge)
+    await expect(providerPortalApi.regenerateRecoveryCodes()).resolves.toBe(codes)
+    expect(apiMocks.post).toHaveBeenNthCalledWith(1, '/identity/mfa/totp/enroll')
+    expect(apiMocks.post).toHaveBeenNthCalledWith(2, '/identity/mfa/recovery-codes/challenge')
+    expect(apiMocks.post).toHaveBeenNthCalledWith(3, '/identity/mfa/recovery-codes/regenerate')
+  })
+
+  it('starts a typed WebAuthn step-up authentication ceremony', async () => {
+    const options = {
+      challengeId: 'challenge-1',
+      challenge: 'AQID',
+      rpId: 'soha.example.test',
+      timeoutMilliseconds: 60_000,
+      userVerification: 'required' as const,
+      allowCredentialIds: ['BAUG'],
+      expiresAt: '2026-07-27T00:01:00Z',
+    }
+    apiMocks.post.mockResolvedValueOnce({ data: options })
+
+    await expect(
+      providerPortalApi.beginWebAuthnAuthentication({ purpose: 'step_up' }),
+    ).resolves.toBe(options)
+    expect(apiMocks.post).toHaveBeenCalledWith('/identity/mfa/webauthn/authenticate', {
+      purpose: 'step_up',
+    })
+  })
 })

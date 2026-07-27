@@ -16,7 +16,7 @@ export const accessKeys = {
 }
 
 export const accessMutationKeys = {
-  users: (action: 'create' | 'delete' | 'update') =>
+  users: (action: 'create' | 'delete' | 'reset-mfa' | 'update') =>
     [...accessKeys.users(), 'mutation', action] as const,
   roles: (action: 'create' | 'delete' | 'update') =>
     [...accessKeys.roles(), 'mutation', action] as const,
