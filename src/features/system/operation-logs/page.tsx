@@ -6,12 +6,15 @@ import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
+  ManagementDensityButton,
   ManagementIconButton,
   ManagementQueryActions,
   ManagementQueryField,
   ManagementQueryScope,
+  ManagementRefreshButton,
+  ManagementTableToolbar,
 } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { systemQueries } from '../queries'
@@ -127,8 +130,20 @@ function OperationLogDrawer({
                   size="small"
                   column={1}
                   items={[
-                    { key: 'path', label: '路径', children: record.requestPath || '-' },
-                    { key: 'method', label: '方法', children: record.requestMethod || '-' },
+                    {
+                      key: 'route',
+                      label: '请求路由',
+                      children: record.requestPath ? (
+                        <Space size={8} wrap>
+                          {record.requestMethod ? (
+                            <MetadataTag label={record.requestMethod} tone="blue" />
+                          ) : null}
+                          <Text code>{record.requestPath}</Text>
+                        </Space>
+                      ) : (
+                        '-'
+                      ),
+                    },
                     { key: 'requestId', label: '请求 ID', children: record.requestId || '-' },
                     { key: 'sourceIp', label: '来源 IP', children: record.sourceIp || '-' },
                   ]}
@@ -162,6 +177,8 @@ export function OperationLogsPage() {
   const initialUsageFilters = useMemo(() => usageSnapshotFilterParams(searchParams), [searchParams])
   const [operationTypeFilter, setOperationTypeFilter] = useState<string>('')
   const [resultFilter, setResultFilter] = useState<string>('')
+  const [requestMethodFilter, setRequestMethodFilter] = useState<string>('')
+  const [requestPathFilter, setRequestPathFilter] = useState<string>('')
   const [metadataKeyFilter, setMetadataKeyFilter] = useState<string>(
     initialUsageFilters.metadataKey,
   )
@@ -171,10 +188,13 @@ export function OperationLogsPage() {
   const [moduleView, setModuleView] = useState<
     'all' | 'system' | 'access' | 'platform' | 'virtualization' | 'delivery'
   >('all')
+  const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const [activeRecord, setActiveRecord] = useState<OperationLog | null>(null)
-  const { data: rawLogs = [], isLoading } = useQuery(
+  const { data: rawLogs = [], isFetching, isLoading, refetch } = useQuery(
     systemQueries.operationLogs({
       operationType: operationTypeFilter,
+      requestMethod: requestMethodFilter,
+      requestPath: requestPathFilter,
       result: resultFilter,
       metadataKey: metadataKeyFilter,
       metadataValue: metadataValueFilter,
@@ -192,74 +212,92 @@ export function OperationLogsPage() {
       ...tableColumnPresets.datetime,
       title: '时间',
       dataIndex: 'createdAt',
+      width: 150,
       render: (value: string) => formatDateTime(value),
     },
     {
       title: '操作者',
       dataIndex: 'actorName',
-      width: 160,
+      width: 170,
       render: (_: string, record: OperationLog) => (
-        <Space orientation="vertical" size={0}>
+        <Space className="soha-log-actor-cell" orientation="vertical" size={0}>
           <Text strong>{record.actorName || record.actorId || '-'}</Text>
           {record.actorId && record.actorId !== record.actorName ? (
-            <Text type="secondary">{record.actorId}</Text>
+            <Text
+              className="soha-log-actor-id"
+              type="secondary"
+              ellipsis={{ tooltip: record.actorId }}
+            >
+              {record.actorId}
+            </Text>
           ) : null}
         </Space>
       ),
     },
     {
-      title: '操作',
+      title: '操作 / 目标',
       dataIndex: 'operationType',
-      width: 260,
-      render: (value: string) => {
+      width: 250,
+      render: (value: string, record: OperationLog) => {
         const pretty = prettifyOperationType(value)
+        const target = buildTargetScopeLabel(record.targetScope || {})
         return (
-          <div className="soha-log-event-cell">
-            <Text strong>{pretty.primary}</Text>
-            <Text type="secondary">{pretty.secondary}</Text>
+          <div className="soha-log-event-cell soha-log-operation-cell">
+            <Space size={8} wrap>
+              <Text strong>{pretty.primary}</Text>
+              <Text type="secondary">{pretty.secondary}</Text>
+            </Space>
+            <Space size={8} wrap>
+              <Text>{target.primary}</Text>
+              {target.secondary ? <Text type="secondary">{target.secondary}</Text> : null}
+            </Space>
           </div>
         )
       },
     },
     {
-      title: '目标',
-      dataIndex: 'targetScope',
-      width: 260,
-      render: (value: Record<string, unknown>) => {
-        const target = buildTargetScopeLabel(value || {})
-        return (
-          <div className="soha-log-event-cell">
-            <Text strong>{target.primary}</Text>
-            <Text type="secondary">{target.secondary || '-'}</Text>
+      title: '请求路由',
+      dataIndex: 'requestPath',
+      width: 280,
+      render: (_: string, record: OperationLog) =>
+        record.requestPath ? (
+          <div className="soha-log-request-cell">
+            {record.requestMethod ? (
+              <MetadataTag label={record.requestMethod} tone="blue" />
+            ) : null}
+            <Text className="soha-log-request-path" ellipsis={{ tooltip: record.requestPath }}>
+              {record.requestPath}
+            </Text>
           </div>
-        )
-      },
+        ) : (
+          '-'
+        ),
     },
     {
       ...tableColumnPresets.status,
       title: '状态',
       dataIndex: 'result',
+      width: 90,
       render: (value: string) => <StatusTag value={value} />,
     },
     {
       title: '摘要',
       dataIndex: 'summary',
-      render: (value: string) => (
-        <Paragraph className="soha-log-summary" ellipsis={{ rows: 2, tooltip: value }}>
-          {value || '-'}
-        </Paragraph>
+      width: 220,
+      render: (value: string, record: OperationLog) => (
+        <Space className="soha-log-summary-cell" orientation="vertical" size={4}>
+          <Paragraph className="soha-log-summary" ellipsis={{ rows: 2, tooltip: value }}>
+            {value || '-'}
+          </Paragraph>
+          <UsageSnapshotSummary metadata={record.metadata} />
+        </Space>
       ),
-    },
-    {
-      title: 'Usage Snapshot',
-      dataIndex: 'metadata',
-      width: 260,
-      render: (value: OperationLog['metadata']) => <UsageSnapshotSummary metadata={value} />,
     },
     {
       ...tableColumnPresets.action,
       title: '详情',
       dataIndex: 'id',
+      width: 64,
       render: (_: string, record: OperationLog) => (
         <ManagementIconButton
           aria-label="查看操作详情"
@@ -282,6 +320,8 @@ export function OperationLogsPage() {
             disabledReset={
               moduleView === 'all' &&
               !operationTypeFilter.trim() &&
+              !requestMethodFilter &&
+              !requestPathFilter.trim() &&
               !resultFilter &&
               !metadataKeyFilter &&
               !metadataValueFilter.trim()
@@ -289,6 +329,8 @@ export function OperationLogsPage() {
             onReset={() => {
               setModuleView('all')
               setOperationTypeFilter('')
+              setRequestMethodFilter('')
+              setRequestPathFilter('')
               setResultFilter('')
               setMetadataKeyFilter('')
               setMetadataValueFilter('')
@@ -326,6 +368,26 @@ export function OperationLogsPage() {
                 placeholder="按操作类型过滤"
                 value={operationTypeFilter}
                 onChange={(event) => setOperationTypeFilter(event.target.value)}
+              />
+            </ManagementQueryField>
+            <ManagementQueryField minWidth={120} width={140} label="请求方法">
+              <Select
+                allowClear
+                placeholder="全部方法"
+                value={requestMethodFilter || undefined}
+                onChange={(value) => setRequestMethodFilter(value || '')}
+                options={['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((value) => ({
+                  value,
+                  label: value,
+                }))}
+              />
+            </ManagementQueryField>
+            <ManagementQueryField grow minWidth={220} width={300} label="请求路由">
+              <Input
+                allowClear
+                placeholder="完整路由，例如 /api/v1/resources"
+                value={requestPathFilter}
+                onChange={(event) => setRequestPathFilter(event.target.value)}
               />
             </ManagementQueryField>
             <ManagementQueryField minWidth={140} width={160} label="结果">
@@ -370,12 +432,30 @@ export function OperationLogsPage() {
       table={{
         columnSettingIconOnly: true,
         columnSettingPlacement: 'header',
+        headerExtra: (
+          <ManagementTableToolbar>
+            <ManagementDensityButton
+              aria-label="切换操作日志表格密度"
+              size="small"
+              tooltip={tableSize === 'small' ? '切换为宽松密度' : '切换为紧凑密度'}
+              onClick={() => setTableSize((current) => (current === 'small' ? 'middle' : 'small'))}
+            />
+            <ManagementRefreshButton
+              aria-label="刷新操作日志"
+              loading={isFetching}
+              size="small"
+              tooltip="刷新"
+              onClick={() => void refetch()}
+            />
+          </ManagementTableToolbar>
+        ),
         columns,
         dataSource: filteredLogs,
         rowKey: 'id',
         loading: isLoading,
         pageSize: 50,
         scroll: { x: 'max-content' },
+        tableSize,
         onRow: (record: OperationLog) => ({
           onClick: () => setActiveRecord(record),
           style: { cursor: 'pointer' },

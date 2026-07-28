@@ -42,29 +42,14 @@ Choose ownership from behavior, not filename symmetry. A small capability does n
 file. Split a module when it establishes a real boundary, isolates a runtime, removes repeated
 logic, or makes tests and ownership clearer.
 
-Do not require Ant Design Pro's `data.d.ts/index.tsx/service.ts/style.ts` convention. In Soha:
-
-- use `types.ts`, not `data.d.ts`, for runtime-adjacent domain types;
-- use `api.ts`, not an ambiguous `service.ts`, for HTTP wire calls;
-- use `page.tsx`, `list-page.tsx`, or `detail-page.tsx`, not generic route `index.tsx` files;
-- use `styles.css` or semantic CSS names, not TypeScript `style.ts`, unless styles genuinely need
-  runtime calculation;
-- reserve `index.ts` for a narrow public API, never a broad page barrel.
+Use `types.ts` for runtime-adjacent domain types, `api.ts` for HTTP wire calls, semantic page
+filenames for leaf routes, and `index.ts` only for a narrow public capability surface.
 
 ## 2. Second-Level Capability Boundaries
 
-Split large domains into user-visible capabilities. Current examples include:
-
-- Platform: workloads, clusters, cluster resources, configuration, network, storage, access
-  control, extensions, overview.
-- Delivery: applications, environments, build templates, workflow templates, workflows,
-  releases, release bundles, execution tasks, blueprints, registries, runtime detail, workbench.
-- Copilot: gateway, workbench, observe, global assistant.
-- Identity: overview, applications, providers, policies, outposts.
-- Observability: overview, alerts, rules, events, integrations, notifications, healing, on-call.
-- Virtualization and Docker: overview plus resource/operation capabilities.
-- Access, System, Settings, Plugins, and Provider Portal: capability folders matching their UI
-  and API ownership.
+Split large domains by user-visible workflow and API ownership. Use the current route manifests,
+query keys, and wire clients as evidence; do not create a capability folder only to mirror a
+menu label.
 
 Promotion rules:
 
@@ -224,7 +209,8 @@ Do not weaken the checker or rewrite its baseline to conceal new debt.
 The Soha Web graph lives in `graphify-out/` relative to the `soha-web` repository.
 
 - Query the graph before broad architecture work.
-- Run `graphify update .` after ordinary code changes.
+- Refresh the graph only for broad structural or dependency changes after source edits are
+  stable and the worktree contents are understood.
 - Use `graphify update . --force` after intentional deletions or large moves so stale nodes are
   pruned.
 - Run graph diagnostics after rebuilding: missing/duplicate node IDs, missing endpoints,
@@ -255,5 +241,5 @@ git diff --check
 
 Use browser regression for canonical routes, redirects with query preservation, direct URL
 refresh, permission/module/capability gates, loading/empty/error states, console errors, and
-layout overflow. Completion requires code, tests, production manifest, browser behavior, and
-Graphify evidence; moving files is not sufficient.
+layout overflow. Completion requires code, tests, production manifest, and browser behavior;
+broad structural work also requires Graphify evidence. Moving files is not sufficient.

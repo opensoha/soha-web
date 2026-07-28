@@ -11,6 +11,9 @@ import { DirectorySyncPage } from './page'
 const state = vi.hoisted(() => ({
   snapshot: { permissionKeys: [], visibleMenuIds: [], visibleMenus: [] } as PermissionSnapshot,
   connections: [] as unknown[],
+  events: [] as unknown[],
+  retryEvent: vi.fn(() => Promise.resolve({ id: 'event-1', status: 'queued' })),
+  runtimeStatus: undefined as unknown,
 }))
 
 vi.mock('@/features/auth/permission-snapshot', () => ({
@@ -24,6 +27,9 @@ vi.mock('./api', () => ({
     listConnections: vi.fn(() => Promise.resolve(state.connections)),
     listConflicts: vi.fn(() => Promise.resolve([])),
     listRuns: vi.fn(() => Promise.resolve([])),
+    getRuntimeStatus: vi.fn(() => Promise.resolve(state.runtimeStatus)),
+    listEvents: vi.fn(() => Promise.resolve(state.events)),
+    retryEvent: state.retryEvent,
     createConnection: vi.fn(),
     updateConnection: vi.fn(),
     validateConnection: vi.fn(),
@@ -80,6 +86,8 @@ describe('directory sync page', () => {
   })
   beforeEach(() => {
     state.connections = []
+    state.events = []
+    state.runtimeStatus = undefined
     state.snapshot = { permissionKeys: [], visibleMenuIds: [], visibleMenus: [] }
   })
   afterEach(async () => {
@@ -122,5 +130,81 @@ describe('directory sync page', () => {
     expect(container.textContent).toContain('飞书通讯录')
     expect(container.textContent).toContain('已开启')
     expect(container.textContent).toContain('未开启')
+  })
+
+  it('shows callback, event queue, and reconciliation status for a selected connection', async () => {
+    state.snapshot.permissionKeys = ['access.directory.view', 'access.directory.sync']
+    state.connections = [
+      {
+        id: 'dir-1',
+        name: '飞书通讯录',
+        providerType: 'feishu',
+        enabled: true,
+        capabilities: ['organizations', 'events'],
+        status: 'healthy',
+        policy: {
+          syncOrganizations: true,
+          syncPeople: true,
+          mode: 'scheduled_and_realtime',
+          schedule: '0 * * * *',
+          fullReconcileSchedule: '0 3 * * *',
+          provisionMode: 'create_and_link',
+          userDisablePolicy: 'managed_only',
+          missingObjectPolicy: 'archive',
+        },
+      },
+    ]
+    state.runtimeStatus = {
+      connectionId: 'dir-1',
+      callbackUrl: 'https://soha.example/api/v1/integrations/directory/dir-1/events',
+      callbackConfigured: true,
+      callbackStatus: 'verified',
+      callbackVerifiedAt: '2026-07-28T01:00:00Z',
+      lastEventAt: '2026-07-28T02:00:00Z',
+      queuedEvents: 2,
+      failedEvents: 1,
+      needsFullReconcile: false,
+      lastIncrementalRun: {
+        id: 'run-1',
+        connectionId: 'dir-1',
+        trigger: 'webhook',
+        mode: 'incremental',
+        status: 'succeeded',
+        finishedAt: '2026-07-28T02:00:00Z',
+      },
+    }
+    state.events = [
+      {
+        id: 'event-1',
+        providerEventId: 'provider-event-1',
+        eventType: 'contact.user.updated_v3',
+        status: 'failed',
+        attempts: 3,
+        occurredAt: '2026-07-28T02:00:00Z',
+        receivedAt: '2026-07-28T02:00:01Z',
+        errorSummary: 'temporary provider error',
+      },
+    ]
+
+    await renderPage()
+    const detailsButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="查看同步记录"]',
+    )
+    await act(async () => detailsButton?.click())
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+
+    expect(document.body.textContent).toContain('事件回调地址')
+    expect(document.body.textContent).toContain('待处理 2')
+    expect(document.body.textContent).toContain('失败 1')
+    expect(document.body.textContent).toContain('contact.user.updated_v3')
+    expect(document.body.textContent).toContain('无需对账')
+
+    const retryButton = [...document.body.querySelectorAll('button')].find(
+      (button) => button.textContent === '重试',
+    )
+    await act(async () => retryButton?.click())
+    expect(state.retryEvent).toHaveBeenCalledWith('dir-1', 'event-1')
   })
 })

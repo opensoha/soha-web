@@ -30,10 +30,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
 import {
   ManagementIconButton,
+  ManagementDensityButton,
   ManagementKeywordField,
   ManagementQueryField,
   ManagementQueryPanel,
   ManagementState,
+  ManagementRefreshButton,
   ManagementTableToolbar,
 } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
@@ -86,6 +88,7 @@ export function AccessUsersPage() {
   const [searchText, setSearchText] = useState('')
   const [selectedOrgId, setSelectedOrgId] = useState(ORG_ALL_KEY)
   const [includeSubOrganizations, setIncludeSubOrganizations] = useState(true)
+  const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const usersQuery = useQuery(accessQueries.users())
   const rolesQuery = useQuery(accessQueries.roles())
   const teamsQuery = useQuery(accessQueries.teams())
@@ -436,8 +439,8 @@ export function AccessUsersPage() {
             shellClassName="soha-management-table-shell"
             className="soha-access-table"
             headerExtra={
-              canManageUsers ? (
-                <ManagementTableToolbar>
+              <ManagementTableToolbar>
+                {canManageUsers ? (
                   <Button
                     size="small"
                     icon={<PlusOutlined />}
@@ -449,14 +452,36 @@ export function AccessUsersPage() {
                   >
                     添加用户
                   </Button>
-                </ManagementTableToolbar>
-              ) : null
+                ) : null}
+                <ManagementDensityButton
+                  aria-label="切换用户表格密度"
+                  size="small"
+                  tooltip={tableSize === 'small' ? '切换为宽松密度' : '切换为紧凑密度'}
+                  onClick={() =>
+                    setTableSize((current) => (current === 'small' ? 'middle' : 'small'))
+                  }
+                />
+                <ManagementRefreshButton
+                  aria-label="刷新用户"
+                  loading={usersQuery.isFetching || rolesQuery.isFetching || teamsQuery.isFetching}
+                  size="small"
+                  tooltip="刷新"
+                  onClick={() =>
+                    void Promise.all([
+                      usersQuery.refetch(),
+                      rolesQuery.refetch(),
+                      teamsQuery.refetch(),
+                    ])
+                  }
+                />
+              </ManagementTableToolbar>
             }
             columns={columns}
             dataSource={filteredUsers}
             rowKey="id"
             loading={usersQuery.isLoading || teamsQuery.isLoading}
             scroll={{ x: 'max-content' }}
+            tableSize={tableSize}
           />
         </section>
       </div>

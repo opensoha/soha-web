@@ -191,6 +191,7 @@ export function AccessTeamsPage() {
 
   return (
     <AccessManagementTablePage<AccessTeam>
+      resourceName="组织"
       columns={columns}
       createAction={
         canManageGroups ? (
@@ -202,6 +203,8 @@ export function AccessTeamsPage() {
       dataSource={filteredTeams}
       rowKey="id"
       loading={crud.isLoading}
+      refreshing={crud.isFetching}
+      onRefresh={() => void crud.refetch()}
       placeholder="搜索组织、路径或来源"
       searchKeyword={searchKeyword}
       setSearchKeyword={setSearchKeyword}

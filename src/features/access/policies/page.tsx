@@ -198,6 +198,7 @@ export function AccessPoliciesPage() {
 
   return (
     <AccessManagementTablePage<AccessPolicy>
+      resourceName="策略"
       columns={columns}
       createAction={
         canManagePolicies ? (
@@ -209,6 +210,8 @@ export function AccessPoliciesPage() {
       dataSource={filteredPolicies}
       rowKey="id"
       loading={crud.isLoading}
+      refreshing={crud.isFetching || rolesQuery.isFetching || teamsQuery.isFetching}
+      onRefresh={() => void Promise.all([crud.refetch(), rolesQuery.refetch(), teamsQuery.refetch()])}
       placeholder="搜索策略、主体、目标或动作"
       searchKeyword={searchKeyword}
       setSearchKeyword={setSearchKeyword}

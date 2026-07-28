@@ -1,15 +1,17 @@
 import { Alert, Form, Input, Select, Switch } from 'antd'
 import type { FormInstance } from 'antd'
-import type { DirectoryConnectionInput } from './types'
+import type { DirectoryConnectionInput, DirectoryProviderType } from './types'
 
 export function DirectoryPolicyForm({
   canManagePeople,
   form,
   onRequestEnablePeople,
+  providerType,
 }: {
   canManagePeople: boolean
   form: FormInstance<DirectoryConnectionInput>
   onRequestEnablePeople: () => void
+  providerType: DirectoryProviderType | undefined
 }) {
   const mode = Form.useWatch(['policy', 'mode'], form)
   const syncPeople = Form.useWatch(['policy', 'syncPeople'], form)
@@ -53,7 +55,9 @@ export function DirectoryPolicyForm({
           options={[
             { value: 'manual', label: '手动' },
             { value: 'scheduled', label: '定时' },
-            { value: 'scheduled_and_realtime', label: '定时 + 实时事件' },
+            ...(providerType === 'feishu'
+              ? [{ value: 'scheduled_and_realtime', label: '定时 + 实时事件' }]
+              : []),
           ]}
         />
       </Form.Item>
@@ -67,16 +71,38 @@ export function DirectoryPolicyForm({
           <Input placeholder="0 * * * *" />
         </Form.Item>
       ) : null}
-      {syncPeople ? (
-        <Form.Item name={['policy', 'provisionMode']} label="人员创建策略">
-          <Select
-            options={[
-              { value: 'review_before_link', label: '人工确认后关联' },
-              { value: 'create_and_link', label: '自动创建并关联' },
-            ]}
-          />
+      {mode === 'scheduled_and_realtime' ? (
+        <Form.Item
+          name={['policy', 'fullReconcileSchedule']}
+          label="全量对账计划"
+          extra="实时事件负责增量修改；此计划仅用于修复事件丢失或数据漂移。"
+        >
+          <Input placeholder="0 3 * * *" />
         </Form.Item>
       ) : null}
+      {syncPeople ? (
+        <>
+          <Form.Item name={['policy', 'provisionMode']} label="人员创建策略">
+            <Select
+              options={[
+                { value: 'review_before_link', label: '人工确认后关联' },
+                { value: 'create_and_link', label: '自动创建并关联' },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item name={['policy', 'userDisablePolicy']} label="离职处理策略">
+            <Select
+              options={[
+                { value: 'managed_only', label: '停用目录托管账号并移除成员关系' },
+                { value: 'never', label: '仅移除成员关系，不自动停用账号' },
+              ]}
+            />
+          </Form.Item>
+        </>
+      ) : null}
+      <Form.Item name={['policy', 'missingObjectPolicy']} label="组织归档策略">
+        <Select disabled options={[{ value: 'archive', label: '上游缺失时归档，不直接删除' }]} />
+      </Form.Item>
     </>
   )
 }

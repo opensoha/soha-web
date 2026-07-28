@@ -1,3 +1,8 @@
+import type {
+  DirectoryEvent as ContractDirectoryEvent,
+  DirectoryRuntimeStatus as ContractDirectoryRuntimeStatus,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+
 export type DirectoryProviderType = 'feishu' | 'wecom' | 'dingtalk' | 'ldap' | 'scim' | 'custom'
 export type DirectorySyncMode = 'manual' | 'scheduled' | 'scheduled_and_realtime'
 export type DirectoryConnectionStatus = 'pending' | 'healthy' | 'degraded' | 'disabled'
@@ -14,7 +19,10 @@ export interface DirectorySyncPolicy {
   syncPeople: boolean
   mode: DirectorySyncMode
   schedule?: string
+  fullReconcileSchedule?: string
   provisionMode: 'create_and_link' | 'review_before_link'
+  userDisablePolicy: 'managed_only' | 'never'
+  missingObjectPolicy: 'archive'
 }
 
 export interface DirectoryConnection {
@@ -93,3 +101,6 @@ export interface DirectoryConflict {
   status: 'open' | 'resolved' | 'ignored'
   createdAt: string
 }
+
+export type DirectoryRuntimeStatus = ContractDirectoryRuntimeStatus
+export type DirectoryEvent = ContractDirectoryEvent

@@ -62,6 +62,17 @@ describe('api client error handling', () => {
     })
   })
 
+  it('normalizes list envelopes for ordinary API consumers', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse({ items: [{ id: 'event-1' }] }, { status: 200 })),
+    )
+
+    await expect(api.get<{ data: Array<{ id: string }> }>('/directory/events')).resolves.toEqual({
+      data: [{ id: 'event-1' }],
+    })
+  })
+
   it('clears auth and emits a typed event when refresh cannot recover a 401', async () => {
     vi.stubGlobal(
       'fetch',

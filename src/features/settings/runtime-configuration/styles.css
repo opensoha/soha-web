@@ -97,9 +97,12 @@
 }
 
 .soha-runtime-config-actionbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  position: sticky;
+  z-index: 4;
+  top: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
   gap: 12px;
   margin-bottom: 12px;
   padding: 10px 12px;
@@ -108,10 +111,30 @@
   background: var(--soha-bg-surface);
 }
 
+.soha-runtime-config-actionbar__context {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.soha-runtime-config-actionbar__summary,
+.soha-runtime-config-confirm__impact {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.soha-runtime-config-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .soha-runtime-config-page .soha-runtime-config-reason {
-  flex: 1 1 280px;
-  width: min(360px, 100%);
-  min-width: 220px;
+  width: min(560px, 100%);
 }
 
 .soha-runtime-config-actionbar__actions {
@@ -157,6 +180,12 @@
 
 .soha-runtime-config-item + .soha-runtime-config-item {
   border-top: 1px solid var(--soha-border-color);
+}
+
+.soha-runtime-config-item.is-changed,
+.soha-runtime-config-branch.is-changed > .ant-collapse-item > .ant-collapse-header {
+  background: color-mix(in srgb, var(--soha-primary) 5%, var(--soha-bg-surface));
+  box-shadow: inset 3px 0 0 var(--soha-primary);
 }
 
 .soha-runtime-config-branch {
@@ -227,7 +256,9 @@
 .soha-runtime-config-item__info .ant-typography-secondary {
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .soha-runtime-config-item__effective .ant-typography-code {
@@ -298,12 +329,11 @@
 
 @media (max-width: 720px) {
   .soha-runtime-config-actionbar {
+    grid-template-columns: 1fr;
     align-items: stretch;
-    flex-wrap: wrap;
   }
 
   .soha-runtime-config-page .soha-runtime-config-reason {
-    flex-basis: 100%;
     width: 100%;
   }
 

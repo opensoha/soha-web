@@ -10,7 +10,7 @@ This reference is the concise operating standard for `soha-web` theme, layout, m
 - Keep the light theme global base/layout background white: `colorBgBase`, `colorBgLayout`, `--soha-bg-base`, and `--soha-bg-layout` must resolve to `#ffffff`.
 - Use Soha semantic variables instead of page-local hardcoded colors and shadows.
 - Keep shape tokens split by purpose: `--soha-radius-control` for inputs/buttons/list items, `--soha-radius-panel` for cards/query panels/detail headers/table shells, and `--soha-radius-lg` for larger scene containers.
-- Keep management search width token-driven: `--soha-management-query-field-default-width` and `--soha-management-toolbar-search-width` are the default search widths (currently 300px); narrow pages must adapt through shared component responsiveness, not page-local `220/240/260px` search widths.
+- Keep management search width token-driven through `--soha-management-query-field-default-width` and `--soha-management-toolbar-search-width`; narrow pages must adapt through shared component responsiveness, not page-local width variants.
 
 ## Shared Components
 

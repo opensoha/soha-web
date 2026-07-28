@@ -6,12 +6,15 @@ import { useQuery } from '@tanstack/react-query'
 import { useLocation, useSearchParams } from 'react-router-dom'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
+  ManagementDensityButton,
   ManagementIconButton,
   ManagementQueryActions,
   ManagementQueryField,
   ManagementQueryScope,
+  ManagementRefreshButton,
+  ManagementTableToolbar,
 } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { resolveSystemEndpointScope } from '../api'
@@ -77,7 +80,12 @@ function AuditLogDrawer({
                       {
                         key: 'action',
                         label: '动作',
-                        children: <StatusTag value={record.action} />,
+                        children: (
+                          <Space size={8} wrap>
+                            <Text>{prettifyAction(record.action)}</Text>
+                            <MetadataTag label={record.action} />
+                          </Space>
+                        ),
                       },
                       {
                         key: 'resource',
@@ -112,11 +120,19 @@ function AuditLogDrawer({
                           label: '团队',
                           children: record.teams?.length ? record.teams.join(', ') : '-',
                         },
-                        { key: 'requestPath', label: '路径', children: record.requestPath || '-' },
                         {
-                          key: 'requestMethod',
-                          label: '方法',
-                          children: record.requestMethod || '-',
+                          key: 'requestRoute',
+                          label: '请求路由',
+                          children: record.requestPath ? (
+                            <Space size={8} wrap>
+                              {record.requestMethod ? (
+                                <MetadataTag label={record.requestMethod} tone="blue" />
+                              ) : null}
+                              <Text code>{record.requestPath}</Text>
+                            </Space>
+                          ) : (
+                            '-'
+                          ),
                         },
                         { key: 'requestId', label: '请求 ID', children: record.requestId || '-' },
                         { key: 'sourceIp', label: '来源 IP', children: record.sourceIp || '-' },
@@ -155,6 +171,8 @@ export function AuditLogsPage() {
   const initialUsageFilters = useMemo(() => usageSnapshotFilterParams(searchParams), [searchParams])
   const [actionFilter, setActionFilter] = useState<string>('')
   const [resultFilter, setResultFilter] = useState<string>('')
+  const [requestMethodFilter, setRequestMethodFilter] = useState<string>('')
+  const [requestPathFilter, setRequestPathFilter] = useState<string>('')
   const [metadataKeyFilter, setMetadataKeyFilter] = useState<string>(
     initialUsageFilters.metadataKey,
   )
@@ -162,10 +180,13 @@ export function AuditLogsPage() {
     initialUsageFilters.metadataValue,
   )
   const [viewMode, setViewMode] = useState<'all' | 'abnormal' | 'today'>('all')
+  const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const [activeRecord, setActiveRecord] = useState<AuditLog | null>(null)
-  const { data: rawLogs = [], isLoading } = useQuery(
+  const { data: rawLogs = [], isFetching, isLoading, refetch } = useQuery(
     systemQueries.audit(endpointScope, {
       action: actionFilter,
+      requestMethod: requestMethodFilter,
+      requestPath: requestPathFilter,
       result: resultFilter,
       metadataKey: metadataKeyFilter,
       metadataValue: metadataValueFilter,
@@ -186,65 +207,91 @@ export function AuditLogsPage() {
       ...tableColumnPresets.datetime,
       title: '时间',
       dataIndex: 'createdAt',
+      width: 150,
       render: (value: string) => formatDateTime(value),
     },
     {
       title: '操作者',
       dataIndex: 'actorName',
-      width: 160,
+      width: 170,
       render: (_: string, record: AuditLog) => (
-        <Space orientation="vertical" size={0}>
+        <Space className="soha-log-actor-cell" orientation="vertical" size={0}>
           <Text strong>{record.actorName || record.actorId || '-'}</Text>
           {record.actorId && record.actorId !== record.actorName ? (
-            <Text type="secondary">{record.actorId}</Text>
+            <Text
+              className="soha-log-actor-id"
+              type="secondary"
+              ellipsis={{ tooltip: record.actorId }}
+            >
+              {record.actorId}
+            </Text>
           ) : null}
         </Space>
       ),
     },
     {
-      title: '事件',
+      title: '事件 / 资源',
       dataIndex: 'action',
-      width: 240,
+      width: 220,
       render: (_: string, record: AuditLog) => {
         const resource = buildAuditResourceLabel(record.resourceKind, record.resourceName)
         return (
           <div className="soha-log-event-cell">
             <Space size={8} wrap>
-              <StatusTag value={record.action} />
+              <Text strong>{prettifyAction(record.action)}</Text>
+              <Text type="secondary">{record.action}</Text>
+            </Space>
+            <Space size={8} wrap>
+              <Text>{resource.primary}</Text>
               {resource.secondary ? <Text type="secondary">{resource.secondary}</Text> : null}
             </Space>
-            <Text strong>{resource.primary}</Text>
           </div>
         )
       },
     },
     {
+      title: '请求路由',
+      dataIndex: 'requestPath',
+      width: 280,
+      render: (_: string, record: AuditLog) =>
+        record.requestPath ? (
+          <div className="soha-log-request-cell">
+            {record.requestMethod ? (
+              <MetadataTag label={record.requestMethod} tone="blue" />
+            ) : null}
+            <Text className="soha-log-request-path" ellipsis={{ tooltip: record.requestPath }}>
+              {record.requestPath}
+            </Text>
+          </div>
+        ) : (
+          '-'
+        ),
+    },
+    {
       ...tableColumnPresets.status,
       title: '结果',
       dataIndex: 'result',
+      width: 90,
       render: (value: string) => <StatusTag value={value} />,
     },
     {
       title: '摘要',
       dataIndex: 'summary',
-      render: (value: string) => (
-        <Space orientation="vertical" size={4}>
+      width: 220,
+      render: (value: string, record: AuditLog) => (
+        <Space className="soha-log-summary-cell" orientation="vertical" size={4}>
           <Paragraph className="soha-log-summary" ellipsis={{ rows: 2, tooltip: value }}>
             {value || '-'}
           </Paragraph>
+          <UsageSnapshotSummary metadata={record.metadata} />
         </Space>
       ),
-    },
-    {
-      title: 'Usage Snapshot',
-      dataIndex: 'metadata',
-      width: 260,
-      render: (value: AuditLog['metadata']) => <UsageSnapshotSummary metadata={value} />,
     },
     {
       ...tableColumnPresets.action,
       title: '详情',
       dataIndex: 'id',
+      width: 64,
       render: (_: string, record: AuditLog) => (
         <ManagementIconButton
           aria-label="查看审计详情"
@@ -267,6 +314,8 @@ export function AuditLogsPage() {
             disabledReset={
               viewMode === 'all' &&
               !actionFilter &&
+              !requestMethodFilter &&
+              !requestPathFilter.trim() &&
               !resultFilter &&
               !metadataKeyFilter &&
               !metadataValueFilter.trim()
@@ -274,6 +323,8 @@ export function AuditLogsPage() {
             onReset={() => {
               setViewMode('all')
               setActionFilter('')
+              setRequestMethodFilter('')
+              setRequestPathFilter('')
               setResultFilter('')
               setMetadataKeyFilter('')
               setMetadataValueFilter('')
@@ -308,6 +359,26 @@ export function AuditLogsPage() {
                   { value: 'publish', label: 'publish' },
                   { value: 'withdraw', label: 'withdraw' },
                 ]}
+              />
+            </ManagementQueryField>
+            <ManagementQueryField minWidth={120} width={140} label="请求方法">
+              <Select
+                allowClear
+                placeholder="全部方法"
+                value={requestMethodFilter || undefined}
+                onChange={(value) => setRequestMethodFilter(value || '')}
+                options={['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((value) => ({
+                  value,
+                  label: value,
+                }))}
+              />
+            </ManagementQueryField>
+            <ManagementQueryField grow minWidth={220} width={300} label="请求路由">
+              <Input
+                allowClear
+                placeholder="完整路由，例如 /api/v1/pods"
+                value={requestPathFilter}
+                onChange={(event) => setRequestPathFilter(event.target.value)}
               />
             </ManagementQueryField>
             <ManagementQueryField minWidth={140} width={160} label="结果">
@@ -353,12 +424,30 @@ export function AuditLogsPage() {
       table={{
         columnSettingIconOnly: true,
         columnSettingPlacement: 'header',
+        headerExtra: (
+          <ManagementTableToolbar>
+            <ManagementDensityButton
+              aria-label="切换审计日志表格密度"
+              size="small"
+              tooltip={tableSize === 'small' ? '切换为宽松密度' : '切换为紧凑密度'}
+              onClick={() => setTableSize((current) => (current === 'small' ? 'middle' : 'small'))}
+            />
+            <ManagementRefreshButton
+              aria-label="刷新审计日志"
+              loading={isFetching}
+              size="small"
+              tooltip="刷新"
+              onClick={() => void refetch()}
+            />
+          </ManagementTableToolbar>
+        ),
         columns,
         dataSource: filteredLogs,
         rowKey: 'id',
         loading: isLoading,
         pageSize: 50,
         scroll: { x: 'max-content' },
+        tableSize,
         onRow: (record: AuditLog) => ({
           onClick: () => setActiveRecord(record),
           style: { cursor: 'pointer' },

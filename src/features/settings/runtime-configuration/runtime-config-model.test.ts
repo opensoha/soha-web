@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildRuntimeConfigChanges,
   isGlobalPrometheusConfig,
+  summarizeRuntimeConfigChanges,
   visibleRuntimeConfigItems,
 } from './runtime-config-model'
 import type { RuntimeConfigItem } from './types'
@@ -46,5 +47,24 @@ describe('runtime configuration visibility', () => {
       { key: 'modules.docker.enabled', reset: true },
       { key: 'modules.ai.enabled', value: true },
     ])
+  })
+
+  it('summarizes changed settings by apply mode', () => {
+    const items = [
+      { key: 'hot', applyMode: 'hot' },
+      { key: 'module', applyMode: 'lifecycle' },
+      { key: 'restart', applyMode: 'restart' },
+    ] as RuntimeConfigItem[]
+
+    expect(
+      summarizeRuntimeConfigChanges(
+        [
+          { key: 'hot', value: true },
+          { key: 'module', reset: true },
+          { key: 'restart', value: 1 },
+        ],
+        items,
+      ),
+    ).toEqual({ hot: 1, reconfigure: 0, lifecycle: 1, restart: 1 })
   })
 })

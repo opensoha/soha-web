@@ -25,6 +25,7 @@ import { DirectoryConnectionModal } from './connection-drawer'
 import { DirectoryConflictCenter } from './conflict-center'
 import { directorySyncMutations } from './mutations'
 import { directorySyncQueries } from './queries'
+import { DirectoryRuntimePanel } from './runtime-status'
 import { DirectoryRunHistory } from './run-history'
 import type { DirectoryConnection, DirectoryConnectionInput, DirectorySyncPreview } from './types'
 import '../shared/styles.css'
@@ -62,6 +63,8 @@ export function DirectorySyncPage() {
 
   const connectionsQuery = useQuery(directorySyncQueries.connections(canView))
   const runsQuery = useQuery(directorySyncQueries.runs(selected?.id ?? ''))
+  const runtimeStatusQuery = useQuery(directorySyncQueries.runtimeStatus(selected?.id ?? ''))
+  const eventsQuery = useQuery(directorySyncQueries.events(selected?.id ?? ''))
   const conflictsQuery = useQuery(directorySyncQueries.conflicts(canView))
   const identitySettingsQuery = useQuery({
     ...settingsQueries.identity(),
@@ -73,6 +76,7 @@ export function DirectorySyncPage() {
   const syncMutation = useMutation(directorySyncMutations.sync(queryClient))
   const cancelMutation = useMutation(directorySyncMutations.cancel(queryClient))
   const resolveMutation = useMutation(directorySyncMutations.resolveConflict(queryClient))
+  const retryEventMutation = useMutation(directorySyncMutations.retryEvent(queryClient))
   const previewMutation = useMutation({ mutationFn: directorySyncApi.preview })
   const connections = connectionsQuery.data ?? []
   const filtered = useManagementTextFilter(connections, search, (item) => [
@@ -228,6 +232,7 @@ export function DirectorySyncPage() {
 
   return (
     <AccessManagementTablePage
+      resourceName="目录同步"
       columns={columns}
       createAction={
         canManage ? (
@@ -247,6 +252,8 @@ export function DirectorySyncPage() {
       dataSource={filtered}
       rowKey="id"
       loading={connectionsQuery.isLoading}
+      refreshing={connectionsQuery.isFetching}
+      onRefresh={() => void connectionsQuery.refetch()}
       placeholder="搜索连接、目录类型、状态或同步方式"
       searchKeyword={search}
       setSearchKeyword={setSearch}
@@ -290,7 +297,7 @@ export function DirectorySyncPage() {
         }}
       />
       <Modal
-        title={selected ? `${selected.name} · 同步运行` : '同步运行'}
+        title={selected ? `${selected.name} · 运行与事件` : '运行与事件'}
         width={960}
         open={Boolean(selected)}
         footer={null}
@@ -298,6 +305,35 @@ export function DirectorySyncPage() {
       >
         <Tabs
           items={[
+            {
+              key: 'runtime',
+              label: '实时事件',
+              children: selected ? (
+                <DirectoryRuntimePanel
+                  canRetry={canSync}
+                  connection={selected}
+                  events={eventsQuery.data ?? []}
+                  eventsLoading={eventsQuery.isLoading}
+                  retryingEventId={
+                    retryEventMutation.isPending ? retryEventMutation.variables?.eventId : undefined
+                  }
+                  status={runtimeStatusQuery.data}
+                  statusError={
+                    runtimeStatusQuery.isError ? runtimeStatusQuery.error.message : undefined
+                  }
+                  statusLoading={runtimeStatusQuery.isLoading}
+                  onRetry={(eventId) =>
+                    retryEventMutation.mutate(
+                      { connectionId: selected.id, eventId },
+                      {
+                        onSuccess: () => void message.success('事件已重新进入队列'),
+                        onError: (error) => void message.error(error.message),
+                      },
+                    )
+                  }
+                />
+              ) : null,
+            },
             {
               key: 'runs',
               label: '运行历史',

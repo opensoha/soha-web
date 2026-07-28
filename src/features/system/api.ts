@@ -14,6 +14,8 @@ export type SystemEndpointScope = 'system' | 'identity'
 export interface LogFilters {
   metadataKey?: string
   metadataValue?: string
+  requestMethod?: string
+  requestPath?: string
   result?: string
 }
 
@@ -129,6 +131,8 @@ export const systemApi = {
         api.get<ApiResponse<AuditLog[]>>(
           withQuery(auditEventsPath(scope), {
             action: filters.action,
+            requestMethod: filters.requestMethod,
+            requestPath: filters.requestPath,
             result: filters.result,
             metadataKey: filters.metadataKey,
             metadataValue: filters.metadataValue,
@@ -142,6 +146,8 @@ export const systemApi = {
         api.get<ApiResponse<OperationLog[]>>(
           withQuery('/operations/logs', {
             operationType: filters.operationType,
+            requestMethod: filters.requestMethod,
+            requestPath: filters.requestPath,
             result: filters.result,
             metadataKey: filters.metadataKey,
             metadataValue: filters.metadataValue,

@@ -36,7 +36,11 @@ import { tableColumnPresets } from '@/utils/table-columns'
 import { SettingsAdminTable } from '../shared/components'
 import { RuntimeConfigurationHistoryDrawer } from './components/history-detail-drawer'
 import { RuntimeResourceOverview } from './components/resource-overview'
-import { buildRuntimeConfigChanges, visibleRuntimeConfigItems } from './runtime-config-model'
+import {
+  buildRuntimeConfigChanges,
+  summarizeRuntimeConfigChanges,
+  visibleRuntimeConfigItems,
+} from './runtime-config-model'
 import {
   AI_WORKBENCH_CONFIG_KEY,
   aiWorkbenchDraft,
@@ -90,6 +94,9 @@ const COMPUTE_STATE_LABELS = {
 function displayValue(item: RuntimeConfigItem) {
   if (item.sensitive) return '********'
   if (item.effectiveValue === undefined) return '-'
+  if (item.valueType === 'boolean' && typeof item.effectiveValue === 'boolean') {
+    return item.effectiveValue ? '已启用' : '已停用'
+  }
   if (Array.isArray(item.effectiveValue)) return item.effectiveValue.join(', ')
   return String(item.effectiveValue)
 }
@@ -175,6 +182,7 @@ export function RuntimeConfigurationPage() {
   const [keyword, setKeyword] = useState('')
   const [applyMode, setApplyMode] = useState('')
   const [source, setSource] = useState('')
+  const [changedOnly, setChangedOnly] = useState(false)
   const [reason, setReason] = useState('')
   const [activeRevision, setActiveRevision] = useState<RuntimeConfigRevision | null>(null)
 
@@ -188,6 +196,27 @@ export function RuntimeConfigurationPage() {
   const changes = useMemo<RuntimeConfigChange[]>(() => {
     return buildRuntimeConfigChanges(draft, resetKeys, runtimeSnapshot?.items ?? [])
   }, [draft, resetKeys, runtimeSnapshot?.items])
+  const changedKeys = useMemo(() => new Set(changes.map((change) => change.key)), [changes])
+  const impactSummary = useMemo(
+    () => summarizeRuntimeConfigChanges(changes, runtimeSnapshot?.items ?? []),
+    [changes, runtimeSnapshot?.items],
+  )
+
+  useEffect(() => {
+    if (changes.length > 0) return undefined
+    setChangedOnly(false)
+    return undefined
+  }, [changes.length])
+
+  useEffect(() => {
+    if (changes.length === 0) return undefined
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', beforeUnload)
+    return () => window.removeEventListener('beforeunload', beforeUnload)
+  }, [changes.length])
 
   const updateDraft = (key: string, value: RuntimeConfigValue) => {
     setDraft((current) => ({ ...current, [key]: value }))
@@ -241,10 +270,11 @@ export function RuntimeConfigurationPage() {
       return (
         matchesKeyword &&
         (!applyMode || item.applyMode === applyMode) &&
-        (!source || item.source === source)
+        (!source || item.source === source) &&
+        (!changedOnly || changedKeys.has(item.key))
       )
     })
-  }, [applyMode, keyword, runtimeSnapshot?.items, source])
+  }, [applyMode, changedKeys, changedOnly, keyword, runtimeSnapshot?.items, source])
 
   const groupedItems = useMemo(() => {
     const groups = new Map<string, RuntimeConfigItem[]>()
@@ -306,7 +336,22 @@ export function RuntimeConfigurationPage() {
     if (changes.length === 0) return
     modal.confirm({
       title: `应用 ${changes.length} 项配置变更？`,
-      content: '系统会再次校验版本与配置。即时和模块配置将直接生效，需要重启的配置会标记为待重启。',
+      content: (
+        <div className="soha-runtime-config-confirm">
+          <Text>系统会再次校验版本与配置。请确认以下生效影响：</Text>
+          <div className="soha-runtime-config-confirm__impact">
+            {Object.entries(impactSummary)
+              .filter(([, count]) => count > 0)
+              .map(([mode, count]) => (
+                <MetadataTag
+                  key={mode}
+                  label={`${APPLY_MODE_LABELS[mode as RuntimeConfigApplyMode]} ${count} 项`}
+                  tone={mode === 'restart' ? 'orange' : 'blue'}
+                />
+              ))}
+          </div>
+        </div>
+      ),
       okText: '应用配置',
       cancelText: '取消',
       onOk: async () => {
@@ -423,22 +468,37 @@ export function RuntimeConfigurationPage() {
       ) : null}
       <ManagementQueryPanel
         actions={
-          <Button
-            disabled={!keyword && !applyMode && !source}
-            icon={<UndoOutlined />}
-            onClick={() => {
-              setKeyword('')
-              setApplyMode('')
-              setSource('')
-            }}
-          >
-            重置筛选
-          </Button>
+          <Space size={12}>
+            <Checkbox
+              checked={changedOnly}
+              disabled={changes.length === 0}
+              onChange={(event) => setChangedOnly(event.target.checked)}
+            >
+              仅看已修改
+            </Checkbox>
+            <Button
+              disabled={!keyword && !applyMode && !source && !changedOnly}
+              icon={<UndoOutlined />}
+              onClick={() => {
+                setKeyword('')
+                setApplyMode('')
+                setSource('')
+                setChangedOnly(false)
+              }}
+            >
+              重置筛选
+            </Button>
+          </Space>
         }
         onFinish={() => undefined}
       >
         <ManagementQueryField grow label="关键词" minWidth={260} width={320}>
-          <Input allowClear value={keyword} onChange={(event) => setKeyword(event.target.value)} />
+          <Input
+            allowClear
+            placeholder="名称、配置键或说明"
+            value={keyword}
+            onChange={(event) => setKeyword(event.target.value)}
+          />
         </ManagementQueryField>
         <ManagementQueryField label="生效方式" width={180}>
           <Select
@@ -458,13 +518,28 @@ export function RuntimeConfigurationPage() {
         </ManagementQueryField>
       </ManagementQueryPanel>
       <div className="soha-runtime-config-actionbar">
-        <Input
-          className="soha-runtime-config-reason"
-          maxLength={1000}
-          placeholder="变更原因（可选）"
-          value={reason}
-          onChange={(event) => setReason(event.target.value)}
-        />
+        <div className="soha-runtime-config-actionbar__context">
+          <div className="soha-runtime-config-actionbar__summary">
+            <Text strong>{changes.length ? `已修改 ${changes.length} 项` : '暂无未应用变更'}</Text>
+            <Text type="secondary">配置版本 v{runtimeSnapshot?.version ?? '-'}</Text>
+            {Object.entries(impactSummary)
+              .filter(([, count]) => count > 0)
+              .map(([mode, count]) => (
+                <MetadataTag
+                  key={mode}
+                  label={`${APPLY_MODE_LABELS[mode as RuntimeConfigApplyMode]} ${count}`}
+                  tone={mode === 'restart' ? 'orange' : 'blue'}
+                />
+              ))}
+          </div>
+          <Input
+            className="soha-runtime-config-reason"
+            maxLength={1000}
+            placeholder="变更原因（可选）"
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+          />
+        </div>
         <Space className="soha-runtime-config-actionbar__actions" size={8} wrap={false}>
           {canManage ? (
             <>
@@ -472,9 +547,22 @@ export function RuntimeConfigurationPage() {
                 disabled={changes.length === 0}
                 icon={<UndoOutlined />}
                 onClick={() => {
-                  setDraft({})
-                  setResetKeys(new Set())
-                  setValidation(null)
+                  const clearDraft = () => {
+                    setDraft({})
+                    setResetKeys(new Set())
+                    setValidation(null)
+                  }
+                  if (changes.length === 1) {
+                    clearDraft()
+                    return
+                  }
+                  modal.confirm({
+                    title: `放弃 ${changes.length} 项未应用变更？`,
+                    okText: '放弃草稿',
+                    okButtonProps: { danger: true },
+                    cancelText: '取消',
+                    onOk: clearDraft,
+                  })
                 }}
               >
                 放弃草稿
@@ -498,7 +586,11 @@ export function RuntimeConfigurationPage() {
               </Button>
             </>
           ) : null}
-          <Button icon={<ReloadOutlined />} onClick={() => void snapshotQuery.refetch()}>
+          <Button
+            icon={<ReloadOutlined />}
+            loading={snapshotQuery.isFetching}
+            onClick={() => void snapshotQuery.refetch()}
+          >
             刷新
           </Button>
         </Space>
@@ -518,9 +610,9 @@ export function RuntimeConfigurationPage() {
             const visibleAIParent = visibleAIItems.some(
               (item) => item.key === AI_WORKBENCH_CONFIG_KEY,
             )
-            const visibleAIChildren = (visibleAIParent ? aiItems : visibleAIItems).filter((item) =>
-              isAIWorkbenchChildConfig(item.key),
-            )
+            const visibleAIChildren = (
+              visibleAIParent && !changedOnly ? aiItems : visibleAIItems
+            ).filter((item) => isAIWorkbenchChildConfig(item.key))
             return (
               <section className="soha-runtime-config-group" key={group.category}>
                 <div className="soha-runtime-config-group__header">
@@ -531,7 +623,7 @@ export function RuntimeConfigurationPage() {
                   {aiWorkbenchItem && visibleAIItems.length > 0 ? (
                     <Collapse
                       bordered={false}
-                      className="soha-runtime-config-branch"
+                      className={`soha-runtime-config-branch${changedKeys.has(aiWorkbenchItem.key) ? ' is-changed' : ''}`}
                       defaultActiveKey={['ai-workbench']}
                       items={[
                         {
@@ -563,6 +655,9 @@ export function RuntimeConfigurationPage() {
                                 />
                               </div>
                               <div className="soha-runtime-config-item__meta">
+                                {changedKeys.has(aiWorkbenchItem.key) ? (
+                                  <MetadataTag label="已修改" tone="gold" />
+                                ) : null}
                                 {aiWorkbenchItem.source === 'runtime_override' ? (
                                   <Button
                                     disabled={!canManage || applyMutation.isPending}
@@ -573,7 +668,7 @@ export function RuntimeConfigurationPage() {
                                       resetOverride(aiWorkbenchItem.key)
                                     }}
                                   >
-                                    移除覆盖
+                                    恢复来源值
                                   </Button>
                                 ) : null}
                                 <MetadataTag label={SOURCE_LABELS[aiWorkbenchItem.source]} />
@@ -590,7 +685,10 @@ export function RuntimeConfigurationPage() {
                           children: (
                             <div className="soha-runtime-config-branch__children">
                               {visibleAIChildren.map((item) => (
-                                <article className="soha-runtime-config-item" key={item.key}>
+                                <article
+                                  className={`soha-runtime-config-item${changedKeys.has(item.key) ? ' is-changed' : ''}`}
+                                  key={item.key}
+                                >
                                   <div className="soha-runtime-config-item__info">
                                     <Text strong>{item.label || item.key}</Text>
                                     <Text code>{item.key}</Text>
@@ -619,6 +717,9 @@ export function RuntimeConfigurationPage() {
                                     />
                                   </div>
                                   <div className="soha-runtime-config-item__meta">
+                                    {changedKeys.has(item.key) ? (
+                                      <MetadataTag label="已修改" tone="gold" />
+                                    ) : null}
                                     {item.source === 'runtime_override' ? (
                                       <Button
                                         disabled={!canManage || applyMutation.isPending}
@@ -626,7 +727,7 @@ export function RuntimeConfigurationPage() {
                                         size="small"
                                         onClick={() => resetOverride(item.key)}
                                       >
-                                        移除覆盖
+                                        恢复来源值
                                       </Button>
                                     ) : null}
                                     <MetadataTag label="依赖 AI 工作台" tone="cyan" />
@@ -646,7 +747,10 @@ export function RuntimeConfigurationPage() {
                     />
                   ) : null}
                   {regularItems.map((item) => (
-                    <article className="soha-runtime-config-item" key={item.key}>
+                    <article
+                      className={`soha-runtime-config-item${changedKeys.has(item.key) ? ' is-changed' : ''}`}
+                      key={item.key}
+                    >
                       <div className="soha-runtime-config-item__info">
                         <Text strong>{item.label || item.key}</Text>
                         <Text code>{item.key}</Text>
@@ -670,6 +774,9 @@ export function RuntimeConfigurationPage() {
                         />
                       </div>
                       <div className="soha-runtime-config-item__meta">
+                        {changedKeys.has(item.key) ? (
+                          <MetadataTag label="已修改" tone="gold" />
+                        ) : null}
                         {item.source === 'runtime_override' ? (
                           <Button
                             disabled={!canManage || applyMutation.isPending}
@@ -677,7 +784,7 @@ export function RuntimeConfigurationPage() {
                             size="small"
                             onClick={() => resetOverride(item.key)}
                           >
-                            移除覆盖
+                            恢复来源值
                           </Button>
                         ) : null}
                         <MetadataTag label={SOURCE_LABELS[item.source]} />
@@ -700,7 +807,7 @@ export function RuntimeConfigurationPage() {
                   {visibleComputeItems.length > 0 ? (
                     <Collapse
                       bordered={false}
-                      className="soha-runtime-config-branch"
+                      className={`soha-runtime-config-branch${visibleComputeItems.some((item) => changedKeys.has(item.key)) ? ' is-changed' : ''}`}
                       defaultActiveKey={['compute']}
                       items={[
                         {
@@ -735,6 +842,12 @@ export function RuntimeConfigurationPage() {
                                 </Checkbox>
                               </div>
                               <div className="soha-runtime-config-item__meta">
+                                {visibleComputeItems.some((item) => changedKeys.has(item.key)) ? (
+                                  <MetadataTag
+                                    label={`已修改 ${visibleComputeItems.filter((item) => changedKeys.has(item.key)).length} 项`}
+                                    tone="gold"
+                                  />
+                                ) : null}
                                 <MetadataTag label="派生状态" />
                                 <MetadataTag label="批量联动" tone="cyan" />
                               </div>
@@ -743,7 +856,10 @@ export function RuntimeConfigurationPage() {
                           children: (
                             <div className="soha-runtime-config-branch__children">
                               {visibleComputeItems.map((item) => (
-                                <article className="soha-runtime-config-item" key={item.key}>
+                                <article
+                                  className={`soha-runtime-config-item${changedKeys.has(item.key) ? ' is-changed' : ''}`}
+                                  key={item.key}
+                                >
                                   <div className="soha-runtime-config-item__info">
                                     <Text strong>{item.label || item.key}</Text>
                                     <Text code>{item.key}</Text>
@@ -769,6 +885,9 @@ export function RuntimeConfigurationPage() {
                                     />
                                   </div>
                                   <div className="soha-runtime-config-item__meta">
+                                    {changedKeys.has(item.key) ? (
+                                      <MetadataTag label="已修改" tone="gold" />
+                                    ) : null}
                                     {item.source === 'runtime_override' ? (
                                       <Button
                                         disabled={!canManage || applyMutation.isPending}
@@ -776,7 +895,7 @@ export function RuntimeConfigurationPage() {
                                         size="small"
                                         onClick={() => resetOverride(item.key)}
                                       >
-                                        移除覆盖
+                                        恢复来源值
                                       </Button>
                                     ) : null}
                                     <MetadataTag label={SOURCE_LABELS[item.source]} />

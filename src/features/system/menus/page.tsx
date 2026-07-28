@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Alert,
+  App,
   Button,
   Form,
   Input,
@@ -14,7 +15,6 @@ import {
   Tag,
   Tooltip,
   Typography,
-  message,
 } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
@@ -23,8 +23,10 @@ import { AdminTable } from '@/components/admin-table'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementIconButton,
+  ManagementDensityButton,
   ManagementQueryActions,
   ManagementQueryField,
+  ManagementRefreshButton,
   ManagementTableToolbar,
 } from '@/components/management-list'
 import { BooleanTag } from '@/components/status-tag'
@@ -140,6 +142,7 @@ function formatSyntheticChildCount(record: MenuItem) {
 }
 
 export function MenusPage() {
+  const { message } = App.useApp()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const [form] = Form.useForm()
@@ -152,9 +155,10 @@ export function MenusPage() {
     'all' | 'derived' | 'explicit' | 'unmapped'
   >('all')
   const [treeView, setTreeView] = useState<'workbench' | 'top' | 'all'>('workbench')
+  const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const canManageMenus = hasPermission(permissionSnapshotQuery.data?.data, 'system.menus.manage')
 
-  const { data: menuTree = [], isLoading } = useQuery(systemQueries.menus())
+  const { data: menuTree = [], isFetching, isLoading, refetch } = useQuery(systemQueries.menus())
   const { data: roleRecords = [] } = useQuery(
     systemQueries.menuAccessRoles(canManageMenus && modalVisible),
   )
@@ -482,8 +486,8 @@ export function MenusPage() {
           pagination={false}
           scroll={{ x: 1320 }}
           headerExtra={
-            canManageMenus ? (
-              <ManagementTableToolbar>
+            <ManagementTableToolbar>
+              {canManageMenus ? (
                 <Button
                   size="small"
                   icon={<PlusOutlined />}
@@ -495,9 +499,25 @@ export function MenusPage() {
                 >
                   新建菜单
                 </Button>
-              </ManagementTableToolbar>
-            ) : null
+              ) : null}
+              <ManagementDensityButton
+                aria-label="切换菜单管理表格密度"
+                size="small"
+                tooltip={tableSize === 'small' ? '切换为宽松密度' : '切换为紧凑密度'}
+                onClick={() =>
+                  setTableSize((current) => (current === 'small' ? 'middle' : 'small'))
+                }
+              />
+              <ManagementRefreshButton
+                aria-label="刷新菜单管理"
+                loading={isFetching}
+                size="small"
+                tooltip="刷新"
+                onClick={() => void refetch()}
+              />
+            </ManagementTableToolbar>
           }
+          tableSize={tableSize}
           expandable={{
             defaultExpandAllRows: treeView !== 'top',
             rowExpandable: (record: MenuItem) => countDirectMenuChildren(record) > 0,

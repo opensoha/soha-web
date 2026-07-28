@@ -69,7 +69,9 @@ export function useAccessResourceCrud<T extends { id: string }, TQueryKey extend
 
   return {
     data: query.data ?? [],
+    isFetching: query.isFetching,
     isLoading: query.isLoading,
+    refetch: query.refetch,
     modalVisible,
     editing,
     openCreate: () => {

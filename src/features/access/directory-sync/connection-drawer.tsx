@@ -12,6 +12,9 @@ const defaults: DirectoryConnectionInput = {
     syncPeople: false,
     mode: 'manual',
     provisionMode: 'review_before_link',
+    fullReconcileSchedule: '0 3 * * *',
+    userDisablePolicy: 'managed_only',
+    missingObjectPolicy: 'archive',
   },
 }
 
@@ -90,7 +93,15 @@ export function DirectoryConnectionModal({
         </Form.Item>
         <Form.Item name="providerType" label="目录类型">
           <Select
-            onChange={() => form.setFieldValue('loginProviderId', undefined)}
+            onChange={(nextProviderType) => {
+              form.setFieldValue('loginProviderId', undefined)
+              if (
+                nextProviderType !== 'feishu' &&
+                form.getFieldValue(['policy', 'mode']) === 'scheduled_and_realtime'
+              ) {
+                form.setFieldValue(['policy', 'mode'], 'scheduled')
+              }
+            }}
             options={[
               { value: 'feishu', label: '飞书' },
               { value: 'wecom', label: '企业微信' },
@@ -146,6 +157,7 @@ export function DirectoryConnectionModal({
         <DirectoryPolicyForm
           canManagePeople={canManagePeople}
           form={form}
+          providerType={providerType}
           onRequestEnablePeople={() =>
             confirm(() => form.setFieldValue(['policy', 'syncPeople'], true))
           }
@@ -157,7 +169,7 @@ export function DirectoryConnectionModal({
               showIcon
               type="info"
               title="目录事件回调"
-              description="凭据加密保存且不会回显；编辑时留空将保留现有配置。"
+              description="事件载荷用于增量更新单个组织、人员或成员关系；对象信息不足时仅补查该对象，全量拉取只用于定期对账。凭据加密保存且不会回显。"
             />
             <Form.Item
               name="webhookVerificationToken"

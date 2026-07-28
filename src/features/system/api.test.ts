@@ -47,6 +47,8 @@ describe('systemApi', () => {
 
     await systemApi.audit.list('identity', {
       action: ' login ',
+      requestMethod: ' POST ',
+      requestPath: ' /api/v1/auth/login ',
       result: '',
       metadataKey: 'usageSnapshot.templateId',
       metadataValue: ' template/a ',
@@ -54,18 +56,20 @@ describe('systemApi', () => {
     await systemApi.audit.list('system', { result: 'failure' })
     await systemApi.operationLogs.list({
       operationType: ' platform.resource.apply ',
+      requestMethod: ' PATCH ',
+      requestPath: ' /api/v1/resources/deployment ',
       metadataKey: '',
       metadataValue: ' workload/a ',
     })
 
     expect(apiMocks.get).toHaveBeenNthCalledWith(
       1,
-      '/identity/audit/events?action=login&metadataKey=usageSnapshot.templateId&metadataValue=template%2Fa',
+      '/identity/audit/events?action=login&requestMethod=POST&requestPath=%2Fapi%2Fv1%2Fauth%2Flogin&metadataKey=usageSnapshot.templateId&metadataValue=template%2Fa',
     )
     expect(apiMocks.get).toHaveBeenNthCalledWith(2, '/audit/logs?result=failure')
     expect(apiMocks.get).toHaveBeenNthCalledWith(
       3,
-      '/operations/logs?operationType=platform.resource.apply&metadataValue=workload%2Fa',
+      '/operations/logs?operationType=platform.resource.apply&requestMethod=PATCH&requestPath=%2Fapi%2Fv1%2Fresources%2Fdeployment&metadataValue=workload%2Fa',
     )
   })
 

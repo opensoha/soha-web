@@ -32,6 +32,15 @@ export const directorySyncMutations = {
     mutationFn: directorySyncApi.cancelSync,
     onSuccess: () => invalidate(queryClient),
   }),
+  retryEvent: (queryClient: QueryClient) => ({
+    mutationFn: ({ connectionId, eventId }: { connectionId: string; eventId: string }) =>
+      directorySyncApi.retryEvent(connectionId, eventId),
+    onSuccess: (_event: unknown, { connectionId }: { connectionId: string; eventId: string }) =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: directorySyncKeys.events(connectionId) }),
+        queryClient.invalidateQueries({ queryKey: directorySyncKeys.runtimeStatus(connectionId) }),
+      ]),
+  }),
   resolveConflict: (queryClient: QueryClient) => ({
     mutationFn: ({ id, resolution }: { id: string; resolution: 'ignore' | 'retry' }) =>
       directorySyncApi.resolveConflict(id, resolution),

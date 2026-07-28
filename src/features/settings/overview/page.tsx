@@ -101,28 +101,28 @@ export function SettingsOverviewPage() {
   ] satisfies OverviewChipItem[]
 
   const quickActions = [
-    canViewUsers && { key: 'users', label: '用户管理', path: '/access/users', icon: <UserOutlined /> },
+    canViewUsers && { key: 'users', label: '用户', path: '/access/users', icon: <UserOutlined /> },
     canViewRoles && {
       key: 'roles',
-      label: '角色管理',
+      label: '角色',
       path: '/access/roles',
       icon: <SafetyCertificateOutlined />,
     },
     canViewTeams && {
       key: 'teams',
-      label: '组织管理',
+      label: '组织',
       path: '/access/teams',
       icon: <ApartmentOutlined />,
     },
     canViewPolicies && {
       key: 'policies',
-      label: '策略管理',
+      label: '策略',
       path: '/access/policies',
       icon: <FileProtectOutlined />,
     },
     hasPermission(permissions, 'settings.identity.view') && {
       key: 'login',
-      label: '登录设置',
+      label: '登陆设置',
       path: '/settings/login',
       icon: <LoginOutlined />,
     },
@@ -164,7 +164,7 @@ export function SettingsOverviewPage() {
           )}
         </Card>
 
-        <Card className="soha-overview-panel-card" title="常用操作">
+        <Card className="soha-overview-panel-card" title="用户管理">
           {quickActions.length ? (
             <div className="soha-settings-overview-actions">
               {quickActions.map((item) => (

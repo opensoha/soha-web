@@ -3,6 +3,8 @@ import type {
   DirectoryConflict,
   DirectoryConnection,
   DirectoryConnectionInput,
+  DirectoryEvent,
+  DirectoryRuntimeStatus,
   DirectorySyncPreview,
   DirectorySyncRun,
 } from './types'
@@ -31,6 +33,24 @@ export const directorySyncApi = {
   cancelSync: (id: string) => api.post<void>(`${basePath}/${id}/sync/cancel`),
   listRuns: (id: string) =>
     api.get<{ data: DirectorySyncRun[] }>(`${basePath}/${id}/runs`).then((result) => result.data),
+  getRuntimeStatus: (id: string) =>
+    api
+      .get<{ data: DirectoryRuntimeStatus }>(
+        `${basePath}/${encodeURIComponent(id)}/runtime-status`,
+      )
+      .then((result) => result.data),
+  listEvents: (id: string) =>
+    api
+      .get<{ data: DirectoryEvent[] }>(
+        `${basePath}/${encodeURIComponent(id)}/events?limit=50`,
+      )
+      .then((result) => result.data),
+  retryEvent: (connectionId: string, eventId: string) =>
+    api
+      .post<{ data: DirectoryEvent }>(
+        `${basePath}/${encodeURIComponent(connectionId)}/events/${encodeURIComponent(eventId)}/retry`,
+      )
+      .then((result) => result.data),
   listConflicts: () =>
     api
       .get<{ data: DirectoryConflict[] }>('/access/directory-conflicts')

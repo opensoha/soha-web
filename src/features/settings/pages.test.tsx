@@ -475,15 +475,19 @@ describe('settings ai page rendering', () => {
     vi.clearAllMocks()
   })
 
-  it('renders user management metrics and frequent actions', async () => {
+  it('renders user management metrics and menu-aligned actions', async () => {
     const container = await renderWithProviders(<SettingsOverviewPage />, '/settings/overview')
 
     expect(container.textContent).toContain('用户总数')
     expect(container.textContent).toContain('角色数')
     expect(container.textContent).toContain('组织数')
     expect(container.textContent).toContain('访问策略')
-    expect(container.textContent).toContain('常用操作')
     expect(container.textContent).toContain('用户管理')
+    expect(
+      Array.from(container.querySelectorAll('.soha-settings-overview-actions button')).map(
+        (button) => button.textContent?.trim(),
+      ),
+    ).toEqual(['用户', '角色', '组织', '策略', '登陆设置'])
     expect(container.textContent).not.toContain('品牌配置')
     expect(container.textContent).not.toContain('认证与品牌')
   })

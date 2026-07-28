@@ -51,7 +51,19 @@ export function buildTargetScopeLabel(targetScope: Record<string, unknown>) {
 export function prettifyAction(action: string) {
   const normalized = compactText(action)
   if (!normalized) return '-'
-  return normalized.replace(/_/g, ' ')
+  const labels: Record<string, string> = {
+    list: '查看列表',
+    view: '查看详情',
+    get: '查看详情',
+    create: '创建',
+    update: '更新',
+    delete: '删除',
+    login: '登录',
+    publish: '发布',
+    withdraw: '撤回',
+    'portal.launch': '打开工作台',
+  }
+  return labels[normalized] || normalized.replace(/_/g, ' ')
 }
 
 export function prettifyOperationType(operationType: string) {

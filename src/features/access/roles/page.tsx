@@ -123,6 +123,7 @@ export function AccessRolesPage() {
 
   return (
     <AccessManagementTablePage<AccessRole>
+      resourceName="角色"
       columns={columns}
       createAction={
         canManageRoles ? (
@@ -134,6 +135,8 @@ export function AccessRolesPage() {
       dataSource={filteredRoles}
       rowKey="id"
       loading={crud.isLoading}
+      refreshing={crud.isFetching}
+      onRefresh={() => void crud.refetch()}
       placeholder="搜索角色、范围或权限键"
       searchKeyword={searchKeyword}
       setSearchKeyword={setSearchKeyword}

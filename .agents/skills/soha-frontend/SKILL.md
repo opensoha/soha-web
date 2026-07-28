@@ -1,24 +1,22 @@
 ---
 name: soha-frontend
-description: Soha Web frontend architecture and UI standards. Use when editing or reviewing soha-web React/Ant Design code involving feature or capability directories, route manifests and metadata, API/query/mutation layers, shared types, state ownership, CSS/theme surfaces, management pages, lazy loading, bundle boundaries, Graphify architecture checks, or Ant Design X/XRequest AI workbench flows.
+description: Soha Web frontend architecture and UI standards. Use when editing or reviewing soha-web React and Ant Design code involving capability ownership, route manifests, API/query/mutation layers, shared types and state, theme surfaces, management pages, lazy loading, bundle boundaries, or Ant Design X and XRequest AI workbench flows.
 ---
 
 # Soha Frontend
 
 ## Purpose
 
-Keep `soha-web` changes inside the verified feature architecture, route registry, data layer,
-loading boundaries, and Soha visual system. Do not copy Ant Design Pro's historical
-`data.d.ts/index.tsx/service.ts/style.ts` layout mechanically; use the semantic Soha modules
-defined in the architecture reference.
+Keep `soha-web` changes inside the verified capability architecture, route registry, data
+layer, loading boundaries, and Soha visual system.
 
 ## Required Workflow
 
 1. Read the affected route manifest, capability directory, data layer, tests, and CSS before
    editing.
-2. For architecture or dependency questions, query `graphify-out/graph.json` first with
-   `graphify query`. After structural moves or deletions, refresh with
-   `graphify update . --force` and audit graph health.
+2. For broad architecture or dependency questions, query `graphify-out/graph.json` first.
+   Refresh it only after structural changes are stable and the worktree contents are
+   understood; use `graphify update . --force` after deletions and audit graph health.
 3. Read `references/architecture-development.md` for feature, route, API/query/mutation, type,
    state, CSS boundary, lazy-loading, testing, or Graphify work.
 4. Read `references/theme-system.md` for theme variables, visual surfaces, management

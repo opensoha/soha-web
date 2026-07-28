@@ -1,17 +1,20 @@
 import { useMemo, useState } from 'react'
-import { Button, Popconfirm, Select, Tag, message } from 'antd'
+import { App, Button, Popconfirm, Select } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { DeleteOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
+  ManagementDensityButton,
+  ManagementIconButton,
   ManagementKeywordField,
   ManagementQueryActions,
   ManagementQueryField,
+  ManagementRefreshButton,
   ManagementTableToolbar,
   useManagementTextFilter,
 } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { formatDateTime, formatRelativeTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
@@ -20,26 +23,26 @@ import { systemQueries } from '../queries'
 import type { OnlineUser } from '../system-model'
 
 function SourceTag({ value }: { value?: string }) {
-  const normalized = (value || '').toLowerCase()
-  if (!normalized) return <>-</>
-  if (normalized === 'console') return <Tag color="blue">Console</Tag>
-  if (normalized === 'oidc') return <Tag color="green">OIDC</Tag>
-  if (normalized === 'api') return <Tag color="orange">API</Tag>
-  return <Tag>{value}</Tag>
+  const label = (value || '').trim()
+  return label ? <MetadataTag label={label.toUpperCase()} /> : <>-</>
 }
 
 export function OnlineUsersPage() {
+  const { message } = App.useApp()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([])
   const [providerFilter, setProviderFilter] = useState<string>('')
   const [searchKeyword, setSearchKeyword] = useState('')
+  const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const canManageOnlineUsers = hasPermission(
     permissionSnapshotQuery.data?.data,
     'system.online-users.manage',
   )
 
-  const { data: sessions = [], isLoading } = useQuery(systemQueries.sessions())
+  const { data: sessions = [], isFetching, isLoading, refetch } = useQuery(
+    systemQueries.sessions(),
+  )
   const revokeMutation = useMutation(systemMutations.sessions.revoke(queryClient))
   const batchRevokeMutation = useMutation(systemMutations.sessions.revokeMany(queryClient))
   const providerOptions = useMemo(
@@ -149,13 +152,13 @@ export function OnlineUsersPage() {
               })
             }
           >
-            <Button
+            <ManagementIconButton
               size="small"
-              type="text"
               danger
               icon={<DeleteOutlined />}
               aria-label="下线用户"
               loading={revokeMutation.isPending}
+              tooltip="下线用户"
             />
           </Popconfirm>
         ) : (
@@ -200,45 +203,61 @@ export function OnlineUsersPage() {
       table={{
         columnSettingIconOnly: true,
         columnSettingPlacement: 'header',
-        headerExtra: canManageOnlineUsers ? (
+        headerExtra: (
           <ManagementTableToolbar>
-            <Button
-              size="small"
-              danger
-              variant="outlined"
-              disabled={selectedSessions.length === 0}
-              loading={batchRevokeMutation.isPending}
-              onClick={() =>
-                batchRevokeMutation.mutate(
-                  selectedSessions.map((item: OnlineUser) => item.id),
-                  {
-                    onSuccess: (results) => {
-                      const successCount = results.filter(
-                        (item) => item.status === 'fulfilled',
-                      ).length
-                      const failureCount = results.length - successCount
-                      void message.success(
-                        failureCount > 0
-                          ? `批量下线完成，成功 ${successCount}，失败 ${failureCount}`
-                          : `已批量下线 ${successCount} 个会话`,
-                      )
-                      setSelectedSessionIds([])
+            {canManageOnlineUsers ? (
+              <Button
+                size="small"
+                danger
+                variant="outlined"
+                disabled={selectedSessions.length === 0}
+                loading={batchRevokeMutation.isPending}
+                onClick={() =>
+                  batchRevokeMutation.mutate(
+                    selectedSessions.map((item: OnlineUser) => item.id),
+                    {
+                      onSuccess: (results) => {
+                        const successCount = results.filter(
+                          (item) => item.status === 'fulfilled',
+                        ).length
+                        const failureCount = results.length - successCount
+                        void message.success(
+                          failureCount > 0
+                            ? `批量下线完成，成功 ${successCount}，失败 ${failureCount}`
+                            : `已批量下线 ${successCount} 个会话`,
+                        )
+                        setSelectedSessionIds([])
+                      },
+                      onError: (error) => void message.error(error.message),
                     },
-                    onError: (error) => void message.error(error.message),
-                  },
-                )
-              }
-            >
-              {`批量下线 (${selectedSessions.length})`}
-            </Button>
+                  )
+                }
+              >
+                {`批量下线 (${selectedSessions.length})`}
+              </Button>
+            ) : null}
+            <ManagementDensityButton
+              aria-label="切换在线用户表格密度"
+              size="small"
+              tooltip={tableSize === 'small' ? '切换为宽松密度' : '切换为紧凑密度'}
+              onClick={() => setTableSize((current) => (current === 'small' ? 'middle' : 'small'))}
+            />
+            <ManagementRefreshButton
+              aria-label="刷新在线用户"
+              loading={isFetching}
+              size="small"
+              tooltip="刷新"
+              onClick={() => void refetch()}
+            />
           </ManagementTableToolbar>
-        ) : null,
+        ),
         columns,
         dataSource: filteredSessions,
         rowKey: 'id',
         loading: isLoading,
         pageSize: 20,
         scroll: { x: 'max-content' },
+        tableSize,
         rowSelection: canManageOnlineUsers
           ? {
               selectedRowKeys: selectedSessionIds,

@@ -68,4 +68,58 @@ it('selects an enabled login provider record instead of accepting a client id', 
   expect(document.body.textContent).toContain('飞书生产 (provider-1)')
   expect(document.body.textContent).not.toContain('停用飞书')
   expect(document.body.textContent).not.toContain('企业微信 (provider-3)')
+  expect(document.body.textContent).toContain('组织归档策略')
+  expect(document.body.textContent).toContain('上游缺失时归档，不直接删除')
+
+  const modeInput = document.querySelector<HTMLInputElement>('#policy_mode')
+  await act(async () => {
+    modeInput?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+  })
+  expect(document.body.textContent).toContain('定时 + 实时事件')
+})
+
+it('only offers realtime directory events for Feishu', async () => {
+  container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+  await act(async () => {
+    root.render(
+      <DirectoryConnectionModal
+        canManagePeople
+        confirm={vi.fn()}
+        connection={
+          {
+            id: 'connection-1',
+            name: '企业微信通讯录',
+            providerType: 'wecom',
+            loginProviderId: 'provider-1',
+            enabled: true,
+            capabilities: [],
+            status: 'healthy',
+            policy: {
+              syncOrganizations: true,
+              syncPeople: false,
+              mode: 'scheduled',
+              schedule: '0 * * * *',
+              provisionMode: 'review_before_link',
+              userDisablePolicy: 'managed_only',
+              missingObjectPolicy: 'archive',
+            },
+          } as never
+        }
+        loading={false}
+        loginProviders={[{ id: 'provider-1', name: '企业微信', type: 'wecom', enabled: true }] as never}
+        loginProvidersLoading={false}
+        onCancel={vi.fn()}
+        onSubmit={vi.fn()}
+        open
+      />,
+    )
+  })
+
+  const modeInput = document.querySelector<HTMLInputElement>('#policy_mode')
+  await act(async () => {
+    modeInput?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+  })
+  expect(document.body.textContent).not.toContain('定时 + 实时事件')
 })
