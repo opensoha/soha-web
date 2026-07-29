@@ -3,6 +3,7 @@ import { validateRouteDefinitions } from '@/routes/definitions'
 import { deliveryRoutes } from './routes'
 
 const routePages = vi.hoisted(() => ({
+  manifests: () => null,
   applications: () => null,
   applicationDetail: () => null,
   workloadDetail: () => null,
@@ -27,6 +28,7 @@ const routePages = vi.hoisted(() => ({
   registries: () => null,
 }))
 
+vi.mock('./manifests/library-page', () => ({ ManifestLibraryPage: routePages.manifests }))
 vi.mock('./applications/list-page', () => ({ ApplicationsPage: routePages.applications }))
 vi.mock('./applications/detail-page', () => ({
   ApplicationDetailPage: routePages.applicationDetail,
@@ -67,8 +69,9 @@ vi.mock('./builds/detail-page', () => ({ BuildDetailPage: routePages.buildDetail
 vi.mock('./registries/page', () => ({ RegistriesPage: routePages.registries }))
 
 describe('delivery route manifest', () => {
-  it('maps all 22 routes directly to distinct leaf modules', async () => {
+  it('maps all 23 routes directly to distinct leaf modules', async () => {
     const expectedPages = new Map([
+      ['delivery-manifest-library', routePages.manifests],
       ['applications', routePages.applications],
       ['application-detail', routePages.applicationDetail],
       ['application-workload-detail', routePages.workloadDetail],
@@ -117,6 +120,14 @@ describe('delivery route manifest', () => {
           'permissionKeysAny' in route.meta ? route.meta.permissionKeysAny : undefined,
       })),
     ).toEqual([
+      {
+        id: 'delivery-manifest-library',
+        menuId: 'delivery-manifest-library',
+        navVisible: true,
+        path: '/delivery/manifests',
+        permissionKey: 'delivery.applications.view',
+        permissionKeysAny: undefined,
+      },
       {
         id: 'applications',
         menuId: 'builds',

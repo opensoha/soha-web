@@ -4,14 +4,18 @@ import {
   createNamespace,
   deleteNamespace,
   deleteNode,
+  drainNode,
+  setNodeSchedulability,
   updateNamespace,
   updateNode,
 } from './api'
 import { clusterResourceKeys } from './keys'
 import type {
   ApplyNodeYAMLVariables,
+  DrainNodeVariables,
   NamespaceTarget,
   NodeTarget,
+  SetNodeSchedulabilityVariables,
   UpdateNamespaceVariables,
   UpdateNodeVariables,
 } from './types'
@@ -43,6 +47,18 @@ export const nodeMutations = {
       mutationFn: applyNodeYAML,
       onSuccess: (_data, variables: ApplyNodeYAMLVariables) =>
         invalidateNodeCaches(queryClient, variables),
+    }),
+  schedulability: (queryClient: QueryClient) =>
+    mutationOptions<void, Error, SetNodeSchedulabilityVariables>({
+      mutationKey: [...clusterResourceKeys.nodes(), 'schedulability'] as const,
+      mutationFn: setNodeSchedulability,
+      onSuccess: (_data, variables) => invalidateNodeCaches(queryClient, variables),
+    }),
+  drain: (queryClient: QueryClient) =>
+    mutationOptions<void, Error, DrainNodeVariables>({
+      mutationKey: [...clusterResourceKeys.nodes(), 'drain'] as const,
+      mutationFn: drainNode,
+      onSettled: (_data, _error, variables) => invalidateNodeCaches(queryClient, variables),
     }),
   remove: (queryClient: QueryClient) =>
     mutationOptions<void, Error, NodeTarget>({

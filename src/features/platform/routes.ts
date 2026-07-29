@@ -4,6 +4,7 @@ import { clusterResourceRoutes } from './cluster-resources/routes'
 import { clusterRoutes } from './clusters/routes'
 import { configurationRoutes } from './configuration/routes'
 import { extensionRoutes } from './extensions/routes'
+import { manifestRoutes } from './manifests/routes'
 import { networkRoutes } from './network/routes'
 import { resourceCreationRoutes } from './resource-creation/routes'
 import { storageRoutes } from './storage/routes'
@@ -113,6 +114,7 @@ export const platformShellRoutes = defineRoutes([
 
 export const platformRouteManifests = [
   accessControlRoutes,
+  manifestRoutes,
   clusterRoutes,
   clusterResourceRoutes,
   workloadRoutes,

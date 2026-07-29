@@ -31,6 +31,7 @@ export interface NodeResourceSummary {
 export interface ClusterNode {
   name: string
   status: string
+  unschedulable: boolean
   roles: string[]
   version?: string
   internalIp?: string
@@ -109,6 +110,16 @@ export interface UpdateNodeVariables extends NodeTarget {
 
 export interface ApplyNodeYAMLVariables extends NodeTarget {
   content: string
+}
+
+export interface SetNodeSchedulabilityVariables extends NodeTarget {
+  unschedulable: boolean
+}
+
+export interface DrainNodeVariables extends NodeTarget {
+  force: boolean
+  deleteEmptyDirData: boolean
+  timeoutSeconds: number
 }
 
 export interface NamespaceInput {

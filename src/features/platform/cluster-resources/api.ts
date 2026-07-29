@@ -4,7 +4,9 @@ import {
   buildNamespacePath,
   buildNamespacesPath,
   buildNodeDetailPath,
+  buildNodeDrainPath,
   buildNodePath,
+  buildNodeSchedulabilityPath,
   buildNodesPath,
   buildNodeYAMLPath,
 } from './paths'
@@ -15,9 +17,11 @@ import type {
   ClusterNodeDetail,
   ClusterScope,
   CreateNamespaceVariables,
+  DrainNodeVariables,
   NamespaceTarget,
   NodeTarget,
   NodeYAMLView,
+  SetNodeSchedulabilityVariables,
   UpdateNamespaceVariables,
   UpdateNodeVariables,
 } from './types'
@@ -55,6 +59,28 @@ export async function applyNodeYAML({ scope, name, content }: ApplyNodeYAMLVaria
 
 export async function deleteNode(target: NodeTarget): Promise<void> {
   await api.delete<unknown>(buildNodePath(target.scope, target.name))
+}
+
+export async function setNodeSchedulability({
+  scope,
+  name,
+  unschedulable,
+}: SetNodeSchedulabilityVariables): Promise<void> {
+  await api.put<unknown>(buildNodeSchedulabilityPath(scope, name), { unschedulable })
+}
+
+export async function drainNode({
+  scope,
+  name,
+  force,
+  deleteEmptyDirData,
+  timeoutSeconds,
+}: DrainNodeVariables): Promise<void> {
+  await api.post<unknown>(buildNodeDrainPath(scope, name), {
+    force,
+    deleteEmptyDirData,
+    timeoutSeconds,
+  })
 }
 
 export async function listNamespaces(scope: ClusterScope): Promise<ClusterNamespace[]> {

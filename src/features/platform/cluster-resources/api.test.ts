@@ -4,10 +4,12 @@ import {
   createNamespace,
   deleteNamespace,
   deleteNode,
+  drainNode,
   getNodeDetail,
   getNodeYAML,
   listNamespaces,
   listNodes,
+  setNodeSchedulability,
   updateNamespace,
   updateNode,
 } from './api'
@@ -52,6 +54,7 @@ describe('cluster resources api', () => {
       .mockResolvedValueOnce({ data: { name: 'node/a', labels: { role: 'worker' } } })
       .mockResolvedValueOnce({ data: { kind: 'Node', name: 'node/a', content: 'updated' } })
     apiMocks.delete.mockResolvedValueOnce(undefined)
+    apiMocks.post.mockResolvedValueOnce(undefined)
 
     await expect(
       updateNode({
@@ -64,6 +67,18 @@ describe('cluster resources api', () => {
       applyNodeYAML({ scope, name: 'node/a', content: 'updated' }),
     ).resolves.toMatchObject({ content: 'updated' })
     await expect(deleteNode({ scope, name: 'node/a' })).resolves.toBeUndefined()
+    await expect(
+      setNodeSchedulability({ scope, name: 'node/a', unschedulable: true }),
+    ).resolves.toBeUndefined()
+    await expect(
+      drainNode({
+        scope,
+        name: 'node/a',
+        force: false,
+        deleteEmptyDirData: true,
+        timeoutSeconds: 10,
+      }),
+    ).resolves.toBeUndefined()
 
     expect(apiMocks.put).toHaveBeenNthCalledWith(
       1,
@@ -77,6 +92,15 @@ describe('cluster resources api', () => {
     )
     expect(apiMocks.delete).toHaveBeenCalledWith(
       '/clusters/cluster%2Fa/infrastructure/nodes/node%2Fa',
+    )
+    expect(apiMocks.put).toHaveBeenNthCalledWith(
+      3,
+      '/clusters/cluster%2Fa/infrastructure/nodes/node%2Fa/schedulability',
+      { unschedulable: true },
+    )
+    expect(apiMocks.post).toHaveBeenCalledWith(
+      '/clusters/cluster%2Fa/infrastructure/nodes/node%2Fa/drain',
+      { force: false, deleteEmptyDirData: true, timeoutSeconds: 10 },
     )
   })
 
