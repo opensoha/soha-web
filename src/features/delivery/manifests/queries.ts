@@ -24,4 +24,36 @@ export const manifestQueries = {
       queryFn: () => manifestApi.revisions(id),
       enabled: enabled && Boolean(id.trim()),
     }),
+  source: (id: string, enabled = true) =>
+    queryOptions({
+      queryKey: manifestKeys.source(id),
+      queryFn: () => manifestApi.source(id),
+      enabled: enabled && Boolean(id.trim()),
+    }),
+  bindings: (id: string, enabled = true) =>
+    queryOptions({
+      queryKey: manifestKeys.bindings(id),
+      queryFn: () => manifestApi.bindings(id),
+      enabled: enabled && Boolean(id.trim()),
+    }),
+  syncRuns: (id: string, enabled = true) =>
+    queryOptions({
+      queryKey: manifestKeys.syncRuns(id),
+      queryFn: () => manifestApi.syncRuns(id),
+      enabled: enabled && Boolean(id.trim()),
+      refetchInterval: 5000,
+    }),
+  deployments: (id: string, enabled = true) =>
+    queryOptions({
+      queryKey: manifestKeys.deployments(id),
+      queryFn: async () => (await manifestApi.deployments(id)).items,
+      enabled: enabled && Boolean(id.trim()),
+      refetchInterval: 5000,
+    }),
+  intents: (id: string, enabled = true) =>
+    queryOptions({
+      queryKey: manifestKeys.intents(id),
+      queryFn: () => manifestApi.intents(id),
+      enabled: enabled && Boolean(id.trim()),
+    }),
 }

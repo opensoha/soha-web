@@ -22,4 +22,9 @@ export const manifestKeys = {
   details: [...ROOT, 'detail'] as const,
   detail: (id: string) => [...ROOT, 'detail', id.trim()] as const,
   revisions: (id: string) => [...ROOT, 'detail', id.trim(), 'revisions'] as const,
+  source: (id: string) => [...ROOT, 'detail', id.trim(), 'source'] as const,
+  bindings: (id: string) => [...ROOT, 'detail', id.trim(), 'bindings'] as const,
+  syncRuns: (id: string) => [...ROOT, 'detail', id.trim(), 'sync-runs'] as const,
+  deployments: (id: string) => [...ROOT, 'detail', id.trim(), 'deployments'] as const,
+  intents: (id: string) => [...ROOT, 'detail', id.trim(), 'intents'] as const,
 }

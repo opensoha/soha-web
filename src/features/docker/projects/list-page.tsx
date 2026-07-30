@@ -3,10 +3,12 @@ import type { Key } from 'react'
 import {
   App,
   Button,
+  Descriptions,
   Form,
   Input,
   InputNumber,
   Popconfirm,
+  Segmented,
   Select,
   Space,
   Switch,
@@ -15,6 +17,8 @@ import {
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
+  BranchesOutlined,
+  CloudOutlined,
   DeleteOutlined,
   EditOutlined,
   FileTextOutlined,
@@ -83,7 +87,7 @@ interface DockerProjectTreeRow {
 }
 
 function isSingleContainerProject(project: DockerProject) {
-  return project.sourceKind === 'single_container'
+  return ['single_container', 'git_dockerfile'].includes(project.sourceKind ?? '')
 }
 
 function projectTypeLabel(project: DockerProject) {
@@ -103,6 +107,7 @@ export function buildContainerStartPayload(
   values: ContainerStartFormValues,
 ): DockerContainerStartInput {
   const {
+    gitBuild: formGitBuild,
     ports: formPorts,
     volumes: formVolumes,
     environmentVariables: formEnvVars,
@@ -143,6 +148,18 @@ export function buildContainerStartPayload(
   const primaryPort = ports[0]
   return compactRecord({
     ...rest,
+    sourceKind: rest.sourceKind || 'image',
+    gitBuild:
+      rest.sourceKind === 'git_dockerfile'
+        ? compactRecord({
+            repositoryUrl: formGitBuild?.repositoryUrl ?? '',
+            ref: formGitBuild?.ref || 'main',
+            dockerfilePath: formGitBuild?.dockerfilePath || 'Dockerfile',
+            contextDir: formGitBuild?.contextDir || '.',
+            pull: Boolean(formGitBuild?.pull),
+            noCache: Boolean(formGitBuild?.noCache),
+          })
+        : undefined,
     architecture: rest.architecture || undefined,
     containerPort: primaryPort?.containerPort ?? rest.containerPort,
     hostIp: primaryPort?.hostIp ?? rest.hostIp,
@@ -155,6 +172,8 @@ export function buildContainerStartPayload(
       : undefined,
     domainTlsEnabled: primaryPort?.domainName ? Boolean(primaryPort.domainTlsEnabled) : undefined,
     restartPolicy: rest.restartPolicy || 'unless-stopped',
+    imagePullPolicy:
+      rest.sourceKind === 'git_dockerfile' ? 'never' : rest.imagePullPolicy || undefined,
     ports: ports.length ? ports : undefined,
     volumes: volumes.length ? volumes : undefined,
     environmentVariables: environmentVariables.length ? environmentVariables : undefined,
@@ -174,6 +193,12 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
   const [currentStep, setCurrentStep] = useState(0)
   const [containerStep, setContainerStep] = useState(0)
   const [containerDrawerOpen, setContainerDrawerOpen] = useState(false)
+  const [containerSourceKind, setContainerSourceKind] = useState<'image' | 'git_dockerfile'>(
+    'image',
+  )
+  const [containerReviewValues, setContainerReviewValues] = useState<
+    Partial<ContainerStartFormValues>
+  >({})
   const [editing, setEditing] = useState<DockerProject | null>(null)
   const {
     dockerModuleEnabled,
@@ -295,6 +320,27 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
         : next
     })
   }, [treeRows])
+  useEffect(() => {
+    if (!containerDrawerOpen) return
+    containerForm.resetFields()
+    containerForm.setFieldsValue({
+      sourceKind: 'image',
+      gitBuild: {
+        ref: 'main',
+        dockerfilePath: 'Dockerfile',
+        contextDir: '.',
+        pull: false,
+        noCache: false,
+      },
+      architecture: 'amd64',
+      protocol: 'tcp',
+      exposureScope: 'internal',
+      restartPolicy: 'unless-stopped',
+      domainScheme: 'http',
+      domainTlsEnabled: false,
+      ports: DEFAULT_CONTAINER_PORTS,
+    })
+  }, [containerDrawerOpen, containerForm])
   const applyContainerHostDefaults = (hostID?: string) => {
     const host = hosts.find((item) => item.id === hostID)
     if (host?.architecture) {
@@ -580,15 +626,8 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                   type="primary"
                   icon={<PlayCircleOutlined />}
                   onClick={() => {
-                    containerForm.setFieldsValue({
-                      architecture: 'amd64',
-                      protocol: 'tcp',
-                      exposureScope: 'internal',
-                      restartPolicy: 'unless-stopped',
-                      domainScheme: 'http',
-                      domainTlsEnabled: false,
-                      ports: DEFAULT_CONTAINER_PORTS,
-                    })
+                    setContainerSourceKind('image')
+                    setContainerReviewValues({})
                     setContainerStep(0)
                     setContainerDrawerOpen(true)
                   }}
@@ -741,18 +780,44 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
         loading={containerStartMutation.isPending}
         open={containerDrawerOpen}
         onClose={() => setContainerDrawerOpen(false)}
-        onCurrentChange={setContainerStep}
+        onCurrentChange={(nextStep) => {
+          if (nextStep === 3) {
+            setContainerReviewValues(containerForm.getFieldsValue(true))
+          }
+          setContainerStep(nextStep)
+        }}
         onFinish={(values) => containerStartMutation.mutate(values)}
         steps={[
           {
-            title: '容器配置',
-            fieldNames: ['name', 'hostId', 'image'],
+            title: '来源',
+            fieldNames: [
+              'sourceKind',
+              'name',
+              'hostId',
+              'image',
+              ['gitBuild', 'repositoryUrl'],
+              ['gitBuild', 'ref'],
+              ['gitBuild', 'dockerfilePath'],
+              ['gitBuild', 'contextDir'],
+            ],
             children: (
               <>
-                <Form.Item name="name" label="容器名称" rules={[{ required: true }]}>
-                  <Input placeholder="preview-api" />
+                <Form.Item name="sourceKind" label="应用来源" rules={[{ required: true }]}>
+                  <Segmented
+                    block
+                    onChange={(value) =>
+                      setContainerSourceKind(value as 'image' | 'git_dockerfile')
+                    }
+                    options={[
+                      { value: 'image', label: '已有镜像', icon: <CloudOutlined /> },
+                      { value: 'git_dockerfile', label: 'Git 构建', icon: <BranchesOutlined /> },
+                    ]}
+                  />
                 </Form.Item>
                 <div className="grid gap-3 md:grid-cols-2">
+                  <Form.Item name="name" label="应用名称" rules={[{ required: true }]}>
+                    <Input placeholder="preview-api" />
+                  </Form.Item>
                   <Form.Item name="hostId" label="Docker 主机" rules={[{ required: true }]}>
                     <Select
                       showSearch={{ optionFilterProp: 'label' }}
@@ -760,12 +825,95 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                       onChange={applyContainerHostDefaults}
                     />
                   </Form.Item>
-                  <Form.Item name="image" label="镜像" rules={[{ required: true }]}>
-                    <Input placeholder="nginx:alpine" />
+                  <Form.Item
+                    name="image"
+                    label={containerSourceKind === 'git_dockerfile' ? '构建镜像' : '镜像'}
+                    rules={[{ required: true }]}
+                  >
+                    <Input
+                      placeholder={
+                        containerSourceKind === 'git_dockerfile'
+                          ? 'preview-api:git-main'
+                          : 'nginx:alpine'
+                      }
+                    />
                   </Form.Item>
                   <Form.Item name="architecture" label="架构">
                     <Select options={ARCHITECTURE_OPTIONS} />
                   </Form.Item>
+                </div>
+                {containerSourceKind === 'git_dockerfile' ? (
+                  <>
+                    <Form.Item
+                      name={['gitBuild', 'repositoryUrl']}
+                      label="Git 仓库"
+                      rules={[
+                        { required: true },
+                        { pattern: /^(https?|ssh):\/\/[^\s]+$/i, message: '请输入有效的仓库 URL' },
+                      ]}
+                    >
+                      <Input placeholder="https://github.com/org/repository.git" />
+                    </Form.Item>
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <Form.Item
+                        name={['gitBuild', 'ref']}
+                        label="分支 / Tag / Commit"
+                        rules={[{ required: true }]}
+                      >
+                        <Input placeholder="main" />
+                      </Form.Item>
+                      <Form.Item
+                        name={['gitBuild', 'dockerfilePath']}
+                        label="Dockerfile"
+                        rules={[{ required: true }]}
+                      >
+                        <Input placeholder="Dockerfile" />
+                      </Form.Item>
+                      <Form.Item
+                        name={['gitBuild', 'contextDir']}
+                        label="构建目录"
+                        rules={[{ required: true }]}
+                      >
+                        <Input placeholder="." />
+                      </Form.Item>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <Form.Item
+                        name={['gitBuild', 'pull']}
+                        label="拉取最新基础镜像"
+                        valuePropName="checked"
+                      >
+                        <Switch />
+                      </Form.Item>
+                      <Form.Item
+                        name={['gitBuild', 'noCache']}
+                        label="禁用构建缓存"
+                        valuePropName="checked"
+                      >
+                        <Switch />
+                      </Form.Item>
+                    </div>
+                  </>
+                ) : (
+                  <Form.Item name="imagePullPolicy" label="拉取策略">
+                    <Select
+                      allowClear
+                      options={['always', 'missing', 'never'].map((item) => ({
+                        value: item,
+                        label: item,
+                      }))}
+                    />
+                  </Form.Item>
+                )}
+              </>
+            ),
+          },
+          {
+            title: '运行配置',
+            fieldNames: ['restartPolicy', 'environmentVariables', 'resources'],
+            children: (
+              <>
+                <div className="grid gap-3 md:grid-cols-2">
                   <Form.Item name="restartPolicy" label="重启策略">
                     <Select
                       options={['unless-stopped', 'always', 'on-failure', 'no'].map((item) => ({
@@ -793,6 +941,63 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                     <Input />
                   </Form.Item>
                 </div>
+                <Form.List name="environmentVariables">
+                  {(fields, { add, remove }) => (
+                    <div className="mb-3 space-y-3">
+                      {fields.map((field, index) => (
+                        <div
+                          key={field.key}
+                          className="grid items-start gap-3 md:grid-cols-[1fr_1fr_40px]"
+                        >
+                          <Form.Item
+                            name={[field.name, 'name']}
+                            label={index === 0 ? '变量名' : undefined}
+                          >
+                            <Input placeholder="APP_ENV" />
+                          </Form.Item>
+                          <Form.Item
+                            name={[field.name, 'value']}
+                            label={index === 0 ? '变量值' : undefined}
+                          >
+                            <Input />
+                          </Form.Item>
+                          <Button
+                            className={index === 0 ? 'mt-8' : undefined}
+                            type="text"
+                            danger
+                            icon={<MinusCircleOutlined />}
+                            onClick={() => remove(field.name)}
+                          />
+                        </div>
+                      ))}
+                      <Button type="dashed" icon={<PlusOutlined />} onClick={() => add({})}>
+                        添加环境变量
+                      </Button>
+                    </div>
+                  )}
+                </Form.List>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <Form.Item name={['resources', 'cpus']} label="CPU 限制">
+                    <InputNumber min={0} step={0.1} className="w-full" />
+                  </Form.Item>
+                  <Form.Item name={['resources', 'memoryMiB']} label="内存限制 MiB">
+                    <InputNumber min={0} className="w-full" />
+                  </Form.Item>
+                  <Form.Item name={['resources', 'memoryReservationMiB']} label="内存预留 MiB">
+                    <InputNumber min={0} className="w-full" />
+                  </Form.Item>
+                </div>
+                <Form.Item name="envContent" label=".env">
+                  <TextArea rows={7} spellCheck={false} placeholder="KEY=value" />
+                </Form.Item>
+              </>
+            ),
+          },
+          {
+            title: '网络与存储',
+            fieldNames: ['ports', 'volumes', 'network'],
+            children: (
+              <>
                 <Form.List name="ports">
                   {(fields, { add, remove }) => (
                     <div className="mb-3 space-y-3">
@@ -943,66 +1148,8 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                     </div>
                   )}
                 </Form.List>
-                <Form.List name="environmentVariables">
-                  {(fields, { add, remove }) => (
-                    <div className="mb-3 space-y-3">
-                      {fields.map((field, index) => (
-                        <div
-                          key={field.key}
-                          className="grid items-start gap-3 md:grid-cols-[1fr_1fr_40px]"
-                        >
-                          <Form.Item
-                            name={[field.name, 'name']}
-                            label={index === 0 ? '变量名' : undefined}
-                          >
-                            <Input placeholder="APP_ENV" />
-                          </Form.Item>
-                          <Form.Item
-                            name={[field.name, 'value']}
-                            label={index === 0 ? '变量值' : undefined}
-                          >
-                            <Input />
-                          </Form.Item>
-                          <Button
-                            className={index === 0 ? 'mt-8' : undefined}
-                            type="text"
-                            danger
-                            icon={<MinusCircleOutlined />}
-                            onClick={() => remove(field.name)}
-                          />
-                        </div>
-                      ))}
-                      <Button type="dashed" icon={<PlusOutlined />} onClick={() => add({})}>
-                        添加环境变量
-                      </Button>
-                    </div>
-                  )}
-                </Form.List>
-                <div className="grid gap-3 md:grid-cols-3">
-                  <Form.Item name={['resources', 'cpus']} label="CPU 限制">
-                    <InputNumber min={0} step={0.1} className="w-full" />
-                  </Form.Item>
-                  <Form.Item name={['resources', 'memoryMiB']} label="内存限制 MiB">
-                    <InputNumber min={0} className="w-full" />
-                  </Form.Item>
-                  <Form.Item name={['resources', 'memoryReservationMiB']} label="内存预留 MiB">
-                    <InputNumber min={0} className="w-full" />
-                  </Form.Item>
-                </div>
                 <Form.Item name="network" label="外部网络">
                   <Input placeholder="traefik 或已有 Docker network" />
-                </Form.Item>
-                <Form.Item name="imagePullPolicy" label="拉取策略">
-                  <Select
-                    allowClear
-                    options={['always', 'missing', 'never', 'build'].map((item) => ({
-                      value: item,
-                      label: item,
-                    }))}
-                  />
-                </Form.Item>
-                <Form.Item name="envContent" label=".env">
-                  <TextArea rows={8} spellCheck={false} placeholder="KEY=value" />
                 </Form.Item>
               </>
             ),
@@ -1010,9 +1157,60 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
           {
             title: '确认启动',
             children: (
-              <Typography.Text type="secondary">
-                确认后将创建单容器服务并提交启动任务。
-              </Typography.Text>
+              <Descriptions
+                bordered
+                column={2}
+                size="small"
+                items={[
+                  {
+                    key: 'source',
+                    label: '来源',
+                    children: containerSourceKind === 'git_dockerfile' ? 'Git 构建' : '已有镜像',
+                  },
+                  {
+                    key: 'name',
+                    label: '应用',
+                    children: containerReviewValues.name || '-',
+                  },
+                  {
+                    key: 'host',
+                    label: 'Docker 主机',
+                    children:
+                      hostOptions.find((item) => item.value === containerReviewValues.hostId)?.label ||
+                      containerReviewValues.hostId ||
+                      '-',
+                  },
+                  {
+                    key: 'image',
+                    label: containerSourceKind === 'git_dockerfile' ? '构建镜像' : '镜像',
+                    children: containerReviewValues.image || '-',
+                  },
+                  ...(containerSourceKind === 'git_dockerfile'
+                    ? [
+                        {
+                          key: 'repository',
+                          label: 'Git 仓库',
+                          children: containerReviewValues.gitBuild?.repositoryUrl || '-',
+                        },
+                        {
+                          key: 'ref',
+                          label: '版本',
+                          children: containerReviewValues.gitBuild?.ref || 'main',
+                        },
+                      ]
+                    : []),
+                  {
+                    key: 'ports',
+                    label: '端口',
+                    children: `${containerReviewValues.ports?.length || 0} 项`,
+                  },
+                  {
+                    key: 'volumes',
+                    label: '卷',
+                    children: `${containerReviewValues.volumes?.length || 0} 项`,
+                  },
+                ]}
+              />
             ),
           },
         ]}

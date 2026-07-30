@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   App,
+  Alert,
   Button,
   Descriptions,
   Drawer,
@@ -40,6 +41,7 @@ import { formatDateTime } from '@/utils/time'
 import { deliveryQueries } from '../queries'
 import { manifestMutations } from './mutations'
 import { manifestQueries } from './queries'
+import { ManifestOperationsPanel } from './operations-panel'
 import type { ManifestFilter, ManifestPackage, ManifestPackageInput } from './types'
 import './styles.css'
 
@@ -106,6 +108,8 @@ export function ManifestLibraryPage() {
   const revisionsQuery = useQuery(
     manifestQueries.revisions(revisionTarget?.id ?? '', Boolean(revisionTarget)),
   )
+  const editingSourceQuery = useQuery(manifestQueries.source(editing?.id ?? '', Boolean(editing)))
+  const gitFilesReadOnly = editingSourceQuery.data?.mode === 'git_synced'
   const createMutation = useMutation(manifestMutations.create(queryClient))
   const updateMutation = useMutation(manifestMutations.update(queryClient))
   const removeMutation = useMutation(manifestMutations.remove(queryClient))
@@ -439,16 +443,24 @@ export function ManifestLibraryPage() {
                   <Form.List name="files">
                     {(fields, { add, remove }) => (
                       <div className="soha-manifest-files">
+                        {gitFilesReadOnly ? (
+                          <Alert showIcon type="info" title="Git 是当前内容来源" />
+                        ) : null}
                         <div className="soha-manifest-section-head">
                           <Text strong>清单文件</Text>
-                          <Button
-                            icon={<FileAddOutlined />}
-                            onClick={() =>
-                              add({ path: `base/resource-${fields.length + 1}.yaml`, content: '' })
-                            }
-                          >
-                            添加文件
-                          </Button>
+                          {!gitFilesReadOnly ? (
+                            <Button
+                              icon={<FileAddOutlined />}
+                              onClick={() =>
+                                add({
+                                  path: `base/resource-${fields.length + 1}.yaml`,
+                                  content: '',
+                                })
+                              }
+                            >
+                              添加文件
+                            </Button>
+                          ) : null}
                         </div>
                         {fields.map((field, index) => (
                           <div className="soha-manifest-file" key={field.key}>
@@ -459,17 +471,20 @@ export function ManifestLibraryPage() {
                                 noStyle
                               >
                                 <Input
+                                  disabled={gitFilesReadOnly}
                                   aria-label={`文件 ${index + 1} 路径`}
                                   placeholder="base/ingress.yaml"
                                 />
                               </Form.Item>
-                              <Button
-                                danger
-                                type="text"
-                                icon={<DeleteOutlined />}
-                                title="删除文件"
-                                onClick={() => remove(field.name)}
-                              />
+                              {!gitFilesReadOnly ? (
+                                <Button
+                                  danger
+                                  type="text"
+                                  icon={<DeleteOutlined />}
+                                  title="删除文件"
+                                  onClick={() => remove(field.name)}
+                                />
+                              ) : null}
                             </div>
                             <Form.Item
                               name={[field.name, 'content']}
@@ -478,6 +493,7 @@ export function ManifestLibraryPage() {
                             >
                               <Input.TextArea
                                 className="soha-manifest-editor"
+                                readOnly={gitFilesReadOnly}
                                 rows={18}
                                 spellCheck={false}
                               />
@@ -572,6 +588,15 @@ export function ManifestLibraryPage() {
                   </Form.List>
                 ),
               },
+              ...(editing
+                ? [
+                    {
+                      key: 'operations',
+                      label: '交付状态',
+                      children: <ManifestOperationsPanel item={editing} />,
+                    },
+                  ]
+                : []),
             ]}
           />
         </Form>

@@ -84,6 +84,32 @@ textarea.soha-manifest-editor {
   margin-bottom: 16px;
 }
 
+.soha-manifest-operation-bar {
+  margin-bottom: 16px;
+}
+
+.soha-manifest-runtime-summary {
+  margin-top: 20px;
+}
+
+.soha-manifest-render-output {
+  max-height: 58vh;
+  margin-top: 16px;
+  overflow: auto;
+  border-top: 1px solid var(--soha-border-color);
+}
+
+.soha-manifest-render-output pre {
+  margin: 0;
+  padding: 16px 0;
+  overflow: auto;
+  border-bottom: 1px solid var(--soha-border-color);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
 @media (max-width: 900px) {
   .soha-manifest-library .soha-admin-table-header {
     align-items: flex-start;

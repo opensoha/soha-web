@@ -1,6 +1,10 @@
 export type DockerPayloadPrimitive = string | number | boolean | null
 
-export type DockerPayloadValue = DockerPayloadPrimitive | DockerPayloadMap | DockerPayloadValue[] | undefined
+export type DockerPayloadValue =
+  | DockerPayloadPrimitive
+  | DockerPayloadMap
+  | DockerPayloadValue[]
+  | undefined
 
 export interface DockerPayloadMap {
   [key: string]: DockerPayloadValue
@@ -273,10 +277,21 @@ export interface DockerContainerResourceInput extends DockerPayloadMap {
   memoryReservationBytes?: number
 }
 
+export interface DockerGitBuildInput {
+  repositoryUrl: string
+  ref?: string
+  dockerfilePath?: string
+  contextDir?: string
+  pull?: boolean
+  noCache?: boolean
+}
+
 export interface DockerContainerStartInput {
   hostId: string
   name: string
   image: string
+  sourceKind?: 'image' | 'git_dockerfile'
+  gitBuild?: DockerGitBuildInput
   architecture?: string
   imagePullPolicy?: string
   containerPort?: number

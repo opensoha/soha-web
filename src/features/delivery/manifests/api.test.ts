@@ -2,7 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { manifestApi } from './api'
 import type { ManifestPackageInput } from './types'
 
-const apiMocks = vi.hoisted(() => ({ delete: vi.fn(), get: vi.fn(), post: vi.fn(), put: vi.fn() }))
+const apiMocks = vi.hoisted(() => ({
+  delete: vi.fn(),
+  get: vi.fn(),
+  post: vi.fn(),
+  postWithHeaders: vi.fn(),
+  put: vi.fn(),
+}))
 vi.mock('@/services/api-client', () => ({ api: apiMocks }))
 
 describe('manifestApi', () => {
@@ -42,5 +48,64 @@ describe('manifestApi', () => {
       '/delivery/manifest-packages/manifest%2F1/publish',
       { note: 'promote host' },
     )
+  })
+
+  it('uses durable action routes and an idempotency key for Git sync', async () => {
+    apiMocks.post.mockResolvedValue({ data: { task: { id: 'task-1' } } })
+    apiMocks.postWithHeaders.mockResolvedValue({ data: { run: { id: 'run-1' } } })
+
+    await manifestApi.setDesiredRevision('binding/1', {
+      desiredRevision: 3,
+      expectedGeneration: 2,
+      reconcilePolicy: 'continuous',
+    })
+    await manifestApi.sync('package/1', 5)
+    await manifestApi.decideIntent('intent/1', 'accept', {
+      expectedCurrentRevision: 3,
+      expectedPackageUpdatedAt: '2026-07-30T00:00:00Z',
+    })
+
+    expect(apiMocks.post).toHaveBeenNthCalledWith(
+      1,
+      '/delivery/manifest-bindings/binding%2F1/desired-revision',
+      { desiredRevision: 3, expectedGeneration: 2, reconcilePolicy: 'continuous' },
+    )
+    expect(apiMocks.postWithHeaders.mock.calls[0][0]).toBe(
+      '/delivery/manifest-packages/package%2F1/sync',
+    )
+    expect(apiMocks.postWithHeaders.mock.calls[0][2]['Idempotency-Key']).toMatch(
+      /^manifest-web-package%2F1-/,
+    )
+    expect(apiMocks.post).toHaveBeenNthCalledWith(
+      2,
+      '/delivery/manifest-delivery-intents/intent%2F1/accept',
+      {
+        expectedCurrentRevision: 3,
+        expectedPackageUpdatedAt: '2026-07-30T00:00:00Z',
+      },
+    )
+  })
+
+  it('loads every deployment page for a manifest package', async () => {
+    apiMocks.get
+      .mockResolvedValueOnce({
+        data: {
+          items: Array.from({ length: 100 }, (_, index) => ({ id: `deployment-${index}` })),
+          total: 101,
+          page: 1,
+          pageSize: 100,
+        },
+      })
+      .mockResolvedValueOnce({
+        data: { items: [{ id: 'deployment-100' }], total: 101, page: 2, pageSize: 100 },
+      })
+
+    const result = await manifestApi.deployments('package/1')
+
+    expect(result.items).toHaveLength(101)
+    expect(apiMocks.get.mock.calls.map(([path]) => path)).toEqual([
+      '/delivery/manifest-deployments?packageId=package%2F1&page=1&pageSize=100',
+      '/delivery/manifest-deployments?packageId=package%2F1&page=2&pageSize=100',
+    ])
   })
 })

@@ -555,6 +555,37 @@ describe('docker pages', () => {
     expect(payload).not.toHaveProperty('resources.memoryReservationMiB')
   })
 
+  it('builds Git Dockerfile source payload and pins local image pull policy', () => {
+    const payload = buildContainerStartPayload({
+      hostId: 'host-1',
+      name: 'preview-api',
+      image: 'preview-api:git-main',
+      sourceKind: 'git_dockerfile',
+      gitBuild: {
+        repositoryUrl: 'https://github.com/opensoha/example.git',
+        ref: 'feature/runtime',
+        dockerfilePath: 'deploy/Dockerfile',
+        contextDir: '.',
+        pull: true,
+      },
+      ports: [{ hostPort: 18080, containerPort: 8080 }],
+    }) satisfies DockerContainerStartInput
+
+    expect(payload).toMatchObject({
+      sourceKind: 'git_dockerfile',
+      image: 'preview-api:git-main',
+      imagePullPolicy: 'never',
+      gitBuild: {
+        repositoryUrl: 'https://github.com/opensoha/example.git',
+        ref: 'feature/runtime',
+        dockerfilePath: 'deploy/Dockerfile',
+        contextDir: '.',
+        pull: true,
+        noCache: false,
+      },
+    })
+  })
+
   it('builds template payload with typed variables', () => {
     const payload = buildTemplatePayload({
       name: 'nginx-compose',
@@ -608,6 +639,47 @@ describe('docker pages', () => {
     expect(document.body.textContent).toContain('单容器')
     expect(document.body.textContent).toContain('镜像 / 端口')
     expect(document.body.textContent).toContain('127.0.0.1:18083 -> 80/tcp')
+  })
+
+  it('opens quick start as a four-step flow and reveals Git Dockerfile fields', async () => {
+    testState.permissionSnapshot = {
+      permissionKeys: [
+        'docker.projects.view',
+        'docker.projects.manage',
+        'docker.projects.deploy',
+        'docker.ports.manage',
+      ],
+      visibleMenuIds: [],
+      visibleMenus: [],
+    }
+    await renderWithProviders(<DockerProjectsPage />)
+
+    const quickStartButton = Array.from(document.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('快速启动'),
+    )
+    expect(quickStartButton).toBeDefined()
+    await act(async () => {
+      quickStartButton?.click()
+      await Promise.resolve()
+    })
+
+    expect(document.body.textContent).toContain('来源')
+    expect(document.body.textContent).toContain('运行配置')
+    expect(document.body.textContent).toContain('网络与存储')
+    expect(document.body.textContent).toContain('确认启动')
+    const gitSegment = Array.from(document.querySelectorAll('.ant-segmented-item')).find((item) =>
+      item.textContent?.includes('Git 构建'),
+    ) as HTMLElement | undefined
+    expect(gitSegment).toBeDefined()
+    await act(async () => {
+      gitSegment?.click()
+      await Promise.resolve()
+    })
+
+    expect(document.body.textContent).toContain('Git 仓库')
+    expect(document.body.textContent).toContain('分支 / Tag / Commit')
+    expect(document.body.textContent).toContain('Dockerfile')
+    expect(document.body.textContent).toContain('构建目录')
   })
 
   it('expands compose projects with their services when service access is available', async () => {
