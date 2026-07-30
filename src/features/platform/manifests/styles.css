@@ -1,0 +1,38 @@
+.soha-platform-manifest-link {
+  max-width: 260px;
+  padding-inline: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.soha-platform-manifest-yaml {
+  min-height: 360px;
+  max-height: calc(100vh - 220px);
+  margin: 0;
+  padding: 16px;
+  overflow: auto;
+  border: 1px solid var(--soha-border-color);
+  border-radius: var(--soha-radius-control);
+  background: var(--soha-fill-weak);
+  color: var(--soha-text-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+@media (max-width: 900px) {
+  .soha-platform-manifests .soha-admin-table-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .soha-platform-manifests .soha-admin-table-header-main {
+    flex: 0 0 100%;
+    white-space: nowrap;
+  }
+
+  .soha-platform-manifests .soha-admin-table-header-extra {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}

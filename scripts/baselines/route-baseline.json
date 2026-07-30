@@ -30,6 +30,7 @@
       "src/features/platform/clusters/routes.ts",
       "src/features/platform/configuration/routes.ts",
       "src/features/platform/extensions/routes.ts",
+      "src/features/platform/manifests/routes.ts",
       "src/features/platform/network/routes.ts",
       "src/features/platform/resource-creation/routes.ts",
       "src/features/platform/routes.ts",
@@ -43,14 +44,14 @@
     ]
   },
   "summary": {
-    "runtimePaths": 227,
-    "metadataPaths": 227,
-    "overlappingPaths": 227,
+    "runtimePaths": 229,
+    "metadataPaths": 229,
+    "overlappingPaths": 229,
     "runtimeOnlyPaths": 0,
     "metadataOnlyPaths": 0,
     "inlineJsxPaths": 0,
-    "lazyRouteLoads": 191,
-    "lazySourceModules": 189
+    "lazyRouteLoads": 193,
+    "lazySourceModules": 191
   },
   "paths": {
     "runtime": [
@@ -145,6 +146,7 @@
       "/delivery/blueprints",
       "/delivery/execution-tasks",
       "/delivery/execution-tasks/:executionTaskId",
+      "/delivery/manifests",
       "/delivery/onboarding",
       "/delivery/release-bundles",
       "/delivery/release-bundles/:releaseBundleId",
@@ -165,6 +167,7 @@
       "/internal-workbench/overview",
       "/login",
       "/login/callback",
+      "/manifests",
       "/monitoring-workbench",
       "/monitoring-workbench/alerts",
       "/monitoring-workbench/alerts/:eventId",
@@ -374,6 +377,7 @@
       "/delivery/blueprints",
       "/delivery/execution-tasks",
       "/delivery/execution-tasks/:executionTaskId",
+      "/delivery/manifests",
       "/delivery/onboarding",
       "/delivery/release-bundles",
       "/delivery/release-bundles/:releaseBundleId",
@@ -394,6 +398,7 @@
       "/internal-workbench/overview",
       "/login",
       "/login/callback",
+      "/manifests",
       "/monitoring-workbench",
       "/monitoring-workbench/alerts",
       "/monitoring-workbench/alerts/:eventId",
@@ -603,6 +608,7 @@
       "/delivery/blueprints",
       "/delivery/execution-tasks",
       "/delivery/execution-tasks/:executionTaskId",
+      "/delivery/manifests",
       "/delivery/onboarding",
       "/delivery/release-bundles",
       "/delivery/release-bundles/:releaseBundleId",
@@ -623,6 +629,7 @@
       "/internal-workbench/overview",
       "/login",
       "/login/callback",
+      "/manifests",
       "/monitoring-workbench",
       "/monitoring-workbench/alerts",
       "/monitoring-workbench/alerts/:eventId",
@@ -1287,6 +1294,11 @@
         "source": "@/features/settings/identity/page"
       },
       {
+        "exportName": "ManifestLibraryPage",
+        "moduleExport": "ManifestLibraryPage",
+        "source": "@/features/delivery/manifests/library-page"
+      },
+      {
         "exportName": "MemoryPoliciesPage",
         "moduleExport": "MemoryPoliciesPage",
         "source": "@/features/copilot/memory/page"
@@ -1460,6 +1472,11 @@
         "exportName": "PlatformAccessControlServiceAccountsPage",
         "moduleExport": "PlatformAccessControlServiceAccountsPage",
         "source": "@/features/platform/access-control/serviceaccounts/list-page"
+      },
+      {
+        "exportName": "PlatformManifestsPage",
+        "moduleExport": "PlatformManifestsPage",
+        "source": "@/features/platform/manifests/page"
       },
       {
         "exportName": "PluginMarketplaceDetailPage",
@@ -1751,6 +1768,7 @@
       "@/features/delivery/environments/list-page",
       "@/features/delivery/execution-tasks/detail-page",
       "@/features/delivery/execution-tasks/list-page",
+      "@/features/delivery/manifests/library-page",
       "@/features/delivery/registries/page",
       "@/features/delivery/release-board/page",
       "@/features/delivery/release-bundles/detail-page",
@@ -1822,6 +1840,7 @@
       "@/features/platform/extensions/helm/charts/page",
       "@/features/platform/extensions/helm/releases/detail-page",
       "@/features/platform/extensions/helm/releases/list-page",
+      "@/features/platform/manifests/page",
       "@/features/platform/network/gateway-api/backend-tls-policies-page",
       "@/features/platform/network/gateway-api/backend-tls-policy-detail-page",
       "@/features/platform/network/gateway-api/gateway-detail-page",
@@ -1942,6 +1961,7 @@
       "@/features/delivery/environments/list-page": ["ApplicationEnvironmentsPage"],
       "@/features/delivery/execution-tasks/detail-page": ["ExecutionTaskDetailPage"],
       "@/features/delivery/execution-tasks/list-page": ["ExecutionTasksPage"],
+      "@/features/delivery/manifests/library-page": ["ManifestLibraryPage"],
       "@/features/delivery/registries/page": ["RegistriesPage"],
       "@/features/delivery/release-board/page": ["ReleaseBoardPage"],
       "@/features/delivery/release-bundles/detail-page": ["ReleaseBundleDetailPage"],
@@ -2056,6 +2076,7 @@
       "@/features/platform/extensions/helm/charts/page": ["HelmChartsPage"],
       "@/features/platform/extensions/helm/releases/detail-page": ["HelmReleaseDetailPage"],
       "@/features/platform/extensions/helm/releases/list-page": ["HelmReleasesPage"],
+      "@/features/platform/manifests/page": ["PlatformManifestsPage"],
       "@/features/platform/network/gateway-api/backend-tls-policies-page": [
         "NetworkBackendTLSPoliciesPage"
       ],
@@ -2154,5 +2175,5 @@
       "@/features/virtualization/virtual-machines/list-page": ["VirtualizationVmsPage"]
     }
   },
-  "generatedAt": "2026-07-24T21:49:04.233Z"
+  "generatedAt": "2026-07-29T17:12:24.178Z"
 }

@@ -3,6 +3,29 @@ import { defineRoutes } from '@/routes/definitions'
 export const deliveryRoutes = defineRoutes([
   {
     meta: {
+      id: 'delivery-manifest-library',
+      path: '/delivery/manifests',
+      title: '应用清单库',
+      description: '应用 YAML、环境差异与不可变版本',
+      icon: 'IconCode',
+      group: 'delivery',
+      workbenchId: 'delivery',
+      requiresAuth: true,
+      tabbar: true,
+      navVisible: true,
+      menuId: 'delivery-manifest-library',
+      permissionKey: 'delivery.applications.view',
+      scopeMode: 'passive',
+      workspace: 'application',
+    },
+    shell: 'app',
+    load: async () => {
+      const module = await import('./manifests/library-page')
+      return { default: module.ManifestLibraryPage }
+    },
+  },
+  {
+    meta: {
       id: 'applications',
       path: '/applications',
       title: '应用中心',

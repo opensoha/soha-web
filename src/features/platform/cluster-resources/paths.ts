@@ -21,6 +21,14 @@ export function buildNodeYAMLPath(scope: ClusterScope, name: string) {
   return `${buildNodePath(scope, name)}/yaml`
 }
 
+export function buildNodeSchedulabilityPath(scope: ClusterScope, name: string) {
+  return `${buildNodePath(scope, name)}/schedulability`
+}
+
+export function buildNodeDrainPath(scope: ClusterScope, name: string) {
+  return `${buildNodePath(scope, name)}/drain`
+}
+
 export function buildNamespacesPath(scope: ClusterScope) {
   return `/clusters/${segment(requireClusterId(scope))}/namespaces`
 }
