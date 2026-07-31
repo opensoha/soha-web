@@ -3,7 +3,6 @@ import { computeRoutes } from './routes'
 
 const routePages = vi.hoisted(() => ({
   overview: () => null,
-  access: () => null,
   syncTasks: () => null,
   buildTasks: () => null,
   operationRecords: () => null,
@@ -19,7 +18,6 @@ const routePages = vi.hoisted(() => ({
 }))
 
 vi.mock('./overview/page', () => ({ ComputeOverviewPage: routePages.overview }))
-vi.mock('./access/page', () => ({ ComputeAccessPage: routePages.access }))
 vi.mock('./tasks/sync-page', () => ({ ComputeSyncTasksPage: routePages.syncTasks }))
 vi.mock('./tasks/build-page', () => ({ ComputeBuildTasksPage: routePages.buildTasks }))
 vi.mock('./tasks/operations-page', () => ({
@@ -61,8 +59,8 @@ describe('compute route manifest', () => {
       pageRoutes.map(async (route) => (await route.load()).default),
     )
 
-    expect(pageRoutes).toHaveLength(14)
-    expect(new Set(loadedPages).size).toBe(14)
+    expect(pageRoutes).toHaveLength(13)
+    expect(new Set(loadedPages).size).toBe(13)
     expect(
       computeRoutes
         .filter((route) => route.meta.navVisible)
@@ -74,6 +72,7 @@ describe('compute route manifest', () => {
     expect(computeRoutes.some((route) => 'aliases' in route)).toBe(false)
     expect(computeRoutes.map((route) => route.meta.path)).not.toEqual(
       expect.arrayContaining([
+        '/compute/access',
         '/compute/access/new',
         '/compute/virtualization/clusters/new',
         '/compute/runtimes/hosts/new',

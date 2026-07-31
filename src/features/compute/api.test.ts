@@ -16,7 +16,6 @@ describe('compute api', () => {
     apiMocks.getEnvelope.mockResolvedValue({ items: [] })
 
     await computeApi.overview()
-    await computeApi.accessSources({ sourceType: 'runtime_host', providerKey: '', limit: 50 })
     await computeApi.tasks({
       domain: 'container_runtime',
       status: 'failed',
@@ -28,10 +27,6 @@ describe('compute api', () => {
     expect(apiMocks.getEnvelope).toHaveBeenNthCalledWith(1, '/compute/overview')
     expect(apiMocks.getEnvelope).toHaveBeenNthCalledWith(
       2,
-      '/compute/access-sources?sourceType=runtime_host&limit=50',
-    )
-    expect(apiMocks.getEnvelope).toHaveBeenNthCalledWith(
-      3,
       '/compute/tasks?domain=container_runtime&status=failed&category=operation&resourceKind=project&resourceId=project-1',
     )
   })

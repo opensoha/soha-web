@@ -1,6 +1,4 @@
 import type {
-  ComputeAccessSourceListEnvelope,
-  ComputeAccessSourceType,
   ComputeOverviewEnvelope,
   ComputeTaskCategory,
   ComputeTaskDomain,
@@ -10,13 +8,6 @@ import type {
   ComputeTaskStatus,
 } from '@opensoha/contracts/gen/ts/sohaapi'
 import { api } from '@/services/api-client'
-
-interface ComputeAccessFilters {
-  sourceType?: ComputeAccessSourceType
-  providerKey?: string
-  cursor?: string
-  limit?: number
-}
 
 interface ComputeTaskFilters {
   domain?: ComputeTaskDomain
@@ -40,10 +31,6 @@ function queryString(filters: object) {
 
 export const computeApi = {
   overview: () => api.getEnvelope<ComputeOverviewEnvelope>('/compute/overview'),
-  accessSources: (filters: ComputeAccessFilters = {}) =>
-    api.getEnvelope<ComputeAccessSourceListEnvelope>(
-      `/compute/access-sources${queryString(filters)}`,
-    ),
   tasks: (filters: ComputeTaskFilters = {}) =>
     api.getEnvelope<ComputeTaskListEnvelope>(`/compute/tasks${queryString(filters)}`),
   task: (domain: ComputeTaskDomain, taskId: string) =>
@@ -60,4 +47,4 @@ function taskPath(domain: ComputeTaskDomain, taskId: string) {
   return `/compute/tasks/${encodeURIComponent(domain)}/${encodeURIComponent(taskId)}`
 }
 
-export type { ComputeAccessFilters, ComputeTaskFilters }
+export type { ComputeTaskFilters }

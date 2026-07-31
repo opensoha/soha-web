@@ -80,13 +80,21 @@ describe('compute overview page', () => {
     expect(text).toContain('部分资源暂不可用')
     expect(text).toContain('运行时数据暂不可用')
     expect(text).toContain('虚拟化')
-    expect(text).toContain('资源接入')
+    expect(text).toContain('接入状态')
     expect(text).toContain('任务运行')
     expect(text).toContain('运行健康')
     expect(text).toContain('Provider 健康')
     expect(text).toContain('pve')
     expect(container.querySelector('.soha-overview-page')).not.toBeNull()
     expect(container.querySelectorAll('.soha-overview-metric-card')).toHaveLength(4)
+    expect(
+      container.querySelector('a[href="/compute/virtualization/vms"] .soha-overview-metric-card'),
+    ).not.toBeNull()
+    expect(
+      container.querySelector('a[href="/compute/tasks/operations"] .soha-overview-metric-card'),
+    ).not.toBeNull()
+    expect(container.querySelector('a[href^="/compute/access"]')).toBeNull()
+    expect(container.querySelector('a[href="/compute/virtualization/clusters"]')).not.toBeNull()
     expect(container.querySelector('.soha-compute-section')).toBeNull()
   })
 })

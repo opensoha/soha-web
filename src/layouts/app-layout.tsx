@@ -30,7 +30,6 @@ import { AnnouncementBell } from '@/features/announcements/announcement-center'
 import { logoutAuthSession } from '@/features/auth/auth-api'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
 import {
-  isComputeWorkbenchManagementMenu,
   isComputeWorkbenchMenuGroup,
   normalizeComputeWorkbenchNav,
 } from '@/features/compute/navigation'
@@ -237,25 +236,7 @@ function buildComputeMenuItems(
   sidebarNav: RuntimeMenuNode[],
   localeCode: 'zh_CN' | 'en_US',
 ): MenuProps['items'] {
-  const managementNodes = sidebarNav.filter((node) => isComputeWorkbenchManagementMenu(node.id))
-  const managementAnchorID = managementNodes[0]?.id
-
   return sidebarNav.flatMap((node) => {
-    if (isComputeWorkbenchManagementMenu(node.id)) {
-      if (node.id !== managementAnchorID) return []
-      return [
-        {
-          key: 'group-compute-workbench-management',
-          type: 'group' as const,
-          label: (
-            <span className="soha-nav-section-title">
-              {localeCode === 'en_US' ? 'Resource Management' : '资源管理'}
-            </span>
-          ),
-          children: managementNodes.map((item) => buildMenuNodeItem(item, localeCode)),
-        },
-      ]
-    }
     if (!isComputeWorkbenchMenuGroup(node.id)) {
       return [buildMenuNodeItem(node, localeCode)]
     }
@@ -847,10 +828,7 @@ export function AppLayout() {
       const missingRouteAncestors: (typeof currentMeta)[] = []
       let routePointer = getParentRouteMeta(currentMeta)
       while (routePointer && !representedRouteIds.has(routePointer.id)) {
-        if (
-          routePointer.navVisible !== false &&
-          !workbenchRootRouteIds.includes(routePointer.id)
-        ) {
+        if (routePointer.navVisible !== false && !workbenchRootRouteIds.includes(routePointer.id)) {
           missingRouteAncestors.unshift(routePointer)
         }
         routePointer = getParentRouteMeta(routePointer)

@@ -335,7 +335,7 @@ export function operationActionLabel(action: string) {
     (
       {
         deploy: '部署',
-        redeploy: '重新部署',
+        redeploy: '销毁重建',
         start: '启动',
         stop: '停止',
         restart: '重启',

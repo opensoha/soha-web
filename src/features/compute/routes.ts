@@ -64,30 +64,6 @@ export const computeRoutes = defineRoutes([
   {
     meta: {
       ...computeRootMeta,
-      id: 'compute-workbench-access',
-      path: '/compute/access',
-      title: '资源接入',
-      description: '虚拟化连接、Agent 与运行时主机接入状态',
-      icon: 'IconCluster',
-      tabbar: true,
-      navVisible: true,
-      parentId: 'compute-workbench',
-      menuId: 'compute-workbench-access',
-      permissionKeysAny: [
-        'compute.access.view',
-        'virtualization.clusters.view',
-        'docker.hosts.view',
-      ],
-    },
-    shell: 'app',
-    load: async () => {
-      const module = await import('./access/page')
-      return { default: module.ComputeAccessPage }
-    },
-  },
-  {
-    meta: {
-      ...computeRootMeta,
       id: 'virtualization-workbench',
       path: '/compute/virtualization',
       title: '虚拟化',

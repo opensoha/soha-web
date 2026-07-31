@@ -641,6 +641,41 @@ describe('docker pages', () => {
     expect(document.body.textContent).toContain('127.0.0.1:18083 -> 80/tcp')
   })
 
+  it('confirms and submits source-aware destructive redeploy for single-container projects', async () => {
+    testState.permissionSnapshot = {
+      permissionKeys: ['docker.projects.view', 'docker.projects.deploy'],
+      visibleMenuIds: [],
+      visibleMenus: [],
+    }
+    await renderWithProviders(<DockerProjectsPage />)
+
+    const redeployButton = document.querySelector(
+      'button[aria-label="销毁重建应用"]',
+    ) as HTMLButtonElement | null
+    expect(redeployButton).not.toBeNull()
+    expect(document.querySelectorAll('button[aria-label="销毁重建应用"]')).toHaveLength(1)
+    await act(async () => {
+      redeployButton?.click()
+      await Promise.resolve()
+    })
+
+    expect(document.body.textContent).toContain('销毁并重建应用？')
+    expect(document.body.textContent).toContain('将拉取最新镜像')
+    expect(document.body.textContent).toContain('数据卷不会删除')
+    const confirmButton = Array.from(
+      document.querySelectorAll('.ant-modal-confirm-btns button'),
+    ).find((button) => button.textContent?.includes('销毁重建')) as HTMLButtonElement | undefined
+    expect(confirmButton).toBeDefined()
+    await act(async () => {
+      confirmButton?.click()
+      await Promise.resolve()
+    })
+
+    expect(testState.apiPost).toHaveBeenCalledWith('/docker/projects/project-1/deploy', {
+      action: 'redeploy',
+    })
+  })
+
   it('opens quick start as a four-step flow and reveals Git Dockerfile fields', async () => {
     testState.permissionSnapshot = {
       permissionKeys: [
@@ -680,6 +715,54 @@ describe('docker pages', () => {
     expect(document.body.textContent).toContain('分支 / Tag / Commit')
     expect(document.body.textContent).toContain('Dockerfile')
     expect(document.body.textContent).toContain('构建目录')
+  })
+
+  it('splits Compose creation into four focused steps', async () => {
+    testState.permissionSnapshot = {
+      permissionKeys: ['docker.projects.view', 'docker.projects.manage'],
+      visibleMenuIds: [],
+      visibleMenus: [],
+    }
+    await renderWithProviders(<DockerProjectsPage />)
+
+    const createButton = Array.from(document.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('创建 Compose'),
+    )
+    expect(createButton).toBeDefined()
+    await act(async () => {
+      createButton?.click()
+      await Promise.resolve()
+    })
+
+    const dialog = Array.from(document.querySelectorAll('[role="dialog"]')).find((item) =>
+      item.querySelector('.ant-modal-title')?.textContent?.includes('创建 Compose 项目'),
+    )
+    const modalTitle = dialog?.querySelector('.ant-modal-title')
+    expect(modalTitle?.textContent).toBe('创建 Compose 项目')
+    expect(modalTitle?.id).toBeTruthy()
+    expect(dialog?.getAttribute('aria-labelledby')?.split(/\s+/)).toContain(modalTitle?.id)
+    expect((dialog?.querySelector('.ant-modal-header') as HTMLElement | null)?.style.minHeight).toBe(
+      '32px',
+    )
+    expect((modalTitle as HTMLElement | null)?.style.position).toBe('absolute')
+
+    const stepTitles = Array.from(
+      document.querySelectorAll('.soha-step-form__steps .ant-steps-item-title'),
+    )
+      .map((item) => item.textContent?.trim())
+      .filter(Boolean)
+    expect(stepTitles).toEqual(['基础信息', '项目设置', '部署来源', 'Compose 配置'])
+
+    const stepPanels = Array.from(
+      document.querySelectorAll('.soha-step-form__content > div'),
+    ) as HTMLElement[]
+    expect(stepPanels).toHaveLength(4)
+    expect(stepPanels[0]?.textContent).toContain('Docker 主机')
+    expect(stepPanels[0]?.textContent).toContain('描述')
+    expect(stepPanels[1]?.textContent).toContain('负责人')
+    expect(stepPanels[1]?.textContent).toContain('目标态')
+    expect(stepPanels[2]?.textContent).toContain('来源引用')
+    expect(stepPanels[3]?.textContent).toContain('.env')
   })
 
   it('expands compose projects with their services when service access is available', async () => {

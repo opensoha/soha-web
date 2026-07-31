@@ -1,6 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
 import type { ComputeTaskDomain } from '@opensoha/contracts/gen/ts/sohaapi'
-import { computeApi, type ComputeAccessFilters, type ComputeTaskFilters } from './api'
+import { computeApi, type ComputeTaskFilters } from './api'
 import { computeKeys } from './keys'
 
 export const computeQueries = {
@@ -8,12 +8,6 @@ export const computeQueries = {
     queryOptions({
       queryKey: computeKeys.overview(),
       queryFn: computeApi.overview,
-      staleTime: 15_000,
-    }),
-  accessSources: (filters: ComputeAccessFilters = {}) =>
-    queryOptions({
-      queryKey: computeKeys.accessSources(filters),
-      queryFn: () => computeApi.accessSources(filters),
       staleTime: 15_000,
     }),
   tasks: (filters: ComputeTaskFilters = {}) =>

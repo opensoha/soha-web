@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RuntimeMenuNode } from '@/types'
-import {
-  isComputeWorkbenchManagementMenu,
-  isComputeWorkbenchMenuGroup,
-  normalizeComputeWorkbenchNav,
-} from './navigation'
+import { isComputeWorkbenchMenuGroup, normalizeComputeWorkbenchNav } from './navigation'
 
 function menuNode(id: string, children?: RuntimeMenuNode[]): RuntimeMenuNode {
   return {
@@ -26,7 +22,6 @@ describe('compute workbench navigation', () => {
       menuNode('compute-workbench-tasks-sync'),
       menuNode('compute-workbench-tasks-build'),
       menuNode('compute-workbench-tasks-operations'),
-      menuNode('compute-workbench-access'),
       menuNode('virtualization-workbench', [
         menuNode('virtualization-workbench-clusters'),
         menuNode('virtualization-workbench-vms'),
@@ -39,21 +34,14 @@ describe('compute workbench navigation', () => {
       menuNode('compute-workbench-overview'),
     ])
 
-    expect(result.map((node) => node.labelZh)).toEqual([
-      '总览',
-      '虚拟化',
-      '容器运行时',
-      '资源接入',
-      '任务中心',
-    ])
-    expect(result[1].children?.map((node) => node.labelZh)).toEqual(['虚拟机', '集群'])
-    expect(result[2].children?.map((node) => node.labelZh)).toEqual([
+    expect(result.map((node) => node.labelZh)).toEqual(['总览', '任务中心', '虚拟化', '容器运行时'])
+    expect(result[2].children?.map((node) => node.labelZh)).toEqual(['虚拟机', '集群'])
+    expect(result[3].children?.map((node) => node.labelZh)).toEqual([
       '运行时主机',
       '容器管理',
       '部署模板',
     ])
-    expect(isComputeWorkbenchMenuGroup(result[1].id)).toBe(true)
     expect(isComputeWorkbenchMenuGroup(result[2].id)).toBe(true)
-    expect(result.slice(3).every((node) => isComputeWorkbenchManagementMenu(node.id))).toBe(true)
+    expect(isComputeWorkbenchMenuGroup(result[3].id)).toBe(true)
   })
 })

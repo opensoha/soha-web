@@ -8,7 +8,7 @@ import {
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { Alert, Button, Card, Space, Tag, Typography } from 'antd'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import type { ComputeSectionStatus } from '@opensoha/contracts/gen/ts/sohaapi'
 import { useAIPageContext } from '@/features/copilot'
 import {
@@ -25,6 +25,9 @@ import { computeQueries } from '../queries'
 import '../compute.css'
 
 const { Text } = Typography
+
+type NavigableMetricItem = OverviewMetricItem & { path: string }
+type NavigableChipItem = OverviewChipItem & { path: string }
 
 function statusTone(status?: ComputeSectionStatus): OverviewTone {
   if (status === 'ok') return 'success'
@@ -67,6 +70,7 @@ export function ComputeOverviewPage() {
         : '当前无虚拟化数据',
       icon: <DesktopOutlined />,
       tone: statusTone(virtualization?.status),
+      path: '/compute/virtualization/vms',
     },
     {
       key: 'runtime-hosts',
@@ -77,6 +81,7 @@ export function ComputeOverviewPage() {
         : '当前无运行时主机数据',
       icon: <ClusterOutlined />,
       tone: statusTone(runtimes?.status),
+      path: '/compute/runtimes/hosts',
     },
     {
       key: 'containers',
@@ -87,6 +92,7 @@ export function ComputeOverviewPage() {
         : '当前无容器资源数据',
       icon: <AppstoreOutlined />,
       tone: statusTone(workloads?.status),
+      path: '/compute/runtimes/projects',
     },
     {
       key: 'active-tasks',
@@ -97,8 +103,9 @@ export function ComputeOverviewPage() {
         : '当前无任务数据',
       icon: <ClockCircleOutlined />,
       tone: statusTone(tasks?.status),
+      path: '/compute/tasks/operations',
     },
-  ] satisfies OverviewMetricItem[]
+  ] satisfies NavigableMetricItem[]
 
   const accessStats = [
     {
@@ -110,6 +117,7 @@ export function ComputeOverviewPage() {
         : '暂无连接数据',
       icon: <ApiOutlined />,
       tone: statusTone(virtualization?.status),
+      path: '/compute/virtualization/clusters',
     },
     {
       key: 'agents',
@@ -118,6 +126,7 @@ export function ComputeOverviewPage() {
       helper: agents ? `${agents.summary?.online ?? 0} 台在线` : '暂无 Agent 数据',
       icon: <ClusterOutlined />,
       tone: statusTone(agents?.status),
+      path: '/compute/runtimes/hosts',
     },
     {
       key: 'runtime-hosts',
@@ -126,8 +135,9 @@ export function ComputeOverviewPage() {
       helper: runtimes ? `${runtimes.summary?.available ?? 0} 台可用` : '暂无运行时数据',
       icon: <AppstoreOutlined />,
       tone: statusTone(runtimes?.status),
+      path: '/compute/runtimes/hosts',
     },
-  ] satisfies OverviewChipItem[]
+  ] satisfies NavigableChipItem[]
 
   const taskStats = [
     {
@@ -135,20 +145,23 @@ export function ComputeOverviewPage() {
       label: '排队',
       value: tasks?.summary?.queued ?? '-',
       tone: (tasks?.summary?.queued ?? 0) > 0 ? 'warning' : 'default',
+      path: '/compute/tasks/operations?status=queued',
     },
     {
       key: 'running',
       label: '执行中',
       value: tasks?.summary?.running ?? '-',
       tone: (tasks?.summary?.running ?? 0) > 0 ? 'success' : 'default',
+      path: '/compute/tasks/operations?status=running',
     },
     {
       key: 'failed',
       label: '失败',
       value: tasks?.summary?.failed ?? '-',
       tone: (tasks?.summary?.failed ?? 0) > 0 ? 'danger' : 'default',
+      path: '/compute/tasks/operations?status=failed',
     },
-  ] satisfies OverviewChipItem[]
+  ] satisfies NavigableChipItem[]
 
   return (
     <div className="soha-page soha-overview-page soha-compute-page soha-compute-overview-page">
@@ -161,34 +174,20 @@ export function ComputeOverviewPage() {
       ))}
 
       <div className="soha-overview-metric-grid">
-        {overviewStats.map((item) => (
-          <OverviewMetricCard
-            key={item.key}
-            label={item.label}
-            value={item.value}
-            helper={item.helper}
-            icon={item.icon}
-            tone={item.tone}
-            loading={overviewQuery.isLoading}
-          />
+        {overviewStats.map(({ key, path, ...item }) => (
+          <Link
+            aria-label={`查看${String(item.label)}`}
+            className="soha-overview-card-link"
+            key={key}
+            to={path}
+          >
+            <OverviewMetricCard {...item} loading={overviewQuery.isLoading} />
+          </Link>
         ))}
       </div>
 
       <div className="soha-overview-summary-grid">
-        <Card
-          className="soha-overview-panel-card"
-          title="资源接入"
-          extra={
-            <Button
-              type="text"
-              icon={<ArrowRightOutlined />}
-              iconPlacement="end"
-              onClick={() => navigate('/compute/access')}
-            >
-              管理接入
-            </Button>
-          }
-        >
+        <Card className="soha-overview-panel-card" title="接入状态">
           {overviewQuery.isLoading ? (
             <ManagementState bordered={false} compact kind="loading" />
           ) : virtualization || agents || runtimes ? (
@@ -198,8 +197,15 @@ export function ComputeOverviewPage() {
                 description="统一查看虚拟化连接、Agent 主机与运行时主机。"
               />
               <div className="soha-overview-chip-grid soha-compute-chip-grid">
-                {accessStats.map(({ key, ...item }) => (
-                  <OverviewChip key={key} {...item} />
+                {accessStats.map(({ key, path, ...item }) => (
+                  <Link
+                    aria-label={`查看${String(item.label)}`}
+                    className="soha-overview-card-link"
+                    key={key}
+                    to={path}
+                  >
+                    <OverviewChip {...item} />
+                  </Link>
                 ))}
               </div>
             </div>
@@ -231,8 +237,15 @@ export function ComputeOverviewPage() {
                 description="集中查看同步、构建与资源操作的执行状态。"
               />
               <div className="soha-overview-chip-grid soha-compute-chip-grid">
-                {taskStats.map(({ key, ...item }) => (
-                  <OverviewChip key={key} {...item} />
+                {taskStats.map(({ key, path, ...item }) => (
+                  <Link
+                    aria-label={`查看${String(item.label)}任务`}
+                    className="soha-overview-card-link"
+                    key={key}
+                    to={path}
+                  >
+                    <OverviewChip {...item} />
+                  </Link>
                 ))}
               </div>
             </div>

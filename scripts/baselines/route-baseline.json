@@ -44,14 +44,14 @@
     ]
   },
   "summary": {
-    "runtimePaths": 229,
-    "metadataPaths": 229,
-    "overlappingPaths": 229,
+    "runtimePaths": 228,
+    "metadataPaths": 228,
+    "overlappingPaths": 228,
     "runtimeOnlyPaths": 0,
     "metadataOnlyPaths": 0,
     "inlineJsxPaths": 0,
-    "lazyRouteLoads": 193,
-    "lazySourceModules": 191
+    "lazyRouteLoads": 192,
+    "lazySourceModules": 190
   },
   "paths": {
     "runtime": [
@@ -106,7 +106,6 @@
       "/clusters",
       "/clusters/:clusterId",
       "/compute",
-      "/compute/access",
       "/compute/overview",
       "/compute/runtimes",
       "/compute/runtimes/hosts",
@@ -337,7 +336,6 @@
       "/clusters",
       "/clusters/:clusterId",
       "/compute",
-      "/compute/access",
       "/compute/overview",
       "/compute/runtimes",
       "/compute/runtimes/hosts",
@@ -568,7 +566,6 @@
       "/clusters",
       "/clusters/:clusterId",
       "/compute",
-      "/compute/access",
       "/compute/overview",
       "/compute/runtimes",
       "/compute/runtimes/hosts",
@@ -957,11 +954,6 @@
         "exportName": "ClustersPage",
         "moduleExport": "ClustersPage",
         "source": "@/features/platform/clusters/list-page"
-      },
-      {
-        "exportName": "ComputeAccessPage",
-        "moduleExport": "ComputeAccessPage",
-        "source": "@/features/compute/access/page"
       },
       {
         "exportName": "ComputeBuildTasksPage",
@@ -1730,7 +1722,6 @@
       "@/features/auth/login-page",
       "@/features/auth/oidc-callback-page",
       "@/features/auth/user-profile-page",
-      "@/features/compute/access/page",
       "@/features/compute/overview/page",
       "@/features/compute/tasks/build-page",
       "@/features/compute/tasks/operations-page",
@@ -1923,7 +1914,6 @@
       "@/features/auth/login-page": ["LoginPage"],
       "@/features/auth/oidc-callback-page": ["OIDCCallbackPage", "OIDCCallbackPage"],
       "@/features/auth/user-profile-page": ["UserProfilePage"],
-      "@/features/compute/access/page": ["ComputeAccessPage"],
       "@/features/compute/overview/page": ["ComputeOverviewPage"],
       "@/features/compute/tasks/build-page": ["ComputeBuildTasksPage"],
       "@/features/compute/tasks/operations-page": ["ComputeOperationRecordsPage"],

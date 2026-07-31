@@ -173,29 +173,6 @@
       }
     },
     {
-      "source": "src/features/compute/access/page.tsx",
-      "file": "assets/page-Cke_6bKJ.js",
-      "incremental": {
-        "rawBytes": 301214,
-        "gzipBytes": 99078,
-        "rawKiB": 294.15,
-        "gzipKiB": 96.76
-      },
-      "ownChunk": {
-        "rawBytes": 5643,
-        "gzipBytes": 2551,
-        "rawKiB": 5.51,
-        "gzipKiB": 2.49
-      },
-      "heavyRuntimes": {
-        "flow": [],
-        "vchart": [],
-        "monaco": [],
-        "xterm": [],
-        "novnc": []
-      }
-    },
-    {
       "source": "src/features/delivery/applications/detail-page.tsx",
       "file": "assets/detail-page-u6EAu0yn.js",
       "incremental": {

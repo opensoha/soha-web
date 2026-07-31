@@ -27,6 +27,7 @@ import {
   PlusOutlined,
   PoweroffOutlined,
   ReloadOutlined,
+  SyncOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
@@ -214,7 +215,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
     includeServices: false,
   })
   const queryClient = useQueryClient()
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
   const projectsQuery = useQuery(dockerQueries.projects(filters, dockerModuleEnabled))
   const tasksQuery = useQuery({
     ...computeQueries.tasks({ domain: 'container_runtime', limit: 100 }),
@@ -258,6 +259,19 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
       refreshDocker(queryClient)
     },
   })
+  const confirmRedeploy = (project: DockerProject) => {
+    const isGitBuild = project.sourceKind === 'git_dockerfile'
+    modal.confirm({
+      title: '销毁并重建应用？',
+      content: isGitBuild
+        ? '将拉取最新代码并构建镜像，成功后删除现有容器并重新启动。数据卷不会删除。'
+        : '将拉取最新镜像，成功后删除现有容器并重新启动。数据卷不会删除。',
+      okText: '销毁重建',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: () => deployMutation.mutateAsync({ id: project.id, action: 'redeploy' }),
+    })
+  }
   const serviceActionMutation = useMutation({
     mutationFn: ({ id, action }: { id: string; action: string }) =>
       dockerApi.serviceAction(id, action),
@@ -444,7 +458,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
       align: 'center',
       className: 'soha-table-actions-column',
       fixed: 'right',
-      width: 160,
+      width: 220,
       render: (_value, record) => {
         if (record.kind === 'service' && record.service) {
           return (
@@ -506,6 +520,17 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                 icon={<PoweroffOutlined />}
                 loading={deployMutation.isPending}
                 onClick={() => deployMutation.mutate({ id: project.id, action: 'down' })}
+              />
+            ) : null}
+            {canDeployProjects && isSingleContainerProject(project) ? (
+              <ManagementIconButton
+                aria-label="销毁重建应用"
+                size="small"
+                tooltip="销毁重建"
+                danger
+                icon={<SyncOutlined />}
+                loading={deployMutation.isPending}
+                onClick={() => confirmRedeploy(project)}
               />
             ) : null}
             <Link to={`/compute/runtimes/projects/${project.id}`}>
@@ -676,8 +701,8 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
         onFinish={(values) => saveMutation.mutate(values)}
         steps={[
           {
-            title: '项目配置',
-            fieldNames: ['name', 'hostId'],
+            title: '基础信息',
+            fieldNames: ['name', 'hostId', 'slug', 'description'],
             children: (
               <>
                 <Form.Item name="name" label="名称" rules={[{ required: true }]}>
@@ -690,32 +715,6 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                   <Form.Item name="slug" label="Slug">
                     <Input />
                   </Form.Item>
-                  <Form.Item name="environment" label="环境">
-                    <Input />
-                  </Form.Item>
-                  <Form.Item name="owner" label="负责人">
-                    <Input />
-                  </Form.Item>
-                  <Form.Item name="team" label="团队">
-                    <Input />
-                  </Form.Item>
-                  <Form.Item name="status" label="状态">
-                    <Select
-                      options={['draft', 'defined', 'running', 'stopped', 'failed'].map((item) => ({
-                        value: item,
-                        label: item,
-                      }))}
-                    />
-                  </Form.Item>
-                  <Form.Item name="desiredState" label="目标态">
-                    <Select
-                      allowClear
-                      options={['running', 'stopped'].map((item) => ({ value: item, label: item }))}
-                    />
-                  </Form.Item>
-                  <Form.Item name="ttlSeconds" label="TTL 秒数">
-                    <InputNumber min={0} className="w-full" />
-                  </Form.Item>
                 </div>
                 <Form.Item name="description" label="描述">
                   <Input />
@@ -724,49 +723,87 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
             ),
           },
           {
-            title: '部署来源',
-            fieldNames: ['sourceKind', 'composeContent'],
+            title: '项目设置',
+            fieldNames: ['environment', 'owner', 'team', 'status', 'desiredState', 'ttlSeconds'],
             children: (
-              <>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <Form.Item name="sourceKind" label="来源类型">
-                    <Select
-                      options={['inline_compose', 'git', 'template'].map((item) => ({
-                        value: item,
-                        label: item,
-                      }))}
-                    />
-                  </Form.Item>
-                  <Form.Item name="sourceRef" label="来源引用">
-                    <Input />
-                  </Form.Item>
-                  <Form.Item name="templateId" label="模板 ID">
-                    <Input />
-                  </Form.Item>
-                </div>
-                <Tabs
-                  items={[
-                    {
-                      key: 'compose',
-                      label: 'Compose',
-                      children: (
-                        <Form.Item name="composeContent" rules={[{ required: true }]}>
-                          <TextArea rows={16} spellCheck={false} />
-                        </Form.Item>
-                      ),
-                    },
-                    {
-                      key: 'env',
-                      label: '.env',
-                      children: (
-                        <Form.Item name="envContent">
-                          <TextArea rows={12} spellCheck={false} />
-                        </Form.Item>
-                      ),
-                    },
-                  ]}
-                />
-              </>
+              <div className="grid gap-3 md:grid-cols-2">
+                <Form.Item name="environment" label="环境">
+                  <Input />
+                </Form.Item>
+                <Form.Item name="owner" label="负责人">
+                  <Input />
+                </Form.Item>
+                <Form.Item name="team" label="团队">
+                  <Input />
+                </Form.Item>
+                <Form.Item name="status" label="状态">
+                  <Select
+                    options={['draft', 'defined', 'running', 'stopped', 'failed'].map((item) => ({
+                      value: item,
+                      label: item,
+                    }))}
+                  />
+                </Form.Item>
+                <Form.Item name="desiredState" label="目标态">
+                  <Select
+                    allowClear
+                    options={['running', 'stopped'].map((item) => ({ value: item, label: item }))}
+                  />
+                </Form.Item>
+                <Form.Item name="ttlSeconds" label="TTL 秒数">
+                  <InputNumber min={0} className="w-full" />
+                </Form.Item>
+              </div>
+            ),
+          },
+          {
+            title: '部署来源',
+            fieldNames: ['sourceKind', 'sourceRef', 'templateId'],
+            children: (
+              <div className="grid gap-3 md:grid-cols-2">
+                <Form.Item name="sourceKind" label="来源类型">
+                  <Select
+                    options={['inline_compose', 'git', 'template'].map((item) => ({
+                      value: item,
+                      label: item,
+                    }))}
+                  />
+                </Form.Item>
+                <Form.Item name="sourceRef" label="来源引用">
+                  <Input />
+                </Form.Item>
+                <Form.Item name="templateId" label="模板 ID">
+                  <Input />
+                </Form.Item>
+              </div>
+            ),
+          },
+          {
+            title: 'Compose 配置',
+            fieldNames: ['composeContent', 'envContent'],
+            children: (
+              <Tabs
+                items={[
+                  {
+                    key: 'compose',
+                    label: 'Compose',
+                    children: (
+                      <Form.Item name="composeContent" rules={[{ required: true }]}>
+                        <TextArea rows={16} spellCheck={false} />
+                      </Form.Item>
+                    ),
+                  },
+                  {
+                    key: 'env',
+                    label: '.env',
+                    children: (
+                      <Form.Item name="envContent">
+                        <TextArea rows={12} spellCheck={false} />
+                      </Form.Item>
+                    ),
+                  },
+                ]}
+              />
             ),
           },
         ]}
@@ -1176,7 +1213,8 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                     key: 'host',
                     label: 'Docker 主机',
                     children:
-                      hostOptions.find((item) => item.value === containerReviewValues.hostId)?.label ||
+                      hostOptions.find((item) => item.value === containerReviewValues.hostId)
+                        ?.label ||
                       containerReviewValues.hostId ||
                       '-',
                   },
