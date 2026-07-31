@@ -36,6 +36,27 @@ function getRoute(id: string): RouteMeta {
 }
 
 describe('access route authorization', () => {
+  it('exposes Logs against an older menu snapshot without weakening its permission boundary', () => {
+    const allowed = buildSnapshot({
+      permissionKeys: ['workspace.resource.view', 'observe.monitoring.view'],
+      visibleMenuIds: ['monitoring-workbench'],
+      visibleMenus: [{ id: 'monitoring-workbench', path: '/monitoring-workbench' }],
+    })
+    const missingPermission = buildSnapshot({
+      permissionKeys: ['workspace.resource.view'],
+      visibleMenuIds: ['monitoring-workbench'],
+      visibleMenus: [{ id: 'monitoring-workbench', path: '/monitoring-workbench' }],
+    })
+
+    expect(canAccessRoute(getRoute('monitoring-workbench-logs'), allowed)).toBe(true)
+    expect(canAccessRoute(getRoute('monitoring-workbench-logs'), missingPermission)).toBe(false)
+    expect(
+      filterSidebarNavByWorkbench(getAccessibleSidebarNav(allowed), 'monitoring').map(
+        (item) => item.id,
+      ),
+    ).toEqual(['monitoring-workbench-logs'])
+  })
+
   it('requires the enabled internal workbench menu binding for the portal', () => {
     const snapshot = buildSnapshot({
       permissionKeys: ['identity.portal.view'],
@@ -951,6 +972,7 @@ describe('access route authorization', () => {
     ])
     expect(filterSidebarNavByWorkbench(resourceNav, 'monitoring').map((item) => item.id)).toEqual([
       'monitoring-workbench-overview',
+      'monitoring-workbench-logs',
     ])
   })
 

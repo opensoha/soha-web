@@ -139,6 +139,32 @@ const FRONTEND_MENU_COMPATIBILITY: ReadonlyArray<
     permissionKey: 'ai.operations.view',
     requiredParentId: 'ai-workbench',
   },
+  {
+    id: 'monitoring-workbench-logs',
+    parentId: 'monitoring-workbench',
+    path: '/monitoring-workbench/logs',
+    labelZh: '日志',
+    labelEn: 'Logs',
+    iconKey: 'history',
+    section: 'ops',
+    sortOrder: 62,
+    enabled: true,
+    permissionKey: 'observe.monitoring.view',
+    requiredParentId: 'monitoring-workbench',
+  },
+  {
+    id: 'monitoring-workbench-log-data-sources',
+    parentId: 'monitoring-workbench',
+    path: '/monitoring-workbench/log-data-sources',
+    labelZh: '日志数据源',
+    labelEn: 'Log Data Sources',
+    iconKey: 'server',
+    section: 'ops',
+    sortOrder: 63,
+    enabled: true,
+    permissionKey: 'observe.log-data-sources.view',
+    requiredParentId: 'monitoring-workbench',
+  },
 ]
 
 function getCompatibleVisibleMenus(snapshot?: PermissionSnapshot | null): VisibleMenu[] {

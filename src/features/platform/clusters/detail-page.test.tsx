@@ -39,6 +39,22 @@ const apiGetMock = vi.hoisted(() =>
         },
       }
     }
+    if (path.endsWith('/observability/logging')) {
+      return {
+        data: {
+          clusterId: 'cluster-a',
+          mode: 'runtime_only',
+          status: 'disabled',
+          namespace: '',
+          releaseName: '',
+          collector: { status: 'unknown', message: 'managed collection is not enabled' },
+          backend: { status: 'unknown', message: 'managed collection is not enabled' },
+          endToEnd: { status: 'unknown', message: 'managed collection is not enabled' },
+          historyPreserved: true,
+          updatedAt: '2026-07-31T00:00:00Z',
+        },
+      }
+    }
     return {
       data: [
         {
@@ -143,7 +159,10 @@ describe('cluster detail page', () => {
 
     expect(apiGetMock).toHaveBeenCalledWith('/clusters/cluster-a/detail')
     expect(apiGetMock).toHaveBeenCalledWith('/clusters/cluster-a/infrastructure/nodes')
+    expect(apiGetMock).toHaveBeenCalledWith('/clusters/cluster-a/observability/logging')
     expect(container.textContent).toContain('集群详情: Primary')
+    expect(container.textContent).toContain('日志采集')
+    expect(container.textContent).toContain('runtime_only')
     expect(container.textContent).toContain('node-a')
   })
 })

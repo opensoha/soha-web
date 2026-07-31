@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import '../applications/styles.css'
 import { App, Button, Card, Modal, Space, Tabs, Tag, Typography } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
@@ -14,9 +14,9 @@ import type { DeploymentDetail, Pod } from '../types'
 
 const { Text } = Typography
 
-const PodLogViewer = lazy(async () => {
-  const module = await import('@/components/pod-log-viewer')
-  return { default: module.PodLogViewer }
+const LogExplorer = lazy(async () => {
+  const module = await import('@/features/observability')
+  return { default: module.LogExplorer }
 })
 
 const PodTerminal = lazy(async () => {
@@ -104,6 +104,15 @@ export function ApplicationWorkloadDetailPage() {
   }, [podList, selectedPodName])
 
   const selectedPod = podList.find((item) => item.name === selectedPodName) ?? podList[0]
+  const deliveryLogTarget = useMemo(
+    () => ({
+      kind: 'delivery' as const,
+      applicationId: applicationId ?? '',
+      environmentId: applicationEnvironmentId ?? '',
+      namespace: detail?.workload.namespace ?? '',
+    }),
+    [applicationEnvironmentId, applicationId, detail?.workload.namespace],
+  )
 
   useAIPageContext({
     sourceWorkbench: 'delivery',
@@ -239,12 +248,17 @@ export function ApplicationWorkloadDetailPage() {
     {
       key: 'logs',
       label: '日志',
-      children: selectedPod ? (
+      children: detail ? (
         <Suspense fallback={<ManagementState bordered={false} compact kind="loading" />}>
-          <PodLogViewer
-            clusterId={detail.workload.clusterId}
+          <LogExplorer
+            autoStart
+            embedded
             namespace={detail.workload.namespace}
-            podName={selectedPod.name}
+            target={deliveryLogTarget}
+            preset={{
+              workloadKind: detail.workload.workloadKind,
+              workloadName: detail.workload.workloadName,
+            }}
           />
         </Suspense>
       ) : (
@@ -252,7 +266,7 @@ export function ApplicationWorkloadDetailPage() {
           bordered={false}
           compact
           kind="select-scope"
-          description="请选择一个 Pod"
+          description="正在读取工作负载范围"
         />
       ),
     },

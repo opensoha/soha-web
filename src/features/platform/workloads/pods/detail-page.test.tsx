@@ -103,9 +103,9 @@ vi.mock('@/components/resource-metrics-panel', () => {
   }
 })
 
-vi.mock('@/components/pod-log-viewer', () => {
+vi.mock('@/features/observability', () => {
   testState.runtimeLoads.logs += 1
-  return { PodLogViewer: () => <div data-testid="logs-panel">logs-panel</div> }
+  return { LogExplorer: () => <div data-testid="logs-panel">logs-panel</div> }
 })
 
 vi.mock('@/components/pod-terminal', () => {

@@ -1,0 +1,123 @@
+.soha-log-explorer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.soha-log-query-card.ant-card,
+.soha-log-results-card.ant-card {
+  border-radius: var(--soha-radius);
+}
+
+.soha-log-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 0 12px;
+}
+
+.soha-log-filter-grid .ant-form-item {
+  min-width: 0;
+  margin-bottom: 12px;
+}
+
+.soha-log-results-card .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.soha-log-results-toolbar {
+  min-height: 32px;
+}
+
+.soha-log-toolbar-spacer {
+  flex: 1 1 24px;
+}
+
+.soha-log-inline-alert.ant-alert {
+  padding-block: 7px;
+}
+
+.soha-aggregate-log-shell {
+  height: clamp(440px, 58vh, 760px);
+  min-height: 440px;
+  overflow: auto;
+  border: 1px solid var(--soha-terminal-border);
+  border-radius: var(--soha-radius);
+  color: var(--soha-terminal-fg);
+  background: var(--soha-terminal-bg);
+}
+
+.soha-aggregate-log-row {
+  display: grid;
+  grid-template-columns: 174px 220px minmax(480px, 1fr);
+  min-width: 900px;
+  border-bottom: 1px solid var(--soha-terminal-row-divider);
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    Liberation Mono,
+    monospace;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.soha-aggregate-log-row > span {
+  min-width: 0;
+  padding: 5px 10px;
+}
+
+.soha-aggregate-log-time,
+.soha-aggregate-log-source {
+  overflow: hidden;
+  color: var(--soha-terminal-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.soha-aggregate-log-source {
+  border-inline: 1px solid var(--soha-terminal-row-divider);
+}
+
+.soha-aggregate-log-message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.soha-aggregate-log-empty {
+  display: grid;
+  min-height: 180px;
+  place-items: center;
+  padding: 24px;
+  color: var(--soha-terminal-muted);
+  text-align: center;
+}
+
+@media (max-width: 1080px) {
+  .soha-log-filter-grid {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .soha-log-filter-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .soha-log-query-card .ant-card-head-wrapper {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+    padding-block: 10px;
+  }
+
+  .soha-aggregate-log-shell {
+    height: 52vh;
+    min-height: 360px;
+  }
+}

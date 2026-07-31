@@ -3,6 +3,7 @@ import { observabilityAlertRoutes } from './alerts/routes'
 import { observabilityEventRoutes } from './events/routes'
 import { observabilityHealingRoutes } from './healing/routes'
 import { observabilityIntegrationRoutes } from './integrations/routes'
+import { observabilityLogRoutes } from './logs/routes'
 import { observabilityNotificationRoutes } from './notifications/routes'
 import { observabilityOncallRoutes } from './oncall/routes'
 import { observabilityOverviewRoutes } from './overview/routes'
@@ -181,6 +182,7 @@ export const observabilityCompatibilityRoutes = defineRoutes([
 export const observabilityRouteManifests = [
   observabilityParentRoutes,
   observabilityOverviewRoutes,
+  observabilityLogRoutes,
   observabilityIntegrationRoutes,
   observabilityRuleRoutes,
   observabilityAlertRoutes,

@@ -1,5 +1,20 @@
 import { mutationOptions, type QueryClient } from '@tanstack/react-query'
-import { createCluster, deleteCluster, updateCluster } from './api'
+import type {
+  LogCollectionDisableInput,
+  LogCollectionEnableInput,
+  LogCollectionPlan,
+  LogCollectionPreflightInput,
+  LogCollectionState,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+import type { ScopeKey } from '@/types'
+import {
+  createCluster,
+  deleteCluster,
+  disableClusterLogCollection,
+  enableClusterLogCollection,
+  preflightClusterLogCollection,
+  updateCluster,
+} from './api'
 import { clusterKeys } from './keys'
 import type {
   ClusterPayload,
@@ -56,5 +71,36 @@ export const clusterMutations = {
           ]),
         ])
       },
+    }),
+  preflightLogCollection: () =>
+    mutationOptions<
+      LogCollectionPlan,
+      Error,
+      { scope: ScopeKey; input: LogCollectionPreflightInput }
+    >({
+      mutationKey: [...clusterKeys.all, 'log-collection', 'preflight'] as const,
+      mutationFn: preflightClusterLogCollection,
+    }),
+  enableLogCollection: (queryClient: QueryClient) =>
+    mutationOptions<
+      LogCollectionState,
+      Error,
+      { scope: ScopeKey; input: LogCollectionEnableInput }
+    >({
+      mutationKey: [...clusterKeys.all, 'log-collection', 'enable'] as const,
+      mutationFn: enableClusterLogCollection,
+      onSuccess: (_data, variables) =>
+        queryClient.invalidateQueries({ queryKey: clusterKeys.logCollection(variables.scope) }),
+    }),
+  disableLogCollection: (queryClient: QueryClient) =>
+    mutationOptions<
+      LogCollectionState,
+      Error,
+      { scope: ScopeKey; input: LogCollectionDisableInput }
+    >({
+      mutationKey: [...clusterKeys.all, 'log-collection', 'disable'] as const,
+      mutationFn: disableClusterLogCollection,
+      onSuccess: (_data, variables) =>
+        queryClient.invalidateQueries({ queryKey: clusterKeys.logCollection(variables.scope) }),
     }),
 }

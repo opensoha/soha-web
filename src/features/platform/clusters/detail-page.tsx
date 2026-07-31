@@ -11,6 +11,7 @@ import { toScopeKey } from '@/types'
 import type { TableColumnsType } from 'antd'
 import { clusterTypeOf, formatClusterType } from './presentation'
 import { clusterQueries } from './queries'
+import { LogCollectionCard } from './log-collection-card'
 import type { Node } from './types'
 import './styles.css'
 
@@ -304,6 +305,13 @@ export function ClusterDetailPage() {
             },
           ]}
         />
+      </Card>
+
+      <Card
+        className="soha-detail-card"
+        title={localeCode === 'zh_CN' ? '日志采集' : 'Log Collection'}
+      >
+        <LogCollectionCard scope={detailScope} localeCode={localeCode} />
       </Card>
 
       <Card

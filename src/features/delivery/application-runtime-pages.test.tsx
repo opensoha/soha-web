@@ -516,8 +516,8 @@ vi.mock('@/features/auth/permission-snapshot', () => ({
   }),
 }))
 
-vi.mock('@/components/pod-log-viewer', () => ({
-  PodLogViewer: () => null,
+vi.mock('@/features/observability', () => ({
+  LogExplorer: () => null,
 }))
 
 vi.mock('@/components/pod-terminal', () => ({

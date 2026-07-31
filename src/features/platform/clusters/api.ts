@@ -1,6 +1,14 @@
 import { api } from '@/services/api-client'
 import type { ApiResponse, ClusterCapabilityMatrixEntry, ScopeKey } from '@/types'
 import type {
+  LogCollectionDisableInput,
+  LogCollectionEnableInput,
+  LogCollectionPlan,
+  LogCollectionPreflightInput,
+  LogCollectionState,
+  ObservabilityDataSource,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+import type {
   Cluster,
   ClusterDetail,
   ClusterPayload,
@@ -38,6 +46,62 @@ export async function getClusterDetail(target: ClusterTarget): Promise<ClusterDe
 export async function listClusterNodes(target: ClusterTarget): Promise<Node[]> {
   const response = await api.get<ApiResponse<Node[]>>(
     clusterPath(target.scope, '/infrastructure/nodes'),
+  )
+  return response.data ?? []
+}
+
+export async function getClusterLogCollection(scope: ScopeKey): Promise<LogCollectionState> {
+  const response = await api.get<ApiResponse<LogCollectionState>>(
+    clusterPath(scope, '/observability/logging'),
+  )
+  return response.data
+}
+
+export async function preflightClusterLogCollection({
+  scope,
+  input,
+}: {
+  scope: ScopeKey
+  input: LogCollectionPreflightInput
+}): Promise<LogCollectionPlan> {
+  const response = await api.post<ApiResponse<LogCollectionPlan>>(
+    clusterPath(scope, '/observability/logging/preflight'),
+    input,
+  )
+  return response.data
+}
+
+export async function enableClusterLogCollection({
+  scope,
+  input,
+}: {
+  scope: ScopeKey
+  input: LogCollectionEnableInput
+}): Promise<LogCollectionState> {
+  const response = await api.post<ApiResponse<LogCollectionState>>(
+    clusterPath(scope, '/observability/logging/enable'),
+    input,
+  )
+  return response.data
+}
+
+export async function disableClusterLogCollection({
+  scope,
+  input,
+}: {
+  scope: ScopeKey
+  input: LogCollectionDisableInput
+}): Promise<LogCollectionState> {
+  const response = await api.post<ApiResponse<LogCollectionState>>(
+    clusterPath(scope, '/observability/logging/disable'),
+    input,
+  )
+  return response.data
+}
+
+export async function listClusterLogDataSources(): Promise<ObservabilityDataSource[]> {
+  const response = await api.get<ApiResponse<ObservabilityDataSource[]>>(
+    '/observability/data-sources',
   )
   return response.data ?? []
 }

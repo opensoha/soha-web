@@ -593,6 +593,23 @@
 }
 
 @media (max-width: 640px) {
+  .soha-management-detail-header {
+    flex-direction: column;
+  }
+
+  .soha-management-detail-header-main,
+  .soha-management-detail-header-actions {
+    width: 100%;
+  }
+
+  .soha-management-detail-header-actions {
+    justify-content: flex-start;
+  }
+
+  .soha-management-detail-header-actions > .ant-space {
+    flex-wrap: wrap;
+  }
+
   .soha-management-table-shell .soha-admin-table-header {
     align-items: flex-start;
     padding: 16px;

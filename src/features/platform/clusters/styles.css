@@ -105,6 +105,10 @@
   margin-top: 12px;
 }
 
+.soha-log-collection-actions {
+  margin-top: 16px;
+}
+
 @media (min-width: 1280px) {
   .soha-cluster-detail-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

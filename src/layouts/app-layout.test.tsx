@@ -504,6 +504,40 @@ describe('app layout workspace navigation', () => {
     expect(testState.prefs.setCurrentWorkspace).toHaveBeenCalledWith('application')
   })
 
+  it('shows the namespace scope selector on the monitoring Logs page', async () => {
+    const container = await renderWithProviders('/monitoring-workbench/logs', {
+      permissionKeys: ['workspace.resource.view', 'observe.monitoring.view'],
+      visibleMenuIds: ['monitoring-workbench', 'monitoring-workbench-logs'],
+      visibleMenus: [
+        {
+          id: 'monitoring-workbench',
+          path: '/monitoring-workbench',
+          labelZh: '监控工作台',
+          labelEn: 'Monitoring Workbench',
+          iconKey: 'gauge',
+          section: 'ops',
+          sortOrder: 60,
+          enabled: true,
+        },
+        {
+          id: 'monitoring-workbench-logs',
+          parentId: 'monitoring-workbench',
+          path: '/monitoring-workbench/logs',
+          labelZh: '日志',
+          labelEn: 'Logs',
+          iconKey: 'history',
+          section: 'ops',
+          sortOrder: 62,
+          enabled: true,
+        },
+      ],
+    })
+
+    expect(container.querySelector('[data-testid="platform-scope-trigger"]')?.textContent).toBe(
+      'namespace',
+    )
+  })
+
   it('switches the left nav into system workspace mode while visiting system pages', async () => {
     const container = await renderWithProviders('/system/menus')
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Alert, App, Button, Card, Descriptions, Input, Select, Space, Tag, Typography } from 'antd'
 import { PlayCircleOutlined, ReloadOutlined, SendOutlined } from '@ant-design/icons'
 import type { TableColumnsType } from 'antd'
@@ -14,8 +14,13 @@ import { deliveryMutations } from '../mutations'
 import { deliveryQueries } from '../queries'
 import type { ApplicationEnvironment, WorkflowRun } from '../types'
 
-const { Text } = Typography
+const { Text, Title } = Typography
 type ColumnProps<T> = TableColumnsType<T>[number]
+
+const LogExplorer = lazy(async () => {
+  const module = await import('@/features/observability')
+  return { default: module.LogExplorer }
+})
 
 interface ReleaseRecord {
   id: string
@@ -182,6 +187,15 @@ export function ApplicationEnvironmentDetailPage() {
     () =>
       binding?.targets?.find((target) => target.id === selectedTargetId) ?? binding?.targets?.[0],
     [binding, selectedTargetId],
+  )
+  const deliveryLogTarget = useMemo(
+    () => ({
+      kind: 'delivery' as const,
+      applicationId: binding?.applicationId ?? '',
+      environmentId: binding?.id ?? '',
+      namespace: '',
+    }),
+    [binding?.applicationId, binding?.id],
   )
 
   useEffect(() => {
@@ -539,6 +553,14 @@ export function ApplicationEnvironmentDetailPage() {
           ]}
         />
       </Card>
+      <section aria-labelledby="delivery-environment-logs-title">
+        <Title id="delivery-environment-logs-title" level={4}>
+          {localeCode === 'zh_CN' ? '环境日志' : 'Environment Logs'}
+        </Title>
+        <Suspense fallback={<ManagementState bordered={false} compact kind="loading" />}>
+          <LogExplorer autoStart embedded target={deliveryLogTarget} />
+        </Suspense>
+      </section>
       <Card
         className="soha-management-panel-card"
         title={localeCode === 'zh_CN' ? '交付动作' : 'Delivery Actions'}

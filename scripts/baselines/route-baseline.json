@@ -20,6 +20,7 @@
       "src/features/observability/events/routes.ts",
       "src/features/observability/healing/routes.ts",
       "src/features/observability/integrations/routes.ts",
+      "src/features/observability/logs/routes.ts",
       "src/features/observability/notifications/routes.ts",
       "src/features/observability/oncall/routes.ts",
       "src/features/observability/overview/routes.ts",
@@ -44,14 +45,14 @@
     ]
   },
   "summary": {
-    "runtimePaths": 228,
-    "metadataPaths": 228,
-    "overlappingPaths": 228,
+    "runtimePaths": 230,
+    "metadataPaths": 230,
+    "overlappingPaths": 230,
     "runtimeOnlyPaths": 0,
     "metadataOnlyPaths": 0,
     "inlineJsxPaths": 0,
-    "lazyRouteLoads": 192,
-    "lazySourceModules": 190
+    "lazyRouteLoads": 194,
+    "lazySourceModules": 192
   },
   "paths": {
     "runtime": [
@@ -173,6 +174,8 @@
       "/monitoring-workbench/events",
       "/monitoring-workbench/healing",
       "/monitoring-workbench/integrations",
+      "/monitoring-workbench/log-data-sources",
+      "/monitoring-workbench/logs",
       "/monitoring-workbench/notifications",
       "/monitoring-workbench/oncall",
       "/monitoring-workbench/oncall/settings",
@@ -403,6 +406,8 @@
       "/monitoring-workbench/events",
       "/monitoring-workbench/healing",
       "/monitoring-workbench/integrations",
+      "/monitoring-workbench/log-data-sources",
+      "/monitoring-workbench/logs",
       "/monitoring-workbench/notifications",
       "/monitoring-workbench/oncall",
       "/monitoring-workbench/oncall/settings",
@@ -633,6 +638,8 @@
       "/monitoring-workbench/events",
       "/monitoring-workbench/healing",
       "/monitoring-workbench/integrations",
+      "/monitoring-workbench/log-data-sources",
+      "/monitoring-workbench/logs",
       "/monitoring-workbench/notifications",
       "/monitoring-workbench/oncall",
       "/monitoring-workbench/oncall/settings",
@@ -1276,6 +1283,11 @@
         "source": "@/features/settings/system-integrations/legacy-detail-redirect"
       },
       {
+        "exportName": "LogDataSourcesPage",
+        "moduleExport": "LogDataSourcesPage",
+        "source": "@/features/observability/logs/data-sources-page"
+      },
+      {
         "exportName": "LoginPage",
         "moduleExport": "LoginPage",
         "source": "@/features/auth/login-page"
@@ -1284,6 +1296,11 @@
         "exportName": "LoginSettingsPage",
         "moduleExport": "LoginSettingsPage",
         "source": "@/features/settings/identity/page"
+      },
+      {
+        "exportName": "LogsPage",
+        "moduleExport": "LogsPage",
+        "source": "@/features/observability/logs/page"
       },
       {
         "exportName": "ManifestLibraryPage",
@@ -1787,6 +1804,8 @@
       "@/features/observability/events/page",
       "@/features/observability/healing/page",
       "@/features/observability/integrations/page",
+      "@/features/observability/logs/data-sources-page",
+      "@/features/observability/logs/page",
       "@/features/observability/notifications/page",
       "@/features/observability/oncall/board-page",
       "@/features/observability/oncall/settings-page",
@@ -1982,6 +2001,8 @@
       "@/features/observability/events/page": ["EventsPage"],
       "@/features/observability/healing/page": ["HealingPage"],
       "@/features/observability/integrations/page": ["AlertIntegrationsPage"],
+      "@/features/observability/logs/data-sources-page": ["LogDataSourcesPage"],
+      "@/features/observability/logs/page": ["LogsPage"],
       "@/features/observability/notifications/page": ["NotificationsPage"],
       "@/features/observability/oncall/board-page": ["OnCallBoardPage"],
       "@/features/observability/oncall/settings-page": ["OnCallSettingsPage"],
@@ -2165,5 +2186,5 @@
       "@/features/virtualization/virtual-machines/list-page": ["VirtualizationVmsPage"]
     }
   },
-  "generatedAt": "2026-07-29T17:12:24.178Z"
+  "generatedAt": "2026-07-31T16:24:02.264Z"
 }

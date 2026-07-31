@@ -37,9 +37,9 @@ import '@/features/platform/workloads/styles.css'
 
 const { Link, Text } = Typography
 
-const PodLogViewer = lazy(async () => {
-  const mod = await import('@/components/pod-log-viewer')
-  return { default: mod.PodLogViewer }
+const LogExplorer = lazy(async () => {
+  const mod = await import('@/features/observability')
+  return { default: mod.LogExplorer }
 })
 
 const PodTerminal = lazy(async () => {
@@ -137,8 +137,6 @@ export function PodDetailPage() {
   const [metricsRangeMinutes, setMetricsRangeMinutes] = useState(60)
   const podLogsCapability = useClusterCapability('pod.logs', localeCode)
   const podExecCapability = useClusterCapability('pod.exec', localeCode)
-  const logsStreamingDisabledReason =
-    podLogsCapability.status === 'partial' ? podLogsCapability.reason : undefined
   const terminalPartialReason =
     localeCode === 'zh_CN'
       ? '当前连接模式仅支持非交互式 exec，暂不支持交互终端。'
@@ -576,15 +574,15 @@ export function PodDetailPage() {
         />
       ) : (
         <Suspense fallback={<Spin size="large" />}>
-          <PodLogViewer
+          <LogExplorer
+            autoStart
             clusterId={clusterId}
+            embedded
             namespace={detailNamespace}
-            podName={podName}
-            container={container || undefined}
-            active={activeTabKey === 'logs'}
-            containerOptions={containerOptions}
-            onContainerChange={setContainer}
-            streamingDisabledReason={logsStreamingDisabledReason}
+            preset={{
+              podNames: [podName],
+              containers: container ? [container] : undefined,
+            }}
           />
         </Suspense>
       ),

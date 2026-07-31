@@ -916,8 +916,8 @@ export function AppLayout() {
         ? systemSelectedKeys
         : businessSelectedKeys
   const primaryOpenKeys = isSystemWorkspaceRoute ? systemOpenKeys : businessOpenKeys
-  const platformHeaderScopeMode =
-    activeWorkbenchId === 'platform' &&
+  const resourceHeaderScopeMode =
+    (activeWorkbenchId === 'platform' || activeWorkbenchId === 'monitoring') &&
     (currentScopeMode === 'cluster' || currentScopeMode === 'namespace')
       ? currentScopeMode
       : 'hidden'
@@ -1088,9 +1088,9 @@ export function AppLayout() {
                   />
                 </div>
               </div>
-              {platformHeaderScopeMode !== 'hidden' && !isAccountUtilityRoute ? (
+              {resourceHeaderScopeMode !== 'hidden' && !isAccountUtilityRoute ? (
                 <div className="soha-header-context">
-                  <PlatformScopeTrigger scopeMode={platformHeaderScopeMode} />
+                  <PlatformScopeTrigger scopeMode={resourceHeaderScopeMode} />
                 </div>
               ) : null}
               <div className="soha-header-right">

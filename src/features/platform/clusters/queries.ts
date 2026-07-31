@@ -1,6 +1,12 @@
 import { queryOptions } from '@tanstack/react-query'
 import type { ScopeKey } from '@/types'
-import { getClusterDetail, listClusterNodes, listClusters } from './api'
+import {
+  getClusterDetail,
+  getClusterLogCollection,
+  listClusterLogDataSources,
+  listClusterNodes,
+  listClusters,
+} from './api'
 import { clusterKeys } from './keys'
 import type { Cluster, ClusterDetail, Node } from './types'
 
@@ -25,5 +31,19 @@ export const clusterQueries = {
       queryKey: clusterKeys.nodes(scope),
       queryFn: () => listClusterNodes({ scope }),
       enabled: hasCluster(scope),
+    }),
+  logCollection: (scope: ScopeKey) =>
+    queryOptions({
+      queryKey: clusterKeys.logCollection(scope),
+      queryFn: () => getClusterLogCollection(scope),
+      enabled: hasCluster(scope),
+      refetchInterval: (query) =>
+        ['installing', 'stopping'].includes(query.state.data?.status ?? '') ? 2_000 : false,
+    }),
+  logDataSources: (enabled = true) =>
+    queryOptions({
+      queryKey: clusterKeys.logDataSources(),
+      queryFn: listClusterLogDataSources,
+      enabled,
     }),
 }

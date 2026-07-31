@@ -7,6 +7,7 @@ const ruleRoot = [...observabilityRoot, 'rules'] as const
 const alertRoot = [...observabilityRoot, 'alerts'] as const
 const oncallRoot = [...observabilityRoot, 'oncall'] as const
 const healingRoot = [...observabilityRoot, 'healing'] as const
+const logRoot = [...observabilityRoot, 'logs'] as const
 
 function normalizedId(value: string) {
   return value.trim()
@@ -79,12 +80,20 @@ export const observabilityKeys = {
     runs: () => [...healingRoot, 'runs'] as const,
     recentRuns: (limit: number) => [...healingRoot, 'runs', 'recent', limit] as const,
   },
+  logs: {
+    all: logRoot,
+    dataSources: () => [...logRoot, 'data-sources'] as const,
+    snapshot: (clusterId: string, query: unknown) =>
+      [...logRoot, 'snapshot', normalizedId(clusterId), query] as const,
+  },
   legacy: {
     monitoringOverviewIntegrations: ['monitoring-overview-integrations'] as const,
   },
 }
 
 export const observabilityMutationKeys = {
+  logs: (action: 'create-data-source' | 'update-data-source' | 'validate-data-source') =>
+    [...logRoot, 'mutation', action] as const,
   integrations: {
     create: [...integrationRoot, 'mutation', 'create'] as const,
     update: [...integrationRoot, 'mutation', 'update'] as const,
