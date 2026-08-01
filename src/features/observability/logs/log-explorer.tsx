@@ -8,6 +8,7 @@ import {
   ExportOutlined,
   FilterOutlined,
   ReloadOutlined,
+  RightOutlined,
   SearchOutlined,
   StopOutlined,
 } from '@ant-design/icons'
@@ -17,6 +18,7 @@ import {
   App,
   Button,
   Card,
+  Checkbox,
   Flex,
   Form,
   Input,
@@ -77,6 +79,79 @@ interface SubmittedLogQuery {
 }
 
 type QueryEditorMode = 'query' | 'builder'
+
+const LOG_FIELDS = [
+  { value: 'timestamp', label: '时间' },
+  { value: 'severity', label: '级别' },
+  { value: 'source', label: '来源' },
+  { value: 'stream', label: '流' },
+  { value: 'traceId', label: 'Trace ID' },
+  { value: 'message', label: '消息' },
+]
+const DEFAULT_LOG_FIELDS = ['timestamp', 'severity', 'source', 'message']
+
+function logFieldLabel(field: string) {
+  return (
+    LOG_FIELDS.find((option) => option.value === field)?.label ?? field.replace('attribute:', '')
+  )
+}
+
+function logFieldValue(entry: LogEntry, field: string) {
+  if (field.startsWith('attribute:')) return entry.attributes?.[field.slice(10)] ?? '-'
+  switch (field) {
+    case 'timestamp':
+      return formatDateTime(entry.timestamp)
+    case 'severity':
+      return entry.severity ?? '-'
+    case 'source':
+      return formatLogSource(entry)
+    case 'stream':
+      return entry.stream ?? '-'
+    case 'traceId':
+      return entry.traceId ?? '-'
+    default:
+      return entry.message
+  }
+}
+
+function logFieldClassName(field: string) {
+  return field.startsWith('attribute:') ? 'attribute' : field
+}
+
+function logSeverityClassName(severity?: string) {
+  const value = severity?.toLowerCase() ?? ''
+  if (value.includes('error') || value.includes('fatal') || value === 'err') return 'is-error'
+  if (value.includes('warn')) return 'is-warning'
+  if (value.includes('info')) return 'is-info'
+  return 'is-muted'
+}
+
+function logEntryContext(entry: LogEntry) {
+  const source = entry.source
+  const values: Array<[string, string | undefined]> = [
+    ['记录时间', entry.timestamp],
+    ['采集时间', entry.observedAt],
+    ['日志域', source.domain],
+    ['集群', source.clusterId],
+    ['命名空间', source.namespace],
+    ['工作负载类型', source.workloadKind],
+    ['工作负载', source.workloadName],
+    ['Pod', source.podName],
+    ['容器', source.containerName],
+    ['应用', source.applicationId],
+    ['环境', source.environmentKey],
+    ['Docker 项目', source.dockerProjectId],
+    ['Docker 服务', source.dockerService],
+    ['流', entry.stream],
+    ['Trace ID', entry.traceId],
+    ['Span ID', entry.spanId],
+    ['来源模式', entry.sourceMode],
+    ...Object.entries(entry.attributes ?? {}).map(
+      ([key, value]) => [`attributes.${key}`, value] as [string, string],
+    ),
+  ]
+  return values.filter((value): value is [string, string] => Boolean(value[1]))
+}
 
 function initialFilters(preset?: LogExplorerPreset): RuntimeLogFilters {
   return {
@@ -155,6 +230,7 @@ export function LogExplorer({
   const [sourceErrors, setSourceErrors] = useState(0)
   const [autoScroll, setAutoScroll] = useState(true)
   const [exporting, setExporting] = useState(false)
+  const [visibleLogFields, setVisibleLogFields] = useState(DEFAULT_LOG_FIELDS)
   const allContainers = Form.useWatch('allContainers', form)
   const scrollerRef = useRef<HTMLDivElement>(null)
   const reconnectAttemptRef = useRef(0)
@@ -443,6 +519,17 @@ export function LogExplorer({
   }
 
   const page = snapshotQuery.data
+  const logFieldOptions = useMemo(
+    () => [
+      ...LOG_FIELDS,
+      ...Array.from(new Set(entries.flatMap((entry) => Object.keys(entry.attributes ?? {}))))
+        .sort()
+        // ponytail: keep the field rail bounded; add search/virtualization if schemas exceed 20 fields.
+        .slice(0, 20)
+        .map((key) => ({ value: `attribute:${key}`, label: key })),
+    ],
+    [entries],
+  )
 
   return (
     <div className={embedded ? 'soha-log-explorer is-embedded' : 'soha-log-explorer'}>
@@ -479,7 +566,7 @@ export function LogExplorer({
           onFinish={handleSubmit}
         >
           {!embedded ? (
-            <Flex className="soha-log-query-mode-row" align="center" gap={12} justify="space-between" wrap>
+            <Flex className="soha-log-query-mode-row" align="center" gap={12} wrap>
               <Segmented
                 aria-label="日志查询模式"
                 options={[
@@ -489,7 +576,7 @@ export function LogExplorer({
                 value={queryEditorMode}
                 onChange={handleQueryEditorModeChange}
               />
-              <Space size={8} wrap>
+              <Space className="soha-log-query-scope" size={8} wrap>
                 <MetadataTag label="SohaQL" tone="blue" />
                 <Text type="secondary">
                   {resolvedTarget.kind === 'cluster'
@@ -499,6 +586,33 @@ export function LogExplorer({
                       : `${resolvedTarget.projectId || '-'} / ${resolvedTarget.serviceName || '-'}`}
                 </Text>
               </Space>
+              <div className="soha-log-query-top-actions">
+                <Form.Item name="sinceSeconds" noStyle>
+                  <Select
+                    aria-label="时间范围"
+                    options={[
+                      { value: 300, label: '最近 5 分钟' },
+                      { value: 900, label: '最近 15 分钟' },
+                      { value: 3600, label: '最近 1 小时' },
+                      { value: 21600, label: '最近 6 小时' },
+                    ]}
+                  />
+                </Form.Item>
+                <Form.Item name="tail" noStyle>
+                  <Select
+                    aria-label="每页行数"
+                    options={[200, 500, 1000].map((value) => ({ value, label: `${value} 行` }))}
+                  />
+                </Form.Item>
+                <Button
+                  htmlType="submit"
+                  icon={<SearchOutlined />}
+                  type="primary"
+                  disabled={!targetReady}
+                >
+                  查询日志
+                </Button>
+              </div>
             </Flex>
           ) : null}
 
@@ -587,48 +701,38 @@ export function LogExplorer({
             </div>
           )}
 
-          <Flex className="soha-log-query-actions" align="end" gap={12} justify="space-between" wrap>
-            <Space size={16} wrap>
-              {isKubernetes && (embedded || queryEditorMode === 'builder') ? (
-                <Form.Item name="allContainers" noStyle valuePropName="checked">
-                  <Switch checkedChildren="全部容器" unCheckedChildren="指定容器" />
-                </Form.Item>
-              ) : null}
-              {isKubernetes && mode === 'live' ? (
-                <Form.Item name="previous" noStyle valuePropName="checked">
-                  <Switch checkedChildren="上次实例" unCheckedChildren="当前实例" />
-                </Form.Item>
-              ) : null}
-            </Space>
-            <span className="soha-log-toolbar-spacer" />
-            {!embedded ? (
-              <div className="soha-log-query-settings">
-                <Form.Item label="时间范围" name="sinceSeconds">
-                  <Select
-                    options={[
-                      { value: 300, label: '最近 5 分钟' },
-                      { value: 900, label: '最近 15 分钟' },
-                      { value: 3600, label: '最近 1 小时' },
-                      { value: 21600, label: '最近 6 小时' },
-                    ]}
-                  />
-                </Form.Item>
-                <Form.Item label="每页行数" name="tail">
-                  <Select
-                    options={[200, 500, 1000].map((value) => ({ value, label: String(value) }))}
-                  />
-                </Form.Item>
-              </div>
-            ) : null}
-            <Button
-              htmlType="submit"
-              icon={<SearchOutlined />}
-              type="primary"
-              disabled={!targetReady}
+          {embedded || (isKubernetes && queryEditorMode === 'builder') ? (
+            <Flex
+              className="soha-log-query-actions"
+              align="end"
+              gap={12}
+              justify="space-between"
+              wrap
             >
-              {mode === 'history' ? '查询日志' : '查询并连接'}
-            </Button>
-          </Flex>
+              <Space size={16} wrap>
+                {isKubernetes && (embedded || queryEditorMode === 'builder') ? (
+                  <Form.Item name="allContainers" noStyle valuePropName="checked">
+                    <Switch checkedChildren="全部容器" unCheckedChildren="指定容器" />
+                  </Form.Item>
+                ) : null}
+                {isKubernetes && mode === 'live' ? (
+                  <Form.Item name="previous" noStyle valuePropName="checked">
+                    <Switch checkedChildren="上次实例" unCheckedChildren="当前实例" />
+                  </Form.Item>
+                ) : null}
+              </Space>
+              {embedded ? (
+                <Button
+                  htmlType="submit"
+                  icon={<SearchOutlined />}
+                  type="primary"
+                  disabled={!targetReady}
+                >
+                  查询并连接
+                </Button>
+              ) : null}
+            </Flex>
+          ) : null}
         </Form>
       </Card>
 
@@ -661,8 +765,12 @@ export function LogExplorer({
           ) : null}
           <span className="soha-log-toolbar-spacer" />
           <Space size={4} wrap>
-            <Text type="secondary">自动滚动</Text>
-            <Switch size="small" checked={autoScroll} onChange={setAutoScroll} />
+            {mode === 'live' ? (
+              <>
+                <Text type="secondary">自动滚动</Text>
+                <Switch size="small" checked={autoScroll} onChange={setAutoScroll} />
+              </>
+            ) : null}
             <ManagementIconButton
               aria-label="清空日志"
               icon={<DeleteOutlined />}
@@ -734,32 +842,108 @@ export function LogExplorer({
           />
         ) : null}
 
-        <div ref={scrollerRef} className="soha-aggregate-log-shell">
-          {snapshotQuery.isLoading && entries.length === 0 ? (
-            <ManagementState bordered={false} compact kind="loading" />
-          ) : entries.length === 0 ? (
-            <div className="soha-aggregate-log-empty">
-              {submitted
-                ? mode === 'history'
-                  ? '当前时间范围暂无日志。'
-                  : '当前范围暂无日志，实时连接会继续等待新内容。'
-                : mode === 'history'
-                  ? '设置范围后查询日志。'
-                  : '设置范围后开始查询实时日志。'}
-            </div>
-          ) : (
-            entries.map((entry) => (
-              <div
-                className="soha-aggregate-log-row"
-                key={entry.timestamp + formatLogSource(entry) + entry.message}
+        {mode === 'history' ? (
+          <div className="soha-log-results-explorer">
+            <aside className="soha-log-results-fields" aria-label="日志字段">
+              <Text strong>显示字段</Text>
+              <Checkbox.Group
+                value={visibleLogFields}
+                onChange={(fields) =>
+                  setVisibleLogFields([...fields.filter((field) => field !== 'message'), 'message'])
+                }
               >
-                <span className="soha-aggregate-log-time">{formatDateTime(entry.timestamp)}</span>
-                <span className="soha-aggregate-log-source">{formatLogSource(entry)}</span>
-                <span className="soha-aggregate-log-message">{entry.message}</span>
+                {logFieldOptions.map((field) => (
+                  <Checkbox
+                    disabled={field.value === 'message'}
+                    key={field.value}
+                    value={field.value}
+                  >
+                    {field.label}
+                  </Checkbox>
+                ))}
+              </Checkbox.Group>
+            </aside>
+            <div className="soha-log-results-table" role="region" aria-label="日志查询结果">
+              {snapshotQuery.isLoading && entries.length === 0 ? (
+                <ManagementState bordered={false} compact kind="loading" />
+              ) : entries.length === 0 ? (
+                <div className="soha-log-result-empty">
+                  {submitted ? '当前时间范围暂无日志。' : '设置范围后查询日志。'}
+                </div>
+              ) : (
+                <>
+                  <div className="soha-log-result-header">
+                    <span className="soha-log-result-disclosure" />
+                    {visibleLogFields.map((field) => (
+                      <span className={`soha-log-field is-${logFieldClassName(field)}`} key={field}>
+                        {logFieldLabel(field)}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="soha-log-result-rows">
+                    {entries.map((entry) => (
+                      <details
+                        className="soha-log-result-row"
+                        key={entry.timestamp + formatLogSource(entry) + entry.message}
+                      >
+                        <summary>
+                          <span className="soha-log-result-disclosure" aria-hidden="true">
+                            <RightOutlined />
+                          </span>
+                          {visibleLogFields.map((field) => (
+                            <span
+                              className={`soha-log-field is-${logFieldClassName(field)} ${
+                                field === 'severity' ? logSeverityClassName(entry.severity) : ''
+                              }`}
+                              key={field}
+                              title={logFieldValue(entry, field)}
+                            >
+                              {logFieldValue(entry, field)}
+                            </span>
+                          ))}
+                        </summary>
+                        <div className="soha-log-result-detail">
+                          <pre>{entry.message}</pre>
+                          <dl>
+                            {logEntryContext(entry).map(([label, value]) => (
+                              <div key={label}>
+                                <dt>{label}</dt>
+                                <dd>{value}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        </div>
+                      </details>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div ref={scrollerRef} className="soha-aggregate-log-shell">
+            {snapshotQuery.isLoading && entries.length === 0 ? (
+              <ManagementState bordered={false} compact kind="loading" />
+            ) : entries.length === 0 ? (
+              <div className="soha-aggregate-log-empty">
+                {submitted
+                  ? '当前范围暂无日志，实时连接会继续等待新内容。'
+                  : '设置范围后开始查询实时日志。'}
               </div>
-            ))
-          )}
-        </div>
+            ) : (
+              entries.map((entry) => (
+                <div
+                  className="soha-aggregate-log-row"
+                  key={entry.timestamp + formatLogSource(entry) + entry.message}
+                >
+                  <span className="soha-aggregate-log-time">{formatDateTime(entry.timestamp)}</span>
+                  <span className="soha-aggregate-log-source">{formatLogSource(entry)}</span>
+                  <span className="soha-aggregate-log-message">{entry.message}</span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
       </Card>
     </div>
   )

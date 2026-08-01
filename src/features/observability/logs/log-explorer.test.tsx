@@ -144,6 +144,7 @@ describe('LogExplorer', () => {
     expect(container.textContent).toContain('在日志中心打开')
     expect(container.textContent).not.toContain('Live')
     expect(container.textContent).not.toContain('History')
+    expect(container.querySelector('.soha-log-results-explorer')).toBeNull()
 
     await act(async () => {
       WebSocketMock.instances[0]?.onopen?.()
@@ -174,7 +175,16 @@ describe('LogExplorer', () => {
         {
           timestamp: '2026-07-31T01:00:00Z',
           message: 'historical entry',
-          source: { domain: 'kubernetes', podName: 'api-0', containerName: 'api' },
+          severity: 'ERROR',
+          stream: 'stderr',
+          traceId: 'trace-1',
+          attributes: { 'service.name': 'orders' },
+          source: {
+            domain: 'kubernetes',
+            namespace: 'apps',
+            podName: 'api-0',
+            containerName: 'api',
+          },
           sourceMode: 'durable',
         },
       ],
@@ -193,9 +203,16 @@ describe('LogExplorer', () => {
     expect(container.textContent).not.toContain('Live')
     expect(container.textContent).not.toContain('History')
     expect(container.textContent).toContain('SohaQL')
-    expect(container.querySelector<HTMLTextAreaElement>('[aria-label="SohaQL 查询语句"]')?.value).toBe(
-      '{pod="api-0", container="api"} |= "timeout"',
-    )
+    expect(
+      container.querySelector<HTMLTextAreaElement>('[aria-label="SohaQL 查询语句"]')?.value,
+    ).toBe('{pod="api-0", container="api"} |= "timeout"')
+    expect(
+      container.querySelector('.soha-log-query-mode-row [aria-label="时间范围"]'),
+    ).not.toBeNull()
+    expect(
+      container.querySelector('.soha-log-query-mode-row [aria-label="每页行数"]'),
+    ).not.toBeNull()
+    expect(container.querySelector('.soha-log-query-actions [aria-label="时间范围"]')).toBeNull()
     expect(container.textContent).not.toContain('工作负载类型')
 
     const submit = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(
@@ -216,6 +233,17 @@ describe('LogExplorer', () => {
     }
 
     expect(container.textContent).toContain('historical entry')
+    expect(container.querySelector('.soha-log-results-fields')?.textContent).toContain('显示字段')
+    expect(container.querySelector('.soha-log-results-fields')?.textContent).toContain(
+      'service.name',
+    )
+    expect(container.querySelector('.soha-log-result-row > summary')).not.toBeNull()
+    expect(container.querySelector('.soha-log-result-detail')?.textContent).toContain('trace-1')
+    expect(container.querySelector('.soha-log-result-header .is-source')).not.toBeNull()
+    await act(async () => {
+      container.querySelector<HTMLInputElement>('input[value="source"]')?.click()
+    })
+    expect(container.querySelector('.soha-log-result-header .is-source')).toBeNull()
     expect(apiMocks.queryLogs).toHaveBeenCalledOnce()
     expect(apiMocks.queryLogs.mock.calls[0]?.[1]).toMatchObject({
       sourceMode: 'durable',
@@ -329,9 +357,7 @@ describe('LogExplorer', () => {
       environmentId: 'binding-1',
       namespace: '',
     }
-    const container = await renderExplorer(
-      <LogExplorer target={target} />,
-    )
+    const container = await renderExplorer(<LogExplorer target={target} />)
     const submit = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(
       (button) => button.textContent?.includes('查询日志'),
     )
