@@ -22,7 +22,6 @@ import type { TableProps } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
 import {
-  ManagementDetailHeader,
   ManagementIconButton,
   ManagementTableToolbar,
 } from '@/components/management-list'
@@ -457,10 +456,8 @@ export function OnCallSettingsPage() {
 
   return (
     <div className="soha-page">
-      <ManagementDetailHeader
-        title="值班设置"
-        description="集中维护值班排班、轮值策略、升级链与告警分派规则。"
-        actions={
+      <Tabs
+        tabBarExtraContent={
           <ManagementTableToolbar>
             {canManageOnCall ? (
               <>
@@ -505,8 +502,6 @@ export function OnCallSettingsPage() {
             ) : null}
           </ManagementTableToolbar>
         }
-      />
-      <Tabs
         items={[
           {
             key: 'assignments',

@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { LogEntry, LogQuery, LogStreamEvent } from '@opensoha/contracts/gen/ts/sohaapi'
 import {
+  CodeOutlined,
+  DatabaseOutlined,
   DeleteOutlined,
   DownloadOutlined,
   ExportOutlined,
+  FilterOutlined,
   ReloadOutlined,
   SearchOutlined,
   StopOutlined,
@@ -42,10 +45,11 @@ import {
   buildDurableLogQuery,
   buildDockerRuntimeLogQuery,
   buildRuntimeLogQuery,
+  buildSohaQLExpression,
   formatLogExport,
   formatLogSource,
   mergeLogEntries,
-  type LogExplorerMode,
+  parseSohaQLExpression,
   type LogExplorerPreset,
   type RuntimeLogFilters,
 } from './model'
@@ -67,10 +71,12 @@ interface LogExplorerProps {
 }
 
 interface SubmittedLogQuery {
-  mode: LogExplorerMode
+  mode: 'live' | 'history'
   query: LogQuery
   target: LogTarget
 }
+
+type QueryEditorMode = 'query' | 'builder'
 
 function initialFilters(preset?: LogExplorerPreset): RuntimeLogFilters {
   return {
@@ -87,7 +93,7 @@ function initialFilters(preset?: LogExplorerPreset): RuntimeLogFilters {
   }
 }
 
-function queryErrorDescription(error: unknown, mode: LogExplorerMode) {
+function queryErrorDescription(error: unknown, mode: SubmittedLogQuery['mode']) {
   if (error instanceof ApiError) {
     if (error.status === 403) return '当前账号没有所选日志范围的查看权限。'
     if (error.status === 404) return '所选日志来源不存在。'
@@ -121,18 +127,25 @@ export function LogExplorer({
   )
   const targetIdentity = logTargetKey(resolvedTarget)
   const isKubernetes = resolvedTarget.kind !== 'docker'
-  const supportsHistory = resolvedTarget.kind !== 'docker'
-  const targetReady =
+  const supportsDurable = resolvedTarget.kind !== 'docker'
+  const targetScoped =
     resolvedTarget.kind === 'docker'
       ? Boolean(resolvedTarget.projectId && resolvedTarget.serviceName)
       : resolvedTarget.kind === 'delivery'
         ? Boolean(resolvedTarget.applicationId && resolvedTarget.environmentId)
         : Boolean(resolvedTarget.clusterId && resolvedTarget.namespace)
+  const mode = embedded ? 'live' : 'history'
+  const targetReady = targetScoped && (embedded || supportsDurable)
   const [form] = Form.useForm<RuntimeLogFilters>()
-  const defaults = useMemo(() => initialFilters(preset), [preset])
-  const [mode, setMode] = useState<LogExplorerMode>(
-    supportsHistory ? (preset?.mode ?? 'live') : 'live',
+  const serializedDefaults = JSON.stringify(initialFilters(preset))
+  const defaults = useMemo(
+    () => JSON.parse(serializedDefaults) as RuntimeLogFilters,
+    [serializedDefaults],
   )
+  const [queryEditorMode, setQueryEditorMode] = useState<QueryEditorMode>(
+    embedded ? 'builder' : 'query',
+  )
+  const [queryExpression, setQueryExpression] = useState(() => buildSohaQLExpression(defaults))
   const [submitted, setSubmitted] = useState<SubmittedLogQuery | null>(null)
   const [entries, setEntries] = useState<LogEntry[]>([])
   const [streamState, setStreamState] = useState('idle')
@@ -147,6 +160,11 @@ export function LogExplorer({
   const reconnectAttemptRef = useRef(0)
   const autoStartedRef = useRef('')
 
+  useEffect(() => {
+    form.setFieldsValue(defaults)
+    setQueryExpression(buildSohaQLExpression(defaults))
+  }, [defaults, form])
+
   const snapshotQuery = useQuery(
     observabilityLogQueries.snapshot(
       submitted?.target ?? resolvedTarget,
@@ -155,7 +173,7 @@ export function LogExplorer({
     ),
   )
 
-  function syncSearch(filters: RuntimeLogFilters, nextMode: LogExplorerMode) {
+  function syncSearch(filters: RuntimeLogFilters) {
     if (!syncURL) return
     const path = buildLogExplorerPath({
       source:
@@ -176,7 +194,6 @@ export function LogExplorer({
       containers: filters.containers,
       labelSelector: filters.labelSelector,
       text: filters.text,
-      mode: nextMode,
       sinceSeconds: filters.sinceSeconds,
       tail: filters.tail,
       allContainers: filters.allContainers,
@@ -207,32 +224,73 @@ export function LogExplorer({
       setSubmitted({ target: resolvedTarget, mode: 'live', query })
       setStreamState('connecting')
       setStreamEnabled(true)
-      syncSearch(filters, 'live')
+      syncSearch(filters)
     } catch (error) {
       void message.error(error instanceof Error ? error.message : '筛选条件无效')
     }
   }
 
   function handleSubmit(filters: RuntimeLogFilters) {
+    let resolvedFilters = filters
+    if (!embedded && queryEditorMode === 'query') {
+      try {
+        resolvedFilters = {
+          ...parseSohaQLExpression(queryExpression),
+          sinceSeconds: filters.sinceSeconds,
+          tail: filters.tail,
+          previous: filters.previous,
+        }
+      } catch (error) {
+        void message.error(error instanceof Error ? error.message : '查询语句无效')
+        return
+      }
+    }
     if (mode === 'history') {
-      if (!supportsHistory || !targetReady) {
+      if (!supportsDurable) {
+        void message.warning('当前日志来源暂不支持持久化查询')
+        return
+      }
+      if (!targetReady) {
         void message.warning('请先选择完整的日志范围')
         return
       }
       try {
-        const query = buildDurableLogQuery(resolvedTarget.namespace ?? '', filters)
+        const query = buildDurableLogQuery(resolvedTarget.namespace ?? '', resolvedFilters)
         setEntries([])
         setSourceErrors(0)
         setStreamMessage('')
         setStreamEnabled(false)
         setSubmitted({ target: resolvedTarget, mode: 'history', query })
-        syncSearch(filters, 'history')
+        syncSearch(resolvedFilters)
       } catch (error) {
         void message.error(error instanceof Error ? error.message : '筛选条件无效')
       }
       return
     }
-    submitLiveQuery(filters)
+    submitLiveQuery(resolvedFilters)
+  }
+
+  function handleQueryEditorModeChange(value: string | number) {
+    const nextMode = value as QueryEditorMode
+    try {
+      if (nextMode === 'query') {
+        setQueryExpression(buildSohaQLExpression(form.getFieldsValue()))
+      } else {
+        const filters = parseSohaQLExpression(queryExpression)
+        form.setFieldsValue({
+          workloadKind: filters.workloadKind,
+          workloadName: filters.workloadName,
+          podNames: filters.podNames,
+          containers: filters.containers,
+          labelSelector: undefined,
+          text: filters.text,
+          allContainers: filters.allContainers,
+        })
+      }
+      setQueryEditorMode(nextMode)
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : '查询语句无效')
+    }
   }
 
   useEffect(() => {
@@ -358,78 +416,60 @@ export function LogExplorer({
     }
   }
 
+  function handleOpenInCenter() {
+    const filters = form.getFieldsValue()
+    navigate(
+      buildLogExplorerPath({
+        ...preset,
+        ...filters,
+        source:
+          resolvedTarget.kind === 'docker'
+            ? 'docker'
+            : resolvedTarget.kind === 'delivery'
+              ? 'delivery'
+              : 'kubernetes',
+        clusterId: resolvedTarget.kind === 'cluster' ? resolvedTarget.clusterId : undefined,
+        namespace: resolvedTarget.kind === 'docker' ? undefined : resolvedTarget.namespace,
+        dockerProjectId: resolvedTarget.kind === 'docker' ? resolvedTarget.projectId : undefined,
+        dockerService: resolvedTarget.kind === 'docker' ? resolvedTarget.serviceName : undefined,
+        applicationId:
+          resolvedTarget.kind === 'delivery' ? resolvedTarget.applicationId : undefined,
+        environmentId:
+          resolvedTarget.kind === 'delivery' ? resolvedTarget.environmentId : undefined,
+        labelSelector: undefined,
+        previous: false,
+      }),
+    )
+  }
+
   const page = snapshotQuery.data
-  const openInCenterPath = buildLogExplorerPath({
-    ...preset,
-    source:
-      resolvedTarget.kind === 'docker'
-        ? 'docker'
-        : resolvedTarget.kind === 'delivery'
-          ? 'delivery'
-          : 'kubernetes',
-    clusterId: resolvedTarget.kind === 'cluster' ? resolvedTarget.clusterId : undefined,
-    namespace: resolvedTarget.kind === 'docker' ? undefined : resolvedTarget.namespace,
-    dockerProjectId: resolvedTarget.kind === 'docker' ? resolvedTarget.projectId : undefined,
-    dockerService: resolvedTarget.kind === 'docker' ? resolvedTarget.serviceName : undefined,
-    applicationId: resolvedTarget.kind === 'delivery' ? resolvedTarget.applicationId : undefined,
-    environmentId: resolvedTarget.kind === 'delivery' ? resolvedTarget.environmentId : undefined,
-    mode,
-  })
 
   return (
     <div className={embedded ? 'soha-log-explorer is-embedded' : 'soha-log-explorer'}>
       <Card
         className="soha-log-query-card"
-        title="查询范围"
+        title={embedded ? '查询范围' : '日志查询'}
         extra={
-          <Space size={8} wrap>
-            {supportsHistory ? (
-              <Segmented<LogExplorerMode>
-                aria-label="日志模式"
-                options={[
-                  { label: 'Live', value: 'live' },
-                  { label: 'History', value: 'history' },
-                ]}
-                value={mode}
-                onChange={(value) => {
-                  setMode(value)
-                  setStreamEnabled(false)
-                  setSubmitted(null)
-                  setEntries([])
-                  if (value === 'history') {
-                    form.setFieldValue('labelSelector', undefined)
-                    form.setFieldValue('previous', false)
-                  }
-                  syncSearch(form.getFieldsValue(), value)
-                }}
-              />
-            ) : (
-              <MetadataTag label="Live" tone="cyan" />
-            )}
-            {embedded ? (
-              <Button icon={<ExportOutlined />} onClick={() => navigate(openInCenterPath)}>
-                在日志中心打开
-              </Button>
-            ) : null}
-          </Space>
+          embedded ? (
+            <Button icon={<ExportOutlined />} onClick={handleOpenInCenter}>
+              在日志中心打开
+            </Button>
+          ) : canManageDataSources ? (
+            <Button
+              icon={<DatabaseOutlined />}
+              onClick={() => navigate('/monitoring-workbench/log-data-sources')}
+            >
+              数据源
+            </Button>
+          ) : undefined
         }
       >
-        {mode === 'history' ? (
+        {mode === 'history' && !supportsDurable ? (
           <Alert
-            action={
-              canManageDataSources ? (
-                <Button
-                  size="small"
-                  onClick={() => navigate('/monitoring-workbench/log-data-sources')}
-                >
-                  配置数据源
-                </Button>
-              ) : undefined
-            }
             className="soha-log-inline-alert"
             showIcon
-            type="info"
-            title="历史查询使用已启用的 Loki、Elasticsearch 或 ClickHouse 数据源"
+            type="warning"
+            title="当前 Docker 日志仅支持在运行时页面实时查看"
           />
         ) : null}
         <Form<RuntimeLogFilters>
@@ -438,75 +478,118 @@ export function LogExplorer({
           layout="vertical"
           onFinish={handleSubmit}
         >
-          <div className="soha-log-filter-grid">
-            {isKubernetes ? (
-              <>
-                <Form.Item label="工作负载类型" name="workloadKind">
-                  <Select
-                    allowClear
-                    options={['Deployment', 'StatefulSet', 'DaemonSet', 'ReplicaSet', 'Job'].map(
-                      (value) => ({ value, label: value }),
-                    )}
-                    placeholder="可选"
-                  />
-                </Form.Item>
-                <Form.Item label="工作负载名称" name="workloadName">
-                  <Input placeholder="与类型同时填写" />
-                </Form.Item>
-                <Form.Item label="Pod" name="podNames">
-                  <Select
-                    mode="tags"
-                    tokenSeparators={[',']}
-                    placeholder={mode === 'history' ? '历史查询限一个 Pod' : '输入一个或多个 Pod'}
-                  />
-                </Form.Item>
-                <Form.Item label="容器" name="containers">
-                  <Select
-                    disabled={allContainers}
-                    mode="tags"
-                    tokenSeparators={[',']}
-                    placeholder={
-                      allContainers
-                        ? '已选择全部容器'
-                        : mode === 'history'
-                          ? '历史查询限一个容器'
-                          : '输入一个或多个容器'
-                    }
-                  />
-                </Form.Item>
-                <Form.Item label="标签选择器" name="labelSelector">
-                  <Input disabled={mode === 'history'} placeholder="app=api,tier=backend" />
-                </Form.Item>
-              </>
-            ) : null}
-            <Form.Item label="文本筛选" name="text">
-              <Input allowClear placeholder="服务端文本匹配" />
-            </Form.Item>
-            <Form.Item label="时间范围" name="sinceSeconds">
-              <Select
+          {!embedded ? (
+            <Flex className="soha-log-query-mode-row" align="center" gap={12} justify="space-between" wrap>
+              <Segmented
+                aria-label="日志查询模式"
                 options={[
-                  ...(mode === 'live' ? [{ value: 0, label: '全部可用日志' }] : []),
-                  { value: 300, label: '最近 5 分钟' },
-                  { value: 900, label: '最近 15 分钟' },
-                  { value: 3600, label: '最近 1 小时' },
-                  { value: 21600, label: '最近 6 小时' },
+                  { icon: <CodeOutlined />, label: '查询语句', value: 'query' },
+                  { icon: <FilterOutlined />, label: '筛选器', value: 'builder' },
                 ]}
+                value={queryEditorMode}
+                onChange={handleQueryEditorModeChange}
               />
-            </Form.Item>
-            <Form.Item label={mode === 'history' ? '每页行数' : '每个来源读取行数'} name="tail">
-              <Select
-                options={(mode === 'history'
-                  ? [200, 500, 1000]
-                  : isKubernetes
-                    ? [200, 500, 1000, 5000]
-                    : [200, 500, 1000, 2000]
-                ).map((value) => ({ value, label: String(value) }))}
-              />
-            </Form.Item>
-          </div>
-          <Flex align="center" gap={16} justify="space-between" wrap>
-            <Space size={16} wrap>
+              <Space size={8} wrap>
+                <MetadataTag label="SohaQL" tone="blue" />
+                <Text type="secondary">
+                  {resolvedTarget.kind === 'cluster'
+                    ? resolvedTarget.namespace || '未选择命名空间'
+                    : resolvedTarget.kind === 'delivery'
+                      ? `${resolvedTarget.applicationId || '-'} / ${resolvedTarget.environmentId || '-'}`
+                      : `${resolvedTarget.projectId || '-'} / ${resolvedTarget.serviceName || '-'}`}
+                </Text>
+              </Space>
+            </Flex>
+          ) : null}
+
+          {!embedded && queryEditorMode === 'query' ? (
+            <Input.TextArea
+              aria-label="SohaQL 查询语句"
+              className="soha-log-query-editor"
+              maxLength={2048}
+              rows={2}
+              spellCheck={false}
+              value={queryExpression}
+              onChange={(event) => setQueryExpression(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) form.submit()
+              }}
+            />
+          ) : (
+            <div className="soha-log-filter-grid">
               {isKubernetes ? (
+                <>
+                  <Form.Item label="工作负载类型" name="workloadKind">
+                    <Select
+                      allowClear
+                      options={['Deployment', 'StatefulSet', 'DaemonSet', 'ReplicaSet', 'Job'].map(
+                        (value) => ({ value, label: value }),
+                      )}
+                      placeholder="可选"
+                    />
+                  </Form.Item>
+                  <Form.Item label="工作负载名称" name="workloadName">
+                    <Input placeholder="与类型同时填写" />
+                  </Form.Item>
+                  <Form.Item label="Pod" name="podNames">
+                    <Select
+                      mode="tags"
+                      tokenSeparators={[',']}
+                      placeholder={mode === 'history' ? '查询限一个 Pod' : '输入一个或多个 Pod'}
+                    />
+                  </Form.Item>
+                  <Form.Item label="容器" name="containers">
+                    <Select
+                      disabled={allContainers}
+                      mode="tags"
+                      tokenSeparators={[',']}
+                      placeholder={
+                        allContainers
+                          ? '已选择全部容器'
+                          : mode === 'history'
+                            ? '查询限一个容器'
+                            : '输入一个或多个容器'
+                      }
+                    />
+                  </Form.Item>
+                  {embedded ? (
+                    <Form.Item label="标签选择器" name="labelSelector">
+                      <Input placeholder="app=api,tier=backend" />
+                    </Form.Item>
+                  ) : null}
+                </>
+              ) : null}
+              <Form.Item label="文本筛选" name="text">
+                <Input allowClear placeholder="服务端文本匹配" />
+              </Form.Item>
+              {embedded ? (
+                <>
+                  <Form.Item label="时间范围" name="sinceSeconds">
+                    <Select
+                      options={[
+                        { value: 0, label: '全部可用日志' },
+                        { value: 300, label: '最近 5 分钟' },
+                        { value: 900, label: '最近 15 分钟' },
+                        { value: 3600, label: '最近 1 小时' },
+                        { value: 21600, label: '最近 6 小时' },
+                      ]}
+                    />
+                  </Form.Item>
+                  <Form.Item label="每个来源读取行数" name="tail">
+                    <Select
+                      options={(isKubernetes ? [200, 500, 1000, 5000] : [200, 500, 1000, 2000]).map(
+                        (value) => ({ value, label: String(value) }),
+                      )}
+                    />
+                  </Form.Item>
+                </>
+              ) : null}
+            </div>
+          )}
+
+          <Flex className="soha-log-query-actions" align="end" gap={12} justify="space-between" wrap>
+            <Space size={16} wrap>
+              {isKubernetes && (embedded || queryEditorMode === 'builder') ? (
                 <Form.Item name="allContainers" noStyle valuePropName="checked">
                   <Switch checkedChildren="全部容器" unCheckedChildren="指定容器" />
                 </Form.Item>
@@ -517,13 +600,33 @@ export function LogExplorer({
                 </Form.Item>
               ) : null}
             </Space>
+            <span className="soha-log-toolbar-spacer" />
+            {!embedded ? (
+              <div className="soha-log-query-settings">
+                <Form.Item label="时间范围" name="sinceSeconds">
+                  <Select
+                    options={[
+                      { value: 300, label: '最近 5 分钟' },
+                      { value: 900, label: '最近 15 分钟' },
+                      { value: 3600, label: '最近 1 小时' },
+                      { value: 21600, label: '最近 6 小时' },
+                    ]}
+                  />
+                </Form.Item>
+                <Form.Item label="每页行数" name="tail">
+                  <Select
+                    options={[200, 500, 1000].map((value) => ({ value, label: String(value) }))}
+                  />
+                </Form.Item>
+              </div>
+            ) : null}
             <Button
               htmlType="submit"
               icon={<SearchOutlined />}
               type="primary"
               disabled={!targetReady}
             >
-              {mode === 'history' ? '查询历史日志' : '查询并连接'}
+              {mode === 'history' ? '查询日志' : '查询并连接'}
             </Button>
           </Flex>
         </Form>
@@ -531,7 +634,7 @@ export function LogExplorer({
 
       <Card
         className="soha-log-results-card"
-        title={mode === 'history' ? '历史日志' : '运行时日志'}
+        title={mode === 'history' ? '查询结果' : '运行时日志'}
       >
         <Flex className="soha-log-results-toolbar" align="center" gap={8} wrap>
           <StatusTag
@@ -638,10 +741,10 @@ export function LogExplorer({
             <div className="soha-aggregate-log-empty">
               {submitted
                 ? mode === 'history'
-                  ? '当前时间范围暂无历史日志。'
+                  ? '当前时间范围暂无日志。'
                   : '当前范围暂无日志，实时连接会继续等待新内容。'
                 : mode === 'history'
-                  ? '设置范围后查询历史日志。'
+                  ? '设置范围后查询日志。'
                   : '设置范围后开始查询实时日志。'}
             </div>
           ) : (

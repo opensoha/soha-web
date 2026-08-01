@@ -17,7 +17,7 @@ import {
 import type { TableProps } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
-import { ManagementDetailHeader, ManagementIconButton } from '@/components/management-list'
+import { ManagementIconButton } from '@/components/management-list'
 import { BooleanTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { formatDateTime } from '@/utils/time'
@@ -32,7 +32,7 @@ import type {
   AlertRuleTestResult,
 } from './types'
 
-const { Paragraph, Text } = Typography
+const { Text } = Typography
 
 export function AlertRulesPage() {
   const { message } = App.useApp()
@@ -215,24 +215,15 @@ export function AlertRulesPage() {
 
   return (
     <div className="soha-page">
-      <ManagementDetailHeader
+      <AdminTable
         title="告警规则"
-        description="按数据源、查询和阈值创建规则，并绑定通知策略与自愈策略。"
-        actions={
+        headerExtra={
           canManageRules ? (
             <Button icon={<PlusOutlined />} type="primary" onClick={() => openEditor(null)}>
               新建规则
             </Button>
           ) : null
         }
-      />
-      <Card>
-        <Paragraph type="secondary" className="mb-0">
-          规则支持 `metrics` / `logs` / `traces` /
-          `external_passthrough`。测试会按选择的数据源执行一次预览查询。
-        </Paragraph>
-      </Card>
-      <AdminTable
         shellClassName="soha-management-table-shell"
         columns={columns}
         dataSource={rulesQuery.data ?? []}

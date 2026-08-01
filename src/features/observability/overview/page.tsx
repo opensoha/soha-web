@@ -19,7 +19,6 @@ import {
   type OverviewMetricItem,
 } from '@/components/overview-visuals'
 import {
-  ManagementDetailHeader,
   ManagementIconButton,
   ManagementState,
 } from '@/components/management-list'
@@ -161,11 +160,6 @@ export function MonitoringPage() {
 
   return (
     <div className="soha-page soha-overview-page soha-monitoring-overview-page">
-      <ManagementDetailHeader
-        title="总览"
-        description="告警任务、事件、通知和值班链路的统一运行视图。"
-      />
-
       <div className="soha-overview-metric-grid">
         {overviewStats.map((item) => (
           <OverviewMetricCard

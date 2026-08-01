@@ -51,12 +51,6 @@ vi.mock('@/components/status-tag', () => ({
   StatusTag: ({ value }: { value?: string }) => <span>{value || '-'}</span>,
 }))
 vi.mock('@/components/management-list', () => ({
-  ManagementDetailHeader: ({ actions, title }: { actions?: ReactNode; title: ReactNode }) => (
-    <header>
-      <h1>{title}</h1>
-      {actions}
-    </header>
-  ),
   ManagementIconButton: ({ 'aria-label': label }: { 'aria-label': string }) => (
     <button aria-label={label} />
   ),
@@ -98,10 +92,13 @@ vi.mock('antd', async () => {
     ...actual,
     Tabs: ({
       items,
+      tabBarExtraContent,
     }: {
       items: Array<{ children?: ReactNode; key: string; label: ReactNode }>
+      tabBarExtraContent?: ReactNode
     }) => (
       <div>
+        {tabBarExtraContent}
         {items.map((item) => (
           <section key={item.key}>
             <h2>{item.label}</h2>

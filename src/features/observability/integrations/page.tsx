@@ -5,7 +5,6 @@ import type { TableProps } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
 import {
-  ManagementDetailHeader,
   ManagementIconButton,
   ManagementState,
   ManagementTableToolbar,
@@ -268,10 +267,9 @@ export function AlertIntegrationsPage() {
 
   return (
     <div className="soha-page">
-      <ManagementDetailHeader
+      <AdminTable
         title="告警集成"
-        description="接入 Alertmanager、Grafana Alerting 和第三方 Webhook，并归一化为 Soha 告警事件。"
-        actions={
+        headerExtra={
           canManageIntegrations ? (
             <ManagementTableToolbar>
               <Button icon={<ExperimentOutlined />} onClick={() => openTest()}>
@@ -283,8 +281,6 @@ export function AlertIntegrationsPage() {
             </ManagementTableToolbar>
           ) : null
         }
-      />
-      <AdminTable
         columnSettingIconOnly
         columnSettingPlacement="header"
         shellClassName="soha-management-table-shell"

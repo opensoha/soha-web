@@ -240,7 +240,7 @@ export const MENU_WORKBENCH_LABELS: Record<MenuWorkbenchSurface, string> = {
   platform: 'k8s工作台',
   compute: '计算资源工作台',
   ai: 'AI工作台',
-  monitoring: '监控工作台',
+  monitoring: '可观测性工作台',
   security: '内网工作台',
   settings: '设置中心',
   delivery: '应用交付工作台',

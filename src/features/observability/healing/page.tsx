@@ -18,13 +18,12 @@ import {
   Space,
   Switch,
   Tag,
-  Typography,
 } from 'antd'
 import type { TableProps } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ReleaseDagDefinition } from '@/components/release-flow-dag-definition'
 import { AdminTable } from '@/components/admin-table'
-import { ManagementDetailHeader, ManagementIconButton } from '@/components/management-list'
+import { ManagementIconButton } from '@/components/management-list'
 import { BooleanTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { formatDateTime } from '@/utils/time'
@@ -34,7 +33,6 @@ import { observabilityHealingMutations } from './mutations'
 import { observabilityHealingQueries } from './queries'
 import type { HealingPolicy, HealingPolicyFormValues, HealingRun } from './types'
 
-const { Paragraph } = Typography
 const HealingDagEditor = lazy(() => import('./editor'))
 
 export function HealingPage() {
@@ -243,24 +241,15 @@ export function HealingPage() {
 
   return (
     <div className="soha-page">
-      <ManagementDetailHeader
-        title="自愈中心"
-        description="维护自愈策略和审批运行记录，策略定义复用 DAG 编辑器。"
-        actions={
+      <AdminTable
+        title="自愈策略"
+        headerExtra={
           canManageHealing ? (
             <Button icon={<PlusOutlined />} type="primary" onClick={() => openEditor(null)}>
               新建自愈策略
             </Button>
           ) : null
         }
-      />
-      <Card>
-        <Paragraph type="secondary" className="mb-0">
-          自愈策略以 `approval_then_auto`
-          为默认触发模式，审批通过后由运行记录推进。当前版本先做策略和审批台，执行可在后续接入工作流执行器。
-        </Paragraph>
-      </Card>
-      <AdminTable
         shellClassName="soha-management-table-shell"
         columns={policyColumns}
         dataSource={policiesQuery.data ?? []}

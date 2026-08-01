@@ -296,7 +296,7 @@ export function OverviewPage() {
                     icon={<ArrowRightOutlined />}
                     onClick={() => navigate('/monitoring-workbench/alerts')}
                   >
-                    {localeCode === 'zh_CN' ? '查看监控工作台' : 'Open Monitoring Workbench'}
+                    {localeCode === 'zh_CN' ? '查看可观测性工作台' : 'Open Observability Workbench'}
                   </Button>
                 }
               />

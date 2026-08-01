@@ -1,6 +1,5 @@
 import { useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ManagementDetailHeader } from '@/components/management-list'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { LogExplorer } from './log-explorer'
 import type { LogTarget } from './api'
@@ -36,16 +35,6 @@ export function LogsPage() {
 
   return (
     <div className="soha-page">
-      <ManagementDetailHeader
-        title="日志"
-        description={
-          preset.source === 'docker'
-            ? '查看 Docker 项目服务的标准化运行时日志'
-            : preset.source === 'delivery'
-              ? '按应用环境聚合查看交付工作负载日志'
-              : '按命名空间、工作负载、Pod 和容器聚合查看运行时日志'
-        }
-      />
       <LogExplorer
         clusterId={clusterId}
         namespace={namespace}

@@ -83,8 +83,8 @@ const CAPABILITY_QUESTIONS = [
     answer: '中转、上游、Tokens、能力清单、治理和调用日志',
   },
   {
-    question: '监控工作台',
-    answer: '指标集成、告警规则、告警事件、通知、OnCall 和自愈联动',
+    question: '可观测性工作台',
+    answer: '日志、指标集成、告警规则、告警事件、通知、OnCall 和自愈联动',
   },
   {
     question: '设置中心',

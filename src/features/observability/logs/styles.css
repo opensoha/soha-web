@@ -21,6 +21,39 @@
   margin-bottom: 12px;
 }
 
+.soha-log-query-mode-row {
+  margin-bottom: 12px;
+}
+
+.soha-log-query-editor.ant-input {
+  padding: 10px 12px;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    Liberation Mono,
+    monospace;
+  font-size: 13px;
+  line-height: 22px;
+}
+
+.soha-log-query-actions {
+  margin-top: 12px;
+}
+
+.soha-log-query-settings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(150px, 180px));
+  gap: 12px;
+}
+
+.soha-log-query-settings .ant-form-item {
+  min-width: 0;
+  margin-bottom: 0;
+}
+
 .soha-log-results-card .ant-card-body {
   display: flex;
   flex-direction: column;
@@ -114,6 +147,20 @@
     flex-direction: column;
     gap: 8px;
     padding-block: 10px;
+  }
+
+  .soha-log-query-mode-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .soha-log-query-settings {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .soha-log-query-actions > .soha-log-toolbar-spacer {
+    display: none;
   }
 
   .soha-aggregate-log-shell {

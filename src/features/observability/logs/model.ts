@@ -1,7 +1,5 @@
 import type { LogEntry, LogQuery } from '@opensoha/contracts/gen/ts/sohaapi'
 
-export type LogExplorerMode = 'live' | 'history'
-
 export interface LogExplorerPreset {
   source?: 'kubernetes' | 'docker' | 'delivery'
   clusterId?: string | null
@@ -16,7 +14,6 @@ export interface LogExplorerPreset {
   containers?: string[]
   labelSelector?: string
   text?: string
-  mode?: LogExplorerMode
   sinceSeconds?: number
   tail?: number
   allContainers?: boolean
@@ -37,6 +34,8 @@ export interface RuntimeLogFilters {
 }
 
 const MAX_BROWSER_ENTRIES = 10000
+const SOHAQL_MAX_LENGTH = 2048
+const SOHAQL_SELECTOR_KEYS = new Set(['workload_kind', 'workload', 'pod', 'container'])
 
 function clean(value?: string | null) {
   return value?.trim() || undefined
@@ -45,6 +44,63 @@ function clean(value?: string | null) {
 function cleanList(values?: string[]) {
   const normalized = values?.map((value) => value.trim()).filter(Boolean) ?? []
   return normalized.length > 0 ? [...new Set(normalized)] : undefined
+}
+
+function escapeSohaQLValue(value: string) {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+function unescapeSohaQLValue(value: string) {
+  return value.replace(/\\(["\\])/g, '$1')
+}
+
+export function buildSohaQLExpression(filters: RuntimeLogFilters) {
+  const matchers: string[] = []
+  const values: Array<[string, string | undefined]> = [
+    ['workload_kind', clean(filters.workloadKind)],
+    ['workload', clean(filters.workloadName)],
+    ['pod', cleanList(filters.podNames)?.[0]],
+    ['container', filters.allContainers ? undefined : cleanList(filters.containers)?.[0]],
+  ]
+  for (const [key, value] of values) {
+    if (value) matchers.push(`${key}="${escapeSohaQLValue(value)}"`)
+  }
+  const text = clean(filters.text)
+  return `{${matchers.join(', ')}}${text ? ` |= "${escapeSohaQLValue(text)}"` : ''}`
+}
+
+export function parseSohaQLExpression(expression: string): RuntimeLogFilters {
+  const normalized = expression.trim()
+  if (!normalized) return { allContainers: true }
+  if (normalized.length > SOHAQL_MAX_LENGTH) throw new Error('查询语句不能超过 2048 个字符')
+
+  const parsed = normalized.match(/^\{([\s\S]*?)\}\s*(?:\|=\s*"((?:\\["\\]|[^"\\])*)")?\s*$/)
+  if (!parsed) throw new Error('查询语句格式无效')
+
+  const selector = (parsed[1] ?? '').trim()
+  const values = new Map<string, string>()
+  const matcherPattern = /\s*([a-z_]+)\s*=\s*"((?:\\["\\]|[^"\\])*)"\s*(?:,|$)/gy
+  let offset = 0
+  while (offset < selector.length) {
+    matcherPattern.lastIndex = offset
+    const matcher = matcherPattern.exec(selector)
+    if (!matcher || matcher.index !== offset) throw new Error('选择器格式无效')
+    const key = matcher[1] ?? ''
+    if (!SOHAQL_SELECTOR_KEYS.has(key)) throw new Error(`不支持的选择器：${key}`)
+    if (values.has(key)) throw new Error(`选择器不能重复：${key}`)
+    values.set(key, unescapeSohaQLValue(matcher[2] ?? ''))
+    offset = matcherPattern.lastIndex
+  }
+
+  const container = clean(values.get('container'))
+  return {
+    workloadKind: clean(values.get('workload_kind')),
+    workloadName: clean(values.get('workload')),
+    podNames: values.has('pod') ? [values.get('pod') ?? ''] : undefined,
+    containers: container ? [container] : undefined,
+    text: clean(parsed[2] ? unescapeSohaQLValue(parsed[2]) : undefined),
+    allContainers: !container,
+  }
 }
 
 export function buildRuntimeLogQuery(namespace: string, filters: RuntimeLogFilters): LogQuery {
@@ -153,7 +209,6 @@ export function readLogExplorerPreset(params: URLSearchParams): LogExplorerPrese
     containers,
     labelSelector: clean(params.get('labelSelector')),
     text: clean(params.get('text')),
-    mode: params.get('mode') === 'history' ? 'history' : 'live',
     sinceSeconds: Number.isFinite(numberValue) && numberValue > 0 ? numberValue : undefined,
     tail: Number.isFinite(tailValue) && tailValue > 0 ? tailValue : undefined,
     allContainers: params.get('allContainers') === 'true',
@@ -175,7 +230,6 @@ export function buildLogExplorerPath(preset: LogExplorerPreset) {
     ['workload', preset.workloadName],
     ['labelSelector', preset.labelSelector],
     ['text', preset.text],
-    ['mode', preset.mode && preset.mode !== 'live' ? preset.mode : undefined],
     ['range', preset.sinceSeconds ? String(preset.sinceSeconds) : undefined],
     ['tail', preset.tail ? String(preset.tail) : undefined],
     ['allContainers', preset.allContainers ? 'true' : undefined],

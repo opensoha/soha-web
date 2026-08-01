@@ -23,7 +23,6 @@ import {
 } from 'antd'
 import { AdminTable } from '@/components/admin-table'
 import {
-  ManagementDetailHeader,
   ManagementIconButton,
   ManagementState,
   ManagementTableToolbar,
@@ -321,19 +320,6 @@ export function LogDataSourcesPage() {
 
   return (
     <div className="soha-page">
-      <ManagementDetailHeader
-        title="日志数据源"
-        description="Loki、Elasticsearch 与 ClickHouse 持久化日志连接"
-        actions={
-          canManage ? (
-            <ManagementTableToolbar>
-              <Button icon={<PlusOutlined />} type="primary" onClick={() => openEditor()}>
-                新建数据源
-              </Button>
-            </ManagementTableToolbar>
-          ) : null
-        }
-      />
       {sourcesQuery.isError ? (
         <ManagementState
           kind="error"
@@ -342,6 +328,16 @@ export function LogDataSourcesPage() {
         />
       ) : (
         <AdminTable
+          title="日志数据源"
+          headerExtra={
+            canManage ? (
+              <ManagementTableToolbar>
+                <Button icon={<PlusOutlined />} type="primary" onClick={() => openEditor()}>
+                  新建数据源
+                </Button>
+              </ManagementTableToolbar>
+            ) : null
+          }
           columnSettingIconOnly
           columnSettingPlacement="header"
           shellClassName="soha-management-table-shell"

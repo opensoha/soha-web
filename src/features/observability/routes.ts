@@ -14,8 +14,8 @@ export const observabilityParentRoutes = defineRoutes([
     meta: {
       id: 'monitoring-workbench',
       path: '/monitoring-workbench',
-      title: '监控工作台',
-      description: '监控、告警、通知和值班协同',
+      title: '可观测性工作台',
+      description: '日志、告警、通知和值班协同',
       icon: 'IconAlertTriangle',
       group: 'observe',
       workbenchId: 'monitoring',

@@ -4,7 +4,9 @@ import {
   buildLogExplorerPath,
   buildDurableLogQuery,
   buildRuntimeLogQuery,
+  buildSohaQLExpression,
   mergeLogEntries,
+  parseSohaQLExpression,
   readLogExplorerPreset,
 } from './model'
 
@@ -109,7 +111,39 @@ describe('log explorer model', () => {
       sinceSeconds: 3600,
       tail: 500,
       previous: true,
-      mode: 'live',
+    })
+  })
+
+  it('round-trips the safe SohaQL selector subset', () => {
+    const expression = buildSohaQLExpression({
+      workloadKind: 'Deployment',
+      workloadName: 'frontend',
+      podNames: ['frontend-0'],
+      containers: ['frontend'],
+      text: 'request "failed"',
+    })
+
+    expect(expression).toBe(
+      '{workload_kind="Deployment", workload="frontend", pod="frontend-0", container="frontend"} |= "request \\"failed\\""',
+    )
+    expect(parseSohaQLExpression(expression)).toEqual({
+      workloadKind: 'Deployment',
+      workloadName: 'frontend',
+      podNames: ['frontend-0'],
+      containers: ['frontend'],
+      text: 'request "failed"',
+      allContainers: false,
+    })
+    expect(() => parseSohaQLExpression('{namespace="other"}')).toThrow(
+      '不支持的选择器：namespace',
+    )
+    expect(parseSohaQLExpression('{ }')).toEqual({
+      workloadKind: undefined,
+      workloadName: undefined,
+      podNames: undefined,
+      containers: undefined,
+      text: undefined,
+      allContainers: true,
     })
   })
 

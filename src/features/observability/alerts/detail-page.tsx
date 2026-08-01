@@ -14,7 +14,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
-import { ManagementDetailHeader, ManagementState } from '@/components/management-list'
+import { ManagementState } from '@/components/management-list'
 import { BooleanTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { getAIWorkbenchPathForMode, useAIPageContext } from '@/features/copilot'
@@ -128,16 +128,18 @@ function useAlertEventDetailController(eventId: string, enabled: boolean) {
 type DetailController = ReturnType<typeof useAlertEventDetailController>
 
 function AlertEventDetailBody({
+  actions,
   detail,
   inDrawer = false,
 }: {
+  actions?: ReactNode
   detail: DetailController
   inDrawer?: boolean
 }) {
   const { event, rule } = detail
   return (
     <div data-testid={inDrawer ? 'alert-event-drawer-content' : 'alert-event-page-content'}>
-      <Card title="事件摘要" loading={detail.eventQuery.isLoading}>
+      <Card title="事件摘要" extra={actions} loading={detail.eventQuery.isLoading}>
         <Descriptions bordered size="small" column={inDrawer ? 1 : 2}>
           <Descriptions.Item label="事件ID">{event?.id || '-'}</Descriptions.Item>
           <Descriptions.Item label="状态">
@@ -482,13 +484,8 @@ export function AlertEventDetailPageContent({
   })
   return (
     <div className="soha-page">
-      <ManagementDetailHeader
-        title={event?.title || '告警事件详情'}
-        description={
-          event
-            ? `${event.sourceSystem || event.sourceType} · ${event.status}`
-            : '查看告警事件、规则运行、自愈与通知链路'
-        }
+      <AlertEventDetailBody
+        detail={detail}
         actions={
           <AlertEventDetailActions
             detail={detail}
@@ -496,7 +493,6 @@ export function AlertEventDetailPageContent({
           />
         }
       />
-      <AlertEventDetailBody detail={detail} />
     </div>
   )
 }

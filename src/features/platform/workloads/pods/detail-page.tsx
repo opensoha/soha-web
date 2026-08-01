@@ -37,9 +37,9 @@ import '@/features/platform/workloads/styles.css'
 
 const { Link, Text } = Typography
 
-const LogExplorer = lazy(async () => {
-  const mod = await import('@/features/observability')
-  return { default: mod.LogExplorer }
+const PodLogViewer = lazy(async () => {
+  const mod = await import('@/components/pod-log-viewer')
+  return { default: mod.PodLogViewer }
 })
 
 const PodTerminal = lazy(async () => {
@@ -137,6 +137,8 @@ export function PodDetailPage() {
   const [metricsRangeMinutes, setMetricsRangeMinutes] = useState(60)
   const podLogsCapability = useClusterCapability('pod.logs', localeCode)
   const podExecCapability = useClusterCapability('pod.exec', localeCode)
+  const logsStreamingDisabledReason =
+    podLogsCapability.status === 'partial' ? podLogsCapability.reason : undefined
   const terminalPartialReason =
     localeCode === 'zh_CN'
       ? '当前连接模式仅支持非交互式 exec，暂不支持交互终端。'
@@ -574,14 +576,22 @@ export function PodDetailPage() {
         />
       ) : (
         <Suspense fallback={<Spin size="large" />}>
-          <LogExplorer
-            autoStart
+          <PodLogViewer
             clusterId={clusterId}
-            embedded
             namespace={detailNamespace}
-            preset={{
-              podNames: [podName],
-              containers: container ? [container] : undefined,
+            podName={podName}
+            container={container || undefined}
+            active={activeTabKey === 'logs'}
+            containerOptions={containerOptions}
+            onContainerChange={setContainer}
+            streamingDisabledReason={logsStreamingDisabledReason}
+            onOpenLogCenter={() => {
+              const query = new URLSearchParams()
+              if (clusterId) query.set('cluster', clusterId)
+              if (detailNamespace) query.set('namespace', detailNamespace)
+              query.append('pod', podName)
+              if (container) query.append('container', container)
+              navigate(`/monitoring-workbench/logs?${query.toString()}`)
             }}
           />
         </Suspense>

@@ -4,7 +4,7 @@ import { act } from 'react'
 import { App as AntdApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot, type Root } from 'react-dom/client'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PodDetailPage } from './detail-page'
 
@@ -103,9 +103,16 @@ vi.mock('@/components/resource-metrics-panel', () => {
   }
 })
 
-vi.mock('@/features/observability', () => {
+vi.mock('@/components/pod-log-viewer', () => {
   testState.runtimeLoads.logs += 1
-  return { LogExplorer: () => <div data-testid="logs-panel">logs-panel</div> }
+  return {
+    PodLogViewer: ({ onOpenLogCenter }: { onOpenLogCenter?: () => void }) => (
+      <div data-testid="logs-panel">
+        logs-panel
+        <button onClick={onOpenLogCenter}>在日志中心打开</button>
+      </div>
+    ),
+  }
 })
 
 vi.mock('@/components/pod-terminal', () => {
@@ -129,6 +136,11 @@ vi.mock('@/components/admin-table', () => ({
 }))
 
 const mountedRoots: Root[] = []
+
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="location">{`${location.pathname}${location.search}`}</div>
+}
 
 beforeAll(() => {
   class ResizeObserverMock {
@@ -194,6 +206,7 @@ async function renderDetail() {
           <MemoryRouter initialEntries={['/workloads/pods/prometheus-0?namespace=url-namespace']}>
             <Routes>
               <Route path="/workloads/pods/:podName" element={<PodDetailPage />} />
+              <Route path="/monitoring-workbench/logs" element={<LocationProbe />} />
             </Routes>
           </MemoryRouter>
         </AntdApp>
@@ -236,6 +249,7 @@ describe('pod detail page lazy boundaries', () => {
 
     await clickTab(container, '日志')
     expect(container.querySelector('[data-testid="logs-panel"]')).not.toBeNull()
+    expect(container.textContent).toContain('在日志中心打开')
     expect(testState.runtimeLoads.logs).toBe(1)
 
     await clickTab(container, '终端')
@@ -251,5 +265,22 @@ describe('pod detail page lazy boundaries', () => {
     await clickTab(container, 'YAML')
     expect(requestedPaths().some((path) => path.includes('/yaml?namespace=monitoring'))).toBe(true)
     expect(container.querySelector('[data-testid="yaml-editor"]')).not.toBeNull()
+  })
+
+  it('opens the log center with the current pod scope', async () => {
+    const container = await renderDetail()
+
+    await clickTab(container, '日志')
+    const openLogCenter = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('在日志中心打开'),
+    )
+    expect(openLogCenter).toBeDefined()
+
+    await act(async () => openLogCenter?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    await flushAsyncWork()
+
+    expect(container.querySelector('[data-testid="location"]')?.textContent).toBe(
+      '/monitoring-workbench/logs?cluster=cluster-a&namespace=monitoring&pod=prometheus-0&container=prometheus',
+    )
   })
 })

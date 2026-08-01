@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { DeleteOutlined, ReloadOutlined } from '@ant-design/icons'
+import { DeleteOutlined, ExportOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Button, Card, Flex, Input, Select, Switch, Tag, Typography } from 'antd'
 import { ManagementState } from '@/components/management-list'
 import './resource-operation-panels.css'
@@ -143,6 +143,7 @@ export function PodLogViewer({
   container,
   active = true,
   containerOptions,
+  onOpenLogCenter,
   onContainerChange,
   streamingDisabledReason,
 }: {
@@ -152,6 +153,7 @@ export function PodLogViewer({
   container?: string
   active?: boolean
   containerOptions?: Array<{ value: string; label: string }>
+  onOpenLogCenter?: () => void
   onContainerChange?: (value: string) => void
   streamingDisabledReason?: string
 }) {
@@ -514,6 +516,11 @@ export function PodLogViewer({
           {localeCode === 'zh_CN' ? '导出日志' : 'Export Logs'}
         </Button>
         <Button icon={<ReloadOutlined />} size="small" type="text" onClick={() => fetchSnapshot(historyLines)}>{t('podLogViewer.reconnect', 'Reconnect')}</Button>
+        {onOpenLogCenter ? (
+          <Button icon={<ExportOutlined />} size="small" onClick={onOpenLogCenter}>
+            {localeCode === 'zh_CN' ? '在日志中心打开' : 'Open in Log Center'}
+          </Button>
+        ) : null}
       </Flex>
       <div ref={scrollerRef} className="soha-log-shell" onScroll={() => { void handleScroll() }}>
         {loadingOlder ? (

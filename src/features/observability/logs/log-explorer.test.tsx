@@ -1,10 +1,10 @@
 /** @vitest-environment jsdom */
 
-import { act } from 'react'
+import { act, useState } from 'react'
 import { App as AntdApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot, type Root } from 'react-dom/client'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LogExplorer } from './log-explorer'
 
@@ -41,6 +41,11 @@ class WebSocketMock {
 }
 
 const roots: Root[] = []
+
+function LocationProbe() {
+  const location = useLocation()
+  return <output data-testid="location">{`${location.pathname}${location.search}`}</output>
+}
 
 beforeAll(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
@@ -103,7 +108,10 @@ async function renderExplorer(element: React.ReactNode) {
     root.render(
       <AntdApp>
         <QueryClientProvider client={client}>
-          <MemoryRouter>{element}</MemoryRouter>
+          <MemoryRouter>
+            {element}
+            <LocationProbe />
+          </MemoryRouter>
         </QueryClientProvider>
       </AntdApp>,
     )
@@ -123,6 +131,7 @@ describe('LogExplorer', () => {
       <LogExplorer
         autoStart
         clusterId="cluster-a"
+        embedded
         namespace="apps"
         preset={{ workloadKind: 'Deployment', workloadName: 'api' }}
       />,
@@ -132,6 +141,9 @@ describe('LogExplorer', () => {
     expect(apiMocks.queryLogs).toHaveBeenCalledOnce()
     expect(apiMocks.issueLogStreamTicket).toHaveBeenCalledOnce()
     expect(WebSocketMock.instances[0]?.url).toContain('stream_ticket=ticket-1')
+    expect(container.textContent).toContain('在日志中心打开')
+    expect(container.textContent).not.toContain('Live')
+    expect(container.textContent).not.toContain('History')
 
     await act(async () => {
       WebSocketMock.instances[0]?.onopen?.()
@@ -172,11 +184,22 @@ describe('LogExplorer', () => {
       scopeRestricted: false,
     })
     const container = await renderExplorer(
-      <LogExplorer clusterId="cluster-a" namespace="apps" preset={{ mode: 'history' }} />,
+      <LogExplorer
+        clusterId="cluster-a"
+        namespace="apps"
+        preset={{ podNames: ['api-0'], containers: ['api'], text: 'timeout' }}
+      />,
     )
+    expect(container.textContent).not.toContain('Live')
+    expect(container.textContent).not.toContain('History')
+    expect(container.textContent).toContain('SohaQL')
+    expect(container.querySelector<HTMLTextAreaElement>('[aria-label="SohaQL 查询语句"]')?.value).toBe(
+      '{pod="api-0", container="api"} |= "timeout"',
+    )
+    expect(container.textContent).not.toContain('工作负载类型')
 
     const submit = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(
-      (button) => button.textContent?.includes('查询历史日志'),
+      (button) => button.textContent?.includes('查询日志'),
     )
     await act(async () => {
       submit?.click()
@@ -196,16 +219,95 @@ describe('LogExplorer', () => {
     expect(apiMocks.queryLogs).toHaveBeenCalledOnce()
     expect(apiMocks.queryLogs.mock.calls[0]?.[1]).toMatchObject({
       sourceMode: 'durable',
-      selector: { namespace: 'apps' },
+      selector: { namespace: 'apps', podNames: ['api-0'], containers: ['api'] },
       direction: 'backward',
+      text: 'timeout',
     })
     expect(apiMocks.issueLogStreamTicket).not.toHaveBeenCalled()
+  })
+
+  it('switches the standalone query editor to the visual filter builder', async () => {
+    const container = await renderExplorer(
+      <LogExplorer
+        clusterId="cluster-a"
+        namespace="apps"
+        preset={{ workloadKind: 'Deployment', workloadName: 'api' }}
+      />,
+    )
+    const builder = Array.from(container.querySelectorAll<HTMLElement>('.ant-segmented-item')).find(
+      (item) => item.textContent?.includes('筛选器'),
+    )
+
+    expect(builder).toBeDefined()
+    await act(async () => builder?.click())
+
+    expect(container.textContent).toContain('工作负载类型')
+    expect(container.textContent).toContain('工作负载名称')
+    expect(container.querySelector('[aria-label="SohaQL 查询语句"]')).toBeNull()
+  })
+
+  it('updates the query editor when an in-place deep link changes', async () => {
+    function Harness() {
+      const [podName, setPodName] = useState('api-0')
+      return (
+        <>
+          <button onClick={() => setPodName('api-1')}>切换深链</button>
+          <LogExplorer clusterId="cluster-a" namespace="apps" preset={{ podNames: [podName] }} />
+        </>
+      )
+    }
+
+    const container = await renderExplorer(<Harness />)
+    const query = () =>
+      container.querySelector<HTMLTextAreaElement>('[aria-label="SohaQL 查询语句"]')
+
+    expect(query()?.value).toBe('{pod="api-0"}')
+    await act(async () => {
+      Array.from(container.querySelectorAll('button'))
+        .find((button) => button.textContent === '切换深链')
+        ?.click()
+    })
+    expect(query()?.value).toBe('{pod="api-1"}')
+  })
+
+  it('opens the log center with the current embedded filters', async () => {
+    const container = await renderExplorer(
+      <LogExplorer
+        clusterId="cluster-a"
+        embedded
+        namespace="apps"
+        preset={{ podNames: ['api-0'] }}
+      />,
+    )
+    const textFilter = container.querySelector<HTMLInputElement>(
+      'input[placeholder="服务端文本匹配"]',
+    )
+
+    await act(async () => {
+      if (textFilter) {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+          textFilter,
+          'timeout',
+        )
+      }
+      textFilter?.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => {
+      Array.from(container.querySelectorAll('button'))
+        .find((button) => button.textContent?.includes('在日志中心打开'))
+        ?.click()
+    })
+
+    expect(container.querySelector('[data-testid="location"]')?.textContent).toContain(
+      '/monitoring-workbench/logs?cluster=cluster-a&namespace=apps&text=timeout&range=900&tail=200&allContainers=true&pod=api-0',
+    )
   })
 
   it('uses the shared explorer for a Docker project service', async () => {
     const container = await renderExplorer(
       <LogExplorer
         autoStart
+        embedded
         target={{ kind: 'docker', projectId: 'project-1', serviceName: 'api' }}
       />,
     )
@@ -228,10 +330,10 @@ describe('LogExplorer', () => {
       namespace: '',
     }
     const container = await renderExplorer(
-      <LogExplorer target={target} preset={{ mode: 'history' }} />,
+      <LogExplorer target={target} />,
     )
     const submit = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(
-      (button) => button.textContent?.includes('查询历史日志'),
+      (button) => button.textContent?.includes('查询日志'),
     )
 
     await act(async () => {

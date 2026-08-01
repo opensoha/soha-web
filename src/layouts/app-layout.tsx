@@ -378,8 +378,8 @@ function buildWorkbenchOptions(localeCode: 'zh_CN' | 'en_US'): WorkbenchOption[]
       },
       {
         key: 'monitoring',
-        label: 'Monitoring Workbench',
-        description: 'Alerts, routes, notifications, and on-call flows',
+        label: 'Observability Workbench',
+        description: 'Logs, alerts, routes, notifications, and on-call flows',
         icon: <AlertOutlined />,
       },
       {
@@ -429,8 +429,8 @@ function buildWorkbenchOptions(localeCode: 'zh_CN' | 'en_US'): WorkbenchOption[]
     },
     {
       key: 'monitoring',
-      label: '监控工作台',
-      description: '告警、路由、通知和值班协同',
+      label: '可观测性工作台',
+      description: '日志、告警、路由、通知和值班协同',
       icon: <AlertOutlined />,
     },
     {

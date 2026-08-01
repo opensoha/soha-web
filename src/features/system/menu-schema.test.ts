@@ -11,6 +11,8 @@ describe('menu section schema helpers', () => {
   it('normalizes legacy display labels to canonical section keys', () => {
     expect(normalizeMenuSection('Dashboard')).toBe('platform')
     expect(normalizeMenuSection('observe')).toBe('ops')
+    expect(normalizeMenuSection('logs')).toBe('logging')
+    expect(normalizeMenuSection('alerts')).toBe('alerting')
     expect(normalizeMenuSection('ai-operations')).toBe('ai-governance')
     expect(normalizeMenuSection('Delivery')).toBe('delivery')
     expect(normalizeMenuSection('extension')).toBe('extensions')
@@ -20,6 +22,9 @@ describe('menu section schema helpers', () => {
 
   it('renders canonical labels for normalized aliases', () => {
     expect(resolveMenuSectionLabel('observe')).toBe('Observe')
+    expect(resolveMenuSectionLabel('logging')).toBe('日志')
+    expect(resolveMenuSectionLabel('alerting')).toBe('告警与响应')
+    expect(resolveMenuSectionLabel('alerting', 'en_US')).toBe('Alerting & Response')
     expect(resolveMenuSectionLabel('Dashboard')).toBe('Dashboard')
     expect(resolveMenuSectionLabel('extensions')).toBe('扩展')
     expect(resolveMenuSectionLabel('extensions', 'en_US')).toBe('Extensions')
@@ -36,10 +41,21 @@ describe('menu section schema helpers', () => {
 
   it('only keeps active section options and removes duplicate aliases', () => {
     expect(
-      buildMenuSectionOptions(['platform', 'Dashboard', 'observe', 'ops', 'control', 'deliver']),
+      buildMenuSectionOptions([
+        'platform',
+        'Dashboard',
+        'observe',
+        'ops',
+        'logs',
+        'alerts',
+        'control',
+        'deliver',
+      ]),
     ).toEqual([
       { value: 'platform', label: 'Dashboard' },
       { value: 'ops', label: 'Observe' },
+      { value: 'logging', label: '日志' },
+      { value: 'alerting', label: '告警与响应' },
       { value: 'delivery', label: '应用交付' },
       { value: 'control', label: 'control' },
     ])

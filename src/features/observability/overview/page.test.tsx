@@ -79,7 +79,6 @@ vi.mock('@/components/overview-visuals', () => ({
   ),
 }))
 vi.mock('@/components/management-list', () => ({
-  ManagementDetailHeader: ({ title }: { title: ReactNode }) => <h1>{title}</h1>,
   ManagementIconButton: ({ 'aria-label': label }: { 'aria-label': string }) => (
     <button aria-label={label} />
   ),
@@ -139,7 +138,6 @@ describe('MonitoringPage', () => {
       if (container.textContent?.includes('High CPU') && queryClient.isFetching() === 0) break
     }
 
-    expect(container.textContent).toContain('总览')
     expect(container.textContent).toContain('活跃告警: 1')
     expect(container.textContent).toContain('High CPU')
     expect(container.textContent).toContain('待处理自愈: 1')

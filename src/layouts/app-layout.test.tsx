@@ -122,7 +122,12 @@ vi.mock('@/features/system/menu-schema', async () => {
   )
   return {
     ...actual,
-    resolveMenuSectionLabel: (key: string) => (key === 'users' ? '用户管理' : key),
+    resolveMenuSectionLabel: (key: string) => {
+      if (key === 'users') return '用户管理'
+      if (key === 'logging') return '日志'
+      if (key === 'alerting') return '告警与响应'
+      return key
+    },
   }
 })
 
@@ -504,19 +509,43 @@ describe('app layout workspace navigation', () => {
     expect(testState.prefs.setCurrentWorkspace).toHaveBeenCalledWith('application')
   })
 
-  it('shows the namespace scope selector on the monitoring Logs page', async () => {
+  it('groups logs separately from alerting in the observability workbench', async () => {
     const container = await renderWithProviders('/monitoring-workbench/logs', {
-      permissionKeys: ['workspace.resource.view', 'observe.monitoring.view'],
-      visibleMenuIds: ['monitoring-workbench', 'monitoring-workbench-logs'],
+      permissionKeys: [
+        'workspace.resource.view',
+        'observe.monitoring.view',
+        'observe.log-data-sources.view',
+        'observe.alert-rules.view',
+        'observe.oncall.view',
+      ],
+      visibleMenuIds: [
+        'monitoring-workbench',
+        'monitoring-workbench-overview',
+        'monitoring-workbench-logs',
+        'monitoring-workbench-log-data-sources',
+        'monitoring-workbench-rules',
+        'monitoring-workbench-oncall',
+      ],
       visibleMenus: [
         {
           id: 'monitoring-workbench',
           path: '/monitoring-workbench',
-          labelZh: '监控工作台',
-          labelEn: 'Monitoring Workbench',
+          labelZh: '可观测性工作台',
+          labelEn: 'Observability Workbench',
           iconKey: 'gauge',
           section: 'ops',
           sortOrder: 60,
+          enabled: true,
+        },
+        {
+          id: 'monitoring-workbench-overview',
+          parentId: 'monitoring-workbench',
+          path: '/monitoring-workbench/overview',
+          labelZh: '总览',
+          labelEn: 'Overview',
+          iconKey: 'gauge',
+          section: '',
+          sortOrder: 61,
           enabled: true,
         },
         {
@@ -526,13 +555,58 @@ describe('app layout workspace navigation', () => {
           labelZh: '日志',
           labelEn: 'Logs',
           iconKey: 'history',
-          section: 'ops',
+          section: 'logging',
           sortOrder: 62,
+          enabled: true,
+        },
+        {
+          id: 'monitoring-workbench-log-data-sources',
+          parentId: 'monitoring-workbench',
+          path: '/monitoring-workbench/log-data-sources',
+          labelZh: '日志数据源',
+          labelEn: 'Log Data Sources',
+          iconKey: 'server',
+          section: 'logging',
+          sortOrder: 63,
+          enabled: true,
+        },
+        {
+          id: 'monitoring-workbench-rules',
+          parentId: 'monitoring-workbench',
+          path: '/monitoring-workbench/rules',
+          labelZh: '告警规则',
+          labelEn: 'Alert Rules',
+          iconKey: 'siren',
+          section: 'alerting',
+          sortOrder: 65,
+          enabled: true,
+        },
+        {
+          id: 'monitoring-workbench-oncall',
+          parentId: 'monitoring-workbench',
+          path: '/monitoring-workbench/oncall',
+          labelZh: '值班协同',
+          labelEn: 'On-Call Coordination',
+          iconKey: 'users',
+          section: 'alerting',
+          sortOrder: 69,
           enabled: true,
         },
       ],
     })
 
+    expect(container.querySelector('.soha-workbench-switcher__label')?.textContent).toBe(
+      '可观测性工作台',
+    )
+    expect(
+      Array.from(container.querySelectorAll('.ant-menu-item-group-title')).map((item) =>
+        item.textContent?.trim(),
+      ),
+    ).toEqual(['日志', '告警与响应'])
+    expect(container.textContent).toContain('总览')
+    expect(container.textContent).toContain('日志数据源')
+    expect(container.textContent).toContain('告警规则')
+    expect(container.textContent).toContain('值班协同')
     expect(container.querySelector('[data-testid="platform-scope-trigger"]')?.textContent).toBe(
       'namespace',
     )

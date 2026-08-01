@@ -24,7 +24,6 @@ import type { TableProps } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
 import {
-  ManagementDetailHeader,
   ManagementIconButton,
   ManagementTableToolbar,
 } from '@/components/management-list'
@@ -625,10 +624,8 @@ export function NotificationsPage() {
 
   return (
     <div className="soha-page">
-      <ManagementDetailHeader
-        title="通知策略"
-        description="维护通知策略、模板、渠道、路由规则与静默策略。"
-        actions={
+      <Tabs
+        tabBarExtraContent={
           canManageNotifications ? (
             <ManagementTableToolbar>
               <Button icon={<PlusOutlined />} onClick={() => openSilenceEditor(null)}>
@@ -646,8 +643,6 @@ export function NotificationsPage() {
             </ManagementTableToolbar>
           ) : null
         }
-      />
-      <Tabs
         items={[
           {
             key: 'policies',

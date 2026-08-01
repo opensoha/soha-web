@@ -29,10 +29,8 @@ import type { Dayjs } from 'dayjs'
 import { useNavigate } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
 import {
-  ManagementDetailHeader,
   ManagementIconButton,
   ManagementState,
-  ManagementTableToolbar,
 } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
@@ -211,24 +209,6 @@ export function OnCallBoardPage() {
 
   return (
     <div className="soha-page">
-      <ManagementDetailHeader
-        title="值班协同"
-        description="跟踪当前排班、轮值与待响应任务，必要时可临时覆盖某天的值班人。"
-        actions={
-          <ManagementTableToolbar>
-            <Select
-              style={{ minWidth: 220 }}
-              placeholder="选择排班"
-              value={effectiveScheduleId || undefined}
-              options={scheduleOptions}
-              onChange={setSelectedScheduleId}
-            />
-            <Button onClick={() => navigate('/monitoring-workbench/oncall/settings')}>
-              值班设置
-            </Button>
-          </ManagementTableToolbar>
-        }
-      />
       {schedules.length === 0 ? (
         <Card>
           <ManagementState
@@ -308,15 +288,27 @@ export function OnCallBoardPage() {
               </Space>
             }
             extra={
-              <Segmented
-                value={view}
-                onChange={(value) => setView(value as OnCallBoardView)}
-                options={[
-                  { value: 'calendar', label: '月历' },
-                  { value: 'timeline', label: '时间轴' },
-                  { value: 'list', label: '覆盖列表' },
-                ]}
-              />
+              <Space wrap>
+                <Select
+                  style={{ minWidth: 220 }}
+                  placeholder="选择排班"
+                  value={effectiveScheduleId || undefined}
+                  options={scheduleOptions}
+                  onChange={setSelectedScheduleId}
+                />
+                <Segmented
+                  value={view}
+                  onChange={(value) => setView(value as OnCallBoardView)}
+                  options={[
+                    { value: 'calendar', label: '月历' },
+                    { value: 'timeline', label: '时间轴' },
+                    { value: 'list', label: '覆盖列表' },
+                  ]}
+                />
+                <Button onClick={() => navigate('/monitoring-workbench/oncall/settings')}>
+                  值班设置
+                </Button>
+              </Space>
             }
           >
             {view === 'calendar' ? (
