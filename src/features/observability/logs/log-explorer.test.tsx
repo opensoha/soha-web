@@ -145,6 +145,9 @@ describe('LogExplorer', () => {
     expect(container.textContent).not.toContain('Live')
     expect(container.textContent).not.toContain('History')
     expect(container.querySelector('.soha-log-results-explorer')).toBeNull()
+    expect(container.querySelector('.soha-log-results-card .ant-card-head')?.textContent).toContain(
+      '运行时日志',
+    )
 
     await act(async () => {
       WebSocketMock.instances[0]?.onopen?.()
@@ -202,6 +205,7 @@ describe('LogExplorer', () => {
     )
     expect(container.textContent).not.toContain('Live')
     expect(container.textContent).not.toContain('History')
+    expect(container.querySelector('.soha-log-results-card .ant-card-head')).toBeNull()
     expect(container.textContent).toContain('SohaQL')
     expect(
       container.querySelector<HTMLTextAreaElement>('[aria-label="SohaQL 查询语句"]')?.value,

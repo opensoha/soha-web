@@ -736,10 +736,7 @@ export function LogExplorer({
         </Form>
       </Card>
 
-      <Card
-        className="soha-log-results-card"
-        title={mode === 'history' ? '查询结果' : '运行时日志'}
-      >
+      <Card className="soha-log-results-card" title={mode === 'live' ? '运行时日志' : undefined}>
         <Flex className="soha-log-results-toolbar" align="center" gap={8} wrap>
           <StatusTag
             value={
