@@ -173,6 +173,7 @@ describe('LogExplorer', () => {
   })
 
   it('queries durable history without opening a live stream', async () => {
+    const longAttributeValue = 'cluster-segment-'.repeat(20)
     apiMocks.queryLogs.mockResolvedValueOnce({
       entries: [
         {
@@ -181,7 +182,7 @@ describe('LogExplorer', () => {
           severity: 'ERROR',
           stream: 'stderr',
           traceId: 'trace-1',
-          attributes: { 'service.name': 'orders' },
+          attributes: { 'service.name': 'orders', 'k8s.long': longAttributeValue },
           source: {
             domain: 'kubernetes',
             namespace: 'apps',
@@ -206,10 +207,9 @@ describe('LogExplorer', () => {
     expect(container.textContent).not.toContain('Live')
     expect(container.textContent).not.toContain('History')
     expect(container.querySelector('.soha-log-results-card .ant-card-head')).toBeNull()
-    expect(container.textContent).toContain('SohaQL')
-    expect(
-      container.querySelector<HTMLTextAreaElement>('[aria-label="SohaQL 查询语句"]')?.value,
-    ).toBe('{pod="api-0", container="api"} |= "timeout"')
+    expect(container.textContent).toContain('筛选查询')
+    expect(container.textContent).toContain('高级语句')
+    expect(container.querySelector('[aria-label="SohaQL 高级查询语句"]')).toBeNull()
     expect(
       container.querySelector('.soha-log-query-mode-row [aria-label="时间范围"]'),
     ).not.toBeNull()
@@ -217,7 +217,7 @@ describe('LogExplorer', () => {
       container.querySelector('.soha-log-query-mode-row [aria-label="每页行数"]'),
     ).not.toBeNull()
     expect(container.querySelector('.soha-log-query-actions [aria-label="时间范围"]')).toBeNull()
-    expect(container.textContent).not.toContain('工作负载类型')
+    expect(container.textContent).toContain('工作负载类型')
 
     const submit = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(
       (button) => button.textContent?.includes('查询日志'),
@@ -243,6 +243,10 @@ describe('LogExplorer', () => {
     )
     expect(container.querySelector('.soha-log-result-row > summary')).not.toBeNull()
     expect(container.querySelector('.soha-log-result-detail')?.textContent).toContain('trace-1')
+    expect(container.querySelector('.soha-log-result-detail')?.textContent).toContain(
+      longAttributeValue,
+    )
+    expect(container.querySelector('.soha-log-result-detail dl')).not.toBeNull()
     expect(container.querySelector('.soha-log-result-header .is-source')).not.toBeNull()
     await act(async () => {
       container.querySelector<HTMLInputElement>('input[value="source"]')?.click()
@@ -258,7 +262,7 @@ describe('LogExplorer', () => {
     expect(apiMocks.issueLogStreamTicket).not.toHaveBeenCalled()
   })
 
-  it('switches the standalone query editor to the visual filter builder', async () => {
+  it('keeps the advanced SohaQL editor available from the visual filter builder', async () => {
     const container = await renderExplorer(
       <LogExplorer
         clusterId="cluster-a"
@@ -266,8 +270,22 @@ describe('LogExplorer', () => {
         preset={{ workloadKind: 'Deployment', workloadName: 'api' }}
       />,
     )
+    const advanced = Array.from(
+      container.querySelectorAll<HTMLElement>('.ant-segmented-item'),
+    ).find((item) => item.textContent?.includes('高级语句'))
+
+    expect(container.textContent).toContain('工作负载类型')
+    expect(container.textContent).toContain('工作负载名称')
+    expect(advanced).toBeDefined()
+    await act(async () => advanced?.click())
+
+    expect(
+      container.querySelector<HTMLTextAreaElement>('[aria-label="SohaQL 高级查询语句"]')?.value,
+    ).toBe('{workload_kind="Deployment", workload="api"}')
+    expect(container.textContent).toContain('SohaQL')
+
     const builder = Array.from(container.querySelectorAll<HTMLElement>('.ant-segmented-item')).find(
-      (item) => item.textContent?.includes('筛选器'),
+      (item) => item.textContent?.includes('筛选查询'),
     )
 
     expect(builder).toBeDefined()
@@ -275,7 +293,26 @@ describe('LogExplorer', () => {
 
     expect(container.textContent).toContain('工作负载类型')
     expect(container.textContent).toContain('工作负载名称')
-    expect(container.querySelector('[aria-label="SohaQL 查询语句"]')).toBeNull()
+    expect(container.querySelector('[aria-label="SohaQL 高级查询语句"]')).toBeNull()
+  })
+
+  it('keeps multiple builder filters intact when advanced SohaQL cannot represent them', async () => {
+    const container = await renderExplorer(
+      <LogExplorer
+        clusterId="cluster-a"
+        namespace="apps"
+        preset={{ podNames: ['api-0', 'api-1'] }}
+      />,
+    )
+    const advanced = Array.from(
+      container.querySelectorAll<HTMLElement>('.ant-segmented-item'),
+    ).find((item) => item.textContent?.includes('高级语句'))
+
+    await act(async () => advanced?.click())
+
+    expect(container.querySelector('[aria-label="SohaQL 高级查询语句"]')).toBeNull()
+    expect(container.textContent).toContain('api-0')
+    expect(container.textContent).toContain('api-1')
   })
 
   it('updates the query editor when an in-place deep link changes', async () => {
@@ -290,8 +327,12 @@ describe('LogExplorer', () => {
     }
 
     const container = await renderExplorer(<Harness />)
+    const advanced = Array.from(
+      container.querySelectorAll<HTMLElement>('.ant-segmented-item'),
+    ).find((item) => item.textContent?.includes('高级语句'))
+    await act(async () => advanced?.click())
     const query = () =>
-      container.querySelector<HTMLTextAreaElement>('[aria-label="SohaQL 查询语句"]')
+      container.querySelector<HTMLTextAreaElement>('[aria-label="SohaQL 高级查询语句"]')
 
     expect(query()?.value).toBe('{pod="api-0"}')
     await act(async () => {

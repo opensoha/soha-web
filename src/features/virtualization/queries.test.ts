@@ -75,7 +75,7 @@ describe('virtualizationQueries', () => {
     expect(vmMetrics).toHaveBeenCalledWith('vm-1', 15, 30)
     expect(vmConsole).toHaveBeenCalledWith('vm-1')
     expect(clusters).toHaveBeenCalledOnce()
-    expect(images).toHaveBeenCalledWith()
+    expect(images).toHaveBeenCalledWith({ pageSize: 500 })
     expect(flavors).toHaveBeenCalledOnce()
     expect(operationLogs).toHaveBeenCalledWith('op-1')
   })

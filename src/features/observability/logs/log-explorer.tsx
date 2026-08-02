@@ -217,9 +217,7 @@ export function LogExplorer({
     () => JSON.parse(serializedDefaults) as RuntimeLogFilters,
     [serializedDefaults],
   )
-  const [queryEditorMode, setQueryEditorMode] = useState<QueryEditorMode>(
-    embedded ? 'builder' : 'query',
-  )
+  const [queryEditorMode, setQueryEditorMode] = useState<QueryEditorMode>('builder')
   const [queryExpression, setQueryExpression] = useState(() => buildSohaQLExpression(defaults))
   const [submitted, setSubmitted] = useState<SubmittedLogQuery | null>(null)
   const [entries, setEntries] = useState<LogEntry[]>([])
@@ -350,7 +348,15 @@ export function LogExplorer({
     const nextMode = value as QueryEditorMode
     try {
       if (nextMode === 'query') {
-        setQueryExpression(buildSohaQLExpression(form.getFieldsValue()))
+        const filters = form.getFieldsValue()
+        if (
+          (filters.podNames?.length ?? 0) > 1 ||
+          (!filters.allContainers && (filters.containers?.length ?? 0) > 1)
+        ) {
+          void message.warning('高级语句暂不支持多个 Pod 或容器，请先缩小筛选范围')
+          return
+        }
+        setQueryExpression(buildSohaQLExpression(filters))
       } else {
         const filters = parseSohaQLExpression(queryExpression)
         form.setFieldsValue({
@@ -570,14 +576,14 @@ export function LogExplorer({
               <Segmented
                 aria-label="日志查询模式"
                 options={[
-                  { icon: <CodeOutlined />, label: '查询语句', value: 'query' },
-                  { icon: <FilterOutlined />, label: '筛选器', value: 'builder' },
+                  { icon: <FilterOutlined />, label: '筛选查询', value: 'builder' },
+                  { icon: <CodeOutlined />, label: '高级语句', value: 'query' },
                 ]}
                 value={queryEditorMode}
                 onChange={handleQueryEditorModeChange}
               />
               <Space className="soha-log-query-scope" size={8} wrap>
-                <MetadataTag label="SohaQL" tone="blue" />
+                {queryEditorMode === 'query' ? <MetadataTag label="SohaQL" tone="blue" /> : null}
                 <Text type="secondary">
                   {resolvedTarget.kind === 'cluster'
                     ? resolvedTarget.namespace || '未选择命名空间'
@@ -618,7 +624,7 @@ export function LogExplorer({
 
           {!embedded && queryEditorMode === 'query' ? (
             <Input.TextArea
-              aria-label="SohaQL 查询语句"
+              aria-label="SohaQL 高级查询语句"
               className="soha-log-query-editor"
               maxLength={2048}
               rows={2}

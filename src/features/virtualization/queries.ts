@@ -83,7 +83,7 @@ export const virtualizationQueries = {
   imageOptions: (enabled = true) =>
     queryOptions({
       queryKey: virtualizationKeys.imageOptions(),
-      queryFn: () => virtualizationApi.images(),
+      queryFn: () => virtualizationApi.images({ pageSize: 500 }),
       enabled,
     }),
   flavors: (enabled = true) =>

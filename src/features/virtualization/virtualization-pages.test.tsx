@@ -262,7 +262,10 @@ const testState = vi.hoisted(() => ({
         },
       }
     }
-    if (path === '/virtualization/images' || path === '/virtualization/images?page=1&pageSize=10') {
+    if (
+      path === '/virtualization/images?pageSize=500' ||
+      path === '/virtualization/images?page=1&pageSize=10'
+    ) {
       return {
         data: {
           items: [
@@ -649,7 +652,7 @@ describe('virtualization pages', () => {
 
     expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/vms?page=1&pageSize=10')
     expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/clusters')
-    expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/images')
+    expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/images?pageSize=500')
     expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/flavors')
     expect(container.textContent).toContain('build-vm')
 
