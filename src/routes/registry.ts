@@ -8,6 +8,7 @@ import { observabilityRouteManifests } from '@/features/observability/routes'
 import { platformRouteManifests, platformShellRoutes } from '@/features/platform/routes'
 import { pluginRoutes } from '@/features/plugins/routes'
 import { providerPortalRoutes } from '@/features/provider-portal/routes'
+import { secretRoutes } from '@/features/secrets'
 import { settingsRoutes } from '@/features/settings/routes'
 import { systemRoutes } from '@/features/system/routes'
 import { assertValidRouteDefinitions, resolveRouteDefinitions } from './definitions'
@@ -24,6 +25,7 @@ export const featureRouteManifests = [
   ...observabilityRouteManifests,
   providerPortalRoutes,
   pluginRoutes,
+  secretRoutes,
   ...identityRouteManifests,
   settingsRoutes,
   systemRoutes,

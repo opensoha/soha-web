@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { PlatformScopeToolbar } from '@/components/platform-scope-toolbar'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { LogExplorer } from './log-explorer'
 import type { LogTarget } from './api'
@@ -39,6 +40,14 @@ export function LogsPage() {
         clusterId={clusterId}
         namespace={namespace}
         preset={preset}
+        scopeControl={
+          <PlatformScopeToolbar
+            clusterWidth={180}
+            embedded
+            namespaceWidth={180}
+            showLabel={false}
+          />
+        }
         syncURL
         target={target}
       />

@@ -3,6 +3,8 @@ import { App, Descriptions, Form, Input, InputNumber, Radio, Select } from 'antd
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { StepFormModal } from '@/components/step-form-modal'
 import type { StepFormStep } from '@/components/step-form'
+import { OperationalPlanModal } from '@/components/operational-plan-modal'
+import type { OperationalPlan } from '@opensoha/contracts/gen/ts/sohaapi'
 import { useWorkbenchModuleEnabled } from '@/features/modules'
 import {
   virtualizationQueries,
@@ -131,6 +133,11 @@ export function RuntimeHostStepModal({
   open,
 }: RuntimeHostStepModalProps) {
   const [current, setCurrent] = useState(0)
+  const [provisionPlan, setProvisionPlan] = useState<OperationalPlan | null>(null)
+  const [pendingProvision, setPendingProvision] = useState<{
+    idempotencyKey: string
+    payload: DockerQuickCreateHostInput
+  } | null>(null)
   const [form] = Form.useForm<RuntimeHostCreateValues>()
   const mode = Form.useWatch('mode', form) ?? 'existing'
   const connectionID = Form.useWatch('virtualizationConnectionId', form)
@@ -158,28 +165,42 @@ export function RuntimeHostStepModal({
   const saveMutation = useMutation({
     mutationFn: async (values: RuntimeHostCreateValues): Promise<unknown> => {
       if (editing) return dockerApi.updateHost(editing.id, buildExistingHostPayload(values))
-      if (values.mode === 'provision') {
-        return dockerApi.quickCreateHost(buildProvisionHostPayload(values))
-      }
       return dockerApi.createHost(buildExistingHostPayload(values))
     },
-    onSuccess: (_result, values) => {
-      message.success(
-        editing
-          ? '运行时主机已更新'
-          : values.mode === 'provision'
-            ? '主机构建任务已提交'
-            : '运行时主机已接入',
-      )
+    onSuccess: () => {
+      message.success(editing ? '运行时主机已更新' : '运行时主机已接入')
       refreshDocker(queryClient)
       onSuccess?.()
       onClose()
     },
   })
+  const provisionPlanMutation = useMutation({
+    mutationFn: dockerApi.planQuickCreateHost,
+    onSuccess: (plan, payload) => {
+      setProvisionPlan(plan)
+      setPendingProvision({ idempotencyKey: crypto.randomUUID(), payload })
+    },
+    onError: (error) => void message.error(error.message),
+  })
+  const provisionMutation = useMutation({
+    mutationFn: ({ payload, idempotencyKey }: NonNullable<typeof pendingProvision>) =>
+      dockerApi.quickCreateHost(payload, idempotencyKey),
+    onSuccess: () => {
+      message.success('主机构建任务已提交')
+      setProvisionPlan(null)
+      setPendingProvision(null)
+      refreshDocker(queryClient)
+      onSuccess?.()
+      onClose()
+    },
+    onError: (error) => void message.error(error.message),
+  })
 
   useEffect(() => {
     if (!open) return
     setCurrent(0)
+    setProvisionPlan(null)
+    setPendingProvision(null)
     form.setFieldsValue(
       editing
         ? existingHostFormValues(editing)
@@ -392,18 +413,39 @@ export function RuntimeHostStepModal({
   ]
 
   return (
-    <StepFormModal
-      current={current}
-      form={form}
-      loading={saveMutation.isPending}
-      onClose={onClose}
-      onCurrentChange={setCurrent}
-      onFinish={(values) => saveMutation.mutate(values)}
-      open={open}
-      steps={steps}
-      submitText={editing ? '保存主机' : mode === 'provision' ? '提交构建' : '接入主机'}
-      title={editing ? '编辑运行时主机' : '新增运行时主机'}
-      width={760}
-    />
+    <>
+      <StepFormModal
+        current={current}
+        form={form}
+        loading={saveMutation.isPending || provisionPlanMutation.isPending}
+        onClose={onClose}
+        onCurrentChange={setCurrent}
+        onFinish={(values) => {
+          if (values.mode === 'provision' && !editing) {
+            provisionPlanMutation.mutate(buildProvisionHostPayload(values))
+            return
+          }
+          saveMutation.mutate(values)
+        }}
+        open={open && !provisionPlan}
+        steps={steps}
+        submitText={editing ? '保存主机' : mode === 'provision' ? '生成构建计划' : '接入主机'}
+        title={editing ? '编辑运行时主机' : '新增运行时主机'}
+        width={760}
+      />
+      <OperationalPlanModal
+        confirmText="确认构建"
+        loading={provisionMutation.isPending}
+        onCancel={() => {
+          setProvisionPlan(null)
+          setPendingProvision(null)
+        }}
+        onConfirm={() => {
+          if (pendingProvision) provisionMutation.mutate(pendingProvision)
+        }}
+        plan={provisionPlan}
+        title="Docker 主机构建计划"
+      />
+    </>
   )
 }

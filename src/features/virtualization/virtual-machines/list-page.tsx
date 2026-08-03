@@ -31,6 +31,8 @@ import { useAIPageContext } from '@/features/copilot'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { StepFormModal } from '@/components/step-form-modal'
+import { OperationalPlanModal } from '@/components/operational-plan-modal'
+import type { OperationalPlan } from '@opensoha/contracts/gen/ts/sohaapi'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementIconButton,
@@ -60,6 +62,7 @@ import { useTaskStream } from '@/features/virtualization/use-task-stream'
 import '@/features/virtualization/virtualization-workbench.css'
 import type {
   VirtualMachine,
+  CreateVirtualMachineInput,
   VirtualMachineDevice,
   VirtualMachineDiskChange,
   VirtualizationListParams,
@@ -206,6 +209,11 @@ export function VirtualizationVmsPage() {
   const [filterForm] = Form.useForm<VirtualizationListParams>()
   const [form] = Form.useForm<VirtualMachineFormValues>()
   const [pendingTaskId, setPendingTaskId] = useState<string | null>(null)
+  const [createPlan, setCreatePlan] = useState<OperationalPlan | null>(null)
+  const [pendingCreate, setPendingCreate] = useState<{
+    idempotencyKey: string
+    payload: CreateVirtualMachineInput
+  } | null>(null)
   const [pendingResizeTaskId, setPendingResizeTaskId] = useState<string | null>(null)
   const [resizeTarget, setResizeTarget] = useState<VirtualMachine | null>(null)
   const [resizeStep, setResizeStep] = useState(0)
@@ -259,6 +267,15 @@ export function VirtualizationVmsPage() {
   const clustersQuery = useQuery(virtualizationQueries.clusters(virtualizationModuleEnabled))
   const imagesQuery = useQuery(virtualizationQueries.imageOptions(virtualizationModuleEnabled))
   const flavorsQuery = useQuery(virtualizationQueries.flavors(virtualizationModuleEnabled))
+  const createPlanMutation = useMutation({
+    ...virtualizationMutations.planCreateVm(),
+    onSuccess: (plan, payload) => {
+      setCreatePlan(plan)
+      setPendingCreate({ idempotencyKey: crypto.randomUUID(), payload })
+      setDrawerOpen(false)
+    },
+    onError: (error) => void message.error(error.message),
+  })
   const createMutation = useMutation(
     withVirtualizationMutationSuccess(
       virtualizationMutations.createVm(queryClient),
@@ -270,6 +287,8 @@ export function VirtualizationVmsPage() {
         } else {
           message.success('虚拟机创建任务已提交')
         }
+        setCreatePlan(null)
+        setPendingCreate(null)
         setDrawerOpen(false)
         form.resetFields()
       },
@@ -718,7 +737,7 @@ export function VirtualizationVmsPage() {
             title="创建虚拟机"
             current={currentStep}
             form={form}
-            loading={createMutation.isPending}
+            loading={createPlanMutation.isPending}
             open={drawerOpen}
             onClose={() => setDrawerOpen(false)}
             onCurrentChange={setCurrentStep}
@@ -730,7 +749,7 @@ export function VirtualizationVmsPage() {
               enableCloudInit: false,
               startAfterCreate: true,
             }}
-            onFinish={(values) => createMutation.mutate(buildCreateVmPayload(values))}
+            onFinish={(values) => createPlanMutation.mutate(buildCreateVmPayload(values))}
             steps={[
               {
                 title: '基础配置',
@@ -1155,6 +1174,20 @@ export function VirtualizationVmsPage() {
             width={820}
           />
         }
+      />
+      <OperationalPlanModal
+        confirmText="确认创建"
+        loading={createMutation.isPending}
+        onCancel={() => {
+          setCreatePlan(null)
+          setPendingCreate(null)
+          setDrawerOpen(true)
+        }}
+        onConfirm={() => {
+          if (pendingCreate) createMutation.mutate(pendingCreate)
+        }}
+        plan={createPlan}
+        title="虚拟机创建计划"
       />
       <StepFormModal
         title={`调整规格：${resizeTarget?.name ?? ''}`}

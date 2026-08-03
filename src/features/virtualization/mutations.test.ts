@@ -105,6 +105,30 @@ describe('virtualizationMutations', () => {
     })
   })
 
+  it('maps VM plan and idempotent create variables to the API', async () => {
+    const { queryClient } = createQueryClient()
+    const payload = { connectionId: 'conn-1', name: 'demo-vm' }
+    const planVmCreate = vi.spyOn(virtualizationApi, 'planVmCreate').mockResolvedValue({
+      capability: 'virtualization.vms.create.trigger',
+      target: 'demo-vm',
+      ready: true,
+      riskLevel: 'execute',
+      requiresApproval: true,
+      changes: [],
+      warnings: [],
+    })
+    const createVm = vi.spyOn(virtualizationApi, 'createVm').mockResolvedValue({ id: 'op-create' })
+
+    await executeMutation(virtualizationMutations.planCreateVm().mutationFn, payload)
+    await executeMutation(virtualizationMutations.createVm(queryClient).mutationFn, {
+      idempotencyKey: 'idem-vm-1234',
+      payload,
+    })
+
+    expect(planVmCreate).toHaveBeenCalledWith(payload)
+    expect(createVm).toHaveBeenCalledWith(payload, 'idem-vm-1234')
+  })
+
   it('invalidates the full domain after synchronization changes asset inventories', async () => {
     const { invalidateQueries, queryClient } = createQueryClient()
     const options = virtualizationMutations.syncCluster(queryClient)

@@ -16,7 +16,7 @@ export const observabilityLogRoutes = defineRoutes([
       parentId: 'monitoring-workbench',
       menuId: 'monitoring-workbench-logs',
       permissionKey: 'observe.monitoring.view',
-      scopeMode: 'namespace',
+      scopeMode: 'passive',
     },
     shell: 'app',
     load: async () => {

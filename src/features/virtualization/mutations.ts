@@ -21,6 +21,10 @@ export interface PowerVirtualMachineVariables {
   id: string
   action: VirtualMachinePowerAction
 }
+export interface CreateVirtualMachineVariables {
+  idempotencyKey: string
+  payload: CreateVirtualMachineInput
+}
 export interface ResizeVirtualMachineVariables {
   id: string
   payload: VirtualMachineResizeInput
@@ -106,10 +110,16 @@ function invalidateOperationCaches(queryClient: QueryClient, operations: Operati
 }
 
 export const virtualizationMutations = {
+  planCreateVm: () =>
+    mutationOptions({
+      mutationKey: virtualizationMutationKeys.vm('create-plan'),
+      mutationFn: (payload: CreateVirtualMachineInput) => virtualizationApi.planVmCreate(payload),
+    }),
   createVm: (queryClient: QueryClient) =>
     mutationOptions({
       mutationKey: virtualizationMutationKeys.vm('create'),
-      mutationFn: (payload: CreateVirtualMachineInput) => virtualizationApi.createVm(payload),
+      mutationFn: ({ payload, idempotencyKey }: CreateVirtualMachineVariables) =>
+        virtualizationApi.createVm(payload, idempotencyKey),
       onSuccess: (operation) =>
         invalidateVirtualizationQueries(queryClient, invalidationKeys.vmChanged(operation.vmId)),
     }),

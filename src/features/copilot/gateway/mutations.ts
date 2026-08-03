@@ -1,5 +1,7 @@
 import { gatewayApi } from './api'
 import type { ApiResponse } from '@/types'
+import type { ToolInvocationRequest } from '@opensoha/contracts/gen/ts/sohaapi'
+import { isSecretReference } from '@/features/secrets'
 import type {
   AccessPolicy,
   AccessPolicyUpsertPayload,
@@ -37,6 +39,45 @@ function parseJsonObjectField(value: unknown, label: string): Record<string, unk
     throw new Error(`${label} 必须是 JSON object`)
   }
   return parsed as Record<string, unknown>
+}
+
+export interface GatewayToolInvocationValues {
+  inputJson?: string
+  secretRefs?: Array<{ alias?: string; ref?: string }>
+}
+
+export function buildGatewayToolInvocation(
+  toolName: string,
+  values: GatewayToolInvocationValues,
+  context: { aiClientId?: string; skillId?: string } = {},
+): ToolInvocationRequest {
+  const secretRefs: Record<string, string> = {}
+  for (const item of values.secretRefs ?? []) {
+    const alias = item.alias?.trim() ?? ''
+    const ref = item.ref?.trim() ?? ''
+    if (!alias && !ref) continue
+    if (!/^[A-Z_][A-Z0-9_]*$/.test(alias)) throw new Error(`无效 Secret alias: ${alias}`)
+    if (!isSecretReference(ref)) throw new Error(`无效 Secret reference: ${ref}`)
+    if (secretRefs[alias]) throw new Error(`重复 Secret alias: ${alias}`)
+    secretRefs[alias] = ref
+  }
+  return {
+    toolName,
+    input: parseJsonObjectField(values.inputJson, 'Input'),
+    aiClientId: context.aiClientId || undefined,
+    skillId: context.skillId || undefined,
+    secretRefs: Object.keys(secretRefs).length ? secretRefs : undefined,
+  }
+}
+
+export function invokeGatewayTool(input: {
+  toolName: string
+  values: GatewayToolInvocationValues
+  aiClientId?: string
+  skillId?: string
+}) {
+  const payload = buildGatewayToolInvocation(input.toolName, input.values, input)
+  return gatewayApi.tools.invoke(input.toolName, payload)
 }
 
 export async function upsertGatewayResource(drawer: DrawerState, values: GatewayDrawerFormValues) {

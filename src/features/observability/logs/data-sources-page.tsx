@@ -30,16 +30,13 @@ import {
 import { BooleanTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { formatDateTime } from '@/utils/time'
+import { observabilityProviderQueries } from '../provider-queries'
 import { observabilityLogMutations } from './mutations'
 import { observabilityLogQueries } from './queries'
 import './styles.css'
 
 const { Text } = Typography
-const backendOptions = [
-  { value: 'loki', label: 'Loki' },
-  { value: 'elasticsearch', label: 'Elasticsearch' },
-  { value: 'clickhouse', label: 'ClickHouse' },
-]
+const builtinProviderKeys = ['loki', 'elasticsearch', 'clickhouse'] as const
 const labelDefaults = {
   labelCluster: 'cluster',
   labelNamespace: 'namespace',
@@ -53,6 +50,7 @@ const labelDefaults = {
 interface DataSourceFormValues {
   name: string
   backendType: ObservabilityDataSourceBackendType
+  providerKey?: string
   enabled: boolean
   endpoint: string
   tenantId?: string
@@ -67,7 +65,9 @@ interface DataSourceFormValues {
   bearerToken?: string
   username?: string
   password?: string
-  clearCredentialKeys?: Array<'bearer_token' | 'username' | 'password'>
+  credentials?: Array<{ key?: string; value?: string }>
+  configuration?: Array<{ key?: string; value?: string }>
+  clearCredentialKeys?: string[]
   labelCluster?: string
   labelNamespace?: string
   labelService?: string
@@ -95,6 +95,7 @@ function formValues(item?: ObservabilityDataSource): DataSourceFormValues {
   return {
     name: item?.name ?? '',
     backendType: item?.backendType ?? 'loki',
+    providerKey: item?.providerKey ?? item?.backendType ?? 'loki',
     enabled: item?.enabled ?? true,
     endpoint: item?.config.endpoint ?? '',
     tenantId: item?.config.tenantId,
@@ -123,15 +124,19 @@ function formValues(item?: ObservabilityDataSource): DataSourceFormValues {
     clusterField: item?.config.clusterField,
     podField: item?.config.podField,
     containerField: item?.config.containerField,
+    configuration: item?.config.configuration,
   }
 }
 
 export function buildDataSourceInput(values: DataSourceFormValues): ObservabilityDataSourceInput {
+  const providerKey = values.providerKey ?? values.backendType
+  const builtIn = builtinProviderKeys.includes(providerKey as (typeof builtinProviderKeys)[number])
+  const backendType = (builtIn ? providerKey : 'provider') as ObservabilityDataSourceBackendType
   const config: ObservabilityDataSourceInput['config'] = { endpoint: values.endpoint.trim() }
   const optionalConfig = {
     tenantId: clean(values.tenantId),
-    index: values.backendType === 'elasticsearch' ? clean(values.index) : undefined,
-    table: values.backendType === 'clickhouse' ? clean(values.table) : undefined,
+    index: providerKey === 'elasticsearch' ? clean(values.index) : undefined,
+    table: providerKey === 'clickhouse' ? clean(values.table) : undefined,
     timestampField: clean(values.timestampField),
     messageField: clean(values.messageField),
     severityField: clean(values.severityField),
@@ -146,7 +151,7 @@ export function buildDataSourceInput(values: DataSourceFormValues): Observabilit
     config,
     Object.fromEntries(Object.entries(optionalConfig).filter(([, value]) => value !== undefined)),
   )
-  if (values.backendType === 'loki') {
+  if (providerKey === 'loki') {
     config.labelKeys = {
       cluster: clean(values.labelCluster),
       namespace: clean(values.labelNamespace),
@@ -157,14 +162,27 @@ export function buildDataSourceInput(values: DataSourceFormValues): Observabilit
       container: clean(values.labelContainer),
     }
   }
-  const credentials = [
-    { key: 'bearer_token', value: clean(values.bearerToken) },
-    { key: 'username', value: clean(values.username) },
-    { key: 'password', value: clean(values.password) },
-  ].filter((item): item is { key: string; value: string } => Boolean(item.value))
+  if (!builtIn) {
+    config.configuration = values.configuration
+      ?.map((item) => ({ key: item.key?.trim() ?? '', value: item.value?.trim() ?? '' }))
+      .filter((item) => item.key && item.value)
+  }
+  const credentials = (
+    builtIn
+      ? [
+          { key: 'bearer_token', value: clean(values.bearerToken) },
+          { key: 'username', value: clean(values.username) },
+          { key: 'password', value: clean(values.password) },
+        ]
+      : (values.credentials ?? []).map((item) => ({
+          key: item.key?.trim() ?? '',
+          value: item.value?.trim() || undefined,
+        }))
+  ).filter((item): item is { key: string; value: string } => Boolean(item.key && item.value))
   return {
     name: values.name.trim(),
-    backendType: values.backendType,
+    backendType,
+    providerKey: builtIn ? undefined : providerKey,
     enabled: values.enabled,
     scope: { clusterIds: values.clusterIds, namespaces: values.namespaces },
     queryBudget: {
@@ -185,13 +203,26 @@ export function LogDataSourcesPage() {
   const snapshot = usePermissionSnapshot().data?.data
   const canManage = hasPermission(snapshot, 'observe.log-data-sources.manage')
   const [form] = Form.useForm<DataSourceFormValues>()
-  const backendType = Form.useWatch('backendType', form)
+  const providerKey = Form.useWatch('providerKey', form)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<ObservabilityDataSource | null>(null)
   const sourcesQuery = useQuery(observabilityLogQueries.dataSources())
+  const providersQuery = useQuery(observabilityProviderQueries.providers())
   const createMutation = useMutation(observabilityLogMutations.createDataSource(queryClient))
   const updateMutation = useMutation(observabilityLogMutations.updateDataSource(queryClient))
   const validateMutation = useMutation(observabilityLogMutations.validateDataSource(queryClient))
+  const providers = (providersQuery.data ?? []).filter(
+    (provider) =>
+      provider.status !== 'unsupported' &&
+      provider.signals.includes('logs') &&
+      provider.capabilities.includes('logs.query'),
+  )
+  const providerOptions = providers.map((provider) => ({
+    value: provider.providerKey,
+    label: provider.displayName,
+  }))
+  const selectedProvider = providers.find((provider) => provider.providerKey === providerKey)
+  const builtIn = selectedProvider?.builtIn ?? builtinProviderKeys.includes(providerKey as never)
 
   function openEditor(item?: ObservabilityDataSource) {
     setEditing(item ?? null)
@@ -247,7 +278,7 @@ export function LogDataSourcesPage() {
       title: '后端',
       dataIndex: 'backendType',
       width: 150,
-      render: (value: string) => <Tag>{value}</Tag>,
+      render: (value: string, item) => <Tag>{item.providerKey ?? value}</Tag>,
     },
     {
       title: '作用域',
@@ -369,8 +400,12 @@ export function LogDataSourcesPage() {
             <Form.Item label="名称" name="name" rules={[{ required: true, whitespace: true }]}>
               <Input />
             </Form.Item>
-            <Form.Item label="后端" name="backendType" rules={[{ required: true }]}>
-              <Select options={backendOptions} />
+            <Form.Item label="Provider" name="providerKey" rules={[{ required: true }]}>
+              <Select
+                loading={providersQuery.isLoading}
+                options={providerOptions}
+                placeholder="选择日志 Provider"
+              />
             </Form.Item>
             <Form.Item label="Endpoint" name="endpoint" rules={[{ required: true, type: 'url' }]}>
               <Input placeholder="https://logs.example.com" />
@@ -378,12 +413,12 @@ export function LogDataSourcesPage() {
             <Form.Item label="Tenant ID" name="tenantId">
               <Input />
             </Form.Item>
-            {backendType === 'elasticsearch' ? (
+            {providerKey === 'elasticsearch' ? (
               <Form.Item label="Index" name="index" rules={[{ required: true, whitespace: true }]}>
                 <Input />
               </Form.Item>
             ) : null}
-            {backendType === 'clickhouse' ? (
+            {providerKey === 'clickhouse' ? (
               <Form.Item label="Table" name="table" rules={[{ required: true, whitespace: true }]}>
                 <Input />
               </Form.Item>
@@ -410,10 +445,12 @@ export function LogDataSourcesPage() {
             <Form.Item label="脱敏属性" name="dropAttributeKeys">
               <Select mode="tags" tokenSeparators={[',']} />
             </Form.Item>
-            <Form.Item label="Bearer Token" name="bearerToken">
-              <Input.Password autoComplete="new-password" placeholder="留空保持不变" />
-            </Form.Item>
-            {backendType === 'clickhouse' ? (
+            {builtIn ? (
+              <Form.Item label="Bearer Token" name="bearerToken">
+                <Input.Password autoComplete="new-password" placeholder="留空保持不变" />
+              </Form.Item>
+            ) : null}
+            {providerKey === 'clickhouse' ? (
               <>
                 <Form.Item label="Username" name="username">
                   <Input autoComplete="off" placeholder="留空保持不变" />
@@ -421,6 +458,50 @@ export function LogDataSourcesPage() {
                 <Form.Item label="Password" name="password">
                   <Input.Password autoComplete="new-password" placeholder="留空保持不变" />
                 </Form.Item>
+              </>
+            ) : null}
+            {!builtIn ? (
+              <>
+                <Form.List name="configuration">
+                  {(fields, { add, remove }) => (
+                    <Form.Item label="Provider 配置">
+                      <Space orientation="vertical" style={{ width: '100%' }}>
+                        {fields.map((field) => (
+                          <div className="soha-log-provider-field-row" key={field.key}>
+                            <Form.Item name={[field.name, 'key']} noStyle>
+                              <Input placeholder="配置键" />
+                            </Form.Item>
+                            <Form.Item name={[field.name, 'value']} noStyle>
+                              <Input placeholder="配置值" />
+                            </Form.Item>
+                            <Button onClick={() => remove(field.name)}>移除</Button>
+                          </div>
+                        ))}
+                        <Button onClick={() => add()}>添加配置</Button>
+                      </Space>
+                    </Form.Item>
+                  )}
+                </Form.List>
+                <Form.List name="credentials">
+                  {(fields, { add, remove }) => (
+                    <Form.Item label="Provider 凭据">
+                      <Space orientation="vertical" style={{ width: '100%' }}>
+                        {fields.map((field) => (
+                          <div className="soha-log-provider-field-row" key={field.key}>
+                            <Form.Item name={[field.name, 'key']} noStyle>
+                              <Input placeholder="凭据键" />
+                            </Form.Item>
+                            <Form.Item name={[field.name, 'value']} noStyle>
+                              <Input.Password autoComplete="new-password" placeholder="凭据值" />
+                            </Form.Item>
+                            <Button onClick={() => remove(field.name)}>移除</Button>
+                          </div>
+                        ))}
+                        <Button onClick={() => add()}>添加凭据</Button>
+                      </Space>
+                    </Form.Item>
+                  )}
+                </Form.List>
               </>
             ) : null}
             {editing?.credentialKeys.length ? (
@@ -433,48 +514,52 @@ export function LogDataSourcesPage() {
             ) : null}
           </div>
 
-          <Collapse
-            ghost
-            items={[
-              {
-                key: 'mapping',
-                label: backendType === 'loki' ? '标签映射' : '字段映射',
-                children: (
-                  <div className="soha-log-filter-grid">
-                    {backendType === 'loki'
-                      ? [
-                          ['labelCluster', 'Cluster'],
-                          ['labelNamespace', 'Namespace'],
-                          ['labelService', 'Service'],
-                          ['labelWorkload', 'Workload'],
-                          ['labelSeverity', 'Severity'],
-                          ['labelPod', 'Pod'],
-                          ['labelContainer', 'Container'],
-                        ].map(([name, label]) => (
-                          <Form.Item key={name} label={label} name={name}>
-                            <Input />
-                          </Form.Item>
-                        ))
-                      : [
-                          ['timestampField', 'Timestamp'],
-                          ['messageField', 'Message'],
-                          ['severityField', 'Severity'],
-                          ['serviceField', 'Service'],
-                          ['workloadField', 'Workload'],
-                          ['namespaceField', 'Namespace'],
-                          ['clusterField', 'Cluster'],
-                          ['podField', 'Pod'],
-                          ['containerField', 'Container'],
-                        ].map(([name, label]) => (
-                          <Form.Item key={name} label={label} name={name}>
-                            <Input placeholder="使用后端默认字段" />
-                          </Form.Item>
-                        ))}
-                  </div>
-                ),
-              },
-            ]}
-          />
+          {builtIn ? (
+            <Collapse
+              ghost
+              items={[
+                {
+                  key: 'mapping',
+                  label: providerKey === 'loki' ? '标签映射' : '字段映射',
+                  children: (
+                    <div className="soha-log-filter-grid">
+                      {providerKey === 'loki'
+                        ? [
+                            ['labelCluster', 'Cluster'],
+                            ['labelNamespace', 'Namespace'],
+                            ['labelService', 'Service'],
+                            ['labelWorkload', 'Workload'],
+                            ['labelSeverity', 'Severity'],
+                            ['labelPod', 'Pod'],
+                            ['labelContainer', 'Container'],
+                          ].map(([name, label]) => (
+                            <Form.Item key={name} label={label} name={name}>
+                              <Input />
+                            </Form.Item>
+                          ))
+                        : builtIn
+                          ? [
+                              ['timestampField', 'Timestamp'],
+                              ['messageField', 'Message'],
+                              ['severityField', 'Severity'],
+                              ['serviceField', 'Service'],
+                              ['workloadField', 'Workload'],
+                              ['namespaceField', 'Namespace'],
+                              ['clusterField', 'Cluster'],
+                              ['podField', 'Pod'],
+                              ['containerField', 'Container'],
+                            ].map(([name, label]) => (
+                              <Form.Item key={name} label={label} name={name}>
+                                <Input placeholder="使用后端默认字段" />
+                              </Form.Item>
+                            ))
+                          : null}
+                    </div>
+                  ),
+                },
+              ]}
+            />
+          ) : null}
           <Space>
             <Form.Item name="enabled" noStyle valuePropName="checked">
               <Switch checkedChildren="启用" unCheckedChildren="停用" />

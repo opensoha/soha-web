@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, App, Card, Form, Input, Modal, Space, Typography } from 'antd'
+import { App, Card, Form, Input, Modal, Space, Typography } from 'antd'
+import { SecretRefSelect } from '@/features/secrets'
 import type { InstalledPlugin, PluginConfigRequest } from '../plugin-model'
 import { requiredSecretValues } from '../plugin-model'
 import {
@@ -122,11 +123,6 @@ export function PluginConfigModal({
       }}
     >
       <Space orientation="vertical" size={12} className="soha-plugin-config-modal">
-        <Alert
-          showIcon
-          type="info"
-          title="这里只保存 secret 引用和插件配置元数据；secret 内容仍由外部 secret 管理。"
-        />
         {schemaFields.length || requiredSecrets.length ? (
           <Card size="small" title="Schema 配置">
             <Form form={form} layout="vertical">
@@ -152,7 +148,7 @@ export function PluginConfigModal({
                     }
                   >
                     {isSecretRef ? (
-                      <Input.Password disabled={!canEditSecrets} placeholder="secret://..." />
+                      <SecretRefSelect disabled={!canEditSecrets} enabled={open} />
                     ) : (
                       renderPluginSchemaInput(schema)
                     )}
@@ -173,24 +169,15 @@ export function PluginConfigModal({
                         : [{ required: true, message: `请填写 ${secret.name} secret ref` }]
                     }
                   >
-                    <Input.Password disabled={!canEditSecrets} placeholder="secret://..." />
+                    <SecretRefSelect disabled={!canEditSecrets} enabled={open} />
                   </Form.Item>
                 ))}
             </Form>
           </Card>
         ) : null}
-        <div>
-          <Text strong>Secret refs</Text>
-          <Input.TextArea
-            disabled={!canEditSecrets}
-            rows={6}
-            value={secretRefsText}
-            onChange={(event) => setSecretRefsText(event.target.value)}
-          />
-          {!canEditSecrets ? (
-            <Text type="secondary">当前账号没有 plugin.configure_secrets 权限。</Text>
-          ) : null}
-        </div>
+        {!canEditSecrets ? (
+          <Text type="secondary">当前账号没有 plugin.configure_secrets 权限。</Text>
+        ) : null}
         <div>
           <Text strong>Metadata</Text>
           <Input.TextArea

@@ -612,10 +612,12 @@
 
   .soha-management-table-shell .soha-admin-table-header {
     align-items: flex-start;
+    flex-wrap: wrap;
     padding: 16px;
   }
 
   .soha-management-table-shell .soha-admin-table-header-extra {
+    flex: 0 0 100%;
     width: 100%;
     justify-content: flex-start;
   }

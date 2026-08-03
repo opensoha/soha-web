@@ -22,8 +22,14 @@ export interface UpdateDockerProjectVariables {
 }
 
 export interface DeployDockerProjectVariables {
+  idempotencyKey: string
   id: string
   action: string
+}
+
+export interface QuickCreateDockerHostVariables {
+  idempotencyKey: string
+  payload: DockerQuickCreateHostInput
 }
 
 export interface DockerServiceActionVariables {
@@ -67,10 +73,16 @@ export const dockerMutations = {
       mutationFn: (id: string) => dockerApi.deleteHost(id),
       onSuccess: () => invalidateDockerQueries(queryClient),
     }),
+  planQuickCreateHost: () =>
+    mutationOptions({
+      mutationKey: dockerMutationKeys.host('quick-create-plan'),
+      mutationFn: (payload: DockerQuickCreateHostInput) => dockerApi.planQuickCreateHost(payload),
+    }),
   quickCreateHost: (queryClient: QueryClient) =>
     mutationOptions({
       mutationKey: dockerMutationKeys.host('quick-create'),
-      mutationFn: (payload: DockerQuickCreateHostInput) => dockerApi.quickCreateHost(payload),
+      mutationFn: ({ payload, idempotencyKey }: QuickCreateDockerHostVariables) =>
+        dockerApi.quickCreateHost(payload, idempotencyKey),
       onSuccess: () => invalidateDockerQueries(queryClient),
     }),
   createProject: (queryClient: QueryClient) =>
@@ -92,11 +104,17 @@ export const dockerMutations = {
       mutationFn: (id: string) => dockerApi.deleteProject(id),
       onSuccess: () => invalidateDockerQueries(queryClient),
     }),
+  planDeployProject: () =>
+    mutationOptions({
+      mutationKey: dockerMutationKeys.project('deploy-plan'),
+      mutationFn: ({ id, action }: Omit<DeployDockerProjectVariables, 'idempotencyKey'>) =>
+        dockerApi.planProjectDeploy(id, action),
+    }),
   deployProject: (queryClient: QueryClient) =>
     mutationOptions({
       mutationKey: dockerMutationKeys.project('deploy'),
-      mutationFn: ({ id, action }: DeployDockerProjectVariables) =>
-        dockerApi.deployProject(id, action),
+      mutationFn: ({ id, action, idempotencyKey }: DeployDockerProjectVariables) =>
+        dockerApi.deployProject(id, action, idempotencyKey),
       onSuccess: () => invalidateDockerQueries(queryClient),
     }),
   startContainer: (queryClient: QueryClient) =>

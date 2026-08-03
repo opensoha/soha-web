@@ -1,5 +1,6 @@
 import { api } from '@/services/api-client'
 import type { ApiResponse, Cluster } from '@/types'
+import type { OperationalPlan } from '@opensoha/contracts/gen/ts/sohaapi'
 import type {
   CreateVirtualMachineInput,
   VirtualMachine,
@@ -57,8 +58,16 @@ export const virtualizationApi = {
     )
     return response.data ?? []
   },
-  createVm: async (payload: CreateVirtualMachineInput) => {
-    const response = await api.post<ApiResponse<VirtualizationOperation>>(`${BASE}/vms`, payload)
+  planVmCreate: async (payload: CreateVirtualMachineInput) => {
+    const response = await api.post<ApiResponse<OperationalPlan>>(`${BASE}/vms/plan`, payload)
+    return response.data
+  },
+  createVm: async (payload: CreateVirtualMachineInput, idempotencyKey: string) => {
+    const response = await api.postWithHeaders<ApiResponse<VirtualizationOperation>>(
+      `${BASE}/vms`,
+      payload,
+      { 'Idempotency-Key': idempotencyKey },
+    )
     return response.data
   },
   powerVm: async (id: string, action: VirtualMachinePowerAction) => {

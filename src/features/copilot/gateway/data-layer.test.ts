@@ -4,6 +4,8 @@ import { gatewayKeys } from './keys'
 import {
   decideGatewayApproval,
   deleteGatewayResource,
+  buildGatewayToolInvocation,
+  invokeGatewayTool,
   rotateGatewayToken,
   upsertGatewayResource,
 } from './mutations'
@@ -127,5 +129,46 @@ describe('gateway data layer', () => {
 
     expect(apiMocks.get).toHaveBeenNthCalledWith(1, '/ai-gateway/personal-access-tokens?scope=all')
     expect(apiMocks.get).toHaveBeenNthCalledWith(2, '/ai-gateway/personal-access-tokens')
+  })
+
+  it('keeps secret references at the canonical invocation boundary', async () => {
+    await invokeGatewayTool({
+      toolName: 'docker.projects.deploy.plan',
+      aiClientId: 'web-console',
+      skillId: 'docker-runtime-operator',
+      values: {
+        inputJson: '{"projectId":"demo"}',
+        secretRefs: [{ alias: 'REGISTRY_AUTH', ref: 'soha://secrets/registry-1' }],
+      },
+    })
+
+    expect(apiMocks.post).toHaveBeenCalledWith(
+      '/ai-gateway/tools/docker.projects.deploy.plan/invoke',
+      {
+        toolName: 'docker.projects.deploy.plan',
+        input: { projectId: 'demo' },
+        aiClientId: 'web-console',
+        skillId: 'docker-runtime-operator',
+        secretRefs: { REGISTRY_AUTH: 'soha://secrets/registry-1' },
+      },
+    )
+  })
+
+  it('rejects non-canonical or duplicate secret references before transport', () => {
+    expect(() =>
+      buildGatewayToolInvocation('k8s.resources.create.preflight', {
+        inputJson: '{}',
+        secretRefs: [{ alias: 'KUBE_AUTH', ref: 'vault://secret-1' }],
+      }),
+    ).toThrow('无效 Secret reference')
+    expect(() =>
+      buildGatewayToolInvocation('virtualization.vms.create.plan', {
+        inputJson: '{}',
+        secretRefs: [
+          { alias: 'PROVIDER_AUTH', ref: 'soha://secrets/provider-1' },
+          { alias: 'PROVIDER_AUTH', ref: 'soha://secrets/provider-2' },
+        ],
+      }),
+    ).toThrow('重复 Secret alias')
   })
 })

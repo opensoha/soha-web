@@ -125,6 +125,8 @@ vi.mock('@/features/system/menu-schema', async () => {
     resolveMenuSectionLabel: (key: string) => {
       if (key === 'users') return '用户管理'
       if (key === 'logging') return '日志'
+      if (key === 'observe-signals') return '探索'
+      if (key === 'observe-data') return '数据与集成'
       if (key === 'alerting') return '告警与响应'
       return key
     },
@@ -555,7 +557,7 @@ describe('app layout workspace navigation', () => {
           labelZh: '日志',
           labelEn: 'Logs',
           iconKey: 'history',
-          section: 'logging',
+          section: 'observe-signals',
           sortOrder: 62,
           enabled: true,
         },
@@ -566,7 +568,7 @@ describe('app layout workspace navigation', () => {
           labelZh: '日志数据源',
           labelEn: 'Log Data Sources',
           iconKey: 'server',
-          section: 'logging',
+          section: 'observe-data',
           sortOrder: 63,
           enabled: true,
         },
@@ -602,14 +604,12 @@ describe('app layout workspace navigation', () => {
       Array.from(container.querySelectorAll('.ant-menu-item-group-title')).map((item) =>
         item.textContent?.trim(),
       ),
-    ).toEqual(['日志', '告警与响应'])
+    ).toEqual(['探索', '数据与集成', '告警与响应'])
     expect(container.textContent).toContain('总览')
     expect(container.textContent).toContain('日志数据源')
     expect(container.textContent).toContain('告警规则')
     expect(container.textContent).toContain('值班协同')
-    expect(container.querySelector('[data-testid="platform-scope-trigger"]')?.textContent).toBe(
-      'namespace',
-    )
+    expect(container.querySelector('[data-testid="platform-scope-trigger"]')).toBeNull()
   })
 
   it('switches the left nav into system workspace mode while visiting system pages', async () => {

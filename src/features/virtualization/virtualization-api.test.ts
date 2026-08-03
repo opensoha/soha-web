@@ -5,6 +5,7 @@ const apiMocks = vi.hoisted(() => ({
   delete: vi.fn(),
   get: vi.fn(),
   post: vi.fn(),
+  postWithHeaders: vi.fn(),
   put: vi.fn(),
 }))
 
@@ -72,6 +73,30 @@ describe('virtualizationApi', () => {
       action: 'restart',
     })
     expect(apiMocks.delete).toHaveBeenCalledWith('/virtualization/clusters/cluster%2F1?force=true')
+  })
+
+  it('plans VM creation before executing it with an idempotency key', async () => {
+    const input = { connectionId: 'conn-1', name: 'demo-vm' }
+    const plan = {
+      capability: 'virtualization.vms.create.trigger',
+      target: 'demo-vm',
+      ready: true,
+      riskLevel: 'execute' as const,
+      requiresApproval: true,
+      changes: [{ action: 'create', resource: 'vm', summary: 'Create demo-vm' }],
+      warnings: [],
+    }
+    const operation = { id: 'op-create', vmId: 'vm-1' }
+    apiMocks.post.mockResolvedValueOnce({ data: plan })
+    apiMocks.postWithHeaders.mockResolvedValueOnce({ data: operation })
+
+    await expect(virtualizationApi.planVmCreate(input)).resolves.toBe(plan)
+    await expect(virtualizationApi.createVm(input, 'idem-vm-1234')).resolves.toBe(operation)
+
+    expect(apiMocks.post).toHaveBeenCalledWith('/virtualization/vms/plan', input)
+    expect(apiMocks.postWithHeaders).toHaveBeenCalledWith('/virtualization/vms', input, {
+      'Idempotency-Key': 'idem-vm-1234',
+    })
   })
 
   it('normalizes operation filters into the wire query and returns the list', async () => {

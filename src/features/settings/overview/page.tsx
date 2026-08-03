@@ -1,6 +1,7 @@
 import {
   ApartmentOutlined,
   FileProtectOutlined,
+  KeyOutlined,
   LoginOutlined,
   MenuOutlined,
   SafetyCertificateOutlined,
@@ -131,6 +132,12 @@ export function SettingsOverviewPage() {
       label: '菜单管理',
       path: '/system/menus',
       icon: <MenuOutlined />,
+    },
+    hasPermission(permissions, 'secret.view') && {
+      key: 'secrets',
+      label: 'Secret Store',
+      path: '/settings/secrets',
+      icon: <KeyOutlined />,
     },
   ].filter((item): item is Exclude<typeof item, false | undefined> => Boolean(item))
 

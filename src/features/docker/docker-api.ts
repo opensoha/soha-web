@@ -1,5 +1,6 @@
 import { api } from '@/services/api-client'
 import type { ApiResponse } from '@/types'
+import type { OperationalPlan } from '@opensoha/contracts/gen/ts/sohaapi'
 import type {
   DockerContainerStartInput,
   DockerHost,
@@ -55,8 +56,14 @@ export const dockerApi = {
     unwrap(api.put<ApiResponse<DockerHost>>(`${BASE}/hosts/${encodeURIComponent(id)}`, payload)),
   deleteHost: (id: string) =>
     discard(api.delete<ApiResponse<void>>(`${BASE}/hosts/${encodeURIComponent(id)}`)),
-  quickCreateHost: (payload: DockerQuickCreateHostInput) =>
-    unwrap(api.post<ApiResponse<DockerOperation>>(`${BASE}/hosts/quick-create`, payload)),
+  planQuickCreateHost: (payload: DockerQuickCreateHostInput) =>
+    unwrap(api.post<ApiResponse<OperationalPlan>>(`${BASE}/hosts/quick-create/plan`, payload)),
+  quickCreateHost: (payload: DockerQuickCreateHostInput, idempotencyKey: string) =>
+    unwrap(
+      api.postWithHeaders<ApiResponse<DockerOperation>>(`${BASE}/hosts/quick-create`, payload, {
+        'Idempotency-Key': idempotencyKey,
+      }),
+    ),
   projects: (params: DockerListParams = {}) =>
     unwrap(api.get<ApiResponse<DockerPage<DockerProject>>>(withQuery(`${BASE}/projects`, params))),
   project: (id: string) =>
@@ -69,11 +76,20 @@ export const dockerApi = {
     ),
   deleteProject: (id: string) =>
     discard(api.delete<ApiResponse<void>>(`${BASE}/projects/${encodeURIComponent(id)}`)),
-  deployProject: (id: string, action: string) =>
+  planProjectDeploy: (id: string, action: string) =>
     unwrap(
-      api.post<ApiResponse<DockerOperation>>(`${BASE}/projects/${encodeURIComponent(id)}/deploy`, {
-        action,
-      }),
+      api.post<ApiResponse<OperationalPlan>>(
+        `${BASE}/projects/${encodeURIComponent(id)}/deploy/plan`,
+        { action },
+      ),
+    ),
+  deployProject: (id: string, action: string, idempotencyKey: string) =>
+    unwrap(
+      api.postWithHeaders<ApiResponse<DockerOperation>>(
+        `${BASE}/projects/${encodeURIComponent(id)}/deploy`,
+        { action },
+        { 'Idempotency-Key': idempotencyKey },
+      ),
     ),
   projectLogs: (id: string, params: { serviceName?: string; tailLines?: number } = {}) =>
     unwrap(

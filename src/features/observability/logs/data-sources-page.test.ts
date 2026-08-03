@@ -48,4 +48,36 @@ describe('log data source form model', () => {
       clearCredentialKeys: ['password'],
     })
   })
+
+  it('builds an extensible provider payload with generic config and write-only credentials', () => {
+    expect(
+      buildDataSourceInput({
+        name: ' community logs ',
+        backendType: 'provider',
+        providerKey: 'community-logs',
+        enabled: true,
+        endpoint: ' https://provider.example ',
+        maxEntries: 200,
+        maxRangeSeconds: 3600,
+        timeoutSeconds: 10,
+        configuration: [
+          { key: ' dataset ', value: ' apps ' },
+          { key: '', value: 'ignored' },
+        ],
+        credentials: [
+          { key: ' api_token ', value: ' secret ' },
+          { key: 'blank', value: ' ' },
+        ],
+      }),
+    ).toMatchObject({
+      name: 'community logs',
+      backendType: 'provider',
+      providerKey: 'community-logs',
+      config: {
+        endpoint: 'https://provider.example',
+        configuration: [{ key: 'dataset', value: 'apps' }],
+      },
+      credentials: [{ key: 'api_token', value: 'secret' }],
+    })
+  })
 })

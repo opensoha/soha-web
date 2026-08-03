@@ -33,7 +33,7 @@ describe('StatusTag', () => {
     const root = createRoot(container)
 
     await act(async () => {
-      root.render(<StatusTag value="healthy" />)
+      root.render(<StatusTag value="supported" />)
     })
 
     expect(captured.props).toMatchObject({

@@ -1,4 +1,8 @@
 import { api } from '@/services/api-client'
+import type {
+  ToolInvocationRequest,
+  ToolInvocationResultEnvelope,
+} from '@opensoha/contracts/gen/ts/sohaapi'
 import type { ApiResponse } from '@/types'
 import type {
   AIClient,
@@ -98,6 +102,13 @@ export const gatewayApi = {
   },
   manifest: (filters: { aiClientId: string; skillId: string; source: string }) =>
     api.get<ApiResponse<GatewayManifest>>(`/ai-gateway/capabilities${queryString(filters)}`),
+  tools: {
+    invoke: (toolName: string, payload: ToolInvocationRequest) =>
+      api.post<ToolInvocationResultEnvelope>(
+        `/ai-gateway/tools/${encodeURIComponent(toolName)}/invoke`,
+        payload,
+      ),
+  },
   auditLogs: (filters: AuditFilterState) =>
     api.get<ApiResponse<GatewayAuditLog[]>>(
       `/ai-gateway/audit-logs${queryString({

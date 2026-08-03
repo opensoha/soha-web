@@ -667,10 +667,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
   const clientsQuery = useQuery(
     gatewayQueries.clients(
       canManage &&
-        (isManifest ||
-          isClients ||
-          isGovernance ||
-          (isCallLogs && sectionActiveTab === 'audit')),
+        (isManifest || isClients || isGovernance || (isCallLogs && sectionActiveTab === 'audit')),
     ),
   )
   const personalTokensQuery = useQuery(
@@ -703,9 +700,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
           (isCallLogs && sectionActiveTab === 'model-calls')),
     ),
   )
-  const serviceAccountsQuery = useQuery(
-    gatewayQueries.serviceAccounts(canManage && isTokens),
-  )
+  const serviceAccountsQuery = useQuery(gatewayQueries.serviceAccounts(canManage && isTokens))
   const serviceAccountTokensQuery = useQuery(gatewayQueries.serviceTokens(canManage && isTokens))
   const grantsQuery = useQuery(gatewayQueries.grants(canManage && isGovernance))
   const policiesQuery = useQuery(gatewayQueries.policies(canManage && isGovernance))
@@ -713,8 +708,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
   const manifestQuery = useQuery(
     gatewayQueries.manifest(
       manifestFilters,
-      canView &&
-        (isManifest || isGovernance || (isCallLogs && sectionActiveTab === 'audit')),
+      canView && (isManifest || isGovernance || (isCallLogs && sectionActiveTab === 'audit')),
     ),
   )
   const auditQuery = useQuery(
@@ -2314,6 +2308,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
                   clients={clients}
                   filters={manifestFilters}
                   toolColumns={toolColumns}
+                  canInvoke={canInvoke}
                   onFiltersChange={setManifestFilters}
                   onRefresh={() => void manifestQuery.refetch()}
                 />

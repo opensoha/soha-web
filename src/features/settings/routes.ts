@@ -46,6 +46,7 @@ export const settingsRoutes = defineRoutes([
         'settings.system-integrations.view',
         'settings.runtime-config.view',
         'system.menus.view',
+        'secret.view',
       ],
       scopeMode: 'passive',
     },

@@ -3,6 +3,7 @@
 import { act, useState } from 'react'
 import { App as AntdApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import dayjs from 'dayjs'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -14,9 +15,14 @@ const apiMocks = vi.hoisted(() => ({
   buildLogStreamURL: vi.fn(() => 'ws://soha.local/logs?stream_ticket=ticket-1'),
   logTargetKey: vi.fn((target: { kind: string }) => JSON.stringify(target)),
 }))
+const podMocks = vi.hoisted(() => ({ detail: vi.fn() }))
+const downloadMocks = vi.hoisted(() => ({ downloadText: vi.fn() }))
 
 vi.mock('./api', () => apiMocks)
-vi.mock('@/utils/download', () => ({ downloadText: vi.fn() }))
+vi.mock('@/features/platform', () => ({
+  podQueries: { detail: podMocks.detail },
+}))
+vi.mock('@/utils/download', () => downloadMocks)
 vi.mock('@/features/auth', () => ({
   hasPermission: () => false,
   usePermissionSnapshot: () => ({ data: { data: { permissionKeys: [] } } }),
@@ -89,6 +95,11 @@ beforeEach(() => {
     ticket: 'ticket-1',
     expiresAt: '2026-07-31T02:01:00Z',
   })
+  podMocks.detail.mockImplementation((scope, name) => ({
+    queryKey: ['pods', 'detail', scope, name],
+    queryFn: async () => ({ containers: [{ name: 'api' }, { name: 'sidecar' }] }),
+    enabled: Boolean(name),
+  }))
 })
 
 afterEach(async () => {
@@ -174,29 +185,56 @@ describe('LogExplorer', () => {
 
   it('queries durable history without opening a live stream', async () => {
     const longAttributeValue = 'cluster-segment-'.repeat(20)
-    apiMocks.queryLogs.mockResolvedValueOnce({
-      entries: [
-        {
-          timestamp: '2026-07-31T01:00:00Z',
-          message: 'historical entry',
-          severity: 'ERROR',
-          stream: 'stderr',
-          traceId: 'trace-1',
-          attributes: { 'service.name': 'orders', 'k8s.long': longAttributeValue },
-          source: {
-            domain: 'kubernetes',
-            namespace: 'apps',
-            podName: 'api-0',
-            containerName: 'api',
+    apiMocks.queryLogs
+      .mockResolvedValueOnce({
+        entries: [
+          {
+            timestamp: '2026-07-31T01:00:00Z',
+            message: 'historical entry',
+            severity: 'ERROR',
+            stream: 'stderr',
+            traceId: 'trace-1',
+            attributes: { 'service.name': 'orders', 'k8s.long': longAttributeValue },
+            source: {
+              domain: 'kubernetes',
+              namespace: 'apps',
+              podName: 'api-0',
+              containerName: 'api',
+            },
+            sourceMode: 'durable',
           },
-          sourceMode: 'durable',
-        },
-      ],
-      nextCursor: 'next-page',
-      partial: false,
-      truncated: true,
-      scopeRestricted: false,
-    })
+        ],
+        nextCursor: 'next-page',
+        partial: false,
+        truncated: true,
+        scopeRestricted: false,
+      })
+      .mockResolvedValueOnce({
+        entries: [
+          {
+            timestamp: '2026-07-31T00:59:59Z',
+            message: 'older historical entry',
+            source: {
+              domain: 'kubernetes',
+              namespace: 'apps',
+              podName: 'api-0',
+              containerName: 'api',
+            },
+            sourceMode: 'durable',
+          },
+        ],
+        nextCursor: 'last-page',
+        partial: false,
+        truncated: false,
+        scopeRestricted: false,
+      })
+      .mockResolvedValueOnce({
+        entries: [],
+        nextCursor: '',
+        partial: false,
+        truncated: false,
+        scopeRestricted: false,
+      })
     const container = await renderExplorer(
       <LogExplorer
         clusterId="cluster-a"
@@ -206,18 +244,27 @@ describe('LogExplorer', () => {
     )
     expect(container.textContent).not.toContain('Live')
     expect(container.textContent).not.toContain('History')
+    expect(container.querySelector('.soha-log-query-card .ant-card-head')).toBeNull()
     expect(container.querySelector('.soha-log-results-card .ant-card-head')).toBeNull()
     expect(container.textContent).toContain('筛选查询')
     expect(container.textContent).toContain('高级语句')
     expect(container.querySelector('[aria-label="SohaQL 高级查询语句"]')).toBeNull()
-    expect(
-      container.querySelector('.soha-log-query-mode-row [aria-label="时间范围"]'),
-    ).not.toBeNull()
-    expect(
-      container.querySelector('.soha-log-query-mode-row [aria-label="每页行数"]'),
-    ).not.toBeNull()
+    expect(container.querySelector('.soha-log-time-trigger')?.textContent).toContain('最近 15 分钟')
+    expect(container.querySelector('.soha-log-query-range-picker')).toBeNull()
+    expect(container.querySelector('.soha-log-query-mode-row [aria-label="行数"]')).not.toBeNull()
+    expect(container.querySelector('.soha-log-query-limit-select')?.textContent).toContain('200 行')
+    expect(container.textContent).not.toContain('每批')
     expect(container.querySelector('.soha-log-query-actions [aria-label="时间范围"]')).toBeNull()
-    expect(container.textContent).toContain('工作负载类型')
+    expect(container.textContent).not.toContain('工作负载类型')
+    expect(container.textContent).not.toContain('工作负载名称')
+    expect(container.querySelector('[aria-label="日志全文搜索"]')).not.toBeNull()
+    expect(container.querySelector('input[placeholder="搜索所选 Pod 的日志内容"]')).not.toBeNull()
+    expect(container.querySelector('[aria-label="容器"]')).not.toBeNull()
+    expect(container.textContent).not.toContain('指定容器')
+    expect(podMocks.detail).toHaveBeenCalledWith(
+      { clusterId: 'cluster-a', namespace: 'apps' },
+      'api-0',
+    )
 
     const submit = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(
       (button) => button.textContent?.includes('查询日志'),
@@ -259,29 +306,192 @@ describe('LogExplorer', () => {
       direction: 'backward',
       text: 'timeout',
     })
+    expect(apiMocks.queryLogs.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({ from: expect.any(String), to: expect.any(String) }),
+    )
+    const firstQuery = apiMocks.queryLogs.mock.calls[0]?.[1] as { from: string; to: string }
+    expect(Date.parse(firstQuery.to) - Date.parse(firstQuery.from)).toBe(900_000)
     expect(apiMocks.issueLogStreamTicket).not.toHaveBeenCalled()
+    expect(container.textContent).not.toContain('下一页')
+
+    const resultTable = container.querySelector<HTMLElement>('.soha-log-results-table')
+    Object.defineProperties(resultTable, {
+      clientHeight: { configurable: true, value: 400 },
+      scrollHeight: { configurable: true, value: 1000 },
+      scrollTop: { configurable: true, value: 600 },
+    })
+    await act(async () => {
+      resultTable?.dispatchEvent(new Event('scroll', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    for (
+      let attempt = 0;
+      attempt < 20 && !container.textContent?.includes('older historical entry');
+      attempt += 1
+    ) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+    }
+
+    expect(apiMocks.queryLogs).toHaveBeenCalledTimes(2)
+    expect(apiMocks.queryLogs.mock.calls[1]?.[1]).toMatchObject({ cursor: 'next-page' })
+    expect(container.textContent).toContain('older historical entry')
+
+    await act(async () => {
+      resultTable?.dispatchEvent(new Event('scroll', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    for (let attempt = 0; attempt < 20 && apiMocks.queryLogs.mock.calls.length < 3; attempt += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+    }
+
+    expect(apiMocks.queryLogs.mock.calls[2]?.[1]).toMatchObject({ cursor: 'last-page' })
+    for (
+      let attempt = 0;
+      attempt < 20 && !container.textContent?.includes('已加载全部日志');
+      attempt += 1
+    ) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+    }
+    const resultRows = container.querySelectorAll('.soha-log-result-row > summary')
+    expect(resultRows[0]?.textContent).toContain('historical entry')
+    expect(resultRows[1]?.textContent).toContain('older historical entry')
+    expect(container.textContent).toContain('已加载全部日志')
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="导出当前快照"]')?.click()
+    })
+    expect(apiMocks.queryLogs).toHaveBeenCalledTimes(3)
+    expect(downloadMocks.downloadText).toHaveBeenCalledOnce()
+    const exported = String(downloadMocks.downloadText.mock.calls[0]?.[1])
+    expect(exported).toContain('historical entry')
+    expect(exported).toContain('older historical entry')
   })
 
-  it('keeps the advanced SohaQL editor available from the visual filter builder', async () => {
+  it('shows an absolute picker only for an explicit absolute range', async () => {
     const container = await renderExplorer(
       <LogExplorer
         clusterId="cluster-a"
         namespace="apps"
-        preset={{ workloadKind: 'Deployment', workloadName: 'api' }}
+        preset={{ from: '2026-07-31T00:00:00Z', to: '2026-07-31T01:00:00Z' }}
       />,
+    )
+
+    const trigger = container.querySelector<HTMLButtonElement>('.soha-log-time-trigger')
+    expect(trigger?.textContent).toContain(
+      `${dayjs('2026-07-31T00:00:00Z').format('YYYY-MM-DD HH:mm')} - ${dayjs('2026-07-31T01:00:00Z').format('YYYY-MM-DD HH:mm')}`,
+    )
+    expect(document.querySelector('.soha-log-time-popover')).toBeNull()
+
+    await act(async () => {
+      trigger?.click()
+      await Promise.resolve()
+    })
+
+    expect(document.querySelector('.soha-log-time-popover')?.textContent).toContain('相对时间')
+    expect(document.querySelector('.soha-log-time-popover')?.textContent).toContain('绝对时间')
+    expect(document.querySelector('.soha-log-query-range-picker')).toBeNull()
+
+    const absoluteToggle = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('.soha-log-time-absolute-section button'),
+    ).find((button) => button.textContent?.includes('绝对时间'))
+    await act(async () => absoluteToggle?.click())
+    expect(document.querySelectorAll('.soha-log-query-range-picker input')).toHaveLength(2)
+
+    const relativeOption = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('.soha-log-time-relative-list button'),
+    ).find((button) => button.textContent?.includes('最近 15 分钟'))
+    await act(async () => relativeOption?.click())
+    expect(trigger?.textContent).toContain('最近 15 分钟')
+  })
+
+  it('queries the current namespace when optional Pod and container filters are empty', async () => {
+    apiMocks.queryLogs.mockResolvedValueOnce({
+      entries: [],
+      nextCursor: '',
+      partial: false,
+      truncated: false,
+      scopeRestricted: false,
+    })
+    const container = await renderExplorer(
+      <LogExplorer clusterId="cluster-a" namespace="apps" preset={{ text: 'request-42' }} />,
+    )
+
+    expect(container.textContent).toContain('Pod（可选）')
+    expect(container.textContent).toContain('容器（可选）')
+    expect(container.textContent).toContain('全部 Pod')
+    expect(
+      container.querySelector('input[placeholder="搜索当前命名空间全部 Pod 的日志内容"]'),
+    ).not.toBeNull()
+
+    const submit = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.textContent?.includes('查询日志'),
+    )
+    await act(async () => {
+      submit?.click()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(apiMocks.queryLogs).toHaveBeenCalledOnce()
+    expect(apiMocks.queryLogs.mock.calls[0]?.[1]).toMatchObject({
+      sourceMode: 'durable',
+      selector: { namespace: 'apps' },
+      text: 'request-42',
+    })
+    expect(apiMocks.queryLogs.mock.calls[0]?.[1].selector.podNames).toBeUndefined()
+    expect(apiMocks.queryLogs.mock.calls[0]?.[1].selector.containers).toBeUndefined()
+  })
+
+  it('queries durable history across all namespaces when no namespace is selected', async () => {
+    apiMocks.queryLogs.mockResolvedValueOnce({
+      entries: [],
+      nextCursor: '',
+      partial: false,
+      truncated: false,
+      scopeRestricted: false,
+    })
+    const container = await renderExplorer(<LogExplorer clusterId="cluster-a" namespace="" />)
+    const submit = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.textContent?.includes('查询日志'),
+    )
+
+    expect(submit?.disabled).toBe(false)
+    await act(async () => {
+      submit?.click()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(apiMocks.queryLogs).toHaveBeenCalledWith(
+      { kind: 'cluster', clusterId: 'cluster-a', namespace: '' },
+      expect.objectContaining({
+        sourceMode: 'durable',
+        selector: expect.objectContaining({ namespace: '' }),
+      }),
+      expect.any(AbortSignal),
+    )
+  })
+
+  it('keeps the advanced SohaQL editor available from the visual filter builder', async () => {
+    const container = await renderExplorer(
+      <LogExplorer clusterId="cluster-a" namespace="apps" preset={{ podNames: ['api-0'] }} />,
     )
     const advanced = Array.from(
       container.querySelectorAll<HTMLElement>('.ant-segmented-item'),
     ).find((item) => item.textContent?.includes('高级语句'))
 
-    expect(container.textContent).toContain('工作负载类型')
-    expect(container.textContent).toContain('工作负载名称')
+    expect(container.textContent).not.toContain('工作负载类型')
+    expect(container.textContent).not.toContain('工作负载名称')
     expect(advanced).toBeDefined()
     await act(async () => advanced?.click())
 
     expect(
       container.querySelector<HTMLTextAreaElement>('[aria-label="SohaQL 高级查询语句"]')?.value,
-    ).toBe('{workload_kind="Deployment", workload="api"}')
+    ).toBe('{pod="api-0"}')
     expect(container.textContent).toContain('SohaQL')
 
     const builder = Array.from(container.querySelectorAll<HTMLElement>('.ant-segmented-item')).find(
@@ -291,8 +501,9 @@ describe('LogExplorer', () => {
     expect(builder).toBeDefined()
     await act(async () => builder?.click())
 
-    expect(container.textContent).toContain('工作负载类型')
-    expect(container.textContent).toContain('工作负载名称')
+    expect(container.textContent).not.toContain('工作负载类型')
+    expect(container.textContent).not.toContain('工作负载名称')
+    expect(container.textContent).toContain('api-0')
     expect(container.querySelector('[aria-label="SohaQL 高级查询语句"]')).toBeNull()
   })
 

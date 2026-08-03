@@ -6,7 +6,7 @@ describe('observability route manifests', () => {
   it('preserves canonical paths, redirects and the detail alias without duplicates', () => {
     const routes = observabilityRouteManifests.flatMap((manifest) => [...manifest])
     expect(validateRouteDefinitions(routes)).toEqual([])
-    expect(routes.map((route) => route.meta.path)).toHaveLength(22)
+    expect(routes.map((route) => route.meta.path)).toHaveLength(27)
     expect(
       observabilityCompatibilityRoutes.map((route) => [route.meta.path, route.redirectTo]),
     ).toEqual([

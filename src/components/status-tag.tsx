@@ -61,6 +61,7 @@ function pickStatusColor(value?: null | string): TagColor {
       'healthy',
       'ready',
       'running',
+      'supported',
       'succeeded',
       'complete',
       'success',
@@ -82,6 +83,7 @@ function pickStatusColor(value?: null | string): TagColor {
       'pending-install',
       'pending-upgrade',
       'draft',
+      'degraded',
     ].includes(normalized)
   ) {
     if (normalized === 'draft') return 'magenta'

@@ -585,6 +585,9 @@ export interface GatewayTool {
   permissionKeys: string[]
   requiredScopes?: string[]
   requiresApproval: boolean
+  description?: string
+  inputSchema?: Record<string, unknown>
+  outputSchema?: Record<string, unknown>
 }
 
 export interface GatewaySkill {

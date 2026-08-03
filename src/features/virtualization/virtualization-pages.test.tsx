@@ -411,6 +411,9 @@ const testState = vi.hoisted(() => ({
     throw new Error(`Unhandled GET ${path}`)
   }),
   apiPost: vi.fn(async (_path: string, _body?: unknown) => ({ data: { id: 'op-new' } })),
+  apiPostWithHeaders: vi.fn(async (_path: string, _body?: unknown, _headers?: HeadersInit) => ({
+    data: { id: 'op-new' },
+  })),
   apiPut: vi.fn(async (_path: string, _body?: unknown) => ({ data: { id: 'updated' } })),
   apiDelete: vi.fn(async (_path: string) => ({ data: undefined })),
 }))
@@ -430,6 +433,8 @@ vi.mock('@/services/api-client', () => ({
   api: {
     get: (path: string) => testState.apiGet(path),
     post: (path: string, body?: unknown) => testState.apiPost(path, body),
+    postWithHeaders: (path: string, body: unknown, headers: HeadersInit) =>
+      testState.apiPostWithHeaders(path, body, headers),
     put: (path: string, body?: unknown) => testState.apiPut(path, body),
     delete: (path: string) => testState.apiDelete(path),
   },
@@ -604,6 +609,7 @@ describe('virtualization pages', () => {
     }
     testState.apiGet.mockClear()
     testState.apiPost.mockClear()
+    testState.apiPostWithHeaders.mockClear()
     testState.apiPut.mockClear()
     testState.apiDelete.mockClear()
     class ResizeObserverMock {

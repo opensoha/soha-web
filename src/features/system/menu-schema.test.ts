@@ -11,7 +11,8 @@ describe('menu section schema helpers', () => {
   it('normalizes legacy display labels to canonical section keys', () => {
     expect(normalizeMenuSection('Dashboard')).toBe('platform')
     expect(normalizeMenuSection('observe')).toBe('ops')
-    expect(normalizeMenuSection('logs')).toBe('logging')
+    expect(normalizeMenuSection('logs')).toBe('observe-signals')
+    expect(normalizeMenuSection('observability-data')).toBe('observe-data')
     expect(normalizeMenuSection('alerts')).toBe('alerting')
     expect(normalizeMenuSection('ai-operations')).toBe('ai-governance')
     expect(normalizeMenuSection('Delivery')).toBe('delivery')
@@ -22,7 +23,8 @@ describe('menu section schema helpers', () => {
 
   it('renders canonical labels for normalized aliases', () => {
     expect(resolveMenuSectionLabel('observe')).toBe('Observe')
-    expect(resolveMenuSectionLabel('logging')).toBe('日志')
+    expect(resolveMenuSectionLabel('logging')).toBe('探索')
+    expect(resolveMenuSectionLabel('observe-data')).toBe('数据与集成')
     expect(resolveMenuSectionLabel('alerting')).toBe('告警与响应')
     expect(resolveMenuSectionLabel('alerting', 'en_US')).toBe('Alerting & Response')
     expect(resolveMenuSectionLabel('Dashboard')).toBe('Dashboard')
@@ -54,7 +56,7 @@ describe('menu section schema helpers', () => {
     ).toEqual([
       { value: 'platform', label: 'Dashboard' },
       { value: 'ops', label: 'Observe' },
-      { value: 'logging', label: '日志' },
+      { value: 'observe-signals', label: '探索' },
       { value: 'alerting', label: '告警与响应' },
       { value: 'delivery', label: '应用交付' },
       { value: 'control', label: 'control' },

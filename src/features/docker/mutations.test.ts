@@ -63,6 +63,32 @@ describe('dockerMutations', () => {
     expect(actionObserver.options.mutationKey).toEqual(dockerMutationKeys.service('action'))
   })
 
+  it('maps plan and idempotent execution variables to Docker API calls', async () => {
+    const payload = { name: 'preview-host' }
+    vi.spyOn(dockerApi, 'planQuickCreateHost').mockResolvedValue({
+      capability: 'docker.hosts.quick_create.trigger',
+      target: 'preview-host',
+      ready: true,
+      riskLevel: 'execute',
+      requiresApproval: true,
+      changes: [],
+      warnings: [],
+    })
+    vi.spyOn(dockerApi, 'quickCreateHost').mockResolvedValue({ id: 'operation-1' })
+    const { queryClient } = queryClientWithInvalidationSpy()
+    const planObserver = new MutationObserver(queryClient, dockerMutations.planQuickCreateHost())
+    const executeObserver = new MutationObserver(
+      queryClient,
+      dockerMutations.quickCreateHost(queryClient),
+    )
+
+    await planObserver.mutate(payload)
+    await executeObserver.mutate({ idempotencyKey: 'idem-host-1234', payload })
+
+    expect(dockerApi.planQuickCreateHost).toHaveBeenCalledWith(payload)
+    expect(dockerApi.quickCreateHost).toHaveBeenCalledWith(payload, 'idem-host-1234')
+  })
+
   it('does not invalidate when a mutation fails', async () => {
     const failure = new Error('delete failed')
     vi.spyOn(dockerApi, 'deletePort').mockRejectedValue(failure)

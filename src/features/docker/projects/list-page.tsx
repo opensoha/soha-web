@@ -39,6 +39,8 @@ import {
   ManagementQueryPanel,
 } from '@/components/management-list'
 import { StepFormModal } from '@/components/step-form-modal'
+import { OperationalPlanModal } from '@/components/operational-plan-modal'
+import type { OperationalPlan } from '@opensoha/contracts/gen/ts/sohaapi'
 import { formatDateTime } from '@/utils/time'
 import { computeQueries, latestTaskForResource, ResourceTaskActions } from '@/features/compute'
 import { dockerApi } from '../docker-api'
@@ -201,6 +203,12 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
     Partial<ContainerStartFormValues>
   >({})
   const [editing, setEditing] = useState<DockerProject | null>(null)
+  const [deployPlan, setDeployPlan] = useState<{
+    action: string
+    idempotencyKey: string
+    plan: OperationalPlan
+    project: DockerProject
+  } | null>(null)
   const {
     dockerModuleEnabled,
     canManageProjects,
@@ -215,7 +223,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
     includeServices: false,
   })
   const queryClient = useQueryClient()
-  const { message, modal } = App.useApp()
+  const { message } = App.useApp()
   const projectsQuery = useQuery(dockerQueries.projects(filters, dockerModuleEnabled))
   const tasksQuery = useQuery({
     ...computeQueries.tasks({ domain: 'container_runtime', limit: 100 }),
@@ -251,26 +259,36 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
       refreshDocker(queryClient)
     },
   })
-  const deployMutation = useMutation({
+  const deployPlanMutation = useMutation({
     mutationFn: ({ id, action }: { id: string; action: string }) =>
-      dockerApi.deployProject(id, action),
+      dockerApi.planProjectDeploy(id, action),
+    onError: (error) => void message.error(error.message),
+  })
+  const deployMutation = useMutation({
+    mutationFn: ({
+      id,
+      action,
+      idempotencyKey,
+    }: {
+      id: string
+      action: string
+      idempotencyKey: string
+    }) => dockerApi.deployProject(id, action, idempotencyKey),
     onSuccess: (_response, variables) => {
       message.success(`${operationActionLabel(variables.action)}任务已提交`)
+      setDeployPlan(null)
       refreshDocker(queryClient)
     },
+    onError: (error) => void message.error(error.message),
   })
-  const confirmRedeploy = (project: DockerProject) => {
-    const isGitBuild = project.sourceKind === 'git_dockerfile'
-    modal.confirm({
-      title: '销毁并重建应用？',
-      content: isGitBuild
-        ? '将拉取最新代码并构建镜像，成功后删除现有容器并重新启动。数据卷不会删除。'
-        : '将拉取最新镜像，成功后删除现有容器并重新启动。数据卷不会删除。',
-      okText: '销毁重建',
-      cancelText: '取消',
-      okButtonProps: { danger: true },
-      onOk: () => deployMutation.mutateAsync({ id: project.id, action: 'redeploy' }),
-    })
+  const reviewDeploy = (project: DockerProject, action: string) => {
+    deployPlanMutation.mutate(
+      { id: project.id, action },
+      {
+        onSuccess: (plan) =>
+          setDeployPlan({ action, idempotencyKey: crypto.randomUUID(), plan, project }),
+      },
+    )
   }
   const serviceActionMutation = useMutation({
     mutationFn: ({ id, action }: { id: string; action: string }) =>
@@ -498,8 +516,8 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                 size="small"
                 tooltip="部署"
                 icon={<PlayCircleOutlined />}
-                loading={deployMutation.isPending}
-                onClick={() => deployMutation.mutate({ id: project.id, action: 'deploy' })}
+                loading={deployPlanMutation.isPending || deployMutation.isPending}
+                onClick={() => reviewDeploy(project, 'deploy')}
               />
             ) : null}
             {canDeployProjects ? (
@@ -508,8 +526,8 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                 size="small"
                 tooltip="重启"
                 icon={<ReloadOutlined />}
-                loading={deployMutation.isPending}
-                onClick={() => deployMutation.mutate({ id: project.id, action: 'restart' })}
+                loading={deployPlanMutation.isPending || deployMutation.isPending}
+                onClick={() => reviewDeploy(project, 'restart')}
               />
             ) : null}
             {canDeployProjects ? (
@@ -518,8 +536,8 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                 size="small"
                 tooltip="停止"
                 icon={<PoweroffOutlined />}
-                loading={deployMutation.isPending}
-                onClick={() => deployMutation.mutate({ id: project.id, action: 'down' })}
+                loading={deployPlanMutation.isPending || deployMutation.isPending}
+                onClick={() => reviewDeploy(project, 'down')}
               />
             ) : null}
             {canDeployProjects && isSingleContainerProject(project) ? (
@@ -529,8 +547,8 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                 tooltip="销毁重建"
                 danger
                 icon={<SyncOutlined />}
-                loading={deployMutation.isPending}
-                onClick={() => confirmRedeploy(project)}
+                loading={deployPlanMutation.isPending || deployMutation.isPending}
+                onClick={() => reviewDeploy(project, 'redeploy')}
               />
             ) : null}
             <Link to={`/compute/runtimes/projects/${project.id}`}>
@@ -689,6 +707,23 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
           void projectsQuery.refetch()
           projectServiceQueries.forEach((query) => void query.refetch())
         }}
+      />
+      <OperationalPlanModal
+        confirmText={deployPlan ? operationActionLabel(deployPlan.action) : '确认执行'}
+        loading={deployMutation.isPending}
+        onCancel={() => setDeployPlan(null)}
+        onConfirm={() => {
+          if (!deployPlan) return
+          deployMutation.mutate({
+            action: deployPlan.action,
+            id: deployPlan.project.id,
+            idempotencyKey: deployPlan.idempotencyKey,
+          })
+        }}
+        plan={deployPlan?.plan ?? null}
+        title={
+          deployPlan ? `${operationActionLabel(deployPlan.action)}：${deployPlan.project.name}` : ''
+        }
       />
       <StepFormModal
         title={editing ? '编辑 Compose 项目' : '创建 Compose 项目'}

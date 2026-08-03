@@ -82,6 +82,7 @@ export const observabilityKeys = {
   },
   logs: {
     all: logRoot,
+    providers: () => [...logRoot, 'providers'] as const,
     dataSources: () => [...logRoot, 'data-sources'] as const,
     snapshot: (clusterId: string, query: unknown) =>
       [...logRoot, 'snapshot', normalizedId(clusterId), query] as const,

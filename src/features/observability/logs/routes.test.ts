@@ -7,14 +7,14 @@ vi.mock('./page', () => ({ LogsPage: routePage }))
 vi.mock('./data-sources-page', () => ({ LogDataSourcesPage: dataSourcesPage }))
 
 describe('observability log route manifest', () => {
-  it('registers the authorized namespace-scoped log workbench', async () => {
+  it('keeps observability scope inside the log workbench', async () => {
     const [route, dataSourcesRoute] = observabilityLogRoutes
     expect(route.meta).toMatchObject({
       id: 'monitoring-workbench-logs',
       path: '/monitoring-workbench/logs',
       menuId: 'monitoring-workbench-logs',
       permissionKey: 'observe.monitoring.view',
-      scopeMode: 'namespace',
+      scopeMode: 'passive',
       navVisible: true,
     })
     await expect(route.load()).resolves.toEqual({ default: routePage })

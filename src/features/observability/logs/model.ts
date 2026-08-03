@@ -14,6 +14,10 @@ export interface LogExplorerPreset {
   containers?: string[]
   labelSelector?: string
   text?: string
+  traceId?: string
+  spanId?: string
+  from?: string
+  to?: string
   sinceSeconds?: number
   tail?: number
   allContainers?: boolean
@@ -27,6 +31,10 @@ export interface RuntimeLogFilters {
   containers?: string[]
   labelSelector?: string
   text?: string
+  traceId?: string
+  spanId?: string
+  from?: string
+  to?: string
   sinceSeconds?: number
   tail?: number
   allContainers?: boolean
@@ -44,6 +52,14 @@ function clean(value?: string | null) {
 function cleanList(values?: string[]) {
   const normalized = values?.map((value) => value.trim()).filter(Boolean) ?? []
   return normalized.length > 0 ? [...new Set(normalized)] : undefined
+}
+
+function absoluteRange(from?: string | null, to?: string | null) {
+  const start = Date.parse(from ?? '')
+  const end = Date.parse(to ?? '')
+  return Number.isFinite(start) && Number.isFinite(end) && start <= end
+    ? [new Date(start).toISOString(), new Date(end).toISOString()]
+    : undefined
 }
 
 function escapeSohaQLValue(value: string) {
@@ -110,7 +126,9 @@ export function buildRuntimeLogQuery(namespace: string, filters: RuntimeLogFilte
     throw new Error('工作负载类型和名称必须同时填写')
   }
 
-  const containers = filters.allContainers ? undefined : cleanList(filters.containers)
+  const selectedContainers = cleanList(filters.containers)
+  const allContainers = Boolean(filters.allContainers) || !selectedContainers
+  const containers = allContainers ? undefined : selectedContainers
   return {
     sourceMode: 'runtime',
     selector: {
@@ -120,7 +138,7 @@ export function buildRuntimeLogQuery(namespace: string, filters: RuntimeLogFilte
       podNames: cleanList(filters.podNames),
       containers,
       labelSelector: clean(filters.labelSelector),
-      allContainers: Boolean(filters.allContainers),
+      allContainers,
     },
     tail: filters.tail || 200,
     limit: 5000,
@@ -159,13 +177,13 @@ export function buildDurableLogQuery(
     throw new Error('工作负载类型和名称必须同时填写')
   }
   const podNames = cleanList(filters.podNames)
-  const containers = filters.allContainers ? undefined : cleanList(filters.containers)
-  if ((podNames?.length ?? 0) > 1 || (containers?.length ?? 0) > 1) {
-    throw new Error('历史日志每次只能筛选一个 Pod 和一个容器')
-  }
+  const selectedContainers = cleanList(filters.containers)
+  const allContainers = Boolean(filters.allContainers) || !selectedContainers
+  const containers = allContainers ? undefined : selectedContainers
   if (clean(filters.labelSelector)) {
     throw new Error('历史日志暂不支持 Kubernetes 标签选择器')
   }
+  const range = absoluteRange(filters.from, filters.to)
   const rangeSeconds = filters.sinceSeconds && filters.sinceSeconds > 0 ? filters.sinceSeconds : 900
   return {
     sourceMode: 'durable',
@@ -175,13 +193,15 @@ export function buildDurableLogQuery(
       workloadName,
       podNames,
       containers,
-      allContainers: Boolean(filters.allContainers),
+      allContainers,
     },
-    from: new Date(now - rangeSeconds * 1000).toISOString(),
-    to: new Date(now).toISOString(),
+    from: range?.[0] ?? new Date(now - rangeSeconds * 1000).toISOString(),
+    to: range?.[1] ?? new Date(now).toISOString(),
     limit: Math.min(filters.tail || 200, 1000),
     direction: 'backward',
     text: clean(filters.text),
+    traceId: clean(filters.traceId),
+    spanId: clean(filters.spanId),
   }
 }
 
@@ -190,6 +210,7 @@ export function readLogExplorerPreset(params: URLSearchParams): LogExplorerPrese
   const tailValue = Number(params.get('tail'))
   const podNames = cleanList(params.getAll('pod'))
   const containers = cleanList(params.getAll('container'))
+  const range = absoluteRange(params.get('from'), params.get('to'))
   return {
     source:
       params.get('source') === 'docker'
@@ -209,7 +230,12 @@ export function readLogExplorerPreset(params: URLSearchParams): LogExplorerPrese
     containers,
     labelSelector: clean(params.get('labelSelector')),
     text: clean(params.get('text')),
-    sinceSeconds: Number.isFinite(numberValue) && numberValue > 0 ? numberValue : undefined,
+    traceId: clean(params.get('traceId')),
+    spanId: clean(params.get('spanId')),
+    from: range?.[0],
+    to: range?.[1],
+    sinceSeconds:
+      !range && Number.isFinite(numberValue) && numberValue > 0 ? numberValue : undefined,
     tail: Number.isFinite(tailValue) && tailValue > 0 ? tailValue : undefined,
     allContainers: params.get('allContainers') === 'true',
     previous: params.get('previous') === 'true',
@@ -218,6 +244,7 @@ export function readLogExplorerPreset(params: URLSearchParams): LogExplorerPrese
 
 export function buildLogExplorerPath(preset: LogExplorerPreset) {
   const params = new URLSearchParams()
+  const range = absoluteRange(preset.from, preset.to)
   const values: Array<[string, string | null | undefined]> = [
     ['source', preset.source && preset.source !== 'kubernetes' ? preset.source : undefined],
     ['cluster', preset.clusterId],
@@ -230,7 +257,11 @@ export function buildLogExplorerPath(preset: LogExplorerPreset) {
     ['workload', preset.workloadName],
     ['labelSelector', preset.labelSelector],
     ['text', preset.text],
-    ['range', preset.sinceSeconds ? String(preset.sinceSeconds) : undefined],
+    ['traceId', preset.traceId],
+    ['spanId', preset.spanId],
+    ['from', range?.[0]],
+    ['to', range?.[1]],
+    ['range', !range && preset.sinceSeconds ? String(preset.sinceSeconds) : undefined],
     ['tail', preset.tail ? String(preset.tail) : undefined],
     ['allContainers', preset.allContainers ? 'true' : undefined],
     ['previous', preset.previous ? 'true' : undefined],
@@ -255,7 +286,11 @@ export function logEntryKey(entry: LogEntry) {
   ].join('\u0000')
 }
 
-export function mergeLogEntries(current: LogEntry[], incoming: LogEntry[]) {
+export function mergeLogEntries(
+  current: LogEntry[],
+  incoming: LogEntry[],
+  maxEntries = MAX_BROWSER_ENTRIES,
+) {
   if (incoming.length === 0) return current
   const seen = new Set(current.map(logEntryKey))
   const additions = incoming.filter((entry) => {
@@ -265,13 +300,12 @@ export function mergeLogEntries(current: LogEntry[], incoming: LogEntry[]) {
     return true
   })
   if (additions.length === 0) return current
-  return [...current, ...additions]
-    .sort(
-      (left, right) =>
-        left.timestamp.localeCompare(right.timestamp) ||
-        logEntryKey(left).localeCompare(logEntryKey(right)),
-    )
-    .slice(-MAX_BROWSER_ENTRIES)
+  const merged = [...current, ...additions].sort(
+    (left, right) =>
+      left.timestamp.localeCompare(right.timestamp) ||
+      logEntryKey(left).localeCompare(logEntryKey(right)),
+  )
+  return Number.isFinite(maxEntries) ? merged.slice(-maxEntries) : merged
 }
 
 export function formatLogSource(entry: LogEntry) {

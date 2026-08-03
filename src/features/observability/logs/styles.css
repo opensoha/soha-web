@@ -16,9 +16,21 @@
   gap: 0 12px;
 }
 
+.soha-log-filter-grid.is-standalone {
+  grid-template-columns: repeat(2, minmax(160px, 1fr));
+}
+
 .soha-log-filter-grid .ant-form-item {
   min-width: 0;
   margin-bottom: 12px;
+}
+
+.soha-log-provider-field-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
 }
 
 .soha-log-query-mode-row {
@@ -29,15 +41,86 @@
   min-width: 0;
 }
 
+.soha-log-query-scope-controls {
+  min-width: 0;
+}
+
 .soha-log-query-top-actions {
   display: grid;
-  grid-template-columns: 148px 112px auto;
+  grid-template-columns: minmax(220px, 340px) 104px repeat(2, auto);
   gap: 8px;
   align-items: center;
   margin-inline-start: auto;
 }
 
+.soha-log-time-trigger.ant-btn {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  justify-content: flex-start;
+}
+
+.soha-log-time-trigger > span:not(.anticon) {
+  min-width: 0;
+  overflow: hidden;
+  flex: 1;
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .soha-log-query-top-actions .ant-select {
+  width: 100%;
+}
+
+.soha-log-time-popover-overlay .ant-popover-inner {
+  padding: 12px;
+}
+
+.soha-log-time-popover {
+  display: flex;
+  width: min(360px, calc(100vw - 32px));
+  flex-direction: column;
+  gap: 12px;
+}
+
+.soha-log-time-relative-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.soha-log-time-relative-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.soha-log-time-relative-list .ant-btn {
+  justify-content: flex-start;
+}
+
+.soha-log-time-absolute-section {
+  display: flex;
+  min-width: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--soha-border-color);
+  flex-direction: column;
+  gap: 8px;
+}
+
+.soha-log-time-absolute-toggle.ant-btn {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.soha-log-time-absolute-toggle > span:not(.anticon) {
+  flex: 1;
+  text-align: start;
+}
+
+.soha-log-time-absolute-section .ant-picker {
   width: 100%;
 }
 
@@ -59,14 +142,28 @@
   margin-top: 12px;
 }
 
+.soha-log-primary-query {
+  margin-top: 12px;
+}
+
+.soha-log-primary-search.ant-input-search {
+  width: 100%;
+}
+
+.soha-log-primary-search .ant-input-group-addon .ant-btn {
+  min-width: 120px;
+}
+
 .soha-log-results-card .ant-card-body {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
+  padding: 16px;
 }
 
 .soha-log-results-toolbar {
+  height: 32px;
   min-height: 32px;
 }
 
@@ -87,6 +184,16 @@
   border: 1px solid var(--soha-border-color);
   border-radius: var(--soha-radius);
   background: var(--soha-bg-surface);
+}
+
+.soha-log-results-explorer.is-empty {
+  grid-template-columns: minmax(0, 1fr);
+  height: auto;
+  min-height: 0;
+}
+
+.soha-log-results-explorer.is-empty .soha-log-result-empty {
+  min-height: 120px;
 }
 
 .soha-log-results-fields {
@@ -112,6 +219,15 @@
 .soha-log-results-table {
   min-width: 0;
   overflow: auto;
+}
+
+.soha-log-results-end {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  border-top: 1px solid var(--soha-border-color);
 }
 
 .soha-log-result-header,
@@ -363,7 +479,16 @@
 }
 
 @media (max-width: 640px) {
-  .soha-log-filter-grid {
+  .soha-log-provider-field-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .soha-log-provider-field-row .ant-btn {
+    justify-self: start;
+  }
+
+  .soha-log-filter-grid,
+  .soha-log-filter-grid.is-standalone {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -388,8 +513,20 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .soha-log-query-top-actions .ant-btn {
+  .soha-log-time-trigger {
     grid-column: 1 / -1;
+  }
+
+  .soha-log-time-relative-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .soha-log-primary-search .ant-input-group-addon .ant-btn {
+    min-width: 96px;
+  }
+
+  .soha-log-results-toolbar {
+    height: auto;
   }
 
   .soha-log-query-actions > .soha-log-toolbar-spacer {

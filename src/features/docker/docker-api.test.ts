@@ -6,6 +6,7 @@ const apiMocks = vi.hoisted(() => ({
   delete: vi.fn(),
   get: vi.fn(),
   post: vi.fn(),
+  postWithHeaders: vi.fn(),
   put: vi.fn(),
 }))
 
@@ -17,9 +18,7 @@ describe('dockerApi', () => {
   it('unwraps list and detail responses while preserving query wire behavior', async () => {
     const page = { items: [{ id: 'host-1', name: 'Host 1' }], total: 1, page: 0, pageSize: 20 }
     const host = { id: 'host/a', name: 'Host A' }
-    apiMocks.get
-      .mockResolvedValueOnce({ data: page })
-      .mockResolvedValueOnce({ data: host })
+    apiMocks.get.mockResolvedValueOnce({ data: page }).mockResolvedValueOnce({ data: host })
 
     await expect(
       dockerApi.hosts({ search: '', status: 'online', page: 0, pageSize: 20 }),
@@ -81,5 +80,40 @@ describe('dockerApi', () => {
     expect(apiMocks.post).toHaveBeenCalledWith('/docker/hosts', hostInput)
     expect(apiMocks.put).toHaveBeenCalledWith('/docker/projects/project%2F1', projectInput)
     expect(apiMocks.delete).toHaveBeenCalledWith('/docker/projects/project%2F1')
+  })
+
+  it('plans host and project operations before idempotent execution', async () => {
+    const hostInput = { name: 'preview-host' }
+    const plan = {
+      capability: 'docker.hosts.quick_create.trigger',
+      target: 'preview-host',
+      ready: true,
+      riskLevel: 'execute' as const,
+      requiresApproval: true,
+      changes: [{ action: 'create', resource: 'docker-host', summary: 'Create host' }],
+      warnings: [],
+    }
+    apiMocks.post.mockResolvedValue({ data: plan })
+    apiMocks.postWithHeaders.mockResolvedValue({ data: { id: 'operation-1' } })
+
+    await expect(dockerApi.planQuickCreateHost(hostInput)).resolves.toBe(plan)
+    await expect(dockerApi.quickCreateHost(hostInput, 'idem-host-1234')).resolves.toEqual({
+      id: 'operation-1',
+    })
+    await expect(dockerApi.planProjectDeploy('project/1', 'deploy')).resolves.toBe(plan)
+    await dockerApi.deployProject('project/1', 'deploy', 'idem-project-1234')
+
+    expect(apiMocks.post).toHaveBeenCalledWith('/docker/hosts/quick-create/plan', hostInput)
+    expect(apiMocks.post).toHaveBeenCalledWith('/docker/projects/project%2F1/deploy/plan', {
+      action: 'deploy',
+    })
+    expect(apiMocks.postWithHeaders).toHaveBeenCalledWith('/docker/hosts/quick-create', hostInput, {
+      'Idempotency-Key': 'idem-host-1234',
+    })
+    expect(apiMocks.postWithHeaders).toHaveBeenCalledWith(
+      '/docker/projects/project%2F1/deploy',
+      { action: 'deploy' },
+      { 'Idempotency-Key': 'idem-project-1234' },
+    )
   })
 })

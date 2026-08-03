@@ -58,10 +58,12 @@ describe('log explorer model', () => {
         'apps',
         {
           podNames: ['api-0'],
-          containers: ['api'],
+          containers: ['api', 'sidecar'],
           sinceSeconds: 3600,
           tail: 5000,
           text: 'timeout',
+          traceId: 'trace-1',
+          spanId: 'span-1',
         },
         Date.parse('2026-07-31T03:00:00Z'),
       ),
@@ -72,7 +74,7 @@ describe('log explorer model', () => {
         workloadKind: undefined,
         workloadName: undefined,
         podNames: ['api-0'],
-        containers: ['api'],
+        containers: ['api', 'sidecar'],
         allContainers: false,
       },
       from: '2026-07-31T02:00:00.000Z',
@@ -80,10 +82,22 @@ describe('log explorer model', () => {
       limit: 1000,
       direction: 'backward',
       text: 'timeout',
+      traceId: 'trace-1',
+      spanId: 'span-1',
     })
-    expect(() => buildDurableLogQuery('apps', { podNames: ['api-0', 'api-1'] })).toThrow(
-      '历史日志每次只能筛选一个 Pod 和一个容器',
-    )
+    expect(
+      buildDurableLogQuery('apps', { podNames: ['api-0', 'api-1'] }).selector?.podNames,
+    ).toEqual(['api-0', 'api-1'])
+    expect(
+      buildDurableLogQuery('apps', {
+        from: '2026-07-30T12:00:00Z',
+        to: '2026-07-30T13:30:00Z',
+        sinceSeconds: 60,
+      }),
+    ).toMatchObject({
+      from: '2026-07-30T12:00:00.000Z',
+      to: '2026-07-30T13:30:00.000Z',
+    })
   })
 
   it('round-trips shareable scope and filter parameters', () => {
@@ -95,6 +109,8 @@ describe('log explorer model', () => {
       podNames: ['api-0', 'api-1'],
       containers: ['api', 'sidecar'],
       text: 'timeout',
+      traceId: 'trace-1',
+      spanId: 'span-1',
       sinceSeconds: 3600,
       tail: 500,
       previous: true,
@@ -108,10 +124,31 @@ describe('log explorer model', () => {
       podNames: ['api-0', 'api-1'],
       containers: ['api', 'sidecar'],
       text: 'timeout',
+      traceId: 'trace-1',
+      spanId: 'span-1',
       sinceSeconds: 3600,
       tail: 500,
       previous: true,
     })
+  })
+
+  it('round-trips a validated absolute time range instead of a relative range', () => {
+    const from = '2026-07-30T12:00:00.000Z'
+    const to = '2026-07-30T13:30:00.000Z'
+    const path = buildLogExplorerPath({ from, to, sinceSeconds: 900 })
+
+    expect(path).toContain(`from=${encodeURIComponent(from)}`)
+    expect(path).toContain(`to=${encodeURIComponent(to)}`)
+    expect(path).not.toContain('range=')
+    expect(readLogExplorerPreset(new URL(path, 'http://soha.local').searchParams)).toMatchObject({
+      from,
+      to,
+      sinceSeconds: undefined,
+    })
+    expect(
+      readLogExplorerPreset(new URLSearchParams({ from: 'invalid', to, range: '900' }))
+        .sinceSeconds,
+    ).toBe(900)
   })
 
   it('round-trips the safe SohaQL selector subset', () => {
@@ -134,9 +171,7 @@ describe('log explorer model', () => {
       text: 'request "failed"',
       allContainers: false,
     })
-    expect(() => parseSohaQLExpression('{namespace="other"}')).toThrow(
-      '不支持的选择器：namespace',
-    )
+    expect(() => parseSohaQLExpression('{namespace="other"}')).toThrow('不支持的选择器：namespace')
     expect(parseSohaQLExpression('{ }')).toEqual({
       workloadKind: undefined,
       workloadName: undefined,

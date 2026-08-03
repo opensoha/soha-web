@@ -1,0 +1,41 @@
+.soha-signal-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.soha-signal-query-card .ant-card-body {
+  padding: 14px 16px;
+}
+
+.soha-signal-scope-row {
+  margin-block-end: 12px;
+}
+
+.soha-signal-query-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.soha-signal-query-grid .ant-form-item {
+  min-width: 0;
+  margin-block-end: 12px;
+}
+
+.soha-signal-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.soha-signal-metric-chart {
+  height: 260px;
+}
+
+@media (max-width: 960px) {
+  .soha-signal-query-grid,
+  .soha-signal-metric-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -264,6 +264,9 @@ const testState = vi.hoisted(() => ({
     throw new Error(`Unhandled GET ${path}`)
   }),
   apiPost: vi.fn(async (_path: string, _body?: unknown) => ({ data: { id: 'operation-1' } })),
+  apiPostWithHeaders: vi.fn(async (_path: string, _body?: unknown, _headers?: HeadersInit) => ({
+    data: { id: 'operation-1' },
+  })),
   apiPut: vi.fn(async (_path: string, _body?: unknown) => ({ data: { id: 'updated' } })),
   apiDelete: vi.fn(async (_path: string) => ({ data: undefined })),
 }))
@@ -281,6 +284,8 @@ vi.mock('@/services/api-client', () => ({
   api: {
     get: (path: string) => testState.apiGet(path),
     post: (path: string, body?: unknown) => testState.apiPost(path, body),
+    postWithHeaders: (path: string, body: unknown, headers: HeadersInit) =>
+      testState.apiPostWithHeaders(path, body, headers),
     put: (path: string, body?: unknown) => testState.apiPut(path, body),
     delete: (path: string) => testState.apiDelete(path),
   },
@@ -347,6 +352,7 @@ describe('docker pages', () => {
     }
     testState.apiGet.mockClear()
     testState.apiPost.mockClear()
+    testState.apiPostWithHeaders.mockClear()
     testState.apiPut.mockClear()
     testState.apiDelete.mockClear()
     class ResizeObserverMock {
@@ -641,12 +647,30 @@ describe('docker pages', () => {
     expect(document.body.textContent).toContain('127.0.0.1:18083 -> 80/tcp')
   })
 
-  it('confirms and submits source-aware destructive redeploy for single-container projects', async () => {
+  it('reviews a redeploy plan before idempotent execution', async () => {
     testState.permissionSnapshot = {
       permissionKeys: ['docker.projects.view', 'docker.projects.deploy'],
       visibleMenuIds: [],
       visibleMenus: [],
     }
+    testState.apiPost.mockResolvedValueOnce({
+      data: {
+        capability: 'docker.projects.deploy.trigger',
+        target: 'project-1',
+        ready: true,
+        riskLevel: 'execute',
+        requiresApproval: true,
+        changes: [
+          {
+            action: 'redeploy',
+            resource: 'docker-project',
+            summary: '销毁并重建 soha-orbstack-smoke，保留数据卷。',
+            sensitiveValuesRedacted: false,
+          },
+        ],
+        warnings: ['将重新拉取镜像。'],
+      },
+    } as never)
     await renderWithProviders(<DockerProjectsPage />)
 
     const redeployButton = document.querySelector(
@@ -657,23 +681,29 @@ describe('docker pages', () => {
     await act(async () => {
       redeployButton?.click()
       await Promise.resolve()
+      await new Promise((resolve) => setTimeout(resolve, 0))
     })
 
-    expect(document.body.textContent).toContain('销毁并重建应用？')
-    expect(document.body.textContent).toContain('将拉取最新镜像')
-    expect(document.body.textContent).toContain('数据卷不会删除')
-    const confirmButton = Array.from(
-      document.querySelectorAll('.ant-modal-confirm-btns button'),
-    ).find((button) => button.textContent?.includes('销毁重建')) as HTMLButtonElement | undefined
+    expect(testState.apiPost).toHaveBeenCalledWith('/docker/projects/project-1/deploy/plan', {
+      action: 'redeploy',
+    })
+    expect(document.body.textContent).toContain('销毁并重建 soha-orbstack-smoke')
+    expect(document.body.textContent).toContain('将重新拉取镜像')
+    const confirmButton = Array.from(document.querySelectorAll('.ant-modal-footer button')).find(
+      (button) => button.textContent?.includes('销毁重建'),
+    ) as HTMLButtonElement | undefined
     expect(confirmButton).toBeDefined()
     await act(async () => {
       confirmButton?.click()
       await Promise.resolve()
+      await new Promise((resolve) => setTimeout(resolve, 0))
     })
 
-    expect(testState.apiPost).toHaveBeenCalledWith('/docker/projects/project-1/deploy', {
-      action: 'redeploy',
-    })
+    expect(testState.apiPostWithHeaders).toHaveBeenCalledWith(
+      '/docker/projects/project-1/deploy',
+      { action: 'redeploy' },
+      expect.objectContaining({ 'Idempotency-Key': expect.any(String) }),
+    )
   })
 
   it('opens quick start as a four-step flow and reveals Git Dockerfile fields', async () => {
@@ -741,9 +771,9 @@ describe('docker pages', () => {
     expect(modalTitle?.textContent).toBe('创建 Compose 项目')
     expect(modalTitle?.id).toBeTruthy()
     expect(dialog?.getAttribute('aria-labelledby')?.split(/\s+/)).toContain(modalTitle?.id)
-    expect((dialog?.querySelector('.ant-modal-header') as HTMLElement | null)?.style.minHeight).toBe(
-      '32px',
-    )
+    expect(
+      (dialog?.querySelector('.ant-modal-header') as HTMLElement | null)?.style.minHeight,
+    ).toBe('32px')
     expect((modalTitle as HTMLElement | null)?.style.position).toBe('absolute')
 
     const stepTitles = Array.from(

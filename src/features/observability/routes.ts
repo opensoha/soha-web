@@ -7,7 +7,9 @@ import { observabilityLogRoutes } from './logs/routes'
 import { observabilityNotificationRoutes } from './notifications/routes'
 import { observabilityOncallRoutes } from './oncall/routes'
 import { observabilityOverviewRoutes } from './overview/routes'
+import { observabilityProviderRoutes } from './providers/routes'
 import { observabilityRuleRoutes } from './rules/routes'
+import { observabilitySignalRoutes } from './signals/routes'
 
 export const observabilityParentRoutes = defineRoutes([
   {
@@ -15,7 +17,7 @@ export const observabilityParentRoutes = defineRoutes([
       id: 'monitoring-workbench',
       path: '/monitoring-workbench',
       title: '可观测性工作台',
-      description: '日志、告警、通知和值班协同',
+      description: 'Logs、Metrics、Traces、Profiles 与告警响应',
       icon: 'IconAlertTriangle',
       group: 'observe',
       workbenchId: 'monitoring',
@@ -182,7 +184,9 @@ export const observabilityCompatibilityRoutes = defineRoutes([
 export const observabilityRouteManifests = [
   observabilityParentRoutes,
   observabilityOverviewRoutes,
+  observabilitySignalRoutes,
   observabilityLogRoutes,
+  observabilityProviderRoutes,
   observabilityIntegrationRoutes,
   observabilityRuleRoutes,
   observabilityAlertRoutes,

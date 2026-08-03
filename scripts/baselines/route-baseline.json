@@ -24,8 +24,10 @@
       "src/features/observability/notifications/routes.ts",
       "src/features/observability/oncall/routes.ts",
       "src/features/observability/overview/routes.ts",
+      "src/features/observability/providers/routes.ts",
       "src/features/observability/routes.ts",
       "src/features/observability/rules/routes.ts",
+      "src/features/observability/signals/routes.ts",
       "src/features/platform/access-control/routes.ts",
       "src/features/platform/cluster-resources/routes.ts",
       "src/features/platform/clusters/routes.ts",
@@ -39,20 +41,21 @@
       "src/features/platform/workloads/routes.ts",
       "src/features/plugins/routes.ts",
       "src/features/provider-portal/routes.ts",
+      "src/features/secrets/routes.ts",
       "src/features/settings/routes.ts",
       "src/features/system/routes.ts",
       "src/routes/fallback-routes.ts"
     ]
   },
   "summary": {
-    "runtimePaths": 230,
-    "metadataPaths": 230,
-    "overlappingPaths": 230,
+    "runtimePaths": 236,
+    "metadataPaths": 236,
+    "overlappingPaths": 236,
     "runtimeOnlyPaths": 0,
     "metadataOnlyPaths": 0,
     "inlineJsxPaths": 0,
-    "lazyRouteLoads": 194,
-    "lazySourceModules": 192
+    "lazyRouteLoads": 200,
+    "lazySourceModules": 198
   },
   "paths": {
     "runtime": [
@@ -169,6 +172,7 @@
       "/login/callback",
       "/manifests",
       "/monitoring-workbench",
+      "/monitoring-workbench/alerting",
       "/monitoring-workbench/alerts",
       "/monitoring-workbench/alerts/:eventId",
       "/monitoring-workbench/events",
@@ -176,11 +180,15 @@
       "/monitoring-workbench/integrations",
       "/monitoring-workbench/log-data-sources",
       "/monitoring-workbench/logs",
+      "/monitoring-workbench/metrics",
       "/monitoring-workbench/notifications",
       "/monitoring-workbench/oncall",
       "/monitoring-workbench/oncall/settings",
       "/monitoring-workbench/overview",
+      "/monitoring-workbench/providers",
       "/monitoring-workbench/rules",
+      "/monitoring-workbench/services",
+      "/monitoring-workbench/traces",
       "/network",
       "/network/endpointslices",
       "/network/endpointslices/:name",
@@ -247,6 +255,7 @@
       "/settings/login",
       "/settings/overview",
       "/settings/runtime-configuration",
+      "/settings/secrets",
       "/settings/source-control",
       "/settings/source-control/:integrationId",
       "/settings/system-integrations",
@@ -401,6 +410,7 @@
       "/login/callback",
       "/manifests",
       "/monitoring-workbench",
+      "/monitoring-workbench/alerting",
       "/monitoring-workbench/alerts",
       "/monitoring-workbench/alerts/:eventId",
       "/monitoring-workbench/events",
@@ -408,11 +418,15 @@
       "/monitoring-workbench/integrations",
       "/monitoring-workbench/log-data-sources",
       "/monitoring-workbench/logs",
+      "/monitoring-workbench/metrics",
       "/monitoring-workbench/notifications",
       "/monitoring-workbench/oncall",
       "/monitoring-workbench/oncall/settings",
       "/monitoring-workbench/overview",
+      "/monitoring-workbench/providers",
       "/monitoring-workbench/rules",
+      "/monitoring-workbench/services",
+      "/monitoring-workbench/traces",
       "/network",
       "/network/endpointslices",
       "/network/endpointslices/:name",
@@ -479,6 +493,7 @@
       "/settings/login",
       "/settings/overview",
       "/settings/runtime-configuration",
+      "/settings/secrets",
       "/settings/source-control",
       "/settings/source-control/:integrationId",
       "/settings/system-integrations",
@@ -633,6 +648,7 @@
       "/login/callback",
       "/manifests",
       "/monitoring-workbench",
+      "/monitoring-workbench/alerting",
       "/monitoring-workbench/alerts",
       "/monitoring-workbench/alerts/:eventId",
       "/monitoring-workbench/events",
@@ -640,11 +656,15 @@
       "/monitoring-workbench/integrations",
       "/monitoring-workbench/log-data-sources",
       "/monitoring-workbench/logs",
+      "/monitoring-workbench/metrics",
       "/monitoring-workbench/notifications",
       "/monitoring-workbench/oncall",
       "/monitoring-workbench/oncall/settings",
       "/monitoring-workbench/overview",
+      "/monitoring-workbench/providers",
       "/monitoring-workbench/rules",
+      "/monitoring-workbench/services",
+      "/monitoring-workbench/traces",
       "/network",
       "/network/endpointslices",
       "/network/endpointslices/:name",
@@ -711,6 +731,7 @@
       "/settings/login",
       "/settings/overview",
       "/settings/runtime-configuration",
+      "/settings/secrets",
       "/settings/source-control",
       "/settings/source-control/:integrationId",
       "/settings/system-integrations",
@@ -1403,6 +1424,31 @@
         "source": "@/features/observability/notifications/page"
       },
       {
+        "exportName": "ObservabilityMetricsPage",
+        "moduleExport": "ObservabilityMetricsPage",
+        "source": "@/features/observability/signals/metrics-page"
+      },
+      {
+        "exportName": "ObservabilityProvidersPage",
+        "moduleExport": "ObservabilityProvidersPage",
+        "source": "@/features/observability/providers/page"
+      },
+      {
+        "exportName": "ObservabilityServicesPage",
+        "moduleExport": "ObservabilityServicesPage",
+        "source": "@/features/observability/signals/services-page"
+      },
+      {
+        "exportName": "ObservabilityTracesPage",
+        "moduleExport": "ObservabilityTracesPage",
+        "source": "@/features/observability/signals/traces-page"
+      },
+      {
+        "exportName": "ObservabilityWorkbenchPage",
+        "moduleExport": "ObservabilityWorkbenchPage",
+        "source": "@/features/observability/overview/workbench-page"
+      },
+      {
         "exportName": "OIDCCallbackPage",
         "moduleExport": "OIDCCallbackPage",
         "source": "@/features/auth/oidc-callback-page"
@@ -1576,6 +1622,11 @@
         "exportName": "SecretDetailPage",
         "moduleExport": "SecretDetailPage",
         "source": "@/features/platform/configuration/secrets/detail-page"
+      },
+      {
+        "exportName": "SecretsPage",
+        "moduleExport": "SecretsPage",
+        "source": "@/features/secrets/page"
       },
       {
         "exportName": "ServiceDetailPage",
@@ -1810,7 +1861,12 @@
       "@/features/observability/oncall/board-page",
       "@/features/observability/oncall/settings-page",
       "@/features/observability/overview/page",
+      "@/features/observability/overview/workbench-page",
+      "@/features/observability/providers/page",
       "@/features/observability/rules/page",
+      "@/features/observability/signals/metrics-page",
+      "@/features/observability/signals/services-page",
+      "@/features/observability/signals/traces-page",
       "@/features/platform/access-control/clusterrolebindings/detail-page",
       "@/features/platform/access-control/clusterrolebindings/list-page",
       "@/features/platform/access-control/clusterroles/detail-page",
@@ -1906,6 +1962,7 @@
       "@/features/provider-portal/application-detail/page",
       "@/features/provider-portal/catalog/page",
       "@/features/provider-portal/security/page",
+      "@/features/secrets/page",
       "@/features/settings/branding/page",
       "@/features/settings/identity/page",
       "@/features/settings/overview/page",
@@ -2007,7 +2064,12 @@
       "@/features/observability/oncall/board-page": ["OnCallBoardPage"],
       "@/features/observability/oncall/settings-page": ["OnCallSettingsPage"],
       "@/features/observability/overview/page": ["MonitoringPage"],
+      "@/features/observability/overview/workbench-page": ["ObservabilityWorkbenchPage"],
+      "@/features/observability/providers/page": ["ObservabilityProvidersPage"],
       "@/features/observability/rules/page": ["AlertRulesPage"],
+      "@/features/observability/signals/metrics-page": ["ObservabilityMetricsPage"],
+      "@/features/observability/signals/services-page": ["ObservabilityServicesPage"],
+      "@/features/observability/signals/traces-page": ["ObservabilityTracesPage"],
       "@/features/platform/access-control/clusterrolebindings/detail-page": [
         "PlatformAccessControlClusterRoleBindingDetailPage"
       ],
@@ -2167,6 +2229,7 @@
       "@/features/provider-portal/application-detail/page": ["PortalApplicationDetailPage"],
       "@/features/provider-portal/catalog/page": ["SohaProviderPortalPage"],
       "@/features/provider-portal/security/page": ["PortalSecurityPage"],
+      "@/features/secrets/page": ["SecretsPage"],
       "@/features/settings/branding/page": ["BrandingSettingsPage"],
       "@/features/settings/identity/page": ["LoginSettingsPage"],
       "@/features/settings/overview/page": ["SettingsOverviewPage"],
@@ -2186,5 +2249,5 @@
       "@/features/virtualization/virtual-machines/list-page": ["VirtualizationVmsPage"]
     }
   },
-  "generatedAt": "2026-07-31T16:24:02.264Z"
+  "generatedAt": "2026-08-03T08:36:36.036Z"
 }
