@@ -6,6 +6,7 @@ import type {
   SecretScopeType,
   SecretStatus,
   SecretUpdateRequest,
+  SecretVaultKV2Reference,
   SecretVersionMetadata,
 } from '@opensoha/contracts/gen/ts/sohaapi'
 import {
@@ -23,8 +24,10 @@ import {
   Drawer,
   Form,
   Input,
+  InputNumber,
   Modal,
   Popconfirm,
+  Segmented,
   Select,
   Space,
   Typography,
@@ -52,14 +55,21 @@ import { secretQueries } from './queries'
 
 const { Text } = Typography
 
-interface SecretEditorValues {
+type SecretSource = 'local' | 'vault_kv2'
+
+interface SecretValueValues {
+  source: SecretSource
+  value?: string
+  vaultKv2?: Partial<SecretVaultKV2Reference>
+}
+
+interface SecretEditorValues extends SecretValueValues {
   bindings?: SecretBinding[]
   description?: string
   name: string
   scopeId: string
   scopeType: SecretScopeType
   status?: SecretStatus
-  value?: string
 }
 
 interface SecretPageFilters extends SecretFilters {
@@ -78,12 +88,105 @@ const bindingOptions = [
   { value: 'connection', label: 'Connection' },
 ] satisfies Array<{ value: SecretBinding['targetType']; label: string }>
 
+const vaultPathPattern = /^[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/
+
+function toSecretValueInput(values: SecretValueValues) {
+  if (values.source === 'vault_kv2') {
+    return {
+      vaultKv2: {
+        key: values.vaultKv2?.key?.trim() ?? '',
+        mount: values.vaultKv2?.mount?.trim() ?? '',
+        path: values.vaultKv2?.path?.trim() ?? '',
+        version: values.vaultKv2?.version ?? 0,
+      },
+    }
+  }
+  return { value: values.value ?? '' }
+}
+
+function SecretValueFields({ label, source }: { label: string; source: SecretSource }) {
+  return (
+    <>
+      <Form.Item name="source" label="来源" rules={[{ required: true }]}>
+        <Segmented
+          block
+          options={[
+            { label: '本地加密', value: 'local' },
+            { label: 'Vault KV v2', value: 'vault_kv2' },
+          ]}
+        />
+      </Form.Item>
+      {source === 'vault_kv2' ? (
+        <Space align="start" size={12} wrap>
+          <Form.Item
+            name={['vaultKv2', 'mount']}
+            label="Mount"
+            rules={[
+              { required: true, whitespace: true },
+              { max: 256, message: 'Mount 最多 256 个字符' },
+              { pattern: vaultPathPattern, message: 'Mount 路径格式无效' },
+            ]}
+          >
+            <Input maxLength={256} style={{ width: 180 }} />
+          </Form.Item>
+          <Form.Item
+            name={['vaultKv2', 'path']}
+            label="Path"
+            rules={[
+              { required: true, whitespace: true },
+              { max: 1024, message: 'Path 最多 1024 个字符' },
+              { pattern: vaultPathPattern, message: 'Path 路径格式无效' },
+            ]}
+          >
+            <Input maxLength={1024} style={{ width: 260 }} />
+          </Form.Item>
+          <Form.Item
+            name={['vaultKv2', 'key']}
+            label="Key"
+            rules={[
+              { required: true, whitespace: true },
+              { max: 256, message: 'Key 最多 256 个字符' },
+              {
+                validator: (_, value?: string) =>
+                  !value ||
+                  (!value.includes(String.fromCharCode(0)) &&
+                    !value.includes('\r') &&
+                    !value.includes('\n'))
+                    ? Promise.resolve()
+                    : Promise.reject(new Error('Key 不能包含换行或 NUL 字符')),
+              },
+            ]}
+          >
+            <Input maxLength={256} style={{ width: 180 }} />
+          </Form.Item>
+          <Form.Item
+            name={['vaultKv2', 'version']}
+            label="Version"
+            rules={[
+              { required: true },
+              { type: 'integer', min: 1, message: 'Version 必须是正整数' },
+            ]}
+          >
+            <InputNumber min={1} step={1} style={{ width: 140 }} />
+          </Form.Item>
+        </Space>
+      ) : (
+        <Form.Item name="value" label={label} rules={[{ required: true }]}>
+          <Input.Password autoComplete="new-password" />
+        </Form.Item>
+      )}
+    </>
+  )
+}
+
 export function SecretsPage() {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const [queryForm] = Form.useForm<SecretPageFilters>()
   const [editorForm] = Form.useForm<SecretEditorValues>()
-  const [rotateForm] = Form.useForm<{ value: string }>()
+  const [rotateForm] = Form.useForm<SecretValueValues>()
+  const editorSource = (Form.useWatch('source', editorForm) ?? 'local') as SecretSource
+  const rotateSource = (Form.useWatch('source', rotateForm) ?? 'local') as SecretSource
   const [filters, setFilters] = useState<SecretPageFilters>({})
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<SecretMetadata | null>(null)
@@ -127,7 +230,9 @@ export function SecretsPage() {
       name: '',
       scopeId: 'default',
       scopeType: 'workspace',
+      source: 'local',
       value: '',
+      vaultKv2: { version: 1 },
     })
     setEditorOpen(true)
   }
@@ -176,7 +281,7 @@ export function SecretsPage() {
       name: values.name.trim(),
       scopeId: values.scopeId.trim(),
       scopeType: values.scopeType,
-      value: values.value ?? '',
+      ...toSecretValueInput(values),
     }
     createMutation.mutate(input, {
       onError: (error) => message.error(error.message),
@@ -285,6 +390,7 @@ export function SecretsPage() {
               tooltip="轮换"
               onClick={() => {
                 rotateForm.resetFields()
+                rotateForm.setFieldsValue({ source: 'local', value: '', vaultKv2: { version: 1 } })
                 setRotating(secret)
               }}
             />
@@ -475,11 +581,7 @@ export function SecretsPage() {
           <Form.Item name="name" label="名称" rules={[{ required: true, whitespace: true }]}>
             <Input maxLength={128} />
           </Form.Item>
-          {!editing ? (
-            <Form.Item name="value" label="值" rules={[{ required: true }]}>
-              <Input.Password autoComplete="new-password" />
-            </Form.Item>
-          ) : null}
+          {!editing ? <SecretValueFields label="值" source={editorSource} /> : null}
           <Form.Item name="description" label="描述">
             <Input.TextArea maxLength={1024} rows={3} />
           </Form.Item>
@@ -569,10 +671,10 @@ export function SecretsPage() {
         <Form
           form={rotateForm}
           layout="vertical"
-          onFinish={({ value }) =>
+          onFinish={(values) =>
             rotating &&
             rotateMutation.mutate(
-              { secretId: rotating.id, input: { value } },
+              { secretId: rotating.id, input: toSecretValueInput(values) },
               {
                 onError: (error) => message.error(error.message),
                 onSuccess: () => {
@@ -583,9 +685,7 @@ export function SecretsPage() {
             )
           }
         >
-          <Form.Item name="value" label="新值" rules={[{ required: true }]}>
-            <Input.Password autoComplete="new-password" />
-          </Form.Item>
+          <SecretValueFields label="新值" source={rotateSource} />
         </Form>
       </Modal>
 

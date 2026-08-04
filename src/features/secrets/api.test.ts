@@ -77,6 +77,25 @@ describe('secret store api', () => {
     })
   })
 
+  it('forwards only pinned Vault KV v2 locators for external versions', async () => {
+    const vaultKv2 = { mount: 'secret', path: 'demo/app', key: 'token', version: 3 }
+    const createInput = {
+      name: secret.name,
+      vaultKv2,
+      scopeType: secret.scopeType,
+      scopeId: secret.scopeId,
+      bindings: secret.bindings,
+    }
+    apiMocks.post.mockResolvedValueOnce({ data: secret }).mockResolvedValueOnce({ data: version })
+
+    await expect(createSecret(createInput)).resolves.toBe(secret)
+    await expect(rotateSecret({ secretId: secret.id, input: { vaultKv2 } })).resolves.toBe(version)
+
+    expect(apiMocks.post).toHaveBeenNthCalledWith(1, '/secrets', createInput)
+    expect(apiMocks.post).toHaveBeenNthCalledWith(2, '/secrets/secret-1/versions', { vaultKv2 })
+    expect(JSON.stringify(apiMocks.post.mock.calls)).not.toContain('vault-token')
+  })
+
   it('encodes management paths and unwraps metadata-only responses', async () => {
     apiMocks.patch.mockResolvedValueOnce({ data: secret })
     apiMocks.delete.mockResolvedValueOnce({ data: { ...secret, status: 'disabled' } })
