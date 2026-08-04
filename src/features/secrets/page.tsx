@@ -94,7 +94,7 @@ function toSecretValueInput(values: SecretValueValues) {
   if (values.source === 'vault_kv2') {
     return {
       vaultKv2: {
-        key: values.vaultKv2?.key?.trim() ?? '',
+        key: values.vaultKv2?.key ?? '',
         mount: values.vaultKv2?.mount?.trim() ?? '',
         path: values.vaultKv2?.path?.trim() ?? '',
         version: values.vaultKv2?.version ?? 0,
