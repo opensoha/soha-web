@@ -320,7 +320,7 @@ describe('Provider Portal catalog page', () => {
     const densityButton = container.querySelector(
       'button[aria-label="Switch application card size"]',
     )
-    expect(container.querySelector('.soha-portal-app-grid')?.className).toContain('is-large')
+    expect(container.querySelector('.soha-portal-app-grid')?.className).toContain('is-medium')
     await act(async () => densityButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     expect(container.querySelector('.soha-portal-app-grid')?.className).toContain('is-small')
     expect(container.querySelectorAll('.soha-portal-app-card.is-small')).toHaveLength(2)
@@ -334,8 +334,7 @@ describe('Provider Portal catalog page', () => {
     ).toHaveLength(0)
     await act(async () => densityButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     expect(container.querySelector('.soha-portal-app-grid')?.className).toContain('is-medium')
-    await act(async () => densityButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
-    expect(container.querySelector('.soha-portal-app-grid')?.className).toContain('is-large')
+    expect(container.querySelector('.soha-portal-app-grid')?.className).not.toContain('is-large')
 
     const internalGroup = [
       ...container.querySelectorAll('.soha-portal-group-menu .ant-menu-item'),

@@ -55,9 +55,9 @@ import '../provider-portal-pages.css'
 
 const { Paragraph, Text } = Typography
 
-type PortalApplicationView = 'small' | 'medium' | 'large'
+type PortalApplicationView = 'small' | 'medium'
 
-const APPLICATION_VIEW_ORDER: PortalApplicationView[] = ['small', 'medium', 'large']
+const APPLICATION_VIEW_ORDER: PortalApplicationView[] = ['small', 'medium']
 const ALL_APPLICATIONS_TAB_KEY = '__all_applications__'
 const APPLICATION_TAG_TAB_PREFIX = 'tag:'
 
@@ -139,7 +139,7 @@ function ApplicationCard({
         <div className="soha-portal-app-card-body">
           <Paragraph
             className="soha-portal-app-description"
-            ellipsis={{ rows: viewMode === 'medium' ? 1 : 2, tooltip: application.description }}
+            ellipsis={{ rows: 1, tooltip: application.description }}
           >
             {application.description || t('providerPortal.home.noDescription', 'No description')}
           </Paragraph>
@@ -151,7 +151,7 @@ function ApplicationCard({
             ) : null}
           </div>
           <div className="soha-portal-app-tags">
-            <PortalTags values={application.tags} max={viewMode === 'medium' ? 2 : 3} />
+            <PortalTags values={application.tags} max={2} />
           </div>
           <div className="soha-portal-app-actions">
             {canViewDetails ? (
@@ -413,7 +413,7 @@ export function SohaProviderPortalPage() {
   const queryClient = useQueryClient()
   const [query, setQuery] = useState('')
   const [selectedTag, setSelectedTag] = useState<string>()
-  const [applicationView, setApplicationView] = useState<PortalApplicationView>('large')
+  const [applicationView, setApplicationView] = useState<PortalApplicationView>('medium')
   const [isGroupCollapsed, setIsGroupCollapsed] = useState(false)
   const [isSideCollapsed, setIsSideCollapsed] = useState(false)
 

@@ -647,12 +647,6 @@
   align-items: stretch;
 }
 
-.soha-provider-portal-home
-  .soha-portal-workspace.is-group-collapsed
-  .soha-portal-app-grid.is-large {
-  grid-template-columns: repeat(auto-fill, minmax(224px, 1fr));
-}
-
 .soha-provider-portal-home .soha-portal-app-grid.is-small {
   grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
   gap: 8px;
@@ -660,7 +654,7 @@
 }
 
 .soha-provider-portal-home .soha-portal-app-grid.is-medium {
-  grid-template-columns: repeat(auto-fill, minmax(208px, 224px));
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 10px;
   padding-top: 10px;
 }
