@@ -14,6 +14,15 @@
   padding-inline-end: 8px;
 }
 
+.soha-vrt-connection-details .ant-descriptions-item-label {
+  width: 132px;
+}
+
+.soha-vrt-connection-details .ant-descriptions-item-content {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .soha-vrt-query .soha-management-query-card .ant-card-body {
   padding-inline: 12px;
 }

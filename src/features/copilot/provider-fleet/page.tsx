@@ -90,7 +90,7 @@ function ProviderFleetPageContent() {
         confirmLoading={rollout.isPending}
         destroyOnHidden
       >
-        <Form form={form} layout="vertical" initialValues={{ canaryPercent: 10 }}>
+        <Form form={form} layout="vertical" preserve={false} initialValues={{ canaryPercent: 10 }}>
           <Form.Item name="id" label="ID" rules={[{ required: true }]}>
             <Input />
           </Form.Item>

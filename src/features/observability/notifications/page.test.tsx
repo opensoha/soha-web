@@ -49,6 +49,9 @@ vi.mock('@/components/status-tag', () => ({
     <span>{value ? String(trueLabel) : String(falseLabel)}</span>
   ),
   StatusTag: ({ value }: { value?: string }) => <span>{value || '-'}</span>,
+  MetadataTag: ({ label }: { label?: ReactNode }) => (
+    <span className="soha-metadata-tag">{label}</span>
+  ),
 }))
 vi.mock('@/components/management-list', () => ({
   ManagementIconButton: ({ 'aria-label': label }: { 'aria-label': string }) => (
@@ -166,6 +169,7 @@ describe('NotificationsPage', () => {
     expect(container.textContent).toContain('兼容 `/alert-routes`')
     expect(container.textContent).toContain('Primary Slack')
     expect(container.textContent).toContain('{"severity":"critical"}')
+    expect(container.querySelectorAll('.soha-metadata-tag')).toHaveLength(2)
     expect(apiMocks.get).toHaveBeenCalledWith('/alert-routes')
   })
 })

@@ -58,6 +58,7 @@ export function PolicyFormModal({
         }}
         layout="vertical"
         onFinish={(values) => onSubmit(identityPolicyInputFromValues(values))}
+        preserve={false}
       >
         <Form.List name="assignments">
           {(fields, { add, remove }) => (

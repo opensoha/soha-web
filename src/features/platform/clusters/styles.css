@@ -25,37 +25,6 @@
   padding-inline: 10px;
 }
 
-.soha-cluster-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--soha-text-primary);
-}
-
-.soha-cluster-status-dot {
-  width: 6px;
-  height: 6px;
-  flex: 0 0 6px;
-  border-radius: 999px;
-  background: var(--soha-text-tertiary);
-}
-
-.soha-cluster-status.is-success .soha-cluster-status-dot {
-  background: var(--soha-success);
-}
-
-.soha-cluster-status.is-error .soha-cluster-status-dot {
-  background: var(--soha-danger);
-}
-
-.soha-cluster-status.is-warning .soha-cluster-status-dot {
-  background: var(--soha-warning);
-}
-
-.soha-cluster-status.is-processing .soha-cluster-status-dot {
-  background: var(--soha-primary);
-}
-
 .soha-cluster-action-links .ant-btn {
   width: 24px;
   min-width: 24px;

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { App, Button, Form, Popconfirm, Select, Space, Tag, Typography } from 'antd'
+import { App, Button, Form, Popconfirm, Select, Space, Typography } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { DeleteOutlined, EditOutlined, KeyOutlined, PlusOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -13,6 +13,7 @@ import {
   ManagementState,
   ManagementTableToolbar,
 } from '@/components/management-list'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useI18n } from '@/i18n'
 import { identityRuntimeQueries } from '../runtime'
@@ -38,19 +39,19 @@ interface IdentityOutpostPageFilters extends IdentityOutpostFilters {
   query: string
 }
 
-const statusTagMeta: Record<IdentityOutpostStatus, { color: string; label: string }> = {
-  online: { color: 'green', label: 'Online' },
-  offline: { color: 'default', label: 'Offline' },
-  degraded: { color: 'gold', label: 'Degraded' },
+const statusLabels: Record<IdentityOutpostStatus, string> = {
+  online: 'Online',
+  offline: 'Offline',
+  degraded: 'Degraded',
 }
 
 function statusTag(status: IdentityOutpostStatus) {
-  const meta = statusTagMeta[status] ?? statusTagMeta.offline
-  return <Tag color={meta.color}>{meta.label}</Tag>
+  const normalizedStatus = statusLabels[status] ? status : 'offline'
+  return <StatusTag label={statusLabels[normalizedStatus]} value={normalizedStatus} />
 }
 
 function modeTag(mode: IdentityOutpostMode) {
-  const color =
+  const tone =
     mode === 'embedded'
       ? 'blue'
       : mode === 'kubernetes'
@@ -58,7 +59,7 @@ function modeTag(mode: IdentityOutpostMode) {
         : mode === 'external'
           ? 'cyan'
           : 'default'
-  return <Tag color={color}>{mode}</Tag>
+  return <MetadataTag label={mode} tone={tone} />
 }
 
 function formatDateTime(value?: string) {
@@ -87,7 +88,10 @@ export function IdentityOutpostsPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [createdToken, setCreatedToken] = useState<IdentityOutpostCreatedToken | null>(null)
   const snapshot = usePermissionSnapshot().data?.data
-  const canManage = hasPermission(snapshot, 'identity.outposts.manage')
+  const canCreate = hasPermission(snapshot, 'identity.outposts.create')
+  const canUpdate = hasPermission(snapshot, 'identity.outposts.update')
+  const canDelete = hasPermission(snapshot, 'identity.outposts.delete')
+  const canRotate = hasPermission(snapshot, 'identity.outposts.rotate')
 
   const outpostsQuery = useQuery(
     identityOutpostQueries.list({ mode: filters.mode, status: filters.status }),
@@ -200,9 +204,7 @@ export function IdentityOutpostsPage() {
       width: 180,
       render: (value: IdentityOutpost['runtimeStatus'], record) => (
         <Space orientation="vertical" size={0}>
-          <Tag color={value === 'available' ? 'green' : value === 'degraded' ? 'gold' : 'default'}>
-            {value || 'unknown'}
-          </Tag>
+          <StatusTag value={value || 'unknown'} />
           {record.runtimeReason ? <Text type="secondary">{record.runtimeReason}</Text> : null}
         </Space>
       ),
@@ -239,7 +241,7 @@ export function IdentityOutpostsPage() {
       render: (_value, record) => (
         <Space size={4}>
           <ManagementIconButton
-            disabled={!canManage}
+            disabled={!canUpdate}
             icon={<EditOutlined />}
             onClick={() => openEdit(record)}
             tooltip="编辑 Outpost"
@@ -259,7 +261,7 @@ export function IdentityOutpostsPage() {
             }
           >
             <ManagementIconButton
-              disabled={!canManage}
+              disabled={!canRotate}
               icon={<KeyOutlined />}
               tooltip="轮换 token"
             />
@@ -277,7 +279,7 @@ export function IdentityOutpostsPage() {
           >
             <ManagementIconButton
               danger
-              disabled={!canManage}
+              disabled={!canDelete}
               icon={<DeleteOutlined />}
               tooltip="删除 Outpost"
             />
@@ -354,7 +356,7 @@ export function IdentityOutpostsPage() {
             <ManagementTableToolbar>
               <Button
                 autoInsertSpace={false}
-                disabled={!canManage || allowedModes.length === 0}
+                disabled={!canCreate || allowedModes.length === 0}
                 icon={<PlusOutlined />}
                 onClick={openCreate}
                 size="small"

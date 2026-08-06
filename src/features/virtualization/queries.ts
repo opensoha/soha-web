@@ -1,6 +1,7 @@
 import { queryOptions } from '@tanstack/react-query'
 import { virtualizationApi } from './virtualization-api'
 import {
+  normalizeVirtualizationImageListParams,
   normalizeVirtualizationListParams,
   normalizeVirtualizationOperationParams,
   normalizeVirtualizationVMMetricsParams,
@@ -8,6 +9,7 @@ import {
   type VirtualizationVMMetricsQueryParams,
 } from './keys'
 import type {
+  VirtualizationImageListParams,
   VirtualizationListParams,
   VirtualizationOperationListParams,
 } from './virtualization-types'
@@ -72,8 +74,8 @@ export const virtualizationQueries = {
       queryFn: virtualizationApi.platformClusters,
       enabled,
     }),
-  images: (params: VirtualizationListParams = {}, enabled = true) => {
-    const normalized = normalizeVirtualizationListParams(params)
+  images: (params: VirtualizationImageListParams = {}, enabled = true) => {
+    const normalized = normalizeVirtualizationImageListParams(params)
     return queryOptions({
       queryKey: virtualizationKeys.imageList(normalized),
       queryFn: () => virtualizationApi.images(normalized),

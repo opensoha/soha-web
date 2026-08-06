@@ -8,6 +8,20 @@
   margin: 0 auto;
 }
 
+.soha-step-form .ant-segmented {
+  border: 1px solid var(--soha-border-color);
+  background: var(--soha-bg-surface-muted);
+}
+
+.soha-step-form .ant-segmented-item-selected {
+  background: color-mix(in srgb, var(--soha-primary) 8%, var(--soha-bg-surface));
+  color: var(--soha-text-primary);
+  font-weight: 600;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--soha-primary) 38%, transparent),
+    0 1px 4px color-mix(in srgb, var(--soha-primary) 20%, transparent);
+}
+
 .soha-step-form__actions {
   display: flex;
   justify-content: flex-end;

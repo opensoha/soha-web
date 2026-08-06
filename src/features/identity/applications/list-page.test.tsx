@@ -8,7 +8,12 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { IdentityApplicationsPage } from './list-page'
 
 const testState = vi.hoisted(() => ({
-  permissionKeys: ['identity.applications.view', 'identity.applications.manage'],
+  permissionKeys: [
+    'identity.applications.view',
+    'identity.applications.create',
+    'identity.applications.update',
+    'identity.applications.delete',
+  ],
   apiGet: vi.fn(),
   apiDelete: vi.fn(),
   apiPost: vi.fn(),
@@ -215,7 +220,12 @@ beforeAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  testState.permissionKeys = ['identity.applications.view', 'identity.applications.manage']
+  testState.permissionKeys = [
+    'identity.applications.view',
+    'identity.applications.create',
+    'identity.applications.update',
+    'identity.applications.delete',
+  ]
   testState.apiGet.mockImplementation(async (path: string) => {
     if (path.startsWith('/identity/applications')) return { data: [application] }
     if (path.startsWith('/identity/providers')) return { data: [provider] }
@@ -311,6 +321,9 @@ describe('identity applications page behavior', () => {
     expect(testState.apiGet).toHaveBeenCalledWith('/identity/provider-capabilities')
     expect(container.querySelector('[data-testid="row-grafana"]')).not.toBeNull()
     expect(container.textContent).toContain('OIDC provider ready')
+    const applicationRow = container.querySelector('[data-testid="row-grafana"]')
+    expect(applicationRow?.querySelector('.soha-status-tag')?.textContent).toBe('enabled')
+    expect(applicationRow?.querySelector('.soha-metadata-tag')?.textContent).toBe('LINK')
 
     const search = container.querySelector('.soha-management-query-field input')
     if (!(search instanceof HTMLInputElement)) throw new Error('Application search input not found')

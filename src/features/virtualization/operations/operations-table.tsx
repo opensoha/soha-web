@@ -10,7 +10,6 @@ import {
   Popconfirm,
   Segmented,
   Space,
-  Tag,
   Tooltip,
   Typography,
 } from 'antd'
@@ -27,6 +26,7 @@ import { hasAllowedAction } from '@/features/auth'
 import { getAIWorkbenchPathForMode } from '@/features/copilot'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
 import {
   ManagementIconButton,
   ManagementQueryField,
@@ -41,7 +41,6 @@ import { useVirtualizationPermissions } from '@/features/virtualization/shared/u
 import { VirtualizationAdminTable } from '@/features/virtualization/shared/ui'
 import {
   OPERATION_FILTER_PRESETS,
-  STATUS_COLORS,
   buildOperationFilter,
   bulkActionSummary,
   formatOperationDuration,
@@ -72,8 +71,7 @@ const tableEllipsis = { showTitle: false } as const
 
 function statusTag(value?: string) {
   if (!value) return <Text type="secondary">-</Text>
-  const key = value.toLowerCase()
-  return <Tag color={STATUS_COLORS[key] ?? 'default'}>{value}</Tag>
+  return <StatusTag value={value} />
 }
 
 function tableTooltipText(value: unknown) {
@@ -126,7 +124,8 @@ export function OperationsTable({
   const [selectedOperation, setSelectedOperation] = useState<VirtualizationOperation | null>(null)
   const [preset, setPreset] = useState<OperationFilterPreset>(initialPreset)
   const [selectedTaskRowKeys, setSelectedTaskRowKeys] = useState<React.Key[]>([])
-  const { virtualizationModuleEnabled, canManageOperations } = useVirtualizationPermissions()
+  const { virtualizationModuleEnabled, canCancelOperations, canRetryOperations } =
+    useVirtualizationPermissions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const operationParams = {
@@ -262,8 +261,8 @@ export function OperationsTable({
       dataIndex: 'id',
       width: 176,
       render: (_value, record) => {
-        const canCancel = canManageOperations && hasAllowedAction(record.allowedActions, 'cancel')
-        const canRetry = canManageOperations && hasAllowedAction(record.allowedActions, 'retry')
+        const canCancel = canCancelOperations && hasAllowedAction(record.allowedActions, 'cancel')
+        const canRetry = canRetryOperations && hasAllowedAction(record.allowedActions, 'retry')
         return (
           <Space className="soha-row-action-icons" wrap>
             <ManagementIconButton
@@ -382,7 +381,7 @@ export function OperationsTable({
         >
           <ManagementQueryField label="任务视图" minWidth={300} width={360}>
             {assetType === 'asset_sync' ? (
-              <Tag color="blue">同步任务</Tag>
+              <MetadataTag tone="blue" label="同步任务" />
             ) : (
               <Segmented
                 size="small"
@@ -415,7 +414,7 @@ export function OperationsTable({
             <div className="soha-vrt-selection-bar">
               <Text type="secondary">已选择 {selectedTaskRowKeys.length} 个任务</Text>
               <Space wrap>
-                {canManageOperations ? (
+                {canCancelOperations ? (
                   <Popconfirm
                     title="确认批量取消任务？"
                     description={bulkActionSummary(
@@ -440,7 +439,7 @@ export function OperationsTable({
                     </Button>
                   </Popconfirm>
                 ) : null}
-                {canManageOperations ? (
+                {canRetryOperations ? (
                   <Popconfirm
                     title="确认批量重试任务？"
                     description={bulkActionSummary(

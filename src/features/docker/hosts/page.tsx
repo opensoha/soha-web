@@ -60,7 +60,8 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
   const [editorOpen, setEditorOpen] = useState(false)
   const [initialMode, setInitialMode] = useState<'existing' | 'provision'>('existing')
   const [editing, setEditing] = useState<DockerHost | null>(null)
-  const { dockerModuleEnabled, canManageHosts, canViewOperations } = useDockerPermissions()
+  const { dockerModuleEnabled, canCreateHosts, canUpdateHosts, canDeleteHosts, canViewOperations } =
+    useDockerPermissions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const hostsQuery = useQuery(dockerQueries.hosts(filters, dockerModuleEnabled))
@@ -138,31 +139,35 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
       fixed: 'right',
       width: 96,
       render: (_value, record) =>
-        canManageHosts ? (
+        canUpdateHosts || canDeleteHosts ? (
           <Space className="soha-row-action-icons">
-            <ManagementIconButton
-              aria-label="编辑主机"
-              size="small"
-              tooltip="编辑"
-              icon={<EditOutlined />}
-              onClick={() => {
-                setEditing(record)
-                setInitialMode('existing')
-                setEditorOpen(true)
-              }}
-            />
-            <Popconfirm
-              title="确认删除 Docker 主机？"
-              onConfirm={() => deleteMutation.mutate(record.id)}
-            >
+            {canUpdateHosts ? (
               <ManagementIconButton
-                aria-label="删除主机"
+                aria-label="编辑主机"
                 size="small"
-                tooltip="删除"
-                danger
-                icon={<DeleteOutlined />}
+                tooltip="编辑"
+                icon={<EditOutlined />}
+                onClick={() => {
+                  setEditing(record)
+                  setInitialMode('existing')
+                  setEditorOpen(true)
+                }}
               />
-            </Popconfirm>
+            ) : null}
+            {canDeleteHosts ? (
+              <Popconfirm
+                title="确认删除 Docker 主机？"
+                onConfirm={() => deleteMutation.mutate(record.id)}
+              >
+                <ManagementIconButton
+                  aria-label="删除主机"
+                  size="small"
+                  tooltip="删除"
+                  danger
+                  icon={<DeleteOutlined />}
+                />
+              </Popconfirm>
+            ) : null}
           </Space>
         ) : null,
     },
@@ -210,7 +215,7 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
         scroll={{ x: 1528 }}
         pagination={pageTablePagination(page, embedded, setFilters)}
         actions={
-          canManageHosts && !embedded ? (
+          canCreateHosts && !embedded ? (
             <>
               <Button
                 icon={<CloudServerOutlined />}

@@ -260,10 +260,10 @@ export function BuildTemplatesPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
-  const canManage = hasPermission(
-    permissionSnapshotQuery.data?.data,
-    'delivery.build-templates.manage',
-  )
+  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const canCreate = hasPermission(permissionSnapshot, 'delivery.build-templates.create')
+  const canUpdate = hasPermission(permissionSnapshot, 'delivery.build-templates.update')
+  const canDelete = hasPermission(permissionSnapshot, 'delivery.build-templates.delete')
   const [searchParams, setSearchParams] = useSearchParams()
   const [form] = Form.useForm<BuildTemplateFormValues>()
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
@@ -285,6 +285,7 @@ export function BuildTemplatesPage() {
   const selectedTemplateUsage = selectedTemplateUsageQuery.data
   const isNewDraft = selectedTemplateId === 'new'
   const hasSelection = isNewDraft || !!selectedTemplate
+  const canSave = isNewDraft ? canCreate : canUpdate
 
   const createOptions = deliveryMutations.buildTemplates.create(queryClient)
   const createMutation = useMutation({
@@ -778,14 +779,14 @@ export function BuildTemplatesPage() {
         <Button
           icon={<PlusOutlined />}
           type="primary"
-          disabled={!canManage}
+          disabled={!canCreate}
           onClick={handleNewTemplate}
         >
           新建模板
         </Button>
         <Button
           icon={<SaveOutlined />}
-          disabled={!hasSelection || !canManage}
+          disabled={!hasSelection || !canSave}
           loading={createMutation.isPending || updateMutation.isPending}
           onClick={() => void handleSave()}
         >
@@ -801,7 +802,7 @@ export function BuildTemplatesPage() {
           <Button
             danger
             icon={<DeleteOutlined />}
-            disabled={!selectedTemplate || !canManage}
+            disabled={!selectedTemplate || !canDelete}
             loading={deleteMutation.isPending}
           >
             删除
@@ -851,7 +852,7 @@ export function BuildTemplatesPage() {
             >
               <Switch
                 checked={item.enabled}
-                disabled={!canManage}
+                disabled={item.isDraft ? !canCreate : !canUpdate}
                 size="small"
                 onChange={(checked) => handleTemplateEnabledChange(item, checked)}
               />
@@ -885,7 +886,7 @@ export function BuildTemplatesPage() {
   const templateDesigner = hasSelection ? (
     <Form
       className="soha-build-template-form"
-      disabled={!canManage}
+      disabled={!canSave}
       form={form}
       layout="vertical"
       onValuesChange={(_changedValues, allValues) => {

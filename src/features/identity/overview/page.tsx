@@ -1,4 +1,4 @@
-import { Button, Card, Space, Tag, Typography } from 'antd'
+import { Button, Card, Space, Typography } from 'antd'
 import {
   ApiOutlined,
   AppstoreOutlined,
@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { ManagementDetailHeader, ManagementState } from '@/components/management-list'
+import { StatusTag } from '@/components/status-tag'
 import {
   OverviewChip,
   OverviewMetricCard,
@@ -26,12 +27,7 @@ const { Text } = Typography
 
 function resultTag(result?: string) {
   const value = result || '-'
-  const color = ['success', 'allow', 'published'].includes(value)
-    ? 'green'
-    : ['deny', 'denied', 'failure', 'error'].includes(value)
-      ? 'red'
-      : 'default'
-  return <Tag color={color}>{value}</Tag>
+  return <StatusTag value={value} />
 }
 
 function latestUpdated(items: Array<{ updatedAt?: string; createdAt?: string }>) {

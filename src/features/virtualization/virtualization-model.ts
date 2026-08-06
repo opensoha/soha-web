@@ -13,28 +13,6 @@ import type {
   VirtualizationVmProviderParams,
 } from './virtualization-types'
 
-export const STATUS_COLORS: Record<string, string> = {
-  healthy: 'green',
-  ready: 'green',
-  running: 'green',
-  success: 'green',
-  completed: 'green',
-  synced: 'green',
-  degraded: 'gold',
-  pending: 'gold',
-  queued: 'gold',
-  syncing: 'blue',
-  running_task: 'blue',
-  failed: 'red',
-  error: 'red',
-  callback_timeout: 'red',
-  canceled: 'default',
-  stale: 'default',
-  unavailable: 'red',
-  stopped: 'default',
-  stopped_vm: 'default',
-}
-
 export const VIRTUALIZATION_PROVIDER_LABELS: Record<string, string> = {
   kubevirt: 'KubeVirt',
   pve: 'PVE',

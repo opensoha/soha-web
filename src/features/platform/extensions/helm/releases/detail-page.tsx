@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { Alert, Button, Card, Descriptions, Space, Spin, Tabs, message } from 'antd'
+import { Alert, App, Button, Card, Descriptions, Space, Spin, Tabs } from 'antd'
 import { ArrowLeftOutlined, HistoryOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -10,7 +10,7 @@ import {
   ManagementTableToolbar,
 } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
-import { hasAllowedAction } from '@/features/auth'
+import { hasAllowedAction, hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useClusterCapability } from '@/features/platform/cluster-capabilities'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
@@ -28,22 +28,31 @@ const HelmReleaseValuesPanel = lazy(async () => {
 })
 
 export function HelmReleaseDetailPage() {
+  const { message } = App.useApp()
   const { t, localeCode } = useI18n()
   const { clusterId, namespace } = usePlatformScopeStore()
   const { releaseName = '' } = useParams()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const permissionSnapshotQuery = usePermissionSnapshot()
+  const canViewValues = hasPermission(
+    permissionSnapshotQuery.data?.data,
+    'platform.helm.values.view',
+  )
   const capability = useClusterCapability('helm.releases', localeCode)
   const detailNamespace = searchParams.get('namespace') || namespace || ''
-  const requestedTab = searchParams.get('tab') === 'history' ? 'history' : 'values'
+  const requestedTab =
+    searchParams.get('tab') === 'history' || !canViewValues ? 'history' : 'values'
   const [activeTab, setActiveTab] = useState(requestedTab)
   const [valuesDraft, setValuesDraft] = useState('')
   const target: HelmReleaseTarget | null = clusterId
     ? { clusterId, name: releaseName, namespace: detailNamespace }
     : null
   const detailQuery = useQuery(helmQueries.releaseDetail(target))
-  const valuesQuery = useQuery(helmQueries.releaseValues(target, activeTab === 'values'))
+  const valuesQuery = useQuery(
+    helmQueries.releaseValues(target, canViewValues && activeTab === 'values'),
+  )
   const historyQuery = useQuery(helmQueries.releaseHistory(target, activeTab === 'history'))
   const updateMutation = useMutation(helmMutations.updateValues(queryClient))
 
@@ -142,6 +151,7 @@ export function HelmReleaseDetailPage() {
         ) : null,
     },
   ]
+  const visibleTabs = canViewValues ? tabs : tabs.filter((tab) => tab.key !== 'values')
 
   return (
     <div className="soha-page">
@@ -213,7 +223,7 @@ export function HelmReleaseDetailPage() {
               />
             ) : null}
           </Card>
-          <Tabs activeKey={activeTab} onChange={setActiveTab} items={tabs} />
+          <Tabs activeKey={activeTab} onChange={setActiveTab} items={visibleTabs} />
         </>
       )}
     </div>

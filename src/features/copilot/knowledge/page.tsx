@@ -62,7 +62,11 @@ export function KnowledgeCenterPage() {
     knowledgeMutations.syncSource(queryClient, selectedBase?.id ?? ''),
   )
   const bases = basesQuery.data?.data ?? []
-  const canManage = hasPermission(permissionSnapshotQuery.data?.data, 'ai.knowledge.manage')
+  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const canCreateBase = hasPermission(permissionSnapshot, 'ai.knowledge.create')
+  const canUpdateBase = hasPermission(permissionSnapshot, 'ai.knowledge.update')
+  const canDeleteBase = hasPermission(permissionSnapshot, 'ai.knowledge.delete')
+  const canOperateIngestion = hasPermission(permissionSnapshot, 'ai.knowledge.ingestion.operate')
 
   const columns: TableColumnsType<KnowledgeBase> = [
     { title: '名称', dataIndex: 'name', key: 'name' },
@@ -112,7 +116,7 @@ export function KnowledgeCenterPage() {
             icon={<DeleteOutlined />}
             aria-label={`删除知识库 ${record.name}`}
             loading={deleteMutation.isPending && deleteMutation.variables === record.id}
-            disabled={!canManage}
+            disabled={!canDeleteBase}
             onClick={() => void deleteMutation.mutateAsync(record.id)}
           />
         </Space>
@@ -142,7 +146,7 @@ export function KnowledgeCenterPage() {
         description: '管理知识库并验证检索结果。知识内容仅在服务端按当前身份和作用域授权。',
         actions: (
           <ManagementTableToolbar>
-            {canManage ? (
+            {canCreateBase ? (
               <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
                 新建知识库
               </Button>
@@ -251,6 +255,7 @@ export function KnowledgeCenterPage() {
         <Form
           form={createForm}
           layout="vertical"
+          preserve={false}
           initialValues={{
             scope: { visibility: 'private' },
             retrievalPolicy: {
@@ -285,7 +290,7 @@ export function KnowledgeCenterPage() {
         size="large"
         destroyOnHidden
         extra={
-          canManage ? (
+          canUpdateBase ? (
             <Button icon={<PlusOutlined />} onClick={() => setSourceOpen(true)}>
               添加来源
             </Button>
@@ -308,7 +313,7 @@ export function KnowledgeCenterPage() {
                       extra={
                         <Space>
                           <StatusTag value={item.status} />
-                          {canManage ? (
+                          {canOperateIngestion ? (
                             <Button
                               type="text"
                               icon={<SyncOutlined />}
@@ -410,6 +415,7 @@ export function KnowledgeCenterPage() {
         <Form
           form={sourceForm}
           layout="vertical"
+          preserve={false}
           initialValues={{
             kind: 'inline',
             syncPolicy: { mode: 'manual' },

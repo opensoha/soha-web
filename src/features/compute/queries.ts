@@ -4,10 +4,11 @@ import { computeApi, type ComputeTaskFilters } from './api'
 import { computeKeys } from './keys'
 
 export const computeQueries = {
-  overview: () =>
+  overview: (enabled = true) =>
     queryOptions({
       queryKey: computeKeys.overview(),
       queryFn: computeApi.overview,
+      enabled,
       staleTime: 15_000,
     }),
   tasks: (filters: ComputeTaskFilters = {}) =>

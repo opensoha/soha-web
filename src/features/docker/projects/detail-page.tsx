@@ -42,14 +42,19 @@ function RuntimeBoundary({ children }: { children: ReactNode }) {
 function ProjectDetailWorkspace() {
   const { projectId } = useParams()
   const resolvedProjectId = projectId ?? ''
-  const { dockerModuleEnabled, canViewServices, canManageServices, canViewPorts } =
-    useDockerPermissions()
+  const {
+    dockerModuleEnabled,
+    canViewServices,
+    canViewServiceLogs,
+    canAccessServiceTerminal,
+    canViewPorts,
+  } = useDockerPermissions()
   const [runtimeServiceName, setRuntimeServiceName] = useState('')
   const projectQuery = useQuery(dockerQueries.project(resolvedProjectId, dockerModuleEnabled))
   const detailServicesQuery = useQuery(
     dockerQueries.projectServices(
       resolvedProjectId,
-      dockerModuleEnabled && (canViewServices || canManageServices),
+      dockerModuleEnabled && canViewServices,
     ),
   )
   const project = projectQuery.data
@@ -217,7 +222,7 @@ function ProjectDetailWorkspace() {
         </Card>
       ),
     },
-    ...(canViewServices
+    ...(canViewServiceLogs
       ? [
           {
             key: 'services',
@@ -234,7 +239,7 @@ function ProjectDetailWorkspace() {
             children: (
               <RuntimeBoundary>
                 <DockerProjectLogsPanel
-                  enabled={canViewServices}
+                  enabled={canViewServiceLogs}
                   projectId={resolvedProjectId}
                   projectName={project?.name}
                   serviceName={runtimeServiceName}
@@ -247,7 +252,7 @@ function ProjectDetailWorkspace() {
           },
         ]
       : []),
-    ...(canManageServices
+    ...(canAccessServiceTerminal
       ? [
           {
             key: 'terminal',
@@ -255,7 +260,7 @@ function ProjectDetailWorkspace() {
             children: (
               <RuntimeBoundary>
                 <DockerProjectTerminalPanel
-                  enabled={canManageServices}
+                  enabled={canAccessServiceTerminal}
                   projectId={resolvedProjectId}
                   projectName={project?.name}
                   serviceName={runtimeServiceName}

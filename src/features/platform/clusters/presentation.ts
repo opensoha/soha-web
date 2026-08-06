@@ -25,19 +25,6 @@ export function formatConnectionMode(value: string | undefined, localeCode: stri
   return value || '-'
 }
 
-export function clusterHealthTone(value?: string) {
-  const normalized = (value || '').trim().toLowerCase()
-  if (['healthy', 'connected', 'ready', 'available', 'running', 'normal'].includes(normalized)) {
-    return 'success'
-  }
-  if (['error', 'failed', 'disconnected', 'critical', 'notready', 'lost'].includes(normalized)) {
-    return 'error'
-  }
-  if (['pending', 'warning', 'queued', 'waiting'].includes(normalized)) return 'warning'
-  if (['syncing', 'checking', 'initializing'].includes(normalized)) return 'processing'
-  return 'muted'
-}
-
 export function formatClusterHealth(value: string | undefined, localeCode: string) {
   const normalized = (value || '').trim().toLowerCase()
   if (localeCode !== 'zh_CN') return value || 'unknown'

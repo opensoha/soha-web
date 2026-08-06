@@ -43,8 +43,10 @@ export function AccessTeamsPage() {
   const permissionSnapshotQuery = usePermissionSnapshot()
   const snapshot = permissionSnapshotQuery.data?.data
   const canViewGroups = hasPermission(snapshot, 'access.groups.view')
-  const canManageGroups = hasPermission(snapshot, 'access.groups.manage')
-  const canManageScopeGrants = hasPermission(snapshot, 'access.scope-grants.manage')
+  const canCreateGroups = hasPermission(snapshot, 'access.groups.create')
+  const canUpdateGroups = hasPermission(snapshot, 'access.groups.update')
+  const canDeleteGroups = hasPermission(snapshot, 'access.groups.delete')
+  const canViewScopeGrants = hasPermission(snapshot, 'access.scope-grants.view')
   const canViewLoginSettings = hasPermission(snapshot, 'settings.identity.view')
   const [form] = Form.useForm<Record<string, unknown>>()
   const crud = useAccessResourceCrud({
@@ -57,7 +59,7 @@ export function AccessTeamsPage() {
   const [grantTeam, setGrantTeam] = useState<AccessTeam | null>(null)
   const [searchKeyword, setSearchKeyword] = useState('')
   const loginProvidersQuery = useQuery(
-    accessQueries.loginProviders(canManageGroups && canViewLoginSettings),
+    accessQueries.loginProviders((canCreateGroups || canUpdateGroups) && canViewLoginSettings),
   )
   const loginProviders = loginProvidersQuery.data ?? []
   const organizationSourceOptions = useMemo(
@@ -130,9 +132,9 @@ export function AccessTeamsPage() {
       dataIndex: 'id',
       render: (_: unknown, record: AccessTeam) => (
         <Space className="soha-row-action-icons">
-          {canManageGroups || canManageScopeGrants ? (
+          {canUpdateGroups || canDeleteGroups || canViewScopeGrants ? (
             <>
-              {canManageScopeGrants ? (
+              {canViewScopeGrants ? (
                 <ManagementIconButton
                   aria-label="授权范围"
                   icon={<FolderOpenOutlined />}
@@ -141,7 +143,7 @@ export function AccessTeamsPage() {
                   onClick={() => setGrantTeam(record)}
                 />
               ) : null}
-              {canManageGroups ? (
+              {canUpdateGroups ? (
                 <ManagementIconButton
                   aria-label="编辑组织"
                   icon={<EditOutlined />}
@@ -150,7 +152,7 @@ export function AccessTeamsPage() {
                   onClick={() => crud.openEdit(record)}
                 />
               ) : null}
-              {canManageGroups ? (
+              {canDeleteGroups ? (
                 <Popconfirm
                   title="确认删除？"
                   onConfirm={() => crud.deleteMutation.mutate(record.id)}
@@ -194,7 +196,7 @@ export function AccessTeamsPage() {
       resourceName="组织"
       columns={columns}
       createAction={
-        canManageGroups ? (
+        canCreateGroups ? (
           <Button size="small" icon={<PlusOutlined />} type="primary" onClick={crud.openCreate}>
             添加组织
           </Button>

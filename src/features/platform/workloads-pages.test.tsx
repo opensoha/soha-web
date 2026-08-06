@@ -635,11 +635,12 @@ describe('workloads pods page refresh controls', () => {
 
     expect(apiGetMock).toHaveBeenCalledWith('/clusters/capabilities')
     expect(container.textContent).toContain(unsupportedReason)
-    for (const label of ['重启', '扩缩', '回滚', '删除']) {
+    for (const label of ['重启', '扩缩', '删除']) {
       const button = container.querySelector(`button[aria-label="${label}"]`)
       expect(button).toBeInstanceOf(HTMLButtonElement)
       expect((button as HTMLButtonElement).disabled).toBe(true)
     }
+    expect(container.querySelector('button[aria-label="回滚"]')).toBeNull()
   })
 
   it('renders statefulset restart, scale, and delete actions using workload permissions', async () => {

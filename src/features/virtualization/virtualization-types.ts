@@ -340,6 +340,12 @@ export interface VirtualizationListParams {
   status?: string
 }
 
+export type VirtualizationImageCategory = 'catalog' | 'storage'
+
+export interface VirtualizationImageListParams extends VirtualizationListParams {
+  category?: VirtualizationImageCategory
+}
+
 export interface VirtualizationOperationListParams {
   assetType?: string
   taskKind?: string

@@ -1,5 +1,7 @@
 export const accessKeys = {
   all: ['access'] as const,
+  permissions: () => [...accessKeys.all, 'permissions'] as const,
+  permissionCatalog: () => [...accessKeys.permissions(), 'catalog'] as const,
   users: () => [...accessKeys.all, 'users'] as const,
   userList: () => [...accessKeys.users(), 'list'] as const,
   roles: () => [...accessKeys.all, 'roles'] as const,

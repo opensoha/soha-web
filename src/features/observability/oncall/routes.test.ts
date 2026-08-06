@@ -7,13 +7,13 @@ vi.mock('./board-page', () => ({ OnCallBoardPage: boardPage }))
 vi.mock('./settings-page', () => ({ OnCallSettingsPage: settingsPage }))
 
 describe('on-call route manifest', () => {
-  it('keeps board and manage-only settings as separate leaf loaders', async () => {
+  it('keeps board and settings as separate view-gated leaf loaders', async () => {
     expect(observabilityOncallRoutes.map((route) => route.meta.path)).toEqual([
       '/monitoring-workbench/oncall',
       '/monitoring-workbench/oncall/settings',
     ])
     expect(observabilityOncallRoutes[0].meta.permissionKey).toBe('observe.oncall.view')
-    expect(observabilityOncallRoutes[1].meta.permissionKey).toBe('observe.oncall.manage')
+    expect(observabilityOncallRoutes[1].meta.permissionKey).toBe('observe.oncall.view')
     await expect(observabilityOncallRoutes[0].load()).resolves.toEqual({ default: boardPage })
     await expect(observabilityOncallRoutes[1].load()).resolves.toEqual({
       default: settingsPage,

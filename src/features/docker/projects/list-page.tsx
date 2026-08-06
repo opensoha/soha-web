@@ -42,6 +42,7 @@ import { StepFormModal } from '@/components/step-form-modal'
 import { OperationalPlanModal } from '@/components/operational-plan-modal'
 import type { OperationalPlan } from '@opensoha/contracts/gen/ts/sohaapi'
 import { formatDateTime } from '@/utils/time'
+import { createUUID } from '@/utils/uuid'
 import { computeQueries, latestTaskForResource, ResourceTaskActions } from '@/features/compute'
 import { dockerApi } from '../docker-api'
 import { dockerQueries } from '../queries'
@@ -211,10 +212,14 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
   } | null>(null)
   const {
     dockerModuleEnabled,
-    canManageProjects,
+    canCreateProjects,
+    canUpdateProjects,
+    canDeleteProjects,
     canDeployProjects,
-    canManagePorts,
-    canManageServices,
+    canCreatePorts,
+    canStartServices,
+    canStopServices,
+    canRestartServices,
     canViewServices,
     canViewOperations,
   } = useDockerPermissions()
@@ -286,7 +291,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
       { id: project.id, action },
       {
         onSuccess: (plan) =>
-          setDeployPlan({ action, idempotencyKey: crypto.randomUUID(), plan, project }),
+          setDeployPlan({ action, idempotencyKey: createUUID(), plan, project }),
       },
     )
   }
@@ -307,7 +312,12 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
       ),
     ),
   })
-  const canStartContainer = canManageProjects && canDeployProjects && canManagePorts
+  const canStartContainer = canCreateProjects && canDeployProjects && canCreatePorts
+  const serviceActions = [
+    { action: 'restart', allowed: canRestartServices, icon: <ReloadOutlined /> },
+    { action: 'start', allowed: canStartServices, icon: <PlayCircleOutlined /> },
+    { action: 'stop', allowed: canStopServices, icon: <PoweroffOutlined /> },
+  ].filter((item) => item.allowed)
   const [expandedRowKeys, setExpandedRowKeys] = useState<string[]>([])
   const autoExpandedProjectKeys = useRef(new Set<string>())
   const servicesByProject = useMemo(() => {
@@ -481,29 +491,19 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
         if (record.kind === 'service' && record.service) {
           return (
             <Space className="soha-row-action-icons">
-              {canManageServices
-                ? (['restart', 'start', 'stop'] as const).map((action) => (
+              {serviceActions.map(({ action, icon }) => (
                     <ManagementIconButton
                       key={action}
                       aria-label={`${operationActionLabel(action)}服务`}
                       size="small"
                       tooltip={operationActionLabel(action)}
-                      icon={
-                        action === 'restart' ? (
-                          <ReloadOutlined />
-                        ) : action === 'start' ? (
-                          <PlayCircleOutlined />
-                        ) : (
-                          <PoweroffOutlined />
-                        )
-                      }
+                      icon={icon}
                       loading={serviceActionMutation.isPending}
                       onClick={() =>
                         serviceActionMutation.mutate({ id: record.service!.id, action })
                       }
                     />
-                  ))
-                : null}
+                  ))}
             </Space>
           )
         }
@@ -559,7 +559,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                 icon={<FileTextOutlined />}
               />
             </Link>
-            {canManageProjects ? (
+            {canUpdateProjects ? (
               <ManagementIconButton
                 aria-label="编辑项目"
                 size="small"
@@ -573,7 +573,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                 }}
               />
             ) : null}
-            {canManageProjects ? (
+            {canDeleteProjects ? (
               <Popconfirm
                 title={
                   isSingleContainerProject(project)
@@ -678,7 +678,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                   快速启动
                 </Button>
               ) : null}
-              {canManageProjects ? (
+              {canCreateProjects ? (
                 <Button
                   type="primary"
                   icon={<PlusOutlined />}

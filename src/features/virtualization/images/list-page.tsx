@@ -9,7 +9,6 @@ import {
   Popconfirm,
   Select,
   Space,
-  Tag,
   Tooltip,
   Typography,
 } from 'antd'
@@ -19,6 +18,7 @@ import { hasAllowedAction } from '@/features/auth'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { StepFormModal } from '@/components/step-form-modal'
+import { BooleanTag, StatusTag } from '@/components/status-tag'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementIconButton,
@@ -34,7 +34,6 @@ import { virtualizationQueries } from '@/features/virtualization/queries'
 import { useVirtualizationPermissions } from '@/features/virtualization/shared/use-virtualization-permissions'
 import { VirtualizationAdminTable } from '@/features/virtualization/shared/ui'
 import {
-  STATUS_COLORS,
   VIRTUALIZATION_PROVIDER_OPTIONS,
   buildImagePayload,
   normalizePage,
@@ -43,6 +42,7 @@ import {
 } from '@/features/virtualization/virtualization-model'
 import '@/features/virtualization/virtualization-workbench.css'
 import type {
+  VirtualizationImageCategory,
   VirtualizationImage,
   VirtualizationImageInput,
   VirtualizationListParams,
@@ -55,8 +55,7 @@ const tableEllipsis = { showTitle: false } as const
 
 function statusTag(value?: string) {
   if (!value) return <Text type="secondary">-</Text>
-  const key = value.toLowerCase()
-  return <Tag color={STATUS_COLORS[key] ?? 'default'}>{value}</Tag>
+  return <StatusTag value={value} />
 }
 
 function tableTooltipText(value: unknown) {
@@ -70,6 +69,35 @@ function tableTooltipText(value: unknown) {
     >
       {content}
     </Tooltip>
+  )
+}
+
+function imageResourceType(record: VirtualizationImage) {
+  const sourceKind = String(record.assetKind || record.sourceKind || record.source || '')
+    .trim()
+    .toLowerCase()
+  const contentType = String(record.config?.contentType || '')
+    .trim()
+    .toLowerCase()
+  if (sourceKind === 'template') return 'VM 模板'
+  if (sourceKind === 'lxc_template' || contentType === 'vztmpl') return 'CT 模板'
+  if (sourceKind === 'iso' || contentType === 'iso') return 'ISO 镜像'
+  if (contentType === 'images') return 'VM 磁盘'
+  if (contentType === 'rootdir') return 'CT 根卷'
+  return (
+    {
+      datasource: 'DataSource',
+      pvc: 'PVC 镜像源',
+      storage: '存储池',
+      storage_content: '存储内容',
+      image: '磁盘/卷',
+      images: 'VM 磁盘',
+      rootdir: 'CT 根卷',
+      datavolume: 'DataVolume',
+      persistentvolumeclaim: 'PVC 卷',
+    }[sourceKind] ||
+    sourceKind ||
+    '-'
   )
 }
 
@@ -88,18 +116,30 @@ function pageTablePagination<T>(
   }
 }
 
-export function VirtualizationImagesPage() {
+interface VirtualizationImagesPageProps {
+  category?: VirtualizationImageCategory
+}
+
+export function VirtualizationImagesPage({
+  category: imageCategory = 'catalog',
+}: VirtualizationImagesPageProps = {}) {
   const [editing, setEditing] = useState<VirtualizationImage | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [currentStep, setCurrentStep] = useState(0)
   const [filters, setFilters] = useState<VirtualizationListParams>({ page: 1, pageSize: 10 })
   const [filterForm] = Form.useForm<VirtualizationListParams>()
   const [form] = Form.useForm<VirtualizationImageInput>()
-  const { virtualizationModuleEnabled, canManageImages } = useVirtualizationPermissions()
+  const { virtualizationModuleEnabled, canCreateImages, canUpdateImages, canDeleteImages } =
+    useVirtualizationPermissions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const imageProvider = Form.useWatch('provider', form) ?? 'kubevirt'
-  const imagesQuery = useQuery(virtualizationQueries.images(filters, virtualizationModuleEnabled))
+  const imagesQuery = useQuery(
+    virtualizationQueries.images(
+      { ...filters, category: imageCategory },
+      virtualizationModuleEnabled,
+    ),
+  )
   const clustersQuery = useQuery(virtualizationQueries.clusters(virtualizationModuleEnabled))
   const imagesPage = normalizePage(imagesQuery.data, filters.page ?? 1, filters.pageSize ?? 10)
   const clusters = clustersQuery.data ?? []
@@ -168,9 +208,8 @@ export function VirtualizationImagesPage() {
       width: 160,
     },
     {
-      title: '来源',
-      render: (_value, record) =>
-        tableTooltipText(record.assetKind || record.sourceKind || record.source || '-'),
+      title: '类型',
+      render: (_value, record) => tableTooltipText(imageResourceType(record)),
       ellipsis: tableEllipsis,
       width: 160,
     },
@@ -197,8 +236,14 @@ export function VirtualizationImagesPage() {
     },
     {
       title: '可用性',
-      render: (_value, record) =>
-        record.ready === false ? <Tag color="red">不可用</Tag> : <Tag color="green">可用</Tag>,
+      render: (_value, record) => (
+        <BooleanTag
+          value={record.ready !== false}
+          trueLabel="可用"
+          falseLabel="不可用"
+          falseColor="error"
+        />
+      ),
       width: 110,
     },
     {
@@ -225,8 +270,8 @@ export function VirtualizationImagesPage() {
       ...tableColumnPresets.action,
       title: '操作',
       render: (_value, record) => {
-        const canUpdate = canManageImages && hasAllowedAction(record.allowedActions, 'update')
-        const canDelete = canManageImages && hasAllowedAction(record.allowedActions, 'delete')
+        const canUpdate = canUpdateImages && hasAllowedAction(record.allowedActions, 'update')
+        const canDelete = canDeleteImages && hasAllowedAction(record.allowedActions, 'delete')
         if (!canUpdate && !canDelete) return null
         return (
           <Space className="soha-row-action-icons">
@@ -258,6 +303,7 @@ export function VirtualizationImagesPage() {
       },
     },
   ]
+  if (imageCategory === 'storage') columns.splice(-1)
   return (
     <ManagementDataPage
       className="soha-virtualization-page"
@@ -273,7 +319,12 @@ export function VirtualizationImagesPage() {
         ),
         children: (
           <>
-            <ManagementKeywordField label="关键字" placeholder="搜索镜像、模板或 ISO" />
+            <ManagementKeywordField
+              label="关键字"
+              placeholder={
+                imageCategory === 'catalog' ? '搜索镜像、模板或 ISO' : '搜索存储、磁盘或卷'
+              }
+            />
             <ManagementQueryField minWidth={180} name="connectionId" label="连接" width={180}>
               <Select
                 allowClear
@@ -300,7 +351,7 @@ export function VirtualizationImagesPage() {
         <VirtualizationAdminTable
           rowKey="id"
           actions={
-            canManageImages ? (
+            canCreateImages && imageCategory === 'catalog' ? (
               <Button type="primary" icon={<PlusOutlined />} onClick={() => openImageEditor()}>
                 新增镜像入口
               </Button>

@@ -69,7 +69,8 @@ export function VirtualizationFlavorsPage() {
   })
   const [filterForm] = Form.useForm<{ enabled?: EnabledFilter; search?: string }>()
   const [form] = Form.useForm<VirtualizationFlavorInput>()
-  const { virtualizationModuleEnabled, canManageFlavors } = useVirtualizationPermissions()
+  const { virtualizationModuleEnabled, canCreateFlavors, canUpdateFlavors, canDeleteFlavors } =
+    useVirtualizationPermissions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const flavorsQuery = useQuery(virtualizationQueries.flavors(virtualizationModuleEnabled))
@@ -142,8 +143,8 @@ export function VirtualizationFlavorsPage() {
       ...tableColumnPresets.action,
       title: '操作',
       render: (_value, record) => {
-        const canUpdate = canManageFlavors && hasAllowedAction(record.allowedActions, 'update')
-        const canDelete = canManageFlavors && hasAllowedAction(record.allowedActions, 'delete')
+        const canUpdate = canUpdateFlavors && hasAllowedAction(record.allowedActions, 'update')
+        const canDelete = canDeleteFlavors && hasAllowedAction(record.allowedActions, 'delete')
         if (!canUpdate && !canDelete) return null
         return (
           <Space className="soha-row-action-icons">
@@ -204,7 +205,7 @@ export function VirtualizationFlavorsPage() {
         <VirtualizationAdminTable
           rowKey="id"
           actions={
-            canManageFlavors ? (
+            canCreateFlavors ? (
               <Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor()}>
                 新增规格
               </Button>

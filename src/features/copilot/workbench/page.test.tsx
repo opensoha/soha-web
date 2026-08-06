@@ -1725,7 +1725,7 @@ describe('AIWorkbenchPage', () => {
 
   it('creates an inspection task from the current session with the inspection profile', async () => {
     testState.snapshot = {
-      permissionKeys: ['observe.ai.view', 'observe.ai.chat', 'observe.ai.inspection.manage'],
+      permissionKeys: ['observe.ai.view', 'observe.ai.chat', 'observe.ai.inspection.create'],
       visibleMenuIds: [],
       visibleMenus: [],
     } as PermissionSnapshot
@@ -1755,9 +1755,9 @@ describe('AIWorkbenchPage', () => {
     })
   })
 
-  it('requires chat and inspection manage permissions before creating an inspection task from a session', async () => {
+  it('requires chat and inspection create permissions before creating an inspection task from a session', async () => {
     testState.snapshot = {
-      permissionKeys: ['observe.ai.view', 'observe.ai.inspection.manage'],
+      permissionKeys: ['observe.ai.view', 'observe.ai.inspection.create'],
       visibleMenuIds: [],
       visibleMenus: [],
     } as PermissionSnapshot

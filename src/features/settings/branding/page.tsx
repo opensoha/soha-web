@@ -18,10 +18,9 @@ export function BrandingSettingsPage({ embedded = false }: SettingsPageProps = {
     permissionSnapshotQuery.data?.data,
     'settings.branding.view',
   )
-  const canManageBrandingSettings = hasPermission(
-    permissionSnapshotQuery.data?.data,
-    'settings.branding.manage',
-  )
+  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const canCreateBrandingSettings = hasPermission(permissionSnapshot, 'settings.branding.create')
+  const canUpdateBrandingSettings = hasPermission(permissionSnapshot, 'settings.branding.update')
 
   const { data, isLoading } = useQuery(settingsQueries.branding())
   const saveMutation = useMutation(settingsMutations.branding.save(queryClient))
@@ -43,6 +42,9 @@ export function BrandingSettingsPage({ embedded = false }: SettingsPageProps = {
   }
 
   const settings = data
+  const canManageBrandingSettings = settings
+    ? canUpdateBrandingSettings
+    : canCreateBrandingSettings
   const content = (
     <SettingsCard>
       <Form

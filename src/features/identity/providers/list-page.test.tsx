@@ -9,7 +9,13 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { IdentityProvidersPage } from './list-page'
 
 const testState = vi.hoisted(() => ({
-  permissionKeys: ['identity.providers.view', 'identity.providers.manage'],
+  permissionKeys: [
+    'identity.providers.view',
+    'identity.providers.create',
+    'identity.providers.update',
+    'identity.providers.delete',
+    'identity.providers.rotate',
+  ],
   apiGet: vi.fn(),
   apiPost: vi.fn(),
 }))
@@ -151,8 +157,15 @@ vi.mock('./components/provider-form-modal', () => ({
 }))
 
 vi.mock('./components/oidc-clients-panel', () => ({
-  OIDCClientsPanel: ({ canManage }: { canManage: boolean }) => (
-    <div data-testid="oidc-panel">manage:{String(canManage)}</div>
+  OIDCClientsPanel: (props: {
+    canCreate: boolean
+    canUpdate: boolean
+    canDelete: boolean
+    canRotate: boolean
+  }) => (
+    <div data-testid="oidc-panel">
+      manage:{String(props.canCreate || props.canUpdate || props.canDelete || props.canRotate)}
+    </div>
   ),
 }))
 
@@ -187,7 +200,13 @@ beforeAll(() => {
 })
 
 beforeEach(() => {
-  testState.permissionKeys = ['identity.providers.view', 'identity.providers.manage']
+  testState.permissionKeys = [
+    'identity.providers.view',
+    'identity.providers.create',
+    'identity.providers.update',
+    'identity.providers.delete',
+    'identity.providers.rotate',
+  ]
   testState.apiGet.mockReset()
   testState.apiPost.mockReset()
   testState.apiGet.mockImplementation(async (path: string) => {
@@ -352,6 +371,8 @@ describe('identity providers page behavior', () => {
     expect(testState.apiGet).toHaveBeenCalledWith('/identity/applications')
     expect(container.querySelector('[data-testid="row-provider-grafana"]')).not.toBeNull()
     expect(container.querySelector('[data-testid="row-provider-harbor"]')).not.toBeNull()
+    expect(container.querySelector('.soha-status-tag')?.textContent).toBe('Enabled')
+    expect(container.querySelector('.soha-metadata-tag')?.textContent).toBe('OIDC')
 
     const search = container.querySelector(
       'input[placeholder="搜索 Provider 或应用"]',

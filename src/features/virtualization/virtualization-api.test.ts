@@ -26,14 +26,19 @@ describe('virtualizationApi', () => {
     await expect(virtualizationApi.platformClusters()).resolves.toEqual([])
     await expect(virtualizationApi.vms({ page: 2, pageSize: 25 })).resolves.toEqual([])
     await expect(virtualizationApi.clusters()).resolves.toEqual([])
-    await expect(virtualizationApi.images({ provider: 'pve' })).resolves.toEqual([])
+    await expect(
+      virtualizationApi.images({ provider: 'pve', category: 'storage' }),
+    ).resolves.toEqual([])
     await expect(virtualizationApi.flavors()).resolves.toEqual([])
     await expect(virtualizationApi.operationLogs('op/1')).resolves.toEqual([])
 
     expect(apiMocks.get).toHaveBeenNthCalledWith(1, '/clusters')
     expect(apiMocks.get).toHaveBeenNthCalledWith(2, '/virtualization/vms?page=2&pageSize=25')
     expect(apiMocks.get).toHaveBeenNthCalledWith(3, '/virtualization/clusters')
-    expect(apiMocks.get).toHaveBeenNthCalledWith(4, '/virtualization/images?provider=pve')
+    expect(apiMocks.get).toHaveBeenNthCalledWith(
+      4,
+      '/virtualization/images?provider=pve&category=storage',
+    )
     expect(apiMocks.get).toHaveBeenNthCalledWith(5, '/virtualization/flavors')
     expect(apiMocks.get).toHaveBeenNthCalledWith(6, '/virtualization/operations/op%2F1/logs')
   })

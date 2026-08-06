@@ -28,8 +28,12 @@ export function SourceConnectionsPage() {
   const queryClient = useQueryClient()
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const permissionQuery = usePermissionSnapshot()
-  const canView = hasPermission(permissionQuery.data?.data, 'settings.system-integrations.view')
-  const canManage = hasPermission(permissionQuery.data?.data, 'settings.system-integrations.manage')
+  const permissionSnapshot = permissionQuery.data?.data
+  const canView = hasPermission(permissionSnapshot, 'settings.system-integrations.view')
+  const canCreate = hasPermission(permissionSnapshot, 'settings.system-integrations.create')
+  const canUpdate = hasPermission(permissionSnapshot, 'settings.system-integrations.update')
+  const canDelete = hasPermission(permissionSnapshot, 'settings.system-integrations.delete')
+  const canTest = hasPermission(permissionSnapshot, 'settings.system-integrations.test')
   const listQuery = useQuery(systemIntegrationQueries.list({ category: 'source_control' }, canView))
   const updateMutation = useMutation(systemIntegrationMutations.update(queryClient))
   const testMutation = useMutation(systemIntegrationMutations.test(queryClient))
@@ -80,7 +84,7 @@ export function SourceConnectionsPage() {
         <Switch
           aria-label={`启用 ${row.name}`}
           checked={enabled}
-          disabled={!canManage || updateMutation.isPending}
+          disabled={!canUpdate || updateMutation.isPending}
           loading={updateMutation.isPending}
           size="small"
           onChange={(checked) =>
@@ -102,7 +106,7 @@ export function SourceConnectionsPage() {
         <Space className="soha-row-action-icons" size={4}>
           <ManagementIconButton
             aria-label={`测试 ${row.name}`}
-            disabled={!canManage || !row.enabled}
+            disabled={!canTest || !row.enabled}
             icon={<ThunderboltOutlined />}
             loading={testMutation.isPending && testMutation.variables === row.id}
             tooltip="测试连接"
@@ -114,7 +118,7 @@ export function SourceConnectionsPage() {
             tooltip="编辑"
             onClick={() => navigate(`/settings/source-control/${row.id}`)}
           />
-          {canManage ? (
+          {canDelete ? (
             <Popconfirm
               title={`删除代码源连接 ${row.name}？`}
               description="删除后使用此连接的代码源访问将不可用。"
@@ -158,7 +162,7 @@ export function SourceConnectionsPage() {
         columnSettingIconOnly: true,
         toolbarExtra: (
           <ManagementTableToolbar>
-            {canManage ? (
+            {canCreate ? (
               <Button
                 icon={<PlusOutlined />}
                 size="small"

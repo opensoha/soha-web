@@ -7,7 +7,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "antd";
 import { LoginPage } from "./login-page";
-import { restoreAuthSession } from "@/features/auth/auth-api";
+import { fetchPermissionSnapshot, restoreAuthSession } from "@/features/auth/auth-api";
 import { useAuthStore } from "@/stores/auth-store";
 import type { User } from "@/types";
 
@@ -30,14 +30,19 @@ vi.mock("@/features/auth/auth-api", async () => {
   };
 });
 
-vi.mock("@/stores/preferences-store", () => ({
-  usePreferencesStore: (selector: (state: any) => unknown) =>
-    selector({
-      currentWorkspace: "resource",
-      setThemeMode: vi.fn(),
-      themeMode: "light",
-    }),
-}));
+vi.mock("@/stores/preferences-store", () => {
+  const state = {
+    currentWorkspace: "resource",
+    setThemeMode: vi.fn(),
+    themeMode: "light",
+  };
+  return {
+    usePreferencesStore: Object.assign(
+      (selector: (value: typeof state) => unknown) => selector(state),
+      { getState: () => state },
+    ),
+  };
+});
 
 vi.mock("@/utils/branding", () => ({
   readStoredBrandingSettings: () => ({
@@ -97,6 +102,7 @@ async function renderLoginPage() {
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/" element={<div>landing page</div>} />
+              <Route path="/portal" element={<div>portal landing page</div>} />
             </Routes>
           </MemoryRouter>
         </App>
@@ -157,6 +163,11 @@ describe("login page", () => {
 
   beforeEach(() => {
     document.documentElement.dataset.themeMode = "light";
+    vi.mocked(fetchPermissionSnapshot).mockResolvedValue({
+      permissionKeys: [],
+      visibleMenuIds: [],
+      visibleMenus: [],
+    });
     vi.mocked(restoreAuthSession).mockResolvedValue("unauthenticated");
     useAuthStore.getState().clearAuth();
   });
@@ -209,4 +220,21 @@ describe("login page", () => {
     expect(restoreAuthSession).toHaveBeenCalledTimes(2);
     expect(container.textContent).toContain("landing page");
   }, 20_000);
+
+  it("uses the portal as the default landing page when it is accessible", async () => {
+    vi.mocked(fetchPermissionSnapshot).mockResolvedValue({
+      permissionKeys: ["identity.portal.view"],
+      visibleMenuIds: ["home-workbench"],
+      visibleMenus: [{ id: "home-workbench", path: "/portal" }],
+    });
+    vi.mocked(restoreAuthSession).mockImplementationOnce(async () => {
+      useAuthStore.getState().setUser(user);
+      useAuthStore.getState().setTokens("new-access-token");
+      return "authenticated";
+    });
+
+    const container = await renderLoginPage();
+
+    expect(container.textContent).toContain("portal landing page");
+  });
 });

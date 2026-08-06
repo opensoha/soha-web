@@ -1,14 +1,15 @@
-import { Avatar, Space, Tag, Typography } from 'antd'
+import { Avatar, Space, Typography } from 'antd'
 import { AppstoreOutlined } from '@ant-design/icons'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
 import type { IdentityApplication, IdentityApplicationStatus } from '../shared/types'
 
 const { Paragraph, Text } = Typography
 
-const statusTagMeta: Record<IdentityApplicationStatus, { color: string; label: string }> = {
-  draft: { color: 'default', label: 'Draft' },
-  enabled: { color: 'green', label: 'Enabled' },
-  disabled: { color: 'default', label: 'Disabled' },
-  maintenance: { color: 'gold', label: 'Maintenance' },
+const statusLabels: Record<IdentityApplicationStatus, string> = {
+  draft: 'Draft',
+  enabled: 'Enabled',
+  disabled: 'Disabled',
+  maintenance: 'Maintenance',
 }
 
 export function formatIdentityApplicationDateTime(value?: string) {
@@ -56,21 +57,25 @@ export function IdentityApplicationNameCell({ application }: { application: Iden
 }
 
 export function identityApplicationStatusTag(status: IdentityApplicationStatus, label?: string) {
-  const meta = statusTagMeta[status] ?? statusTagMeta.draft
-  return <Tag color={meta.color}>{label ?? meta.label}</Tag>
+  const normalizedStatus = statusLabels[status] ? status : 'draft'
+  return <StatusTag label={label ?? statusLabels[normalizedStatus]} value={normalizedStatus} />
 }
 
-export function identityApplicationAssignmentsSummary(application: IdentityApplication, emptyLabel = 'All authenticated users') {
+export function identityApplicationAssignmentsSummary(
+  application: IdentityApplication,
+  emptyLabel = 'All authenticated users',
+) {
   const assignments = application.assignments ?? []
   if (!assignments.length) return <Text type="secondary">{emptyLabel}</Text>
   return (
     <Space size={[4, 4]} wrap>
       {assignments.slice(0, 4).map((assignment) => (
-        <Tag key={`${assignment.subjectType}:${assignment.subjectId}`}>
-          {assignment.subjectType}:{assignment.subjectId}
-        </Tag>
+        <MetadataTag
+          key={`${assignment.subjectType}:${assignment.subjectId}`}
+          label={`${assignment.subjectType}:${assignment.subjectId}`}
+        />
       ))}
-      {assignments.length > 4 ? <Tag>+{assignments.length - 4}</Tag> : null}
+      {assignments.length > 4 ? <MetadataTag label={`+${assignments.length - 4}`} /> : null}
     </Space>
   )
 }

@@ -1,10 +1,11 @@
 import type { ComponentProps, Dispatch, ReactNode, SetStateAction } from 'react'
 import { useState } from 'react'
-import { Badge, Button, Card, Space, Tag, Typography } from 'antd'
+import { Badge, Button, Card, Space, Typography } from 'antd'
 import type { FormInstance } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import type { QueryClient } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
+import { BooleanTag, MetadataTag, StatusTag } from '@/components/status-tag'
 import {
   ManagementDensityButton,
   ManagementDetailHeader,
@@ -37,38 +38,6 @@ export interface DockerFilterState extends DockerListParams {
   pending?: boolean
   kind?: string
   enabled?: boolean
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  active: 'green',
-  completed: 'green',
-  defined: 'blue',
-  degraded: 'gold',
-  disabled: 'default',
-  draft: 'default',
-  error: 'red',
-  exited: 'default',
-  failed: 'red',
-  healthy: 'green',
-  offline: 'default',
-  online: 'green',
-  pending: 'gold',
-  provisioning: 'blue',
-  provisioned_waiting_agent: 'blue',
-  queued: 'gold',
-  ready: 'green',
-  released: 'default',
-  running: 'green',
-  agent_bootstrapping: 'blue',
-  agent_failed: 'red',
-  agent_registered: 'gold',
-  docker_ready: 'green',
-  vm_ready: 'blue',
-  stopped: 'default',
-  timeout: 'red',
-  callback_timeout: 'red',
-  unavailable: 'red',
-  unknown: 'default',
 }
 
 export const DEFAULT_COMPOSE = `services:\n  web:\n    image: nginx:alpine\n    ports:\n      - "8080:80"\n`
@@ -123,19 +92,18 @@ function classNames(...items: Array<string | false | null | undefined>) {
 
 export function statusTag(value?: string) {
   if (!value) return <Text type="secondary">-</Text>
-  const key = value.toLowerCase()
-  return <Tag color={STATUS_COLORS[key] ?? 'default'}>{value}</Tag>
+  return <StatusTag value={value} />
 }
 
 export function boolTag(value?: boolean) {
-  return <Tag color={value ? 'green' : 'default'}>{value ? '启用' : '停用'}</Tag>
+  return <BooleanTag value={Boolean(value)} trueLabel="启用" falseLabel="停用" />
 }
 
 export function architectureTag(value?: string) {
   if (!value) return <Text type="secondary">-</Text>
   const normalized = String(value).toLowerCase()
-  const color = normalized === 'arm64' || normalized === 'aarch64' ? 'cyan' : 'geekblue'
-  return <Tag color={color}>{normalized === 'amd64' ? 'x86_64' : normalized}</Tag>
+  const tone = normalized === 'arm64' || normalized === 'aarch64' ? 'cyan' : 'blue'
+  return <MetadataTag tone={tone} label={normalized === 'amd64' ? 'x86_64' : normalized} />
 }
 
 export function formatBytes(value?: number) {
@@ -247,7 +215,7 @@ export function renderProjectPortSummary(record: DockerProject) {
           </span>
         )
       })}
-      {ports.length > 2 ? <Tag>+{ports.length - 2}</Tag> : null}
+      {ports.length > 2 ? <MetadataTag label={`+${ports.length - 2}`} /> : null}
     </Space>
   )
 }
@@ -355,16 +323,29 @@ export function useDockerPermissions() {
   const hasDockerPermission = (key: string) => dockerModuleEnabled && hasPermission(snapshot, key)
   return {
     dockerModuleEnabled,
-    canManageHosts: hasDockerPermission('docker.hosts.manage'),
-    canManageProjects: hasDockerPermission('docker.projects.manage'),
+    canCreateHosts: hasDockerPermission('docker.hosts.create'),
+    canUpdateHosts: hasDockerPermission('docker.hosts.update'),
+    canDeleteHosts: hasDockerPermission('docker.hosts.delete'),
+    canCreateProjects: hasDockerPermission('docker.projects.create'),
+    canUpdateProjects: hasDockerPermission('docker.projects.update'),
+    canDeleteProjects: hasDockerPermission('docker.projects.delete'),
     canDeployProjects: hasDockerPermission('docker.projects.deploy'),
     canViewServices: hasDockerPermission('docker.services.view'),
-    canManageServices: hasDockerPermission('docker.services.manage'),
+    canStartServices: hasDockerPermission('docker.services.start'),
+    canStopServices: hasDockerPermission('docker.services.stop'),
+    canRestartServices: hasDockerPermission('docker.services.restart'),
+    canViewServiceLogs: hasDockerPermission('docker.services.logs'),
+    canAccessServiceTerminal: hasDockerPermission('docker.services.terminal'),
     canViewPorts: hasDockerPermission('docker.ports.view'),
-    canManagePorts: hasDockerPermission('docker.ports.manage'),
-    canManageTemplates: hasDockerPermission('docker.templates.manage'),
+    canCreatePorts: hasDockerPermission('docker.ports.create'),
+    canUpdatePorts: hasDockerPermission('docker.ports.update'),
+    canDeletePorts: hasDockerPermission('docker.ports.delete'),
+    canCreateTemplates: hasDockerPermission('docker.templates.create'),
+    canUpdateTemplates: hasDockerPermission('docker.templates.update'),
+    canDeleteTemplates: hasDockerPermission('docker.templates.delete'),
     canViewOperations: hasDockerPermission('docker.operations.view'),
-    canManageOperations: hasDockerPermission('docker.operations.manage'),
+    canCancelOperations: hasDockerPermission('docker.operations.cancel'),
+    canRetryOperations: hasDockerPermission('docker.operations.retry'),
   }
 }
 

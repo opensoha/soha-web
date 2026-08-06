@@ -13,7 +13,6 @@ import {
   Space,
   Spin,
   Switch,
-  Tag,
   Tooltip,
   Typography,
 } from 'antd'
@@ -30,8 +29,10 @@ import { hasAllowedAction } from '@/features/auth'
 import { useAIPageContext } from '@/features/copilot'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
+import { createUUID } from '@/utils/uuid'
 import { StepFormModal } from '@/components/step-form-modal'
 import { OperationalPlanModal } from '@/components/operational-plan-modal'
+import { StatusTag } from '@/components/status-tag'
 import type { OperationalPlan } from '@opensoha/contracts/gen/ts/sohaapi'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
@@ -50,7 +51,6 @@ import { virtualizationQueries } from '@/features/virtualization/queries'
 import { useVirtualizationPermissions } from '@/features/virtualization/shared/use-virtualization-permissions'
 import { VirtualizationAdminTable } from '@/features/virtualization/shared/ui'
 import {
-  STATUS_COLORS,
   buildCreateVmPayload,
   normalizePage,
   virtualMachineDisplayStatus,
@@ -105,8 +105,7 @@ export function defaultRootDisk(
 
 function statusTag(value?: string) {
   if (!value) return <Text type="secondary">-</Text>
-  const key = value.toLowerCase()
-  return <Tag color={STATUS_COLORS[key] ?? 'default'}>{value}</Tag>
+  return <StatusTag value={value} />
 }
 
 function tableTooltipText(value: unknown) {
@@ -161,7 +160,7 @@ function TaskProgressBanner({
   const description =
     task?.message || (isError ? '与服务器的实时连接已断开' : '正在等待任务完成...')
   const taskStatus = task?.status ? (
-    <Tag color={STATUS_COLORS[task.status] ?? 'blue'}>{task.status}</Tag>
+    <StatusTag value={task.status} />
   ) : null
   return (
     <Alert
@@ -218,7 +217,7 @@ export function VirtualizationVmsPage() {
   const [resizeTarget, setResizeTarget] = useState<VirtualMachine | null>(null)
   const [resizeStep, setResizeStep] = useState(0)
   const [resizeForm] = Form.useForm<VirtualMachineResizeFormValues>()
-  const { virtualizationModuleEnabled, canManageVMs } = useVirtualizationPermissions()
+  const { virtualizationModuleEnabled, canCreateVMs } = useVirtualizationPermissions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const createProvider = Form.useWatch('provider', form) ?? 'kubevirt'
@@ -271,7 +270,7 @@ export function VirtualizationVmsPage() {
     ...virtualizationMutations.planCreateVm(),
     onSuccess: (plan, payload) => {
       setCreatePlan(plan)
-      setPendingCreate({ idempotencyKey: crypto.randomUUID(), payload })
+      setPendingCreate({ idempotencyKey: createUUID(), payload })
       setDrawerOpen(false)
     },
     onError: (error) => void message.error(error.message),
@@ -564,7 +563,6 @@ export function VirtualizationVmsPage() {
       title: '操作',
       width: 130,
       render: (_value, record) => {
-        if (!canManageVMs) return null
         const canPower = (action: string) => hasAllowedAction(record.allowedActions, action)
         return (
           <Space className="soha-row-action-icons">
@@ -595,7 +593,7 @@ export function VirtualizationVmsPage() {
                 onClick={() => powerMutation.mutate({ id: record.id, action: 'restart' })}
               />
             ) : null}
-            {record.capabilities?.length ? (
+            {canPower('resize') ? (
               <ManagementIconButton
                 aria-label="调整虚拟机规格"
                 size="small"
@@ -702,7 +700,7 @@ export function VirtualizationVmsPage() {
           <VirtualizationAdminTable
             rowKey="id"
             actions={
-              canManageVMs ? (
+              canCreateVMs ? (
                 <Button
                   type="primary"
                   icon={<PlusOutlined />}

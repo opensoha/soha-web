@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { App, Button, Form, Input, Modal, Popconfirm, Select, Space, Switch, Tag } from 'antd'
+import { App, Button, Form, Input, Modal, Popconfirm, Select, Space, Switch } from 'antd'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import type { TableColumnsType } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -10,7 +10,7 @@ import {
   ManagementState,
   ManagementTableToolbar,
 } from '@/components/management-list'
-import { BooleanTag } from '@/components/status-tag'
+import { BooleanTag, MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
@@ -37,7 +37,9 @@ export function AccessScopeGrantsPage() {
   const permissionSnapshotQuery = usePermissionSnapshot()
   const snapshot = permissionSnapshotQuery.data?.data
   const canViewScopeGrants = hasPermission(snapshot, 'access.scope-grants.view')
-  const canManageScopeGrants = hasPermission(snapshot, 'access.scope-grants.manage')
+  const canCreateScopeGrants = hasPermission(snapshot, 'access.scope-grants.create')
+  const canUpdateScopeGrants = hasPermission(snapshot, 'access.scope-grants.update')
+  const canDeleteScopeGrants = hasPermission(snapshot, 'access.scope-grants.delete')
   const queryClient = useQueryClient()
   const [form] = Form.useForm<ScopeGrantFormValues>()
   const [modalVisible, setModalVisible] = useState(false)
@@ -90,18 +92,24 @@ export function AccessScopeGrantsPage() {
       title: '环境',
       dataIndex: 'environmentIds',
       render: (values: string[]) =>
-        values?.length ? values.map((item) => <Tag key={item}>{item}</Tag>) : '全部',
+        values?.length ? values.map((item) => <MetadataTag key={item} label={item} />) : '全部',
     },
     {
       title: '应用',
       dataIndex: 'applicationIds',
       render: (values: string[]) =>
         values?.length
-          ? values.map((item) => <Tag key={item}>{applicationMap[item] || item}</Tag>)
+          ? values.map((item) => (
+              <MetadataTag key={item} label={applicationMap[item] || item} />
+            ))
           : '全部',
     },
     { title: '角色', dataIndex: 'role' },
-    { title: '效果', dataIndex: 'effect' },
+    {
+      title: '效果',
+      dataIndex: 'effect',
+      render: (value: string) => <StatusTag value={value} />,
+    },
     {
       title: '启用',
       dataIndex: 'enabled',
@@ -119,31 +127,35 @@ export function AccessScopeGrantsPage() {
       dataIndex: 'id',
       render: (_: unknown, record: AccessScopeGrant) => (
         <Space className="soha-row-action-icons" size={2}>
-          {canManageScopeGrants ? (
+          {canUpdateScopeGrants || canDeleteScopeGrants ? (
             <>
-              <ManagementIconButton
-                aria-label="编辑授权项"
-                icon={<EditOutlined />}
-                size="small"
-                tooltip="编辑"
-                onClick={() => {
-                  setEditing(record)
-                  setModalVisible(true)
-                }}
-              />
-              <Popconfirm
-                title="确认删除？"
-                onConfirm={() => deleteMutation.mutate(record.id)}
-                placement="topRight"
-              >
+              {canUpdateScopeGrants ? (
                 <ManagementIconButton
-                  aria-label="删除授权项"
-                  danger
-                  icon={<DeleteOutlined />}
+                  aria-label="编辑授权项"
+                  icon={<EditOutlined />}
                   size="small"
-                  tooltip="删除"
+                  tooltip="编辑"
+                  onClick={() => {
+                    setEditing(record)
+                    setModalVisible(true)
+                  }}
                 />
-              </Popconfirm>
+              ) : null}
+              {canDeleteScopeGrants ? (
+                <Popconfirm
+                  title="确认删除？"
+                  onConfirm={() => deleteMutation.mutate(record.id)}
+                  placement="topRight"
+                >
+                  <ManagementIconButton
+                    aria-label="删除授权项"
+                    danger
+                    icon={<DeleteOutlined />}
+                    size="small"
+                    tooltip="删除"
+                  />
+                </Popconfirm>
+              ) : null}
             </>
           ) : (
             '-'
@@ -170,7 +182,7 @@ export function AccessScopeGrantsPage() {
         title="授权范围"
         headerExtra={
           <ManagementTableToolbar>
-            {canManageScopeGrants ? (
+            {canCreateScopeGrants ? (
               <Button
                 icon={<PlusOutlined />}
                 type="primary"

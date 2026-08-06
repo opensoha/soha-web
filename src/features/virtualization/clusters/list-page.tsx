@@ -12,7 +12,6 @@ import {
   Select,
   Space,
   Switch,
-  Tag,
   Tooltip,
   Typography,
 } from 'antd'
@@ -29,6 +28,7 @@ import {
 import { formatDateTime } from '@/utils/time'
 import { computeQueries, latestTaskForResource, ResourceTaskActions } from '@/features/compute'
 import { tableColumnPresets } from '@/utils/table-columns'
+import { BooleanTag, StatusTag } from '@/components/status-tag'
 import {
   ManagementIconButton,
   ManagementQueryField,
@@ -43,7 +43,6 @@ import { useVirtualizationPermissions } from '@/features/virtualization/shared/u
 import { VirtualizationAdminTable } from '@/features/virtualization/shared/ui'
 import {
   ENABLED_FILTER_OPTIONS,
-  STATUS_COLORS,
   VIRTUALIZATION_PROVIDER_FILTER_OPTIONS,
   bulkActionSummary,
   clusterRiskScore,
@@ -73,8 +72,7 @@ const tableEllipsis = { showTitle: false } as const
 
 function statusTag(value?: string) {
   if (!value) return <Text type="secondary">-</Text>
-  const key = value.toLowerCase()
-  return <Tag color={STATUS_COLORS[key] ?? 'default'}>{value}</Tag>
+  return <StatusTag value={value} />
 }
 
 function tableTooltipText(value: unknown) {
@@ -179,8 +177,15 @@ export function VirtualizationClustersPage() {
     cluster: VirtualizationCluster
     dependencies: VirtualizationConnectionDeleteDependencies
   } | null>(null)
-  const { virtualizationModuleEnabled, canManageClusters, canSync, canViewTasks } =
-    useVirtualizationPermissions()
+  const {
+    virtualizationModuleEnabled,
+    canCreateClusters,
+    canUpdateClusters,
+    canDeleteClusters,
+    canTestClusters,
+    canSyncClusters,
+    canViewTasks,
+  } = useVirtualizationPermissions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const clustersQuery = useQuery(virtualizationQueries.clusters(virtualizationModuleEnabled))
@@ -306,23 +311,7 @@ export function VirtualizationClustersPage() {
       title: '风险等级',
       dataIndex: 'riskLevel',
       render: (value: string | undefined) =>
-        value ? (
-          <Tag
-            color={
-              value === 'critical'
-                ? 'red'
-                : value === 'warning'
-                  ? 'gold'
-                  : value === 'attention'
-                    ? 'blue'
-                    : 'default'
-            }
-          >
-            {value}
-          </Tag>
-        ) : (
-          '-'
-        ),
+        value ? <StatusTag value={value} /> : '-',
       width: 120,
     },
     {
@@ -355,7 +344,12 @@ export function VirtualizationClustersPage() {
       title: '凭证',
       dataIndex: 'credentialConfigured',
       render: (value: boolean | undefined) =>
-        value === false ? <Tag color="red">未配置</Tag> : <Tag color="green">已配置</Tag>,
+        <BooleanTag
+          value={value !== false}
+          trueLabel="已配置"
+          falseLabel="未配置"
+          falseColor="error"
+        />,
       width: 120,
     },
     {
@@ -383,7 +377,7 @@ export function VirtualizationClustersPage() {
       width: 168,
       render: (_value, record) => (
         <Space className="soha-row-action-icons">
-          {canManageClusters ? (
+          {canTestClusters ? (
             <ManagementIconButton
               aria-label="测试连接"
               size="small"
@@ -392,7 +386,7 @@ export function VirtualizationClustersPage() {
               onClick={() => testMutation.mutate(record.id)}
             />
           ) : null}
-          {canSync ? (
+          {canSyncClusters ? (
             <ManagementIconButton
               aria-label="同步连接"
               size="small"
@@ -401,7 +395,7 @@ export function VirtualizationClustersPage() {
               onClick={() => syncMutation.mutate(record.id)}
             />
           ) : null}
-          {canManageClusters ? (
+          {canUpdateClusters ? (
             <ManagementIconButton
               aria-label="编辑连接"
               size="small"
@@ -410,7 +404,7 @@ export function VirtualizationClustersPage() {
               onClick={() => openEditor(record)}
             />
           ) : null}
-          {canManageClusters ? (
+          {canDeleteClusters ? (
             <ManagementIconButton
               aria-label="删除连接"
               size="small"
@@ -475,7 +469,7 @@ export function VirtualizationClustersPage() {
       <VirtualizationAdminTable
         rowKey="id"
         actions={
-          canManageClusters ? (
+          canCreateClusters ? (
             <Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor()}>
               新增连接
             </Button>
@@ -486,7 +480,7 @@ export function VirtualizationClustersPage() {
             <div className="soha-vrt-selection-bar">
               <Text type="secondary">已选择 {selectedClusterRowKeys.length} 个连接</Text>
               <Space wrap>
-                {canManageClusters ? (
+                {canTestClusters ? (
                   <Popconfirm
                     title="确认批量测试连接？"
                     description={bulkActionSummary(
@@ -500,7 +494,7 @@ export function VirtualizationClustersPage() {
                     <Button loading={batchTestMutation.isPending}>批量测试</Button>
                   </Popconfirm>
                 ) : null}
-                {canSync ? (
+                {canSyncClusters ? (
                   <Popconfirm
                     title="确认批量同步连接？"
                     description={bulkActionSummary(
@@ -541,8 +535,13 @@ export function VirtualizationClustersPage() {
             const failedSync = failedSyncForConnection(record.id)
             const latestAbnormal = latestAbnormalForConnection(record.id)
             return (
-              <Descriptions size="small" column={{ xs: 1, md: 2 }} bordered>
-                <Descriptions.Item label="Endpoint / Cluster">
+              <Descriptions
+                className="soha-vrt-connection-details"
+                size="small"
+                column={{ xs: 1, sm: 1, md: 2, lg: 2, xl: 2, xxl: 2 }}
+                bordered
+              >
+                <Descriptions.Item label="Endpoint / Cluster" span="filled">
                   {record.provider === 'kubevirt'
                     ? record.kubernetesClusterId || '-'
                     : record.endpoint || '-'}
@@ -557,37 +556,44 @@ export function VirtualizationClustersPage() {
                   {formatDateTime(record.lastSyncedAt)}
                 </Descriptions.Item>
                 <Descriptions.Item label="Region">{record.region || '-'}</Descriptions.Item>
-                <Descriptions.Item label="风险说明">
+                <Descriptions.Item label="风险说明" span="filled">
                   {riskReasons(record).join(' / ') || '正常'}
                 </Descriptions.Item>
-                <Descriptions.Item label="Console Backend">
-                  {record.provider === 'kubevirt'
-                    ? String(record.config?.backendUrl || record.endpoint || '-')
-                    : '-'}
-                </Descriptions.Item>
-                <Descriptions.Item label="Prometheus">
-                  {record.provider === 'kubevirt'
-                    ? String(record.config?.prometheusUrl || '-')
-                    : '-'}
-                </Descriptions.Item>
-                <Descriptions.Item label="PVE 默认网桥">
-                  {record.provider === 'pve' ? String(record.config?.defaultBridge || '-') : '-'}
-                </Descriptions.Item>
-                <Descriptions.Item label="PVE Snippet Storage">
-                  {record.provider === 'pve'
-                    ? String(
+                {record.provider === 'kubevirt' ? (
+                  <>
+                    <Descriptions.Item label="Console Backend" span="filled">
+                      {String(record.config?.backendUrl || record.endpoint || '-')}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Prometheus" span="filled">
+                      {String(record.config?.prometheusUrl || '-')}
+                    </Descriptions.Item>
+                  </>
+                ) : (
+                  <>
+                    <Descriptions.Item label="PVE 默认节点">
+                      {String(record.config?.defaultNode || '-')}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="PVE 默认存储">
+                      {String(record.config?.defaultStorage || '-')}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="PVE 默认网桥">
+                      {String(record.config?.defaultBridge || '-')}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="PVE Snippet Storage">
+                      {String(
                         record.config?.defaultSnippetStorage ||
                           record.config?.snippetStorage ||
                           '-',
-                      )
-                    : '-'}
-                </Descriptions.Item>
-                <Descriptions.Item label="最近失败同步">
+                      )}
+                    </Descriptions.Item>
+                  </>
+                )}
+                <Descriptions.Item label="最近失败同步" span="filled">
                   {failedSync
                     ? `${operationKind(failedSync)} · ${latestNonEmptyOperationMessage(failedSync)}`
                     : '-'}
                 </Descriptions.Item>
-                <Descriptions.Item label="最近异常任务">
+                <Descriptions.Item label="最近异常任务" span="filled">
                   {latestAbnormal
                     ? `${operationKind(latestAbnormal)} · ${latestNonEmptyOperationMessage(latestAbnormal)}`
                     : '-'}

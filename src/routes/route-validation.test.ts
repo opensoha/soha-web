@@ -1,16 +1,57 @@
+import permissionCatalogArtifact from '@opensoha/contracts/auth/permission-catalog.json'
+import type { PermissionCatalog } from '@opensoha/contracts/gen/ts/sohaapi'
 import { describe, expect, it } from 'vitest'
 import { defineRoutes, resolveRouteDefinitions, validateRouteDefinitions } from './definitions'
 import { appRouteDefinitions, registeredRouteDefinitions, routeMeta } from './registry'
 
 const emptyPage = async () => ({ default: () => null })
+const permissionCatalog = permissionCatalogArtifact as PermissionCatalog
 
 describe('route registry validation', () => {
   it('keeps registered ids and canonical paths unique', () => {
     expect(validateRouteDefinitions(appRouteDefinitions)).toEqual([])
-    expect(registeredRouteDefinitions).toHaveLength(236)
-    expect(routeMeta).toHaveLength(236)
+    expect(registeredRouteDefinitions).toHaveLength(237)
+    expect(routeMeta).toHaveLength(237)
     expect(new Set(routeMeta.map((meta) => meta.id)).size).toBe(routeMeta.length)
     expect(new Set(routeMeta.map((meta) => meta.path)).size).toBe(routeMeta.length)
+  })
+
+  it('only guards routes with active assignable permissions', () => {
+    const assignableKeys = new Set(
+      permissionCatalog.permissions
+        .filter((permission) => permission.status === 'active' && permission.assignable)
+        .map((permission) => permission.key),
+    )
+    const guardedKeys = routeMeta.flatMap((meta) =>
+      meta.permissionKeysAny?.length
+        ? meta.permissionKeysAny
+        : meta.permissionKey
+          ? [meta.permissionKey]
+          : [],
+    )
+
+    expect(guardedKeys.filter((key) => !assignableKeys.has(key))).toEqual([])
+  })
+
+  it('keeps Kubernetes menu pages aligned with their route ids and exact page permissions', () => {
+    const kubernetesPaths = [
+      '/workloads',
+      '/configuration',
+      '/network',
+      '/storage',
+      '/platform-access-control',
+    ]
+    const menuPages = routeMeta.filter(
+      (meta) => meta.navVisible && kubernetesPaths.some((prefix) => meta.path.startsWith(prefix)),
+    )
+
+    expect(menuPages.filter((meta) => meta.menuId !== meta.id)).toEqual([])
+    expect(routeMeta.find((meta) => meta.id === 'workloads-overview')?.permissionKey).toBe(
+      'platform.workloads.overview.view',
+    )
+    expect(routeMeta.find((meta) => meta.id === 'network-topology')?.permissionKey).toBe(
+      'platform.network.topology.view',
+    )
   })
 
   it('derives public, profile, overview and fallback metadata from manifests', () => {
@@ -117,6 +158,37 @@ describe('route registry validation', () => {
       permissionKey: 'items.view',
       workspace: 'resource',
       navVisible: false,
+    })
+  })
+
+  it('lets a child replace an inherited aggregate permission', () => {
+    const routes = defineRoutes([
+      {
+        meta: {
+          id: 'items',
+          path: '/items',
+          title: 'Items',
+          permissionKeysAny: ['items.alpha.view', 'items.beta.view'],
+        },
+        shell: 'app',
+        load: emptyPage,
+      },
+      {
+        meta: {
+          id: 'item-alpha',
+          path: '/items/alpha',
+          title: 'Alpha',
+          permissionKey: 'items.alpha.view',
+        },
+        shell: 'app',
+        inheritMetaFrom: 'items',
+        load: emptyPage,
+      },
+    ] as const)
+
+    expect(resolveRouteDefinitions(routes)[1].meta).toMatchObject({
+      permissionKey: 'items.alpha.view',
+      permissionKeysAny: undefined,
     })
   })
 

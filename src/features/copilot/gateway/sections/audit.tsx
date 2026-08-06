@@ -43,7 +43,7 @@ export interface GatewayCallLogsSectionProps {
   modelCallsFetching: boolean
   modelCallFilters: ModelCallFilterState
   upstreams: LLMUpstream[]
-  canRelayManage: boolean
+  canRelayView: boolean
   expandedModelCallRowRender: (record: LLMCallLog) => React.ReactNode
   onModelCallFiltersChange: (filters: ModelCallFilterState) => void
   onRefreshModelCalls: () => void
@@ -67,7 +67,7 @@ export function GatewayCallLogsSection({
   modelCallsFetching,
   modelCallFilters,
   upstreams,
-  canRelayManage,
+  canRelayView,
   expandedModelCallRowRender,
   onModelCallFiltersChange,
   onRefreshModelCalls,
@@ -209,14 +209,14 @@ export function GatewayCallLogsSection({
                 />
                 <Button
                   icon={<ReloadOutlined />}
-                  disabled={!canRelayManage}
+                  disabled={!canRelayView}
                   loading={modelCallsFetching}
                   onClick={onRefreshModelCalls}
                 >
                   刷新
                 </Button>
               </Space>
-              {canRelayManage ? (
+              {canRelayView ? (
                 <AdminTable
                   shellClassName="soha-management-table-shell"
                   columnSettingIconOnly

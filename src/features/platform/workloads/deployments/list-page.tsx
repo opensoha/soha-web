@@ -135,7 +135,7 @@ function buildWorkloadActionColumn<T extends WorkloadActionRecord>({
     render: (name: string, record: T) => {
       const canRestart = Boolean(onRestart) && hasAllowedAction(record.allowedActions, 'restart')
       const canScale = Boolean(onScale) && hasAllowedAction(record.allowedActions, 'scale')
-      const canRollback = Boolean(onRollback) && hasAllowedAction(record.allowedActions, 'update')
+      const canRollback = Boolean(onRollback) && hasAllowedAction(record.allowedActions, 'rollback')
       const canDelete = hasAllowedAction(record.allowedActions, 'delete')
       if (!canRestart && !canScale && !canRollback && !canDelete) return '-'
 
@@ -374,7 +374,7 @@ export function WorkloadsDeploymentsPage() {
   const canBatchRollback =
     selectedDeployments.length > 0 &&
     !workloadMutationDisabled &&
-    selectedDeployments.every((item) => hasAllowedAction(item.allowedActions, 'update'))
+    selectedDeployments.every((item) => hasAllowedAction(item.allowedActions, 'rollback'))
   const batchMutationDisabledReason =
     selectedDeployments.length > 0 && workloadMutationDisabled
       ? workloadMutationCapability.reason

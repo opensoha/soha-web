@@ -1,6 +1,9 @@
 import { api } from '@/services/api-client'
 import type { ApiResponse } from '@/types'
-import type { MFAAdminResetResult } from '@opensoha/contracts/gen/ts/sohaapi'
+import type {
+  MFAAdminResetResult,
+  PermissionCatalog,
+} from '@opensoha/contracts/gen/ts/sohaapi'
 import { settingsApi } from '@/features/settings'
 import type {
   AccessApplicationOption,
@@ -28,6 +31,10 @@ function resourcePath(resource: string, id: string) {
 }
 
 export const accessApi = {
+  permissions: {
+    catalog: () =>
+      unwrap(api.get<ApiResponse<PermissionCatalog>>('/access/permissions')),
+  },
   users: {
     list: () => unwrap(api.get<ApiResponse<AccessUser[]>>('/access/users')),
     create: (values: AccessMutationValues) => discard(api.post('/access/users', values)),

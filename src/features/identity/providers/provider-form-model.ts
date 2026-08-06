@@ -343,27 +343,25 @@ export function providerValuesFor(item: IdentityProvider): ProviderFormValues {
 
 export function providerInputFromValues(values: ProviderFormValues): IdentityProviderInput {
   const advancedConfig = parseRecordJSON(values.configJson, 'Config')
-  const mappings = JSON.parse(values.samlAttributeMappingsJson || '[]') as unknown
-  if (values.type === 'saml' && !Array.isArray(mappings)) {
-    throw new Error('Attribute mappings 必须是 JSON array')
-  }
-  const samlConfig = {
-    ...advancedConfig,
-    entityId: values.samlEntityId.trim(),
-    acsUrls: compactStrings(values.samlAcsUrls),
-    nameIdFormat: values.samlNameIdFormat,
-    spCertificatePem: values.samlSpCertificatePem.trim() || undefined,
-    wantAuthnRequestsSigned: Boolean(values.samlWantAuthnRequestsSigned),
-    attributeMappings: mappings,
+  let config = advancedConfig
+  if (values.type === 'proxy') {
+    config = proxyConfigFromValues(values, advancedConfig)
+  } else if (values.type === 'saml') {
+    const mappings = JSON.parse(values.samlAttributeMappingsJson || '[]') as unknown
+    if (!Array.isArray(mappings)) throw new Error('Attribute mappings 必须是 JSON array')
+    config = {
+      ...advancedConfig,
+      entityId: values.samlEntityId.trim(),
+      acsUrls: compactStrings(values.samlAcsUrls),
+      nameIdFormat: values.samlNameIdFormat,
+      spCertificatePem: values.samlSpCertificatePem.trim() || undefined,
+      wantAuthnRequestsSigned: Boolean(values.samlWantAuthnRequestsSigned),
+      attributeMappings: mappings,
+    }
   }
   return {
     applicationId: values.applicationId.trim(),
-    config:
-      values.type === 'proxy'
-        ? proxyConfigFromValues(values, advancedConfig)
-        : values.type === 'saml'
-          ? samlConfig
-          : advancedConfig,
+    config,
     enabled: Boolean(values.enabled),
     name: values.name.trim(),
     secretRefs: parseRecordJSON(values.secretRefsJson, 'Secret refs'),

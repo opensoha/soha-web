@@ -21,6 +21,7 @@ import {
 } from '@/components/overview-visuals'
 import { ManagementState } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { computeQueries } from '../queries'
 import '../compute.css'
 
@@ -42,7 +43,33 @@ function providerDomainLabel(domain: string) {
 
 export function ComputeOverviewPage() {
   const navigate = useNavigate()
-  const overviewQuery = useQuery(computeQueries.overview())
+  const permissionSnapshotQuery = usePermissionSnapshot()
+  const snapshot = permissionSnapshotQuery.data?.data
+  const canViewVirtualization = [
+    'virtualization.overview.view',
+    'virtualization.vms.view',
+    'virtualization.clusters.view',
+    'virtualization.images.view',
+    'virtualization.storage.view',
+    'virtualization.flavors.view',
+    'virtualization.operations.view',
+    'virtualization.sync.view',
+  ].some((permission) => hasPermission(snapshot, permission))
+  const canViewDocker = [
+    'docker.overview.view',
+    'docker.hosts.view',
+    'docker.projects.view',
+    'docker.services.view',
+    'docker.ports.view',
+    'docker.templates.view',
+  ].some((permission) => hasPermission(snapshot, permission))
+  const canViewTasks =
+    hasPermission(snapshot, 'virtualization.operations.view') ||
+    hasPermission(snapshot, 'virtualization.sync.view') ||
+    hasPermission(snapshot, 'docker.operations.view')
+  const overviewQuery = useQuery(
+    computeQueries.overview(canViewVirtualization || canViewDocker || canViewTasks),
+  )
   const overview = overviewQuery.data?.data
   const virtualization = overview?.virtualization
   const agents = overview?.agents
@@ -106,6 +133,11 @@ export function ComputeOverviewPage() {
       path: '/compute/tasks/operations',
     },
   ] satisfies NavigableMetricItem[]
+  const visibleOverviewStats = overviewStats.filter(({ key }) => {
+    if (key === 'virtual-machines') return canViewVirtualization
+    if (key === 'active-tasks') return canViewTasks
+    return canViewDocker
+  })
 
   const accessStats = [
     {
@@ -138,6 +170,9 @@ export function ComputeOverviewPage() {
       path: '/compute/runtimes/hosts',
     },
   ] satisfies NavigableChipItem[]
+  const visibleAccessStats = accessStats.filter(({ key }) =>
+    key === 'connections' ? canViewVirtualization : canViewDocker,
+  )
 
   const taskStats = [
     {
@@ -174,7 +209,7 @@ export function ComputeOverviewPage() {
       ))}
 
       <div className="soha-overview-metric-grid">
-        {overviewStats.map(({ key, path, ...item }) => (
+        {visibleOverviewStats.map(({ key, path, ...item }) => (
           <Link
             aria-label={`查看${String(item.label)}`}
             className="soha-overview-card-link"
@@ -197,7 +232,7 @@ export function ComputeOverviewPage() {
                 description="统一查看虚拟化连接、Agent 主机与运行时主机。"
               />
               <div className="soha-overview-chip-grid soha-compute-chip-grid">
-                {accessStats.map(({ key, path, ...item }) => (
+                {visibleAccessStats.map(({ key, path, ...item }) => (
                   <Link
                     aria-label={`查看${String(item.label)}`}
                     className="soha-overview-card-link"
@@ -214,45 +249,47 @@ export function ComputeOverviewPage() {
           )}
         </Card>
 
-        <Card
-          className="soha-overview-panel-card"
-          title="任务运行"
-          extra={
-            <Button
-              type="text"
-              icon={<ArrowRightOutlined />}
-              iconPlacement="end"
-              onClick={() => navigate('/compute/tasks/operations')}
-            >
-              查看任务
-            </Button>
-          }
-        >
-          {overviewQuery.isLoading ? (
-            <ManagementState bordered={false} compact kind="loading" />
-          ) : tasks ? (
-            <div className="soha-overview-alert-stack">
-              <OverviewSectionBar
-                title="任务队列"
-                description="集中查看同步、构建与资源操作的执行状态。"
-              />
-              <div className="soha-overview-chip-grid soha-compute-chip-grid">
-                {taskStats.map(({ key, path, ...item }) => (
-                  <Link
-                    aria-label={`查看${String(item.label)}任务`}
-                    className="soha-overview-card-link"
-                    key={key}
-                    to={path}
-                  >
-                    <OverviewChip {...item} />
-                  </Link>
-                ))}
+        {canViewTasks ? (
+          <Card
+            className="soha-overview-panel-card"
+            title="任务运行"
+            extra={
+              <Button
+                type="text"
+                icon={<ArrowRightOutlined />}
+                iconPlacement="end"
+                onClick={() => navigate('/compute/tasks/operations')}
+              >
+                查看任务
+              </Button>
+            }
+          >
+            {overviewQuery.isLoading ? (
+              <ManagementState bordered={false} compact kind="loading" />
+            ) : tasks ? (
+              <div className="soha-overview-alert-stack">
+                <OverviewSectionBar
+                  title="任务队列"
+                  description="集中查看同步、构建与资源操作的执行状态。"
+                />
+                <div className="soha-overview-chip-grid soha-compute-chip-grid">
+                  {taskStats.map(({ key, path, ...item }) => (
+                    <Link
+                      aria-label={`查看${String(item.label)}任务`}
+                      className="soha-overview-card-link"
+                      key={key}
+                      to={path}
+                    >
+                      <OverviewChip {...item} />
+                    </Link>
+                  ))}
+                </div>
               </div>
-            </div>
-          ) : (
-            <ManagementState bordered={false} compact kind="empty" title="暂无任务摘要" />
-          )}
-        </Card>
+            ) : (
+              <ManagementState bordered={false} compact kind="empty" title="暂无任务摘要" />
+            )}
+          </Card>
+        ) : null}
       </div>
 
       <Card className="soha-overview-runtime-card" title="运行健康">

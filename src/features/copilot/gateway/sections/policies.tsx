@@ -9,7 +9,7 @@ export interface GatewayPoliciesSectionProps {
   columns: TableColumnsType<AccessPolicy>
   policies: AccessPolicy[]
   loading: boolean
-  canManage: boolean
+  canCreate: boolean
   filter: string
   onFilterChange: (value: string) => void
   onCreate: () => void
@@ -19,7 +19,7 @@ export function GatewayPoliciesSection({
   columns,
   policies,
   loading,
-  canManage,
+  canCreate,
   filter,
   onFilterChange,
   onCreate,
@@ -42,7 +42,7 @@ export function GatewayPoliciesSection({
             type="primary"
             size="small"
             icon={<PlusOutlined />}
-            disabled={!canManage}
+            disabled={!canCreate}
             onClick={onCreate}
           >
             新增 policy

@@ -192,9 +192,9 @@ describe('frontend access authorization splits', () => {
     expect(getButtonTexts(container)).not.toContain('添加角色')
   })
 
-  it('shows the role create action when the manage permission is present', async () => {
+  it('shows the role create action when the create permission is present', async () => {
     setSnapshot(
-      ['access.roles.view', 'access.roles.manage'],
+      ['access.roles.view', 'access.roles.create'],
       ['access-roles'],
       [{ id: 'access-roles', path: '/access/roles' }],
     )
@@ -220,8 +220,8 @@ describe('frontend access authorization splits', () => {
     expect(getButtonTexts(container)).not.toContain('新建授权项')
   })
 
-  it('shows the scope-grants create action when the manage permission is present', async () => {
-    setSnapshot(['access.scope-grants.view', 'access.scope-grants.manage'])
+  it('shows the scope-grants create action when the create permission is present', async () => {
+    setSnapshot(['access.scope-grants.view', 'access.scope-grants.create'])
 
     const container = await renderWithProviders(<AccessScopeGrantsPage />, '/access/scope-grants')
 

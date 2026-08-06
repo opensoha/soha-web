@@ -22,6 +22,7 @@ import './topology.css'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementState } from '@/components/management-list'
 import { StatGrid } from '@/components/stat-grid'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
@@ -823,11 +824,16 @@ export function NetworkTopologyRuntimePage() {
   const navigate = useNavigate()
   const { clusterId, namespace } = usePlatformScopeStore()
   const scope = toScopeKey(clusterId, namespace)
+  const permissionSnapshot = usePermissionSnapshot().data?.data
   const [searchKeyword, setSearchKeyword] = useState('')
   const [selectedNodeID, setSelectedNodeID] = useState<string | null>(null)
   const deferredSearchKeyword = useDeferredValue(searchKeyword.trim().toLowerCase())
 
-  const topologyQuery = useQuery(topologyQueries.detail(scope))
+  const topologyQuery = useQuery({
+    ...topologyQueries.detail(scope),
+    enabled:
+      Boolean(clusterId) && hasPermission(permissionSnapshot, 'platform.network.topology.view'),
+  })
   const topologyData = topologyQuery.data
 
   const liveTraces = useMemo(

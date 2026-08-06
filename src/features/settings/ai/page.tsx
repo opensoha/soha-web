@@ -151,7 +151,7 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
   const canViewAISettings = hasPermission(permissionSnapshotQuery.data?.data, 'settings.ai.view')
   const canManageAISettings = hasPermission(
     permissionSnapshotQuery.data?.data,
-    'settings.ai.manage',
+    'settings.ai.update',
   )
   const canViewAgentRuns = hasPermission(permissionSnapshotQuery.data?.data, 'observe.ai.view')
 

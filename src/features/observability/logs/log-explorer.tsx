@@ -237,7 +237,7 @@ export function LogExplorer({
   const [, setSearchParams] = useSearchParams()
   const { message } = App.useApp()
   const permissionSnapshot = usePermissionSnapshot().data?.data
-  const canManageDataSources = hasPermission(permissionSnapshot, 'observe.log-data-sources.manage')
+  const canViewDataSources = hasPermission(permissionSnapshot, 'observe.log-data-sources.view')
   const resolvedTarget = useMemo<LogTarget>(
     () => target ?? { kind: 'cluster', clusterId: clusterId ?? '', namespace: namespace ?? '' },
     [target, clusterId, namespace],
@@ -833,7 +833,7 @@ export function LogExplorer({
                     查询日志
                   </Button>
                 ) : null}
-                {canManageDataSources ? (
+                {canViewDataSources ? (
                   <ManagementIconButton
                     aria-label="数据源"
                     icon={<DatabaseOutlined />}

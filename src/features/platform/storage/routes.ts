@@ -1,5 +1,11 @@
 import { defineRoutes } from '@/routes/definitions'
 
+export const storageViewPermissions = [
+  'platform.storage.persistent-volume-claims.view',
+  'platform.storage.persistent-volumes.view',
+  'platform.storage.storage-classes.view',
+]
+
 export const storageRoutes = defineRoutes([
   {
     meta: {
@@ -13,8 +19,8 @@ export const storageRoutes = defineRoutes([
       tabbar: true,
       navVisible: true,
       parentId: 'storage',
-      menuId: 'storage',
-      permissionKey: 'platform.storage.view',
+      menuId: 'storage-pvc',
+      permissionKey: 'platform.storage.persistent-volume-claims.view',
       scopeMode: 'namespace',
       workspace: 'resource',
     },
@@ -54,8 +60,8 @@ export const storageRoutes = defineRoutes([
       tabbar: true,
       navVisible: true,
       parentId: 'storage',
-      menuId: 'storage',
-      permissionKey: 'platform.storage.view',
+      menuId: 'storage-pv',
+      permissionKey: 'platform.storage.persistent-volumes.view',
       scopeMode: 'cluster',
       workspace: 'resource',
     },
@@ -95,8 +101,8 @@ export const storageRoutes = defineRoutes([
       tabbar: true,
       navVisible: true,
       parentId: 'storage',
-      menuId: 'storage',
-      permissionKey: 'platform.storage.view',
+      menuId: 'storage-classes',
+      permissionKey: 'platform.storage.storage-classes.view',
       scopeMode: 'cluster',
       workspace: 'resource',
     },

@@ -16,4 +16,13 @@ describe('login provider presets', () => {
       'https://qyapi.weixin.qq.com/cgi-bin/user/get',
     )
   })
+
+  it('configures the current Feishu OAuth endpoints and subject field', () => {
+    expect(applyProviderPreset('feishu')).toMatchObject({
+      authorizeUrl: 'https://accounts.feishu.cn/open-apis/authen/v1/authorize',
+      tokenUrl: 'https://accounts.feishu.cn/oauth/v3/token',
+      userInfoUrl: 'https://open.feishu.cn/open-apis/authen/v1/user_info',
+      userIdField: 'open_id',
+    })
+  })
 })

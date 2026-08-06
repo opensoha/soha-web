@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  AppstoreOutlined,
   BellOutlined,
   ClockCircleOutlined,
   InfoCircleOutlined,
   LinkOutlined,
   LeftOutlined,
+  MenuFoldOutlined,
   RightOutlined,
   SearchOutlined,
   StarFilled,
   StarOutlined,
+  TagsOutlined,
   UserOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -20,19 +23,24 @@ import {
   Card,
   Empty,
   Input,
+  Menu,
   Spin,
   Tag,
-  Tabs,
   Tooltip,
   Typography,
 } from 'antd'
-import type { TabsProps } from 'antd'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { ManagementDensityButton } from '@/components/management-list'
 import { useAnnouncementInbox, type AnnouncementInboxItem } from '@/features/announcements'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import type { IdentityApplication, IdentityApplicationLaunch } from '@/features/identity'
+import { MENU_WORKBENCH_LABELS, resolveMenuIcon } from '@/features/system'
 import { useI18n } from '@/i18n'
+import {
+  findFirstAccessiblePathForWorkbench,
+  getAccessibleWorkbenchIds,
+  getMenuWorkbenchId,
+} from '@/routes/meta'
 import { providerPortalMutations } from '../mutations'
 import { providerPortalQueries } from '../queries'
 import {
@@ -401,11 +409,12 @@ function PortalAnnouncementPanel({
 export function SohaProviderPortalPage() {
   const navigate = useNavigate()
   const { message } = App.useApp()
-  const { t } = useI18n()
+  const { t, localeCode } = useI18n()
   const queryClient = useQueryClient()
   const [query, setQuery] = useState('')
   const [selectedTag, setSelectedTag] = useState<string>()
   const [applicationView, setApplicationView] = useState<PortalApplicationView>('large')
+  const [isGroupCollapsed, setIsGroupCollapsed] = useState(false)
   const [isSideCollapsed, setIsSideCollapsed] = useState(false)
 
   const bootstrapQuery = useQuery(providerPortalQueries.bootstrap())
@@ -432,10 +441,38 @@ export function SohaProviderPortalPage() {
   }
 
   const bootstrap = bootstrapQuery.data
-  const canViewApplicationDetails = hasPermission(
-    permissionSnapshotQuery.data?.data,
-    'identity.applications.view',
-  )
+  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const canViewApplicationDetails = hasPermission(permissionSnapshot, 'identity.applications.view')
+  const workbenches = useMemo(() => {
+    if (!permissionSnapshot) return []
+    return getAccessibleWorkbenchIds(permissionSnapshot)
+      .filter((workbenchId) => workbenchId !== 'home')
+      .flatMap((workbenchId) => {
+        const path = findFirstAccessiblePathForWorkbench(workbenchId, permissionSnapshot)
+        if (!path) return []
+        const menu = permissionSnapshot.visibleMenus
+          .filter((item) => getMenuWorkbenchId(item) === workbenchId)
+          .sort(
+            (left, right) =>
+              Number(Boolean(left.parentId)) - Number(Boolean(right.parentId)) ||
+              (left.sortOrder ?? Number.MAX_SAFE_INTEGER) -
+                (right.sortOrder ?? Number.MAX_SAFE_INTEGER),
+          )[0]
+        return [
+          {
+            iconKey: menu?.iconKey,
+            id: workbenchId,
+            label:
+              (localeCode === 'en_US'
+                ? menu?.labelEn || menu?.labelZh
+                : MENU_WORKBENCH_LABELS[workbenchId]) || workbenchId,
+            path,
+            sortOrder: menu?.sortOrder ?? Number.MAX_SAFE_INTEGER,
+          },
+        ]
+      })
+      .sort((left, right) => left.sortOrder - right.sortOrder)
+  }, [localeCode, permissionSnapshot])
   const applications = bootstrap?.applications ?? []
   const announcementItems = announcementQuery.data?.data.items ?? []
   const announcementUnreadCount = announcementQuery.data?.data.unreadCount ?? 0
@@ -446,7 +483,7 @@ export function SohaProviderPortalPage() {
       ),
     [applications],
   )
-  const applicationTagItems = useMemo<TabsProps['items']>(
+  const applicationGroupItems = useMemo(
     () => [
       {
         key: ALL_APPLICATIONS_TAB_KEY,
@@ -459,6 +496,17 @@ export function SohaProviderPortalPage() {
     ],
     [applicationTags, t],
   )
+  const activeApplicationTagKey = selectedTag
+    ? applicationTagTabKey(selectedTag)
+    : ALL_APPLICATIONS_TAB_KEY
+  const selectApplicationTag = (activeKey: string) =>
+    setSelectedTag(
+      activeKey === ALL_APPLICATIONS_TAB_KEY
+        ? undefined
+        : activeKey.startsWith(APPLICATION_TAG_TAB_PREFIX)
+          ? activeKey.slice(APPLICATION_TAG_TAB_PREFIX.length)
+          : undefined,
+    )
 
   const filteredApplications = useMemo(() => {
     const keyword = query.trim().toLowerCase()
@@ -480,38 +528,86 @@ export function SohaProviderPortalPage() {
   return (
     <div className="soha-provider-portal soha-provider-portal-home">
       <main className="soha-portal-main">
-        <div className={`soha-portal-workspace${isSideCollapsed ? ' is-side-collapsed' : ''}`}>
-          <section className="soha-portal-apps">
-            <PortalAnnouncementPanel
-              isLoading={announcementQuery.isLoading}
-              items={announcementItems}
-              unreadCount={announcementUnreadCount}
-            />
-            <div
-              className="soha-portal-app-tag-filter"
-              aria-label={t('providerPortal.home.tagFilter', 'Filter applications by tag')}
+        <div
+          className={`soha-portal-workspace${isGroupCollapsed ? ' is-group-collapsed' : ''}${isSideCollapsed ? ' is-side-collapsed' : ''}`}
+        >
+          {isGroupCollapsed ? null : (
+            <nav
+              aria-label={t('providerPortal.home.applicationGroups', 'Application groups')}
+              className="soha-portal-group-nav"
             >
-              <Tabs
-                activeKey={
-                  selectedTag ? applicationTagTabKey(selectedTag) : ALL_APPLICATIONS_TAB_KEY
-                }
-                aria-label={t('providerPortal.home.tags', 'Tags')}
-                className="soha-resource-tabs soha-portal-tag-filter-tabs is-header-only"
-                indicator={{ size: (origin) => Math.max(16, origin - 16), align: 'center' }}
-                items={applicationTagItems}
-                onChange={(activeKey) =>
-                  setSelectedTag(
-                    activeKey === ALL_APPLICATIONS_TAB_KEY
-                      ? undefined
-                      : activeKey.startsWith(APPLICATION_TAG_TAB_PREFIX)
-                        ? activeKey.slice(APPLICATION_TAG_TAB_PREFIX.length)
-                        : undefined,
-                  )
-                }
-                size="small"
-                tabBarGutter={18}
+              <div className="soha-portal-group-nav-heading">
+                <span className="soha-portal-group-nav-heading-main">
+                  <TagsOutlined />
+                  <Text strong>
+                    {t('providerPortal.home.applicationGroups', 'Application groups')}
+                  </Text>
+                </span>
+                <span className="soha-portal-group-nav-heading-actions">
+                  <Text type="secondary">{applicationTags.length}</Text>
+                  <Tooltip
+                    title={t(
+                      'providerPortal.home.collapseApplicationGroups',
+                      'Collapse application groups',
+                    )}
+                  >
+                    <Button
+                      aria-label={t(
+                        'providerPortal.home.collapseApplicationGroups',
+                        'Collapse application groups',
+                      )}
+                      className="soha-portal-group-nav-toggle"
+                      icon={<MenuFoldOutlined />}
+                      size="small"
+                      type="text"
+                      onClick={() => setIsGroupCollapsed(true)}
+                    />
+                  </Tooltip>
+                </span>
+              </div>
+              <Menu
+                className="soha-portal-group-menu"
+                items={applicationGroupItems}
+                mode="inline"
+                selectedKeys={[activeApplicationTagKey]}
+                onClick={({ key }) => selectApplicationTag(key)}
+              />
+            </nav>
+          )}
+
+          <section className="soha-portal-apps">
+            <div
+              className="soha-portal-app-toolbar"
+              aria-label={t('providerPortal.home.applications', 'Applications')}
+            >
+              <Input
+                allowClear
+                className="soha-portal-search soha-portal-app-search"
+                placeholder={t('providerPortal.home.searchApplications', 'Search applications')}
+                prefix={<SearchOutlined />}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
               />
               <div className="soha-portal-view-actions">
+                {isGroupCollapsed ? (
+                  <Tooltip
+                    title={t(
+                      'providerPortal.home.expandApplicationGroups',
+                      'Expand application groups',
+                    )}
+                  >
+                    <Button
+                      aria-label={t(
+                        'providerPortal.home.expandApplicationGroups',
+                        'Expand application groups',
+                      )}
+                      icon={<RightOutlined />}
+                      size="small"
+                      type="text"
+                      onClick={() => setIsGroupCollapsed(false)}
+                    />
+                  </Tooltip>
+                ) : null}
                 {isSideCollapsed ? (
                   <Tooltip title={t('providerPortal.home.expandSidebar', 'Expand sidebar')}>
                     <Button
@@ -535,49 +631,48 @@ export function SohaProviderPortalPage() {
                   onClick={() => setApplicationView((current) => cycleApplicationView(current))}
                 />
               </div>
-              <Input
-                allowClear
-                className="soha-portal-search soha-portal-tag-filter-search"
-                placeholder={t('providerPortal.home.searchApplications', 'Search applications')}
-                prefix={<SearchOutlined />}
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
             </div>
-            {filteredApplications.length ? (
-              <div className={`soha-portal-app-grid is-${applicationView}`}>
-                {filteredApplications.map((application) => (
-                  <ApplicationCard
-                    application={application}
-                    canViewDetails={canViewApplicationDetails}
-                    favoriteLoading={
-                      favoriteMutation.isPending &&
-                      favoriteMutation.variables?.id === application.id
-                    }
-                    key={application.id}
-                    viewMode={applicationView}
-                    launchLoading={
-                      launchMutation.isPending && launchMutation.variables?.id === application.id
-                    }
-                    onFavoriteToggle={(item) => favoriteMutation.mutate(item)}
-                    onLaunch={launchApplication}
-                    onViewDetails={(item) =>
-                      navigate(`/portal/applications/${encodeURIComponent(item.id)}`)
-                    }
+            <PortalAnnouncementPanel
+              isLoading={announcementQuery.isLoading}
+              items={announcementItems}
+              unreadCount={announcementUnreadCount}
+            />
+            <div className="soha-portal-catalog-results">
+              {filteredApplications.length ? (
+                <div className={`soha-portal-app-grid is-${applicationView}`}>
+                  {filteredApplications.map((application) => (
+                    <ApplicationCard
+                      application={application}
+                      canViewDetails={canViewApplicationDetails}
+                      favoriteLoading={
+                        favoriteMutation.isPending &&
+                        favoriteMutation.variables?.id === application.id
+                      }
+                      key={application.id}
+                      viewMode={applicationView}
+                      launchLoading={
+                        launchMutation.isPending && launchMutation.variables?.id === application.id
+                      }
+                      onFavoriteToggle={(item) => favoriteMutation.mutate(item)}
+                      onLaunch={launchApplication}
+                      onViewDetails={(item) =>
+                        navigate(`/portal/applications/${encodeURIComponent(item.id)}`)
+                      }
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="soha-portal-empty">
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description={t(
+                      'providerPortal.home.noMatchingApplications',
+                      'No matching applications',
+                    )}
                   />
-                ))}
-              </div>
-            ) : (
-              <div className="soha-portal-empty">
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={t(
-                    'providerPortal.home.noMatchingApplications',
-                    'No matching applications',
-                  )}
-                />
-              </div>
-            )}
+                </div>
+              )}
+            </div>
           </section>
 
           {isSideCollapsed ? null : (
@@ -599,6 +694,40 @@ export function SohaProviderPortalPage() {
                 </div>
                 <PortalUserPanel security={bootstrap?.security} />
               </section>
+              {workbenches.length ? (
+                <section
+                  aria-label={t('providerPortal.home.workbenches', 'Workbenches')}
+                  className="soha-portal-side-panel soha-portal-workbenches"
+                >
+                  <div className="soha-portal-side-title">
+                    <AppstoreOutlined />
+                    <span>{t('providerPortal.home.workbenches', 'Workbenches')}</span>
+                  </div>
+                  <div className="soha-portal-workbench-list">
+                    {workbenches.map((workbench) => (
+                      <Link
+                        aria-label={`${t('providerPortal.home.open', 'Open')} ${workbench.label}`}
+                        className="soha-portal-recent-item soha-portal-workbench-link"
+                        key={workbench.id}
+                        to={workbench.path}
+                      >
+                        <span className="soha-portal-workbench-icon">
+                          {resolveMenuIcon(workbench.iconKey)}
+                        </span>
+                        <Text
+                          className="soha-portal-workbench-label"
+                          ellipsis
+                          strong
+                          title={workbench.label}
+                        >
+                          {workbench.label}
+                        </Text>
+                        <RightOutlined className="soha-portal-workbench-arrow" />
+                      </Link>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
               <section className="soha-portal-side-panel">
                 <div className="soha-portal-side-title">
                   <ClockCircleOutlined />

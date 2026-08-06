@@ -127,7 +127,7 @@ export function WorkloadsCronJobsPage() {
             ? '暂停'
             : 'Suspend'
         const suspendDisabled =
-          workloadMutationCapability.disabled || !hasAllowedAction(record.allowedActions, 'update')
+          workloadMutationCapability.disabled || !hasAllowedAction(record.allowedActions, 'suspend')
         const suspendPending =
           suspendMutation.isPending &&
           suspendMutation.variables?.name === name &&

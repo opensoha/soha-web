@@ -24,7 +24,13 @@ import {
 import { PluginManifestSections } from '../shared/manifest-sections'
 import { PluginNameCell } from '../shared/plugin-name-cell'
 import { PluginPageShell } from '../shared/page-shell'
-import { canConfigurePluginSecrets, canManagePlugins } from '../shared/permissions'
+import {
+  canChangePluginLifecycle,
+  canConfigurePlugins,
+  canConfigurePluginSecrets,
+  canRemovePlugins,
+  canUpgradePlugins,
+} from '../shared/permissions'
 import { useInstalledPluginActions } from './actions'
 import { PluginConfigModal } from './config-modal'
 
@@ -73,7 +79,7 @@ export function InstalledPluginDetailPage() {
           </Button>
           {plugin.status === 'enabled' ? (
             <Button
-              disabled={!canManagePlugins(snapshot)}
+              disabled={!canChangePluginLifecycle(snapshot)}
               icon={<PauseCircleOutlined />}
               onClick={() => actions.disable(plugin.id)}
             >
@@ -81,7 +87,7 @@ export function InstalledPluginDetailPage() {
             </Button>
           ) : (
             <Button
-              disabled={!canManagePlugins(snapshot)}
+              disabled={!canChangePluginLifecycle(snapshot)}
               icon={<PlayCircleOutlined />}
               onClick={() => actions.enable(plugin.id)}
             >
@@ -89,14 +95,14 @@ export function InstalledPluginDetailPage() {
             </Button>
           )}
           <Button
-            disabled={!canManagePlugins(snapshot)}
+            disabled={!canConfigurePlugins(snapshot)}
             icon={<SettingOutlined />}
             onClick={() => setConfigOpen(true)}
           >
             配置
           </Button>
           <Button
-            disabled={!canManagePlugins(snapshot)}
+            disabled={!canUpgradePlugins(snapshot)}
             icon={<ReloadOutlined />}
             onClick={() => actions.upgrade(plugin.id)}
           >
@@ -104,7 +110,7 @@ export function InstalledPluginDetailPage() {
           </Button>
           <Button
             danger
-            disabled={!canManagePlugins(snapshot)}
+            disabled={!canRemovePlugins(snapshot)}
             icon={<DeleteOutlined />}
             onClick={() => actions.confirmRemove(plugin)}
           >

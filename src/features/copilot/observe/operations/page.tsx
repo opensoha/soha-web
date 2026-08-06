@@ -133,15 +133,12 @@ export function AIOperationsPage() {
     permissionSnapshotQuery.data?.data,
     'observe.ai.inspection.run',
   )
-  const canManageInspection = hasPermission(
-    permissionSnapshotQuery.data?.data,
-    'observe.ai.inspection.manage',
-  )
+  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const canCreateInspection = hasPermission(permissionSnapshot, 'observe.ai.inspection.create')
+  const canUpdateInspection = hasPermission(permissionSnapshot, 'observe.ai.inspection.update')
+  const canDeleteInspection = hasPermission(permissionSnapshot, 'observe.ai.inspection.delete')
   const canCreateSessionFromRun = canViewAI && canUseChat
-  const canManageAISettings = hasPermission(
-    permissionSnapshotQuery.data?.data,
-    'settings.ai.manage',
-  )
+  const canUpdateAISettings = hasPermission(permissionSnapshot, 'settings.ai.update')
   const requestedView = searchParams.get('view')
   const requestedInspectionRunId = searchParams.get('inspectionRunId')?.trim() ?? ''
   const [activeView, setActiveView] = useState<'tasks' | 'runs' | 'policies'>(
@@ -153,7 +150,7 @@ export function AIOperationsPage() {
   const [editingPolicy, setEditingPolicy] = useState<AutomationPolicy | null>(null)
   const tasksQuery = useQuery(observeQueries.operations.tasks())
   const runsQuery = useQuery(observeQueries.operations.runs())
-  const policiesQuery = useQuery(observeQueries.operations.policies(canManageAISettings))
+  const policiesQuery = useQuery(observeQueries.operations.policies(canUpdateAISettings))
   const catalogQuery = useQuery(observeQueries.operations.catalog())
   const createSessionMutation = useMutation({
     ...observeMutations.operations.createSession(),
@@ -296,13 +293,13 @@ export function AIOperationsPage() {
     }
   }
   const openCreatePolicy = () => {
-    if (!canManageAISettings) return
+    if (!canUpdateAISettings) return
     setEditingPolicy(null)
     policyForm.setFieldsValue(defaultAutomationPolicyValues())
     setPolicyModalOpen(true)
   }
   const openEditPolicy = (policy: AutomationPolicy) => {
-    if (!canManageAISettings) return
+    if (!canUpdateAISettings) return
     setEditingPolicy(policy)
     policyForm.setFieldsValue(policyFormValuesFromRecord(policy))
     setPolicyModalOpen(true)
@@ -337,8 +334,8 @@ export function AIOperationsPage() {
             <Button
               icon={<PlusOutlined />}
               onClick={openCreateTask}
-              disabled={!canManageInspection}
-              title={canManageInspection ? undefined : '缺少 observe.ai.inspection.manage 权限'}
+              disabled={!canCreateInspection}
+              title={canCreateInspection ? undefined : '缺少 observe.ai.inspection.create 权限'}
             >
               新建巡检任务
             </Button>
@@ -378,7 +375,7 @@ export function AIOperationsPage() {
               size="small"
               icon={<PlusOutlined />}
               onClick={openCreateTask}
-              disabled={!canManageInspection}
+              disabled={!canCreateInspection}
             >
               新建任务
             </Button>
@@ -436,9 +433,9 @@ export function AIOperationsPage() {
                       tooltip="编辑"
                       icon={<EditOutlined />}
                       onClick={() => openEditTask(record)}
-                      disabled={!canManageInspection}
+                      disabled={!canUpdateInspection}
                       title={
-                        canManageInspection ? undefined : '缺少 observe.ai.inspection.manage 权限'
+                        canUpdateInspection ? undefined : '缺少 observe.ai.inspection.update 权限'
                       }
                     />
                     <ManagementIconButton
@@ -463,9 +460,9 @@ export function AIOperationsPage() {
                         tooltip="删除"
                         icon={<DeleteOutlined />}
                         danger
-                        disabled={!canManageInspection}
+                        disabled={!canDeleteInspection}
                         title={
-                          canManageInspection ? undefined : '缺少 observe.ai.inspection.manage 权限'
+                          canDeleteInspection ? undefined : '缺少 observe.ai.inspection.delete 权限'
                         }
                       />
                     </Popconfirm>
@@ -485,7 +482,9 @@ export function AIOperationsPage() {
         okText={editingTask ? '更新' : '创建'}
         cancelText="取消"
         confirmLoading={taskSaving}
-        okButtonProps={{ disabled: !canManageInspection }}
+        okButtonProps={{
+          disabled: editingTask ? !canUpdateInspection : !canCreateInspection,
+        }}
         width={640}
       >
         <Form form={taskForm} layout="vertical" preserve={false}>
@@ -657,8 +656,8 @@ export function AIOperationsPage() {
               size="small"
               icon={<PlusOutlined />}
               onClick={openCreatePolicy}
-              disabled={!canManageAISettings}
-              title={canManageAISettings ? undefined : '缺少 settings.ai.manage 权限'}
+              disabled={!canUpdateAISettings}
+              title={canUpdateAISettings ? undefined : '缺少 settings.ai.update 权限'}
             >
               新建策略
             </Button>
@@ -668,11 +667,11 @@ export function AIOperationsPage() {
             自动化策略只负责触发和分析范围，不应隐式替代会话级 toolset
             选择。需要深入分析时，优先把结果送回 AI 工作台。
           </Paragraph>
-          {!canManageAISettings ? (
+          {!canUpdateAISettings ? (
             <Alert
               type="warning"
               showIcon
-              title="缺少 settings.ai.manage 权限"
+              title="缺少 settings.ai.update 权限"
               description="自动化策略包含全局 AI 执行配置，当前账号不能查看或编辑。巡检任务和运行记录仍可继续使用。"
               style={{ marginBottom: 16 }}
             />
@@ -732,8 +731,8 @@ export function AIOperationsPage() {
                       tooltip="编辑"
                       icon={<EditOutlined />}
                       onClick={() => openEditPolicy(record)}
-                      disabled={!canManageAISettings}
-                      title={canManageAISettings ? undefined : '缺少 settings.ai.manage 权限'}
+                      disabled={!canUpdateAISettings}
+                      title={canUpdateAISettings ? undefined : '缺少 settings.ai.update 权限'}
                     />
                     <Popconfirm
                       title="确认删除自动化策略？"
@@ -747,8 +746,8 @@ export function AIOperationsPage() {
                         tooltip="删除"
                         icon={<DeleteOutlined />}
                         danger
-                        disabled={!canManageAISettings}
-                        title={canManageAISettings ? undefined : '缺少 settings.ai.manage 权限'}
+                        disabled={!canUpdateAISettings}
+                        title={canUpdateAISettings ? undefined : '缺少 settings.ai.update 权限'}
                       />
                     </Popconfirm>
                   </Space>
@@ -767,7 +766,7 @@ export function AIOperationsPage() {
         okText={editingPolicy ? '更新' : '创建'}
         cancelText="取消"
         confirmLoading={policySaving}
-        okButtonProps={{ disabled: !canManageAISettings }}
+        okButtonProps={{ disabled: !canUpdateAISettings }}
         width={680}
       >
         <Form form={policyForm} layout="vertical" preserve={false}>

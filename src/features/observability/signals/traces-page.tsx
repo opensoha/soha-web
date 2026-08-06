@@ -2,10 +2,11 @@ import type { ObservabilityTraceSpan } from '@opensoha/contracts/gen/ts/sohaapi'
 import { FileSearchOutlined } from '@ant-design/icons'
 import { useMutation } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
-import { Button, Form, Input, InputNumber, Space, Tag, Typography } from 'antd'
+import { Button, Form, Input, InputNumber, Space, Typography } from 'antd'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementState } from '@/components/management-list'
+import { StatusTag } from '@/components/status-tag'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { formatDateTime } from '@/utils/time'
 import { buildLogExplorerPath } from '../logs/model'
@@ -43,7 +44,7 @@ export function ObservabilityTracesPage() {
       key: 'error',
       width: 90,
       render: (value: boolean) => (
-        <Tag color={value ? 'error' : 'success'}>{value ? '错误' : '正常'}</Tag>
+        <StatusTag label={value ? '错误' : '正常'} value={value ? 'error' : 'normal'} />
       ),
     },
     {

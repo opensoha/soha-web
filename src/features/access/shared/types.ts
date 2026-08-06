@@ -1,4 +1,10 @@
-import type { MFAAdminResetRequest } from '@opensoha/contracts/gen/ts/sohaapi'
+import type {
+  MFAAdminResetRequest,
+  PermissionCatalog,
+  PermissionDefinition,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+
+export type { PermissionCatalog, PermissionDefinition }
 
 export interface AccessUser {
   id: string

@@ -24,7 +24,10 @@ describe('compute workbench navigation', () => {
       menuNode('compute-workbench-tasks-operations'),
       menuNode('virtualization-workbench', [
         menuNode('virtualization-workbench-clusters'),
+        menuNode('virtualization-workbench-storage'),
         menuNode('virtualization-workbench-vms'),
+        menuNode('virtualization-workbench-images'),
+        menuNode('virtualization-workbench-flavors'),
       ]),
       menuNode('docker-workbench', [
         menuNode('docker-workbench-hosts'),
@@ -35,7 +38,13 @@ describe('compute workbench navigation', () => {
     ])
 
     expect(result.map((node) => node.labelZh)).toEqual(['总览', '任务中心', '虚拟化', '容器运行时'])
-    expect(result[2].children?.map((node) => node.labelZh)).toEqual(['虚拟机', '集群'])
+    expect(result[2].children?.map((node) => node.labelZh)).toEqual([
+      '虚拟机',
+      '集群',
+      '镜像与模板',
+      '存储与卷',
+      '规格',
+    ])
     expect(result[3].children?.map((node) => node.labelZh)).toEqual([
       '运行时主机',
       '容器管理',

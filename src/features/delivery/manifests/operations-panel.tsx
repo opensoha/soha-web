@@ -69,8 +69,14 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
   const [revision, setRevision] = useState(item.currentRevision || 1)
   const [rendered, setRendered] = useState<ManifestRenderResult | null>(null)
   const snapshot = usePermissionSnapshot().data?.data
-  const canManageSource = hasPermission(snapshot, 'delivery.manifest-sources.manage')
-  const canDeploy = hasPermission(snapshot, 'delivery.manifest-deployments.manage')
+  const canUpdateSource = hasPermission(snapshot, 'delivery.manifest-sources.update')
+  const canSyncSource = hasPermission(snapshot, 'delivery.manifest-sources.sync')
+  const canTriggerDeployment = hasPermission(snapshot, 'delivery.manifest-deployments.trigger')
+  const canPreflightDeployment = hasPermission(
+    snapshot,
+    'delivery.manifest-deployments.preflight',
+  )
+  const canUpdateDeployment = hasPermission(snapshot, 'delivery.manifest-deployments.update')
   const canRepair = hasPermission(snapshot, 'delivery.manifest-drift.repair')
   const canAdopt = hasPermission(snapshot, 'delivery.manifest-drift.adopt')
   const canUseAI = hasPermission(snapshot, 'observe.ai.chat')
@@ -178,7 +184,7 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
       <div className="soha-manifest-form-grid">
         <Form.Item label="来源模式" name="mode" rules={[{ required: true }]}>
           <Select
-            disabled={!canManageSource || item.currentRevision > 0}
+            disabled={!canUpdateSource || item.currentRevision > 0}
             options={[
               { value: 'soha_managed', label: 'Soha 托管' },
               { value: 'git_synced', label: 'Git 同步' },
@@ -245,12 +251,12 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
         ) : null}
       </div>
       <Space wrap>
-        {canManageSource ? (
+        {canUpdateSource ? (
           <Button type="primary" loading={sourceMutation.isPending} onClick={saveSource}>
             保存来源
           </Button>
         ) : null}
-        {canManageSource && sourceQuery.data?.mode === 'git_synced' ? (
+        {canSyncSource && sourceQuery.data?.mode === 'git_synced' ? (
           <Button
             icon={<CloudSyncOutlined />}
             loading={syncMutation.isPending}
@@ -312,7 +318,7 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
       width: 240,
       render: (_, value) => (
         <Space size={4} wrap>
-          {canDeploy ? (
+          {canTriggerDeployment ? (
             <Button
               size="small"
               icon={<ReloadOutlined />}
@@ -345,7 +351,7 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
               采纳
             </Button>
           ) : null}
-          {canDeploy && value.status.lastKnownGoodRevision ? (
+          {canTriggerDeployment && value.status.lastKnownGoodRevision ? (
             <Button
               size="small"
               icon={<RollbackOutlined />}
@@ -458,7 +464,7 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
                   <Button icon={<PlayCircleOutlined />} disabled={!bindingId} onClick={runRender}>
                     渲染
                   </Button>
-                  {canDeploy ? (
+                  {canPreflightDeployment ? (
                     <Button
                       icon={<SafetyCertificateOutlined />}
                       disabled={!bindingId}
@@ -468,7 +474,7 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
                       预检
                     </Button>
                   ) : null}
-                  {canDeploy ? (
+                  {canUpdateDeployment ? (
                     <Button
                       type="primary"
                       icon={<CloudSyncOutlined />}

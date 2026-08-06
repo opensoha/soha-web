@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, App, Descriptions, Form, Input, Select, Switch } from 'antd'
+import { Alert, App, Collapse, Descriptions, Form, Input, Segmented, Select, Switch } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { StepFormModal } from '@/components/step-form-modal'
 import type { StepFormStep } from '@/components/step-form'
@@ -22,6 +22,14 @@ interface VirtualizationConnectionStepModalProps {
   onSuccess?: () => void
   open: boolean
 }
+
+type PVEAuthMode = 'password' | 'token' | 'ticket'
+
+const PVE_AUTH_OPTIONS = [
+  { label: '账号密码', value: 'password' },
+  { label: 'API Token', value: 'token' },
+  { label: 'Ticket', value: 'ticket' },
+] satisfies Array<{ label: string; value: PVEAuthMode }>
 
 function connectionFormValues(
   record?: VirtualizationCluster | null,
@@ -69,12 +77,17 @@ export function VirtualizationConnectionStepModal({
   open,
 }: VirtualizationConnectionStepModalProps) {
   const [current, setCurrent] = useState(0)
+  const [pveAuthMode, setPveAuthMode] = useState<PVEAuthMode>('password')
+  const [replaceCredential, setReplaceCredential] = useState(false)
   const [form] = Form.useForm<VirtualizationClusterFormValues>()
   const provider = Form.useWatch('provider', form) ?? 'kubevirt'
   const selectedKubernetesClusterId = Form.useWatch('kubernetesClusterId', form)
-  const { virtualizationModuleEnabled, canManageClusters } = useVirtualizationPermissions()
+  const { virtualizationModuleEnabled, canCreateClusters, canUpdateClusters } =
+    useVirtualizationPermissions()
   const platformClustersQuery = useQuery(
-    virtualizationQueries.platformClusterOptions(virtualizationModuleEnabled && canManageClusters),
+    virtualizationQueries.platformClusterOptions(
+      virtualizationModuleEnabled && (editing ? canUpdateClusters : canCreateClusters),
+    ),
   )
   const selectedPlatformCluster = useMemo(
     () =>
@@ -100,12 +113,23 @@ export function VirtualizationConnectionStepModal({
   useEffect(() => {
     if (!open) return
     setCurrent(0)
+    setPveAuthMode('password')
+    setReplaceCredential(!editing)
+    form.resetFields()
     form.setFieldsValue(
       editing
         ? connectionFormValues(editing)
         : { ...connectionFormValues(), provider: initialProvider },
     )
   }, [editing, form, initialProvider, open])
+
+  const pveCredentialFields =
+    pveAuthMode === 'token'
+      ? ['tokenID', 'tokenSecret']
+      : pveAuthMode === 'ticket'
+        ? ['ticket', 'csrfToken']
+        : ['username', 'password']
+  const showPVECredentialFields = !editing || replaceCredential
 
   const steps: StepFormStep[] = [
     {
@@ -126,11 +150,19 @@ export function VirtualizationConnectionStepModal({
                 { value: 'kubevirt', label: 'KubeVirt' },
                 { value: 'pve', label: 'PVE' },
               ]}
-              onChange={() => {
+              onChange={(nextProvider) => {
+                setPveAuthMode('password')
+                if (nextProvider === 'pve') setReplaceCredential(true)
                 form.setFieldsValue({
                   endpoint: undefined,
                   kubernetesClusterId: undefined,
                   mode: undefined,
+                  username: undefined,
+                  password: undefined,
+                  tokenID: undefined,
+                  tokenSecret: undefined,
+                  ticket: undefined,
+                  csrfToken: undefined,
                 })
               }}
             />
@@ -144,7 +176,9 @@ export function VirtualizationConnectionStepModal({
     {
       title: '连接配置',
       fieldNames:
-        provider === 'kubevirt' ? ['kubernetesClusterId'] : ['endpoint', 'username', 'tokenID'],
+        provider === 'kubevirt'
+          ? ['kubernetesClusterId']
+          : ['endpoint', ...(showPVECredentialFields ? pveCredentialFields : [])],
       children: (
         <>
           <Form.Item name="mode" hidden>
@@ -206,24 +240,89 @@ export function VirtualizationConnectionStepModal({
               >
                 <Input placeholder="https://pve.example:8006" />
               </Form.Item>
-              <Form.Item name="username" label="Username">
-                <Input placeholder="root@pam" />
-              </Form.Item>
-              <Form.Item name="password" label="Password">
-                <Input.Password />
-              </Form.Item>
-              <Form.Item name="tokenID" label="Token ID">
-                <Input />
-              </Form.Item>
-              <Form.Item name="tokenSecret" label="Token Secret">
-                <Input.Password />
-              </Form.Item>
-              <Form.Item name="ticket" label="Ticket">
-                <Input.Password />
-              </Form.Item>
-              <Form.Item name="csrfToken" label="CSRF Token">
-                <Input.Password />
-              </Form.Item>
+              {editing ? (
+                <Form.Item label="更新凭证">
+                  <Switch checked={replaceCredential} onChange={setReplaceCredential} />
+                </Form.Item>
+              ) : null}
+              {showPVECredentialFields ? (
+                <>
+                  <Form.Item label="认证方式">
+                    <Segmented
+                      block
+                      options={PVE_AUTH_OPTIONS}
+                      value={pveAuthMode}
+                      onChange={(value) => setPveAuthMode(value as PVEAuthMode)}
+                    />
+                  </Form.Item>
+                  {pveAuthMode === 'password' ? (
+                    <>
+                      <Form.Item
+                        name="username"
+                        label="Username"
+                        preserve={false}
+                        rules={[
+                          { required: true, message: '请输入 PVE 用户名' },
+                          {
+                            pattern: /^[^@\s]+@[^@\s]+$/,
+                            message: '请输入包含 realm 的用户名，例如 root@pam',
+                          },
+                        ]}
+                      >
+                        <Input autoComplete="username" placeholder="root@pam" />
+                      </Form.Item>
+                      <Form.Item
+                        name="password"
+                        label="Password"
+                        preserve={false}
+                        rules={[{ required: true, message: '请输入 PVE 密码' }]}
+                      >
+                        <Input.Password autoComplete="current-password" />
+                      </Form.Item>
+                    </>
+                  ) : null}
+                  {pveAuthMode === 'token' ? (
+                    <>
+                      <Form.Item
+                        name="tokenID"
+                        label="Token ID"
+                        preserve={false}
+                        rules={[{ required: true, message: '请输入 PVE Token ID' }]}
+                      >
+                        <Input placeholder="root@pam!soha" />
+                      </Form.Item>
+                      <Form.Item
+                        name="tokenSecret"
+                        label="Token Secret"
+                        preserve={false}
+                        rules={[{ required: true, message: '请输入 PVE Token Secret' }]}
+                      >
+                        <Input.Password autoComplete="off" />
+                      </Form.Item>
+                    </>
+                  ) : null}
+                  {pveAuthMode === 'ticket' ? (
+                    <>
+                      <Form.Item
+                        name="ticket"
+                        label="Ticket"
+                        preserve={false}
+                        rules={[{ required: true, message: '请输入 PVE Ticket' }]}
+                      >
+                        <Input.Password autoComplete="off" />
+                      </Form.Item>
+                      <Form.Item
+                        name="csrfToken"
+                        label="CSRF Token"
+                        preserve={false}
+                        rules={[{ required: true, message: '请输入 PVE CSRF Token' }]}
+                      >
+                        <Input.Password autoComplete="off" />
+                      </Form.Item>
+                    </>
+                  ) : null}
+                </>
+              ) : null}
             </>
           )}
           <Form.Item name="verifyTls" label="校验 TLS" valuePropName="checked">
@@ -233,24 +332,36 @@ export function VirtualizationConnectionStepModal({
       ),
     },
     {
-      title: '默认配置',
+      title: '可选配置',
       children: (
         <>
           {provider === 'pve' ? (
-            <>
-              <Form.Item name="defaultNode" label="默认节点">
-                <Input />
-              </Form.Item>
-              <Form.Item name="defaultStorage" label="默认存储">
-                <Input />
-              </Form.Item>
-              <Form.Item name="defaultBridge" label="默认网桥">
-                <Input />
-              </Form.Item>
-              <Form.Item name="defaultSnippetStorage" label="默认 Snippet Storage">
-                <Input />
-              </Form.Item>
-            </>
+            <Collapse
+              ghost
+              items={[
+                {
+                  key: 'pve-resource-defaults',
+                  label: 'PVE 资源默认值（可选）',
+                  forceRender: true,
+                  children: (
+                    <>
+                      <Form.Item name="defaultNode" label="默认节点">
+                        <Input />
+                      </Form.Item>
+                      <Form.Item name="defaultStorage" label="默认存储">
+                        <Input />
+                      </Form.Item>
+                      <Form.Item name="defaultBridge" label="默认网桥">
+                        <Input />
+                      </Form.Item>
+                      <Form.Item name="defaultSnippetStorage" label="默认 Snippet Storage">
+                        <Input />
+                      </Form.Item>
+                    </>
+                  ),
+                },
+              ]}
+            />
           ) : null}
           <Form.Item name="enabled" label="创建后启用" valuePropName="checked">
             <Switch />

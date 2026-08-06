@@ -40,10 +40,9 @@ export function ExecutionTasksPage() {
   const focusedExecutionTaskId = searchParams.get('executionTaskId')?.trim() ?? ''
   const focusedReleaseBundleId = searchParams.get('releaseBundleId')?.trim() ?? ''
   const permissionSnapshotQuery = usePermissionSnapshot()
-  const canManage = hasPermission(
-    permissionSnapshotQuery.data?.data,
-    'delivery.execution-tasks.manage',
-  )
+  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const canCancel = hasPermission(permissionSnapshot, 'delivery.execution-tasks.cancel')
+  const canRetry = hasPermission(permissionSnapshot, 'delivery.execution-tasks.retry')
   const [selectedTask, setSelectedTask] = useState<ExecutionTask | null>(null)
   const tasksQuery = useQuery(deliveryQueries.executionTasks.list({ refetchInterval: 5000 }))
   const logsQuery = useQuery(
@@ -238,7 +237,7 @@ export function ExecutionTasksPage() {
                   tooltip="日志"
                   onClick={() => setSelectedTask(record)}
                 />
-                {canManage && canCancelExecutionTask(record) ? (
+                {canCancel && canCancelExecutionTask(record) ? (
                   <Popconfirm title="确认取消该任务？" onConfirm={() => handleCancel(record)}>
                     <ManagementIconButton
                       aria-label="取消执行任务"
@@ -249,7 +248,7 @@ export function ExecutionTasksPage() {
                     />
                   </Popconfirm>
                 ) : null}
-                {canManage && canRetryExecutionTask(record) ? (
+                {canRetry && canRetryExecutionTask(record) ? (
                   <ManagementIconButton
                     aria-label="重试执行任务"
                     icon={<ReloadOutlined />}
@@ -297,9 +296,9 @@ export function ExecutionTasksPage() {
               : []
           }
         />
-        {canManage && selectedTask ? (
+        {(canCancel || canRetry) && selectedTask ? (
           <Space style={{ marginBottom: 12 }}>
-            {canCancelExecutionTask(selectedTask) ? (
+            {canCancel && canCancelExecutionTask(selectedTask) ? (
               <Button
                 danger
                 icon={<StopOutlined />}
@@ -310,7 +309,7 @@ export function ExecutionTasksPage() {
                 取消任务
               </Button>
             ) : null}
-            {canRetryExecutionTask(selectedTask) ? (
+            {canRetry && canRetryExecutionTask(selectedTask) ? (
               <Button
                 icon={<ReloadOutlined />}
                 loading={retryMutation.isPending}

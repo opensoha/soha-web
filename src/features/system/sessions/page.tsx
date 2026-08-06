@@ -37,7 +37,7 @@ export function OnlineUsersPage() {
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const canManageOnlineUsers = hasPermission(
     permissionSnapshotQuery.data?.data,
-    'system.online-users.manage',
+    'system.online-users.revoke',
   )
 
   const { data: sessions = [], isFetching, isLoading, refetch } = useQuery(

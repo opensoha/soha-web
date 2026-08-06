@@ -3,6 +3,12 @@ import { accessApi } from './api'
 import { accessKeys } from './keys'
 
 export const accessQueries = {
+  permissionCatalog: (enabled = true) =>
+    queryOptions({
+      queryKey: accessKeys.permissionCatalog(),
+      queryFn: accessApi.permissions.catalog,
+      enabled,
+    }),
   users: (enabled = true) =>
     queryOptions({
       queryKey: accessKeys.userList(),

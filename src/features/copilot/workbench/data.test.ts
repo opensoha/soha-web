@@ -50,6 +50,7 @@ describe('workbench data options', () => {
   })
 
   it('disables session-scoped queries without a session id', () => {
+    expect(workbenchQueries.sessions.all(false).enabled).toBe(false)
     expect(workbenchQueries.sessions.detail().enabled).toBe(false)
     expect(workbenchQueries.sessions.messages().enabled).toBe(false)
     expect(workbenchQueries.agentRuns.session().enabled).toBe(false)

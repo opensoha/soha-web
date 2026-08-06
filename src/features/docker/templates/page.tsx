@@ -46,7 +46,8 @@ function TemplatesTable() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [currentStep, setCurrentStep] = useState(0)
   const [editing, setEditing] = useState<DockerTemplate | null>(null)
-  const { dockerModuleEnabled, canManageTemplates } = useDockerPermissions()
+  const { dockerModuleEnabled, canCreateTemplates, canUpdateTemplates, canDeleteTemplates } =
+    useDockerPermissions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const templatesQuery = useQuery(dockerQueries.templates(filters, dockerModuleEnabled))
@@ -100,29 +101,33 @@ function TemplatesTable() {
       fixed: 'right',
       width: 96,
       render: (_value, record) =>
-        canManageTemplates ? (
+        canUpdateTemplates || canDeleteTemplates ? (
           <Space className="soha-row-action-icons">
-            <ManagementIconButton
-              aria-label="编辑模板"
-              size="small"
-              tooltip="编辑"
-              icon={<EditOutlined />}
-              onClick={() => {
-                setEditing(record)
-                form.setFieldsValue(record)
-                setCurrentStep(0)
-                setDrawerOpen(true)
-              }}
-            />
-            <Popconfirm title="确认删除模板？" onConfirm={() => deleteMutation.mutate(record.id)}>
+            {canUpdateTemplates ? (
               <ManagementIconButton
-                aria-label="删除模板"
+                aria-label="编辑模板"
                 size="small"
-                tooltip="删除"
-                danger
-                icon={<DeleteOutlined />}
+                tooltip="编辑"
+                icon={<EditOutlined />}
+                onClick={() => {
+                  setEditing(record)
+                  form.setFieldsValue(record)
+                  setCurrentStep(0)
+                  setDrawerOpen(true)
+                }}
               />
-            </Popconfirm>
+            ) : null}
+            {canDeleteTemplates ? (
+              <Popconfirm title="确认删除模板？" onConfirm={() => deleteMutation.mutate(record.id)}>
+                <ManagementIconButton
+                  aria-label="删除模板"
+                  size="small"
+                  tooltip="删除"
+                  danger
+                  icon={<DeleteOutlined />}
+                />
+              </Popconfirm>
+            ) : null}
           </Space>
         ) : null,
     },
@@ -171,7 +176,7 @@ function TemplatesTable() {
         scroll={{ x: 860 }}
         pagination={pageTablePagination(page, false, setFilters)}
         actions={
-          canManageTemplates ? (
+          canCreateTemplates ? (
             <>
               <Button
                 type="primary"

@@ -9,7 +9,7 @@ export interface GatewayClientsSectionProps {
   columns: TableColumnsType<AIClient>
   clients: AIClient[]
   loading: boolean
-  canManage: boolean
+  canCreate: boolean
   filter: string
   onFilterChange: (value: string) => void
   onCreate: () => void
@@ -19,7 +19,7 @@ export function GatewayClientsSection({
   columns,
   clients,
   loading,
-  canManage,
+  canCreate,
   filter,
   onFilterChange,
   onCreate,
@@ -42,7 +42,7 @@ export function GatewayClientsSection({
             type="primary"
             size="small"
             icon={<PlusOutlined />}
-            disabled={!canManage}
+            disabled={!canCreate}
             onClick={onCreate}
           >
             新增 client

@@ -38,10 +38,10 @@ export function AlertIntegrationsPage() {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
-  const canManageIntegrations = hasPermission(
-    permissionSnapshotQuery.data?.data,
-    'observe.alert-integrations.manage',
-  )
+  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const canCreateIntegration = hasPermission(permissionSnapshot, 'observe.alert-integrations.create')
+  const canUpdateIntegration = hasPermission(permissionSnapshot, 'observe.alert-integrations.update')
+  const canTestIntegration = hasPermission(permissionSnapshot, 'observe.alert-integrations.test')
   const [editorForm] = Form.useForm<AlertIntegrationFormValues>()
   const [testForm] = Form.useForm<AlertIntegrationTestFormValues>()
   const [editorOpen, setEditorOpen] = useState(false)
@@ -239,6 +239,7 @@ export function AlertIntegrationsPage() {
         <Space className="soha-row-action-icons" size={2}>
           <ManagementIconButton
             aria-label="测试告警集成"
+            disabled={!canTestIntegration}
             icon={<ExperimentOutlined />}
             size="small"
             tooltip="测试"
@@ -251,7 +252,7 @@ export function AlertIntegrationsPage() {
             tooltip="复制地址"
             onClick={() => copyText(buildWebhookURL(record.webhookPath), 'Webhook 地址')}
           />
-          {canManageIntegrations ? (
+          {canUpdateIntegration ? (
             <ManagementIconButton
               aria-label="编辑告警集成"
               icon={<EditOutlined />}
@@ -270,14 +271,18 @@ export function AlertIntegrationsPage() {
       <AdminTable
         title="告警集成"
         headerExtra={
-          canManageIntegrations ? (
+          canCreateIntegration || canTestIntegration ? (
             <ManagementTableToolbar>
-              <Button icon={<ExperimentOutlined />} onClick={() => openTest()}>
-                测试 Payload
-              </Button>
-              <Button icon={<PlusOutlined />} type="primary" onClick={() => openEditor(null)}>
-                新建集成
-              </Button>
+              {canTestIntegration ? (
+                <Button icon={<ExperimentOutlined />} onClick={() => openTest()}>
+                  测试 Payload
+                </Button>
+              ) : null}
+              {canCreateIntegration ? (
+                <Button icon={<PlusOutlined />} type="primary" onClick={() => openEditor(null)}>
+                  新建集成
+                </Button>
+              ) : null}
             </ManagementTableToolbar>
           ) : null
         }

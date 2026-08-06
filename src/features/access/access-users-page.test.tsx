@@ -7,7 +7,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { api } from '@/services/api-client'
 import type { PermissionSnapshot } from '@/types'
+import permissionCatalog from '@opensoha/contracts/auth/permission-catalog.json'
 import { AccessRolesPage } from './roles/page'
 import { AccessTeamsPage } from './teams/page'
 import { AccessUsersPage } from './users/page'
@@ -118,6 +120,7 @@ function setDefaultResponses() {
       },
     ],
     '/access/roles': [{ id: 'admin', name: 'admin' }],
+    '/access/permissions': permissionCatalog,
     '/access/teams': [],
     '/settings/identity': {
       providers: [],
@@ -203,6 +206,12 @@ describe('access users page columns', () => {
 
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
     vi.stubGlobal('ResizeObserver', ResizeObserverMock)
+    vi.spyOn(window, 'getComputedStyle').mockImplementation(
+      () =>
+        ({
+          getPropertyValue: () => '',
+        }) as unknown as CSSStyleDeclaration,
+    )
   })
 
   beforeEach(() => {
@@ -268,12 +277,21 @@ describe('access users page columns', () => {
     expect(container.querySelector('.ant-tag-success')?.textContent).toBe('飞书')
   })
 
+  it('does not load role or organization catalogs without their read permissions', async () => {
+    await renderWithProviders(<AccessUsersPage />, '/access/users')
+
+    const paths = vi.mocked(api.get).mock.calls.map(([path]) => path)
+    expect(paths).toContain('/access/users')
+    expect(paths).not.toContain('/access/roles')
+    expect(paths).not.toContain('/access/teams')
+  })
+
   it('permission-gates and confirms the administrative MFA reset action', async () => {
     const viewOnlyContainer = await renderWithProviders(<AccessUsersPage />, '/access/users')
     await waitForRow(viewOnlyContainer, 'row-u-admin')
     expect(viewOnlyContainer.querySelector('button[aria-label="重置 MFA"]')).toBeNull()
 
-    testState.snapshot.permissionKeys = ['access.users.view', 'access.users.manage']
+    testState.snapshot.permissionKeys = ['access.users.view', 'access.users.update']
     const result = {
       userId: 'u-admin',
       revokedCredentialCount: 2,
@@ -357,7 +375,7 @@ describe('access users page columns', () => {
   it('renders organization source as a concrete login provider application', async () => {
     testState.snapshot.permissionKeys = [
       'access.groups.view',
-      'access.groups.manage',
+      'access.groups.update',
       'settings.identity.view',
     ]
     testState.responses['/access/teams'] = [
@@ -411,9 +429,55 @@ describe('access users page columns', () => {
     const container = await renderWithProviders(<AccessRolesPage />, '/access/roles')
     await waitForRow(container, 'row-ops')
 
-    const permissionCell = container.querySelector('[data-testid="cell-0-3"]')
+    const permissionCell = container.querySelector('[data-testid="cell-0-2"]')
     expect(permissionCell?.textContent).toContain('+4')
     expect(permissionCell?.textContent).toContain('管理用户')
     expect(permissionCell?.textContent).not.toContain('管理登陆设置')
+  })
+
+  it('round-trips exact permissions without editing compatibility capabilities', async () => {
+    testState.snapshot.permissionKeys = ['access.roles.view', 'access.roles.update']
+    testState.responses['/access/roles'] = [
+      {
+        id: 'ops',
+        name: '运维角色',
+        scope: 'custom',
+        capabilities: ['view', 'create'],
+        permissionKeys: ['platform.configuration.secret-data.view', 'platform.helm.values.view'],
+        userCount: 0,
+      },
+    ]
+
+    const container = await renderWithProviders(<AccessRolesPage />, '/access/roles')
+    await waitForRow(container, 'row-ops')
+
+    const editButton = container.querySelector(
+      'button[aria-label="编辑角色"]',
+    ) as HTMLButtonElement | null
+    expect(editButton).not.toBeNull()
+    await act(async () => editButton?.click())
+
+    const modal = document.body.querySelector('.ant-modal')
+    expect(modal?.textContent).toContain('角色权限')
+    expect(modal?.textContent).toContain('k8s工作台')
+    expect(modal?.textContent).toContain('精确权限 2/')
+    expect(modal?.textContent).not.toContain('全局资源动作')
+
+    const updateButton = document.body.querySelector(
+      '.ant-modal-footer .ant-btn-primary',
+    ) as HTMLButtonElement | null
+    expect(updateButton).not.toBeNull()
+    await act(async () => updateButton?.click())
+    await act(async () => {
+      await Promise.resolve()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(api.put).toHaveBeenCalledWith('/access/roles/ops', {
+      name: '运维角色',
+      scope: 'custom',
+      capabilities: ['view', 'create'],
+      permissionKeys: ['platform.configuration.secret-data.view', 'platform.helm.values.view'],
+    })
   })
 })

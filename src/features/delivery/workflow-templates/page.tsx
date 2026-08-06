@@ -100,10 +100,21 @@ export function WorkflowTemplatesPage() {
   const savedDefinitionRef = useRef(
     serializeWorkflowTemplateDagDefinition(createDefaultReleaseDagDefinition()),
   )
-  const canManageWorkflowTemplates = hasPermission(
-    permissionSnapshotQuery.data?.data,
-    'delivery.workflow-templates.manage',
+  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const canCreateWorkflowTemplate = hasPermission(
+    permissionSnapshot,
+    'delivery.workflow-templates.create',
   )
+  const canUpdateWorkflowTemplate = hasPermission(
+    permissionSnapshot,
+    'delivery.workflow-templates.update',
+  )
+  const canDeleteWorkflowTemplate = hasPermission(
+    permissionSnapshot,
+    'delivery.workflow-templates.delete',
+  )
+  const canSaveWorkflowTemplate =
+    selectedTemplateId === 'new' ? canCreateWorkflowTemplate : canUpdateWorkflowTemplate
 
   const { data, isFetching, isLoading, refetch } = useQuery(
     deliveryQueries.workflowTemplates.list(),
@@ -516,14 +527,14 @@ export function WorkflowTemplatesPage() {
         <Button
           icon={<PlusOutlined />}
           type="primary"
-          disabled={!canManageWorkflowTemplates}
+          disabled={!canCreateWorkflowTemplate}
           onClick={handleNewTemplate}
         >
           {localeCode === 'zh_CN' ? '新建模板' : 'New Template'}
         </Button>
         <Button
           icon={<SaveOutlined />}
-          disabled={!hasSelection || !canManageWorkflowTemplates}
+          disabled={!hasSelection || !canSaveWorkflowTemplate}
           loading={createMutation.isPending || updateMutation.isPending}
           onClick={() => void handleSave()}
         >
@@ -534,7 +545,7 @@ export function WorkflowTemplatesPage() {
         </Button>
         <Button
           icon={<CopyOutlined />}
-          disabled={!hasSelection || !canManageWorkflowTemplates}
+          disabled={!hasSelection || !canCreateWorkflowTemplate}
           onClick={handleCopyTemplate}
         >
           {localeCode === 'zh_CN' ? '复制模板' : 'Copy'}
@@ -546,7 +557,7 @@ export function WorkflowTemplatesPage() {
           <Button
             danger
             icon={<DeleteOutlined />}
-            disabled={!selectedTemplate || !canManageWorkflowTemplates}
+            disabled={!selectedTemplate || !canDeleteWorkflowTemplate}
             loading={deleteMutation.isPending}
           >
             {localeCode === 'zh_CN' ? '删除' : 'Delete'}
@@ -608,7 +619,7 @@ export function WorkflowTemplatesPage() {
               >
                 <Switch
                   checked={enabledValue}
-                  disabled={!canManageWorkflowTemplates}
+                  disabled={template.id === 'new' ? !canCreateWorkflowTemplate : !canUpdateWorkflowTemplate}
                   size="small"
                   onChange={(checked) => handleTemplateEnabledChange(template, checked)}
                 />
@@ -684,7 +695,7 @@ export function WorkflowTemplatesPage() {
 
       <Modal
         forceRender
-        okButtonProps={{ disabled: !hasSelection || !canManageWorkflowTemplates }}
+        okButtonProps={{ disabled: !hasSelection || !canSaveWorkflowTemplate }}
         okText={localeCode === 'zh_CN' ? '保存模板' : 'Save Template'}
         open={settingsModalOpen && hasSelection}
         title={localeCode === 'zh_CN' ? '模板设置' : 'Template Settings'}
@@ -713,7 +724,7 @@ export function WorkflowTemplatesPage() {
               },
             ]}
           >
-            <Input disabled={!canManageWorkflowTemplates} />
+            <Input disabled={!canSaveWorkflowTemplate} />
           </Form.Item>
           <Form.Item
             name="name"
@@ -725,15 +736,15 @@ export function WorkflowTemplatesPage() {
               },
             ]}
           >
-            <Input disabled={!canManageWorkflowTemplates} />
+            <Input disabled={!canSaveWorkflowTemplate} />
           </Form.Item>
           <Form.Item name="description" label={localeCode === 'zh_CN' ? '描述' : 'Description'}>
-            <Input disabled={!canManageWorkflowTemplates} />
+            <Input disabled={!canSaveWorkflowTemplate} />
           </Form.Item>
           <div className="soha-workflow-template-settings-form__grid">
             <Form.Item name="category" label={localeCode === 'zh_CN' ? '分类' : 'Category'}>
               <Select
-                disabled={!canManageWorkflowTemplates}
+                disabled={!canSaveWorkflowTemplate}
                 options={RELEASE_TEMPLATE_CATEGORY_OPTIONS}
               />
             </Form.Item>
@@ -743,7 +754,7 @@ export function WorkflowTemplatesPage() {
               label={localeCode === 'zh_CN' ? '启用' : 'Enabled'}
               valuePropName="checked"
             >
-              <Switch disabled={!canManageWorkflowTemplates} />
+              <Switch disabled={!canSaveWorkflowTemplate} />
             </Form.Item>
           </div>
           <div className="soha-workflow-template-status-tags">

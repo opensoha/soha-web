@@ -88,6 +88,7 @@ function MemoryPoliciesPageContent() {
         <Form
           form={form}
           layout="vertical"
+          preserve={false}
           initialValues={{ consentMode: 'explicit', ttlDays: 30 }}
         >
           <Form.Item name="id" label="ID" rules={[{ required: true }]}>

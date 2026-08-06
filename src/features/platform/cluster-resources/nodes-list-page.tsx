@@ -10,7 +10,6 @@ import {
   Popconfirm,
   Space,
   Spin,
-  Tag,
 } from 'antd'
 import {
   ClearOutlined,
@@ -31,7 +30,7 @@ import {
   ManagementState,
   ManagementTableToolbar,
 } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasAllowedAction } from '@/features/auth'
 import { useAIPageContext } from '@/features/copilot'
 import {
@@ -111,7 +110,7 @@ export function ClusterNodesPage() {
       render: (status: string, record) => (
         <Space size={4} wrap>
           <StatusTag value={status} />
-          {record.unschedulable ? <StatusTag value="禁止调度" /> : null}
+          {record.unschedulable ? <StatusTag label="禁止调度" value="warning" /> : null}
         </Space>
       ),
     },
@@ -120,9 +119,7 @@ export function ClusterNodesPage() {
       dataIndex: 'roles',
       render: (roles: string[]) =>
         roles?.map((role) => (
-          <Tag key={role} className="mr-1">
-            {role}
-          </Tag>
+          <MetadataTag key={role} label={role} />
         )) ?? '-',
     },
     { title: 'IP', dataIndex: 'internalIp', render: (value: string) => value || '-' },

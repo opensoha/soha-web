@@ -2,13 +2,13 @@ import { defineRoutes } from '@/routes/definitions'
 import { accessControlRoutes } from './access-control/routes'
 import { clusterResourceRoutes } from './cluster-resources/routes'
 import { clusterRoutes } from './clusters/routes'
-import { configurationRoutes } from './configuration/routes'
+import { configurationRoutes, configurationViewPermissions } from './configuration/routes'
 import { extensionRoutes } from './extensions/routes'
 import { manifestRoutes } from './manifests/routes'
-import { networkRoutes } from './network/routes'
+import { networkRoutes, networkViewPermissions } from './network/routes'
 import { resourceCreationRoutes } from './resource-creation/routes'
-import { storageRoutes } from './storage/routes'
-import { workloadRoutes } from './workloads/routes'
+import { storageRoutes, storageViewPermissions } from './storage/routes'
+import { workloadRoutes, workloadViewPermissions } from './workloads/routes'
 
 export const platformShellRoutes = defineRoutes([
   {
@@ -46,7 +46,7 @@ export const platformShellRoutes = defineRoutes([
       tabbar: false,
       navVisible: true,
       menuId: 'workloads',
-      permissionKey: 'platform.workloads.view',
+      permissionKeysAny: workloadViewPermissions,
       scopeMode: 'namespace',
       workspace: 'resource',
     },
@@ -65,7 +65,7 @@ export const platformShellRoutes = defineRoutes([
       tabbar: false,
       navVisible: true,
       menuId: 'configuration',
-      permissionKey: 'platform.configuration.view',
+      permissionKeysAny: configurationViewPermissions,
       scopeMode: 'namespace',
       workspace: 'resource',
     },
@@ -84,7 +84,7 @@ export const platformShellRoutes = defineRoutes([
       tabbar: false,
       navVisible: true,
       menuId: 'network',
-      permissionKey: 'platform.network.view',
+      permissionKeysAny: networkViewPermissions,
       scopeMode: 'namespace',
       workspace: 'resource',
     },
@@ -103,7 +103,7 @@ export const platformShellRoutes = defineRoutes([
       tabbar: false,
       navVisible: true,
       menuId: 'storage',
-      permissionKey: 'platform.storage.view',
+      permissionKeysAny: storageViewPermissions,
       scopeMode: 'namespace',
       workspace: 'resource',
     },

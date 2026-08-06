@@ -79,8 +79,14 @@ export function AccessUsersPage() {
   const permissionSnapshotQuery = usePermissionSnapshot()
   const snapshot = permissionSnapshotQuery.data?.data
   const canViewUsers = hasPermission(snapshot, 'access.users.view')
-  const canManageUsers = hasPermission(snapshot, 'access.users.manage')
-  const canManageScopeGrants = hasPermission(snapshot, 'access.scope-grants.manage')
+  const canViewRoles = hasPermission(snapshot, 'access.roles.view')
+  const canViewTeams = hasPermission(snapshot, 'access.groups.view')
+  const canCreateUsers = hasPermission(snapshot, 'access.users.create')
+  const canUpdateUsers = hasPermission(snapshot, 'access.users.update')
+  const canDeleteUsers = hasPermission(snapshot, 'access.users.delete')
+  const canReplaceUserRoles = hasPermission(snapshot, 'access.users.replace-roles')
+  const canReplaceUserTeams = hasPermission(snapshot, 'access.users.replace-teams')
+  const canViewScopeGrants = hasPermission(snapshot, 'access.scope-grants.view')
   const [form] = Form.useForm<Record<string, unknown>>()
   const [modalVisible, setModalVisible] = useState(false)
   const [editing, setEditing] = useState<AccessUser | null>(null)
@@ -89,9 +95,9 @@ export function AccessUsersPage() {
   const [selectedOrgId, setSelectedOrgId] = useState(ORG_ALL_KEY)
   const [includeSubOrganizations, setIncludeSubOrganizations] = useState(true)
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
-  const usersQuery = useQuery(accessQueries.users())
-  const rolesQuery = useQuery(accessQueries.roles())
-  const teamsQuery = useQuery(accessQueries.teams())
+  const usersQuery = useQuery(accessQueries.users(canViewUsers))
+  const rolesQuery = useQuery(accessQueries.roles(canViewRoles))
+  const teamsQuery = useQuery(accessQueries.teams(canViewTeams))
 
   const roleMap = useMemo(
     () => Object.fromEntries((rolesQuery.data ?? []).map((item) => [item.id, item.name])),
@@ -201,8 +207,8 @@ export function AccessUsersPage() {
       email: String(values.email ?? '').trim(),
       status: String(values.status ?? 'active'),
       password: String(values.password ?? ''),
-      roleIds: toStringArray(values.roleIds),
-      teamIds: toStringArray(values.teamIds),
+      roleIds: canReplaceUserRoles ? toStringArray(values.roleIds) : undefined,
+      teamIds: canReplaceUserTeams ? toStringArray(values.teamIds) : undefined,
       tags: toStringArray(values.tags),
     }
     if (editing) {
@@ -295,9 +301,9 @@ export function AccessUsersPage() {
       dataIndex: 'id',
       render: (_: unknown, record: AccessUser) => (
         <Space className="soha-row-action-icons">
-          {canManageUsers || canManageScopeGrants ? (
+          {canUpdateUsers || canDeleteUsers || canViewScopeGrants ? (
             <>
-              {canManageScopeGrants ? (
+              {canViewScopeGrants ? (
                 <ManagementIconButton
                   aria-label="授权范围"
                   icon={<FolderOpenOutlined />}
@@ -306,7 +312,7 @@ export function AccessUsersPage() {
                   onClick={() => setGrantUser(record)}
                 />
               ) : null}
-              {canManageUsers ? (
+              {canUpdateUsers ? (
                 <ManagementIconButton
                   aria-label="编辑用户"
                   icon={<EditOutlined />}
@@ -318,7 +324,7 @@ export function AccessUsersPage() {
                   }}
                 />
               ) : null}
-              {canManageUsers ? (
+              {canUpdateUsers ? (
                 <Popconfirm
                   title="确认重置此用户的 MFA？"
                   description="所有 MFA 凭据和恢复码将失效，并撤销现有会话。"
@@ -342,7 +348,7 @@ export function AccessUsersPage() {
                   />
                 </Popconfirm>
               ) : null}
-              {canManageUsers ? (
+              {canDeleteUsers ? (
                 <Popconfirm title="确认删除？" onConfirm={() => deleteMutation.mutate(record.id)}>
                   <ManagementIconButton
                     aria-label="删除用户"
@@ -440,7 +446,7 @@ export function AccessUsersPage() {
             className="soha-access-table"
             headerExtra={
               <ManagementTableToolbar>
-                {canManageUsers ? (
+                {canCreateUsers ? (
                   <Button
                     size="small"
                     icon={<PlusOutlined />}
@@ -561,12 +567,18 @@ export function AccessUsersPage() {
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="roleIds" label="角色">
-                <Select mode="multiple" options={roleOptions} placeholder="选择用户角色" />
+                <Select
+                  disabled={!canReplaceUserRoles}
+                  mode="multiple"
+                  options={roleOptions}
+                  placeholder="选择用户角色"
+                />
               </Form.Item>
             </Col>
             <Col span={12}>
               <Form.Item name="teamIds" label="所属组织">
                 <Select
+                  disabled={!canReplaceUserTeams}
                   mode="multiple"
                   options={teamOptions}
                   placeholder="选择所属组织或部门"

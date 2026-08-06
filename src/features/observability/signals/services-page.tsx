@@ -1,11 +1,12 @@
 import { SearchOutlined } from '@ant-design/icons'
 import { useMutation } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
-import { Button, Form, InputNumber, Tag } from 'antd'
+import { Button, Form, InputNumber } from 'antd'
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementState } from '@/components/management-list'
+import { StatusTag } from '@/components/status-tag'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { queryTraces } from './api'
 import { summarizeServices } from './model'
@@ -25,7 +26,9 @@ export function ObservabilityServicesPage() {
       dataIndex: 'errorSpans',
       key: 'errorSpans',
       width: 120,
-      render: (value: number) => <Tag color={value > 0 ? 'error' : 'success'}>{value}</Tag>,
+      render: (value: number) => (
+        <StatusTag label={value} value={value > 0 ? 'error' : 'normal'} />
+      ),
     },
     {
       title: '最大耗时',

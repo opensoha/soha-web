@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Card, Space, Tag, Typography } from 'antd'
+import { Card, Space, Typography } from 'antd'
 import { ArrowRightOutlined } from '@ant-design/icons'
 import type { TableColumnsType } from 'antd'
 import { useQuery } from '@tanstack/react-query'
@@ -95,7 +95,7 @@ export function ReleaseBoardPage() {
       key: 'quality',
       render: (_: unknown, record) => {
         const signal = releaseBoardQualitySignal(record)
-        return <Tag color={signal.color}>{signal.label}</Tag>
+        return <StatusTag label={signal.label} value={signal.value} />
       },
     },
     {

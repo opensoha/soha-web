@@ -192,7 +192,11 @@ export function SecretsPage() {
   const [editing, setEditing] = useState<SecretMetadata | null>(null)
   const [rotating, setRotating] = useState<SecretMetadata | null>(null)
   const [versionSecret, setVersionSecret] = useState<SecretMetadata | null>(null)
-  const canManage = hasPermission(usePermissionSnapshot().data?.data, 'secret.manage')
+  const permissionSnapshot = usePermissionSnapshot().data?.data
+  const canCreate = hasPermission(permissionSnapshot, 'secret.create')
+  const canUpdate = hasPermission(permissionSnapshot, 'secret.update')
+  const canRotate = hasPermission(permissionSnapshot, 'secret.rotate')
+  const canRevoke = hasPermission(permissionSnapshot, 'secret.revoke')
 
   const secretsQuery = useQuery(
     secretQueries.list({ scopeId: filters.scopeId, scopeType: filters.scopeType }),
@@ -385,7 +389,7 @@ export function SecretsPage() {
             />
             <ManagementIconButton
               aria-label="轮换 Secret"
-              disabled={!canManage || secret.status !== 'active'}
+              disabled={!canRotate || secret.status !== 'active'}
               icon={<ReloadOutlined />}
               tooltip="轮换"
               onClick={() => {
@@ -396,14 +400,14 @@ export function SecretsPage() {
             />
             <ManagementIconButton
               aria-label="编辑 Secret"
-              disabled={!canManage}
+              disabled={!canUpdate}
               icon={<EditOutlined />}
               tooltip="编辑"
               onClick={() => openEdit(secret)}
             />
             <Popconfirm
               cancelText="取消"
-              disabled={!canManage || secret.status === 'disabled'}
+              disabled={!canUpdate || secret.status === 'disabled'}
               okButtonProps={{ danger: true, loading: disableMutation.isPending }}
               okText="停用"
               title={`停用 ${secret.name}`}
@@ -417,7 +421,7 @@ export function SecretsPage() {
               <ManagementIconButton
                 aria-label="停用 Secret"
                 danger
-                disabled={!canManage || secret.status === 'disabled'}
+                disabled={!canUpdate || secret.status === 'disabled'}
                 icon={<StopOutlined />}
                 tooltip="停用"
               />
@@ -426,7 +430,7 @@ export function SecretsPage() {
         ),
       },
     ],
-    [canManage, disableMutation, message, rotateForm],
+    [canRotate, canUpdate, disableMutation, message, rotateForm],
   )
 
   const versionColumns: TableColumnsType<SecretVersionMetadata> = [
@@ -458,7 +462,7 @@ export function SecretsPage() {
           />
           <Popconfirm
             cancelText="取消"
-            disabled={!canManage || version.status === 'revoked'}
+            disabled={!canRevoke || version.status === 'revoked'}
             okButtonProps={{ danger: true, loading: revokeMutation.isPending }}
             okText="撤销"
             title={`撤销 v${version.version}`}
@@ -476,7 +480,7 @@ export function SecretsPage() {
             <ManagementIconButton
               aria-label="撤销 Secret 版本"
               danger
-              disabled={!canManage || version.status === 'revoked'}
+              disabled={!canRevoke || version.status === 'revoked'}
               icon={<DeleteOutlined />}
               tooltip="撤销"
             />
@@ -545,7 +549,7 @@ export function SecretsPage() {
           headerExtra: (
             <ManagementTableToolbar>
               <Button
-                disabled={!canManage}
+                disabled={!canCreate}
                 icon={<PlusOutlined />}
                 size="small"
                 type="primary"

@@ -130,7 +130,7 @@ function EvaluationLifecyclePageContent() {
             },
           ]}
         />
-        <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+        <Form form={form} layout="vertical" preserve={false} style={{ marginTop: 16 }}>
           <Form.Item name="id" label="ID" rules={[{ required: true }]}>
             <Input />
           </Form.Item>

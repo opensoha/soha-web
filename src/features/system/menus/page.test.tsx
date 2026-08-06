@@ -12,7 +12,12 @@ import { MenusPage } from './page'
 
 const testState = vi.hoisted(() => ({
   snapshot: {
-    permissionKeys: ['system.menus.view', 'system.menus.manage'],
+    permissionKeys: [
+      'system.menus.view',
+      'system.menus.create',
+      'system.menus.update',
+      'system.menus.delete',
+    ],
     visibleMenuIds: ['menus'],
     visibleMenus: [],
   } as PermissionSnapshot,

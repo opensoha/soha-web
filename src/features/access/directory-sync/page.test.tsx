@@ -102,7 +102,7 @@ describe('directory sync page', () => {
   })
 
   it('shows management actions according to directory permissions', async () => {
-    state.snapshot.permissionKeys = ['access.directory.view', 'access.directory.manage']
+    state.snapshot.permissionKeys = ['access.directory.view', 'access.directory.create']
     await renderPage()
     expect(container.textContent).toContain('新增目录连接')
     expect(container.textContent).toContain('关键词')

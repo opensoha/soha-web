@@ -60,14 +60,9 @@ export function AIObserveOverviewPage() {
   const canObserve = hasPermission(snapshot, 'observe.ai.view')
   const canKnowledge = hasPermission(snapshot, 'ai.knowledge.view')
   const canGateway = hasPermission(snapshot, 'ai.gateway.view')
-  const canRelay =
-    hasPermission(snapshot, 'ai.gateway.relay.view') ||
-    hasPermission(snapshot, 'ai.gateway.relay.manage')
+  const canRelay = hasPermission(snapshot, 'ai.gateway.relay.view')
 
-  const sessionsQuery = useQuery({
-    ...workbenchQueries.sessions.all(),
-    enabled: canChat || canObserve,
-  })
+  const sessionsQuery = useQuery(workbenchQueries.sessions.all(canChat))
   const catalogQuery = useQuery({ ...workbenchQueries.catalog(), enabled: canObserve })
   const runsQuery = useQuery({ ...workbenchQueries.agentRuns.all(), enabled: canObserve })
   const basesQuery = useQuery(knowledgeQueries.bases(canKnowledge))

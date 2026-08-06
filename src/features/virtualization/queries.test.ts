@@ -21,7 +21,11 @@ describe('virtualizationQueries', () => {
       .mockResolvedValue(undefined as never)
 
     const vmOptions = virtualizationQueries.vms({ page: 1, status: '' })
-    const imageOptions = virtualizationQueries.images({ pageSize: 25, search: '' })
+    const imageOptions = virtualizationQueries.images({
+      pageSize: 25,
+      search: '',
+      category: 'catalog',
+    })
     const operationOptions = virtualizationQueries.operations({
       statuses: ['running', 'failed', 'running'],
       abnormal: false,
@@ -29,7 +33,9 @@ describe('virtualizationQueries', () => {
     })
 
     expect(vmOptions.queryKey).toEqual(virtualizationKeys.vmList({ page: 1 }))
-    expect(imageOptions.queryKey).toEqual(virtualizationKeys.imageList({ pageSize: 25 }))
+    expect(imageOptions.queryKey).toEqual(
+      virtualizationKeys.imageList({ pageSize: 25, category: 'catalog' }),
+    )
     expect(operationOptions.queryKey).toEqual(
       virtualizationKeys.operationList({ pending: true, statuses: ['failed', 'running'] }),
     )
@@ -39,7 +45,7 @@ describe('virtualizationQueries', () => {
     await executeQuery(operationOptions)
 
     expect(vms).toHaveBeenCalledWith({ page: 1 })
-    expect(images).toHaveBeenCalledWith({ pageSize: 25 })
+    expect(images).toHaveBeenCalledWith({ pageSize: 25, category: 'catalog' })
     expect(operations).toHaveBeenCalledWith({
       pending: true,
       statuses: ['failed', 'running'],

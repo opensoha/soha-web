@@ -65,7 +65,9 @@ export function EvaluationStudioPage() {
   const startRunMutation = useMutation(evaluationMutations.startRun(queryClient))
   const datasets = datasetsQuery.data?.data ?? []
   const runs = runsQuery.data?.data ?? []
-  const canExecute = hasPermission(permissionSnapshotQuery.data?.data, 'ai.evaluations.manage')
+  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const canCreate = hasPermission(permissionSnapshot, 'ai.evaluations.create')
+  const canExecute = hasPermission(permissionSnapshot, 'ai.evaluations.execute')
 
   const runColumns: TableColumnsType<EvaluationRun> = [
     { title: 'Run', dataIndex: 'id', key: 'id' },
@@ -200,7 +202,7 @@ export function EvaluationStudioPage() {
             >
               刷新
             </Button>
-            {canExecute ? (
+            {canCreate ? (
               <Button icon={<PlusOutlined />} onClick={() => setDatasetOpen(true)}>
                 新建数据集
               </Button>
@@ -287,7 +289,12 @@ export function EvaluationStudioPage() {
         onCancel={() => setDatasetOpen(false)}
         onOk={() => void createDataset()}
       >
-        <Form form={datasetForm} layout="vertical" initialValues={{ version: 'v1' }}>
+        <Form
+          form={datasetForm}
+          layout="vertical"
+          preserve={false}
+          initialValues={{ version: 'v1' }}
+        >
           <Form.Item
             name="name"
             label="名称"
@@ -352,7 +359,12 @@ export function EvaluationStudioPage() {
         onCancel={() => setRunOpen(false)}
         onOk={() => void startRun()}
       >
-        <Form form={runForm} layout="vertical" initialValues={{ candidateKind: 'prompt' }}>
+        <Form
+          form={runForm}
+          layout="vertical"
+          preserve={false}
+          initialValues={{ candidateKind: 'prompt' }}
+        >
           <Form.Item
             name="id"
             label="Run ID"

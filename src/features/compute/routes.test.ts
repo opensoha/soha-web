@@ -10,6 +10,7 @@ const routePages = vi.hoisted(() => ({
   vmDetail: () => null,
   clusters: () => null,
   images: () => null,
+  storage: () => null,
   flavors: () => null,
   hosts: () => null,
   projects: () => null,
@@ -35,6 +36,9 @@ vi.mock('@/features/virtualization/clusters/list-page', () => ({
 vi.mock('@/features/virtualization/images/list-page', () => ({
   VirtualizationImagesPage: routePages.images,
 }))
+vi.mock('@/features/virtualization/storage/list-page', () => ({
+  VirtualizationStoragePage: routePages.storage,
+}))
 vi.mock('@/features/virtualization/flavors/list-page', () => ({
   VirtualizationFlavorsPage: routePages.flavors,
 }))
@@ -59,8 +63,8 @@ describe('compute route manifest', () => {
       pageRoutes.map(async (route) => (await route.load()).default),
     )
 
-    expect(pageRoutes).toHaveLength(13)
-    expect(new Set(loadedPages).size).toBe(13)
+    expect(pageRoutes).toHaveLength(14)
+    expect(new Set(loadedPages).size).toBe(14)
     expect(
       computeRoutes
         .filter((route) => route.meta.navVisible)
@@ -109,10 +113,10 @@ describe('compute route manifest', () => {
       'virtualization.vms.view',
       'virtualization.clusters.view',
       'virtualization.images.view',
+      'virtualization.storage.view',
       'virtualization.flavors.view',
       'virtualization.operations.view',
       'virtualization.sync.view',
-      'virtualization.sync.manage',
       'docker.overview.view',
       'docker.hosts.view',
       'docker.projects.view',
@@ -121,5 +125,16 @@ describe('compute route manifest', () => {
       'docker.templates.view',
       'docker.operations.view',
     ])
+  })
+
+  it('uses a dedicated permission for virtualization storage', () => {
+    const storage = computeRoutes.find(
+      (route) => route.meta.id === 'virtualization-workbench-storage',
+    )
+    if (!storage || !('permissionKey' in storage.meta)) {
+      throw new Error('missing virtualization storage permission metadata')
+    }
+
+    expect(storage.meta.permissionKey).toBe('virtualization.storage.view')
   })
 })

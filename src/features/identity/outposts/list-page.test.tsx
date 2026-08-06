@@ -13,7 +13,13 @@ import {
 import { IdentityOutpostsPage } from './list-page'
 
 const testState = vi.hoisted(() => ({
-  permissionKeys: ['identity.outposts.view', 'identity.outposts.manage'],
+  permissionKeys: [
+    'identity.outposts.view',
+    'identity.outposts.create',
+    'identity.outposts.update',
+    'identity.outposts.delete',
+    'identity.outposts.rotate',
+  ],
   apiGet: vi.fn(),
   apiPost: vi.fn(),
 }))
@@ -166,7 +172,13 @@ beforeAll(() => {
 })
 
 beforeEach(() => {
-  testState.permissionKeys = ['identity.outposts.view', 'identity.outposts.manage']
+  testState.permissionKeys = [
+    'identity.outposts.view',
+    'identity.outposts.create',
+    'identity.outposts.update',
+    'identity.outposts.delete',
+    'identity.outposts.rotate',
+  ]
   testState.apiGet.mockReset()
   testState.apiPost.mockReset()
   testState.apiGet.mockImplementation(async (path: string) => {
@@ -298,6 +310,8 @@ describe('identity outposts page behavior', () => {
     expect(testState.apiGet).toHaveBeenCalledWith('/identity/outposts')
     expect(container.querySelector('[data-testid="row-edge-grafana"]')).not.toBeNull()
     expect(container.querySelector('[data-testid="row-edge-harbor"]')).not.toBeNull()
+    expect(container.querySelector('.soha-status-tag')?.textContent).toBe('Online')
+    expect(container.querySelector('.soha-metadata-tag')?.textContent).toBe('embedded')
 
     const search = container.querySelector(
       'input[placeholder="搜索名称、endpoint、版本"]',

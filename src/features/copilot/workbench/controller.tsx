@@ -210,11 +210,11 @@ export function AIWorkbenchController() {
   } = useWorkbenchRouteState()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const canUseChat = hasPermission(permissionSnapshotQuery.data?.data, 'observe.ai.chat')
-  const canManageInspection = hasPermission(
+  const canCreateInspection = hasPermission(
     permissionSnapshotQuery.data?.data,
-    'observe.ai.inspection.manage',
+    'observe.ai.inspection.create',
   )
-  const canCreateInspectionTask = canUseChat && canManageInspection
+  const canCreateInspectionTask = canUseChat && canCreateInspection
   const canRunRootCause = hasPermission(
     permissionSnapshotQuery.data?.data,
     'observe.ai.root-cause.run',
@@ -1054,7 +1054,7 @@ export function AIWorkbenchController() {
     ? undefined
     : !canUseChat
       ? '缺少 observe.ai.chat 权限'
-      : '缺少 observe.ai.inspection.manage 权限'
+      : '缺少 observe.ai.inspection.create 权限'
   const enabledSkills = globalSkills.filter((item) => item.enabled)
   const skillRelevanceTokens = useMemo(() => {
     if (activeMode === 'root_cause') return ['logs', 'metrics', 'traces', 'events', 'alerts']

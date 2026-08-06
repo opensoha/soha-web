@@ -73,7 +73,7 @@ function AIProductionOperationsPageContent() {
         confirmLoading={start.isPending}
         destroyOnHidden
       >
-        <Form form={form} layout="vertical" initialValues={{ kind: 'drill' }}>
+        <Form form={form} layout="vertical" preserve={false} initialValues={{ kind: 'drill' }}>
           <Form.Item name="kind" label="操作" rules={[{ required: true }]}>
             <Select
               options={[

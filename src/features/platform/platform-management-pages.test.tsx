@@ -15,6 +15,7 @@ import { ConfigurationConfigMapsPage } from './configuration/configmaps/list-pag
 import { NetworkPortForwardPage } from './network/port-forward/page'
 
 const testState = vi.hoisted(() => ({
+  permissionKeys: [] as string[],
   responses: {} as Record<string, unknown>,
   scope: {
     clusterId: 'cluster-a' as string | null,
@@ -22,6 +23,14 @@ const testState = vi.hoisted(() => ({
     setClusterId: vi.fn(),
     setNamespace: vi.fn(),
   },
+}))
+
+vi.mock('@/features/auth', () => ({
+  hasAllowedAction: (allowedActions: string[] | undefined, action: string) =>
+    allowedActions?.includes(action) ?? false,
+  hasPermission: (_snapshot: unknown, permissionKey?: string) =>
+    !permissionKey || testState.permissionKeys.includes(permissionKey),
+  usePermissionSnapshot: () => ({ data: { data: { permissionKeys: testState.permissionKeys } } }),
 }))
 
 vi.mock('@/stores/platform-scope-store', () => ({
@@ -110,6 +119,7 @@ vi.mock('@/components/admin-table', () => ({
 
 let containers: HTMLDivElement[] = []
 let roots: Array<ReturnType<typeof createRoot>> = []
+const getComputedStyle = window.getComputedStyle.bind(window)
 
 function setResponses(responses: Record<string, unknown>) {
   testState.responses = responses
@@ -187,6 +197,10 @@ function installDomMocks() {
       dispatchEvent: vi.fn(),
     })),
   })
+  Object.defineProperty(window, 'getComputedStyle', {
+    configurable: true,
+    value: (element: Element) => getComputedStyle(element),
+  })
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   vi.stubGlobal('ResizeObserver', ResizeObserverMock)
 }
@@ -197,6 +211,11 @@ describe('platform RBAC list pages', () => {
   })
 
   beforeEach(() => {
+    testState.permissionKeys = [
+      'platform.network.port-forwards.create',
+      'platform.network.port-forwards.delete',
+      'platform.network.port-forwards.view',
+    ]
     testState.scope.clusterId = 'cluster-a'
     testState.scope.namespace = 'team-a'
     setResponses({})
@@ -647,5 +666,59 @@ describe('platform network port forward page', () => {
     )
     expect(createButton?.disabled).toBe(false)
     expect(container.textContent).toContain('pending')
+  })
+
+  it('discards the create draft after cancelling the modal', async () => {
+    const container = await renderWithProviders(<NetworkPortForwardPage />, '/network/port-forward')
+    const createButton = Array.from(
+      container.querySelectorAll('[data-testid="header-extra"] button'),
+    ).find((button) => button.textContent?.trim() === '新建 Port Forward')
+
+    await act(async () => createButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+
+    const targetInput = Array.from(
+      document.body.querySelectorAll<HTMLInputElement>('.ant-modal input.ant-input'),
+    ).find((input) => input.value === '')
+    if (!targetInput) throw new Error('port forward target input not found')
+
+    await act(async () => {
+      setNativeInputValue(targetInput, 'stale-target')
+      targetInput.dispatchEvent(new Event('input', { bubbles: true }))
+      targetInput.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    const cancelButton = Array.from(document.body.querySelectorAll('.ant-modal button')).find(
+      (button) => button.textContent?.trim() === '取消',
+    )
+    await act(async () => cancelButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    await act(async () => createButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+
+    const reopenedTargetInput = Array.from(
+      document.body.querySelectorAll<HTMLInputElement>('.ant-modal input.ant-input'),
+    ).find((input) => input.value !== 'team-a')
+    expect(reopenedTargetInput?.value).toBe('')
+  })
+
+  it('hides mutation controls from a view-only role', async () => {
+    testState.permissionKeys = ['platform.network.port-forwards.view']
+    setResponses({
+      '/clusters/cluster-a/network/port-forwards': [
+        {
+          sessionId: 'session-a',
+          namespace: 'team-a',
+          targetKind: 'Pod',
+          targetName: 'api',
+          localPort: 8080,
+          remotePort: 80,
+          status: 'active',
+          createdAt: '2026-06-02T00:00:00Z',
+        },
+      ],
+    })
+
+    const container = await renderWithProviders(<NetworkPortForwardPage />, '/network/port-forward')
+
+    expect(container.textContent).not.toContain('新建 Port Forward')
+    expect(container.textContent).not.toContain('删除')
   })
 })

@@ -38,7 +38,7 @@ export const observabilityOncallRoutes = defineRoutes([
       navVisible: false,
       parentId: 'monitoring-workbench-oncall',
       menuId: 'monitoring-workbench-oncall',
-      permissionKey: 'observe.oncall.manage',
+      permissionKey: 'observe.oncall.view',
       scopeMode: 'passive',
     },
     shell: 'app',

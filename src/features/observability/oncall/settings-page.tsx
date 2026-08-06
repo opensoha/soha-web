@@ -89,7 +89,9 @@ export function OnCallSettingsPage() {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
-  const canManageOnCall = hasPermission(permissionSnapshotQuery.data?.data, 'observe.oncall.manage')
+  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const canCreateOnCall = hasPermission(permissionSnapshot, 'observe.oncall.create')
+  const canUpdateOnCall = hasPermission(permissionSnapshot, 'observe.oncall.update')
   const [scheduleForm] = Form.useForm<OnCallScheduleFormValues>()
   const [rotationForm] = Form.useForm<OnCallRotationFormValues>()
   const [policyForm] = Form.useForm<OnCallEscalationPolicyFormValues>()
@@ -273,7 +275,7 @@ export function OnCallSettingsPage() {
       title: '操作',
       dataIndex: 'id',
       render: (_: string, record) =>
-        canManageOnCall ? (
+        canUpdateOnCall ? (
           <ManagementIconButton
             aria-label="编辑排班"
             size="small"
@@ -322,7 +324,7 @@ export function OnCallSettingsPage() {
       title: '操作',
       dataIndex: 'id',
       render: (_: string, record) =>
-        canManageOnCall ? (
+        canUpdateOnCall ? (
           <ManagementIconButton
             aria-label="编辑轮值"
             size="small"
@@ -355,7 +357,7 @@ export function OnCallSettingsPage() {
       title: '操作',
       dataIndex: 'id',
       render: (_: string, record) =>
-        canManageOnCall ? (
+        canUpdateOnCall ? (
           <ManagementIconButton
             aria-label="编辑升级策略"
             size="small"
@@ -442,7 +444,7 @@ export function OnCallSettingsPage() {
       title: '操作',
       dataIndex: 'id',
       render: (_: string, record) =>
-        canManageOnCall ? (
+        canUpdateOnCall ? (
           <ManagementIconButton
             aria-label="编辑分派规则"
             size="small"
@@ -459,7 +461,7 @@ export function OnCallSettingsPage() {
       <Tabs
         tabBarExtraContent={
           <ManagementTableToolbar>
-            {canManageOnCall ? (
+            {canCreateOnCall ? (
               <>
                 <Button icon={<PlusOutlined />} onClick={() => openAssignmentEditor(null)}>
                   新增分派规则

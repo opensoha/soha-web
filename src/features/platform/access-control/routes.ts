@@ -1,5 +1,13 @@
 import { defineRoutes } from '@/routes/definitions'
 
+export const accessControlViewPermissions = [
+  'platform.access-control.service-accounts.view',
+  'platform.access-control.cluster-roles.view',
+  'platform.access-control.roles.view',
+  'platform.access-control.cluster-role-bindings.view',
+  'platform.access-control.role-bindings.view',
+]
+
 export const accessControlRoutes = defineRoutes([
   {
     meta: {
@@ -13,6 +21,7 @@ export const accessControlRoutes = defineRoutes([
       tabbar: false,
       navVisible: true,
       menuId: 'platform-access-control',
+      permissionKeysAny: accessControlViewPermissions,
       scopeMode: 'namespace',
       workspace: 'resource',
     },
@@ -31,6 +40,8 @@ export const accessControlRoutes = defineRoutes([
       tabbar: true,
       navVisible: true,
       parentId: 'platform-access-control',
+      menuId: 'platform-access-control-serviceaccounts',
+      permissionKey: 'platform.access-control.service-accounts.view',
       scopeMode: 'namespace',
     },
     shell: 'app',
@@ -70,6 +81,8 @@ export const accessControlRoutes = defineRoutes([
       tabbar: true,
       navVisible: true,
       parentId: 'platform-access-control',
+      menuId: 'platform-access-control-clusterroles',
+      permissionKey: 'platform.access-control.cluster-roles.view',
       scopeMode: 'cluster',
     },
     shell: 'app',
@@ -109,6 +122,8 @@ export const accessControlRoutes = defineRoutes([
       tabbar: true,
       navVisible: true,
       parentId: 'platform-access-control',
+      menuId: 'platform-access-control-roles',
+      permissionKey: 'platform.access-control.roles.view',
       scopeMode: 'namespace',
     },
     shell: 'app',
@@ -148,6 +163,8 @@ export const accessControlRoutes = defineRoutes([
       tabbar: true,
       navVisible: true,
       parentId: 'platform-access-control',
+      menuId: 'platform-access-control-clusterrolebindings',
+      permissionKey: 'platform.access-control.cluster-role-bindings.view',
       scopeMode: 'cluster',
     },
     shell: 'app',
@@ -187,6 +204,8 @@ export const accessControlRoutes = defineRoutes([
       tabbar: true,
       navVisible: true,
       parentId: 'platform-access-control',
+      menuId: 'platform-access-control-rolebindings',
+      permissionKey: 'platform.access-control.role-bindings.view',
       scopeMode: 'namespace',
     },
     shell: 'app',

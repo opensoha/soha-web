@@ -166,9 +166,17 @@ export function useApplicationCenterState() {
   const canCreateApplication = hasPermission(permissionSnapshot, 'delivery.application.create')
   const canUpdateApplication = hasPermission(permissionSnapshot, 'delivery.application.update')
   const canDeleteApplication = hasPermission(permissionSnapshot, 'delivery.application.delete')
-  const canManageBindings = hasPermission(
+  const canCreateBinding = hasPermission(
     permissionSnapshot,
-    'delivery.application-environments.manage',
+    'delivery.application-environments.create',
+  )
+  const canUpdateBinding = hasPermission(
+    permissionSnapshot,
+    'delivery.application-environments.update',
+  )
+  const canDeleteBinding = hasPermission(
+    permissionSnapshot,
+    'delivery.application-environments.delete',
   )
 
   const createAppOptions = deliveryMutations.applications.create(queryClient)
@@ -268,7 +276,9 @@ export function useApplicationCenterState() {
     canCreateApplication,
     canUpdateApplication,
     canDeleteApplication,
-    canManageBindings,
+    canCreateBinding,
+    canUpdateBinding,
+    canDeleteBinding,
     createAppMutation,
     updateAppMutation,
     deleteAppMutation,

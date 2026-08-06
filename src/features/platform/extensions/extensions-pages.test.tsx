@@ -16,6 +16,7 @@ import { HelmReleasesPage } from './helm/releases/list-page'
 
 const testState = vi.hoisted(() => ({
   editorLoaded: false,
+  permissionKeys: ['platform.helm.view', 'platform.helm.values.view'],
   normalizePath: (path: string) => {
     const [pathname, query] = path.split('?')
     if (!query) return path
@@ -44,6 +45,13 @@ const apiGetMock = vi.hoisted(() =>
 
 vi.mock('@/stores/platform-scope-store', () => ({
   usePlatformScopeStore: () => testState.scope,
+}))
+
+vi.mock('@/features/auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/auth')>()),
+  usePermissionSnapshot: () => ({
+    data: { data: { permissionKeys: testState.permissionKeys } },
+  }),
 }))
 
 vi.mock('@/services/api-client', () => ({
@@ -195,6 +203,7 @@ describe('extensions capability pages', () => {
 
   beforeEach(() => {
     testState.editorLoaded = false
+    testState.permissionKeys = ['platform.helm.view', 'platform.helm.values.view']
     setResponses({})
   })
 
@@ -289,6 +298,29 @@ describe('extensions capability pages', () => {
     expect(apiGetMock.mock.calls.some(([path]) => String(path).includes('/history'))).toBe(true)
     expect(apiGetMock.mock.calls.some(([path]) => String(path).includes('/values'))).toBe(false)
     expect(testState.editorLoaded).toBe(false)
+  })
+
+  it('falls back to Helm history when values access is not granted', async () => {
+    testState.permissionKeys = ['platform.helm.view']
+    setResponses({
+      '/clusters/cluster-a/helm/releases/demo/detail?namespace=team-a': {
+        name: 'demo',
+        namespace: 'team-a',
+        status: 'deployed',
+      },
+      '/clusters/cluster-a/helm/releases/demo/history?namespace=team-a': [],
+    })
+
+    const container = await renderPage(
+      <Routes>
+        <Route path="/helm/releases/:releaseName" element={<HelmReleaseDetailPage />} />
+      </Routes>,
+      '/helm/releases/demo?namespace=team-a&tab=values',
+    )
+
+    expect(container.textContent).not.toContain('values.yaml')
+    expect(apiGetMock.mock.calls.some(([path]) => String(path).includes('/history'))).toBe(true)
+    expect(apiGetMock.mock.calls.some(([path]) => String(path).includes('/values'))).toBe(false)
   })
 
   it('loads chart detail and default values only after opening the drawer and Values tab', async () => {

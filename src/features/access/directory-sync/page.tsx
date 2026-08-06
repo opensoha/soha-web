@@ -51,9 +51,11 @@ export function DirectorySyncPage() {
   const permissionQuery = usePermissionSnapshot()
   const snapshot = permissionQuery.data?.data
   const canView = hasPermission(snapshot, 'access.directory.view')
-  const canManage = hasPermission(snapshot, 'access.directory.manage')
+  const canCreate = hasPermission(snapshot, 'access.directory.create')
+  const canUpdate = hasPermission(snapshot, 'access.directory.update')
+  const canValidate = hasPermission(snapshot, 'access.directory.validate')
   const canSync = hasPermission(snapshot, 'access.directory.sync')
-  const canManagePeople = hasPermission(snapshot, 'access.directory.people.manage')
+  const canManagePeople = hasPermission(snapshot, 'access.directory.people.resolve')
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState<DirectoryConnection | null>(null)
   const [formOpen, setFormOpen] = useState(false)
@@ -68,7 +70,7 @@ export function DirectorySyncPage() {
   const conflictsQuery = useQuery(directorySyncQueries.conflicts(canView))
   const identitySettingsQuery = useQuery({
     ...settingsQueries.identity(),
-    enabled: canManage && formOpen,
+    enabled: (canCreate || canUpdate) && formOpen,
   })
   const createMutation = useMutation(directorySyncMutations.create(queryClient))
   const updateMutation = useMutation(directorySyncMutations.update(queryClient))
@@ -163,7 +165,7 @@ export function DirectorySyncPage() {
                 }}
               />
             ) : null}
-            {canManage ? (
+            {canValidate ? (
               <ManagementIconButton
                 aria-label="验证连接"
                 tooltip="验证连接"
@@ -179,7 +181,7 @@ export function DirectorySyncPage() {
                 }
               />
             ) : null}
-            {canManage ? (
+            {canUpdate ? (
               <ManagementIconButton
                 aria-label="编辑目录连接"
                 tooltip="编辑"
@@ -210,7 +212,7 @@ export function DirectorySyncPage() {
         ),
       },
     ],
-    [canManage, canSync, message, previewMutation, syncMutation, validateMutation],
+    [canSync, canUpdate, canValidate, message, previewMutation, syncMutation, validateMutation],
   )
 
   if (!canView)
@@ -235,7 +237,7 @@ export function DirectorySyncPage() {
       resourceName="目录同步"
       columns={columns}
       createAction={
-        canManage ? (
+        canCreate ? (
           <Button
             size="small"
             type="primary"

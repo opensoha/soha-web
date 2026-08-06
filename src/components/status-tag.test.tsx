@@ -45,6 +45,43 @@ describe('StatusTag', () => {
     await act(async () => root.unmount())
   })
 
+  it('keeps a localized label while resolving color from the status value', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(<StatusTag label="阻塞" value=" blocked " />)
+    })
+
+    expect(container.textContent).toBe('阻塞')
+    expect(captured.props).toMatchObject({
+      className: 'soha-status-tag',
+      color: 'error',
+      variant: 'filled',
+    })
+
+    await act(async () => root.unmount())
+  })
+
+  it('covers infrastructure provisioning and agent failure states', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(<StatusTag value="provisioning" />)
+    })
+    expect(captured.props?.color).toBe('processing')
+
+    await act(async () => {
+      root.render(<StatusTag value="agent_failed" />)
+    })
+    expect(captured.props?.color).toBe('error')
+
+    await act(async () => root.unmount())
+  })
+
   it('uses the same filled treatment for categorical metadata', async () => {
     const container = document.createElement('div')
     document.body.appendChild(container)

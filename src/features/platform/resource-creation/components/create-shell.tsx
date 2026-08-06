@@ -6,6 +6,7 @@ import { ManagementState } from '@/components/management-list'
 import { listClusters } from '@/features/platform/clusters/api'
 import { clusterKeys } from '@/features/platform/clusters/keys'
 import { useI18n } from '@/i18n'
+import { createUUID } from '@/utils/uuid'
 import { resourceCreationMutations } from '../mutations'
 import { resourceCreationQueries } from '../queries'
 import {
@@ -196,7 +197,7 @@ function ShellBody({
       {
         onSuccess: () => {
           setPreflightRequestFingerprint(requestFingerprint)
-          setIdempotencyKey(crypto.randomUUID())
+          setIdempotencyKey(createUUID())
         },
         onError: (error) => void message.error(error.message),
       },
@@ -208,7 +209,7 @@ function ShellBody({
     executeMutation.mutate(
       {
         clusterId: context.clusterId,
-        idempotencyKey: idempotencyKey || crypto.randomUUID(),
+        idempotencyKey: idempotencyKey || createUUID(),
         request,
       },
       {

@@ -95,7 +95,12 @@ export function GatewayToolInvokeDrawer({
               { key: 'scopes', label: 'Scopes', children: tool.requiredScopes?.join(', ') || '-' },
             ]}
           />
-          <Form form={form} layout="vertical" initialValues={{ inputJson: '{}', secretRefs: [] }}>
+          <Form
+            form={form}
+            layout="vertical"
+            preserve={false}
+            initialValues={{ inputJson: '{}', secretRefs: [] }}
+          >
             <Form.Item label="Input JSON" name="inputJson" rules={[{ required: true }]}>
               <Input.TextArea autoSize={{ minRows: 8, maxRows: 16 }} spellCheck={false} />
             </Form.Item>

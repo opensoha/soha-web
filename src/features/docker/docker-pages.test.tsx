@@ -29,7 +29,7 @@ const testState = vi.hoisted(() => ({
     virtualization: true,
   },
   permissionSnapshot: {
-    permissionKeys: ['docker.hosts.manage'],
+    permissionKeys: ['docker.hosts.create', 'docker.hosts.update', 'docker.hosts.delete'],
     visibleMenuIds: [],
     visibleMenus: [],
   },
@@ -346,7 +346,7 @@ describe('docker pages', () => {
       virtualization: true,
     }
     testState.permissionSnapshot = {
-      permissionKeys: ['docker.hosts.manage'],
+      permissionKeys: ['docker.hosts.create', 'docker.hosts.update', 'docker.hosts.delete'],
       visibleMenuIds: [],
       visibleMenus: [],
     }
@@ -629,9 +629,13 @@ describe('docker pages', () => {
     testState.permissionSnapshot = {
       permissionKeys: [
         'docker.projects.view',
-        'docker.projects.manage',
+        'docker.projects.create',
+        'docker.projects.update',
+        'docker.projects.delete',
         'docker.projects.deploy',
-        'docker.ports.manage',
+        'docker.ports.create',
+        'docker.ports.update',
+        'docker.ports.delete',
       ],
       visibleMenuIds: [],
       visibleMenus: [],
@@ -710,9 +714,13 @@ describe('docker pages', () => {
     testState.permissionSnapshot = {
       permissionKeys: [
         'docker.projects.view',
-        'docker.projects.manage',
+        'docker.projects.create',
+        'docker.projects.update',
+        'docker.projects.delete',
         'docker.projects.deploy',
-        'docker.ports.manage',
+        'docker.ports.create',
+        'docker.ports.update',
+        'docker.ports.delete',
       ],
       visibleMenuIds: [],
       visibleMenus: [],
@@ -749,7 +757,7 @@ describe('docker pages', () => {
 
   it('splits Compose creation into four focused steps', async () => {
     testState.permissionSnapshot = {
-      permissionKeys: ['docker.projects.view', 'docker.projects.manage'],
+      permissionKeys: ['docker.projects.view', 'docker.projects.create'],
       visibleMenuIds: [],
       visibleMenus: [],
     }
@@ -824,11 +832,17 @@ describe('docker pages', () => {
     testState.permissionSnapshot = {
       permissionKeys: [
         'docker.projects.view',
-        'docker.projects.manage',
+        'docker.projects.create',
+        'docker.projects.update',
+        'docker.projects.delete',
         'docker.projects.deploy',
         'docker.services.view',
-        'docker.services.manage',
-        'docker.ports.manage',
+        'docker.services.create',
+        'docker.services.update',
+        'docker.services.delete',
+        'docker.ports.create',
+        'docker.ports.update',
+        'docker.ports.delete',
       ],
       visibleMenuIds: [],
       visibleMenus: [],

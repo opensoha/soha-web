@@ -646,14 +646,53 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
   const permissionSnapshot = usePermissionSnapshot()
   const snapshot = permissionSnapshot.data?.data
   const canView = hasPermission(snapshot, 'ai.gateway.view')
-  const canManage = hasPermission(snapshot, 'ai.gateway.manage')
   const canInvoke = hasPermission(snapshot, 'ai.gateway.invoke')
+  const canViewApprovals = hasPermission(snapshot, 'ai.gateway.approvals.view')
+  const canApprove = hasPermission(snapshot, 'ai.gateway.approvals.approve')
+  const canReject = hasPermission(snapshot, 'ai.gateway.approvals.reject')
+  const canCancel = hasPermission(snapshot, 'ai.gateway.approvals.cancel')
+  const canViewClients = hasPermission(snapshot, 'ai.gateway.clients.view')
+  const canCreateClients = hasPermission(snapshot, 'ai.gateway.clients.create')
+  const canUpdateClients = hasPermission(snapshot, 'ai.gateway.clients.update')
+  const canViewGrants = hasPermission(snapshot, 'ai.gateway.grants.view')
+  const canCreateGrants = hasPermission(snapshot, 'ai.gateway.grants.create')
+  const canDeleteGrants = hasPermission(snapshot, 'ai.gateway.grants.delete')
+  const canViewPolicies = hasPermission(snapshot, 'ai.gateway.policies.view')
+  const canCreatePolicies = hasPermission(snapshot, 'ai.gateway.policies.create')
+  const canUpdatePolicies = hasPermission(snapshot, 'ai.gateway.policies.update')
+  const canDeletePolicies = hasPermission(snapshot, 'ai.gateway.policies.delete')
+  const canViewSkills = hasPermission(snapshot, 'ai.gateway.skills.view')
+  const canCreateSkills = hasPermission(snapshot, 'ai.gateway.skills.create')
+  const canUpdateSkills = hasPermission(snapshot, 'ai.gateway.skills.update')
+  const canDeleteSkills = hasPermission(snapshot, 'ai.gateway.skills.delete')
+  const canViewTokens = hasPermission(snapshot, 'ai.gateway.tokens.view')
+  const canCreateTokens = hasPermission(snapshot, 'ai.gateway.tokens.create')
+  const canRevokeTokens = hasPermission(snapshot, 'ai.gateway.tokens.revoke')
+  const canRotateTokens = hasPermission(snapshot, 'ai.gateway.tokens.rotate')
   const canRelayView = hasPermission(snapshot, 'ai.gateway.relay.view')
-  const canRelayManage = hasPermission(snapshot, 'ai.gateway.relay.manage')
+  const canRelayCreate = hasPermission(snapshot, 'ai.gateway.relay.create')
+  const canRelayUpdate = hasPermission(snapshot, 'ai.gateway.relay.update')
+  const canRelayDelete = hasPermission(snapshot, 'ai.gateway.relay.delete')
+  const canRelayTest = hasPermission(snapshot, 'ai.gateway.relay.test')
   const canRelayInvoke = hasPermission(snapshot, 'ai.gateway.relay.invoke')
-  const canUseRelay = canRelayView || canRelayManage || canRelayInvoke
-  const canUseGateway = canView || canInvoke || canManage || canUseRelay
-  const personalTokenScope = canManage ? 'all' : 'mine'
+  const canUseRelay =
+    canRelayView ||
+    canRelayCreate ||
+    canRelayUpdate ||
+    canRelayDelete ||
+    canRelayTest ||
+    canRelayInvoke
+  const canUseGateway =
+    canView ||
+    canInvoke ||
+    canViewApprovals ||
+    canViewClients ||
+    canViewGrants ||
+    canViewPolicies ||
+    canViewSkills ||
+    canViewTokens ||
+    canUseRelay
+  const personalTokenScope = canViewTokens ? 'all' : 'mine'
   const sectionActiveTab = gatewayTabBelongsToSection(activeTab, section)
     ? activeTab
     : defaultGatewayTabForSection(section, focusedApprovalRequestId)
@@ -666,45 +705,45 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
 
   const clientsQuery = useQuery(
     gatewayQueries.clients(
-      canManage &&
+      canViewClients &&
         (isManifest || isClients || isGovernance || (isCallLogs && sectionActiveTab === 'audit')),
     ),
   )
   const personalTokensQuery = useQuery(
     gatewayQueries.personalTokens(
       personalTokenScope,
-      (canManage || canView || canInvoke) && isTokens,
+      (canViewTokens || canView || canInvoke) && isTokens,
     ),
   )
-  const relayMetricsQuery = useQuery(
-    gatewayQueries.relay.metrics((canRelayManage || canRelayView) && isRelay),
-  )
+  const relayMetricsQuery = useQuery(gatewayQueries.relay.metrics(canRelayView && isRelay))
   const upstreamsQuery = useQuery(
     gatewayQueries.relay.upstreams(
       { providerKind: upstreamProviderFilter, status: upstreamStatusFilter },
-      (canRelayManage || canRelayView) &&
+      canRelayView &&
         (isRelay || isTokens || (isCallLogs && sectionActiveTab === 'model-calls')),
     ),
   )
   const modelRoutesQuery = useQuery(
     gatewayQueries.relay.modelRoutes(
       { providerKind: modelRouteProviderFilter, upstreamId: modelRouteUpstreamFilter },
-      (canRelayManage || canRelayView) && isRelay,
+      canRelayView && isRelay,
     ),
   )
   const modelCallsQuery = useQuery(
     gatewayQueries.relay.modelCalls(
       modelCallFilters,
-      canRelayManage &&
+      canRelayView &&
         ((isRelay && ['relay', 'model-calls'].includes(sectionActiveTab)) ||
           (isCallLogs && sectionActiveTab === 'model-calls')),
     ),
   )
-  const serviceAccountsQuery = useQuery(gatewayQueries.serviceAccounts(canManage && isTokens))
-  const serviceAccountTokensQuery = useQuery(gatewayQueries.serviceTokens(canManage && isTokens))
-  const grantsQuery = useQuery(gatewayQueries.grants(canManage && isGovernance))
-  const policiesQuery = useQuery(gatewayQueries.policies(canManage && isGovernance))
-  const bindingsQuery = useQuery(gatewayQueries.bindings(canManage && isGovernance))
+  const serviceAccountsQuery = useQuery(gatewayQueries.serviceAccounts(canViewTokens && isTokens))
+  const serviceAccountTokensQuery = useQuery(
+    gatewayQueries.serviceTokens(canViewTokens && isTokens),
+  )
+  const grantsQuery = useQuery(gatewayQueries.grants(canViewGrants && isGovernance))
+  const policiesQuery = useQuery(gatewayQueries.policies(canViewPolicies && isGovernance))
+  const bindingsQuery = useQuery(gatewayQueries.bindings(canViewSkills && isGovernance))
   const manifestQuery = useQuery(
     gatewayQueries.manifest(
       manifestFilters,
@@ -712,18 +751,18 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
     ),
   )
   const auditQuery = useQuery(
-    gatewayQueries.auditLogs(auditFilters, canManage && isCallLogs && sectionActiveTab === 'audit'),
+    gatewayQueries.auditLogs(auditFilters, canView && isCallLogs && sectionActiveTab === 'audit'),
   )
   const approvalsQuery = useQuery(
     gatewayQueries.approvals(
       approvalFilters,
-      canManage && isGovernance && sectionActiveTab === 'approvals',
+      canViewApprovals && isGovernance && sectionActiveTab === 'approvals',
     ),
   )
   const governanceQuery = useQuery(
     gatewayQueries.governance(
       governanceWindowHours,
-      canManage && isGovernance && sectionActiveTab === 'governance',
+      canView && isGovernance && sectionActiveTab === 'governance',
     ),
   )
 
@@ -1009,7 +1048,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             tooltip="编辑"
             aria-label="编辑 client"
             icon={<EditOutlined />}
-            disabled={!canManage}
+            disabled={!canUpdateClients}
             onClick={() => setDrawer({ kind: 'ai-client', record })}
           />
           <Popconfirm
@@ -1025,7 +1064,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
               danger
               icon={<StopOutlined />}
               loading={disableClientMutation.isPending}
-              disabled={!canManage || record.status === 'disabled'}
+              disabled={!canUpdateClients || record.status === 'disabled'}
             />
           </Popconfirm>
         </Space>
@@ -1103,7 +1142,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             tooltip="测试"
             aria-label="测试上游"
             icon={<CheckOutlined />}
-            disabled={!canRelayManage || record.status === 'disabled'}
+            disabled={!canRelayTest || record.status === 'disabled'}
             loading={testUpstreamMutation.isPending}
             onClick={() => testUpstreamMutation.mutate(record)}
           />
@@ -1112,7 +1151,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             tooltip="编辑"
             aria-label="编辑上游"
             icon={<EditOutlined />}
-            disabled={!canRelayManage}
+            disabled={!canRelayUpdate}
             onClick={() => setDrawer({ kind: 'relay-upstream', record })}
           />
           <Popconfirm
@@ -1128,7 +1167,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
               danger
               icon={<StopOutlined />}
               loading={disableUpstreamMutation.isPending}
-              disabled={!canRelayManage || record.status === 'disabled'}
+              disabled={!canRelayUpdate || record.status === 'disabled'}
             />
           </Popconfirm>
         </Space>
@@ -1204,7 +1243,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             tooltip="复制"
             aria-label="复制模型路由"
             icon={<CopyOutlined />}
-            disabled={!canRelayManage}
+            disabled={!canRelayCreate}
             onClick={() =>
               setDrawer({
                 kind: 'relay-route',
@@ -1226,7 +1265,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             tooltip="编辑"
             aria-label="编辑模型路由"
             icon={<EditOutlined />}
-            disabled={!canRelayManage}
+            disabled={!canRelayUpdate}
             onClick={() => setDrawer({ kind: 'relay-route', record })}
           />
           <Popconfirm
@@ -1241,7 +1280,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
               aria-label="删除模型路由"
               danger
               icon={<DeleteOutlined />}
-              disabled={!canRelayManage}
+              disabled={!canRelayDelete}
             />
           </Popconfirm>
         </Space>
@@ -1362,7 +1401,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
       render: (_, record) => {
         const isOwner = record.userId === currentUser?.userId
         const canRotate = canInvoke && isOwner
-        const canRevoke = canManage || (canInvoke && isOwner)
+        const canRevoke = canRevokeTokens || (canInvoke && isOwner)
         return (
           <Space className="soha-row-action-icons">
             <Popconfirm
@@ -1433,7 +1472,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
           <Button
             size="small"
             icon={<KeyOutlined />}
-            disabled={!canManage || record.status !== 'active'}
+            disabled={!canCreateTokens || record.status !== 'active'}
             onClick={() => setDrawer({ kind: 'service-token', record })}
           />
         </Space>
@@ -1500,7 +1539,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
               aria-label="轮换服务 token"
               icon={<ReloadOutlined />}
               loading={rotateTokenMutation.isPending}
-              disabled={!canManage || !!record.revokedAt}
+              disabled={!canRotateTokens || !!record.revokedAt}
             />
           </Popconfirm>
           <ManagementIconButton
@@ -1509,7 +1548,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             aria-label="吊销服务 token"
             danger
             icon={<StopOutlined />}
-            disabled={!canManage || !!record.revokedAt}
+            disabled={!canRevokeTokens || !!record.revokedAt}
             onClick={() =>
               setDrawer({ kind: 'service-token-revoke', initialValues: { tokenId: record.id } })
             }
@@ -1566,7 +1605,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             aria-label="删除 MCP tool grant"
             danger
             icon={<DeleteOutlined />}
-            disabled={!canManage}
+            disabled={!canDeleteGrants}
           />
         </Popconfirm>
       ),
@@ -1627,7 +1666,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             tooltip="编辑"
             aria-label="编辑 access policy"
             icon={<EditOutlined />}
-            disabled={!canManage}
+            disabled={!canUpdatePolicies}
             onClick={() => setDrawer({ kind: 'access-policy', record })}
           />
           <Popconfirm
@@ -1642,7 +1681,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
               aria-label="删除 access policy"
               danger
               icon={<DeleteOutlined />}
-              disabled={!canManage}
+              disabled={!canDeletePolicies}
             />
           </Popconfirm>
         </Space>
@@ -1689,7 +1728,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             tooltip="编辑"
             aria-label="编辑 skill binding"
             icon={<EditOutlined />}
-            disabled={!canManage}
+            disabled={!canUpdateSkills}
             onClick={() => setDrawer({ kind: 'skill-binding', record })}
           />
           <Popconfirm
@@ -1704,7 +1743,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
               aria-label="删除 skill binding"
               danger
               icon={<DeleteOutlined />}
-              disabled={!canManage}
+              disabled={!canDeleteSkills}
             />
           </Popconfirm>
         </Space>
@@ -1856,7 +1895,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
           <Button
             size="small"
             icon={<CheckOutlined />}
-            disabled={!canManage || !isPendingApproval(record)}
+            disabled={!canApprove || !isPendingApproval(record)}
             loading={decisionMutation.isPending}
             onClick={() => setDecisionTarget({ action: 'approve', record })}
           />
@@ -1864,14 +1903,14 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             size="small"
             danger
             icon={<CloseOutlined />}
-            disabled={!canManage || !isPendingApproval(record)}
+            disabled={!canReject || !isPendingApproval(record)}
             loading={decisionMutation.isPending}
             onClick={() => setDecisionTarget({ action: 'reject', record })}
           />
           <Button
             size="small"
             icon={<StopOutlined />}
-            disabled={!canManage || !isPendingApproval(record)}
+            disabled={!canCancel || !isPendingApproval(record)}
             loading={decisionMutation.isPending}
             onClick={() => setDecisionTarget({ action: 'cancel', record })}
           />
@@ -2251,7 +2290,8 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
                   modelCallsFetching={modelCallsQuery.isFetching}
                   modelCallFilters={modelCallFilters}
                   onModelCallFiltersChange={setModelCallFilters}
-                  canRelayManage={canRelayManage}
+                  canRelayView={canRelayView}
+                  canRelayCreate={canRelayCreate}
                   upstreamColumns={upstreamColumns}
                   upstreams={filteredUpstreams}
                   upstreamsLoading={upstreamsQuery.isLoading}
@@ -2317,7 +2357,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
                   columns={aiClientColumns}
                   clients={filteredClients}
                   loading={clientsQuery.isLoading}
-                  canManage={canManage}
+                  canCreate={canCreateClients}
                   filter={clientFilter}
                   onFilterChange={setClientFilter}
                   onCreate={() => setDrawer({ kind: 'ai-client' })}
@@ -2335,7 +2375,9 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
                   serviceTokenColumns={serviceAccountTokenColumns}
                   serviceTokens={filteredServiceAccountTokens}
                   serviceTokensLoading={serviceAccountTokensQuery.isLoading}
-                  canManage={canManage}
+                  canViewAll={canViewTokens}
+                  canCreate={canCreateTokens}
+                  canRevoke={canRevokeTokens}
                   canInvoke={canInvoke}
                   tokenFilter={tokenFilter}
                   serviceTokenFilter={serviceTokenFilter}
@@ -2349,7 +2391,9 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
                 <GatewayGovernanceSection
                   activeTab={sectionActiveTab}
                   onTabChange={setActiveTab}
-                  canManage={canManage}
+                  canCreateGrants={canCreateGrants}
+                  canCreatePolicies={canCreatePolicies}
+                  canCreateSkills={canCreateSkills}
                   grantColumns={grantColumns}
                   grants={filteredGrants}
                   grantsLoading={grantsQuery.isLoading}
@@ -2406,7 +2450,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
                   modelCallsFetching={modelCallsQuery.isFetching}
                   modelCallFilters={modelCallFilters}
                   upstreams={upstreams}
-                  canRelayManage={canRelayManage}
+                  canRelayView={canRelayView}
                   onModelCallFiltersChange={setModelCallFilters}
                   onRefreshModelCalls={() => void modelCallsQuery.refetch()}
                   expandedModelCallRowRender={(record) => (
@@ -2514,7 +2558,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
                 },
               ]}
             />
-            <Form form={decisionForm} layout="vertical">
+            <Form form={decisionForm} layout="vertical" preserve={false}>
               <Form.Item name="comment" label="备注">
                 <Input.TextArea autoSize={{ minRows: 3 }} />
               </Form.Item>

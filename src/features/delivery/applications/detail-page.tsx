@@ -515,10 +515,10 @@ export function ApplicationDetailPage() {
   const [deliveryForm] = Form.useForm<DeliveryActionFormValues>()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const managementState = useApplicationCenterState()
-  const canManageServices = hasPermission(
-    permissionSnapshotQuery.data?.data,
-    'delivery.application-services.manage',
-  )
+  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const canCreateService = hasPermission(permissionSnapshot, 'delivery.application-services.create')
+  const canUpdateService = hasPermission(permissionSnapshot, 'delivery.application-services.update')
+  const canDeleteService = hasPermission(permissionSnapshot, 'delivery.application-services.delete')
   const canManageRepositories = managementState.canUpdateApplication
   const canTriggerBuild = hasPermission(
     permissionSnapshotQuery.data?.data,
@@ -968,7 +968,9 @@ export function ApplicationDetailPage() {
     { key: 'delivery.builds.trigger', label: '构建', enabled: canTriggerBuild },
     { key: 'delivery.workflows.trigger', label: '工作流', enabled: canTriggerWorkflow },
     { key: 'delivery.releases.trigger', label: '发布', enabled: canTriggerRelease },
-    { key: 'delivery.application-services.manage', label: '服务配置', enabled: canManageServices },
+    { key: 'delivery.application-services.create', label: '新建服务', enabled: canCreateService },
+    { key: 'delivery.application-services.update', label: '修改服务', enabled: canUpdateService },
+    { key: 'delivery.application-services.delete', label: '删除服务', enabled: canDeleteService },
   ]
 
   return (
@@ -1544,7 +1546,7 @@ export function ApplicationDetailPage() {
                 <DeliveryTable
                   title="环境绑定"
                   actions={
-                    managementState.canManageBindings ? (
+                    managementState.canCreateBinding ? (
                       <Button type="primary" icon={<PlusOutlined />} onClick={openBindingCreate}>
                         新建绑定
                       </Button>
@@ -1621,7 +1623,7 @@ export function ApplicationDetailPage() {
                               setActiveTab('environments')
                             }}
                           />
-                          {managementState.canManageBindings ? (
+                          {managementState.canUpdateBinding ? (
                             <ManagementIconButton
                               aria-label="编辑绑定"
                               icon={<EditOutlined />}
@@ -1630,7 +1632,7 @@ export function ApplicationDetailPage() {
                               onClick={() => openBindingEdit(record)}
                             />
                           ) : null}
-                          {managementState.canManageBindings ? (
+                          {managementState.canDeleteBinding ? (
                             <Popconfirm
                               title="确认删除绑定？"
                               onConfirm={() =>
@@ -1754,7 +1756,7 @@ export function ApplicationDetailPage() {
                 className="soha-management-panel-card"
                 title="服务组件"
                 extra={
-                  canManageServices ? (
+                  canCreateService ? (
                     <Button
                       type="primary"
                       icon={<PlusOutlined />}
@@ -1775,8 +1777,10 @@ export function ApplicationDetailPage() {
                         title={service.name}
                         extra={<StatusTag value={service.enabled ? 'enabled' : 'disabled'} />}
                         actions={
-                          canManageServices
+                          canUpdateService || canDeleteService
                             ? [
+                                ...(canUpdateService
+                                  ? [
                                 <ManagementIconButton
                                   key="edit"
                                   aria-label="编辑服务组件"
@@ -1785,6 +1789,10 @@ export function ApplicationDetailPage() {
                                   tooltip="编辑"
                                   onClick={() => openServiceModal(service)}
                                 />,
+                                    ]
+                                  : []),
+                                ...(canDeleteService
+                                  ? [
                                 <Popconfirm
                                   key="delete"
                                   title="确认删除该服务组件？"
@@ -1803,6 +1811,8 @@ export function ApplicationDetailPage() {
                                     tooltip="删除"
                                   />
                                 </Popconfirm>,
+                                    ]
+                                  : []),
                               ]
                             : undefined
                         }

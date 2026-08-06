@@ -1,3 +1,4 @@
+import { createUUID } from '@/utils/uuid'
 import type { LoginProviderSettings } from '../types'
 
 export const LOGIN_PROVIDER_TYPE_OPTIONS = [
@@ -60,7 +61,7 @@ export function defaultFrontendRedirectPath() {
 }
 
 export function newLoginProviderID() {
-  return crypto.randomUUID()
+  return createUUID()
 }
 
 export function applyProviderPreset(
@@ -74,9 +75,8 @@ export function applyProviderPreset(
         ...provider,
         type,
         authorizeUrl:
-          provider.authorizeUrl || 'https://open.feishu.cn/open-apis/authen/v1/authorize',
-        tokenUrl:
-          provider.tokenUrl || 'https://open.feishu.cn/open-apis/authen/v1/oidc/access_token',
+          provider.authorizeUrl || 'https://accounts.feishu.cn/open-apis/authen/v1/authorize',
+        tokenUrl: provider.tokenUrl || 'https://accounts.feishu.cn/oauth/v3/token',
         userInfoUrl: provider.userInfoUrl || 'https://open.feishu.cn/open-apis/authen/v1/user_info',
         scopes: provider.scopes.length > 0 ? provider.scopes : ['contact:user.base:readonly'],
         userIdField: provider.userIdField || 'open_id',

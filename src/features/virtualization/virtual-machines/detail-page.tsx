@@ -9,7 +9,6 @@ import {
   Space,
   Spin,
   Tabs,
-  Tag,
   Tooltip,
   Typography,
 } from 'antd'
@@ -18,11 +17,11 @@ import { getAIWorkbenchPathForMode, useAIPageContext } from '@/features/copilot'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { ManagementIconButton, ManagementState } from '@/components/management-list'
+import { StatusTag } from '@/components/status-tag'
 import { virtualizationQueries } from '@/features/virtualization/queries'
 import { useVirtualizationPermissions } from '@/features/virtualization/shared/use-virtualization-permissions'
 import { VirtualizationAdminTable } from '@/features/virtualization/shared/ui'
 import {
-  STATUS_COLORS,
   isAbnormalOperation,
   isStaleVirtualMachine,
   latestNonEmptyOperationMessage,
@@ -48,8 +47,7 @@ const VMMetricsPanel = lazy(() =>
 
 function statusTag(value?: string) {
   if (!value) return <Text type="secondary">-</Text>
-  const key = value.toLowerCase()
-  return <Tag color={STATUS_COLORS[key] ?? 'default'}>{value}</Tag>
+  return <StatusTag value={value} />
 }
 
 function tableTooltipText(value: unknown) {

@@ -32,7 +32,9 @@ export function AccessPoliciesPage() {
   const permissionSnapshotQuery = usePermissionSnapshot()
   const snapshot = permissionSnapshotQuery.data?.data
   const canViewPolicies = hasPermission(snapshot, 'access.policies.view')
-  const canManagePolicies = hasPermission(snapshot, 'access.policies.manage')
+  const canCreatePolicies = hasPermission(snapshot, 'access.policies.create')
+  const canUpdatePolicies = hasPermission(snapshot, 'access.policies.update')
+  const canDeletePolicies = hasPermission(snapshot, 'access.policies.delete')
   const [form] = Form.useForm<Record<string, unknown>>()
   const crud = useAccessResourceCrud({
     query: accessQueries.policies(),
@@ -94,27 +96,31 @@ export function AccessPoliciesPage() {
       dataIndex: 'id',
       render: (_: unknown, record: AccessPolicy) => (
         <Space className="soha-row-action-icons">
-          {canManagePolicies ? (
+          {canUpdatePolicies || canDeletePolicies ? (
             <>
-              <ManagementIconButton
-                aria-label="编辑策略"
-                icon={<EditOutlined />}
-                size="small"
-                tooltip="编辑"
-                onClick={() => crud.openEdit(record)}
-              />
-              <Popconfirm
-                title="确认删除？"
-                onConfirm={() => crud.deleteMutation.mutate(record.id)}
-              >
+              {canUpdatePolicies ? (
                 <ManagementIconButton
-                  aria-label="删除策略"
-                  danger
-                  icon={<DeleteOutlined />}
+                  aria-label="编辑策略"
+                  icon={<EditOutlined />}
                   size="small"
-                  tooltip="删除"
+                  tooltip="编辑"
+                  onClick={() => crud.openEdit(record)}
                 />
-              </Popconfirm>
+              ) : null}
+              {canDeletePolicies ? (
+                <Popconfirm
+                  title="确认删除？"
+                  onConfirm={() => crud.deleteMutation.mutate(record.id)}
+                >
+                  <ManagementIconButton
+                    aria-label="删除策略"
+                    danger
+                    icon={<DeleteOutlined />}
+                    size="small"
+                    tooltip="删除"
+                  />
+                </Popconfirm>
+              ) : null}
             </>
           ) : (
             '-'
@@ -201,7 +207,7 @@ export function AccessPoliciesPage() {
       resourceName="策略"
       columns={columns}
       createAction={
-        canManagePolicies ? (
+        canCreatePolicies ? (
           <Button size="small" icon={<PlusOutlined />} type="primary" onClick={crud.openCreate}>
             添加策略
           </Button>

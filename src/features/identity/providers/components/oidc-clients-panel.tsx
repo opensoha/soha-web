@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { App, Button, Popconfirm, Space, Tag, Typography } from 'antd'
+import { App, Button, Popconfirm, Space, Typography } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { DeleteOutlined, EditOutlined, KeyOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -9,6 +9,7 @@ import {
   ManagementState,
   ManagementTableToolbar,
 } from '@/components/management-list'
+import { MetadataTag } from '@/components/status-tag'
 import {
   formatIdentityProviderDateTime,
   identityOIDCClientStatusTag,
@@ -28,12 +29,22 @@ import type { IdentityOIDCSecretReveal } from './secret-reveal-modal'
 const { Text } = Typography
 
 interface OIDCClientsPanelProps {
-  canManage: boolean
+  canCreate: boolean
+  canUpdate: boolean
+  canDelete: boolean
+  canRotate: boolean
   onSecretCreated: (secret: IdentityOIDCSecretReveal) => void
   provider: IdentityProvider
 }
 
-export function OIDCClientsPanel({ canManage, onSecretCreated, provider }: OIDCClientsPanelProps) {
+export function OIDCClientsPanel({
+  canCreate,
+  canUpdate,
+  canDelete,
+  canRotate,
+  onSecretCreated,
+  provider,
+}: OIDCClientsPanelProps) {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const [modalOpen, setModalOpen] = useState(false)
@@ -121,7 +132,7 @@ export function OIDCClientsPanel({ canManage, onSecretCreated, provider }: OIDCC
         title: 'Client Type',
         dataIndex: 'clientType',
         width: 120,
-        render: (value: string) => <Tag>{value || 'confidential'}</Tag>,
+        render: (value: string) => <MetadataTag label={value || 'confidential'} />,
       },
       {
         title: 'Scopes',
@@ -153,9 +164,10 @@ export function OIDCClientsPanel({ canManage, onSecretCreated, provider }: OIDCC
         render: (value: IdentityOIDCClientStatus, record) => (
           <Space orientation="vertical" size={2}>
             {identityOIDCClientStatusTag(value)}
-            <Tag color={record.requirePkce ? 'blue' : 'default'}>
-              {record.requirePkce ? 'PKCE' : 'No PKCE'}
-            </Tag>
+            <MetadataTag
+              label={record.requirePkce ? 'PKCE' : 'No PKCE'}
+              tone={record.requirePkce ? 'blue' : 'default'}
+            />
           </Space>
         ),
       },
@@ -173,14 +185,14 @@ export function OIDCClientsPanel({ canManage, onSecretCreated, provider }: OIDCC
         render: (_, record) => (
           <Space size={4}>
             <ManagementIconButton
-              disabled={!canManage}
+              disabled={!canUpdate}
               icon={<EditOutlined />}
               onClick={() => openEdit(record)}
               tooltip="编辑"
             />
             <Popconfirm
               cancelText="取消"
-              disabled={!canManage}
+              disabled={!canDelete}
               okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
               okText="删除"
               onConfirm={() =>
@@ -194,13 +206,13 @@ export function OIDCClientsPanel({ canManage, onSecretCreated, provider }: OIDCC
               }
               title={`删除 ${record.clientId}`}
             >
-              <Button danger disabled={!canManage} icon={<DeleteOutlined />} size="small" />
+              <Button danger disabled={!canDelete} icon={<DeleteOutlined />} size="small" />
             </Popconfirm>
           </Space>
         ),
       },
     ],
-    [canManage, deleteMutation, message, provider.id],
+    [canDelete, canUpdate, deleteMutation, message, provider.id],
   )
 
   if (provider.type !== 'oidc') {
@@ -234,7 +246,7 @@ export function OIDCClientsPanel({ canManage, onSecretCreated, provider }: OIDCC
             <Popconfirm
               cancelText="取消"
               description="旧公钥会保留 24 小时，之后使用旧密钥签发的令牌将无法验证。"
-              disabled={!canManage}
+              disabled={!canRotate}
               okButtonProps={{ loading: rotateSigningKeyMutation.isPending }}
               okText="轮换"
               onConfirm={() =>
@@ -245,12 +257,12 @@ export function OIDCClientsPanel({ canManage, onSecretCreated, provider }: OIDCC
               }
               title="轮换 OIDC 签名密钥"
             >
-              <Button disabled={!canManage} icon={<KeyOutlined />} size="small">
+              <Button disabled={!canRotate} icon={<KeyOutlined />} size="small">
                 轮换签名密钥
               </Button>
             </Popconfirm>
             <Button
-              disabled={!canManage}
+              disabled={!canCreate}
               icon={<PlusOutlined />}
               onClick={openCreate}
               size="small"

@@ -5,10 +5,11 @@ import { workbenchKeys } from './keys'
 
 export const workbenchQueries = {
   sessions: {
-    all: () =>
+    all: (enabled = true) =>
       queryOptions({
         queryKey: workbenchKeys.sessions.all(),
         queryFn: workbenchApi.sessions.all,
+        enabled,
       }),
     detail: (sessionId?: string) =>
       queryOptions({

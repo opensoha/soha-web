@@ -1,17 +1,17 @@
-import { Space, Tag, Typography } from 'antd'
+import { Space, Typography } from 'antd'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
 import type { IdentityOIDCClientStatus, IdentityRuntimeProviderStatus } from './types'
 
 const { Text } = Typography
 
-const providerStatusMeta: Record<IdentityRuntimeProviderStatus, { color: string; label: string }> =
-  {
-    disabled: { color: 'default', label: 'Disabled' },
-    enabled: { color: 'green', label: 'Enabled' },
-  }
+const providerStatusLabels: Record<IdentityRuntimeProviderStatus, string> = {
+  disabled: 'Disabled',
+  enabled: 'Enabled',
+}
 
-const oidcClientStatusMeta: Record<IdentityOIDCClientStatus, { color: string; label: string }> = {
-  disabled: { color: 'default', label: 'Disabled' },
-  enabled: { color: 'green', label: 'Enabled' },
+const oidcClientStatusLabels: Record<IdentityOIDCClientStatus, string> = {
+  disabled: 'Disabled',
+  enabled: 'Enabled',
 }
 
 export function formatIdentityProviderDateTime(value?: string) {
@@ -27,13 +27,13 @@ export function formatIdentityProviderDateTime(value?: string) {
 }
 
 export function identityProviderStatusTag(status: IdentityRuntimeProviderStatus) {
-  const meta = providerStatusMeta[status] ?? providerStatusMeta.disabled
-  return <Tag color={meta.color}>{meta.label}</Tag>
+  const normalizedStatus = providerStatusLabels[status] ? status : 'disabled'
+  return <StatusTag label={providerStatusLabels[normalizedStatus]} value={normalizedStatus} />
 }
 
 export function identityOIDCClientStatusTag(status: IdentityOIDCClientStatus) {
-  const meta = oidcClientStatusMeta[status] ?? oidcClientStatusMeta.disabled
-  return <Tag color={meta.color}>{meta.label}</Tag>
+  const normalizedStatus = oidcClientStatusLabels[status] ? status : 'disabled'
+  return <StatusTag label={oidcClientStatusLabels[normalizedStatus]} value={normalizedStatus} />
 }
 
 export function identityProviderTagsSummary(values: string[], empty = '-') {
@@ -42,9 +42,9 @@ export function identityProviderTagsSummary(values: string[], empty = '-') {
   return (
     <Space size={[4, 4]} wrap>
       {items.slice(0, 4).map((value) => (
-        <Tag key={value}>{value}</Tag>
+        <MetadataTag key={value} label={value} />
       ))}
-      {items.length > 4 ? <Tag>+{items.length - 4}</Tag> : null}
+      {items.length > 4 ? <MetadataTag label={`+${items.length - 4}`} /> : null}
     </Space>
   )
 }

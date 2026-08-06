@@ -32,10 +32,10 @@ export function ScopeGrantManager({
 }: ScopeGrantManagerProps) {
   const { message } = App.useApp()
   const permissionSnapshotQuery = usePermissionSnapshot()
-  const canManageScopeGrants = hasPermission(
-    permissionSnapshotQuery.data?.data,
-    'access.scope-grants.manage',
-  )
+  const snapshot = permissionSnapshotQuery.data?.data
+  const canCreateScopeGrants = hasPermission(snapshot, 'access.scope-grants.create')
+  const canUpdateScopeGrants = hasPermission(snapshot, 'access.scope-grants.update')
+  const canDeleteScopeGrants = hasPermission(snapshot, 'access.scope-grants.delete')
   const queryClient = useQueryClient()
   const [form] = Form.useForm<Record<string, unknown>>()
   const [editing, setEditing] = useState<AccessScopeGrant | null>(null)
@@ -126,27 +126,31 @@ export function ScopeGrantManager({
       dataIndex: 'id',
       render: (_: unknown, record: AccessScopeGrant) => (
         <Space className="soha-row-action-icons">
-          {canManageScopeGrants ? (
+          {canUpdateScopeGrants || canDeleteScopeGrants ? (
             <>
-              <ManagementIconButton
-                aria-label="编辑授权项"
-                icon={<EditOutlined />}
-                size="small"
-                tooltip="编辑"
-                onClick={() => {
-                  setEditing(record)
-                  setGrantModalVisible(true)
-                }}
-              />
-              <Popconfirm title="确认删除？" onConfirm={() => deleteMutation.mutate(record.id)}>
+              {canUpdateScopeGrants ? (
                 <ManagementIconButton
-                  aria-label="删除授权项"
-                  danger
-                  icon={<DeleteOutlined />}
+                  aria-label="编辑授权项"
+                  icon={<EditOutlined />}
                   size="small"
-                  tooltip="删除"
+                  tooltip="编辑"
+                  onClick={() => {
+                    setEditing(record)
+                    setGrantModalVisible(true)
+                  }}
                 />
-              </Popconfirm>
+              ) : null}
+              {canDeleteScopeGrants ? (
+                <Popconfirm title="确认删除？" onConfirm={() => deleteMutation.mutate(record.id)}>
+                  <ManagementIconButton
+                    aria-label="删除授权项"
+                    danger
+                    icon={<DeleteOutlined />}
+                    size="small"
+                    tooltip="删除"
+                  />
+                </Popconfirm>
+              ) : null}
             </>
           ) : (
             '-'
@@ -166,7 +170,7 @@ export function ScopeGrantManager({
             shellClassName="soha-management-table-shell"
             title="授权项"
             headerExtra={
-              canManageScopeGrants ? (
+              canCreateScopeGrants ? (
                 <ManagementTableToolbar>
                   <Button
                     icon={<PlusOutlined />}

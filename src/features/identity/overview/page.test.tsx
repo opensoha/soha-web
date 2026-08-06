@@ -61,8 +61,18 @@ vi.mock('antd', () => ({
     </section>
   ),
   Space: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  Tag: ({ children, color }: { children?: ReactNode; color?: string }) => (
-    <span data-color={color}>{children}</span>
+  Tag: ({
+    children,
+    className,
+    color,
+  }: {
+    children?: ReactNode
+    className?: string
+    color?: string
+  }) => (
+    <span className={className} data-color={color}>
+      {children}
+    </span>
   ),
   Typography: {
     Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
@@ -350,8 +360,9 @@ describe('IdentityOverviewPage', () => {
     expect(container.textContent).toContain('resource-name-1')
     expect(container.textContent).toContain('provider-kind')
     expect(container.textContent).toContain('actor-1')
-    expect(container.querySelector('[data-color="green"]')?.textContent).toBe('success')
-    expect(container.querySelector('[data-color="red"]')?.textContent).toBe('denied')
+    expect(container.querySelectorAll('.soha-status-tag')).toHaveLength(6)
+    expect(container.querySelector('[data-color="success"]')?.textContent).toBe('success')
+    expect(container.querySelector('[data-color="error"]')?.textContent).toBe('denied')
 
     await clickButton(container, '刷新')
     expect(refreshAll).toHaveBeenCalledOnce()

@@ -29,6 +29,7 @@ import {
   capabilityActionTooltip,
   useClusterCapability,
 } from '@/features/platform/cluster-capabilities'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
@@ -50,6 +51,16 @@ function includesSearch(values: Array<string | undefined | null>, keyword: strin
   return values.some((value) => (value ?? '').toLowerCase().includes(keyword))
 }
 
+function createPortForwardDraft(namespace: string | null) {
+  return {
+    targetKind: 'Pod',
+    targetName: '',
+    namespace: namespace || 'default',
+    localPort: 8080,
+    remotePort: 80,
+  }
+}
+
 function PlatformTableState({
   description,
   kind,
@@ -69,16 +80,15 @@ export function NetworkPortForwardPage() {
   const { clusterId, namespace } = usePlatformScopeStore()
   const scope = toScopeKey(clusterId, null)
   const portForwardCapability = useClusterCapability('port.forward', localeCode)
+  const permissionSnapshot = usePermissionSnapshot().data?.data
+  const canCreate = hasPermission(permissionSnapshot, 'platform.network.port-forwards.create')
+  const canDelete = hasPermission(permissionSnapshot, 'platform.network.port-forwards.delete')
   const [modalVisible, setModalVisible] = useState(false)
   const [searchKeyword, setSearchKeyword] = useState('')
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
-  const [form, setForm] = useState<Omit<PortForwardDraft, 'scope'>>({
-    targetKind: 'Pod',
-    targetName: '',
-    namespace: namespace || 'default',
-    localPort: 8080,
-    remotePort: 80,
-  })
+  const [form, setForm] = useState<Omit<PortForwardDraft, 'scope'>>(() =>
+    createPortForwardDraft(namespace),
+  )
 
   const query = useQuery(portForwardQueries.list(scope))
   const registerMutation = useMutation(portForwardMutations.register(queryClient))
@@ -155,8 +165,9 @@ export function NetworkPortForwardPage() {
       fixed: 'right',
       align: 'center',
       width: 64,
-      render: (value: string) => (
-        <Popconfirm
+      render: (value: string) =>
+        canDelete ? (
+          <Popconfirm
           title={localeCode === 'zh_CN' ? '确认停止该 Port Forward？' : 'Stop this port forward?'}
           description={
             localeCode === 'zh_CN'
@@ -180,20 +191,20 @@ export function NetworkPortForwardPage() {
               },
             )
           }
-        >
-          <Tooltip title={localeCode === 'zh_CN' ? '停止' : 'Stop'}>
-            <Button
-              aria-label={stopPortForwardLabel}
-              size="small"
-              type="text"
-              danger
-              disabled={portForwardUnsupported}
-              icon={<DeleteOutlined />}
-              loading={stopMutation.isPending && stopMutation.variables?.sessionId === value}
-            />
-          </Tooltip>
-        </Popconfirm>
-      ),
+          >
+            <Tooltip title={localeCode === 'zh_CN' ? '停止' : 'Stop'}>
+              <Button
+                aria-label={stopPortForwardLabel}
+                size="small"
+                type="text"
+                danger
+                disabled={portForwardUnsupported}
+                icon={<DeleteOutlined />}
+                loading={stopMutation.isPending && stopMutation.variables?.sessionId === value}
+              />
+            </Tooltip>
+          </Popconfirm>
+        ) : null,
     },
   ]
 
@@ -232,7 +243,8 @@ export function NetworkPortForwardPage() {
         columnSettingPlacement: 'header',
         headerExtra: (
           <ManagementTableToolbar>
-            <Tooltip
+            {canCreate ? (
+              <Tooltip
               title={
                 !clusterId
                   ? localeCode === 'zh_CN'
@@ -240,20 +252,24 @@ export function NetworkPortForwardPage() {
                     : 'Select a cluster first'
                   : capabilityActionTooltip(createPortForwardLabel, portForwardCapability)
               }
-            >
-              <span>
-                <Button
-                  autoInsertSpace={false}
-                  size="small"
-                  type="primary"
-                  icon={<PlusOutlined />}
-                  disabled={!clusterId || portForwardUnsupported}
-                  onClick={() => setModalVisible(true)}
-                >
-                  {createPortForwardLabel}
-                </Button>
-              </span>
-            </Tooltip>
+              >
+                <span>
+                  <Button
+                    autoInsertSpace={false}
+                    size="small"
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    disabled={!clusterId || portForwardUnsupported}
+                    onClick={() => {
+                      setForm(createPortForwardDraft(namespace))
+                      setModalVisible(true)
+                    }}
+                  >
+                    {createPortForwardLabel}
+                  </Button>
+                </span>
+              </Tooltip>
+            ) : null}
             <ManagementDensityButton
               aria-label={densityLabel}
               title={densityLabel}

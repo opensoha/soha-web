@@ -83,7 +83,7 @@ export function OperationsTable({
   })
   const [filterForm] = Form.useForm<DockerFilterState>()
   const [selectedOperation, setSelectedOperation] = useState<DockerOperation | null>(null)
-  const { dockerModuleEnabled, canManageOperations } = useDockerPermissions()
+  const { dockerModuleEnabled, canCancelOperations, canRetryOperations } = useDockerPermissions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const presetFilter = useMemo<DockerFilterState>(() => {
@@ -164,7 +164,7 @@ export function OperationsTable({
             icon={<FileTextOutlined />}
             onClick={() => setSelectedOperation(record)}
           />
-          {canManageOperations && isPendingOperation(record.status) ? (
+          {canCancelOperations && isPendingOperation(record.status) ? (
             <ManagementIconButton
               aria-label="取消任务"
               size="small"
@@ -175,7 +175,7 @@ export function OperationsTable({
               onClick={() => cancelMutation.mutate(record.id)}
             />
           ) : null}
-          {canManageOperations && isAbnormalOperation(record.status) ? (
+          {canRetryOperations && isAbnormalOperation(record.status) ? (
             <ManagementIconButton
               aria-label="重试任务"
               size="small"

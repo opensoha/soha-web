@@ -42,10 +42,10 @@ export const computeRoutes = defineRoutes([
         'virtualization.vms.view',
         'virtualization.clusters.view',
         'virtualization.images.view',
+        'virtualization.storage.view',
         'virtualization.flavors.view',
         'virtualization.operations.view',
         'virtualization.sync.view',
-        'virtualization.sync.manage',
         'docker.overview.view',
         'docker.hosts.view',
         'docker.projects.view',
@@ -142,8 +142,8 @@ export const computeRoutes = defineRoutes([
       ...computeRootMeta,
       id: 'virtualization-workbench-images',
       path: '/compute/virtualization/images',
-      title: '镜像',
-      description: '虚拟机镜像入口',
+      title: '镜像与模板',
+      description: '虚拟化镜像与模板入口',
       icon: 'IconInbox',
       tabbar: true,
       navVisible: true,
@@ -155,6 +155,26 @@ export const computeRoutes = defineRoutes([
     load: async () => {
       const module = await import('@/features/virtualization/images/list-page')
       return { default: module.VirtualizationImagesPage }
+    },
+  },
+  {
+    meta: {
+      ...computeRootMeta,
+      id: 'virtualization-workbench-storage',
+      path: '/compute/virtualization/storage',
+      title: '存储与卷',
+      description: '虚拟化存储池、磁盘与卷',
+      icon: 'IconInbox',
+      tabbar: true,
+      navVisible: true,
+      parentId: 'virtualization-workbench',
+      menuId: 'virtualization-workbench-storage',
+      permissionKey: 'virtualization.storage.view',
+    },
+    shell: 'app',
+    load: async () => {
+      const module = await import('@/features/virtualization')
+      return { default: module.VirtualizationStoragePage }
     },
   },
   {
@@ -285,12 +305,7 @@ export const computeRoutes = defineRoutes([
       navVisible: false,
       parentId: 'compute-workbench',
       menuId: 'compute-workbench-tasks-sync',
-      permissionKeysAny: [
-        'compute.tasks.view',
-        'virtualization.sync.view',
-        'virtualization.sync.manage',
-        'docker.operations.view',
-      ],
+      permissionKeysAny: ['virtualization.sync.view', 'docker.operations.view'],
     },
     shell: 'app',
     load: async () => {
@@ -310,11 +325,7 @@ export const computeRoutes = defineRoutes([
       navVisible: false,
       parentId: 'compute-workbench',
       menuId: 'compute-workbench-tasks-build',
-      permissionKeysAny: [
-        'compute.tasks.view',
-        'virtualization.operations.view',
-        'docker.operations.view',
-      ],
+      permissionKeysAny: ['virtualization.operations.view', 'docker.operations.view'],
     },
     shell: 'app',
     load: async () => {
@@ -335,10 +346,8 @@ export const computeRoutes = defineRoutes([
       parentId: 'compute-workbench',
       menuId: 'compute-workbench-tasks-operations',
       permissionKeysAny: [
-        'compute.tasks.view',
         'virtualization.operations.view',
         'virtualization.sync.view',
-        'virtualization.sync.manage',
         'docker.operations.view',
       ],
     },

@@ -36,8 +36,12 @@ export function SourceConnectionDetailPage() {
   const integrationId = params.integrationId ?? ''
   const isNew = integrationId === 'new'
   const permissionQuery = usePermissionSnapshot()
-  const canView = hasPermission(permissionQuery.data?.data, 'settings.system-integrations.view')
-  const canManage = hasPermission(permissionQuery.data?.data, 'settings.system-integrations.manage')
+  const permissionSnapshot = permissionQuery.data?.data
+  const canView = hasPermission(permissionSnapshot, 'settings.system-integrations.view')
+  const canCreate = hasPermission(permissionSnapshot, 'settings.system-integrations.create')
+  const canUpdate = hasPermission(permissionSnapshot, 'settings.system-integrations.update')
+  const canTest = hasPermission(permissionSnapshot, 'settings.system-integrations.test')
+  const canSave = isNew ? canCreate : canUpdate
   const detailQuery = useQuery(systemIntegrationQueries.detail(integrationId, canView && !isNew))
   const createMutation = useMutation(systemIntegrationMutations.create(queryClient))
   const updateMutation = useMutation(systemIntegrationMutations.update(queryClient))
@@ -70,7 +74,7 @@ export function SourceConnectionDetailPage() {
     )
   }
 
-  if (isNew && !permissionQuery.isLoading && !canManage) {
+  if (isNew && !permissionQuery.isLoading && !canCreate) {
     return (
       <div className="soha-page">
         <ManagementState kind="no-permission" description="当前账号没有新建代码源连接的权限。" />
@@ -79,7 +83,7 @@ export function SourceConnectionDetailPage() {
   }
 
   const save = (values: GitLabFormValues) => {
-    if (!canManage) return
+    if (!canSave) return
     if (isNew) {
       createMutation.mutate(createGitLabIntegration(values), {
         onSuccess: () => {
@@ -114,7 +118,7 @@ export function SourceConnectionDetailPage() {
             <Button onClick={() => navigate('/settings/source-control')}>返回</Button>
             {!isNew && detailQuery.data ? (
               <Button
-                disabled={!canManage || !detailQuery.data.enabled || !connectionReady}
+                disabled={!canTest || !detailQuery.data.enabled || !connectionReady}
                 icon={<ThunderboltOutlined />}
                 loading={testMutation.isPending}
                 onClick={() =>
@@ -133,7 +137,7 @@ export function SourceConnectionDetailPage() {
             ) : null}
             {!isNew && detailQuery.data && oauthMode ? (
               <Button
-                disabled={!canManage || !detailQuery.data.credentialKeys.includes('client_secret')}
+                disabled={!canUpdate || !detailQuery.data.credentialKeys.includes('client_secret')}
                 icon={<LinkOutlined />}
                 loading={authorizeOAuthMutation.isPending}
                 onClick={() =>
@@ -146,7 +150,7 @@ export function SourceConnectionDetailPage() {
                 {connectionReady ? '重新授权' : '授权 GitLab'}
               </Button>
             ) : null}
-            {canManage ? (
+            {canSave ? (
               <Button
                 icon={<SaveOutlined />}
                 loading={saving}
@@ -180,7 +184,7 @@ export function SourceConnectionDetailPage() {
           <Form<GitLabFormValues>
             form={form}
             layout="vertical"
-            disabled={!canManage || saving}
+            disabled={!canSave || saving}
             initialValues={gitLabFormValues()}
             onFinish={save}
           >

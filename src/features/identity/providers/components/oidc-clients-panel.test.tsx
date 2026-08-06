@@ -232,7 +232,10 @@ async function renderPanel(canManage: boolean, onSecretCreated = vi.fn()) {
       <AntdApp>
         <QueryClientProvider client={queryClient}>
           <OIDCClientsPanel
-            canManage={canManage}
+            canCreate={canManage}
+            canDelete={canManage}
+            canRotate={canManage}
+            canUpdate={canManage}
             onSecretCreated={onSecretCreated}
             provider={provider}
           />

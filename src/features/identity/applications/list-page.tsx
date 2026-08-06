@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { App, Button, Form, Popconfirm, Select, Space, Tag, Typography } from 'antd'
+import { App, Button, Form, Popconfirm, Select, Space, Typography } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -13,6 +13,7 @@ import {
   ManagementState,
   ManagementTableToolbar,
 } from '@/components/management-list'
+import { BooleanTag, MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useI18n } from '@/i18n'
 import type {
@@ -51,7 +52,9 @@ export function IdentityApplicationsPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<IdentityApplication | null>(null)
   const snapshot = usePermissionSnapshot().data?.data
-  const canManage = hasPermission(snapshot, 'identity.applications.manage')
+  const canCreate = hasPermission(snapshot, 'identity.applications.create')
+  const canUpdate = hasPermission(snapshot, 'identity.applications.update')
+  const canDelete = hasPermission(snapshot, 'identity.applications.delete')
 
   const resetFilters = () => {
     queryForm.resetFields()
@@ -119,7 +122,7 @@ export function IdentityApplicationsPage() {
         width: 150,
         render: (value: IdentityProviderType, record) => (
           <Space orientation="vertical" size={2}>
-            <Tag>{value.toUpperCase()}</Tag>
+            <MetadataTag label={value.toUpperCase()} />
             {record.providerId ? <Text type="secondary">{record.providerId}</Text> : null}
           </Space>
         ),
@@ -134,13 +137,13 @@ export function IdentityApplicationsPage() {
               record.status,
               t(`identity.applications.status.${record.status}`, record.status),
             )}
-            <Tag color={portalVisible ? 'blue' : 'default'}>
-              {portalVisible
-                ? t('identity.applications.visible', '可见')
-                : t('identity.applications.hidden', '隐藏')}
-            </Tag>
+            <BooleanTag
+              value={portalVisible}
+              trueLabel={t('identity.applications.visible', '可见')}
+              falseLabel={t('identity.applications.hidden', '隐藏')}
+            />
             {record.featured ? (
-              <Tag color="purple">{t('identity.applications.featured', '推荐')}</Tag>
+              <MetadataTag label={t('identity.applications.featured', '推荐')} tone="purple" />
             ) : null}
           </Space>
         ),
@@ -165,9 +168,10 @@ export function IdentityApplicationsPage() {
               {value}
             </Text>
           ) : record.providerType === 'oidc' ? (
-            <Tag color="blue">
-              {t('identity.applications.generatedAuthorizeUrl', '自动生成授权地址')}
-            </Tag>
+            <MetadataTag
+              label={t('identity.applications.generatedAuthorizeUrl', '自动生成授权地址')}
+              tone="blue"
+            />
           ) : (
             <Text type="secondary">-</Text>
           ),
@@ -187,14 +191,14 @@ export function IdentityApplicationsPage() {
           <Space size={4}>
             <ManagementIconButton
               aria-label={t('common.edit', '编辑')}
-              disabled={!canManage}
+              disabled={!canUpdate}
               icon={<EditOutlined />}
               tooltip={t('common.edit', '编辑')}
               onClick={() => openEdit(record)}
             />
             <Popconfirm
               cancelText={t('common.cancel', '取消')}
-              disabled={!canManage}
+              disabled={!canDelete}
               okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
               okText={t('common.delete', '删除')}
               title={`删除 ${record.name}`}
@@ -208,7 +212,7 @@ export function IdentityApplicationsPage() {
               <ManagementIconButton
                 aria-label={t('common.delete', '删除')}
                 danger
-                disabled={!canManage}
+                disabled={!canDelete}
                 icon={<DeleteOutlined />}
                 tooltip={t('common.delete', '删除')}
               />
@@ -217,7 +221,7 @@ export function IdentityApplicationsPage() {
         ),
       },
     ],
-    [canManage, deleteMutation, message, t],
+    [canDelete, canUpdate, deleteMutation, message, t],
   )
 
   const saving = createMutation.isPending || updateMutation.isPending
@@ -232,10 +236,14 @@ export function IdentityApplicationsPage() {
       {(providerCapabilitiesQuery.data ?? []).map((capability) => (
         <div className="soha-identity-capability" key={capability.type}>
           <div className="soha-identity-capability-title">
-            <Tag>{capability.type.toUpperCase()}</Tag>
-            <Tag color="gold">
-              {t(`identity.applications.capabilityStatus.${capability.status}`, capability.status)}
-            </Tag>
+            <MetadataTag label={capability.type.toUpperCase()} />
+            <StatusTag
+              label={t(
+                `identity.applications.capabilityStatus.${capability.status}`,
+                capability.status,
+              )}
+              value={capability.status}
+            />
           </div>
           <Text type="secondary">
             {t(`identity.applications.capability.${capability.type}`, capability.description)}
@@ -305,7 +313,7 @@ export function IdentityApplicationsPage() {
             <ManagementTableToolbar>
               <Button
                 autoInsertSpace={false}
-                disabled={!canManage}
+                disabled={!canCreate}
                 icon={<PlusOutlined />}
                 size="small"
                 type="primary"

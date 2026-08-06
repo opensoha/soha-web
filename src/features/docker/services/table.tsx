@@ -48,7 +48,13 @@ export function ServicesTable({
     projectId: fixedProjectId,
   })
   const [filterForm] = Form.useForm<DockerFilterState>()
-  const { dockerModuleEnabled, canManageServices } = useDockerPermissions()
+  const {
+    dockerModuleEnabled,
+    canStartServices,
+    canStopServices,
+    canRestartServices,
+    canViewServiceLogs,
+  } = useDockerPermissions()
   const { hostOptions, projectOptions } = useDockerOptions({ includeServices: false })
   const queryClient = useQueryClient()
   const { message } = App.useApp()
@@ -62,6 +68,11 @@ export function ServicesTable({
     },
   })
   const page = normalizePage(servicesQuery.data, filters.page ?? 1, filters.pageSize ?? 10)
+  const serviceActions = [
+    { action: 'restart', allowed: canRestartServices, icon: <ReloadOutlined /> },
+    { action: 'start', allowed: canStartServices, icon: <PlayCircleOutlined /> },
+    { action: 'stop', allowed: canStopServices, icon: <PoweroffOutlined /> },
+  ].filter((item) => item.allowed)
   const columns: ColumnsType<DockerService> = [
     {
       title: '服务',
@@ -106,35 +117,29 @@ export function ServicesTable({
       fixed: 'right',
       width: 130,
       render: (_value, record) =>
-        canManageServices ? (
+        serviceActions.length > 0 || canViewServiceLogs ? (
           <Space className="soha-row-action-icons">
-            {['restart', 'start', 'stop'].map((action) => (
+            {serviceActions.map(({ action, icon }) => (
               <ManagementIconButton
                 key={action}
                 aria-label={operationActionLabel(action)}
                 size="small"
                 tooltip={operationActionLabel(action)}
-                icon={
-                  action === 'restart' ? (
-                    <ReloadOutlined />
-                  ) : action === 'start' ? (
-                    <PlayCircleOutlined />
-                  ) : (
-                    <PoweroffOutlined />
-                  )
-                }
+                icon={icon}
                 loading={actionMutation.isPending}
                 onClick={() => actionMutation.mutate({ id: record.id, action })}
               />
             ))}
-            <ManagementIconButton
-              aria-label="查看日志"
-              size="small"
-              tooltip="日志"
-              icon={<FileTextOutlined />}
-              loading={actionMutation.isPending}
-              onClick={() => actionMutation.mutate({ id: record.id, action: 'logs' })}
-            />
+            {canViewServiceLogs ? (
+              <ManagementIconButton
+                aria-label="查看日志"
+                size="small"
+                tooltip="日志"
+                icon={<FileTextOutlined />}
+                loading={actionMutation.isPending}
+                onClick={() => actionMutation.mutate({ id: record.id, action: 'logs' })}
+              />
+            ) : null}
           </Space>
         ) : null,
     },

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  normalizeVirtualizationImageListParams,
   normalizeVirtualizationListParams,
   normalizeVirtualizationOperationParams,
   virtualizationKeys,
@@ -88,5 +89,8 @@ describe('virtualizationKeys', () => {
         page: 0,
       }),
     ).toEqual({ page: 0, status: 'running' })
+    expect(normalizeVirtualizationImageListParams({ search: '', category: 'storage' })).toEqual({
+      category: 'storage',
+    })
   })
 })

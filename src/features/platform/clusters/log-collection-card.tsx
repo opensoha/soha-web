@@ -67,7 +67,9 @@ export function LogCollectionCard({ scope, localeCode }: { scope: ScopeKey; loca
   const stateQuery = useQuery(clusterQueries.logCollection(scope))
   const dataSourcesQuery = useQuery(clusterQueries.logDataSources(open && profile !== 'starter'))
   const permissionQuery = usePermissionSnapshot()
-  const canManage = hasPermission(permissionQuery.data?.data, 'observe.log-collection.manage')
+  const permissionSnapshot = permissionQuery.data?.data
+  const canEnable = hasPermission(permissionSnapshot, 'platform.observability.logging.enable')
+  const canDisable = hasPermission(permissionSnapshot, 'platform.observability.logging.disable')
   const preflight = useMutation(clusterMutations.preflightLogCollection())
   const enable = useMutation(clusterMutations.enableLogCollection(queryClient))
   const disable = useMutation(clusterMutations.disableLogCollection(queryClient))
@@ -81,6 +83,7 @@ export function LogCollectionCard({ scope, localeCode }: { scope: ScopeKey; loca
   const showPreflight = () => {
     setPlan(null)
     preflight.reset()
+    form.resetFields()
     form.setFieldsValue({
       profile: state?.profile ?? 'starter',
       namespace: state?.namespace || 'soha-observability',
@@ -177,23 +180,25 @@ export function LogCollectionCard({ scope, localeCode }: { scope: ScopeKey; loca
               }
             />
           ) : null}
-          {canManage ? (
+          {canEnable || canDisable ? (
             <Space wrap className="soha-log-collection-actions">
-              <Button
-                icon={<PlayCircleOutlined />}
-                type="primary"
-                onClick={showPreflight}
-                disabled={busy}
-              >
-                {state?.status === 'failed' || state?.status === 'degraded'
-                  ? zh
-                    ? '重新预检'
-                    : 'Run preflight again'
-                  : zh
-                    ? '启用增强采集'
-                    : 'Enable managed collection'}
-              </Button>
-              {state?.mode === 'soha_managed' && state.status !== 'disabled' ? (
+              {canEnable ? (
+                <Button
+                  icon={<PlayCircleOutlined />}
+                  type="primary"
+                  onClick={showPreflight}
+                  disabled={busy}
+                >
+                  {state?.status === 'failed' || state?.status === 'degraded'
+                    ? zh
+                      ? '重新预检'
+                      : 'Run preflight again'
+                    : zh
+                      ? '启用增强采集'
+                      : 'Enable managed collection'}
+                </Button>
+              ) : null}
+              {canDisable && state?.mode === 'soha_managed' && state.status !== 'disabled' ? (
                 <Popconfirm
                   title={zh ? '停止采集并保留历史日志？' : 'Stop collection and retain history?'}
                   onConfirm={() => disable.mutateAsync({ scope, input: { action: 'stop' } })}
@@ -203,7 +208,7 @@ export function LogCollectionCard({ scope, localeCode }: { scope: ScopeKey; loca
                   </Button>
                 </Popconfirm>
               ) : null}
-              {state?.mode === 'soha_managed' ? (
+              {canDisable && state?.mode === 'soha_managed' ? (
                 <Popconfirm
                   title={
                     zh

@@ -65,7 +65,7 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
   )
   const canManageLoginSettings = hasPermission(
     permissionSnapshotQuery.data?.data,
-    'settings.identity.manage',
+    'settings.identity.update',
   )
 
   const identityQuery = useQuery(settingsQueries.identity())
@@ -327,6 +327,18 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
                     providerForm.setFieldsValue(
                       applyProviderPreset(String(value), {
                         ...current,
+                        scopes: [],
+                        authorizeUrl: '',
+                        tokenUrl: '',
+                        userInfoUrl: '',
+                        profileUrl: '',
+                        userIdField: '',
+                        userNameField: '',
+                        emailField: '',
+                        phoneField: '',
+                        avatarField: '',
+                        roleField: '',
+                        organizationField: '',
                         frontendRedirectUrl:
                           current.frontendRedirectUrl || defaultFrontendRedirectPath(),
                       }),
@@ -646,6 +658,7 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
             setEditingProvider(null)
             setProviderStep(0)
           }}
+          preserve={false}
           steps={providerSteps}
         />
       </Modal>

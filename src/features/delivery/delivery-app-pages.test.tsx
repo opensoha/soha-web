@@ -69,10 +69,18 @@ const defaultPermissionKeys = [
   'delivery.application.create',
   'delivery.application.update',
   'delivery.application-environments.view',
-  'delivery.application-environments.manage',
-  'delivery.build-templates.manage',
-  'delivery.workflow-templates.manage',
-  'delivery.registries.manage',
+  'delivery.application-environments.create',
+  'delivery.application-environments.update',
+  'delivery.application-environments.delete',
+  'delivery.build-templates.create',
+  'delivery.build-templates.update',
+  'delivery.build-templates.delete',
+  'delivery.workflow-templates.create',
+  'delivery.workflow-templates.update',
+  'delivery.workflow-templates.delete',
+  'delivery.registries.create',
+  'delivery.registries.update',
+  'delivery.registries.delete',
   'delivery.release-board.view',
 ]
 
@@ -92,10 +100,18 @@ const testState = vi.hoisted(() => ({
       'delivery.application.create',
       'delivery.application.update',
       'delivery.application-environments.view',
-      'delivery.application-environments.manage',
-      'delivery.build-templates.manage',
-      'delivery.workflow-templates.manage',
-      'delivery.registries.manage',
+      'delivery.application-environments.create',
+      'delivery.application-environments.update',
+      'delivery.application-environments.delete',
+      'delivery.build-templates.create',
+      'delivery.build-templates.update',
+      'delivery.build-templates.delete',
+      'delivery.workflow-templates.create',
+      'delivery.workflow-templates.update',
+      'delivery.workflow-templates.delete',
+      'delivery.registries.create',
+      'delivery.registries.update',
+      'delivery.registries.delete',
       'delivery.release-board.view',
     ],
     visibleMenuIds: [],
@@ -1351,6 +1367,7 @@ describe('ApplicationsPage workspace layout', () => {
 
     expect(testState.apiGet).toHaveBeenCalledWith('/registries')
     expect(container.textContent).toContain('Harbor Prod')
+    expect(container.querySelector('.soha-metadata-tag')?.textContent).toBe('harbor')
     expect(hasButtonText(container, '添加仓库')).toBe(false)
     expect(container.querySelector('[aria-label="编辑仓库"]')).toBeNull()
     expect(container.querySelector('[aria-label="删除仓库"]')).toBeNull()

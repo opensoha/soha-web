@@ -33,8 +33,8 @@ function useAlertEventDetailController(eventId: string, enabled: boolean) {
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const canAcknowledge = hasPermission(permissionSnapshotQuery.data?.data, 'observe.alerts.ack')
-  const canManageAlerts = hasPermission(permissionSnapshotQuery.data?.data, 'observe.alerts.manage')
-  const canHeal = hasPermission(permissionSnapshotQuery.data?.data, 'observe.healing.manage')
+  const canResolve = hasPermission(permissionSnapshotQuery.data?.data, 'observe.alerts.update')
+  const canHeal = hasPermission(permissionSnapshotQuery.data?.data, 'observe.healing.heal')
   const [healOpen, setHealOpen] = useState(false)
   const [healingPolicyId, setHealingPolicyId] = useState('')
   const eventQuery = useQuery({
@@ -89,7 +89,7 @@ function useAlertEventDetailController(eventId: string, enabled: boolean) {
     acknowledgeMutation,
     canAcknowledge,
     canHeal,
-    canManageAlerts,
+    canResolve,
     deliveryLogsQuery,
     event: eventQuery.data,
     eventQuery,
@@ -433,7 +433,7 @@ function AlertEventDetailActions({
           确认
         </Button>
       ) : null}
-      {detail.canManageAlerts && alertDisplayStatus(event) !== 'resolved' ? (
+      {detail.canResolve && alertDisplayStatus(event) !== 'resolved' ? (
         <Button loading={detail.resolveMutation.isPending} onClick={detail.resolve}>
           恢复
         </Button>

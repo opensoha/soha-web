@@ -15,8 +15,10 @@ const testState = vi.hoisted(() => ({
       'observe.ai.view',
       'observe.ai.chat',
       'observe.ai.inspection.run',
-      'observe.ai.inspection.manage',
-      'settings.ai.manage',
+      'observe.ai.inspection.create',
+      'observe.ai.inspection.update',
+      'observe.ai.inspection.delete',
+      'settings.ai.update',
     ],
     visibleMenuIds: [],
     visibleMenus: [],
@@ -272,8 +274,10 @@ describe('AIOperationsPage delete actions', () => {
       permissionKeys: [
         'observe.ai.chat',
         'observe.ai.inspection.run',
-        'observe.ai.inspection.manage',
-        'settings.ai.manage',
+        'observe.ai.inspection.create',
+        'observe.ai.inspection.update',
+        'observe.ai.inspection.delete',
+        'settings.ai.update',
       ],
       visibleMenuIds: [],
       visibleMenus: [],
@@ -311,7 +315,9 @@ describe('AIOperationsPage delete actions', () => {
         'observe.ai.view',
         'observe.ai.chat',
         'observe.ai.inspection.run',
-        'observe.ai.inspection.manage',
+        'observe.ai.inspection.create',
+        'observe.ai.inspection.update',
+        'observe.ai.inspection.delete',
       ],
       visibleMenuIds: [],
       visibleMenus: [],
@@ -330,7 +336,7 @@ describe('AIOperationsPage delete actions', () => {
     })
     await flush()
 
-    expect(container.textContent).toContain('缺少 settings.ai.manage 权限')
+    expect(container.textContent).toContain('缺少 settings.ai.update 权限')
     expect(apiGetMock).not.toHaveBeenCalledWith('/copilot/automation-policies')
   })
 })

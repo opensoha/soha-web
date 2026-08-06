@@ -17,6 +17,7 @@ import type {
   VirtualizationFlavorInput,
   VirtualizationImage,
   VirtualizationImageInput,
+  VirtualizationImageListParams,
   VirtualizationOperation,
   VirtualizationOperationListParams,
   VirtualizationOperationLog,
@@ -122,7 +123,7 @@ export const virtualizationApi = {
     )
     return response.data
   },
-  images: async (params: VirtualizationListParams = {}) => {
+  images: async (params: VirtualizationImageListParams = {}) => {
     const response = await api.get<
       ApiResponse<VirtualizationPage<VirtualizationImage> | VirtualizationImage[]>
     >(withQuery(`${BASE}/images`, Object.entries(params)))

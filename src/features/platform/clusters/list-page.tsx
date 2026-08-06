@@ -12,7 +12,6 @@ import {
   Select,
   Space,
   Spin,
-  Tag,
   Typography,
 } from 'antd'
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons'
@@ -29,6 +28,8 @@ import {
   ManagementRefreshButton,
   ManagementTableToolbar,
 } from '@/components/management-list'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { tableColumnPresets } from '@/utils/table-columns'
@@ -38,7 +39,6 @@ import type { TableColumnsType } from 'antd'
 import { clusterMutations } from './mutations'
 import { clusterQueries } from './queries'
 import {
-  clusterHealthTone,
   clusterTypeOf,
   clusterTypeOptions,
   formatClusterHealth,
@@ -69,6 +69,10 @@ export function ClustersPage() {
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([])
   const [tableSize, setTableSize] = useState<'middle' | 'small'>('small')
   const setClusterId = usePlatformScopeStore((state) => state.setClusterId)
+  const permissionSnapshot = usePermissionSnapshot().data?.data
+  const canCreate = hasPermission(permissionSnapshot, 'platform.clusters.create')
+  const canUpdate = hasPermission(permissionSnapshot, 'platform.clusters.update')
+  const canDelete = hasPermission(permissionSnapshot, 'platform.clusters.delete')
 
   const clustersQuery = useQuery(clusterQueries.list())
   const editingScope = toScopeKey(editingCluster?.id, null)
@@ -176,12 +180,7 @@ export function ClustersPage() {
       width: 104,
       render: (health: Cluster['health']) => {
         const status = health?.status ?? 'unknown'
-        return (
-          <span className={`soha-cluster-status is-${clusterHealthTone(status)}`}>
-            <span className="soha-cluster-status-dot" />
-            {formatClusterHealth(status, localeCode)}
-          </span>
-        )
+        return <StatusTag label={formatClusterHealth(status, localeCode)} value={status} />
       },
     },
     {
@@ -201,7 +200,9 @@ export function ClustersPage() {
       title: localeCode === 'zh_CN' ? '连接方式' : 'Mode',
       dataIndex: 'connectionMode',
       width: 104,
-      render: (value: string) => <Tag>{formatConnectionMode(value, localeCode)}</Tag>,
+      render: (value: string) => (
+        <MetadataTag label={formatConnectionMode(value, localeCode)} />
+      ),
     },
     {
       ...tableColumnPresets.datetime,
@@ -224,17 +225,20 @@ export function ClustersPage() {
             tooltip={localeCode === 'zh_CN' ? '详情' : 'Detail'}
             onClick={() => navigate(`/clusters/${record.id}`)}
           />
-          <ManagementIconButton
-            aria-label={localeCode === 'zh_CN' ? '编辑集群' : 'Edit cluster'}
-            icon={<EditOutlined />}
-            size="small"
-            tooltip={localeCode === 'zh_CN' ? '编辑' : 'Edit'}
-            onClick={() => {
-              setEditingCluster(record)
-              setModalVisible(true)
-            }}
-          />
-          <Popconfirm
+          {canUpdate ? (
+            <ManagementIconButton
+              aria-label={localeCode === 'zh_CN' ? '编辑集群' : 'Edit cluster'}
+              icon={<EditOutlined />}
+              size="small"
+              tooltip={localeCode === 'zh_CN' ? '编辑' : 'Edit'}
+              onClick={() => {
+                setEditingCluster(record)
+                setModalVisible(true)
+              }}
+            />
+          ) : null}
+          {canDelete ? (
+            <Popconfirm
             title={
               localeCode === 'zh_CN'
                 ? `确认删除集群 ${record.name}？`
@@ -259,18 +263,20 @@ export function ClustersPage() {
                 onError: (error) => void message.error(error.message),
               })
             }
-          >
-            <ManagementIconButton
-              aria-label={localeCode === 'zh_CN' ? '删除集群' : 'Delete cluster'}
-              danger
-              icon={<DeleteOutlined />}
-              loading={
-                deleteMutation.isPending && deleteMutation.variables?.scope.clusterId === record.id
-              }
-              size="small"
-              tooltip={localeCode === 'zh_CN' ? '删除' : 'Delete'}
-            />
-          </Popconfirm>
+            >
+              <ManagementIconButton
+                aria-label={localeCode === 'zh_CN' ? '删除集群' : 'Delete cluster'}
+                danger
+                icon={<DeleteOutlined />}
+                loading={
+                  deleteMutation.isPending &&
+                  deleteMutation.variables?.scope.clusterId === record.id
+                }
+                size="small"
+                tooltip={localeCode === 'zh_CN' ? '删除' : 'Delete'}
+              />
+            </Popconfirm>
+          ) : null}
         </Space>
       ),
     },
@@ -485,7 +491,8 @@ kubernetes:
         >
           {localeCode === 'zh_CN' ? '查看节点' : 'Open Nodes'}
         </Button>
-        <Popconfirm
+        {canDelete ? (
+          <Popconfirm
           title={
             localeCode === 'zh_CN'
               ? `确认删除 ${selectedRowKeys.length} 个集群？`
@@ -501,11 +508,12 @@ kubernetes:
           okButtonProps={{ danger: true }}
           placement="top"
           onConfirm={handleBatchDelete}
-        >
-          <Button autoInsertSpace={false} size="small" danger>
-            {localeCode === 'zh_CN' ? '批量删除' : 'Batch Delete'}
-          </Button>
-        </Popconfirm>
+          >
+            <Button autoInsertSpace={false} size="small" danger>
+              {localeCode === 'zh_CN' ? '批量删除' : 'Batch Delete'}
+            </Button>
+          </Popconfirm>
+        ) : null}
         <Button
           autoInsertSpace={false}
           size="small"
@@ -519,15 +527,17 @@ kubernetes:
 
   const tableHeaderExtra = (
     <ManagementTableToolbar batchBar={tableToolbarExtra}>
-      <Button
-        autoInsertSpace={false}
-        className="soha-clusters-create-button"
-        icon={<PlusOutlined />}
-        type="primary"
-        onClick={openCreateModal}
-      >
-        {t('common.create', 'Create')}
-      </Button>
+      {canCreate ? (
+        <Button
+          autoInsertSpace={false}
+          className="soha-clusters-create-button"
+          icon={<PlusOutlined />}
+          type="primary"
+          onClick={openCreateModal}
+        >
+          {t('common.create', 'Create')}
+        </Button>
+      ) : null}
       <ManagementDensityButton
         aria-label={localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'}
         title={localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'}
@@ -575,6 +585,7 @@ kubernetes:
       />
 
       <Modal
+        destroyOnHidden
         title={editingCluster ? '编辑集群' : '添加集群'}
         open={modalVisible}
         width={760}
@@ -594,6 +605,7 @@ kubernetes:
             layout="vertical"
             onFinish={handleSubmit}
             initialValues={initialValues}
+            preserve={false}
           >
             <Form.Item
               name="name"

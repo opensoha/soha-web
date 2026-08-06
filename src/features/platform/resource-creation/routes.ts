@@ -14,11 +14,11 @@ export const resourceCreationRoutes = defineRoutes([
       tabbar: true,
       navVisible: false,
       menuId: 'dashboard',
-      permissionKey: 'platform.resource.create',
       scopeMode: 'namespace',
       workspace: 'resource',
     },
     shell: 'app',
+    permissionExemptReason: 'modal redirect; the create API enforces the selected resource permission',
     load: async () => {
       const module = await import('./modal-redirect')
       return { default: module.ResourceCreationModalRedirect }

@@ -53,10 +53,13 @@ export function AnnouncementsPage() {
   const [editing, setEditing] = useState<Announcement | null>(null)
   const [previewing, setPreviewing] = useState<Announcement | null>(null)
   const [statusView, setStatusView] = useState('all')
-  const canManageAnnouncements = hasPermission(
-    permissionSnapshotQuery.data?.data,
-    'system.announcements.manage',
-  )
+  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const canCreateAnnouncement = hasPermission(permissionSnapshot, 'system.announcements.create')
+  const canUpdateAnnouncement = hasPermission(permissionSnapshot, 'system.announcements.update')
+  const canDeleteAnnouncement = hasPermission(permissionSnapshot, 'system.announcements.delete')
+  const canPublishAnnouncement = hasPermission(permissionSnapshot, 'system.announcements.publish')
+  const canWithdrawAnnouncement = hasPermission(permissionSnapshot, 'system.announcements.withdraw')
+  const canSaveAnnouncement = editing ? canUpdateAnnouncement : canCreateAnnouncement
 
   const { data: announcements = [], isLoading } = useQuery(systemQueries.announcements())
   const createMutation = useMutation(systemMutations.announcements.create(queryClient))
@@ -132,7 +135,7 @@ export function AnnouncementsPage() {
         tooltip="预览"
         onClick={() => setPreviewing(record)}
       />
-      {canManageAnnouncements ? (
+      {canUpdateAnnouncement ? (
         <ManagementIconButton
           aria-label="编辑公告"
           icon={<EditOutlined />}
@@ -144,7 +147,7 @@ export function AnnouncementsPage() {
           }}
         />
       ) : null}
-      {canManageAnnouncements && buildAnnouncementLifecycle(record) !== 'published' ? (
+      {canPublishAnnouncement && buildAnnouncementLifecycle(record) !== 'published' ? (
         <ManagementIconButton
           aria-label="发布公告"
           icon={<SendOutlined />}
@@ -159,7 +162,7 @@ export function AnnouncementsPage() {
           loading={publishMutation.isPending && publishMutation.variables === record.id}
         />
       ) : null}
-      {canManageAnnouncements && buildAnnouncementLifecycle(record) === 'published' ? (
+      {canWithdrawAnnouncement && buildAnnouncementLifecycle(record) === 'published' ? (
         <ManagementIconButton
           aria-label="撤回公告"
           icon={<PauseCircleOutlined />}
@@ -174,7 +177,7 @@ export function AnnouncementsPage() {
           loading={withdrawMutation.isPending && withdrawMutation.variables === record.id}
         />
       ) : null}
-      {canManageAnnouncements ? (
+      {canDeleteAnnouncement ? (
         <Popconfirm
           title="确认删除？"
           onConfirm={() =>
@@ -221,7 +224,7 @@ export function AnnouncementsPage() {
         variant="outlined"
         className="soha-system-panel-card"
         extra={
-          canManageAnnouncements ? (
+          canCreateAnnouncement ? (
             <Button
               size="small"
               icon={<PlusOutlined />}
@@ -314,7 +317,7 @@ export function AnnouncementsPage() {
         <Form
           {...MODAL_FORM_LAYOUT}
           onFinish={(values) => {
-            if (!canManageAnnouncements) return
+            if (!canSaveAnnouncement) return
             handleSubmit(values as Record<string, unknown>)
           }}
           initialValues={
@@ -373,7 +376,7 @@ export function AnnouncementsPage() {
           </Form.Item>
           <div className="soha-form-actions">
             <Button onClick={() => setModalVisible(false)}>取消</Button>
-            {canManageAnnouncements ? (
+            {canSaveAnnouncement ? (
               <Button
                 htmlType="submit"
                 type="primary"

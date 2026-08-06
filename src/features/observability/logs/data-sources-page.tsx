@@ -201,7 +201,9 @@ export function LogDataSourcesPage() {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const snapshot = usePermissionSnapshot().data?.data
-  const canManage = hasPermission(snapshot, 'observe.log-data-sources.manage')
+  const canCreate = hasPermission(snapshot, 'observe.log-data-sources.create')
+  const canUpdate = hasPermission(snapshot, 'observe.log-data-sources.update')
+  const canValidate = hasPermission(snapshot, 'observe.log-data-sources.validate')
   const [form] = Form.useForm<DataSourceFormValues>()
   const providerKey = Form.useWatch('providerKey', form)
   const [open, setOpen] = useState(false)
@@ -323,7 +325,7 @@ export function LogDataSourcesPage() {
         <Space size={2}>
           <ManagementIconButton
             aria-label="验证日志数据源"
-            disabled={!canManage}
+            disabled={!canValidate}
             icon={<ExperimentOutlined />}
             loading={validateMutation.isPending && validateMutation.variables === item.id}
             tooltip="验证连接"
@@ -339,7 +341,7 @@ export function LogDataSourcesPage() {
           />
           <ManagementIconButton
             aria-label="编辑日志数据源"
-            disabled={!canManage}
+            disabled={!canUpdate}
             icon={<EditOutlined />}
             tooltip="编辑"
             onClick={() => openEditor(item)}
@@ -361,7 +363,7 @@ export function LogDataSourcesPage() {
         <AdminTable
           title="日志数据源"
           headerExtra={
-            canManage ? (
+            canCreate ? (
               <ManagementTableToolbar>
                 <Button icon={<PlusOutlined />} type="primary" onClick={() => openEditor()}>
                   新建数据源

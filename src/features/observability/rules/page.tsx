@@ -11,14 +11,13 @@ import {
   Select,
   Space,
   Switch,
-  Tag,
   Typography,
 } from 'antd'
 import type { TableProps } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementIconButton } from '@/components/management-list'
-import { BooleanTag, StatusTag } from '@/components/status-tag'
+import { BooleanTag, MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { formatDateTime } from '@/utils/time'
 import '../observability-pages.css'
@@ -38,10 +37,10 @@ export function AlertRulesPage() {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
-  const canManageRules = hasPermission(
-    permissionSnapshotQuery.data?.data,
-    'observe.alert-rules.manage',
-  )
+  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const canCreateRule = hasPermission(permissionSnapshot, 'observe.alert-rules.create')
+  const canUpdateRule = hasPermission(permissionSnapshot, 'observe.alert-rules.update')
+  const canTestRule = hasPermission(permissionSnapshot, 'observe.alert-rules.test')
   const [form] = Form.useForm<AlertRuleFormValues>()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<AlertRule | null>(null)
@@ -146,7 +145,11 @@ export function AlertRulesPage() {
 
   const columns: TableProps<AlertRule>['columns'] = [
     { title: '名称', dataIndex: 'name' },
-    { title: '类型', dataIndex: 'ruleType', render: (value: string) => <Tag>{value}</Tag> },
+    {
+      title: '类型',
+      dataIndex: 'ruleType',
+      render: (value: string) => <MetadataTag label={value} />,
+    },
     {
       title: '数据源',
       dataIndex: 'datasourceSelector',
@@ -165,7 +168,7 @@ export function AlertRulesPage() {
       render: (value: string[]) => (
         <Space wrap>
           {(value ?? []).map((item) => (
-            <Tag key={item}>{item}</Tag>
+            <MetadataTag key={item} label={item} />
           ))}
         </Space>
       ),
@@ -184,6 +187,7 @@ export function AlertRulesPage() {
         <Space className="soha-row-action-icons" size={2}>
           <ManagementIconButton
             aria-label="测试告警规则"
+            disabled={!canTestRule}
             size="small"
             tooltip="测试"
             icon={<PlayCircleOutlined />}
@@ -199,7 +203,7 @@ export function AlertRulesPage() {
               setRunsOpen(true)
             }}
           />
-          {canManageRules ? (
+          {canUpdateRule ? (
             <ManagementIconButton
               aria-label="编辑告警规则"
               size="small"
@@ -218,7 +222,7 @@ export function AlertRulesPage() {
       <AdminTable
         title="告警规则"
         headerExtra={
-          canManageRules ? (
+          canCreateRule ? (
             <Button icon={<PlusOutlined />} type="primary" onClick={() => openEditor(null)}>
               新建规则
             </Button>

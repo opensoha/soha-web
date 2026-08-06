@@ -344,11 +344,18 @@ describe('access route authorization', () => {
     expect(canAccessRoute(getRoute('access-roles'), snapshot)).toBe(false)
   })
 
-  it('allows RBAC platform child routes from visible menu bindings without a dedicated permission key', () => {
+  it('requires the exact RBAC permission and child menu binding', () => {
     const snapshot = buildSnapshot({
-      permissionKeys: ['workspace.resource.view'],
-      visibleMenuIds: ['platform-access-control'],
-      visibleMenus: [{ id: 'platform-access-control', path: '/platform-access-control' }],
+      permissionKeys: ['workspace.resource.view', 'platform.access-control.cluster-roles.view'],
+      visibleMenuIds: ['platform-access-control', 'platform-access-control-clusterroles'],
+      visibleMenus: [
+        { id: 'platform-access-control', path: '/platform-access-control' },
+        {
+          id: 'platform-access-control-clusterroles',
+          parentId: 'platform-access-control',
+          path: '/platform-access-control/clusterroles',
+        },
+      ],
     })
 
     expect(canAccessRoute(getRoute('platform-access-control'), snapshot)).toBe(true)
@@ -357,9 +364,29 @@ describe('access route authorization', () => {
 
   it('inherits RBAC list access for hidden detail routes', () => {
     const snapshot = buildSnapshot({
-      permissionKeys: ['workspace.resource.view'],
-      visibleMenuIds: ['platform-access-control'],
-      visibleMenus: [{ id: 'platform-access-control', path: '/platform-access-control' }],
+      permissionKeys: [
+        'workspace.resource.view',
+        'platform.access-control.service-accounts.view',
+        'platform.access-control.role-bindings.view',
+      ],
+      visibleMenuIds: [
+        'platform-access-control',
+        'platform-access-control-serviceaccounts',
+        'platform-access-control-rolebindings',
+      ],
+      visibleMenus: [
+        { id: 'platform-access-control', path: '/platform-access-control' },
+        {
+          id: 'platform-access-control-serviceaccounts',
+          parentId: 'platform-access-control',
+          path: '/platform-access-control/serviceaccounts',
+        },
+        {
+          id: 'platform-access-control-rolebindings',
+          parentId: 'platform-access-control',
+          path: '/platform-access-control/rolebindings',
+        },
+      ],
     })
 
     expect(
@@ -494,7 +521,7 @@ describe('access route authorization', () => {
       visibleMenus: [{ id: 'builds', path: '/applications' }],
     })
     const resourceSnapshot = buildSnapshot({
-      permissionKeys: ['platform.workloads.view'],
+      permissionKeys: ['platform.pods.view'],
       visibleMenuIds: ['workloads'],
       visibleMenus: [{ id: 'workloads', path: '/workloads' }],
     })
@@ -870,7 +897,7 @@ describe('access route authorization', () => {
 
   it('preserves empty backend menu sections inside a workbench', () => {
     const snapshot = buildSnapshot({
-      permissionKeys: ['workspace.resource.view', 'overview.view', 'platform.workloads.view'],
+      permissionKeys: ['workspace.resource.view', 'overview.view', 'platform.pods.view'],
       visibleMenuIds: ['dashboard', 'workloads'],
       visibleMenus: [
         {
@@ -1179,11 +1206,11 @@ describe('access route authorization', () => {
     ).toBe(false)
   })
 
-  it('allows AI Gateway token routing from invoke-only permission', () => {
+  it('allows AI Gateway token routing from its exact view permission', () => {
     const tokenRoute = getRoute('ai-gateway-tokens')
     const parentRoute = getRoute('ai-workbench')
     const snapshot = buildSnapshot({
-      permissionKeys: ['workspace.resource.view', 'ai.gateway.invoke'],
+      permissionKeys: ['workspace.resource.view', 'ai.gateway.tokens.view'],
       visibleMenuIds: ['ai-workbench', 'ai-gateway-tokens'],
       visibleMenus: [
         {
@@ -1222,10 +1249,10 @@ describe('access route authorization', () => {
     expect(canAccessRoute(relayRoute, viewSnapshot)).toBe(true)
   })
 
-  it('requires AI Gateway manage permission for call logs', () => {
+  it('requires AI Gateway view permission for call logs', () => {
     const route = getRoute('ai-gateway-call-logs')
     const snapshot = buildSnapshot({
-      permissionKeys: ['workspace.resource.view', 'ai.gateway.manage'],
+      permissionKeys: ['workspace.resource.view', 'ai.gateway.view'],
       visibleMenuIds: ['ai-workbench', 'ai-gateway-call-logs'],
       visibleMenus: [
         {
@@ -1246,7 +1273,7 @@ describe('access route authorization', () => {
       canAccessRoute(
         route,
         buildSnapshot({
-          permissionKeys: ['workspace.resource.view', 'ai.gateway.view'],
+          permissionKeys: ['workspace.resource.view', 'ai.gateway.invoke'],
           visibleMenuIds: ['ai-workbench', 'ai-gateway-call-logs'],
           visibleMenus: snapshot.visibleMenus,
         }),

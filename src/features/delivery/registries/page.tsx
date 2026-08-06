@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { App, Button, Form, Input, Modal, Popconfirm, Select, Space, Tag } from 'antd'
+import { App, Button, Form, Input, Modal, Popconfirm, Select, Space } from 'antd'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import type { TableColumnsType } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementIconButton } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { DeliveryTable } from '../delivery-table'
@@ -21,10 +21,10 @@ export function RegistriesPage() {
   const [form] = Form.useForm<DeliveryStringRecordInput>()
   const [modalVisible, setModalVisible] = useState(false)
   const [editing, setEditing] = useState<RegistryRecord | null>(null)
-  const canManageRegistry = hasPermission(
-    permissionSnapshotQuery.data?.data,
-    'delivery.registries.manage',
-  )
+  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const canCreateRegistry = hasPermission(permissionSnapshot, 'delivery.registries.create')
+  const canUpdateRegistry = hasPermission(permissionSnapshot, 'delivery.registries.update')
+  const canDeleteRegistry = hasPermission(permissionSnapshot, 'delivery.registries.delete')
 
   const registriesQuery = useQuery(deliveryQueries.registries.list())
   const createMutation = useMutation(deliveryMutations.registries.create(queryClient))
@@ -63,7 +63,7 @@ export function RegistriesPage() {
 
   const columns: ColumnProps<RegistryRecord>[] = [
     { title: '名称', dataIndex: 'name' },
-    { title: '类型', dataIndex: 'type', render: (type: string) => <Tag>{type}</Tag> },
+    { title: '类型', dataIndex: 'type', render: (type: string) => <MetadataTag label={type} /> },
     { title: 'Endpoint', dataIndex: 'endpoint', ellipsis: true },
     { title: '用户名', dataIndex: 'username' },
     {
@@ -78,7 +78,7 @@ export function RegistriesPage() {
       dataIndex: 'id',
       render: (_: unknown, record: RegistryRecord) => (
         <Space className="soha-row-action-icons" size={2}>
-          {canManageRegistry ? (
+          {canUpdateRegistry ? (
             <ManagementIconButton
               aria-label="编辑仓库"
               icon={<EditOutlined />}
@@ -90,7 +90,7 @@ export function RegistriesPage() {
               }}
             />
           ) : null}
-          {canManageRegistry ? (
+          {canDeleteRegistry ? (
             <Popconfirm
               title="确认删除？"
               onConfirm={() =>
@@ -112,7 +112,7 @@ export function RegistriesPage() {
               />
             </Popconfirm>
           ) : null}
-          {!canManageRegistry ? '-' : null}
+          {!canUpdateRegistry && !canDeleteRegistry ? '-' : null}
         </Space>
       ),
     },
@@ -122,7 +122,7 @@ export function RegistriesPage() {
     <div className="soha-page">
       <DeliveryTable
         actions={
-          canManageRegistry ? (
+          canCreateRegistry ? (
             <Button
               icon={<PlusOutlined />}
               type="primary"

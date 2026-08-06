@@ -59,7 +59,9 @@ export function OnCallBoardPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const permissionSnapshotQuery = usePermissionSnapshot()
-  const canManageOnCall = hasPermission(permissionSnapshotQuery.data?.data, 'observe.oncall.manage')
+  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const canCreateOnCall = hasPermission(permissionSnapshot, 'observe.oncall.create')
+  const canUpdateOnCall = hasPermission(permissionSnapshot, 'observe.oncall.update')
   const [overrideForm] = Form.useForm<{ participants: string[] }>()
   const [view, setView] = useState<OnCallBoardView>('calendar')
   const [calendarValue, setCalendarValue] = useState<Dayjs>(dayjs())
@@ -71,7 +73,7 @@ export function OnCallBoardPage() {
   const schedulesQuery = useQuery(observabilityOncallQueries.schedules())
   const rotationsQuery = useQuery(observabilityOncallQueries.rotations())
   const tasksQuery = useQuery(observabilityOncallQueries.tasks())
-  const usersQuery = useQuery(observabilityOncallQueries.users(canManageOnCall))
+  const usersQuery = useQuery(observabilityOncallQueries.users(canUpdateOnCall))
   const updateRotationOverride = useMutation({
     ...observabilityOncallMutations.updateRotation(queryClient),
     onError: (error) => message.error(error.message),
@@ -109,7 +111,7 @@ export function OnCallBoardPage() {
   const tomorrowAssignment = assignmentForDate(selectedRotation, today.add(1, 'day'))
 
   function openOverride(date: Dayjs) {
-    if (!canManageOnCall) return
+    if (!canUpdateOnCall) return
     if (!selectedRotation) {
       message.warning('当前排班尚未配置轮值，请先到值班设置中创建')
       return
@@ -217,7 +219,7 @@ export function OnCallBoardPage() {
             description="尚未创建排班，请前往值班设置新增。"
             kind="not-configured"
             actions={
-              canManageOnCall ? (
+              canCreateOnCall ? (
                 <Button
                   type="primary"
                   onClick={() => navigate('/monitoring-workbench/oncall/settings')}
@@ -361,7 +363,7 @@ export function OnCallBoardPage() {
                       title: '操作',
                       dataIndex: 'date',
                       render: (value: string) =>
-                        canManageOnCall ? (
+                        canUpdateOnCall ? (
                           <ManagementIconButton
                             aria-label="编辑覆盖记录"
                             size="small"
@@ -432,7 +434,7 @@ export function OnCallBoardPage() {
                 />
               </Card>
             ) : null}
-            {canManageOnCall ? (
+            {canUpdateOnCall ? (
               <Space>
                 <Button
                   type="primary"

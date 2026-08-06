@@ -109,6 +109,21 @@ describe('provider form model', () => {
     ).toThrow('Secret refs 必须是 JSON object')
   })
 
+  it('submits OIDC providers without unmounted SAML fields', () => {
+    const values = defaultProviderValues()
+    values.applicationId = 'oidc-app'
+    values.name = 'OIDC Provider'
+    Reflect.deleteProperty(values, 'samlEntityId')
+    Reflect.deleteProperty(values, 'samlAttributeMappingsJson')
+
+    expect(providerInputFromValues(values)).toMatchObject({
+      applicationId: 'oidc-app',
+      config: {},
+      name: 'OIDC Provider',
+      type: 'oidc',
+    })
+  })
+
   it('builds a typed SAML service provider config instead of proxy config', () => {
     expect(
       providerInputFromValues({

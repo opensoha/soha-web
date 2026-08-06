@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { act, type ReactNode } from 'react'
+import { act, isValidElement, type ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
@@ -8,6 +8,11 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { ClustersPage } from './list-page'
 
 const storeMocks = vi.hoisted(() => ({ setClusterId: vi.fn() }))
+const authMocks = vi.hoisted(() => ({ permissions: new Set<string>() }))
+const formLifecycleMocks = vi.hoisted(() => ({
+  destroyOnHidden: undefined as boolean | undefined,
+  preserve: undefined as boolean | undefined,
+}))
 const apiGetMock = vi.hoisted(() =>
   vi.fn(async (path: string) => {
     if (path === '/clusters') {
@@ -47,6 +52,11 @@ vi.mock('@/services/api-client', () => ({
     post: vi.fn(async () => ({ data: {} })),
     put: vi.fn(async () => ({ data: {} })),
   },
+}))
+vi.mock('@/features/auth', () => ({
+  hasPermission: (_snapshot: unknown, permissionKey: string) =>
+    authMocks.permissions.has(permissionKey),
+  usePermissionSnapshot: () => ({ data: { data: {} } }),
 }))
 vi.mock('@/stores/platform-scope-store', () => ({
   usePlatformScopeStore: (selector: (state: typeof storeMocks) => unknown) => selector(storeMocks),
@@ -127,19 +137,26 @@ vi.mock('antd', async (importOriginal) => {
     Form: FormMock,
     Modal: ({
       children,
+      destroyOnHidden,
       open,
       title,
     }: {
       children?: ReactNode
+      destroyOnHidden?: boolean
       open?: boolean
       title?: ReactNode
-    }) =>
-      open ? (
+    }) => {
+      formLifecycleMocks.destroyOnHidden = destroyOnHidden
+      if (isValidElement<{ preserve?: boolean }>(children)) {
+        formLifecycleMocks.preserve = children.props.preserve
+      }
+      return open ? (
         <div>
           {title}
           {children}
         </div>
-      ) : null,
+      ) : null
+    },
     Popconfirm: ({ children, onConfirm }: { children?: ReactNode; onConfirm?: () => void }) => (
       <span onClick={onConfirm}>{children}</span>
     ),
@@ -150,7 +167,17 @@ vi.mock('antd', async (importOriginal) => {
 const mountedRoots: Root[] = []
 
 beforeAll(() => vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true))
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  authMocks.permissions = new Set([
+    'platform.clusters.view',
+    'platform.clusters.create',
+    'platform.clusters.update',
+    'platform.clusters.delete',
+  ])
+  formLifecycleMocks.destroyOnHidden = undefined
+  formLifecycleMocks.preserve = undefined
+})
 afterEach(async () => {
   await act(async () => {
     for (const root of mountedRoots.splice(0)) root.unmount()
@@ -187,10 +214,19 @@ async function renderPage() {
 }
 
 describe('clusters list page boundaries', () => {
+  it('discards create form state when the modal closes', async () => {
+    await renderPage()
+
+    expect(formLifecycleMocks.destroyOnHidden).toBe(true)
+    expect(formLifecycleMocks.preserve).toBe(false)
+  })
+
   it('loads edit detail on demand and deletes through the capability mutation', async () => {
     const container = await renderPage()
     expect(apiGetMock).toHaveBeenCalledWith('/clusters')
     expect(apiGetMock).not.toHaveBeenCalledWith('/clusters/cluster-a/detail')
+    expect(container.querySelector('.soha-status-tag')?.textContent).toBe('正常')
+    expect(container.querySelector('.soha-metadata-tag')?.textContent).toBe('Agent')
 
     const editButton = container.querySelector('button[aria-label="编辑集群"]')
     await act(async () => editButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
@@ -202,5 +238,14 @@ describe('clusters list page boundaries', () => {
     await act(async () => deleteButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     await flushAsyncWork()
     expect(apiDeleteMock).toHaveBeenCalledWith('/clusters/cluster-a')
+  })
+
+  it('hides mutation controls without their exact permissions', async () => {
+    authMocks.permissions = new Set(['platform.clusters.view'])
+    const container = await renderPage()
+
+    expect(container.querySelector('.soha-clusters-create-button')).toBeNull()
+    expect(container.querySelector('button[aria-label="编辑集群"]')).toBeNull()
+    expect(container.querySelector('button[aria-label="删除集群"]')).toBeNull()
   })
 })

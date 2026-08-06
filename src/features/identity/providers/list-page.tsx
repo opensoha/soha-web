@@ -8,7 +8,6 @@ import {
   Popconfirm,
   Select,
   Space,
-  Tag,
   Typography,
 } from 'antd'
 import type { TableColumnsType } from 'antd'
@@ -24,6 +23,7 @@ import {
   ManagementRefreshButton,
   ManagementTableToolbar,
 } from '@/components/management-list'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useI18n } from '@/i18n'
 import { identityApplicationQueries } from '../applications'
@@ -121,7 +121,10 @@ export function IdentityProvidersPage() {
   const [createdSecret, setCreatedSecret] = useState<IdentityOIDCSecretReveal | null>(null)
   const [formProviderType, setFormProviderType] = useState<IdentityRuntimeProviderType>('oidc')
   const snapshot = usePermissionSnapshot().data?.data
-  const canManage = hasPermission(snapshot, 'identity.providers.manage')
+  const canCreate = hasPermission(snapshot, 'identity.providers.create')
+  const canUpdate = hasPermission(snapshot, 'identity.providers.update')
+  const canDelete = hasPermission(snapshot, 'identity.providers.delete')
+  const canRotate = hasPermission(snapshot, 'identity.providers.rotate')
 
   const providersQuery = useQuery(
     identityProviderQueries.list({ status: filters.status, type: filters.type }),
@@ -234,9 +237,10 @@ export function IdentityProvidersPage() {
         dataIndex: 'type',
         width: 140,
         render: (value: IdentityRuntimeProviderType) => (
-          <Tag color={value === 'oidc' ? 'blue' : value === 'saml' ? 'cyan' : 'gold'}>
-            {value.toUpperCase()}
-          </Tag>
+          <MetadataTag
+            label={value.toUpperCase()}
+            tone={value === 'oidc' ? 'blue' : value === 'saml' ? 'cyan' : 'gold'}
+          />
         ),
       },
       {
@@ -262,11 +266,14 @@ export function IdentityProvidersPage() {
         render: (value: IdentityRuntimeProviderStatus, record) => (
           <Space orientation="vertical" size={2}>
             {identityProviderStatusTag(value)}
-            <Tag color={record.enabled ? 'green' : 'default'}>
-              {record.enabled
-                ? t('identity.providers.runtimeOn', '运行中')
-                : t('identity.providers.runtimeOff', '已停止')}
-            </Tag>
+            <StatusTag
+              label={
+                record.enabled
+                  ? t('identity.providers.runtimeOn', '运行中')
+                  : t('identity.providers.runtimeOff', '已停止')
+              }
+              value={record.enabled ? 'running' : 'disabled'}
+            />
           </Space>
         ),
       },
@@ -285,14 +292,14 @@ export function IdentityProvidersPage() {
           <Space size={4}>
             <ManagementIconButton
               aria-label={t('common.edit', '编辑')}
-              disabled={!canManage}
+              disabled={!canUpdate}
               icon={<EditOutlined />}
               onClick={() => openEdit(record)}
               tooltip={t('common.edit', '编辑')}
             />
             <Popconfirm
               cancelText={t('common.cancel', '取消')}
-              disabled={!canManage}
+              disabled={!canDelete}
               okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
               okText={t('common.delete', '删除')}
               onConfirm={() =>
@@ -307,7 +314,7 @@ export function IdentityProvidersPage() {
               <ManagementIconButton
                 aria-label={t('common.delete', '删除')}
                 danger
-                disabled={!canManage}
+                disabled={!canDelete}
                 icon={<DeleteOutlined />}
                 tooltip={t('common.delete', '删除')}
               />
@@ -316,7 +323,7 @@ export function IdentityProvidersPage() {
         ),
       },
     ],
-    [applicationById, canManage, deleteMutation, message, t],
+    [applicationById, canDelete, canUpdate, deleteMutation, message, t],
   )
 
   return (
@@ -392,7 +399,10 @@ export function IdentityProvidersPage() {
             expandedRowRender: (record: IdentityProvider) =>
               record.type === 'oidc' ? (
                 <OIDCClientsPanel
-                  canManage={canManage}
+                  canCreate={canCreate}
+                  canUpdate={canUpdate}
+                  canDelete={canDelete}
+                  canRotate={canRotate}
                   onSecretCreated={setCreatedSecret}
                   provider={record}
                 />
@@ -413,7 +423,7 @@ export function IdentityProvidersPage() {
             <ManagementTableToolbar>
               <Button
                 autoInsertSpace={false}
-                disabled={!canManage}
+                disabled={!canCreate}
                 icon={<PlusOutlined />}
                 onClick={openCreate}
                 size="small"

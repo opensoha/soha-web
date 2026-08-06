@@ -24,7 +24,7 @@ function defaultMeta(definition: AppRouteDefinition): RouteMeta {
 }
 
 function inheritedMeta(parent: RouteMeta, definition: AppRouteDefinition): RouteMeta {
-  return {
+  const meta: RouteMeta = {
     description: definition.meta.description ?? definition.meta.title,
     icon: parent.icon,
     group: parent.group,
@@ -42,6 +42,9 @@ function inheritedMeta(parent: RouteMeta, definition: AppRouteDefinition): Route
     ...definition.meta,
     ...(definition.redirectTo ? { redirectTo: definition.redirectTo } : {}),
   }
+  if (definition.meta.permissionKey) meta.permissionKeysAny = undefined
+  if (definition.meta.permissionKeysAny?.length) meta.permissionKey = undefined
+  return meta
 }
 
 export function resolveRouteDefinitions(

@@ -17,14 +17,13 @@ import {
   Select,
   Space,
   Switch,
-  Tag,
 } from 'antd'
 import type { TableProps } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ReleaseDagDefinition } from '@/components/release-flow-dag-definition'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementIconButton } from '@/components/management-list'
-import { BooleanTag, StatusTag } from '@/components/status-tag'
+import { BooleanTag, MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { formatDateTime } from '@/utils/time'
 import '../observability-pages.css'
@@ -39,10 +38,12 @@ export function HealingPage() {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
-  const canManageHealing = hasPermission(
-    permissionSnapshotQuery.data?.data,
-    'observe.healing.manage',
-  )
+  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const canCreateHealing = hasPermission(permissionSnapshot, 'observe.healing.create')
+  const canUpdateHealing = hasPermission(permissionSnapshot, 'observe.healing.update')
+  const canApproveHealing = hasPermission(permissionSnapshot, 'observe.healing.approve')
+  const canRejectHealing = hasPermission(permissionSnapshot, 'observe.healing.reject')
+  const canRetryHealing = hasPermission(permissionSnapshot, 'observe.healing.retry')
   const [form] = Form.useForm<HealingPolicyFormValues>()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<HealingPolicy | null>(null)
@@ -155,8 +156,7 @@ export function HealingPage() {
         dataIndex: 'id',
         render: (value: string, record) => (
           <Space>
-            {canManageHealing ? (
-              <>
+            {canApproveHealing ? (
                 <Button
                   size="small"
                   icon={<CheckOutlined />}
@@ -170,6 +170,8 @@ export function HealingPage() {
                 >
                   通过
                 </Button>
+            ) : null}
+            {canRejectHealing ? (
                 <Button
                   size="small"
                   icon={<CloseOutlined />}
@@ -183,6 +185,8 @@ export function HealingPage() {
                 >
                   拒绝
                 </Button>
+            ) : null}
+            {canRetryHealing ? (
                 <Button
                   size="small"
                   icon={<ReloadOutlined />}
@@ -194,13 +198,20 @@ export function HealingPage() {
                 >
                   重试
                 </Button>
-              </>
             ) : null}
           </Space>
         ),
       },
     ],
-    [approveMutation, canManageHealing, message, rejectMutation, retryMutation],
+    [
+      approveMutation,
+      canApproveHealing,
+      canRejectHealing,
+      canRetryHealing,
+      message,
+      rejectMutation,
+      retryMutation,
+    ],
   )
 
   const policyColumns: TableProps<HealingPolicy>['columns'] = [
@@ -208,7 +219,7 @@ export function HealingPage() {
     {
       title: '触发模式',
       dataIndex: 'triggerMode',
-      render: (value: string) => <Tag>{value}</Tag>,
+      render: (value: string) => <MetadataTag label={value} />,
     },
     { title: '工作流模板', dataIndex: 'workflowTemplateId' },
     {
@@ -227,7 +238,7 @@ export function HealingPage() {
       title: '操作',
       dataIndex: 'id',
       render: (_: string, record) =>
-        canManageHealing ? (
+        canUpdateHealing ? (
           <ManagementIconButton
             aria-label="编辑自愈策略"
             size="small"
@@ -244,7 +255,7 @@ export function HealingPage() {
       <AdminTable
         title="自愈策略"
         headerExtra={
-          canManageHealing ? (
+          canCreateHealing ? (
             <Button icon={<PlusOutlined />} type="primary" onClick={() => openEditor(null)}>
               新建自愈策略
             </Button>

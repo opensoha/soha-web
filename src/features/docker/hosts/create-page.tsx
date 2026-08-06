@@ -6,6 +6,7 @@ import type { StepFormStep } from '@/components/step-form'
 import { OperationalPlanModal } from '@/components/operational-plan-modal'
 import type { OperationalPlan } from '@opensoha/contracts/gen/ts/sohaapi'
 import { useWorkbenchModuleEnabled } from '@/features/modules'
+import { createUUID } from '@/utils/uuid'
 import {
   virtualizationQueries,
   type VirtualizationCluster,
@@ -142,19 +143,20 @@ export function RuntimeHostStepModal({
   const mode = Form.useWatch('mode', form) ?? 'existing'
   const connectionID = Form.useWatch('virtualizationConnectionId', form)
   const selectedImageID = Form.useWatch('imageId', form)
-  const { canManageHosts } = useDockerPermissions()
+  const { canCreateHosts, canUpdateHosts } = useDockerPermissions()
+  const canConfigureHost = editing ? canUpdateHosts : canCreateHosts
   const { moduleEnabled: virtualizationModuleEnabled } = useWorkbenchModuleEnabled('virtualization')
   const clustersQuery = useQuery(
-    virtualizationQueries.clusters(canManageHosts && virtualizationModuleEnabled),
+    virtualizationQueries.clusters(canConfigureHost && virtualizationModuleEnabled),
   )
   const imagesQuery = useQuery(
     virtualizationQueries.images(
       { page: 1, pageSize: 500 },
-      canManageHosts && virtualizationModuleEnabled,
+      canConfigureHost && virtualizationModuleEnabled,
     ),
   )
   const flavorsQuery = useQuery(
-    virtualizationQueries.flavors(canManageHosts && virtualizationModuleEnabled),
+    virtualizationQueries.flavors(canConfigureHost && virtualizationModuleEnabled),
   )
   const connections = (clustersQuery.data ?? []).filter(isProvisionConnection)
   const images = virtualizationItems(imagesQuery.data).filter(isProvisionImage)
@@ -178,7 +180,7 @@ export function RuntimeHostStepModal({
     mutationFn: dockerApi.planQuickCreateHost,
     onSuccess: (plan, payload) => {
       setProvisionPlan(plan)
-      setPendingProvision({ idempotencyKey: crypto.randomUUID(), payload })
+      setPendingProvision({ idempotencyKey: createUUID(), payload })
     },
     onError: (error) => void message.error(error.message),
   })

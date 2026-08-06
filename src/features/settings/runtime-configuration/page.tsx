@@ -166,7 +166,10 @@ export function RuntimeConfigurationPage() {
   const permissionQuery = usePermissionSnapshot()
   const snapshot = permissionQuery.data?.data
   const canView = hasPermission(snapshot, 'settings.runtime-config.view')
-  const canManage = hasPermission(snapshot, 'settings.runtime-config.manage')
+  const canApply = hasPermission(snapshot, 'settings.runtime-config.apply')
+  const canValidate = hasPermission(snapshot, 'settings.runtime-config.validate')
+  const canRollback = hasPermission(snapshot, 'settings.runtime-config.rollback')
+  const canManage = canApply || canValidate
   const [activeTab, setActiveTab] = useState<RuntimeConfigurationTab>('configuration')
   const snapshotQuery = useQuery(runtimeConfigurationQueries.snapshot(canView))
   const resourceQuery = useQuery(
@@ -567,23 +570,27 @@ export function RuntimeConfigurationPage() {
               >
                 放弃草稿
               </Button>
-              <Button
-                disabled={changes.length === 0}
-                icon={<CheckCircleOutlined />}
-                loading={validateMutation.isPending}
-                onClick={() => void handleValidate()}
-              >
-                校验
-              </Button>
-              <Button
-                disabled={changes.length === 0}
-                icon={<SaveOutlined />}
-                loading={applyMutation.isPending}
-                type="primary"
-                onClick={handleApply}
-              >
-                应用 {changes.length} 项
-              </Button>
+              {canValidate ? (
+                <Button
+                  disabled={changes.length === 0}
+                  icon={<CheckCircleOutlined />}
+                  loading={validateMutation.isPending}
+                  onClick={() => void handleValidate()}
+                >
+                  校验
+                </Button>
+              ) : null}
+              {canApply ? (
+                <Button
+                  disabled={changes.length === 0}
+                  icon={<SaveOutlined />}
+                  loading={applyMutation.isPending}
+                  type="primary"
+                  onClick={handleApply}
+                >
+                  应用 {changes.length} 项
+                </Button>
+              ) : null}
             </>
           ) : null}
           <Button
@@ -947,7 +954,7 @@ export function RuntimeConfigurationPage() {
         onChange={(key) => setActiveTab(key as RuntimeConfigurationTab)}
       />
       <RuntimeConfigurationHistoryDrawer
-        canRollback={canManage && activeRevision?.version !== runtimeSnapshot?.version}
+        canRollback={canRollback && activeRevision?.version !== runtimeSnapshot?.version}
         items={runtimeSnapshot?.items ?? []}
         open={Boolean(activeRevision)}
         revision={activeRevision}

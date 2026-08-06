@@ -1,4 +1,5 @@
 import type {
+  VirtualizationImageListParams,
   VirtualizationListParams,
   VirtualizationOperationListParams,
 } from './virtualization-types'
@@ -6,6 +7,15 @@ import type {
 export interface VirtualizationVMMetricsQueryParams {
   rangeMinutes?: number
   stepSeconds?: number
+}
+
+export function normalizeVirtualizationImageListParams(
+  params: VirtualizationImageListParams = {},
+): VirtualizationImageListParams {
+  return {
+    ...normalizeVirtualizationListParams(params),
+    ...(includeString(params.category) !== undefined ? { category: params.category } : {}),
+  }
 }
 
 function includeString(value: string | undefined) {
@@ -79,8 +89,8 @@ export const virtualizationKeys = {
   platformClusterOptions: () => [...virtualizationKeys.clusters(), 'platform-options'] as const,
   images: () => [...virtualizationKeys.all, 'images'] as const,
   imageLists: () => [...virtualizationKeys.images(), 'list'] as const,
-  imageList: (params: VirtualizationListParams = {}) =>
-    [...virtualizationKeys.imageLists(), normalizeVirtualizationListParams(params)] as const,
+  imageList: (params: VirtualizationImageListParams = {}) =>
+    [...virtualizationKeys.imageLists(), normalizeVirtualizationImageListParams(params)] as const,
   imageOptions: () => [...virtualizationKeys.imageLists(), 'options'] as const,
   flavors: () => [...virtualizationKeys.all, 'flavors'] as const,
   flavorList: () => [...virtualizationKeys.flavors(), 'list'] as const,

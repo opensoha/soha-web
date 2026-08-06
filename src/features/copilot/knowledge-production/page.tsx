@@ -131,6 +131,7 @@ function KnowledgeProductionPageContent() {
         <Form
           form={connectorForm}
           layout="vertical"
+          preserve={false}
           initialValues={{
             kind: 'http',
             version: 'v1',
@@ -197,7 +198,7 @@ function KnowledgeProductionPageContent() {
         confirmLoading={startSync.isPending}
         destroyOnHidden
       >
-        <Form form={syncForm} layout="vertical">
+        <Form form={syncForm} layout="vertical" preserve={false}>
           <Form.Item name="knowledgeBaseId" label="Knowledge Base ID" rules={[{ required: true }]}>
             <Input />
           </Form.Item>

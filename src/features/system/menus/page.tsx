@@ -156,11 +156,15 @@ export function MenusPage() {
   >('all')
   const [treeView, setTreeView] = useState<'workbench' | 'top' | 'all'>('workbench')
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
-  const canManageMenus = hasPermission(permissionSnapshotQuery.data?.data, 'system.menus.manage')
+  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const canCreateMenu = hasPermission(permissionSnapshot, 'system.menus.create')
+  const canUpdateMenu = hasPermission(permissionSnapshot, 'system.menus.update')
+  const canDeleteMenu = hasPermission(permissionSnapshot, 'system.menus.delete')
+  const canEditMenu = editing ? canUpdateMenu : canCreateMenu
 
   const { data: menuTree = [], isFetching, isLoading, refetch } = useQuery(systemQueries.menus())
   const { data: roleRecords = [] } = useQuery(
-    systemQueries.menuAccessRoles(canManageMenus && modalVisible),
+    systemQueries.menuAccessRoles((canCreateMenu || canUpdateMenu) && modalVisible),
   )
   const createMutation = useMutation(systemMutations.menus.create(queryClient))
   const updateMutation = useMutation(systemMutations.menus.update(queryClient))
@@ -352,7 +356,7 @@ export function MenusPage() {
       dataIndex: 'id',
       render: (_: unknown, record: MenuItem) => (
         <Space className="soha-row-action-icons">
-          {canManageMenus && !record.syntheticKind ? (
+          {canUpdateMenu && !record.syntheticKind ? (
             <ManagementIconButton
               aria-label="编辑菜单"
               icon={<EditOutlined />}
@@ -364,7 +368,7 @@ export function MenusPage() {
               }}
             />
           ) : null}
-          {canManageMenus && !record.syntheticKind ? (
+          {canDeleteMenu && !record.syntheticKind ? (
             <Popconfirm
               title="确认删除？"
               onConfirm={() =>
@@ -383,7 +387,7 @@ export function MenusPage() {
               />
             </Popconfirm>
           ) : null}
-          {!canManageMenus || record.syntheticKind ? '-' : null}
+          {(!canUpdateMenu && !canDeleteMenu) || record.syntheticKind ? '-' : null}
         </Space>
       ),
     },
@@ -487,7 +491,7 @@ export function MenusPage() {
           scroll={{ x: 1320 }}
           headerExtra={
             <ManagementTableToolbar>
-              {canManageMenus ? (
+              {canCreateMenu ? (
                 <Button
                   size="small"
                   icon={<PlusOutlined />}
@@ -540,7 +544,7 @@ export function MenusPage() {
             form={form}
             {...MODAL_FORM_LAYOUT}
             onFinish={(values) => {
-              if (!canManageMenus) return
+              if (!canEditMenu) return
               handleSubmit(values as Record<string, unknown>)
             }}
           >
@@ -733,7 +737,7 @@ export function MenusPage() {
               >
                 取消
               </Button>
-              {canManageMenus ? (
+              {canEditMenu ? (
                 <Button
                   htmlType="submit"
                   type="primary"

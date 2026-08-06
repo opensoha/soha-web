@@ -92,6 +92,7 @@ function EnvironmentsPageContent() {
         <Form
           form={form}
           layout="vertical"
+          preserve={false}
           initialValues={{ backend: 'container', isolationMode: 'read-only' }}
         >
           <Form.Item name="id" label="ID" rules={[{ required: true }]}>

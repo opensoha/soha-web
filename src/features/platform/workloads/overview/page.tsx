@@ -11,6 +11,7 @@ import { AdminTable } from '@/components/admin-table'
 import { ManagementState, ManagementTableToolbar } from '@/components/management-list'
 import { OverviewMetricCard, type OverviewMetricItem } from '@/components/overview-visuals'
 import { StatusTag } from '@/components/status-tag'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
@@ -31,13 +32,45 @@ export function WorkloadsOverviewPage() {
   const { t, localeCode } = useI18n()
   const { clusterId, namespace } = usePlatformScopeStore()
   const scope = toScopeKey(clusterId, namespace)
-  const deploymentsQuery = useQuery(workloadQueries.list<unknown>('deployments', scope))
-  const podsQuery = useQuery(workloadQueries.list<unknown>('pods', scope))
-  const statefulSetsQuery = useQuery(workloadQueries.list<unknown>('statefulsets', scope))
-  const daemonSetsQuery = useQuery(workloadQueries.list<unknown>('daemonsets', scope))
-  const jobsQuery = useQuery(workloadQueries.list<unknown>('jobs', scope))
-  const cronJobsQuery = useQuery(workloadQueries.list<unknown>('cronjobs', scope))
-  const eventsQuery = useQuery(workloadOverviewQueries.events(scope))
+  const permissionSnapshot = usePermissionSnapshot().data?.data
+  const workloadPermissions: Record<string, boolean> = {
+    deployments: hasPermission(permissionSnapshot, 'platform.deployment.view'),
+    pods: hasPermission(permissionSnapshot, 'platform.pods.view'),
+    statefulsets: hasPermission(permissionSnapshot, 'platform.workloads.stateful-sets.view'),
+    daemonsets: hasPermission(permissionSnapshot, 'platform.workloads.daemon-sets.view'),
+    jobs: hasPermission(permissionSnapshot, 'platform.workloads.jobs.view'),
+    cronjobs: hasPermission(permissionSnapshot, 'platform.workloads.cron-jobs.view'),
+  }
+  const deploymentsQuery = useQuery({
+    ...workloadQueries.list<unknown>('deployments', scope),
+    enabled: Boolean(clusterId) && workloadPermissions.deployments,
+  })
+  const podsQuery = useQuery({
+    ...workloadQueries.list<unknown>('pods', scope),
+    enabled: Boolean(clusterId) && workloadPermissions.pods,
+  })
+  const statefulSetsQuery = useQuery({
+    ...workloadQueries.list<unknown>('statefulsets', scope),
+    enabled: Boolean(clusterId) && workloadPermissions.statefulsets,
+  })
+  const daemonSetsQuery = useQuery({
+    ...workloadQueries.list<unknown>('daemonsets', scope),
+    enabled: Boolean(clusterId) && workloadPermissions.daemonsets,
+  })
+  const jobsQuery = useQuery({
+    ...workloadQueries.list<unknown>('jobs', scope),
+    enabled: Boolean(clusterId) && workloadPermissions.jobs,
+  })
+  const cronJobsQuery = useQuery({
+    ...workloadQueries.list<unknown>('cronjobs', scope),
+    enabled: Boolean(clusterId) && workloadPermissions.cronjobs,
+  })
+  const eventsQuery = useQuery({
+    ...workloadOverviewQueries.events(scope),
+    enabled:
+      Boolean(clusterId) &&
+      hasPermission(permissionSnapshot, 'platform.workloads.overview.view'),
+  })
   const { densityButton, tableSize } = useWorkloadTableDensity(localeCode)
 
   if (!clusterId) {
@@ -52,7 +85,7 @@ export function WorkloadsOverviewPage() {
     )
   }
 
-  const stats = [
+  const stats = ([
     {
       key: 'deployments',
       label: 'Deployments',
@@ -101,7 +134,7 @@ export function WorkloadsOverviewPage() {
       icon: <ScheduleOutlined />,
       tone: 'default',
     },
-  ] satisfies OverviewMetricItem[]
+  ] satisfies OverviewMetricItem[]).filter((item) => workloadPermissions[item.key])
 
   const eventColumns: TableColumnsType<WorkloadEvent> = [
     {

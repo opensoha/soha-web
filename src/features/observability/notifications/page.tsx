@@ -17,7 +17,6 @@ import {
   Space,
   Switch,
   Tabs,
-  Tag,
   Typography,
 } from 'antd'
 import type { TableProps } from 'antd'
@@ -27,7 +26,7 @@ import {
   ManagementIconButton,
   ManagementTableToolbar,
 } from '@/components/management-list'
-import { BooleanTag, StatusTag } from '@/components/status-tag'
+import { BooleanTag, MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { formatDateTime } from '@/utils/time'
@@ -68,10 +67,9 @@ export function NotificationsPage() {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
-  const canManageNotifications = hasPermission(
-    permissionSnapshotQuery.data?.data,
-    'observe.notifications.manage',
-  )
+  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const canCreateNotification = hasPermission(permissionSnapshot, 'observe.notifications.create')
+  const canUpdateNotification = hasPermission(permissionSnapshot, 'observe.notifications.update')
   const [policyForm] = Form.useForm<NotificationPolicyFormValues>()
   const [templateForm] = Form.useForm<NotificationTemplateFormValues>()
   const [channelForm] = Form.useForm<NotificationChannelFormValues>()
@@ -385,7 +383,7 @@ export function NotificationsPage() {
     {
       title: '类型',
       dataIndex: 'channelType',
-      render: (value: string) => <Tag>{value}</Tag>,
+      render: (value: string) => <MetadataTag label={value} />,
     },
     {
       title: 'Endpoint',
@@ -410,7 +408,7 @@ export function NotificationsPage() {
       title: '操作',
       dataIndex: 'id',
       render: (_: string, record) =>
-        canManageNotifications ? (
+        canUpdateNotification ? (
           <ManagementIconButton
             aria-label="编辑通知渠道"
             icon={<BellOutlined />}
@@ -439,7 +437,7 @@ export function NotificationsPage() {
         return items.length > 0 ? (
           <Space wrap>
             {items.map((item) => (
-              <Tag key={item}>{item}</Tag>
+              <MetadataTag key={item} label={item} />
             ))}
           </Space>
         ) : (
@@ -464,7 +462,7 @@ export function NotificationsPage() {
       title: '操作',
       dataIndex: 'id',
       render: (_: string, record) =>
-        canManageNotifications ? (
+        canUpdateNotification ? (
           <ManagementIconButton
             aria-label="编辑通知路由"
             icon={<NotificationOutlined />}
@@ -507,7 +505,7 @@ export function NotificationsPage() {
       title: '操作',
       dataIndex: 'id',
       render: (_: string, record) =>
-        canManageNotifications ? (
+        canUpdateNotification ? (
           <ManagementIconButton
             aria-label="编辑静默规则"
             icon={<EditOutlined />}
@@ -527,7 +525,7 @@ export function NotificationsPage() {
       render: (value: string[]) => (
         <Space wrap>
           {(value ?? []).map((item) => (
-            <Tag key={item}>{item}</Tag>
+            <MetadataTag key={item} label={item} />
           ))}
         </Space>
       ),
@@ -538,7 +536,7 @@ export function NotificationsPage() {
       render: (value: string[]) => (
         <Space wrap>
           {(value ?? []).map((item) => (
-            <Tag key={item}>{channelNamesById[item] || item}</Tag>
+            <MetadataTag key={item} label={channelNamesById[item] || item} />
           ))}
         </Space>
       ),
@@ -566,7 +564,7 @@ export function NotificationsPage() {
       dataIndex: 'id',
       render: (_: string, record) => (
         <Space className="soha-row-action-icons" size={2}>
-          {canManageNotifications ? (
+          {canUpdateNotification ? (
             <ManagementIconButton
               aria-label="编辑通知策略"
               icon={<EditOutlined />}
@@ -597,7 +595,7 @@ export function NotificationsPage() {
     {
       title: '模板类型',
       dataIndex: 'templateType',
-      render: (value: string) => <Tag>{value}</Tag>,
+      render: (value: string) => <MetadataTag label={value} />,
     },
     { title: '内容类型', dataIndex: 'contentType' },
     {
@@ -610,7 +608,7 @@ export function NotificationsPage() {
       title: '操作',
       dataIndex: 'id',
       render: (_: string, record) =>
-        canManageNotifications ? (
+        canUpdateNotification ? (
           <ManagementIconButton
             aria-label="编辑通知模板"
             icon={<EditOutlined />}
@@ -626,7 +624,7 @@ export function NotificationsPage() {
     <div className="soha-page">
       <Tabs
         tabBarExtraContent={
-          canManageNotifications ? (
+          canCreateNotification ? (
             <ManagementTableToolbar>
               <Button icon={<PlusOutlined />} onClick={() => openSilenceEditor(null)}>
                 新建静默
@@ -698,7 +696,7 @@ export function NotificationsPage() {
                     <Text data-testid="notification-route-compat-note" type="secondary">
                       兼容 `/alert-routes`，保存后同步到通知策略。
                     </Text>
-                    {canManageNotifications ? (
+                    {canCreateNotification ? (
                       <Button
                         size="small"
                         icon={<PlusOutlined />}

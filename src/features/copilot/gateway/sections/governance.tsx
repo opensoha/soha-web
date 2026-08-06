@@ -46,7 +46,9 @@ const GatewayApprovalsSection = lazy(() =>
 export interface GatewayGovernanceSectionProps {
   activeTab: GatewayTabKey
   onTabChange: (tab: GatewayTabKey) => void
-  canManage: boolean
+  canCreateGrants: boolean
+  canCreatePolicies: boolean
+  canCreateSkills: boolean
   grantColumns: TableColumnsType<ToolGrant>
   grants: ToolGrant[]
   grantsLoading: boolean
@@ -118,7 +120,7 @@ export function GatewayGovernanceSection(props: GatewayGovernanceSectionProps) {
                     type="primary"
                     size="small"
                     icon={<PlusOutlined />}
-                    disabled={!props.canManage}
+                    disabled={!props.canCreateGrants}
                     onClick={props.onCreateGrant}
                   >
                     新增 grant
@@ -142,7 +144,7 @@ export function GatewayGovernanceSection(props: GatewayGovernanceSectionProps) {
                 columns={props.policyColumns}
                 policies={props.policies}
                 loading={props.policiesLoading}
-                canManage={props.canManage}
+                canCreate={props.canCreatePolicies}
                 filter={props.policyFilter}
                 onFilterChange={props.onPolicyFilterChange}
                 onCreate={props.onCreatePolicy}
@@ -171,7 +173,7 @@ export function GatewayGovernanceSection(props: GatewayGovernanceSectionProps) {
                     type="primary"
                     size="small"
                     icon={<PlusOutlined />}
-                    disabled={!props.canManage}
+                    disabled={!props.canCreateSkills}
                     onClick={props.onCreateBinding}
                   >
                     新增 binding
@@ -195,7 +197,6 @@ export function GatewayGovernanceSection(props: GatewayGovernanceSectionProps) {
                 />
                 <Button
                   icon={<ReloadOutlined />}
-                  disabled={!props.canManage}
                   loading={props.governanceFetching}
                   onClick={props.onRefreshGovernance}
                 >

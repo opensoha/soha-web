@@ -58,10 +58,20 @@ const testState = vi.hoisted(() => ({
   },
   permissionSnapshot: {
     permissionKeys: [
-      'virtualization.vms.manage',
-      'virtualization.sync.manage',
-      'virtualization.clusters.manage',
-      'virtualization.operations.manage',
+      'virtualization.vms.create',
+      'virtualization.vms.power',
+      'virtualization.vms.resize',
+      'virtualization.vms.delete',
+      'virtualization.sync.view',
+      'virtualization.sync.sync',
+      'virtualization.clusters.create',
+      'virtualization.clusters.update',
+      'virtualization.clusters.delete',
+      'virtualization.clusters.test',
+      'virtualization.clusters.sync',
+      'virtualization.operations.view',
+      'virtualization.operations.cancel',
+      'virtualization.operations.retry',
     ],
     visibleMenuIds: [],
     visibleMenus: [],
@@ -262,10 +272,72 @@ const testState = vi.hoisted(() => ({
         },
       }
     }
-    if (
-      path === '/virtualization/images?pageSize=500' ||
-      path === '/virtualization/images?page=1&pageSize=10'
-    ) {
+    if (path === '/virtualization/images?page=1&pageSize=10&category=catalog') {
+      return {
+        data: {
+          items: [
+            {
+              id: 'image-1',
+              name: 'ubuntu-24.04',
+              provider: 'kubevirt',
+              connectionId: 'conn-1',
+              sourceKind: 'datasource',
+              sourceRef: 'default/ubuntu',
+              osType: 'ubuntu',
+            },
+            {
+              id: 'image-2',
+              name: 'debian-template',
+              provider: 'pve',
+              connectionId: 'conn-pve',
+              sourceKind: 'template',
+              sourceRef: 'local:vztmpl/debian.tar.zst',
+              node: 'pve-1',
+              storage: 'local',
+              osType: 'debian',
+            },
+          ],
+          total: 2,
+          page: 1,
+          pageSize: 10,
+        },
+      }
+    }
+    if (path === '/virtualization/images?page=1&pageSize=10&category=storage') {
+      return {
+        data: {
+          items: [
+            {
+              id: 'storage-local',
+              name: 'local',
+              provider: 'pve',
+              connectionId: 'conn-pve',
+              sourceKind: 'storage',
+            },
+            {
+              id: 'vm-disk',
+              name: 'vm-152-disk-0',
+              provider: 'pve',
+              connectionId: 'conn-pve',
+              sourceKind: 'image',
+              config: { contentType: 'images' },
+            },
+            {
+              id: 'ct-root-volume',
+              name: 'subvol-201-disk-0',
+              provider: 'pve',
+              connectionId: 'conn-pve',
+              sourceKind: 'image',
+              config: { contentType: 'rootdir' },
+            },
+          ],
+          total: 3,
+          page: 1,
+          pageSize: 10,
+        },
+      }
+    }
+    if (path === '/virtualization/images?pageSize=500') {
       return {
         data: {
           items: [
@@ -599,10 +671,20 @@ describe('virtualization pages', () => {
     }
     testState.permissionSnapshot = {
       permissionKeys: [
-        'virtualization.vms.manage',
-        'virtualization.sync.manage',
-        'virtualization.clusters.manage',
-        'virtualization.operations.manage',
+        'virtualization.vms.create',
+        'virtualization.vms.power',
+        'virtualization.vms.resize',
+        'virtualization.vms.delete',
+        'virtualization.sync.view',
+        'virtualization.sync.sync',
+        'virtualization.clusters.create',
+        'virtualization.clusters.update',
+        'virtualization.clusters.delete',
+        'virtualization.clusters.test',
+        'virtualization.clusters.sync',
+        'virtualization.operations.view',
+        'virtualization.operations.cancel',
+        'virtualization.operations.retry',
       ],
       visibleMenuIds: [],
       visibleMenus: [],
@@ -922,9 +1004,13 @@ describe('virtualization pages', () => {
     expect(container.textContent).not.toContain('停止')
   })
 
-  it('treats virtualization.manage as the aggregate virtualization permission', async () => {
+  it('uses exact VM create and metrics permissions', async () => {
     testState.permissionSnapshot = {
-      permissionKeys: ['virtualization.manage'],
+      permissionKeys: [
+        'virtualization.vms.create',
+        'virtualization.vms.metrics',
+        'virtualization.vms.console',
+      ],
       visibleMenuIds: [],
       visibleMenus: [],
     }
@@ -972,11 +1058,10 @@ describe('virtualization pages', () => {
     }
     testState.permissionSnapshot = {
       permissionKeys: [
-        'virtualization.manage',
-        'virtualization.vms.manage',
-        'virtualization.sync.manage',
-        'virtualization.clusters.manage',
-        'virtualization.operations.manage',
+        'virtualization.vms.create',
+        'virtualization.sync.sync',
+        'virtualization.clusters.create',
+        'virtualization.operations.view',
       ],
       visibleMenuIds: [],
       visibleMenus: [],
@@ -994,7 +1079,7 @@ describe('virtualization pages', () => {
 
   it('requires explicit VM allowed actions for power and delete controls', async () => {
     testState.permissionSnapshot = {
-      permissionKeys: ['virtualization.vms.manage'],
+      permissionKeys: ['virtualization.vms.power', 'virtualization.vms.delete'],
       visibleMenuIds: [],
       visibleMenus: [],
     }
@@ -1049,7 +1134,45 @@ describe('virtualization pages', () => {
     expect(document.body.textContent).toContain('校验 TLS')
   })
 
-  it('renders PVE credential fields without raw config editing', async () => {
+  it('shows and requires only the selected PVE credential mode', async () => {
+    await renderWithProviders(
+      <VirtualizationConnectionStepModal initialProvider="pve" onClose={() => undefined} open />,
+      '/compute/virtualization/clusters',
+    )
+
+    expect(document.body.textContent).toContain('认证方式')
+    expect(document.querySelector('input[id$="username"]')).not.toBeNull()
+    expect(document.querySelector('input[id$="password"]')).not.toBeNull()
+    expect(document.querySelector('input[id$="tokenID"]')).toBeNull()
+    expect(document.querySelector('label[for$="username"]')?.className).toContain(
+      'ant-form-item-required',
+    )
+    expect(document.querySelector('label[for$="password"]')?.className).toContain(
+      'ant-form-item-required',
+    )
+
+    const apiTokenMode = Array.from(
+      document.querySelectorAll<HTMLElement>('.ant-segmented-item'),
+    ).find((item) => item.textContent?.trim() === 'API Token')
+    expect(apiTokenMode).toBeDefined()
+    await act(async () => {
+      apiTokenMode?.click()
+      await Promise.resolve()
+    })
+
+    expect(document.querySelector('input[id$="username"]')).toBeNull()
+    expect(document.querySelector('input[id$="password"]')).toBeNull()
+    expect(document.querySelector('input[id$="tokenID"]')).not.toBeNull()
+    expect(document.querySelector('input[id$="tokenSecret"]')).not.toBeNull()
+    expect(document.querySelector('label[for$="tokenID"]')?.className).toContain(
+      'ant-form-item-required',
+    )
+    expect(document.querySelector('label[for$="tokenSecret"]')?.className).toContain(
+      'ant-form-item-required',
+    )
+  })
+
+  it('keeps optional PVE defaults collapsed while editing a connection', async () => {
     const container = await renderWithProviders(
       <VirtualizationClustersPage />,
       '/virtualization/clusters',
@@ -1057,10 +1180,13 @@ describe('virtualization pages', () => {
 
     await clickButtonByLabel(container, '编辑连接')
 
-    expect(document.body.textContent).toContain('Token ID')
-    expect(document.body.textContent).toContain('Token Secret')
-    expect(document.body.textContent).toContain('默认节点')
-    expect(document.body.textContent).toContain('默认存储')
+    expect(document.body.textContent).toContain('更新凭证')
+    expect(document.body.textContent).not.toContain('Token Secret')
+    expect(document.body.textContent).toContain('PVE 资源默认值（可选）')
+    const pveDefaults = Array.from(
+      document.querySelectorAll<HTMLElement>('.ant-collapse-item'),
+    ).find((item) => item.textContent?.includes('PVE 资源默认值（可选）'))
+    expect(pveDefaults?.classList.contains('ant-collapse-item-active')).toBe(false)
     expect(document.body.textContent).not.toContain('raw JSON')
     expect(container.textContent).toContain('风险等级')
     expect(container.textContent).toContain('最近失败同步')
@@ -1090,7 +1216,7 @@ describe('virtualization pages', () => {
 
   it('shows image management entries for KubeVirt and PVE sources', async () => {
     testState.permissionSnapshot = {
-      permissionKeys: ['virtualization.images.view', 'virtualization.images.manage'],
+      permissionKeys: ['virtualization.images.view', 'virtualization.images.create'],
       visibleMenuIds: [],
       visibleMenus: [],
     }
@@ -1099,11 +1225,13 @@ describe('virtualization pages', () => {
       '/virtualization/images',
     )
 
-    expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/images?page=1&pageSize=10')
+    expect(testState.apiGet).toHaveBeenCalledWith(
+      '/virtualization/images?page=1&pageSize=10&category=catalog',
+    )
     expect(container.textContent).toContain('KubeVirt')
     expect(container.textContent).toContain('PVE')
-    expect(container.textContent).toContain('datasource')
-    expect(container.textContent).toContain('template')
+    expect(container.textContent).toContain('DataSource')
+    expect(container.textContent).toContain('VM 模板')
     expect(container.textContent).toContain('新增镜像入口')
 
     await act(async () => {
@@ -1118,13 +1246,28 @@ describe('virtualization pages', () => {
     expect(document.body.textContent).toContain('来源类型')
   })
 
+  it('shows storage pools, VM disks, and CT volumes on the storage route', async () => {
+    const container = await renderWithProviders(
+      <VirtualizationImagesPage category="storage" />,
+      '/compute/virtualization/storage',
+    )
+
+    expect(testState.apiGet).toHaveBeenCalledWith(
+      '/virtualization/images?page=1&pageSize=10&category=storage',
+    )
+    expect(container.textContent).toContain('存储池')
+    expect(container.textContent).toContain('VM 磁盘')
+    expect(container.textContent).toContain('CT 根卷')
+    expect(container.textContent).not.toContain('新增镜像入口')
+  })
+
   it('uses image and flavor allowed actions for row edit and delete controls', async () => {
     testState.permissionSnapshot = {
       permissionKeys: [
         'virtualization.images.view',
-        'virtualization.images.manage',
+        'virtualization.images.create',
         'virtualization.flavors.view',
-        'virtualization.flavors.manage',
+        'virtualization.flavors.create',
       ],
       visibleMenuIds: [],
       visibleMenus: [],

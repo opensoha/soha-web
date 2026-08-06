@@ -76,7 +76,8 @@ export function PortsTable({
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [currentStep, setCurrentStep] = useState(0)
   const [editing, setEditing] = useState<DockerPortMapping | null>(null)
-  const { dockerModuleEnabled, canManagePorts, canViewServices } = useDockerPermissions()
+  const { dockerModuleEnabled, canCreatePorts, canUpdatePorts, canDeletePorts, canViewServices } =
+    useDockerPermissions()
   const { hostOptions, projectOptions, serviceOptions } = useDockerOptions({
     includeServices: canViewServices,
   })
@@ -174,32 +175,36 @@ export function PortsTable({
       fixed: 'right',
       width: 96,
       render: (_value, record) =>
-        canManagePorts ? (
+        canUpdatePorts || canDeletePorts ? (
           <Space className="soha-row-action-icons">
-            <ManagementIconButton
-              aria-label="编辑端口映射"
-              size="small"
-              tooltip="编辑"
-              icon={<EditOutlined />}
-              onClick={() => {
-                setEditing(record)
-                form.setFieldsValue(record)
-                setCurrentStep(0)
-                setDrawerOpen(true)
-              }}
-            />
-            <Popconfirm
-              title="确认删除端口映射？"
-              onConfirm={() => deleteMutation.mutate(record.id)}
-            >
+            {canUpdatePorts ? (
               <ManagementIconButton
-                aria-label="删除端口映射"
+                aria-label="编辑端口映射"
                 size="small"
-                tooltip="删除"
-                danger
-                icon={<DeleteOutlined />}
+                tooltip="编辑"
+                icon={<EditOutlined />}
+                onClick={() => {
+                  setEditing(record)
+                  form.setFieldsValue(record)
+                  setCurrentStep(0)
+                  setDrawerOpen(true)
+                }}
               />
-            </Popconfirm>
+            ) : null}
+            {canDeletePorts ? (
+              <Popconfirm
+                title="确认删除端口映射？"
+                onConfirm={() => deleteMutation.mutate(record.id)}
+              >
+                <ManagementIconButton
+                  aria-label="删除端口映射"
+                  size="small"
+                  tooltip="删除"
+                  danger
+                  icon={<DeleteOutlined />}
+                />
+              </Popconfirm>
+            ) : null}
           </Space>
         ) : null,
     },
@@ -277,7 +282,7 @@ export function PortsTable({
         scroll={{ x: 1470 }}
         pagination={pageTablePagination(page, embedded, setFilters)}
         actions={
-          canManagePorts && !embedded ? (
+          canCreatePorts && !embedded ? (
             <>
               <Button
                 type="primary"

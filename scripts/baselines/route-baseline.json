@@ -48,14 +48,14 @@
     ]
   },
   "summary": {
-    "runtimePaths": 236,
-    "metadataPaths": 236,
-    "overlappingPaths": 236,
+    "runtimePaths": 237,
+    "metadataPaths": 237,
+    "overlappingPaths": 237,
     "runtimeOnlyPaths": 0,
     "metadataOnlyPaths": 0,
     "inlineJsxPaths": 0,
-    "lazyRouteLoads": 200,
-    "lazySourceModules": 198
+    "lazyRouteLoads": 201,
+    "lazySourceModules": 199
   },
   "paths": {
     "runtime": [
@@ -123,6 +123,7 @@
       "/compute/virtualization/clusters",
       "/compute/virtualization/flavors",
       "/compute/virtualization/images",
+      "/compute/virtualization/storage",
       "/compute/virtualization/vms",
       "/compute/virtualization/vms/:id",
       "/configuration",
@@ -361,6 +362,7 @@
       "/compute/virtualization/clusters",
       "/compute/virtualization/flavors",
       "/compute/virtualization/images",
+      "/compute/virtualization/storage",
       "/compute/virtualization/vms",
       "/compute/virtualization/vms/:id",
       "/configuration",
@@ -599,6 +601,7 @@
       "/compute/virtualization/clusters",
       "/compute/virtualization/flavors",
       "/compute/virtualization/images",
+      "/compute/virtualization/storage",
       "/compute/virtualization/vms",
       "/compute/virtualization/vms/:id",
       "/configuration",
@@ -1709,6 +1712,11 @@
         "source": "@/features/virtualization/images/list-page"
       },
       {
+        "exportName": "VirtualizationStoragePage",
+        "moduleExport": "VirtualizationStoragePage",
+        "source": "@/features/virtualization/storage/list-page"
+      },
+      {
         "exportName": "VirtualizationVmDetailPage",
         "moduleExport": "VirtualizationVmDetailPage",
         "source": "@/features/virtualization/virtual-machines/detail-page"
@@ -1976,6 +1984,7 @@
       "@/features/virtualization/clusters/list-page",
       "@/features/virtualization/flavors/list-page",
       "@/features/virtualization/images/list-page",
+      "@/features/virtualization/storage/list-page",
       "@/features/virtualization/virtual-machines/detail-page",
       "@/features/virtualization/virtual-machines/list-page"
     ],
@@ -2245,9 +2254,10 @@
       "@/features/virtualization/clusters/list-page": ["VirtualizationClustersPage"],
       "@/features/virtualization/flavors/list-page": ["VirtualizationFlavorsPage"],
       "@/features/virtualization/images/list-page": ["VirtualizationImagesPage"],
+      "@/features/virtualization/storage/list-page": ["VirtualizationStoragePage"],
       "@/features/virtualization/virtual-machines/detail-page": ["VirtualizationVmDetailPage"],
       "@/features/virtualization/virtual-machines/list-page": ["VirtualizationVmsPage"]
     }
   },
-  "generatedAt": "2026-08-03T08:36:36.036Z"
+  "generatedAt": "2026-08-05T07:30:24.177Z"
 }

@@ -67,6 +67,7 @@ export function StepFormModal<Values>({
         onCancel={onClose}
         onCurrentChange={onCurrentChange}
         onFinish={onFinish}
+        preserve={false}
         steps={steps}
         submitText={submitText}
       />

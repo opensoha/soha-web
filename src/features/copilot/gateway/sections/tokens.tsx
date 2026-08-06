@@ -22,7 +22,9 @@ export interface GatewayTokensSectionProps {
   serviceTokenColumns: TableColumnsType<ServiceAccountToken>
   serviceTokens: ServiceAccountToken[]
   serviceTokensLoading: boolean
-  canManage: boolean
+  canViewAll: boolean
+  canCreate: boolean
+  canRevoke: boolean
   canInvoke: boolean
   tokenFilter: string
   serviceTokenFilter: string
@@ -45,7 +47,9 @@ export function GatewayTokensSection({
   serviceTokenColumns,
   serviceTokens,
   serviceTokensLoading,
-  canManage,
+  canViewAll,
+  canCreate,
+  canRevoke,
   canInvoke,
   tokenFilter,
   serviceTokenFilter,
@@ -75,7 +79,7 @@ export function GatewayTokensSection({
               dataSource={personalTokens}
               loading={personalTokensLoading}
               scroll={{ x: 1420 }}
-              title={canManage ? 'User Login Keys' : 'My Login Keys'}
+              title={canViewAll ? 'User Login Keys' : 'My Login Keys'}
               headerExtra={
                 <ManagementTableToolbar>
                   <Button
@@ -119,7 +123,7 @@ export function GatewayTokensSection({
                       type="primary"
                       size="small"
                       icon={<PlusOutlined />}
-                      disabled={!canManage}
+                      disabled={!canCreate}
                       onClick={onCreateServiceAccount}
                     >
                       新增服务账号
@@ -144,7 +148,7 @@ export function GatewayTokensSection({
                       size="small"
                       danger
                       icon={<StopOutlined />}
-                      disabled={!canManage}
+                      disabled={!canRevoke}
                       onClick={onRevokeServiceToken}
                     >
                       吊销服务 token

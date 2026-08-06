@@ -58,13 +58,18 @@ function pickStatusColor(value?: null | string): TagColor {
   if (
     [
       'active',
+      'enabled',
       'healthy',
+      'online',
       'ready',
       'running',
       'supported',
       'succeeded',
+      'completed',
       'complete',
+      'synced',
       'success',
+      'docker_ready',
       'true',
       'allow',
     ].includes(normalized)
@@ -75,6 +80,7 @@ function pickStatusColor(value?: null | string): TagColor {
   if (
     [
       'warning',
+      'approval',
       'pending',
       'queued',
       'building',
@@ -84,6 +90,9 @@ function pickStatusColor(value?: null | string): TagColor {
       'pending-upgrade',
       'draft',
       'degraded',
+      'maintenance',
+      'target',
+      'agent_registered',
     ].includes(normalized)
   ) {
     if (normalized === 'draft') return 'magenta'
@@ -93,6 +102,9 @@ function pickStatusColor(value?: null | string): TagColor {
   if (
     [
       'error',
+      'blocked',
+      'denied',
+      'failure',
       'failed',
       'disconnected',
       'critical',
@@ -102,6 +114,10 @@ function pickStatusColor(value?: null | string): TagColor {
       'lost',
       'deny',
       'expired',
+      'unavailable',
+      'agent_failed',
+      'timeout',
+      'callback_timeout',
     ].includes(normalized)
   ) {
     return 'error'
@@ -111,18 +127,41 @@ function pickStatusColor(value?: null | string): TagColor {
     return 'processing'
   }
 
+  if (
+    [
+      'attention',
+      'checking',
+      'defined',
+      'initializing',
+      'provisioning',
+      'provisioned_waiting_agent',
+      'agent_bootstrapping',
+      'running_task',
+      'syncing',
+      'vm_ready',
+    ].includes(normalized)
+  ) {
+    return 'processing'
+  }
+
   return 'default'
 }
 
-export function StatusTag({ value }: { value?: null | string }) {
-  const label = (value || '').trim() || '-'
+export function StatusTag({
+  label,
+  value,
+}: {
+  label?: ReactNode
+  value?: null | string
+}) {
+  const displayLabel = label ?? ((value || '').trim() || '-')
   return (
     <Tag
       className="soha-status-tag"
       color={resolveAntdTagColor(pickStatusColor(value))}
       variant="filled"
     >
-      {label}
+      {displayLabel}
     </Tag>
   )
 }

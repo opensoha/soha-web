@@ -21,7 +21,42 @@ const announcementMocks = vi.hoisted(() => ({
 }))
 
 const permissionMocks = vi.hoisted(() => ({
-  permissionKeys: ['identity.applications.view'],
+  snapshot: {
+    permissionKeys: [
+      'identity.applications.view',
+      'identity.portal.view',
+      'observe.monitoring.view',
+      'workspace.resource.view',
+    ],
+    visibleMenuIds: ['home-workbench', 'monitoring-workbench', 'monitoring-workbench-overview'],
+    visibleMenus: [
+      {
+        id: 'home-workbench',
+        path: '/portal',
+        labelEn: 'Home',
+        labelZh: '首页',
+        iconKey: 'home',
+        sortOrder: 0,
+      },
+      {
+        id: 'monitoring-workbench',
+        path: '/monitoring-workbench',
+        labelEn: 'Observability Workbench',
+        labelZh: '可观测性工作台',
+        iconKey: 'gauge',
+        sortOrder: 50,
+      },
+      {
+        id: 'monitoring-workbench-overview',
+        parentId: 'monitoring-workbench',
+        path: '/monitoring-workbench/overview',
+        labelEn: 'Overview',
+        labelZh: '总览',
+        iconKey: 'gauge',
+        sortOrder: 51,
+      },
+    ],
+  },
 }))
 
 vi.mock('@/services/api-client', () => ({ api: apiMocks }))
@@ -30,9 +65,9 @@ vi.mock('@/features/announcements', () => ({
 }))
 vi.mock('@/features/auth', () => ({
   hasPermission: (_snapshot: unknown, permissionKey?: string) =>
-    !permissionKey || permissionMocks.permissionKeys.includes(permissionKey),
+    !permissionKey || permissionMocks.snapshot.permissionKeys.includes(permissionKey),
   usePermissionSnapshot: () => ({
-    data: { data: { permissionKeys: permissionMocks.permissionKeys } },
+    data: { data: permissionMocks.snapshot },
   }),
 }))
 
@@ -118,7 +153,12 @@ beforeAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  permissionMocks.permissionKeys = ['identity.applications.view']
+  permissionMocks.snapshot.permissionKeys = [
+    'identity.applications.view',
+    'identity.portal.view',
+    'observe.monitoring.view',
+    'workspace.resource.view',
+  ]
   usePreferencesStore.setState({ localeCode: 'en_US' })
   apiMocks.get.mockResolvedValue({ data: bootstrap })
   announcementMocks.useAnnouncementInbox.mockReturnValue({
@@ -177,19 +217,36 @@ describe('Provider Portal catalog page', () => {
     expect(container.querySelector('.soha-portal-shortcuts')).toBeNull()
     expect(container.querySelector('.soha-portal-toolbar')).toBeNull()
     expect(container.querySelector('.soha-portal-apps-toolbar')).toBeNull()
-    expect(container.querySelector('.soha-portal-app-tag-filter')).not.toBeNull()
-    expect(container.querySelector('.soha-portal-app-tag-filter > .ant-typography')).toBeNull()
-    expect(
-      container.querySelector('.soha-portal-app-tag-filter .soha-portal-search'),
-    ).not.toBeNull()
+    expect(container.querySelector('.soha-portal-app-tag-filter')).toBeNull()
+    expect(container.querySelector('.soha-portal-app-toolbar')).not.toBeNull()
+    expect(container.querySelector('.soha-portal-app-toolbar .soha-portal-search')).not.toBeNull()
     expect(
       container.querySelector('button[aria-label="Switch application card size"]'),
     ).not.toBeNull()
     expect(container.querySelector('.soha-portal-category')).toBeNull()
     expect(container.querySelector('.soha-portal-mode')).toBeNull()
     expect(container.querySelector('.soha-portal-announcements')).toBeNull()
-    expect(container.querySelectorAll('.soha-portal-side-panel')).toHaveLength(2)
+    expect(container.querySelectorAll('.soha-portal-side-panel')).toHaveLength(3)
     expect(container.querySelector('button[aria-label="Collapse sidebar"]')).not.toBeNull()
+  })
+
+  it('renders accessible workbench links between the user and recent side panels', async () => {
+    const container = await renderPage()
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('.soha-portal-workbenches')).not.toBeNull()
+    })
+    const workbenches = container.querySelector('.soha-portal-workbenches')
+    const sidePanels = [...container.querySelectorAll('.soha-portal-side-panel')]
+    const observabilityLink = container.querySelector(
+      'a[aria-label="Open Observability Workbench"]',
+    )
+
+    expect(workbenches).not.toBeNull()
+    expect(sidePanels).toHaveLength(3)
+    expect(sidePanels[1]).toBe(workbenches)
+    expect(observabilityLink?.getAttribute('href')).toBe('/monitoring-workbench/overview')
+    expect(container.textContent).not.toContain('Settings Center')
   })
 
   it('renders autoplay announcements and a horizontally collapsible sidebar', async () => {
@@ -254,7 +311,7 @@ describe('Provider Portal catalog page', () => {
       'is-side-collapsed',
     )
     expect(container.querySelector('.soha-portal-side')).not.toBeNull()
-    expect(container.querySelectorAll('.soha-portal-side-panel')).toHaveLength(2)
+    expect(container.querySelectorAll('.soha-portal-side-panel')).toHaveLength(3)
   })
 
   it('switches application card density and filters by tag', async () => {
@@ -280,16 +337,64 @@ describe('Provider Portal catalog page', () => {
     await act(async () => densityButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     expect(container.querySelector('.soha-portal-app-grid')?.className).toContain('is-large')
 
-    const internalTag = [
-      ...container.querySelectorAll('.soha-portal-app-tag-filter [role="tab"]'),
+    const internalGroup = [
+      ...container.querySelectorAll('.soha-portal-group-menu .ant-menu-item'),
     ].find((item) => item.textContent?.trim() === 'internal')
-    await act(async () => internalTag?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    await act(async () => internalGroup?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     await flushAsyncWork()
 
     const visibleCards = [...container.querySelectorAll('.soha-portal-app-card')]
     expect(visibleCards).toHaveLength(1)
     expect(visibleCards[0]?.textContent).toContain('Build Dashboard')
     expect(visibleCards[0]?.textContent).not.toContain('Operations Console')
+  })
+
+  it('renders application groups as the fixed first workspace column', async () => {
+    const container = await renderPage()
+
+    const workspace = container.querySelector('.soha-portal-workspace')
+    const groupNavigation = container.querySelector('.soha-portal-group-nav')
+    expect(workspace?.children[0]).toBe(groupNavigation)
+    expect(workspace?.children[1]).toBe(container.querySelector('.soha-portal-apps'))
+    expect(workspace?.children[2]).toBe(container.querySelector('.soha-portal-side'))
+    expect(container.textContent).toContain('Application groups')
+    expect(container.querySelector('.soha-portal-tag-filter-tabs')).toBeNull()
+    expect(container.querySelector('button[aria-label="Switch to grouped view"]')).toBeNull()
+    expect(container.querySelector('button[aria-label="Switch to tab view"]')).toBeNull()
+
+    await act(async () =>
+      container
+        .querySelector('button[aria-label="Collapse application groups"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true })),
+    )
+    expect(workspace?.className).toContain('is-group-collapsed')
+    expect(container.querySelector('.soha-portal-group-nav')).toBeNull()
+    expect(container.querySelector('.soha-portal-group-menu')).toBeNull()
+    expect(
+      container.querySelector(
+        '.soha-portal-app-toolbar button[aria-label="Expand application groups"]',
+      ),
+    ).not.toBeNull()
+    expect(workspace?.children[0]).toBe(container.querySelector('.soha-portal-apps'))
+
+    await act(async () =>
+      container
+        .querySelector('button[aria-label="Expand application groups"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true })),
+    )
+    expect(workspace?.className).not.toContain('is-group-collapsed')
+    expect(workspace?.children[0]).toBe(container.querySelector('.soha-portal-group-nav'))
+    expect(container.querySelector('.soha-portal-group-menu')).not.toBeNull()
+
+    const internalGroup = [
+      ...container.querySelectorAll('.soha-portal-group-menu .ant-menu-item'),
+    ].find((item) => item.textContent?.trim() === 'internal')
+    await act(async () => internalGroup?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    await flushAsyncWork()
+
+    const visibleCards = [...container.querySelectorAll('.soha-portal-app-card')]
+    expect(visibleCards).toHaveLength(1)
+    expect(visibleCards[0]?.textContent).toContain('Build Dashboard')
   })
 
   it('launches an enabled application when its card is clicked', async () => {
@@ -306,7 +411,7 @@ describe('Provider Portal catalog page', () => {
   })
 
   it('hides application details without the identity application permission', async () => {
-    permissionMocks.permissionKeys = []
+    permissionMocks.snapshot.permissionKeys = []
     const container = await renderPage()
 
     expect(container.textContent).not.toContain('Details')

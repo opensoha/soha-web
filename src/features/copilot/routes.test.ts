@@ -61,9 +61,18 @@ describe('Copilot route manifests', () => {
     ]
     for (const id of ids) {
       const meta = routes.find((route) => route.meta.id === id)?.meta as
-        { workbenchId?: string } | undefined
+        | { workbenchId?: string }
+        | undefined
       expect(meta?.workbenchId).toBe('ai')
     }
+  })
+
+  it('gates Agent Providers with its exact view permission', () => {
+    const routes = copilotRouteManifests.flatMap((manifest) => [...manifest])
+    const route = routes.find((item) => item.meta.id === 'ai-workbench-agent-providers')
+    const meta = route?.meta as { permissionKey?: string } | undefined
+
+    expect(meta?.permissionKey).toBe('ai.agent-providers.view')
   })
 
   it('forms one valid Copilot registry', () => {

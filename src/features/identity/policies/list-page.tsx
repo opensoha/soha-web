@@ -38,7 +38,7 @@ export function IdentityPoliciesPage() {
   const [filters, setFilters] = useState<IdentityPolicyFilters>({ query: '', status: '' })
   const [editing, setEditing] = useState<IdentityApplicationPolicy | null>(null)
   const snapshot = usePermissionSnapshot().data?.data
-  const canManage = hasPermission(snapshot, 'identity.policies.manage')
+  const canUpdate = hasPermission(snapshot, 'identity.policies.update')
   const policiesQuery = useQuery(identityPolicyQueries.list(filters))
   const updateMutation = useMutation(identityPolicyMutations.update(queryClient))
   const runtimeQuery = useQuery(identityRuntimeQueries.capabilities())
@@ -83,7 +83,7 @@ export function IdentityPoliciesPage() {
         fixed: 'right',
         render: (_, record) => (
           <ManagementIconButton
-            disabled={!canManage}
+            disabled={!canUpdate}
             icon={<EditOutlined />}
             onClick={() => setEditing(record)}
             tooltip={t('common.edit', '编辑')}
@@ -91,7 +91,7 @@ export function IdentityPoliciesPage() {
         ),
       },
     ],
-    [canManage, t],
+    [canUpdate, t],
   )
 
   const submit = (input: IdentityApplicationPolicyInput) => {

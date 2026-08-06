@@ -75,9 +75,18 @@ export function ApplicationEnvironmentsPage() {
   const selectedNamespace = Form.useWatch('targetNamespace', form) as string | undefined
   const selectedTargetKind = Form.useWatch('targetKind', form) as string | undefined
   const selectedExecutorKind = Form.useWatch('executorKind', form) as string | undefined
-  const canManageBindings = hasPermission(
-    permissionSnapshotQuery.data?.data,
-    'delivery.application-environments.manage',
+  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const canCreateBinding = hasPermission(
+    permissionSnapshot,
+    'delivery.application-environments.create',
+  )
+  const canUpdateBinding = hasPermission(
+    permissionSnapshot,
+    'delivery.application-environments.update',
+  )
+  const canDeleteBinding = hasPermission(
+    permissionSnapshot,
+    'delivery.application-environments.delete',
   )
 
   const bindingsQuery = useQuery(deliveryQueries.environments.list())
@@ -196,7 +205,7 @@ export function ApplicationEnvironmentsPage() {
       dataIndex: 'id',
       render: (_: unknown, record: ApplicationEnvironment) => (
         <Space className="soha-row-action-icons" size={2}>
-          {canManageBindings ? (
+          {canUpdateBinding ? (
             <ManagementIconButton
               aria-label="编辑绑定"
               icon={<EditOutlined />}
@@ -208,7 +217,7 @@ export function ApplicationEnvironmentsPage() {
               }}
             />
           ) : null}
-          {canManageBindings ? (
+          {canDeleteBinding ? (
             <Popconfirm
               title="确认删除？"
               onConfirm={() => deleteMutation.mutate(record.id)}
@@ -223,7 +232,7 @@ export function ApplicationEnvironmentsPage() {
               />
             </Popconfirm>
           ) : null}
-          {!canManageBindings ? '-' : null}
+          {!canUpdateBinding && !canDeleteBinding ? '-' : null}
         </Space>
       ),
     },
@@ -233,7 +242,7 @@ export function ApplicationEnvironmentsPage() {
     <div className="soha-page">
       <DeliveryTable
         actions={
-          canManageBindings ? (
+          canCreateBinding ? (
             <Button
               icon={<PlusOutlined />}
               type="primary"

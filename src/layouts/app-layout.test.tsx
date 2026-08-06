@@ -442,7 +442,11 @@ describe('app layout workspace navigation', () => {
 
   it('uses namespace scope in the k8s workbench header for namespaced routes', async () => {
     const container = await renderWithProviders('/workloads/overview', {
-      permissionKeys: ['workspace.resource.view', 'platform.workloads.view', 'system.menus.view'],
+      permissionKeys: [
+        'workspace.resource.view',
+        'platform.workloads.overview.view',
+        'system.menus.view',
+      ],
       visibleMenuIds: ['workloads', 'workloads-overview', 'system', 'menus'],
       visibleMenus: [
         {
@@ -1057,8 +1061,8 @@ describe('app layout workspace navigation', () => {
     testState.prefs.currentWorkspace = 'application'
 
     await renderWithProviders('/workloads/pods', {
-      permissionKeys: ['workspace.resource.view', 'platform.workloads.view', 'system.menus.view'],
-      visibleMenuIds: ['workloads', 'system', 'menus'],
+      permissionKeys: ['workspace.resource.view', 'platform.pods.view', 'system.menus.view'],
+      visibleMenuIds: ['workloads', 'workloads-pods', 'system', 'menus'],
       visibleMenus: [
         {
           id: 'workloads',
@@ -1068,6 +1072,17 @@ describe('app layout workspace navigation', () => {
           iconKey: 'boxes',
           section: 'platform',
           sortOrder: 1,
+          enabled: true,
+        },
+        {
+          id: 'workloads-pods',
+          parentId: 'workloads',
+          path: '/workloads/pods',
+          labelZh: 'Pods',
+          labelEn: 'Pods',
+          iconKey: 'boxes',
+          section: 'platform',
+          sortOrder: 2,
           enabled: true,
         },
         {
@@ -1099,7 +1114,7 @@ describe('app layout workspace navigation', () => {
 
   it('renders ungrouped workbench menus without a group heading', async () => {
     const container = await renderWithProviders('/', {
-      permissionKeys: ['workspace.resource.view', 'overview.view', 'platform.workloads.view'],
+      permissionKeys: ['workspace.resource.view', 'overview.view', 'platform.pods.view'],
       visibleMenuIds: ['dashboard', 'workloads'],
       visibleMenus: [
         {
@@ -1265,7 +1280,9 @@ describe('app layout workspace navigation', () => {
       permissionKeys: [
         'workspace.resource.view',
         'ai.gateway.view',
-        'ai.gateway.manage',
+        'ai.gateway.clients.view',
+        'ai.gateway.tokens.view',
+        'ai.gateway.approvals.view',
         'ai.gateway.relay.view',
         'observe.ai.view',
         'observe.ai.chat',
@@ -1663,8 +1680,8 @@ describe('app layout workspace navigation', () => {
 
   it('adds the list route and resource name to dynamic detail breadcrumbs', async () => {
     const container = await renderWithProviders('/workloads/pods/alidns-webhook-f7645fd4b-lkvn8', {
-      permissionKeys: ['workspace.resource.view', 'platform.workloads.view'],
-      visibleMenuIds: ['workloads'],
+      permissionKeys: ['workspace.resource.view', 'platform.pods.view'],
+      visibleMenuIds: ['workloads', 'workloads-pods'],
       visibleMenus: [
         {
           id: 'workloads',
@@ -1674,6 +1691,17 @@ describe('app layout workspace navigation', () => {
           iconKey: 'boxes',
           section: 'platform',
           sortOrder: 1,
+          enabled: true,
+        },
+        {
+          id: 'workloads-pods',
+          parentId: 'workloads',
+          path: '/workloads/pods',
+          labelZh: 'Pods',
+          labelEn: 'Pods',
+          iconKey: 'boxes',
+          section: 'platform',
+          sortOrder: 2,
           enabled: true,
         },
       ],

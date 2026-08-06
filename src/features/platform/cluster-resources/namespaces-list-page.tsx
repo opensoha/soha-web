@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { App, Button, Form, Input, Modal, Popconfirm, Space, Tag } from 'antd'
+import { App, Button, Form, Input, Modal, Popconfirm, Space } from 'antd'
 import {
   ApartmentOutlined,
   DeleteOutlined,
@@ -17,7 +17,7 @@ import {
   ManagementState,
   ManagementTableToolbar,
 } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { useAIPageContext } from '@/features/copilot'
 import { parseStringMap, stringifyMap } from '@/features/platform/node-resource-utils'
 import { useI18n } from '@/i18n'
@@ -85,7 +85,7 @@ export function ClusterNamespacesPage() {
         labels
           ? Object.entries(labels)
               .slice(0, 3)
-              .map(([key, value]) => <Tag key={key} className="mr-1">{`${key}=${value}`}</Tag>)
+              .map(([key, value]) => <MetadataTag key={key} label={`${key}=${value}`} />)
           : '-',
     },
     {
@@ -205,6 +205,7 @@ export function ClusterNamespacesPage() {
       )}
 
       <Modal
+        destroyOnHidden
         title={editingNamespace ? `编辑命名空间 ${editingNamespace.name}` : '新建命名空间'}
         open={namespaceModalVisible}
         footer={null}
@@ -215,6 +216,7 @@ export function ClusterNamespacesPage() {
           key={editingNamespace?.name ?? 'namespace-new'}
           layout="vertical"
           initialValues={namespaceModalInitValues}
+          preserve={false}
           onFinish={(values) => {
             const input = {
               name: editingNamespace?.name ?? String(values.name ?? ''),

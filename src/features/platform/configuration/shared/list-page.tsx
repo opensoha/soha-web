@@ -119,8 +119,7 @@ export function ConfigurationResourceListPage<T extends ConfigurationResourceRec
     onHeaderCell: () => ({ className: TABLE_ACTIONS_COLUMN_CLASS_NAME }),
     onCell: () => ({ className: TABLE_ACTIONS_COLUMN_CLASS_NAME }),
     render: (_value, record) => {
-      const canDelete =
-        record.allowedActions == null || hasAllowedAction(record.allowedActions, 'delete')
+      const canDelete = hasAllowedAction(record.allowedActions, 'delete')
       if (!canDelete) return null
       const target = configurationTargetFromRecord(clusterId, record)
       const deleting =

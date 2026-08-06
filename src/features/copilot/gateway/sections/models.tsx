@@ -50,7 +50,8 @@ export interface GatewayRelaySectionProps {
   modelCallsFetching: boolean
   modelCallFilters: ModelCallFilterState
   onModelCallFiltersChange: (filters: ModelCallFilterState) => void
-  canRelayManage: boolean
+  canRelayView: boolean
+  canRelayCreate: boolean
   upstreamColumns: TableColumnsType<LLMUpstream>
   upstreams: LLMUpstream[]
   upstreamsLoading: boolean
@@ -131,7 +132,7 @@ export function GatewayRelaySection(props: GatewayRelaySectionProps) {
                 <Button
                   size="small"
                   icon={<HistoryOutlined />}
-                  disabled={!props.canRelayManage}
+                  disabled={!props.canRelayView}
                   onClick={() => props.onTabChange('model-calls')}
                 >
                   Model Calls
@@ -225,7 +226,7 @@ export function GatewayRelaySection(props: GatewayRelaySectionProps) {
                       type="primary"
                       size="small"
                       icon={<PlusOutlined />}
-                      disabled={!props.canRelayManage}
+                      disabled={!props.canRelayCreate}
                       onClick={props.onCreateUpstream}
                     >
                       新增上游
@@ -289,7 +290,7 @@ export function GatewayRelaySection(props: GatewayRelaySectionProps) {
                       type="primary"
                       size="small"
                       icon={<PlusOutlined />}
-                      disabled={!props.canRelayManage}
+                      disabled={!props.canRelayCreate}
                       onClick={props.onCreateModelRoute}
                     >
                       新增路由
@@ -424,14 +425,14 @@ export function GatewayRelaySection(props: GatewayRelaySectionProps) {
                 />
                 <Button
                   icon={<ReloadOutlined />}
-                  disabled={!props.canRelayManage}
+                  disabled={!props.canRelayView}
                   loading={props.modelCallsFetching}
                   onClick={props.onRefreshModelCalls}
                 >
                   刷新
                 </Button>
               </Space>
-              {props.canRelayManage ? (
+              {props.canRelayView ? (
                 <AdminTable
                   shellClassName="soha-management-table-shell"
                   columnSettingIconOnly
