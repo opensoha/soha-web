@@ -9,7 +9,12 @@ export interface DesktopSoftwarePackage {
 }
 
 export type SoftwareInstallState =
-  'queued' | 'downloading' | 'verifying' | 'opening' | 'completed' | 'failed'
+  | 'queued'
+  | 'downloading'
+  | 'verifying'
+  | 'opening'
+  | 'completed'
+  | 'failed'
 
 export interface SoftwareInstallTask {
   id: string

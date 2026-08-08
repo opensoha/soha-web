@@ -47,6 +47,10 @@ vi.mock('@/features/provider-portal', () => ({
   },
 }))
 
+vi.mock('@/features/companion/window-page', () => ({
+  CompanionWindowPage: () => <main>桌面宠物窗口</main>,
+}))
+
 const user: User = {
   userId: 'user-1',
   userName: 'opensoha',
@@ -110,6 +114,7 @@ describe('desktop router', () => {
     ['/software', '软件库'],
     ['/account', '个人资料'],
     ['/settings', '设置'],
+    ['/companion', '桌面宠物窗口'],
   ])('renders the independent desktop route %s', async (path, heading) => {
     const view = await renderRoute(path)
     expect(view.textContent).toContain(heading)

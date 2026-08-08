@@ -9,13 +9,16 @@ import {
 } from '@ant-design/icons'
 import { Alert, App, Button, Form, Input, Slider } from 'antd'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   authKeys,
   commitAuthResult,
   fetchAuthProviders,
   fetchLoginOptions,
   loginWithPassword,
+  publishAuthSessionAvailable,
+  restoreAuthSession,
+  subscribeAuthSessionAvailable,
 } from '@/features/auth'
 import { useAuthStore } from '@/stores/auth-store'
 import { usePreferencesStore } from '@/stores/preferences-store'
@@ -33,6 +36,7 @@ function providerLoginPath(provider: { id?: string; loginUrl?: string }) {
 }
 
 export function DesktopLoginPage() {
+  const location = useLocation()
   const navigate = useNavigate()
   const { message } = App.useApp()
   const accessToken = useAuthStore((state) => state.accessToken)
@@ -58,10 +62,23 @@ export function DesktopLoginPage() {
     (provider) => provider.enabled !== false && provider.type !== 'password',
   )
   const resolvedTheme = resolveThemeMode(themeMode)
+  const returnTo =
+    (location.state as { from?: { pathname?: string } } | null)?.from?.pathname === '/companion'
+      ? '/companion'
+      : '/home'
 
   useEffect(() => {
-    if (accessToken) navigate('/home', { replace: true })
-  }, [accessToken, navigate])
+    if (accessToken) navigate(returnTo, { replace: true })
+  }, [accessToken, navigate, returnTo])
+
+  useEffect(() => {
+    const restore = () => {
+      if (!useAuthStore.getState().accessToken) void restoreAuthSession()
+    }
+    const unsubscribe = subscribeAuthSessionAvailable(restore)
+    restore()
+    return unsubscribe
+  }, [])
 
   const submit = async (values: LoginValues) => {
     if (sliderEnabled && !sliderVerified) {
@@ -72,8 +89,9 @@ export function DesktopLoginPage() {
     try {
       const result = await loginWithPassword(values.username, values.password)
       commitAuthResult(result)
+      publishAuthSessionAvailable()
       message.success('登录成功')
-      navigate('/home', { replace: true })
+      navigate(returnTo, { replace: true })
     } catch (error) {
       setSliderValue(0)
       setSliderVerified(false)
@@ -90,7 +108,7 @@ export function DesktopLoginPage() {
       return
     }
     const target = new URL(path, window.location.origin)
-    target.searchParams.set('return_to', '/home')
+    target.searchParams.set('return_to', returnTo)
     window.location.assign(`${target.pathname}${target.search}`)
   }
 

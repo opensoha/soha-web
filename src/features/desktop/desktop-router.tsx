@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import {
   AppstoreOutlined,
   CloudDownloadOutlined,
@@ -23,6 +23,11 @@ import { AccountPage, ApplicationsPage, DesktopHomePage, SettingsPage } from './
 import { DesktopLoginPage } from './desktop-login-page'
 import { SoftwareLibraryPage } from './software-library-page'
 import './desktop.css'
+
+const CompanionWindowPage = lazy(async () => {
+  const module = await import('@/features/companion')
+  return { default: module.CompanionWindowPage }
+})
 
 const navigation = [
   { icon: <HomeOutlined />, label: '首页', path: '/home' },
@@ -144,6 +149,21 @@ export function DesktopRouter() {
     <Routes>
       <Route path="/login" element={<DesktopLoginPage />} />
       <Route element={<DesktopAuthGuard />}>
+        <Route
+          path="/companion"
+          element={
+            <Suspense
+              fallback={
+                <div className="soha-desktop-auth-state" role="status">
+                  <span className="soha-desktop-spinner" />
+                  正在加载桌面宠物
+                </div>
+              }
+            >
+              <CompanionWindowPage />
+            </Suspense>
+          }
+        />
         <Route element={<DesktopLayout />}>
           <Route path="/" element={<Navigate to="/home" replace />} />
           <Route path="/home" element={<DesktopHomePage />} />
