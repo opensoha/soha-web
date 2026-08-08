@@ -47,7 +47,7 @@ vi.mock('@/features/provider-portal', () => ({
   },
 }))
 
-vi.mock('@/features/companion/window-page', () => ({
+vi.mock('@/features/companion', () => ({
   CompanionWindowPage: () => <main>桌面宠物窗口</main>,
 }))
 
