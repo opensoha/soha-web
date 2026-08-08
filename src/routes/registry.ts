@@ -1,6 +1,7 @@
 import { accessRoutes } from '@/features/access/routes'
 import { authRoutes, authUtilityRoutes } from '@/features/auth/routes'
 import { copilotRouteManifests } from '@/features/copilot/routes'
+import { companionRoutes } from '@/features/companion/routes'
 import { computeRoutes } from '@/features/compute/routes'
 import { deliveryRoutes } from '@/features/delivery/routes'
 import { identityRouteManifests } from '@/features/identity/routes'
@@ -18,6 +19,7 @@ import type { AppRouteDefinition, AppRouteShell } from './route-types'
 export const featureRouteManifests = [
   accessRoutes,
   authRoutes,
+  companionRoutes,
   ...copilotRouteManifests,
   ...platformRouteManifests,
   computeRoutes,

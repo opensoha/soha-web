@@ -4,7 +4,7 @@ import type {
   WorkbenchStreamEvent,
   WorkbenchToolCall,
 } from '@opensoha/contracts/gen/ts/sohaapi'
-import { API_BASE_URL, getStoredAccessToken } from '@/features/auth'
+import { API_BASE_URL, getStoredAccessToken, refreshAuthSession } from '@/features/auth/auth-api'
 
 export interface WorkbenchSSEParseResult {
   events: WorkbenchStreamEvent[]
@@ -274,23 +274,28 @@ export async function streamWorkbenchMessage(
   onEvent: (event: WorkbenchStreamEvent) => void | Promise<void>,
   signal?: AbortSignal,
 ) {
-  const headers = new Headers({
-    Accept: 'text/event-stream',
-    'Content-Type': 'application/json',
-  })
-  const accessToken = getStoredAccessToken()
-  if (accessToken) {
-    headers.set('Authorization', `Bearer ${accessToken}`)
+  const streamPath = path.startsWith('/') ? path : `/${path}`
+  const request = () => {
+    const headers = new Headers({
+      Accept: 'text/event-stream',
+      'Content-Type': 'application/json',
+    })
+    const accessToken = getStoredAccessToken()
+    if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`)
+    return fetch(`${API_BASE_URL}${streamPath}`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      credentials: 'include',
+      headers,
+      signal,
+    })
   }
 
-  const streamPath = path.startsWith('/') ? path : `/${path}`
-  const response = await fetch(`${API_BASE_URL}${streamPath}`, {
-    method: 'POST',
-    body: JSON.stringify(body),
-    credentials: 'include',
-    headers,
-    signal,
-  })
+  let response = await request()
+  if (response.status === 401 && !signal?.aborted && (await refreshAuthSession())) {
+    await response.body?.cancel().catch(() => undefined)
+    response = await request()
+  }
 
   if (!response.ok) {
     throw new Error(`Workbench stream failed: ${response.status} ${response.statusText}`)

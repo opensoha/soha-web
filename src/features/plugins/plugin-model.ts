@@ -63,6 +63,7 @@ export const pluginTypeOptions = [
   { value: 'notification-channel', label: 'Notification Channel' },
   { value: 'identity-template', label: 'Identity Template' },
   { value: 'ui-extension', label: 'UI Extension' },
+  { value: 'companion-pack', label: 'Companion Pack' },
 ] as const
 
 export const pluginRiskLabels: Record<string, string> = {

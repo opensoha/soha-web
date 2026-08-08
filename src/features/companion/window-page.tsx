@@ -1,0 +1,26 @@
+import { useEffect } from 'react'
+import { usePermissionSnapshot } from '@/features/auth'
+import { GlobalAIAssistantProvider } from '@/features/copilot/global-assistant/ai-global-assistant-provider'
+
+export function CompanionWindowPage() {
+  const permissionSnapshotQuery = usePermissionSnapshot()
+
+  useEffect(() => {
+    document.documentElement.classList.add('soha-companion-window-document')
+    document.body.classList.add('soha-companion-window-document')
+    return () => {
+      document.documentElement.classList.remove('soha-companion-window-document')
+      document.body.classList.remove('soha-companion-window-document')
+    }
+  }, [])
+
+  return (
+    <GlobalAIAssistantProvider
+      enabled
+      nativeCompanionWindow
+      permissionSnapshot={permissionSnapshotQuery.data?.data}
+    >
+      <main aria-label="Soha 桌面宠物" className="soha-companion-window-root" />
+    </GlobalAIAssistantProvider>
+  )
+}

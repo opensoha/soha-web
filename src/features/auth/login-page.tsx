@@ -19,6 +19,10 @@ import {
   loginWithPassword,
   restoreAuthSession,
 } from '@/features/auth/auth-api'
+import {
+  publishAuthSessionAvailable,
+  subscribeAuthSessionAvailable,
+} from '@/features/auth/auth-session-channel'
 import { authKeys } from '@/features/auth/keys'
 import { normalizeLocalReturnTo, shouldUseDocumentNavigation } from '@/features/auth/return-to'
 import { findLandingPath } from '@/routes/meta'
@@ -373,7 +377,9 @@ function getProviderIcon(type: string, iconUrl?: string) {
   }
   const brandInitials: Record<string, string> = { feishu: '飞', dingtalk: '钉', wecom: '企' }
   if (brandInitials[type]) {
-    return <span className={`soha-auth-provider-button__brand is-${type}`}>{brandInitials[type]}</span>
+    return (
+      <span className={`soha-auth-provider-button__brand is-${type}`}>{brandInitials[type]}</span>
+    )
   }
   if (type === 'oidc' || type === 'saml') {
     return <SafetyCertificateOutlined />
@@ -534,10 +540,17 @@ export function LoginPage() {
       setCheckingExistingSession(false)
     }
 
+    const unsubscribe = subscribeAuthSessionAvailable(() => {
+      if (!useAuthStore.getState().accessToken) {
+        if (retryTimer !== undefined) window.clearTimeout(retryTimer)
+        void restore()
+      }
+    })
     void restore()
 
     return () => {
       cancelled = true
+      unsubscribe()
       if (retryTimer !== undefined) {
         window.clearTimeout(retryTimer)
       }
@@ -577,6 +590,7 @@ export function LoginPage() {
     try {
       const authResult = await loginWithPassword(values.username, values.password)
       commitAuthResult(authResult)
+      publishAuthSessionAvailable()
       const nextPath = await resolvePostLoginPath(authResult.user.roles, returnTo ?? undefined)
       message.success('登录成功')
       completeLoginNavigation(nextPath)
@@ -663,80 +677,82 @@ export function LoginPage() {
               </div>
             ) : (
               <>
-                {localPasswordLoginEnabled ? <Form<LoginFormValues> layout="vertical" onFinish={handleLogin}>
-                  <Form.Item<LoginFormValues>
-                    name="username"
-                    label="用户名"
-                    rules={[{ required: true, message: '请输入用户名' }]}
-                  >
-                    <Input
-                      prefix={<UserOutlined />}
-                      placeholder="请输入用户名"
-                      allowClear
-                      size="middle"
-                    />
-                  </Form.Item>
-                  <Form.Item<LoginFormValues>
-                    name="password"
-                    label="密码"
-                    rules={[{ required: true, message: '请输入密码' }]}
-                  >
-                    <Input.Password
-                      prefix={<LockOutlined />}
-                      placeholder="请输入密码"
-                      size="middle"
-                    />
-                  </Form.Item>
-
-                  {sliderVerificationEnabled ? (
-                    <Form.Item>
-                      <div className={`soha-auth-slider ${sliderVerified ? 'is-verified' : ''}`}>
-                        <div className="soha-auth-slider-label">
-                          <span className="soha-auth-slider-label__icon">
-                            {sliderVerified ? (
-                              <CheckCircleOutlined />
-                            ) : (
-                              <SafetyCertificateOutlined />
-                            )}
-                          </span>
-                          <span>{sliderVerified ? '验证通过' : '拖动滑块完成验证'}</span>
-                        </div>
-                        <div className="soha-auth-slider-track-shell">
-                          <span className="soha-auth-slider-shine" />
-                          <span className="soha-auth-slider-track-copy">
-                            {sliderVerified ? '身份环境检查完成' : '按住滑块向右拖动'}
-                          </span>
-                        </div>
-                        <Slider
-                          className="soha-auth-slider-control"
-                          disabled={sliderVerified || loading}
-                          max={100}
-                          min={0}
-                          onChange={handleSliderChange}
-                          onChangeComplete={handleSliderComplete}
-                          step={1}
-                          tooltip={{ formatter: null }}
-                          value={sliderValue}
-                        />
-                        <div className="soha-auth-slider-footer">
-                          <span>{sliderVerified ? '可提交登录' : '滑到最右侧后解锁登录'}</span>
-                          <span>{sliderVerified ? '100%' : `${Math.round(sliderValue)}%`}</span>
-                        </div>
-                      </div>
+                {localPasswordLoginEnabled ? (
+                  <Form<LoginFormValues> layout="vertical" onFinish={handleLogin}>
+                    <Form.Item<LoginFormValues>
+                      name="username"
+                      label="用户名"
+                      rules={[{ required: true, message: '请输入用户名' }]}
+                    >
+                      <Input
+                        prefix={<UserOutlined />}
+                        placeholder="请输入用户名"
+                        allowClear
+                        size="middle"
+                      />
                     </Form.Item>
-                  ) : null}
+                    <Form.Item<LoginFormValues>
+                      name="password"
+                      label="密码"
+                      rules={[{ required: true, message: '请输入密码' }]}
+                    >
+                      <Input.Password
+                        prefix={<LockOutlined />}
+                        placeholder="请输入密码"
+                        size="middle"
+                      />
+                    </Form.Item>
 
-                  <Button
-                    type="primary"
-                    htmlType="submit"
-                    loading={loading}
-                    block
-                    disabled={sliderVerificationEnabled && !sliderVerified}
-                    className="soha-auth-submit"
-                  >
-                    登录控制台
-                  </Button>
-                </Form> : null}
+                    {sliderVerificationEnabled ? (
+                      <Form.Item>
+                        <div className={`soha-auth-slider ${sliderVerified ? 'is-verified' : ''}`}>
+                          <div className="soha-auth-slider-label">
+                            <span className="soha-auth-slider-label__icon">
+                              {sliderVerified ? (
+                                <CheckCircleOutlined />
+                              ) : (
+                                <SafetyCertificateOutlined />
+                              )}
+                            </span>
+                            <span>{sliderVerified ? '验证通过' : '拖动滑块完成验证'}</span>
+                          </div>
+                          <div className="soha-auth-slider-track-shell">
+                            <span className="soha-auth-slider-shine" />
+                            <span className="soha-auth-slider-track-copy">
+                              {sliderVerified ? '身份环境检查完成' : '按住滑块向右拖动'}
+                            </span>
+                          </div>
+                          <Slider
+                            className="soha-auth-slider-control"
+                            disabled={sliderVerified || loading}
+                            max={100}
+                            min={0}
+                            onChange={handleSliderChange}
+                            onChangeComplete={handleSliderComplete}
+                            step={1}
+                            tooltip={{ formatter: null }}
+                            value={sliderValue}
+                          />
+                          <div className="soha-auth-slider-footer">
+                            <span>{sliderVerified ? '可提交登录' : '滑到最右侧后解锁登录'}</span>
+                            <span>{sliderVerified ? '100%' : `${Math.round(sliderValue)}%`}</span>
+                          </div>
+                        </div>
+                      </Form.Item>
+                    ) : null}
+
+                    <Button
+                      type="primary"
+                      htmlType="submit"
+                      loading={loading}
+                      block
+                      disabled={sliderVerificationEnabled && !sliderVerified}
+                      className="soha-auth-submit"
+                    >
+                      登录控制台
+                    </Button>
+                  </Form>
+                ) : null}
 
                 {thirdPartyProviders.length > 0 ? (
                   <div className="soha-auth-provider-slot">

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   Alert,
+  App,
   Button,
   Col,
   Form,
@@ -10,12 +11,12 @@ import {
   Modal,
   Popconfirm,
   Row,
+  Segmented,
   Select,
   Space,
   Spin,
   Switch,
   Tag,
-  message,
 } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -23,7 +24,11 @@ import { useNavigate } from 'react-router-dom'
 import { ManagementIconButton, ManagementState } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { companionApi, companionKeys } from '@/features/companion/api'
+import { BUILTIN_COMPANION_PLUGIN_ID } from '@/features/companion/builtin-pack'
 import type { WorkbenchAgentRun } from '@/features/copilot'
+import { pluginQueries } from '@/features/plugins/queries'
+import { usePreferencesStore } from '@/stores/preferences-store'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import {
@@ -135,6 +140,7 @@ function renderAgentTagList(values?: string[], max = 4, tone: AIGradientTagTone 
 }
 
 export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
+  const { message } = App.useApp()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const permissionSnapshotQuery = usePermissionSnapshot()
@@ -154,6 +160,14 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
     'settings.ai.update',
   )
   const canViewAgentRuns = hasPermission(permissionSnapshotQuery.data?.data, 'observe.ai.view')
+  const companionMode = usePreferencesStore((state) => state.companionMode)
+  const companionBubbleEnabled = usePreferencesStore((state) => state.companionBubbleEnabled)
+  const selectedCompanionPluginId = usePreferencesStore((state) => state.selectedCompanionPluginId)
+  const setCompanionMode = usePreferencesStore((state) => state.setCompanionMode)
+  const setCompanionBubbleEnabled = usePreferencesStore((state) => state.setCompanionBubbleEnabled)
+  const setSelectedCompanionPluginId = usePreferencesStore(
+    (state) => state.setSelectedCompanionPluginId,
+  )
 
   useEffect(() => {
     if (dataSourceModalVisible && editingDataSource) {
@@ -176,6 +190,15 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
   const agentRunsQuery = useQuery(
     settingsQueries.ai.agentRuns(canViewAISettings && canViewAgentRuns),
   )
+  const companionPacksQuery = useQuery(pluginQueries.installed())
+  const resetCompanionMutation = useMutation({
+    mutationFn: () => companionApi.reset({ pluginId: selectedCompanionPluginId }),
+    onSuccess: (profile) => {
+      queryClient.setQueryData(companionKeys.profile(), profile)
+      void message.success('宠物成长数据已重置')
+    },
+    onError: (error: Error) => void message.error(error.message),
+  })
 
   const saveWorkbenchModelMutation = useMutation(
     settingsMutations.ai.saveWorkbenchModel(queryClient),
@@ -762,9 +785,68 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
     </section>
   )
 
+  const companionPackOptions = [
+    { value: BUILTIN_COMPANION_PLUGIN_ID, label: 'Soha Orbit' },
+    ...(Array.isArray(companionPacksQuery.data) ? companionPacksQuery.data : [])
+      .filter(
+        (item) =>
+          item.type === 'companion-pack' &&
+          item.status === 'enabled' &&
+          Boolean(item.manifest.companionPack),
+      )
+      .map((item) => ({
+        value: item.id,
+        label: `${item.name} (${item.activeVersion || item.version})`,
+      })),
+  ]
+
+  const companionCard = (
+    <section data-testid="ai-companion-section" className="soha-settings-table-section">
+      <SettingsCard title="桌面宠物">
+        <div className="soha-companion-settings-grid">
+          <label>
+            <span>悬浮模式</span>
+            <Segmented
+              options={[
+                { value: 'companion', label: '宠物' },
+                { value: 'icon', label: '图标' },
+              ]}
+              value={companionMode}
+              onChange={(value) => setCompanionMode(value as 'companion' | 'icon')}
+            />
+          </label>
+          <label>
+            <span>当前模型</span>
+            <Select
+              loading={companionPacksQuery.isLoading}
+              options={companionPackOptions}
+              value={selectedCompanionPluginId}
+              onChange={setSelectedCompanionPluginId}
+            />
+          </label>
+          <label>
+            <span>对话气泡</span>
+            <Switch checked={companionBubbleEnabled} onChange={setCompanionBubbleEnabled} />
+          </label>
+          <Popconfirm
+            title="重置宠物成长数据？"
+            okText="重置"
+            cancelText="取消"
+            onConfirm={() => resetCompanionMutation.mutate()}
+          >
+            <Button danger loading={resetCompanionMutation.isPending}>
+              重置成长数据
+            </Button>
+          </Popconfirm>
+        </div>
+      </SettingsCard>
+    </section>
+  )
+
   const content = (
     <>
       {workbenchModelCard}
+      {companionCard}
       {agentRuntimeCard}
       <div className="soha-settings-table-section">
         <SettingsAdminTable
@@ -1487,7 +1569,6 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
           </div>
         </Form>
       </Modal>
-
     </>
   )
 

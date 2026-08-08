@@ -16,7 +16,9 @@ import type {
   WorkbenchSendMessageStreamRequest,
 } from '@opensoha/contracts/gen/ts/sohaapi'
 import { hasPermission } from '@/features/auth'
+import { AssistantCompanionOverlay } from '@/features/companion'
 import { api } from '@/services/api-client'
+import { usePreferencesStore } from '@/stores/preferences-store'
 import type { ApiResponse, PermissionSnapshot } from '@/types'
 import { getAIWorkbenchPathForMode } from '../workbench/navigation'
 import {
@@ -63,7 +65,42 @@ interface AIPageContextRegistration {
 interface GlobalAIAssistantProviderProps {
   children: ReactNode
   enabled?: boolean
+  nativeCompanionWindow?: boolean
   permissionSnapshot?: PermissionSnapshot
+}
+
+interface SharedAssistantSession {
+  contextKey: string
+  session: WorkbenchSession
+}
+
+const sharedSessionStorageKey = 'soha.ai.global-assistant.session'
+const sharedSessionChannelName = 'soha-ai-global-assistant'
+
+function readSharedSession(): SharedAssistantSession | null {
+  try {
+    const raw = localStorage.getItem(sharedSessionStorageKey)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<SharedAssistantSession>
+    if (!parsed.session?.id || typeof parsed.contextKey !== 'string') return null
+    return parsed as SharedAssistantSession
+  } catch {
+    return null
+  }
+}
+
+function writeSharedSession(value: SharedAssistantSession | null) {
+  try {
+    if (value) localStorage.setItem(sharedSessionStorageKey, JSON.stringify(value))
+    else localStorage.removeItem(sharedSessionStorageKey)
+    if (typeof BroadcastChannel !== 'undefined') {
+      const channel = new BroadcastChannel(sharedSessionChannelName)
+      channel.postMessage(value)
+      channel.close()
+    }
+  } catch {
+    // The active provider state remains authoritative when browser storage is unavailable.
+  }
 }
 
 function sourceWorkbenchFromPath(pathname: string): AIPageContext['sourceWorkbench'] {
@@ -195,12 +232,14 @@ class WorkbenchStreamEventError extends Error {
 export function GlobalAIAssistantProvider({
   children,
   enabled = true,
+  nativeCompanionWindow = false,
   permissionSnapshot,
 }: GlobalAIAssistantProviderProps) {
   const location = useLocation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { message } = AntdApp.useApp()
+  const companionMode = usePreferencesStore((state) => state.companionMode)
   const canUseChat = hasPermission(permissionSnapshot, 'observe.ai.chat')
   const routeFallbackContext = useMemo(
     () => routeContext(location.pathname, location.search),
@@ -214,8 +253,13 @@ export function GlobalAIAssistantProvider({
   const [streamState, setStreamState] = useState<WorkbenchStreamState>(() =>
     createWorkbenchStreamState(),
   )
-  const [currentSession, setCurrentSession] = useState<WorkbenchSession | null>(null)
-  const [currentSessionContextKey, setCurrentSessionContextKey] = useState<string | null>(null)
+  const initialSharedSession = useMemo(() => readSharedSession(), [])
+  const [currentSession, setCurrentSession] = useState<WorkbenchSession | null>(
+    initialSharedSession?.session ?? null,
+  )
+  const [currentSessionContextKey, setCurrentSessionContextKey] = useState<string | null>(
+    initialSharedSession?.contextKey ?? null,
+  )
   const [running, setRunning] = useState(false)
   const [selectionContext, setSelectionContext] = useState<AISelectionContext | null>(null)
   const [selectionToolbar, setSelectionToolbar] = useState<AISelectionToolbarState | null>(null)
@@ -224,6 +268,17 @@ export function GlobalAIAssistantProvider({
   const selectionTimerRef = useRef<number | null>(null)
 
   const activeContext = useMemo(() => mergeAIPageContext(pageContext), [pageContext])
+
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return undefined
+    const channel = new BroadcastChannel(sharedSessionChannelName)
+    channel.onmessage = (event: MessageEvent<SharedAssistantSession | null>) => {
+      const shared = event.data
+      setCurrentSession(shared?.session ?? null)
+      setCurrentSessionContextKey(shared?.contextKey ?? null)
+    }
+    return () => channel.close()
+  }, [])
 
   const registerPageContext = useCallback((id: string, context: AIPageContext, key: string) => {
     setRegistrations((items) => {
@@ -241,7 +296,7 @@ export function GlobalAIAssistantProvider({
   const ensureSession = useCallback(
     async (context: AIPageContext, action: AIGlobalAssistantAction, signal: AbortSignal) => {
       const key = contextIdentityKey(context)
-      if (currentSession && currentSessionContextKey === key) {
+      if (currentSession && (nativeCompanionWindow || currentSessionContextKey === key)) {
         return { session: currentSession, created: false }
       }
 
@@ -263,10 +318,11 @@ export function GlobalAIAssistantProvider({
       }
       setCurrentSession(response.data)
       setCurrentSessionContextKey(key)
+      writeSharedSession({ session: response.data, contextKey: key })
       await queryClient.invalidateQueries({ queryKey: workbenchKeys.sessions.all() })
       return { session: response.data, created: true }
     },
-    [currentSession, currentSessionContextKey, queryClient],
+    [currentSession, currentSessionContextKey, nativeCompanionWindow, queryClient],
   )
 
   const sendPrompt = useCallback(
@@ -364,6 +420,7 @@ export function GlobalAIAssistantProvider({
           const sessionId = createdSessionId
           setCurrentSession((current) => (current?.id === sessionId ? null : current))
           setCurrentSessionContextKey(null)
+          writeSharedSession(null)
           await api.delete(`/copilot/sessions/${sessionId}`).catch(() => undefined)
           await queryClient.invalidateQueries({ queryKey: workbenchKeys.sessions.all() })
         }
@@ -537,7 +594,21 @@ export function GlobalAIAssistantProvider({
   return (
     <AIPageContextRegistry.Provider value={contextValue}>
       {children}
-      {enabled ? (
+      {enabled && (nativeCompanionWindow || companionMode === 'companion') ? (
+        <AssistantCompanionOverlay
+          disabled={!canUseChat}
+          messages={messages}
+          panelOpen={panelOpen}
+          running={running}
+          nativeWindow={nativeCompanionWindow}
+          onAction={(action) => {
+            void launchAssistant({ action })
+          }}
+          onOpenAssistant={() => setPanelOpen(true)}
+          onOpenWorkbench={openWorkbench}
+        />
+      ) : null}
+      {enabled && !nativeCompanionWindow && companionMode === 'icon' ? (
         <AIFloatButton
           disabled={!canUseChat}
           hasSelection={Boolean(selectionContext?.text)}

@@ -1,12 +1,37 @@
 /** @vitest-environment jsdom */
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorkbenchStreamEvent } from '@opensoha/contracts/gen/ts/sohaapi'
-import { createWorkbenchStreamState, parseSSEChunk, reduceWorkbenchStreamState } from './stream'
+import {
+  createWorkbenchStreamState,
+  parseSSEChunk,
+  reduceWorkbenchStreamState,
+  streamWorkbenchMessage,
+} from './stream'
+
+const authMocks = vi.hoisted(() => ({
+  getStoredAccessToken: vi.fn<() => string | null>(),
+  refreshAuthSession: vi.fn<() => Promise<boolean>>(),
+}))
+
+vi.mock('@/features/auth/auth-api', () => ({
+  API_BASE_URL: '/api/v1',
+  getStoredAccessToken: authMocks.getStoredAccessToken,
+  refreshAuthSession: authMocks.refreshAuthSession,
+}))
 
 const createdAt = '2026-07-03T00:00:00Z'
 
 describe('workbench stream helpers', () => {
+  beforeEach(() => {
+    authMocks.getStoredAccessToken.mockReset()
+    authMocks.refreshAuthSession.mockReset()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('parses complete SSE events across chunks', () => {
     const delta: WorkbenchStreamEvent = {
       id: 'evt-1',
@@ -342,5 +367,47 @@ describe('workbench stream helpers', () => {
       code: 'provider_unavailable',
       retryable: true,
     })
+  })
+
+  it('refreshes authentication once before opening an SSE stream', async () => {
+    const done: WorkbenchStreamEvent = {
+      id: 'evt-done',
+      sessionId: 'session-1',
+      messageId: 'message-1',
+      sequence: 1,
+      createdAt,
+      type: 'message.done',
+      role: 'assistant',
+      content: 'ready',
+    }
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(done)}\n\n`))
+        controller.close()
+      },
+    })
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(null, { status: 401, statusText: 'Unauthorized' }))
+      .mockResolvedValueOnce(new Response(body, { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    authMocks.getStoredAccessToken.mockReturnValueOnce('expired').mockReturnValueOnce('fresh')
+    authMocks.refreshAuthSession.mockResolvedValue(true)
+    const events: WorkbenchStreamEvent[] = []
+
+    await streamWorkbenchMessage(
+      '/copilot/sessions/session-1/messages/stream',
+      { content: 'hello' },
+      (event) => {
+        events.push(event)
+      },
+    )
+
+    expect(authMocks.refreshAuthSession).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(new Headers(fetchMock.mock.calls[1]?.[1]?.headers).get('Authorization')).toBe(
+      'Bearer fresh',
+    )
+    expect(events).toEqual([done])
   })
 })

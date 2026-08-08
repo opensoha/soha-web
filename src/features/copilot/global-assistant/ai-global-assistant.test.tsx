@@ -7,6 +7,7 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/services/api-client'
+import { usePreferencesStore } from '@/stores/preferences-store'
 import type { PermissionSnapshot } from '@/types'
 import { GlobalAIAssistantProvider } from './ai-global-assistant-provider'
 import { useAIGlobalAssistant, useAIPageContext } from './ai-context-provider'
@@ -104,7 +105,10 @@ function ToggleableProviderHarness() {
   )
 }
 
-async function renderProvider({ enabled = true }: { enabled?: boolean } = {}) {
+async function renderProvider({
+  enabled = true,
+  nativeCompanionWindow = false,
+}: { enabled?: boolean; nativeCompanionWindow?: boolean } = {}) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   containers.push(container)
@@ -119,7 +123,11 @@ async function renderProvider({ enabled = true }: { enabled?: boolean } = {}) {
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={['/network/services/payment-api?namespace=payments']}>
           <AntdApp>
-            <GlobalAIAssistantProvider enabled={enabled} permissionSnapshot={permissionSnapshot}>
+            <GlobalAIAssistantProvider
+              enabled={enabled}
+              nativeCompanionWindow={nativeCompanionWindow}
+              permissionSnapshot={permissionSnapshot}
+            >
               <Harness />
             </GlobalAIAssistantProvider>
           </AntdApp>
@@ -310,6 +318,8 @@ describe('GlobalAIAssistantProvider', () => {
   })
 
   beforeEach(() => {
+    vi.clearAllMocks()
+    usePreferencesStore.setState({ companionMode: 'icon' })
     vi.mocked(api.postWithSignal).mockResolvedValue({
       data: {
         id: 'session-global',
@@ -359,6 +369,36 @@ describe('GlobalAIAssistantProvider', () => {
     )
     await waitForText(container, '已完成当前服务分析。')
     expect(String(container.textContent)).toContain('已完成当前服务分析。')
+  })
+
+  it('reuses the shared session in the native companion window', async () => {
+    window.localStorage.setItem(
+      'soha.ai.global-assistant.session',
+      JSON.stringify({
+        contextKey: 'shared-main-window',
+        session: {
+          id: 'session-shared',
+          title: 'Shared assistant',
+          updatedAt: '2026-07-06T00:00:00Z',
+          metadata: { mode: 'root_cause' },
+        },
+      }),
+    )
+    const container = await renderProvider({ nativeCompanionWindow: true })
+    const askButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'ask',
+    )
+
+    await act(async () => {
+      askButton?.click()
+    })
+    await waitForText(container, '已完成当前服务分析。')
+
+    expect(api.postWithSignal).not.toHaveBeenCalled()
+    expect(window.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/copilot/sessions/session-shared/messages/stream'),
+      expect.any(Object),
+    )
   })
 
   it('cancels session creation work and archives a new empty session when the panel closes', async () => {

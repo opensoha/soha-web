@@ -13,6 +13,286 @@
   position: static !important;
 }
 
+.soha-companion-shell {
+  z-index: 1051 !important;
+}
+
+.soha-companion-window-document,
+.soha-companion-window-document body,
+.soha-companion-window-document #root,
+.soha-companion-window-document .ant-app {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent !important;
+}
+
+.soha-companion-window-root {
+  width: 100vw;
+  height: 100vh;
+  background: transparent;
+}
+
+.soha-companion-native-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 1051;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 12px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.soha-companion-native-shell .soha-companion__model {
+  --wails-draggable: drag;
+}
+
+.soha-companion {
+  position: relative;
+  width: 176px;
+  height: 210px;
+  pointer-events: none;
+}
+
+.soha-companion__model {
+  position: absolute;
+  right: 12px;
+  bottom: 24px;
+  width: 146px;
+  height: 164px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: inherit;
+  pointer-events: auto;
+}
+
+.soha-companion__model:focus-visible {
+  outline: 2px solid var(--soha-primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.soha-companion__model:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.7);
+  opacity: 0.62;
+}
+
+.soha-companion-orbit,
+.soha-companion-pack-image,
+.soha-companion-live2d-host {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.soha-companion-orbit {
+  overflow: visible;
+}
+
+.soha-companion-orbit__shadow {
+  fill: rgba(15, 23, 42, 0.16);
+}
+
+.soha-companion-orbit__body {
+  transform-origin: 90px 174px;
+  animation: soha-companion-float 3.2s ease-in-out infinite;
+}
+
+.soha-companion-orbit__head {
+  fill: #f8fafc;
+  stroke: #1f2937;
+  stroke-width: 5;
+}
+
+.soha-companion-orbit__ear {
+  fill: #2dd4bf;
+  stroke: #1f2937;
+  stroke-linejoin: round;
+  stroke-width: 5;
+}
+
+.soha-companion-orbit__antenna {
+  fill: none;
+  stroke: #1f2937;
+  stroke-linecap: round;
+  stroke-width: 5;
+}
+
+.soha-companion-orbit__signal {
+  fill: #fb7185;
+  stroke: #1f2937;
+  stroke-width: 4;
+}
+
+.soha-companion-orbit__face {
+  fill: #dbeafe;
+  stroke: #60a5fa;
+  stroke-width: 3;
+}
+
+.soha-companion-orbit__eyes,
+.soha-companion-orbit__mouth {
+  fill: none;
+  stroke: #172554;
+  stroke-linecap: round;
+  stroke-width: 6;
+}
+
+.soha-companion-orbit__mouth {
+  stroke-width: 4;
+}
+
+.soha-companion-orbit__chest {
+  fill: #ffffff;
+  stroke: #1f2937;
+  stroke-width: 5;
+}
+
+.soha-companion-orbit__core {
+  fill: #facc15;
+  stroke: #1f2937;
+  stroke-width: 4;
+}
+
+.soha-companion[data-state='thinking'] .soha-companion-orbit__signal,
+.soha-companion[data-state='speaking'] .soha-companion-orbit__signal {
+  animation: soha-companion-pulse 0.8s ease-in-out infinite alternate;
+}
+
+.soha-companion[data-state='speaking'] .soha-companion-orbit__mouth {
+  animation: soha-companion-talk 0.36s ease-in-out infinite alternate;
+}
+
+.soha-companion[data-state='hover'] .soha-companion-orbit__body,
+.soha-companion[data-state='listening'] .soha-companion-orbit__body {
+  transform: translateY(-5px) rotate(-2deg);
+}
+
+.soha-companion[data-state='dragging'] .soha-companion-orbit__body {
+  animation: none;
+  transform: rotate(5deg);
+}
+
+.soha-companion[data-state='error'] .soha-companion-orbit__face {
+  fill: #fee2e2;
+  stroke: #ef4444;
+}
+
+.soha-companion__bubble {
+  position: absolute;
+  right: 10px;
+  bottom: 190px;
+  width: min(270px, calc(100vw - 48px));
+  max-height: 100px;
+  padding: 9px 11px;
+  overflow: hidden;
+  border: 1px solid var(--soha-border-color);
+  border-radius: 6px;
+  color: var(--soha-text-primary);
+  background: var(--soha-bg-surface-elevated);
+  box-shadow: var(--soha-shadow-strong);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 18px;
+  pointer-events: auto;
+  text-align: left;
+}
+
+.soha-companion__actions {
+  position: absolute;
+  top: 32px;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  opacity: 0;
+  pointer-events: auto;
+  transform: translateX(4px);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.soha-companion:hover .soha-companion__actions,
+.soha-companion:focus-within .soha-companion__actions {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.soha-companion__growth {
+  position: absolute;
+  right: 18px;
+  bottom: 1px;
+  left: 18px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 6px;
+  color: var(--soha-text-secondary);
+  font-size: 10px;
+  line-height: 16px;
+  pointer-events: none;
+}
+
+.soha-companion__growth-track {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--soha-fill-medium);
+}
+
+.soha-companion__growth-track > span {
+  display: block;
+  height: 100%;
+  background: #22c55e;
+}
+
+@keyframes soha-companion-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes soha-companion-pulse {
+  from {
+    transform: scale(0.85);
+  }
+  to {
+    transform: scale(1.2);
+  }
+}
+
+@keyframes soha-companion-talk {
+  from {
+    transform: scaleY(0.6);
+  }
+  to {
+    transform: scaleY(1.35);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .soha-companion-orbit__body,
+  .soha-companion-orbit__signal,
+  .soha-companion-orbit__mouth {
+    animation: none !important;
+  }
+}
+
+@media (hover: none) {
+  .soha-companion__actions {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 .soha-ai-panel {
   position: fixed;
   right: 24px;
