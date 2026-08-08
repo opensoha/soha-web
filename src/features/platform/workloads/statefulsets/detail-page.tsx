@@ -1,17 +1,15 @@
 import { lazy, Suspense, useState } from 'react'
 import { Card, Descriptions, Spin } from 'antd'
 import { useQuery } from '@tanstack/react-query'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { ResourceEventsTimeline } from '@/components/resource-events-timeline'
-import { resolveWorkloadNamespace } from '@/features/platform/workloads-model'
 import { WorkloadDetailShell } from '@/features/platform/workloads/shared/detail-shell'
+import { useWorkloadDetailScope } from '@/features/platform/workloads/shared/detail-scope'
 import {
   WorkloadPodsCard,
   WorkloadRelationsCard,
 } from '@/features/platform/workloads/shared/workload-relations'
 import { useI18n } from '@/i18n'
-import { usePlatformScopeStore } from '@/stores/platform-scope-store'
-import { toScopeKey } from '@/types'
 import { statefulSetQueries } from './queries'
 import type { StatefulSetDetail } from './types'
 import '@/features/platform/workloads/styles.css'
@@ -72,11 +70,8 @@ function StatefulSetOverview({ detail }: { detail: StatefulSetDetail }) {
 export function StatefulSetDetailPage() {
   const { localeCode } = useI18n()
   const params = useParams()
-  const [searchParams] = useSearchParams()
   const statefulSetName = params.statefulSetName as string
-  const { clusterId, namespace } = usePlatformScopeStore()
-  const detailNamespace = resolveWorkloadNamespace(namespace, searchParams.get('namespace'))
-  const detailScope = toScopeKey(clusterId, detailNamespace)
+  const detailScope = useWorkloadDetailScope()
   const [activeTabKey, setActiveTabKey] = useState('overview')
   const metricsOptions = statefulSetQueries.metrics(detailScope, statefulSetName)
   const metricsQuery = useQuery({

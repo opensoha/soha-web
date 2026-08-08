@@ -5,6 +5,7 @@ import { useI18n } from '@/i18n'
 import { formatAgeSeconds } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { buildWorkloadDetailPath } from '@/features/platform/workloads-model'
+import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { renderWorkloadNameLink } from '../shared/list-controls'
 import { ReplicaControllerListPage } from '../shared/replica-controller-list'
 import type { ReplicaSet } from './types'
@@ -30,6 +31,7 @@ function renderReady(ready: number, desired: number) {
 export function WorkloadsReplicaSetsPage() {
   const { localeCode } = useI18n()
   const navigate = useNavigate()
+  const clusterId = usePlatformScopeStore((state) => state.clusterId)
   const columns: TableColumnsType<ReplicaSet> = [
     {
       title: localeCode === 'zh_CN' ? '名称' : 'Name',
@@ -37,7 +39,7 @@ export function WorkloadsReplicaSetsPage() {
       ellipsis: { showTitle: false },
       render: (name: string, record) =>
         renderWorkloadNameLink(name, () =>
-          navigate(buildWorkloadDetailPath('replicasets', name, null, record.namespace)),
+          navigate(buildWorkloadDetailPath('replicasets', name, null, record.namespace, clusterId)),
         ),
       width: 240,
     },

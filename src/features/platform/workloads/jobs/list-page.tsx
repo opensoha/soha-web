@@ -74,7 +74,9 @@ export function WorkloadsJobsPage() {
       ellipsis: { showTitle: false },
       render: (name: string, record: Job) =>
         renderWorkloadNameLink(name, () =>
-          navigate(buildWorkloadDetailPath('jobs', name, namespace, record.namespace)),
+          navigate(
+            buildWorkloadDetailPath('jobs', name, namespace, record.namespace, clusterId),
+          ),
         ),
     },
     { title: t('common.namespace', 'Namespace'), dataIndex: 'namespace', width: 160 },

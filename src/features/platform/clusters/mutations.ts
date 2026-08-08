@@ -1,5 +1,6 @@
 import { mutationOptions, type QueryClient } from '@tanstack/react-query'
 import type {
+  AgentInstallation,
   LogCollectionDisableInput,
   LogCollectionEnableInput,
   LogCollectionPlan,
@@ -8,6 +9,7 @@ import type {
 } from '@opensoha/contracts/gen/ts/sohaapi'
 import type { ScopeKey } from '@/types'
 import {
+  createAgentInstallation,
   createCluster,
   deleteCluster,
   disableClusterLogCollection,
@@ -26,22 +28,22 @@ import type {
 async function invalidateClusterTarget(queryClient: QueryClient, target: ClusterTarget) {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: clusterKeys.list() }),
-    queryClient.invalidateQueries({ queryKey: clusterKeys.legacyList() }),
     queryClient.invalidateQueries({ queryKey: clusterKeys.detail(target.scope) }),
     queryClient.invalidateQueries({ queryKey: clusterKeys.nodes(target.scope) }),
   ])
 }
 
 export const clusterMutations = {
+  createAgentInstallation: () =>
+    mutationOptions<AgentInstallation, Error, ClusterTarget>({
+      mutationKey: [...clusterKeys.all, 'agent-installation'] as const,
+      mutationFn: createAgentInstallation,
+    }),
   create: (queryClient: QueryClient) =>
     mutationOptions({
       mutationKey: [...clusterKeys.all, 'create'] as const,
       mutationFn: (values: ClusterPayload) => createCluster(values),
-      onSuccess: () =>
-        Promise.all([
-          queryClient.invalidateQueries({ queryKey: clusterKeys.list() }),
-          queryClient.invalidateQueries({ queryKey: clusterKeys.legacyList() }),
-        ]),
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: clusterKeys.list() }),
     }),
   update: (queryClient: QueryClient) =>
     mutationOptions({
@@ -64,7 +66,6 @@ export const clusterMutations = {
       onSuccess: async (_data, { scopes }) => {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: clusterKeys.list() }),
-          queryClient.invalidateQueries({ queryKey: clusterKeys.legacyList() }),
           ...scopes.flatMap((scope) => [
             queryClient.invalidateQueries({ queryKey: clusterKeys.detail(scope) }),
             queryClient.invalidateQueries({ queryKey: clusterKeys.nodes(scope) }),

@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import {
+  App,
   Button,
   Select,
   Spin,
@@ -9,7 +10,6 @@ import {
   InputNumber,
   Tooltip,
   Typography,
-  message,
 } from 'antd'
 import { DeleteOutlined, EditOutlined, ReloadOutlined, UndoOutlined } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -221,6 +221,7 @@ function buildWorkloadActionColumn<T extends WorkloadActionRecord>({
 
 export function WorkloadsDeploymentsPage() {
   const { t, localeCode } = useI18n()
+  const { message } = App.useApp()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { clusterId, namespace } = usePlatformScopeStore()
@@ -436,7 +437,15 @@ export function WorkloadsDeploymentsPage() {
       dataIndex: 'name',
       render: (name: string, record: Deployment) =>
         renderWorkloadNameLink(name, () =>
-          navigate(buildWorkloadDetailPath('deployments', name, namespace, record.namespace)),
+          navigate(
+            buildWorkloadDetailPath(
+              'deployments',
+              name,
+              namespace,
+              record.namespace,
+              clusterId,
+            ),
+          ),
         ),
     },
     { title: t('common.namespace', 'Namespace'), dataIndex: 'namespace' },
@@ -608,7 +617,13 @@ export function WorkloadsDeploymentsPage() {
         onRow={(record: Deployment) => ({
           'data-ai-context': encodeAIContextForElement({
             sourceWorkbench: 'platform',
-            sourceRoute: `/workloads/deployments/${record.name}?namespace=${encodeURIComponent(record.namespace)}`,
+            sourceRoute: buildWorkloadDetailPath(
+              'deployments',
+              record.name,
+              namespace,
+              record.namespace,
+              clusterId,
+            ),
             sourceTitle: `Deployment ${record.name}`,
             entityKind: 'kubernetes.deployment',
             entityName: record.name,

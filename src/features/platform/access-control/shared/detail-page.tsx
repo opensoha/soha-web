@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Card, Space, Spin, Tabs, Typography, message } from 'antd'
+import { App, Card, Space, Spin, Tabs, Typography } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
@@ -33,6 +33,7 @@ function AccessControlYAMLTab({
   target: AccessControlTarget
 }) {
   const { t, localeCode } = useI18n()
+  const { message } = App.useApp()
   const queryClient = useQueryClient()
   const yamlQuery = useQuery(accessControlQueries.yaml(kind, target.scope, target.name))
   const updateMutation = useMutation(accessControlMutations.updateYAML(kind, queryClient))

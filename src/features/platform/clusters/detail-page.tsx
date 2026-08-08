@@ -1,15 +1,20 @@
 import { useNavigate, useParams } from 'react-router-dom'
-import { Button, Card, Descriptions, Space, Spin, Tag, Typography } from 'antd'
+import { Button, Card, Descriptions, Spin, Tag, Typography } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
-import { ManagementDetailHeader, ManagementState } from '@/components/management-list'
+import { ManagementState } from '@/components/management-list'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { StatusTag } from '@/components/status-tag'
 import { formatDateTime } from '@/utils/time'
 import { toScopeKey } from '@/types'
 import type { TableColumnsType } from 'antd'
-import { clusterTypeOf, formatClusterType } from './presentation'
+import {
+  clusterTypeOf,
+  formatClusterRuntimeValue,
+  formatClusterType,
+  formatConnectionMode,
+} from './presentation'
 import { clusterQueries } from './queries'
 import { LogCollectionCard } from './log-collection-card'
 import type { Node } from './types'
@@ -84,14 +89,6 @@ export function ClusterDetailPage() {
   if (!detail || !summary) {
     return (
       <div className="soha-page">
-        <ManagementDetailHeader
-          title={localeCode === 'zh_CN' ? '集群详情' : 'Cluster Detail'}
-          description={
-            localeCode === 'zh_CN'
-              ? '当前集群不存在或详情不可用。'
-              : 'The cluster was not found or its detail is unavailable.'
-          }
-        />
         <ManagementState kind="not-found" description={t('common.notFound', 'Not found')} />
       </div>
     )
@@ -99,40 +96,6 @@ export function ClusterDetailPage() {
 
   return (
     <div className="soha-page soha-cluster-detail-page">
-      <ManagementDetailHeader
-        title={`${localeCode === 'zh_CN' ? '集群详情' : 'Cluster Detail'}: ${summary.name}`}
-        description={
-          localeCode === 'zh_CN'
-            ? '查看集群标签、版本、连接方式和运行诊断信息。'
-            : 'Inspect cluster labels, version, connectivity, and runtime diagnostics.'
-        }
-        actions={
-          <Space>
-            <Button onClick={() => navigate('/clusters')}>
-              {localeCode === 'zh_CN' ? '返回列表' : 'Back'}
-            </Button>
-            <Button
-              variant="outlined"
-              onClick={() => {
-                setClusterId(summary.id)
-                navigate('/cluster-resources/nodes')
-              }}
-            >
-              {localeCode === 'zh_CN' ? '查看节点' : 'Open Nodes'}
-            </Button>
-            <Button
-              type="primary"
-              onClick={() => {
-                setClusterId(summary.id)
-                navigate('/workloads/overview')
-              }}
-            >
-              {localeCode === 'zh_CN' ? '查看工作负载' : 'Open Workloads'}
-            </Button>
-          </Space>
-        }
-      />
-
       <div className="soha-cluster-detail-grid">
         <Card className="soha-detail-card" title={localeCode === 'zh_CN' ? '基础信息' : 'Summary'}>
           <Descriptions
@@ -162,7 +125,7 @@ export function ClusterDetailPage() {
               {
                 key: localeCode === 'zh_CN' ? '连接方式' : 'Mode',
                 label: localeCode === 'zh_CN' ? '连接方式' : 'Mode',
-                children: summary.connectionMode || '-',
+                children: formatConnectionMode(summary.connectionMode, localeCode),
               },
               {
                 key: localeCode === 'zh_CN' ? '最近检查' : 'Last Checked',
@@ -220,17 +183,17 @@ export function ClusterDetailPage() {
               {
                 key: localeCode === 'zh_CN' ? '连接模式' : 'Connection Mode',
                 label: localeCode === 'zh_CN' ? '连接模式' : 'Connection Mode',
-                children: detail.connection.mode || '-',
+                children: formatConnectionMode(detail.connection.mode, localeCode),
               },
               {
                 key: localeCode === 'zh_CN' ? '凭据类型' : 'Credential Type',
                 label: localeCode === 'zh_CN' ? '凭据类型' : 'Credential Type',
-                children: detail.connection.credentialType || '-',
+                children: formatClusterRuntimeValue(detail.connection.credentialType, localeCode),
               },
               {
                 key: localeCode === 'zh_CN' ? '来源类型' : 'Source Type',
                 label: localeCode === 'zh_CN' ? '来源类型' : 'Source Type',
-                children: detail.connection.sourceType || '-',
+                children: formatClusterRuntimeValue(detail.connection.sourceType, localeCode),
               },
               {
                 key: localeCode === 'zh_CN' ? 'Context' : 'Context',
@@ -245,22 +208,28 @@ export function ClusterDetailPage() {
               {
                 key: localeCode === 'zh_CN' ? 'Informer Cache' : 'Informer Cache',
                 label: localeCode === 'zh_CN' ? 'Informer Cache' : 'Informer Cache',
-                children: detail.connection.usesInformerCache ? 'Yes' : 'No',
+                children: detail.connection.usesInformerCache
+                  ? localeCode === 'zh_CN'
+                    ? '是'
+                    : 'Yes'
+                  : localeCode === 'zh_CN'
+                    ? '否'
+                    : 'No',
               },
               {
                 key: localeCode === 'zh_CN' ? '同步策略' : 'Sync Strategy',
                 label: localeCode === 'zh_CN' ? '同步策略' : 'Sync Strategy',
-                children: detail.diagnostics.syncStrategy || '-',
+                children: formatClusterRuntimeValue(detail.diagnostics.syncStrategy, localeCode),
               },
               {
                 key: localeCode === 'zh_CN' ? '缓存状态' : 'Cache Status',
                 label: localeCode === 'zh_CN' ? '缓存状态' : 'Cache Status',
-                children: detail.diagnostics.cacheStatus || '-',
+                children: formatClusterRuntimeValue(detail.diagnostics.cacheStatus, localeCode),
               },
               {
                 key: localeCode === 'zh_CN' ? '连接状态' : 'Connection State',
                 label: localeCode === 'zh_CN' ? '连接状态' : 'Connection State',
-                children: detail.diagnostics.connectionState || '-',
+                children: formatClusterRuntimeValue(detail.diagnostics.connectionState, localeCode),
               },
               {
                 key: localeCode === 'zh_CN' ? '诊断信息' : 'Diagnostic Message',

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, Card, Typography } from 'antd'
+import { App, Button, Card, Typography } from 'antd'
 import { CopyOutlined } from '@ant-design/icons'
 import { useI18n } from '@/i18n'
 import type { TableColumnsType } from 'antd'
@@ -27,6 +27,7 @@ export function ConfigMapDataTab({
   onApply: (data: Record<string, string>) => void
 }) {
   const { localeCode } = useI18n()
+  const { message } = App.useApp()
   const data = configurationDataRows(detail.data)
   const binaryData = configurationDataRows(detail.binaryData)
   const [editorOpen, setEditorOpen] = useState(false)
@@ -53,7 +54,7 @@ export function ConfigMapDataTab({
           size="small"
           type="text"
           icon={<CopyOutlined />}
-          onClick={() => copyConfigurationValue(record.value, localeCode)}
+          onClick={() => copyConfigurationValue(record.value, localeCode, message)}
         >
           {localeCode === 'zh_CN' ? '复制' : 'Copy'}
         </Button>

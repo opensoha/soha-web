@@ -65,6 +65,27 @@ export interface VirtualizationImageConfig extends VirtualizationPayloadMap {
 export type VirtualizationOperationPayload = VirtualizationPayloadMap
 export type VirtualizationProviderRaw = VirtualizationPayloadMap | string | null
 
+export interface VirtualMachineConfig extends VirtualizationPayloadMap {
+  hostname?: string
+  fqdn?: string
+  dnsServers?: string
+  searchDomains?: string
+  gateway?: string
+  cloudInitConfigured?: boolean | string
+  cloudInitUser?: string
+  cloudInitSource?: string
+  cloudInitUserDataConfigured?: boolean | string
+  sshKeysConfigured?: boolean | string
+  guestAgentEnabled?: boolean | string
+  diskCount?: number | string
+  networkInterfaceCount?: number | string
+  networks?: string
+  firmware?: string
+  machine?: string
+  osType?: string
+  dnsPolicy?: string
+}
+
 export interface VirtualMachine {
   id: string
   name: string
@@ -86,6 +107,7 @@ export interface VirtualMachine {
   bootImageName?: string
   ipAddresses?: string[]
   network?: string
+  config?: VirtualMachineConfig
   createdAt?: string
   updatedAt?: string
   allowedActions?: string[]
@@ -279,6 +301,8 @@ export interface VirtualizationImageInput {
 export interface VirtualizationFlavor {
   id: string
   name: string
+  provider?: string
+  connectionId?: string
   description?: string
   cpu: number
   memoryMiB: number

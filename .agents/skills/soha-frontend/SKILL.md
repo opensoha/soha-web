@@ -1,6 +1,6 @@
 ---
 name: soha-frontend
-description: Soha Web frontend architecture and UI standards. Use when editing or reviewing soha-web React and Ant Design code involving capability ownership, route manifests, API/query/mutation layers, shared types and state, theme surfaces, management pages, lazy loading, bundle boundaries, or Ant Design X and XRequest AI workbench flows.
+description: Soha Web frontend architecture and UI standards. Use when editing or reviewing soha-web React and Ant Design code involving capability ownership, route manifests, API/query/mutation layers, shared types and state, theme surfaces, management pages, data-dense tables, detail overviews, lazy loading, bundle boundaries, or Ant Design X and XRequest AI workbench flows.
 ---
 
 # Soha Frontend
@@ -64,6 +64,12 @@ layer, loading boundaries, and Soha visual system.
 - Use `ManagementDataPage`, `ManagementQueryPanel`, `ManagementQueryField`,
   `ManagementQueryScope`, `ManagementKeywordField`, `ManagementQueryActions`,
   `ManagementTableToolbar`, and `AdminTable` for ordinary management pages.
+- Keep management-table toolbars on the shared control height and spacing. Do not add page-local
+  height, padding, or divider overrides.
+- For scan-heavy tables and detail overviews, follow the density, grouping, and decoration rules
+  in `references/theme-system.md`.
+- Do not repeat the current page identity, generic explanatory copy, or a back-to-list action below
+  a breadcrumb that already provides that context and navigation.
 - Keep DAG, topology, terminal, noVNC, charts, and AI graph as token-driven scene exceptions.
 - Prefer current Ant Design 6 APIs such as `Card.styles.body`, `Alert.title`, and
   `showSearch={{ optionFilterProp: 'label' }}`.

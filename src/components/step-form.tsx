@@ -65,6 +65,12 @@ export function StepForm({
     onCurrentChange(Math.max(current - 1, 0))
   }
 
+  const submitForm = (event: MouseEvent<HTMLElement>) => {
+    if (!form) return
+    event.preventDefault()
+    form.submit()
+  }
+
   return (
     <Form
       {...formProps}
@@ -78,20 +84,14 @@ export function StepForm({
         items={steps.map((step) => ({ title: step.title }))}
         size="small"
       />
-      <div
-        className="soha-step-form__content"
-        style={{ maxWidth: contentMaxWidth }}
-      >
+      <div className="soha-step-form__content" style={{ maxWidth: contentMaxWidth }}>
         {steps.map((step, index) => (
           <div key={index} hidden={index !== current}>
             {step.children}
           </div>
         ))}
       </div>
-      <div
-        className="soha-step-form__actions"
-        style={{ maxWidth: contentMaxWidth }}
-      >
+      <div className="soha-step-form__actions" style={{ maxWidth: contentMaxWidth }}>
         {onCancel ? (
           <Button
             htmlType="button"
@@ -113,7 +113,7 @@ export function StepForm({
             {nextText}
           </Button>
         ) : (
-          <Button htmlType="submit" loading={loading} type="primary">
+          <Button htmlType="submit" loading={loading} onClick={submitForm} type="primary">
             {submitText}
           </Button>
         )}

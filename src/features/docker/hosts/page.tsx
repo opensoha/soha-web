@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { App, Button, Form, Input, Popconfirm, Select, Space, Typography } from 'antd'
+import { App, Button, Descriptions, Form, Input, Popconfirm, Select, Space, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { CloudServerOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementDataPage } from '@/components/management-data-page'
+import { MetadataTag } from '@/components/status-tag'
 import {
   ManagementIconButton,
   ManagementKeywordField,
@@ -12,6 +13,7 @@ import {
   ManagementQueryPanel,
 } from '@/components/management-list'
 import { formatDateTime } from '@/utils/time'
+import { tableColumnPresets } from '@/utils/table-columns'
 import { computeQueries, latestTaskForResource, ResourceTaskActions } from '@/features/compute'
 import { dockerApi } from '../docker-api'
 import { dockerQueries } from '../queries'
@@ -94,12 +96,6 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
       render: (value, record) => value || record.ipAddress || '-',
     },
     {
-      title: '环境/归属',
-      width: 180,
-      render: (_value, record) =>
-        [record.environment, record.owner || record.team].filter(Boolean).join(' / ') || '-',
-    },
-    {
       title: 'VM',
       width: 180,
       render: (_value, record) =>
@@ -108,22 +104,25 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
     {
       title: '规格',
       width: 180,
-      render: (_value, record) =>
-        `${record.cpuCoreCount || '-'}C / ${formatBytes(record.memoryBytes)} / ${formatBytes(record.diskBytes)}`,
-    },
-    {
-      title: '端口池',
-      width: 140,
-      render: (_value, record) =>
-        record.availablePortStart && record.availablePortEnd
-          ? `${record.availablePortStart}-${record.availablePortEnd}`
-          : '-',
+      render: (_value, record) => {
+        const values = [
+          record.cpuCoreCount ? (
+            <MetadataTag key="cpu" label={`${record.cpuCoreCount} CPU`} tone="purple" />
+          ) : null,
+          record.memoryBytes ? (
+            <MetadataTag key="memory" label={formatBytes(record.memoryBytes)} tone="cyan" />
+          ) : null,
+          record.diskBytes ? (
+            <MetadataTag key="disk" label={formatBytes(record.diskBytes)} tone="gold" />
+          ) : null,
+        ].filter(Boolean)
+        return values.length > 0 ? <Space size={4}>{values}</Space> : '-'
+      },
     },
     { title: '心跳', dataIndex: 'lastHeartbeatAt', width: 155, render: formatDateTime },
     {
+      ...tableColumnPresets.task,
       title: '最近任务',
-      fixed: 'right',
-      width: 188,
       render: (_value, record) => (
         <ResourceTaskActions
           task={latestTaskForResource(tasksQuery.data?.items ?? [], 'runtime_host', record.id)}
@@ -212,8 +211,33 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
         loading={hostsQuery.isLoading}
         dataSource={page.items}
         columns={columns}
-        scroll={{ x: 1528 }}
         pagination={pageTablePagination(page, embedded, setFilters)}
+        expandable={{
+          expandedRowRender: (record: DockerHost) => (
+            <Descriptions
+              size="small"
+              bordered
+              column={{ xs: 1, sm: 1, md: 2, lg: 2, xl: 2, xxl: 2 }}
+            >
+              <Descriptions.Item label="环境">{record.environment || '-'}</Descriptions.Item>
+              <Descriptions.Item label="归属">
+                {record.owner || record.team || '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="VM ID">{record.vmId || '-'}</Descriptions.Item>
+              <Descriptions.Item label="虚拟化连接">
+                {record.virtualizationConnectionId || '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="端口池">
+                {record.availablePortStart && record.availablePortEnd
+                  ? `${record.availablePortStart}-${record.availablePortEnd}`
+                  : '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Agent">{record.agentVersion || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Docker">{record.dockerVersion || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Compose">{record.composeVersion || '-'}</Descriptions.Item>
+            </Descriptions>
+          ),
+        }}
         actions={
           canCreateHosts && !embedded ? (
             <>

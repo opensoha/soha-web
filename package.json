@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:app": "vite --mode app",
     "build": "tsc --noEmit && vite build",
     "build:app": "tsc --noEmit && vite build --mode app",
     "check:bundle-budget": "node scripts/check-bundle-budget.mjs --baseline scripts/baselines/bundle-baseline.json --mode p0 --scope initial",

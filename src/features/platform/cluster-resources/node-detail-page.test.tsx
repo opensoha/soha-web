@@ -9,6 +9,12 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { NodeDetailPage } from './node-detail-page'
 
 const testState = vi.hoisted(() => ({
+  capability: {
+    disabled: false,
+    isLoading: false,
+    reason: '',
+    status: 'available' as 'available' | 'partial',
+  },
   runtimeLoads: { yaml: 0 },
   scope: {
     clusterId: 'stored-cluster' as string | null,
@@ -67,6 +73,9 @@ vi.mock('@/services/api-client', () => ({
 vi.mock('@/stores/platform-scope-store', () => ({
   usePlatformScopeStore: () => testState.scope,
 }))
+vi.mock('@/features/platform/cluster-capabilities', () => ({
+  useClusterCapabilityForCluster: () => testState.capability,
+}))
 vi.mock('@/i18n', () => ({
   useI18n: () => ({
     localeCode: 'zh_CN' as const,
@@ -120,6 +129,10 @@ beforeEach(() => {
   vi.clearAllMocks()
   testState.runtimeLoads.yaml = 0
   testState.scope.clusterId = 'stored-cluster'
+  testState.capability.disabled = false
+  testState.capability.isLoading = false
+  testState.capability.reason = ''
+  testState.capability.status = 'available'
 })
 
 afterEach(async () => {
@@ -203,5 +216,26 @@ describe('node detail lazy YAML boundary', () => {
     expect(requestedPaths()).toContain('/clusters/url-cluster/infrastructure/nodes/node-a/yaml')
     expect(testState.runtimeLoads.yaml).toBe(1)
     expect(container.querySelector('[data-testid="yaml-editor"]')).not.toBeNull()
+  })
+
+  it('does not request node YAML when Agent support is only partial', async () => {
+    testState.capability.disabled = false
+    testState.capability.reason =
+      'Built-in generic and custom-resource YAML is supported; node YAML still needs parity cleanup.'
+    testState.capability.status = 'partial'
+    const container = await renderDetail()
+    const requestedPaths = () => apiGetMock.mock.calls.map(([path]) => String(path))
+
+    const yamlTab = Array.from(container.querySelectorAll<HTMLElement>('[role="tab"]')).find(
+      (item) => item.textContent?.includes('YAML'),
+    )
+    expect(yamlTab).toBeDefined()
+    await act(async () => yamlTab?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    await flushAsyncWork()
+
+    expect(container.textContent).toContain('节点 YAML 暂不可用')
+    expect(container.textContent).toContain('node YAML still needs parity cleanup')
+    expect(requestedPaths().some((path) => path.endsWith('/yaml'))).toBe(false)
+    expect(testState.runtimeLoads.yaml).toBe(0)
   })
 })

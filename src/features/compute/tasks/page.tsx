@@ -235,7 +235,12 @@ export function ComputeTasksPage() {
       title: '领域',
       dataIndex: 'domain',
       width: 145,
-      render: (value) => (value === 'container_runtime' ? '容器运行时' : '虚拟化'),
+      render: (value) => (
+        <MetadataTag
+          label={value === 'container_runtime' ? '容器运行时' : '虚拟化'}
+          tone={value === 'container_runtime' ? 'cyan' : 'blue'}
+        />
+      ),
     },
     {
       title: '类别',
@@ -252,25 +257,12 @@ export function ComputeTasksPage() {
       render: (value) => <StatusTag value={value} />,
     },
     {
-      title: 'Provider',
-      width: 170,
-      render: (_value, record) => (
-        <Space orientation="vertical" size={0}>
-          <Text>{record.providerKey || '-'}</Text>
-          <Text type="secondary">{record.providerSource || '-'}</Text>
-        </Space>
-      ),
-    },
-    {
       title: '关联资源',
       width: 240,
       render: (_value, record) =>
         record.resources.map((item) => item.displayName).join(' / ') || '-',
     },
-    { title: '发起人', dataIndex: 'requestedBy', width: 130, render: (value) => value || '-' },
-    { title: '尝试', dataIndex: 'attemptCount', width: 80 },
     { title: '创建时间', dataIndex: 'createdAt', width: 170, render: formatDateTime },
-    { title: '结束时间', dataIndex: 'finishedAt', width: 170, render: formatDateTime },
     { title: '摘要', dataIndex: 'summary', width: 260, render: (value) => value || '-' },
     {
       title: '操作',
@@ -435,7 +427,7 @@ export function ComputeTasksPage() {
               {tasksQuery.data?.nextCursor ? '，还有更多' : ''}
             </Text>
           ),
-          scroll: { x: 'max-content' },
+          scroll: { x: 1391 },
           tableSize,
         }}
       />
@@ -461,6 +453,23 @@ export function ComputeTasksPage() {
               </Descriptions.Item>
               <Descriptions.Item label="创建时间">
                 {formatDateTime(selectedTask.createdAt)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Provider">
+                {[selectedTask.providerKey, selectedTask.providerSource]
+                  .filter(Boolean)
+                  .join(' / ') || '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="发起人">
+                {selectedTask.requestedBy || '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="尝试次数">
+                {selectedTask.attemptCount ?? '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="结束时间">
+                {formatDateTime(selectedTask.finishedAt)}
+              </Descriptions.Item>
+              <Descriptions.Item label="摘要" span={2}>
+                {selectedTask.summary || '-'}
               </Descriptions.Item>
             </Descriptions>
             <List

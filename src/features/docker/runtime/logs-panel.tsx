@@ -1,10 +1,8 @@
-import { Card, Space, Typography } from 'antd'
+import { Card } from 'antd'
 import { ManagementState } from '@/components/management-list'
 import { LogExplorer } from '@/features/observability'
 import { runtimeServiceSelector, type DockerRuntimePanelProps } from './shared'
 import './styles.css'
-
-const { Text } = Typography
 
 export function DockerProjectLogsPanel({
   enabled,
@@ -16,7 +14,7 @@ export function DockerProjectLogsPanel({
 }: DockerRuntimePanelProps) {
   if (!enabled) {
     return (
-      <Card className="soha-docker-runtime-card" size="small">
+      <Card className="soha-detail-card" size="small">
         <ManagementState
           compact
           kind="no-permission"
@@ -29,7 +27,7 @@ export function DockerProjectLogsPanel({
 
   if (serviceOptions.length === 0 && !servicesLoading) {
     return (
-      <Card className="soha-docker-runtime-card" size="small">
+      <Card className="soha-detail-card" size="small">
         <ManagementState
           compact
           kind="empty"
@@ -41,24 +39,19 @@ export function DockerProjectLogsPanel({
   }
 
   return (
-    <div className="soha-docker-log-explorer">
-      <Space className="soha-terminal-toolbar" size={8} wrap>
-        <Text type="secondary">服务</Text>
-        {runtimeServiceSelector({
-          disabled: !enabled,
-          loading: servicesLoading,
-          options: serviceOptions,
-          serviceName,
-          onChange: onServiceChange,
-        })}
-      </Space>
-      <LogExplorer
-        key={`${projectId}:${serviceName ?? ''}`}
-        autoStart
-        embedded
-        preset={{ source: 'docker', dockerProjectId: projectId, dockerService: serviceName }}
-        target={{ kind: 'docker', projectId, serviceName: serviceName ?? '' }}
-      />
-    </div>
+    <LogExplorer
+      key={`${projectId}:${serviceName ?? ''}`}
+      autoStart
+      embedded
+      preset={{ source: 'docker', dockerProjectId: projectId, dockerService: serviceName }}
+      scopeControl={runtimeServiceSelector({
+        disabled: !enabled,
+        loading: servicesLoading,
+        options: serviceOptions,
+        serviceName,
+        onChange: onServiceChange,
+      })}
+      target={{ kind: 'docker', projectId, serviceName: serviceName ?? '' }}
+    />
   )
 }

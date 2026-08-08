@@ -83,21 +83,6 @@ vi.mock('@/components/status-tag', () => ({
   StatusTag: ({ value }: { value?: string }) => <span>{value}</span>,
 }))
 vi.mock('@/components/management-list', () => ({
-  ManagementDetailHeader: ({
-    actions,
-    description,
-    title,
-  }: {
-    actions?: ReactNode
-    description?: ReactNode
-    title?: ReactNode
-  }) => (
-    <header>
-      {title}
-      {description}
-      {actions}
-    </header>
-  ),
   ManagementState: ({ description }: { description?: ReactNode }) => <div>{description}</div>,
 }))
 vi.mock('@/components/admin-table', () => ({
@@ -160,7 +145,11 @@ describe('cluster detail page', () => {
     expect(apiGetMock).toHaveBeenCalledWith('/clusters/cluster-a/detail')
     expect(apiGetMock).toHaveBeenCalledWith('/clusters/cluster-a/infrastructure/nodes')
     expect(apiGetMock).toHaveBeenCalledWith('/clusters/cluster-a/observability/logging')
-    expect(container.textContent).toContain('集群详情: Primary')
+    expect(container.textContent).not.toContain('集群详情')
+    expect(container.textContent).toContain('Token')
+    expect(container.textContent).toContain('持续监听')
+    expect(container.textContent).toContain('就绪')
+    expect(container.textContent).toContain('已连接')
     expect(container.textContent).toContain('日志采集')
     expect(container.textContent).toContain('runtime_only')
     expect(container.textContent).toContain('node-a')

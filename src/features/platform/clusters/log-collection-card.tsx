@@ -115,7 +115,7 @@ export function LogCollectionCard({ scope, localeCode }: { scope: ScopeKey; loca
         <Alert
           type="error"
           showIcon
-          message={zh ? '日志采集状态加载失败' : 'Failed to load log collection status'}
+          title={zh ? '日志采集状态加载失败' : 'Failed to load log collection status'}
           description={(stateQuery.error as Error).message}
         />
       ) : (
@@ -164,12 +164,12 @@ export function LogCollectionCard({ scope, localeCode }: { scope: ScopeKey; loca
               },
             ]}
           />
-          {state?.lastError ? <Alert type="warning" showIcon message={state.lastError} /> : null}
+          {state?.lastError ? <Alert type="warning" showIcon title={state.lastError} /> : null}
           {busy ? (
             <Alert
               type="info"
               showIcon
-              message={
+              title={
                 enable.isPending || state?.status === 'installing'
                   ? zh
                     ? '正在安装日志采集组件'
@@ -259,7 +259,7 @@ export function LogCollectionCard({ scope, localeCode }: { scope: ScopeKey; loca
         }
       >
         {plan ? (
-          <Space direction="vertical" size="middle" className="w-full">
+          <Space orientation="vertical" size="middle" className="w-full">
             <Descriptions
               size="small"
               column={1}
@@ -305,10 +305,10 @@ export function LogCollectionCard({ scope, localeCode }: { scope: ScopeKey; loca
               ]}
             />
             {plan.blockers.map((item) => (
-              <Alert key={item} type="error" showIcon message={displayMessage(item, zh)} />
+              <Alert key={item} type="error" showIcon title={displayMessage(item, zh)} />
             ))}
             {plan.warnings.map((item) => (
-              <Alert key={item} type="warning" showIcon message={displayMessage(item, zh)} />
+              <Alert key={item} type="warning" showIcon title={displayMessage(item, zh)} />
             ))}
           </Space>
         ) : (
@@ -382,7 +382,7 @@ export function LogCollectionCard({ scope, localeCode }: { scope: ScopeKey; loca
               </Form.Item>
             </Space>
             {preflight.isError ? (
-              <Alert type="error" showIcon message={preflight.error.message} />
+              <Alert type="error" showIcon title={preflight.error.message} />
             ) : null}
           </Form>
         )}

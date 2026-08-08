@@ -1,15 +1,15 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Card, Descriptions, Select, Space, Spin, Tag, Tooltip, Typography } from 'antd'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementState } from '@/components/management-list'
 import { ResourceEventsTimeline } from '@/components/resource-events-timeline'
 import { BooleanTag, StatusTag } from '@/components/status-tag'
+import { hasAllowedAction, hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useAIPageContext } from '@/features/copilot'
 import { useI18n } from '@/i18n'
 import { useClusterCapability } from '@/features/platform/cluster-capabilities'
-import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import {
@@ -20,9 +20,7 @@ import {
   formatVolumeTypeLabel,
   localizeRelatedRelation,
   localizeRelatedResourceKind,
-  resolveWorkloadNamespace,
 } from '@/features/platform/workloads-model'
-import { toScopeKey } from '@/types'
 import type {
   PodRelatedResource,
   PodVolume,
@@ -32,6 +30,7 @@ import type {
 } from '@/types'
 import type { TableColumnsType, TabsProps } from 'antd'
 import { WorkloadDetailShell } from '../shared/detail-shell'
+import { useWorkloadDetailScope } from '../shared/detail-scope'
 import { podQueries } from './queries'
 import '@/features/platform/workloads/styles.css'
 
@@ -126,11 +125,13 @@ function renderVolumeDetail(
 export function PodDetailPage() {
   const { localeCode } = useI18n()
   const navigate = useNavigate()
+  const permissionSnapshotQuery = usePermissionSnapshot()
+  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const canViewPodLogs = hasPermission(permissionSnapshot, 'platform.pods.logs')
+  const canExecPod = hasPermission(permissionSnapshot, 'platform.pods.exec')
   const params = useParams()
-  const [searchParams] = useSearchParams()
   const podName = params.podName as string
-  const { clusterId, namespace } = usePlatformScopeStore()
-  const detailNamespace = resolveWorkloadNamespace(namespace, searchParams.get('namespace'))
+  const { clusterId, namespace: detailNamespace } = useWorkloadDetailScope()
   const [container, setContainer] = useState<string>('')
   const [terminalShell, setTerminalShell] = useState('/bin/sh')
   const [activeTabKey, setActiveTabKey] = useState('overview')
@@ -147,17 +148,7 @@ export function PodDetailPage() {
     localeCode === 'zh_CN'
       ? '正在读取当前集群的终端能力。'
       : 'Reading terminal capability for the current cluster.'
-  const terminalDisabled =
-    podExecCapability.isLoading ||
-    podExecCapability.disabled ||
-    podExecCapability.status === 'partial'
-  const terminalDisabledReason = podExecCapability.isLoading
-    ? terminalLoadingReason
-    : podExecCapability.status === 'partial'
-      ? podExecCapability.reason || terminalPartialReason
-      : podExecCapability.reason
-
-  const detailScope = toScopeKey(clusterId, detailNamespace)
+  const detailScope = { clusterId, namespace: detailNamespace }
   const podDetailQuery = useQuery(podQueries.detail(detailScope, podName))
   const podMetricsQueryOptions = podQueries.metrics(detailScope, podName, metricsRangeMinutes)
   const podMetricsQuery = useQuery({
@@ -187,6 +178,33 @@ export function PodDetailPage() {
   }, [container, containerOptions])
 
   const podDetail = podDetailQuery.data
+  const logsAllowedByPolicy = hasAllowedAction(podDetail?.allowedActions, 'logs')
+  const logsDisabled =
+    podLogsCapability.isLoading || podLogsCapability.disabled || !logsAllowedByPolicy
+  const logsDisabledReason = podLogsCapability.isLoading
+    ? localeCode === 'zh_CN'
+      ? '正在读取当前集群的 Pod 日志能力。'
+      : 'Reading pod log capability for the current cluster.'
+    : podLogsCapability.disabled
+      ? podLogsCapability.reason
+      : localeCode === 'zh_CN'
+        ? '当前环境或资源范围不允许查看 Pod 日志。'
+        : 'Pod logs are not allowed in the current environment or resource scope.'
+  const terminalAllowedByPolicy = hasAllowedAction(podDetail?.allowedActions, 'exec')
+  const terminalDisabled =
+    podExecCapability.isLoading ||
+    podExecCapability.disabled ||
+    podExecCapability.status === 'partial' ||
+    !terminalAllowedByPolicy
+  const terminalDisabledReason = podExecCapability.isLoading
+    ? terminalLoadingReason
+    : podExecCapability.status === 'partial'
+      ? podExecCapability.reason || terminalPartialReason
+      : podExecCapability.disabled
+        ? podExecCapability.reason
+        : localeCode === 'zh_CN'
+          ? '当前环境或资源范围不允许打开 Pod 终端。'
+          : 'Pod terminal access is not allowed in the current environment or resource scope.'
   useAIPageContext({
     sourceWorkbench: 'platform',
     sourceTitle: `Pod ${podName}`,
@@ -331,7 +349,7 @@ export function PodDetailPage() {
       title: localeCode === 'zh_CN' ? '名称' : 'Name',
       dataIndex: 'name',
       render: (value: string, record: PodRelatedResource) => {
-        const targetPath = buildRelatedResourcePath(record, detailNamespace)
+        const targetPath = buildRelatedResourcePath(record, detailNamespace, clusterId)
         if (!targetPath) {
           return value
         }
@@ -563,7 +581,16 @@ export function PodDetailPage() {
 
   const logsTab: NonNullable<TabsProps['items']>[number] = {
     key: 'logs',
-    label: localeCode === 'zh_CN' ? '日志' : 'Logs',
+    label: logsDisabled ? (
+      <Tooltip title={logsDisabledReason}>
+        <span>{localeCode === 'zh_CN' ? '日志' : 'Logs'}</span>
+      </Tooltip>
+    ) : localeCode === 'zh_CN' ? (
+      '日志'
+    ) : (
+      'Logs'
+    ),
+    disabled: logsDisabled,
     children:
       activeTabKey !== 'logs' ? null : podLogsCapability.isLoading ? (
         <ManagementState compact kind="loading" />
@@ -684,8 +711,8 @@ export function PodDetailPage() {
       paramKey="podName"
       extraOverview={runtimeOverview}
       extraTabPanes={[
-        logsTab,
-        terminalTab,
+        ...(canViewPodLogs ? [logsTab] : []),
+        ...(canExecPod ? [terminalTab] : []),
         eventsTab,
         volumesTab,
         relatedResourcesTab,

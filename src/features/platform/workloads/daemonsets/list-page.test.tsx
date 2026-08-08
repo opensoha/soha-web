@@ -103,10 +103,12 @@ vi.mock('@/components/admin-table', () => ({
 }))
 vi.mock('antd', async (importOriginal) => {
   const actual = await importOriginal<typeof import('antd')>()
+  const message = { error: vi.fn(), success: vi.fn() }
   return {
     ...actual,
+    App: { ...actual.App, useApp: () => ({ message }) },
     Popconfirm: ({ children }: { children?: ReactNode }) => <>{children}</>,
-    message: { error: vi.fn(), success: vi.fn() },
+    message,
   }
 })
 

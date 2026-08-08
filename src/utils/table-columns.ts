@@ -5,6 +5,10 @@ export const tableColumnPresets = {
   datetime: {
     width: 180,
   },
+  task: {
+    width: 160,
+    fixed: 'right' as const,
+  },
   action: {
     width: 140,
     align: 'center' as const,

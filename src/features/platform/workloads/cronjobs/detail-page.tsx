@@ -19,6 +19,7 @@ import '@/features/platform/workloads/styles.css'
 function CronJobOverview({ detail }: { detail: CronJobDetail }) {
   const { localeCode } = useI18n()
   const navigate = useNavigate()
+  const clusterId = usePlatformScopeStore((state) => state.clusterId)
   const jobs = detail.jobs ?? []
 
   return (
@@ -88,7 +89,13 @@ function CronJobOverview({ detail }: { detail: CronJobDetail }) {
                     className="soha-related-pod-name"
                     onClick={() =>
                       navigate(
-                        buildWorkloadDetailPath('jobs', job.name, detail.namespace, job.namespace),
+                        buildWorkloadDetailPath(
+                          'jobs',
+                          job.name,
+                          detail.namespace,
+                          job.namespace,
+                          clusterId,
+                        ),
                       )
                     }
                   >

@@ -1,4 +1,4 @@
-import { Spin, message } from 'antd'
+import { App, Spin } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
@@ -13,6 +13,7 @@ import { secretQueries } from './queries'
 
 export function SecretDetailPage() {
   const { localeCode } = useI18n()
+  const { message } = App.useApp()
   const params = useParams()
   const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()

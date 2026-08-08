@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createCluster,
+  createAgentInstallation,
   deleteCluster,
   getClusterDetail,
   listClusterNodes,
@@ -48,6 +49,17 @@ describe('cluster api', () => {
     await expect(updateCluster({ scope, values })).resolves.toEqual({ id: 'cluster/a' })
     expect(apiMocks.post).toHaveBeenCalledWith('/clusters', values)
     expect(apiMocks.put).toHaveBeenCalledWith('/clusters/cluster%2Fa', values)
+  })
+
+  it('creates an Agent installation for the selected cluster', async () => {
+    apiMocks.post.mockResolvedValueOnce({
+      data: { clusterId: 'cluster/a', command: 'kubectl apply -f https://soha.test/agent.yaml' },
+    })
+
+    await expect(createAgentInstallation({ scope })).resolves.toMatchObject({
+      clusterId: 'cluster/a',
+    })
+    expect(apiMocks.post).toHaveBeenCalledWith('/clusters/cluster%2Fa/agent-installation')
   })
 
   it('returns void for deletes and rejects an empty cluster scope', async () => {

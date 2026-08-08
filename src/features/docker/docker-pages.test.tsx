@@ -647,7 +647,16 @@ describe('docker pages', () => {
     expect(document.body.textContent).toContain('soha-orbstack-smoke')
     expect(document.body.textContent).toContain('Compose')
     expect(document.body.textContent).toContain('单容器')
-    expect(document.body.textContent).toContain('镜像 / 端口')
+    const tableHeaders = Array.from(document.querySelectorAll('th')).map((item) =>
+      item.textContent?.trim(),
+    )
+    expect(tableHeaders).toContain('项目')
+    expect(tableHeaders).toContain('服务')
+    expect(tableHeaders).not.toContain('服务 / 项目')
+    expect(tableHeaders).toContain('镜像')
+    expect(tableHeaders).toContain('端口')
+    expect(tableHeaders).not.toContain('镜像 / 端口')
+    expect(document.body.textContent).toContain('nginx:alpine')
     expect(document.body.textContent).toContain('127.0.0.1:18083 -> 80/tcp')
   })
 
@@ -740,6 +749,15 @@ describe('docker pages', () => {
     expect(document.body.textContent).toContain('运行配置')
     expect(document.body.textContent).toContain('网络与存储')
     expect(document.body.textContent).toContain('确认启动')
+    expect(document.querySelector('.ant-segmented-item-selected')?.textContent).toContain(
+      '已有镜像',
+    )
+    const activeStep = document.querySelector('.soha-step-form__content > div:not([hidden])')
+    expect(
+      Array.from(activeStep?.querySelectorAll('.soha-docker-quick-form-section h2') ?? []).map(
+        (item) => item.textContent,
+      ),
+    ).toEqual(['来源方式', '应用与目标', '镜像与构建'])
     const gitSegment = Array.from(document.querySelectorAll('.ant-segmented-item')).find((item) =>
       item.textContent?.includes('Git 构建'),
     ) as HTMLElement | undefined
@@ -874,6 +892,10 @@ describe('docker pages', () => {
     const tabTexts = Array.from(container.querySelectorAll('.ant-tabs-tab-btn'))
       .map((node) => node.textContent?.trim())
       .filter(Boolean)
+    expect(container.querySelector('.soha-management-detail-header')).toBeNull()
+    expect(container.querySelector('.soha-resource-tabs')).not.toBeNull()
+    expect(container.querySelector('.soha-workload-detail-tabs')).not.toBeNull()
+    expect(container.querySelector('.ant-tabs-tabpane-active .soha-detail-card')).not.toBeNull()
     expect(tabTexts).toContain('信息')
     expect(tabTexts).toContain('配置')
     expect(tabTexts).not.toContain('日志')
@@ -886,5 +908,79 @@ describe('docker pages', () => {
     expect(testState.apiGet.mock.calls.some(([path]) => String(path).includes('/runtime/'))).toBe(
       false,
     )
+  })
+
+  it('gates project service and log tabs with their matching permissions', async () => {
+    testState.permissionSnapshot = {
+      permissionKeys: ['docker.projects.view', 'docker.services.view'],
+      visibleMenuIds: [],
+      visibleMenus: [],
+    }
+
+    let container = await renderWithProviders(
+      <Routes>
+        <Route path="/docker/projects/:projectId" element={<DockerProjectDetailPage />} />
+      </Routes>,
+      '/docker/projects/project-1',
+    )
+    let tabTexts = Array.from(container.querySelectorAll('.ant-tabs-tab-btn')).map((node) =>
+      node.textContent?.trim(),
+    )
+    expect(tabTexts).toContain('服务')
+    expect(tabTexts).not.toContain('日志')
+
+    container.remove()
+    testState.permissionSnapshot = {
+      permissionKeys: ['docker.projects.view', 'docker.services.logs'],
+      visibleMenuIds: [],
+      visibleMenus: [],
+    }
+
+    container = await renderWithProviders(
+      <Routes>
+        <Route path="/docker/projects/:projectId" element={<DockerProjectDetailPage />} />
+      </Routes>,
+      '/docker/projects/project-1',
+    )
+    tabTexts = Array.from(container.querySelectorAll('.ant-tabs-tab-btn')).map((node) =>
+      node.textContent?.trim(),
+    )
+    expect(tabTexts).not.toContain('服务')
+    expect(tabTexts).toContain('日志')
+  })
+
+  it('omits list filters from project-scoped service and port tabs', async () => {
+    testState.permissionSnapshot = {
+      permissionKeys: [
+        'docker.projects.view',
+        'docker.services.view',
+        'docker.services.logs',
+        'docker.ports.view',
+        'docker.ports.create',
+      ],
+      visibleMenuIds: [],
+      visibleMenus: [],
+    }
+
+    const container = await renderWithProviders(
+      <Routes>
+        <Route path="/docker/projects/:projectId" element={<DockerProjectDetailPage />} />
+      </Routes>,
+      '/docker/projects/project-1',
+    )
+
+    for (const label of ['服务', '端口映射']) {
+      const tab = Array.from(container.querySelectorAll<HTMLElement>('.ant-tabs-tab-btn')).find(
+        (item) => item.textContent?.trim() === label,
+      )
+      expect(tab).toBeDefined()
+      await act(async () => tab?.click())
+      expect(container.querySelector('.ant-tabs-tabpane-active .soha-vrt-query')).toBeNull()
+      expect(
+        container.querySelector('.ant-tabs-tabpane-active .soha-admin-table-shell'),
+      ).not.toBeNull()
+    }
+
+    expect(container.textContent).toContain('新增映射')
   })
 })

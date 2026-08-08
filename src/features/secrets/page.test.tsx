@@ -25,19 +25,33 @@ vi.mock('@/services/api-client', () => ({
 
 vi.mock('@/components/admin-table', () => ({
   AdminTable: ({
+    columns,
     dataSource,
     empty,
     headerExtra,
   }: {
+    columns: Array<{
+      key?: React.Key
+      render?: (_: unknown, record: Record<string, unknown>) => React.ReactNode
+    }>
     dataSource: unknown[]
     empty?: React.ReactNode
     headerExtra?: React.ReactNode
-  }) => (
-    <div data-testid="admin-table">
-      {headerExtra}
-      {dataSource.length ? `${dataSource.length} rows` : empty}
-    </div>
-  ),
+  }) => {
+    const actions = columns.find((column) => column.key === 'actions')
+    return (
+      <div data-testid="admin-table">
+        {headerExtra}
+        {dataSource.length
+          ? dataSource.map((record, index) => (
+              <div key={index}>
+                {actions?.render?.(undefined, record as Record<string, unknown>)}
+              </div>
+            ))
+          : empty}
+      </div>
+    )
+  },
 }))
 
 const roots: Root[] = []
@@ -138,9 +152,15 @@ describe('SecretsPage', () => {
     await act(async () => create?.click())
     await flush()
 
-    const vaultSource = Array.from(document.body.querySelectorAll<HTMLElement>('.ant-segmented-item')).find(
-      (item) => item.textContent?.includes('Vault KV v2'),
-    )
+    expect(
+      document.body.querySelector<HTMLInputElement>(
+        'input[placeholder="工具名称，例如 docker.projects.deploy.plan"]',
+      ),
+    ).not.toBeNull()
+
+    const vaultSource = Array.from(
+      document.body.querySelectorAll<HTMLElement>('.ant-segmented-item'),
+    ).find((item) => item.textContent?.includes('Vault KV v2'))
     await act(async () => vaultSource?.click())
     await flush()
 
@@ -156,10 +176,53 @@ describe('SecretsPage', () => {
     await act(async () => {
       if (version) changeInput(version, '1.5')
     })
-    const submit = document.body.querySelector<HTMLButtonElement>('.ant-modal-footer .ant-btn-primary')
+    const submit = document.body.querySelector<HTMLButtonElement>(
+      '.ant-modal-footer .ant-btn-primary',
+    )
     await act(async () => submit?.click())
     await flush()
 
     expect(document.body.textContent).toContain('Version 必须是正整数')
+  })
+
+  it('opens a concrete usage flow from an active Secret', async () => {
+    apiGet.mockResolvedValueOnce({
+      items: [
+        {
+          bindings: [{ targetRef: 'docker.projects.deploy.plan', targetType: 'capability' }],
+          createdAt: '2026-08-07T00:00:00Z',
+          createdBy: 'admin',
+          currentVersion: 1,
+          id: 'secret-1',
+          name: 'Registry token',
+          scopeId: 'default',
+          scopeType: 'workspace',
+          status: 'active',
+          updatedAt: '2026-08-07T00:00:00Z',
+        },
+      ],
+    })
+    await renderPage()
+
+    const useSecret = document.body.querySelector<HTMLButtonElement>(
+      'button[aria-label="使用 Secret"]',
+    )
+    await act(async () => useSecret?.click())
+    await flush()
+
+    expect(document.body.textContent).toContain('使用 Registry token')
+    const referenceInput = Array.from(
+      document.body.querySelectorAll<HTMLInputElement>('input[readonly]'),
+    ).find((input) => input.value.startsWith('soha://'))
+    expect(referenceInput?.value).toBe('soha://secrets/secret-1')
+    expect(
+      document.body.querySelector<HTMLAnchorElement>('a[href="/ai-gateway/manifest"]'),
+    ).not.toBeNull()
+    expect(
+      document.body.querySelector<HTMLAnchorElement>(
+        'a[href="/plugins/marketplace?installation=installed"]',
+      ),
+    ).not.toBeNull()
+    expect(document.body.textContent).toContain('capability:docker.projects.deploy.plan')
   })
 })

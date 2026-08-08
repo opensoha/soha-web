@@ -1,5 +1,5 @@
 import { useDeferredValue, useMemo, useState } from 'react'
-import { Button, Popconfirm, Typography, message } from 'antd'
+import { App, Button, Popconfirm, Typography } from 'antd'
 import { DeleteOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -82,6 +82,7 @@ export function ConfigurationResourceListPage<T extends ConfigurationResourceRec
   singularLabel?: string
 }) {
   const { localeCode } = useI18n()
+  const { message } = App.useApp()
   const { clusterId, namespace } = usePlatformScopeStore()
   const queryClient = useQueryClient()
   const [searchKeyword, setSearchKeyword] = useState('')

@@ -11,7 +11,7 @@ import {
   Space,
   Switch,
 } from 'antd'
-import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, ImportOutlined, PlusOutlined } from '@ant-design/icons'
 import type { TableColumnsType } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementIconButton } from '@/components/management-list'
@@ -27,6 +27,7 @@ import {
   RELEASE_TARGET_KIND_OPTIONS,
   summarizeReleaseTargets,
 } from '../release-targets'
+import { ImportKubernetesServicesModal } from './import-kubernetes-services-modal'
 
 type ColumnProps<T> = TableColumnsType<T>[number]
 
@@ -69,6 +70,7 @@ export function ApplicationEnvironmentsPage() {
   const permissionSnapshotQuery = usePermissionSnapshot()
   const [form] = Form.useForm<Record<string, unknown>>()
   const [modalVisible, setModalVisible] = useState(false)
+  const [importModalVisible, setImportModalVisible] = useState(false)
   const [editing, setEditing] = useState<ApplicationEnvironment | null>(null)
   const selectedApplicationId = Form.useWatch('applicationId', form) as string | undefined
   const selectedClusterId = Form.useWatch('targetClusterId', form) as string | undefined
@@ -88,6 +90,19 @@ export function ApplicationEnvironmentsPage() {
     permissionSnapshot,
     'delivery.application-environments.delete',
   )
+  const canImportKubernetes = [
+    'delivery.application.create',
+    'delivery.application-services.create',
+    'delivery.application-environments.create',
+    'platform.clusters.view',
+    'platform.namespaces.view',
+    'platform.deployment.view',
+    'platform.workloads.stateful-sets.view',
+    'platform.workloads.daemon-sets.view',
+    'platform.network.services.view',
+    'platform.network.ingresses.view',
+    'platform.configuration.horizontal-pod-autoscalers.view',
+  ].every((permission) => hasPermission(permissionSnapshot, permission))
 
   const bindingsQuery = useQuery(deliveryQueries.environments.list())
   const appsQuery = useQuery(deliveryQueries.applications.list())
@@ -242,18 +257,25 @@ export function ApplicationEnvironmentsPage() {
     <div className="soha-page">
       <DeliveryTable
         actions={
-          canCreateBinding ? (
-            <Button
-              icon={<PlusOutlined />}
-              type="primary"
-              onClick={() => {
-                setEditing(null)
-                setModalVisible(true)
-              }}
-            >
-              新建绑定
-            </Button>
-          ) : null
+          <Space>
+            {canImportKubernetes ? (
+              <Button icon={<ImportOutlined />} onClick={() => setImportModalVisible(true)}>
+                导入集群服务
+              </Button>
+            ) : null}
+            {canCreateBinding ? (
+              <Button
+                icon={<PlusOutlined />}
+                type="primary"
+                onClick={() => {
+                  setEditing(null)
+                  setModalVisible(true)
+                }}
+              >
+                新建绑定
+              </Button>
+            ) : null}
+          </Space>
         }
         refreshing={bindingsQuery.isFetching}
         onRefresh={() => void bindingsQuery.refetch()}
@@ -261,6 +283,12 @@ export function ApplicationEnvironmentsPage() {
         dataSource={bindingsQuery.data ?? []}
         rowKey="id"
         loading={bindingsQuery.isLoading}
+      />
+      <ImportKubernetesServicesModal
+        applications={appsQuery.data ?? []}
+        bindings={bindingsQuery.data ?? []}
+        open={importModalVisible}
+        onClose={() => setImportModalVisible(false)}
       />
       <Modal
         title={editing ? '编辑应用环境绑定' : '新建应用环境绑定'}
@@ -278,7 +306,7 @@ export function ApplicationEnvironmentsPage() {
           key={editing?.id ?? 'create-application-environment'}
           layout="vertical"
           onFinish={(values) => {
-            const selectedTarget = (targetCandidatesQuery.data ?? []).find(
+            const selectedTarget = (targetCandidatesQuery.data?.items ?? []).find(
               (item) =>
                 `${item.clusterId}/${item.namespace}/${item.workloadName}` ===
                 values.targetWorkload,
@@ -344,24 +372,24 @@ export function ApplicationEnvironmentsPage() {
               targets: matrixTargets.length
                 ? matrixTargets
                 : targetRecord.workloadName
-                ? [
-                    {
-                      clusterId: targetRecord.clusterId,
-                      namespace: targetRecord.namespace,
-                      targetKind: resolvedTargetKind,
-                      executorKind: resolvedExecutorKind,
-                      groupKey: values.groupKey || '',
-                      waveKey: values.waveKey || '',
-                      regionKey: values.regionKey || '',
-                      configRef: values.configRef || '',
-                      workloadKind: targetRecord.workloadKind,
-                      workloadName: targetRecord.workloadName,
-                      containerName: values.targetContainer || '',
-                      metadata: targetMetadata,
-                      enabled: true,
-                    },
-                  ]
-                : [],
+                  ? [
+                      {
+                        clusterId: targetRecord.clusterId,
+                        namespace: targetRecord.namespace,
+                        targetKind: resolvedTargetKind,
+                        executorKind: resolvedExecutorKind,
+                        groupKey: values.groupKey || '',
+                        waveKey: values.waveKey || '',
+                        regionKey: values.regionKey || '',
+                        configRef: values.configRef || '',
+                        workloadKind: targetRecord.workloadKind,
+                        workloadName: targetRecord.workloadName,
+                        containerName: values.targetContainer || '',
+                        metadata: targetMetadata,
+                        enabled: true,
+                      },
+                    ]
+                  : [],
             }
             if (editing) {
               updateMutation.mutate({ id: editing.id, payload })
@@ -551,9 +579,7 @@ export function ApplicationEnvironmentsPage() {
             <Input />
           </Form.Item>
           <Form.Item name="targetKind" label="目标类型">
-            <Select
-              options={[...RELEASE_TARGET_KIND_OPTIONS]}
-            />
+            <Select options={[...RELEASE_TARGET_KIND_OPTIONS]} />
           </Form.Item>
           <Form.Item name="executorKind" label="执行器">
             <Select
@@ -588,7 +614,7 @@ export function ApplicationEnvironmentsPage() {
             >
               <Select
                 showSearch
-                options={(targetCandidatesQuery.data ?? []).map((item) => ({
+                options={(targetCandidatesQuery.data?.items ?? []).map((item) => ({
                   value: `${item.clusterId}/${item.namespace}/${item.workloadName}`,
                   label: `${item.clusterId} / ${item.namespace} / ${item.workloadName}`,
                 }))}
@@ -607,7 +633,7 @@ export function ApplicationEnvironmentsPage() {
             <Select
               allowClear
               options={(() => {
-                const selectedTarget = (targetCandidatesQuery.data ?? []).find(
+                const selectedTarget = (targetCandidatesQuery.data?.items ?? []).find(
                   (item) =>
                     `${item.clusterId}/${item.namespace}/${item.workloadName}` ===
                     form.getFieldValue('targetWorkload'),

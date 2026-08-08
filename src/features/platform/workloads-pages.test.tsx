@@ -15,6 +15,12 @@ import { WorkloadsPodsPage } from './workloads/pods/list-page'
 import { WorkloadsStatefulSetsPage } from './workloads/statefulsets/list-page'
 
 const testState = vi.hoisted(() => ({
+  permissionKeys: [
+    'platform.pods.delete',
+    'platform.pods.exec',
+    'platform.pods.logs',
+    'platform.pods.view',
+  ],
   responses: {} as Record<string, unknown>,
   scope: {
     clusterId: 'cluster-a' as string | null,
@@ -99,6 +105,17 @@ vi.mock('@/components/resource-actions', () => ({
 }))
 
 vi.mock('@/features/auth/permission-snapshot', () => ({
+  usePermissionSnapshot: () => ({
+    data: {
+      data: {
+        permissionKeys: testState.permissionKeys,
+        visibleMenuIds: [],
+      },
+    },
+    isLoading: false,
+  }),
+  hasPermission: (snapshot: { permissionKeys: string[] } | undefined, permissionKey: string) =>
+    snapshot?.permissionKeys.includes(permissionKey) ?? false,
   hasAllowedAction: (allowedActions: string[] | undefined, action: string) =>
     allowedActions?.includes(action) ?? false,
 }))
@@ -295,6 +312,12 @@ describe('workloads pods page refresh controls', () => {
 
   beforeEach(() => {
     vi.useFakeTimers()
+    testState.permissionKeys = [
+      'platform.pods.delete',
+      'platform.pods.exec',
+      'platform.pods.logs',
+      'platform.pods.view',
+    ]
     testState.scope.clusterId = 'cluster-a'
     testState.scope.namespace = 'monitoring'
     setResponses({
@@ -481,6 +504,58 @@ describe('workloads pods page refresh controls', () => {
     expect(apiDeleteMock).not.toHaveBeenCalled()
   })
 
+  it('hides pod delete controls when the role lacks the delete permission', async () => {
+    testState.permissionKeys = ['platform.pods.view']
+
+    const container = await renderWithProviders(<WorkloadsPodsPage />)
+    await act(async () => {
+      vi.runOnlyPendingTimers()
+      await Promise.resolve()
+    })
+    await flushAsyncWork()
+
+    expect(container.querySelector('button[aria-label="重建 Pod"]')).toBeNull()
+
+    const checkbox = container.querySelector('input[aria-label="select-monitoring/prometheus-0"]')
+    await act(async () => {
+      checkbox?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushAsyncWork()
+
+    expect(container.textContent).not.toContain('批量删除')
+  })
+
+  it('disables pod delete controls when the current policy denies delete', async () => {
+    setResponses({
+      '/clusters/cluster-a/workloads/pods?namespace=monitoring': [
+        {
+          name: 'production-pod',
+          namespace: 'monitoring',
+          phase: 'Running',
+          readyContainers: '1/1',
+          restarts: 0,
+          podIp: '10.0.0.12',
+          nodeName: 'node-a',
+          cpu: '10m',
+          memory: '64Mi',
+          ageSeconds: 60,
+          allowedActions: [],
+        },
+      ],
+    })
+
+    const container = await renderWithProviders(<WorkloadsPodsPage />)
+    await act(async () => {
+      vi.runOnlyPendingTimers()
+      await Promise.resolve()
+    })
+    await flushAsyncWork()
+
+    const rebuildButton = container.querySelector('button[aria-label="重建 Pod"]')
+    expect(rebuildButton).toBeInstanceOf(HTMLButtonElement)
+    expect((rebuildButton as HTMLButtonElement).disabled).toBe(true)
+  })
+
   it('limits concurrent pod batch delete requests', async () => {
     const podCount = 12
     const releaseDeleteRequests: Array<() => void> = []
@@ -511,6 +586,23 @@ describe('workloads pods page refresh controls', () => {
       )
     }
     setResponses({
+      '/clusters': [
+        {
+          id: 'cluster-a',
+          connectionMode: 'direct_kubeconfig',
+        },
+      ],
+      '/clusters/capabilities': [
+        {
+          key: 'workload.mutations',
+          label: 'Workload mutations',
+          category: 'workloads',
+          riskLevel: 'mutate',
+          requiresApproval: true,
+          direct: { status: 'available' },
+          agent: { status: 'partial' },
+        },
+      ],
       '/clusters/cluster-a/workloads/pods?namespace=monitoring': Array.from(
         { length: podCount },
         (_, index) => ({
@@ -864,6 +956,7 @@ describe('workloads pods page refresh controls', () => {
             details: ['Type: ClusterIP'],
           },
         ],
+        allowedActions: ['logs', 'exec'],
       },
     })
 
@@ -882,6 +975,95 @@ describe('workloads pods page refresh controls', () => {
     expect(container.textContent).toContain('容器')
     expect(container.textContent).toContain('卷')
     expect(container.textContent).toContain('相关资源')
+  })
+
+  it('hides pod logs and terminal tabs when the role lacks their permissions', async () => {
+    testState.permissionKeys = ['platform.pods.view']
+    setResponses({
+      '/clusters/cluster-a/workloads/pods/demo-pod/detail?namespace=monitoring': {
+        name: 'demo-pod',
+        namespace: 'monitoring',
+        phase: 'Running',
+        createdAt: '2026-05-07T12:00:00Z',
+        containers: [],
+        allowedActions: ['logs', 'exec'],
+      },
+    })
+
+    const container = await renderWithProviders(
+      <Routes>
+        <Route path="/workloads/pods/:podName" element={<PodDetailPage />} />
+      </Routes>,
+      '/workloads/pods/demo-pod?namespace=monitoring',
+    )
+    await act(async () => {
+      vi.runAllTimers()
+      await Promise.resolve()
+    })
+    await flushAsyncWork()
+
+    const tabLabels = Array.from(container.querySelectorAll('[role="tab"]')).map((tab) =>
+      tab.textContent?.replace(/\s/g, ''),
+    )
+    expect(tabLabels).not.toContain('日志')
+    expect(tabLabels).not.toContain('终端')
+  })
+
+  it('disables pod logs and terminal tabs when the current policy denies them', async () => {
+    setResponses({
+      '/clusters': [
+        {
+          id: 'cluster-a',
+          name: 'Direct Cluster',
+          connectionMode: 'direct',
+          health: { status: 'healthy' },
+        },
+      ],
+      '/clusters/capabilities': [
+        {
+          key: 'pod.logs',
+          label: 'Pod logs',
+          category: 'workloads',
+          direct: { status: 'available' },
+          agent: { status: 'partial' },
+        },
+        {
+          key: 'pod.exec',
+          label: 'Pod exec',
+          category: 'workloads',
+          direct: { status: 'available' },
+          agent: { status: 'partial' },
+        },
+      ],
+      '/clusters/cluster-a/workloads/pods/demo-pod/detail?namespace=monitoring': {
+        name: 'demo-pod',
+        namespace: 'monitoring',
+        phase: 'Running',
+        createdAt: '2026-05-07T12:00:00Z',
+        containers: [],
+        allowedActions: [],
+      },
+    })
+
+    const container = await renderWithProviders(
+      <Routes>
+        <Route path="/workloads/pods/:podName" element={<PodDetailPage />} />
+      </Routes>,
+      '/workloads/pods/demo-pod?namespace=monitoring',
+    )
+    await act(async () => {
+      vi.runAllTimers()
+      await Promise.resolve()
+    })
+    await flushAsyncWork()
+
+    for (const label of ['日志', '终端']) {
+      const tab = Array.from(container.querySelectorAll('[role="tab"]')).find(
+        (item) => item.textContent?.replace(/\s/g, '') === label,
+      )
+      expect(tab).toBeInstanceOf(HTMLElement)
+      expect(tab?.getAttribute('aria-disabled')).toBe('true')
+    }
   })
 
   it('keeps partial pod logs on snapshot mode and disables interactive terminal', async () => {
@@ -926,6 +1108,7 @@ describe('workloads pods page refresh controls', () => {
             state: 'running',
           },
         ],
+        allowedActions: ['logs', 'exec'],
       },
       '/clusters/cluster-a/workloads/pods/demo-pod/logs?namespace=monitoring&tailLines=100&container=app':
         {

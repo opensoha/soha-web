@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildRelatedResourcePath, localizeRelatedResourceKind } from './workloads-model'
+import {
+  buildRelatedResourcePath,
+  buildWorkloadDetailPath,
+  localizeRelatedResourceKind,
+} from './workloads-model'
 
 describe('workload relation paths', () => {
   it('links network and controller relations to their detail pages', () => {
@@ -13,14 +17,16 @@ describe('workload relation paths', () => {
       buildRelatedResourcePath(
         { kind: 'ReplicaSet', name: 'api-7d9', namespace: 'team-a' },
         'selected-ns',
+        'cluster-a',
       ),
-    ).toBe('/workloads/replicasets/api-7d9?namespace=selected-ns')
+    ).toBe('/workloads/replicasets/api-7d9?clusterId=cluster-a&namespace=selected-ns')
     expect(
       buildRelatedResourcePath(
         { kind: 'ReplicationController', name: 'legacy', namespace: 'team-a' },
         null,
+        'cluster-a',
       ),
-    ).toBe('/workloads/replicationcontrollers/legacy?namespace=team-a')
+    ).toBe('/workloads/replicationcontrollers/legacy?clusterId=cluster-a&namespace=team-a')
     expect(localizeRelatedResourceKind('ReplicationController', 'zh_CN')).toBe(
       'ReplicationController',
     )
@@ -30,5 +36,11 @@ describe('workload relation paths', () => {
     expect(
       buildRelatedResourcePath({ kind: 'GRPCRoute', name: 'rpc', namespace: 'team-a' }, null),
     ).toBe('/network/gateway-api/grpcroutes/rpc?namespace=team-a')
+  })
+
+  it('keeps cluster and namespace scope in workload detail links', () => {
+    expect(buildWorkloadDetailPath('pods', 'api/server', null, 'team/a', 'cluster/a')).toBe(
+      '/workloads/pods/api%2Fserver?clusterId=cluster%2Fa&namespace=team%2Fa',
+    )
   })
 })

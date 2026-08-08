@@ -34,11 +34,36 @@ This reference is the concise operating standard for `soha-web` theme, layout, m
 - Use `StatusTag` for stateful values and `MetadataTag` for categorical labels. Both use compact
   Ant Design `filled` tags with semantic colors; ordinary management pages must not add outlined
   tag variants or local color maps.
+- In scan-heavy tables, keep the primary identity as text or a link, then use a small number of
+  colored tags for provider, location, address, and specification metadata. Limit each color to a
+  stable meaning and summarize overflowing values instead of widening rows indefinitely.
+- Do not repeat information with decorative row icons, provider-colored side borders, or accent
+  rails when the same provider or resource type is already visible as text or a tag.
 - Wrap groups of tags at the collection level while keeping each tag on one line. Large value
   sets need an overflow or summary treatment instead of unbounded table-row growth.
 - Top-level `AdminTable` lists keep the shared pagination footer and summary, including when the
   backend uses cursors. Toolbar previous/next buttons do not replace the footer. Disable
   pagination only for intentional embedded tables.
+
+## Management Table Toolbars
+
+- Keep toolbar controls at the global control height and vertically centered inside the shared
+  compact toolbar rhythm. Use `ManagementTableToolbar`; do not set page-local button heights.
+- Keep the toolbar and table header as one continuous panel surface. Do not add a divider between
+  them unless the toolbar contains a distinct titled section rather than ordinary list actions.
+
+## Detail Overviews
+
+- Use one restrained overview panel before logs, tasks, metrics, and console content. Start with
+  resource identity and compact provider/status tags, then group fields by operator task such as
+  runtime hardware, network identity, and initialization/source.
+- Use `Descriptions` or an equivalent responsive grid for label-value alignment. Render status
+  with `StatusTag`, categorical values with `MetadataTag`, and long identifiers as selectable or
+  wrap-safe text.
+- Add depth with the shared panel radius and shadow only. Do not add provider-colored side rails,
+  oversized resource icons, nested cards, or decorative elements that duplicate visible metadata.
+- Show unavailable values as `-`; show actionable collection limitations with a compact `Alert`
+  near the affected section rather than hiding missing data.
 
 ## Resource Tabs
 
@@ -57,11 +82,12 @@ This reference is the concise operating standard for `soha-web` theme, layout, m
   generic `Detail` label when a stable route parameter is available.
 - Keep workbench, menu-group, and menu labels sourced from the runtime navigation. Route-only
   ancestors use their route titles so a shared menu ID does not collapse distinct list levels.
-- Standard K8s resource detail pages must not repeat the resource kind and name below a
-  breadcrumb that already identifies the resource. Keep workload mutation commands such as
-  restart and scale in the management list table's row or batch actions instead of the detail
-  tab bar. Keep a dedicated detail header only when it carries additional workspace context or
-  cross-page actions that the breadcrumb and tabs cannot represent.
+- Detail pages must not repeat the current application or resource name, generic explanatory
+  copy, or a back-to-list action below a breadcrumb that already provides that identity and
+  navigation. Keep a dedicated detail header only when it adds workspace context or cross-page
+  actions that the breadcrumb, tabs, and surrounding management surface cannot represent.
+- Keep K8s workload mutation commands such as restart and scale in the management list table's
+  row or batch actions instead of the detail tab bar.
 
 ## Shared Query Behavior
 

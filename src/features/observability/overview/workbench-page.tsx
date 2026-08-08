@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import {
   AlertOutlined,
   DatabaseOutlined,
+  DashboardOutlined,
   FileSearchOutlined,
   LineChartOutlined,
   ShareAltOutlined,
@@ -106,6 +107,12 @@ export function ObservabilityWorkbenchPage() {
                 onClick={() => navigate('/monitoring-workbench/metrics')}
               >
                 指标
+              </Button>
+              <Button
+                icon={<DashboardOutlined />}
+                onClick={() => navigate('/monitoring-workbench/dashboards')}
+              >
+                仪表盘
               </Button>
               <Button
                 icon={<ShareAltOutlined />}

@@ -1,0 +1,46 @@
+.soha-software-library-shell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.soha-software-source-segmented {
+  margin-bottom: 20px;
+}
+
+.soha-software-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 16px;
+}
+
+.soha-software-storage-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 40px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--soha-border-color);
+}
+
+.soha-software-storage-summary > div {
+  display: grid;
+  min-width: 132px;
+  gap: 2px;
+}
+
+.soha-software-upload-form .ant-upload-list {
+  max-width: 100%;
+}
+
+.soha-software-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 8px;
+}
+
+@media (max-width: 720px) {
+  .soha-software-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

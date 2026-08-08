@@ -63,6 +63,7 @@ export function runtimeServiceSelector({
 }) {
   return (
     <Select
+      aria-label="服务"
       disabled={disabled}
       loading={loading}
       options={options}

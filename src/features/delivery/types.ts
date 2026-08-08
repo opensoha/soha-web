@@ -33,11 +33,14 @@ import type {
 } from './domain-types'
 import type { Cluster, DeploymentDetail, Pod, ResourceMetrics } from '@/types/platform'
 import type { GatewayManifest, GatewayTool } from '@/features/copilot'
+import type {
+  RegistryConnection,
+  RegistryConnectionInput,
+} from '@opensoha/contracts/gen/ts/sohaapi'
 
 export type * from './domain-types'
 
 export type DeliveryRecordInput = Record<string, unknown>
-export type DeliveryStringRecordInput = Record<string, string>
 
 export interface DeliveryUpdateInput<TPayload> {
   id: string
@@ -98,16 +101,11 @@ export interface ReleaseTriggerInput {
   imageTag?: string
   releaseName?: string
   actionKind?: string
+  valuesContent?: string
 }
 
-export interface RegistryRecord {
-  id: string
-  name: string
-  type: string
-  endpoint: string
-  username: string
-  status: string
-}
+export type RegistryRecord = RegistryConnection
+export type RegistryInput = RegistryConnectionInput
 
 export interface DeliveryListParams {
   applicationId?: string
@@ -132,6 +130,8 @@ export interface GitCommitParams extends GitReferenceParams {
 export interface DeliveryTargetCandidateParams {
   clusterId: string
   namespace: string
+  search?: string
+  limit?: number
 }
 
 export interface DeliveryExecutionLog {
@@ -165,18 +165,10 @@ export interface DeliveryDraftInput {
 }
 
 export type DeliveryRuntimeKind =
-  | 'build'
-  | 'workflow'
-  | 'release'
-  | 'release_bundle'
-  | 'execution_task'
+  'build' | 'workflow' | 'release' | 'release_bundle' | 'execution_task'
 
 export type DeliveryRuntimeRecord =
-  | BuildRecord
-  | WorkflowRun
-  | ReleaseRecord
-  | ReleaseBundle
-  | ExecutionTask
+  BuildRecord | WorkflowRun | ReleaseRecord | ReleaseBundle | ExecutionTask
 
 export type DeliveryRuntimeDetail = RuntimeObjectDetail<DeliveryRuntimeRecord>
 export type RuntimeKind = DeliveryRuntimeKind
@@ -232,7 +224,6 @@ export type DeliveryWorkflowTemplateList = WorkflowTemplate[]
 export type DeliveryBlueprintList = DeliveryBlueprint[]
 export type DeliveryWorkflowList = WorkflowRun[]
 export type DeliveryReleaseList = ReleaseRecord[]
-export type DeliveryRegistryList = RegistryRecord[]
 export type DeliveryReleaseBoard = ReleaseBoardEntry[]
 export type DeliveryReleaseBundleList = ReleaseBundle[]
 export type DeliveryExecutionTaskList = ExecutionTask[]

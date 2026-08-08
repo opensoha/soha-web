@@ -10,41 +10,219 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BuildDetailPage } from './builds/detail-page'
 import { ExecutionTaskDetailPage } from './execution-tasks/detail-page'
 import { ReleaseDetailPage } from './releases/detail-page'
+import { ApplicationWorkloadDetailPage } from './runtime/workload-detail-page'
 
 const testState = vi.hoisted(() => ({
   missingKind: '' as '' | 'build' | 'workflow' | 'release' | 'release_bundle' | 'execution_task',
   apiGet: vi.fn(async (path: string) => {
-    const application = { id: 'app-1', name: 'Checkout Platform', key: 'checkout-platform', group: 'commerce', language: 'go', enabled: true, createdAt: '2026-05-01T00:00:00Z', updatedAt: '2026-05-08T00:00:00Z' }
-    const binding = { id: 'binding-1', applicationId: 'app-1', environmentId: 'env-1', environmentKey: 'test', workflowTemplateId: 'wf-template-1', buildPolicy: { sourceId: 'source-api' }, releasePolicy: { requiresApproval: false }, targets: [], createdAt: '2026-05-01T00:00:00Z', updatedAt: '2026-05-08T00:00:00Z' }
-    const environment = { id: 'env-1', key: 'test', name: '测试环境', stageLevel: 1, sortOrder: 1, isProduction: false, requiresApproval: false, enabled: true, createdAt: '2026-05-01T00:00:00Z', updatedAt: '2026-05-08T00:00:00Z' }
-    const workflowTemplate = { id: 'wf-template-1', key: 'release-dag', name: 'Release DAG', enabled: true, createdAt: '2026-05-01T00:00:00Z', updatedAt: '2026-05-08T00:00:00Z' }
+    const application = {
+      id: 'app-1',
+      name: 'Checkout Platform',
+      key: 'checkout-platform',
+      group: 'commerce',
+      language: 'go',
+      enabled: true,
+      createdAt: '2026-05-01T00:00:00Z',
+      updatedAt: '2026-05-08T00:00:00Z',
+    }
+    const binding = {
+      id: 'binding-1',
+      applicationId: 'app-1',
+      environmentId: 'env-1',
+      environmentKey: 'test',
+      workflowTemplateId: 'wf-template-1',
+      buildPolicy: { sourceId: 'source-api' },
+      releasePolicy: { requiresApproval: false },
+      targets: [],
+      createdAt: '2026-05-01T00:00:00Z',
+      updatedAt: '2026-05-08T00:00:00Z',
+    }
+    const environment = {
+      id: 'env-1',
+      key: 'test',
+      name: '测试环境',
+      stageLevel: 1,
+      sortOrder: 1,
+      isProduction: false,
+      requiresApproval: false,
+      enabled: true,
+      createdAt: '2026-05-01T00:00:00Z',
+      updatedAt: '2026-05-08T00:00:00Z',
+    }
+    const workflowTemplate = {
+      id: 'wf-template-1',
+      key: 'release-dag',
+      name: 'Release DAG',
+      enabled: true,
+      createdAt: '2026-05-01T00:00:00Z',
+      updatedAt: '2026-05-08T00:00:00Z',
+    }
     const links = {
       application: '/applications/app-1?tab=delivery',
       audit: '/system/audit?metadataKey=runtime.execution_task.id&metadataValue=task-1',
       operations: '/system/operations?metadataKey=runtime.execution_task.id&metadataValue=task-1',
       artifacts: '/delivery/artifacts?executionTaskId=task-1',
     }
-    const permissions = { canViewArtifacts: true, canViewAudit: true, canViewOperations: true, canRetry: true, canCancel: true }
+    const permissions = {
+      canViewArtifacts: true,
+      canViewAudit: true,
+      canViewOperations: true,
+      canRetry: true,
+      canCancel: true,
+    }
     if (path === '/delivery/runtime/builds/build-1') {
-      const object = { id: 'build-1', applicationId: 'app-1', sourceSystem: 'application', status: 'completed', metadata: { applicationEnvironmentId: 'binding-1' }, createdAt: '2026-05-08T00:00:00Z', updatedAt: '2026-05-08T01:00:00Z' }
-      return { data: { kind: 'build', id: 'build-1', object, application, binding, environment, workflowTemplate, artifacts: [], evidence: {}, links: { ...links, artifacts: '/delivery/artifacts' }, permissions } }
+      const object = {
+        id: 'build-1',
+        applicationId: 'app-1',
+        sourceSystem: 'application',
+        status: 'completed',
+        metadata: { applicationEnvironmentId: 'binding-1' },
+        createdAt: '2026-05-08T00:00:00Z',
+        updatedAt: '2026-05-08T01:00:00Z',
+      }
+      return {
+        data: {
+          kind: 'build',
+          id: 'build-1',
+          object,
+          application,
+          binding,
+          environment,
+          workflowTemplate,
+          artifacts: [],
+          evidence: {},
+          links: { ...links, artifacts: '/delivery/artifacts' },
+          permissions,
+        },
+      }
     }
     if (path === '/delivery/runtime/releases/release-1') {
-      const object = { id: 'release-1', applicationId: 'app-1', clusterId: 'cluster-a', namespace: 'checkout', deploymentName: 'checkout-api', status: 'completed', metadata: { applicationEnvironmentId: 'binding-1' }, createdAt: '2026-05-08T00:00:00Z', updatedAt: '2026-05-08T01:00:00Z' }
-      return { data: { kind: 'release', id: 'release-1', object, application, binding, environment, workflowTemplate, artifacts: [], evidence: {}, links, permissions } }
+      const object = {
+        id: 'release-1',
+        applicationId: 'app-1',
+        clusterId: 'cluster-a',
+        namespace: 'checkout',
+        deploymentName: 'checkout-api',
+        status: 'completed',
+        metadata: { applicationEnvironmentId: 'binding-1' },
+        createdAt: '2026-05-08T00:00:00Z',
+        updatedAt: '2026-05-08T01:00:00Z',
+      }
+      return {
+        data: {
+          kind: 'release',
+          id: 'release-1',
+          object,
+          application,
+          binding,
+          environment,
+          workflowTemplate,
+          artifacts: [],
+          evidence: {},
+          links,
+          permissions,
+        },
+      }
     }
     if (path === '/delivery/runtime/execution-tasks/task-1') {
-      const object = { id: 'task-1', releaseBundleId: 'bundle-1', applicationId: 'app-1', applicationEnvironmentId: 'binding-1', taskKind: 'build_release', providerKind: 'ci_agent_runner', targetKind: 'k8s_workload', status: 'running', maxRetries: 1, attemptCount: 1, timeoutSeconds: 600, createdAt: '2026-05-08T00:00:00Z', updatedAt: '2026-05-08T01:00:00Z' }
-      const artifacts = [{ id: 'artifact-2', kind: 'image', name: 'checkout-api', ref: 'registry.example.com/checkout/api:1.2.3', status: 'completed' }]
-      const evidence = { logs: [{ id: 'log-1', logLevel: 'info', message: 'task running', createdAt: '2026-05-08T01:00:00Z' }] }
-      return { data: { kind: 'execution_task', id: 'task-1', object, application, binding, environment, workflowTemplate, artifacts, evidence, links, permissions } }
+      const object = {
+        id: 'task-1',
+        releaseBundleId: 'bundle-1',
+        applicationId: 'app-1',
+        applicationEnvironmentId: 'binding-1',
+        taskKind: 'build_release',
+        providerKind: 'ci_agent_runner',
+        targetKind: 'k8s_workload',
+        status: 'running',
+        maxRetries: 1,
+        attemptCount: 1,
+        timeoutSeconds: 600,
+        createdAt: '2026-05-08T00:00:00Z',
+        updatedAt: '2026-05-08T01:00:00Z',
+      }
+      const artifacts = [
+        {
+          id: 'artifact-2',
+          kind: 'image',
+          name: 'checkout-api',
+          ref: 'registry.example.com/checkout/api:1.2.3',
+          status: 'completed',
+        },
+      ]
+      const evidence = {
+        logs: [
+          {
+            id: 'log-1',
+            logLevel: 'info',
+            message: 'task running',
+            createdAt: '2026-05-08T01:00:00Z',
+          },
+        ],
+      }
+      return {
+        data: {
+          kind: 'execution_task',
+          id: 'task-1',
+          object,
+          application,
+          binding,
+          environment,
+          workflowTemplate,
+          artifacts,
+          evidence,
+          links,
+          permissions,
+        },
+      }
+    }
+    if (
+      path ===
+      '/applications/app-1/application-environments/binding-1/workloads/checkout-api/runtime'
+    ) {
+      return {
+        data: {
+          application,
+          binding,
+          environment,
+          workload: {
+            applicationEnvironmentId: 'binding-1',
+            clusterId: 'cluster-a',
+            namespace: 'checkout',
+            workloadKind: 'Deployment',
+            workloadName: 'checkout-api',
+            desiredReplicas: 2,
+            readyReplicas: 2,
+            updatedReplicas: 2,
+            availableReplicas: 2,
+          },
+          deployment: {
+            name: 'checkout-api',
+            namespace: 'checkout',
+            desiredReplicas: 2,
+            readyReplicas: 2,
+            updatedReplicas: 2,
+            availableReplicas: 2,
+            observedGeneration: 3,
+            strategy: 'RollingUpdate',
+            labels: { app: 'checkout-api' },
+          },
+          pods: [],
+          services: [],
+          ingresses: [],
+        },
+      }
     }
     throw new Error(`Unhandled GET ${path}`)
   }),
 }))
 
 vi.mock('@/services/api-client', () => ({
-  api: { get: (path: string) => testState.apiGet(path), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
+  api: {
+    get: (path: string) => testState.apiGet(path),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+  },
 }))
 
 vi.mock('@/services/api-error', () => ({
@@ -52,7 +230,20 @@ vi.mock('@/services/api-error', () => ({
 }))
 
 vi.mock('@/features/auth/permission-snapshot', () => ({
-  usePermissionSnapshot: () => ({ data: { data: { permissionKeys: ['delivery.applications.view', 'delivery.workflows.view', 'delivery.releases.view', 'delivery.release-bundles.view', 'delivery.execution-tasks.view'] } }, isLoading: false }),
+  usePermissionSnapshot: () => ({
+    data: {
+      data: {
+        permissionKeys: [
+          'delivery.applications.view',
+          'delivery.workflows.view',
+          'delivery.releases.view',
+          'delivery.release-bundles.view',
+          'delivery.execution-tasks.view',
+        ],
+      },
+    },
+    isLoading: false,
+  }),
   hasPermission: () => true,
 }))
 
@@ -77,6 +268,10 @@ async function renderWithProviders(node: ReactNode, route: string) {
               <Route path="/releases/:releaseId" element={node} />
               <Route path="/delivery/release-bundles/:releaseBundleId" element={node} />
               <Route path="/delivery/execution-tasks/:executionTaskId" element={node} />
+              <Route
+                path="/applications/:applicationId/application-environments/:applicationEnvironmentId/workloads/:workloadName"
+                element={node}
+              />
             </Routes>
           </MemoryRouter>
         </QueryClientProvider>
@@ -94,6 +289,12 @@ async function renderWithProviders(node: ReactNode, route: string) {
 describe('delivery runtime detail pages', () => {
   beforeEach(() => {
     testState.apiGet.mockClear()
+    class ResizeObserverMock {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal('ResizeObserver', ResizeObserverMock)
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
       value: vi.fn().mockImplementation(() => ({
@@ -128,7 +329,10 @@ describe('delivery runtime detail pages', () => {
   })
 
   it('loads an execution task detail route and renders logs and artifacts', async () => {
-    const container = await renderWithProviders(<ExecutionTaskDetailPage />, '/delivery/execution-tasks/task-1')
+    const container = await renderWithProviders(
+      <ExecutionTaskDetailPage />,
+      '/delivery/execution-tasks/task-1',
+    )
     expect(testState.apiGet).toHaveBeenCalledWith('/delivery/runtime/execution-tasks/task-1')
     expect(testState.apiGet).not.toHaveBeenCalledWith('/delivery/execution-tasks')
     expect(testState.apiGet).not.toHaveBeenCalledWith('/delivery/execution-tasks/task-1/artifacts')
@@ -151,5 +355,23 @@ describe('delivery runtime detail pages', () => {
     expect(testState.apiGet).toHaveBeenCalledWith('/delivery/runtime/releases/release-missing')
     expect(container.textContent).toContain('未找到')
     expect(container.textContent).toContain('Release')
+  })
+
+  it('uses the global resource detail shell for application workloads', async () => {
+    const container = await renderWithProviders(
+      <ApplicationWorkloadDetailPage />,
+      '/applications/app-1/application-environments/binding-1/workloads/checkout-api',
+    )
+
+    expect(container.querySelector('.soha-management-detail-header')).toBeNull()
+    expect(container.querySelector('.soha-page.soha-workload-detail-page')).not.toBeNull()
+    expect(
+      container.querySelector('.soha-page > .soha-resource-tabs.soha-workload-detail-tabs'),
+    ).not.toBeNull()
+    expect(
+      container.querySelectorAll('.soha-management-panel-card .soha-management-panel-card'),
+    ).toHaveLength(0)
+    expect(container.textContent).toContain('checkout-api')
+    expect(container.textContent).toContain('RollingUpdate')
   })
 })

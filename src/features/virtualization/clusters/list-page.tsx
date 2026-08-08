@@ -28,7 +28,7 @@ import {
 import { formatDateTime } from '@/utils/time'
 import { computeQueries, latestTaskForResource, ResourceTaskActions } from '@/features/compute'
 import { tableColumnPresets } from '@/utils/table-columns'
-import { BooleanTag, StatusTag } from '@/components/status-tag'
+import { BooleanTag, MetadataTag, StatusTag } from '@/components/status-tag'
 import {
   ManagementIconButton,
   ManagementQueryField,
@@ -283,7 +283,14 @@ export function VirtualizationClustersPage() {
       ellipsis: tableEllipsis,
       width: 180,
     },
-    { title: 'Provider', dataIndex: 'provider', render: providerLabel, width: 120 },
+    {
+      title: 'Provider',
+      dataIndex: 'provider',
+      render: (value: string) => (
+        <MetadataTag label={providerLabel(value)} tone={value === 'pve' ? 'gold' : 'blue'} />
+      ),
+      width: 120,
+    },
     {
       title: '接入目标',
       render: (_value, record) =>
@@ -303,66 +310,18 @@ export function VirtualizationClustersPage() {
     },
     {
       title: '风险',
-      render: (_value, record) => tableTooltipText(riskReasons(record).join(' / ') || '正常'),
-      ellipsis: tableEllipsis,
-      width: 240,
-    },
-    {
-      title: '风险等级',
-      dataIndex: 'riskLevel',
-      render: (value: string | undefined) =>
-        value ? <StatusTag value={value} /> : '-',
-      width: 120,
-    },
-    {
-      title: '最近失败同步',
       render: (_value, record) => {
-        const failedSync = failedSyncForConnection(record.id)
-        return failedSync
-          ? tableTooltipTextButton(latestNonEmptyOperationMessage(failedSync), () =>
-              setSelectedConnectionOperation(failedSync),
-            )
-          : '-'
+        const reasons = riskReasons(record).join(' / ') || '正常'
+        const value = record.riskLevel || (reasons === '正常' ? 'normal' : 'warning')
+        return (
+          <Tooltip title={reasons}>
+            <span>
+              <StatusTag value={value} label={value === 'normal' ? '正常' : value} />
+            </span>
+          </Tooltip>
+        )
       },
-      ellipsis: tableEllipsis,
-      width: 260,
-    },
-    {
-      title: '最近异常任务',
-      render: (_value, record) => {
-        const abnormal = latestAbnormalForConnection(record.id)
-        return abnormal
-          ? tableTooltipTextButton(operationKind(abnormal), () =>
-              setSelectedConnectionOperation(abnormal),
-            )
-          : '-'
-      },
-      ellipsis: tableEllipsis,
-      width: 180,
-    },
-    {
-      title: '凭证',
-      dataIndex: 'credentialConfigured',
-      render: (value: boolean | undefined) =>
-        <BooleanTag
-          value={value !== false}
-          trueLabel="已配置"
-          falseLabel="未配置"
-          falseColor="error"
-        />,
-      width: 120,
-    },
-    {
-      title: '最近任务',
-      fixed: 'right',
-      width: 188,
-      render: (_value, record) => (
-        <ResourceTaskActions
-          task={latestTaskForResource(computeTasksQuery.data?.items ?? [], 'connection', record.id)}
-          resourceKind="connection"
-          resourceId={record.id}
-        />
-      ),
+      width: 110,
     },
     {
       ...tableColumnPresets.datetime,
@@ -370,6 +329,17 @@ export function VirtualizationClustersPage() {
       dataIndex: 'lastSyncedAt',
       render: formatDateTime,
       width: 180,
+    },
+    {
+      ...tableColumnPresets.task,
+      title: '最近任务',
+      render: (_value, record) => (
+        <ResourceTaskActions
+          task={latestTaskForResource(computeTasksQuery.data?.items ?? [], 'connection', record.id)}
+          resourceKind="connection"
+          resourceId={record.id}
+        />
+      ),
     },
     {
       ...tableColumnPresets.action,
@@ -528,7 +498,6 @@ export function VirtualizationClustersPage() {
         loading={clustersQuery.isLoading || clusterOperationsQuery.isLoading}
         dataSource={clusterRows}
         columns={columns}
-        scroll={{ x: 2158 }}
         paginationSummary={localTableSummary(clusterRows.length, clustersQuery.data?.length ?? 0)}
         expandable={{
           expandedRowRender: (record: VirtualizationCluster) => {
@@ -550,12 +519,30 @@ export function VirtualizationClustersPage() {
                   {record.defaultNamespace || '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="校验 TLS">
-                  {record.verifyTls === false ? '关闭' : '开启'}
+                  <BooleanTag
+                    value={record.verifyTls !== false}
+                    trueLabel="开启"
+                    falseLabel="关闭"
+                  />
                 </Descriptions.Item>
                 <Descriptions.Item label="最近同步">
                   {formatDateTime(record.lastSyncedAt)}
                 </Descriptions.Item>
                 <Descriptions.Item label="Region">{record.region || '-'}</Descriptions.Item>
+                <Descriptions.Item label="风险等级">
+                  <StatusTag
+                    value={record.riskLevel || 'normal'}
+                    label={record.riskLevel || '正常'}
+                  />
+                </Descriptions.Item>
+                <Descriptions.Item label="凭证">
+                  <BooleanTag
+                    value={record.credentialConfigured !== false}
+                    trueLabel="已配置"
+                    falseLabel="未配置"
+                    falseColor="error"
+                  />
+                </Descriptions.Item>
                 <Descriptions.Item label="风险说明" span="filled">
                   {riskReasons(record).join(' / ') || '正常'}
                 </Descriptions.Item>
@@ -590,12 +577,18 @@ export function VirtualizationClustersPage() {
                 )}
                 <Descriptions.Item label="最近失败同步" span="filled">
                   {failedSync
-                    ? `${operationKind(failedSync)} · ${latestNonEmptyOperationMessage(failedSync)}`
+                    ? tableTooltipTextButton(
+                        `${operationKind(failedSync)} · ${latestNonEmptyOperationMessage(failedSync)}`,
+                        () => setSelectedConnectionOperation(failedSync),
+                      )
                     : '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="最近异常任务" span="filled">
                   {latestAbnormal
-                    ? `${operationKind(latestAbnormal)} · ${latestNonEmptyOperationMessage(latestAbnormal)}`
+                    ? tableTooltipTextButton(
+                        `${operationKind(latestAbnormal)} · ${latestNonEmptyOperationMessage(latestAbnormal)}`,
+                        () => setSelectedConnectionOperation(latestAbnormal),
+                      )
                     : '-'}
                 </Descriptions.Item>
               </Descriptions>

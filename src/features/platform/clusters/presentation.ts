@@ -25,6 +25,37 @@ export function formatConnectionMode(value: string | undefined, localeCode: stri
   return value || '-'
 }
 
+const clusterRuntimeValueLabels: Record<string, [zh: string, en: string]> = {
+  agent: ['Agent', 'Agent'],
+  api: ['API', 'API'],
+  bearer: ['Bearer Token', 'Bearer Token'],
+  token: ['Token', 'Token'],
+  kubeconfig: ['Kubeconfig', 'Kubeconfig'],
+  agent_summary_and_remote_pull: ['Agent 摘要与远程拉取', 'Agent summary and remote pull'],
+  informer_cache_then_live_fallback: [
+    'Informer 缓存，实时读取回退',
+    'Informer cache with live fallback',
+  ],
+  watch: ['持续监听', 'Watch'],
+  ready: ['就绪', 'Ready'],
+  warming: ['预热中', 'Warming'],
+  disabled: ['已禁用', 'Disabled'],
+  healthy: ['正常', 'Healthy'],
+  connected: ['已连接', 'Connected'],
+  disconnected: ['未连接', 'Disconnected'],
+  failed: ['失败', 'Failed'],
+  error: ['异常', 'Error'],
+  unknown: ['未知', 'Unknown'],
+}
+
+export function formatClusterRuntimeValue(value: string | undefined, localeCode: string) {
+  const normalized = value?.trim().toLowerCase()
+  if (!normalized) return '-'
+  const labels = clusterRuntimeValueLabels[normalized]
+  if (labels) return labels[localeCode === 'zh_CN' ? 0 : 1]
+  return normalized.replace(/[_-]+/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase())
+}
+
 export function formatClusterHealth(value: string | undefined, localeCode: string) {
   const normalized = (value || '').trim().toLowerCase()
   if (localeCode !== 'zh_CN') return value || 'unknown'

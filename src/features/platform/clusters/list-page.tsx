@@ -14,8 +14,16 @@ import {
   Spin,
   Typography,
 } from 'antd'
-import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons'
+import {
+  CopyOutlined,
+  DeleteOutlined,
+  DownloadOutlined,
+  EditOutlined,
+  EyeOutlined,
+  PlusOutlined,
+} from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import type { AgentInstallation } from '@opensoha/contracts/gen/ts/sohaapi'
 import { AdminTable } from '@/components/admin-table'
 import {
   ManagementBatchBar,
@@ -56,6 +64,7 @@ export function ClustersPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [modalVisible, setModalVisible] = useState(false)
+  const [agentInstallation, setAgentInstallation] = useState<AgentInstallation | null>(null)
   const [editingCluster, setEditingCluster] = useState<Cluster | null>(null)
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>('direct_kubeconfig')
   const [searchText, setSearchText] = useState('')
@@ -82,6 +91,7 @@ export function ClustersPage() {
     enabled: Boolean(editDetailOptions.enabled) && modalVisible && Boolean(editingCluster),
   })
   const createMutation = useMutation(clusterMutations.create(queryClient))
+  const agentInstallationMutation = useMutation(clusterMutations.createAgentInstallation())
   const updateMutation = useMutation(clusterMutations.update(queryClient))
   const deleteMutation = useMutation(clusterMutations.remove(queryClient))
   const batchDeleteMutation = useMutation(clusterMutations.removeMany(queryClient))
@@ -200,9 +210,7 @@ export function ClustersPage() {
       title: localeCode === 'zh_CN' ? '连接方式' : 'Mode',
       dataIndex: 'connectionMode',
       width: 104,
-      render: (value: string) => (
-        <MetadataTag label={formatConnectionMode(value, localeCode)} />
-      ),
+      render: (value: string) => <MetadataTag label={formatConnectionMode(value, localeCode)} />,
     },
     {
       ...tableColumnPresets.datetime,
@@ -215,7 +223,7 @@ export function ClustersPage() {
       ...tableColumnPresets.action,
       title: '操作',
       dataIndex: 'id',
-      width: 112,
+      width: 144,
       render: (_: unknown, record: Cluster) => (
         <Space size={2} className="soha-cluster-action-links">
           <ManagementIconButton
@@ -225,6 +233,28 @@ export function ClustersPage() {
             tooltip={localeCode === 'zh_CN' ? '详情' : 'Detail'}
             onClick={() => navigate(`/clusters/${record.id}`)}
           />
+          {canUpdate ? (
+            record.connectionMode === 'agent' ? (
+              <ManagementIconButton
+                aria-label={
+                  localeCode === 'zh_CN' ? '生成 Agent 安装命令' : 'Generate Agent install command'
+                }
+                icon={<DownloadOutlined />}
+                loading={
+                  agentInstallationMutation.isPending &&
+                  agentInstallationMutation.variables?.scope.clusterId === record.id
+                }
+                size="small"
+                tooltip={localeCode === 'zh_CN' ? '安装 Agent' : 'Install Agent'}
+                onClick={() =>
+                  agentInstallationMutation.mutate(targetFor(record.id), {
+                    onSuccess: setAgentInstallation,
+                    onError: (error) => void message.error(error.message),
+                  })
+                }
+              />
+            ) : null
+          ) : null}
           {canUpdate ? (
             <ManagementIconButton
               aria-label={localeCode === 'zh_CN' ? '编辑集群' : 'Edit cluster'}
@@ -239,30 +269,31 @@ export function ClustersPage() {
           ) : null}
           {canDelete ? (
             <Popconfirm
-            title={
-              localeCode === 'zh_CN'
-                ? `确认删除集群 ${record.name}？`
-                : `Delete cluster ${record.name}?`
-            }
-            description={
-              localeCode === 'zh_CN'
-                ? '删除后会移除该集群在 Soha 中的注册信息。'
-                : 'This removes the cluster registration from Soha.'
-            }
-            okText={localeCode === 'zh_CN' ? '删除' : 'Delete'}
-            cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
-            okButtonProps={{
-              danger: true,
-              loading:
-                deleteMutation.isPending && deleteMutation.variables?.scope.clusterId === record.id,
-            }}
-            placement="topRight"
-            onConfirm={() =>
-              deleteMutation.mutate(targetFor(record.id), {
-                onSuccess: () => void message.success('集群已删除'),
-                onError: (error) => void message.error(error.message),
-              })
-            }
+              title={
+                localeCode === 'zh_CN'
+                  ? `确认删除集群 ${record.name}？`
+                  : `Delete cluster ${record.name}?`
+              }
+              description={
+                localeCode === 'zh_CN'
+                  ? '删除后会移除该集群在 Soha 中的注册信息。'
+                  : 'This removes the cluster registration from Soha.'
+              }
+              okText={localeCode === 'zh_CN' ? '删除' : 'Delete'}
+              cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
+              okButtonProps={{
+                danger: true,
+                loading:
+                  deleteMutation.isPending &&
+                  deleteMutation.variables?.scope.clusterId === record.id,
+              }}
+              placement="topRight"
+              onConfirm={() =>
+                deleteMutation.mutate(targetFor(record.id), {
+                  onSuccess: () => void message.success('集群已删除'),
+                  onError: (error) => void message.error(error.message),
+                })
+              }
             >
               <ManagementIconButton
                 aria-label={localeCode === 'zh_CN' ? '删除集群' : 'Delete cluster'}
@@ -310,28 +341,13 @@ export function ClustersPage() {
       connectionMode:
         ((detail?.connection.mode || editingCluster.connectionMode) as ConnectionMode) ||
         'direct_kubeconfig',
-      agentEndpoint: detail?.connection.endpoint || '',
       prometheusBaseUrl: detail?.monitoring.prometheus.baseUrl || '',
     }
   }, [editingCluster, clusterDetailQuery.data])
 
   const formKey = editingCluster
-    ? `cluster-edit:${editingCluster.id}:${clusterDetailQuery.data ? 'ready' : 'loading'}:${connectionMode}`
-    : `cluster-create:${connectionMode}`
-
-  const agentConfigExample = `app:
-  name: soha-agent
-
-http:
-  addr: :18080
-
-auth:
-  bearer_token: demo-agent-token
-
-kubernetes:
-  kubeconfig: /abs/path/to/kubeconfig
-  context: ""
-`
+    ? `cluster-edit:${editingCluster.id}:${clusterDetailQuery.data ? 'ready' : 'loading'}`
+    : 'cluster-create'
 
   const handleSubmit = (values: Record<string, unknown>) => {
     const provider = typeof values.provider === 'string' ? values.provider.trim() : ''
@@ -360,9 +376,15 @@ kubernetes:
       )
     } else {
       createMutation.mutate(payload, {
-        onSuccess: () => {
+        onSuccess: (cluster) => {
           void message.success('集群创建成功')
           setModalVisible(false)
+          if (values.connectionMode === 'agent') {
+            agentInstallationMutation.mutate(targetFor(cluster.id), {
+              onSuccess: setAgentInstallation,
+              onError: (error) => void message.error(error.message),
+            })
+          }
         },
         onError: (error) => void message.error(error.message),
       })
@@ -493,21 +515,21 @@ kubernetes:
         </Button>
         {canDelete ? (
           <Popconfirm
-          title={
-            localeCode === 'zh_CN'
-              ? `确认删除 ${selectedRowKeys.length} 个集群？`
-              : `Delete ${selectedRowKeys.length} clusters?`
-          }
-          description={
-            localeCode === 'zh_CN'
-              ? '删除后会移除这些集群在 Soha 中的注册信息。'
-              : 'This removes these cluster registrations from Soha.'
-          }
-          okText={localeCode === 'zh_CN' ? '删除' : 'Delete'}
-          cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
-          okButtonProps={{ danger: true }}
-          placement="top"
-          onConfirm={handleBatchDelete}
+            title={
+              localeCode === 'zh_CN'
+                ? `确认删除 ${selectedRowKeys.length} 个集群？`
+                : `Delete ${selectedRowKeys.length} clusters?`
+            }
+            description={
+              localeCode === 'zh_CN'
+                ? '删除后会移除这些集群在 Soha 中的注册信息。'
+                : 'This removes these cluster registrations from Soha.'
+            }
+            okText={localeCode === 'zh_CN' ? '删除' : 'Delete'}
+            cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
+            okButtonProps={{ danger: true }}
+            placement="top"
+            onConfirm={handleBatchDelete}
           >
             <Button autoInsertSpace={false} size="small" danger>
               {localeCode === 'zh_CN' ? '批量删除' : 'Batch Delete'}
@@ -585,6 +607,48 @@ kubernetes:
       />
 
       <Modal
+        title={localeCode === 'zh_CN' ? 'Agent 安装命令' : 'Agent install command'}
+        open={Boolean(agentInstallation)}
+        destroyOnHidden
+        onCancel={() => setAgentInstallation(null)}
+        footer={null}
+      >
+        {agentInstallation ? (
+          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+            <Input.TextArea
+              value={agentInstallation.command}
+              readOnly
+              autoSize={{ minRows: 2, maxRows: 5 }}
+            />
+            <Space>
+              <Button
+                icon={<CopyOutlined />}
+                onClick={() => {
+                  void navigator.clipboard
+                    .writeText(agentInstallation.command)
+                    .then(() =>
+                      message.success(localeCode === 'zh_CN' ? '命令已复制' : 'Command copied'),
+                    )
+                    .catch(() => message.error(localeCode === 'zh_CN' ? '复制失败' : 'Copy failed'))
+                }}
+              >
+                {localeCode === 'zh_CN' ? '复制' : 'Copy'}
+              </Button>
+              <Text type="secondary">
+                {localeCode === 'zh_CN' ? '有效期至' : 'Expires'}{' '}
+                {formatDateTime(agentInstallation.expiresAt)}
+              </Text>
+            </Space>
+            <div className="soha-form-actions">
+              <Button type="primary" onClick={() => setAgentInstallation(null)}>
+                {localeCode === 'zh_CN' ? '完成' : 'Done'}
+              </Button>
+            </div>
+          </Space>
+        ) : null}
+      </Modal>
+
+      <Modal
         destroyOnHidden
         title={editingCluster ? '编辑集群' : '添加集群'}
         open={modalVisible}
@@ -659,41 +723,7 @@ kubernetes:
                   rows={8}
                 />
               </Form.Item>
-            ) : (
-              <>
-                <Form.Item
-                  name="agentEndpoint"
-                  label="Agent Endpoint"
-                  rules={
-                    editingCluster
-                      ? undefined
-                      : [{ required: true, message: '请输入 Agent Endpoint' }]
-                  }
-                >
-                  <Input
-                    placeholder={
-                      editingCluster ? '留空则沿用现有 endpoint' : 'http://127.0.0.1:18080'
-                    }
-                  />
-                </Form.Item>
-                <Form.Item name="agentToken" label="Agent Token">
-                  <Input.Password
-                    placeholder={
-                      editingCluster
-                        ? '留空则沿用现有 token'
-                        : '与 agent 配置中的 auth.bearer_token 一致'
-                    }
-                  />
-                </Form.Item>
-                <Card className="soha-detail-card">
-                  <div className="soha-detail-meta">
-                    <Text strong>Agent 部署方式</Text>
-                    <pre className="soha-code-block">{agentConfigExample}</pre>
-                    <pre className="soha-code-block">{`go run ./cmd/agent\nKC_AGENT_CONFIG_FILE=/abs/path/to/agent.config.yaml go run ./cmd/agent`}</pre>
-                  </div>
-                </Card>
-              </>
-            )}
+            ) : null}
 
             <Card className="soha-detail-card">
               <div className="soha-detail-meta">

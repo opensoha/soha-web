@@ -75,7 +75,9 @@ export function WorkloadsCronJobsPage() {
       ellipsis: { showTitle: false },
       render: (name: string, record: CronJob) =>
         renderWorkloadNameLink(name, () =>
-          navigate(buildWorkloadDetailPath('cronjobs', name, namespace, record.namespace)),
+          navigate(
+            buildWorkloadDetailPath('cronjobs', name, namespace, record.namespace, clusterId),
+          ),
         ),
     },
     { title: t('common.namespace', 'Namespace'), dataIndex: 'namespace', width: 160 },

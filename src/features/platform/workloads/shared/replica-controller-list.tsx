@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { DeleteOutlined } from '@ant-design/icons'
-import { Popconfirm, message } from 'antd'
+import { App, Popconfirm } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
 import { AdminTable } from '@/components/admin-table'
@@ -41,6 +41,7 @@ export function ReplicaControllerListPage<T extends ReplicaControllerRecord>({
   label: string
 }) {
   const { localeCode } = useI18n()
+  const { message } = App.useApp()
   const { clusterId, namespace } = usePlatformScopeStore()
   const scope = toScopeKey(clusterId, namespace)
   const queryClient = useQueryClient()

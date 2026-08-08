@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/services/api-client'
-import { getOverviewMonitoringSummary, getOverviewWorkload, listOverviewClusters } from './api'
+import { getOverviewMonitoringSummary, getOverviewWorkload } from './api'
 import { platformOverviewKeys } from './keys'
 
 vi.mock('@/services/api-client', () => ({
@@ -16,7 +16,7 @@ describe('platform overview data boundary', () => {
   })
 
   it('preserves overview query tuples', () => {
-    expect(platformOverviewKeys.clusters()).toEqual(['clusters'])
+    expect(platformOverviewKeys.clusters()).toEqual(['platform', 'clusters', 'list'])
     expect(platformOverviewKeys.monitoringSummary()).toEqual(['monitoring-summary'])
     expect(platformOverviewKeys.workload('cluster-1')).toEqual([
       'overview-workload',
@@ -26,14 +26,10 @@ describe('platform overview data boundary', () => {
   })
 
   it('preserves overview wire paths', async () => {
-    vi.mocked(api.get).mockResolvedValueOnce({ data: [{ id: 'cluster-1' }] })
-
-    await expect(listOverviewClusters()).resolves.toEqual([{ id: 'cluster-1' }])
     await getOverviewMonitoringSummary()
     await getOverviewWorkload('cluster-1')
 
-    expect(api.get).toHaveBeenNthCalledWith(1, '/clusters')
-    expect(api.get).toHaveBeenNthCalledWith(2, '/monitoring/summary')
-    expect(api.get).toHaveBeenNthCalledWith(3, '/clusters/cluster-1/workloads/overview')
+    expect(api.get).toHaveBeenNthCalledWith(1, '/monitoring/summary')
+    expect(api.get).toHaveBeenNthCalledWith(2, '/clusters/cluster-1/workloads/overview')
   })
 })

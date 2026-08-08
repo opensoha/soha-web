@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Card, Spin, Tabs, message } from 'antd'
+import { App, Card, Spin, Tabs } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PlatformResourceOverview } from '@/features/platform/shared/resource-overview'
 import { useI18n } from '@/i18n'
@@ -47,6 +47,7 @@ function NetworkYAMLTab({
   target: NetworkTarget
 }) {
   const { localeCode } = useI18n()
+  const { message } = App.useApp()
   const queryClient = useQueryClient()
   const yamlQuery = useQuery(networkQueries.yaml(kind, target.scope, target.name, clusterScoped))
   const updateMutation = useMutation(networkMutations.updateYAML(kind, queryClient))

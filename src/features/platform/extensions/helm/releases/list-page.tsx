@@ -1,5 +1,5 @@
 import { useDeferredValue, useMemo, useState } from 'react'
-import { Alert, Button, Popconfirm, Space, Typography, message } from 'antd'
+import { Alert, App, Button, Popconfirm, Space, Typography } from 'antd'
 import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -34,6 +34,7 @@ const { Text } = Typography
 
 export function HelmReleasesPage() {
   const { t, localeCode } = useI18n()
+  const { message } = App.useApp()
   const { clusterId, namespace } = usePlatformScopeStore()
   const navigate = useNavigate()
   const queryClient = useQueryClient()

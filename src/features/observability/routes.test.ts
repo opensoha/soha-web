@@ -6,7 +6,10 @@ describe('observability route manifests', () => {
   it('preserves canonical paths, redirects and the detail alias without duplicates', () => {
     const routes = observabilityRouteManifests.flatMap((manifest) => [...manifest])
     expect(validateRouteDefinitions(routes)).toEqual([])
-    expect(routes.map((route) => route.meta.path)).toHaveLength(27)
+    const paths = routes.map((route) => route.meta.path)
+    expect(paths).toHaveLength(29)
+    expect(paths).toContain('/monitoring-workbench/dashboards')
+    expect(paths).toContain('/monitoring-workbench/dashboards/:dashboardId')
     expect(
       observabilityCompatibilityRoutes.map((route) => [route.meta.path, route.redirectTo]),
     ).toEqual([

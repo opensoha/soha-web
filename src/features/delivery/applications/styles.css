@@ -1,381 +1,123 @@
 @import '../styles/responsive.css';
 
-.soha-application-workspace-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.soha-application-workspace-summary__main {
-  display: flex;
-  min-width: 0;
-  flex: 1 1 320px;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.soha-application-center-shell {
+.soha-application-center-results {
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-
-.soha-application-center-header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.soha-application-center-header__main {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.soha-application-center-header__title {
-  margin: 0;
-  color: var(--soha-text-primary);
-  font-size: 26px;
-  line-height: 1.2;
-  font-weight: 700;
 }
 
 .soha-application-center-toolbar {
   display: flex;
+  min-height: 32px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
 }
 
-.soha-application-center-toolbar .soha-application-group-tags {
-  flex: 1 1 auto;
+.soha-application-center-toolbar__groups {
   min-width: 0;
+  overflow-x: auto;
 }
 
-.soha-application-center-toolbar .ant-btn {
-  flex: 0 0 auto;
+.soha-application-center-toolbar__groups .ant-segmented {
+  width: max-content;
 }
 
-.soha-application-center-toolbar__actions {
-  flex: 0 0 auto;
-  justify-content: flex-end;
-}
-
-.soha-application-group-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 0;
-}
-
-.soha-application-group-create {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.soha-application-group-create .ant-input {
-  width: 112px;
-  border-radius: 999px;
-}
-
-.soha-application-group-tag.ant-tag {
-  margin-inline-end: 0;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: var(--soha-fill-weak);
-  color: var(--soha-text-secondary);
-  cursor: pointer;
-  transition:
-    background 0.18s ease,
-    color 0.18s ease;
-}
-
-.soha-application-group-tag.ant-tag.is-active {
-  background: var(--soha-text-primary);
-  color: var(--soha-bg-surface);
-}
-
-.soha-application-card-grid,
-.soha-application-card-list {
+.soha-application-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
   align-items: stretch;
-}
-
-.soha-application-card-list {
-  grid-template-columns: repeat(auto-fill, minmax(220px, 260px));
-  justify-content: start;
-  align-items: start;
-}
-
-.soha-application-card.ant-card,
-.soha-application-empty-card.ant-card {
-  display: flex;
-  min-width: 0;
-  height: 100%;
-  flex-direction: column;
-}
-
-.soha-application-card.ant-card,
-.soha-application-empty-card.ant-card,
-.soha-application-lane-card.ant-card {
-  border-color: var(--soha-border-color);
-  border-radius: 8px;
-  background: var(--soha-bg-surface);
-  box-shadow: none;
+  gap: 12px;
 }
 
 .soha-application-card.ant-card {
-  height: auto;
-  position: relative;
-  overflow: hidden;
-}
-
-.soha-application-card.ant-card .ant-card-body,
-.soha-application-card.ant-card .ant-card-actions {
-  position: relative;
-  z-index: 2;
-}
-
-.soha-application-card.ant-card .ant-card-body,
-.soha-application-empty-card.ant-card .ant-card-body,
-.soha-application-lane-card.ant-card .ant-card-body {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: 8px;
-  min-height: 0;
-}
-
-.soha-application-card.ant-card .ant-card-body,
-.soha-application-card.ant-card .ant-card-actions {
-  padding-inline: 12px;
-}
-
-.soha-application-card.ant-card .ant-card-body {
-  min-height: 0;
-  padding-block: 12px 10px;
-}
-
-.soha-application-card.ant-card .ant-card-actions {
-  padding-block: 4px;
-  background: transparent;
-}
-
-.soha-application-card.ant-card .ant-card-actions .ant-btn {
-  height: 24px;
-  padding-inline: 6px;
-  font-size: 12px;
-}
-
-.soha-application-card.ant-card .ant-card-actions > li {
-  margin: 0;
+  height: 100%;
+  border-color: var(--soha-border-color);
+  border-radius: var(--soha-radius-panel);
+  box-shadow: none;
 }
 
 .soha-application-card.ant-card:hover {
-  border-color: color-mix(in srgb, var(--soha-border-color) 55%, var(--soha-text-secondary) 45%);
+  border-color: var(--soha-border-color-strong);
 }
 
-.soha-application-card.ant-card > .ant-border-beam {
-  padding: 2px;
-}
-
-.soha-application-card.ant-card > .ant-border-beam::before {
-  width: 120px;
-}
-
-.soha-application-card__language-tag.ant-tag {
-  margin-inline-end: 0;
-  border-radius: 6px;
-  letter-spacing: 0.02em;
-}
-
-.soha-application-card__state-tag.ant-tag {
-  margin-inline-end: 0;
-  border-radius: 6px;
-}
-
-.soha-application-card__metric-tag.ant-tag {
-  margin-inline-end: 0;
-  border-radius: 6px;
-  font-size: 11px;
-  line-height: 18px;
-  white-space: nowrap;
-}
-
-.soha-application-card__metric-tag--wide.ant-tag {
-  width: fit-content;
-  max-width: 100%;
+.soha-application-card.ant-card .ant-card-body {
+  display: flex;
+  min-height: 124px;
+  height: 100%;
+  flex-direction: column;
+  gap: 16px;
+  padding: 12px;
 }
 
 .soha-application-card__header,
-.soha-application-card__title-wrap,
-.soha-application-lane-card__item {
+.soha-application-card__footer {
   display: flex;
-  flex-direction: column;
-}
-
-.soha-application-card__header {
-  flex-direction: row;
+  min-width: 0;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
+  gap: 12px;
+}
+
+.soha-application-card__link {
+  display: flex;
   min-width: 0;
-}
-
-.soha-application-card__edit-trigger.ant-btn {
-  width: fit-content;
-  margin-left: auto;
-}
-
-.soha-application-card__title-wrap {
   flex: 1 1 auto;
+  align-items: flex-start;
+  gap: 10px;
+  color: inherit;
+}
+
+.soha-application-card__icon {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--soha-radius-control);
+  color: var(--soha-primary);
+  background: var(--soha-primary-light-default);
+  font-size: 16px;
+}
+
+.soha-application-card__identity {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
   gap: 2px;
-  min-width: 0;
 }
 
-.soha-application-card__title-row {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  min-width: 0;
-}
-
-.soha-application-card__title {
-  margin: 0;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--soha-text-primary);
-  font-size: 15px;
-  line-height: 20px;
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.soha-application-card__subline {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 6px;
-  line-height: 18px;
-}
-
-.soha-application-card__subline .ant-typography {
-  min-width: 0;
-  overflow: hidden;
-  font-size: 12px;
-  line-height: 18px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.soha-application-card__header-actions {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: flex-end;
-  max-width: 28px;
-  gap: 4px;
-}
-
-.soha-application-card__more.ant-btn {
-  flex: 0 0 auto;
-  width: 22px;
-  min-width: 22px;
-  height: 22px;
-  padding: 0;
-  color: var(--soha-text-secondary);
-}
-
-.soha-application-card__more.ant-btn:hover,
-.soha-application-card__more.ant-btn:focus-visible {
-  color: var(--soha-text-primary);
-  background: var(--soha-fill-weak);
-}
-
-.soha-application-card__signals {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.soha-application-card__stats {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  min-width: 0;
-  margin-top: 0;
-  padding-top: 6px;
-  border-top: 1px solid var(--soha-border-color);
-}
-
-.soha-application-card__stats .ant-tag {
+.soha-application-card__identity .ant-typography {
   max-width: 100%;
 }
 
-.soha-application-card__stat {
-  display: flex;
-  min-width: 0;
-  flex: 0 0 auto;
-  align-items: baseline;
-  gap: 3px;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
-
-.soha-application-card__stat.is-wide {
-  flex: 1 1 100%;
-}
-
-.soha-application-card__stat-label {
-  color: var(--soha-text-tertiary);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0;
-  text-transform: none;
-  white-space: nowrap;
-}
-
-.soha-application-card__stat-label::after {
-  content: ':';
-}
-
-.soha-application-card__stat-value {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--soha-text-primary);
+.soha-application-card__footer {
+  align-items: center;
+  margin-top: auto;
   font-size: 12px;
-  line-height: 18px;
-  font-weight: 700;
-  text-overflow: ellipsis;
+}
+
+.soha-application-card__footer .ant-typography:first-child {
+  min-width: 0;
+  max-width: 50%;
+}
+
+.soha-application-card__footer .ant-typography:last-child {
+  flex: 0 0 auto;
   white-space: nowrap;
 }
 
-.soha-application-lane-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-}
+@media (max-width: 768px) {
+  .soha-application-center-toolbar__actions {
+    width: 100%;
+  }
 
-.soha-application-lane-card__item {
-  gap: 4px;
-}
-
-.soha-application-lane-card__item + .soha-application-lane-card__item {
-  padding-top: 12px;
-  border-top: 1px solid var(--soha-border-color);
+  .soha-application-center-toolbar__actions .soha-management-toolbar-search {
+    flex: 1 1 auto;
+    width: auto !important;
+  }
 }
 
 .soha-application-runtime-service-summary {
@@ -477,6 +219,10 @@
 }
 
 .soha-application-runtime-settings-grid .soha-admin-table-shell {
+  grid-column: 1 / -1;
+}
+
+.soha-application-runtime-delivery-grid > .soha-application-delivery-actions {
   grid-column: 1 / -1;
 }
 
@@ -688,4 +434,81 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.soha-application-section-tabs > .ant-tabs-nav {
+  margin-bottom: 12px;
+}
+
+.soha-application-service-environment-toolbar {
+  display: grid;
+  grid-template-columns: 180px 160px auto auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.soha-application-service-environment-matrix .ant-table-cell {
+  vertical-align: top;
+}
+
+.soha-application-service-environment-matrix__service,
+.soha-application-service-environment-matrix__runtime {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.soha-application-service-environment-matrix__service strong,
+.soha-application-service-environment-matrix__service .ant-typography,
+.soha-application-service-environment-matrix__runtime strong,
+.soha-application-service-environment-matrix__runtime .ant-typography {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.soha-application-service-environment-matrix__runtime-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.soha-application-service-environment-matrix__runtime-head .ant-tag {
+  margin-inline-end: 0;
+}
+
+@media (max-width: 767px) {
+  .soha-application-service-environment-matrix .soha-management-table-toolbar-actions,
+  .soha-application-service-environment-matrix
+    .soha-management-table-toolbar-actions
+    > .ant-space-item:first-child {
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    align-items: stretch;
+  }
+
+  .soha-application-service-environment-matrix
+    .soha-management-table-toolbar-actions
+    > .ant-space-item:not(:first-child),
+  .soha-application-service-environment-matrix .soha-admin-table-column-setting-button {
+    display: none;
+  }
+
+  .soha-application-service-environment-toolbar {
+    width: 100%;
+    grid-template-columns: 1fr;
+  }
+
+  .soha-application-service-environment-toolbar .ant-input-affix-wrapper,
+  .soha-application-service-environment-toolbar .ant-select {
+    width: 100%;
+  }
+
+  .soha-application-service-environment-toolbar .ant-btn {
+    width: 100%;
+  }
 }

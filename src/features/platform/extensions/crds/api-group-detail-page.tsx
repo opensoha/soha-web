@@ -70,6 +70,14 @@ export function CRDApiGroupDetailPage() {
         </Card>
       ) : catalogQuery.isLoading ? (
         <Card className="soha-detail-card" style={{ marginTop: 0 }} loading />
+      ) : catalogQuery.isError ? (
+        <Card className="soha-detail-card" style={{ marginTop: 0 }}>
+          <ManagementState
+            compact
+            kind="error"
+            title={localeCode === 'zh_CN' ? 'API Group 加载失败' : 'Failed to load the API group'}
+          />
+        </Card>
       ) : !groupSummary ? (
         <Card className="soha-detail-card" style={{ marginTop: 0 }}>
           <ManagementState

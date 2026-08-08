@@ -142,6 +142,17 @@ export function OverviewPage() {
     )
   }
 
+  if (clustersQuery.isError) {
+    return (
+      <div className="soha-page soha-overview-page soha-platform-overview-page">
+        <ManagementState
+          kind="error"
+          title={localeCode === 'zh_CN' ? '集群概览加载失败' : 'Failed to load cluster overview'}
+        />
+      </div>
+    )
+  }
+
   const overviewStats = [
     {
       key: 'clusters',
@@ -163,7 +174,7 @@ export function OverviewPage() {
       key: 'alerts',
       label: localeCode === 'zh_CN' ? '活跃告警' : 'Firing Alerts',
       helper: localeCode === 'zh_CN' ? '需要值守的告警压力' : 'Current alert pressure',
-      value: summary?.firingCount ?? 0,
+      value: summaryQuery.isError ? '-' : (summary?.firingCount ?? 0),
       icon: <WarningOutlined />,
       tone: (summary?.firingCount ?? 0) > 0 ? 'warning' : 'default',
     },
@@ -171,7 +182,7 @@ export function OverviewPage() {
       key: 'channels',
       label: localeCode === 'zh_CN' ? '通知渠道' : 'Channels',
       helper: localeCode === 'zh_CN' ? '可用通知投递入口' : 'Delivery paths configured',
-      value: summary?.channelCount ?? 0,
+      value: summaryQuery.isError ? '-' : (summary?.channelCount ?? 0),
       icon: <AppstoreOutlined />,
       tone: 'default',
     },
@@ -277,7 +288,14 @@ export function OverviewPage() {
             </Text>
           }
         >
-          {summary ? (
+          {summaryQuery.isError ? (
+            <ManagementState
+              bordered={false}
+              compact
+              kind="error"
+              title={localeCode === 'zh_CN' ? '告警摘要加载失败' : 'Failed to load alert summary'}
+            />
+          ) : summary ? (
             <div className="soha-overview-alert-stack">
               <OverviewSectionBar
                 title={localeCode === 'zh_CN' ? '告警分布' : 'Alert Distribution'}
@@ -390,6 +408,13 @@ export function OverviewPage() {
           <div className="flex items-center justify-center h-56">
             <Spin size="large" />
           </div>
+        ) : workloadOverviewQuery.isError ? (
+          <ManagementState
+            bordered={false}
+            compact
+            kind="error"
+            title={localeCode === 'zh_CN' ? 'Pod 运行态势加载失败' : 'Failed to load pod runtime'}
+          />
         ) : !workloadOverview ? (
           <ManagementState
             bordered={false}

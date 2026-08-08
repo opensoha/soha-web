@@ -1,23 +1,21 @@
 import { lazy, Suspense, useState, useMemo } from 'react'
 import { Tag, Card, Spin, Tooltip, Typography } from 'antd'
 import { useQuery } from '@tanstack/react-query'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
 import { useAIPageContext } from '@/features/copilot'
 import { useI18n } from '@/i18n'
 import { ResourceEventsTimeline } from '@/components/resource-events-timeline'
 import { StatusTag } from '@/components/status-tag'
-import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { formatDateTime } from '@/utils/time'
 import {
   conditionToTimelineEvent,
-  resolveWorkloadNamespace,
   targetMatchesDeployment,
 } from '@/features/platform/workloads-model'
-import { toScopeKey } from '@/types'
 import type { TabsProps } from 'antd'
 import { WorkloadDetailShell } from '../shared/detail-shell'
 import { WorkloadPodsCard, WorkloadRelationsCard } from '../shared/workload-relations'
+import { useWorkloadDetailScope } from '../shared/detail-scope'
 import { deploymentQueries } from './queries'
 import { deploymentLinkageQueries } from './linkage-queries'
 import type { ApplicationEnvironment } from './types'
@@ -33,12 +31,10 @@ const ResourceMetricsPanel = lazy(async () => {
 export function DeploymentDetailPage() {
   const { localeCode } = useI18n()
   const params = useParams()
-  const [searchParams] = useSearchParams()
   const deploymentName = params.deploymentName as string
-  const { clusterId, namespace } = usePlatformScopeStore()
-  const detailNamespace = resolveWorkloadNamespace(namespace, searchParams.get('namespace'))
+  const { clusterId, namespace: detailNamespace } = useWorkloadDetailScope()
   const [activeTabKey, setActiveTabKey] = useState('overview')
-  const detailScope = toScopeKey(clusterId, detailNamespace)
+  const detailScope = { clusterId, namespace: detailNamespace }
   const deploymentDetailQuery = useQuery(deploymentQueries.detail(detailScope, deploymentName))
 
   const bindingsQuery = useQuery(deploymentLinkageQueries.applicationEnvironments())
@@ -104,10 +100,10 @@ export function DeploymentDetailPage() {
   )
   const linkageOverview = (
     <div className="soha-detail-stack">
-      <WorkloadPodsCard pods={deploymentPods} namespace={detailNamespace} />
+      <WorkloadPodsCard pods={deploymentPods} namespace={detailNamespace ?? ''} />
       <WorkloadRelationsCard
         resources={deploymentDetailQuery.data?.relatedResources}
-        namespace={detailNamespace}
+        namespace={detailNamespace ?? ''}
       />
       <Card
         className="soha-detail-card soha-rollout-card"

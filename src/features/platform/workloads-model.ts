@@ -6,8 +6,8 @@ export function resolveWorkloadNamespace(
   searchNamespace: string | null,
   rowNamespace?: string,
 ) {
-  if (selectedNamespace && selectedNamespace !== '') return selectedNamespace
   if (searchNamespace) return searchNamespace
+  if (selectedNamespace && selectedNamespace !== '') return selectedNamespace
   return rowNamespace ?? ''
 }
 
@@ -16,14 +16,19 @@ export function buildWorkloadDetailPath(
   name: string,
   selectedNamespace: string | null,
   rowNamespace: string,
+  clusterId: string | null,
 ) {
   const params = new URLSearchParams()
+  if (clusterId) {
+    params.set('clusterId', clusterId)
+  }
   const resolvedNamespace = resolveWorkloadNamespace(selectedNamespace, null, rowNamespace)
   if (resolvedNamespace) {
     params.set('namespace', resolvedNamespace)
   }
   const query = params.toString()
-  return query ? `/workloads/${resource}/${name}?${query}` : `/workloads/${resource}/${name}`
+  const path = `/workloads/${resource}/${encodeURIComponent(name)}`
+  return query ? `${path}?${query}` : path
 }
 
 export function buildNamespacedDetailQuery(namespace?: string | null) {
@@ -96,6 +101,7 @@ export function localizeRelatedRelation(relation: string, localeCode: 'zh_CN' | 
 export function buildRelatedResourcePath(
   resource: PodRelatedResource,
   selectedNamespace: string | null,
+  clusterId: string | null = null,
 ) {
   const effectiveNamespace = resource.namespace || selectedNamespace || ''
   switch (resource.kind) {
@@ -117,6 +123,7 @@ export function buildRelatedResourcePath(
         resource.name,
         selectedNamespace,
         effectiveNamespace,
+        clusterId,
       )
     case 'ReplicaSet':
       return buildWorkloadDetailPath(
@@ -124,6 +131,7 @@ export function buildRelatedResourcePath(
         resource.name,
         selectedNamespace,
         effectiveNamespace,
+        clusterId,
       )
     case 'ReplicationController':
       return buildWorkloadDetailPath(
@@ -131,6 +139,7 @@ export function buildRelatedResourcePath(
         resource.name,
         selectedNamespace,
         effectiveNamespace,
+        clusterId,
       )
     case 'StatefulSet':
       return buildWorkloadDetailPath(
@@ -138,6 +147,7 @@ export function buildRelatedResourcePath(
         resource.name,
         selectedNamespace,
         effectiveNamespace,
+        clusterId,
       )
     case 'DaemonSet':
       return buildWorkloadDetailPath(
@@ -145,15 +155,23 @@ export function buildRelatedResourcePath(
         resource.name,
         selectedNamespace,
         effectiveNamespace,
+        clusterId,
       )
     case 'Job':
-      return buildWorkloadDetailPath('jobs', resource.name, selectedNamespace, effectiveNamespace)
+      return buildWorkloadDetailPath(
+        'jobs',
+        resource.name,
+        selectedNamespace,
+        effectiveNamespace,
+        clusterId,
+      )
     case 'CronJob':
       return buildWorkloadDetailPath(
         'cronjobs',
         resource.name,
         selectedNamespace,
         effectiveNamespace,
+        clusterId,
       )
     case 'PersistentVolumeClaim':
       return `/storage/persistentvolumeclaims/${encodeURIComponent(resource.name)}${buildNamespacedDetailQuery(effectiveNamespace)}`

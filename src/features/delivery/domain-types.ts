@@ -656,6 +656,7 @@ export interface ApplicationDeliveryActionRequest extends ContractApplicationDel
   imageTag?: string
   releaseName?: string
   containerName?: string
+  valuesContent?: string
   variables?: Record<string, unknown>
   buildArgs?: Record<string, unknown>
 }
@@ -841,6 +842,98 @@ export interface DeliveryTargetCandidate {
   namespace: string
   workloadKind: string
   workloadName: string
+  desiredReplicas: number
+  readyReplicas: number
   containers?: string[]
   labels?: Record<string, string>
+  relatedResources: Array<{ kind: string; name: string }>
+}
+
+export interface DeliveryTargetCandidatePage {
+  items: DeliveryTargetCandidate[]
+  truncated: boolean
+}
+
+export interface KubernetesServiceImportInput {
+  clusterId: string
+  namespace: string
+  applicationKey: string
+  applicationName: string
+  environmentKey: string
+  environmentName: string
+  ownershipMode: 'observe_only' | 'managed'
+  workloads: Array<{
+    workloadKind: 'Deployment' | 'StatefulSet' | 'DaemonSet'
+    workloadName: string
+  }>
+}
+
+export interface KubernetesImportEntityRef {
+  id: string
+  key: string
+  name: string
+  created: boolean
+}
+
+export interface KubernetesServiceImportResult {
+  application: KubernetesImportEntityRef
+  environment: KubernetesImportEntityRef
+  applicationEnvironmentId: string
+  applicationEnvironmentCreated: boolean
+  ownershipMode: 'observe_only' | 'managed'
+  services: Array<{
+    id: string
+    key: string
+    name: string
+    workloadKind: string
+    workloadName: string
+    created: boolean
+  }>
+  targets: Array<{
+    id: string
+    workloadKind: string
+    workloadName: string
+    created: boolean
+  }>
+}
+
+export interface HelmReleaseCandidate {
+  name: string
+  namespace: string
+  revision?: string
+  status?: string
+  chart?: string
+  appVersion?: string
+  storageDriver?: string
+}
+
+export interface HelmReleaseImportInput {
+  clusterId: string
+  namespace: string
+  applicationKey: string
+  applicationName: string
+  environmentKey: string
+  environmentName: string
+  ownershipMode: 'observe_only' | 'managed'
+  releases: Array<{ releaseName: string }>
+}
+
+export interface HelmReleaseImportResult {
+  application: KubernetesImportEntityRef
+  environment: KubernetesImportEntityRef
+  applicationEnvironmentId: string
+  applicationEnvironmentCreated: boolean
+  ownershipMode: 'observe_only' | 'managed'
+  services: Array<{
+    id: string
+    key: string
+    name: string
+    releaseName: string
+    created: boolean
+  }>
+  targets: Array<{
+    id: string
+    releaseName: string
+    created: boolean
+  }>
 }

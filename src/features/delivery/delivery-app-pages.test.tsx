@@ -17,7 +17,6 @@ import { ExecutionTasksPage } from './execution-tasks/list-page'
 import { ReleaseBundlesPage } from './release-bundles/list-page'
 import { WorkflowsPage } from './workflows/list-page'
 import { runtimeEvidencePath } from './template-usage-runtime-links'
-import { defaultBuildSources } from './application-center-model'
 import { ApplicationEnvironmentsPage } from './environments/list-page'
 import { ReleaseBoardPage } from './release-board/page'
 import { WorkflowTemplatesPage } from './workflow-templates/page'
@@ -68,6 +67,7 @@ const defaultPermissionKeys = [
   'delivery.applications.view',
   'delivery.application.create',
   'delivery.application.update',
+  'delivery.application-services.create',
   'delivery.application-environments.view',
   'delivery.application-environments.create',
   'delivery.application-environments.update',
@@ -82,6 +82,14 @@ const defaultPermissionKeys = [
   'delivery.registries.update',
   'delivery.registries.delete',
   'delivery.release-board.view',
+  'platform.clusters.view',
+  'platform.namespaces.view',
+  'platform.deployment.view',
+  'platform.workloads.stateful-sets.view',
+  'platform.workloads.daemon-sets.view',
+  'platform.network.services.view',
+  'platform.network.ingresses.view',
+  'platform.configuration.horizontal-pod-autoscalers.view',
 ]
 
 const readonlyPermissionKeys = [
@@ -99,6 +107,7 @@ const testState = vi.hoisted(() => ({
       'delivery.applications.view',
       'delivery.application.create',
       'delivery.application.update',
+      'delivery.application-services.create',
       'delivery.application-environments.view',
       'delivery.application-environments.create',
       'delivery.application-environments.update',
@@ -113,6 +122,14 @@ const testState = vi.hoisted(() => ({
       'delivery.registries.update',
       'delivery.registries.delete',
       'delivery.release-board.view',
+      'platform.clusters.view',
+      'platform.namespaces.view',
+      'platform.deployment.view',
+      'platform.workloads.stateful-sets.view',
+      'platform.workloads.daemon-sets.view',
+      'platform.network.services.view',
+      'platform.network.ingresses.view',
+      'platform.configuration.horizontal-pod-autoscalers.view',
     ],
     visibleMenuIds: [],
     visibleMenus: [],
@@ -771,14 +788,21 @@ const testState = vi.hoisted(() => ({
     }
     if (path === '/registries') {
       return {
-        data: [
+        items: [
           {
             id: 'registry-1',
             name: 'Harbor Prod',
-            type: 'harbor',
+            registryType: 'harbor',
             endpoint: 'https://harbor.example.com',
+            namespace: 'delivery',
             username: 'robot$delivery',
-            status: 'healthy',
+            insecure: false,
+            metadata: {
+              secretConfigured: true,
+              secretStorage: 'encrypted',
+            },
+            createdAt: '2026-05-08T11:00:00Z',
+            updatedAt: '2026-05-08T11:30:00Z',
           },
         ],
       }
@@ -817,6 +841,18 @@ const testState = vi.hoisted(() => ({
   }),
   apiPut: vi.fn(async (_path: string, body?: unknown) => ({ data: body })),
   apiPost: vi.fn(async (path: string, body?: unknown) => {
+    if (path === '/applications') {
+      return {
+        data: {
+          id: 'app-created',
+          ...(body as Record<string, unknown>),
+          group: '',
+          language: '',
+          createdAt: '2026-05-08T12:00:00Z',
+          updatedAt: '2026-05-08T12:00:00Z',
+        },
+      }
+    }
     if (path === '/delivery/drafts') {
       const payload = body as {
         applicationDraft?: Record<string, unknown>
@@ -915,6 +951,7 @@ vi.mock('@/features/auth/permission-snapshot', () => ({
 vi.mock('@/services/api-client', () => ({
   api: {
     get: (path: string) => testState.apiGet(path),
+    getEnvelope: (path: string) => testState.apiGet(path),
     post: (path: string, body?: unknown) => testState.apiPost(path, body),
     put: (path: string, body?: unknown) => testState.apiPut(path, body),
     delete: vi.fn(),
@@ -1104,27 +1141,30 @@ describe('ApplicationsPage workspace layout', () => {
     vi.clearAllMocks()
   })
 
-  it('renders application-centered cards before the detailed table', async () => {
+  it('renders application workspaces as compact cards', async () => {
     const container = await renderWithProviders(<ApplicationsPage />)
 
-    expect(container.textContent).toContain('接入应用/服务')
-    expect(container.textContent).toContain('新建应用档案')
+    expect(container.textContent).not.toContain('接入应用/服务')
+    expect(container.textContent).toContain('创建应用')
+    expect(container.textContent).toContain('未分组')
     expect(container.textContent).toContain('ERP Front Main')
     expect(container.textContent).toContain('全部')
     expect(container.textContent).toContain('erp-front')
     expect(container.textContent).toContain('erp-front-main')
     expect(container.textContent).toContain('frontend')
     expect(container.textContent).toContain('mall')
-    expect(container.textContent).toContain('交付: 执行中')
-    expect(container.textContent).toContain('门禁: 等待执行')
-    expect(container.textContent).toContain('交付: 失败待处理')
-    expect(container.textContent).toContain('门禁: 阻塞')
-    expect(container.textContent).toContain('服务线索')
-    expect(container.textContent).toContain('最近环境')
-    expect(container.querySelector('.soha-application-card-list')).not.toBeNull()
+    expect(container.textContent).not.toContain('执行中')
+    expect(container.textContent).not.toContain('失败待处理')
+    expect(container.textContent).not.toContain('环境范围')
+    expect(container.querySelector('.soha-management-query-card')).toBeNull()
+    expect(container.querySelector('input[placeholder="搜索应用"]')).not.toBeNull()
     expect(container.querySelector('.soha-application-center-toolbar')).not.toBeNull()
-    expect(container.querySelector('.soha-application-card__more')).not.toBeNull()
-    expect(container.querySelector('.soha-application-card .ant-card-actions')).toBeNull()
+    expect(container.querySelector('.soha-application-card-grid')).not.toBeNull()
+    expect(container.querySelectorAll('.soha-application-card')).toHaveLength(2)
+    expect(container.querySelectorAll('.soha-application-card__more')).toHaveLength(2)
+    expect(container.querySelector('.soha-application-card__metrics')).toBeNull()
+    expect(container.querySelector('.soha-admin-table')).toBeNull()
+    expect(container.querySelector('.soha-management-table-shell')).toBeNull()
     expect(container.querySelector('.soha-management-detail-header')).toBeNull()
     expect(container.querySelector('.soha-application-create-card')).toBeNull()
     expect(container.textContent).not.toContain('erp/front/main')
@@ -1135,22 +1175,28 @@ describe('ApplicationsPage workspace layout', () => {
     expect(container.textContent).not.toContain('应用管理')
     expect(container.textContent).not.toContain('围绕应用聚合研发、测试和交付上下文')
     expect(container.textContent).not.toContain('应用详细清单')
-    expect(container.querySelector('.soha-admin-table-shell')).toBeNull()
   })
 
-  it('seeds new applications with a repository dockerfile build source', () => {
-    expect(defaultBuildSources()).toEqual([
-      {
-        id: '',
-        name: 'Repository Dockerfile',
-        type: 'repo_dockerfile',
-        enabled: true,
-        isDefault: true,
-        buildImage: '',
-        defaultTag: '',
-        config: { contextDir: '.', dockerfilePath: 'Dockerfile', builderKind: 'docker' },
-      },
-    ])
+  it('creates an application boundary with only name and key', async () => {
+    const container = await renderWithProviders(<ApplicationsPage />)
+
+    await clickButton(findButton(container, '创建应用'))
+
+    const modal = document.querySelector('.ant-modal') as HTMLElement
+    expect(modal.textContent).toContain('创建应用')
+    expect(modal.textContent).not.toContain('应用分组')
+    expect(modal.textContent).not.toContain('语言')
+    expect(modal.textContent).not.toContain('启用')
+
+    await setInputValue(document.querySelector('#name') as HTMLInputElement, 'Payments')
+    await setInputValue(document.querySelector('#key') as HTMLInputElement, 'payments')
+    await clickButton(modal.querySelector('button[type="submit"]') as HTMLButtonElement)
+
+    expect(testState.apiPost).toHaveBeenCalledWith('/applications', {
+      name: 'Payments',
+      key: 'payments',
+      enabled: true,
+    })
   })
 
   it('builds typed build template payloads without form-only text fields', () => {
@@ -1286,12 +1332,18 @@ describe('ApplicationsPage workspace layout', () => {
     expect(container.textContent).toContain('Release DAG')
     expect(container.textContent).toContain('1')
     expect(hasButtonText(container, '新建绑定')).toBe(true)
+    expect(hasButtonText(container, '导入集群服务')).toBe(true)
     expect(container.querySelector('[aria-label="编辑绑定"]')).not.toBeNull()
     expect(container.querySelector('[aria-label="删除绑定"]')).not.toBeNull()
 
     await clickButton(findButton(container, '新建绑定'))
     expect(document.body.textContent).toContain('新建应用环境绑定')
     expect(document.body.textContent).toContain('目标元数据(JSON)')
+
+    await clickButton(findButton(container, '导入集群服务'))
+    expect(document.body.textContent).toContain('导入集群服务')
+    expect(document.body.textContent).toContain('Helm Release')
+    expect(testState.apiGet).toHaveBeenCalledWith('/clusters')
   })
 
   it('hides application environment binding writes for readonly users', async () => {
@@ -1303,6 +1355,7 @@ describe('ApplicationsPage workspace layout', () => {
 
     expect(container.textContent).toContain('ERP Front Main')
     expect(hasButtonText(container, '新建绑定')).toBe(false)
+    expect(hasButtonText(container, '导入集群服务')).toBe(false)
     expect(container.querySelector('[aria-label="编辑绑定"]')).toBeNull()
     expect(container.querySelector('[aria-label="删除绑定"]')).toBeNull()
   })
@@ -1371,6 +1424,28 @@ describe('ApplicationsPage workspace layout', () => {
     expect(hasButtonText(container, '添加仓库')).toBe(false)
     expect(container.querySelector('[aria-label="编辑仓库"]')).toBeNull()
     expect(container.querySelector('[aria-label="删除仓库"]')).toBeNull()
+  })
+
+  it('submits canonical registry fields without exposing the stored secret', async () => {
+    const container = await renderWithProviders(<RegistriesPage />, '/registries')
+
+    await clickButton(container.querySelector('[aria-label="编辑仓库"]') as HTMLButtonElement)
+    const modal = document.querySelector('.ant-modal') as HTMLElement
+    expect(modal.querySelector<HTMLInputElement>('#name')?.value).toBe('Harbor Prod')
+    expect(modal.querySelector<HTMLInputElement>('#secret')?.value).toBe('')
+
+    await setInputValue(modal.querySelector('#secret') as HTMLInputElement, 'rotated-token')
+    await clickButton(modal.querySelector('button[type="submit"]') as HTMLButtonElement)
+
+    expect(testState.apiPut).toHaveBeenCalledWith('/registries/registry-1', {
+      endpoint: 'https://harbor.example.com',
+      insecure: false,
+      name: 'Harbor Prod',
+      namespace: 'delivery',
+      registryType: 'harbor',
+      secret: 'rotated-token',
+      username: 'robot$delivery',
+    })
   })
 
   it('shows Gateway approval drilldown context on workflow list', async () => {

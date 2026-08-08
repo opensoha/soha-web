@@ -1,5 +1,5 @@
 import { useDeferredValue, useMemo, useState } from 'react'
-import { Popconfirm, Typography, message } from 'antd'
+import { App, Popconfirm, Typography } from 'antd'
 import { DeleteOutlined } from '@ant-design/icons'
 import {
   useMutation,
@@ -64,6 +64,7 @@ export function StorageListPage<T extends { allowedActions?: string[]; name: str
   searchPlaceholder: { zh_CN: string; en_US: string }
   searchValues: (record: T) => Array<string | undefined | null>
 }) {
+  const { message } = App.useApp()
   const { localeCode } = useI18n()
   const queryClient = useQueryClient()
   const { clusterId, namespace } = usePlatformScopeStore()

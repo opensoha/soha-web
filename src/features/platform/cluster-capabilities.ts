@@ -7,8 +7,7 @@ import type {
   ClusterCapabilityRiskLevel,
   ClusterCapabilityStatus,
 } from '@/types'
-import { listClusterCapabilities, listClusters } from './clusters/api'
-import { clusterKeys } from './clusters/keys'
+import { clusterQueries } from './clusters/queries'
 
 type CapabilityMode = 'direct' | 'agent'
 type LocaleCode = 'zh_CN' | 'en_US'
@@ -29,13 +28,26 @@ export interface ClusterCapabilityDecision {
 
 function capabilityModeFor(connectionMode?: string): CapabilityMode | undefined {
   if (!connectionMode) return undefined
-  return connectionMode === 'agent' ? 'agent' : 'direct'
+  if (connectionMode === 'agent') return 'agent'
+  if (connectionMode === 'direct' || connectionMode === 'direct_kubeconfig') return 'direct'
+  return undefined
 }
 
 function fallbackUnsupportedReason(localeCode: LocaleCode) {
   return localeCode === 'zh_CN'
     ? '当前集群连接模式暂不支持该操作。'
     : 'The current cluster connection mode does not support this operation.'
+}
+
+function fallbackUnknownReason(localeCode: LocaleCode, isLoading: boolean) {
+  if (isLoading) {
+    return localeCode === 'zh_CN'
+      ? '正在确认当前集群的运行能力。'
+      : 'Checking the current cluster capabilities.'
+  }
+  return localeCode === 'zh_CN'
+    ? '暂时无法确认当前集群是否支持该操作。'
+    : 'Unable to confirm whether the current cluster supports this operation.'
 }
 
 function notesFromSupport(support: ClusterCapabilityModeSupport | undefined) {
@@ -47,24 +59,28 @@ export function evaluateClusterCapability({
   key,
   localeCode,
   matrix,
+  isError = false,
+  isLoading = false,
 }: {
   connectionMode?: string
   key: string
   localeCode: LocaleCode
   matrix?: ClusterCapabilityMatrixEntry[]
+  isError?: boolean
+  isLoading?: boolean
 }): ClusterCapabilityDecision {
   const mode = capabilityModeFor(connectionMode)
   const entry = (matrix ?? []).find((item) => item.key === key)
-  if (!mode || !entry) {
+  if (isLoading || isError || !mode || !entry) {
     return {
-      disabled: false,
+      disabled: true,
       entry,
-      isLoading: false,
+      isLoading,
       mode,
       notes: [],
       requiredScopes: [],
       requiresApproval: false,
-      reason: '',
+      reason: fallbackUnknownReason(localeCode, isLoading),
       status: 'unknown',
     }
   }
@@ -105,16 +121,8 @@ export function useClusterCapabilityForCluster(
   localeCode: LocaleCode,
   clusterId?: string | null,
 ): ClusterCapabilityDecision {
-  const clustersQuery = useQuery({
-    queryKey: clusterKeys.legacyList(),
-    queryFn: listClusters,
-    enabled: !!clusterId,
-  })
-  const capabilitiesQuery = useQuery({
-    queryKey: clusterKeys.legacyCapabilities(),
-    queryFn: listClusterCapabilities,
-    enabled: !!clusterId,
-  })
+  const clustersQuery = useQuery({ ...clusterQueries.list(), enabled: !!clusterId })
+  const capabilitiesQuery = useQuery({ ...clusterQueries.capabilities(), enabled: !!clusterId })
 
   const connectionMode = useMemo(
     () => (clustersQuery.data ?? []).find((item) => item.id === clusterId)?.connectionMode,
@@ -128,12 +136,15 @@ export function useClusterCapabilityForCluster(
         key,
         localeCode,
         matrix: capabilitiesQuery.data,
+        isError: clustersQuery.isError || capabilitiesQuery.isError,
+        isLoading: clustersQuery.isLoading || capabilitiesQuery.isLoading,
       }),
-      isLoading: clustersQuery.isLoading || capabilitiesQuery.isLoading,
     }),
     [
       capabilitiesQuery.data,
+      capabilitiesQuery.isError,
       capabilitiesQuery.isLoading,
+      clustersQuery.isError,
       clustersQuery.isLoading,
       connectionMode,
       key,

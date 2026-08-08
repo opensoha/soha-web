@@ -66,7 +66,7 @@ describe('evaluateClusterCapability', () => {
     expect(decision.requiresApproval).toBe(true)
   })
 
-  it('keeps unknown capabilities enabled until the matrix is available', () => {
+  it('disables unknown capabilities until the matrix is available', () => {
     const decision = evaluateClusterCapability({
       connectionMode: 'agent',
       key: 'missing.capability',
@@ -75,9 +75,49 @@ describe('evaluateClusterCapability', () => {
     })
 
     expect(decision.status).toBe('unknown')
-    expect(decision.disabled).toBe(false)
-    expect(decision.reason).toBe('')
+    expect(decision.disabled).toBe(true)
+    expect(decision.reason).toContain('暂时无法确认')
     expect(decision.requiredScopes).toEqual([])
     expect(decision.requiresApproval).toBe(false)
+  })
+
+  it('disables cached capabilities when the capability query fails', () => {
+    const decision = evaluateClusterCapability({
+      connectionMode: 'direct_kubeconfig',
+      key: 'workload.mutations',
+      localeCode: 'en_US',
+      matrix,
+      isError: true,
+    })
+
+    expect(decision.status).toBe('unknown')
+    expect(decision.disabled).toBe(true)
+    expect(decision.reason).toContain('Unable to confirm')
+  })
+
+  it('disables actions while capability data is loading', () => {
+    const decision = evaluateClusterCapability({
+      connectionMode: 'agent',
+      key: 'workload.mutations',
+      localeCode: 'en_US',
+      matrix,
+      isLoading: true,
+    })
+
+    expect(decision.disabled).toBe(true)
+    expect(decision.isLoading).toBe(true)
+    expect(decision.reason).toContain('Checking')
+  })
+
+  it('does not treat an unrecognized connection mode as direct access', () => {
+    const decision = evaluateClusterCapability({
+      connectionMode: 'future-mode',
+      key: 'workload.mutations',
+      localeCode: 'en_US',
+      matrix,
+    })
+
+    expect(decision.status).toBe('unknown')
+    expect(decision.disabled).toBe(true)
   })
 })

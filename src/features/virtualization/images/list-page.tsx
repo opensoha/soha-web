@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   App,
   Button,
+  Descriptions,
   Form,
   Input,
   InputNumber,
@@ -18,7 +19,7 @@ import { hasAllowedAction } from '@/features/auth'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { StepFormModal } from '@/components/step-form-modal'
-import { BooleanTag, StatusTag } from '@/components/status-tag'
+import { BooleanTag, MetadataTag, StatusTag } from '@/components/status-tag'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementIconButton,
@@ -192,7 +193,14 @@ export function VirtualizationImagesPage({
       ellipsis: tableEllipsis,
       width: 180,
     },
-    { title: 'Provider', dataIndex: 'provider', render: providerLabel, width: 120 },
+    {
+      title: 'Provider',
+      dataIndex: 'provider',
+      render: (value: string) => (
+        <MetadataTag label={providerLabel(value)} tone={value === 'pve' ? 'gold' : 'blue'} />
+      ),
+      width: 120,
+    },
     {
       title: '连接',
       dataIndex: 'connectionName',
@@ -201,16 +209,13 @@ export function VirtualizationImagesPage({
       width: 200,
     },
     {
-      title: '命名空间',
-      dataIndex: 'namespace',
-      render: (value) => tableTooltipText(value || '-'),
-      ellipsis: tableEllipsis,
-      width: 160,
-    },
-    {
       title: '类型',
-      render: (_value, record) => tableTooltipText(imageResourceType(record)),
-      ellipsis: tableEllipsis,
+      render: (_value, record) => (
+        <MetadataTag
+          label={imageResourceType(record)}
+          tone={imageCategory === 'storage' ? 'gold' : 'blue'}
+        />
+      ),
       width: 160,
     },
     {
@@ -219,20 +224,6 @@ export function VirtualizationImagesPage({
       render: (value) => tableTooltipText(value || '-'),
       ellipsis: tableEllipsis,
       width: 280,
-    },
-    {
-      title: '节点/存储',
-      render: (_value, record) =>
-        tableTooltipText([record.node, record.storage].filter(Boolean).join(' / ') || '-'),
-      ellipsis: tableEllipsis,
-      width: 200,
-    },
-    {
-      title: 'StorageClass',
-      dataIndex: 'storageClass',
-      render: (value) => tableTooltipText(value || '-'),
-      ellipsis: tableEllipsis,
-      width: 200,
     },
     {
       title: '可用性',
@@ -245,13 +236,6 @@ export function VirtualizationImagesPage({
         />
       ),
       width: 110,
-    },
-    {
-      title: '系统',
-      dataIndex: 'osType',
-      render: (value) => tableTooltipText(value || '-'),
-      ellipsis: tableEllipsis,
-      width: 120,
     },
     {
       title: '大小',
@@ -362,9 +346,35 @@ export function VirtualizationImagesPage({
           loading={imagesQuery.isLoading}
           dataSource={imagesPage.items}
           columns={columns}
-          scroll={{ x: 2270 }}
+          scroll={{ x: 1546 }}
           pagination={pageTablePagination(imagesPage, setFilters)}
           paginationSummary={virtualizationPageSummary}
+          expandable={{
+            expandedRowRender: (record: VirtualizationImage) => (
+              <Descriptions
+                size="small"
+                bordered
+                column={{ xs: 1, sm: 1, md: 2, lg: 2, xl: 2, xxl: 2 }}
+              >
+                <Descriptions.Item label="命名空间">{record.namespace || '-'}</Descriptions.Item>
+                <Descriptions.Item label="系统">{record.osType || '-'}</Descriptions.Item>
+                <Descriptions.Item label="节点">{record.node || '-'}</Descriptions.Item>
+                <Descriptions.Item label="存储">{record.storage || '-'}</Descriptions.Item>
+                <Descriptions.Item label="StorageClass">
+                  {record.storageClass || '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="来源类型">
+                  {record.sourceKind || record.source || '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="来源引用" span="filled">
+                  {record.sourceRef || '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="描述" span="filled">
+                  {record.description || '-'}
+                </Descriptions.Item>
+              </Descriptions>
+            ),
+          }}
         />
       }
       afterTable={

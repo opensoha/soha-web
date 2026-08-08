@@ -4,26 +4,6 @@
   gap: 18px;
 }
 
-.soha-docker-page {
-  gap: 14px;
-}
-
-.soha-vrt-query .soha-management-query-card .ant-card-body {
-  padding-inline: 12px;
-}
-
-.soha-vrt-query .soha-management-query-grid {
-  column-gap: 12px;
-}
-
-.soha-vrt-query .soha-management-query-fields {
-  column-gap: 12px;
-}
-
-.soha-vrt-query .soha-management-query-field .ant-form-item-label {
-  flex-basis: 60px;
-}
-
 .soha-vrt-commandbar {
   display: flex;
   align-items: center;
@@ -347,4 +327,40 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.soha-docker-image-value {
+  display: inline-block;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+.soha-docker-quick-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.soha-docker-quick-form-section + .soha-docker-quick-form-section {
+  padding-top: 16px;
+  border-top: 1px solid var(--soha-border-color);
+}
+
+.soha-docker-quick-form-section h2 {
+  margin: 0 0 12px;
+  color: var(--soha-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.soha-docker-quick-form-section .ant-form-item:last-child {
+  margin-bottom: 0;
+}
+
+.soha-docker-quick-form-section .ant-segmented {
+  padding: 4px;
 }

@@ -6,10 +6,9 @@ function normalizeClusterScope(scope: ScopeKey) {
 
 export const clusterKeys = {
   all: ['platform', 'clusters'] as const,
-  legacyList: () => ['clusters'] as const,
-  legacyCapabilities: () => ['clusters', 'capabilities'] as const,
   lists: () => [...clusterKeys.all, 'list'] as const,
   list: () => [...clusterKeys.lists()] as const,
+  capabilities: () => [...clusterKeys.all, 'capabilities'] as const,
   details: () => [...clusterKeys.all, 'detail'] as const,
   detail: (scope: ScopeKey) => [...clusterKeys.details(), normalizeClusterScope(scope)] as const,
   nodes: (scope: ScopeKey) => [...clusterKeys.detail(scope), 'nodes'] as const,

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { InputNumber, Modal, Popconfirm, Space, Typography, message } from 'antd'
+import { App, InputNumber, Modal, Popconfirm, Space, Typography } from 'antd'
 import { DeleteOutlined, EditOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -54,6 +54,7 @@ function isTargetMutationPending<T extends StatefulSetTarget>(
 
 export function WorkloadsStatefulSetsPage() {
   const { t, localeCode } = useI18n()
+  const { message } = App.useApp()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { clusterId, namespace } = usePlatformScopeStore()
@@ -91,7 +92,15 @@ export function WorkloadsStatefulSetsPage() {
       ellipsis: { showTitle: false },
       render: (name: string, record) =>
         renderWorkloadNameLink(name, () =>
-          navigate(buildWorkloadDetailPath('statefulsets', name, namespace, record.namespace)),
+          navigate(
+            buildWorkloadDetailPath(
+              'statefulsets',
+              name,
+              namespace,
+              record.namespace,
+              clusterId,
+            ),
+          ),
         ),
     },
     { title: t('common.namespace', 'Namespace'), dataIndex: 'namespace', width: 160 },

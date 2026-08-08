@@ -62,6 +62,19 @@ const FRONTEND_MENU_COMPATIBILITY: ReadonlyArray<
   VisibleMenu & { permissionKey: string; requiredParentId: string }
 > = [
   {
+    id: 'identity-software-storage',
+    parentId: 'identity',
+    path: '/internal-workbench/software-storage',
+    labelZh: '存储文件',
+    labelEn: 'Storage Files',
+    iconKey: 'server',
+    section: 'software',
+    sortOrder: 10,
+    enabled: true,
+    permissionKey: 'software.package.view',
+    requiredParentId: 'identity',
+  },
+  {
     id: 'ai-workbench-knowledge-pipelines',
     parentId: 'ai-workbench',
     path: '/ai-workbench/knowledge-pipelines',
@@ -584,15 +597,11 @@ function sortRuntimeMenuTree(items: RuntimeMenuNode[]): RuntimeMenuNode[] {
       if (left.sortOrder !== right.sortOrder) return left.sortOrder - right.sortOrder
       return left.path.localeCompare(right.path)
     })
-    .map(
-      (item): RuntimeMenuNode => ({
-        ...item,
-        children:
-          item.children && item.children.length > 0
-            ? sortRuntimeMenuTree(item.children)
-            : undefined,
-      }),
-    )
+    .map((item): RuntimeMenuNode => ({
+      ...item,
+      children:
+        item.children && item.children.length > 0 ? sortRuntimeMenuTree(item.children) : undefined,
+    }))
 }
 
 const APPLICATION_SECTION_ORDER: Record<string, number> = {

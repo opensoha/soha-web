@@ -9,7 +9,12 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { DaemonSetDetailPage } from './detail-page'
 
 const testState = vi.hoisted(() => ({
-  scope: { clusterId: 'cluster-a', namespace: 'selected-ns' },
+  scope: {
+    clusterId: 'cluster-a',
+    namespace: 'selected-ns',
+    setClusterId: vi.fn(),
+    setNamespace: vi.fn(),
+  },
 }))
 const apiGetMock = vi.hoisted(() =>
   vi.fn(async (path: string) => {
@@ -166,8 +171,9 @@ describe('daemonset detail boundaries', () => {
     const requestedPaths = () => apiGetMock.mock.calls.map(([path]) => String(path))
 
     expect(requestedPaths()).toContain(
-      '/clusters/cluster-a/workloads/daemonsets/node-agent/detail?namespace=selected-ns',
+      '/clusters/cluster-a/workloads/daemonsets/node-agent/detail?namespace=url-namespace',
     )
+    expect(testState.scope.setNamespace).toHaveBeenCalledWith('url-namespace')
     expect(requestedPaths().some((path) => path.includes('/metrics?'))).toBe(false)
     expect(requestedPaths().some((path) => path.includes('/events?'))).toBe(false)
     expect(requestedPaths().some((path) => path.includes('/yaml?'))).toBe(false)
@@ -177,21 +183,23 @@ describe('daemonset detail boundaries', () => {
 
     await act(async () => clickTab(container, '指标'))
     await flushAsyncWork()
-    expect(requestedPaths().some((path) => path.includes('/metrics?namespace=selected-ns'))).toBe(
+    expect(requestedPaths().some((path) => path.includes('/metrics?namespace=url-namespace'))).toBe(
       true,
     )
     expect(container.querySelector('[data-testid="metrics-panel"]')).not.toBeNull()
 
     await act(async () => clickTab(container, '事件'))
     await flushAsyncWork()
-    expect(requestedPaths().some((path) => path.includes('/events?namespace=selected-ns'))).toBe(
+    expect(requestedPaths().some((path) => path.includes('/events?namespace=url-namespace'))).toBe(
       true,
     )
     expect(container.querySelector('[data-testid="events-panel"]')).not.toBeNull()
 
     await act(async () => clickTab(container, 'YAML'))
     await flushAsyncWork()
-    expect(requestedPaths().some((path) => path.includes('/yaml?namespace=selected-ns'))).toBe(true)
+    expect(requestedPaths().some((path) => path.includes('/yaml?namespace=url-namespace'))).toBe(
+      true,
+    )
     expect(container.querySelector('[data-testid="yaml-editor"]')).not.toBeNull()
   })
 })

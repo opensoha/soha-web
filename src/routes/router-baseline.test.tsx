@@ -44,6 +44,8 @@ vi.mock('@/features/identity/outposts/list-page', mockRoutePage('IdentityOutpost
 vi.mock('@/features/identity/policies/list-page', mockRoutePage('IdentityPoliciesPage'))
 vi.mock('@/features/identity/applications/list-page', mockRoutePage('IdentityApplicationsPage'))
 vi.mock('@/features/identity/overview/page', mockRoutePage('IdentityOverviewPage'))
+vi.mock('@/features/identity/software/page', mockRoutePage('SoftwareLibraryPage'))
+vi.mock('@/features/identity/software/storage-page', mockRoutePage('SoftwareStoragePage'))
 vi.mock('@/features/identity/providers/list-page', mockRoutePage('IdentityProvidersPage'))
 vi.mock('@/features/access/users/page', mockRoutePage('AccessUsersPage'))
 vi.mock('@/features/access/roles/page', mockRoutePage('AccessRolesPage'))
@@ -204,6 +206,8 @@ describe('router deep-link baseline', () => {
     ['/identity', 'IdentityOverviewPage'],
     ['/internal-workbench', 'IdentityOverviewPage'],
     ['/internal-workbench/overview', 'IdentityOverviewPage'],
+    ['/internal-workbench/software', 'SoftwareLibraryPage'],
+    ['/internal-workbench/software-storage', 'SoftwareStoragePage'],
     ['/identity/applications', 'IdentityApplicationsPage'],
     ['/identity/providers', 'IdentityProvidersPage'],
     ['/identity/outposts', 'IdentityOutpostsPage'],

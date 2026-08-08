@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { Button, Card, Descriptions, Spin, message } from 'antd'
+import { App, Button, Card, Descriptions, Spin } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
@@ -21,6 +21,7 @@ const StorageYAMLPanel = lazy(() => import('../shared/yaml-panel'))
 
 export function StorageClassDetailPage() {
   const { localeCode } = useI18n()
+  const { message } = App.useApp()
   const navigate = useNavigate()
   const { name = '' } = useParams()
   const { clusterId } = usePlatformScopeStore()

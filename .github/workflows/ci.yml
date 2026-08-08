@@ -58,6 +58,11 @@ jobs:
       - name: Bundle budget
         working-directory: soha-web
         run: npm run check:bundle-budget
+      - name: Kubernetes browser regression
+        working-directory: soha-web
+        env:
+          CHROME_PATH: google-chrome
+        run: npm run browser:baseline
       - name: Upload bundle manifest
         uses: actions/upload-artifact@v7
         with:

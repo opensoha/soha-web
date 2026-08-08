@@ -8,8 +8,13 @@ import { once } from 'node:events'
 
 const root = resolve(new URL('..', import.meta.url).pathname)
 const distDir = resolve(root, 'dist')
-const chromePath = process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-const routePath = '/login'
+const chromePath =
+  process.env.CHROME_PATH ||
+  (process.platform === 'darwin'
+    ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+    : 'google-chrome')
+const clusterRoute = '/clusters'
+const deploymentRoute = '/workloads/deployments/api?clusterId=cluster-a&namespace=monitoring'
 const viewport = { width: 1440, height: 1000 }
 const fatalConsolePatterns = [
   /Uncaught/i,
@@ -26,24 +31,28 @@ async function main() {
   let chrome
 
   try {
-    chrome = spawn(chromePath, [
-      '--headless=new',
-      '--disable-gpu',
-      '--disable-dev-shm-usage',
-      '--disable-background-networking',
-      '--no-first-run',
-      '--no-default-browser-check',
-      `--user-data-dir=${userDataDir}`,
-      `--remote-debugging-port=0`,
-      'about:blank',
-    ], {
-      stdio: ['ignore', 'ignore', 'pipe'],
-    })
+    chrome = spawn(
+      chromePath,
+      [
+        '--headless=new',
+        '--disable-gpu',
+        '--disable-dev-shm-usage',
+        '--disable-background-networking',
+        '--no-first-run',
+        '--no-default-browser-check',
+        `--user-data-dir=${userDataDir}`,
+        `--remote-debugging-port=0`,
+        'about:blank',
+      ],
+      {
+        stdio: ['ignore', 'ignore', 'pipe'],
+      },
+    )
 
     const webSocketURL = await waitForChromeDebugger(chrome)
     const browser = await CDPClient.connect(webSocketURL)
     try {
-      const targetID = await browser.createTarget(`http://127.0.0.1:${server.port}${routePath}`)
+      const targetID = await browser.createTarget(`http://127.0.0.1:${server.port}${clusterRoute}`)
       const pageWsURL = await browser.pageWebSocketURL(targetID)
       const page = await CDPClient.connect(pageWsURL)
       try {
@@ -66,14 +75,16 @@ async function main() {
     await rm(userDataDir, { recursive: true, force: true })
   }
 
-  console.log('browser regression baseline verified: login route')
+  console.log('browser regression baseline verified: Kubernetes workbench')
   console.log(`viewport: ${viewport.width}x${viewport.height}`)
-  console.log(`route: http://127.0.0.1:${server.port}${routePath}`)
+  console.log(`routes: ${clusterRoute}, ${deploymentRoute}`)
 }
 
 async function runBrowserBaseline(page, port) {
   const consoleErrors = []
   const failedRequests = []
+  const missingMocks = []
+  const requestedAPIs = []
 
   page.on('Log.entryAdded', ({ entry }) => {
     if (entry?.level === 'error') {
@@ -81,7 +92,9 @@ async function runBrowserBaseline(page, port) {
     }
   })
   page.on('Runtime.exceptionThrown', ({ exceptionDetails }) => {
-    consoleErrors.push(exceptionDetails?.text || exceptionDetails?.exception?.description || 'runtime exception')
+    consoleErrors.push(
+      exceptionDetails?.text || exceptionDetails?.exception?.description || 'runtime exception',
+    )
   })
   page.on('Network.loadingFailed', ({ errorText, canceled, blockedReason, requestId }) => {
     if (!canceled) {
@@ -89,14 +102,18 @@ async function runBrowserBaseline(page, port) {
     }
   })
   page.on('Fetch.requestPaused', async (event) => {
-    await handleMockedAPI(page, event)
+    const url = new URL(event.request.url)
+    requestedAPIs.push(`${url.pathname}${url.search}`)
+    await handleMockedAPI(page, event, missingMocks)
   })
 
   await page.send('Log.enable')
   await page.send('Runtime.enable')
   await page.send('Page.enable')
   await page.send('Network.enable')
-  await page.send('Fetch.enable', { patterns: [{ urlPattern: `http://127.0.0.1:${port}/api/v1/*` }] })
+  await page.send('Fetch.enable', {
+    patterns: [{ urlPattern: `http://127.0.0.1:${port}/api/v1/*` }],
+  })
   await page.send('Emulation.setDeviceMetricsOverride', {
     width: viewport.width,
     height: viewport.height,
@@ -104,57 +121,219 @@ async function runBrowserBaseline(page, port) {
     mobile: false,
   })
 
-  const loadEvent = page.waitFor('Page.loadEventFired')
-  await page.send('Page.navigate', { url: `http://127.0.0.1:${port}${routePath}` })
-  await waitForLoad(loadEvent)
-  await waitForExpression(page, `document.querySelector('.soha-auth-panel') && document.body.innerText.includes('登录控制台')`)
+  await navigate(page, port, clusterRoute)
+  await waitForExpression(page, `document.body.innerText.includes('prod-cluster')`)
+  await assertPage(page, clusterRoute, ['prod-cluster', 'v1.31.0'])
 
-  const snapshot = await page.evaluate(`(() => ({
-    title: document.title,
-    text: document.body.innerText,
-    rootChildren: document.getElementById('root')?.children.length || 0,
-    panelCount: document.querySelectorAll('.soha-auth-panel').length,
-    inputCount: document.querySelectorAll('input').length,
-    submitCount: Array.from(document.querySelectorAll('button')).filter((button) => button.innerText.includes('登录控制台')).length,
-    canvasRendered: Boolean(document.querySelector('.soha-auth-background')),
-  }))()`)
+  await navigate(page, port, deploymentRoute)
+  await waitForExpression(
+    page,
+    `document.body.innerText.includes('monitoring') && document.body.innerText.includes('滚动发布')`,
+  )
+  await assertPage(page, deploymentRoute, ['api', 'monitoring', '滚动发布'])
 
-  const missing = []
-  if (snapshot.rootChildren < 1) missing.push('React root did not render')
-  if (snapshot.panelCount < 1) missing.push('login panel')
-  if (snapshot.inputCount < 2) missing.push('username/password inputs')
-  if (snapshot.submitCount < 1) missing.push('login submit button')
-  if (!snapshot.canvasRendered) missing.push('login visual background')
-  for (const text of ['Soha 是一种能力', 'k8s 工作台', 'AI Gateway', '多工作台统一控制台']) {
-    if (!snapshot.text.includes(text)) {
-      missing.push(`login copy: ${text}`)
-    }
-  }
-  if (missing.length > 0) {
-    throw new Error(`login browser baseline missing:\n${missing.map((item) => `- ${item}`).join('\n')}`)
+  const detailRequest =
+    '/api/v1/clusters/cluster-a/workloads/deployments/api/detail?namespace=monitoring'
+  if (!requestedAPIs.includes(detailRequest)) {
+    throw new Error(`deployment deep link did not request the scoped API: ${detailRequest}`)
   }
 
-  const fatalErrors = consoleErrors.filter((item) => fatalConsolePatterns.some((pattern) => pattern.test(item)))
+  const fatalErrors = consoleErrors.filter((item) =>
+    fatalConsolePatterns.some((pattern) => pattern.test(item)),
+  )
   if (fatalErrors.length > 0) {
-    throw new Error(`browser console contains fatal errors:\n${fatalErrors.map((item) => `- ${item}`).join('\n')}`)
+    throw new Error(
+      `browser console contains fatal errors:\n${fatalErrors.map((item) => `- ${item}`).join('\n')}`,
+    )
   }
   if (failedRequests.length > 0) {
-    throw new Error(`browser request failures:\n${failedRequests.map((item) => `- ${item}`).join('\n')}`)
+    throw new Error(
+      `browser request failures:\n${failedRequests.map((item) => `- ${item}`).join('\n')}`,
+    )
+  }
+  if (missingMocks.length > 0) {
+    throw new Error(
+      `browser API mocks missing:\n${missingMocks.map((item) => `- ${item}`).join('\n')}`,
+    )
   }
 }
 
-async function handleMockedAPI(page, event) {
+async function navigate(page, port, route) {
+  const loadEvent = page.waitFor('Page.loadEventFired')
+  await page.send('Page.navigate', { url: `http://127.0.0.1:${port}${route}` })
+  await waitForLoad(loadEvent)
+}
+
+async function assertPage(page, route, expectedText) {
+  const snapshot = await page.evaluate(`(() => ({
+    path: window.location.pathname + window.location.search,
+    text: document.body.innerText,
+    rootChildren: document.getElementById('root')?.children.length || 0,
+  }))()`)
+  const missing = []
+  if (snapshot.path !== route) missing.push(`route ${route}, got ${snapshot.path}`)
+  if (snapshot.rootChildren < 1) missing.push('React root did not render')
+  for (const text of expectedText) {
+    if (!snapshot.text.includes(text)) missing.push(`page text: ${text}`)
+  }
+  if (missing.length > 0) {
+    throw new Error(`browser baseline missing:\n${missing.map((item) => `- ${item}`).join('\n')}`)
+  }
+}
+
+async function handleMockedAPI(page, event, missingMocks) {
   const url = new URL(event.request.url)
   const path = url.pathname
-  if (path === '/api/v1/auth/providers') {
-    await fulfillJSON(page, event.requestId, { data: [{ id: 'password', type: 'password', name: 'Password', enabled: true }] })
+  if (path === '/api/v1/auth/refresh') {
+    await fulfillJSON(page, event.requestId, {
+      data: {
+        tokens: {
+          accessToken: 'browser-regression-token',
+          refreshToken: 'browser-regression-refresh-token',
+          tokenType: 'Bearer',
+          expiresIn: 3600,
+          expiresAt: '2099-01-01T00:00:00Z',
+        },
+        user: {
+          userId: 'browser-regression-user',
+          userName: 'browser-regression',
+          email: 'browser-regression@soha.local',
+          roles: [],
+          teams: [],
+          projects: [],
+          tags: [],
+        },
+      },
+    })
     return
   }
-  if (path === '/api/v1/auth/login-options') {
-    await fulfillJSON(page, event.requestId, { data: { verification: { sliderEnabled: false } } })
+  if (path === '/api/v1/access/permission-snapshot') {
+    await fulfillJSON(page, event.requestId, {
+      data: {
+        permissionKeys: [
+          'workspace.resource.view',
+          'platform.clusters.view',
+          'platform.deployment.view',
+        ],
+        visibleMenuIds: ['clusters', 'workloads', 'workloads-deployments'],
+        visibleMenus: [
+          { id: 'clusters', path: '/clusters', labelZh: '集群' },
+          { id: 'workloads', path: '/workloads', labelZh: '工作负载' },
+          {
+            id: 'workloads-deployments',
+            parentId: 'workloads',
+            path: '/workloads/deployments',
+            labelZh: 'Deployments',
+          },
+        ],
+      },
+    })
     return
   }
-  await fulfillJSON(page, event.requestId, { error: { code: 'not_found', message: `mock missing for ${path}` } }, 404)
+  if (path === '/api/v1/settings/branding') {
+    await fulfillJSON(page, event.requestId, {
+      data: {
+        appTitle: 'Soha',
+        sidebarTitle: 'Soha',
+        loginLogoUrl: '',
+        expandedLogoUrl: '',
+        collapsedLogoUrl: '',
+        faviconUrl: '',
+      },
+    })
+    return
+  }
+  if (path === '/api/v1/modules') {
+    await fulfillJSON(page, event.requestId, { data: [] })
+    return
+  }
+  if (path === '/api/v1/clusters') {
+    await fulfillJSON(page, event.requestId, {
+      data: [
+        {
+          id: 'cluster-a',
+          name: 'prod-cluster',
+          region: 'standard_kubernetes',
+          environment: 'production',
+          labels: {},
+          connectionMode: 'agent',
+          version: 'v1.31.0',
+          health: { status: 'healthy' },
+        },
+      ],
+    })
+    return
+  }
+  if (path === '/api/v1/clusters/capabilities') {
+    await fulfillJSON(page, event.requestId, { data: [] })
+    return
+  }
+  if (path === '/api/v1/clusters/cluster-a/namespaces') {
+    await fulfillJSON(page, event.requestId, {
+      data: [{ name: 'monitoring', status: 'Active', labels: {} }],
+    })
+    return
+  }
+  if (path === '/api/v1/clusters/cluster-a/workloads/deployments/api/detail') {
+    await fulfillJSON(page, event.requestId, {
+      data: {
+        name: 'api',
+        namespace: 'monitoring',
+        desiredReplicas: 2,
+        readyReplicas: 2,
+        updatedReplicas: 2,
+        availableReplicas: 2,
+        observedGeneration: 1,
+        strategy: 'RollingUpdate',
+        labels: { app: 'api' },
+        selector: { app: 'api' },
+        pods: [],
+        relatedResources: [],
+      },
+    })
+    return
+  }
+  if (path === '/api/v1/clusters/cluster-a/workloads/deployments/api/rollout-status') {
+    await fulfillJSON(page, event.requestId, {
+      data: {
+        name: 'api',
+        namespace: 'monitoring',
+        revision: '3',
+        status: 'ready',
+        message: 'Deployment is available',
+        desiredReplicas: 2,
+        updatedReplicas: 2,
+        readyReplicas: 2,
+        availableReplicas: 2,
+        observedGeneration: 1,
+        conditions: [],
+      },
+    })
+    return
+  }
+  if (path === '/api/v1/clusters/cluster-a/workloads/deployments/api/rollouts') {
+    await fulfillJSON(page, event.requestId, { data: [] })
+    return
+  }
+  if (
+    [
+      '/api/v1/application-environments',
+      '/api/v1/applications',
+      '/api/v1/builds',
+      '/api/v1/workflows',
+      '/api/v1/releases',
+    ].includes(path)
+  ) {
+    await fulfillJSON(page, event.requestId, { data: [] })
+    return
+  }
+  missingMocks.push(`${event.request.method} ${path}${url.search}`)
+  await fulfillJSON(
+    page,
+    event.requestId,
+    { error: { code: 'mock_missing', message: `mock missing for ${path}` } },
+    500,
+  )
 }
 
 async function fulfillJSON(page, requestId, payload, status = 200) {
@@ -170,7 +349,9 @@ async function requireDist() {
   const index = join(distDir, 'index.html')
   const info = await stat(index).catch(() => null)
   if (!info?.isFile()) {
-    throw new Error('dist/index.html is missing; run npm run build before browser regression baseline')
+    throw new Error(
+      'dist/index.html is missing; run npm run build before browser regression baseline',
+    )
   }
 }
 
@@ -190,7 +371,10 @@ async function startStaticServer(rootDir) {
   await once(server, 'listening')
   return {
     port: server.address().port,
-    close: () => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())),
+    close: () =>
+      new Promise((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      ),
   }
 }
 
@@ -254,7 +438,13 @@ async function waitForExpression(page, expression) {
     if (result) return
     await delay(150)
   }
-  throw new Error(`Timed out waiting for browser expression: ${expression}`)
+  const snapshot = await page.evaluate(`(() => ({
+    path: window.location.pathname + window.location.search,
+    text: document.body.innerText.slice(0, 2000),
+  }))()`)
+  throw new Error(
+    `Timed out waiting for browser expression: ${expression}\n${JSON.stringify(snapshot, null, 2)}`,
+  )
 }
 
 function delay(ms) {

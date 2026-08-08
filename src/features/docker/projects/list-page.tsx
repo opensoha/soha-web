@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Key } from 'react'
+import type { Key, ReactNode } from 'react'
 import {
   App,
   Button,
@@ -40,9 +40,10 @@ import {
 } from '@/components/management-list'
 import { StepFormModal } from '@/components/step-form-modal'
 import { OperationalPlanModal } from '@/components/operational-plan-modal'
+import { MetadataTag } from '@/components/status-tag'
 import type { OperationalPlan } from '@opensoha/contracts/gen/ts/sohaapi'
-import { formatDateTime } from '@/utils/time'
 import { createUUID } from '@/utils/uuid'
+import { tableColumnPresets } from '@/utils/table-columns'
 import { computeQueries, latestTaskForResource, ResourceTaskActions } from '@/features/compute'
 import { dockerApi } from '../docker-api'
 import { dockerQueries } from '../queries'
@@ -64,6 +65,7 @@ import {
   pageTablePagination,
   refreshDocker,
   renderProjectPortSummary,
+  stringValue,
   statusTag,
   type DockerFilterState,
   useDockerOptions,
@@ -96,6 +98,15 @@ function isSingleContainerProject(project: DockerProject) {
 
 function projectTypeLabel(project: DockerProject) {
   return isSingleContainerProject(project) ? '单容器' : 'Compose'
+}
+
+function QuickStartFormSection({ children, title }: { children: ReactNode; title: string }) {
+  return (
+    <section className="soha-docker-quick-form-section">
+      <h2>{title}</h2>
+      {children}
+    </section>
+  )
 }
 
 export function buildProjectPayload(values: DockerProjectInput): DockerProjectInput {
@@ -290,8 +301,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
     deployPlanMutation.mutate(
       { id: project.id, action },
       {
-        onSuccess: (plan) =>
-          setDeployPlan({ action, idempotencyKey: createUUID(), plan, project }),
+        onSuccess: (plan) => setDeployPlan({ action, idempotencyKey: createUUID(), plan, project }),
       },
     )
   }
@@ -362,27 +372,6 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
         : next
     })
   }, [treeRows])
-  useEffect(() => {
-    if (!containerDrawerOpen) return
-    containerForm.resetFields()
-    containerForm.setFieldsValue({
-      sourceKind: 'image',
-      gitBuild: {
-        ref: 'main',
-        dockerfilePath: 'Dockerfile',
-        contextDir: '.',
-        pull: false,
-        noCache: false,
-      },
-      architecture: 'amd64',
-      protocol: 'tcp',
-      exposureScope: 'internal',
-      restartPolicy: 'unless-stopped',
-      domainScheme: 'http',
-      domainTlsEnabled: false,
-      ports: DEFAULT_CONTAINER_PORTS,
-    })
-  }, [containerDrawerOpen, containerForm])
   const applyContainerHostDefaults = (hostID?: string) => {
     const host = hosts.find((item) => item.id === hostID)
     if (host?.architecture) {
@@ -391,27 +380,36 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
   }
   const columns: ColumnsType<DockerProjectTreeRow> = [
     {
-      title: '服务 / 项目',
+      title: '项目',
       fixed: 'left',
-      width: 250,
-      render: (_value, record) => {
-        if (record.kind === 'service' && record.service) {
-          return (
-            <Space orientation="vertical" size={0}>
-              <Text>{record.service.name}</Text>
-              <Text type="secondary">{record.service.containerId || record.service.id}</Text>
-            </Space>
-          )
-        }
-        return (
-          <Space orientation="vertical" size={0}>
+      width: 190,
+      render: (_value, record) =>
+        record.kind === 'project' ? (
+          <Space orientation="vertical" size={4}>
             <Link to={`/compute/runtimes/projects/${record.project.id}`}>
-              <Text strong>{record.project.name}</Text>
+              {record.project.name}
             </Link>
-            <Text type="secondary">{record.project.slug}</Text>
+            <MetadataTag label={projectTypeLabel(record.project)} tone="purple" />
           </Space>
-        )
-      },
+        ) : (
+          <Text type="secondary">-</Text>
+        ),
+    },
+    {
+      title: '服务',
+      width: 190,
+      render: (_value, record) =>
+        record.kind === 'service' && record.service ? (
+          <Space orientation="vertical" size={4}>
+            <Space size={4}>
+              <Text>{record.service.name}</Text>
+              <MetadataTag label="服务" tone="cyan" />
+            </Space>
+            <Text type="secondary">{record.service.containerId || record.service.id}</Text>
+          </Space>
+        ) : (
+          stringValue(record.project.config?.serviceName) || <Text type="secondary">-</Text>
+        ),
     },
     {
       title: '状态',
@@ -421,55 +419,43 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
     },
     {
       title: '主机',
-      width: 190,
+      width: 170,
       render: (_value, record) => {
         const hostId = record.kind === 'service' ? record.service?.hostId : record.project.hostId
         return hostOptions.find((item) => item.value === hostId)?.label || hostId || '-'
       },
     },
     {
-      title: '类型',
-      width: 120,
-      render: (_value, record) =>
-        record.kind === 'service' ? '服务' : projectTypeLabel(record.project),
-    },
-    {
-      title: '镜像 / 端口',
-      width: 280,
+      title: '镜像',
+      width: 210,
       render: (_value, record) => {
-        if (record.kind === 'service') return record.service?.image || '-'
-        if (isSingleContainerProject(record.project))
-          return renderProjectPortSummary(record.project)
-        const count = record.children?.length ?? 0
-        return count > 0 ? `${count} 个服务` : '暂无服务'
+        const image =
+          record.kind === 'service'
+            ? record.service?.image
+            : stringValue(record.project.config?.image)
+        return image ? (
+          <MetadataTag
+            label={<span className="soha-docker-image-value">{image}</span>}
+            tone="blue"
+          />
+        ) : (
+          <Text type="secondary">-</Text>
+        )
       },
     },
     {
-      title: '环境/归属',
-      width: 180,
+      title: '端口',
+      width: 220,
       render: (_value, record) =>
-        [record.project.environment, record.project.owner || record.project.team]
-          .filter(Boolean)
-          .join(' / ') || '-',
+        record.kind === 'project' && isSingleContainerProject(record.project) ? (
+          renderProjectPortSummary(record.project)
+        ) : (
+          <Text type="secondary">-</Text>
+        ),
     },
     {
-      title: '目标态',
-      width: 120,
-      render: (_value, record) =>
-        record.kind === 'service' ? '-' : record.project.desiredState || '-',
-    },
-    {
-      title: '部署时间',
-      width: 155,
-      render: (_value, record) =>
-        record.kind === 'service'
-          ? formatDateTime(record.service?.lastSeenAt)
-          : formatDateTime(record.project.lastDeployedAt),
-    },
-    {
+      ...tableColumnPresets.task,
       title: '最近任务',
-      fixed: 'right',
-      width: 188,
       render: (_value, record) =>
         record.kind === 'service' ? (
           <Text type="secondary">-</Text>
@@ -486,24 +472,22 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
       align: 'center',
       className: 'soha-table-actions-column',
       fixed: 'right',
-      width: 220,
+      width: 200,
       render: (_value, record) => {
         if (record.kind === 'service' && record.service) {
           return (
             <Space className="soha-row-action-icons">
               {serviceActions.map(({ action, icon }) => (
-                    <ManagementIconButton
-                      key={action}
-                      aria-label={`${operationActionLabel(action)}服务`}
-                      size="small"
-                      tooltip={operationActionLabel(action)}
-                      icon={icon}
-                      loading={serviceActionMutation.isPending}
-                      onClick={() =>
-                        serviceActionMutation.mutate({ id: record.service!.id, action })
-                      }
-                    />
-                  ))}
+                <ManagementIconButton
+                  key={action}
+                  aria-label={`${operationActionLabel(action)}服务`}
+                  size="small"
+                  tooltip={operationActionLabel(action)}
+                  icon={icon}
+                  loading={serviceActionMutation.isPending}
+                  onClick={() => serviceActionMutation.mutate({ id: record.service!.id, action })}
+                />
+              ))}
             </Space>
           )
         }
@@ -659,7 +643,6 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
         loading={projectsQuery.isLoading || projectServiceQueries.some((query) => query.isLoading)}
         dataSource={treeRows}
         columns={columns}
-        scroll={{ x: 1850 }}
         pagination={pageTablePagination(page, embedded, setFilters)}
         actions={
           !embedded ? (
@@ -849,6 +832,23 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
         title="快速启动 Docker 应用"
         current={containerStep}
         form={containerForm}
+        initialValues={{
+          sourceKind: 'image',
+          gitBuild: {
+            ref: 'main',
+            dockerfilePath: 'Dockerfile',
+            contextDir: '.',
+            pull: false,
+            noCache: false,
+          },
+          architecture: 'amd64',
+          protocol: 'tcp',
+          exposureScope: 'internal',
+          restartPolicy: 'unless-stopped',
+          domainScheme: 'http',
+          domainTlsEnabled: false,
+          ports: DEFAULT_CONTAINER_PORTS,
+        }}
         loading={containerStartMutation.isPending}
         open={containerDrawerOpen}
         onClose={() => setContainerDrawerOpen(false)}
@@ -873,30 +873,39 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
               ['gitBuild', 'contextDir'],
             ],
             children: (
-              <>
-                <Form.Item name="sourceKind" label="应用来源" rules={[{ required: true }]}>
-                  <Segmented
-                    block
-                    onChange={(value) =>
-                      setContainerSourceKind(value as 'image' | 'git_dockerfile')
-                    }
-                    options={[
-                      { value: 'image', label: '已有镜像', icon: <CloudOutlined /> },
-                      { value: 'git_dockerfile', label: 'Git 构建', icon: <BranchesOutlined /> },
-                    ]}
-                  />
-                </Form.Item>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <Form.Item name="name" label="应用名称" rules={[{ required: true }]}>
-                    <Input placeholder="preview-api" />
-                  </Form.Item>
-                  <Form.Item name="hostId" label="Docker 主机" rules={[{ required: true }]}>
-                    <Select
-                      showSearch={{ optionFilterProp: 'label' }}
-                      options={hostOptions}
-                      onChange={applyContainerHostDefaults}
+              <div className="soha-docker-quick-form">
+                <QuickStartFormSection title="来源方式">
+                  <Form.Item name="sourceKind" label="应用来源" rules={[{ required: true }]}>
+                    <Segmented
+                      block
+                      onChange={(value) =>
+                        setContainerSourceKind(value as 'image' | 'git_dockerfile')
+                      }
+                      options={[
+                        { value: 'image', label: '已有镜像', icon: <CloudOutlined /> },
+                        { value: 'git_dockerfile', label: 'Git 构建', icon: <BranchesOutlined /> },
+                      ]}
                     />
                   </Form.Item>
+                </QuickStartFormSection>
+                <QuickStartFormSection title="应用与目标">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <Form.Item name="name" label="应用名称" rules={[{ required: true }]}>
+                      <Input placeholder="preview-api" />
+                    </Form.Item>
+                    <Form.Item name="hostId" label="Docker 主机" rules={[{ required: true }]}>
+                      <Select
+                        showSearch={{ optionFilterProp: 'label' }}
+                        options={hostOptions}
+                        onChange={applyContainerHostDefaults}
+                      />
+                    </Form.Item>
+                    <Form.Item name="architecture" label="架构">
+                      <Select options={ARCHITECTURE_OPTIONS} />
+                    </Form.Item>
+                  </div>
+                </QuickStartFormSection>
+                <QuickStartFormSection title="镜像与构建">
                   <Form.Item
                     name="image"
                     label={containerSourceKind === 'git_dockerfile' ? '构建镜像' : '镜像'}
@@ -910,74 +919,74 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                       }
                     />
                   </Form.Item>
-                  <Form.Item name="architecture" label="架构">
-                    <Select options={ARCHITECTURE_OPTIONS} />
-                  </Form.Item>
-                </div>
-                {containerSourceKind === 'git_dockerfile' ? (
-                  <>
-                    <Form.Item
-                      name={['gitBuild', 'repositoryUrl']}
-                      label="Git 仓库"
-                      rules={[
-                        { required: true },
-                        { pattern: /^(https?|ssh):\/\/[^\s]+$/i, message: '请输入有效的仓库 URL' },
-                      ]}
-                    >
-                      <Input placeholder="https://github.com/org/repository.git" />
+                  {containerSourceKind === 'git_dockerfile' ? (
+                    <>
+                      <Form.Item
+                        name={['gitBuild', 'repositoryUrl']}
+                        label="Git 仓库"
+                        rules={[
+                          { required: true },
+                          {
+                            pattern: /^(https?|ssh):\/\/[^\s]+$/i,
+                            message: '请输入有效的仓库 URL',
+                          },
+                        ]}
+                      >
+                        <Input placeholder="https://github.com/org/repository.git" />
+                      </Form.Item>
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <Form.Item
+                          name={['gitBuild', 'ref']}
+                          label="分支 / Tag / Commit"
+                          rules={[{ required: true }]}
+                        >
+                          <Input placeholder="main" />
+                        </Form.Item>
+                        <Form.Item
+                          name={['gitBuild', 'dockerfilePath']}
+                          label="Dockerfile"
+                          rules={[{ required: true }]}
+                        >
+                          <Input placeholder="Dockerfile" />
+                        </Form.Item>
+                        <Form.Item
+                          name={['gitBuild', 'contextDir']}
+                          label="构建目录"
+                          rules={[{ required: true }]}
+                        >
+                          <Input placeholder="." />
+                        </Form.Item>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <Form.Item
+                          name={['gitBuild', 'pull']}
+                          label="拉取最新基础镜像"
+                          valuePropName="checked"
+                        >
+                          <Switch />
+                        </Form.Item>
+                        <Form.Item
+                          name={['gitBuild', 'noCache']}
+                          label="禁用构建缓存"
+                          valuePropName="checked"
+                        >
+                          <Switch />
+                        </Form.Item>
+                      </div>
+                    </>
+                  ) : (
+                    <Form.Item name="imagePullPolicy" label="拉取策略">
+                      <Select
+                        allowClear
+                        options={['always', 'missing', 'never'].map((item) => ({
+                          value: item,
+                          label: item,
+                        }))}
+                      />
                     </Form.Item>
-                    <div className="grid gap-3 md:grid-cols-3">
-                      <Form.Item
-                        name={['gitBuild', 'ref']}
-                        label="分支 / Tag / Commit"
-                        rules={[{ required: true }]}
-                      >
-                        <Input placeholder="main" />
-                      </Form.Item>
-                      <Form.Item
-                        name={['gitBuild', 'dockerfilePath']}
-                        label="Dockerfile"
-                        rules={[{ required: true }]}
-                      >
-                        <Input placeholder="Dockerfile" />
-                      </Form.Item>
-                      <Form.Item
-                        name={['gitBuild', 'contextDir']}
-                        label="构建目录"
-                        rules={[{ required: true }]}
-                      >
-                        <Input placeholder="." />
-                      </Form.Item>
-                    </div>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <Form.Item
-                        name={['gitBuild', 'pull']}
-                        label="拉取最新基础镜像"
-                        valuePropName="checked"
-                      >
-                        <Switch />
-                      </Form.Item>
-                      <Form.Item
-                        name={['gitBuild', 'noCache']}
-                        label="禁用构建缓存"
-                        valuePropName="checked"
-                      >
-                        <Switch />
-                      </Form.Item>
-                    </div>
-                  </>
-                ) : (
-                  <Form.Item name="imagePullPolicy" label="拉取策略">
-                    <Select
-                      allowClear
-                      options={['always', 'missing', 'never'].map((item) => ({
-                        value: item,
-                        label: item,
-                      }))}
-                    />
-                  </Form.Item>
-                )}
-              </>
+                  )}
+                </QuickStartFormSection>
+              </div>
             ),
           },
           {

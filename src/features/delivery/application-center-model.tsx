@@ -36,21 +36,6 @@ export function summarizeBuildSource(source?: BuildSource) {
   }
 }
 
-export function defaultBuildSources() {
-  return [
-    {
-      id: '',
-      name: 'Repository Dockerfile',
-      type: 'repo_dockerfile' as const,
-      enabled: true,
-      isDefault: true,
-      buildImage: '',
-      defaultTag: '',
-      config: { contextDir: '.', dockerfilePath: 'Dockerfile', builderKind: 'docker' },
-    },
-  ] satisfies BuildSource[]
-}
-
 export function splitApplicationGroups(value?: string | string[] | null) {
   const raw = Array.isArray(value) ? value.join(',') : String(value ?? '')
   return Array.from(
@@ -292,7 +277,7 @@ export type ApplicationCenterState = ReturnType<typeof useApplicationCenterState
 
 export function ApplicationCenterModals({ state }: { state: ApplicationCenterState }) {
   const selectedTargetCandidate = (record: Record<string, unknown>) =>
-    (state.targetCandidatesQuery.data ?? []).find(
+    (state.targetCandidatesQuery.data?.items ?? []).find(
       (item) =>
         `${item.clusterId}/${item.namespace}/${item.workloadName}` === record.targetWorkload,
     )
@@ -300,7 +285,7 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
   return (
     <>
       <Modal
-        title={state.editingApp ? '编辑应用档案' : '新建应用档案'}
+        title={state.editingApp ? '编辑应用' : '创建应用'}
         open={state.appModalVisible}
         onCancel={() => {
           state.setAppModalVisible(false)
@@ -308,7 +293,7 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
         }}
         footer={null}
         destroyOnHidden
-        width={860}
+        width={state.editingApp ? 640 : 520}
       >
         <Form
           form={state.appForm}
@@ -321,18 +306,23 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
                   group: splitApplicationGroups(state.editingApp.group),
                   enabled: state.editingApp.enabled,
                 }
-              : { enabled: true, language: 'go', group: [] }
+              : undefined
           }
           onFinish={(values) => {
-            const payload = {
-              ...values,
-              group: joinApplicationGroups(values.group as string[] | string),
-              buildSources: state.buildSources,
-            }
             if (state.editingApp) {
+              const payload = {
+                ...values,
+                group: joinApplicationGroups(values.group as string[] | string),
+                language: state.editingApp.language,
+                buildSources: state.buildSources,
+              }
               state.updateAppMutation.mutate({ id: state.editingApp.id, payload })
             } else {
-              state.createAppMutation.mutate(payload)
+              state.createAppMutation.mutate({
+                name: values.name,
+                key: values.key,
+                enabled: true,
+              })
             }
           }}
         >
@@ -350,35 +340,25 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
           >
             <Input />
           </Form.Item>
-          <Form.Item
-            name="group"
-            label="应用分组"
-            rules={[{ required: true, message: '请输入应用分组' }]}
-          >
-            <Select
-              mode="tags"
-              tokenSeparators={[',', '，', ';', '；', '/']}
-              placeholder="输入一个或多个分组"
-              maxTagCount="responsive"
-              options={state.applicationGroupOptions.map((group) => ({
-                value: group,
-                label: group,
-              }))}
-            />
-          </Form.Item>
-          <Form.Item name="language" label="语言">
-            <Select
-              options={[
-                { value: 'go', label: 'Go' },
-                { value: 'java', label: 'Java' },
-                { value: 'node', label: 'Node.js' },
-                { value: 'python', label: 'Python' },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="enabled" label="启用" valuePropName="checked">
-            <Switch />
-          </Form.Item>
+          {state.editingApp ? (
+            <>
+              <Form.Item name="group" label="应用分组">
+                <Select
+                  mode="tags"
+                  tokenSeparators={[',', '，', ';', '；', '/']}
+                  placeholder="可选，用于筛选应用"
+                  maxTagCount="responsive"
+                  options={state.applicationGroupOptions.map((group) => ({
+                    value: group,
+                    label: group,
+                  }))}
+                />
+              </Form.Item>
+              <Form.Item name="enabled" label="启用" valuePropName="checked">
+                <Switch />
+              </Form.Item>
+            </>
+          ) : null}
           <div className="soha-form-actions">
             <Button onClick={() => state.setAppModalVisible(false)}>取消</Button>
             <Button
@@ -416,8 +396,16 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
                   refType: state.editingBinding.buildPolicy?.refType || 'branch',
                   refValue: state.editingBinding.buildPolicy?.refValue,
                   imageTagTemplate: state.editingBinding.buildPolicy?.imageTagTemplate,
-                  buildVariablesText: JSON.stringify(state.editingBinding.buildPolicy?.variables ?? {}, null, 2),
-                  buildArgsText: JSON.stringify(state.editingBinding.buildPolicy?.buildArgs ?? {}, null, 2),
+                  buildVariablesText: JSON.stringify(
+                    state.editingBinding.buildPolicy?.variables ?? {},
+                    null,
+                    2,
+                  ),
+                  buildArgsText: JSON.stringify(
+                    state.editingBinding.buildPolicy?.buildArgs ?? {},
+                    null,
+                    2,
+                  ),
                   targetsText: JSON.stringify(state.editingBinding.targets ?? [], null, 2),
                   actionKind: state.editingBinding.releasePolicy?.actionKind || 'deploy',
                   requiresApproval: state.editingBinding.releasePolicy?.requiresApproval,
@@ -472,21 +460,23 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
               resourceSelector: {
                 matchLabels,
               },
-              targets: configuredTargets.length ? configuredTargets : target
-                ? [
-                    {
-                      clusterId: target.clusterId,
-                      namespace: target.namespace,
-                      targetKind: 'k8s_workload',
-                      executorKind: 'k8s_job_runner',
-                      workloadKind: target.workloadKind,
-                      workloadName: target.workloadName,
-                      containerName: String(values.targetContainer || ''),
-                      metadata: {},
-                      enabled: true,
-                    },
-                  ]
-                : [],
+              targets: configuredTargets.length
+                ? configuredTargets
+                : target
+                  ? [
+                      {
+                        clusterId: target.clusterId,
+                        namespace: target.namespace,
+                        targetKind: 'k8s_workload',
+                        executorKind: 'k8s_job_runner',
+                        workloadKind: target.workloadKind,
+                        workloadName: target.workloadName,
+                        containerName: String(values.targetContainer || ''),
+                        metadata: {},
+                        enabled: true,
+                      },
+                    ]
+                  : [],
             }
             if (state.editingBinding) {
               state.updateBindingMutation.mutate({ id: state.editingBinding.id, payload })
@@ -530,7 +520,13 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
             />
           </Form.Item>
           <Form.Item name="refType" label="Ref 类型">
-            <Select options={[{ value: 'branch', label: 'Branch' }, { value: 'tag', label: 'Tag' }, { value: 'commit', label: 'Commit' }]} />
+            <Select
+              options={[
+                { value: 'branch', label: 'Branch' },
+                { value: 'tag', label: 'Tag' },
+                { value: 'commit', label: 'Commit' },
+              ]}
+            />
           </Form.Item>
           <Form.Item name="refValue" label="环境默认 Ref">
             <Input placeholder="main / v1.0.0 / commit SHA" />
@@ -571,7 +567,7 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
             <Select
               allowClear
               showSearch
-              options={(state.targetCandidatesQuery.data ?? []).map((item) => ({
+              options={(state.targetCandidatesQuery.data?.items ?? []).map((item) => ({
                 value: `${item.clusterId}/${item.namespace}/${item.workloadName}`,
                 label: `${item.workloadName} · ${item.namespace}`,
               }))}

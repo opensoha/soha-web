@@ -1,8 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Button, Card, Descriptions, Input, Space, Tabs, Tag, Typography } from 'antd'
+import { Card, Descriptions, Input, Tabs } from 'antd'
 import { useQuery } from '@tanstack/react-query'
-import { Link, Navigate, useParams } from 'react-router-dom'
-import { ManagementDetailHeader } from '@/components/management-list'
+import { Navigate, useParams } from 'react-router-dom'
 import { useAIPageContext } from '@/features/copilot'
 import { formatDateTime } from '@/utils/time'
 import { dockerQueries } from '../queries'
@@ -13,12 +12,10 @@ import {
   configArrayCount,
   configTextValue,
   normalizePage,
-  statusTag,
   stringValue,
   useDockerPermissions,
 } from '../shared/ui'
 
-const { Text } = Typography
 const { TextArea } = Input
 
 const DockerProjectLogsPanel = lazy(() =>
@@ -52,10 +49,7 @@ function ProjectDetailWorkspace() {
   const [runtimeServiceName, setRuntimeServiceName] = useState('')
   const projectQuery = useQuery(dockerQueries.project(resolvedProjectId, dockerModuleEnabled))
   const detailServicesQuery = useQuery(
-    dockerQueries.projectServices(
-      resolvedProjectId,
-      dockerModuleEnabled && canViewServices,
-    ),
+    dockerQueries.projectServices(resolvedProjectId, dockerModuleEnabled && canViewServices),
   )
   const project = projectQuery.data
   const isSingleContainerProject = project?.sourceKind === 'single_container'
@@ -109,7 +103,7 @@ function ProjectDetailWorkspace() {
         key: 'config',
         label: '配置',
         children: (
-          <Card loading={projectQuery.isLoading}>
+          <Card className="soha-detail-card" loading={projectQuery.isLoading}>
             <Descriptions
               size="small"
               column={{ xs: 1, sm: 2, lg: 3 }}
@@ -167,34 +161,36 @@ function ProjectDetailWorkspace() {
         key: 'compose',
         label: 'Compose',
         children: (
-          <Tabs
-            items={[
-              {
-                key: 'composeContent',
-                label: 'compose.yaml',
-                children: (
-                  <TextArea
-                    rows={18}
-                    spellCheck={false}
-                    value={project?.composeContent || ''}
-                    readOnly
-                  />
-                ),
-              },
-              {
-                key: 'envContent',
-                label: '.env',
-                children: (
-                  <TextArea
-                    rows={12}
-                    spellCheck={false}
-                    value={project?.envContent || ''}
-                    readOnly
-                  />
-                ),
-              },
-            ]}
-          />
+          <Card className="soha-detail-card">
+            <Tabs
+              items={[
+                {
+                  key: 'composeContent',
+                  label: 'compose.yaml',
+                  children: (
+                    <TextArea
+                      rows={18}
+                      spellCheck={false}
+                      value={project?.composeContent || ''}
+                      readOnly
+                    />
+                  ),
+                },
+                {
+                  key: 'envContent',
+                  label: '.env',
+                  children: (
+                    <TextArea
+                      rows={12}
+                      spellCheck={false}
+                      value={project?.envContent || ''}
+                      readOnly
+                    />
+                  ),
+                },
+              ]}
+            />
+          </Card>
         ),
       }
   const detailTabItems = [
@@ -202,7 +198,7 @@ function ProjectDetailWorkspace() {
       key: 'info',
       label: '信息',
       children: (
-        <Card loading={projectQuery.isLoading}>
+        <Card className="soha-detail-card" loading={projectQuery.isLoading}>
           <Descriptions
             size="small"
             column={{ xs: 1, sm: 2, lg: 3 }}
@@ -222,16 +218,20 @@ function ProjectDetailWorkspace() {
         </Card>
       ),
     },
-    ...(canViewServiceLogs
+    ...(canViewServices
       ? [
           {
             key: 'services',
             label: '服务',
-            children: <ServicesTable fixedProjectId={resolvedProjectId} />,
+            children: (
+              <div className="soha-page-section">
+                <ServicesTable fixedProjectId={resolvedProjectId} />
+              </div>
+            ),
           },
         ]
       : []),
-    ...(canViewServices
+    ...(canViewServiceLogs
       ? [
           {
             key: 'logs',
@@ -300,7 +300,9 @@ function ProjectDetailWorkspace() {
             key: 'ports',
             label: '端口映射',
             children: (
-              <PortsTable fixedProjectId={resolvedProjectId} fixedHostId={project?.hostId} />
+              <div className="soha-page-section">
+                <PortsTable fixedProjectId={resolvedProjectId} fixedHostId={project?.hostId} />
+              </div>
             ),
           },
         ]
@@ -309,25 +311,7 @@ function ProjectDetailWorkspace() {
   ]
   return (
     <div className="soha-page soha-docker-page">
-      <ManagementDetailHeader
-        title={project?.name || '容器详情'}
-        description={isSingleContainerProject ? '单容器服务' : 'Compose 项目'}
-        meta={
-          project ? (
-            <Space size={8} wrap>
-              {statusTag(project.status)}
-              <Tag>{project.sourceKind || 'inline_compose'}</Tag>
-              <Text type="secondary">{project.slug || project.id}</Text>
-            </Space>
-          ) : null
-        }
-        actions={
-          <Link to="/compute/runtimes/projects">
-            <Button>返回</Button>
-          </Link>
-        }
-      />
-      <Tabs className="soha-docker-management-tabs" items={detailTabItems} />
+      <Tabs className="soha-resource-tabs soha-workload-detail-tabs" items={detailTabItems} />
     </div>
   )
 }

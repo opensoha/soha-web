@@ -3,6 +3,7 @@ import type { ScopeKey } from '@/types'
 import {
   getClusterDetail,
   getClusterLogCollection,
+  listClusterCapabilities,
   listClusterLogDataSources,
   listClusterNodes,
   listClusters,
@@ -19,6 +20,11 @@ export const clusterQueries = {
     queryOptions<Cluster[]>({
       queryKey: clusterKeys.list(),
       queryFn: listClusters,
+    }),
+  capabilities: () =>
+    queryOptions({
+      queryKey: clusterKeys.capabilities(),
+      queryFn: listClusterCapabilities,
     }),
   detail: (scope: ScopeKey) =>
     queryOptions<ClusterDetail>({

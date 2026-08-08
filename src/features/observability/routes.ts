@@ -1,5 +1,6 @@
 import { defineRoutes } from '@/routes/definitions'
 import { observabilityAlertRoutes } from './alerts/routes'
+import { observabilityDashboardRoutes } from './dashboards/routes'
 import { observabilityEventRoutes } from './events/routes'
 import { observabilityHealingRoutes } from './healing/routes'
 import { observabilityIntegrationRoutes } from './integrations/routes'
@@ -184,6 +185,7 @@ export const observabilityCompatibilityRoutes = defineRoutes([
 export const observabilityRouteManifests = [
   observabilityParentRoutes,
   observabilityOverviewRoutes,
+  observabilityDashboardRoutes,
   observabilitySignalRoutes,
   observabilityLogRoutes,
   observabilityProviderRoutes,

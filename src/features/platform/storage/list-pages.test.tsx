@@ -111,13 +111,15 @@ vi.mock('@/components/management-data-page', () => ({
 }))
 vi.mock('antd', async (importOriginal) => {
   const actual = await importOriginal<typeof import('antd')>()
+  const message = { error: vi.fn(), success: vi.fn() }
   return {
     ...actual,
+    App: { ...actual.App, useApp: () => ({ message }) },
     Popconfirm: ({ children, onConfirm }: { children?: ReactNode; onConfirm?: () => void }) => (
       <span onClick={onConfirm}>{children}</span>
     ),
     Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
-    message: { error: vi.fn(), success: vi.fn() },
+    message,
   }
 })
 

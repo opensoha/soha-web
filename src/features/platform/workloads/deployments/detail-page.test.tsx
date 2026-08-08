@@ -12,6 +12,8 @@ const testState = vi.hoisted(() => ({
   scope: {
     clusterId: 'cluster-a' as string | null,
     namespace: 'monitoring' as string | null,
+    setClusterId: vi.fn(),
+    setNamespace: vi.fn(),
   },
 }))
 
@@ -170,7 +172,9 @@ async function renderDetail() {
       <QueryClientProvider client={queryClient}>
         <AntdApp>
           <MemoryRouter
-            initialEntries={['/workloads/deployments/prometheus?namespace=url-namespace']}
+            initialEntries={[
+              '/workloads/deployments/prometheus?clusterId=url-cluster&namespace=url-namespace',
+            ]}
           >
             <Routes>
               <Route
@@ -211,8 +215,10 @@ describe('deployment detail page boundaries', () => {
     const requestedPaths = () => apiGetMock.mock.calls.map(([path]) => String(path))
 
     expect(requestedPaths().filter((path) => path.includes('/detail?'))).toEqual([
-      '/clusters/cluster-a/workloads/deployments/prometheus/detail?namespace=monitoring',
+      '/clusters/url-cluster/workloads/deployments/prometheus/detail?namespace=url-namespace',
     ])
+    expect(testState.scope.setClusterId).toHaveBeenCalledWith('url-cluster')
+    expect(testState.scope.setNamespace).toHaveBeenCalledWith('url-namespace')
     expect(requestedPaths().some((path) => path.includes('/metrics?'))).toBe(false)
     expect(requestedPaths().some((path) => path.includes('/events?'))).toBe(false)
     expect(requestedPaths().some((path) => path.includes('/yaml?'))).toBe(false)
@@ -222,21 +228,23 @@ describe('deployment detail page boundaries', () => {
 
     await act(async () => clickTab(container, '指标'))
     await flushAsyncWork()
-    expect(requestedPaths().some((path) => path.includes('/metrics?namespace=monitoring'))).toBe(
+    expect(requestedPaths().some((path) => path.includes('/metrics?namespace=url-namespace'))).toBe(
       true,
     )
     expect(container.querySelector('[data-testid="metrics-panel"]')).not.toBeNull()
 
     await act(async () => clickTab(container, '事件'))
     await flushAsyncWork()
-    expect(requestedPaths().some((path) => path.includes('/events?namespace=monitoring'))).toBe(
+    expect(requestedPaths().some((path) => path.includes('/events?namespace=url-namespace'))).toBe(
       true,
     )
     expect(container.querySelector('[data-testid="events-panel"]')).not.toBeNull()
 
     await act(async () => clickTab(container, 'YAML'))
     await flushAsyncWork()
-    expect(requestedPaths().some((path) => path.includes('/yaml?namespace=monitoring'))).toBe(true)
+    expect(requestedPaths().some((path) => path.includes('/yaml?namespace=url-namespace'))).toBe(
+      true,
+    )
     expect(container.querySelector('[data-testid="yaml-editor"]')).not.toBeNull()
   })
 })

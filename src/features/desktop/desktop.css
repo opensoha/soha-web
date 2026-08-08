@@ -1,0 +1,668 @@
+.soha-desktop-shell {
+  display: grid;
+  grid-template-columns: 216px minmax(0, 1fr);
+  min-height: 100vh;
+  background: var(--soha-bg-surface-muted);
+  color: var(--soha-text-primary);
+}
+
+.soha-desktop-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 18px 12px 14px;
+  border-right: 1px solid var(--soha-border-color);
+  background: var(--soha-bg-surface);
+}
+
+.soha-desktop-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 8px 16px;
+}
+
+.soha-desktop-brand-mark {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--soha-primary);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.soha-desktop-brand strong,
+.soha-desktop-brand small,
+.soha-desktop-user strong,
+.soha-desktop-user small,
+.soha-desktop-setting-row span {
+  display: block;
+}
+
+.soha-desktop-brand strong {
+  font-size: 15px;
+}
+.soha-desktop-brand small,
+.soha-desktop-user small {
+  color: var(--soha-text-tertiary);
+}
+
+.soha-desktop-nav {
+  display: grid;
+  gap: 4px;
+  margin-top: 14px;
+}
+
+.soha-desktop-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 6px;
+  color: var(--soha-text-secondary);
+  font-size: 13px;
+}
+
+.soha-desktop-nav-item:hover {
+  background: var(--soha-fill-weak);
+  color: var(--soha-text-primary);
+}
+
+.soha-desktop-nav-item.is-active {
+  background: var(--soha-primary-light-default);
+  color: var(--soha-primary);
+  font-weight: 600;
+}
+
+.soha-desktop-sidebar-footer {
+  display: grid;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--soha-border-color);
+}
+
+.soha-desktop-user {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.soha-desktop-user:hover {
+  background: var(--soha-fill-weak);
+}
+.soha-desktop-user span {
+  min-width: 0;
+}
+.soha-desktop-user strong,
+.soha-desktop-user small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.soha-desktop-main {
+  min-width: 0;
+}
+
+.soha-desktop-titlebar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 52px;
+  padding: 0 28px;
+  border-bottom: 1px solid var(--soha-border-color);
+  background: var(--soha-bg-surface);
+  color: var(--soha-text-tertiary);
+}
+
+.soha-desktop-connection {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.soha-desktop-connection i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--soha-success);
+}
+
+.soha-desktop-content {
+  height: calc(100vh - 53px);
+  overflow: auto;
+}
+
+.soha-desktop-page {
+  width: min(1040px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 34px 0 52px;
+}
+
+.soha-desktop-page-heading {
+  margin-bottom: 28px;
+}
+.soha-desktop-page-heading > span {
+  color: var(--soha-primary);
+  font-size: 11px;
+  font-weight: 700;
+}
+.soha-desktop-page-heading h1 {
+  margin: 4px 0 6px;
+  font-size: 25px;
+  line-height: 1.3;
+  letter-spacing: 0;
+}
+.soha-desktop-page-heading p,
+.soha-desktop-section-heading p,
+.soha-desktop-app-copy p,
+.soha-desktop-profile p {
+  margin: 0;
+  color: var(--soha-text-tertiary);
+}
+
+.soha-desktop-status-band {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin-bottom: 32px;
+  border: 1px solid var(--soha-border-color);
+  border-radius: 8px;
+  background: var(--soha-bg-surface);
+}
+
+.soha-desktop-status-band > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 18px 20px;
+}
+
+.soha-desktop-status-band > div + div {
+  border-left: 1px solid var(--soha-border-color);
+}
+.soha-desktop-status-band svg {
+  color: var(--soha-success);
+  font-size: 18px;
+}
+.soha-desktop-status-band span,
+.soha-desktop-status-band strong,
+.soha-desktop-status-band small {
+  display: block;
+}
+.soha-desktop-status-band small {
+  color: var(--soha-text-tertiary);
+}
+
+.soha-desktop-section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  margin-bottom: 14px;
+}
+
+.soha-desktop-section h2,
+.soha-desktop-settings-section h2,
+.soha-desktop-profile h2,
+.soha-desktop-app-title h2 {
+  margin: 0;
+  letter-spacing: 0;
+}
+.soha-desktop-section-heading h2,
+.soha-desktop-settings-section > h2 {
+  font-size: 16px;
+}
+
+.soha-desktop-app-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.soha-desktop-app-card {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  min-height: 94px;
+  padding: 16px;
+  border: 1px solid var(--soha-border-color);
+  border-radius: 8px;
+  background: var(--soha-bg-surface);
+}
+
+.soha-desktop-app-card:hover {
+  border-color: var(--soha-primary-disabled);
+  box-shadow: var(--soha-shadow-strong);
+}
+.soha-desktop-app-copy {
+  min-width: 0;
+}
+.soha-desktop-app-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.soha-desktop-app-title h2 {
+  overflow: hidden;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.soha-desktop-app-copy p {
+  overflow: hidden;
+  margin-top: 2px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.soha-desktop-app-tags {
+  min-height: 20px;
+  margin-top: 7px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.soha-desktop-app-tags .ant-tag {
+  margin-inline-end: 4px;
+}
+
+.soha-desktop-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+  color: var(--soha-text-tertiary);
+}
+.soha-desktop-toolbar .ant-input-affix-wrapper {
+  width: min(420px, 100%);
+}
+
+.soha-desktop-software-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 22px;
+  padding: 14px 16px;
+  border: 1px solid var(--soha-border-color);
+  border-left: 3px solid var(--soha-success);
+  background: var(--soha-bg-surface);
+}
+.soha-desktop-software-status > svg {
+  color: var(--soha-success);
+  font-size: 20px;
+}
+.soha-desktop-software-status span,
+.soha-desktop-software-status strong,
+.soha-desktop-software-status small {
+  display: block;
+}
+.soha-desktop-software-status small {
+  margin-top: 2px;
+  color: var(--soha-text-tertiary);
+}
+
+.soha-desktop-software-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.soha-desktop-software-card {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  min-height: 116px;
+  padding: 16px;
+  border: 1px solid var(--soha-border-color);
+  border-radius: 8px;
+  background: var(--soha-bg-surface);
+}
+.soha-desktop-software-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--soha-fill-weak);
+  color: var(--soha-primary);
+  font-size: 18px;
+  font-weight: 700;
+}
+.soha-desktop-software-copy {
+  min-width: 0;
+}
+.soha-desktop-software-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.soha-desktop-software-title h2 {
+  overflow: hidden;
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.soha-desktop-software-copy p {
+  overflow: hidden;
+  margin: 4px 0;
+  color: var(--soha-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.soha-desktop-software-copy small {
+  color: var(--soha-text-tertiary);
+}
+.soha-desktop-software-progress {
+  grid-column: 2 / -1;
+}
+.soha-desktop-software-progress > span {
+  color: var(--soha-text-tertiary);
+  font-size: 12px;
+}
+
+.soha-desktop-profile {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 24px 0;
+  border-bottom: 1px solid var(--soha-border-color);
+}
+.soha-desktop-profile h2 {
+  margin-bottom: 2px;
+  font-size: 20px;
+}
+.soha-desktop-profile .ant-tag {
+  margin-top: 8px;
+}
+
+.soha-desktop-details {
+  margin: 0;
+}
+.soha-desktop-details > div {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  padding: 16px 0;
+  border-bottom: 1px solid var(--soha-border-color);
+}
+.soha-desktop-details dt {
+  color: var(--soha-text-tertiary);
+}
+.soha-desktop-details dd {
+  margin: 0;
+}
+
+.soha-desktop-settings-section {
+  margin-bottom: 28px;
+  border-top: 1px solid var(--soha-border-color);
+}
+.soha-desktop-settings-section > h2 {
+  padding: 18px 0 8px;
+}
+.soha-desktop-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 68px;
+  border-bottom: 1px solid var(--soha-border-color);
+}
+.soha-desktop-setting-row small {
+  margin-top: 2px;
+  color: var(--soha-text-tertiary);
+}
+.soha-desktop-setting-row .ant-select {
+  width: 148px;
+}
+.soha-desktop-update-note {
+  margin-top: 12px;
+  color: var(--soha-text-tertiary);
+}
+
+.soha-desktop-auth-state {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  color: var(--soha-text-secondary);
+}
+.soha-desktop-spinner {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--soha-border-color);
+  border-top-color: var(--soha-primary);
+  border-radius: 50%;
+  animation: soha-desktop-spin 0.8s linear infinite;
+}
+@keyframes soha-desktop-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.soha-desktop-login {
+  min-height: 100vh;
+  background:
+    linear-gradient(var(--soha-border-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--soha-border-color) 1px, transparent 1px),
+    var(--soha-bg-surface-muted);
+  background-size: 48px 48px;
+}
+
+.soha-desktop-login-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  padding: 0 22px;
+  border-bottom: 1px solid var(--soha-border-color);
+  background: var(--soha-bg-surface);
+}
+
+.soha-desktop-login-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+}
+
+.soha-desktop-login-brand .soha-desktop-brand-mark {
+  width: 30px;
+  height: 30px;
+  font-size: 15px;
+}
+
+.soha-desktop-login-main {
+  display: grid;
+  box-sizing: border-box;
+  min-height: calc(100vh - 57px);
+  place-items: center;
+  padding: 32px 20px;
+}
+
+.soha-desktop-login-panel {
+  box-sizing: border-box;
+  width: min(400px, 100%);
+  padding: 32px;
+  border: 1px solid var(--soha-border-color);
+  border-top: 3px solid var(--soha-primary);
+  border-radius: 8px;
+  background: var(--soha-bg-surface);
+  box-shadow: var(--soha-shadow-strong);
+}
+
+.soha-desktop-login-heading {
+  margin-bottom: 24px;
+}
+
+.soha-desktop-login-heading > span {
+  color: var(--soha-primary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.soha-desktop-login-heading h1 {
+  margin: 5px 0 5px;
+  font-size: 24px;
+  line-height: 1.3;
+  letter-spacing: 0;
+}
+
+.soha-desktop-login-heading p {
+  margin: 0;
+  color: var(--soha-text-tertiary);
+}
+
+.soha-desktop-login-panel .ant-alert {
+  margin-bottom: 18px;
+}
+
+.soha-desktop-login-panel .ant-form-item {
+  margin-bottom: 16px;
+}
+
+.soha-desktop-login-panel .ant-input-affix-wrapper,
+.soha-desktop-login-panel .ant-btn-primary {
+  min-height: 40px;
+}
+
+.soha-desktop-login-slider {
+  margin: 4px 0 18px;
+  padding: 12px 14px 4px;
+  border: 1px solid var(--soha-border-color);
+  border-radius: 6px;
+  background: var(--soha-bg-surface-muted);
+}
+
+.soha-desktop-login-slider > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--soha-text-secondary);
+}
+
+.soha-desktop-login-slider.is-verified > span {
+  color: var(--soha-success);
+}
+
+.soha-desktop-login-providers {
+  display: grid;
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--soha-border-color);
+}
+
+.soha-desktop-login-providers > span {
+  margin-bottom: 2px;
+  color: var(--soha-text-tertiary);
+  text-align: center;
+}
+
+.soha-desktop-login-panel footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 24px;
+  color: var(--soha-text-tertiary);
+}
+
+.soha-desktop-login-panel footer i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--soha-success);
+}
+
+@media (max-width: 760px) {
+  .soha-desktop-shell {
+    display: block;
+    padding-bottom: 62px;
+  }
+  .soha-desktop-sidebar {
+    position: fixed;
+    z-index: 20;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    min-height: 0;
+    padding: 6px 10px;
+    border-top: 1px solid var(--soha-border-color);
+    border-right: 0;
+  }
+  .soha-desktop-brand,
+  .soha-desktop-sidebar-footer {
+    display: none;
+  }
+  .soha-desktop-nav {
+    grid-template-columns: repeat(5, 1fr);
+    margin: 0;
+  }
+  .soha-desktop-nav-item {
+    flex-direction: column;
+    gap: 0;
+    justify-content: center;
+    min-height: 48px;
+    padding: 2px;
+    font-size: 10px;
+  }
+  .soha-desktop-titlebar {
+    padding: 0 18px;
+  }
+  .soha-desktop-content {
+    height: calc(100vh - 115px);
+  }
+  .soha-desktop-page {
+    width: calc(100% - 32px);
+    padding-top: 24px;
+  }
+  .soha-desktop-page-heading h1 {
+    font-size: 22px;
+  }
+  .soha-desktop-status-band {
+    grid-template-columns: 1fr;
+  }
+  .soha-desktop-status-band > div + div {
+    border-top: 1px solid var(--soha-border-color);
+    border-left: 0;
+  }
+  .soha-desktop-app-grid {
+    grid-template-columns: 1fr;
+  }
+  .soha-desktop-software-grid {
+    grid-template-columns: 1fr;
+  }
+  .soha-desktop-app-card {
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    padding: 14px;
+  }
+  .soha-desktop-setting-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 0;
+  }
+  .soha-desktop-setting-row .ant-select {
+    width: 100%;
+  }
+  .soha-desktop-login-panel {
+    padding: 26px 22px;
+  }
+}

@@ -10,12 +10,14 @@ import {
   localizeRelatedResourceKind,
 } from '@/features/platform/workloads-model'
 import { useI18n } from '@/i18n'
+import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import type { Pod, WorkloadRelation } from '@/types'
 import { formatAgeSeconds } from '@/utils/time'
 
 export function WorkloadPodsCard({ pods = [], namespace }: { pods?: Pod[]; namespace: string }) {
   const { localeCode } = useI18n()
   const navigate = useNavigate()
+  const clusterId = usePlatformScopeStore((state) => state.clusterId)
 
   return (
     <Card
@@ -39,7 +41,15 @@ export function WorkloadPodsCard({ pods = [], namespace }: { pods?: Pod[]; names
                   type="link"
                   className="soha-related-pod-name"
                   onClick={() =>
-                    navigate(buildWorkloadDetailPath('pods', pod.name, namespace, pod.namespace))
+                    navigate(
+                      buildWorkloadDetailPath(
+                        'pods',
+                        pod.name,
+                        namespace,
+                        pod.namespace,
+                        clusterId,
+                      ),
+                    )
                   }
                 >
                   {pod.name}
@@ -86,6 +96,7 @@ export function WorkloadRelationsCard({
 }) {
   const { localeCode } = useI18n()
   const navigate = useNavigate()
+  const clusterId = usePlatformScopeStore((state) => state.clusterId)
   const columns: TableColumnsType<WorkloadRelation> = [
     {
       title: localeCode === 'zh_CN' ? '资源类型' : 'Kind',
@@ -97,7 +108,7 @@ export function WorkloadRelationsCard({
       title: localeCode === 'zh_CN' ? '名称' : 'Name',
       dataIndex: 'name',
       render: (value: string, record) => {
-        const path = buildRelatedResourcePath(record, namespace)
+        const path = buildRelatedResourcePath(record, namespace, clusterId)
         return path ? (
           <Button type="link" onClick={() => navigate(path)}>
             {value}

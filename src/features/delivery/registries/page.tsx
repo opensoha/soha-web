@@ -1,16 +1,16 @@
 import { useState } from 'react'
-import { App, Button, Form, Input, Modal, Popconfirm, Select, Space } from 'antd'
+import { App, Button, Form, Input, Modal, Popconfirm, Select, Space, Switch } from 'antd'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import type { TableColumnsType } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementIconButton } from '@/components/management-list'
-import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { BooleanTag, MetadataTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { DeliveryTable } from '../delivery-table'
 import { deliveryMutations } from '../mutations'
 import { deliveryQueries } from '../queries'
-import type { DeliveryStringRecordInput, RegistryRecord } from '../types'
+import type { RegistryInput, RegistryRecord } from '../types'
 
 type ColumnProps<T> = TableColumnsType<T>[number]
 
@@ -18,7 +18,7 @@ export function RegistriesPage() {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
-  const [form] = Form.useForm<DeliveryStringRecordInput>()
+  const [form] = Form.useForm<RegistryInput>()
   const [modalVisible, setModalVisible] = useState(false)
   const [editing, setEditing] = useState<RegistryRecord | null>(null)
   const permissionSnapshot = permissionSnapshotQuery.data?.data
@@ -36,7 +36,7 @@ export function RegistriesPage() {
     setEditing(null)
   }
 
-  const handleSubmit = (payload: DeliveryStringRecordInput) => {
+  const handleSubmit = (payload: RegistryInput) => {
     if (editing) {
       updateMutation.mutate(
         { id: editing.id, payload },
@@ -63,14 +63,32 @@ export function RegistriesPage() {
 
   const columns: ColumnProps<RegistryRecord>[] = [
     { title: '名称', dataIndex: 'name' },
-    { title: '类型', dataIndex: 'type', render: (type: string) => <MetadataTag label={type} /> },
+    {
+      title: '类型',
+      dataIndex: 'registryType',
+      render: (registryType: string) => <MetadataTag label={registryType} />,
+    },
     { title: 'Endpoint', dataIndex: 'endpoint', ellipsis: true },
-    { title: '用户名', dataIndex: 'username' },
+    { title: '命名空间', dataIndex: 'namespace', render: (value?: string) => value || '-' },
+    { title: '用户名', dataIndex: 'username', render: (value?: string) => value || '-' },
+    {
+      title: '凭据',
+      dataIndex: 'metadata',
+      render: (_: RegistryRecord['metadata'], record: RegistryRecord) => (
+        <BooleanTag
+          value={record.metadata.secretConfigured}
+          trueLabel="已配置"
+          falseLabel="未配置"
+        />
+      ),
+    },
     {
       ...tableColumnPresets.status,
-      title: '状态',
-      dataIndex: 'status',
-      render: (status: string) => <StatusTag value={status} />,
+      title: 'TLS 校验',
+      dataIndex: 'insecure',
+      render: (insecure: boolean) => (
+        <BooleanTag value={!insecure} trueLabel="校验" falseLabel="跳过" falseColor="warning" />
+      ),
     },
     {
       ...tableColumnPresets.action,
@@ -158,17 +176,23 @@ export function RegistriesPage() {
             editing
               ? {
                   name: editing.name,
-                  type: editing.type,
+                  registryType: editing.registryType,
                   endpoint: editing.endpoint,
+                  namespace: editing.namespace,
                   username: editing.username,
+                  insecure: editing.insecure,
                 }
-              : {}
+              : { insecure: false }
           }
         >
           <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="type" label="类型" rules={[{ required: true, message: '请选择类型' }]}>
+          <Form.Item
+            name="registryType"
+            label="类型"
+            rules={[{ required: true, message: '请选择类型' }]}
+          >
             <Select
               options={[
                 { value: 'docker', label: 'Docker Hub' },
@@ -189,8 +213,14 @@ export function RegistriesPage() {
           <Form.Item name="username" label="用户名">
             <Input />
           </Form.Item>
-          <Form.Item name="password" label="密码">
-            <Input.Password />
+          <Form.Item name="namespace" label="命名空间">
+            <Input />
+          </Form.Item>
+          <Form.Item name="secret" label={editing ? '凭据（留空不修改）' : '凭据'}>
+            <Input.Password autoComplete="new-password" />
+          </Form.Item>
+          <Form.Item name="insecure" label="跳过 TLS 证书校验" valuePropName="checked">
+            <Switch />
           </Form.Item>
           <div className="soha-form-actions">
             <Button onClick={closeModal}>取消</Button>

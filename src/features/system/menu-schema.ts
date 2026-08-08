@@ -1,5 +1,6 @@
 export const MENU_SECTION_ORDER = [
   'account',
+  'software',
   'provider',
   'integrations',
   'users',
@@ -9,6 +10,7 @@ export const MENU_SECTION_ORDER = [
   'ops',
   'observe-signals',
   'observe-data',
+  'dashboards',
   'alerting',
   'ai-interaction',
   'ai-engineering',
@@ -25,6 +27,7 @@ export type MenuSectionKey = (typeof MENU_SECTION_ORDER)[number]
 
 const MENU_SECTION_LABELS: Record<MenuSectionKey, { zh: string; en: string }> = {
   account: { zh: '基础', en: 'Basics' },
+  software: { zh: '软件', en: 'Software' },
   provider: { zh: '提供商', en: 'Providers' },
   integrations: { zh: '系统集成', en: 'System Integrations' },
   users: { zh: '用户管理', en: 'User Management' },
@@ -34,6 +37,7 @@ const MENU_SECTION_LABELS: Record<MenuSectionKey, { zh: string; en: string }> = 
   ops: { zh: 'Observe', en: 'Observe' },
   'observe-signals': { zh: '探索', en: 'Explore' },
   'observe-data': { zh: '数据与集成', en: 'Data & Integrations' },
+  dashboards: { zh: '仪表盘', en: 'Dashboards' },
   alerting: { zh: '告警与响应', en: 'Alerting & Response' },
   'ai-interaction': { zh: '交互', en: 'Interaction' },
   'ai-engineering': { zh: 'AI 工程', en: 'AI Engineering' },
@@ -50,6 +54,7 @@ const MENU_SECTION_ALIASES: Record<string, MenuSectionKey> = {
   account: 'account',
   basic: 'account',
   basics: 'account',
+  software: 'software',
   provider: 'provider',
   providers: 'provider',
   integration: 'integrations',
@@ -75,6 +80,8 @@ const MENU_SECTION_ALIASES: Record<string, MenuSectionKey> = {
   'observe-signals': 'observe-signals',
   'observe-data': 'observe-data',
   'observability-data': 'observe-data',
+  dashboards: 'dashboards',
+  'observability-dashboards': 'dashboards',
   alerting: 'alerting',
   alerts: 'alerting',
   interaction: 'ai-interaction',

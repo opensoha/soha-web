@@ -10,12 +10,14 @@ import type {
   DeliveryDraftInput,
   DeliveryPlanRequest,
   DeliveryRecordInput,
-  DeliveryStringRecordInput,
   DeliveryUpdateInput,
   DeliveryWorkloadRestartInput,
   ExecutionCallbackInput,
   ExecutionTaskActionInput,
+  KubernetesServiceImportInput,
+  HelmReleaseImportInput,
   ReleaseTriggerInput,
+  RegistryInput,
   WorkflowDecisionInput,
   WorkflowTriggerInput,
 } from './types'
@@ -139,6 +141,20 @@ export const deliveryMutations = {
       }),
   },
   environments: {
+    importKubernetesServices: (queryClient: QueryClient) =>
+      mutationOptions({
+        mutationKey: deliveryMutationKeys.environments('import-kubernetes-services'),
+        mutationFn: (payload: KubernetesServiceImportInput) =>
+          deliveryApi.environments.importKubernetesServices(payload),
+        onSuccess: () => invalidateEnvironmentQueries(queryClient),
+      }),
+    importHelmReleases: (queryClient: QueryClient) =>
+      mutationOptions({
+        mutationKey: deliveryMutationKeys.environments('import-helm-releases'),
+        mutationFn: (payload: HelmReleaseImportInput) =>
+          deliveryApi.environments.importHelmReleases(payload),
+        onSuccess: () => invalidateEnvironmentQueries(queryClient),
+      }),
     create: (queryClient: QueryClient) =>
       mutationOptions({
         mutationKey: deliveryMutationKeys.environments('create'),
@@ -281,13 +297,13 @@ export const deliveryMutations = {
     create: (queryClient: QueryClient) =>
       mutationOptions({
         mutationKey: deliveryMutationKeys.registries('create'),
-        mutationFn: (payload: DeliveryStringRecordInput) => deliveryApi.registries.create(payload),
+        mutationFn: (payload: RegistryInput) => deliveryApi.registries.create(payload),
         onSuccess: () => queryClient.invalidateQueries({ queryKey: deliveryKeys.registries.all }),
       }),
     update: (queryClient: QueryClient) =>
       mutationOptions({
         mutationKey: deliveryMutationKeys.registries('update'),
-        mutationFn: ({ id, payload }: DeliveryUpdateInput<DeliveryStringRecordInput>) =>
+        mutationFn: ({ id, payload }: DeliveryUpdateInput<RegistryInput>) =>
           deliveryApi.registries.update(id, payload),
         onSuccess: () => queryClient.invalidateQueries({ queryKey: deliveryKeys.registries.all }),
       }),

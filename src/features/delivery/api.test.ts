@@ -4,6 +4,7 @@ import { deliveryApi, deliveryRuntimeDetailPath } from './api'
 const apiMocks = vi.hoisted(() => ({
   delete: vi.fn(),
   get: vi.fn(),
+  getEnvelope: vi.fn(),
   post: vi.fn(),
   put: vi.fn(),
 }))
@@ -35,12 +36,16 @@ describe('deliveryApi', () => {
   })
 
   it('preserves candidate, application filter, workload, and gateway query paths', async () => {
-    apiMocks.get.mockResolvedValue({ data: [] })
+    apiMocks.get.mockResolvedValue({ items: [], truncated: false })
 
-    await deliveryApi.environments.targetCandidates({
-      clusterId: 'cluster/a',
-      namespace: 'team dev',
-    })
+    await expect(
+      deliveryApi.environments.targetCandidates({
+        clusterId: 'cluster/a',
+        namespace: 'team dev',
+        search: ' api ',
+        limit: 200,
+      }),
+    ).resolves.toEqual({ items: [], truncated: false })
     await deliveryApi.workflows.list({ applicationId: 'app/a' })
     await deliveryApi.workloads.metrics({
       clusterId: 'cluster/a',
@@ -50,11 +55,57 @@ describe('deliveryApi', () => {
     await deliveryApi.gateway.readiness({ skillId: 'delivery/onboarding' })
 
     expect(apiMocks.get.mock.calls.map(([path]) => path)).toEqual([
-      '/application-environments/target-candidates?clusterId=cluster%2Fa&namespace=team+dev',
+      '/application-environments/target-candidates?clusterId=cluster%2Fa&namespace=team+dev&search=api&limit=200',
       '/workflows?applicationId=app%2Fa',
       '/clusters/cluster%2Fa/workloads/deployments/api%2Fweb/metrics?namespace=team+dev&rangeMinutes=60',
       '/ai-gateway/capabilities?source=delivery-workbench&skillId=delivery%2Fonboarding',
     ])
+  })
+
+  it('imports selected Kubernetes workloads in observe-only mode', async () => {
+    const payload = {
+      clusterId: 'cluster-a',
+      namespace: 'erp',
+      applicationKey: 'erp',
+      applicationName: 'ERP',
+      environmentKey: 'prod',
+      environmentName: 'prod',
+      ownershipMode: 'observe_only' as const,
+      workloads: [{ workloadKind: 'Deployment' as const, workloadName: 'api' }],
+    }
+    apiMocks.post.mockResolvedValue({ data: { ownershipMode: 'observe_only' } })
+
+    await expect(deliveryApi.environments.importKubernetesServices(payload)).resolves.toEqual({
+      ownershipMode: 'observe_only',
+    })
+    expect(apiMocks.post).toHaveBeenCalledWith('/application-environments/imports', payload)
+  })
+
+  it('lists and imports managed Helm releases', async () => {
+    const payload = {
+      clusterId: 'cluster-a',
+      namespace: 'erp',
+      applicationKey: 'erp',
+      applicationName: 'ERP',
+      environmentKey: 'prod',
+      environmentName: 'prod',
+      ownershipMode: 'managed' as const,
+      releases: [{ releaseName: 'erp' }],
+    }
+    apiMocks.get.mockResolvedValue({ data: [{ name: 'erp', namespace: 'erp' }] })
+    apiMocks.post.mockResolvedValue({ data: { ownershipMode: 'managed' } })
+
+    await expect(deliveryApi.environments.helmReleases('cluster/a', 'erp')).resolves.toEqual([
+      { name: 'erp', namespace: 'erp' },
+    ])
+    await expect(deliveryApi.environments.importHelmReleases(payload)).resolves.toEqual({
+      ownershipMode: 'managed',
+    })
+    expect(apiMocks.get).toHaveBeenCalledWith('/clusters/cluster%2Fa/helm/releases?namespace=erp')
+    expect(apiMocks.post).toHaveBeenCalledWith(
+      '/application-environments/helm-release-imports',
+      payload,
+    )
   })
 
   it('uses repository and GitLab project, branch, tag, and commit endpoints', async () => {
@@ -78,6 +129,37 @@ describe('deliveryApi', () => {
       '/integrations/gitlab/tags?projectId=group%2Fapi',
       '/integrations/gitlab/commits?projectId=group%2Fapi&limit=20&page=1',
     ])
+  })
+
+  it('uses the registry items envelope and canonical registry fields', async () => {
+    const connection = {
+      id: 'registry-1',
+      name: 'Harbor Prod',
+      registryType: 'harbor',
+      endpoint: 'https://harbor.example.com',
+      insecure: false,
+      metadata: { secretConfigured: true, secretStorage: 'encrypted' },
+      createdAt: '2026-08-08T08:00:00Z',
+      updatedAt: '2026-08-08T08:00:00Z',
+    }
+    const payload = {
+      name: connection.name,
+      registryType: connection.registryType,
+      endpoint: connection.endpoint,
+      secret: 'fixture-token',
+      insecure: false,
+    }
+    apiMocks.getEnvelope.mockResolvedValue({ items: [connection] })
+    apiMocks.post.mockResolvedValue({ data: connection })
+    apiMocks.put.mockResolvedValue({ data: connection })
+
+    await expect(deliveryApi.registries.list()).resolves.toEqual([connection])
+    await deliveryApi.registries.create(payload)
+    await deliveryApi.registries.update('registry/1', payload)
+
+    expect(apiMocks.getEnvelope).toHaveBeenCalledWith('/registries')
+    expect(apiMocks.post).toHaveBeenCalledWith('/registries', payload)
+    expect(apiMocks.put).toHaveBeenCalledWith('/registries/registry%2F1', payload)
   })
 
   it('uses the five canonical runtime detail endpoints and unwraps details', async () => {

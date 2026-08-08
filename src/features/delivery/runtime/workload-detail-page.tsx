@@ -1,10 +1,11 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import '../applications/styles.css'
-import { App, Button, Card, Modal, Space, Tabs, Tag, Typography } from 'antd'
+import { App, Button, Card, Descriptions, Modal, Space, Tabs, Typography } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useParams } from 'react-router-dom'
-import { ManagementDetailHeader, ManagementState } from '@/components/management-list'
+import { useParams } from 'react-router-dom'
+import { ManagementIconButton, ManagementState } from '@/components/management-list'
+import { MetadataTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useAIPageContext } from '@/features/copilot'
 import { DeliveryTable } from '../delivery-table'
@@ -35,42 +36,41 @@ function firstPodName(pods?: Pod[]) {
 function DeploymentOverview({ deployment }: { deployment: DeploymentDetail }) {
   return (
     <Card className="soha-management-panel-card">
-      <Space orientation="vertical" style={{ width: '100%' }} size={12}>
-        <div className="soha-application-runtime-overview">
-          <div>
-            <Text type="secondary">Workload</Text>
-            <div className="soha-application-runtime-overview__title">{deployment.name}</div>
-          </div>
-          <Tag color="blue">{deployment.strategy}</Tag>
-        </div>
-        <div className="soha-application-runtime-statgrid">
-          <Card className="soha-management-panel-card" size="small">
-            <Text type="secondary">Desired</Text>
-            <div>{deployment.desiredReplicas}</div>
-          </Card>
-          <Card className="soha-management-panel-card" size="small">
-            <Text type="secondary">Ready</Text>
-            <div>{deployment.readyReplicas}</div>
-          </Card>
-          <Card className="soha-management-panel-card" size="small">
-            <Text type="secondary">Available</Text>
-            <div>{deployment.availableReplicas}</div>
-          </Card>
-        </div>
-        <Card className="soha-management-panel-card" size="small" title="Labels">
-          <Space wrap>
-            {Object.entries(deployment.labels ?? {}).map(([key, value]) => (
-              <Tag key={key}>{`${key}=${value}`}</Tag>
-            ))}
-          </Space>
-        </Card>
-      </Space>
+      <Descriptions
+        size="small"
+        column={{ xs: 1, sm: 2, md: 3 }}
+        items={[
+          { key: 'workload', label: 'Workload', children: deployment.name },
+          { key: 'namespace', label: 'Namespace', children: deployment.namespace },
+          {
+            key: 'strategy',
+            label: 'Strategy',
+            children: <MetadataTag label={deployment.strategy} tone="blue" />,
+          },
+          { key: 'desired', label: 'Desired', children: deployment.desiredReplicas },
+          { key: 'ready', label: 'Ready', children: deployment.readyReplicas },
+          { key: 'available', label: 'Available', children: deployment.availableReplicas },
+          {
+            key: 'labels',
+            label: 'Labels',
+            span: 3,
+            children: Object.keys(deployment.labels ?? {}).length ? (
+              <Space wrap size={[4, 4]}>
+                {Object.entries(deployment.labels ?? {}).map(([key, value]) => (
+                  <MetadataTag key={key} label={`${key}=${value}`} />
+                ))}
+              </Space>
+            ) : (
+              <Text type="secondary">-</Text>
+            ),
+          },
+        ]}
+      />
     </Card>
   )
 }
 export function ApplicationWorkloadDetailPage() {
   const { applicationId, applicationEnvironmentId, workloadName } = useParams()
-  const navigate = useNavigate()
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState('overview')
@@ -326,33 +326,30 @@ export function ApplicationWorkloadDetailPage() {
   ]
 
   return (
-    <div className="soha-page">
-      <ManagementDetailHeader
-        title={detail.application.name}
-        description={`${detail.environment?.name || detail.binding.environmentKey || detail.binding.environmentId} · ${detail.workload.workloadName}`}
-        actions={
-          <Space>
-            <Button onClick={() => navigate(`/applications/${detail.application.id}`)}>
-              返回应用
-            </Button>
-            {canManage ? (
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={() =>
-                  restartMutation.mutate({
-                    clusterId: detail.workload.clusterId,
-                    namespace: detail.workload.namespace,
-                    workloadName: detail.workload.workloadName,
-                  })
-                }
-              >
-                重启
-              </Button>
-            ) : null}
-          </Space>
+    <div className="soha-page soha-workload-detail-page">
+      <Tabs
+        className="soha-resource-tabs soha-workload-detail-tabs"
+        items={tabItems}
+        activeKey={activeTab}
+        tabBarExtraContent={
+          canManage ? (
+            <ManagementIconButton
+              aria-label="重启工作负载"
+              icon={<ReloadOutlined />}
+              loading={restartMutation.isPending}
+              tooltip="重启"
+              onClick={() =>
+                restartMutation.mutate({
+                  clusterId: detail.workload.clusterId,
+                  namespace: detail.workload.namespace,
+                  workloadName: detail.workload.workloadName,
+                })
+              }
+            />
+          ) : null
         }
+        onChange={setActiveTab}
       />
-      <Tabs items={tabItems} activeKey={activeTab} onChange={setActiveTab} />
     </div>
   )
 }

@@ -135,6 +135,19 @@ describe('AdminTable', () => {
     expect(captured.tableProps?.pagination.showTotal(1, [1, 1])).toBe('当前 1 / 3 条')
   })
 
+  it('shows the shared pagination range summary by default', async () => {
+    await renderNode(
+      <AdminTable
+        columns={[{ title: 'A', dataIndex: 'a' }]}
+        dataSource={[{ id: '1', a: 'a' }]}
+        rowKey="id"
+      />,
+    )
+
+    expect(captured.tableProps?.pagination.showTotal(3, [1, 3])).toBe('当前 1-3 / 3 条')
+    expect(captured.tableProps?.pagination.showTotal(0, [0, 0])).toBe('当前 0 / 0 条')
+  })
+
   it('separates server page and page-size callbacks', async () => {
     const onPageChange = vi.fn()
     const onPageSizeChange = vi.fn()

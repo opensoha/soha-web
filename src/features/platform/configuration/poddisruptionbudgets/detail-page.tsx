@@ -14,15 +14,24 @@ import { resolveConfigurationNamespace } from '../shared/scope'
 import type { PodDisruptionBudgetResource } from './types'
 
 function PDBOverview({ detail }: { detail: PodDisruptionBudgetResource }) {
+  const clusterId = usePlatformScopeStore((state) => state.clusterId)
   const workloadPath = detail.workload
-    ? buildRelatedResourcePath(detail.workload, detail.namespace)
+    ? buildRelatedResourcePath(detail.workload, detail.namespace, clusterId)
     : null
   const columns: TableColumnsType<Pod> = [
     {
       title: 'Name',
       dataIndex: 'name',
       render: (value: string, pod) => (
-        <Link to={buildWorkloadDetailPath('pods', value, detail.namespace, pod.namespace)}>
+        <Link
+          to={buildWorkloadDetailPath(
+            'pods',
+            value,
+            detail.namespace,
+            pod.namespace,
+            clusterId,
+          )}
+        >
           {value}
         </Link>
       ),

@@ -4,6 +4,7 @@ import { clusterKeys } from './keys'
 import { clusterMutations } from './mutations'
 
 const apiMocks = vi.hoisted(() => ({
+  createAgentInstallation: vi.fn(),
   createCluster: vi.fn(),
   deleteCluster: vi.fn(),
   updateCluster: vi.fn(),
@@ -23,7 +24,6 @@ async function expectTargetInvalidation<TData, TVariables>(
 
   await observer.mutate(variables)
   expect(invalidate).toHaveBeenCalledWith({ queryKey: clusterKeys.list() })
-  expect(invalidate).toHaveBeenCalledWith({ queryKey: clusterKeys.legacyList() })
   expect(invalidate).toHaveBeenCalledWith({ queryKey: clusterKeys.detail(target.scope) })
   expect(invalidate).toHaveBeenCalledWith({ queryKey: clusterKeys.nodes(target.scope) })
 }
@@ -49,7 +49,6 @@ describe('cluster mutation options', () => {
     await observer.mutate({ scopes: [target.scope, secondScope] })
     expect(apiMocks.deleteCluster).toHaveBeenCalledTimes(2)
     expect(invalidate).toHaveBeenCalledWith({ queryKey: clusterKeys.list() })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: clusterKeys.legacyList() })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: clusterKeys.detail(secondScope) })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: clusterKeys.nodes(secondScope) })
   })

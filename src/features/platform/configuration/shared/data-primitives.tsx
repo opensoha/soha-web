@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Input, Modal, Table, Typography, message } from 'antd'
+import { App, Button, Input, Modal, Table, Typography } from 'antd'
 import { ArrowsAltOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { ManagementState } from '@/components/management-list'
 import { useI18n } from '@/i18n'
@@ -13,11 +13,20 @@ export interface ConfigurationDataRow {
   decoded?: string
 }
 
-export function copyConfigurationValue(value: string, localeCode: string) {
+interface ConfigurationCopyFeedback {
+  error: (content: string) => unknown
+  success: (content: string) => unknown
+}
+
+export function copyConfigurationValue(
+  value: string,
+  localeCode: string,
+  feedback: ConfigurationCopyFeedback,
+) {
   if (!navigator.clipboard) return
   navigator.clipboard.writeText(value).then(
-    () => void message.success(localeCode === 'zh_CN' ? '已复制' : 'Copied'),
-    () => void message.error(localeCode === 'zh_CN' ? '复制失败' : 'Copy failed'),
+    () => void feedback.success(localeCode === 'zh_CN' ? '已复制' : 'Copied'),
+    () => void feedback.error(localeCode === 'zh_CN' ? '复制失败' : 'Copy failed'),
   )
 }
 
@@ -73,6 +82,7 @@ export function EditConfigurationDataModal({
   value: Record<string, string>
 }) {
   const { localeCode } = useI18n()
+  const { message } = App.useApp()
   const [draft, setDraft] = useState<Array<{ key: string; value: string }>>([])
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null)
   const expandedItem = expandedIndex === null ? undefined : draft[expandedIndex]

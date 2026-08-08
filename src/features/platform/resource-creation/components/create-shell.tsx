@@ -3,8 +3,7 @@ import { Alert, App, Button, Modal, Spin, Tabs, Typography } from 'antd'
 import { CheckCircleOutlined, FileTextOutlined, FormOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementState } from '@/components/management-list'
-import { listClusters } from '@/features/platform/clusters/api'
-import { clusterKeys } from '@/features/platform/clusters/keys'
+import { clusterQueries } from '@/features/platform/clusters/queries'
 import { useI18n } from '@/i18n'
 import { createUUID } from '@/utils/uuid'
 import { resourceCreationMutations } from '../mutations'
@@ -92,8 +91,7 @@ function ShellBody({
   )
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null)
   const clustersQuery = useQuery({
-    queryKey: clusterKeys.legacyList(),
-    queryFn: listClusters,
+    ...clusterQueries.list(),
     enabled: visible,
   })
   const namespacesQuery = useQuery({

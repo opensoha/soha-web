@@ -127,6 +127,7 @@ vi.mock('@/features/system/menu-schema', async () => {
       if (key === 'logging') return '日志'
       if (key === 'observe-signals') return '探索'
       if (key === 'observe-data') return '数据与集成'
+      if (key === 'dashboards') return '仪表盘'
       if (key === 'alerting') return '告警与响应'
       return key
     },
@@ -529,6 +530,7 @@ describe('app layout workspace navigation', () => {
         'monitoring-workbench-overview',
         'monitoring-workbench-logs',
         'monitoring-workbench-log-data-sources',
+        'monitoring-workbench-dashboards',
         'monitoring-workbench-rules',
         'monitoring-workbench-oncall',
       ],
@@ -577,6 +579,17 @@ describe('app layout workspace navigation', () => {
           enabled: true,
         },
         {
+          id: 'monitoring-workbench-dashboards',
+          parentId: 'monitoring-workbench',
+          path: '/monitoring-workbench/dashboards',
+          labelZh: '表盘列表',
+          labelEn: 'Dashboard List',
+          iconKey: 'activity',
+          section: 'dashboards',
+          sortOrder: 64,
+          enabled: true,
+        },
+        {
           id: 'monitoring-workbench-rules',
           parentId: 'monitoring-workbench',
           path: '/monitoring-workbench/rules',
@@ -608,7 +621,7 @@ describe('app layout workspace navigation', () => {
       Array.from(container.querySelectorAll('.ant-menu-item-group-title')).map((item) =>
         item.textContent?.trim(),
       ),
-    ).toEqual(['探索', '数据与集成', '告警与响应'])
+    ).toEqual(['探索', '数据与集成', '仪表盘', '告警与响应'])
     expect(container.textContent).toContain('总览')
     expect(container.textContent).toContain('日志数据源')
     expect(container.textContent).toContain('告警规则')

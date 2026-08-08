@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Card, Spin, Table, Tabs, Tag, Typography, message } from 'antd'
+import { App, Card, Spin, Table, Tabs, Tag, Typography } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementState } from '@/components/management-list'
 import { PlatformResourceOverview } from '@/features/platform/shared/resource-overview'
@@ -123,6 +123,7 @@ function ConfigurationYAMLTab({
   target: ConfigurationTarget
 }) {
   const { t, localeCode } = useI18n()
+  const { message } = App.useApp()
   const queryClient = useQueryClient()
   const yamlQuery = useQuery(configurationQueries.yaml(kind, target.scope, target.name, scopeMode))
   const updateMutation = useMutation(configurationMutations.updateYAML(kind, queryClient))

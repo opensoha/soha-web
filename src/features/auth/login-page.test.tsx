@@ -196,6 +196,15 @@ describe("login page", () => {
     );
   });
 
+  it("presents the current product capabilities", async () => {
+    const container = await renderLoginPage();
+
+    expect(container.textContent).toContain("计算资源工作台");
+    expect(container.textContent).toContain("内网工作台");
+    expect(container.textContent).toContain("用户角色、组织策略、Secret Store、审计与运行配置");
+    expect(container.textContent).not.toContain("虚拟化资源");
+  });
+
   it("restores an existing browser session from the login page", async () => {
     vi.useFakeTimers();
     vi.mocked(restoreAuthSession)

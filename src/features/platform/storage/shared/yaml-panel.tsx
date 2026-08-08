@@ -1,4 +1,4 @@
-import { message } from 'antd'
+import { App } from 'antd'
 import { K8sYamlEditor } from '@/components/k8s-yaml-editor'
 import { useI18n } from '@/i18n'
 
@@ -16,6 +16,7 @@ export default function StorageYAMLPanel({
   onReset: () => void
 }) {
   const { localeCode } = useI18n()
+  const { message } = App.useApp()
   return (
     <div style={{ height: 620 }}>
       <K8sYamlEditor

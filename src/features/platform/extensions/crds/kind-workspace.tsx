@@ -1,6 +1,7 @@
 import { lazy, Suspense, useDeferredValue, useMemo, useState } from 'react'
 import {
   Alert,
+  App,
   Button,
   Card,
   Descriptions,
@@ -9,7 +10,6 @@ import {
   Spin,
   Tag,
   Typography,
-  message,
 } from 'antd'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -62,6 +62,7 @@ function formatResourceAge(createdAt?: string, ageSeconds?: number) {
 
 export function CRDKindWorkspace({ crd }: { crd: CRD }) {
   const { t, localeCode } = useI18n()
+  const { message } = App.useApp()
   const { clusterId, namespace } = usePlatformScopeStore()
   const queryClient = useQueryClient()
   const capability = useClusterCapability('custom.resources', localeCode)

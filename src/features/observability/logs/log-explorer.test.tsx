@@ -156,9 +156,8 @@ describe('LogExplorer', () => {
     expect(container.textContent).not.toContain('Live')
     expect(container.textContent).not.toContain('History')
     expect(container.querySelector('.soha-log-results-explorer')).toBeNull()
-    expect(container.querySelector('.soha-log-results-card .ant-card-head')?.textContent).toContain(
-      '运行时日志',
-    )
+    expect(container.querySelector('.soha-log-explorer.is-embedded')).not.toBeNull()
+    expect(container.querySelector('.soha-log-results-card .ant-card-head')).toBeNull()
 
     await act(async () => {
       WebSocketMock.instances[0]?.onopen?.()
@@ -592,6 +591,7 @@ describe('LogExplorer', () => {
       <LogExplorer
         autoStart
         embedded
+        scopeControl={<span>服务 api</span>}
         target={{ kind: 'docker', projectId: 'project-1', serviceName: 'api' }}
       />,
     )
@@ -604,6 +604,24 @@ describe('LogExplorer', () => {
     expect(apiMocks.issueLogStreamTicket).toHaveBeenCalled()
     expect(container.textContent).not.toContain('工作负载类型')
     expect(container.textContent).not.toContain('History')
+    expect(container.querySelector('.soha-log-query-card')).toBeNull()
+    expect(container.textContent).not.toContain('文本筛选')
+    expect(container.textContent).not.toContain('时间范围')
+    expect(container.textContent).not.toContain('每个来源读取行数')
+    expect(container.textContent).toContain('在日志中心打开')
+    expect(container.textContent).not.toContain('查询并连接')
+    expect(container.querySelector('.soha-log-results-toolbar')).not.toBeNull()
+    expect(container.querySelector('.soha-log-results-toolbar')?.textContent).toContain('服务 api')
+    expect(container.textContent).toContain('自动滚动')
+
+    await act(async () => {
+      Array.from(container.querySelectorAll('button'))
+        .find((button) => button.textContent?.includes('在日志中心打开'))
+        ?.click()
+    })
+    expect(container.querySelector('[data-testid="location"]')?.textContent).toContain(
+      '/monitoring-workbench/logs?source=docker&dockerProject=project-1&dockerService=api',
+    )
   })
 
   it('queries delivery history without forcing the default namespace', async () => {

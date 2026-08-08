@@ -1,6 +1,7 @@
 import { api } from '@/services/api-client'
 import type { ApiResponse, ClusterCapabilityMatrixEntry, ScopeKey } from '@/types'
 import type {
+  AgentInstallation,
   LogCollectionDisableInput,
   LogCollectionEnableInput,
   LogCollectionPlan,
@@ -108,6 +109,13 @@ export async function listClusterLogDataSources(): Promise<ObservabilityDataSour
 
 export async function createCluster(values: ClusterPayload): Promise<Cluster> {
   const response = await api.post<ApiResponse<Cluster>>('/clusters', values)
+  return response.data
+}
+
+export async function createAgentInstallation(target: ClusterTarget): Promise<AgentInstallation> {
+  const response = await api.post<ApiResponse<AgentInstallation>>(
+    clusterPath(target.scope, '/agent-installation'),
+  )
   return response.data
 }
 

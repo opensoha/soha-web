@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { DownloadOutlined, FileOutlined, FolderOutlined, ReloadOutlined } from '@ant-design/icons'
-import { Button, Card, Input, List, Select, Space, Tag, Typography } from 'antd'
+import { Button, Card, Input, Select, Space, Spin, Typography } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { ManagementState } from '@/components/management-list'
+import { MetadataTag } from '@/components/status-tag'
 import '@/components/resource-operation-panels.css'
 import { downloadText } from '@/utils/download'
 import { dockerQueries } from '../queries'
@@ -75,7 +76,7 @@ export function DockerProjectVolumesPanel({
 
   if (!enabled) {
     return (
-      <Card className="soha-docker-runtime-card" size="small">
+      <Card className="soha-detail-card" size="small">
         <ManagementState
           compact
           kind="no-permission"
@@ -88,7 +89,7 @@ export function DockerProjectVolumesPanel({
 
   return (
     <Card
-      className="soha-docker-runtime-card"
+      className="soha-detail-card"
       size="small"
       title="卷文件"
       extra={
@@ -150,7 +151,7 @@ export function DockerProjectVolumesPanel({
             />
             {selectedVolume ? (
               <Space size={6} wrap>
-                {selectedVolume.readOnly ? <Tag>只读</Tag> : null}
+                {selectedVolume.readOnly ? <MetadataTag label="只读" /> : null}
                 {selectedVolume.source ? (
                   <Text type="secondary">{selectedVolume.source}</Text>
                 ) : null}
@@ -159,13 +160,20 @@ export function DockerProjectVolumesPanel({
           </div>
           <div className="soha-docker-volume-browser">
             <div className="soha-docker-volume-list">
-              <List
-                dataSource={entries}
-                loading={filesQuery.isFetching}
-                locale={{ emptyText: '暂无文件' }}
-                renderItem={(entry) => (
-                  <List.Item
+              {filesQuery.isFetching ? (
+                <div className="soha-docker-volume-list-state">
+                  <Spin size="small" />
+                </div>
+              ) : entries.length === 0 ? (
+                <div className="soha-docker-volume-list-state">
+                  <Text type="secondary">暂无文件</Text>
+                </div>
+              ) : (
+                entries.map((entry) => (
+                  <button
                     className="soha-docker-volume-file-row"
+                    key={entry.path}
+                    type="button"
                     onClick={() => openEntry(entry)}
                   >
                     <Space size={8}>
@@ -175,9 +183,9 @@ export function DockerProjectVolumesPanel({
                     <Text type="secondary">
                       {entry.kind === 'directory' ? '-' : `${entry.sizeBytes ?? 0} B`}
                     </Text>
-                  </List.Item>
-                )}
-              />
+                  </button>
+                ))
+              )}
             </div>
             <div className="soha-docker-volume-preview">
               <div className="soha-docker-volume-preview-toolbar">

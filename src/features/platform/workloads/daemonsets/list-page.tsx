@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Popconfirm, Space, message } from 'antd'
+import { App, Popconfirm, Space } from 'antd'
 import { DeleteOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -53,6 +53,7 @@ function isTargetMutationPending(
 
 export function WorkloadsDaemonSetsPage() {
   const { localeCode } = useI18n()
+  const { message } = App.useApp()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { clusterId, namespace } = usePlatformScopeStore()
@@ -85,7 +86,15 @@ export function WorkloadsDaemonSetsPage() {
       ellipsis: { showTitle: false },
       render: (name: string, record) =>
         renderWorkloadNameLink(name, () =>
-          navigate(buildWorkloadDetailPath('daemonsets', name, namespace, record.namespace)),
+          navigate(
+            buildWorkloadDetailPath(
+              'daemonsets',
+              name,
+              namespace,
+              record.namespace,
+              clusterId,
+            ),
+          ),
         ),
     },
     {

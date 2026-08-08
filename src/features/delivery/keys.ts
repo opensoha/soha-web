@@ -43,10 +43,18 @@ export function normalizeDeliveryListParams(params: DeliveryListParams = {}): De
 }
 
 export function normalizeRepositoryListParams(params: RepositoryListParams = {}) {
-  return { applicationId: params.applicationId?.trim() || undefined, search: params.search?.trim() || undefined, limit: params.limit }
+  return {
+    applicationId: params.applicationId?.trim() || undefined,
+    search: params.search?.trim() || undefined,
+    limit: params.limit,
+  }
 }
 export function normalizeGitReferenceParams(params: GitReferenceParams) {
-  return { projectId: params.projectId.trim(), search: params.search?.trim() || undefined, limit: params.limit }
+  return {
+    projectId: params.projectId.trim(),
+    search: params.search?.trim() || undefined,
+    limit: params.limit,
+  }
 }
 export function normalizeGitCommitParams(params: GitCommitParams) {
   return { ...normalizeGitReferenceParams(params), page: params.page }
@@ -58,6 +66,8 @@ export function normalizeTargetCandidateParams(
   return {
     clusterId: params.clusterId.trim(),
     namespace: params.namespace.trim(),
+    search: params.search?.trim() || undefined,
+    limit: params.limit,
   }
 }
 
@@ -118,6 +128,8 @@ export const deliveryKeys = {
     detail: (id: string) => [...ENVIRONMENTS, 'detail', normalizeDeliveryId(id)] as const,
     targetCandidates: (params: DeliveryTargetCandidateParams) =>
       [...ENVIRONMENTS, 'target-candidates', normalizeTargetCandidateParams(params)] as const,
+    helmReleases: (clusterId: string, namespace: string) =>
+      [...ENVIRONMENTS, 'helm-releases', clusterId.trim(), namespace.trim()] as const,
   },
   buildTemplates: {
     all: BUILD_TEMPLATES,
@@ -213,11 +225,16 @@ export const deliveryKeys = {
   },
   repositories: {
     all: REPOSITORIES,
-    list: (params: RepositoryListParams = {}) => [...REPOSITORIES, 'list', normalizeRepositoryListParams(params)] as const,
-    gitProjects: (params: RepositoryListParams = {}) => [...REPOSITORIES, 'gitlab', 'projects', normalizeRepositoryListParams(params)] as const,
-    gitBranches: (params: GitReferenceParams) => [...REPOSITORIES, 'gitlab', 'branches', normalizeGitReferenceParams(params)] as const,
-    gitTags: (params: GitReferenceParams) => [...REPOSITORIES, 'gitlab', 'tags', normalizeGitReferenceParams(params)] as const,
-    gitCommits: (params: GitCommitParams) => [...REPOSITORIES, 'gitlab', 'commits', normalizeGitCommitParams(params)] as const,
+    list: (params: RepositoryListParams = {}) =>
+      [...REPOSITORIES, 'list', normalizeRepositoryListParams(params)] as const,
+    gitProjects: (params: RepositoryListParams = {}) =>
+      [...REPOSITORIES, 'gitlab', 'projects', normalizeRepositoryListParams(params)] as const,
+    gitBranches: (params: GitReferenceParams) =>
+      [...REPOSITORIES, 'gitlab', 'branches', normalizeGitReferenceParams(params)] as const,
+    gitTags: (params: GitReferenceParams) =>
+      [...REPOSITORIES, 'gitlab', 'tags', normalizeGitReferenceParams(params)] as const,
+    gitCommits: (params: GitCommitParams) =>
+      [...REPOSITORIES, 'gitlab', 'commits', normalizeGitCommitParams(params)] as const,
   },
 }
 

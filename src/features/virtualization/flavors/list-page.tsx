@@ -10,7 +10,6 @@ import {
   Select,
   Space,
   Switch,
-  Tag,
   Tooltip,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -18,6 +17,7 @@ import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { hasAllowedAction } from '@/features/auth'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { StepFormModal } from '@/components/step-form-modal'
+import { BooleanTag } from '@/components/status-tag'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementIconButton,
@@ -129,7 +129,7 @@ export function VirtualizationFlavorsPage() {
     {
       title: '状态',
       dataIndex: 'enabled',
-      render: (value) => (value === false ? <Tag>禁用</Tag> : <Tag color="green">启用</Tag>),
+      render: (value) => <BooleanTag value={value !== false} trueLabel="启用" falseLabel="禁用" />,
       width: 100,
     },
     {

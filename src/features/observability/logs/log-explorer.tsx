@@ -252,6 +252,7 @@ export function LogExplorer({
         ? Boolean(resolvedTarget.applicationId && resolvedTarget.environmentId)
         : Boolean(resolvedTarget.clusterId && (!embedded || resolvedTarget.namespace))
   const mode = embedded ? 'live' : 'history'
+  const showQueryControls = !embedded || resolvedTarget.kind !== 'docker'
   const targetReady = targetScoped && (embedded || supportsDurable)
   const [form] = Form.useForm<RuntimeLogFilters>()
   const serializedDefaults = JSON.stringify(initialFilters(preset))
@@ -676,319 +677,321 @@ export function LogExplorer({
 
   return (
     <div className={embedded ? 'soha-log-explorer is-embedded' : 'soha-log-explorer'}>
-      <Card
-        className="soha-log-query-card"
-        title={embedded ? '查询范围' : undefined}
-        extra={
-          embedded ? (
-            <Button icon={<ExportOutlined />} onClick={handleOpenInCenter}>
-              在日志中心打开
-            </Button>
-          ) : undefined
-        }
-      >
-        {mode === 'history' && !supportsDurable ? (
-          <Alert
-            className="soha-log-inline-alert"
-            showIcon
-            type="warning"
-            title="当前 Docker 日志仅支持在运行时页面实时查看"
-          />
-        ) : null}
-        <Form<RuntimeLogFilters>
-          form={form}
-          initialValues={defaults}
-          layout="vertical"
-          onFinish={handleSubmit}
-        >
-          <Form.Item name="allContainers" hidden valuePropName="checked">
-            <Switch />
-          </Form.Item>
-          <Form.Item name="containers" hidden>
-            <Select mode="multiple" />
-          </Form.Item>
-          <Form.Item name="traceId" hidden>
-            <Input />
-          </Form.Item>
-          <Form.Item name="spanId" hidden>
-            <Input />
-          </Form.Item>
-          {!embedded ? (
-            <Flex className="soha-log-query-mode-row" align="center" gap={12} wrap>
-              <Segmented
-                aria-label="日志查询模式"
-                options={[
-                  { icon: <FilterOutlined />, label: '筛选查询', value: 'builder' },
-                  { icon: <CodeOutlined />, label: '高级语句', value: 'query' },
-                ]}
-                value={queryEditorMode}
-                onChange={handleQueryEditorModeChange}
-              />
-              {resolvedTarget.kind === 'cluster' && scopeControl ? (
-                <div className="soha-log-query-scope-controls">{scopeControl}</div>
-              ) : (
-                <Space className="soha-log-query-scope" size={8} wrap>
-                  {queryEditorMode === 'query' ? <MetadataTag label="SohaQL" tone="blue" /> : null}
-                  <Text type="secondary">
-                    {resolvedTarget.kind === 'cluster'
-                      ? resolvedTarget.namespace || '未选择命名空间'
-                      : resolvedTarget.kind === 'delivery'
-                        ? `${resolvedTarget.applicationId || '-'} / ${resolvedTarget.environmentId || '-'}`
-                        : `${resolvedTarget.projectId || '-'} / ${resolvedTarget.serviceName || '-'}`}
-                  </Text>
-                </Space>
-              )}
-              {traceId ? <MetadataTag label={`Trace ${traceId}`} tone="cyan" /> : null}
-              {spanId ? <MetadataTag label={`Span ${spanId}`} tone="blue" /> : null}
-              <div className="soha-log-query-top-actions">
-                <Popover
-                  content={
-                    <div className="soha-log-time-popover">
-                      <div className="soha-log-time-relative-section">
-                        <Text strong>相对时间</Text>
-                        <div className="soha-log-time-relative-list">
-                          {LOG_TIME_OPTIONS.map((option) => (
-                            <Button
-                              aria-pressed={timeMode === option.value}
-                              block
-                              key={option.value}
-                              type={timeMode === option.value ? 'primary' : 'text'}
-                              onClick={() => {
-                                setTimeMode(option.value)
+      {showQueryControls ? (
+        <Card className="soha-log-query-card">
+          {mode === 'history' && !supportsDurable ? (
+            <Alert
+              className="soha-log-inline-alert"
+              showIcon
+              type="warning"
+              title="当前 Docker 日志仅支持在运行时页面实时查看"
+            />
+          ) : null}
+          <Form<RuntimeLogFilters>
+            form={form}
+            initialValues={defaults}
+            layout="vertical"
+            onFinish={handleSubmit}
+          >
+            <Form.Item name="allContainers" hidden valuePropName="checked">
+              <Switch />
+            </Form.Item>
+            <Form.Item name="containers" hidden>
+              <Select mode="multiple" />
+            </Form.Item>
+            <Form.Item name="traceId" hidden>
+              <Input />
+            </Form.Item>
+            <Form.Item name="spanId" hidden>
+              <Input />
+            </Form.Item>
+            {!embedded ? (
+              <Flex className="soha-log-query-mode-row" align="center" gap={12} wrap>
+                <Segmented
+                  aria-label="日志查询模式"
+                  options={[
+                    { icon: <FilterOutlined />, label: '筛选查询', value: 'builder' },
+                    { icon: <CodeOutlined />, label: '高级语句', value: 'query' },
+                  ]}
+                  value={queryEditorMode}
+                  onChange={handleQueryEditorModeChange}
+                />
+                {resolvedTarget.kind === 'cluster' && scopeControl ? (
+                  <div className="soha-log-query-scope-controls">{scopeControl}</div>
+                ) : (
+                  <Space className="soha-log-query-scope" size={8} wrap>
+                    {queryEditorMode === 'query' ? (
+                      <MetadataTag label="SohaQL" tone="blue" />
+                    ) : null}
+                    <Text type="secondary">
+                      {resolvedTarget.kind === 'cluster'
+                        ? resolvedTarget.namespace || '未选择命名空间'
+                        : resolvedTarget.kind === 'delivery'
+                          ? `${resolvedTarget.applicationId || '-'} / ${resolvedTarget.environmentId || '-'}`
+                          : `${resolvedTarget.projectId || '-'} / ${resolvedTarget.serviceName || '-'}`}
+                    </Text>
+                  </Space>
+                )}
+                {traceId ? <MetadataTag label={`Trace ${traceId}`} tone="cyan" /> : null}
+                {spanId ? <MetadataTag label={`Span ${spanId}`} tone="blue" /> : null}
+                <div className="soha-log-query-top-actions">
+                  <Popover
+                    content={
+                      <div className="soha-log-time-popover">
+                        <div className="soha-log-time-relative-section">
+                          <Text strong>相对时间</Text>
+                          <div className="soha-log-time-relative-list">
+                            {LOG_TIME_OPTIONS.map((option) => (
+                              <Button
+                                aria-pressed={timeMode === option.value}
+                                block
+                                key={option.value}
+                                type={timeMode === option.value ? 'primary' : 'text'}
+                                onClick={() => {
+                                  setTimeMode(option.value)
+                                  setTimePopoverOpen(false)
+                                }}
+                              >
+                                {option.label}
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="soha-log-time-absolute-section">
+                          <Button
+                            aria-expanded={absoluteTimeOpen}
+                            className="soha-log-time-absolute-toggle"
+                            type="text"
+                            onClick={() => setAbsoluteTimeOpen((current) => !current)}
+                          >
+                            <span>绝对时间</span>
+                            <DownOutlined />
+                          </Button>
+                          {absoluteTimeOpen ? (
+                            <DatePicker.RangePicker
+                              allowClear={false}
+                              aria-label="绝对时间范围"
+                              className="soha-log-query-range-picker"
+                              format="YYYY-MM-DD HH:mm:ss"
+                              showTime
+                              value={timeRange}
+                              onChange={(value) => {
+                                if (!value?.[0] || !value[1]) return
+                                setTimeRange([value[0], value[1]])
+                                setTimeMode('absolute')
                                 setTimePopoverOpen(false)
                               }}
-                            >
-                              {option.label}
-                            </Button>
-                          ))}
+                            />
+                          ) : null}
                         </div>
                       </div>
-                      <div className="soha-log-time-absolute-section">
-                        <Button
-                          aria-expanded={absoluteTimeOpen}
-                          className="soha-log-time-absolute-toggle"
-                          type="text"
-                          onClick={() => setAbsoluteTimeOpen((current) => !current)}
-                        >
-                          <span>绝对时间</span>
-                          <DownOutlined />
-                        </Button>
-                        {absoluteTimeOpen ? (
-                          <DatePicker.RangePicker
-                            allowClear={false}
-                            aria-label="绝对时间范围"
-                            className="soha-log-query-range-picker"
-                            format="YYYY-MM-DD HH:mm:ss"
-                            showTime
-                            value={timeRange}
-                            onChange={(value) => {
-                              if (!value?.[0] || !value[1]) return
-                              setTimeRange([value[0], value[1]])
-                              setTimeMode('absolute')
-                              setTimePopoverOpen(false)
-                            }}
-                          />
-                        ) : null}
-                      </div>
-                    </div>
-                  }
-                  onOpenChange={(open) => {
-                    if (open) {
-                      setAbsoluteTimeOpen(false)
-                      if (timeMode !== 'absolute') {
-                        const now = dayjs()
-                        setTimeRange([now.subtract(timeMode, 'second'), now])
-                      }
                     }
-                    setTimePopoverOpen(open)
-                  }}
-                  open={timePopoverOpen}
-                  placement="bottomRight"
-                  rootClassName="soha-log-time-popover-overlay"
-                  trigger="click"
-                >
-                  <Button aria-label="时间范围" className="soha-log-time-trigger">
-                    <ClockCircleOutlined />
-                    <span>{formatTimeRangeLabel(timeMode, timeRange)}</span>
-                    <DownOutlined />
+                    onOpenChange={(open) => {
+                      if (open) {
+                        setAbsoluteTimeOpen(false)
+                        if (timeMode !== 'absolute') {
+                          const now = dayjs()
+                          setTimeRange([now.subtract(timeMode, 'second'), now])
+                        }
+                      }
+                      setTimePopoverOpen(open)
+                    }}
+                    open={timePopoverOpen}
+                    placement="bottomRight"
+                    rootClassName="soha-log-time-popover-overlay"
+                    trigger="click"
+                  >
+                    <Button aria-label="时间范围" className="soha-log-time-trigger">
+                      <ClockCircleOutlined />
+                      <span>{formatTimeRangeLabel(timeMode, timeRange)}</span>
+                      <DownOutlined />
+                    </Button>
+                  </Popover>
+                  <Form.Item name="tail" noStyle>
+                    <Select
+                      aria-label="行数"
+                      className="soha-log-query-limit-select"
+                      options={[200, 500, 1000].map((value) => ({
+                        value,
+                        label: `${value} 行`,
+                      }))}
+                    />
+                  </Form.Item>
+                  {queryEditorMode === 'query' ? (
+                    <Button
+                      htmlType="submit"
+                      icon={<SearchOutlined />}
+                      type="primary"
+                      disabled={!targetReady}
+                    >
+                      查询日志
+                    </Button>
+                  ) : null}
+                  {canViewDataSources ? (
+                    <ManagementIconButton
+                      aria-label="数据源"
+                      icon={<DatabaseOutlined />}
+                      tooltip="数据源"
+                      onClick={() => navigate('/monitoring-workbench/log-data-sources')}
+                    />
+                  ) : null}
+                </div>
+              </Flex>
+            ) : null}
+
+            {!embedded && queryEditorMode === 'query' ? (
+              <Input.TextArea
+                aria-label="SohaQL 高级查询语句"
+                className="soha-log-query-editor"
+                maxLength={2048}
+                rows={2}
+                spellCheck={false}
+                value={queryExpression}
+                onChange={(event) => setQueryExpression(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) form.submit()
+                }}
+              />
+            ) : (
+              <div className={`soha-log-filter-grid${!embedded ? ' is-standalone' : ''}`}>
+                {isKubernetes ? (
+                  <>
+                    <Form.Item label="Pod（可选）" name="podNames">
+                      <Select
+                        allowClear
+                        aria-label="Pod"
+                        mode="tags"
+                        tokenSeparators={[',']}
+                        placeholder="全部 Pod"
+                      />
+                    </Form.Item>
+                    <Form.Item label="容器（可选）">
+                      <Select
+                        allowClear
+                        aria-label="容器"
+                        loading={podContainersQuery.isFetching}
+                        maxTagCount="responsive"
+                        mode="tags"
+                        options={containerOptions}
+                        showSearch={{ optionFilterProp: 'label' }}
+                        tokenSeparators={[',']}
+                        value={allContainers ? [ALL_CONTAINERS_VALUE] : (selectedContainers ?? [])}
+                        onChange={handleContainerChange}
+                      />
+                    </Form.Item>
+                    {embedded ? (
+                      <Form.Item label="标签选择器" name="labelSelector">
+                        <Input placeholder="app=api,tier=backend" />
+                      </Form.Item>
+                    ) : null}
+                  </>
+                ) : null}
+                {embedded ? (
+                  <Form.Item label="文本筛选" name="text">
+                    <Input allowClear placeholder="服务端文本匹配" />
+                  </Form.Item>
+                ) : null}
+                {embedded ? (
+                  <>
+                    <Form.Item label="时间范围" name="sinceSeconds">
+                      <Select
+                        options={[
+                          { value: 0, label: '全部可用日志' },
+                          { value: 300, label: '最近 5 分钟' },
+                          { value: 900, label: '最近 15 分钟' },
+                          { value: 3600, label: '最近 1 小时' },
+                          { value: 21600, label: '最近 6 小时' },
+                        ]}
+                      />
+                    </Form.Item>
+                    <Form.Item label="每个来源读取行数" name="tail">
+                      <Select
+                        options={(isKubernetes
+                          ? [200, 500, 1000, 5000]
+                          : [200, 500, 1000, 2000]
+                        ).map((value) => ({ value, label: String(value) }))}
+                      />
+                    </Form.Item>
+                  </>
+                ) : null}
+              </div>
+            )}
+
+            {embedded ? (
+              <Flex
+                className="soha-log-query-actions"
+                align="end"
+                gap={12}
+                justify="space-between"
+                wrap
+              >
+                <Space size={16} wrap>
+                  {isKubernetes && mode === 'live' ? (
+                    <Form.Item name="previous" noStyle valuePropName="checked">
+                      <Switch checkedChildren="上次实例" unCheckedChildren="当前实例" />
+                    </Form.Item>
+                  ) : null}
+                </Space>
+                <Space size={8} wrap>
+                  <Button icon={<ExportOutlined />} onClick={handleOpenInCenter}>
+                    在日志中心打开
                   </Button>
-                </Popover>
-                <Form.Item name="tail" noStyle>
-                  <Select
-                    aria-label="行数"
-                    className="soha-log-query-limit-select"
-                    options={[200, 500, 1000].map((value) => ({
-                      value,
-                      label: `${value} 行`,
-                    }))}
-                  />
-                </Form.Item>
-                {queryEditorMode === 'query' ? (
                   <Button
                     htmlType="submit"
                     icon={<SearchOutlined />}
                     type="primary"
                     disabled={!targetReady}
                   >
-                    查询日志
+                    查询并连接
                   </Button>
-                ) : null}
-                {canViewDataSources ? (
-                  <ManagementIconButton
-                    aria-label="数据源"
-                    icon={<DatabaseOutlined />}
-                    tooltip="数据源"
-                    onClick={() => navigate('/monitoring-workbench/log-data-sources')}
+                </Space>
+              </Flex>
+            ) : null}
+
+            {!embedded && queryEditorMode === 'builder' ? (
+              <div className="soha-log-primary-query">
+                <Form.Item name="text" noStyle>
+                  <Input.Search
+                    allowClear
+                    aria-label="日志全文搜索"
+                    className="soha-log-primary-search"
+                    enterButton={
+                      <Button
+                        aria-label="查询日志"
+                        disabled={!targetReady}
+                        icon={<SearchOutlined />}
+                        type="primary"
+                      >
+                        查询日志
+                      </Button>
+                    }
+                    maxLength={2048}
+                    placeholder={
+                      resolvedTarget.kind === 'cluster'
+                        ? podNames?.length
+                          ? '搜索所选 Pod 的日志内容'
+                          : '搜索当前命名空间全部 Pod 的日志内容'
+                        : '搜索日志内容'
+                    }
+                    prefix={<SearchOutlined />}
+                    size="large"
+                    onSearch={() => {
+                      if (targetReady) form.submit()
+                    }}
                   />
-                ) : null}
-              </div>
-            </Flex>
-          ) : null}
-
-          {!embedded && queryEditorMode === 'query' ? (
-            <Input.TextArea
-              aria-label="SohaQL 高级查询语句"
-              className="soha-log-query-editor"
-              maxLength={2048}
-              rows={2}
-              spellCheck={false}
-              value={queryExpression}
-              onChange={(event) => setQueryExpression(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) form.submit()
-              }}
-            />
-          ) : (
-            <div className={`soha-log-filter-grid${!embedded ? ' is-standalone' : ''}`}>
-              {isKubernetes ? (
-                <>
-                  <Form.Item label="Pod（可选）" name="podNames">
-                    <Select
-                      allowClear
-                      aria-label="Pod"
-                      mode="tags"
-                      tokenSeparators={[',']}
-                      placeholder="全部 Pod"
-                    />
-                  </Form.Item>
-                  <Form.Item label="容器（可选）">
-                    <Select
-                      allowClear
-                      aria-label="容器"
-                      loading={podContainersQuery.isFetching}
-                      maxTagCount="responsive"
-                      mode="tags"
-                      options={containerOptions}
-                      showSearch={{ optionFilterProp: 'label' }}
-                      tokenSeparators={[',']}
-                      value={allContainers ? [ALL_CONTAINERS_VALUE] : (selectedContainers ?? [])}
-                      onChange={handleContainerChange}
-                    />
-                  </Form.Item>
-                  {embedded ? (
-                    <Form.Item label="标签选择器" name="labelSelector">
-                      <Input placeholder="app=api,tier=backend" />
-                    </Form.Item>
-                  ) : null}
-                </>
-              ) : null}
-              {embedded ? (
-                <Form.Item label="文本筛选" name="text">
-                  <Input allowClear placeholder="服务端文本匹配" />
                 </Form.Item>
-              ) : null}
-              {embedded ? (
-                <>
-                  <Form.Item label="时间范围" name="sinceSeconds">
-                    <Select
-                      options={[
-                        { value: 0, label: '全部可用日志' },
-                        { value: 300, label: '最近 5 分钟' },
-                        { value: 900, label: '最近 15 分钟' },
-                        { value: 3600, label: '最近 1 小时' },
-                        { value: 21600, label: '最近 6 小时' },
-                      ]}
-                    />
-                  </Form.Item>
-                  <Form.Item label="每个来源读取行数" name="tail">
-                    <Select
-                      options={(isKubernetes ? [200, 500, 1000, 5000] : [200, 500, 1000, 2000]).map(
-                        (value) => ({ value, label: String(value) }),
-                      )}
-                    />
-                  </Form.Item>
-                </>
-              ) : null}
-            </div>
-          )}
+              </div>
+            ) : null}
+          </Form>
+        </Card>
+      ) : null}
 
-          {embedded ? (
-            <Flex
-              className="soha-log-query-actions"
-              align="end"
-              gap={12}
-              justify="space-between"
-              wrap
-            >
-              <Space size={16} wrap>
-                {isKubernetes && mode === 'live' ? (
-                  <Form.Item name="previous" noStyle valuePropName="checked">
-                    <Switch checkedChildren="上次实例" unCheckedChildren="当前实例" />
-                  </Form.Item>
-                ) : null}
-              </Space>
-              {embedded ? (
-                <Button
-                  htmlType="submit"
-                  icon={<SearchOutlined />}
-                  type="primary"
-                  disabled={!targetReady}
-                >
-                  查询并连接
-                </Button>
-              ) : null}
-            </Flex>
-          ) : null}
-
-          {!embedded && queryEditorMode === 'builder' ? (
-            <div className="soha-log-primary-query">
-              <Form.Item name="text" noStyle>
-                <Input.Search
-                  allowClear
-                  aria-label="日志全文搜索"
-                  className="soha-log-primary-search"
-                  enterButton={
-                    <Button
-                      aria-label="查询日志"
-                      disabled={!targetReady}
-                      icon={<SearchOutlined />}
-                      type="primary"
-                    >
-                      查询日志
-                    </Button>
-                  }
-                  maxLength={2048}
-                  placeholder={
-                    resolvedTarget.kind === 'cluster'
-                      ? podNames?.length
-                        ? '搜索所选 Pod 的日志内容'
-                        : '搜索当前命名空间全部 Pod 的日志内容'
-                      : '搜索日志内容'
-                  }
-                  prefix={<SearchOutlined />}
-                  size="large"
-                  onSearch={() => {
-                    if (targetReady) form.submit()
-                  }}
-                />
-              </Form.Item>
-            </div>
-          ) : null}
-        </Form>
-      </Card>
-
-      <Card className="soha-log-results-card" title={mode === 'live' ? '运行时日志' : undefined}>
+      <Card
+        className="soha-log-results-card"
+        title={!embedded && mode === 'live' ? '运行时日志' : undefined}
+      >
         <Flex className="soha-log-results-toolbar" align="center" gap={8} wrap>
+          {!showQueryControls ? scopeControl : null}
           <StatusTag
             value={
               mode === 'history'
@@ -1013,6 +1016,11 @@ export function LogExplorer({
           ) : null}
           <span className="soha-log-toolbar-spacer" />
           <Space size={4} wrap>
+            {!showQueryControls ? (
+              <Button icon={<ExportOutlined />} onClick={handleOpenInCenter}>
+                在日志中心打开
+              </Button>
+            ) : null}
             {mode === 'live' ? (
               <>
                 <Text type="secondary">自动滚动</Text>

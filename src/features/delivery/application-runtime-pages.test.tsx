@@ -14,12 +14,26 @@ const workflowDefinition = {
   schemaVersion: 2,
   mode: 'release_dag',
   nodes: [
-    { id: 'approval', type: 'manual_approval', name: '审批', position: { x: 120, y: 120 }, timeoutSeconds: 300, continueOnFailure: false, config: {} },
-    { id: 'deploy', type: 'deploy_update_image', name: '更新镜像', position: { x: 320, y: 120 }, timeoutSeconds: 300, continueOnFailure: false, config: {} },
+    {
+      id: 'approval',
+      type: 'manual_approval',
+      name: '审批',
+      position: { x: 120, y: 120 },
+      timeoutSeconds: 300,
+      continueOnFailure: false,
+      config: {},
+    },
+    {
+      id: 'deploy',
+      type: 'deploy_update_image',
+      name: '更新镜像',
+      position: { x: 320, y: 120 },
+      timeoutSeconds: 300,
+      continueOnFailure: false,
+      config: {},
+    },
   ],
-  edges: [
-    { id: 'edge-1', source: 'approval', target: 'deploy', condition: 'success' },
-  ],
+  edges: [{ id: 'edge-1', source: 'approval', target: 'deploy', condition: 'success' }],
 }
 
 const testState = vi.hoisted(() => ({
@@ -107,10 +121,33 @@ const testState = vi.hoisted(() => ({
       }
     }
     if (path === '/workflow-templates') {
-      return { data: [{ id: 'wf-template-1', key: 'release-dag', name: 'Release DAG', enabled: true, definition: workflowDefinition, createdAt: '2026-05-01T00:00:00Z', updatedAt: '2026-05-10T00:00:00Z' }] }
+      return {
+        data: [
+          {
+            id: 'wf-template-1',
+            key: 'release-dag',
+            name: 'Release DAG',
+            enabled: true,
+            definition: workflowDefinition,
+            createdAt: '2026-05-01T00:00:00Z',
+            updatedAt: '2026-05-10T00:00:00Z',
+          },
+        ],
+      }
     }
     if (path === '/clusters') {
-      return { data: [{ id: 'cluster-a', name: 'cluster-a', connectionMode: testState.deliveryClusterConnectionMode, status: 'ready', createdAt: '2026-05-01T00:00:00Z', updatedAt: '2026-05-10T00:00:00Z' }] }
+      return {
+        data: [
+          {
+            id: 'cluster-a',
+            name: 'cluster-a',
+            connectionMode: testState.deliveryClusterConnectionMode,
+            status: 'ready',
+            createdAt: '2026-05-01T00:00:00Z',
+            updatedAt: '2026-05-10T00:00:00Z',
+          },
+        ],
+      }
     }
     if (path === '/clusters/capabilities') {
       return {
@@ -122,9 +159,12 @@ const testState = vi.hoisted(() => ({
             direct: { status: 'available' },
             agent: {
               status: testState.deliveryActionsAgentStatus,
-              notes: testState.deliveryActionsAgentStatus === 'available'
-                ? []
-                : ['build actions remain available; deploy, build-deploy, verification, and rollback against agent-connected targets require delivery runner parity'],
+              notes:
+                testState.deliveryActionsAgentStatus === 'available'
+                  ? []
+                  : [
+                      'build actions remain available; deploy, build-deploy, verification, and rollback against agent-connected targets require delivery runner parity',
+                    ],
             },
           },
         ],
@@ -170,6 +210,8 @@ const testState = vi.hoisted(() => ({
                   namespace: 'checkout-test',
                   workloadKind: 'Deployment',
                   workloadName: 'checkout-api',
+                  serviceId: 'svc-api',
+                  serviceKey: 'api',
                   desiredReplicas: 2,
                   readyReplicas: 2,
                   updatedReplicas: 2,
@@ -215,34 +257,43 @@ const testState = vi.hoisted(() => ({
               environmentName: '测试环境',
               workflowTemplateId: 'wf-template-1',
               workflowTemplateName: 'Release DAG',
-              workflowTemplate: testState.detailWithoutWorkflow ? undefined : {
-                id: 'wf-template-1',
-                key: 'release-dag',
-                name: 'Release DAG',
-                category: 'release',
-                definition: testState.detailWithoutValidationNodes
-                  ? {
-                    ...workflowDefinition,
-                    nodes: workflowDefinition.nodes.filter((node) => node.type !== 'check_http' && node.type !== 'check_k8s_event' && node.type !== 'smoke_test' && node.type !== 'verify' && node.type !== 'check'),
-                  }
-                  : {
-                    ...workflowDefinition,
-                    nodes: [
-                      ...workflowDefinition.nodes,
-                      {
-                        id: 'verify',
-                        type: 'verify',
-                        name: 'AI 回归验证',
-                        executorKind: 'mcp',
-                        targetKind: 'ai_test',
-                        capabilityRef: 'testing.ui.run',
-                        providerRef: 'external-test-platform',
-                        artifactKinds: ['test_report', 'screenshot', 'junit'],
-                        config: { url: 'https://example.com/healthz' },
-                      },
-                    ],
+              workflowTemplate: testState.detailWithoutWorkflow
+                ? undefined
+                : {
+                    id: 'wf-template-1',
+                    key: 'release-dag',
+                    name: 'Release DAG',
+                    category: 'release',
+                    definition: testState.detailWithoutValidationNodes
+                      ? {
+                          ...workflowDefinition,
+                          nodes: workflowDefinition.nodes.filter(
+                            (node) =>
+                              node.type !== 'check_http' &&
+                              node.type !== 'check_k8s_event' &&
+                              node.type !== 'smoke_test' &&
+                              node.type !== 'verify' &&
+                              node.type !== 'check',
+                          ),
+                        }
+                      : {
+                          ...workflowDefinition,
+                          nodes: [
+                            ...workflowDefinition.nodes,
+                            {
+                              id: 'verify',
+                              type: 'verify',
+                              name: 'AI 回归验证',
+                              executorKind: 'mcp',
+                              targetKind: 'ai_test',
+                              capabilityRef: 'testing.ui.run',
+                              providerRef: 'external-test-platform',
+                              artifactKinds: ['test_report', 'screenshot', 'junit'],
+                              config: { url: 'https://example.com/healthz' },
+                            },
+                          ],
+                        },
                   },
-              },
               targetCount: 1,
               targets: [
                 {
@@ -280,7 +331,11 @@ const testState = vi.hoisted(() => ({
                 attemptCount: 1,
                 timeoutSeconds: 600,
                 artifacts: [
-                  { kind: 'image', name: 'checkout-api', ref: 'registry.example.com/checkout/api:1.2.3' },
+                  {
+                    kind: 'image',
+                    name: 'checkout-api',
+                    ref: 'registry.example.com/checkout/api:1.2.3',
+                  },
                 ],
                 createdAt: '2026-05-10T00:00:00Z',
                 updatedAt: '2026-05-10T00:00:00Z',
@@ -299,8 +354,18 @@ const testState = vi.hoisted(() => ({
                 status: 'completed',
                 steps: [],
                 nodeRuns: [
-                  { nodeId: 'approval', name: '审批', type: 'manual_approval', status: 'completed' },
-                  { nodeId: 'deploy', name: '更新镜像', type: 'deploy_update_image', status: 'completed' },
+                  {
+                    nodeId: 'approval',
+                    name: '审批',
+                    type: 'manual_approval',
+                    status: 'completed',
+                  },
+                  {
+                    nodeId: 'deploy',
+                    name: '更新镜像',
+                    type: 'deploy_update_image',
+                    status: 'completed',
+                  },
                 ],
                 metadata: { nodes: workflowDefinition.nodes },
                 createdAt: '2026-05-10T00:00:00Z',
@@ -341,7 +406,11 @@ const testState = vi.hoisted(() => ({
             attemptCount: 1,
             timeoutSeconds: 600,
             artifacts: [
-              { kind: 'image', name: 'checkout-api', ref: 'registry.example.com/checkout/api:1.2.3' },
+              {
+                kind: 'image',
+                name: 'checkout-api',
+                ref: 'registry.example.com/checkout/api:1.2.3',
+              },
             ],
             createdAt: '2026-05-10T00:00:00Z',
             updatedAt: '2026-05-10T00:00:00Z',
@@ -361,7 +430,12 @@ const testState = vi.hoisted(() => ({
             steps: [],
             nodeRuns: [
               { nodeId: 'approval', name: '审批', type: 'manual_approval', status: 'completed' },
-              { nodeId: 'deploy', name: '更新镜像', type: 'deploy_update_image', status: 'completed' },
+              {
+                nodeId: 'deploy',
+                name: '更新镜像',
+                type: 'deploy_update_image',
+                status: 'completed',
+              },
             ],
             metadata: { nodes: workflowDefinition.nodes },
             createdAt: '2026-05-10T00:00:00Z',
@@ -440,16 +514,60 @@ const testState = vi.hoisted(() => ({
       }
     }
     if (path === '/builds?applicationId=app-1') {
-      return { items: [{ id: 'build-1', applicationId: 'app-1', sourceSystem: 'application', status: 'completed', createdAt: '2026-05-10T00:00:00Z' }] }
+      return {
+        items: [
+          {
+            id: 'build-1',
+            applicationId: 'app-1',
+            sourceSystem: 'application',
+            status: 'completed',
+            createdAt: '2026-05-10T00:00:00Z',
+          },
+        ],
+      }
     }
     if (path === '/builds') {
-      return { items: [{ id: 'build-1', applicationId: 'app-1', sourceSystem: 'application', status: 'completed', createdAt: '2026-05-10T00:00:00Z' }] }
+      return {
+        items: [
+          {
+            id: 'build-1',
+            applicationId: 'app-1',
+            sourceSystem: 'application',
+            status: 'completed',
+            createdAt: '2026-05-10T00:00:00Z',
+          },
+        ],
+      }
     }
     if (path === '/releases?applicationId=app-1') {
-      return { items: [{ id: 'release-1', applicationId: 'app-1', clusterId: 'cluster-a', namespace: 'checkout-test', deploymentName: 'checkout-api', status: 'completed', createdAt: '2026-05-10T00:00:00Z' }] }
+      return {
+        items: [
+          {
+            id: 'release-1',
+            applicationId: 'app-1',
+            clusterId: 'cluster-a',
+            namespace: 'checkout-test',
+            deploymentName: 'checkout-api',
+            status: 'completed',
+            createdAt: '2026-05-10T00:00:00Z',
+          },
+        ],
+      }
     }
     if (path === '/releases') {
-      return { items: [{ id: 'release-1', applicationId: 'app-1', clusterId: 'cluster-a', namespace: 'checkout-test', deploymentName: 'checkout-api', status: 'completed', createdAt: '2026-05-10T00:00:00Z' }] }
+      return {
+        items: [
+          {
+            id: 'release-1',
+            applicationId: 'app-1',
+            clusterId: 'cluster-a',
+            namespace: 'checkout-test',
+            deploymentName: 'checkout-api',
+            status: 'completed',
+            createdAt: '2026-05-10T00:00:00Z',
+          },
+        ],
+      }
     }
     if (path === '/workflows?applicationId=app-1') {
       return {
@@ -462,7 +580,12 @@ const testState = vi.hoisted(() => ({
             steps: [],
             nodeRuns: [
               { nodeId: 'approval', name: '审批', type: 'manual_approval', status: 'completed' },
-              { nodeId: 'deploy', name: '更新镜像', type: 'deploy_update_image', status: 'completed' },
+              {
+                nodeId: 'deploy',
+                name: '更新镜像',
+                type: 'deploy_update_image',
+                status: 'completed',
+              },
             ],
             metadata: { nodes: workflowDefinition.nodes },
             createdAt: '2026-05-10T00:00:00Z',
@@ -482,7 +605,12 @@ const testState = vi.hoisted(() => ({
             steps: [],
             nodeRuns: [
               { nodeId: 'approval', name: '审批', type: 'manual_approval', status: 'completed' },
-              { nodeId: 'deploy', name: '更新镜像', type: 'deploy_update_image', status: 'completed' },
+              {
+                nodeId: 'deploy',
+                name: '更新镜像',
+                type: 'deploy_update_image',
+                status: 'completed',
+              },
             ],
             metadata: { nodes: workflowDefinition.nodes },
             createdAt: '2026-05-10T00:00:00Z',
@@ -517,7 +645,8 @@ const readonlyPermissionKeys = [
 ]
 
 vi.mock('@/features/auth/permission-snapshot', () => ({
-  hasPermission: (snapshot: { permissionKeys?: string[] } | undefined, key: string) => snapshot?.permissionKeys?.includes(key) ?? false,
+  hasPermission: (snapshot: { permissionKeys?: string[] } | undefined, key: string) =>
+    snapshot?.permissionKeys?.includes(key) ?? false,
   usePermissionSnapshot: () => ({
     data: { data: testState.permissionSnapshot },
     isLoading: false,
@@ -566,7 +695,10 @@ vi.mock('@/services/api-client', () => ({
           riskLevel: payload.action === 'build' ? 'low' : 'medium',
           requiresApproval: payload.action !== 'build',
           impact: { applicationId: payload.applicationId, action: payload.action },
-          rollbackStrategy: payload.action === 'build' ? 'Build only; no runtime rollback required.' : 'Use rollback context if rollout fails.',
+          rollbackStrategy:
+            payload.action === 'build'
+              ? 'Build only; no runtime rollback required.'
+              : 'Use rollback context if rollout fails.',
           createdAt: '2026-05-10T01:00:00Z',
           updatedAt: '2026-05-10T01:00:00Z',
         }
@@ -640,7 +772,9 @@ async function renderWithProviders(node: ReactNode, route = '/applications/app-1
 }
 
 function clickTab(container: HTMLElement, text: string) {
-  const tab = Array.from(container.querySelectorAll('[role="tab"]')).find((item) => item.textContent?.includes(text)) as HTMLElement | undefined
+  const tab = Array.from(container.querySelectorAll('[role="tab"]')).find((item) =>
+    item.textContent?.includes(text),
+  ) as HTMLElement | undefined
   if (!tab) {
     throw new Error(`tab not found: ${text}`)
   }
@@ -650,7 +784,9 @@ function clickTab(container: HTMLElement, text: string) {
 }
 
 function findButton(container: HTMLElement, text: string) {
-  const button = Array.from(container.querySelectorAll('button')).find((item) => item.textContent?.includes(text)) as HTMLButtonElement | undefined
+  const button = Array.from(container.querySelectorAll('button')).find((item) =>
+    item.textContent?.includes(text),
+  ) as HTMLButtonElement | undefined
   if (!button) {
     throw new Error(`button not found: ${text}`)
   }
@@ -711,7 +847,7 @@ describe('ApplicationDetailPage workbench', () => {
     vi.clearAllMocks()
   })
 
-  it('renders overview, service, delivery artifact and verification views', async () => {
+  it('renders service-environment, delivery and settings workspaces', async () => {
     const container = await renderWithProviders(<ApplicationDetailPage />)
 
     expect(testState.apiGet).toHaveBeenCalledWith('/applications/app-1/runtime')
@@ -726,29 +862,43 @@ describe('ApplicationDetailPage workbench', () => {
     expect(testState.apiGet).toHaveBeenCalledWith('/application-environments')
     expect(testState.apiGet).toHaveBeenCalledWith('/workflow-templates')
     expect(testState.apiGet).toHaveBeenCalledWith('/clusters')
-    expect(container.textContent).toContain('Checkout Platform')
-    expect(container.textContent).toContain('总览')
-    expect(container.textContent).toContain('配置')
-    expect(container.textContent).toContain('权限')
-    expect(container.textContent).toContain('服务组件')
-    expect(container.textContent).toContain('工作流')
-    expect(container.textContent).toContain('AI/MCP')
-    expect(container.textContent).toContain('交付操作')
-    expect(container.textContent).toContain('交付态势')
-    expect(container.textContent).toContain('门禁状态')
-    expect(container.textContent).toContain('候选版本')
-    expect(container.textContent).toContain('环境矩阵')
-    expect(container.textContent).toContain('构建完成')
-    expect(container.textContent).toContain('可验证')
+    expect(container.querySelector('.soha-management-detail-header')).toBeNull()
+    expect(container.textContent).not.toContain(
+      '围绕应用查看服务组件、容器、环境运行态和交付入口。',
+    )
+    expect(container.textContent).not.toContain('返回应用中心')
+    const page = container.querySelector('.soha-page')
+    const tabs = container.querySelector('.soha-page > .ant-tabs')
+    const serviceEnvironmentPane = container.querySelector('.ant-tabs-tabpane-active')
+    expect(page?.firstElementChild).toBe(tabs)
+    expect(tabs?.classList.contains('soha-resource-tabs')).toBe(true)
+    expect(
+      Array.from(
+        container.querySelectorAll('.soha-page > .ant-tabs > .ant-tabs-nav .ant-tabs-tab'),
+      ).map((tab) => tab.textContent),
+    ).toEqual(['服务与环境', '交付', '设置'])
+    expect(
+      serviceEnvironmentPane?.querySelector('.soha-application-runtime-service-summary'),
+    ).toBeNull()
+    expect(serviceEnvironmentPane?.querySelector('.soha-application-delivery-actions')).toBeNull()
+    expect(
+      serviceEnvironmentPane?.querySelector('.soha-application-service-environment-matrix'),
+    ).not.toBeNull()
+    expect(container.textContent).toContain('Checkout API')
+    expect(container.textContent).toContain('Kubernetes Workload')
+    expect(container.textContent).toContain('checkout-test')
+    expect(container.textContent).toContain('Ready 2/2')
     expect(container.textContent).toContain('1.2.3')
-    expect(container.textContent).toContain('个交付物线索')
-    expect(container.textContent).toContain('构建并部署')
-    expect(container.textContent).toContain('运行验证')
+    expect(container.textContent).not.toContain('交付操作')
 
-    clickTab(container, '配置')
+    clickTab(container, '设置')
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
+    expect(container.textContent).toContain('应用配置')
+    expect(container.querySelector('.ant-tabs-tabpane-active .soha-resource-tabs')).not.toBeNull()
+    expect(container.textContent).toContain('权限')
+    expect(container.textContent).toContain('交付能力')
     expect(container.textContent).toContain('应用配置')
     expect(container.textContent).toContain('编辑应用')
     expect(container.textContent).toContain('构建来源')
@@ -770,16 +920,25 @@ describe('ApplicationDetailPage workbench', () => {
     expect(container.textContent).toContain('构建: 允许')
     expect(container.textContent).toContain('环境授权上下文')
 
-    clickTab(container, '构建发布')
+    clickTab(container, '交付')
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
+    expect(container.textContent).toContain('发布变更')
+    expect(container.textContent).toContain('工作流')
+    expect(container.textContent).toContain('验证')
     expect(container.textContent).toContain('Release Bundle')
     expect(container.textContent).toContain('Task 交付物')
     expect(container.textContent).toContain('build-1')
     expect(container.textContent).toContain('release-1')
     expect(container.textContent).toContain('workflow-1')
     expect(container.querySelector('.soha-application-runtime-delivery-grid')).not.toBeNull()
+    expect(
+      container.querySelector('.ant-tabs-tabpane-active .soha-application-delivery-actions'),
+    ).not.toBeNull()
+    expect(container.textContent).toContain('交付操作')
+    expect(container.textContent).toContain('构建并部署')
+    expect(container.textContent).toContain('运行验证')
 
     clickTab(container, '工作流')
     await act(async () => {
@@ -790,7 +949,7 @@ describe('ApplicationDetailPage workbench', () => {
     expect(container.textContent).toContain('release-dag')
     expect(container.querySelector('.soha-application-runtime-pipeline-grid')).not.toBeNull()
 
-    clickTab(container, '测试验证')
+    clickTab(container, '验证')
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
@@ -798,7 +957,11 @@ describe('ApplicationDetailPage workbench', () => {
     expect(container.textContent).toContain('DAG 节点数')
     expect(container.querySelector('.soha-application-runtime-verification-grid')).not.toBeNull()
 
-    clickTab(container, 'AI/MCP')
+    clickTab(container, '设置')
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    clickTab(container, '交付能力')
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
@@ -808,18 +971,19 @@ describe('ApplicationDetailPage workbench', () => {
     expect(container.textContent).toContain('external-test-platform')
     expect(container.textContent).toContain('外部 AI 测试平台尚未接入')
 
-    clickTab(container, '服务组件')
+    clickTab(container, '服务与环境')
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
     expect(container.textContent).toContain('Checkout API')
-    expect(container.textContent).toContain('registry.example.com/checkout/api')
-    expect(container.querySelector('.soha-application-service-grid')).not.toBeNull()
-    expect(container.querySelector('.soha-application-container-row')).not.toBeNull()
+    expect(container.querySelector('.soha-application-service-environment-matrix')).not.toBeNull()
   })
 
   it('opens delivery tab and highlights focused build evidence from query params', async () => {
-    const container = await renderWithProviders(<ApplicationDetailPage />, '/applications/app-1?tab=delivery&buildId=build-1')
+    const container = await renderWithProviders(
+      <ApplicationDetailPage />,
+      '/applications/app-1?tab=delivery&buildId=build-1',
+    )
 
     expect(testState.apiGet).toHaveBeenCalledWith('/builds?applicationId=app-1')
     expect(container.textContent).toContain('已定位交付证据 build-1')
@@ -829,7 +993,10 @@ describe('ApplicationDetailPage workbench', () => {
   })
 
   it('creates and confirms a DeliveryPlan when build is clicked', async () => {
-    const container = await renderWithProviders(<ApplicationDetailPage />)
+    const container = await renderWithProviders(
+      <ApplicationDetailPage />,
+      '/applications/app-1?tab=delivery',
+    )
     const buildButton = findButton(container, '构建')
 
     await act(async () => {
@@ -837,21 +1004,29 @@ describe('ApplicationDetailPage workbench', () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
 
-    expect(api.post).toHaveBeenCalledWith('/delivery/plans', expect.objectContaining({
-      applicationId: 'app-1',
-      action: 'build',
-      applicationEnvironmentId: 'binding-test',
-      targetId: 'target-1',
-      buildSourceId: 'source-api',
-      refType: 'branch',
-      refName: 'main',
-    }))
-    expect(api.post).not.toHaveBeenCalledWith('/applications/app-1/delivery-actions', expect.anything())
+    expect(api.post).toHaveBeenCalledWith(
+      '/delivery/plans',
+      expect.objectContaining({
+        applicationId: 'app-1',
+        action: 'build',
+        applicationEnvironmentId: 'binding-test',
+        targetId: 'target-1',
+        buildSourceId: 'source-api',
+        refType: 'branch',
+        refName: 'main',
+      }),
+    )
+    expect(api.post).not.toHaveBeenCalledWith(
+      '/applications/app-1/delivery-actions',
+      expect.anything(),
+    )
     expect(document.body.textContent).toContain('DeliveryPlan 确认')
     expect(document.body.textContent).toContain('确认前不会触发执行')
 
     await act(async () => {
-      findButton(document.body, '确认执行').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      findButton(document.body, '确认执行').dispatchEvent(
+        new MouseEvent('click', { bubbles: true, cancelable: true }),
+      )
       await new Promise((resolve) => setTimeout(resolve, 0))
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
@@ -861,7 +1036,10 @@ describe('ApplicationDetailPage workbench', () => {
   })
 
   it('creates a DeliveryPlan when deploy is clicked', async () => {
-    const container = await renderWithProviders(<ApplicationDetailPage />)
+    const container = await renderWithProviders(
+      <ApplicationDetailPage />,
+      '/applications/app-1?tab=delivery',
+    )
     const deployButton = findButton(container, '部署')
 
     await act(async () => {
@@ -869,14 +1047,20 @@ describe('ApplicationDetailPage workbench', () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
 
-    expect(api.post).toHaveBeenCalledWith('/delivery/plans', expect.objectContaining({
-      applicationId: 'app-1',
-      action: 'deploy',
-      applicationEnvironmentId: 'binding-test',
-      targetId: 'target-1',
-      imageTag: expect.any(String),
-    }))
-    expect(api.post).not.toHaveBeenCalledWith('/applications/app-1/delivery-actions', expect.anything())
+    expect(api.post).toHaveBeenCalledWith(
+      '/delivery/plans',
+      expect.objectContaining({
+        applicationId: 'app-1',
+        action: 'deploy',
+        applicationEnvironmentId: 'binding-test',
+        targetId: 'target-1',
+        imageTag: expect.any(String),
+      }),
+    )
+    expect(api.post).not.toHaveBeenCalledWith(
+      '/applications/app-1/delivery-actions',
+      expect.anything(),
+    )
     expect(document.body.textContent).toContain('medium')
     expect(document.body.textContent).toContain('需要审批')
   })
@@ -885,7 +1069,10 @@ describe('ApplicationDetailPage workbench', () => {
     testState.deliveryClusterConnectionMode = 'agent'
     testState.deliveryActionsAgentStatus = 'partial'
 
-    const container = await renderWithProviders(<ApplicationDetailPage />)
+    const container = await renderWithProviders(
+      <ApplicationDetailPage />,
+      '/applications/app-1?tab=delivery',
+    )
     const buildButton = findButton(container, '构建')
     const deployButton = findButton(container, '部署')
     const buildDeployButton = findButton(container, '构建并部署')
@@ -903,19 +1090,28 @@ describe('ApplicationDetailPage workbench', () => {
     })
 
     expect(api.post).not.toHaveBeenCalledWith('/delivery/plans', expect.anything())
-    expect(api.post).not.toHaveBeenCalledWith('/applications/app-1/delivery-actions', expect.anything())
+    expect(api.post).not.toHaveBeenCalledWith(
+      '/applications/app-1/delivery-actions',
+      expect.anything(),
+    )
   })
 
   it('disables build and deploy when workflow template is missing', async () => {
     testState.detailWithoutWorkflow = true
-    const container = await renderWithProviders(<ApplicationDetailPage />)
+    const container = await renderWithProviders(
+      <ApplicationDetailPage />,
+      '/applications/app-1?tab=delivery',
+    )
 
     expect(findButton(container, '构建并部署').disabled).toBe(true)
   })
 
   it('disables delivery action buttons for readonly users', async () => {
     testState.permissionSnapshot.permissionKeys = [...readonlyPermissionKeys]
-    const container = await renderWithProviders(<ApplicationDetailPage />)
+    const container = await renderWithProviders(
+      <ApplicationDetailPage />,
+      '/applications/app-1?tab=delivery',
+    )
 
     const buildButton = findButton(container, '构建')
     const deployButton = findButton(container, '部署')
@@ -935,12 +1131,18 @@ describe('ApplicationDetailPage workbench', () => {
     })
 
     expect(api.post).not.toHaveBeenCalledWith('/delivery/plans', expect.anything())
-    expect(api.post).not.toHaveBeenCalledWith('/applications/app-1/delivery-actions', expect.anything())
+    expect(api.post).not.toHaveBeenCalledWith(
+      '/applications/app-1/delivery-actions',
+      expect.anything(),
+    )
   })
 
   it('disables image-producing actions when image tag defaults are missing', async () => {
     testState.detailWithoutImageTagDefaults = true
-    const container = await renderWithProviders(<ApplicationDetailPage />)
+    const container = await renderWithProviders(
+      <ApplicationDetailPage />,
+      '/applications/app-1?tab=delivery',
+    )
 
     expect(findButton(container, '构建').disabled).toBe(true)
     expect(findButton(container, '部署').disabled).toBe(true)
@@ -949,7 +1151,10 @@ describe('ApplicationDetailPage workbench', () => {
 
   it('disables verification when workflow template has no validation nodes', async () => {
     testState.detailWithoutValidationNodes = true
-    const container = await renderWithProviders(<ApplicationDetailPage />)
+    const container = await renderWithProviders(
+      <ApplicationDetailPage />,
+      '/applications/app-1?tab=delivery',
+    )
 
     expect(findButton(container, '运行验证').disabled).toBe(true)
   })

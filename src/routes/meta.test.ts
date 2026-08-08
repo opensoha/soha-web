@@ -57,6 +57,35 @@ describe('access route authorization', () => {
     ).toEqual(['monitoring-workbench-logs'])
   })
 
+  it('exposes software storage against an older menu snapshot without weakening its permission boundary', () => {
+    const allowed = buildSnapshot({
+      permissionKeys: ['software.package.view'],
+      visibleMenuIds: ['identity', 'identity-software'],
+      visibleMenus: [
+        { id: 'identity', path: '/internal-workbench' },
+        {
+          id: 'identity-software',
+          parentId: 'identity',
+          path: '/internal-workbench/software',
+        },
+      ],
+    })
+    const missingPermission = buildSnapshot({
+      visibleMenuIds: ['identity', 'identity-software'],
+      visibleMenus: [{ id: 'identity', path: '/internal-workbench' }],
+    })
+
+    expect(canAccessRoute(getRoute('internal-workbench-software-storage'), allowed)).toBe(true)
+    expect(canAccessRoute(getRoute('internal-workbench-software-storage'), missingPermission)).toBe(
+      false,
+    )
+    expect(
+      getAccessibleSidebarNav(allowed)
+        .find((item) => item.id === 'identity')
+        ?.children?.map((item) => item.id),
+    ).toContain('identity-software-storage')
+  })
+
   it('requires the enabled internal workbench menu binding for the portal', () => {
     const snapshot = buildSnapshot({
       permissionKeys: ['identity.portal.view'],

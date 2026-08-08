@@ -200,11 +200,15 @@ export function CRDPage() {
           <ManagementState
             bordered={false}
             compact
-            kind={!clusterId ? 'select-scope' : 'empty'}
+            kind={!clusterId ? 'select-scope' : catalogQuery.isError ? 'error' : 'empty'}
             title={
               !clusterId
                 ? t('platformScope.clusterPlaceholder', 'Select cluster')
-                : t('page.extensions.crd.empty', 'No CRDs in the current cluster.')
+                : catalogQuery.isError
+                  ? localeCode === 'zh_CN'
+                    ? 'CRD 目录加载失败'
+                    : 'Failed to load the CRD catalog'
+                  : t('page.extensions.crd.empty', 'No CRDs in the current cluster.')
             }
           />
         }

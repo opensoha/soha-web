@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Alert,
+  App,
   Button,
   Card,
   Checkbox,
@@ -16,7 +17,6 @@ import {
   Tabs,
   Tag,
   Typography,
-  message,
 } from 'antd'
 import { CloudDownloadOutlined, LinkOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -87,6 +87,7 @@ function Readme({ value }: { value?: string }) {
 
 export function HelmChartDrawer({ chart, initialTab, onClose }: HelmChartDrawerProps) {
   const { localeCode } = useI18n()
+  const { message } = App.useApp()
   const { clusterId, namespace } = usePlatformScopeStore()
   const navigate = useNavigate()
   const queryClient = useQueryClient()

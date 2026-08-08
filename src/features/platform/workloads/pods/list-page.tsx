@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import {
+  App,
   Button,
   Popconfirm,
   Progress,
@@ -10,7 +11,6 @@ import {
   Tag,
   Tooltip,
   Typography,
-  message,
 } from 'antd'
 import { DeleteOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -23,7 +23,7 @@ import {
   ManagementTableToolbar,
 } from '@/components/management-list'
 import { TABLE_ACTIONS_COLUMN_CLASS_NAME } from '@/components/resource-actions'
-import { hasAllowedAction } from '@/features/auth'
+import { hasAllowedAction, hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { encodeAIContextForElement, useAIPageContext } from '@/features/copilot'
 import { useI18n } from '@/i18n'
 import { StatusTag } from '@/components/status-tag'
@@ -191,8 +191,14 @@ function renderPodNameCell(record: Pod, onClick: () => void) {
 
 export function WorkloadsPodsPage() {
   const { t, localeCode } = useI18n()
+  const { message } = App.useApp()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const permissionSnapshotQuery = usePermissionSnapshot()
+  const canDeletePods = hasPermission(
+    permissionSnapshotQuery.data?.data,
+    'platform.pods.delete',
+  )
   const { clusterId, namespace } = usePlatformScopeStore()
   const podDeleteCapability = useClusterCapability('workload.mutations', localeCode)
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true)
@@ -349,7 +355,15 @@ export function WorkloadsPodsPage() {
       defaultSortOrder: 'ascend',
       render: (_name: string, record: Pod) =>
         renderPodNameCell(record, () =>
-          navigate(buildWorkloadDetailPath('pods', record.name, namespace, record.namespace)),
+          navigate(
+            buildWorkloadDetailPath(
+              'pods',
+              record.name,
+              namespace,
+              record.namespace,
+              clusterId,
+            ),
+          ),
         ),
     },
     {
@@ -450,6 +464,8 @@ export function WorkloadsPodsPage() {
       }),
       onCell: () => ({ className: `${TABLE_ACTIONS_COLUMN_CLASS_NAME} soha-pod-actions-column` }),
       render: (value: string, record: Pod) => {
+        if (!canDeletePods) return null
+
         const podRebuildDisabled =
           podDeleteDisabled || !hasAllowedAction(record.allowedActions, 'delete')
         const podRebuildDisabledReason =
@@ -606,7 +622,7 @@ export function WorkloadsPodsPage() {
   )
 
   const podBatchBar =
-    selectedPodKeys.length > 0 ? (
+    canDeletePods && selectedPodKeys.length > 0 ? (
       <ManagementBatchBar
         selectedCount={selectedPodKeys.length}
         selectedLabel={
@@ -731,7 +747,13 @@ export function WorkloadsPodsPage() {
         onRow={(record: Pod) => ({
           'data-ai-context': encodeAIContextForElement({
             sourceWorkbench: 'platform',
-            sourceRoute: `/workloads/pods/${record.name}?namespace=${encodeURIComponent(record.namespace)}`,
+            sourceRoute: buildWorkloadDetailPath(
+              'pods',
+              record.name,
+              namespace,
+              record.namespace,
+              clusterId,
+            ),
             sourceTitle: `Pod ${record.name}`,
             entityKind: 'kubernetes.pod',
             entityName: record.name,
@@ -763,11 +785,15 @@ export function WorkloadsPodsPage() {
         tableSize={tableSize}
         scroll={{ x: 1500 }}
         selectCurrentPageOnly
-        rowSelection={{
-          columnWidth: 44,
-          selectedRowKeys: selectedPodKeys,
-          onChange: (selectedRowKeys: string[]) => setSelectedPodKeys(selectedRowKeys),
-        }}
+        rowSelection={
+          canDeletePods
+            ? {
+                columnWidth: 44,
+                selectedRowKeys: selectedPodKeys,
+                onChange: (selectedRowKeys: string[]) => setSelectedPodKeys(selectedRowKeys),
+              }
+            : undefined
+        }
       />
     </div>
   )

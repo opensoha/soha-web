@@ -2,8 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { Select, Space, Tag, Typography } from 'antd'
 import { ApartmentOutlined, KubernetesOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { listClusters } from '@/features/platform/clusters/api'
-import { clusterKeys } from '@/features/platform/clusters/keys'
+import { clusterQueries } from '@/features/platform/clusters/queries'
 import { useI18n } from '@/i18n'
 import { api } from '@/services/api-client'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
@@ -46,10 +45,7 @@ function usePlatformScopeData() {
   const { t } = useI18n()
   const { clusterId, namespace, setClusterId, setNamespace } = usePlatformScopeStore()
 
-  const clustersQuery = useQuery({
-    queryKey: clusterKeys.legacyList(),
-    queryFn: listClusters,
-  })
+  const clustersQuery = useQuery(clusterQueries.list())
 
   const namespacesQuery = useQuery({
     queryKey: ['namespaces', clusterId],
@@ -86,12 +82,16 @@ function usePlatformScopeData() {
     [clusterId, clusters],
   )
 
-  const scopeLabels = useMemo(() => ({
-    cluster: currentCluster?.name || t('platformScope.clusterPlaceholder', 'Select cluster'),
-    namespace: namespace && namespace !== ''
-      ? namespace
-      : t('platformScope.allNamespaces', 'All namespaces'),
-  }), [currentCluster?.name, namespace, t])
+  const scopeLabels = useMemo(
+    () => ({
+      cluster: currentCluster?.name || t('platformScope.clusterPlaceholder', 'Select cluster'),
+      namespace:
+        namespace && namespace !== ''
+          ? namespace
+          : t('platformScope.allNamespaces', 'All namespaces'),
+    }),
+    [currentCluster?.name, namespace, t],
+  )
 
   return {
     clusterId,
@@ -139,7 +139,9 @@ export function PlatformScopeTrigger({
         'soha-platform-scope-inline',
         showNamespaceSelector ? 'has-namespace' : 'is-cluster-only',
         className,
-      ].filter(Boolean).join(' ')}
+      ]
+        .filter(Boolean)
+        .join(' ')}
       role="group"
       aria-label={t('platformScope.scope', 'Resource Scope')}
     >
@@ -196,10 +198,15 @@ export function PlatformScopeToolbar({
   showLabel = true,
 }: PlatformScopeToolbarProps = {}) {
   const { t } = useI18n()
-  const { clusterId, namespace, setClusterId, setNamespace, clusters, namespaces } = usePlatformScopeData()
+  const { clusterId, namespace, setClusterId, setNamespace, clusters, namespaces } =
+    usePlatformScopeData()
 
   return (
-    <div className={['soha-scopebar', embedded ? 'is-embedded' : '', className].filter(Boolean).join(' ')}>
+    <div
+      className={['soha-scopebar', embedded ? 'is-embedded' : '', className]
+        .filter(Boolean)
+        .join(' ')}
+    >
       {showLabel ? (
         <Text strong style={{ fontSize: 12 }}>
           {t('platformScope.scope', 'Resource Scope')}
@@ -249,7 +256,9 @@ export function ScopeSummary({ className, scopeMode = 'passive' }: ScopeSummaryP
 
   return (
     <Space size={[6, 6]} wrap className={className}>
-      {scopeMode === 'namespace' ? <Tag className="soha-scope-summary-tag">{`${t('common.namespace', 'Namespace')} ${scopeLabels.namespace}`}</Tag> : null}
+      {scopeMode === 'namespace' ? (
+        <Tag className="soha-scope-summary-tag">{`${t('common.namespace', 'Namespace')} ${scopeLabels.namespace}`}</Tag>
+      ) : null}
       <Tag className="soha-scope-summary-tag">{`${t('common.cluster', 'Cluster')} ${scopeLabels.cluster}`}</Tag>
     </Space>
   )
@@ -261,7 +270,8 @@ export function ResourceWorkspaceScopeBar({
   sticky = true,
 }: ResourceWorkspaceScopeBarProps = {}) {
   const { t } = useI18n()
-  const { clusterId, namespace, setClusterId, setNamespace, clusters, namespaces, scopeLabels } = usePlatformScopeData()
+  const { clusterId, namespace, setClusterId, setNamespace, clusters, namespaces, scopeLabels } =
+    usePlatformScopeData()
 
   if (scopeMode === 'hidden') {
     return null
@@ -271,17 +281,27 @@ export function ResourceWorkspaceScopeBar({
   const showClusterSelector = scopeMode === 'cluster' || scopeMode === 'namespace'
 
   return (
-    <div className={['soha-page-context-bar', sticky ? 'is-sticky' : '', className].filter(Boolean).join(' ')}>
+    <div
+      className={['soha-page-context-bar', sticky ? 'is-sticky' : '', className]
+        .filter(Boolean)
+        .join(' ')}
+    >
       <div className="soha-page-context-bar__header">
         <Text strong className="soha-page-context-bar__title">
           {t('platformScope.scope', 'Resource Scope')}
         </Text>
         <Text type="secondary" className="soha-page-context-bar__subtitle">
           {scopeMode === 'namespace'
-            ? t('platformScope.namespaceHint', 'Use namespace and cluster as the current resource context')
+            ? t(
+                'platformScope.namespaceHint',
+                'Use namespace and cluster as the current resource context',
+              )
             : showClusterSelector
               ? t('platformScope.clusterHint', 'Use cluster as the current resource context')
-              : t('platformScope.summaryHint', 'Current page uses the selected resource context as a read-only summary')}
+              : t(
+                  'platformScope.summaryHint',
+                  'Current page uses the selected resource context as a read-only summary',
+                )}
         </Text>
       </div>
 

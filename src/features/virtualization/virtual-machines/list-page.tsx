@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   App,
   Alert,
+  AutoComplete,
   Button,
   Form,
   Input,
@@ -32,7 +33,7 @@ import { tableColumnPresets } from '@/utils/table-columns'
 import { createUUID } from '@/utils/uuid'
 import { StepFormModal } from '@/components/step-form-modal'
 import { OperationalPlanModal } from '@/components/operational-plan-modal'
-import { StatusTag } from '@/components/status-tag'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
 import type { OperationalPlan } from '@opensoha/contracts/gen/ts/sohaapi'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
@@ -52,8 +53,10 @@ import { useVirtualizationPermissions } from '@/features/virtualization/shared/u
 import { VirtualizationAdminTable } from '@/features/virtualization/shared/ui'
 import {
   buildCreateVmPayload,
+  filterVmCreateFlavors,
   normalizePage,
   virtualMachineDisplayStatus,
+  virtualMachineObservation,
   virtualizationPageSummary,
   providerLabel,
 } from '@/features/virtualization/virtualization-model'
@@ -122,22 +125,43 @@ function tableTooltipText(value: unknown) {
   )
 }
 
-function tableTooltipLink(value: unknown, to: string) {
-  const text = String(value ?? '').trim() || '-'
-  const content = (
-    <Link className="soha-vrt-table-tooltip-text" to={to}>
-      {text}
-    </Link>
-  )
-  if (text === '-') return <span className="soha-vrt-table-tooltip-text">-</span>
+function providerTag(provider?: string) {
+  return <MetadataTag label={providerLabel(provider)} tone={provider === 'pve' ? 'gold' : 'cyan'} />
+}
+
+function vmIdentity(record: VirtualMachine) {
+  const hostname = virtualMachineObservation(record).hostname
   return (
-    <Tooltip
-      placement="topLeft"
-      title={<span className="soha-vrt-table-tooltip-content">{text}</span>}
-    >
-      {content}
-    </Tooltip>
+    <span className="soha-vrt-vm-identity-copy">
+      <Tooltip title={record.name} placement="topLeft">
+        <Link
+          className="soha-vrt-vm-name"
+          to={`/compute/virtualization/vms/${encodeURIComponent(record.id)}`}
+        >
+          {record.name}
+        </Link>
+      </Tooltip>
+      {hostname && hostname !== record.name ? <Text type="secondary">{hostname}</Text> : null}
+    </span>
   )
+}
+
+function vmMetadataTags(
+  values: Array<{ label: string; tone?: 'default' | 'blue' | 'cyan' | 'purple' | 'gold' }>,
+) {
+  if (values.length === 0) return <Text type="secondary">-</Text>
+  return (
+    <span className="soha-vrt-vm-tag-group">
+      {values.map((item) => (
+        <MetadataTag key={item.label} label={item.label} tone={item.tone} />
+      ))}
+    </span>
+  )
+}
+
+function memoryLabel(memoryMiB?: number) {
+  if (!memoryMiB) return ''
+  return memoryMiB % 1024 === 0 ? `${memoryMiB / 1024} GiB` : `${memoryMiB} MiB`
 }
 
 interface TaskProgressBannerProps {
@@ -159,9 +183,7 @@ function TaskProgressBanner({
   const isError = status === 'error'
   const description =
     task?.message || (isError ? '与服务器的实时连接已断开' : '正在等待任务完成...')
-  const taskStatus = task?.status ? (
-    <StatusTag value={task.status} />
-  ) : null
+  const taskStatus = task?.status ? <StatusTag value={task.status} /> : null
   return (
     <Alert
       className="soha-vrt-task-banner"
@@ -227,6 +249,7 @@ export function VirtualizationVmsPage() {
   const enableCloudInit = Form.useWatch('enableCloudInit', form) ?? false
   const kubevirtNetworkType = Form.useWatch('kubevirtNetworkType', form) ?? 'pod'
   const selectedConnectionId = Form.useWatch('connectionId', form)
+  const selectedFlavorId = Form.useWatch('flavorId', form)
   const { task: streamedTask, status: streamStatus } = useTaskStream(
     pendingTaskId,
     virtualizationModuleEnabled,
@@ -346,6 +369,15 @@ export function VirtualizationVmsPage() {
     providerOptions.find((item) => item.value === 'kubevirt')?.value ?? providerOptions[0]?.value
   const images = normalizePage(imagesQuery.data, 1, 200).items
   const flavors = flavorsQuery.data ?? []
+  const compatibleFlavors = useMemo(
+    () => filterVmCreateFlavors(flavors, createProvider, selectedConnectionId),
+    [createProvider, flavors, selectedConnectionId],
+  )
+  useEffect(() => {
+    if (selectedFlavorId && !compatibleFlavors.some((flavor) => flavor.id === selectedFlavorId)) {
+      form.setFieldValue('flavorId', undefined)
+    }
+  }, [compatibleFlavors, form, selectedFlavorId])
   const selectedCluster = useMemo(
     () => clusters.find((item) => item.id === selectedConnectionId),
     [clusters, selectedConnectionId],
@@ -468,8 +500,7 @@ export function VirtualizationVmsPage() {
     ]),
   ).map((value) => ({ value, label: value }))
   const vmPage = normalizePage(vmsQuery.data, filters.page ?? 1, filters.pageSize ?? 10)
-  const selectedFlavorId = Form.useWatch('flavorId', form)
-  const selectedFlavor = flavors.find((item) => item.id === selectedFlavorId)
+  const selectedFlavor = compatibleFlavors.find((item) => item.id === selectedFlavorId)
   useAIPageContext({
     sourceWorkbench: 'compute',
     sourceTitle: '虚拟机列表',
@@ -496,61 +527,77 @@ export function VirtualizationVmsPage() {
       title: '名称',
       dataIndex: 'name',
       fixed: 'left',
-      width: 190,
-      render: (value, record) =>
-        tableTooltipLink(value, `/compute/virtualization/vms/${encodeURIComponent(record.id)}`),
-      ellipsis: tableEllipsis,
+      width: 210,
+      render: (_value, record) => vmIdentity(record),
     },
     {
       title: 'Provider',
       dataIndex: 'provider',
-      render: (value) => tableTooltipText(value || '-'),
-      ellipsis: tableEllipsis,
-      width: 120,
+      render: (value) => providerTag(value),
+      width: 90,
     },
     {
       title: '连接',
       dataIndex: 'connectionName',
       render: (value, record) => tableTooltipText(value || record.connectionId || '-'),
       ellipsis: tableEllipsis,
-      width: 180,
+      width: 160,
     },
     {
       title: '命名空间/节点',
       render: (_value, record) =>
-        tableTooltipText([record.namespace, record.node].filter(Boolean).join(' / ') || '-'),
-      ellipsis: tableEllipsis,
-      width: 200,
+        vmMetadataTags([
+          ...(record.namespace ? [{ label: record.namespace, tone: 'purple' as const }] : []),
+          ...(record.node ? [{ label: record.node, tone: 'blue' as const }] : []),
+        ]),
+      width: 160,
     },
     {
       title: '电源',
       dataIndex: 'powerState',
       render: (_value, record) => statusTag(virtualMachineDisplayStatus(record)),
-      width: 120,
-    },
-    {
-      title: '规格',
-      render: (_value, record) =>
-        tableTooltipText(
-          record.flavorName ||
-            `${record.cpu ?? '-'}C / ${record.memoryMiB ?? '-'}MiB / ${record.diskGiB ?? '-'}GiB`,
-        ),
-      ellipsis: tableEllipsis,
-      width: 180,
-    },
-    {
-      title: '镜像',
-      dataIndex: 'bootImageName',
-      render: (value, record) => tableTooltipText(value || record.bootImageId || '-'),
-      ellipsis: tableEllipsis,
-      width: 220,
+      width: 100,
     },
     {
       title: '地址',
       dataIndex: 'ipAddresses',
-      render: (value: string[]) => tableTooltipText(value?.join(', ') || '-'),
-      ellipsis: tableEllipsis,
-      width: 220,
+      render: (value: string[]) =>
+        vmMetadataTags([
+          ...(value ?? [])
+            .slice(0, 2)
+            .map((address) => ({ label: address, tone: 'cyan' as const })),
+          ...((value?.length ?? 0) > 2
+            ? [{ label: `+${value.length - 2}`, tone: 'default' as const }]
+            : []),
+        ]),
+      width: 200,
+    },
+    {
+      title: '规格',
+      render: (_value, record) =>
+        record.flavorName
+          ? vmMetadataTags([{ label: record.flavorName, tone: 'purple' }])
+          : vmMetadataTags([
+              ...(record.cpu ? [{ label: `${record.cpu} vCPU`, tone: 'purple' as const }] : []),
+              ...(record.memoryMiB
+                ? [{ label: memoryLabel(record.memoryMiB), tone: 'cyan' as const }]
+                : []),
+              ...(record.diskGiB
+                ? [{ label: `${record.diskGiB} GiB`, tone: 'gold' as const }]
+                : []),
+            ]),
+      width: 210,
+    },
+    {
+      title: '镜像',
+      dataIndex: 'bootImageName',
+      render: (value, record) =>
+        vmMetadataTags(
+          value || record.bootImageId
+            ? [{ label: String(value || record.bootImageId), tone: 'blue' }]
+            : [],
+        ),
+      width: 200,
     },
     {
       ...tableColumnPresets.datetime,
@@ -725,7 +772,7 @@ export function VirtualizationVmsPage() {
             loading={vmsQuery.isLoading}
             dataSource={vmPage.items}
             columns={columns}
-            scroll={{ x: 1620 }}
+            scroll={{ x: 1550 }}
             pagination={pageTablePagination(vmPage, setFilters)}
             paginationSummary={virtualizationPageSummary}
           />
@@ -792,10 +839,12 @@ export function VirtualizationVmsPage() {
                         }
                       />
                     </Form.Item>
-                    <Form.Item name="flavorId" label="规格" rules={[{ required: true }]}>
+                    <Form.Item name="flavorId" label="规格">
                       <Select
+                        allowClear
+                        placeholder="可选；未选择时使用下方计算规格"
                         showSearch={{ optionFilterProp: 'label' }}
-                        options={flavors
+                        options={compatibleFlavors
                           .filter((item) => item.enabled !== false)
                           .map((item) => ({
                             value: item.id,
@@ -881,15 +930,14 @@ export function VirtualizationVmsPage() {
                         <Input />
                       </Form.Item>
                       <Form.Item name="node" label="节点">
-                        {createProvider === 'pve' && pveNodeOptions.length > 0 ? (
-                          <Select allowClear options={pveNodeOptions} />
-                        ) : (
-                          <Input
-                            disabled={createProvider === 'kubevirt'}
-                            placeholder={
-                              createProvider === 'kubevirt' ? '当前由集群调度' : undefined
-                            }
+                        {createProvider === 'pve' ? (
+                          <AutoComplete
+                            allowClear
+                            options={pveNodeOptions}
+                            placeholder="选择或输入 PVE 节点"
                           />
+                        ) : (
+                          <Input disabled placeholder="当前由集群调度" />
                         )}
                       </Form.Item>
                     </div>

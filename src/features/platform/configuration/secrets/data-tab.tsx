@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, Card, Space } from 'antd'
+import { App, Button, Card, Space } from 'antd'
 import { CopyOutlined } from '@ant-design/icons'
 import { useI18n } from '@/i18n'
 import type { TableColumnsType } from 'antd'
@@ -25,6 +25,7 @@ export function SecretDataTab({
   onApply: (decodedData: Record<string, string>) => void
 }) {
   const { localeCode } = useI18n()
+  const { message } = App.useApp()
   const rows = configurationDataRows(detail.data, true)
   const [editorOpen, setEditorOpen] = useState(false)
   const decodedData = Object.fromEntries(rows.map((row) => [row.key, row.decoded ?? '']))
@@ -58,7 +59,7 @@ export function SecretDataTab({
             size="small"
             type="text"
             icon={<CopyOutlined />}
-            onClick={() => copyConfigurationValue(record.value, localeCode)}
+            onClick={() => copyConfigurationValue(record.value, localeCode, message)}
           >
             Base64
           </Button>
@@ -66,7 +67,7 @@ export function SecretDataTab({
             size="small"
             type="text"
             icon={<CopyOutlined />}
-            onClick={() => copyConfigurationValue(record.decoded ?? '', localeCode)}
+            onClick={() => copyConfigurationValue(record.decoded ?? '', localeCode, message)}
           >
             {localeCode === 'zh_CN' ? '解码' : 'Decoded'}
           </Button>

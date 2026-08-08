@@ -17,6 +17,7 @@ import {
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { formatAgeSeconds, formatDateTime } from '@/utils/time'
+import { useClusterCapabilityForCluster } from '../cluster-capabilities'
 import { nodeMutations } from './mutations'
 import { nodeQueries } from './queries'
 import { toClusterScope } from './scope'
@@ -49,6 +50,8 @@ export function NodeDetailPage() {
   const [activeTab, setActiveTab] = useState('overview')
   const nodeDetailQuery = useQuery(nodeQueries.detail(scope, nodeName))
   const updateNodeMutation = useMutation(nodeMutations.update(queryClient))
+  const yamlCapability = useClusterCapabilityForCluster('resource.yaml.view', localeCode, clusterId)
+  const yamlAvailable = yamlCapability.status === 'available'
 
   useEffect(() => {
     if (requestedClusterId && requestedClusterId !== scopedClusterId) {
@@ -352,15 +355,28 @@ export function NodeDetailPage() {
             label: t('common.yaml', 'YAML'),
             children:
               activeTab === 'yaml' ? (
-                <Suspense
-                  fallback={
-                    <Card className="soha-detail-card">
-                      <Spin size="large" />
-                    </Card>
-                  }
-                >
-                  <NodeYAMLPanel scope={scope} nodeName={nodeName} />
-                </Suspense>
+                yamlCapability.isLoading ? (
+                  <Card className="soha-detail-card">
+                    <Spin size="large" />
+                  </Card>
+                ) : yamlAvailable ? (
+                  <Suspense
+                    fallback={
+                      <Card className="soha-detail-card">
+                        <Spin size="large" />
+                      </Card>
+                    }
+                  >
+                    <NodeYAMLPanel scope={scope} nodeName={nodeName} />
+                  </Suspense>
+                ) : (
+                  <ManagementState
+                    compact
+                    kind="unsupported"
+                    title={localeCode === 'zh_CN' ? '节点 YAML 暂不可用' : 'Node YAML unavailable'}
+                    description={yamlCapability.reason}
+                  />
+                )
               ) : null,
           },
         ]}

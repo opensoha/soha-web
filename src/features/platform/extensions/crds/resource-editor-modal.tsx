@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { Alert, Button, Modal, Spin, message } from 'antd'
+import { Alert, App, Button, Modal, Spin } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementState } from '@/components/management-list'
 import { useI18n } from '@/i18n'
@@ -32,6 +32,7 @@ export function CRDResourceEditorModal({
   resource,
 }: CRDResourceEditorModalProps) {
   const { t, localeCode } = useI18n()
+  const { message } = App.useApp()
   const { clusterId, namespace } = usePlatformScopeStore()
   const queryClient = useQueryClient()
   const [draft, setDraft] = useState('')

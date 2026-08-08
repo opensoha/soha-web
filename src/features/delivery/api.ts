@@ -1,5 +1,6 @@
 import { api } from '@/services/api-client'
 import type { ApiResponse } from '@/types'
+import type { RegistryConnectionListEnvelope } from '@opensoha/contracts/gen/ts/sohaapi'
 import type {
   ApplicationEnvironment,
   ApplicationRuntimeDetail,
@@ -34,11 +35,9 @@ import type {
   DeliveryPlanConfirmResult,
   DeliveryPlanRequest,
   DeliveryRecordInput,
-  DeliveryRegistryList,
   DeliveryRuntimeDetail,
   DeliveryRuntimeKind,
-  DeliveryStringRecordInput,
-  DeliveryTargetCandidate,
+  DeliveryTargetCandidatePage,
   DeliveryTargetCandidateParams,
   DeliveryWorkloadMetricsRef,
   DeliveryWorkloadRef,
@@ -48,6 +47,7 @@ import type {
   ExecutionTask,
   ExecutionTaskActionInput,
   RegistryRecord,
+  RegistryInput,
   ReleaseBoardEntry,
   ReleaseBundle,
   ReleaseRecord,
@@ -60,6 +60,11 @@ import type {
   WorkflowRun,
   WorkflowTemplate,
   WorkflowTriggerInput,
+  KubernetesServiceImportInput,
+  KubernetesServiceImportResult,
+  HelmReleaseCandidate,
+  HelmReleaseImportInput,
+  HelmReleaseImportResult,
 } from './types'
 
 async function unwrap<T>(request: Promise<ApiResponse<T>>): Promise<T> {
@@ -140,7 +145,15 @@ function gatewayReadinessPath(params: DeliveryGatewayReadinessParams) {
 export const deliveryApi = {
   repositories: {
     list: (params: RepositoryListParams = {}) =>
-      unwrap(api.get<ApiResponse<DeliveryRepository[]>>(withQuery('/repositories', { applicationId: params.applicationId?.trim(), search: params.search?.trim(), limit: params.limit }))),
+      unwrap(
+        api.get<ApiResponse<DeliveryRepository[]>>(
+          withQuery('/repositories', {
+            applicationId: params.applicationId?.trim(),
+            search: params.search?.trim(),
+            limit: params.limit,
+          }),
+        ),
+      ),
     create: (payload: DeliveryRecordInput) =>
       unwrap(api.post<ApiResponse<DeliveryRepository>>('/repositories', payload)),
     update: (id: string, payload: DeliveryRecordInput) =>
@@ -149,11 +162,34 @@ export const deliveryApi = {
   },
   gitlab: {
     projects: async (params: Omit<RepositoryListParams, 'applicationId'> = {}) =>
-      (await api.get<{ items: GitProject[] }>(withQuery('/integrations/gitlab/projects', { search: params.search?.trim(), limit: params.limit }))).items,
+      (
+        await api.get<{ items: GitProject[] }>(
+          withQuery('/integrations/gitlab/projects', {
+            search: params.search?.trim(),
+            limit: params.limit,
+          }),
+        )
+      ).items,
     branches: async (params: GitReferenceParams) =>
-      (await api.get<{ items: GitReference[] }>(withQuery('/integrations/gitlab/branches', { projectId: params.projectId, search: params.search, limit: params.limit }))).items,
+      (
+        await api.get<{ items: GitReference[] }>(
+          withQuery('/integrations/gitlab/branches', {
+            projectId: params.projectId,
+            search: params.search,
+            limit: params.limit,
+          }),
+        )
+      ).items,
     tags: async (params: GitReferenceParams) =>
-      (await api.get<{ items: GitReference[] }>(withQuery('/integrations/gitlab/tags', { projectId: params.projectId, search: params.search, limit: params.limit }))).items,
+      (
+        await api.get<{ items: GitReference[] }>(
+          withQuery('/integrations/gitlab/tags', {
+            projectId: params.projectId,
+            search: params.search,
+            limit: params.limit,
+          }),
+        )
+      ).items,
     commits: (params: GitCommitParams) =>
       api.get<{ items: GitCommit[]; page: number; limit: number; hasMore: boolean }>(
         withQuery('/integrations/gitlab/commits', {
@@ -203,12 +239,34 @@ export const deliveryApi = {
         ),
       ),
     targetCandidates: (params: DeliveryTargetCandidateParams) =>
+      api.get<DeliveryTargetCandidatePage>(
+        withQuery('/application-environments/target-candidates', {
+          clusterId: params.clusterId.trim(),
+          namespace: params.namespace.trim(),
+          search: params.search?.trim(),
+          limit: params.limit,
+        }),
+      ),
+    importKubernetesServices: (payload: KubernetesServiceImportInput) =>
       unwrap(
-        api.get<ApiResponse<DeliveryTargetCandidate[]>>(
-          withQuery('/application-environments/target-candidates', {
-            clusterId: params.clusterId.trim(),
-            namespace: params.namespace.trim(),
+        api.post<ApiResponse<KubernetesServiceImportResult>>(
+          '/application-environments/imports',
+          payload,
+        ),
+      ),
+    helmReleases: (clusterId: string, namespace: string) =>
+      unwrap(
+        api.get<ApiResponse<HelmReleaseCandidate[]>>(
+          withQuery(`/clusters/${segment(clusterId)}/helm/releases`, {
+            namespace: namespace.trim(),
           }),
+        ),
+      ),
+    importHelmReleases: (payload: HelmReleaseImportInput) =>
+      unwrap(
+        api.post<ApiResponse<HelmReleaseImportResult>>(
+          '/application-environments/helm-release-imports',
+          payload,
         ),
       ),
     create: (payload: DeliveryRecordInput) =>
@@ -285,9 +343,9 @@ export const deliveryApi = {
     trigger: (payload: ReleaseTriggerInput) => discard(api.post('/releases/trigger', payload)),
   },
   registries: {
-    list: () => unwrap(api.get<ApiResponse<DeliveryRegistryList>>('/registries')),
-    create: (payload: DeliveryStringRecordInput) => discard(api.post('/registries', payload)),
-    update: (id: string, payload: DeliveryStringRecordInput) =>
+    list: async () => (await api.getEnvelope<RegistryConnectionListEnvelope>('/registries')).items,
+    create: (payload: RegistryInput) => discard(api.post('/registries', payload)),
+    update: (id: string, payload: RegistryInput) =>
       discard(api.put(`/registries/${segment(id)}`, payload)),
     delete: (id: string) => discard(api.delete(`/registries/${segment(id)}`)),
   },
@@ -379,7 +437,9 @@ export const deliveryApi = {
         ),
       ),
     approval: (id: string, payload: { action: 'approve' | 'reject'; comment?: string }) =>
-      unwrap(api.post<ApiResponse<DeliveryPlan>>(`/delivery/plans/${segment(id)}/approval`, payload)),
+      unwrap(
+        api.post<ApiResponse<DeliveryPlan>>(`/delivery/plans/${segment(id)}/approval`, payload),
+      ),
   },
   dependencies: {
     clusters: () => unwrap(api.get<ApiResponse<DeliveryClusterList>>('/clusters')),

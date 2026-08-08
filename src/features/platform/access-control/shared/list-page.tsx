@@ -1,5 +1,5 @@
 import { useDeferredValue, useMemo, useState } from 'react'
-import { Alert, Popconfirm, Typography, message } from 'antd'
+import { Alert, App, Popconfirm, Typography } from 'antd'
 import { DeleteOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementDataPage } from '@/components/management-data-page'
@@ -63,6 +63,7 @@ export function AccessControlResourceListPage<T extends AccessControlResourceRec
   searchValues: (record: T) => Array<string | null | undefined>
 }) {
   const { localeCode } = useI18n()
+  const { message } = App.useApp()
   const { clusterId, namespace } = usePlatformScopeStore()
   const queryClient = useQueryClient()
   const yamlCapability = useClusterCapability('resource.yaml.apply', localeCode)

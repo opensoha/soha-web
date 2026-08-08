@@ -10,6 +10,34 @@
   border-radius: var(--soha-radius);
 }
 
+.soha-log-explorer.is-embedded {
+  padding: 16px;
+  border: 1px solid var(--soha-border-color);
+  border-radius: var(--soha-radius-panel);
+  background: var(--soha-bg-surface);
+}
+
+.soha-log-explorer.is-embedded .soha-log-query-card.ant-card,
+.soha-log-explorer.is-embedded .soha-log-results-card.ant-card {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.soha-log-explorer.is-embedded .soha-log-query-card .ant-card-body,
+.soha-log-explorer.is-embedded .soha-log-results-card .ant-card-body {
+  padding: 0;
+}
+
+.soha-log-explorer.is-embedded .soha-log-filter-grid {
+  grid-template-columns: repeat(3, minmax(160px, 1fr));
+}
+
+.soha-log-explorer.is-embedded .soha-log-query-actions {
+  margin-top: 0;
+}
+
 .soha-log-filter-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(160px, 1fr));
@@ -165,6 +193,10 @@
 .soha-log-results-toolbar {
   height: 32px;
   min-height: 32px;
+}
+
+.soha-log-results-toolbar > .ant-tag {
+  align-self: center;
 }
 
 .soha-log-toolbar-spacer {
@@ -476,6 +508,10 @@
   .soha-log-filter-grid {
     grid-template-columns: repeat(2, minmax(160px, 1fr));
   }
+
+  .soha-log-explorer.is-embedded .soha-log-filter-grid {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
 }
 
 @media (max-width: 640px) {
@@ -489,6 +525,14 @@
 
   .soha-log-filter-grid,
   .soha-log-filter-grid.is-standalone {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .soha-log-explorer.is-embedded {
+    padding: 12px;
+  }
+
+  .soha-log-explorer.is-embedded .soha-log-filter-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 

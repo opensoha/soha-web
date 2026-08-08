@@ -13,7 +13,11 @@ import { VirtualizationFlavorsPage } from './flavors/list-page'
 import { VirtualizationImagesPage } from './images/list-page'
 import { VirtualizationVmDetailPage } from './virtual-machines/detail-page'
 import { defaultRootDisk, VirtualizationVmsPage } from './virtual-machines/list-page'
-import { buildClusterPayload, buildCreateVmPayload } from './virtualization-model'
+import {
+  buildClusterPayload,
+  buildCreateVmPayload,
+  filterVmCreateFlavors,
+} from './virtualization-model'
 import type { CreateVirtualMachineInput, VirtualizationClusterInput } from './virtualization-types'
 
 const lazyRuntimeState = vi.hoisted(() => ({
@@ -105,6 +109,19 @@ const testState = vi.hoisted(() => ({
               cpu: 2,
               memoryMiB: 4096,
               diskGiB: 40,
+              ipAddresses: ['10.0.0.8'],
+              config: {
+                hostname: 'build-vm',
+                fqdn: 'build-vm.apps.svc.cluster.local',
+                dnsServers: '10.96.0.10',
+                searchDomains: 'apps.svc.cluster.local',
+                cloudInitConfigured: 'true',
+                cloudInitSource: 'cloudInitNoCloud',
+                cloudInitUserDataConfigured: 'true',
+                diskCount: '1',
+                networkInterfaceCount: '1',
+                networks: 'default',
+              },
             },
             {
               id: 'vm-stale',
@@ -136,6 +153,21 @@ const testState = vi.hoisted(() => ({
             flavorName: 'standard-2c4g',
             bootImageName: 'ubuntu-24.04',
             ipAddresses: ['10.0.0.8'],
+            cpu: 2,
+            memoryMiB: 4096,
+            diskGiB: 40,
+            config: {
+              hostname: 'build-vm',
+              fqdn: 'build-vm.apps.svc.cluster.local',
+              dnsServers: '10.96.0.10',
+              searchDomains: 'apps.svc.cluster.local',
+              cloudInitConfigured: 'true',
+              cloudInitSource: 'cloudInitNoCloud',
+              cloudInitUserDataConfigured: 'true',
+              diskCount: '1',
+              networkInterfaceCount: '1',
+              networks: 'default',
+            },
           },
           providerRaw: { kind: 'VirtualMachine', metadata: { name: 'build-vm' } },
           operations: [
@@ -743,6 +775,8 @@ describe('virtualization pages', () => {
     expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/images?pageSize=500')
     expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/flavors')
     expect(container.textContent).toContain('build-vm')
+    expect(container.textContent).toContain('10.0.0.8')
+    expect(container.querySelector('.soha-metadata-tag')).not.toBeNull()
 
     await act(async () => {
       const createButton = Array.from(container.querySelectorAll('button')).find((button) =>
@@ -855,6 +889,41 @@ describe('virtualization pages', () => {
     })
     expect(payload).not.toHaveProperty('kubevirtStorageClass')
     expect(payload).not.toHaveProperty('kubevirtDataVolumeName')
+  })
+
+  it('only offers VM flavors compatible with the selected provider and connection', () => {
+    const flavors = [
+      {
+        id: 'pve-local',
+        name: 'pve-small',
+        provider: 'pve',
+        connectionId: 'conn-pve',
+        cpu: 2,
+        memoryMiB: 4096,
+        diskGiB: 20,
+      },
+      {
+        id: 'kubevirt-local',
+        name: 'u1.large',
+        provider: 'kubevirt',
+        connectionId: 'conn-kubevirt',
+        cpu: 2,
+        memoryMiB: 8192,
+        diskGiB: 0,
+      },
+      {
+        id: 'global',
+        name: 'global-small',
+        cpu: 1,
+        memoryMiB: 2048,
+        diskGiB: 10,
+      },
+    ]
+
+    expect(filterVmCreateFlavors(flavors, 'pve', 'conn-pve').map((item) => item.id)).toEqual([
+      'pve-local',
+      'global',
+    ])
   })
 
   it('builds PVE VM create payload with raw cloud-init snippet fields', () => {
@@ -970,7 +1039,13 @@ describe('virtualization pages', () => {
     expect(container.textContent).toContain('standard-2c4g')
     expect(container.textContent).toContain('ubuntu-24.04')
     expect(container.textContent).toContain('10.0.0.8')
-    expect(container.textContent).toContain('Provider Raw')
+    expect(container.textContent).toContain('Provider 摘要')
+    expect(container.textContent).toContain('运行与硬件')
+    expect(container.textContent).toContain('网络与身份')
+    expect(container.textContent).toContain('初始化与来源')
+    expect(container.textContent).toContain('build-vm.apps.svc.cluster.local')
+    expect(container.textContent).toContain('10.96.0.10')
+    expect(container.textContent).toContain('cloudInitNoCloud')
     expect(container.textContent).toContain('任务历史')
     expect(container.textContent).toContain('vm ready')
     expect(container.textContent).toContain('最近异常任务')
@@ -1188,6 +1263,22 @@ describe('virtualization pages', () => {
     ).find((item) => item.textContent?.includes('PVE 资源默认值（可选）'))
     expect(pveDefaults?.classList.contains('ant-collapse-item-active')).toBe(false)
     expect(document.body.textContent).not.toContain('raw JSON')
+    expect(container.textContent).toContain('风险')
+    expect(container.textContent).not.toContain('最近失败同步')
+    const latestTaskHeader = Array.from(container.querySelectorAll('th')).find(
+      (header) => header.textContent?.trim() === '最近任务',
+    )
+    expect(latestTaskHeader?.className).toContain('ant-table-cell-fix-end')
+
+    const expandButton = container.querySelector<HTMLButtonElement>(
+      'button.ant-table-row-expand-icon',
+    )
+    expect(expandButton).not.toBeNull()
+    await act(async () => {
+      expandButton?.click()
+      await Promise.resolve()
+    })
+
     expect(container.textContent).toContain('风险等级')
     expect(container.textContent).toContain('最近失败同步')
     expect(container.textContent).toContain('最近异常任务')

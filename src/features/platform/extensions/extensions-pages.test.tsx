@@ -277,6 +277,33 @@ describe('extensions capability pages', () => {
     expect(apiGetMock.mock.calls.some(([path]) => String(path).includes('/yaml'))).toBe(false)
   })
 
+  it('renders CRD catalog failures as errors instead of empty data', async () => {
+    setResponses({
+      '/clusters/cluster-a/extensions/crds': new Error('forbidden'),
+    })
+
+    const container = await renderPage(<CRDPage />, '/extensions')
+
+    expect(container.querySelector('.soha-management-state.is-error')).not.toBeNull()
+    expect(container.textContent).not.toContain('No CRDs in the current cluster.')
+  })
+
+  it('renders API group query failures as errors instead of not found', async () => {
+    setResponses({
+      '/clusters/cluster-a/extensions/crds': new Error('forbidden'),
+    })
+
+    const container = await renderPage(
+      <Routes>
+        <Route path="/extensions/apis/:groupName" element={<CRDApiGroupDetailPage />} />
+      </Routes>,
+      '/extensions/apis/example.io',
+    )
+
+    expect(container.querySelector('.soha-management-state.is-error')).not.toBeNull()
+    expect(container.querySelector('.soha-management-state.is-not-found')).toBeNull()
+  })
+
   it('loads Helm history without loading values or the diff editor', async () => {
     setResponses({
       '/clusters/cluster-a/helm/releases/demo/detail?namespace=team-a': {

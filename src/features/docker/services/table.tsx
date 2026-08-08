@@ -146,7 +146,7 @@ export function ServicesTable({
   ]
   return (
     <>
-      {!embedded ? (
+      {!embedded && !fixedProjectId ? (
         <div className="soha-vrt-query">
           <ManagementQueryPanel
             form={filterForm}

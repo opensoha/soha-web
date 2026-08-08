@@ -130,6 +130,7 @@ export function ApplicationEnvironmentDetailPage() {
   const [imageTag, setImageTag] = useState('')
   const [releaseName, setReleaseName] = useState('')
   const [containerName, setContainerName] = useState('')
+  const [helmValues, setHelmValues] = useState('')
   const [rollbackRevision, setRollbackRevision] = useState('')
   const focusedReleaseId = searchParams.get('releaseId')?.trim() ?? ''
   const canViewReleaseBoard = hasPermission(
@@ -199,6 +200,7 @@ export function ApplicationEnvironmentDetailPage() {
   )
 
   useEffect(() => {
+    setHelmValues('')
     if (!selectedTarget) {
       setContainerName('')
       return
@@ -359,11 +361,14 @@ export function ApplicationEnvironmentDetailPage() {
   const application = detail?.application
   const environment = detail?.environment
   const selectedTargetIsDeployment = selectedTarget?.workloadKind.toLowerCase() === 'deployment'
+  const selectedTargetIsHelm = selectedTarget?.targetKind === 'helm_release'
   const selectedTargetSupportsDirectRelease =
     !!selectedTarget &&
-    (selectedTarget.executorKind !== 'k8s_job_runner' ||
-      selectedTarget.targetKind !== 'k8s_workload' ||
-      selectedTargetIsDeployment)
+    selectedTarget.enabled &&
+    ((selectedTarget.targetKind === 'k8s_workload' &&
+      selectedTarget.executorKind === 'k8s_job_runner' &&
+      selectedTargetIsDeployment) ||
+      (selectedTargetIsHelm && selectedTarget.executorKind === 'helm_sdk'))
   const targetOptions = (binding.targets ?? []).map((target) => ({
     value: target.id,
     label: `${target.clusterId} / ${target.namespace} / ${target.workloadName}`,
@@ -410,7 +415,15 @@ export function ApplicationEnvironmentDetailPage() {
       return
     }
     const effectiveImageTag = imageTag.trim() || detail?.buildSource?.defaultTag || ''
-    if (!effectiveImageTag) {
+    if (selectedTargetIsHelm && !helmValues.trim()) {
+      message.error(
+        localeCode === 'zh_CN'
+          ? '请提供完整的 Helm Values YAML'
+          : 'Provide the complete Helm values YAML',
+      )
+      return
+    }
+    if (!selectedTargetIsHelm && !effectiveImageTag) {
       message.error(
         localeCode === 'zh_CN'
           ? '请提供 Image Tag，或先在应用中配置默认 Tag'
@@ -429,6 +442,7 @@ export function ApplicationEnvironmentDetailPage() {
       imageTag: effectiveImageTag,
       releaseName: releaseName.trim(),
       actionKind: detail?.actionKind || 'deploy',
+      valuesContent: selectedTargetIsHelm ? helmValues : undefined,
     })
   }
 
@@ -603,15 +617,25 @@ export function ApplicationEnvironmentDetailPage() {
           </div>
           <div className="soha-delivery-action-block">
             <Text strong>{localeCode === 'zh_CN' ? '触发发布' : 'Trigger Release'}</Text>
-            <Input
-              value={imageTag}
-              onChange={(event) => setImageTag(event.target.value)}
-              placeholder={
-                localeCode === 'zh_CN'
-                  ? 'Image Tag，默认取应用默认 Tag'
-                  : 'Image tag, defaulting to the application default tag'
-              }
-            />
+            {selectedTargetIsHelm ? (
+              <Input.TextArea
+                value={helmValues}
+                onChange={(event) => setHelmValues(event.target.value)}
+                autoSize={{ minRows: 8, maxRows: 16 }}
+                placeholder="replicaCount: 2"
+                aria-label="Helm Values YAML"
+              />
+            ) : (
+              <Input
+                value={imageTag}
+                onChange={(event) => setImageTag(event.target.value)}
+                placeholder={
+                  localeCode === 'zh_CN'
+                    ? 'Image Tag，默认取应用默认 Tag'
+                    : 'Image tag, defaulting to the application default tag'
+                }
+              />
+            )}
             <Input
               value={releaseName}
               onChange={(event) => setReleaseName(event.target.value)}
@@ -621,16 +645,18 @@ export function ApplicationEnvironmentDetailPage() {
                   : 'Release name, leave empty to auto-generate'
               }
             />
-            <Input
-              value={containerName}
-              onChange={(event) => setContainerName(event.target.value)}
-              placeholder={
-                localeCode === 'zh_CN'
-                  ? 'Container Name，可留空使用绑定值'
-                  : 'Container name, leave empty to use the binding value'
-              }
-            />
-            {releaseImagePreview ? (
+            {!selectedTargetIsHelm ? (
+              <Input
+                value={containerName}
+                onChange={(event) => setContainerName(event.target.value)}
+                placeholder={
+                  localeCode === 'zh_CN'
+                    ? 'Container Name，可留空使用绑定值'
+                    : 'Container name, leave empty to use the binding value'
+                }
+              />
+            ) : null}
+            {!selectedTargetIsHelm && releaseImagePreview ? (
               <Text
                 type="secondary"
                 style={{ fontSize: 12 }}

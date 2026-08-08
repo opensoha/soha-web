@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { DeleteOutlined } from '@ant-design/icons'
-import { Button, Card, Select, Space, Tag, Typography } from 'antd'
+import { DisconnectOutlined, LinkOutlined } from '@ant-design/icons'
+import { Button, Card, Select, Space, Typography } from 'antd'
 import type { Terminal } from '@xterm/xterm'
 import type { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { ManagementState } from '@/components/management-list'
+import { StatusTag } from '@/components/status-tag'
 import '@/components/resource-operation-panels.css'
 import { withStreamTicket } from '@/features/auth'
 import { readTerminalThemeColors } from '@/theme/app-theme'
@@ -152,12 +153,9 @@ export function DockerProjectTerminalPanel({
 
   useEffect(() => disposeTerminal, [disposeTerminal])
 
-  const statusColor =
-    connectionState === 'connected' ? 'green' : connectionState === 'error' ? 'red' : 'default'
-
   if (!enabled) {
     return (
-      <Card className="soha-docker-runtime-card" size="small">
+      <Card className="soha-detail-card" size="small">
         <ManagementState
           compact
           kind="no-permission"
@@ -169,12 +167,10 @@ export function DockerProjectTerminalPanel({
   }
 
   return (
-    <Card
-      className="soha-docker-runtime-card"
-      size="small"
-      title="Shell"
-      extra={
-        <Space size={8} wrap>
+    <div className="soha-pod-terminal-tab-card">
+      <div className="soha-terminal-controls">
+        <div className="soha-terminal-control-group">
+          <Text strong>服务:</Text>
           {runtimeServiceSelector({
             disabled: !enabled,
             loading: servicesLoading,
@@ -182,6 +178,9 @@ export function DockerProjectTerminalPanel({
             serviceName,
             onChange: onServiceChange,
           })}
+        </div>
+        <div className="soha-terminal-control-group">
+          <Text strong>Shell:</Text>
           <Select
             disabled={!enabled}
             options={[
@@ -193,27 +192,38 @@ export function DockerProjectTerminalPanel({
             value={shell}
             onChange={setShell}
           />
-          <Button
-            disabled={!enabled || !serviceName || connectionState === 'connecting'}
-            size="small"
-            type="primary"
-            onClick={connect}
-          >
-            连接
-          </Button>
-          <Button icon={<DeleteOutlined />} size="small" onClick={disposeTerminal}>
-            断开
-          </Button>
-        </Space>
-      }
-    >
-      <Space className="soha-terminal-toolbar" size={8}>
-        <Tag color={statusColor}>{connectionState}</Tag>
-        <Text type="secondary">{serviceName || '未选择服务'}</Text>
-      </Space>
-      <div className="soha-terminal-shell">
-        <div ref={containerRef} className="soha-terminal-shell-inner" />
+        </div>
       </div>
-    </Card>
+      <Card className="soha-detail-card" size="small">
+        <div className="soha-terminal-toolbar">
+          <div className="soha-terminal-toolbar-group">
+            <Text strong>{serviceName ? `服务: ${serviceName}` : '未选择服务'}</Text>
+            <StatusTag value={connectionState} />
+          </div>
+          <Space size={4} wrap>
+            <Button
+              disabled={!enabled || !serviceName || connectionState === 'connecting'}
+              icon={<LinkOutlined />}
+              size="small"
+              type="primary"
+              onClick={connect}
+            >
+              连接
+            </Button>
+            <Button
+              icon={<DisconnectOutlined />}
+              size="small"
+              type="text"
+              onClick={disposeTerminal}
+            >
+              断开
+            </Button>
+          </Space>
+        </div>
+        <div className="soha-terminal-shell">
+          <div ref={containerRef} className="soha-terminal-shell-inner" />
+        </div>
+      </Card>
+    </div>
   )
 }

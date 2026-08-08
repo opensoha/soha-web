@@ -1,6 +1,12 @@
 /** @vitest-environment jsdom */
 
-import { act, isValidElement, type ReactNode } from 'react'
+import {
+  act,
+  isValidElement,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type TextareaHTMLAttributes,
+} from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
@@ -13,6 +19,7 @@ const formLifecycleMocks = vi.hoisted(() => ({
   destroyOnHidden: undefined as boolean | undefined,
   preserve: undefined as boolean | undefined,
 }))
+const selectMocks = vi.hoisted(() => ({ setAgentMode: undefined as (() => void) | undefined }))
 const apiGetMock = vi.hoisted(() =>
   vi.fn(async (path: string) => {
     if (path === '/clusters') {
@@ -92,6 +99,7 @@ vi.mock('@/components/admin-table', () => ({
   AdminTable: ({
     columns = [],
     dataSource = [],
+    headerExtra,
   }: {
     columns?: Array<{
       dataIndex?: string | string[]
@@ -99,8 +107,10 @@ vi.mock('@/components/admin-table', () => ({
       render?: (value: unknown, record: Record<string, unknown>) => ReactNode
     }>
     dataSource?: Array<Record<string, unknown>>
+    headerExtra?: ReactNode
   }) => (
     <div>
+      {headerExtra}
       {dataSource.map((record, rowIndex) => (
         <div key={rowIndex}>
           {columns.map((column, columnIndex) => {
@@ -128,6 +138,15 @@ vi.mock('antd', async (importOriginal) => {
   const actual = await importOriginal<typeof import('antd')>()
   const FormMock = ({ children }: { children?: ReactNode }) => <div>{children}</div>
   FormMock.Item = ({ children }: { children?: ReactNode }) => <div>{children}</div>
+  const InputMock = Object.assign(
+    (props: InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
+    {
+      Password: (props: InputHTMLAttributes<HTMLInputElement>) => (
+        <input type="password" {...props} />
+      ),
+      TextArea: (props: TextareaHTMLAttributes<HTMLTextAreaElement>) => <textarea {...props} />,
+    },
+  )
   const AppMock = Object.assign(({ children }: { children?: ReactNode }) => <>{children}</>, {
     useApp: () => ({ message: { error: vi.fn(), success: vi.fn() } }),
   })
@@ -135,6 +154,7 @@ vi.mock('antd', async (importOriginal) => {
     ...actual,
     App: AppMock,
     Form: FormMock,
+    Input: InputMock,
     Modal: ({
       children,
       destroyOnHidden,
@@ -160,7 +180,32 @@ vi.mock('antd', async (importOriginal) => {
     Popconfirm: ({ children, onConfirm }: { children?: ReactNode; onConfirm?: () => void }) => (
       <span onClick={onConfirm}>{children}</span>
     ),
-    Select: () => <select aria-label="select" />,
+    Select: ({
+      onChange,
+      options = [],
+    }: {
+      onChange?: (value: string) => void
+      options?: Array<{ label: ReactNode; value: string }>
+    }) => {
+      const isConnectionMode = options.some((option) => option.value === 'agent')
+      if (isConnectionMode) {
+        selectMocks.setAgentMode = () => onChange?.('agent')
+        return (
+          <button type="button" aria-label="select-agent-mode" onClick={() => onChange?.('agent')}>
+            Agent
+          </button>
+        )
+      }
+      return (
+        <select aria-label="select" onChange={(event) => onChange?.(event.target.value)}>
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      )
+    },
   }
 })
 
@@ -177,6 +222,7 @@ beforeEach(() => {
   ])
   formLifecycleMocks.destroyOnHidden = undefined
   formLifecycleMocks.preserve = undefined
+  selectMocks.setAgentMode = undefined
 })
 afterEach(async () => {
   await act(async () => {
@@ -219,6 +265,32 @@ describe('clusters list page boundaries', () => {
 
     expect(formLifecycleMocks.destroyOnHidden).toBe(true)
     expect(formLifecycleMocks.preserve).toBe(false)
+  })
+
+  it('preserves create fields and removes inbound connection fields in Agent mode', async () => {
+    const container = await renderPage()
+    const createButton = container.querySelector<HTMLButtonElement>('.soha-clusters-create-button')
+    expect(createButton).not.toBeNull()
+    await act(async () => createButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    await flushAsyncWork()
+
+    const nameInput = container.querySelector('input')
+    expect(nameInput).not.toBeNull()
+    await act(async () => {
+      if (!nameInput) return
+      nameInput.value = 'soha-k3s-agent-1'
+      nameInput.dispatchEvent(new Event('input', { bubbles: true }))
+      nameInput.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    await act(async () => {
+      selectMocks.setAgentMode?.()
+    })
+    await flushAsyncWork()
+
+    expect(container.querySelector('input')?.value).toBe('soha-k3s-agent-1')
+    expect(container.textContent).not.toContain('Agent Endpoint')
+    expect(container.textContent).not.toContain('Agent Token')
   })
 
   it('loads edit detail on demand and deletes through the capability mutation', async () => {

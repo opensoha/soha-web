@@ -1,6 +1,6 @@
 import { useDeferredValue, useMemo, useState } from 'react'
 import { DeleteOutlined } from '@ant-design/icons'
-import { Popconfirm, Typography, message } from 'antd'
+import { App, Popconfirm, Typography } from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { UseQueryResult } from '@tanstack/react-query'
 import { ManagementDataPage } from '@/components/management-data-page'
@@ -67,6 +67,7 @@ export function NetworkResourceListPage<T extends NetworkResourceRecord>({
   searchPlaceholder: { en_US: string; zh_CN: string }
   searchValues: (record: T) => Array<string | undefined | null>
 }) {
+  const { message } = App.useApp()
   const { localeCode } = useI18n()
   const { clusterId, namespace } = usePlatformScopeStore()
   const queryClient = useQueryClient()

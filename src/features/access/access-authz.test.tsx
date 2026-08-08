@@ -7,6 +7,7 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PermissionSnapshot } from '@/types'
+import { AccessPoliciesPage } from './policies/page'
 import { AccessRolesPage } from './roles/page'
 import { AccessScopeGrantsPage } from './scope-grants/page'
 
@@ -156,6 +157,10 @@ describe('frontend access authorization splits', () => {
         dispatchEvent: vi.fn(),
       })),
     })
+    const getComputedStyle = window.getComputedStyle.bind(window)
+    Object.defineProperty(window, 'getComputedStyle', {
+      value: (element: Element) => getComputedStyle(element),
+    })
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
     vi.stubGlobal('ResizeObserver', ResizeObserverMock)
   })
@@ -203,6 +208,38 @@ describe('frontend access authorization splits', () => {
 
     expect(container.textContent).toContain('关键词')
     expect(getButtonTexts(container)).toContain('添加角色')
+  })
+
+  it('keeps common policy fields visible and places low-frequency conditions in advanced options', async () => {
+    setSnapshot(['access.policies.view', 'access.policies.create'])
+
+    const container = await renderWithProviders(<AccessPoliciesPage />, '/access/policies')
+    const createButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === '添加策略',
+    )
+
+    await act(async () => {
+      createButton?.click()
+    })
+
+    expect(document.body.textContent).toContain('适用主体')
+    expect(document.body.textContent).toContain('目标范围')
+    expect(document.body.textContent).toContain('高级条件')
+    expect(document.body.textContent).not.toContain('主体标签')
+    expect(document.body.textContent).not.toContain('归属组织')
+    expect(document.body.textContent).not.toContain('资源名称')
+
+    const advancedButton = document.body.querySelector<HTMLElement>(
+      '[role="button"][aria-expanded="false"]',
+    )
+    await act(async () => {
+      advancedButton?.click()
+    })
+
+    expect(document.body.textContent).toContain('主体标签')
+    expect(document.body.textContent).toContain('集群地域')
+    expect(document.body.textContent).toContain('请求来源')
+    expect(document.body.textContent).toContain('审批状态')
   })
 
   it('blocks the scope-grants page without the dedicated view permission', async () => {

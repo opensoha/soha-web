@@ -1,11 +1,13 @@
 import { hasAllowedAction } from '@/features/auth'
 import type {
   CreateVirtualMachineInput,
+  VirtualMachine,
   VirtualMachineDetail,
   VirtualizationCluster,
   VirtualizationClusterConfig,
   VirtualizationClusterCredential,
   VirtualizationClusterInput,
+  VirtualizationFlavor,
   VirtualizationImageInput,
   VirtualizationOperation,
   VirtualizationPage,
@@ -21,6 +23,18 @@ export const VIRTUALIZATION_PROVIDER_LABELS: Record<string, string> = {
 export function providerLabel(provider?: string) {
   if (!provider) return '-'
   return VIRTUALIZATION_PROVIDER_LABELS[provider] ?? provider
+}
+
+export function filterVmCreateFlavors(
+  flavors: VirtualizationFlavor[],
+  provider?: string,
+  connectionId?: string,
+) {
+  return flavors.filter(
+    (flavor) =>
+      (!provider || !flavor.provider || flavor.provider === provider) &&
+      (!connectionId || !flavor.connectionId || flavor.connectionId === connectionId),
+  )
 }
 
 export const OPERATION_FILTER_PRESETS = [
@@ -54,6 +68,52 @@ export function virtualMachineDisplayStatus(record?: { status?: string; powerSta
   const status = String(record.status || '').trim()
   if (status.toLowerCase() === 'stale') return status
   return record.powerState || status
+}
+
+function configString(value: unknown) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function configList(value: unknown) {
+  return configString(value)
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function configBoolean(value: unknown) {
+  return value === true || String(value).toLowerCase() === 'true'
+}
+
+function configNumber(value: unknown) {
+  const number = Number(value)
+  return Number.isFinite(number) && number > 0 ? number : undefined
+}
+
+export function virtualMachineObservation(record?: VirtualMachine) {
+  const config = record?.config
+  return {
+    hostname: configString(config?.hostname),
+    fqdn: configString(config?.fqdn),
+    dnsServers: configList(config?.dnsServers),
+    searchDomains: configList(config?.searchDomains),
+    gateway: configString(config?.gateway),
+    cloudInitKnown: config?.cloudInitConfigured !== undefined,
+    cloudInitConfigured: configBoolean(config?.cloudInitConfigured),
+    cloudInitUser: configString(config?.cloudInitUser),
+    cloudInitSource: configString(config?.cloudInitSource),
+    cloudInitUserDataConfigured: configBoolean(config?.cloudInitUserDataConfigured),
+    sshKeysConfigured: configBoolean(config?.sshKeysConfigured),
+    guestAgentKnown: config?.guestAgentEnabled !== undefined,
+    guestAgentEnabled: configBoolean(config?.guestAgentEnabled),
+    diskCount: configNumber(config?.diskCount),
+    networkInterfaceCount: configNumber(config?.networkInterfaceCount),
+    networks: configList(config?.networks),
+    firmware: configString(config?.firmware),
+    machine: configString(config?.machine),
+    osType: configString(config?.osType),
+    dnsPolicy: configString(config?.dnsPolicy),
+  }
 }
 
 export function isSyncOperation(record: VirtualizationOperation) {

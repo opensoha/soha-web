@@ -10,12 +10,15 @@ import type {
   SecretVersionMetadata,
 } from '@opensoha/contracts/gen/ts/sohaapi'
 import {
+  AppstoreOutlined,
   CopyOutlined,
   DeleteOutlined,
   EditOutlined,
   HistoryOutlined,
+  LinkOutlined,
   PlusOutlined,
   ReloadOutlined,
+  RobotOutlined,
   StopOutlined,
 } from '@ant-design/icons'
 import {
@@ -77,16 +80,22 @@ interface SecretPageFilters extends SecretFilters {
 }
 
 const scopeOptions = [
-  { value: 'workspace', label: 'Workspace' },
-  { value: 'project', label: 'Project' },
-  { value: 'environment', label: 'Environment' },
+  { value: 'workspace', label: '工作空间' },
+  { value: 'project', label: '项目' },
+  { value: 'environment', label: '环境' },
 ] satisfies Array<{ value: SecretScopeType; label: string }>
 
 const bindingOptions = [
-  { value: 'capability', label: 'Capability' },
-  { value: 'project', label: 'Project' },
-  { value: 'connection', label: 'Connection' },
+  { value: 'capability', label: 'AI / 工具能力' },
+  { value: 'project', label: '项目' },
+  { value: 'connection', label: '连接' },
 ] satisfies Array<{ value: SecretBinding['targetType']; label: string }>
+
+const bindingTargetPlaceholders: Record<SecretBinding['targetType'], string> = {
+  capability: '工具名称，例如 docker.projects.deploy.plan',
+  connection: '连接 ID',
+  project: '项目 ID',
+}
 
 const vaultPathPattern = /^[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/
 
@@ -186,17 +195,27 @@ export function SecretsPage() {
   const [editorForm] = Form.useForm<SecretEditorValues>()
   const [rotateForm] = Form.useForm<SecretValueValues>()
   const editorSource = (Form.useWatch('source', editorForm) ?? 'local') as SecretSource
+  const editorBindings = (Form.useWatch('bindings', editorForm) ?? []) as SecretBinding[]
   const rotateSource = (Form.useWatch('source', rotateForm) ?? 'local') as SecretSource
   const [filters, setFilters] = useState<SecretPageFilters>({})
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<SecretMetadata | null>(null)
   const [rotating, setRotating] = useState<SecretMetadata | null>(null)
+  const [usageSecret, setUsageSecret] = useState<SecretMetadata | null>(null)
   const [versionSecret, setVersionSecret] = useState<SecretMetadata | null>(null)
   const permissionSnapshot = usePermissionSnapshot().data?.data
   const canCreate = hasPermission(permissionSnapshot, 'secret.create')
   const canUpdate = hasPermission(permissionSnapshot, 'secret.update')
   const canRotate = hasPermission(permissionSnapshot, 'secret.rotate')
   const canRevoke = hasPermission(permissionSnapshot, 'secret.revoke')
+  const canInvokeWithSecret =
+    hasPermission(permissionSnapshot, 'secret.use') &&
+    hasPermission(permissionSnapshot, 'ai.gateway.view') &&
+    hasPermission(permissionSnapshot, 'ai.gateway.invoke')
+  const canConfigurePluginSecret =
+    hasPermission(permissionSnapshot, 'plugin.view') &&
+    hasPermission(permissionSnapshot, 'plugin.configure') &&
+    hasPermission(permissionSnapshot, 'plugin.configure_secrets')
 
   const secretsQuery = useQuery(
     secretQueries.list({ scopeId: filters.scopeId, scopeType: filters.scopeType }),
@@ -229,7 +248,7 @@ export function SecretsPage() {
   function openCreate() {
     setEditing(null)
     editorForm.setFieldsValue({
-      bindings: [{ targetType: 'project', targetRef: '' }],
+      bindings: [{ targetType: 'capability', targetRef: '' }],
       description: '',
       name: '',
       scopeId: 'default',
@@ -289,9 +308,10 @@ export function SecretsPage() {
     }
     createMutation.mutate(input, {
       onError: (error) => message.error(error.message),
-      onSuccess: () => {
+      onSuccess: (created) => {
         message.success('Secret 已创建')
         closeEditor()
+        setUsageSecret(created)
       },
     })
   }
@@ -325,7 +345,7 @@ export function SecretsPage() {
         ),
       },
       {
-        title: 'Scope',
+        title: '作用域',
         key: 'scope',
         width: 220,
         render: (_, secret) => (
@@ -336,7 +356,7 @@ export function SecretsPage() {
         ),
       },
       {
-        title: 'Bindings',
+        title: '允许使用位置',
         dataIndex: 'bindings',
         width: 320,
         render: (bindings: SecretBinding[]) => (
@@ -353,20 +373,20 @@ export function SecretsPage() {
         ),
       },
       {
-        title: 'Version',
+        title: '版本',
         dataIndex: 'currentVersion',
         width: 92,
         render: (version: number) => `v${version}`,
       },
       {
         ...tableColumnPresets.status,
-        title: 'Status',
+        title: '状态',
         dataIndex: 'status',
         render: (status: string) => <StatusTag value={status} />,
       },
       {
         ...tableColumnPresets.datetime,
-        title: 'Updated',
+        title: '更新时间',
         dataIndex: 'updatedAt',
         render: formatDateTime,
       },
@@ -376,10 +396,11 @@ export function SecretsPage() {
         render: (_, secret) => (
           <Space size={2}>
             <ManagementIconButton
-              aria-label="复制 Secret 引用"
-              icon={<CopyOutlined />}
-              tooltip="复制引用"
-              onClick={() => copyReference(secret)}
+              aria-label="使用 Secret"
+              disabled={secret.status !== 'active'}
+              icon={<LinkOutlined />}
+              tooltip="使用"
+              onClick={() => setUsageSecret(secret)}
             />
             <ManagementIconButton
               aria-label="查看 Secret 版本"
@@ -507,10 +528,10 @@ export function SecretsPage() {
           children: (
             <>
               <ManagementKeywordField label="关键词" name="query" placeholder="名称、ID、描述" />
-              <ManagementQueryField label="Scope 类型" name="scopeType" width={180}>
+              <ManagementQueryField label="作用域" name="scopeType" width={180}>
                 <Select allowClear options={scopeOptions} />
               </ManagementQueryField>
-              <ManagementQueryField label="Scope ID" name="scopeId" width={220}>
+              <ManagementQueryField label="作用域 ID" name="scopeId" width={220}>
                 <Input allowClear />
               </ManagementQueryField>
             </>
@@ -590,12 +611,12 @@ export function SecretsPage() {
             <Input.TextArea maxLength={1024} rows={3} />
           </Form.Item>
           <Space align="start" size={12} wrap>
-            <Form.Item name="scopeType" label="Scope 类型" rules={[{ required: true }]}>
+            <Form.Item name="scopeType" label="作用域" rules={[{ required: true }]}>
               <Select disabled={Boolean(editing)} options={scopeOptions} style={{ width: 180 }} />
             </Form.Item>
             <Form.Item
               name="scopeId"
-              label="Scope ID"
+              label="作用域 ID"
               rules={[{ required: true, whitespace: true }]}
             >
               <Input disabled={Boolean(editing)} maxLength={128} style={{ width: 260 }} />
@@ -617,13 +638,13 @@ export function SecretsPage() {
             rules={[
               {
                 validator: async (_, bindings) => {
-                  if (!bindings?.length) throw new Error('至少添加一个 Binding')
+                  if (!bindings?.length) throw new Error('至少添加一个允许使用位置')
                 },
               },
             ]}
           >
             {(fields, { add, remove }, { errors }) => (
-              <Form.Item label="Bindings">
+              <Form.Item label="允许使用位置">
                 <Space orientation="vertical" size={8} style={{ width: '100%' }}>
                   {fields.map((field) => (
                     <Space.Compact block key={field.key}>
@@ -639,10 +660,17 @@ export function SecretsPage() {
                         name={[field.name, 'targetRef']}
                         rules={[{ required: true, whitespace: true }]}
                       >
-                        <Input maxLength={256} />
+                        <Input
+                          maxLength={256}
+                          placeholder={
+                            bindingTargetPlaceholders[
+                              editorBindings[field.name]?.targetType ?? 'capability'
+                            ]
+                          }
+                        />
                       </Form.Item>
                       <Button
-                        aria-label="删除 Binding"
+                        aria-label="删除使用位置"
                         danger
                         icon={<DeleteOutlined />}
                         onClick={() => remove(field.name)}
@@ -652,9 +680,9 @@ export function SecretsPage() {
                   <Button
                     block
                     icon={<PlusOutlined />}
-                    onClick={() => add({ targetType: 'project', targetRef: '' })}
+                    onClick={() => add({ targetType: 'capability', targetRef: '' })}
                   >
-                    添加 Binding
+                    添加使用位置
                   </Button>
                   <Form.ErrorList errors={errors} />
                 </Space>
@@ -662,6 +690,63 @@ export function SecretsPage() {
             )}
           </Form.List>
         </Form>
+      </Modal>
+
+      <Modal
+        footer={null}
+        open={Boolean(usageSecret)}
+        title={`使用 ${usageSecret?.name ?? ''}`}
+        width={520}
+        onCancel={() => setUsageSecret(null)}
+      >
+        {usageSecret ? (
+          <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+            <Space orientation="vertical" size={6} style={{ width: '100%' }}>
+              <Text type="secondary">Secret 引用</Text>
+              <Space.Compact block>
+                <Input readOnly value={buildSecretReference(usageSecret.id)} />
+                <Button icon={<CopyOutlined />} onClick={() => copyReference(usageSecret)}>
+                  复制
+                </Button>
+              </Space.Compact>
+            </Space>
+            <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+              <Text type="secondary">使用位置</Text>
+              <Button
+                block
+                disabled={!canInvokeWithSecret}
+                href={canInvokeWithSecret ? '/ai-gateway/manifest' : undefined}
+                icon={<RobotOutlined />}
+              >
+                AI 工具调用
+              </Button>
+              <Button
+                block
+                disabled={!canConfigurePluginSecret}
+                href={
+                  canConfigurePluginSecret
+                    ? '/plugins/marketplace?installation=installed'
+                    : undefined
+                }
+                icon={<AppstoreOutlined />}
+              >
+                配置已安装插件
+              </Button>
+            </Space>
+            <Space orientation="vertical" size={6} style={{ width: '100%' }}>
+              <Text type="secondary">允许使用位置</Text>
+              <Space size={4} wrap>
+                {usageSecret.bindings.map((binding) => (
+                  <MetadataTag
+                    key={`${binding.targetType}:${binding.targetRef}`}
+                    label={`${binding.targetType}:${binding.targetRef}`}
+                    tone="cyan"
+                  />
+                ))}
+              </Space>
+            </Space>
+          </Space>
+        ) : null}
       </Modal>
 
       <Modal

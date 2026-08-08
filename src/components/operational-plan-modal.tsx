@@ -19,6 +19,9 @@ export function OperationalPlanModal({
   plan,
   title,
 }: OperationalPlanModalProps) {
+  const warnings = plan?.warnings ?? []
+  const changes = plan?.changes ?? []
+
   return (
     <Modal
       destroyOnHidden
@@ -53,11 +56,11 @@ export function OperationalPlanModal({
               },
             ]}
           />
-          {plan.warnings.length > 0 ? (
+          {warnings.length > 0 ? (
             <Alert
               description={
                 <ul className="list-disc pl-5">
-                  {plan.warnings.map((warning) => (
+                  {warnings.map((warning) => (
                     <li key={warning}>{warning}</li>
                   ))}
                 </ul>
@@ -72,7 +75,7 @@ export function OperationalPlanModal({
             column={1}
             size="small"
             title="计划变更"
-            items={plan.changes.map((change, index) => ({
+            items={changes.map((change, index) => ({
               key: `${change.action}-${change.resource}-${index}`,
               label: `${change.action} · ${change.resource}`,
               children: change.summary,

@@ -7,6 +7,8 @@ import { useI18n } from '@/i18n'
 import './admin-table.css'
 
 const DEFAULT_PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
+const DEFAULT_PAGINATION_SUMMARY = (total: number, range: [number, number]) =>
+  total > 0 ? `当前 ${range[0]}-${range[1]} / ${total} 条` : '当前 0 / 0 条'
 const ACTION_COLUMN_CLASS_NAME = 'soha-table-actions-column'
 const AUTO_ACTION_COLUMN_CLASS_NAME = 'soha-table-actions-column--auto'
 const { Text } = Typography
@@ -258,7 +260,7 @@ export function AdminTable({
                 ? paginationSummary(total, range)
                 : paginationSummary
             )
-          : inheritedPagination?.showTotal,
+          : (inheritedPagination?.showTotal ?? DEFAULT_PAGINATION_SUMMARY),
         onChange: (nextPage: number, nextPageSize: number) => {
           if (nextPageSize !== currentPageSize) {
             setCurrentPage(nextPage)

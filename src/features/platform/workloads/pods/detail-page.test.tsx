@@ -17,6 +17,8 @@ const testState = vi.hoisted(() => ({
   scope: {
     clusterId: 'cluster-a' as string | null,
     namespace: 'monitoring' as string | null,
+    setClusterId: vi.fn(),
+    setNamespace: vi.fn(),
   },
 }))
 
@@ -41,6 +43,7 @@ const apiGetMock = vi.hoisted(() =>
           conditions: [],
           volumes: [],
           relatedResources: [],
+          allowedActions: ['logs', 'exec'],
         },
       }
     }
@@ -82,6 +85,22 @@ vi.mock('@/i18n', () => ({
 }))
 
 vi.mock('@/features/copilot', () => ({ useAIPageContext: vi.fn() }))
+
+vi.mock('@/features/auth/permission-snapshot', () => ({
+  usePermissionSnapshot: () => ({
+    data: {
+      data: {
+        permissionKeys: ['platform.pods.logs', 'platform.pods.exec'],
+        visibleMenuIds: [],
+      },
+    },
+    isLoading: false,
+  }),
+  hasPermission: (snapshot: { permissionKeys: string[] } | undefined, permissionKey: string) =>
+    snapshot?.permissionKeys.includes(permissionKey) ?? false,
+  hasAllowedAction: (allowedActions: string[] | undefined, action: string) =>
+    allowedActions?.includes(action) ?? false,
+}))
 
 vi.mock('@/features/platform/cluster-capabilities', () => ({
   useClusterCapability: () => ({
@@ -203,7 +222,11 @@ async function renderDetail() {
     root.render(
       <QueryClientProvider client={queryClient}>
         <AntdApp>
-          <MemoryRouter initialEntries={['/workloads/pods/prometheus-0?namespace=url-namespace']}>
+          <MemoryRouter
+            initialEntries={[
+              '/workloads/pods/prometheus-0?clusterId=url-cluster&namespace=url-namespace',
+            ]}
+          >
             <Routes>
               <Route path="/workloads/pods/:podName" element={<PodDetailPage />} />
               <Route path="/monitoring-workbench/logs" element={<LocationProbe />} />
@@ -233,15 +256,17 @@ describe('pod detail page lazy boundaries', () => {
     const requestedPaths = () => apiGetMock.mock.calls.map(([path]) => String(path))
 
     expect(requestedPaths().filter((path) => path.includes('/detail?'))).toEqual([
-      '/clusters/cluster-a/workloads/pods/prometheus-0/detail?namespace=monitoring',
+      '/clusters/url-cluster/workloads/pods/prometheus-0/detail?namespace=url-namespace',
     ])
+    expect(testState.scope.setClusterId).toHaveBeenCalledWith('url-cluster')
+    expect(testState.scope.setNamespace).toHaveBeenCalledWith('url-namespace')
     expect(requestedPaths().some((path) => path.includes('/metrics?'))).toBe(false)
     expect(requestedPaths().some((path) => path.includes('/events?'))).toBe(false)
     expect(requestedPaths().some((path) => path.includes('/yaml?'))).toBe(false)
     expect(testState.runtimeLoads).toEqual({ logs: 0, metrics: 0, terminal: 0 })
 
     await clickTab(container, '指标')
-    expect(requestedPaths().some((path) => path.includes('/metrics?namespace=monitoring'))).toBe(
+    expect(requestedPaths().some((path) => path.includes('/metrics?namespace=url-namespace'))).toBe(
       true,
     )
     expect(container.querySelector('[data-testid="metrics-panel"]')).not.toBeNull()
@@ -257,13 +282,15 @@ describe('pod detail page lazy boundaries', () => {
     expect(testState.runtimeLoads.terminal).toBe(1)
 
     await clickTab(container, '事件')
-    expect(requestedPaths().some((path) => path.includes('/events?namespace=monitoring'))).toBe(
+    expect(requestedPaths().some((path) => path.includes('/events?namespace=url-namespace'))).toBe(
       true,
     )
     expect(container.querySelector('[data-testid="events-panel"]')).not.toBeNull()
 
     await clickTab(container, 'YAML')
-    expect(requestedPaths().some((path) => path.includes('/yaml?namespace=monitoring'))).toBe(true)
+    expect(requestedPaths().some((path) => path.includes('/yaml?namespace=url-namespace'))).toBe(
+      true,
+    )
     expect(container.querySelector('[data-testid="yaml-editor"]')).not.toBeNull()
   })
 
@@ -280,7 +307,7 @@ describe('pod detail page lazy boundaries', () => {
     await flushAsyncWork()
 
     expect(container.querySelector('[data-testid="location"]')?.textContent).toBe(
-      '/monitoring-workbench/logs?cluster=cluster-a&namespace=monitoring&pod=prometheus-0&container=prometheus',
+      '/monitoring-workbench/logs?cluster=url-cluster&namespace=url-namespace&pod=prometheus-0&container=prometheus',
     )
   })
 })

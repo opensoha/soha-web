@@ -2,17 +2,15 @@ import { lazy, Suspense, useState, useEffect, useMemo } from 'react'
 import type { ReactNode } from 'react'
 import { App, Tabs, Card, Spin } from 'antd'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
 import { PlatformResourceOverview } from '@/features/platform/shared/resource-overview'
 import { useI18n } from '@/i18n'
 import { useClusterCapability } from '@/features/platform/cluster-capabilities'
-import { usePlatformScopeStore } from '@/stores/platform-scope-store'
-import { resolveWorkloadNamespace } from '@/features/platform/workloads-model'
-import { toScopeKey } from '@/types'
 import type { TabsProps } from 'antd'
 import { updateWorkloadYAML } from '@/features/platform/workloads/shared/api'
 import { workloadQueries } from '@/features/platform/workloads/shared/queries'
+import { useWorkloadDetailScope } from '@/features/platform/workloads/shared/detail-scope'
 import type { WorkloadKind } from '@/features/platform/workloads/shared/types'
 import '@/features/platform/workloads/styles.css'
 
@@ -60,14 +58,12 @@ export function WorkloadDetailShell({
   const { t, localeCode } = useI18n()
   const { message } = App.useApp()
   const params = useParams()
-  const [searchParams] = useSearchParams()
   const name = params[paramKey] as string
-  const { clusterId, namespace } = usePlatformScopeStore()
-  const detailNamespace = resolveWorkloadNamespace(namespace, searchParams.get('namespace'))
+  const { clusterId, namespace: detailNamespace } = useWorkloadDetailScope()
   const [internalActiveTabKey, setInternalActiveTabKey] = useState('overview')
   const resolvedActiveTabKey = activeTabKey ?? internalActiveTabKey
 
-  const detailScope = toScopeKey(clusterId, detailNamespace)
+  const detailScope = { clusterId, namespace: detailNamespace }
   const detailQuery = useQuery(workloadQueries.detail<WorkloadMeta>(resource, detailScope, name))
   const yamlQueryOptions = workloadQueries.yaml(resource, detailScope, name)
   const yamlQuery = useQuery({

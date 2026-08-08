@@ -33,6 +33,18 @@
   display: none;
 }
 
+.soha-workload-detail-tabs.ant-tabs {
+  margin-top: 0;
+}
+
+.soha-workload-detail-tabs .ant-tabs-content-holder {
+  padding-top: 12px;
+}
+
+.soha-workload-detail-tabs .soha-detail-card {
+  margin-top: 0;
+}
+
 /* Right-fixed column: force an opaque sticky surface so underlying cells never bleed through */
 .soha-table-actions-column {
   border-left: 1px solid var(--soha-border-color) !important;

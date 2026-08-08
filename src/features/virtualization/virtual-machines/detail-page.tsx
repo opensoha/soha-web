@@ -6,6 +6,7 @@ import {
   Button,
   Card,
   Descriptions,
+  Flex,
   Space,
   Spin,
   Tabs,
@@ -17,7 +18,7 @@ import { getAIWorkbenchPathForMode, useAIPageContext } from '@/features/copilot'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { ManagementIconButton, ManagementState } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { virtualizationQueries } from '@/features/virtualization/queries'
 import { useVirtualizationPermissions } from '@/features/virtualization/shared/use-virtualization-permissions'
 import { VirtualizationAdminTable } from '@/features/virtualization/shared/ui'
@@ -29,6 +30,7 @@ import {
   operationTime,
   stringifyRaw,
   virtualMachineDisplayStatus,
+  virtualMachineObservation,
 } from '@/features/virtualization/virtualization-model'
 import '@/features/virtualization/virtualization-workbench.css'
 import type { VirtualizationOperation } from '@/features/virtualization/virtualization-types'
@@ -48,6 +50,20 @@ const VMMetricsPanel = lazy(() =>
 function statusTag(value?: string) {
   if (!value) return <Text type="secondary">-</Text>
   return <StatusTag value={value} />
+}
+
+function metadataValues(
+  values: string[],
+  tone: 'default' | 'blue' | 'cyan' | 'purple' | 'gold' = 'default',
+) {
+  if (values.length === 0) return <Text type="secondary">-</Text>
+  return (
+    <Flex gap={4} wrap>
+      {values.map((value) => (
+        <MetadataTag key={value} label={value} tone={tone} />
+      ))}
+    </Flex>
+  )
 }
 
 function tableTooltipText(value: unknown) {
@@ -106,6 +122,7 @@ export function VirtualizationVmDetailPage() {
   )
   const detail = detailQuery.data
   const vm = detail?.vm
+  const observation = virtualMachineObservation(vm)
   const providerRaw = stringifyRaw(detail?.providerRaw)
   const sortedOperations = useMemo(() => {
     const records = [...(detail?.operations ?? [])]
@@ -203,60 +220,175 @@ export function VirtualizationVmDetailPage() {
                 <Card
                   size="small"
                   variant="outlined"
-                  className="soha-management-panel-card"
+                  className="soha-management-panel-card soha-vrt-vm-detail-card"
                   loading={detailQuery.isLoading}
                 >
-                  <Descriptions size="small" column={{ xs: 1, md: 2, xl: 3 }} bordered>
-                    <Descriptions.Item label="名称">{vm?.name ?? '-'}</Descriptions.Item>
-                    <Descriptions.Item label="ID">{vm?.id ?? '-'}</Descriptions.Item>
-                    <Descriptions.Item label="Provider">{vm?.provider ?? '-'}</Descriptions.Item>
-                    <Descriptions.Item label="连接">
-                      {vm?.connectionName || vm?.connectionId || '-'}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="状态">{statusTag(vmDisplayStatus)}</Descriptions.Item>
-                    <Descriptions.Item label="命名空间">{vm?.namespace || '-'}</Descriptions.Item>
-                    <Descriptions.Item label="节点">{vm?.node || '-'}</Descriptions.Item>
-                    <Descriptions.Item label="规格">
-                      {vm?.flavorName || vm?.flavorId || '-'}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="来源模式">{vm?.sourceMode || '-'}</Descriptions.Item>
-                    <Descriptions.Item label="来源引用">{vm?.sourceRef || '-'}</Descriptions.Item>
-                    <Descriptions.Item label="来源资产">
-                      {detail?.image?.name || vm?.bootImageName || vm?.bootImageId || '-'}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="资产类型">
-                      {detail?.image?.assetKind || detail?.image?.sourceKind || '-'}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="StorageClass / 存储">
-                      {detail?.image
-                        ? [detail.image.storageClass, detail.image.storage]
-                            .filter(Boolean)
-                            .join(' / ') || '-'
-                        : '-'}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="CPU">{vm?.cpu ?? '-'}</Descriptions.Item>
-                    <Descriptions.Item label="内存">
-                      {vm?.memoryMiB ? `${vm.memoryMiB} MiB` : '-'}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="磁盘">
-                      {vm?.diskGiB ? `${vm.diskGiB} GiB` : '-'}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="镜像">
-                      {vm?.bootImageName || vm?.bootImageId || '-'}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="网络">{vm?.network || '-'}</Descriptions.Item>
-                    <Descriptions.Item label="IP">
-                      {vm?.ipAddresses?.join(', ') || '-'}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="创建时间">
-                      {formatDateTime(vm?.createdAt)}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="更新时间">
-                      {formatDateTime(vm?.updatedAt)}
-                    </Descriptions.Item>
-                  </Descriptions>
+                  <div className="soha-vrt-vm-detail-identity">
+                    <div className="soha-vrt-vm-detail-title">
+                      <strong>{vm?.name ?? '-'}</strong>
+                      <Text type="secondary">{vm?.id ?? '-'}</Text>
+                    </div>
+                    <Flex className="soha-vrt-vm-detail-tags" gap={6} wrap>
+                      <MetadataTag
+                        label={
+                          vm?.provider === 'pve'
+                            ? 'PVE'
+                            : vm?.provider === 'kubevirt'
+                              ? 'KubeVirt'
+                              : vm?.provider || '-'
+                        }
+                        tone={vm?.provider === 'pve' ? 'gold' : 'cyan'}
+                      />
+                      {statusTag(vmDisplayStatus)}
+                      {vm?.connectionName || vm?.connectionId ? (
+                        <MetadataTag label={vm.connectionName || vm.connectionId} tone="blue" />
+                      ) : null}
+                    </Flex>
+                  </div>
+
+                  <section className="soha-vrt-vm-detail-section">
+                    <h2>运行与硬件</h2>
+                    <Descriptions size="small" column={{ xs: 1, md: 2, xl: 3 }}>
+                      <Descriptions.Item label="位置">
+                        {metadataValues(
+                          [vm?.namespace, vm?.node].filter(Boolean) as string[],
+                          'purple',
+                        )}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="CPU">
+                        {vm?.cpu ? <MetadataTag label={`${vm.cpu} vCPU`} tone="purple" /> : '-'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="内存">
+                        {vm?.memoryMiB ? (
+                          <MetadataTag label={`${vm.memoryMiB} MiB`} tone="cyan" />
+                        ) : (
+                          '-'
+                        )}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="磁盘">
+                        {metadataValues(
+                          [
+                            vm?.diskGiB ? `${vm.diskGiB} GiB` : '',
+                            observation.diskCount ? `${observation.diskCount} 块` : '',
+                          ].filter(Boolean),
+                          'gold',
+                        )}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="网卡">
+                        {observation.networkInterfaceCount
+                          ? `${observation.networkInterfaceCount} 个`
+                          : '-'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="固件 / 机型">
+                        {[observation.firmware, observation.machine].filter(Boolean).join(' / ') ||
+                          '-'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="操作系统">
+                        {observation.osType || '-'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="规格">
+                        {vm?.flavorName || vm?.flavorId || '-'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="镜像">
+                        {metadataValues(
+                          [
+                            detail?.image?.name || vm?.bootImageName || vm?.bootImageId || '',
+                          ].filter(Boolean),
+                          'blue',
+                        )}
+                      </Descriptions.Item>
+                    </Descriptions>
+                  </section>
+
+                  <section className="soha-vrt-vm-detail-section">
+                    <h2>网络与身份</h2>
+                    <Descriptions size="small" column={{ xs: 1, md: 2, xl: 3 }}>
+                      <Descriptions.Item label="主机名">
+                        {observation.hostname || '-'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="FQDN">{observation.fqdn || '-'}</Descriptions.Item>
+                      <Descriptions.Item label="IP">
+                        {metadataValues(vm?.ipAddresses ?? [], 'cyan')}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="网络">
+                        {metadataValues(
+                          observation.networks.length > 0
+                            ? observation.networks
+                            : vm?.network
+                              ? [vm.network]
+                              : [],
+                          'blue',
+                        )}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="网关">
+                        {observation.gateway || '-'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="DNS">
+                        {metadataValues(observation.dnsServers, 'cyan')}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="搜索域">
+                        {metadataValues(observation.searchDomains, 'purple')}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="DNS 策略">
+                        {observation.dnsPolicy || '-'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Guest Agent">
+                        {vm?.provider === 'pve' && observation.guestAgentKnown
+                          ? statusTag(observation.guestAgentEnabled ? 'enabled' : 'disabled')
+                          : '-'}
+                      </Descriptions.Item>
+                    </Descriptions>
+                    {!vm?.ipAddresses?.length && vm?.provider === 'pve' ? (
+                      <Alert
+                        className="soha-vrt-vm-address-alert"
+                        type="warning"
+                        showIcon
+                        title="未获取到运行地址"
+                        description="静态 Cloud-Init 地址可直接识别；DHCP 地址需要 PVE 的 QEMU Guest Agent 正常运行后上报。"
+                      />
+                    ) : null}
+                  </section>
+
+                  <section className="soha-vrt-vm-detail-section">
+                    <h2>初始化与来源</h2>
+                    <Descriptions size="small" column={{ xs: 1, md: 2, xl: 3 }}>
+                      <Descriptions.Item label="Cloud-Init">
+                        {observation.cloudInitKnown
+                          ? statusTag(
+                              observation.cloudInitConfigured ? 'configured' : 'not configured',
+                            )
+                          : '-'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="初始化用户">
+                        {observation.cloudInitUser || '-'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="来源模式">
+                        {observation.cloudInitSource || vm?.sourceMode || '-'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="User Data">
+                        {observation.cloudInitUserDataConfigured ? statusTag('configured') : '-'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="SSH Key">
+                        {observation.sshKeysConfigured ? statusTag('configured') : '-'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="来源引用">{vm?.sourceRef || '-'}</Descriptions.Item>
+                      <Descriptions.Item label="资产类型">
+                        {detail?.image?.assetKind || detail?.image?.sourceKind || '-'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="StorageClass / 存储">
+                        {detail?.image
+                          ? [detail.image.storageClass, detail.image.storage]
+                              .filter(Boolean)
+                              .join(' / ') || '-'
+                          : '-'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="时间">
+                        {formatDateTime(vm?.createdAt)} / {formatDateTime(vm?.updatedAt)}
+                      </Descriptions.Item>
+                    </Descriptions>
+                  </section>
                 </Card>
-                <Card size="small" title="Provider Raw" className="soha-management-panel-card">
+                <Card size="small" title="Provider 摘要" className="soha-management-panel-card">
                   <pre className="max-h-[520px] overflow-auto rounded border border-[var(--soha-border-color)] bg-[var(--soha-bg-surface-muted)] p-3 text-xs">
                     {providerRaw || '暂无 provider raw 数据'}
                   </pre>

@@ -29,6 +29,7 @@ const GROUP_LABELS: Record<string, string> = {
   plugin: '插件管理',
   secret: 'Secret Store',
   settings: '设置中心',
+  software: '软件库',
   system: '系统管理',
   virtualization: '虚拟化管理',
   workspace: '工作台',

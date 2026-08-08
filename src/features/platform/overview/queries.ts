@@ -1,13 +1,10 @@
 import { queryOptions } from '@tanstack/react-query'
-import { getOverviewMonitoringSummary, getOverviewWorkload, listOverviewClusters } from './api'
+import { clusterQueries } from '@/features/platform/clusters/queries'
+import { getOverviewMonitoringSummary, getOverviewWorkload } from './api'
 import { platformOverviewKeys } from './keys'
 
 export const platformOverviewQueries = {
-  clusters: () =>
-    queryOptions({
-      queryKey: platformOverviewKeys.clusters(),
-      queryFn: listOverviewClusters,
-    }),
+  clusters: clusterQueries.list,
   monitoringSummary: () =>
     queryOptions({
       queryKey: platformOverviewKeys.monitoringSummary(),

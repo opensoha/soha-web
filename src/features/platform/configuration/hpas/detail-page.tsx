@@ -32,17 +32,17 @@ function HPAOverview({ detail }: { detail: HorizontalPodAutoscalerResource }) {
   )
 }
 
-function targetLink(targetRef: string, namespace?: string) {
+function targetLink(targetRef: string, namespace: string | undefined, clusterId: string | null) {
   const [kind, name] = targetRef.split('/', 2)
   if (!kind || !name) return targetRef || '-'
-  const path = buildRelatedResourcePath({ kind, name, namespace }, namespace ?? null)
+  const path = buildRelatedResourcePath({ kind, name, namespace }, namespace ?? null, clusterId)
   return path ? <Link to={path}>{targetRef}</Link> : targetRef
 }
 
 export function ConfigurationHPADetailPage() {
   const name = useParams().name as string
   const [searchParams] = useSearchParams()
-  const { namespace } = usePlatformScopeStore()
+  const { clusterId, namespace } = usePlatformScopeStore()
   const detailNamespace = resolveConfigurationNamespace(namespace, searchParams.get('namespace'))
   return (
     <ConfigurationQueryDetailPage<HorizontalPodAutoscalerResource>
@@ -51,7 +51,7 @@ export function ConfigurationHPADetailPage() {
       name={name}
       namespace={detailNamespace}
       overviewExtra={(detail) => [
-        { key: 'Target', value: targetLink(detail.targetRef, detail.namespace) },
+        { key: 'Target', value: targetLink(detail.targetRef, detail.namespace, clusterId) },
         { key: 'Replicas', value: `${detail.currentReplicas}/${detail.desiredReplicas}` },
         { key: 'Min / Max', value: `${detail.minReplicas} / ${detail.maxReplicas}` },
       ]}

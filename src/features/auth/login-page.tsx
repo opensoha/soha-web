@@ -59,36 +59,36 @@ type StarToneVariable = (typeof STAR_TONES)[number]
 
 const CAPABILITY_QUESTIONS = [
   {
-    question: 'k8s 工作台',
-    answer: '多集群、工作负载、网络、存储、YAML 统一入口',
+    question: 'k8s工作台',
+    answer: '多集群、工作负载、网络、存储和 YAML 管理',
   },
   {
-    question: '虚拟化资源',
-    answer: '虚拟机、集群、镜像、规格、同步和操作记录',
+    question: '计算资源工作台',
+    answer: '虚拟机、容器运行时、镜像模板与统一任务中心',
   },
   {
-    question: '容器运行时',
-    answer: '主机、容器、Compose、模板和操作任务',
+    question: '应用交付',
+    answer: '应用接入、环境绑定、构建发布、测试与问题分析',
   },
   {
-    question: '应用交付工作台',
-    answer: '应用接入、环境绑定、构建、版本包和发布验证',
-  },
-  {
-    question: 'AI 工作台',
-    answer: '会话、根因、性能、巡检、工具和模型配置',
+    question: 'AI工作台',
+    answer: '对话分析、知识库、巡检自动化、Agent 运行与评测',
   },
   {
     question: 'AI Gateway',
-    answer: '中转、上游、Tokens、能力清单、治理和调用日志',
+    answer: '模型路由、客户端与 Token、能力治理和调用审计',
   },
   {
     question: '可观测性工作台',
-    answer: '日志、指标集成、告警规则、告警事件、通知、OnCall 和自愈联动',
+    answer: '指标、链路、日志、告警、通知、值班与自愈',
   },
   {
-    question: '设置中心',
-    answer: '总览、个人中心、关于、Provider、权限、菜单、审计和品牌',
+    question: '内网工作台',
+    answer: '应用目录、身份 Provider、Outpost 与访问策略',
+  },
+  {
+    question: '平台治理',
+    answer: '用户角色、组织策略、Secret Store、审计与运行配置',
   },
 ]
 
@@ -310,8 +310,7 @@ function LoginCapabilityFlow() {
             Soha 是一种能力！
           </Title>
           <Text className="soha-auth-flow-subtitle">
-            从 k8s、虚拟化、Docker、应用交付、AI 工作台、AI Gateway、监控告警到设置中心，Soha
-            把日常操作沉淀成可协同、可治理的能力。
+            Soha 将 Kubernetes 与计算资源、应用交付、AI、可观测性、身份访问和系统配置统一到一个可协同、可治理的工作平台。
           </Text>
         </div>
       </div>

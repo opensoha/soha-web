@@ -46,23 +46,43 @@ export const deliveryQueries = {
   repositories: {
     list: (params: RepositoryListParams = {}, enabled = true) => {
       const normalized = normalizeRepositoryListParams(params)
-      return queryOptions({ queryKey: deliveryKeys.repositories.list(normalized), queryFn: () => deliveryApi.repositories.list(normalized), enabled })
+      return queryOptions({
+        queryKey: deliveryKeys.repositories.list(normalized),
+        queryFn: () => deliveryApi.repositories.list(normalized),
+        enabled,
+      })
     },
     gitProjects: (params: RepositoryListParams = {}, enabled = true) => {
       const normalized = normalizeRepositoryListParams(params)
-      return queryOptions({ queryKey: deliveryKeys.repositories.gitProjects(normalized), queryFn: () => deliveryApi.gitlab.projects(normalized), enabled })
+      return queryOptions({
+        queryKey: deliveryKeys.repositories.gitProjects(normalized),
+        queryFn: () => deliveryApi.gitlab.projects(normalized),
+        enabled,
+      })
     },
     gitBranches: (params: GitReferenceParams, enabled = true) => {
       const normalized = normalizeGitReferenceParams(params)
-      return queryOptions({ queryKey: deliveryKeys.repositories.gitBranches(normalized), queryFn: () => deliveryApi.gitlab.branches(normalized), enabled: enabled && hasValue(normalized.projectId) })
+      return queryOptions({
+        queryKey: deliveryKeys.repositories.gitBranches(normalized),
+        queryFn: () => deliveryApi.gitlab.branches(normalized),
+        enabled: enabled && hasValue(normalized.projectId),
+      })
     },
     gitTags: (params: GitReferenceParams, enabled = true) => {
       const normalized = normalizeGitReferenceParams(params)
-      return queryOptions({ queryKey: deliveryKeys.repositories.gitTags(normalized), queryFn: () => deliveryApi.gitlab.tags(normalized), enabled: enabled && hasValue(normalized.projectId) })
+      return queryOptions({
+        queryKey: deliveryKeys.repositories.gitTags(normalized),
+        queryFn: () => deliveryApi.gitlab.tags(normalized),
+        enabled: enabled && hasValue(normalized.projectId),
+      })
     },
     gitCommits: (params: GitCommitParams, enabled = true) => {
       const normalized = normalizeGitCommitParams(params)
-      return queryOptions({ queryKey: deliveryKeys.repositories.gitCommits(normalized), queryFn: () => deliveryApi.gitlab.commits(normalized), enabled: enabled && hasValue(normalized.projectId) })
+      return queryOptions({
+        queryKey: deliveryKeys.repositories.gitCommits(normalized),
+        queryFn: () => deliveryApi.gitlab.commits(normalized),
+        enabled: enabled && hasValue(normalized.projectId),
+      })
     },
   },
   applications: {
@@ -118,6 +138,16 @@ export const deliveryQueries = {
         queryKey: deliveryKeys.environments.targetCandidates(normalized),
         queryFn: () => deliveryApi.environments.targetCandidates(normalized),
         enabled: enabled && hasValue(normalized.clusterId) && hasValue(normalized.namespace),
+      })
+    },
+    helmReleases: (clusterId: string, namespace: string, enabled = true) => {
+      const normalizedClusterId = clusterId.trim()
+      const normalizedNamespace = namespace.trim()
+      return queryOptions({
+        queryKey: deliveryKeys.environments.helmReleases(normalizedClusterId, normalizedNamespace),
+        queryFn: () =>
+          deliveryApi.environments.helmReleases(normalizedClusterId, normalizedNamespace),
+        enabled: enabled && hasValue(normalizedClusterId) && hasValue(normalizedNamespace),
       })
     },
   },

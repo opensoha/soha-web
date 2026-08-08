@@ -1,3 +1,5 @@
 export { useClusterCapabilityForCluster } from './cluster-capabilities'
+export { namespaceQueries } from './cluster-resources/queries'
+export { clusterQueries } from './clusters/queries'
 export { buildClusterScopedPath } from './platform-scope-query'
 export { podQueries } from './workloads/pods/queries'
