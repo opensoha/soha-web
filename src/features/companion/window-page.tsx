@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { usePermissionSnapshot } from '@/features/auth'
-import { GlobalAIAssistantProvider } from '@/features/copilot/global-assistant/ai-global-assistant-provider'
+import { GlobalAIAssistantProvider } from '@/features/copilot'
+import { AssistantCompanionOverlay } from './assistant-companion-overlay'
 
 export function CompanionWindowPage() {
   const permissionSnapshotQuery = usePermissionSnapshot()
@@ -19,6 +20,7 @@ export function CompanionWindowPage() {
       enabled
       nativeCompanionWindow
       permissionSnapshot={permissionSnapshotQuery.data?.data}
+      renderCompanion={(props) => <AssistantCompanionOverlay {...props} />}
     >
       <main aria-label="Soha 桌面宠物" className="soha-companion-window-root" />
     </GlobalAIAssistantProvider>

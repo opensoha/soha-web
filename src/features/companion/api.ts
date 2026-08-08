@@ -4,7 +4,7 @@ import type {
   CompanionProfile,
   CompanionProfileResetRequest,
 } from '@opensoha/contracts/gen/ts/sohaapi'
-import { API_BASE_URL, getStoredAccessToken, refreshAuthSession } from '@/features/auth/auth-api'
+import { API_BASE_URL, getStoredAccessToken, refreshAuthSession } from '@/features/auth'
 import { api } from '@/services/api-client'
 import type { ApiResponse } from '@/types'
 

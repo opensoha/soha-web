@@ -1,4 +1,4 @@
-import type { AIGlobalAssistantMessage } from '@/features/copilot/global-assistant/ai-context'
+import type { AIGlobalAssistantMessage } from '@/features/copilot'
 import type { CompanionVisualState } from './types'
 
 interface CompanionStateInput {

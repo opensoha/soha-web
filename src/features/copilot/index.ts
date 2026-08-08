@@ -1,11 +1,15 @@
 export {
+  DraggableFloatShell,
   encodeAIContextForElement,
+  GlobalAIAssistantProvider,
   useAIGlobalAssistant,
   useAIPageContext,
 } from './global-assistant'
 export type {
   AIGlobalAssistantAction,
   AIGlobalAssistantLaunchRequest,
+  AIGlobalAssistantMessage,
+  GlobalAssistantCompanionRenderProps,
   AIPageContext,
   AISelectionContext,
 } from './global-assistant'

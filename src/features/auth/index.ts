@@ -6,6 +6,7 @@ export {
   getStoredAccessToken,
   loginWithPassword,
   logoutAuthSession,
+  refreshAuthSession,
   restoreAuthSession,
 } from './auth-api'
 export { publishAuthSessionAvailable, subscribeAuthSessionAvailable } from './auth-session-channel'

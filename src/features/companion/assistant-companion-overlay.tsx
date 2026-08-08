@@ -7,13 +7,10 @@ import {
   MessageOutlined,
   SearchOutlined,
 } from '@ant-design/icons'
-import type {
-  AIGlobalAssistantAction,
-  AIGlobalAssistantMessage,
-} from '@/features/copilot/global-assistant/ai-context'
-import { DraggableFloatShell } from '@/features/copilot/global-assistant/draggable-float-shell'
-import { pluginQueries } from '@/features/plugins/queries'
-import type { InstalledPlugin } from '@/features/plugins/plugin-model'
+import { DraggableFloatShell } from '@/features/copilot'
+import type { AIGlobalAssistantAction, AIGlobalAssistantMessage } from '@/features/copilot'
+import { pluginQueries } from '@/features/plugins'
+import type { InstalledPlugin } from '@/features/plugins'
 import { usePreferencesStore } from '@/stores/preferences-store'
 import { companionApi, companionKeys } from './api'
 import { builtinCompanionPack, BUILTIN_COMPANION_PLUGIN_ID } from './builtin-pack'

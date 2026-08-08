@@ -29,6 +29,7 @@ import { PlatformScopeTrigger } from '@/components/platform-scope-toolbar'
 import { AnnouncementBell } from '@/features/announcements/announcement-center'
 import { logoutAuthSession } from '@/features/auth/auth-api'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
+import { AssistantCompanionOverlay } from '@/features/companion'
 import {
   isComputeWorkbenchMenuGroup,
   normalizeComputeWorkbenchNav,
@@ -947,7 +948,11 @@ export function AppLayout() {
   }
 
   return (
-    <GlobalAIAssistantProvider enabled={globalAssistantEnabled} permissionSnapshot={snapshot}>
+    <GlobalAIAssistantProvider
+      enabled={globalAssistantEnabled}
+      permissionSnapshot={snapshot}
+      renderCompanion={(props) => <AssistantCompanionOverlay {...props} />}
+    >
       <Layout className="soha-shell" hasSider>
         <Sider
           breakpoint="md"

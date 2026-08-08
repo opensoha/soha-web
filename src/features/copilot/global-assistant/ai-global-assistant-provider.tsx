@@ -16,7 +16,6 @@ import type {
   WorkbenchSendMessageStreamRequest,
 } from '@opensoha/contracts/gen/ts/sohaapi'
 import { hasPermission } from '@/features/auth'
-import { AssistantCompanionOverlay } from '@/features/companion'
 import { api } from '@/services/api-client'
 import { usePreferencesStore } from '@/stores/preferences-store'
 import type { ApiResponse, PermissionSnapshot } from '@/types'
@@ -62,11 +61,23 @@ interface AIPageContextRegistration {
   key: string
 }
 
+export interface GlobalAssistantCompanionRenderProps {
+  disabled: boolean
+  messages: AIGlobalAssistantMessage[]
+  nativeWindow: boolean
+  onAction: (action: AIGlobalAssistantAction) => void
+  onOpenAssistant: () => void
+  onOpenWorkbench: () => void
+  panelOpen: boolean
+  running: boolean
+}
+
 interface GlobalAIAssistantProviderProps {
   children: ReactNode
   enabled?: boolean
   nativeCompanionWindow?: boolean
   permissionSnapshot?: PermissionSnapshot
+  renderCompanion?: (props: GlobalAssistantCompanionRenderProps) => ReactNode
 }
 
 interface SharedAssistantSession {
@@ -234,6 +245,7 @@ export function GlobalAIAssistantProvider({
   enabled = true,
   nativeCompanionWindow = false,
   permissionSnapshot,
+  renderCompanion,
 }: GlobalAIAssistantProviderProps) {
   const location = useLocation()
   const navigate = useNavigate()
@@ -594,20 +606,20 @@ export function GlobalAIAssistantProvider({
   return (
     <AIPageContextRegistry.Provider value={contextValue}>
       {children}
-      {enabled && (nativeCompanionWindow || companionMode === 'companion') ? (
-        <AssistantCompanionOverlay
-          disabled={!canUseChat}
-          messages={messages}
-          panelOpen={panelOpen}
-          running={running}
-          nativeWindow={nativeCompanionWindow}
-          onAction={(action) => {
-            void launchAssistant({ action })
-          }}
-          onOpenAssistant={() => setPanelOpen(true)}
-          onOpenWorkbench={openWorkbench}
-        />
-      ) : null}
+      {enabled && renderCompanion && (nativeCompanionWindow || companionMode === 'companion')
+        ? renderCompanion({
+            disabled: !canUseChat,
+            messages,
+            panelOpen,
+            running,
+            nativeWindow: nativeCompanionWindow,
+            onAction: (action) => {
+              void launchAssistant({ action })
+            },
+            onOpenAssistant: () => setPanelOpen(true),
+            onOpenWorkbench: openWorkbench,
+          })
+        : null}
       {enabled && !nativeCompanionWindow && companionMode === 'icon' ? (
         <AIFloatButton
           disabled={!canUseChat}
