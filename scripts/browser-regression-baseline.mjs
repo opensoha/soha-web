@@ -64,20 +64,29 @@ async function main() {
       browser.close()
     }
   } finally {
-    if (chrome && !chrome.killed) {
-      chrome.kill('SIGTERM')
-      await Promise.race([
-        once(chrome, 'exit'),
-        new Promise((resolve) => setTimeout(resolve, 1500)),
-      ])
-    }
+    await stopChrome(chrome)
     await server.close()
-    await rm(userDataDir, { recursive: true, force: true })
+    await rm(userDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   }
 
   console.log('browser regression baseline verified: Kubernetes workbench')
   console.log(`viewport: ${viewport.width}x${viewport.height}`)
   console.log(`routes: ${clusterRoute}, ${deploymentRoute}`)
+}
+
+async function stopChrome(chrome) {
+  if (!chrome || chrome.exitCode !== null || chrome.signalCode !== null) return
+
+  const exit = once(chrome, 'exit')
+  chrome.kill('SIGTERM')
+  const stopped = await Promise.race([
+    exit.then(() => true),
+    new Promise((resolve) => setTimeout(() => resolve(false), 1500)),
+  ])
+  if (!stopped && chrome.exitCode === null && chrome.signalCode === null) {
+    chrome.kill('SIGKILL')
+    await exit
+  }
 }
 
 async function runBrowserBaseline(page, port) {
