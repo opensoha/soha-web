@@ -85,6 +85,7 @@ export interface ClusterNamespace {
   status: string
   labels: Record<string, string>
   annotations?: Record<string, string>
+  allowedActions?: string[]
 }
 
 export interface NodeYAMLView {

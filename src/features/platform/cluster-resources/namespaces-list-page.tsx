@@ -18,6 +18,7 @@ import {
   ManagementTableToolbar,
 } from '@/components/management-list'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { hasAllowedAction, hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useAIPageContext } from '@/features/copilot'
 import { parseStringMap, stringifyMap } from '@/features/platform/node-resource-utils'
 import { useI18n } from '@/i18n'
@@ -39,6 +40,8 @@ export function ClusterNamespacesPage() {
   const [editingNamespace, setEditingNamespace] = useState<ClusterNamespace | null>(null)
   const [namespaceModalVisible, setNamespaceModalVisible] = useState(false)
   const namespacesQuery = useQuery(namespaceQueries.list(scope))
+  const permissionSnapshot = usePermissionSnapshot().data?.data
+  const canCreate = hasPermission(permissionSnapshot, 'platform.namespaces.create')
   const createNamespaceMutation = useMutation(namespaceMutations.create(queryClient))
   const updateNamespaceMutation = useMutation(namespaceMutations.update(queryClient))
   const deleteNamespaceMutation = useMutation(namespaceMutations.remove(queryClient))
@@ -96,6 +99,8 @@ export function ClusterNamespacesPage() {
       render: (name: string, record) => {
         const deleting =
           deleteNamespaceMutation.isPending && deleteNamespaceMutation.variables?.name === name
+        const canUpdate = hasAllowedAction(record.allowedActions, 'update')
+        const canDelete = hasAllowedAction(record.allowedActions, 'delete')
         return (
           <Space size={2} className="soha-row-action-icons">
             <ManagementIconButton
@@ -118,42 +123,46 @@ export function ClusterNamespacesPage() {
                 navigate('/helm/releases')
               }}
             />
-            <ManagementIconButton
-              aria-label={`编辑命名空间 ${name}`}
-              size="small"
-              tooltip="编辑"
-              icon={<EditOutlined />}
-              onClick={() => {
-                setEditingNamespace(record)
-                setNamespaceModalVisible(true)
-              }}
-            />
-            <Popconfirm
-              title={`确认删除命名空间 ${name}？`}
-              description="删除后该命名空间下的资源会一并回收，请确认。"
-              okText="删除"
-              cancelText="取消"
-              okButtonProps={{ danger: true, loading: deleting }}
-              placement="topRight"
-              onConfirm={() =>
-                deleteNamespaceMutation.mutate(
-                  { scope, name },
-                  {
-                    onSuccess: () => void message.success('命名空间已删除'),
-                    onError: (error) => void message.error(error.message),
-                  },
-                )
-              }
-            >
+            {canUpdate ? (
               <ManagementIconButton
-                aria-label={`删除命名空间 ${name}`}
-                danger
-                icon={<DeleteOutlined />}
-                loading={deleting}
+                aria-label={`编辑命名空间 ${name}`}
                 size="small"
-                tooltip="删除"
+                tooltip="编辑"
+                icon={<EditOutlined />}
+                onClick={() => {
+                  setEditingNamespace(record)
+                  setNamespaceModalVisible(true)
+                }}
               />
-            </Popconfirm>
+            ) : null}
+            {canDelete ? (
+              <Popconfirm
+                title={`确认删除命名空间 ${name}？`}
+                description="删除后该命名空间下的资源会一并回收，请确认。"
+                okText="删除"
+                cancelText="取消"
+                okButtonProps={{ danger: true, loading: deleting }}
+                placement="topRight"
+                onConfirm={() =>
+                  deleteNamespaceMutation.mutate(
+                    { scope, name },
+                    {
+                      onSuccess: () => void message.success('命名空间已删除'),
+                      onError: (error) => void message.error(error.message),
+                    },
+                  )
+                }
+              >
+                <ManagementIconButton
+                  aria-label={`删除命名空间 ${name}`}
+                  danger
+                  icon={<DeleteOutlined />}
+                  loading={deleting}
+                  size="small"
+                  tooltip="删除"
+                />
+              </Popconfirm>
+            ) : null}
           </Space>
         )
       },
@@ -189,16 +198,18 @@ export function ClusterNamespacesPage() {
           scroll={{ x: 'max-content' }}
           headerExtra={
             <ManagementTableToolbar>
-              <Button
-                icon={<PlusOutlined />}
-                type="primary"
-                onClick={() => {
-                  setEditingNamespace(null)
-                  setNamespaceModalVisible(true)
-                }}
-              >
-                {t('common.create', 'Create')}
-              </Button>
+              {canCreate ? (
+                <Button
+                  icon={<PlusOutlined />}
+                  type="primary"
+                  onClick={() => {
+                    setEditingNamespace(null)
+                    setNamespaceModalVisible(true)
+                  }}
+                >
+                  {t('common.create', 'Create')}
+                </Button>
+              ) : null}
             </ManagementTableToolbar>
           }
         />

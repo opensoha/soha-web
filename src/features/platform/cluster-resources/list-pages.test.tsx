@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { act, type ReactNode } from 'react'
+import { act, forwardRef, type ReactNode } from 'react'
 import { App as AntdApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot, type Root } from 'react-dom/client'
@@ -10,6 +10,7 @@ import { ClusterNamespacesPage } from './namespaces-list-page'
 import { ClusterNodesPage } from './nodes-list-page'
 
 const testState = vi.hoisted(() => ({
+  permissions: [] as string[],
   responses: {} as Record<string, unknown>,
   scope: {
     clusterId: null as string | null,
@@ -31,6 +32,13 @@ vi.mock('@/stores/platform-scope-store', () => ({
   usePlatformScopeStore: () => testState.scope,
 }))
 vi.mock('@/features/copilot', () => ({ useAIPageContext: vi.fn() }))
+vi.mock('@/features/auth', () => ({
+  hasAllowedAction: (actions: string[] | undefined, action: string) =>
+    actions?.includes(action) ?? false,
+  hasPermission: (_snapshot: unknown, permission: string) =>
+    testState.permissions.includes(permission),
+  usePermissionSnapshot: () => ({ data: { data: {} } }),
+}))
 vi.mock('@/i18n', () => ({
   useI18n: () => ({
     localeCode: 'zh_CN' as const,
@@ -48,15 +56,39 @@ vi.mock('@/components/status-tag', () => ({
   StatusTag: ({ value }: { value?: string }) => <span>{value}</span>,
 }))
 vi.mock('@/components/admin-table', () => ({
-  AdminTable: ({ dataSource = [] }: { dataSource?: unknown[] }) => (
-    <div data-testid="admin-table">{dataSource.length}</div>
+  AdminTable: ({
+    columns = [],
+    dataSource = [],
+    headerExtra,
+  }: {
+    columns?: Array<{
+      dataIndex?: string
+      key?: string
+      render?: (value: unknown, record: Record<string, unknown>) => ReactNode
+    }>
+    dataSource?: Array<Record<string, unknown>>
+    headerExtra?: ReactNode
+  }) => (
+    <div data-count={dataSource.length} data-testid="admin-table">
+      {headerExtra}
+      {dataSource.length}
+      {dataSource.flatMap((record) =>
+        columns.map((column, index) => (
+          <div key={`${String(record.name)}-${column.key ?? column.dataIndex}-${index}`}>
+            {column.render
+              ? column.render(record[column.dataIndex ?? ''], record)
+              : (record[column.dataIndex ?? ''] as ReactNode)}
+          </div>
+        )),
+      )}
+    </div>
   ),
 }))
 vi.mock('@/components/management-list', () => ({
   ManagementDensityButton: () => null,
   ManagementDetailHeader: ({ title }: { title?: ReactNode }) => <h1>{title}</h1>,
-  ManagementIconButton: ({ 'aria-label': ariaLabel }: { 'aria-label': string }) => (
-    <button aria-label={ariaLabel} />
+  ManagementIconButton: forwardRef<HTMLButtonElement, { 'aria-label': string }>(
+    ({ 'aria-label': ariaLabel }, ref) => <button ref={ref} aria-label={ariaLabel} />,
   ),
   ManagementRefreshButton: () => null,
   ManagementState: ({ title }: { title?: ReactNode }) => <div>{title}</div>,
@@ -79,6 +111,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  testState.permissions = []
   testState.responses = {}
   testState.scope.clusterId = null
   testState.scope.namespace = null
@@ -104,9 +137,7 @@ async function renderPage(page: ReactNode) {
     root.render(
       <AntdApp>
         <QueryClientProvider client={queryClient}>
-          <MemoryRouter>
-            {page}
-          </MemoryRouter>
+          <MemoryRouter>{page}</MemoryRouter>
         </QueryClientProvider>
       </AntdApp>,
     )
@@ -137,9 +168,44 @@ describe('cluster resource list pages', () => {
     const nodes = await renderPage(<ClusterNodesPage />)
     const namespaces = await renderPage(<ClusterNamespacesPage />)
 
-    expect(nodes.querySelector('[data-testid="admin-table"]')?.textContent).toBe('1')
-    expect(namespaces.querySelector('[data-testid="admin-table"]')?.textContent).toBe('1')
+    expect(nodes.querySelector('[data-testid="admin-table"]')?.getAttribute('data-count')).toBe('1')
+    expect(
+      namespaces.querySelector('[data-testid="admin-table"]')?.getAttribute('data-count'),
+    ).toBe('1')
     expect(apiMocks.get).toHaveBeenCalledWith('/clusters/cluster-a/infrastructure/nodes')
     expect(apiMocks.get).toHaveBeenCalledWith('/clusters/cluster-a/namespaces')
+  })
+
+  it('renders node and namespace mutations only when their permissions are allowed', async () => {
+    testState.scope.clusterId = 'cluster-a'
+    testState.responses['/clusters/cluster-a/infrastructure/nodes'] = [
+      { name: 'node-a', allowedActions: ['view'] },
+    ]
+    testState.responses['/clusters/cluster-a/namespaces'] = [
+      { name: 'team-a', allowedActions: ['view'] },
+    ]
+
+    const readonlyNodes = await renderPage(<ClusterNodesPage />)
+    const readonlyNamespaces = await renderPage(<ClusterNamespacesPage />)
+    expect(readonlyNodes.querySelector('[aria-label="编辑节点 node-a"]')).toBeNull()
+    expect(readonlyNodes.querySelector('[aria-label="删除节点 node-a"]')).toBeNull()
+    expect(readonlyNamespaces.querySelector('[aria-label="编辑命名空间 team-a"]')).toBeNull()
+    expect(readonlyNamespaces.querySelector('[aria-label="删除命名空间 team-a"]')).toBeNull()
+    expect(readonlyNamespaces.textContent).not.toContain('Create')
+
+    testState.permissions = ['platform.namespaces.create']
+    testState.responses['/clusters/cluster-a/infrastructure/nodes'] = [
+      { name: 'node-b', allowedActions: ['view', 'update', 'delete'] },
+    ]
+    testState.responses['/clusters/cluster-a/namespaces'] = [
+      { name: 'team-b', allowedActions: ['view', 'update', 'delete'] },
+    ]
+    const writableNodes = await renderPage(<ClusterNodesPage />)
+    const writableNamespaces = await renderPage(<ClusterNamespacesPage />)
+    expect(writableNodes.querySelector('[aria-label="编辑节点 node-b"]')).not.toBeNull()
+    expect(writableNodes.querySelector('[aria-label="删除节点 node-b"]')).not.toBeNull()
+    expect(writableNamespaces.querySelector('[aria-label="编辑命名空间 team-b"]')).not.toBeNull()
+    expect(writableNamespaces.querySelector('[aria-label="删除命名空间 team-b"]')).not.toBeNull()
+    expect(writableNamespaces.textContent).toContain('Create')
   })
 })

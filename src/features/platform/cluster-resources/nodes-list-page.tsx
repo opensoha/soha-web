@@ -1,16 +1,5 @@
 import { useMemo, useState } from 'react'
-import {
-  Alert,
-  App,
-  Button,
-  Checkbox,
-  Form,
-  Input,
-  Modal,
-  Popconfirm,
-  Space,
-  Spin,
-} from 'antd'
+import { Alert, App, Button, Checkbox, Form, Input, Modal, Popconfirm, Space, Spin } from 'antd'
 import {
   ClearOutlined,
   DeleteOutlined,
@@ -62,6 +51,10 @@ export function ClusterNodesPage() {
   const [drainForm] = Form.useForm()
   const [nodeTableSize, setNodeTableSize] = useState<'middle' | 'small'>('small')
   const nodesQuery = useQuery(nodeQueries.list(scope))
+  const nodes = nodesQuery.data ?? []
+  const canShowNodeActions = nodes.some((node) =>
+    ['update', 'delete'].some((action) => hasAllowedAction(node.allowedActions, action)),
+  )
   const nodeDetailQuery = useQuery(nodeQueries.detail(scope, editingNodeName ?? ''))
   const updateNodeMutation = useMutation(nodeMutations.update(queryClient))
   const deleteNodeMutation = useMutation(nodeMutations.remove(queryClient))
@@ -118,9 +111,7 @@ export function ClusterNodesPage() {
       title: '角色',
       dataIndex: 'roles',
       render: (roles: string[]) =>
-        roles?.map((role) => (
-          <MetadataTag key={role} label={role} />
-        )) ?? '-',
+        roles?.map((role) => <MetadataTag key={role} label={role} />) ?? '-',
     },
     { title: 'IP', dataIndex: 'internalIp', render: (value: string) => value || '-' },
     { title: 'Version', dataIndex: 'version', render: (value: string) => value || '-' },
@@ -135,12 +126,14 @@ export function ClusterNodesPage() {
       ...tableColumnPresets.action,
       title: '操作',
       dataIndex: 'name',
+      key: 'actions',
       width: 176,
       render: (name: string, record) => {
         const deleting = deleteNodeMutation.isPending && deleteNodeMutation.variables?.name === name
         const changingSchedulability =
           schedulabilityMutation.isPending && schedulabilityMutation.variables?.name === name
         const canUpdate = hasAllowedAction(record.allowedActions, 'update')
+        const canDelete = hasAllowedAction(record.allowedActions, 'delete')
         const schedulabilityLabel = record.unschedulable ? '恢复调度' : '禁止调度'
         return (
           <Space size={2} className="soha-row-action-icons">
@@ -194,39 +187,43 @@ export function ClusterNodesPage() {
                 }}
               />
             ) : null}
-            <ManagementIconButton
-              aria-label={`编辑节点 ${name}`}
-              icon={<EditOutlined />}
-              size="small"
-              tooltip="编辑"
-              onClick={() => setEditingNodeName(name)}
-            />
-            <Popconfirm
-              title={`确认删除节点 ${name}？`}
-              description="这会删除 Kubernetes 中的 Node 对象，不会自动回收底层机器。"
-              okText="删除"
-              cancelText="取消"
-              okButtonProps={{ danger: true, loading: deleting }}
-              placement="topRight"
-              onConfirm={() =>
-                deleteNodeMutation.mutate(
-                  { scope, name },
-                  {
-                    onSuccess: () => void message.success('节点对象已删除'),
-                    onError: (error) => void message.error(error.message),
-                  },
-                )
-              }
-            >
+            {canUpdate ? (
               <ManagementIconButton
-                aria-label={`删除节点 ${name}`}
-                danger
-                icon={<DeleteOutlined />}
-                loading={deleting}
+                aria-label={`编辑节点 ${name}`}
+                icon={<EditOutlined />}
                 size="small"
-                tooltip="删除"
+                tooltip="编辑"
+                onClick={() => setEditingNodeName(name)}
               />
-            </Popconfirm>
+            ) : null}
+            {canDelete ? (
+              <Popconfirm
+                title={`确认删除节点 ${name}？`}
+                description="这会删除 Kubernetes 中的 Node 对象，不会自动回收底层机器。"
+                okText="删除"
+                cancelText="取消"
+                okButtonProps={{ danger: true, loading: deleting }}
+                placement="topRight"
+                onConfirm={() =>
+                  deleteNodeMutation.mutate(
+                    { scope, name },
+                    {
+                      onSuccess: () => void message.success('节点对象已删除'),
+                      onError: (error) => void message.error(error.message),
+                    },
+                  )
+                }
+              >
+                <ManagementIconButton
+                  aria-label={`删除节点 ${name}`}
+                  danger
+                  icon={<DeleteOutlined />}
+                  loading={deleting}
+                  size="small"
+                  tooltip="删除"
+                />
+              </Popconfirm>
+            ) : null}
           </Space>
         )
       },
@@ -265,8 +262,12 @@ export function ClusterNodesPage() {
               />
             </ManagementTableToolbar>
           }
-          columns={nodeColumns}
-          dataSource={nodesQuery.data ?? []}
+          columns={
+            canShowNodeActions
+              ? nodeColumns
+              : nodeColumns.filter((column) => column.key !== 'actions')
+          }
+          dataSource={nodes}
           rowKey="name"
           loading={nodesQuery.isLoading}
           pageSize={10}
