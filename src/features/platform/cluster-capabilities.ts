@@ -12,6 +12,21 @@ import { clusterQueries } from './clusters/queries'
 type CapabilityMode = 'direct' | 'agent'
 type LocaleCode = 'zh_CN' | 'en_US'
 
+const AGENT_CAPABILITY_REASONS_ZH: Partial<Record<string, string>> = {
+  'custom.resources':
+    'Agent 模式支持 CRD 发现；自定义资源读取和变更需要为目标 API 组与资源配置明确的 Kubernetes RBAC。',
+  'helm.releases': 'Agent 模式支持 Helm Release 的查询、安装、更新和删除。',
+  'pod.exec': 'Agent 模式支持非交互命令执行和交互式终端。',
+  'pod.logs': 'Agent 模式支持 Pod 日志快照和流式日志。',
+  'port.forward': 'Agent 模式支持实时端口转发。',
+  'resource.yaml.apply':
+    'Agent 模式支持内置资源和自定义资源的 YAML 应用与删除；部分直连专用接口仍待能力对齐。',
+  'resource.yaml.view':
+    'Agent 模式支持读取内置资源和自定义资源 YAML；部分直连专用接口仍待能力对齐。',
+  'workload.mutations':
+    'Agent 模式支持 Deployment 重启、回滚和扩缩容、StatefulSet 重启和扩缩容以及 DaemonSet 重启；Pod 删除和 YAML 应用仍仅支持直连模式。',
+}
+
 export interface ClusterCapabilityDecision {
   disabled: boolean
   entry?: ClusterCapabilityMatrixEntry
@@ -54,6 +69,37 @@ function notesFromSupport(support: ClusterCapabilityModeSupport | undefined) {
   return (support?.notes ?? []).map((item) => item.trim()).filter(Boolean)
 }
 
+function capabilityReason(
+  key: string,
+  localeCode: LocaleCode,
+  mode: CapabilityMode,
+  support: ClusterCapabilityModeSupport,
+  notes: string[],
+) {
+  const sourceReason = support.reason?.trim() || notes.join(' / ')
+  if (localeCode === 'en_US') {
+    return (
+      sourceReason ||
+      (support.status === 'unsupported' ? fallbackUnsupportedReason(localeCode) : '')
+    )
+  }
+  if (mode === 'direct') {
+    return sourceReason || (support.status === 'unsupported' ? fallbackUnsupportedReason(localeCode) : '')
+  }
+  return (
+    (mode === 'agent' && support.status !== 'unsupported'
+      ? AGENT_CAPABILITY_REASONS_ZH[key]
+      : undefined) ||
+    (sourceReason
+      ? support.status === 'partial'
+        ? '当前集群连接模式仅部分支持该能力。'
+        : fallbackUnsupportedReason(localeCode)
+      : support.status === 'unsupported'
+        ? fallbackUnsupportedReason(localeCode)
+        : '')
+  )
+}
+
 export function evaluateClusterCapability({
   connectionMode,
   key,
@@ -88,10 +134,7 @@ export function evaluateClusterCapability({
   const support = entry[mode]
   const notes = notesFromSupport(support)
   const disabled = support.status === 'unsupported'
-  const reason =
-    support.reason?.trim() ||
-    notes.join(' / ') ||
-    (disabled ? fallbackUnsupportedReason(localeCode) : '')
+  const reason = capabilityReason(key, localeCode, mode, support, notes)
 
   return {
     disabled,

@@ -172,15 +172,7 @@ async function renderWithProviders(node: ReactNode, route = '/extensions') {
       <AntdApp>
         <QueryClientProvider client={queryClient}>
           <I18nProvider>
-            <MemoryRouter
-              initialEntries={[route]}
-              future={{
-                v7_startTransition: true,
-                v7_relativeSplatPath: true,
-              }}
-            >
-              {node}
-            </MemoryRouter>
+            <MemoryRouter initialEntries={[route]}>{node}</MemoryRouter>
           </I18nProvider>
         </QueryClientProvider>
       </AntdApp>,
@@ -380,7 +372,7 @@ describe('CRD catalog page', () => {
     expect(container.textContent).not.toContain('ingress-nginx')
   })
 
-  it('disables Helm release write actions when the capability matrix marks agent writes partial', async () => {
+  it('enables Helm release write actions when the capability matrix marks agent parity available', async () => {
     setResponses({
       '/clusters': [
         {
@@ -401,9 +393,9 @@ describe('CRD catalog page', () => {
           category: 'helm',
           direct: { status: 'available' },
           agent: {
-            status: 'partial',
+            status: 'available',
             notes: [
-              'release list, detail, history, and values read are available through the agent; install, values update, and delete remain direct-only',
+              'release list, detail, history, values read, install, values update, and delete are available through the agent',
             ],
           },
         },
@@ -434,9 +426,9 @@ describe('CRD catalog page', () => {
       'button[aria-label="查看 values.yaml"]',
     ) as HTMLButtonElement | null
 
-    expect(container.textContent).toContain('install, values update, and delete remain direct-only')
-    expect(editButton?.disabled).toBe(true)
-    expect(deleteButton?.disabled).toBe(true)
+    expect(container.textContent).not.toContain('当前连接模式限制 Helm 写入')
+    expect(editButton?.disabled).toBe(false)
+    expect(deleteButton?.disabled).toBe(false)
     expect(viewButton?.disabled).toBe(false)
   })
 
@@ -501,7 +493,7 @@ describe('CRD catalog page', () => {
     expect(apiGetMock.mock.calls.map(([path]) => path)).toContain('/clusters/capabilities')
     expect(container.textContent).toContain('widgets.example.io')
     expect(container.textContent).toContain(
-      'custom-resource list, YAML, create, apply, and delete remain direct-only',
+      '自定义资源读取和变更需要为目标 API 组与资源配置明确的 Kubernetes RBAC',
     )
     expect(container.textContent).not.toContain('should-not-load')
     const createButton = Array.from(container.querySelectorAll('button')).find(

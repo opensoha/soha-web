@@ -1,7 +1,7 @@
-import { Button } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import type { TableColumnsType } from 'antd'
 import { BooleanTag } from '@/components/status-tag'
+import { TableCellLink, TableCellText } from '@/components/table-cell-content'
 import { useI18n } from '@/i18n'
 import { formatAgeSeconds } from '@/utils/time'
 import { StorageListPage } from '../shared/list-page'
@@ -27,15 +27,19 @@ export function StorageClassesPage() {
       ellipsis: { showTitle: false },
       width: 260,
       render: (value: string) => (
-        <Button
-          type="text"
+        <TableCellLink
+          label={value}
           onClick={() => navigate(`/storage/storageclasses/${encodeURIComponent(value)}`)}
-        >
-          {value}
-        </Button>
+        />
       ),
     },
-    { title: 'Provisioner', dataIndex: 'provisioner', ellipsis: { showTitle: false }, width: 320 },
+    {
+      title: 'Provisioner',
+      dataIndex: 'provisioner',
+      ellipsis: { showTitle: false },
+      width: 320,
+      render: (value: string) => <TableCellText value={value} />,
+    },
     { title: 'Reclaim Policy', dataIndex: 'reclaimPolicy', width: 140 },
     { title: 'Binding Mode', dataIndex: 'volumeBindingMode', width: 180 },
     {

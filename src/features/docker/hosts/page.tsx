@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { App, Button, Descriptions, Form, Input, Popconfirm, Select, Space, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { CloudServerOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementDataPage } from '@/components/management-data-page'
 import { MetadataTag } from '@/components/status-tag'
@@ -60,7 +60,6 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
   })
   const [filterForm] = Form.useForm<DockerFilterState>()
   const [editorOpen, setEditorOpen] = useState(false)
-  const [initialMode, setInitialMode] = useState<'existing' | 'provision'>('existing')
   const [editing, setEditing] = useState<DockerHost | null>(null)
   const { dockerModuleEnabled, canCreateHosts, canUpdateHosts, canDeleteHosts, canViewOperations } =
     useDockerPermissions()
@@ -148,7 +147,6 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
                 icon={<EditOutlined />}
                 onClick={() => {
                   setEditing(record)
-                  setInitialMode('existing')
                   setEditorOpen(true)
                 }}
               />
@@ -240,29 +238,16 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
         }}
         actions={
           canCreateHosts && !embedded ? (
-            <>
-              <Button
-                icon={<CloudServerOutlined />}
-                onClick={() => {
-                  setEditing(null)
-                  setInitialMode('provision')
-                  setEditorOpen(true)
-                }}
-              >
-                虚拟化快速构建
-              </Button>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => {
-                  setEditing(null)
-                  setInitialMode('existing')
-                  setEditorOpen(true)
-                }}
-              >
-                接入主机
-              </Button>
-            </>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                setEditing(null)
+                setEditorOpen(true)
+              }}
+            >
+              新增主机
+            </Button>
           ) : null
         }
         enableDensity={!embedded}
@@ -273,7 +258,6 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
       />
       <RuntimeHostStepModal
         editing={editing}
-        initialMode={initialMode}
         open={editorOpen}
         onClose={() => {
           setEditorOpen(false)

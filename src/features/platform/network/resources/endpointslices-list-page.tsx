@@ -1,6 +1,6 @@
-import { Button } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { TableCellLink } from '@/components/table-cell-content'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
 import { formatAgeSeconds } from '@/utils/time'
@@ -23,12 +23,12 @@ export function NetworkEndpointSlicesPage() {
       ellipsis: { showTitle: false },
       width: 280,
       render: (value: string, record) => (
-        <Button
-          type="text"
-          onClick={() => navigate(buildNetworkRoutePath('endpointslices', value, record.namespace))}
-        >
-          {value}
-        </Button>
+        <TableCellLink
+          label={value}
+          onClick={() =>
+            navigate(buildNetworkRoutePath('endpointslices', value, record.namespace))
+          }
+        />
       ),
     },
     { title: 'Namespace', dataIndex: 'namespace', width: 160 },

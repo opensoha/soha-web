@@ -61,10 +61,6 @@ function connectionFormValues(
       typeof record.config?.backendUrl === 'string' ? record.config.backendUrl : undefined,
     prometheusUrl:
       typeof record.config?.prometheusUrl === 'string' ? record.config.prometheusUrl : undefined,
-    prometheusBearerTokenSecretRef:
-      typeof record.config?.prometheusBearerTokenSecretRef === 'string'
-        ? record.config.prometheusBearerTokenSecretRef
-        : undefined,
     mode: typeof record.config?.mode === 'string' ? record.config.mode : undefined,
   }
 }
@@ -227,8 +223,8 @@ export function VirtualizationConnectionStepModal({
               <Form.Item name="prometheusUrl" label="Prometheus URL">
                 <Input placeholder="https://prometheus.example" />
               </Form.Item>
-              <Form.Item name="prometheusBearerTokenSecretRef" label="Prometheus Token SecretRef">
-                <Input />
+              <Form.Item name="prometheusBearerToken" label="Prometheus Bearer Token">
+                <Input.Password placeholder={editing ? '留空保持现有 Token' : '可选'} />
               </Form.Item>
             </>
           ) : (

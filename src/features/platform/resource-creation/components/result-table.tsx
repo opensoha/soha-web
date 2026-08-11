@@ -34,6 +34,7 @@ function resourcePath(ref: ResourceRef) {
 export function ResourceCreateResultTable({ items }: { items: ResourceCreateResultItem[] }) {
   const { localeCode } = useI18n()
   const isChinese = localeCode === 'zh_CN'
+  const canShowActions = items.some((item) => item.resourceRef && resourcePath(item.resourceRef))
   const columns: TableColumnsType<ResourceCreateResultItem> = [
     {
       title: '#',
@@ -90,7 +91,7 @@ export function ResourceCreateResultTable({ items }: { items: ResourceCreateResu
   ]
   return (
     <Table
-      columns={columns}
+      columns={canShowActions ? columns : columns.filter((column) => column.key !== 'actions')}
       dataSource={items}
       pagination={false}
       rowKey={(item) => item.document.index}

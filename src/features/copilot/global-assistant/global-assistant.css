@@ -103,6 +103,18 @@
   animation: soha-companion-float 3.2s ease-in-out infinite;
 }
 
+.soha-companion-orbit__head-hit {
+  transform-origin: 90px 96px;
+}
+
+.soha-companion-orbit[data-interaction='tap'] .soha-companion-orbit__body {
+  animation: soha-companion-tap 520ms ease-out;
+}
+
+.soha-companion-orbit[data-interaction='pet'] .soha-companion-orbit__head-hit {
+  animation: soha-companion-pet 520ms ease-out;
+}
+
 .soha-companion-orbit__head {
   fill: #f8fafc;
   stroke: #1f2937;
@@ -159,26 +171,26 @@
   stroke-width: 4;
 }
 
-.soha-companion[data-state='thinking'] .soha-companion-orbit__signal,
-.soha-companion[data-state='speaking'] .soha-companion-orbit__signal {
+.soha-companion-orbit[data-motion='thinking'] .soha-companion-orbit__signal,
+.soha-companion-orbit[data-motion='speaking'] .soha-companion-orbit__signal {
   animation: soha-companion-pulse 0.8s ease-in-out infinite alternate;
 }
 
-.soha-companion[data-state='speaking'] .soha-companion-orbit__mouth {
+.soha-companion-orbit[data-motion='speaking'] .soha-companion-orbit__mouth {
   animation: soha-companion-talk 0.36s ease-in-out infinite alternate;
 }
 
-.soha-companion[data-state='hover'] .soha-companion-orbit__body,
-.soha-companion[data-state='listening'] .soha-companion-orbit__body {
+.soha-companion-orbit[data-motion='hover'] .soha-companion-orbit__body,
+.soha-companion-orbit[data-motion='listening'] .soha-companion-orbit__body {
   transform: translateY(-5px) rotate(-2deg);
 }
 
-.soha-companion[data-state='dragging'] .soha-companion-orbit__body {
+.soha-companion-orbit[data-motion='dragging'] .soha-companion-orbit__body {
   animation: none;
   transform: rotate(5deg);
 }
 
-.soha-companion[data-state='error'] .soha-companion-orbit__face {
+.soha-companion-orbit[data-motion='error'] .soha-companion-orbit__face {
   fill: #fee2e2;
   stroke: #ef4444;
 }
@@ -213,7 +225,9 @@
   opacity: 0;
   pointer-events: auto;
   transform: translateX(4px);
-  transition: opacity 160ms ease, transform 160ms ease;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
 }
 
 .soha-companion:hover .soha-companion__actions,
@@ -260,6 +274,29 @@
   }
 }
 
+@keyframes soha-companion-tap {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  45% {
+    transform: translateY(-9px) scale(1.03);
+  }
+}
+
+@keyframes soha-companion-pet {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  35% {
+    transform: rotate(-4deg) translateY(2px);
+  }
+  70% {
+    transform: rotate(3deg) translateY(1px);
+  }
+}
+
 @keyframes soha-companion-pulse {
   from {
     transform: scale(0.85);
@@ -280,6 +317,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .soha-companion-orbit__body,
+  .soha-companion-orbit__head-hit,
   .soha-companion-orbit__signal,
   .soha-companion-orbit__mouth {
     animation: none !important;
@@ -290,6 +328,12 @@
   .soha-companion__actions {
     opacity: 1;
     transform: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .soha-companion-shell {
+    display: none !important;
   }
 }
 

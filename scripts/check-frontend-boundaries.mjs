@@ -23,6 +23,7 @@ const COMPUTE_ROUTE_LEAF_IMPORTS = new Set([
   'src/features/virtualization/virtual-machines/detail-page.tsx',
   'src/features/virtualization/clusters/list-page.tsx',
   'src/features/virtualization/images/list-page.tsx',
+  'src/features/virtualization/storage/list-page.tsx',
   'src/features/virtualization/flavors/list-page.tsx',
   'src/features/docker/hosts/page.tsx',
   'src/features/docker/projects/list-page.tsx',

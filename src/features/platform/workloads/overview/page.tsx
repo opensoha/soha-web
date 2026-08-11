@@ -11,6 +11,7 @@ import { AdminTable } from '@/components/admin-table'
 import { ManagementState, ManagementTableToolbar } from '@/components/management-list'
 import { OverviewMetricCard, type OverviewMetricItem } from '@/components/overview-visuals'
 import { StatusTag } from '@/components/status-tag'
+import { TableCellText } from '@/components/table-cell-content'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
@@ -154,7 +155,12 @@ export function WorkloadsOverviewPage() {
       render: (_: string, record: WorkloadEvent) =>
         `${record.involvedKind || '-'} / ${record.involvedName || '-'}`,
     },
-    { title: localeCode === 'zh_CN' ? '消息' : 'Message', dataIndex: 'message', ellipsis: true },
+    {
+      title: localeCode === 'zh_CN' ? '消息' : 'Message',
+      dataIndex: 'message',
+      ellipsis: { showTitle: false },
+      render: (value?: string) => <TableCellText value={value} />,
+    },
     { title: localeCode === 'zh_CN' ? '次数' : 'Count', dataIndex: 'count' },
     {
       ...tableColumnPresets.datetime,

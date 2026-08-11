@@ -1,7 +1,7 @@
-import { Button } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import type { TableColumnsType } from 'antd'
 import { StatusTag } from '@/components/status-tag'
+import { TableCellLink, TableCellText } from '@/components/table-cell-content'
 import { useI18n } from '@/i18n'
 import { formatAgeSeconds } from '@/utils/time'
 import { StorageListPage } from '../shared/list-page'
@@ -31,16 +31,14 @@ export function StoragePvcPage() {
       ellipsis: { showTitle: false },
       width: 260,
       render: (value: string, record) => (
-        <Button
-          type="text"
+        <TableCellLink
+          label={value}
           onClick={() =>
             navigate(
               `/storage/persistentvolumeclaims/${encodeURIComponent(value)}?namespace=${encodeURIComponent(record.namespace)}`,
             )
           }
-        >
-          {value}
-        </Button>
+        />
       ),
     },
     {
@@ -59,27 +57,27 @@ export function StoragePvcPage() {
       dataIndex: 'volumeName',
       ellipsis: { showTitle: false },
       width: 220,
-      render: (value?: string) => value || '-',
+      render: (value?: string) => <TableCellText value={value} />,
     },
     {
       title: localeCode === 'zh_CN' ? '申请容量' : 'Requested',
       dataIndex: 'requested',
       width: 110,
-      render: (value?: string) => value || '-',
+      render: (value?: string) => <TableCellText value={value} />,
     },
     {
       title: 'StorageClass',
       dataIndex: 'storageClass',
       ellipsis: { showTitle: false },
       width: 180,
-      render: (value?: string) => value || '-',
+      render: (value?: string) => <TableCellText value={value} />,
     },
     {
       title: 'Access Modes',
       dataIndex: 'accessModes',
       ellipsis: { showTitle: false },
       width: 160,
-      render: (value?: string[]) => value?.join(', ') || '-',
+      render: (value?: string[]) => <TableCellText value={value?.join(', ')} />,
     },
     {
       title: 'Age',

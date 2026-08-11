@@ -60,7 +60,7 @@ export const settingsRoutes = defineRoutes([
     meta: {
       id: 'settings-login',
       path: '/settings/login',
-      title: '登陆设置',
+      title: '登录设置',
       description: 'OIDC、OAuth2 与 SAML 登录配置',
       icon: 'IconSetting',
       group: 'settings',
@@ -120,6 +120,28 @@ export const settingsRoutes = defineRoutes([
     load: async () => {
       const module = await import('./system-integrations/source-list-page')
       return { default: module.SourceConnectionsPage }
+    },
+  },
+  {
+    meta: {
+      id: 'settings-source-control-create',
+      path: '/settings/source-control/new',
+      title: '新增代码源连接',
+      description: '新建代码源连接',
+      icon: 'IconGitBranch',
+      group: 'settings',
+      requiresAuth: true,
+      tabbar: true,
+      navVisible: false,
+      parentId: 'settings-source-control',
+      menuId: 'settings-source-control',
+      permissionKey: 'settings.system-integrations.create',
+      scopeMode: 'passive',
+    },
+    shell: 'app',
+    load: async () => {
+      const module = await import('./system-integrations/source-detail-page')
+      return { default: module.SourceConnectionDetailPage }
     },
   },
   {

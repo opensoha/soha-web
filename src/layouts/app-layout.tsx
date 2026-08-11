@@ -951,7 +951,9 @@ export function AppLayout() {
     <GlobalAIAssistantProvider
       enabled={globalAssistantEnabled}
       permissionSnapshot={snapshot}
-      renderCompanion={(props) => <AssistantCompanionOverlay {...props} />}
+      renderCompanion={(props) =>
+        currentWorkbenchId === 'settings' ? null : <AssistantCompanionOverlay {...props} />
+      }
     >
       <Layout className="soha-shell" hasSider>
         <Sider

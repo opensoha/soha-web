@@ -1,3 +1,4 @@
+import { TableCellText } from '@/components/table-cell-content'
 import { formatAgeSeconds } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import type { TableColumnsType } from 'antd'
@@ -21,7 +22,7 @@ const columns: TableColumnsType<ResourceQuotaResource> = [
     dataIndex: 'scopes',
     width: 220,
     ellipsis: { showTitle: false },
-    render: (value: string[] | undefined) => value?.join(', ') || '-',
+    render: (value: string[] | undefined) => <TableCellText value={value?.join(', ')} />,
   },
   {
     title: 'Usage',

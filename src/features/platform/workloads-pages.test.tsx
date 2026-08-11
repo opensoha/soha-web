@@ -260,15 +260,7 @@ async function renderWithProviders(node: ReactNode, route = '/workloads/pods') {
     root.render(
       <AntdApp>
         <QueryClientProvider client={queryClient}>
-          <MemoryRouter
-            initialEntries={[route]}
-            future={{
-              v7_startTransition: true,
-              v7_relativeSplatPath: true,
-            }}
-          >
-            {node}
-          </MemoryRouter>
+          <MemoryRouter initialEntries={[route]}>{node}</MemoryRouter>
         </QueryClientProvider>
       </AntdApp>,
     )
@@ -441,7 +433,7 @@ describe('workloads pods page refresh controls', () => {
     }
   })
 
-  it('disables pod rebuild and batch delete when agent mode only partially supports workload mutations', async () => {
+  it('hides pod mutation controls when agent mode does not support pod deletion', async () => {
     const partialReason = 'pod deletion remains direct-only'
     setResponses({
       '/clusters': [
@@ -485,22 +477,9 @@ describe('workloads pods page refresh controls', () => {
     })
     await flushAsyncWork()
 
-    const rebuildButton = container.querySelector('button[aria-label="重建 Pod"]')
-    expect(rebuildButton).toBeInstanceOf(HTMLButtonElement)
-    expect((rebuildButton as HTMLButtonElement).disabled).toBe(true)
-
-    const checkbox = container.querySelector('input[aria-label="select-monitoring/failed-pod"]')
-    expect(checkbox).toBeInstanceOf(HTMLInputElement)
-    await act(async () => {
-      checkbox?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    await flushAsyncWork()
-
-    const batchDeleteButton = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent?.trim() === '批量删除',
-    )
-    expect(batchDeleteButton).toBeInstanceOf(HTMLButtonElement)
-    expect((batchDeleteButton as HTMLButtonElement).disabled).toBe(true)
+    expect(container.querySelector('button[aria-label="重建 Pod"]')).toBeNull()
+    expect(container.querySelector('input[aria-label="select-monitoring/failed-pod"]')).toBeNull()
+    expect(container.textContent).not.toContain('批量删除')
     expect(apiDeleteMock).not.toHaveBeenCalled()
   })
 
@@ -515,6 +494,7 @@ describe('workloads pods page refresh controls', () => {
     await flushAsyncWork()
 
     expect(container.querySelector('button[aria-label="重建 Pod"]')).toBeNull()
+    expect(container.querySelector('.soha-pod-actions-column')).toBeNull()
 
     const checkbox = container.querySelector('input[aria-label="select-monitoring/prometheus-0"]')
     await act(async () => {
@@ -525,7 +505,7 @@ describe('workloads pods page refresh controls', () => {
     expect(container.textContent).not.toContain('批量删除')
   })
 
-  it('disables pod delete controls when the current policy denies delete', async () => {
+  it('hides pod delete controls when the current policy denies delete', async () => {
     setResponses({
       '/clusters/cluster-a/workloads/pods?namespace=monitoring': [
         {
@@ -551,9 +531,8 @@ describe('workloads pods page refresh controls', () => {
     })
     await flushAsyncWork()
 
-    const rebuildButton = container.querySelector('button[aria-label="重建 Pod"]')
-    expect(rebuildButton).toBeInstanceOf(HTMLButtonElement)
-    expect((rebuildButton as HTMLButtonElement).disabled).toBe(true)
+    expect(container.querySelector('button[aria-label="重建 Pod"]')).toBeNull()
+    expect(container.querySelector('.soha-pod-actions-column')).toBeNull()
   })
 
   it('limits concurrent pod batch delete requests', async () => {
@@ -674,7 +653,7 @@ describe('workloads pods page refresh controls', () => {
     expect(maxActiveDeletes).toBeLessThanOrEqual(8)
   })
 
-  it('disables deployment mutation buttons when the current cluster capability is unsupported', async () => {
+  it('hides the deployment action column when the current cluster capability is unsupported', async () => {
     const unsupportedReason = 'workload mutations are disabled for agent-connected clusters'
     setResponses({
       '/clusters': [
@@ -726,13 +705,12 @@ describe('workloads pods page refresh controls', () => {
     await flushAsyncWork()
 
     expect(apiGetMock).toHaveBeenCalledWith('/clusters/capabilities')
-    expect(container.textContent).toContain(unsupportedReason)
-    for (const label of ['重启', '扩缩', '删除']) {
-      const button = container.querySelector(`button[aria-label="${label}"]`)
-      expect(button).toBeInstanceOf(HTMLButtonElement)
-      expect((button as HTMLButtonElement).disabled).toBe(true)
+    expect(container.textContent).toContain('当前集群连接模式暂不支持该操作')
+    expect(container.textContent).not.toContain(unsupportedReason)
+    for (const label of ['重启', '扩缩', '删除', '回滚']) {
+      expect(container.querySelector(`button[aria-label="${label}"]`)).toBeNull()
     }
-    expect(container.querySelector('button[aria-label="回滚"]')).toBeNull()
+    expect(container.querySelector('input[aria-label="select-monitoring/prometheus"]')).toBeNull()
   })
 
   it('renders statefulset restart, scale, and delete actions using workload permissions', async () => {

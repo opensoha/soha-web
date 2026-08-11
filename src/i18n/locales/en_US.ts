@@ -154,6 +154,7 @@ export const enUS: Dictionary = {
   'route.settings-login.title': 'Login Settings',
   'route.settings-branding.title': 'Branding Settings',
   'route.settings-source-control.title': 'Source Control',
+  'route.settings-source-control-create.title': 'Create Source Connection',
   'route.settings-source-control-detail.title': 'Source Connection',
   'route.settings-runtime-configuration.title': 'Runtime Configuration',
   'route.account-profile.title': 'Account Center',

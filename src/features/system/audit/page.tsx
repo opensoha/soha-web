@@ -344,21 +344,11 @@ export function AuditLogsPage() {
               ]}
             />
             <ManagementQueryField minWidth={140} width={160} label="动作">
-              <Select
+              <Input
                 allowClear
-                placeholder="全部动作"
-                value={actionFilter || undefined}
-                onChange={(value) => setActionFilter(value || '')}
-                options={[
-                  { value: 'list', label: 'list' },
-                  { value: 'view', label: 'view' },
-                  { value: 'create', label: 'create' },
-                  { value: 'update', label: 'update' },
-                  { value: 'delete', label: 'delete' },
-                  { value: 'login', label: 'login' },
-                  { value: 'publish', label: 'publish' },
-                  { value: 'withdraw', label: 'withdraw' },
-                ]}
+                placeholder="按动作过滤"
+                value={actionFilter}
+                onChange={(event) => setActionFilter(event.target.value)}
               />
             </ManagementQueryField>
             <ManagementQueryField minWidth={120} width={140} label="请求方法">

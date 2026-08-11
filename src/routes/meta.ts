@@ -207,7 +207,16 @@ export function getRouteMeta(pathname: string): RouteMeta {
         path,
       })),
     )
-    .sort((a, b) => b.path.length - a.path.length)
+    .sort((a, b) => {
+      const aSegments = a.path.split('/').filter(Boolean)
+      const bSegments = b.path.split('/').filter(Boolean)
+      return (
+        bSegments.length - aSegments.length ||
+        aSegments.filter((segment) => segment.startsWith(':')).length -
+          bSegments.filter((segment) => segment.startsWith(':')).length ||
+        b.path.length - a.path.length
+      )
+    })
   return (
     candidates.find((candidate) => {
       if (candidate.path === '/') return pathname === '/'

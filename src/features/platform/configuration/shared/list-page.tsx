@@ -1,9 +1,10 @@
 import { useDeferredValue, useMemo, useState } from 'react'
-import { App, Button, Popconfirm, Typography } from 'antd'
+import { App, Popconfirm, Typography } from 'antd'
 import { DeleteOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { ManagementDataPage } from '@/components/management-data-page'
+import { TableCellLink } from '@/components/table-cell-content'
 import {
   ManagementDensityButton,
   ManagementIconButton,
@@ -55,12 +56,10 @@ export function ConfigurationNameLink({
   const navigate = useNavigate()
   const query = namespace ? `?namespace=${encodeURIComponent(namespace)}` : ''
   return (
-    <Button
-      type="text"
+    <TableCellLink
+      label={name}
       onClick={() => navigate(`/configuration/${kind}/${encodeURIComponent(name)}${query}`)}
-    >
-      {name}
-    </Button>
+    />
   )
 }
 
@@ -108,6 +107,7 @@ export function ConfigurationResourceListPage<T extends ConfigurationResourceRec
       : emptyDescription[localeCode]
   const densityLabel = localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'
   const canCreate = Boolean(defaultTemplate && singularLabel)
+  const canShowActions = rawItems.some((item) => hasAllowedAction(item.allowedActions, 'delete'))
   const searchDimensions = scopeMode === 'namespace' ? '名称 / 命名空间' : '名称'
   const englishSearchDimensions = scopeMode === 'namespace' ? 'name / namespace' : 'name'
 
@@ -198,8 +198,7 @@ export function ConfigurationResourceListPage<T extends ConfigurationResourceRec
               <CreateEntry
                 context={{
                   clusterId: clusterId || '',
-                  defaultNamespace:
-                    scopeMode === 'namespace' ? namespace || undefined : undefined,
+                  defaultNamespace: scopeMode === 'namespace' ? namespace || undefined : undefined,
                   expectedKind: singularLabel,
                   resourceGroup: 'configuration',
                   scopeMode,
@@ -226,7 +225,7 @@ export function ConfigurationResourceListPage<T extends ConfigurationResourceRec
             />
           </ManagementTableToolbar>
         ),
-        columns: [...columns, actionColumn],
+        columns: canShowActions ? [...columns, actionColumn] : columns,
         dataSource: clusterId ? filteredItems : [],
         rowKey: (record) => `${record.namespace ?? ''}/${record.name}`,
         loading: query.isLoading,

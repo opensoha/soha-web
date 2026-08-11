@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { MouseEvent } from 'react'
-import { Button, Form, Input, Spin, message } from 'antd'
+import { App, Button, Form, Input, Spin } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementState } from '@/components/management-list'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
@@ -12,6 +12,7 @@ import type { SettingsPageProps } from '../types'
 import './styles.css'
 
 export function BrandingSettingsPage({ embedded = false }: SettingsPageProps = {}) {
+  const { message } = App.useApp()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const canViewBrandingSettings = hasPermission(
@@ -22,13 +23,36 @@ export function BrandingSettingsPage({ embedded = false }: SettingsPageProps = {
   const canCreateBrandingSettings = hasPermission(permissionSnapshot, 'settings.branding.create')
   const canUpdateBrandingSettings = hasPermission(permissionSnapshot, 'settings.branding.update')
 
-  const { data, isLoading } = useQuery(settingsQueries.branding())
+  const brandingQuery = useQuery(settingsQueries.branding(canViewBrandingSettings))
+  const { data, isLoading } = brandingQuery
   const saveMutation = useMutation(settingsMutations.branding.save(queryClient))
 
-  if (isLoading) {
+  if (permissionSnapshotQuery.isLoading || isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <Spin size="large" />
+      </div>
+    )
+  }
+
+  if (permissionSnapshotQuery.isError || brandingQuery.isError) {
+    return (
+      <div className="soha-page">
+        <ManagementState
+          kind="error"
+          actions={
+            <Button
+              onClick={() => {
+                void permissionSnapshotQuery.refetch()
+                if (canViewBrandingSettings) {
+                  void brandingQuery.refetch()
+                }
+              }}
+            >
+              重试
+            </Button>
+          }
+        />
       </div>
     )
   }
@@ -42,9 +66,7 @@ export function BrandingSettingsPage({ embedded = false }: SettingsPageProps = {
   }
 
   const settings = data
-  const canManageBrandingSettings = settings
-    ? canUpdateBrandingSettings
-    : canCreateBrandingSettings
+  const canManageBrandingSettings = settings ? canUpdateBrandingSettings : canCreateBrandingSettings
   const content = (
     <SettingsCard>
       <Form
@@ -58,6 +80,7 @@ export function BrandingSettingsPage({ embedded = false }: SettingsPageProps = {
         }}
         initialValues={settings ?? { appTitle: 'Soha', sidebarTitle: 'Soha' }}
       >
+        <BrandingFormSync settings={settings} />
         <Form.Item name="appTitle" label="网页标题">
           <Input placeholder="浏览器标签页标题" />
         </Form.Item>
@@ -119,6 +142,18 @@ export function BrandingSettingsPage({ embedded = false }: SettingsPageProps = {
   return <div className="soha-page">{content}</div>
 }
 
+function BrandingFormSync({ settings }: { settings?: BrandingSettings }) {
+  const form = Form.useFormInstance<BrandingSettings>()
+
+  useEffect(() => {
+    if (settings && !form.isFieldsTouched()) {
+      form.setFieldsValue(settings)
+    }
+  }, [form, settings])
+
+  return null
+}
+
 interface BrandingUploadFieldProps {
   field: string
   label: string
@@ -136,6 +171,7 @@ function BrandingUploadField({
   previewHeight,
   disabled,
 }: BrandingUploadFieldProps) {
+  const { message } = App.useApp()
   const [uploading, setUploading] = useState(false)
   const uploadMutation = useMutation(settingsMutations.branding.upload())
   const form = Form.useFormInstance()

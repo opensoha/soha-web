@@ -68,6 +68,7 @@ describe('PlatformResourceOverview', () => {
     expect(container.textContent).toContain('Labelsapp:demo')
     expect(container.textContent).toContain('注解owner:-')
     expect(container.textContent).not.toContain('ignored')
+    expect(container.querySelectorAll('.soha-workload-kv-item[title]')).toHaveLength(0)
   })
 
   it('omits namespace when the resource is cluster scoped', async () => {

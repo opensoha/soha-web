@@ -59,7 +59,9 @@ export function ReplicaControllerListPage<T extends ReplicaControllerRecord>({
       ),
     [normalizedKeyword, records],
   )
-  const canShowActions = records.some((record) => hasAllowedAction(record.allowedActions, 'delete'))
+  const canShowActions =
+    !capability.disabled &&
+    records.some((record) => hasAllowedAction(record.allowedActions, 'delete'))
   const actionColumn: TableColumnsType<T>[number] = {
     fixed: 'right',
     title: '',

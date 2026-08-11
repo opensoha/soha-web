@@ -76,6 +76,9 @@ vi.mock('@/components/admin-table', () => ({
     <div data-testid="admin-table">
       {headerExtra ? <div data-testid="header-extra">{headerExtra}</div> : null}
       {paginationSummary ? <div data-testid="pagination-summary">{paginationSummary}</div> : null}
+      <div data-testid="column-keys">
+        {columns.map((column) => String(column.key ?? column.dataIndex ?? '')).join(',')}
+      </div>
       <div data-testid="row-count">{dataSource.length}</div>
       {dataSource.length === 0 ? <div>{empty}</div> : null}
       {dataSource.map((record, rowIndex) => (
@@ -155,10 +158,7 @@ async function renderPage(node: ReactNode, route: string, routePath?: string) {
     root.render(
       <QueryClientProvider client={queryClient}>
         <AntdApp>
-          <MemoryRouter
-            initialEntries={[route]}
-            future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
-          >
+          <MemoryRouter initialEntries={[route]}>
             {routePath ? (
               <Routes>
                 <Route path={routePath} element={node} />
@@ -205,6 +205,7 @@ describe('configuration leaf pages', () => {
         dataEntries: 1,
         immutable: false,
         ageSeconds: 60,
+        allowedActions: ['delete'],
       },
     ]
 
@@ -219,9 +220,13 @@ describe('configuration leaf pages', () => {
     expect(configMaps.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
       '当前 1 / 1 条',
     )
+    expect(configMaps.querySelector('[data-testid="column-keys"]')?.textContent).not.toContain(
+      '__actions',
+    )
 
     const secrets = await renderPage(<ConfigurationSecretsPage />, '/configuration/secrets')
     expect(secrets.textContent).toContain('registry-secret')
+    expect(secrets.querySelector('[data-testid="column-keys"]')?.textContent).toContain('__actions')
     expect(apiGetMock).toHaveBeenCalledWith(
       '/clusters/cluster-a/configuration/secrets?namespace=team-a',
     )

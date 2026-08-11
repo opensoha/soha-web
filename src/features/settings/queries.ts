@@ -22,7 +22,7 @@ export const settingsQueries = {
       queryFn: settingsApi.branding.get,
       enabled,
     }),
-  identity: () =>
+  identity: (enabled = true) =>
     queryOptions({
       queryKey: settingsKeys.identity.detail(),
       queryFn: async () => {
@@ -36,9 +36,10 @@ export const settingsQueries = {
           localPasswordLoginEnabled: current.localPasswordLoginEnabled ?? true,
         }
       },
+      enabled,
     }),
   ai: {
-    detail: () =>
+    detail: (enabled = true) =>
       queryOptions({
         queryKey: settingsKeys.ai.detail(),
         queryFn: async () => {
@@ -48,6 +49,7 @@ export const settingsQueries = {
             skillsRegistry: current.skillsRegistry ?? [],
           } satisfies AISettings
         },
+        enabled,
       }),
     modelRoutes: (enabled: boolean) =>
       queryOptions({
@@ -55,20 +57,23 @@ export const settingsQueries = {
         queryFn: settingsApi.ai.modelRoutes,
         enabled,
       }),
-    dataSources: () =>
+    dataSources: (enabled = true) =>
       queryOptions({
         queryKey: settingsKeys.ai.dataSources(),
         queryFn: settingsApi.ai.dataSources,
+        enabled,
       }),
-    analysisProfiles: () =>
+    analysisProfiles: (enabled = true) =>
       queryOptions({
         queryKey: settingsKeys.ai.analysisProfiles(),
         queryFn: settingsApi.ai.analysisProfiles,
+        enabled,
       }),
-    dataSourceCapabilities: () =>
+    dataSourceCapabilities: (enabled = true) =>
       queryOptions({
         queryKey: settingsKeys.ai.dataSourceCapabilities(),
         queryFn: settingsApi.ai.dataSourceCapabilities,
+        enabled,
       }),
     workbenchCatalog: (enabled: boolean) =>
       queryOptions({

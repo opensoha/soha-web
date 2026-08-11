@@ -164,7 +164,6 @@ async function renderDetail() {
         <QueryClientProvider client={queryClient}>
           <MemoryRouter
             initialEntries={['/cluster-resources/nodes/node-a?clusterId=url-cluster']}
-            future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
           >
             <Routes>
               <Route path="/cluster-resources/nodes/:nodeName" element={<NodeDetailPage />} />

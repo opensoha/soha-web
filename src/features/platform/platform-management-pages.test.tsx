@@ -154,15 +154,7 @@ async function renderWithProviders(
     root.render(
       <AntdApp>
         <QueryClientProvider client={queryClient}>
-          <MemoryRouter
-            initialEntries={[route]}
-            future={{
-              v7_startTransition: true,
-              v7_relativeSplatPath: true,
-            }}
-          >
-            {node}
-          </MemoryRouter>
+          <MemoryRouter initialEntries={[route]}>{node}</MemoryRouter>
         </QueryClientProvider>
       </AntdApp>,
     )
@@ -422,7 +414,7 @@ describe('platform RBAC list pages', () => {
 
     const container = await renderWithProviders(<PlatformAccessControlServiceAccountsPage />)
 
-    expect(container.textContent).toContain(unsupportedReason)
+    expect(container.textContent).toContain('当前集群连接模式暂不支持该操作')
     const createButton = Array.from(
       container.querySelectorAll('[data-testid="header-extra"] button'),
     ).find((button) => button.textContent?.trim() === '新增')
@@ -612,7 +604,7 @@ describe('platform network port forward page', () => {
     expect(container.textContent).not.toContain('Service/web')
   })
 
-  it('shows the agent port-forward pending note without disabling registration', async () => {
+  it('keeps registration enabled when agent port-forward parity is available', async () => {
     setResponses({
       '/clusters': [
         {
@@ -633,10 +625,8 @@ describe('platform network port forward page', () => {
           category: 'network',
           direct: { status: 'available' },
           agent: {
-            status: 'partial',
-            notes: [
-              'agent-mode requests are persisted as pending until the agent tunnel protocol attaches them',
-            ],
+            status: 'available',
+            notes: ['live port-forward tunnels are available through the agent'],
           },
         },
       ],
@@ -661,9 +651,7 @@ describe('platform network port forward page', () => {
       | HTMLButtonElement
       | undefined
 
-    expect(container.textContent).toContain(
-      'agent-mode requests are persisted as pending until the agent tunnel protocol attaches them',
-    )
+    expect(container.textContent).toContain('Agent 模式支持实时端口转发')
     expect(createButton?.disabled).toBe(false)
     expect(container.textContent).toContain('pending')
   })

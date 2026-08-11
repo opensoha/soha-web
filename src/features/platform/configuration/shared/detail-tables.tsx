@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Card, Space, Table, Typography } from 'antd'
 import { Link } from 'react-router-dom'
 import { BooleanTag, StatusTag } from '@/components/status-tag'
+import { TableCellText } from '@/components/table-cell-content'
 import { useI18n } from '@/i18n'
 import { buildRelatedResourcePath } from '@/features/platform/workloads-model'
 import type { WorkloadCondition } from '@/types'
@@ -31,7 +32,7 @@ export function ConfigurationConditions({ conditions }: { conditions?: WorkloadC
       title: localeCode === 'zh_CN' ? '消息' : 'Message',
       dataIndex: 'message',
       ellipsis: { showTitle: false },
-      render: (value?: string) => <Text title={value}>{value || '-'}</Text>,
+      render: (value?: string) => <TableCellText value={value} />,
     },
     {
       title: localeCode === 'zh_CN' ? '最近变化' : 'Last Transition',
@@ -62,7 +63,12 @@ function list(value?: string[]) {
 export function AdmissionWebhooks({ webhooks }: { webhooks: AdmissionWebhook[] }) {
   const { localeCode } = useI18n()
   const webhookColumns: TableColumnsType<AdmissionWebhook> = [
-    { title: 'Name', dataIndex: 'name', ellipsis: { showTitle: false } },
+    {
+      title: 'Name',
+      dataIndex: 'name',
+      ellipsis: { showTitle: false },
+      render: (value: string) => <TableCellText value={value} />,
+    },
     {
       title: localeCode === 'zh_CN' ? '客户端目标' : 'Client target',
       dataIndex: 'clientTarget',

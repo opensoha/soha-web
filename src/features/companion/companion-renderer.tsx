@@ -1,7 +1,8 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { fetchCompanionAsset } from './api'
 import { BUILTIN_COMPANION_PLUGIN_ID } from './builtin-pack'
 import { SohaOrbit } from './soha-orbit'
+import { companionStateAnimation, type CompanionInteractionMotion } from './motion'
 import type { CompanionPackSelection, CompanionVisualState } from './types'
 
 const Live2DCubismRenderer = lazy(async () => {
@@ -10,11 +11,12 @@ const Live2DCubismRenderer = lazy(async () => {
 })
 
 interface CompanionRendererProps {
+  interaction?: CompanionInteractionMotion
   pack: CompanionPackSelection
   state: CompanionVisualState
 }
 
-function CompanionImage({ pack, state }: CompanionRendererProps) {
+function CompanionImage({ interaction, pack, state }: CompanionRendererProps) {
   const [assetUrl, setAssetUrl] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
 
@@ -38,19 +40,28 @@ function CompanionImage({ pack, state }: CompanionRendererProps) {
     }
   }, [pack.manifest.entryAsset, pack.pluginId])
 
-  if (failed || !assetUrl) return <SohaOrbit state={state} />
+  const stateAnimation = companionStateAnimation(pack.manifest, state)
+  if (failed || !assetUrl) {
+    return <SohaOrbit interaction={interaction} state={state} stateAnimation={stateAnimation} />
+  }
   return <img alt="" className="soha-companion-pack-image" draggable={false} src={assetUrl} />
 }
 
-export function CompanionRenderer({ pack, state }: CompanionRendererProps) {
-  const onUnavailable = useCallback(() => undefined, [])
-  if (pack.pluginId === BUILTIN_COMPANION_PLUGIN_ID) return <SohaOrbit state={state} />
+export function CompanionRenderer({ interaction, pack, state }: CompanionRendererProps) {
+  const stateAnimation = companionStateAnimation(pack.manifest, state)
+  if (pack.pluginId === BUILTIN_COMPANION_PLUGIN_ID) {
+    return <SohaOrbit interaction={interaction} state={state} stateAnimation={stateAnimation} />
+  }
   if (pack.manifest.renderer === 'live2d-cubism') {
     return (
-      <Suspense fallback={<SohaOrbit state={state} />}>
-        <Live2DCubismRenderer onUnavailable={onUnavailable} state={state} />
+      <Suspense fallback={<SohaOrbit state={state} stateAnimation={stateAnimation} />}>
+        <Live2DCubismRenderer
+          interaction={interaction}
+          state={state}
+          stateAnimation={stateAnimation}
+        />
       </Suspense>
     )
   }
-  return <CompanionImage pack={pack} state={state} />
+  return <CompanionImage interaction={interaction} pack={pack} state={state} />
 }

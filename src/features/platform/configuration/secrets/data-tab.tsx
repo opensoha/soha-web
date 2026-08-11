@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { App, Button, Card, Space } from 'antd'
 import { CopyOutlined } from '@ant-design/icons'
+import { TableCellText } from '@/components/table-cell-content'
 import { useI18n } from '@/i18n'
 import type { TableColumnsType } from 'antd'
 import {
@@ -30,7 +31,13 @@ export function SecretDataTab({
   const [editorOpen, setEditorOpen] = useState(false)
   const decodedData = Object.fromEntries(rows.map((row) => [row.key, row.decoded ?? '']))
   const columns: TableColumnsType<ConfigurationDataRow> = [
-    { title: 'Key', dataIndex: 'key', width: 220, ellipsis: { showTitle: false } },
+    {
+      title: 'Key',
+      dataIndex: 'key',
+      width: 220,
+      ellipsis: { showTitle: false },
+      render: (value: string) => <TableCellText value={value} />,
+    },
     {
       title: 'Base64',
       dataIndex: 'value',

@@ -66,6 +66,42 @@ describe('evaluateClusterCapability', () => {
     expect(decision.requiresApproval).toBe(true)
   })
 
+  it('localizes agent capability details in the Chinese interface', () => {
+    const decision = evaluateClusterCapability({
+      connectionMode: 'agent',
+      key: 'workload.mutations',
+      localeCode: 'zh_CN',
+      matrix,
+    })
+
+    expect(decision.reason).toContain('Pod 删除')
+    expect(decision.reason).not.toContain('deployment restart')
+  })
+
+  it.each([
+    ['available', 'Direct backend supports this capability'],
+    ['partial', 'Direct backend supports only namespaced resources'],
+  ] as const)('preserves direct %s backend reasons in Chinese', (status, reason) => {
+    const decision = evaluateClusterCapability({
+      connectionMode: 'direct',
+      key: 'direct.capability',
+      localeCode: 'zh_CN',
+      matrix: [
+        {
+          key: 'direct.capability',
+          label: 'Direct capability',
+          category: 'configuration',
+          riskLevel: 'read',
+          requiresApproval: false,
+          direct: { status, reason },
+          agent: { status: 'unsupported' },
+        },
+      ],
+    })
+
+    expect(decision.reason).toBe(reason)
+  })
+
   it('disables unknown capabilities until the matrix is available', () => {
     const decision = evaluateClusterCapability({
       connectionMode: 'agent',

@@ -1,3 +1,4 @@
+import { TableCellText } from '@/components/table-cell-content'
 import { formatAgeSeconds, formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import type { TableColumnsType } from 'antd'
@@ -6,12 +7,18 @@ import type { LeaseResource } from './types'
 
 const columns: TableColumnsType<LeaseResource> = [
   { title: 'Namespace', dataIndex: 'namespace', width: 160 },
-  { title: 'Name', dataIndex: 'name', width: 260, ellipsis: { showTitle: false } },
+  {
+    title: 'Name',
+    dataIndex: 'name',
+    width: 260,
+    ellipsis: { showTitle: false },
+    render: (value: string) => <TableCellText value={value} />,
+  },
   {
     title: 'Holder',
     dataIndex: 'holderIdentity',
     ellipsis: { showTitle: false },
-    render: (value: string | undefined) => value || '-',
+    render: (value: string | undefined) => <TableCellText value={value} />,
   },
   {
     title: 'Duration (s)',

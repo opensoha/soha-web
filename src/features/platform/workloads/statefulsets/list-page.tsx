@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import type { TableColumnsType } from 'antd'
 import { AdminTable } from '@/components/admin-table'
+import { TableCellText } from '@/components/table-cell-content'
 import { ManagementIconButton, ManagementTableToolbar } from '@/components/management-list'
 import { WorkloadCreateEntry } from '../shared/create-entry'
 import { TABLE_ACTIONS_COLUMN_CLASS_NAME } from '@/components/resource-actions'
@@ -69,6 +70,13 @@ export function WorkloadsStatefulSetsPage() {
   const workloadMutationCapability = useClusterCapability('workload.mutations', localeCode)
 
   const statefulSets = statefulSetsQuery.data ?? []
+  const canShowActions =
+    !workloadMutationCapability.disabled &&
+    statefulSets.some((item) =>
+      ['restart', 'scale', 'delete'].some((action) =>
+        hasAllowedAction(item.allowedActions, action),
+      ),
+    )
   const targetFor = (name: string, targetNamespace: string): StatefulSetTarget => ({
     name,
     scope: toScopeKey(clusterId, targetNamespace),
@@ -93,13 +101,7 @@ export function WorkloadsStatefulSetsPage() {
       render: (name: string, record) =>
         renderWorkloadNameLink(name, () =>
           navigate(
-            buildWorkloadDetailPath(
-              'statefulsets',
-              name,
-              namespace,
-              record.namespace,
-              clusterId,
-            ),
+            buildWorkloadDetailPath('statefulsets', name, namespace, record.namespace, clusterId),
           ),
         ),
     },
@@ -108,8 +110,8 @@ export function WorkloadsStatefulSetsPage() {
       title: 'Service',
       dataIndex: 'serviceName',
       width: 180,
-      ellipsis: { showTitle: true },
-      render: (value: string) => value || '-',
+      ellipsis: { showTitle: false },
+      render: (value: string) => <TableCellText value={value} />,
     },
     {
       title: 'Ready',
@@ -259,7 +261,7 @@ export function WorkloadsStatefulSetsPage() {
             />
           </ManagementTableToolbar>
         }
-        columns={columns}
+        columns={canShowActions ? columns : columns.filter((column) => column.key !== 'actions')}
         dataSource={filteredStatefulSets}
         rowKey={(record) => `${record.namespace}/${record.name}`}
         loading={statefulSetsQuery.isLoading}

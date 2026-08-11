@@ -59,11 +59,7 @@ export function configurationDataSize(value: string) {
 }
 
 export function ConfigurationDataPreview({ value }: { value: string }) {
-  return (
-    <Text className="soha-config-data-preview" title={value}>
-      {value || '-'}
-    </Text>
-  )
+  return <Text className="soha-config-data-preview">{value || '-'}</Text>
 }
 
 export function EditConfigurationDataModal({

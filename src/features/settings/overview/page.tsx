@@ -34,6 +34,9 @@ export function SettingsOverviewPage() {
   const rolesQuery = useQuery(accessQueries.roles(canViewRoles))
   const teamsQuery = useQuery(accessQueries.teams(canViewTeams))
   const policiesQuery = useQuery(accessQueries.policies(canViewPolicies))
+  const hasQueryError =
+    permissionQuery.isError ||
+    [usersQuery, rolesQuery, teamsQuery, policiesQuery].some((query) => query.isError)
 
   const users = usersQuery.data ?? []
   const roles = rolesQuery.data ?? []
@@ -123,7 +126,7 @@ export function SettingsOverviewPage() {
     },
     hasPermission(permissions, 'settings.identity.view') && {
       key: 'login',
-      label: '登陆设置',
+      label: '登录设置',
       path: '/settings/login',
       icon: <LoginOutlined />,
     },
@@ -140,6 +143,31 @@ export function SettingsOverviewPage() {
       icon: <KeyOutlined />,
     },
   ].filter((item): item is Exclude<typeof item, false | undefined> => Boolean(item))
+
+  if (hasQueryError) {
+    return (
+      <div className="soha-page soha-settings-overview">
+        <ManagementState
+          kind="error"
+          actions={
+            <Button
+              onClick={() => {
+                void permissionQuery.refetch()
+                void Promise.all([
+                  canViewUsers ? usersQuery.refetch() : Promise.resolve(),
+                  canViewRoles ? rolesQuery.refetch() : Promise.resolve(),
+                  canViewTeams ? teamsQuery.refetch() : Promise.resolve(),
+                  canViewPolicies ? policiesQuery.refetch() : Promise.resolve(),
+                ])
+              }}
+            >
+              重试
+            </Button>
+          }
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="soha-page soha-overview-page soha-settings-overview">

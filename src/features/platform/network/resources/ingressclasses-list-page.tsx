@@ -1,7 +1,7 @@
-import { Button } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { BooleanTag } from '@/components/status-tag'
+import { TableCellLink } from '@/components/table-cell-content'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
 import { formatAgeSeconds } from '@/utils/time'
@@ -24,12 +24,10 @@ export function NetworkIngressClassesPage() {
       ellipsis: { showTitle: false },
       width: 280,
       render: (value: string) => (
-        <Button
-          type="text"
+        <TableCellLink
+          label={value}
           onClick={() => navigate(buildNetworkRoutePath('ingressclasses', value, ''))}
-        >
-          {value}
-        </Button>
+        />
       ),
     },
     { title: 'Controller', dataIndex: 'controller' },

@@ -104,7 +104,7 @@ async function renderPage(page: ReactNode) {
     root.render(
       <AntdApp>
         <QueryClientProvider client={queryClient}>
-          <MemoryRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
+          <MemoryRouter>
             {page}
           </MemoryRouter>
         </QueryClientProvider>

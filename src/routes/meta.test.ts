@@ -12,6 +12,7 @@ import {
   getAccessibleWorkbenchIds,
   getAccessibleWorkspaces,
   getMenuWorkbenchId,
+  getRouteMeta,
   getRouteScopeMode,
   getRouteWorkbenchId,
   getRouteWorkspace,
@@ -36,6 +37,12 @@ function getRoute(id: string): RouteMeta {
 }
 
 describe('access route authorization', () => {
+  it('prefers an exact route over a dynamic sibling', () => {
+    expect(getRouteMeta('/settings/source-control/new').id).toBe(
+      'settings-source-control-create',
+    )
+  })
+
   it('exposes Logs against an older menu snapshot without weakening its permission boundary', () => {
     const allowed = buildSnapshot({
       permissionKeys: ['workspace.resource.view', 'observe.monitoring.view'],

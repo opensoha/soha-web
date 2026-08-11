@@ -1,3 +1,4 @@
+import { TableCellText } from '@/components/table-cell-content'
 import { formatAgeSeconds } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import type { TableColumnsType } from 'antd'
@@ -5,8 +6,19 @@ import { ConfigurationResourceListPage } from '../shared/list-page'
 import type { RuntimeClassResource } from './types'
 
 const columns: TableColumnsType<RuntimeClassResource> = [
-  { title: 'Name', dataIndex: 'name', width: 280, ellipsis: { showTitle: false } },
-  { title: 'Handler', dataIndex: 'handler', ellipsis: { showTitle: false } },
+  {
+    title: 'Name',
+    dataIndex: 'name',
+    width: 280,
+    ellipsis: { showTitle: false },
+    render: (value: string) => <TableCellText value={value} />,
+  },
+  {
+    title: 'Handler',
+    dataIndex: 'handler',
+    ellipsis: { showTitle: false },
+    render: (value: string) => <TableCellText value={value} />,
+  },
   {
     ...tableColumnPresets.datetime,
     title: 'Age',

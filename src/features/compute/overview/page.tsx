@@ -7,7 +7,7 @@ import {
   DesktopOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { Alert, Button, Card, Space, Tag, Typography } from 'antd'
+import { Alert, Button, Card, Space, Typography } from 'antd'
 import { Link, useNavigate } from 'react-router-dom'
 import type { ComputeSectionStatus } from '@opensoha/contracts/gen/ts/sohaapi'
 import { useAIPageContext } from '@/features/copilot'
@@ -310,17 +310,7 @@ export function ComputeOverviewPage() {
                   >
                     <div className="soha-overview-attention-main">
                       <Space size={6} wrap>
-                        <Tag
-                          color={
-                            item.severity === 'critical'
-                              ? 'error'
-                              : item.severity === 'warning'
-                                ? 'warning'
-                                : 'processing'
-                          }
-                        >
-                          {item.severity}
-                        </Tag>
+                        <StatusTag value={item.severity} />
                         <Text strong>{item.summary}</Text>
                       </Space>
                       {item.resources?.length ? (

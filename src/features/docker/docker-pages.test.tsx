@@ -7,8 +7,8 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from 'antd'
-import { RuntimeHostStepModal } from './hosts/create-page'
-import { buildQuickHostPayload } from './hosts/page'
+import { RuntimeHostStepModal, buildRuntimeHostPayload } from './hosts/create-page'
+import { DockerHostsPage, buildQuickHostPayload } from './hosts/page'
 import { DockerProjectDetailPage } from './projects/detail-page'
 import {
   DockerProjectsPage,
@@ -208,7 +208,7 @@ const testState = vi.hoisted(() => ({
             name: 'pve-a',
             provider: 'pve',
             enabled: true,
-            config: { defaultBridge: 'vmbr0' },
+            config: { defaultBridge: 'vmbr0', defaultStorage: 'local-lvm' },
           },
           {
             id: 'conn-kv',
@@ -233,6 +233,33 @@ const testState = vi.hoisted(() => ({
               sourceRef: '9000',
             },
             {
+              id: 'image-pve-iso',
+              name: 'rocky.iso',
+              provider: 'pve',
+              connectionId: 'conn-pve',
+              sourceKind: 'iso',
+              sourceRef: 'local:iso/rocky.iso',
+              node: 'pve-a',
+            },
+            {
+              id: 'pve-network-vmbr0',
+              name: 'vmbr0',
+              provider: 'pve',
+              connectionId: 'conn-pve',
+              sourceKind: 'network',
+              node: 'pve-a',
+              config: { bridge: true, network: 'vmbr0' },
+            },
+            {
+              id: 'pve-storage-local-lvm',
+              name: 'local-lvm',
+              provider: 'pve',
+              connectionId: 'conn-pve',
+              sourceKind: 'storage',
+              node: 'pve-a',
+              config: { supportsImages: true },
+            },
+            {
               id: 'image-kv',
               name: 'ubuntu-ds',
               provider: 'kubevirt',
@@ -240,8 +267,17 @@ const testState = vi.hoisted(() => ({
               sourceKind: 'datasource',
               sourceRef: 'default/ubuntu',
             },
+            {
+              id: 'nad-tenant',
+              name: 'tenant-net',
+              provider: 'kubevirt',
+              connectionId: 'conn-kv',
+              sourceKind: 'networkattachmentdefinition',
+              namespace: 'default',
+              config: { networkAttachmentDefinition: 'default/tenant-net' },
+            },
           ],
-          total: 2,
+          total: 6,
           page: 1,
           pageSize: 500,
         },
@@ -306,10 +342,7 @@ async function renderWithProviders(node: ReactNode, route = '/') {
   await act(async () => {
     root.render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter
-          future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
-          initialEntries={[route]}
-        >
+        <MemoryRouter initialEntries={[route]}>
           <App>{node}</App>
         </MemoryRouter>
       </QueryClientProvider>,
@@ -608,21 +641,51 @@ describe('docker pages', () => {
     })
   })
 
-  it('loads virtualization resources for the runtime host provision step form', async () => {
+  it('keeps runtime-host onboarding focused on existing hosts', async () => {
     await renderWithProviders(
-      <RuntimeHostStepModal initialMode="provision" onClose={() => undefined} open />,
+      <RuntimeHostStepModal onClose={() => undefined} open />,
       '/compute/runtimes/hosts',
     )
 
-    expect(document.body.textContent).toContain('新增运行时主机')
-    expect(document.body.textContent).toContain('虚拟化连接')
-    expect(document.body.textContent).toContain('镜像 / 模板')
-    expect(document.body.textContent).toContain('规格')
-    expect(document.body.textContent).toContain('Cloud-init 用户数据')
-    expect(document.body.textContent).not.toContain('PVE 连接 ID')
-    expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/clusters')
-    expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/images?page=1&pageSize=500')
-    expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/flavors')
+    expect(document.body.textContent).toContain('接入运行时主机')
+    expect(document.body.textContent).toContain('Agent Endpoint')
+    expect(document.body.textContent).not.toContain('Agent ID')
+    expect(document.body.textContent).not.toContain('IP 地址')
+    expect(document.body.textContent).not.toContain('Docker 版本')
+    expect(document.body.textContent).not.toContain('Compose 版本')
+    expect(document.body.textContent).not.toContain('架构')
+    expect(document.body.textContent).not.toContain('虚拟化连接')
+    expect(document.body.textContent).not.toContain('启动源')
+    expect(testState.apiGet).not.toHaveBeenCalledWith('/virtualization/clusters')
+  })
+
+  it('maps existing-host resource sizes to bytes', () => {
+    const payload = buildRuntimeHostPayload({
+      name: 'existing-host',
+      cpuCoreCount: 6,
+      memoryGiB: 12,
+      diskGiB: 96,
+    })
+
+    expect(payload).toMatchObject({
+      name: 'existing-host',
+      cpuCoreCount: 6,
+      memoryBytes: 12 * 1024 ** 3,
+      diskBytes: 96 * 1024 ** 3,
+    })
+  })
+
+  it('opens one existing-host onboarding action', async () => {
+    await renderWithProviders(<DockerHostsPage />, '/compute/runtimes/hosts')
+
+    const createButton = Array.from(document.querySelectorAll('button')).find(
+      (button) => button.textContent === '新增主机',
+    )
+    expect(createButton).toBeTruthy()
+    await act(async () => createButton?.click())
+
+    expect(document.body.textContent).toContain('接入运行时主机')
+    expect(document.body.textContent).not.toContain('从虚拟化资源构建')
   })
 
   it('aggregates compose and single-container projects in one tree table', async () => {

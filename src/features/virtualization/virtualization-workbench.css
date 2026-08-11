@@ -616,6 +616,50 @@
   justify-content: flex-start;
 }
 
+.soha-vrt-fill {
+  width: 100%;
+}
+
+.soha-vrt-form-alert {
+  margin-bottom: 16px;
+}
+
+.soha-vrt-form-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.soha-vrt-form-grid--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.soha-vrt-form-grid--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.soha-vrt-form-grid--disk-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 120px 32px;
+}
+
+.soha-vrt-form-grid--network-row {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) 32px;
+}
+
+.soha-vrt-form-grid--resize-disk-row {
+  grid-template-columns: 120px minmax(0, 1fr) minmax(0, 1fr) 120px 32px;
+}
+
+.soha-vrt-form-grid .ant-form-item {
+  min-width: 0;
+}
+
+.soha-vrt-form-row-hint {
+  display: flex;
+  align-items: center;
+  color: var(--soha-text-color-secondary);
+  font-size: 12px;
+}
+
 @media (max-width: 1200px) {
   .soha-vrt-workbench-grid {
     grid-template-columns: 1fr;
@@ -628,6 +672,10 @@
 }
 
 @media (max-width: 768px) {
+  .soha-vrt-form-grid {
+    grid-template-columns: 1fr;
+  }
+
   .soha-vrt-filter-grid,
   .soha-vrt-metric-grid,
   .soha-vrt-lane-grid,

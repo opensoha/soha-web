@@ -1,3 +1,4 @@
+import { TableCellText } from '@/components/table-cell-content'
 import { formatAgeSeconds } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import type { TableColumnsType } from 'antd'
@@ -15,7 +16,13 @@ const columns: TableColumnsType<HorizontalPodAutoscalerResource> = [
     ),
   },
   { title: 'Namespace', dataIndex: 'namespace', width: 160 },
-  { title: 'Target', dataIndex: 'targetRef', width: 260, ellipsis: { showTitle: false } },
+  {
+    title: 'Target',
+    dataIndex: 'targetRef',
+    width: 260,
+    ellipsis: { showTitle: false },
+    render: (value: string) => <TableCellText value={value} />,
+  },
   { title: 'Min', dataIndex: 'minReplicas', width: 88 },
   { title: 'Max', dataIndex: 'maxReplicas', width: 88 },
   { title: 'Current', dataIndex: 'currentReplicas', width: 96 },

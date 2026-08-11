@@ -56,7 +56,7 @@ export function HelmReleasesPage() {
       ),
     [normalizedKeyword, rawItems],
   )
-  const mutationsDisabled = capability.status !== 'unknown' && capability.status !== 'available'
+  const mutationsDisabled = capability.status !== 'available'
   const capabilityReason = mutationsDisabled ? capability.reason : ''
   const densityLabel = localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'
   const emptyTitle = !clusterId

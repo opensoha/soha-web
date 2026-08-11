@@ -72,13 +72,14 @@ export function CRDKindWorkspace({ crd }: { crd: CRD }) {
   const [searchKeyword, setSearchKeyword] = useState('')
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const normalizedKeyword = normalizeSearchKeyword(useDeferredValue(searchKeyword))
-  const mutationsDisabled = capability.status !== 'unknown' && capability.status !== 'available'
+  const mutationsDisabled = capability.status !== 'available'
   const capabilityReason = mutationsDisabled ? capability.reason : ''
   const resourcesQuery = useQuery(
     crdQueries.resources(clusterId, crd, namespace, !capability.isLoading && !mutationsDisabled),
   )
   const deleteMutation = useMutation(crdMutations.remove(queryClient))
   const rawResources = resourcesQuery.data ?? []
+  const canShowActions = !mutationsDisabled && rawResources.length > 0
   const filteredResources = useMemo(
     () =>
       rawResources.filter((item) =>
@@ -248,7 +249,7 @@ export function CRDKindWorkspace({ crd }: { crd: CRD }) {
         columnSettingIconOnly
         columnSettingPlacement="header"
         shellClassName="soha-management-table-shell"
-        columns={columns}
+        columns={canShowActions ? columns : columns.filter((column) => column.key !== 'actions')}
         dataSource={mutationsDisabled ? [] : filteredResources}
         rowKey={(record) => `${record.namespace || '__cluster__'}:${record.name}`}
         loading={resourcesQuery.isLoading}

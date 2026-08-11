@@ -173,7 +173,7 @@ export const computeRoutes = defineRoutes([
     },
     shell: 'app',
     load: async () => {
-      const module = await import('@/features/virtualization')
+      const module = await import('@/features/virtualization/storage/list-page')
       return { default: module.VirtualizationStoragePage }
     },
   },

@@ -951,7 +951,7 @@ describe('app layout workspace navigation', () => {
           id: 'settings-login',
           parentId: 'settings',
           path: '/settings/login',
-          labelZh: '登陆设置',
+          labelZh: '登录设置',
           labelEn: 'Login Settings',
           iconKey: 'shield',
           section: 'users',
@@ -986,7 +986,7 @@ describe('app layout workspace navigation', () => {
     expect(menuText).toContain('组织')
     expect(menuText).toContain('策略')
     expect(menuText).toContain('目录同步')
-    expect(menuText).toContain('登陆设置')
+    expect(menuText).toContain('登录设置')
     expect(menuText).not.toContain('会话')
     expect(menuText).toContain('通知公告')
     expect(menuText).toContain('在线用户')

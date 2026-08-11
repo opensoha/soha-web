@@ -49,6 +49,9 @@ export function WorkloadsJobsPage() {
   const workloadMutationCapability = useClusterCapability('workload.mutations', localeCode)
 
   const jobs = jobsQuery.data ?? []
+  const canShowActions =
+    !workloadMutationCapability.disabled &&
+    jobs.some((item) => hasAllowedAction(item.allowedActions, 'delete'))
   const filteredJobs = useMemo(
     () =>
       jobs.filter((item) =>
@@ -74,9 +77,7 @@ export function WorkloadsJobsPage() {
       ellipsis: { showTitle: false },
       render: (name: string, record: Job) =>
         renderWorkloadNameLink(name, () =>
-          navigate(
-            buildWorkloadDetailPath('jobs', name, namespace, record.namespace, clusterId),
-          ),
+          navigate(buildWorkloadDetailPath('jobs', name, namespace, record.namespace, clusterId)),
         ),
     },
     { title: t('common.namespace', 'Namespace'), dataIndex: 'namespace', width: 160 },
@@ -183,7 +184,7 @@ export function WorkloadsJobsPage() {
             />
           </ManagementTableToolbar>
         }
-        columns={columns}
+        columns={canShowActions ? columns : columns.filter((column) => column.key !== 'actions')}
         dataSource={filteredJobs}
         rowKey={(record) => `${record.namespace}/${record.name}`}
         loading={jobsQuery.isLoading}

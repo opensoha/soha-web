@@ -3,6 +3,7 @@ import { Button, Card, Descriptions, Tag, Typography } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
+import { TableCellLink } from '@/components/table-cell-content'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { accessControlQueries } from './queries'
@@ -63,12 +64,10 @@ export function AccessControlNameLink({
 }) {
   const navigate = useNavigate()
   return (
-    <Button
-      type="text"
+    <TableCellLink
+      label={label ?? name}
       onClick={() => navigate(buildAccessControlDetailRoute(kind, name, namespace))}
-    >
-      {label ?? name}
-    </Button>
+    />
   )
 }
 

@@ -126,7 +126,7 @@ export function HelmChartDrawer({ chart, initialTab, onClose }: HelmChartDrawerP
   const valuesQuery = useQuery(
     helmQueries.chartValues(valuesInput, activeTab === 'values' || activeTab === 'install'),
   )
-  const mutationsDisabled = capability.status !== 'unknown' && capability.status !== 'available'
+  const mutationsDisabled = capability.status !== 'available'
   const capabilityReason = mutationsDisabled ? capability.reason : ''
   const canInstall = hasAllowedAction(activeChart.allowedActions, 'create') && !mutationsDisabled
   const installConflict = isHelmReleaseNameConflictError(installError)

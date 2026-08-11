@@ -7,6 +7,11 @@
   white-space: nowrap;
 }
 
+.soha-platform-table .ant-table-tbody > tr > td:not(.ant-table-cell-ellipsis) {
+  overflow: visible;
+  text-overflow: clip;
+}
+
 .soha-platform-table .ant-table-thead > tr > th:first-child,
 .soha-platform-table .ant-table-tbody > tr > td:first-child {
   padding-left: 10px;
@@ -262,10 +267,7 @@
 }
 
 .soha-workload-kv-tooltip {
-  display: flex;
-  flex-direction: column;
   max-width: min(640px, 78vw);
-  gap: 4px;
   overflow-wrap: anywhere;
   white-space: normal;
 }

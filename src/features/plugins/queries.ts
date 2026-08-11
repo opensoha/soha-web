@@ -21,10 +21,11 @@ export const pluginQueries = {
       enabled: enabled && Boolean(id),
     })
   },
-  installed: () =>
+  installed: (enabled = true) =>
     queryOptions({
       queryKey: pluginKeys.installedList(),
       queryFn: pluginApi.installed,
+      enabled,
     }),
   installedDetail: (pluginId: string, enabled = true) => {
     const id = pluginId.trim()

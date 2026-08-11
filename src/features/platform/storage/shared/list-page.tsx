@@ -81,6 +81,7 @@ export function StorageListPage<T extends { allowedActions?: string[]; name: str
     () => rawItems.filter((item) => includesSearch(searchValues(item), normalizedKeyword)),
     [normalizedKeyword, rawItems, searchValues],
   )
+  const canShowActions = rawItems.some((item) => hasAllowedAction(item.allowedActions, 'delete'))
   const deleteLabel = localeCode === 'zh_CN' ? '删除' : 'Delete'
   const actionColumn: TableColumnsType<T>[number] = {
     fixed: 'right',
@@ -90,7 +91,7 @@ export function StorageListPage<T extends { allowedActions?: string[]; name: str
     width: 64,
     align: 'center',
     render: (name: string, record: T) => {
-      if (!hasAllowedAction(record.allowedActions, 'delete')) return '-'
+      if (!hasAllowedAction(record.allowedActions, 'delete')) return null
       const targetScope = clusterScoped
         ? toClusterStorageScope(clusterId)
         : toStorageScope(clusterId, getRecordNamespace?.(record))
@@ -128,7 +129,7 @@ export function StorageListPage<T extends { allowedActions?: string[]; name: str
       )
     },
   }
-  const effectiveColumns = [...columns, actionColumn]
+  const effectiveColumns = canShowActions ? [...columns, actionColumn] : columns
   const effectiveEmpty = !clusterId
     ? localeCode === 'zh_CN'
       ? '请选择集群'

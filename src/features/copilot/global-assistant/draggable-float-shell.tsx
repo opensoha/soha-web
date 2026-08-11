@@ -8,6 +8,7 @@ export interface FloatPosition {
 
 interface ViewportRect {
   height: number
+  left?: number
   width: number
 }
 
@@ -45,7 +46,8 @@ function browserViewport(): ViewportRect {
   if (typeof window === 'undefined') {
     return { width: 1280, height: 720 }
   }
-  return { width: window.innerWidth, height: window.innerHeight }
+  const sidebarRight = document.querySelector('.soha-sider')?.getBoundingClientRect().right ?? 0
+  return { width: window.innerWidth, height: window.innerHeight, left: Math.max(0, sidebarRight) }
 }
 
 export function defaultFloatPosition(viewport = browserViewport(), shellSize = DEFAULT_SHELL_SIZE): FloatPosition {
@@ -62,7 +64,7 @@ export function clampFloatPosition(
   shellSize = DEFAULT_SHELL_SIZE,
   margin = DEFAULT_MARGIN,
 ): FloatPosition {
-  const minX = margin
+  const minX = Math.max(margin, (viewport.left ?? 0) + margin)
   const minY = margin
   const maxX = Math.max(minX, viewport.width - shellSize.width - margin)
   const maxY = Math.max(minY, viewport.height - shellSize.height - margin)
@@ -80,12 +82,13 @@ export function snapFloatPosition(
   threshold = SNAP_THRESHOLD,
 ): FloatPosition {
   const clamped = clampFloatPosition(position, viewport, shellSize)
-  const leftDistance = clamped.x
+  const leftX = Math.max(DEFAULT_MARGIN, (viewport.left ?? 0) + DEFAULT_MARGIN)
+  const leftDistance = clamped.x - leftX
   const rightX = viewport.width - shellSize.width - DEFAULT_MARGIN
   const rightDistance = Math.abs(clamped.x - rightX)
 
   if (leftDistance <= threshold) {
-    return { ...clamped, x: DEFAULT_MARGIN, edge: 'left' }
+    return { ...clamped, x: leftX, edge: 'left' }
   }
   if (rightDistance <= threshold) {
     return { ...clamped, x: rightX, edge: 'right' }
@@ -156,7 +159,13 @@ export function DraggableFloatShell({
       })
     }
     window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
+    const sidebar = document.querySelector('.soha-sider')
+    const observer = sidebar && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(onResize) : null
+    if (sidebar && observer) observer.observe(sidebar)
+    return () => {
+      window.removeEventListener('resize', onResize)
+      observer?.disconnect()
+    }
   }, [shellSize, shellSizeKey, storageKey])
 
   useEffect(() => {

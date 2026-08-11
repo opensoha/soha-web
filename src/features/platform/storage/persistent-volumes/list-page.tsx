@@ -1,7 +1,7 @@
-import { Button } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import type { TableColumnsType } from 'antd'
 import { StatusTag } from '@/components/status-tag'
+import { TableCellLink, TableCellText } from '@/components/table-cell-content'
 import { useI18n } from '@/i18n'
 import { formatAgeSeconds } from '@/utils/time'
 import { StorageListPage } from '../shared/list-page'
@@ -33,12 +33,10 @@ export function StoragePvPage() {
       ellipsis: { showTitle: false },
       width: 260,
       render: (value: string) => (
-        <Button
-          type="text"
+        <TableCellLink
+          label={value}
           onClick={() => navigate(`/storage/persistentvolumes/${encodeURIComponent(value)}`)}
-        >
-          {value}
-        </Button>
+        />
       ),
     },
     {
@@ -51,21 +49,21 @@ export function StoragePvPage() {
       title: localeCode === 'zh_CN' ? '容量' : 'Capacity',
       dataIndex: 'capacity',
       width: 110,
-      render: (v?: string) => v || '-',
+      render: (value?: string) => <TableCellText value={value} />,
     },
     {
       title: 'StorageClass',
       dataIndex: 'storageClass',
       ellipsis: { showTitle: false },
       width: 180,
-      render: (v?: string) => v || '-',
+      render: (value?: string) => <TableCellText value={value} />,
     },
     {
       title: 'Claim',
       dataIndex: 'claimRef',
       ellipsis: { showTitle: false },
       width: 260,
-      render: (v?: string) => v || '-',
+      render: (value?: string) => <TableCellText value={value} />,
     },
     {
       title: 'Access Modes',

@@ -195,10 +195,7 @@ export function WorkloadsPodsPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
-  const canDeletePods = hasPermission(
-    permissionSnapshotQuery.data?.data,
-    'platform.pods.delete',
-  )
+  const canDeletePods = hasPermission(permissionSnapshotQuery.data?.data, 'platform.pods.delete')
   const { clusterId, namespace } = usePlatformScopeStore()
   const podDeleteCapability = useClusterCapability('workload.mutations', localeCode)
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true)
@@ -281,6 +278,10 @@ export function WorkloadsPodsPage() {
     podDeleteCapability.isLoading ||
     podDeleteCapability.disabled ||
     (podDeleteCapability.mode === 'agent' && podDeleteCapability.status === 'partial')
+  const canShowPodActions =
+    canDeletePods &&
+    !podDeleteDisabled &&
+    pods.some((item) => hasAllowedAction(item.allowedActions, 'delete'))
   const podDeleteDisabledReason = podDeleteDisabled
     ? podDeleteCapability.isLoading
       ? localeCode === 'zh_CN'
@@ -356,13 +357,7 @@ export function WorkloadsPodsPage() {
       render: (_name: string, record: Pod) =>
         renderPodNameCell(record, () =>
           navigate(
-            buildWorkloadDetailPath(
-              'pods',
-              record.name,
-              namespace,
-              record.namespace,
-              clusterId,
-            ),
+            buildWorkloadDetailPath('pods', record.name, namespace, record.namespace, clusterId),
           ),
         ),
     },
@@ -524,6 +519,9 @@ export function WorkloadsPodsPage() {
       },
     },
   ]
+  const visibleColumns = canShowPodActions
+    ? columns
+    : columns.filter((column) => column.key !== 'actions')
 
   const podQueryPanel = (
     <WorkloadQueryPanel
@@ -622,7 +620,7 @@ export function WorkloadsPodsPage() {
   )
 
   const podBatchBar =
-    canDeletePods && selectedPodKeys.length > 0 ? (
+    canShowPodActions && selectedPodKeys.length > 0 ? (
       <ManagementBatchBar
         selectedCount={selectedPodKeys.length}
         selectedLabel={
@@ -741,7 +739,7 @@ export function WorkloadsPodsPage() {
         columnSettingPlacement="header"
         shellClassName="soha-management-table-shell"
         headerExtra={podToolbarExtra}
-        columns={columns}
+        columns={visibleColumns}
         dataSource={orderedPods}
         rowKey={(record) => `${record.namespace}/${record.name}`}
         onRow={(record: Pod) => ({
@@ -786,7 +784,7 @@ export function WorkloadsPodsPage() {
         scroll={{ x: 1500 }}
         selectCurrentPageOnly
         rowSelection={
-          canDeletePods
+          canShowPodActions
             ? {
                 columnWidth: 44,
                 selectedRowKeys: selectedPodKeys,

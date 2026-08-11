@@ -1,6 +1,12 @@
-import { Navigate, useParams } from 'react-router-dom'
+import { Navigate, useLocation, useParams } from 'react-router-dom'
 
 export function LegacySourceConnectionDetailRedirect() {
   const { integrationId = '' } = useParams<{ integrationId: string }>()
-  return <Navigate replace to={`/settings/source-control/${encodeURIComponent(integrationId)}`} />
+  const { hash, search } = useLocation()
+  return (
+    <Navigate
+      replace
+      to={{ pathname: `/settings/source-control/${encodeURIComponent(integrationId)}`, search, hash }}
+    />
+  )
 }

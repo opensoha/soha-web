@@ -100,7 +100,9 @@ export function formatMetricValue(value: number, unit: string) {
 }
 
 function summarizeSeries(series: MetricSeries) {
-  const values = (series.points ?? []).map((point) => point.value).filter((value) => Number.isFinite(value))
+  const values = (series.points ?? [])
+    .map((point) => point.value)
+    .filter((value) => Number.isFinite(value))
   if (values.length === 0) {
     return { min: '-', max: '-', avg: '-', samples: 0 }
   }
@@ -135,10 +137,20 @@ function parseMemoryQuantity(value?: string) {
   if (!Number.isFinite(amount)) return null
   const unit = match[2] ?? ''
   const binaryUnits: Record<string, number> = {
-    Ei: 1024 ** 6, Gi: 1024 ** 3, Ki: 1024, Mi: 1024 ** 2, Pi: 1024 ** 5, Ti: 1024 ** 4,
+    Ei: 1024 ** 6,
+    Gi: 1024 ** 3,
+    Ki: 1024,
+    Mi: 1024 ** 2,
+    Pi: 1024 ** 5,
+    Ti: 1024 ** 4,
   }
   const decimalUnits: Record<string, number> = {
-    E: 1000 ** 6, G: 1000 ** 3, K: 1000, M: 1000 ** 2, P: 1000 ** 5, T: 1000 ** 4,
+    E: 1000 ** 6,
+    G: 1000 ** 3,
+    K: 1000,
+    M: 1000 ** 2,
+    P: 1000 ** 5,
+    T: 1000 ** 4,
   }
   if (unit in binaryUnits) return amount * binaryUnits[unit]
   if (unit in decimalUnits) return amount * decimalUnits[unit]
@@ -176,7 +188,7 @@ function buildResourceBaseline(
 function buildChartValues(lines: CompactChartLine[]) {
   const timestampSet = new Set<string>()
   lines.forEach((line) => {
-    (line.points ?? []).forEach((point) => timestampSet.add(point.timestamp))
+    ;(line.points ?? []).forEach((point) => timestampSet.add(point.timestamp))
   })
   const timestamps = Array.from(timestampSet).sort(compareMetricTimestamps)
 
@@ -184,7 +196,8 @@ function buildChartValues(lines: CompactChartLine[]) {
   lines.forEach((line) => {
     if (line.value != null) {
       const constantValue = line.value
-      const anchorTimestamps = timestamps.length > 0 ? timestamps : (line.points ?? []).map((p) => p.timestamp)
+      const anchorTimestamps =
+        timestamps.length > 0 ? timestamps : (line.points ?? []).map((p) => p.timestamp)
       anchorTimestamps.forEach((ts) => {
         rows.push({
           rawValue: constantValue,
@@ -194,7 +207,7 @@ function buildChartValues(lines: CompactChartLine[]) {
         })
       })
     } else {
-      (line.points ?? []).forEach((point) => {
+      ;(line.points ?? []).forEach((point) => {
         rows.push({
           rawValue: point.value,
           time: formatDateTime(point.timestamp),
@@ -231,9 +244,15 @@ function resolveMetricSeriesLabel(seriesKey: string, fallback: string, localeCod
   return dictionary[seriesKey]?.[localeCode] ?? fallback
 }
 
-export function buildCompactChartSpec(lines: CompactChartLine[], unit: string, _localeCode: MetricLocale): any {
+export function buildCompactChartSpec(
+  lines: CompactChartLine[],
+  unit: string,
+  _localeCode: MetricLocale,
+): any {
   const values = buildChartValues(lines)
-  const mirroredAxisDomain = lines.some((line) => line.negate) ? resolveMirroredAxisDomain(values) : undefined
+  const mirroredAxisDomain = lines.some((line) => line.negate)
+    ? resolveMirroredAxisDomain(values)
+    : undefined
   const colorDomain: string[] = []
   const colorRange: string[] = []
   const dashMap: Record<string, number[] | undefined> = {}
@@ -338,11 +357,21 @@ export function buildCompactChartSpec(lines: CompactChartLine[], unit: string, _
         orient: 'bottom',
         type: 'band',
         label: {
-          style: { fontSize: 10, fill: resolveThemeColorReference('var(--soha-text-tertiary, #6b7280)', '#6b7280') },
+          style: {
+            fontSize: 10,
+            fill: resolveThemeColorReference('var(--soha-text-tertiary, #6b7280)', '#6b7280'),
+          },
           autoLimit: true,
           autoHide: true,
         },
-        domainLine: { style: { stroke: resolveThemeColorReference('var(--soha-border-color-strong, #f0f2f5)', '#f0f2f5') } },
+        domainLine: {
+          style: {
+            stroke: resolveThemeColorReference(
+              'var(--soha-border-color-strong, #f0f2f5)',
+              '#f0f2f5',
+            ),
+          },
+        },
         tick: { visible: false },
       },
       {
@@ -354,13 +383,19 @@ export function buildCompactChartSpec(lines: CompactChartLine[], unit: string, _
         max: mirroredAxisDomain?.max,
         expand: { min: 0.08, max: 0.08 },
         label: {
-          style: { fontSize: 10, fill: resolveThemeColorReference('var(--soha-text-tertiary, #6b7280)', '#6b7280') },
+          style: {
+            fontSize: 10,
+            fill: resolveThemeColorReference('var(--soha-text-tertiary, #6b7280)', '#6b7280'),
+          },
           formatMethod: (value: unknown) => formatAxisMetricValue(Number(value), unit),
         },
         grid: {
           visible: true,
           style: {
-            stroke: resolveThemeColorReference('var(--soha-border-color-strong, #f0f2f5)', '#f0f2f5'),
+            stroke: resolveThemeColorReference(
+              'var(--soha-border-color-strong, #f0f2f5)',
+              '#f0f2f5',
+            ),
             lineDash: [3, 3],
             strokeOpacity: 0.6,
           },
@@ -376,7 +411,8 @@ export function buildCompactChartSpec(lines: CompactChartLine[], unit: string, _
         content: [
           {
             key: (datum: any) => datum?.type ?? '',
-            value: (datum: any) => formatMetricValue(Math.abs(Number(datum?.rawValue ?? datum?.value)), unit),
+            value: (datum: any) =>
+              formatMetricValue(Math.abs(Number(datum?.rawValue ?? datum?.value)), unit),
           },
         ],
       },
@@ -403,7 +439,10 @@ export function buildCompactChartSpec(lines: CompactChartLine[], unit: string, _
 }
 
 export function resolveCompactMetricColor(key: string): string {
-  return resolveThemeColorReference(compactMetricColors[key] ?? compactMetricColors.default, '#1677ff')
+  return resolveThemeColorReference(
+    compactMetricColors[key] ?? compactMetricColors.default,
+    '#1677ff',
+  )
 }
 
 function buildPlaceholderCard(key: string, title: string, unit: string): CompactChartCard {
@@ -485,7 +524,12 @@ function buildCompactChartCards(
     return { key, title, unit: resolvedUnit, lines }
   }
 
-  const buildSingleCard = (seriesKey: string, colorKey: string, fallbackTitle: string, fallbackUnit: string) => {
+  const buildSingleCard = (
+    seriesKey: string,
+    colorKey: string,
+    fallbackTitle: string,
+    fallbackUnit: string,
+  ) => {
     const current = seriesMap.get(seriesKey)
     if (!current || (current.points?.length ?? 0) === 0) {
       return buildPlaceholderCard(seriesKey, fallbackTitle, fallbackUnit)
@@ -509,25 +553,36 @@ function buildCompactChartCards(
 
   cards.push(buildUsageCard('cpu', localeCode === 'zh_CN' ? 'CPU 使用' : 'CPU Usage'))
   cards.push(buildUsageCard('memory', localeCode === 'zh_CN' ? '内存使用' : 'Memory Usage'))
-  cards.push(buildCombinedCard(
-    'network',
-    [
-      { color: compactMetricColors.networkRx, seriesKey: 'network_rx' },
-      { color: compactMetricColors.networkTx, negate: true, seriesKey: 'network_tx' },
-    ],
-    localeCode === 'zh_CN' ? '网络吞吐' : 'Network Traffic',
-    'bytes/s',
-  ))
-  cards.push(buildCombinedCard(
-    'disk',
-    [
-      { color: compactMetricColors.diskRead, seriesKey: 'disk_read' },
-      { color: compactMetricColors.diskWrite, negate: true, seriesKey: 'disk_write' },
-    ],
-    localeCode === 'zh_CN' ? '磁盘吞吐' : 'Disk I/O',
-    'bytes/s',
-  ))
-  cards.push(buildSingleCard('connections', 'connections', localeCode === 'zh_CN' ? '连接数' : 'Connections', 'count'))
+  cards.push(
+    buildCombinedCard(
+      'network',
+      [
+        { color: compactMetricColors.networkRx, seriesKey: 'network_rx' },
+        { color: compactMetricColors.networkTx, negate: true, seriesKey: 'network_tx' },
+      ],
+      localeCode === 'zh_CN' ? '网络吞吐' : 'Network Traffic',
+      'bytes/s',
+    ),
+  )
+  cards.push(
+    buildCombinedCard(
+      'disk',
+      [
+        { color: compactMetricColors.diskRead, seriesKey: 'disk_read' },
+        { color: compactMetricColors.diskWrite, negate: true, seriesKey: 'disk_write' },
+      ],
+      localeCode === 'zh_CN' ? '磁盘吞吐' : 'Disk I/O',
+      'bytes/s',
+    ),
+  )
+  cards.push(
+    buildSingleCard(
+      'connections',
+      'connections',
+      localeCode === 'zh_CN' ? '连接数' : 'Connections',
+      'count',
+    ),
+  )
 
   return cards
 }
@@ -548,7 +603,13 @@ function getMetricsHint(message: string | undefined, localeCode: 'zh_CN' | 'en_U
   return ''
 }
 
-function CompactMetricCard({ card, localeCode }: { card: CompactChartCard; localeCode: MetricLocale }) {
+function CompactMetricCard({
+  card,
+  localeCode,
+}: {
+  card: CompactChartCard
+  localeCode: MetricLocale
+}) {
   const hasData = card.lines.length > 0
   return (
     <div
@@ -564,7 +625,11 @@ function CompactMetricCard({ card, localeCode }: { card: CompactChartCard; local
         </div>
       ) : (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <ManagementState bordered={false} compact title={localeCode === 'zh_CN' ? '暂无数据' : 'No data'} />
+          <ManagementState
+            bordered={false}
+            compact
+            title={localeCode === 'zh_CN' ? '暂无数据' : 'No data'}
+          />
         </div>
       )}
     </div>
@@ -609,7 +674,11 @@ export function ResourceMetricsPanel({
   if (!data) {
     return (
       <Card className="soha-detail-card" title={title}>
-        <ManagementState bordered={false} compact title={localeCode === 'zh_CN' ? '暂无指标数据' : 'No metrics data'} />
+        <ManagementState
+          bordered={false}
+          compact
+          title={localeCode === 'zh_CN' ? '暂无指标数据' : 'No metrics data'}
+        />
       </Card>
     )
   }
@@ -620,7 +689,12 @@ export function ResourceMetricsPanel({
     value: formatMetricValue(item.latest, item.unit),
   }))
   const metricsHint = getMetricsHint(data.message, localeCode)
-  const emptyDescription = metricsHint || data.message || (localeCode === 'zh_CN' ? '当前范围没有可展示的指标序列' : 'No metrics series available for the current range')
+  const emptyDescription =
+    metricsHint ||
+    data.message ||
+    (localeCode === 'zh_CN'
+      ? '当前范围没有可展示的指标序列'
+      : 'No metrics series available for the current range')
   const rangeSelector = onRangeChange ? (
     <Select
       value={String(rangeMinutes ?? data.rangeMinutes)}
@@ -635,19 +709,37 @@ export function ResourceMetricsPanel({
     />
   ) : null
   const grafanaButton = data.grafanaBaseUrl ? (
-    <Button type="primary" onClick={() => window.open(data.grafanaBaseUrl, '_blank', 'noopener,noreferrer')}>
+    <Button
+      type="primary"
+      onClick={() => window.open(data.grafanaBaseUrl, '_blank', 'noopener,noreferrer')}
+    >
       {localeCode === 'zh_CN' ? '打开 Grafana' : 'Open Grafana'}
     </Button>
   ) : null
-  const headerExtraContent = rangeSelector || grafanaButton ? (
-    <Space>
-      {rangeSelector}
-      {grafanaButton}
-    </Space>
-  ) : null
+  const headerExtraContent =
+    rangeSelector || grafanaButton ? (
+      <Space>
+        {rangeSelector}
+        {grafanaButton}
+      </Space>
+    ) : null
 
   if (compact) {
-    const compactCards = buildCompactChartCards(series, localeCode, resourceRequests, resourceLimits)
+    if (series.length === 0) {
+      return (
+        <div className="soha-page-section">
+          <Card className="soha-detail-card" title={title} extra={headerExtraContent}>
+            <ManagementState bordered={false} compact title={emptyDescription} />
+          </Card>
+        </div>
+      )
+    }
+    const compactCards = buildCompactChartCards(
+      series,
+      localeCode,
+      resourceRequests,
+      resourceLimits,
+    )
     return (
       <div className="soha-page-section">
         <Card className="soha-detail-card" title={title} extra={headerExtraContent}>
@@ -685,13 +777,41 @@ export function ResourceMetricsPanel({
     <div className="soha-page-section">
       <Card className="soha-detail-card" title={title} extra={headerExtraContent}>
         <Descriptions
-          items={[
-            { key: 'status', label: localeCode === 'zh_CN' ? '状态' : 'Status', children: data.configured ? (localeCode === 'zh_CN' ? '已配置' : 'Configured') : (localeCode === 'zh_CN' ? '未配置' : 'Not configured') },
-            { key: 'source', label: localeCode === 'zh_CN' ? '来源' : 'Source', children: data.source || '-' },
-            { key: 'generated-at', label: localeCode === 'zh_CN' ? '生成时间' : 'Generated At', children: formatDateTime(data.generatedAt) },
-            { key: 'range', label: localeCode === 'zh_CN' ? '查询范围' : 'Range', children: `${data.rangeMinutes} min` },
-            { key: 'step', label: localeCode === 'zh_CN' ? '采样步长' : 'Step', children: `${data.stepSeconds}s` },
-          ] satisfies DescriptionsProps['items']}
+          items={
+            [
+              {
+                key: 'status',
+                label: localeCode === 'zh_CN' ? '状态' : 'Status',
+                children: data.configured
+                  ? localeCode === 'zh_CN'
+                    ? '已配置'
+                    : 'Configured'
+                  : localeCode === 'zh_CN'
+                    ? '未配置'
+                    : 'Not configured',
+              },
+              {
+                key: 'source',
+                label: localeCode === 'zh_CN' ? '来源' : 'Source',
+                children: data.source || '-',
+              },
+              {
+                key: 'generated-at',
+                label: localeCode === 'zh_CN' ? '生成时间' : 'Generated At',
+                children: formatDateTime(data.generatedAt),
+              },
+              {
+                key: 'range',
+                label: localeCode === 'zh_CN' ? '查询范围' : 'Range',
+                children: `${data.rangeMinutes} min`,
+              },
+              {
+                key: 'step',
+                label: localeCode === 'zh_CN' ? '采样步长' : 'Step',
+                children: `${data.stepSeconds}s`,
+              },
+            ] satisfies DescriptionsProps['items']
+          }
         />
         {data.message ? (
           <div style={{ marginTop: 12 }}>
@@ -699,7 +819,14 @@ export function ResourceMetricsPanel({
               {data.message}
             </Text>
             {metricsHint ? (
-              <Text style={{ display: 'block', marginTop: 6, fontSize: 12, color: 'var(--ant-color-warning)' }}>
+              <Text
+                style={{
+                  display: 'block',
+                  marginTop: 6,
+                  fontSize: 12,
+                  color: 'var(--ant-color-warning)',
+                }}
+              >
                 {metricsHint}
               </Text>
             ) : null}
@@ -710,7 +837,10 @@ export function ResourceMetricsPanel({
       {series.length > 0 ? (
         <>
           <StatGrid items={stats} />
-          <Card className="soha-detail-card" title={localeCode === 'zh_CN' ? '时序明细' : 'Series Detail'}>
+          <Card
+            className="soha-detail-card"
+            title={localeCode === 'zh_CN' ? '时序明细' : 'Series Detail'}
+          >
             <Tabs
               type="card"
               items={series.map((item): TabItem => {
@@ -746,13 +876,35 @@ export function ResourceMetricsPanel({
                   children: (
                     <>
                       <Descriptions
-                        items={[
-                          { key: 'latest', label: localeCode === 'zh_CN' ? '最新值' : 'Latest', children: formatMetricValue(item.latest, item.unit) },
-                          { key: 'min', label: localeCode === 'zh_CN' ? '最小值' : 'Min', children: summary.min },
-                          { key: 'max', label: localeCode === 'zh_CN' ? '最大值' : 'Max', children: summary.max },
-                          { key: 'avg', label: localeCode === 'zh_CN' ? '平均值' : 'Average', children: summary.avg },
-                          { key: 'samples', label: localeCode === 'zh_CN' ? '样本数' : 'Samples', children: summary.samples },
-                        ] satisfies DescriptionsProps['items']}
+                        items={
+                          [
+                            {
+                              key: 'latest',
+                              label: localeCode === 'zh_CN' ? '最新值' : 'Latest',
+                              children: formatMetricValue(item.latest, item.unit),
+                            },
+                            {
+                              key: 'min',
+                              label: localeCode === 'zh_CN' ? '最小值' : 'Min',
+                              children: summary.min,
+                            },
+                            {
+                              key: 'max',
+                              label: localeCode === 'zh_CN' ? '最大值' : 'Max',
+                              children: summary.max,
+                            },
+                            {
+                              key: 'avg',
+                              label: localeCode === 'zh_CN' ? '平均值' : 'Average',
+                              children: summary.avg,
+                            },
+                            {
+                              key: 'samples',
+                              label: localeCode === 'zh_CN' ? '样本数' : 'Samples',
+                              children: summary.samples,
+                            },
+                          ] satisfies DescriptionsProps['items']
+                        }
                       />
                       <div style={{ marginTop: 16, height: 280 }}>
                         <LineChart spec={buildCompactChartSpec(cardLines, item.unit, localeCode)} />

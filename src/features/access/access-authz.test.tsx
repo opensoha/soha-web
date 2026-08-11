@@ -111,10 +111,6 @@ async function renderWithProviders(node: React.ReactNode, route: string) {
         <QueryClientProvider client={queryClient}>
           <MemoryRouter
             initialEntries={[route]}
-            future={{
-              v7_startTransition: true,
-              v7_relativeSplatPath: true,
-            }}
           >
             {node}
           </MemoryRouter>

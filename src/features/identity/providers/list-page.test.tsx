@@ -334,7 +334,7 @@ async function renderPage() {
     root.render(
       <AntdApp>
         <QueryClientProvider client={queryClient}>
-          <MemoryRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
+          <MemoryRouter>
             <IdentityProvidersPage />
           </MemoryRouter>
         </QueryClientProvider>

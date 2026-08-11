@@ -1,6 +1,6 @@
-import { Button } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { TableCellLink } from '@/components/table-cell-content'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
@@ -26,12 +26,12 @@ export function NetworkGatewaysPage() {
       ellipsis: { showTitle: false },
       width: 260,
       render: (value: string, record) => (
-        <Button
-          type="text"
-          onClick={() => navigate(buildGatewayAPIRoutePath('gateways', value, record.namespace))}
-        >
-          {value}
-        </Button>
+        <TableCellLink
+          label={value}
+          onClick={() =>
+            navigate(buildGatewayAPIRoutePath('gateways', value, record.namespace))
+          }
+        />
       ),
     },
     {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button } from 'antd'
 import {
@@ -15,6 +15,11 @@ import { usePreferencesStore } from '@/stores/preferences-store'
 import { companionApi, companionKeys } from './api'
 import { builtinCompanionPack, BUILTIN_COMPANION_PLUGIN_ID } from './builtin-pack'
 import { CompanionRenderer } from './companion-renderer'
+import {
+  companionInteractionAnimation,
+  companionInteractionId,
+  type CompanionInteractionMotion,
+} from './motion'
 import { companionSpeech, resolveCompanionVisualState } from './state-machine'
 import type { CompanionPackSelection } from './types'
 
@@ -65,6 +70,8 @@ export function AssistantCompanionOverlay({
   const bubbleEnabled = usePreferencesStore((state) => state.companionBubbleEnabled)
   const [dragging, setDragging] = useState(false)
   const [hovered, setHovered] = useState(false)
+  const [interactionMotion, setInteractionMotion] = useState<CompanionInteractionMotion>()
+  const interactionTimerRef = useRef<number>()
   const installedQuery = useQuery(pluginQueries.installed())
   const profileQuery = useQuery({
     queryKey: companionKeys.profile(),
@@ -104,6 +111,13 @@ export function AssistantCompanionOverlay({
     return () => channel.close()
   }, [queryClient])
 
+  useEffect(
+    () => () => {
+      window.clearTimeout(interactionTimerRef.current)
+    },
+    [],
+  )
+
   const visualState = resolveCompanionVisualState({
     disabled,
     dragging,
@@ -114,6 +128,19 @@ export function AssistantCompanionOverlay({
   })
   const speech = companionSpeech(messages, running)
   const profile = profileQuery.data
+
+  const runInteraction = (interactionId: string) => {
+    const animation = companionInteractionAnimation(pack.manifest, interactionId)
+    if (animation) {
+      window.clearTimeout(interactionTimerRef.current)
+      setInteractionMotion((current) => ({
+        animation,
+        sequence: (current?.sequence ?? 0) + 1,
+      }))
+      interactionTimerRef.current = window.setTimeout(() => setInteractionMotion(undefined), 600)
+    }
+    void interactionMutation.mutateAsync(interactionId).catch(() => undefined)
+  }
 
   const companion = (
     <div
@@ -132,12 +159,18 @@ export function AssistantCompanionOverlay({
         className="soha-companion__model"
         disabled={disabled}
         type="button"
-        onClick={() => {
-          void interactionMutation.mutateAsync('tap').catch(() => undefined)
+        onClick={(event) => {
+          const requestedInteraction =
+            event.target instanceof Element
+              ? event.target
+                  .closest('[data-companion-interaction]')
+                  ?.getAttribute('data-companion-interaction')
+              : null
+          runInteraction(companionInteractionId(pack.manifest, requestedInteraction))
           onOpenAssistant()
         }}
       >
-        <CompanionRenderer pack={pack} state={visualState} />
+        <CompanionRenderer interaction={interactionMotion} pack={pack} state={visualState} />
       </button>
       <div aria-label="宠物操作" className="soha-companion__actions" role="toolbar">
         <Button
@@ -147,7 +180,7 @@ export function AssistantCompanionOverlay({
           loading={interactionMutation.isPending}
           shape="circle"
           size="small"
-          onClick={() => void interactionMutation.mutateAsync('pet').catch(() => undefined)}
+          onClick={() => runInteraction('pet')}
         />
         <Button
           aria-label="打开助手"

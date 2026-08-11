@@ -128,6 +128,7 @@ export function NetworkPortForwardPage() {
         : 'No port forward sessions registered'
   const densityLabel = localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'
   const portForwardUnsupported = portForwardCapability.status === 'unsupported'
+  const canShowActions = canDelete && !portForwardUnsupported && rawItems.length > 0
   const portForwardCapabilityReason = portForwardCapability.reason
   const createPortForwardLabel = localeCode === 'zh_CN' ? '新建 Port Forward' : 'New Port Forward'
   const stopPortForwardLabel = localeCode === 'zh_CN' ? '停止 Port Forward' : 'Stop port forward'
@@ -162,35 +163,36 @@ export function NetworkPortForwardPage() {
     {
       title: localeCode === 'zh_CN' ? '操作' : 'Actions',
       dataIndex: 'sessionId',
+      key: 'actions',
       fixed: 'right',
       align: 'center',
       width: 64,
       render: (value: string) =>
         canDelete ? (
           <Popconfirm
-          title={localeCode === 'zh_CN' ? '确认停止该 Port Forward？' : 'Stop this port forward?'}
-          description={
-            localeCode === 'zh_CN'
-              ? '这只会停止 Soha 中登记的转发会话记录。'
-              : 'This stops the registered forward session record in Soha.'
-          }
-          okText={localeCode === 'zh_CN' ? '停止' : 'Stop'}
-          cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
-          okButtonProps={{
-            danger: true,
-            loading: stopMutation.isPending && stopMutation.variables?.sessionId === value,
-          }}
-          placement="topRight"
-          onConfirm={() =>
-            stopMutation.mutate(
-              { scope, sessionId: value },
-              {
-                onSuccess: () =>
-                  void message.success(localeCode === 'zh_CN' ? '已停止' : 'Stopped'),
-                onError: (error) => void message.error(error.message),
-              },
-            )
-          }
+            title={localeCode === 'zh_CN' ? '确认停止该 Port Forward？' : 'Stop this port forward?'}
+            description={
+              localeCode === 'zh_CN'
+                ? '这只会停止 Soha 中登记的转发会话记录。'
+                : 'This stops the registered forward session record in Soha.'
+            }
+            okText={localeCode === 'zh_CN' ? '停止' : 'Stop'}
+            cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
+            okButtonProps={{
+              danger: true,
+              loading: stopMutation.isPending && stopMutation.variables?.sessionId === value,
+            }}
+            placement="topRight"
+            onConfirm={() =>
+              stopMutation.mutate(
+                { scope, sessionId: value },
+                {
+                  onSuccess: () =>
+                    void message.success(localeCode === 'zh_CN' ? '已停止' : 'Stopped'),
+                  onError: (error) => void message.error(error.message),
+                },
+              )
+            }
           >
             <Tooltip title={localeCode === 'zh_CN' ? '停止' : 'Stop'}>
               <Button
@@ -245,13 +247,13 @@ export function NetworkPortForwardPage() {
           <ManagementTableToolbar>
             {canCreate ? (
               <Tooltip
-              title={
-                !clusterId
-                  ? localeCode === 'zh_CN'
-                    ? '请先选择集群'
-                    : 'Select a cluster first'
-                  : capabilityActionTooltip(createPortForwardLabel, portForwardCapability)
-              }
+                title={
+                  !clusterId
+                    ? localeCode === 'zh_CN'
+                      ? '请先选择集群'
+                      : 'Select a cluster first'
+                    : capabilityActionTooltip(createPortForwardLabel, portForwardCapability)
+                }
               >
                 <span>
                   <Button
@@ -289,7 +291,7 @@ export function NetworkPortForwardPage() {
             />
           </ManagementTableToolbar>
         ),
-        columns,
+        columns: canShowActions ? columns : columns.filter((column) => column.key !== 'actions'),
         dataSource: clusterId ? filteredItems : [],
         rowKey: 'sessionId',
         loading: query.isLoading,

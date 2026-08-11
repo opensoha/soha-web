@@ -272,6 +272,16 @@ describe('global AI assistant utilities', () => {
       y: 228,
     })
     expect(
+      clampFloatPosition(
+        { x: 24, y: 120 },
+        { width: 1280, height: 720, left: 200 },
+        { width: 176, height: 210 },
+      ),
+    ).toEqual({
+      x: 224,
+      y: 120,
+    })
+    expect(
       snapFloatPosition({ x: 340, y: 120 }, { width: 400, height: 300 }, { width: 48, height: 48 }),
     ).toEqual({
       x: 328,

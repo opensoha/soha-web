@@ -32,14 +32,11 @@ function ResourceMetadataSection({
           return (
             <Tooltip
               key={key}
-              title={
-                <div className="soha-workload-kv-tooltip">
-                  <div>{key}</div>
-                  <div>{displayValue}</div>
-                </div>
-              }
+              classNames={{ root: 'soha-workload-kv-tooltip' }}
+              placement="topLeft"
+              title={`${key}: ${displayValue}`}
             >
-              <div className="soha-workload-kv-item" title={`${key}: ${displayValue}`}>
+              <div className="soha-workload-kv-item">
                 <span className="soha-workload-kv-key">{`${key}:`}</span>
                 <span className="soha-workload-kv-value">{displayValue}</span>
               </div>

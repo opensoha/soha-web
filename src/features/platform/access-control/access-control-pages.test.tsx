@@ -167,7 +167,6 @@ async function renderPage(node: ReactNode, route: string, routePath?: string) {
         <AntdApp>
           <MemoryRouter
             initialEntries={[route]}
-            future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
           >
             {routePath ? (
               <Routes>

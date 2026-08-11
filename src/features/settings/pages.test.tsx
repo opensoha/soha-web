@@ -59,7 +59,7 @@ const testState = vi.hoisted(() => ({
         id: 'settings-login',
         parentId: 'settings',
         path: '/settings/login',
-        labelZh: '登陆设置',
+        labelZh: '登录设置',
         sortOrder: 261,
       },
       {
@@ -228,9 +228,7 @@ function setDefaultResponses() {
         userCount: 1,
       },
     ],
-    '/access/policies': [
-      { id: 'policy-1', name: '管理员策略', effect: 'allow', priority: 100 },
-    ],
+    '/access/policies': [{ id: 'policy-1', name: '管理员策略', effect: 'allow', priority: 100 }],
     '/settings/branding': {
       appTitle: 'Soha',
       sidebarTitle: 'Soha',
@@ -345,15 +343,7 @@ async function renderWithProviders(node: ReactNode, route: string) {
     root.render(
       <AntdApp>
         <QueryClientProvider client={queryClient}>
-          <MemoryRouter
-            initialEntries={[route]}
-            future={{
-              v7_startTransition: true,
-              v7_relativeSplatPath: true,
-            }}
-          >
-            {node}
-          </MemoryRouter>
+          <MemoryRouter initialEntries={[route]}>{node}</MemoryRouter>
         </QueryClientProvider>
       </AntdApp>,
     )
@@ -404,6 +394,11 @@ describe('settings ai page rendering', () => {
   })
 
   beforeEach(() => {
+    apiGetMock.mockImplementation((path: string) =>
+      Promise.resolve({ data: testState.responses[path] ?? {} }),
+    )
+    apiPostMock.mockResolvedValue({ data: {} })
+    apiPutMock.mockResolvedValue({ data: {} })
     testState.snapshot = {
       permissionKeys: [
         'access.users.view',
@@ -448,7 +443,7 @@ describe('settings ai page rendering', () => {
           id: 'settings-login',
           parentId: 'settings',
           path: '/settings/login',
-          labelZh: '登陆设置',
+          labelZh: '登录设置',
           sortOrder: 261,
         },
         {
@@ -489,7 +484,7 @@ describe('settings ai page rendering', () => {
       Array.from(container.querySelectorAll('.soha-settings-overview-actions button')).map(
         (button) => button.textContent?.trim(),
       ),
-    ).toEqual(['用户', '角色', '组织', '策略', '登陆设置'])
+    ).toEqual(['用户', '角色', '组织', '策略', '登录设置'])
     expect(container.textContent).not.toContain('品牌配置')
     expect(container.textContent).not.toContain('认证与品牌')
   })
@@ -517,6 +512,60 @@ describe('settings ai page rendering', () => {
     expect(apiGetMock).not.toHaveBeenCalledWith('/access/roles')
     expect(apiGetMock).not.toHaveBeenCalledWith('/access/teams')
     expect(apiGetMock).not.toHaveBeenCalledWith('/access/policies')
+  })
+
+  it('shows retryable errors instead of empty settings data', async () => {
+    const failingPaths = new Set([
+      '/access/users',
+      '/settings/identity',
+      '/settings/branding',
+      '/settings/ai',
+    ])
+    apiGetMock.mockImplementation((path: string) =>
+      failingPaths.has(path)
+        ? Promise.reject(new Error('request failed'))
+        : Promise.resolve({ data: testState.responses[path] ?? {} }),
+    )
+
+    const overview = await renderWithProviders(<SettingsOverviewPage />, '/settings/overview')
+    const login = await renderWithProviders(<LoginSettingsPage />, '/settings/login')
+    const branding = await renderWithProviders(<BrandingSettingsPage />, '/settings/branding')
+    const ai = await renderWithProviders(<AISettingsPage />, '/ai-workbench/model-settings')
+
+    for (const container of [overview, login, branding, ai]) {
+      expect(container.textContent).toContain('加载失败')
+      expect(container.textContent).toContain('重试')
+    }
+  })
+
+  it('does not request protected settings data without view permissions', async () => {
+    testState.snapshot = {
+      permissionKeys: [],
+      visibleMenuIds: [],
+      visibleMenus: [],
+    }
+
+    const login = await renderWithProviders(<LoginSettingsPage />, '/settings/login')
+    const branding = await renderWithProviders(<BrandingSettingsPage />, '/settings/branding')
+    const ai = await renderWithProviders(<AISettingsPage />, '/ai-workbench/model-settings')
+
+    expect(login.textContent).toContain('当前账号没有查看登录设置的权限。')
+    expect(branding.textContent).toContain('当前账号没有查看品牌设置的权限。')
+    expect(ai.textContent).toContain('当前账号没有查看 AI 设置的权限。')
+    for (const path of [
+      '/settings/identity',
+      '/settings/branding',
+      '/settings/ai',
+      '/ai-gateway/relay/model-routes?includeDisabled=true',
+      '/copilot/data-sources',
+      '/copilot/analysis-profiles',
+      '/copilot/data-source-capabilities',
+      '/copilot/workbench/catalog',
+      '/copilot/agent-runs',
+      '/plugins/installed',
+    ]) {
+      expect(apiGetMock).not.toHaveBeenCalledWith(path)
+    }
   })
 
   it('renders login settings on /settings/login', async () => {
@@ -550,6 +599,45 @@ describe('settings ai page rendering', () => {
       '/settings/branding',
       expect.objectContaining({ appTitle: 'Soha', sidebarTitle: 'Soha' }),
     )
+  })
+
+  it('does not overwrite an edited branding form during background refresh', async () => {
+    let brandingReads = 0
+    apiGetMock.mockImplementation((path: string) => {
+      if (path === '/settings/branding') {
+        brandingReads += 1
+        return Promise.resolve({
+          data: {
+            ...(testState.responses[path] as Record<string, unknown>),
+            appTitle: brandingReads === 1 ? 'Initial title' : 'Server title',
+          },
+        })
+      }
+      return Promise.resolve({ data: testState.responses[path] ?? {} })
+    })
+
+    const container = await renderWithProviders(<BrandingSettingsPage />, '/settings/branding')
+    const appTitle = container.querySelector('#appTitle') as HTMLInputElement
+    const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+
+    await act(async () => {
+      valueSetter?.call(appTitle, 'Local draft')
+      appTitle.dispatchEvent(new Event('input', { bubbles: true }))
+      appTitle.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    const saveButton = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('保存设置'),
+    )
+    await act(async () => {
+      saveButton?.click()
+      await Promise.resolve()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(brandingReads).toBeGreaterThan(1)
+    expect(appTitle.value).toBe('Local draft')
   })
 
   it('renders empty login settings when providers are empty', async () => {

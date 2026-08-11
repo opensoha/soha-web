@@ -163,15 +163,7 @@ async function renderWithProviders(node: ReactNode, route: string) {
     root.render(
       <AntdApp>
         <QueryClientProvider client={queryClient}>
-          <MemoryRouter
-            initialEntries={[route]}
-            future={{
-              v7_startTransition: true,
-              v7_relativeSplatPath: true,
-            }}
-          >
-            {node}
-          </MemoryRouter>
+          <MemoryRouter initialEntries={[route]}>{node}</MemoryRouter>
         </QueryClientProvider>
       </AntdApp>,
     )
@@ -347,7 +339,7 @@ describe('menus page modal state', () => {
           {
             id: 'settings-login',
             parentId: 'settings',
-            labelZh: '登陆设置',
+            labelZh: '登录设置',
             labelEn: 'Login',
             path: '/settings/login',
             iconKey: 'settings',
@@ -396,7 +388,7 @@ describe('menus page modal state', () => {
     ).toContain('管理')
     expect(document.body.textContent).toContain('个人中心')
     expect(document.body.textContent).toContain('关于')
-    expect(document.body.textContent).toContain('登陆设置')
+    expect(document.body.textContent).toContain('登录设置')
     expect(document.body.textContent).toContain('菜单管理')
     expect(document.querySelector('[data-testid="row-system"]')).toBeNull()
   })

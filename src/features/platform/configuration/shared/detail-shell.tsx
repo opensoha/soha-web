@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { App, Card, Spin, Table, Tabs, Tag, Typography } from 'antd'
+import { App, Card, Spin, Table, Tabs, Tag } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementState } from '@/components/management-list'
+import { TableCellText } from '@/components/table-cell-content'
 import { PlatformResourceOverview } from '@/features/platform/shared/resource-overview'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
@@ -18,8 +19,6 @@ import type {
   ConfigurationTarget,
 } from './types'
 import '../styles.css'
-
-const { Text } = Typography
 
 const K8sYamlEditor = lazy(async () => {
   const module = await import('@/components/k8s-yaml-editor')
@@ -66,11 +65,7 @@ function ConfigurationReferencesTab({
       title: localeCode === 'zh_CN' ? '名称' : 'Name',
       dataIndex: 'name',
       ellipsis: { showTitle: false },
-      render: (value: string) => (
-        <Text className="soha-config-reference-name" title={value}>
-          {value}
-        </Text>
-      ),
+      render: (value: string) => <TableCellText value={value} />,
     },
     {
       title: localeCode === 'zh_CN' ? '命名空间' : 'Namespace',
@@ -81,11 +76,7 @@ function ConfigurationReferencesTab({
       title: localeCode === 'zh_CN' ? '引用位置' : 'Reference',
       dataIndex: 'path',
       ellipsis: { showTitle: false },
-      render: (value: string) => (
-        <Text className="soha-config-reference-path" title={value}>
-          {value}
-        </Text>
-      ),
+      render: (value: string) => <TableCellText value={value} />,
     },
   ]
   return (

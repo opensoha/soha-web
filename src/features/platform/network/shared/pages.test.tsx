@@ -139,7 +139,6 @@ async function renderPage(node: ReactNode, route: string, routePath: string) {
         <QueryClientProvider client={queryClient}>
           <MemoryRouter
             initialEntries={[route]}
-            future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
           >
             <Routes>
               <Route path={routePath} element={node} />

@@ -66,7 +66,7 @@ export function HelmReleaseDetailPage() {
     (values?.editable || detail?.valuesEditable) &&
     hasAllowedAction(values?.allowedActions ?? detail?.allowedActions, 'update'),
   )
-  const mutationsDisabled = capability.status !== 'unknown' && capability.status !== 'available'
+  const mutationsDisabled = capability.status !== 'available'
   const capabilityReason = mutationsDisabled ? capability.reason : ''
 
   const historyColumns: TableColumnsType<HelmReleaseHistory> = [

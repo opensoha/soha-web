@@ -1,4 +1,5 @@
 import { hasAllowedAction } from '@/features/auth'
+import type { DockerPayloadMap, DockerQuickCreateHostInput } from '@/features/docker'
 import type {
   CreateVirtualMachineInput,
   VirtualMachine,
@@ -302,7 +303,6 @@ export interface VirtualizationClusterFormValues {
   backendUrl?: string
   prometheusUrl?: string
   prometheusBearerToken?: string
-  prometheusBearerTokenSecretRef?: string
   mode?: string
 }
 
@@ -402,6 +402,7 @@ export function buildVmPayload(values: CreateVirtualMachineInput): CreateVirtual
     diskGiB: values.diskGiB,
     sourceMode: values.sourceMode,
     sourceId: values.sourceId,
+    templateId: values.templateId,
     imageId: values.imageId,
     network: values.network || undefined,
     cloudInit: values.cloudInit || undefined,
@@ -419,6 +420,7 @@ export interface VirtualMachineFormValues extends CreateVirtualMachineInput {
   pveStorage?: string
   pveBridge?: string
   pveIso?: string
+  pveOsType?: string
   pveCloudInitUser?: string
   pveCloudInitSSHKeys?: string
   pveSnippetStorage?: string
@@ -430,6 +432,17 @@ export interface VirtualMachineFormValues extends CreateVirtualMachineInput {
   kubevirtInterfaceModel?: string
   kubevirtInterfaceBinding?: string
   kubevirtInterfaceName?: string
+  registerRuntimeHost?: boolean
+  runtimeEnvironment?: string
+  runtimeOwner?: string
+  runtimeTeam?: string
+  runtimeAvailablePortStart?: number
+  runtimeAvailablePortEnd?: number
+  runtimeTTLSeconds?: number
+  runtimeControlPlaneBaseURL?: string
+  runtimeEndpoint?: string
+  runtimeAgentInstallScript?: string
+  runtimeSnippetStorage?: string
 }
 
 export function buildCreateVmPayload(values: VirtualMachineFormValues): CreateVirtualMachineInput {
@@ -438,6 +451,7 @@ export function buildCreateVmPayload(values: VirtualMachineFormValues): CreateVi
     storage: values.pveStorage,
     bridge: values.pveBridge,
     iso: values.pveIso,
+    osType: values.pveOsType,
     ciuser: cloudInitEnabled ? values.pveCloudInitUser : undefined,
     sshkeys: cloudInitEnabled ? values.pveCloudInitSSHKeys : undefined,
     snippetStorage: cloudInitEnabled ? values.pveSnippetStorage : undefined,
@@ -452,14 +466,53 @@ export function buildCreateVmPayload(values: VirtualMachineFormValues): CreateVi
   })
   const sourceMode =
     values.sourceMode || (values.provider === 'pve' ? 'template_clone' : 'datasource_clone')
+  const vmClone = sourceMode === 'vm_clone'
   return buildVmPayload({
     ...values,
+    bootImageId: vmClone ? undefined : values.bootImageId,
     cloudInit: cloudInitEnabled ? values.cloudInit : undefined,
     sourceMode,
-    sourceId: values.bootImageId,
-    imageId: values.bootImageId,
+    sourceId: vmClone ? values.templateId : values.bootImageId,
+    templateId: vmClone ? values.templateId : undefined,
+    imageId: vmClone ? undefined : values.bootImageId,
     providerParams: Object.keys(providerParams).length ? providerParams : undefined,
   })
+}
+
+export function buildRuntimeHostProvisionPayload(
+  values: VirtualMachineFormValues,
+  vm = buildCreateVmPayload(values),
+): DockerQuickCreateHostInput {
+  const providerParams: DockerPayloadMap = {
+    ...(vm.providerParams as DockerPayloadMap | undefined),
+    sourceMode: vm.sourceMode,
+    node: vm.node,
+    controlPlaneBaseURL: values.runtimeControlPlaneBaseURL,
+    runtimeEndpoint: values.runtimeEndpoint,
+    agentInstallScript: values.runtimeAgentInstallScript,
+    snippetStorage: values.runtimeSnippetStorage,
+  }
+  Object.keys(providerParams).forEach((key) => {
+    if (providerParams[key] === undefined || providerParams[key] === '') delete providerParams[key]
+  })
+  return {
+    name: vm.name,
+    environment: values.runtimeEnvironment,
+    owner: values.runtimeOwner,
+    team: values.runtimeTeam,
+    virtualizationConnectionId: vm.connectionId,
+    vmTemplateId: vm.templateId,
+    flavorId: vm.flavorId,
+    imageId: vm.imageId || vm.bootImageId,
+    cpuCoreCount: vm.cpu,
+    memoryBytes: vm.memoryMiB ? vm.memoryMiB * 1024 ** 2 : undefined,
+    diskBytes: vm.diskGiB ? vm.diskGiB * 1024 ** 3 : undefined,
+    network: vm.network,
+    availablePortStart: values.runtimeAvailablePortStart,
+    availablePortEnd: values.runtimeAvailablePortEnd,
+    ttlSeconds: values.runtimeTTLSeconds,
+    config: { providerParams },
+  }
 }
 
 export function buildImagePayload(values: VirtualizationImageInput): VirtualizationImageInput {
@@ -502,8 +555,6 @@ export function buildClusterPayload(
   } else {
     if (values.backendUrl) config.backendUrl = values.backendUrl
     if (values.prometheusUrl) config.prometheusUrl = values.prometheusUrl
-    if (values.prometheusBearerTokenSecretRef)
-      config.prometheusBearerTokenSecretRef = values.prometheusBearerTokenSecretRef
     if (values.mode) config.mode = values.mode
     if (values.prometheusBearerToken)
       credential.prometheusBearerToken = values.prometheusBearerToken

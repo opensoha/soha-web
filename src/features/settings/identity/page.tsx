@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import {
   Alert,
+  App,
   Avatar,
   Button,
   Col,
@@ -15,7 +16,6 @@ import {
   Switch,
   Tag,
   Typography,
-  message,
 } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -50,6 +50,7 @@ import '../shared/styles.css'
 const { Text } = Typography
 
 export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) {
+  const { message } = App.useApp()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const [providerForm] = Form.useForm()
@@ -68,7 +69,7 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
     'settings.identity.update',
   )
 
-  const identityQuery = useQuery(settingsQueries.identity())
+  const identityQuery = useQuery(settingsQueries.identity(canViewLoginSettings))
   const runtimeQuery = useQuery({
     ...identityRuntimeQueries.capabilities(),
     enabled: canViewLoginSettings,
@@ -78,6 +79,9 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
     ...accessQueries.roles(),
     enabled: canViewLoginSettings,
   })
+  const hasQueryError =
+    permissionSnapshotQuery.isError ||
+    [identityQuery, runtimeQuery, rolesQuery].some((query) => query.isError)
   const saveMutation = useMutation(settingsMutations.identity.save(queryClient))
   const saveIdentity = (input: SaveIdentitySettingsInput) =>
     saveMutation.mutate(
@@ -89,7 +93,7 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
         },
       },
       {
-        onSuccess: () => void message.success(input.successMessage || '登陆设置已保存'),
+        onSuccess: () => void message.success(input.successMessage || '登录设置已保存'),
         onError: (err) => void message.error(err.message),
       },
     )
@@ -99,9 +103,7 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
   const samlAvailable = runtimeQuery.data?.samlLoginSource?.available === true
   const providerTypeOptions = LOGIN_PROVIDER_TYPE_OPTIONS.filter(
     (item) => item.value !== 'saml' || samlAvailable || editingProvider?.type === 'saml',
-  ).map((item) =>
-    item.value === 'saml' && !samlAvailable ? { ...item, disabled: true } : item,
-  )
+  ).map((item) => (item.value === 'saml' && !samlAvailable ? { ...item, disabled: true } : item))
   const roleOptions = (rolesQuery.data ?? []).map((role) => ({
     value: role.id,
     label: role.name || role.id,
@@ -115,7 +117,7 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
     frontendRedirectUrl: editingProvider?.frontendRedirectUrl || defaultFrontendRedirectPath(),
   })
 
-  if (isLoading) {
+  if (permissionSnapshotQuery.isLoading || isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <Spin size="large" />
@@ -123,10 +125,36 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
     )
   }
 
+  if (hasQueryError) {
+    return (
+      <div className="soha-page">
+        <ManagementState
+          kind="error"
+          actions={
+            <Button
+              onClick={() => {
+                void permissionSnapshotQuery.refetch()
+                if (canViewLoginSettings) {
+                  void Promise.all([
+                    identityQuery.refetch(),
+                    runtimeQuery.refetch(),
+                    rolesQuery.refetch(),
+                  ])
+                }
+              }}
+            >
+              重试
+            </Button>
+          }
+        />
+      </div>
+    )
+  }
+
   if (!canViewLoginSettings) {
     return (
       <div className="soha-page">
-        <ManagementState kind="no-permission" description="当前账号没有查看登陆设置的权限。" />
+        <ManagementState kind="no-permission" description="当前账号没有查看登录设置的权限。" />
       </div>
     )
   }
@@ -185,7 +213,9 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
           checked={value}
           aria-label={`启用 ${record.name}`}
           disabled={
-            !canManageLoginSettings || saveMutation.isPending || (record.type === 'saml' && !samlAvailable)
+            !canManageLoginSettings ||
+            saveMutation.isPending ||
+            (record.type === 'saml' && !samlAvailable)
           }
           loading={saveMutation.isPending}
           size="small"

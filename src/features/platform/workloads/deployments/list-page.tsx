@@ -246,6 +246,13 @@ export function WorkloadsDeploymentsPage() {
 
   const deployments = deploymentsQuery.data ?? []
   const isLoading = deploymentsQuery.isLoading
+  const canShowActions =
+    !workloadMutationDisabled &&
+    deployments.some((item) =>
+      ['restart', 'scale', 'rollback', 'delete'].some((action) =>
+        hasAllowedAction(item.allowedActions, action),
+      ),
+    )
   const targetFor = (name: string, targetNamespace: string) => ({
     name,
     scope: toScopeKey(clusterId, targetNamespace),
@@ -438,13 +445,7 @@ export function WorkloadsDeploymentsPage() {
       render: (name: string, record: Deployment) =>
         renderWorkloadNameLink(name, () =>
           navigate(
-            buildWorkloadDetailPath(
-              'deployments',
-              name,
-              namespace,
-              record.namespace,
-              clusterId,
-            ),
+            buildWorkloadDetailPath('deployments', name, namespace, record.namespace, clusterId),
           ),
         ),
     },
@@ -611,7 +612,7 @@ export function WorkloadsDeploymentsPage() {
         columnSettingPlacement="header"
         shellClassName="soha-management-table-shell"
         headerExtra={deploymentToolbarExtra}
-        columns={columns}
+        columns={canShowActions ? columns : columns.filter((column) => column.key !== 'actions')}
         dataSource={filteredDeployments}
         rowKey={(record) => `${record.namespace}/${record.name}`}
         onRow={(record: Deployment) => ({
@@ -654,10 +655,14 @@ export function WorkloadsDeploymentsPage() {
         tableSize={tableSize}
         scroll={{ x: 'max-content' }}
         selectCurrentPageOnly
-        rowSelection={{
-          selectedRowKeys: selectedDeploymentKeys,
-          onChange: (selectedRowKeys: string[]) => setSelectedDeploymentKeys(selectedRowKeys),
-        }}
+        rowSelection={
+          canShowActions
+            ? {
+                selectedRowKeys: selectedDeploymentKeys,
+                onChange: (selectedRowKeys: string[]) => setSelectedDeploymentKeys(selectedRowKeys),
+              }
+            : undefined
+        }
       />
       <Modal
         title={localeCode === 'zh_CN' ? '扩缩容' : 'Scale deployment'}

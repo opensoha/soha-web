@@ -131,15 +131,15 @@ function ConnectionDeletePreview({
         <Alert
           type="warning"
           showIcon
-          title="删除将影响关联资源"
-          description="确认后会使用 force 删除，后端会先为历史任务写入连接与 VM 快照。"
+          title="仅删除 Soha 中的连接与同步记录"
+          description="不会删除 PVE/KubeVirt 中的 VM、镜像、磁盘或其他 Provider 资源。确认后会删除 Soha 连接和本地同步记录，并为历史任务保留连接与 VM 快照。"
         />
       ) : (
         <Alert
           type="info"
           showIcon
-          title="未发现关联资源"
-          description="可以直接删除该虚拟化连接。"
+          title="仅删除 Soha 中的连接"
+          description="不会删除 PVE/KubeVirt 中的任何 Provider 资源。"
         />
       )}
       <Descriptions size="small" column={2} bordered>
@@ -197,12 +197,13 @@ export function VirtualizationClustersPage() {
     enabled: virtualizationModuleEnabled && canViewTasks,
   })
   const deletePreviewMutation = useMutation(virtualizationMutations.clusterDeleteDependencies())
-  const deleteMutation = useMutation(
-    withVirtualizationMutationSuccess(virtualizationMutations.deleteCluster(queryClient), () => {
+  const deleteMutation = useMutation({
+    ...withVirtualizationMutationSuccess(virtualizationMutations.deleteCluster(queryClient), () => {
       message.success('连接已删除')
       setDeletePreview(null)
     }),
-  )
+    onError: (error: Error) => void message.error(error.message),
+  })
   const testMutation = useMutation(
     withVirtualizationMutationSuccess(virtualizationMutations.testCluster(queryClient), () =>
       message.success('测试任务已提交'),
@@ -599,7 +600,7 @@ export function VirtualizationClustersPage() {
       <Modal
         title={deletePreview ? `删除连接：${deletePreview.cluster.name}` : '删除连接'}
         open={Boolean(deletePreview)}
-        okText={deleteForceRequired ? '确认强制删除' : '确认删除'}
+        okText={deleteForceRequired ? '确认从 Soha 删除' : '确认删除连接'}
         cancelText="取消"
         okButtonProps={{ danger: true, disabled: deleteBlocked, loading: deleteMutation.isPending }}
         onOk={() => {

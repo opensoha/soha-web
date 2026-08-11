@@ -180,16 +180,29 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
     }
   }, [dataSourceModalVisible, editingDataSource])
 
-  const { data, isLoading } = useQuery(settingsQueries.ai.detail())
+  const settingsQuery = useQuery(settingsQueries.ai.detail(canViewAISettings))
+  const { data } = settingsQuery
   const modelRoutesQuery = useQuery(settingsQueries.ai.modelRoutes(canViewAISettings))
-  const dataSourcesQuery = useQuery(settingsQueries.ai.dataSources())
-  const profilesQuery = useQuery(settingsQueries.ai.analysisProfiles())
-  const capabilitiesQuery = useQuery(settingsQueries.ai.dataSourceCapabilities())
+  const dataSourcesQuery = useQuery(settingsQueries.ai.dataSources(canViewAISettings))
+  const profilesQuery = useQuery(settingsQueries.ai.analysisProfiles(canViewAISettings))
+  const capabilitiesQuery = useQuery(settingsQueries.ai.dataSourceCapabilities(canViewAISettings))
   const workbenchCatalogQuery = useQuery(settingsQueries.ai.workbenchCatalog(canViewAISettings))
   const agentRunsQuery = useQuery(
     settingsQueries.ai.agentRuns(canViewAISettings && canViewAgentRuns),
   )
-  const companionPacksQuery = useQuery(pluginQueries.installed())
+  const companionPacksQuery = useQuery(pluginQueries.installed(canViewAISettings))
+  const pageQueries = [
+    settingsQuery,
+    modelRoutesQuery,
+    dataSourcesQuery,
+    profilesQuery,
+    capabilitiesQuery,
+    workbenchCatalogQuery,
+    agentRunsQuery,
+    companionPacksQuery,
+  ]
+  const hasQueryError =
+    permissionSnapshotQuery.isError || pageQueries.some((query) => query.isError)
   const resetCompanionMutation = useMutation({
     mutationFn: () => companionApi.reset({ pluginId: selectedCompanionPluginId }),
     onSuccess: (profile) => {
@@ -286,6 +299,7 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
   )
 
   useEffect(() => {
+    if (!settings) return
     workbenchModelForm.setFieldsValue(normalizeWorkbenchModelSettings(settings?.workbenchModel))
     setSkillsRegistryDraft(
       (settings?.skillsRegistry ?? []).map((item) => ({
@@ -305,10 +319,41 @@ export function AISettingsPage({ embedded = false }: SettingsPageProps = {}) {
     )
   }, [settings?.skillsRegistry, settings?.workbenchModel, workbenchModelForm])
 
-  if (isLoading) {
+  if (permissionSnapshotQuery.isLoading || pageQueries.some((query) => query.isLoading)) {
     return (
       <div className="flex items-center justify-center h-64">
         <Spin size="large" />
+      </div>
+    )
+  }
+
+  if (hasQueryError) {
+    return (
+      <div className="soha-page">
+        <ManagementState
+          kind="error"
+          actions={
+            <Button
+              onClick={() => {
+                void permissionSnapshotQuery.refetch()
+                if (canViewAISettings) {
+                  void Promise.all([
+                    settingsQuery.refetch(),
+                    modelRoutesQuery.refetch(),
+                    dataSourcesQuery.refetch(),
+                    profilesQuery.refetch(),
+                    capabilitiesQuery.refetch(),
+                    workbenchCatalogQuery.refetch(),
+                    canViewAgentRuns ? agentRunsQuery.refetch() : Promise.resolve(),
+                    companionPacksQuery.refetch(),
+                  ])
+                }
+              }}
+            >
+              重试
+            </Button>
+          }
+        />
       </div>
     )
   }

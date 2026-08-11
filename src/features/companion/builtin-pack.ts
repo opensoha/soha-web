@@ -29,7 +29,7 @@ export const builtinCompanionPack: CompanionPackSelection = {
     },
     interactions: [
       { id: 'tap', action: 'tap', label: '轻触' },
-      { id: 'pet', action: 'pet', label: '摸摸' },
+      { id: 'pet', action: 'pet', animation: 'pet', label: '摸摸' },
       { id: 'greet', action: 'greet', label: '打招呼' },
     ],
     unlocks: [

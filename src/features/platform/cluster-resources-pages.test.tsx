@@ -82,10 +82,6 @@ async function renderWithProviders(node: ReactNode) {
       <AntdApp>
         <QueryClientProvider client={queryClient}>
           <MemoryRouter
-            future={{
-              v7_startTransition: true,
-              v7_relativeSplatPath: true,
-            }}
           >
             {node}
           </MemoryRouter>

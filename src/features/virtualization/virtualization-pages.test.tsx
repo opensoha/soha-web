@@ -16,6 +16,7 @@ import { defaultRootDisk, VirtualizationVmsPage } from './virtual-machines/list-
 import {
   buildClusterPayload,
   buildCreateVmPayload,
+  buildRuntimeHostProvisionPayload,
   filterVmCreateFlavors,
 } from './virtualization-model'
 import type { CreateVirtualMachineInput, VirtualizationClusterInput } from './virtualization-types'
@@ -58,6 +59,7 @@ vi.mock('@/components/resource-metrics-panel', () => ({
 
 const testState = vi.hoisted(() => ({
   modules: {
+    docker: true,
     virtualization: true,
   },
   permissionSnapshot: {
@@ -76,10 +78,12 @@ const testState = vi.hoisted(() => ({
       'virtualization.operations.view',
       'virtualization.operations.cancel',
       'virtualization.operations.retry',
+      'docker.hosts.create',
     ],
     visibleMenuIds: [],
     visibleMenus: [],
   },
+  vmAllowedActions: [] as string[],
   apiGet: vi.fn(async (path: string) => {
     if (path === '/modules') {
       return {
@@ -91,6 +95,14 @@ const testState = vi.hoisted(() => ({
               defaultPath: '/virtualization',
             },
             enabled: testState.modules.virtualization,
+          },
+          {
+            descriptor: {
+              id: 'docker',
+              name: 'Docker',
+              defaultPath: '/compute/runtimes',
+            },
+            enabled: testState.modules.docker,
           },
         ],
       }
@@ -110,6 +122,7 @@ const testState = vi.hoisted(() => ({
               memoryMiB: 4096,
               diskGiB: 40,
               ipAddresses: ['10.0.0.8'],
+              allowedActions: testState.vmAllowedActions,
               config: {
                 hostname: 'build-vm',
                 fqdn: 'build-vm.apps.svc.cluster.local',
@@ -622,6 +635,17 @@ async function waitForDeleteCall(path: string) {
   }
 }
 
+async function waitForPostCall(path: string) {
+  for (let index = 0; index < 10; index += 1) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    if (testState.apiPost.mock.calls.some(([calledPath]) => calledPath === path)) {
+      return
+    }
+  }
+}
+
 async function waitForGetCall(path: string) {
   for (let index = 0; index < 50; index += 1) {
     await act(async () => {
@@ -699,6 +723,7 @@ describe('virtualization pages', () => {
   })
   beforeEach(() => {
     testState.modules = {
+      docker: true,
       virtualization: true,
     }
     testState.permissionSnapshot = {
@@ -721,6 +746,7 @@ describe('virtualization pages', () => {
       visibleMenuIds: [],
       visibleMenus: [],
     }
+    testState.vmAllowedActions = []
     testState.apiGet.mockClear()
     testState.apiPost.mockClear()
     testState.apiPostWithHeaders.mockClear()
@@ -817,6 +843,22 @@ describe('virtualization pages', () => {
     expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/vms/vm-stale/detail')
     expect(detailContainer.textContent).toContain('stale-vm')
     expect(detailContainer.textContent).toContain('stale')
+  })
+
+  it('submits VM deletion from the confirmation modal', async () => {
+    testState.vmAllowedActions = ['delete']
+    const container = await renderWithProviders(<VirtualizationVmsPage />)
+
+    await clickButtonByLabel(container, '删除虚拟机')
+    await waitForText('从 Provider 删除虚拟机')
+    expect(document.body.textContent).toContain('此操作不会删除虚拟化连接')
+
+    await clickButtonByText(document.body, '确认删除')
+    await waitForPostCall('/virtualization/vms/vm-1/power')
+
+    expect(testState.apiPost).toHaveBeenCalledWith('/virtualization/vms/vm-1/power', {
+      action: 'delete',
+    })
   })
 
   it('keeps the VM filter row on the compact aligned query layout', async () => {
@@ -961,6 +1003,67 @@ describe('virtualization pages', () => {
     expect(payload).not.toHaveProperty('pveCICustom')
   })
 
+  it('builds a PVE full clone from an ordinary VM source', () => {
+    const payload = buildCreateVmPayload({
+      provider: 'pve',
+      connectionId: 'conn-pve',
+      name: 'cloned-vm',
+      sourceMode: 'vm_clone',
+      templateId: '101',
+      pveStorage: 'local-lvm',
+      pveBridge: 'vmbr0',
+    })
+
+    expect(payload).toMatchObject({
+      sourceMode: 'vm_clone',
+      sourceId: '101',
+      templateId: '101',
+    })
+    expect(payload.bootImageId).toBeUndefined()
+    expect(payload.imageId).toBeUndefined()
+  })
+
+  it('maps VM creation to runtime-host onboarding without replacing Agent bootstrap', () => {
+    const values = {
+      provider: 'kubevirt',
+      connectionId: 'conn-kubevirt',
+      name: 'runtime-vm',
+      bootImageId: 'image-pvc',
+      sourceMode: 'pvc_clone',
+      cpu: 4,
+      memoryMiB: 8192,
+      diskGiB: 80,
+      network: 'pod',
+      runtimeEnvironment: 'production',
+      runtimeAvailablePortStart: 20000,
+      runtimeAvailablePortEnd: 39999,
+      runtimeControlPlaneBaseURL: 'http://soha.internal:8080',
+      cloudInit: '#cloud-config\nusers: []',
+      enableCloudInit: true,
+    }
+    const payload = buildRuntimeHostProvisionPayload(values)
+
+    expect(payload).toMatchObject({
+      name: 'runtime-vm',
+      virtualizationConnectionId: 'conn-kubevirt',
+      imageId: 'image-pvc',
+      cpuCoreCount: 4,
+      memoryBytes: 8192 * 1024 ** 2,
+      diskBytes: 80 * 1024 ** 3,
+      network: 'pod',
+      environment: 'production',
+      availablePortStart: 20000,
+      availablePortEnd: 39999,
+      config: {
+        providerParams: {
+          sourceMode: 'pvc_clone',
+          controlPlaneBaseURL: 'http://soha.internal:8080',
+        },
+      },
+    })
+    expect(payload).not.toHaveProperty('cloudInit')
+  })
+
   it('omits Cloud-Init fields when the create option is disabled', () => {
     const payload = buildCreateVmPayload({
       provider: 'pve',
@@ -1011,13 +1114,11 @@ describe('virtualization pages', () => {
       backendUrl: 'https://kube.example:6443',
       prometheusUrl: 'https://prometheus.example',
       prometheusBearerToken: 'secret',
-      prometheusBearerTokenSecretRef: 'observability/prometheus-token',
       mode: 'direct_kubeconfig',
     }) satisfies VirtualizationClusterInput
     expect(kubevirtPayload.config).toMatchObject({
       backendUrl: 'https://kube.example:6443',
       prometheusUrl: 'https://prometheus.example',
-      prometheusBearerTokenSecretRef: 'observability/prometheus-token',
       mode: 'direct_kubeconfig',
     })
     expect(kubevirtPayload.credential).toMatchObject({ prometheusBearerToken: 'secret' })
@@ -1129,6 +1230,7 @@ describe('virtualization pages', () => {
 
   it('does not load virtualization data or expose actions when the module is disabled', async () => {
     testState.modules = {
+      docker: true,
       virtualization: false,
     }
     testState.permissionSnapshot = {
@@ -1204,7 +1306,7 @@ describe('virtualization pages', () => {
 
     expect(testState.apiGet).toHaveBeenCalledWith('/clusters')
     expect(document.body.textContent).toContain('Kubernetes 集群')
-    expect(document.body.textContent).toContain('Prometheus Token SecretRef')
+    expect(document.body.textContent).toContain('Prometheus Bearer Token')
     expect(document.body.textContent).not.toContain('Other')
     expect(document.body.textContent).toContain('校验 TLS')
   })
@@ -1291,18 +1393,37 @@ describe('virtualization pages', () => {
     )
 
     await clickButtonByLabel(container, '删除连接')
-    await waitForText('删除将影响关联资源')
+    await waitForText('仅删除 Soha 中的连接与同步记录')
 
     expect(testState.apiGet).toHaveBeenCalledWith(
       '/virtualization/clusters/conn-pve/delete-dependencies',
     )
+    expect(document.body.textContent).toContain(
+      '不会删除 PVE/KubeVirt 中的 VM、镜像、磁盘或其他 Provider 资源',
+    )
     expect(document.body.textContent).toContain('Docker Host')
     expect(document.body.textContent).toContain('build-vm')
 
-    await clickButtonByText(document.body, '确认强制删除')
+    await clickButtonByText(document.body, '确认从 Soha 删除')
     await waitForDeleteCall('/virtualization/clusters/conn-pve?force=true')
 
     expect(testState.apiDelete).toHaveBeenCalledWith('/virtualization/clusters/conn-pve?force=true')
+  })
+
+  it('keeps the delete preview open and reports a force delete failure', async () => {
+    testState.apiDelete.mockRejectedValueOnce(new Error('历史任务快照写入失败'))
+    const container = await renderWithProviders(
+      <VirtualizationClustersPage />,
+      '/virtualization/clusters',
+    )
+
+    await clickButtonByLabel(container, '删除连接')
+    await waitForText('仅删除 Soha 中的连接与同步记录')
+    await clickButtonByText(document.body, '确认从 Soha 删除')
+    await waitForText('历史任务快照写入失败')
+
+    expect(document.body.textContent).toContain('历史任务快照写入失败')
+    expect(document.body.textContent).toContain('删除连接：pve-a')
   })
 
   it('shows image management entries for KubeVirt and PVE sources', async () => {

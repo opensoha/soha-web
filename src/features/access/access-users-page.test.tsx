@@ -148,15 +148,7 @@ async function renderWithProviders(node: ReactNode, route: string) {
     root.render(
       <AntdApp>
         <QueryClientProvider client={queryClient}>
-          <MemoryRouter
-            initialEntries={[route]}
-            future={{
-              v7_startTransition: true,
-              v7_relativeSplatPath: true,
-            }}
-          >
-            {node}
-          </MemoryRouter>
+          <MemoryRouter initialEntries={[route]}>{node}</MemoryRouter>
         </QueryClientProvider>
       </AntdApp>,
     )
@@ -432,7 +424,7 @@ describe('access users page columns', () => {
     const permissionCell = container.querySelector('[data-testid="cell-0-2"]')
     expect(permissionCell?.textContent).toContain('+4')
     expect(permissionCell?.textContent).toContain('管理用户')
-    expect(permissionCell?.textContent).not.toContain('管理登陆设置')
+    expect(permissionCell?.textContent).not.toContain('管理登录设置')
   })
 
   it('round-trips exact permissions without editing compatibility capabilities', async () => {

@@ -6,6 +6,7 @@ import { AdminTable } from '@/components/admin-table'
 import { ManagementState } from '@/components/management-list'
 import { ResourceEventsTimeline } from '@/components/resource-events-timeline'
 import { BooleanTag, StatusTag } from '@/components/status-tag'
+import { TableCellText } from '@/components/table-cell-content'
 import { hasAllowedAction, hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useAIPageContext } from '@/features/copilot'
 import { useI18n } from '@/i18n'
@@ -245,7 +246,16 @@ export function PodDetailPage() {
 
   const containerColumns: TableColumnsType<WorkloadContainer> = [
     { title: localeCode === 'zh_CN' ? '容器' : 'Container', dataIndex: 'name' },
-    { title: localeCode === 'zh_CN' ? '镜像' : 'Image', dataIndex: 'image', ellipsis: true },
+    {
+      title: localeCode === 'zh_CN' ? '镜像' : 'Image',
+      dataIndex: 'image',
+      ellipsis: { showTitle: false },
+      render: (value?: string) => (
+        <Tooltip title={value || '-'} placement="topLeft">
+          <Text>{value || '-'}</Text>
+        </Tooltip>
+      ),
+    },
     { title: localeCode === 'zh_CN' ? '重启次数' : 'Restarts', dataIndex: 'restartCount' },
     {
       title: (
@@ -261,9 +271,10 @@ export function PodDetailPage() {
       ),
       dataIndex: 'role',
       render: (value?: string) => {
-        const labels: Record<string, string> = localeCode === 'zh_CN'
-          ? { init: '初始化容器', main: '主容器', sidecar: '辅助容器' }
-          : { init: 'Init', main: 'Main', sidecar: 'Sidecar' }
+        const labels: Record<string, string> =
+          localeCode === 'zh_CN'
+            ? { init: '初始化容器', main: '主容器', sidecar: '辅助容器' }
+            : { init: 'Init', main: 'Main', sidecar: 'Sidecar' }
         return <Tag>{(value && labels[value]) || value || '-'}</Tag>
       },
     },
@@ -295,8 +306,12 @@ export function PodDetailPage() {
     {
       title: 'Container ID',
       dataIndex: 'containerId',
-      ellipsis: true,
-      render: (value?: string) => value || '-',
+      ellipsis: { showTitle: false },
+      render: (value?: string) => (
+        <Tooltip title={value || '-'} placement="topLeft">
+          <Text>{value || '-'}</Text>
+        </Tooltip>
+      ),
     },
   ]
 
@@ -393,7 +408,12 @@ export function PodDetailPage() {
       dataIndex: 'reason',
       render: (value: string) => value || '-',
     },
-    { title: localeCode === 'zh_CN' ? '消息' : 'Message', dataIndex: 'message', ellipsis: true },
+    {
+      title: localeCode === 'zh_CN' ? '消息' : 'Message',
+      dataIndex: 'message',
+      ellipsis: { showTitle: false },
+      render: (value?: string) => <TableCellText value={value} />,
+    },
     {
       ...tableColumnPresets.datetime,
       title: localeCode === 'zh_CN' ? '最近变化' : 'Last Transition',

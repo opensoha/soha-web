@@ -66,6 +66,11 @@ export function WorkloadsDaemonSetsPage() {
   const workloadMutationCapability = useClusterCapability('workload.mutations', localeCode)
 
   const daemonSets = daemonSetsQuery.data ?? []
+  const canShowActions =
+    !workloadMutationCapability.disabled &&
+    daemonSets.some((item) =>
+      ['restart', 'delete'].some((action) => hasAllowedAction(item.allowedActions, action)),
+    )
   const targetFor = (name: string, targetNamespace: string): DaemonSetTarget => ({
     name,
     scope: toScopeKey(clusterId, targetNamespace),
@@ -87,13 +92,7 @@ export function WorkloadsDaemonSetsPage() {
       render: (name: string, record) =>
         renderWorkloadNameLink(name, () =>
           navigate(
-            buildWorkloadDetailPath(
-              'daemonsets',
-              name,
-              namespace,
-              record.namespace,
-              clusterId,
-            ),
+            buildWorkloadDetailPath('daemonsets', name, namespace, record.namespace, clusterId),
           ),
         ),
     },
@@ -230,7 +229,7 @@ export function WorkloadsDaemonSetsPage() {
             />
           </ManagementTableToolbar>
         }
-        columns={columns}
+        columns={canShowActions ? columns : columns.filter((column) => column.key !== 'actions')}
         dataSource={filteredDaemonSets}
         rowKey={(record) => `${record.namespace}/${record.name}`}
         loading={daemonSetsQuery.isLoading}

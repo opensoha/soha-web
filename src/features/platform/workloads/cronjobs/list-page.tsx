@@ -51,6 +51,13 @@ export function WorkloadsCronJobsPage() {
   const workloadMutationCapability = useClusterCapability('workload.mutations', localeCode)
 
   const cronJobs = cronJobsQuery.data ?? []
+  const canShowActions =
+    !workloadMutationCapability.disabled &&
+    cronJobs.some(
+      (item) =>
+        hasAllowedAction(item.allowedActions, 'suspend') ||
+        hasAllowedAction(item.allowedActions, 'delete'),
+    )
   const filteredCronJobs = useMemo(
     () =>
       cronJobs.filter((item) =>
@@ -120,6 +127,10 @@ export function WorkloadsCronJobsPage() {
       align: 'center',
       width: 96,
       render: (name: string, record: CronJob) => {
+        const canSuspend = hasAllowedAction(record.allowedActions, 'suspend')
+        const canDelete = hasAllowedAction(record.allowedActions, 'delete')
+        if (!canSuspend && !canDelete) return null
+
         const target = targetFor(name, record.namespace)
         const actionLabel = record.suspend
           ? localeCode === 'zh_CN'
@@ -128,8 +139,6 @@ export function WorkloadsCronJobsPage() {
           : localeCode === 'zh_CN'
             ? '暂停'
             : 'Suspend'
-        const suspendDisabled =
-          workloadMutationCapability.disabled || !hasAllowedAction(record.allowedActions, 'suspend')
         const suspendPending =
           suspendMutation.isPending &&
           suspendMutation.variables?.name === name &&
@@ -138,49 +147,44 @@ export function WorkloadsCronJobsPage() {
           removeMutation.isPending &&
           removeMutation.variables?.name === name &&
           removeMutation.variables.scope.namespace === record.namespace
-        const canDelete = hasAllowedAction(record.allowedActions, 'delete')
         const deleteLabel = localeCode === 'zh_CN' ? '删除' : 'Delete'
 
         return (
           <Space size={4} className="soha-deployment-action-cell">
-            <Popconfirm
-              title={
-                record.suspend
-                  ? localeCode === 'zh_CN'
-                    ? `恢复 ${name}？`
-                    : `Resume ${name}?`
-                  : localeCode === 'zh_CN'
-                    ? `暂停 ${name}？`
-                    : `Suspend ${name}?`
-              }
-              okText={localeCode === 'zh_CN' ? '确认' : 'OK'}
-              cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
-              disabled={suspendDisabled}
-              onConfirm={() =>
-                suspendMutation.mutate(
-                  { ...target, suspend: !record.suspend },
-                  {
-                    onSuccess: () =>
-                      void message.success(
-                        localeCode === 'zh_CN' ? '已更新定时任务状态' : 'CronJob updated',
-                      ),
-                    onError: (error) => void message.error(error.message),
-                  },
-                )
-              }
-            >
-              <ManagementIconButton
-                disabled={suspendDisabled}
-                icon={record.suspend ? <PlayCircleOutlined /> : <PauseCircleOutlined />}
-                aria-label={actionLabel}
-                loading={suspendPending}
-                tooltip={
-                  suspendDisabled
-                    ? capabilityActionTooltip(actionLabel, workloadMutationCapability)
-                    : actionLabel
+            {canSuspend ? (
+              <Popconfirm
+                title={
+                  record.suspend
+                    ? localeCode === 'zh_CN'
+                      ? `恢复 ${name}？`
+                      : `Resume ${name}?`
+                    : localeCode === 'zh_CN'
+                      ? `暂停 ${name}？`
+                      : `Suspend ${name}?`
                 }
-              />
-            </Popconfirm>
+                okText={localeCode === 'zh_CN' ? '确认' : 'OK'}
+                cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
+                onConfirm={() =>
+                  suspendMutation.mutate(
+                    { ...target, suspend: !record.suspend },
+                    {
+                      onSuccess: () =>
+                        void message.success(
+                          localeCode === 'zh_CN' ? '已更新定时任务状态' : 'CronJob updated',
+                        ),
+                      onError: (error) => void message.error(error.message),
+                    },
+                  )
+                }
+              >
+                <ManagementIconButton
+                  icon={record.suspend ? <PlayCircleOutlined /> : <PauseCircleOutlined />}
+                  aria-label={actionLabel}
+                  loading={suspendPending}
+                  tooltip={actionLabel}
+                />
+              </Popconfirm>
+            ) : null}
             {canDelete && workloadMutationCapability.disabled ? (
               <ManagementIconButton
                 danger
@@ -260,7 +264,7 @@ export function WorkloadsCronJobsPage() {
             />
           </ManagementTableToolbar>
         }
-        columns={columns}
+        columns={canShowActions ? columns : columns.filter((column) => column.key !== 'actions')}
         dataSource={filteredCronJobs}
         rowKey={(record) => `${record.namespace}/${record.name}`}
         loading={cronJobsQuery.isLoading}

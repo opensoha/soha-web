@@ -1078,7 +1078,7 @@ describe('ApplicationDetailPage workbench', () => {
     const buildDeployButton = findButton(container, '构建并部署')
     const verifyButton = findButton(container, '运行验证')
 
-    expect(container.textContent).toContain('delivery runner parity')
+    expect(container.textContent).toContain('当前集群连接模式仅部分支持该能力')
     expect(buildButton.disabled).toBe(false)
     expect(deployButton.disabled).toBe(true)
     expect(buildDeployButton.disabled).toBe(true)

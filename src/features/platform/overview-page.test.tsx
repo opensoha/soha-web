@@ -67,7 +67,7 @@ async function renderPage() {
   await act(async () => {
     root.render(
       <I18nProvider>
-        <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <MemoryRouter>
           <OverviewPage />
         </MemoryRouter>
       </I18nProvider>,

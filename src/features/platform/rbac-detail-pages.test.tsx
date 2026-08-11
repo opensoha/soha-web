@@ -81,10 +81,6 @@ async function renderWithProviders(node: ReactNode) {
       <QueryClientProvider client={queryClient}>
         <MemoryRouter
           initialEntries={['/platform-access-control/roles/demo?namespace=default']}
-          future={{
-            v7_relativeSplatPath: true,
-            v7_startTransition: true,
-          }}
         >
           <Routes>
             <Route path="/platform-access-control/roles/:name" element={node} />

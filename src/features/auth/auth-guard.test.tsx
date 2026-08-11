@@ -80,7 +80,6 @@ async function renderGuard() {
       <QueryClientProvider client={queryClient}>
         <MemoryRouter
           initialEntries={['/clusters']}
-          future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
         >
           <Routes>
             <Route element={<AuthGuard />}>

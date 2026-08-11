@@ -38,7 +38,6 @@ export interface VirtualizationClusterConfig extends VirtualizationPayloadMap {
   backendUrl?: string
   prometheusUrl?: string
   prometheusBearerTokenConfigured?: boolean
-  prometheusBearerTokenSecretRef?: string
   credentialSecretRef?: string
   mode?: string
 }
@@ -153,6 +152,7 @@ export interface CreateVirtualMachineInput {
   imageId?: string
   sourceMode?: string
   sourceId?: string
+  templateId?: string
   diskGiB?: number
   network?: string
   cloudInit?: string

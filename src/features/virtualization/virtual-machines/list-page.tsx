@@ -6,10 +6,11 @@ import {
   Alert,
   AutoComplete,
   Button,
+  Collapse,
   Form,
   Input,
   InputNumber,
-  Popconfirm,
+  Modal,
   Select,
   Space,
   Spin,
@@ -26,8 +27,11 @@ import {
   ReloadOutlined,
   SettingOutlined,
 } from '@ant-design/icons'
-import { hasAllowedAction } from '@/features/auth'
+import { hasAllowedAction, hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useAIPageContext } from '@/features/copilot'
+import { useWorkbenchModuleEnabled } from '@/features/modules'
+import { dockerApi, dockerKeys } from '@/features/docker'
+import type { DockerQuickCreateHostInput } from '@/features/docker'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { createUUID } from '@/utils/uuid'
@@ -53,6 +57,7 @@ import { useVirtualizationPermissions } from '@/features/virtualization/shared/u
 import { VirtualizationAdminTable } from '@/features/virtualization/shared/ui'
 import {
   buildCreateVmPayload,
+  buildRuntimeHostProvisionPayload,
   filterVmCreateFlavors,
   normalizePage,
   virtualMachineDisplayStatus,
@@ -91,6 +96,14 @@ interface VirtualMachineResizeFormValues {
   rootDiskSizeGiB?: number
   disks?: VirtualMachineDiskChange[]
   networks?: Array<{ network: string; model?: string; add?: boolean }>
+}
+
+type PendingCreate =
+  | { kind: 'vm'; idempotencyKey: string; payload: CreateVirtualMachineInput }
+  | { kind: 'runtime'; idempotencyKey: string; payload: DockerQuickCreateHostInput }
+
+function pveVMSourceRef(item: VirtualMachine) {
+  return String(item.sourceRef || item.config?.sourceRef || item.config?.vmid || '').trim()
 }
 
 export function defaultRootDisk(
@@ -231,15 +244,17 @@ export function VirtualizationVmsPage() {
   const [form] = Form.useForm<VirtualMachineFormValues>()
   const [pendingTaskId, setPendingTaskId] = useState<string | null>(null)
   const [createPlan, setCreatePlan] = useState<OperationalPlan | null>(null)
-  const [pendingCreate, setPendingCreate] = useState<{
-    idempotencyKey: string
-    payload: CreateVirtualMachineInput
-  } | null>(null)
+  const [pendingCreate, setPendingCreate] = useState<PendingCreate | null>(null)
   const [pendingResizeTaskId, setPendingResizeTaskId] = useState<string | null>(null)
   const [resizeTarget, setResizeTarget] = useState<VirtualMachine | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<VirtualMachine | null>(null)
   const [resizeStep, setResizeStep] = useState(0)
   const [resizeForm] = Form.useForm<VirtualMachineResizeFormValues>()
   const { virtualizationModuleEnabled, canCreateVMs } = useVirtualizationPermissions()
+  const permissionSnapshotQuery = usePermissionSnapshot()
+  const { moduleEnabled: dockerModuleEnabled } = useWorkbenchModuleEnabled('docker')
+  const canCreateRuntimeHosts =
+    dockerModuleEnabled && hasPermission(permissionSnapshotQuery.data?.data, 'docker.hosts.create')
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const createProvider = Form.useWatch('provider', form) ?? 'kubevirt'
@@ -247,6 +262,7 @@ export function VirtualizationVmsPage() {
     Form.useWatch('sourceMode', form) ??
     (createProvider === 'pve' ? 'template_clone' : 'datasource_clone')
   const enableCloudInit = Form.useWatch('enableCloudInit', form) ?? false
+  const registerRuntimeHost = Form.useWatch('registerRuntimeHost', form) ?? false
   const kubevirtNetworkType = Form.useWatch('kubevirtNetworkType', form) ?? 'pod'
   const selectedConnectionId = Form.useWatch('connectionId', form)
   const selectedFlavorId = Form.useWatch('flavorId', form)
@@ -289,11 +305,26 @@ export function VirtualizationVmsPage() {
   const clustersQuery = useQuery(virtualizationQueries.clusters(virtualizationModuleEnabled))
   const imagesQuery = useQuery(virtualizationQueries.imageOptions(virtualizationModuleEnabled))
   const flavorsQuery = useQuery(virtualizationQueries.flavors(virtualizationModuleEnabled))
+  const pveCloneSourcesQuery = useQuery(
+    virtualizationQueries.vms(
+      { connectionId: selectedConnectionId, page: 1, pageSize: 500 },
+      virtualizationModuleEnabled && createProvider === 'pve' && Boolean(selectedConnectionId),
+    ),
+  )
   const createPlanMutation = useMutation({
     ...virtualizationMutations.planCreateVm(),
     onSuccess: (plan, payload) => {
       setCreatePlan(plan)
-      setPendingCreate({ idempotencyKey: createUUID(), payload })
+      setPendingCreate({ kind: 'vm', idempotencyKey: createUUID(), payload })
+      setDrawerOpen(false)
+    },
+    onError: (error) => void message.error(error.message),
+  })
+  const runtimePlanMutation = useMutation({
+    mutationFn: dockerApi.planQuickCreateHost,
+    onSuccess: (plan, payload) => {
+      setCreatePlan(plan)
+      setPendingCreate({ kind: 'runtime', idempotencyKey: createUUID(), payload })
       setDrawerOpen(false)
     },
     onError: (error) => void message.error(error.message),
@@ -316,6 +347,20 @@ export function VirtualizationVmsPage() {
       },
     ),
   )
+  const runtimeCreateMutation = useMutation({
+    mutationFn: ({ payload, idempotencyKey }: Extract<PendingCreate, { kind: 'runtime' }>) =>
+      dockerApi.quickCreateHost(payload, idempotencyKey),
+    onSuccess: () => {
+      message.success('虚拟机与运行时主机构建任务已提交')
+      setCreatePlan(null)
+      setPendingCreate(null)
+      setDrawerOpen(false)
+      form.resetFields()
+      void queryClient.invalidateQueries({ queryKey: dockerKeys.all })
+      void invalidateVirtualizationQueries(queryClient, [virtualizationKeys.all])
+    },
+    onError: (error) => void message.error(error.message),
+  })
   const powerMutation = useMutation(
     withVirtualizationMutationSuccess(virtualizationMutations.powerVm(queryClient), () =>
       message.success('电源操作已提交'),
@@ -368,6 +413,13 @@ export function VirtualizationVmsPage() {
   const defaultProvider =
     providerOptions.find((item) => item.value === 'kubevirt')?.value ?? providerOptions[0]?.value
   const images = normalizePage(imagesQuery.data, 1, 200).items
+  const pveCloneSources = normalizePage(pveCloneSourcesQuery.data, 1, 500).items.filter(
+    (item) =>
+      item.provider === 'pve' &&
+      item.connectionId === selectedConnectionId &&
+      item.status !== 'deleted' &&
+      pveVMSourceRef(item),
+  )
   const flavors = flavorsQuery.data ?? []
   const compatibleFlavors = useMemo(
     () => filterVmCreateFlavors(flavors, createProvider, selectedConnectionId),
@@ -661,18 +713,14 @@ export function VirtualizationVmsPage() {
               />
             ) : null}
             {canPower('delete') ? (
-              <Popconfirm
-                title="确认删除虚拟机？"
-                onConfirm={() => powerMutation.mutate({ id: record.id, action: 'delete' })}
-              >
-                <ManagementIconButton
-                  aria-label="删除虚拟机"
-                  size="small"
-                  tooltip="删除"
-                  danger
-                  icon={<DeleteOutlined />}
-                />
-              </Popconfirm>
+              <ManagementIconButton
+                aria-label="删除虚拟机"
+                size="small"
+                tooltip="删除"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={() => setDeleteTarget(record)}
+              />
             ) : null}
           </Space>
         )
@@ -685,7 +733,7 @@ export function VirtualizationVmsPage() {
       <ManagementDataPage
         className="soha-virtualization-page"
         beforeQuery={
-          <Space orientation="vertical" className="w-full">
+          <Space orientation="vertical" className="soha-vrt-fill">
             <TaskProgressBanner
               task={streamedTask}
               status={streamStatus}
@@ -760,6 +808,7 @@ export function VirtualizationVmsPage() {
                       defaultProvider === 'pve' ? 'template_clone' : 'datasource_clone',
                     )
                     form.setFieldValue('enableCloudInit', false)
+                    form.setFieldValue('registerRuntimeHost', false)
                     setDrawerOpen(true)
                   }}
                 >
@@ -782,7 +831,7 @@ export function VirtualizationVmsPage() {
             title="创建虚拟机"
             current={currentStep}
             form={form}
-            loading={createPlanMutation.isPending}
+            loading={createPlanMutation.isPending || runtimePlanMutation.isPending}
             open={drawerOpen}
             onClose={() => setDrawerOpen(false)}
             onCurrentChange={setCurrentStep}
@@ -792,9 +841,19 @@ export function VirtualizationVmsPage() {
               kubevirtNetworkType: 'pod',
               kubevirtInterfaceBinding: 'bridge',
               enableCloudInit: false,
+              registerRuntimeHost: false,
+              runtimeAvailablePortStart: 20000,
+              runtimeAvailablePortEnd: 39999,
               startAfterCreate: true,
             }}
-            onFinish={(values) => createPlanMutation.mutate(buildCreateVmPayload(values))}
+            onFinish={(values) => {
+              const vmPayload = buildCreateVmPayload(values)
+              if (values.registerRuntimeHost) {
+                runtimePlanMutation.mutate(buildRuntimeHostProvisionPayload(values, vmPayload))
+                return
+              }
+              createPlanMutation.mutate(vmPayload)
+            }}
             steps={[
               {
                 title: '基础配置',
@@ -805,15 +864,28 @@ export function VirtualizationVmsPage() {
                   'sourceMode',
                   'flavorId',
                   'bootImageId',
+                  'templateId',
                 ],
                 children: (
                   <>
                     <Form.Item name="name" label="名称" rules={[{ required: true }]}>
                       <Input />
                     </Form.Item>
-                    <div className="grid gap-3 md:grid-cols-2">
+                    <div className="soha-vrt-form-grid soha-vrt-form-grid--2">
                       <Form.Item name="provider" label="Provider" rules={[{ required: true }]}>
-                        <Select options={providerOptions} />
+                        <Select
+                          options={providerOptions}
+                          onChange={(provider) =>
+                            form.setFieldsValue({
+                              connectionId: undefined,
+                              sourceMode:
+                                provider === 'pve' ? 'template_clone' : 'datasource_clone',
+                              flavorId: undefined,
+                              bootImageId: undefined,
+                              templateId: undefined,
+                            })
+                          }
+                        />
                       </Form.Item>
                       <Form.Item name="connectionId" label="连接" rules={[{ required: true }]}>
                         <Select
@@ -826,10 +898,14 @@ export function VirtualizationVmsPage() {
                     </div>
                     <Form.Item name="sourceMode" label="创建模式" rules={[{ required: true }]}>
                       <Select
+                        onChange={() =>
+                          form.setFieldsValue({ bootImageId: undefined, templateId: undefined })
+                        }
                         options={
                           createProvider === 'pve'
                             ? [
                                 { value: 'template_clone', label: '模板克隆' },
+                                { value: 'vm_clone', label: '虚拟机完整克隆' },
                                 { value: 'iso_install', label: 'ISO 安装' },
                               ]
                             : [
@@ -861,36 +937,63 @@ export function VirtualizationVmsPage() {
                       />
                     ) : null}
                     <Form.Item
-                      name="bootImageId"
+                      name={createSourceMode === 'vm_clone' ? 'templateId' : 'bootImageId'}
                       label={
                         createProvider === 'pve'
                           ? createSourceMode === 'iso_install'
                             ? '安装 ISO'
-                            : '模板'
+                            : createSourceMode === 'vm_clone'
+                              ? '源虚拟机'
+                              : '模板'
                           : '启动镜像'
                       }
                       rules={[{ required: true }]}
                     >
                       <Select
                         showSearch={{ optionFilterProp: 'label' }}
-                        options={images
-                          .filter(
-                            (item) =>
-                              !createProvider || item.provider === createProvider || !item.provider,
+                        loading={createSourceMode === 'vm_clone' && pveCloneSourcesQuery.isLoading}
+                        onChange={(sourceRef) => {
+                          if (createSourceMode !== 'vm_clone') return
+                          const source = pveCloneSources.find(
+                            (item) => pveVMSourceRef(item) === sourceRef,
                           )
-                          .filter(
-                            (item) =>
-                              createProvider !== 'pve' ||
-                              (createSourceMode === 'iso_install'
-                                ? item.assetKind === 'iso' || item.sourceKind === 'iso'
-                                : item.assetKind === 'template' || item.sourceKind === 'template'),
-                          )
-                          .map((item) => ({
-                            value: item.id,
-                            label: item.connectionName
-                              ? `${item.name} (${item.connectionName})`
-                              : item.name,
-                          }))}
+                          form.setFieldsValue({
+                            node: source?.node,
+                            pveBridge:
+                              source?.network ||
+                              (typeof selectedCluster?.config?.defaultBridge === 'string'
+                                ? selectedCluster.config.defaultBridge
+                                : undefined),
+                          })
+                        }}
+                        options={
+                          createSourceMode === 'vm_clone'
+                            ? pveCloneSources.map((item) => ({
+                                value: pveVMSourceRef(item),
+                                label: `${item.name || pveVMSourceRef(item)} / 虚拟机（完整克隆）`,
+                              }))
+                            : images
+                                .filter(
+                                  (item) =>
+                                    !createProvider ||
+                                    item.provider === createProvider ||
+                                    !item.provider,
+                                )
+                                .filter(
+                                  (item) =>
+                                    createProvider !== 'pve' ||
+                                    (createSourceMode === 'iso_install'
+                                      ? item.assetKind === 'iso' || item.sourceKind === 'iso'
+                                      : item.assetKind === 'template' ||
+                                        item.sourceKind === 'template'),
+                                )
+                                .map((item) => ({
+                                  value: item.id,
+                                  label: item.connectionName
+                                    ? `${item.name} (${item.connectionName})`
+                                    : item.name,
+                                }))
+                        }
                       />
                     </Form.Item>
                   </>
@@ -902,20 +1005,20 @@ export function VirtualizationVmsPage() {
                 children: (
                   <>
                     <Alert
-                      className="mb-4"
+                      className="soha-vrt-form-alert"
                       type="info"
                       showIcon
                       title="可保留规格模板值，也可在这里覆盖 CPU、内存和系统盘。"
                     />
-                    <div className="grid gap-3 md:grid-cols-3">
+                    <div className="soha-vrt-form-grid soha-vrt-form-grid--3">
                       <Form.Item name="cpu" label="CPU 核数">
-                        <InputNumber min={1} precision={0} className="w-full" />
+                        <InputNumber min={1} precision={0} className="soha-vrt-fill" />
                       </Form.Item>
                       <Form.Item name="memoryMiB" label="内存 MiB">
-                        <InputNumber min={128} step={128} precision={0} className="w-full" />
+                        <InputNumber min={128} step={128} precision={0} className="soha-vrt-fill" />
                       </Form.Item>
                       <Form.Item name="diskGiB" label="系统盘 GiB">
-                        <InputNumber min={1} precision={0} className="w-full" />
+                        <InputNumber min={1} precision={0} className="soha-vrt-fill" />
                       </Form.Item>
                     </div>
                   </>
@@ -925,7 +1028,7 @@ export function VirtualizationVmsPage() {
                 title: '存储网络',
                 children: (
                   <>
-                    <div className="grid gap-3 md:grid-cols-2">
+                    <div className="soha-vrt-form-grid soha-vrt-form-grid--2">
                       <Form.Item name="namespace" label="命名空间">
                         <Input />
                       </Form.Item>
@@ -942,7 +1045,7 @@ export function VirtualizationVmsPage() {
                       </Form.Item>
                     </div>
                     {createProvider === 'pve' ? (
-                      <div className="grid gap-3 md:grid-cols-2">
+                      <div className="soha-vrt-form-grid soha-vrt-form-grid--2">
                         <Form.Item name="pveStorage" label="PVE 存储">
                           {pveStorageOptions.length > 0 ? (
                             <Select allowClear options={pveStorageOptions} />
@@ -962,9 +1065,22 @@ export function VirtualizationVmsPage() {
                           )}
                         </Form.Item>
                         {createSourceMode === 'iso_install' ? (
-                          <Form.Item name="pveIso" label="安装 ISO">
-                            <Input placeholder="local:iso/ubuntu.iso" />
-                          </Form.Item>
+                          <>
+                            <Form.Item name="pveIso" label="安装 ISO">
+                              <Input placeholder="local:iso/ubuntu.iso" />
+                            </Form.Item>
+                            <Form.Item name="pveOsType" label="客体系统类型" initialValue="l26">
+                              <Select
+                                options={[
+                                  { value: 'l26', label: 'Linux 2.6+ 内核' },
+                                  { value: 'l24', label: 'Linux 2.4 内核' },
+                                  { value: 'win11', label: 'Windows 11 / Server 2022' },
+                                  { value: 'win10', label: 'Windows 10 / Server 2016-2019' },
+                                  { value: 'other', label: '其他系统' },
+                                ]}
+                              />
+                            </Form.Item>
+                          </>
                         ) : (
                           <Alert
                             type="info"
@@ -975,7 +1091,7 @@ export function VirtualizationVmsPage() {
                       </div>
                     ) : (
                       <>
-                        <div className="grid gap-3 md:grid-cols-2">
+                        <div className="soha-vrt-form-grid soha-vrt-form-grid--2">
                           <Form.Item name="kubevirtStorageClass" label="StorageClass">
                             <Input placeholder="fast-ssd" />
                           </Form.Item>
@@ -1040,15 +1156,16 @@ export function VirtualizationVmsPage() {
               {
                 title: '附加资源',
                 children: (
-                  <Space orientation="vertical" className="w-full" size="large">
+                  <Space orientation="vertical" className="soha-vrt-fill" size="large">
                     <Form.List name="disks">
                       {(fields, { add, remove }) => (
-                        <Space orientation="vertical" className="w-full">
+                        <Space orientation="vertical" className="soha-vrt-fill">
                           {fields.map(({ key, name }) => (
-                            <div key={key} className="grid gap-3 md:grid-cols-[1fr_1fr_120px_32px]">
-                              <div className="flex items-center text-xs text-[var(--soha-text-color-secondary)]">
-                                系统自动分配磁盘标识
-                              </div>
+                            <div
+                              key={key}
+                              className="soha-vrt-form-grid soha-vrt-form-grid--disk-row"
+                            >
+                              <div className="soha-vrt-form-row-hint">系统自动分配磁盘标识</div>
                               <Form.Item
                                 name={[name, 'storage']}
                                 rules={[{ required: true, message: '请选择虚拟化存储' }]}
@@ -1084,12 +1201,13 @@ export function VirtualizationVmsPage() {
                     </Form.List>
                     <Form.List name="networks">
                       {(fields, { add, remove }) => (
-                        <Space orientation="vertical" className="w-full">
+                        <Space orientation="vertical" className="soha-vrt-fill">
                           {fields.map(({ key, name }) => (
-                            <div key={key} className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_32px]">
-                              <div className="flex items-center text-xs text-[var(--soha-text-color-secondary)]">
-                                系统自动分配网卡标识
-                              </div>
+                            <div
+                              key={key}
+                              className="soha-vrt-form-grid soha-vrt-form-grid--network-row"
+                            >
+                              <div className="soha-vrt-form-row-hint">系统自动分配网卡标识</div>
                               <Form.Item name={[name, 'network']} rules={[{ required: true }]}>
                                 <Select
                                   showSearch
@@ -1132,60 +1250,157 @@ export function VirtualizationVmsPage() {
                   'pveCloudInitSSHKeys',
                   'pveCICustom',
                   'cloudInit',
+                  'registerRuntimeHost',
+                  'runtimeControlPlaneBaseURL',
+                  'runtimeEnvironment',
+                  'runtimeAvailablePortStart',
+                  'runtimeAvailablePortEnd',
                 ],
                 children: (
                   <>
                     <Form.Item
-                      name="enableCloudInit"
-                      label="启用 Cloud-Init"
+                      name="registerRuntimeHost"
+                      label="同时接入为运行时主机"
+                      tooltip={
+                        canCreateRuntimeHosts
+                          ? '创建 VM 后安装 Soha Agent，并登记到运行时主机。'
+                          : '需要启用容器运行时模块并具备运行时主机创建权限。'
+                      }
                       valuePropName="checked"
                     >
-                      <Switch />
-                    </Form.Item>
-                    {enableCloudInit ? (
-                      <>
-                        {createProvider === 'pve' ? (
-                          <div className="grid gap-3 md:grid-cols-2">
-                            <Form.Item name="pveCloudInitUser" label="Cloud-Init 用户名">
-                              <Input placeholder="ubuntu" />
-                            </Form.Item>
-                            <Form.Item name="pveSnippetStorage" label="Snippet Storage">
-                              {pveSnippetStorageOptions.length > 0 ? (
-                                <Select
-                                  allowClear
-                                  options={pveSnippetStorageOptions}
-                                  placeholder="选择支持 snippets 的存储"
-                                />
-                              ) : (
-                                <Input placeholder="local" />
-                              )}
-                            </Form.Item>
-                            <Form.Item name="pveCloudInitSSHKeys" label="SSH Keys">
-                              <Input.TextArea rows={3} placeholder="ssh-rsa AAAA..." />
-                            </Form.Item>
-                            <Form.Item name="pveCICustom" label="cicustom 引用">
-                              <Input placeholder="user=local:snippets/docker-agent.yaml" />
-                            </Form.Item>
-                          </div>
-                        ) : null}
-                        <Form.Item
-                          name="cloudInit"
-                          label={
-                            createProvider === 'pve'
-                              ? 'Raw Cloud-Init user-data'
-                              : 'Cloud-Init userData'
+                      <Switch
+                        disabled={!canCreateRuntimeHosts}
+                        onChange={(checked) => {
+                          if (checked) {
+                            form.setFieldsValue({ enableCloudInit: false, startAfterCreate: true })
                           }
+                        }}
+                      />
+                    </Form.Item>
+                    {registerRuntimeHost ? (
+                      <>
+                        <Form.Item
+                          name="runtimeControlPlaneBaseURL"
+                          label="Soha 控制面地址"
+                          rules={[
+                            { required: true, message: '请输入虚拟机可访问的 Soha 控制面地址' },
+                          ]}
+                          tooltip="新虚拟机内的 Agent 使用此地址注册并回传任务。"
                         >
-                          <Input.TextArea rows={6} placeholder="#cloud-config" />
+                          <Input placeholder="http://soha.internal:8080" />
                         </Form.Item>
+                        <div className="soha-vrt-form-grid soha-vrt-form-grid--3">
+                          <Form.Item name="runtimeEnvironment" label="运行环境">
+                            <Input placeholder="dev / test" />
+                          </Form.Item>
+                          <Form.Item name="runtimeAvailablePortStart" label="端口池起始">
+                            <InputNumber min={1} max={65535} className="soha-vrt-fill" />
+                          </Form.Item>
+                          <Form.Item name="runtimeAvailablePortEnd" label="端口池结束">
+                            <InputNumber min={1} max={65535} className="soha-vrt-fill" />
+                          </Form.Item>
+                        </div>
+                        <Collapse
+                          ghost
+                          size="small"
+                          items={[
+                            {
+                              key: 'runtime-advanced',
+                              label: '运行时高级设置',
+                              children: (
+                                <>
+                                  {createProvider === 'pve' ? (
+                                    <Form.Item
+                                      name="runtimeSnippetStorage"
+                                      label="PVE Snippet Storage"
+                                    >
+                                      {pveSnippetStorageOptions.length > 0 ? (
+                                        <Select
+                                          allowClear
+                                          options={pveSnippetStorageOptions}
+                                          placeholder="选择支持 snippets 的存储"
+                                        />
+                                      ) : (
+                                        <Input placeholder="local" />
+                                      )}
+                                    </Form.Item>
+                                  ) : null}
+                                  <Form.Item name="runtimeEndpoint" label="Agent 对外地址">
+                                    <Input placeholder="http://__SOHA_VM_IP__:18080" />
+                                  </Form.Item>
+                                  <Form.Item
+                                    name="runtimeAgentInstallScript"
+                                    label="Agent 安装脚本"
+                                  >
+                                    <Input.TextArea rows={3} spellCheck={false} />
+                                  </Form.Item>
+                                  <div className="soha-vrt-form-grid soha-vrt-form-grid--2">
+                                    <Form.Item name="runtimeOwner" label="负责人">
+                                      <Input />
+                                    </Form.Item>
+                                    <Form.Item name="runtimeTeam" label="团队">
+                                      <Input />
+                                    </Form.Item>
+                                  </div>
+                                  <Form.Item name="runtimeTTLSeconds" label="有效期秒数">
+                                    <InputNumber min={0} className="soha-vrt-fill" />
+                                  </Form.Item>
+                                </>
+                              ),
+                            },
+                          ]}
+                        />
                       </>
                     ) : (
-                      <Alert
-                        type="info"
-                        showIcon
-                        title="本次创建不使用 Cloud-Init"
-                        description="用户名、SSH Keys、Snippet Storage 和 user-data 均不会提交。"
-                      />
+                      <>
+                        <Form.Item
+                          name="enableCloudInit"
+                          label="启用 Cloud-Init"
+                          valuePropName="checked"
+                        >
+                          <Switch />
+                        </Form.Item>
+                        {enableCloudInit ? (
+                          <>
+                            {createProvider === 'pve' ? (
+                              <div className="soha-vrt-form-grid soha-vrt-form-grid--2">
+                                <Form.Item name="pveCloudInitUser" label="Cloud-Init 用户名">
+                                  <Input placeholder="ubuntu" />
+                                </Form.Item>
+                                <Form.Item name="pveSnippetStorage" label="Snippet Storage">
+                                  {pveSnippetStorageOptions.length > 0 ? (
+                                    <Select
+                                      allowClear
+                                      options={pveSnippetStorageOptions}
+                                      placeholder="选择支持 snippets 的存储"
+                                    />
+                                  ) : (
+                                    <Input placeholder="local" />
+                                  )}
+                                </Form.Item>
+                                <Form.Item name="pveCloudInitSSHKeys" label="SSH Keys">
+                                  <Input.TextArea rows={3} placeholder="ssh-rsa AAAA..." />
+                                </Form.Item>
+                                <Form.Item name="pveCICustom" label="cicustom 引用">
+                                  <Input placeholder="user=local:snippets/bootstrap.yaml" />
+                                </Form.Item>
+                              </div>
+                            ) : null}
+                            <Form.Item
+                              name="cloudInit"
+                              label={
+                                createProvider === 'pve'
+                                  ? 'Raw Cloud-Init user-data'
+                                  : 'Cloud-Init userData'
+                              }
+                            >
+                              <Input.TextArea rows={6} placeholder="#cloud-config" />
+                            </Form.Item>
+                          </>
+                        ) : (
+                          <Alert type="info" showIcon title="本次创建不使用 Cloud-Init" />
+                        )}
+                      </>
                     )}
                   </>
                 ),
@@ -1197,11 +1412,17 @@ export function VirtualizationVmsPage() {
                     <Alert
                       showIcon
                       type="info"
-                      title="确认提交虚拟机创建任务"
+                      title={
+                        registerRuntimeHost
+                          ? '确认创建虚拟机并接入运行时主机'
+                          : '确认提交虚拟机创建任务'
+                      }
                       description={
-                        enableCloudInit
-                          ? 'Cloud-Init 已启用，相关初始化配置将随创建任务提交。'
-                          : 'Cloud-Init 未启用，本次仅提交虚拟机、存储和网络配置。'
+                        registerRuntimeHost
+                          ? '虚拟机创建完成后将等待 Soha Agent 注册，运行时主机随后上线。'
+                          : enableCloudInit
+                            ? 'Cloud-Init 已启用，相关初始化配置将随创建任务提交。'
+                            : 'Cloud-Init 未启用，本次仅提交虚拟机、存储和网络配置。'
                       }
                     />
                     <Form.Item
@@ -1210,30 +1431,64 @@ export function VirtualizationVmsPage() {
                       label="创建后启动"
                       valuePropName="checked"
                     >
-                      <Switch />
+                      <Switch disabled={registerRuntimeHost} />
                     </Form.Item>
                   </>
                 ),
               },
             ]}
-            submitText="提交创建"
+            submitText={registerRuntimeHost ? '生成创建与接入计划' : '提交创建'}
             width={820}
           />
         }
       />
+      <Modal
+        title={`删除虚拟机：${deleteTarget?.name ?? ''}`}
+        open={Boolean(deleteTarget)}
+        okText="确认删除"
+        cancelText="取消"
+        okButtonProps={{ danger: true, loading: powerMutation.isPending }}
+        onCancel={() => setDeleteTarget(null)}
+        onOk={() => {
+          if (!deleteTarget) return
+          powerMutation.mutate(
+            { id: deleteTarget.id, action: 'delete' },
+            {
+              onSuccess: () => setDeleteTarget(null),
+              onError: (error) => void message.error(error.message),
+            },
+          )
+        }}
+        destroyOnHidden
+      >
+        <Alert
+          showIcon
+          type="warning"
+          title="从 Provider 删除虚拟机"
+          description={`将删除 ${deleteTarget?.name ?? ''} 及其 Provider 资源。此操作不会删除虚拟化连接。`}
+        />
+      </Modal>
       <OperationalPlanModal
-        confirmText="确认创建"
-        loading={createMutation.isPending}
+        confirmText={pendingCreate?.kind === 'runtime' ? '确认创建并接入' : '确认创建'}
+        loading={createMutation.isPending || runtimeCreateMutation.isPending}
         onCancel={() => {
           setCreatePlan(null)
           setPendingCreate(null)
           setDrawerOpen(true)
         }}
         onConfirm={() => {
-          if (pendingCreate) createMutation.mutate(pendingCreate)
+          if (!pendingCreate) return
+          if (pendingCreate.kind === 'runtime') {
+            runtimeCreateMutation.mutate(pendingCreate)
+            return
+          }
+          createMutation.mutate({
+            payload: pendingCreate.payload,
+            idempotencyKey: pendingCreate.idempotencyKey,
+          })
         }}
         plan={createPlan}
-        title="虚拟机创建计划"
+        title={pendingCreate?.kind === 'runtime' ? '虚拟机与运行时主机创建计划' : '虚拟机创建计划'}
       />
       <StepFormModal
         title={`调整规格：${resizeTarget?.name ?? ''}`}
@@ -1282,17 +1537,17 @@ export function VirtualizationVmsPage() {
             children: (
               <>
                 <Alert
-                  className="mb-4"
+                  className="soha-vrt-form-alert"
                   type="info"
                   showIcon
                   title="CPU 和内存可调高或调低，是否支持热变更由 Provider 决定。"
                 />
-                <div className="grid gap-3 md:grid-cols-2">
+                <div className="soha-vrt-form-grid soha-vrt-form-grid--2">
                   <Form.Item name="cpu" label="CPU 核数" rules={[{ required: true }]}>
                     <InputNumber
                       min={1}
                       precision={0}
-                      className="w-full"
+                      className="soha-vrt-fill"
                       disabled={!resizeTarget?.capabilities?.includes(VM_CAPABILITIES.cpu)}
                     />
                   </Form.Item>
@@ -1301,7 +1556,7 @@ export function VirtualizationVmsPage() {
                       min={128}
                       step={128}
                       precision={0}
-                      className="w-full"
+                      className="soha-vrt-fill"
                       disabled={!resizeTarget?.capabilities?.includes(VM_CAPABILITIES.memory)}
                     />
                   </Form.Item>
@@ -1342,17 +1597,17 @@ export function VirtualizationVmsPage() {
                   <InputNumber
                     min={selectedRootDisk?.sizeGiB ?? resizeTarget?.diskGiB ?? 1}
                     precision={0}
-                    className="w-full"
+                    className="soha-vrt-fill"
                     disabled={!resizeTarget?.capabilities?.includes(VM_CAPABILITIES.diskResize)}
                   />
                 </Form.Item>
                 <Form.List name="disks">
                   {(fields, { add, remove }) => (
-                    <Space orientation="vertical" className="w-full">
+                    <Space orientation="vertical" className="soha-vrt-fill">
                       {fields.map(({ key, name }) => (
                         <div
                           key={key}
-                          className="grid gap-3 md:grid-cols-[120px_1fr_1fr_120px_32px]"
+                          className="soha-vrt-form-grid soha-vrt-form-grid--resize-disk-row"
                         >
                           <Form.Item name={[name, 'add']} initialValue={true}>
                             <Select
@@ -1375,9 +1630,7 @@ export function VirtualizationVmsPage() {
                               />
                             </Form.Item>
                           ) : (
-                            <div className="flex items-center text-xs text-[var(--soha-text-color-secondary)]">
-                              系统自动分配磁盘标识
-                            </div>
+                            <div className="soha-vrt-form-row-hint">系统自动分配磁盘标识</div>
                           )}
                           <Form.Item
                             name={[name, 'storage']}
@@ -1388,9 +1641,7 @@ export function VirtualizationVmsPage() {
                             }
                           >
                             {resizeDisks[name]?.add === false ? (
-                              <div className="text-xs text-[var(--soha-text-color-secondary)]">
-                                沿用原磁盘存储
-                              </div>
+                              <div className="soha-vrt-form-row-hint">沿用原磁盘存储</div>
                             ) : (
                               <Select
                                 showSearch
@@ -1442,12 +1693,10 @@ export function VirtualizationVmsPage() {
             children: (
               <Form.List name="networks">
                 {(fields, { add, remove }) => (
-                  <Space orientation="vertical" className="w-full">
+                  <Space orientation="vertical" className="soha-vrt-fill">
                     {fields.map(({ key, name }) => (
-                      <div key={key} className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_32px]">
-                        <div className="flex items-center text-xs text-[var(--soha-text-color-secondary)]">
-                          系统自动分配网卡标识
-                        </div>
+                      <div key={key} className="soha-vrt-form-grid soha-vrt-form-grid--network-row">
+                        <div className="soha-vrt-form-row-hint">系统自动分配网卡标识</div>
                         <Form.Item name={[name, 'network']} rules={[{ required: true }]}>
                           <Select
                             showSearch

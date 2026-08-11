@@ -1,6 +1,6 @@
-import { Button } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { TableCellLink } from '@/components/table-cell-content'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
@@ -25,12 +25,10 @@ export function NetworkIngressesPage() {
       ellipsis: { showTitle: false },
       width: 260,
       render: (value: string, record) => (
-        <Button
-          type="text"
+        <TableCellLink
+          label={value}
           onClick={() => navigate(buildNetworkRoutePath('ingresses', value, record.namespace))}
-        >
-          {value}
-        </Button>
+        />
       ),
     },
     {

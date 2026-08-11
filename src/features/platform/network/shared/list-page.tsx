@@ -85,6 +85,8 @@ export function NetworkResourceListPage<T extends NetworkResourceRecord>({
       ),
     [normalizedKeyword, rawItems, searchValues],
   )
+  const canShowActions =
+    deletable && rawItems.some((item) => hasAllowedAction(item.allowedActions, 'delete'))
   useAIPageContext(buildAIPageContext(rawItems, searchKeyword))
   const removeMutation = useMutation(networkMutations.remove(kind, queryClient))
   const densityLabel = localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'
@@ -183,7 +185,7 @@ export function NetworkResourceListPage<T extends NetworkResourceRecord>({
         className: 'soha-platform-table',
         columnSettingIconOnly: true,
         columnSettingPlacement: 'header',
-        columns: deletable ? [...columns, actionColumn] : columns,
+        columns: canShowActions ? [...columns, actionColumn] : columns,
         dataSource: clusterId ? filteredItems : [],
         rowKey: rowKey ?? ((record) => `${record.namespace}/${record.name}`),
         onRow,
