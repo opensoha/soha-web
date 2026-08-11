@@ -22,6 +22,7 @@ import {
   ManagementTableToolbar,
 } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
+import { hasAllowedAction } from '@/features/auth'
 import {
   capabilityActionTooltip,
   useClusterCapability,
@@ -79,7 +80,11 @@ export function CRDKindWorkspace({ crd }: { crd: CRD }) {
   )
   const deleteMutation = useMutation(crdMutations.remove(queryClient))
   const rawResources = resourcesQuery.data ?? []
-  const canShowActions = !mutationsDisabled && rawResources.length > 0
+  const canShowActions =
+    !mutationsDisabled &&
+    rawResources.some((resource) =>
+      ['update', 'delete'].some((action) => hasAllowedAction(resource.allowedActions, action)),
+    )
   const filteredResources = useMemo(
     () =>
       rawResources.filter((item) =>
@@ -103,11 +108,18 @@ export function CRDKindWorkspace({ crd }: { crd: CRD }) {
     {
       title: '名称',
       dataIndex: 'name',
-      render: (value: string, record) => (
-        <Button type="link" style={{ paddingInline: 0 }} onClick={() => setEditingResource(record)}>
-          {value}
-        </Button>
-      ),
+      render: (value: string, record) =>
+        hasAllowedAction(record.allowedActions, 'update') ? (
+          <Button
+            type="link"
+            style={{ paddingInline: 0 }}
+            onClick={() => setEditingResource(record)}
+          >
+            {value}
+          </Button>
+        ) : (
+          value
+        ),
     },
     ...(isNamespacedCRD(crd) ? [{ title: '命名空间', dataIndex: 'namespace', width: 180 }] : []),
     { title: 'Kind', dataIndex: 'kind', width: 180, render: (value?: string) => value || crd.kind },
@@ -138,49 +150,57 @@ export function CRDKindWorkspace({ crd }: { crd: CRD }) {
       width: 76,
       render: (_value, record) => {
         const resourceKey = `${record.namespace || ''}/${record.name}`
+        const canUpdate = hasAllowedAction(record.allowedActions, 'update')
+        const canDelete = hasAllowedAction(record.allowedActions, 'delete')
         return (
           <Space size={2} className="soha-row-action-icons">
-            <ManagementIconButton
-              icon={<EditOutlined />}
-              aria-label={t('common.edit', 'Edit')}
-              disabled={mutationsDisabled}
-              tooltip={capabilityActionTooltip(t('common.edit', 'Edit'), capability)}
-              onClick={() => setEditingResource(record)}
-            />
-            <Popconfirm
-              title={t('common.deleteConfirm', `Delete ${record.name}?`)}
-              description={record.namespace ? `${record.name} (${record.namespace})` : record.name}
-              okText={t('common.delete', 'Delete')}
-              cancelText={t('common.cancel', 'Cancel')}
-              okButtonProps={{ danger: true, loading: deletingKey === resourceKey }}
-              onConfirm={() => {
-                if (!clusterId) return
-                setDeletingKey(resourceKey)
-                deleteMutation.mutate(
-                  {
-                    clusterId,
-                    crd,
-                    namespace: record.namespace ?? namespace,
-                    resourceName: record.name,
-                  },
-                  {
-                    onSuccess: () =>
-                      void message.success(t('common.deleteSuccess', 'Deleted successfully')),
-                    onError: (error) => void message.error(error.message),
-                    onSettled: () => setDeletingKey(null),
-                  },
-                )
-              }}
-            >
+            {canUpdate ? (
               <ManagementIconButton
-                danger
-                icon={<DeleteOutlined />}
-                aria-label={t('common.delete', 'Delete')}
+                icon={<EditOutlined />}
+                aria-label={t('common.edit', 'Edit')}
                 disabled={mutationsDisabled}
-                loading={deletingKey === resourceKey}
-                tooltip={capabilityActionTooltip(t('common.delete', 'Delete'), capability)}
+                tooltip={capabilityActionTooltip(t('common.edit', 'Edit'), capability)}
+                onClick={() => setEditingResource(record)}
               />
-            </Popconfirm>
+            ) : null}
+            {canDelete ? (
+              <Popconfirm
+                title={t('common.deleteConfirm', `Delete ${record.name}?`)}
+                description={
+                  record.namespace ? `${record.name} (${record.namespace})` : record.name
+                }
+                okText={t('common.delete', 'Delete')}
+                cancelText={t('common.cancel', 'Cancel')}
+                okButtonProps={{ danger: true, loading: deletingKey === resourceKey }}
+                onConfirm={() => {
+                  if (!clusterId) return
+                  setDeletingKey(resourceKey)
+                  deleteMutation.mutate(
+                    {
+                      clusterId,
+                      crd,
+                      namespace: record.namespace ?? namespace,
+                      resourceName: record.name,
+                    },
+                    {
+                      onSuccess: () =>
+                        void message.success(t('common.deleteSuccess', 'Deleted successfully')),
+                      onError: (error) => void message.error(error.message),
+                      onSettled: () => setDeletingKey(null),
+                    },
+                  )
+                }}
+              >
+                <ManagementIconButton
+                  danger
+                  icon={<DeleteOutlined />}
+                  aria-label={t('common.delete', 'Delete')}
+                  disabled={mutationsDisabled}
+                  loading={deletingKey === resourceKey}
+                  tooltip={capabilityActionTooltip(t('common.delete', 'Delete'), capability)}
+                />
+              </Popconfirm>
+            ) : null}
           </Space>
         )
       },

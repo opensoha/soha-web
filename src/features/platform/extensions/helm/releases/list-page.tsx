@@ -12,7 +12,7 @@ import {
   ManagementTableToolbar,
 } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
-import { hasAllowedAction } from '@/features/auth'
+import { hasAllowedAction, hasPermission, usePermissionSnapshot } from '@/features/auth'
 import {
   capabilityActionTooltip,
   useClusterCapability,
@@ -38,6 +38,8 @@ export function HelmReleasesPage() {
   const { clusterId, namespace } = usePlatformScopeStore()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const permissionSnapshot = usePermissionSnapshot().data?.data
+  const canViewValues = hasPermission(permissionSnapshot, 'platform.helm.values.view')
   const capability = useClusterCapability('helm.releases', localeCode)
   const [searchKeyword, setSearchKeyword] = useState('')
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
@@ -46,6 +48,11 @@ export function HelmReleasesPage() {
   const releasesQuery = useQuery(helmQueries.releases(clusterId, namespace))
   const deleteMutation = useMutation(helmMutations.removeRelease(queryClient))
   const rawItems = releasesQuery.data ?? []
+  const canShowActions =
+    canViewValues ||
+    rawItems.some((item) =>
+      ['update', 'delete'].some((action) => hasAllowedAction(item.allowedActions, action)),
+    )
   const filteredItems = useMemo(
     () =>
       rawItems.filter((item) =>
@@ -116,19 +123,21 @@ export function HelmReleasesPage() {
             className="soha-row-action-icons"
             onClick={(event) => event.stopPropagation()}
           >
-            <ManagementIconButton
-              icon={<EyeOutlined />}
-              aria-label={localeCode === 'zh_CN' ? '查看 values.yaml' : 'View values.yaml'}
-              tooltip={localeCode === 'zh_CN' ? '查看 values.yaml' : 'View values.yaml'}
-              onClick={() =>
-                navigate(
-                  buildHelmReleaseRoutePath(record.name, record.namespace, {
-                    tab: 'values',
-                    mode: 'diff',
-                  }),
-                )
-              }
-            />
+            {canViewValues ? (
+              <ManagementIconButton
+                icon={<EyeOutlined />}
+                aria-label={localeCode === 'zh_CN' ? '查看 values.yaml' : 'View values.yaml'}
+                tooltip={localeCode === 'zh_CN' ? '查看 values.yaml' : 'View values.yaml'}
+                onClick={() =>
+                  navigate(
+                    buildHelmReleaseRoutePath(record.name, record.namespace, {
+                      tab: 'values',
+                      mode: 'diff',
+                    }),
+                  )
+                }
+              />
+            ) : null}
             {canUpdate ? (
               <ManagementIconButton
                 icon={<EditOutlined />}
@@ -206,7 +215,7 @@ export function HelmReleasesPage() {
         columnSettingIconOnly
         columnSettingPlacement="header"
         shellClassName="soha-management-table-shell"
-        columns={columns}
+        columns={canShowActions ? columns : columns.filter((column) => column.key !== 'actions')}
         dataSource={clusterId ? filteredItems : []}
         rowKey={(record) => `${record.namespace}:${record.name}`}
         loading={releasesQuery.isLoading}

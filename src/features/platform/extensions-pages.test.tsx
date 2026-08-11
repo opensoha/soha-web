@@ -14,6 +14,7 @@ import { HelmChartsPage } from './extensions/helm/charts/page'
 import { HelmReleasesPage } from './extensions/helm/releases/list-page'
 
 const testState = vi.hoisted(() => ({
+  permissions: ['platform.helm.values.view'] as string[],
   normalizePath: (path: string) => {
     const [pathname, rawQuery] = path.split('?')
     if (!rawQuery) return path
@@ -56,6 +57,14 @@ vi.mock('@/services/api-client', () => ({
     put: vi.fn(),
     delete: vi.fn(),
   },
+}))
+
+vi.mock('@/features/auth', () => ({
+  hasAllowedAction: (actions: string[] | undefined, action: string) =>
+    actions?.includes(action) ?? false,
+  hasPermission: (_snapshot: unknown, permission: string) =>
+    testState.permissions.includes(permission),
+  usePermissionSnapshot: () => ({ data: { data: {} } }),
 }))
 
 vi.mock('@/components/platform-scope-toolbar', () => ({
@@ -231,6 +240,7 @@ describe('CRD catalog page', () => {
   })
 
   beforeEach(() => {
+    testState.permissions = ['platform.helm.values.view']
     setResponses({
       '/clusters/cluster-a/extensions/crds': [
         {
@@ -430,6 +440,27 @@ describe('CRD catalog page', () => {
     expect(editButton?.disabled).toBe(false)
     expect(deleteButton?.disabled).toBe(false)
     expect(viewButton?.disabled).toBe(false)
+  })
+
+  it('hides the Helm action column when values and mutation permissions are absent', async () => {
+    testState.permissions = []
+    setResponses({
+      '/clusters/cluster-a/helm/releases?namespace=team-a': [
+        {
+          name: 'read-only-release',
+          namespace: 'team-a',
+          chart: 'read-only-1.0.0',
+          revision: '1',
+          status: 'deployed',
+          allowedActions: ['view'],
+        },
+      ],
+    })
+
+    const container = await renderWithProviders(<HelmReleasesPage />, '/helm/releases')
+
+    expect(container.querySelector('button[aria-label="查看 values.yaml"]')).toBeNull()
+    expect(container.querySelector('[data-testid="column-titles"]')?.children).toHaveLength(7)
   })
 
   it('keeps CRD discovery visible but blocks custom-resource instance calls for agent partial support', async () => {

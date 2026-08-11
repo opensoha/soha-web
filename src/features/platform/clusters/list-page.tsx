@@ -614,7 +614,7 @@ export function ClustersPage() {
         footer={null}
       >
         {agentInstallation ? (
-          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
             <Input.TextArea
               value={agentInstallation.command}
               readOnly

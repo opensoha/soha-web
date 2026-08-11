@@ -11,6 +11,7 @@ export interface CRD {
 }
 
 export interface CRDResourceInstance {
+  allowedActions?: string[]
   apiVersion?: string
   createdAt?: string
   ageSeconds?: number
