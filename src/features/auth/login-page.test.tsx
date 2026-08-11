@@ -221,12 +221,14 @@ describe("login page", () => {
     expect(container.textContent).not.toContain("登录控制台");
 
     await act(async () => {
-      vi.advanceTimersByTime(2_000);
+      await vi.advanceTimersByTimeAsync(2_000);
     });
     await flushReact();
 
     expect(restoreAuthSession).toHaveBeenCalledTimes(2);
-    expect(container.textContent).toContain("landing page");
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain("landing page");
+    });
   }, 20_000);
 
   it("uses the portal as the default landing page when it is accessible", async () => {
@@ -243,6 +245,8 @@ describe("login page", () => {
 
     const container = await renderLoginPage();
 
-    expect(container.textContent).toContain("portal landing page");
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain("portal landing page");
+    });
   });
 });
