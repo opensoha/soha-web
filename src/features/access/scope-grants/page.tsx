@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { App, Button, Form, Input, Modal, Popconfirm, Select, Space, Switch } from 'antd'
+import { App, Button, Popconfirm, Space, Tooltip } from 'antd'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import type { TableColumnsType } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -16,21 +16,11 @@ import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { accessMutations, invalidateAccessScopeGrants } from '../shared/mutations'
 import { accessQueries } from '../shared/queries'
+import { ScopeGrantEditor } from '../shared/scope-grant-editor'
 import type { AccessScopeGrant } from '../shared/types'
-import { parseCSV } from '../shared/utils'
 import '../shared/styles.css'
 
 type ColumnProps<T> = TableColumnsType<T>[number]
-type ScopeGrantFormValues = {
-  applicationIds?: string
-  businessLineId: string
-  effect: string
-  enabled: boolean
-  environmentIds?: string
-  role: string
-  subjectId: string
-  subjectType: 'team' | 'user'
-}
 
 export function AccessScopeGrantsPage() {
   const { message } = App.useApp()
@@ -40,16 +30,37 @@ export function AccessScopeGrantsPage() {
   const canCreateScopeGrants = hasPermission(snapshot, 'access.scope-grants.create')
   const canUpdateScopeGrants = hasPermission(snapshot, 'access.scope-grants.update')
   const canDeleteScopeGrants = hasPermission(snapshot, 'access.scope-grants.delete')
+  const canViewRoles = hasPermission(snapshot, 'access.roles.view')
+  const canViewUsers = hasPermission(snapshot, 'access.users.view')
+  const canViewTeams = hasPermission(snapshot, 'access.groups.view')
+  const canViewApplications = hasPermission(snapshot, 'delivery.applications.view')
+  const canViewApplicationEnvironments = hasPermission(
+    snapshot,
+    'delivery.application-environments.view',
+  )
+  const canViewClusters = hasPermission(snapshot, 'platform.clusters.view')
+  const canUseEditor =
+    canViewRoles &&
+    (canViewUsers || canViewTeams) &&
+    ((canViewApplications && canViewApplicationEnvironments) || canViewClusters)
   const queryClient = useQueryClient()
-  const [form] = Form.useForm<ScopeGrantFormValues>()
   const [modalVisible, setModalVisible] = useState(false)
   const [editing, setEditing] = useState<AccessScopeGrant | null>(null)
 
-  const grantsQuery = useQuery(accessQueries.scopeGrants())
-  const applicationsQuery = useQuery(accessQueries.applicationOptions())
+  const grantsQuery = useQuery(accessQueries.scopeGrants(canViewScopeGrants))
+  const applicationsQuery = useQuery(
+    accessQueries.applicationOptions(canViewScopeGrants && canViewApplications),
+  )
+  const clustersQuery = useQuery(
+    accessQueries.clusterOptions(canViewScopeGrants && canViewClusters),
+  )
   const applicationMap = useMemo(
     () => Object.fromEntries((applicationsQuery.data ?? []).map((item) => [item.id, item.name])),
     [applicationsQuery.data],
+  )
+  const clusterMap = useMemo(
+    () => Object.fromEntries((clustersQuery.data ?? []).map((item) => [item.id, item.name])),
+    [clustersQuery.data],
   )
 
   const createMutation = useMutation({
@@ -87,22 +98,40 @@ export function AccessScopeGrantsPage() {
       render: (value: string) => (value === 'team' ? '组织' : '用户'),
     },
     { title: '主体 ID', dataIndex: 'subjectId' },
-    { title: '范围 Key', dataIndex: 'businessLineId', render: (value: string) => value || '-' },
+    {
+      title: '范围类型',
+      dataIndex: 'scopeType',
+      render: (value: string) => (value === 'platform' ? '平台范围' : '交付范围'),
+    },
+    {
+      title: '资源范围',
+      key: 'resourceScope',
+      render: (_: unknown, record: AccessScopeGrant) =>
+        record.scopeType === 'platform'
+          ? record.clusterIds?.map((item) => (
+              <MetadataTag key={item} label={clusterMap[item] || item} />
+            ))
+          : record.businessLineId || '-',
+    },
     {
       title: '环境',
       dataIndex: 'environmentIds',
-      render: (values: string[]) =>
-        values?.length ? values.map((item) => <MetadataTag key={item} label={item} />) : '全部',
+      render: (values: string[] | undefined, record: AccessScopeGrant) =>
+        record.scopeType === 'platform'
+          ? '-'
+          : values?.length
+            ? values.map((item) => <MetadataTag key={item} label={item} />)
+            : '全部',
     },
     {
       title: '应用',
       dataIndex: 'applicationIds',
-      render: (values: string[]) =>
-        values?.length
-          ? values.map((item) => (
-              <MetadataTag key={item} label={applicationMap[item] || item} />
-            ))
-          : '全部',
+      render: (values: string[] | undefined, record: AccessScopeGrant) =>
+        record.scopeType === 'platform'
+          ? '-'
+          : values?.length
+            ? values.map((item) => <MetadataTag key={item} label={applicationMap[item] || item} />)
+            : '全部',
     },
     { title: '角色', dataIndex: 'role' },
     {
@@ -183,16 +212,21 @@ export function AccessScopeGrantsPage() {
         headerExtra={
           <ManagementTableToolbar>
             {canCreateScopeGrants ? (
-              <Button
-                icon={<PlusOutlined />}
-                type="primary"
-                onClick={() => {
-                  setEditing(null)
-                  setModalVisible(true)
-                }}
-              >
-                新建授权项
-              </Button>
+              <Tooltip title={canUseEditor ? undefined : '需要主体、角色及资源目录查看权限'}>
+                <span>
+                  <Button
+                    disabled={!canUseEditor}
+                    icon={<PlusOutlined />}
+                    type="primary"
+                    onClick={() => {
+                      setEditing(null)
+                      setModalVisible(true)
+                    }}
+                  >
+                    新建授权项
+                  </Button>
+                </span>
+              </Tooltip>
             ) : null}
             <ManagementRefreshButton
               aria-label="刷新"
@@ -204,95 +238,44 @@ export function AccessScopeGrantsPage() {
         }
         columns={columns}
         dataSource={grantsQuery.data ?? []}
+        empty={
+          grantsQuery.isError ? (
+            <ManagementState
+              bordered={false}
+              compact
+              kind="error"
+              description="授权范围加载失败，请重试。"
+              actions={<Button onClick={() => void grantsQuery.refetch()}>重试</Button>}
+            />
+          ) : (
+            <ManagementState
+              bordered={false}
+              compact
+              title="未设置额外范围"
+              description="当前主体仍按角色和访问策略生效。"
+            />
+          )
+        }
         rowKey="id"
         loading={grantsQuery.isLoading}
         scroll={{ x: 'max-content' }}
       />
-      <Modal
-        title={editing ? '编辑授权项' : '新建授权项'}
+      <ScopeGrantEditor
+        editing={editing}
         open={modalVisible}
         onCancel={() => {
           setModalVisible(false)
           setEditing(null)
         }}
-        onOk={async () => {
-          try {
-            const values = await form.validateFields()
-            const payload = {
-              ...values,
-              environmentIds: parseCSV(values.environmentIds),
-              applicationIds: parseCSV(values.applicationIds),
-            }
-            if (editing) {
-              updateMutation.mutate({ id: editing.id, values: payload })
-              return
-            }
-            createMutation.mutate(payload)
-          } catch {
+        onSubmit={(payload) => {
+          if (editing) {
+            updateMutation.mutate({ id: editing.id, values: payload })
             return
           }
+          createMutation.mutate(payload)
         }}
-        okText={editing ? '更新' : '创建'}
-        cancelText="取消"
-        confirmLoading={createMutation.isPending || updateMutation.isPending}
-        width={760}
-        destroyOnHidden
-        mask={{ closable: false }}
-        styles={{ body: { maxHeight: '65vh', overflow: 'auto' } }}
-      >
-        <Form
-          form={form}
-          key={editing?.id ?? 'create-scope-grant'}
-          layout="vertical"
-          initialValues={
-            editing
-              ? {
-                  ...editing,
-                  environmentIds: editing.environmentIds.join(', '),
-                  applicationIds: editing.applicationIds.join(', '),
-                }
-              : { enabled: true, effect: 'allow', subjectType: 'team' }
-          }
-        >
-          <Form.Item name="subjectType" label="主体类型">
-            <Select
-              options={[
-                { value: 'team', label: '组织' },
-                { value: 'user', label: '用户' },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item
-            name="subjectId"
-            label="主体 ID"
-            rules={[{ required: true, message: '请输入主体 ID' }]}
-          >
-            <Input />
-          </Form.Item>
-          <Form.Item
-            name="businessLineId"
-            label="范围 Key"
-            rules={[{ required: true, message: '请输入范围 Key' }]}
-          >
-            <Input placeholder="应用组 / 历史 businessLineId" />
-          </Form.Item>
-          <Form.Item name="environmentIds" label="环境 IDs">
-            <Input placeholder="留空表示全部环境，多个以逗号分隔" />
-          </Form.Item>
-          <Form.Item name="applicationIds" label="应用 IDs">
-            <Input placeholder="留空表示全部应用，多个以逗号分隔" />
-          </Form.Item>
-          <Form.Item name="role" label="角色" rules={[{ required: true, message: '请输入角色' }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="effect" label="效果">
-            <Select options={[{ value: 'allow', label: '允许' }]} />
-          </Form.Item>
-          <Form.Item name="enabled" label="启用" valuePropName="checked">
-            <Switch />
-          </Form.Item>
-        </Form>
-      </Modal>
+        pending={createMutation.isPending || updateMutation.isPending}
+      />
     </div>
   )
 }

@@ -73,6 +73,19 @@ describe('systemApi', () => {
     )
   })
 
+  it('uses server summaries for audit and operation totals', async () => {
+    apiMocks.get.mockResolvedValueOnce({ data: { total: 12 } })
+    apiMocks.get.mockResolvedValueOnce({ data: { total: 8, failureCount: 1 } })
+
+    await expect(systemApi.audit.summary()).resolves.toEqual({ total: 12 })
+    await expect(systemApi.operationLogs.summary()).resolves.toEqual({
+      total: 8,
+      failureCount: 1,
+    })
+    expect(apiMocks.get).toHaveBeenNthCalledWith(1, '/audit/summary')
+    expect(apiMocks.get).toHaveBeenNthCalledWith(2, '/operations/summary')
+  })
+
   it('unwraps menu CRUD and encodes record identifiers', async () => {
     const menu = { id: 'menu/a', labelZh: '菜单 A' }
     apiMocks.post.mockResolvedValue({ data: menu })

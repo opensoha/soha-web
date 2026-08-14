@@ -144,6 +144,7 @@ export interface PermissionSnapshot {
 export interface BrandingSettings {
   appTitle: string
   sidebarTitle: string
+  slogan?: string
   loginLogoUrl: string
   expandedLogoUrl: string
   collapsedLogoUrl: string

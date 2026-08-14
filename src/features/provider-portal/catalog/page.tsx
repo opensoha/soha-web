@@ -15,20 +15,7 @@ import {
   UserOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  App,
-  Avatar,
-  Badge,
-  Button,
-  Card,
-  Empty,
-  Input,
-  Menu,
-  Spin,
-  Tag,
-  Tooltip,
-  Typography,
-} from 'antd'
+import { App, Badge, Button, Card, Empty, Input, Menu, Spin, Tag, Tooltip, Typography } from 'antd'
 import { Link, useNavigate } from 'react-router-dom'
 import { ManagementDensityButton } from '@/components/management-list'
 import { useAnnouncementInbox, type AnnouncementInboxItem } from '@/features/announcements'
@@ -41,8 +28,10 @@ import {
   getAccessibleWorkbenchIds,
   getMenuWorkbenchId,
 } from '@/routes/meta'
+import { useAuthStore } from '@/stores/auth-store'
 import { providerPortalMutations } from '../mutations'
 import { providerPortalQueries } from '../queries'
+import { PortalUserAvatar } from '../shared/account-menu'
 import {
   PortalApplicationAvatar,
   PortalTags,
@@ -57,9 +46,21 @@ const { Paragraph, Text } = Typography
 
 type PortalApplicationView = 'small' | 'medium'
 
+interface PortalLayoutPreferences {
+  applicationView: PortalApplicationView
+  isGroupCollapsed: boolean
+  isSideCollapsed: boolean
+}
+
 const APPLICATION_VIEW_ORDER: PortalApplicationView[] = ['small', 'medium']
 const ALL_APPLICATIONS_TAB_KEY = '__all_applications__'
 const APPLICATION_TAG_TAB_PREFIX = 'tag:'
+const PORTAL_LAYOUT_STORAGE_KEY_PREFIX = 'soha-provider-portal-layout:v1'
+const DEFAULT_PORTAL_LAYOUT_PREFERENCES: PortalLayoutPreferences = {
+  applicationView: 'medium',
+  isGroupCollapsed: false,
+  isSideCollapsed: false,
+}
 
 function applicationTagTabKey(tag: string) {
   return `${APPLICATION_TAG_TAB_PREFIX}${tag}`
@@ -68,6 +69,40 @@ function applicationTagTabKey(tag: string) {
 function cycleApplicationView(view: PortalApplicationView) {
   const currentIndex = APPLICATION_VIEW_ORDER.indexOf(view)
   return APPLICATION_VIEW_ORDER[(currentIndex + 1) % APPLICATION_VIEW_ORDER.length]
+}
+
+function portalLayoutStorageKey(userId: string) {
+  return `${PORTAL_LAYOUT_STORAGE_KEY_PREFIX}:${encodeURIComponent(userId)}`
+}
+
+function readPortalLayoutPreferences(userId?: string): PortalLayoutPreferences {
+  if (!userId || typeof window === 'undefined') return DEFAULT_PORTAL_LAYOUT_PREFERENCES
+
+  try {
+    const raw = window.localStorage.getItem(portalLayoutStorageKey(userId))
+    if (!raw) return DEFAULT_PORTAL_LAYOUT_PREFERENCES
+    const stored = JSON.parse(raw) as Partial<PortalLayoutPreferences> | null
+    return {
+      applicationView:
+        stored?.applicationView === 'small' || stored?.applicationView === 'medium'
+          ? stored.applicationView
+          : DEFAULT_PORTAL_LAYOUT_PREFERENCES.applicationView,
+      isGroupCollapsed: stored?.isGroupCollapsed === true,
+      isSideCollapsed: stored?.isSideCollapsed === true,
+    }
+  } catch {
+    return DEFAULT_PORTAL_LAYOUT_PREFERENCES
+  }
+}
+
+function writePortalLayoutPreferences(userId: string | undefined, value: PortalLayoutPreferences) {
+  if (!userId || typeof window === 'undefined') return
+
+  try {
+    window.localStorage.setItem(portalLayoutStorageKey(userId), JSON.stringify(value))
+  } catch {
+    return
+  }
 }
 
 function ApplicationCard({
@@ -190,7 +225,7 @@ function PortalUserPanel({ security }: { security?: PortalSecuritySummary }) {
   return (
     <div className="soha-portal-side-body">
       <div className="soha-portal-principal">
-        <Avatar icon={<UserOutlined />} size={40} />
+        <PortalUserAvatar size={40} />
         <div className="soha-portal-principal-copy">
           <Text strong>{principal?.userName || t('layout.user', 'User')}</Text>
           <Text type="secondary" ellipsis title={principal?.email}>
@@ -411,11 +446,19 @@ export function SohaProviderPortalPage() {
   const { message } = App.useApp()
   const { t, localeCode } = useI18n()
   const queryClient = useQueryClient()
+  const currentUserId = useAuthStore((state) => state.user?.userId)
   const [query, setQuery] = useState('')
   const [selectedTag, setSelectedTag] = useState<string>()
-  const [applicationView, setApplicationView] = useState<PortalApplicationView>('medium')
-  const [isGroupCollapsed, setIsGroupCollapsed] = useState(false)
-  const [isSideCollapsed, setIsSideCollapsed] = useState(false)
+  const [portalLayout, setPortalLayout] = useState(() => readPortalLayoutPreferences(currentUserId))
+  const { applicationView, isGroupCollapsed, isSideCollapsed } = portalLayout
+
+  const updatePortalLayout = (updates: Partial<PortalLayoutPreferences>) => {
+    setPortalLayout((current) => {
+      const next = { ...current, ...updates }
+      writePortalLayoutPreferences(currentUserId, next)
+      return next
+    })
+  }
 
   const bootstrapQuery = useQuery(providerPortalQueries.bootstrap())
   const permissionSnapshotQuery = usePermissionSnapshot()
@@ -560,7 +603,7 @@ export function SohaProviderPortalPage() {
                       icon={<MenuFoldOutlined />}
                       size="small"
                       type="text"
-                      onClick={() => setIsGroupCollapsed(true)}
+                      onClick={() => updatePortalLayout({ isGroupCollapsed: true })}
                     />
                   </Tooltip>
                 </span>
@@ -604,7 +647,7 @@ export function SohaProviderPortalPage() {
                       icon={<RightOutlined />}
                       size="small"
                       type="text"
-                      onClick={() => setIsGroupCollapsed(false)}
+                      onClick={() => updatePortalLayout({ isGroupCollapsed: false })}
                     />
                   </Tooltip>
                 ) : null}
@@ -615,7 +658,7 @@ export function SohaProviderPortalPage() {
                       icon={<LeftOutlined />}
                       size="small"
                       type="text"
-                      onClick={() => setIsSideCollapsed(false)}
+                      onClick={() => updatePortalLayout({ isSideCollapsed: false })}
                     />
                   </Tooltip>
                 ) : null}
@@ -628,7 +671,9 @@ export function SohaProviderPortalPage() {
                     'providerPortal.home.cycleApplicationView',
                     'Switch application card size',
                   )}
-                  onClick={() => setApplicationView((current) => cycleApplicationView(current))}
+                  onClick={() =>
+                    updatePortalLayout({ applicationView: cycleApplicationView(applicationView) })
+                  }
                 />
               </div>
             </div>
@@ -684,7 +729,7 @@ export function SohaProviderPortalPage() {
                   icon={<RightOutlined />}
                   size="small"
                   type="text"
-                  onClick={() => setIsSideCollapsed(true)}
+                  onClick={() => updatePortalLayout({ isSideCollapsed: true })}
                 />
               </Tooltip>
               <section className="soha-portal-side-panel">

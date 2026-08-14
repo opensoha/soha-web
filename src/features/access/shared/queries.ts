@@ -45,6 +45,18 @@ export const accessQueries = {
       queryFn: accessApi.dependencies.applications,
       enabled,
     }),
+  applicationEnvironments: (enabled = true) =>
+    queryOptions({
+      queryKey: accessKeys.applicationEnvironments(),
+      queryFn: accessApi.dependencies.applicationEnvironments,
+      enabled,
+    }),
+  clusterOptions: (enabled = true) =>
+    queryOptions({
+      queryKey: accessKeys.clusterOptions(),
+      queryFn: accessApi.dependencies.clusters,
+      enabled,
+    }),
   loginProviders: (enabled = true) =>
     queryOptions({
       queryKey: accessKeys.loginProviders(),

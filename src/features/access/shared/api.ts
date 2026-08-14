@@ -1,12 +1,11 @@
 import { api } from '@/services/api-client'
 import type { ApiResponse } from '@/types'
-import type {
-  MFAAdminResetResult,
-  PermissionCatalog,
-} from '@opensoha/contracts/gen/ts/sohaapi'
+import type { MFAAdminResetResult, PermissionCatalog } from '@opensoha/contracts/gen/ts/sohaapi'
 import { settingsApi } from '@/features/settings'
 import type {
   AccessApplicationOption,
+  AccessApplicationEnvironment,
+  AccessClusterOption,
   AccessMutationValues,
   AccessPolicy,
   AccessRole,
@@ -32,8 +31,7 @@ function resourcePath(resource: string, id: string) {
 
 export const accessApi = {
   permissions: {
-    catalog: () =>
-      unwrap(api.get<ApiResponse<PermissionCatalog>>('/access/permissions')),
+    catalog: () => unwrap(api.get<ApiResponse<PermissionCatalog>>('/access/permissions')),
   },
   users: {
     list: () => unwrap(api.get<ApiResponse<AccessUser[]>>('/access/users')),
@@ -79,6 +77,9 @@ export const accessApi = {
   },
   dependencies: {
     applications: () => unwrap(api.get<ApiResponse<AccessApplicationOption[]>>('/applications')),
+    applicationEnvironments: () =>
+      unwrap(api.get<ApiResponse<AccessApplicationEnvironment[]>>('/application-environments')),
+    clusters: () => unwrap(api.get<ApiResponse<AccessClusterOption[]>>('/clusters')),
     loginProviders: async () => {
       const settings = await settingsApi.identity.get()
       return Array.isArray(settings?.providers) ? settings.providers : []

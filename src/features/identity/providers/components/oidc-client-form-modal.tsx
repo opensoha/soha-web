@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
-import { Button, Form, Input, InputNumber, Modal, Select, Switch } from 'antd'
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import { Button, Form, Input, InputNumber, Modal, Select, Switch, Tooltip } from 'antd'
 import {
   defaultOIDCClientValues,
   oidcClientInputFromValues,
@@ -7,6 +8,7 @@ import {
   oidcClientTypeOptions,
   oidcClientValuesFor,
   oidcGrantTypeOptions,
+  oidcRedirectMatchModeOptions,
   type OIDCClientFormValues,
 } from '../provider-form-model'
 import type { IdentityOIDCClient, IdentityOIDCClientInput } from '../types'
@@ -64,7 +66,11 @@ export function OIDCClientFormModal({
             <Input.Password
               disabled={clientType === 'public'}
               placeholder={
-                clientType === 'public' ? 'Public client 不使用 secret' : editing ? '留空表示不轮换' : '留空自动生成'
+                clientType === 'public'
+                  ? 'Public client 不使用 secret'
+                  : editing
+                    ? '留空表示不轮换'
+                    : '留空自动生成'
               }
             />
           </Form.Item>
@@ -86,22 +92,62 @@ export function OIDCClientFormModal({
           </Form.Item>
         </div>
 
-        <Form.Item
-          label="Redirect URIs"
-          name="redirectUris"
-          rules={[{ required: true, message: '至少配置一个 Redirect URI' }]}
-        >
-          <Select
-            mode="tags"
-            placeholder="https://grafana.example.com/login/generic_oauth"
-            tokenSeparators={[',']}
-          />
+        <Form.Item label="重定向 URI/Origin" required>
+          <Form.List
+            name="redirectRules"
+            rules={[
+              {
+                validator: async (_, rules) => {
+                  if (rules?.some((rule: { value?: string }) => rule.value?.trim())) return
+                  throw new Error('至少配置一个重定向规则')
+                },
+              },
+            ]}
+          >
+            {(fields, { add, remove }, { errors }) => (
+              <div className="soha-identity-redirect-rule-list">
+                {fields.map((field) => (
+                  <div className="soha-identity-redirect-rule" key={field.key}>
+                    <Form.Item name={[field.name, 'mode']} rules={[{ required: true }]}>
+                      <Select aria-label="重定向匹配方式" options={oidcRedirectMatchModeOptions} />
+                    </Form.Item>
+                    <Form.Item
+                      name={[field.name, 'value']}
+                      rules={[
+                        { required: true, whitespace: true, message: '请输入 URI 或正则表达式' },
+                      ]}
+                    >
+                      <Input placeholder="http://grafana.internal/login/generic_oauth" />
+                    </Form.Item>
+                    <Tooltip title="删除规则">
+                      <Button
+                        aria-label="删除重定向规则"
+                        danger
+                        disabled={fields.length === 1}
+                        icon={<DeleteOutlined />}
+                        onClick={() => remove(field.name)}
+                        type="text"
+                      />
+                    </Tooltip>
+                  </div>
+                ))}
+                <Button
+                  icon={<PlusOutlined />}
+                  onClick={() => add({ mode: 'strict', value: '' })}
+                  type="link"
+                >
+                  添加条目
+                </Button>
+                <Form.ErrorList errors={errors} />
+              </div>
+            )}
+          </Form.List>
         </Form.Item>
 
         <Form.Item label="Post Logout Redirect URIs" name="postLogoutRedirectUris">
           <Select
             mode="tags"
-            placeholder="https://grafana.example.com/logout"
+            placeholder="http://grafana.internal/logout"
             tokenSeparators={[',']}
           />
         </Form.Item>

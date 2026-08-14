@@ -33,9 +33,97 @@
   height: 260px;
 }
 
+.soha-explore-switcher {
+  align-self: flex-start;
+  min-width: 280px;
+}
+
+.soha-trace-expanded {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 560px;
+}
+
+.soha-trace-waterfall {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.soha-trace-waterfall-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 220px) minmax(280px, 1fr) 84px;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+}
+
+.soha-trace-waterfall-label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.soha-trace-waterfall-track {
+  position: relative;
+  height: 12px;
+  overflow: hidden;
+  background: var(--ant-color-fill-secondary);
+  border-radius: 4px;
+}
+
+.soha-trace-waterfall-bar {
+  position: absolute;
+  inset-block: 0;
+  background: var(--ant-color-primary);
+  border-radius: 3px;
+}
+
+.soha-trace-waterfall-bar.is-error {
+  background: var(--ant-color-error);
+}
+
+.soha-trace-waterfall-duration {
+  text-align: end;
+  white-space: nowrap;
+}
+
+.soha-service-drawer-section {
+  margin-block-start: 20px;
+}
+
+.soha-topology-edge-list .ant-list-item {
+  padding-inline: 0;
+}
+
 @media (max-width: 960px) {
   .soha-signal-query-grid,
   .soha-signal-metric-grid {
     grid-template-columns: 1fr;
+  }
+
+  .soha-trace-waterfall-row {
+    grid-template-columns: 120px minmax(180px, 1fr) 72px;
+  }
+}
+
+@media (max-width: 600px) {
+  .soha-signal-scope-row {
+    align-items: stretch;
+  }
+
+  .soha-signal-scope-row > .soha-scopebar.is-embedded {
+    flex: 1 1 100%;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .soha-signal-scope-row .ant-select {
+    width: 100% !important;
   }
 }

@@ -29,7 +29,11 @@ import { findLandingPath } from '@/routes/meta'
 import { useAuthStore } from '@/stores/auth-store'
 import { usePreferencesStore } from '@/stores/preferences-store'
 import { getThemePalette, readThemeCssVariable, resolveThemeMode } from '@/theme/app-theme'
-import { readStoredBrandingSettings } from '@/utils/branding'
+import {
+  applyBrandingSettings,
+  persistBrandingSettings,
+  readStoredBrandingSettings,
+} from '@/utils/branding'
 import './login-page.css'
 
 const { Title, Text } = Typography
@@ -305,17 +309,14 @@ function LoginConstellationBackground() {
   return <canvas ref={canvasRef} className="soha-auth-background" aria-hidden="true" />
 }
 
-function LoginCapabilityFlow() {
+function LoginCapabilityFlow({ slogan }: { slogan: string }) {
   return (
     <section className="soha-auth-flow" aria-label="Soha 支持的能力">
       <div className="soha-auth-flow-copy">
         <div>
           <Title level={1} className="soha-auth-flow-title">
-            Soha 是一种能力！
+            {slogan}
           </Title>
-          <Text className="soha-auth-flow-subtitle">
-            Soha 将 Kubernetes 与计算资源、应用交付、AI、可观测性、身份访问和系统配置统一到一个可协同、可治理的工作平台。
-          </Text>
         </div>
       </div>
 
@@ -431,7 +432,7 @@ export function LoginPage() {
   const themeMode = usePreferencesStore((state) => state.themeMode)
   const setThemeMode = usePreferencesStore((state) => state.setThemeMode)
 
-  const branding = readStoredBrandingSettings()
+  const storedBranding = readStoredBrandingSettings()
   const stateReturnTo = normalizeLocalReturnTo(
     routeLocationPath(
       (
@@ -464,6 +465,12 @@ export function LoginPage() {
     retry: false,
     staleTime: 60_000,
   })
+  const branding = loginOptionsQuery.data?.branding ?? storedBranding
+  useEffect(() => {
+    if (!loginOptionsQuery.data?.branding) return
+    applyBrandingSettings(loginOptionsQuery.data.branding)
+    persistBrandingSettings(loginOptionsQuery.data.branding)
+  }, [loginOptionsQuery.data?.branding])
   const thirdPartyProviders = (providersQuery.data ?? []).filter(
     (item) => item.enabled !== false && item.type !== 'password',
   )
@@ -636,7 +643,7 @@ export function LoginPage() {
       />
 
       <div className="soha-auth-layout soha-auth-layout--floating">
-        <LoginCapabilityFlow />
+        <LoginCapabilityFlow slogan={branding.slogan || 'Soha 是一种能力！'} />
 
         <Card className="soha-auth-panel soha-auth-panel--floating" variant="borderless">
           <div className="soha-auth-panel-inner">

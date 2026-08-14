@@ -1,4 +1,7 @@
 import type {
+  Application,
+  ApplicationEnvironment,
+  KubernetesClusterSummary,
   MFAAdminResetRequest,
   PermissionCatalog,
   PermissionDefinition,
@@ -84,10 +87,20 @@ export interface AccessPolicy {
   reason: string
 }
 
-export interface AccessApplicationOption {
-  id: string
-  name: string
-}
+export type AccessApplicationOption = Pick<Application, 'businessLineId' | 'group' | 'id' | 'name'>
+export type AccessApplicationEnvironment = Pick<
+  ApplicationEnvironment,
+  | 'applicationGroup'
+  | 'applicationId'
+  | 'businessLineId'
+  | 'environmentId'
+  | 'environmentKey'
+  | 'id'
+>
+export type AccessClusterOption = Pick<
+  KubernetesClusterSummary,
+  'environment' | 'id' | 'name' | 'region'
+>
 
 export interface AccessLoginProviderRef {
   id: string
@@ -110,13 +123,19 @@ export interface ResetAccessUserMFAVariables {
 
 export interface AccessScopeGrant {
   id: string
-  subjectType: string
+  subjectType: 'team' | 'user'
   subjectId: string
   businessLineId: string
-  environmentIds: string[]
-  applicationIds: string[]
+  environmentIds?: string[]
+  applicationIds?: string[]
+  scopeType: 'delivery' | 'legacy' | 'platform'
+  clusterIds?: string[]
+  namespaces?: string[]
+  namespaceSelector?: string
+  resourceGroups?: string[]
+  resourceKinds?: string[]
   role: string
-  effect: string
+  effect: 'allow' | 'deny'
   enabled: boolean
   createdAt: string
   updatedAt: string

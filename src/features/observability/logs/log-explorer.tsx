@@ -234,7 +234,7 @@ export function LogExplorer({
   target,
 }: LogExplorerProps) {
   const navigate = useNavigate()
-  const [, setSearchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { message } = App.useApp()
   const permissionSnapshot = usePermissionSnapshot().data?.data
   const canViewDataSources = hasPermission(permissionSnapshot, 'observe.log-data-sources.view')
@@ -357,7 +357,10 @@ export function LogExplorer({
       allContainers: filters.allContainers,
       previous: filters.previous,
     })
-    setSearchParams(path.split('?')[1] ?? '', { replace: true })
+    const next = new URLSearchParams(path.split('?')[1] ?? '')
+    const signal = searchParams.get('signal')
+    if (signal) next.set('signal', signal)
+    setSearchParams(next, { replace: true })
   }
 
   function submitLiveQuery(filters: RuntimeLogFilters) {

@@ -18,7 +18,7 @@ export const identityParentRoutes = defineRoutes([
       workbenchId: 'security',
       requiresAuth: true,
       tabbar: false,
-      navVisible: true,
+      navVisible: false,
       menuId: 'identity',
       permissionStrategy: 'any-child',
       scopeMode: 'passive',

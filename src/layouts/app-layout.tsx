@@ -43,6 +43,10 @@ import {
 } from '@/features/modules'
 import { resolveMenuIcon } from '@/features/system/menu-icons'
 import { resolveMenuSectionLabel } from '@/features/system/menu-schema'
+import {
+  RealtimeSessionDockProvider,
+  RealtimeSessionDockTrigger,
+} from '@/features/platform/session-dock'
 import { useI18n } from '@/i18n'
 import {
   filterSidebarNavByWorkbench,
@@ -923,7 +927,10 @@ export function AppLayout() {
       ? currentScopeMode
       : 'hidden'
   const showResourceCreateAction =
-    currentWorkbenchId === 'platform' && hasPermission(snapshot, 'platform.resource.create')
+    currentWorkbenchId === 'platform' && hasPermission(snapshot, 'platform.resource-creation.use')
+  const showRealtimeSessionsAction =
+    currentWorkbenchId === 'platform' &&
+    (hasPermission(snapshot, 'platform.pods.logs') || hasPermission(snapshot, 'platform.pods.exec'))
   const globalAssistantEnabled = getWorkbenchModuleFeature(
     moduleStatusesQuery.data,
     'ai',
@@ -955,272 +962,278 @@ export function AppLayout() {
         currentWorkbenchId === 'settings' ? null : <AssistantCompanionOverlay {...props} />
       }
     >
-      <Layout className="soha-shell" hasSider>
-        <Sider
-          breakpoint="md"
-          className="soha-sider"
-          collapsible
-          collapsed={sidebarCollapsed}
-          collapsedWidth={SIDEBAR_COLLAPSED_WIDTH}
-          onCollapse={(collapsed) => setSidebarCollapsed(collapsed)}
-          style={{ backgroundColor: 'transparent' }}
-          trigger={null}
-          width={SIDEBAR_WIDTH}
-        >
-          <div className="soha-nav" style={{ height: '100%' }}>
-            <div className="soha-sider-topbar">
-              <button
-                type="button"
-                className="soha-sider-brand"
-                aria-label={localeCode === 'zh_CN' ? '返回首页' : 'Go to overview'}
-                onClick={() => navigate(homePath ?? '/')}
-              >
-                {activeLogo ? (
-                  <img className="soha-brand-logo" src={activeLogo} alt={branding.sidebarTitle} />
-                ) : (
-                  <div className="soha-brand-mark">SOHA</div>
-                )}
-              </button>
-            </div>
+      <RealtimeSessionDockProvider visible={currentWorkbenchId === 'platform'}>
+        <Layout className="soha-shell" hasSider>
+          <Sider
+            breakpoint="md"
+            className="soha-sider"
+            collapsible
+            collapsed={sidebarCollapsed}
+            collapsedWidth={SIDEBAR_COLLAPSED_WIDTH}
+            onCollapse={(collapsed) => setSidebarCollapsed(collapsed)}
+            style={{ backgroundColor: 'transparent' }}
+            trigger={null}
+            width={SIDEBAR_WIDTH}
+          >
+            <div className="soha-nav" style={{ height: '100%' }}>
+              <div className="soha-sider-topbar">
+                <button
+                  type="button"
+                  className="soha-sider-brand"
+                  aria-label={localeCode === 'zh_CN' ? '返回首页' : 'Go to overview'}
+                  onClick={() => navigate(homePath ?? '/')}
+                >
+                  {activeLogo ? (
+                    <img className="soha-brand-logo" src={activeLogo} alt={branding.sidebarTitle} />
+                  ) : (
+                    <div className="soha-brand-mark">SOHA</div>
+                  )}
+                </button>
+              </div>
 
-            {isAccountUtilityRoute ? (
-              <>
-                <div className="soha-workbench-switcher-shell">
-                  <WorkbenchSwitcher
-                    collapsed={sidebarCollapsed}
-                    current={accountWorkbenchOption}
-                    options={[...workbenchOptions, accountWorkbenchOption]}
-                    onSelect={(workbench) => {
-                      if (workbench === 'account') {
-                        navigate('/account/profile')
-                        return
-                      }
-                      const targetPath = findFirstAccessiblePathForWorkbench(workbench, snapshot)
-                      if (targetPath) navigate(targetPath)
-                    }}
-                  />
-                </div>
-                <div className="soha-nav-business">
-                  <Menu
-                    className="soha-nav-menu"
-                    mode="inline"
-                    items={accountSidebarItems}
-                    selectedKeys={[location.pathname]}
-                    onClick={({ key }) => navigate(String(key))}
-                    inlineIndent={8}
-                    inlineCollapsed={sidebarCollapsed}
-                    theme={resolvedThemeMode}
-                  />
-                </div>
-              </>
-            ) : (
-              <>
-                {workbenchOptions.length > 0 && currentWorkbenchOption ? (
+              {isAccountUtilityRoute ? (
+                <>
                   <div className="soha-workbench-switcher-shell">
                     <WorkbenchSwitcher
                       collapsed={sidebarCollapsed}
-                      current={currentWorkbenchOption}
-                      options={workbenchOptions}
+                      current={accountWorkbenchOption}
+                      options={[...workbenchOptions, accountWorkbenchOption]}
                       onSelect={(workbench) => {
-                        if (workbench === 'account') return
-                        const targetPath = findFirstAccessiblePathForWorkbench(workbench, snapshot)
-                        if (!targetPath) {
+                        if (workbench === 'account') {
+                          navigate('/account/profile')
                           return
                         }
-                        navigate(targetPath)
+                        const targetPath = findFirstAccessiblePathForWorkbench(workbench, snapshot)
+                        if (targetPath) navigate(targetPath)
                       }}
                     />
                   </div>
-                ) : null}
-                <div className="soha-nav-business">
-                  <Menu
-                    className="soha-nav-menu"
-                    mode="inline"
-                    items={primaryMenuItems}
-                    selectedKeys={primarySelectedKeys}
-                    openKeys={sidebarCollapsed ? [] : primaryOpenKeys}
-                    onOpenChange={(keys) => {
-                      if (isSystemWorkspaceRoute) {
-                        setSystemOpenKeys(keys as string[])
-                        return
-                      }
-                      setBusinessOpenKeys(keys as string[])
-                    }}
-                    onClick={({ key }) => {
-                      const path = primaryItemKeyToPath[String(key)]
-                      if (path) navigate(path)
-                    }}
-                    inlineIndent={8}
-                    inlineCollapsed={sidebarCollapsed}
-                    theme={resolvedThemeMode}
-                  />
-                </div>
-              </>
-            )}
-          </div>
-        </Sider>
+                  <div className="soha-nav-business">
+                    <Menu
+                      className="soha-nav-menu"
+                      mode="inline"
+                      items={accountSidebarItems}
+                      selectedKeys={[location.pathname]}
+                      onClick={({ key }) => navigate(String(key))}
+                      inlineIndent={8}
+                      inlineCollapsed={sidebarCollapsed}
+                      theme={resolvedThemeMode}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  {workbenchOptions.length > 0 && currentWorkbenchOption ? (
+                    <div className="soha-workbench-switcher-shell">
+                      <WorkbenchSwitcher
+                        collapsed={sidebarCollapsed}
+                        current={currentWorkbenchOption}
+                        options={workbenchOptions}
+                        onSelect={(workbench) => {
+                          if (workbench === 'account') return
+                          const targetPath = findFirstAccessiblePathForWorkbench(
+                            workbench,
+                            snapshot,
+                          )
+                          if (!targetPath) {
+                            return
+                          }
+                          navigate(targetPath)
+                        }}
+                      />
+                    </div>
+                  ) : null}
+                  <div className="soha-nav-business">
+                    <Menu
+                      className="soha-nav-menu"
+                      mode="inline"
+                      items={primaryMenuItems}
+                      selectedKeys={primarySelectedKeys}
+                      openKeys={sidebarCollapsed ? [] : primaryOpenKeys}
+                      onOpenChange={(keys) => {
+                        if (isSystemWorkspaceRoute) {
+                          setSystemOpenKeys(keys as string[])
+                          return
+                        }
+                        setBusinessOpenKeys(keys as string[])
+                      }}
+                      onClick={({ key }) => {
+                        const path = primaryItemKeyToPath[String(key)]
+                        if (path) navigate(path)
+                      }}
+                      inlineIndent={8}
+                      inlineCollapsed={sidebarCollapsed}
+                      theme={resolvedThemeMode}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          </Sider>
 
-        <Layout className="soha-main">
-          <Header className="soha-header">
-            <div className="soha-header-top-row">
-              <div className="soha-header-main">
-                <div className="soha-header-breadcrumb-row">
-                  <Button
-                    aria-label={
-                      sidebarCollapsed
-                        ? t('layout.expand', 'Expand sidebar')
-                        : t('layout.collapse', 'Collapse sidebar')
-                    }
-                    className="soha-header-action soha-header-sider-toggle"
-                    type="text"
-                    icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-                    onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          <Layout className="soha-main">
+            <Header className="soha-header">
+              <div className="soha-header-top-row">
+                <div className="soha-header-main">
+                  <div className="soha-header-breadcrumb-row">
+                    <Button
+                      aria-label={
+                        sidebarCollapsed
+                          ? t('layout.expand', 'Expand sidebar')
+                          : t('layout.collapse', 'Collapse sidebar')
+                      }
+                      className="soha-header-action soha-header-sider-toggle"
+                      type="text"
+                      icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                      onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                    />
+                    <Breadcrumb
+                      items={breadcrumbRoutes.map((route) => ({
+                        title: route.path ? (
+                          <a
+                            href={route.path}
+                            onClick={(event) => {
+                              event.preventDefault()
+                              navigate(route.path!)
+                            }}
+                          >
+                            {route.name}
+                          </a>
+                        ) : (
+                          route.name
+                        ),
+                      }))}
+                    />
+                  </div>
+                </div>
+                {resourceHeaderScopeMode !== 'hidden' && !isAccountUtilityRoute ? (
+                  <div className="soha-header-context">
+                    <PlatformScopeTrigger scopeMode={resourceHeaderScopeMode} />
+                  </div>
+                ) : null}
+                <div className="soha-header-right">
+                  {showRealtimeSessionsAction ? <RealtimeSessionDockTrigger /> : null}
+                  {showResourceCreateAction ? (
+                    <HeaderActionButton
+                      ariaLabel={t('platform.resourceCreation.createResource', '创建资源')}
+                      className="soha-header-resource-create"
+                      icon={<FileAddOutlined />}
+                      label={t('platform.resourceCreation.createResource', '创建资源')}
+                      title={t('platform.resourceCreation.createResource', '创建资源')}
+                      onClick={() => setResourceCreateOpenedByAction(true)}
+                    />
+                  ) : null}
+                  <HeaderActionButton
+                    ariaLabel={t('layout.docs', 'Docs')}
+                    title={t('layout.docs', 'Docs')}
+                    icon={<QuestionCircleOutlined />}
+                    label={t('layout.docs', 'Docs')}
+                    onClick={() => window.open('/docs/', '_blank', 'noopener,noreferrer')}
                   />
-                  <Breadcrumb
-                    items={breadcrumbRoutes.map((route) => ({
-                      title: route.path ? (
-                        <a
-                          href={route.path}
-                          onClick={(event) => {
-                            event.preventDefault()
-                            navigate(route.path!)
-                          }}
+                  <div className="soha-header-preferences">
+                    <HeaderActionButton
+                      ariaLabel={languageSwitchTitle}
+                      title={languageSwitchTitle}
+                      inset
+                      icon={<TranslationOutlined />}
+                      label={languageSwitchLabel}
+                      onClick={() => setLocaleCode(localeCode === 'zh_CN' ? 'en_US' : 'zh_CN')}
+                    />
+                    <HeaderActionButton
+                      ariaLabel={themeSwitchTitle}
+                      title={themeSwitchTitle}
+                      icon={resolvedThemeMode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
+                      onClick={() => setThemeMode(resolvedThemeMode === 'dark' ? 'light' : 'dark')}
+                      pressed={resolvedThemeMode === 'dark'}
+                    />
+                  </div>
+                  <AnnouncementBell />
+                  <Dropdown
+                    menu={{
+                      items: [
+                        { key: 'user', label: userDisplayName, disabled: true },
+                        { type: 'divider' },
+                        ...(homePath
+                          ? [
+                              {
+                                key: 'portal',
+                                icon: <AppstoreOutlined />,
+                                label: t('layout.portal', '门户首页'),
+                              },
+                            ]
+                          : []),
+                        {
+                          key: 'accountSettings',
+                          icon: <SettingOutlined />,
+                          label: t('layout.accountSettings', '个人设置'),
+                        },
+                        {
+                          key: 'changePassword',
+                          icon: <LockOutlined />,
+                          label: t('layout.changePassword', '修改密码'),
+                        },
+                        { type: 'divider' },
+                        {
+                          key: 'logout',
+                          icon: <LogoutOutlined />,
+                          label: t('layout.logout', 'Sign out'),
+                        },
+                      ],
+                      onClick: ({ key }) => {
+                        if (key === 'portal') {
+                          navigate(homePath ?? '/')
+                          return
+                        }
+                        if (key === 'accountSettings') {
+                          navigate('/account/settings')
+                          return
+                        }
+                        if (key === 'changePassword') {
+                          navigate('/account/profile?changePassword=1')
+                          return
+                        }
+                        if (key === 'logout') {
+                          void logoutAuthSession().finally(() => navigate('/login'))
+                        }
+                      },
+                    }}
+                    placement="bottomRight"
+                    trigger={['click']}
+                  >
+                    <HeaderActionButton
+                      ariaLabel={userDisplayName}
+                      className="soha-user-trigger"
+                      iconClassName="soha-user-trigger__avatar"
+                      icon={
+                        <Avatar
+                          className="soha-user-avatar"
+                          size="small"
+                          src={user?.avatarUrl || undefined}
+                          style={userAvatarStyle}
                         >
-                          {route.name}
-                        </a>
-                      ) : (
-                        route.name
-                      ),
-                    }))}
-                  />
+                          {userDisplayName.charAt(0).toUpperCase()}
+                        </Avatar>
+                      }
+                      label={userDisplayName}
+                    />
+                  </Dropdown>
                 </div>
               </div>
-              {resourceHeaderScopeMode !== 'hidden' && !isAccountUtilityRoute ? (
-                <div className="soha-header-context">
-                  <PlatformScopeTrigger scopeMode={resourceHeaderScopeMode} />
-                </div>
-              ) : null}
-              <div className="soha-header-right">
-                {showResourceCreateAction ? (
-                  <HeaderActionButton
-                    ariaLabel={t('platform.resourceCreation.createResource', '创建资源')}
-                    className="soha-header-resource-create"
-                    icon={<FileAddOutlined />}
-                    label={t('platform.resourceCreation.createResource', '创建资源')}
-                    title={t('platform.resourceCreation.createResource', '创建资源')}
-                    onClick={() => setResourceCreateOpenedByAction(true)}
-                  />
-                ) : null}
-                <HeaderActionButton
-                  ariaLabel={t('layout.docs', 'Docs')}
-                  title={t('layout.docs', 'Docs')}
-                  icon={<QuestionCircleOutlined />}
-                  label={t('layout.docs', 'Docs')}
-                  onClick={() => window.open('/docs/', '_blank', 'noopener,noreferrer')}
-                />
-                <div className="soha-header-preferences">
-                  <HeaderActionButton
-                    ariaLabel={languageSwitchTitle}
-                    title={languageSwitchTitle}
-                    inset
-                    icon={<TranslationOutlined />}
-                    label={languageSwitchLabel}
-                    onClick={() => setLocaleCode(localeCode === 'zh_CN' ? 'en_US' : 'zh_CN')}
-                  />
-                  <HeaderActionButton
-                    ariaLabel={themeSwitchTitle}
-                    title={themeSwitchTitle}
-                    icon={resolvedThemeMode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
-                    onClick={() => setThemeMode(resolvedThemeMode === 'dark' ? 'light' : 'dark')}
-                    pressed={resolvedThemeMode === 'dark'}
-                  />
-                </div>
-                <AnnouncementBell />
-                <Dropdown
-                  menu={{
-                    items: [
-                      { key: 'user', label: userDisplayName, disabled: true },
-                      { type: 'divider' },
-                      ...(homePath
-                        ? [
-                            {
-                              key: 'portal',
-                              icon: <AppstoreOutlined />,
-                              label: t('layout.portal', '门户首页'),
-                            },
-                          ]
-                        : []),
-                      {
-                        key: 'accountSettings',
-                        icon: <SettingOutlined />,
-                        label: t('layout.accountSettings', '个人设置'),
-                      },
-                      {
-                        key: 'changePassword',
-                        icon: <LockOutlined />,
-                        label: t('layout.changePassword', '修改密码'),
-                      },
-                      { type: 'divider' },
-                      {
-                        key: 'logout',
-                        icon: <LogoutOutlined />,
-                        label: t('layout.logout', 'Sign out'),
-                      },
-                    ],
-                    onClick: ({ key }) => {
-                      if (key === 'portal') {
-                        navigate(homePath ?? '/')
-                        return
-                      }
-                      if (key === 'accountSettings') {
-                        navigate('/account/settings')
-                        return
-                      }
-                      if (key === 'changePassword') {
-                        navigate('/account/profile?changePassword=1')
-                        return
-                      }
-                      if (key === 'logout') {
-                        void logoutAuthSession().finally(() => navigate('/login'))
-                      }
-                    },
-                  }}
-                  placement="bottomRight"
-                  trigger={['click']}
-                >
-                  <HeaderActionButton
-                    ariaLabel={userDisplayName}
-                    className="soha-user-trigger"
-                    iconClassName="soha-user-trigger__avatar"
-                    icon={
-                      <Avatar
-                        className="soha-user-avatar"
-                        size="small"
-                        src={user?.avatarUrl || undefined}
-                        style={userAvatarStyle}
-                      >
-                        {userDisplayName.charAt(0).toUpperCase()}
-                      </Avatar>
-                    }
-                    label={userDisplayName}
-                  />
-                </Dropdown>
-              </div>
-            </div>
-          </Header>
+            </Header>
 
-          <Content className="soha-content">
-            <div className="soha-content-inner soha-pro-content-host">
-              <Outlet />
-            </div>
-          </Content>
+            <Content className="soha-content">
+              <div className="soha-content-inner soha-pro-content-host">
+                <Outlet />
+              </div>
+            </Content>
+          </Layout>
         </Layout>
-      </Layout>
-      {resourceCreateOpen ? (
-        <Suspense fallback={null}>
-          <GlobalResourceCreateModal onClose={closeResourceCreate} open />
-        </Suspense>
-      ) : null}
+        {resourceCreateOpen ? (
+          <Suspense fallback={null}>
+            <GlobalResourceCreateModal onClose={closeResourceCreate} open />
+          </Suspense>
+        ) : null}
+      </RealtimeSessionDockProvider>
     </GlobalAIAssistantProvider>
   )
 }

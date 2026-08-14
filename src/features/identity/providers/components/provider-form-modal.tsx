@@ -47,7 +47,7 @@ function SAMLConfigFields() {
           />
         </Form.Item>
         <Form.Item label="ACS URLs" name="samlAcsUrls" rules={[{ required: true }]}>
-          <Select mode="tags" placeholder="https://grafana.example/saml/acs" />
+          <Select mode="tags" placeholder="http://grafana.internal/saml/acs" />
         </Form.Item>
       </div>
       <Form.Item
@@ -148,6 +148,16 @@ function ProxyConfigFields({
       >
         <Switch />
       </Form.Item>
+
+      {proxyMode === 'reverse_proxy' ? (
+        <Form.Item
+          label={zh ? '允许私网上游' : 'Allow private upstream'}
+          name="proxyAllowPrivateUpstream"
+          valuePropName="checked"
+        >
+          <Switch />
+        </Form.Item>
+      ) : null}
 
       <div className="soha-identity-provider-section-title">
         {zh ? '身份请求头' : 'Identity headers'}
@@ -291,7 +301,11 @@ export function ProviderFormModal({
           >
             <Input.TextArea autoSize={{ minRows: 5, maxRows: 10 }} />
           </Form.Item>
-          <Form.Item label="Secret refs JSON" name="secretRefsJson">
+          <Form.Item
+            label="Secret refs JSON"
+            name="secretRefsJson"
+            tooltip={editing ? 'Leave blank to keep configured references' : undefined}
+          >
             <Input.TextArea autoSize={{ minRows: 5, maxRows: 10 }} />
           </Form.Item>
         </div>

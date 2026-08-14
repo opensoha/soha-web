@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { EditOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import {
+  Alert,
   App,
   Button,
   Card,
@@ -8,6 +9,7 @@ import {
   Input,
   InputNumber,
   Modal,
+  Segmented,
   Select,
   Space,
   Switch,
@@ -15,13 +17,19 @@ import {
 } from 'antd'
 import type { TableProps } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementIconButton } from '@/components/management-list'
 import { BooleanTag, MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { formatDateTime } from '@/utils/time'
 import '../observability-pages.css'
-import { buildAlertRulePayload, prettyObservabilityJson } from './model'
+import {
+  alertRuleDashboardDraft,
+  alertRuleFormValues,
+  buildAlertRulePayload,
+  prettyObservabilityJson,
+} from './model'
 import { observabilityRuleMutations } from './mutations'
 import { observabilityRuleQueries } from './queries'
 import type {
@@ -38,9 +46,10 @@ export function AlertRulesPage() {
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const permissionSnapshot = permissionSnapshotQuery.data?.data
-  const canCreateRule = hasPermission(permissionSnapshot, 'observe.alert-rules.create')
-  const canUpdateRule = hasPermission(permissionSnapshot, 'observe.alert-rules.update')
-  const canTestRule = hasPermission(permissionSnapshot, 'observe.alert-rules.test')
+  const canManageRule = hasPermission(permissionSnapshot, 'observe.alert-rules.manage')
+  const canTestRule = hasPermission(permissionSnapshot, 'observe.alert-rules.view')
+  const [searchParams] = useSearchParams()
+  const dashboardDraftOpened = useRef(false)
   const [form] = Form.useForm<AlertRuleFormValues>()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<AlertRule | null>(null)
@@ -48,6 +57,7 @@ export function AlertRulesPage() {
   const [testResult, setTestResult] = useState<AlertRuleTestResult | null>(null)
   const [runsOpen, setRunsOpen] = useState(false)
   const [selectedRuleId, setSelectedRuleId] = useState('')
+  const editorMode = Form.useWatch('mode', form) ?? 'simple'
 
   const rulesQuery = useQuery(observabilityRuleQueries.list())
   const notificationPoliciesQuery = useQuery(observabilityRuleQueries.notificationPolicies())
@@ -70,40 +80,20 @@ export function AlertRulesPage() {
     onError: mutationError,
   })
 
+  useEffect(() => {
+    if (dashboardDraftOpened.current || !canManageRule) return
+    const draft = alertRuleDashboardDraft(searchParams)
+    if (!draft) return
+    dashboardDraftOpened.current = true
+    setEditing(null)
+    form.setFieldsValue(draft)
+    setOpen(true)
+  }, [canManageRule, form, searchParams])
+
   function openEditor(record: AlertRule | null) {
     setEditing(record)
     setOpen(true)
-    const defaults = record ?? {
-      id: '',
-      name: '',
-      ruleType: 'metrics',
-      datasourceSelector: {},
-      querySpec: { metricKey: 'cpu_usage', windowMinutes: 60, stepSeconds: 60 },
-      thresholdSpec: { sampleLimit: 20 },
-      forSeconds: 60,
-      groupBy: [],
-      labels: {},
-      annotations: {},
-      notificationPolicyId: '',
-      healingPolicyIds: [],
-      enabled: true,
-      createdAt: '',
-      updatedAt: '',
-    }
-    form.setFieldsValue({
-      name: defaults.name,
-      ruleType: defaults.ruleType,
-      datasourceSelector: prettyObservabilityJson(defaults.datasourceSelector),
-      querySpec: prettyObservabilityJson(defaults.querySpec),
-      thresholdSpec: prettyObservabilityJson(defaults.thresholdSpec),
-      forSeconds: defaults.forSeconds,
-      groupBy: (defaults.groupBy ?? []).join(', '),
-      labels: prettyObservabilityJson(defaults.labels),
-      annotations: prettyObservabilityJson(defaults.annotations),
-      notificationPolicyId: defaults.notificationPolicyId,
-      healingPolicyIds: defaults.healingPolicyIds ?? [],
-      enabled: defaults.enabled,
-    })
+    form.setFieldsValue(alertRuleFormValues(record))
   }
 
   function closeEditor(label: string) {
@@ -141,6 +131,15 @@ export function AlertRulesPage() {
         },
       },
     )
+  }
+
+  function testEditor() {
+    try {
+      const payload = buildAlertRulePayload(form.getFieldsValue())
+      testRule(editing ?? ({ id: 'preview' } as AlertRule), payload)
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '规则测试失败')
+    }
   }
 
   const columns: TableProps<AlertRule>['columns'] = [
@@ -203,7 +202,7 @@ export function AlertRulesPage() {
               setRunsOpen(true)
             }}
           />
-          {canUpdateRule ? (
+          {canManageRule ? (
             <ManagementIconButton
               aria-label="编辑告警规则"
               size="small"
@@ -222,7 +221,7 @@ export function AlertRulesPage() {
       <AdminTable
         title="告警规则"
         headerExtra={
-          canCreateRule ? (
+          canManageRule ? (
             <Button icon={<PlusOutlined />} type="primary" onClick={() => openEditor(null)}>
               新建规则
             </Button>
@@ -247,8 +246,18 @@ export function AlertRulesPage() {
           layout="vertical"
           form={form}
           onFinish={submit}
-          initialValues={{ ruleType: 'metrics', forSeconds: 60, groupBy: '', enabled: true }}
+          initialValues={{ mode: 'simple', ruleType: 'metrics', forSeconds: 60, enabled: true }}
         >
+          <Form.Item name="mode" label="配置模式">
+            <Segmented
+              block
+              className="soha-form-segmented"
+              options={[
+                { value: 'simple', label: '普通' },
+                { value: 'advanced', label: '高级' },
+              ]}
+            />
+          </Form.Item>
           <Form.Item
             name="name"
             label="名称"
@@ -256,38 +265,144 @@ export function AlertRulesPage() {
           >
             <Input />
           </Form.Item>
-          <Form.Item name="ruleType" label="规则类型" rules={[{ required: true }]}>
-            <Select
-              options={[
-                { value: 'metrics', label: 'Metrics' },
-                { value: 'logs', label: 'Logs' },
-                { value: 'traces', label: 'Traces' },
-                { value: 'external_passthrough', label: 'External passthrough' },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item
-            name="datasourceSelector"
-            label="数据源选择器(JSON)"
-            rules={[{ required: true }]}
-          >
-            <Input.TextArea rows={3} />
-          </Form.Item>
-          <Form.Item name="querySpec" label="查询定义(JSON)" rules={[{ required: true }]}>
-            <Input.TextArea rows={4} />
-          </Form.Item>
-          <Form.Item name="thresholdSpec" label="阈值定义(JSON)" rules={[{ required: true }]}>
-            <Input.TextArea rows={3} />
-          </Form.Item>
-          <Form.Item name="groupBy" label="分组标签(逗号分隔)">
-            <Input />
-          </Form.Item>
-          <Form.Item name="labels" label="事件标签(JSON)" rules={[{ required: true }]}>
-            <Input.TextArea rows={3} />
-          </Form.Item>
-          <Form.Item name="annotations" label="事件注释(JSON)" rules={[{ required: true }]}>
-            <Input.TextArea rows={3} />
-          </Form.Item>
+          {editorMode === 'simple' ? (
+            <>
+              <Space size={16} style={{ width: '100%' }} wrap>
+                <Form.Item
+                  name="metricKey"
+                  label="监控指标"
+                  rules={[{ required: true }]}
+                  style={{ flex: '1 1 220px' }}
+                >
+                  <Select
+                    options={[
+                      { value: 'cpu_usage', label: 'CPU 使用率' },
+                      { value: 'memory_usage', label: '内存使用率' },
+                      { value: 'restart_rate', label: '重启次数' },
+                      { value: 'error_rate', label: '错误率' },
+                      { value: 'latency_p95', label: 'P95 延迟' },
+                    ]}
+                  />
+                </Form.Item>
+                <Form.Item
+                  name="reducer"
+                  label="取值"
+                  rules={[{ required: true }]}
+                  style={{ flex: '1 1 160px' }}
+                >
+                  <Select
+                    options={[
+                      { value: 'latest', label: '最新值' },
+                      { value: 'average', label: '平均值' },
+                      { value: 'max', label: '最大值' },
+                      { value: 'min', label: '最小值' },
+                      { value: 'sum', label: '总和' },
+                      { value: 'count', label: '样本数' },
+                    ]}
+                  />
+                </Form.Item>
+              </Space>
+              <Space size={16} style={{ width: '100%' }} wrap>
+                <Form.Item
+                  name="operator"
+                  label="条件"
+                  rules={[{ required: true }]}
+                  style={{ flex: '1 1 180px' }}
+                >
+                  <Select
+                    options={[
+                      { value: 'gt', label: '大于' },
+                      { value: 'gte', label: '大于等于' },
+                      { value: 'lt', label: '小于' },
+                      { value: 'lte', label: '小于等于' },
+                      { value: 'eq', label: '等于' },
+                    ]}
+                  />
+                </Form.Item>
+                <Form.Item
+                  name="thresholdValue"
+                  label="阈值"
+                  rules={[{ required: true }]}
+                  style={{ flex: '1 1 180px' }}
+                >
+                  <InputNumber style={{ width: '100%' }} />
+                </Form.Item>
+                <Form.Item
+                  name="windowMinutes"
+                  label="查询窗口(分钟)"
+                  rules={[{ required: true }]}
+                  style={{ flex: '1 1 180px' }}
+                >
+                  <InputNumber min={1} max={1440} style={{ width: '100%' }} />
+                </Form.Item>
+              </Space>
+              <Space size={16} style={{ width: '100%' }} wrap>
+                <Form.Item name="clusterId" label="集群" style={{ flex: '1 1 220px' }}>
+                  <Input />
+                </Form.Item>
+                <Form.Item name="namespace" label="命名空间" style={{ flex: '1 1 220px' }}>
+                  <Input />
+                </Form.Item>
+                <Form.Item name="workload" label="工作负载" style={{ flex: '1 1 220px' }}>
+                  <Input />
+                </Form.Item>
+              </Space>
+              <Space size={16} style={{ width: '100%' }} wrap>
+                <Form.Item
+                  name="severity"
+                  label="严重级别"
+                  rules={[{ required: true }]}
+                  style={{ flex: '1 1 220px' }}
+                >
+                  <Select
+                    options={[
+                      { value: 'critical', label: '严重' },
+                      { value: 'warning', label: '警告' },
+                      { value: 'info', label: '提示' },
+                    ]}
+                  />
+                </Form.Item>
+                <Form.Item name="summary" label="告警摘要" style={{ flex: '2 1 360px' }}>
+                  <Input />
+                </Form.Item>
+              </Space>
+            </>
+          ) : (
+            <>
+              <Form.Item name="ruleType" label="规则类型" rules={[{ required: true }]}>
+                <Select
+                  options={[
+                    { value: 'metrics', label: 'Metrics' },
+                    { value: 'logs', label: 'Logs' },
+                    { value: 'traces', label: 'Traces' },
+                    { value: 'external_passthrough', label: 'External passthrough' },
+                  ]}
+                />
+              </Form.Item>
+              <Form.Item
+                name="datasourceSelector"
+                label="数据源选择器(JSON)"
+                rules={[{ required: true }]}
+              >
+                <Input.TextArea rows={3} />
+              </Form.Item>
+              <Form.Item name="querySpec" label="查询定义(JSON)" rules={[{ required: true }]}>
+                <Input.TextArea rows={4} />
+              </Form.Item>
+              <Form.Item name="thresholdSpec" label="阈值定义(JSON)" rules={[{ required: true }]}>
+                <Input.TextArea rows={3} />
+              </Form.Item>
+              <Form.Item name="groupBy" label="分组标签(逗号分隔)">
+                <Input />
+              </Form.Item>
+              <Form.Item name="labels" label="事件标签(JSON)" rules={[{ required: true }]}>
+                <Input.TextArea rows={3} />
+              </Form.Item>
+              <Form.Item name="annotations" label="事件注释(JSON)" rules={[{ required: true }]}>
+                <Input.TextArea rows={3} />
+              </Form.Item>
+            </>
+          )}
           <Space size={16} style={{ width: '100%' }}>
             <Form.Item name="forSeconds" label="持续时间(s)" style={{ flex: 1 }}>
               <InputNumber min={0} style={{ width: '100%' }} />
@@ -324,16 +439,11 @@ export function AlertRulesPage() {
               保存
             </Button>
             <Button onClick={() => setOpen(false)}>取消</Button>
-            {editing ? (
+            {canTestRule ? (
               <Button
                 icon={<PlayCircleOutlined />}
-                onClick={() => {
-                  try {
-                    testRule(editing, buildAlertRulePayload(form.getFieldsValue()))
-                  } catch (error) {
-                    message.error(error instanceof Error ? error.message : '规则测试失败')
-                  }
-                }}
+                loading={testMutation.isPending}
+                onClick={testEditor}
               >
                 测试
               </Button>
@@ -351,13 +461,27 @@ export function AlertRulesPage() {
         destroyOnHidden
       >
         <Space orientation="vertical" style={{ width: '100%' }} size={16}>
-          {['summary', 'matched', 'dataSources', 'samples', 'notificationPreview'].map((key) => (
-            <Card size="small" title={key} key={key}>
-              <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
-                {JSON.stringify(testResult?.[key] ?? (key === 'matched' ? false : '-'), null, 2)}
-              </pre>
-            </Card>
-          ))}
+          <Alert
+            type={
+              testResult?.state === 'error' ? 'error' : testResult?.matched ? 'warning' : 'success'
+            }
+            showIcon
+            title={
+              <Space>
+                <StatusTag value={String(testResult?.state ?? 'unknown')} />
+                {String(testResult?.summary ?? '-')}
+              </Space>
+            }
+          />
+          {['errors', 'dataSources', 'samples', 'notificationPreview', 'querySnapshot'].map(
+            (key) => (
+              <Card size="small" title={key} key={key}>
+                <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+                  {JSON.stringify(testResult?.[key] ?? (key === 'matched' ? false : '-'), null, 2)}
+                </pre>
+              </Card>
+            ),
+          )}
         </Space>
       </Modal>
 

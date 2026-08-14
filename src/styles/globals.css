@@ -33,6 +33,7 @@ body,
   --soha-accent-blue-rgb: 22, 119, 255;
   --soha-accent-cyan: #13c2c2;
   --soha-accent-cyan-rgb: 19, 194, 194;
+  --soha-accent-violet: #7c3aed;
   --soha-accent-teal: #52c41a;
   --soha-accent-teal-rgb: 82, 196, 26;
   --soha-gradient-primary: linear-gradient(135deg, #1677ff 0%, #13c2c2 56%, #52c41a 100%);

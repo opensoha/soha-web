@@ -1,10 +1,7 @@
 export type DockerPayloadPrimitive = string | number | boolean | null
 
 export type DockerPayloadValue =
-  | DockerPayloadPrimitive
-  | DockerPayloadMap
-  | DockerPayloadValue[]
-  | undefined
+  DockerPayloadPrimitive | DockerPayloadMap | DockerPayloadValue[] | undefined
 
 export interface DockerPayloadMap {
   [key: string]: DockerPayloadValue
@@ -113,6 +110,14 @@ export interface DockerHostInput {
   availablePortEnd?: number
   labels?: DockerLabels
   config?: DockerHostConfig
+}
+
+export interface DockerHostAgentInstallation {
+  hostId: string
+  operationId: string
+  scriptUrl: string
+  command: string
+  expiresAt: string
 }
 
 export interface DockerQuickCreateHostInput {

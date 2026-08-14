@@ -54,6 +54,7 @@ export interface ThemePalette {
   accentBlueRgb: string
   accentCyan: string
   accentCyanRgb: string
+  accentViolet: string
   accentTeal: string
   accentTealRgb: string
   gradientPrimary: string
@@ -159,6 +160,7 @@ const THEME_PALETTES: Record<ResolvedThemeMode, ThemePalette> = {
     accentBlueRgb: '22, 119, 255',
     accentCyan: '#13c2c2',
     accentCyanRgb: '19, 194, 194',
+    accentViolet: '#7c3aed',
     accentTeal: '#52c41a',
     accentTealRgb: '82, 196, 26',
     gradientPrimary: 'linear-gradient(135deg, #1677ff 0%, #13c2c2 56%, #52c41a 100%)',
@@ -242,6 +244,7 @@ const THEME_PALETTES: Record<ResolvedThemeMode, ThemePalette> = {
     accentBlueRgb: '64, 150, 255',
     accentCyan: '#36cfc9',
     accentCyanRgb: '54, 207, 201',
+    accentViolet: '#a78bfa',
     accentTeal: '#73d13d',
     accentTealRgb: '115, 209, 61',
     gradientPrimary: 'linear-gradient(135deg, #4096ff 0%, #36cfc9 56%, #73d13d 100%)',
@@ -610,6 +613,7 @@ export function applyAppTheme(_themeId: AppThemeId, themeMode: ThemeMode) {
   root.style.setProperty('--soha-accent-blue-rgb', palette.accentBlueRgb)
   root.style.setProperty('--soha-accent-cyan', palette.accentCyan)
   root.style.setProperty('--soha-accent-cyan-rgb', palette.accentCyanRgb)
+  root.style.setProperty('--soha-accent-violet', palette.accentViolet)
   root.style.setProperty('--soha-accent-teal', palette.accentTeal)
   root.style.setProperty('--soha-accent-teal-rgb', palette.accentTealRgb)
   root.style.setProperty('--soha-gradient-primary', palette.gradientPrimary)

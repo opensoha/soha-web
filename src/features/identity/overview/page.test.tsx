@@ -25,7 +25,6 @@ vi.mock('@ant-design/icons', () => {
     AuditOutlined: Icon,
     KeyOutlined: Icon,
     LinkOutlined: Icon,
-    ReloadOutlined: Icon,
     SafetyCertificateOutlined: Icon,
     UserSwitchOutlined: Icon,
   }
@@ -80,12 +79,6 @@ vi.mock('antd', () => ({
 }))
 
 vi.mock('@/components/management-list', () => ({
-  ManagementDetailHeader: ({ actions, title }: { actions?: ReactNode; title?: ReactNode }) => (
-    <header>
-      <h1>{title}</h1>
-      {actions}
-    </header>
-  ),
   ManagementState: ({ title }: { title?: ReactNode }) => <div>{title}</div>,
 }))
 
@@ -363,20 +356,19 @@ describe('IdentityOverviewPage', () => {
     expect(container.querySelectorAll('.soha-status-tag')).toHaveLength(6)
     expect(container.querySelector('[data-color="success"]')?.textContent).toBe('success')
     expect(container.querySelector('[data-color="error"]')?.textContent).toBe('denied')
-
-    await clickButton(container, '刷新')
-    expect(refreshAll).toHaveBeenCalledOnce()
+    expect(container.textContent).not.toContain(
+      '查看 Provider Portal、下游 Provider、活跃会话和身份审计的运行状态。',
+    )
+    expect(container.textContent).not.toContain('运行入口')
+    expect(container.textContent).not.toContain('最近身份相关操作和协议访问记录')
   })
 
-  it('uses the canonical system audit route for all audit navigation', async () => {
+  it('keeps the remaining provider and audit navigation canonical', async () => {
     const container = await renderPage()
     const targets = [
-      ['应用目录', '/identity/applications'],
-      ['Provider 管理', '/identity/providers'],
-      ['Outpost 管理', '/identity/outposts'],
-      ['在线用户', '/system/online-users'],
-      ['审计事件', '/system/audit'],
-      ['门户首页', '/portal'],
+      ['Provider', '/identity/providers'],
+      ['管理 Provider', '/identity/providers'],
+      ['审计', '/system/audit'],
     ] as const
 
     for (const [label, path] of targets) {
@@ -384,8 +376,6 @@ describe('IdentityOverviewPage', () => {
       expect(navigateMock).toHaveBeenLastCalledWith(path)
     }
 
-    await clickButton(container, '审计')
-    expect(navigateMock).toHaveBeenLastCalledWith('/system/audit')
     expect(navigateMock).not.toHaveBeenCalledWith('/identity/audit')
   })
 
@@ -416,10 +406,6 @@ describe('IdentityOverviewPage', () => {
 
     expect(container.textContent).toContain('无 Provider 权限')
     expect(container.textContent).toContain('无审计权限')
-    for (const label of ['应用目录', 'Provider 管理', 'Outpost 管理', '在线用户', '审计事件']) {
-      expect(buttonByText(container, label).disabled).toBe(true)
-    }
-    expect(buttonByText(container, '门户首页').disabled).toBe(false)
     expect(buttonByText(container, 'Provider').disabled).toBe(false)
     expect(buttonByText(container, '审计').disabled).toBe(false)
   })

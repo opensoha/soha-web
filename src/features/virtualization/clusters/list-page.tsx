@@ -629,34 +629,33 @@ export function VirtualizationClustersPage() {
         open={Boolean(selectedConnectionOperation)}
         onClose={() => setSelectedConnectionOperation(null)}
       >
-        <Descriptions size="small" column={1} bordered>
-          <Descriptions.Item label="任务 ID">{selectedConnectionOperation?.id}</Descriptions.Item>
-          <Descriptions.Item label="类型">
-            {selectedConnectionOperation ? operationKind(selectedConnectionOperation) : '-'}
-          </Descriptions.Item>
-          <Descriptions.Item label="状态">
-            {statusTag(selectedConnectionOperation?.status)}
-          </Descriptions.Item>
-          <Descriptions.Item label="连接">
-            {selectedConnectionOperation?.connectionId || '-'}
-          </Descriptions.Item>
-          <Descriptions.Item label="摘要">
-            {selectedConnectionOperation?.message || '-'}
-          </Descriptions.Item>
-          <Descriptions.Item label="开始时间">
-            {formatDateTime(
-              operationTime(selectedConnectionOperation || ({} as VirtualizationOperation)),
-            )}
-          </Descriptions.Item>
-        </Descriptions>
-        {selectedConnectionOperation?.message ? (
-          <Alert
-            className="mt-4"
-            type={isAbnormalOperation(selectedConnectionOperation.status) ? 'error' : 'info'}
-            title={selectedConnectionOperation.message}
-          />
-        ) : null}
-        <div className="mt-4">
+        <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+          <Descriptions size="small" column={1} bordered>
+            <Descriptions.Item label="任务 ID">{selectedConnectionOperation?.id}</Descriptions.Item>
+            <Descriptions.Item label="类型">
+              {selectedConnectionOperation ? operationKind(selectedConnectionOperation) : '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="状态">
+              {statusTag(selectedConnectionOperation?.status)}
+            </Descriptions.Item>
+            <Descriptions.Item label="连接">
+              {selectedConnectionOperation?.connectionId || '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="摘要">
+              {selectedConnectionOperation?.message || '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="开始时间">
+              {formatDateTime(
+                operationTime(selectedConnectionOperation || ({} as VirtualizationOperation)),
+              )}
+            </Descriptions.Item>
+          </Descriptions>
+          {selectedConnectionOperation?.message ? (
+            <Alert
+              type={isAbnormalOperation(selectedConnectionOperation.status) ? 'error' : 'info'}
+              title={selectedConnectionOperation.message}
+            />
+          ) : null}
           <Button
             onClick={() =>
               navigate(
@@ -666,7 +665,7 @@ export function VirtualizationClustersPage() {
           >
             查看该连接全部任务
           </Button>
-        </div>
+        </Space>
       </Drawer>
     </div>
   )

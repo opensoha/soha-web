@@ -4,6 +4,7 @@
   position: relative;
   box-sizing: border-box;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto;
   align-items: center;
   justify-content: center;
@@ -121,7 +122,7 @@
 
 .soha-auth-flow-title.ant-typography {
   max-width: 620px;
-  margin: 0 0 10px;
+  margin: 0;
   color: var(--soha-text-primary);
   font-size: clamp(30px, 4.5vw, 48px);
   font-weight: 750;
@@ -129,20 +130,8 @@
   letter-spacing: 0;
 }
 
-.soha-auth-flow-subtitle.ant-typography {
-  display: block;
-  max-width: 600px;
-  color: var(--soha-text-secondary);
-  font-size: 15px;
-  line-height: 1.7;
-}
-
 :root[data-theme-mode='dark'] .soha-auth-flow-title.ant-typography {
   color: var(--soha-text-primary);
-}
-
-:root[data-theme-mode='dark'] .soha-auth-flow-subtitle.ant-typography {
-  color: var(--soha-text-secondary);
 }
 
 .soha-auth-flow-map {
@@ -703,10 +692,6 @@
 
   .soha-auth-flow-copy {
     gap: 10px;
-  }
-
-  .soha-auth-flow-subtitle.ant-typography {
-    line-height: 1.55;
   }
 
   .soha-auth-flow-map {

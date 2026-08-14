@@ -12,7 +12,11 @@ import {
   Tooltip,
   Typography,
 } from 'antd'
-import { DeleteOutlined } from '@ant-design/icons'
+import {
+  CodeOutlined,
+  DeleteOutlined,
+  FileTextOutlined,
+} from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
@@ -31,6 +35,7 @@ import {
   capabilityActionTooltip,
   useClusterCapability,
 } from '@/features/platform/cluster-capabilities'
+import { useRealtimeSessionDock } from '@/features/platform/session-dock'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { formatAgeSeconds } from '@/utils/time'
 import {
@@ -191,13 +196,19 @@ function renderPodNameCell(record: Pod, onClick: () => void) {
 
 export function WorkloadsPodsPage() {
   const { t, localeCode } = useI18n()
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
-  const canDeletePods = hasPermission(permissionSnapshotQuery.data?.data, 'platform.pods.delete')
+  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const canDeletePods = hasPermission(permissionSnapshot, 'platform.pods.delete')
+  const canExecPods = hasPermission(permissionSnapshot, 'platform.pods.exec')
+  const canViewPodLogs = hasPermission(permissionSnapshot, 'platform.pods.logs')
   const { clusterId, namespace } = usePlatformScopeStore()
+  const { openSession } = useRealtimeSessionDock()
   const podDeleteCapability = useClusterCapability('workload.mutations', localeCode)
+  const podExecCapability = useClusterCapability('pod.exec', localeCode)
+  const podLogsCapability = useClusterCapability('pod.logs', localeCode)
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true)
   const [autoRefreshIntervalSeconds, setAutoRefreshIntervalSeconds] = useState(15)
   const [manualRefreshPending, setManualRefreshPending] = useState(false)
@@ -278,7 +289,7 @@ export function WorkloadsPodsPage() {
     podDeleteCapability.isLoading ||
     podDeleteCapability.disabled ||
     (podDeleteCapability.mode === 'agent' && podDeleteCapability.status === 'partial')
-  const canShowPodActions =
+  const canShowPodDeleteActions =
     canDeletePods &&
     !podDeleteDisabled &&
     pods.some((item) => hasAllowedAction(item.allowedActions, 'delete'))
@@ -326,7 +337,7 @@ export function WorkloadsPodsPage() {
           ? '选择集群后开始刷新'
           : 'Select a cluster to start refreshing'
 
-  const rebuildPodMutation = useMutation(podMutations.rebuild(queryClient))
+  const deletePodMutation = useMutation(podMutations.remove(queryClient))
   const batchDeletePodsMutation = useMutation(podMutations.removeBatch(queryClient))
 
   const handleRefresh = async () => {
@@ -451,77 +462,106 @@ export function WorkloadsPodsPage() {
       title: localeCode === 'zh_CN' ? '操作' : 'Actions',
       dataIndex: 'name',
       key: 'actions',
-      width: 64,
+      width: 116,
       align: 'center',
       className: `${TABLE_ACTIONS_COLUMN_CLASS_NAME} soha-pod-actions-column`,
       onHeaderCell: () => ({
         className: `${TABLE_ACTIONS_COLUMN_CLASS_NAME} soha-pod-actions-column`,
       }),
       onCell: () => ({ className: `${TABLE_ACTIONS_COLUMN_CLASS_NAME} soha-pod-actions-column` }),
-      render: (value: string, record: Pod) => {
-        if (!canDeletePods) return null
+      render: (_value: string, record: Pod) => {
+        const canOpenLogs = canViewPodLogs && hasAllowedAction(record.allowedActions, 'logs')
+        const canOpenTerminal = canExecPods && hasAllowedAction(record.allowedActions, 'exec')
+        const canDeletePod = canDeletePods && hasAllowedAction(record.allowedActions, 'delete')
+        const logsDisabled = !clusterId || podLogsCapability.isLoading || podLogsCapability.disabled
+        const terminalDisabled =
+          !clusterId ||
+          podExecCapability.isLoading ||
+          podExecCapability.disabled ||
+          podExecCapability.status === 'partial'
+        const logLabel = localeCode === 'zh_CN' ? '打开日志会话' : 'Open log session'
+        const terminalLabel = localeCode === 'zh_CN' ? '打开终端会话' : 'Open terminal session'
+        const deleteLabel = localeCode === 'zh_CN' ? '删除 Pod' : 'Delete pod'
 
-        const podRebuildDisabled =
-          podDeleteDisabled || !hasAllowedAction(record.allowedActions, 'delete')
-        const podRebuildDisabledReason =
-          podDeleteDisabledReason ||
-          (localeCode === 'zh_CN' ? '当前 Pod 不允许删除。' : 'This pod does not allow delete.')
         return (
           <Space size={4} className="soha-deployment-action-cell">
-            {podRebuildDisabled ? (
+            {canOpenLogs ? (
+              <ManagementIconButton
+                aria-label={logLabel}
+                disabled={logsDisabled}
+                icon={<FileTextOutlined />}
+                tooltip={capabilityActionTooltip(logLabel, podLogsCapability)}
+                onClick={() => {
+                  if (!clusterId) return
+                  openSession({
+                    clusterId,
+                    kind: 'logs',
+                    namespace: record.namespace,
+                    podName: record.name,
+                    streamingDisabledReason:
+                      podLogsCapability.status === 'partial' ? podLogsCapability.reason : undefined,
+                  })
+                }}
+              />
+            ) : null}
+            {canOpenTerminal ? (
+              <ManagementIconButton
+                aria-label={terminalLabel}
+                disabled={terminalDisabled}
+                icon={<CodeOutlined />}
+                tooltip={capabilityActionTooltip(terminalLabel, podExecCapability)}
+                onClick={() => {
+                  if (!clusterId) return
+                  openSession({
+                    clusterId,
+                    kind: 'terminal',
+                    namespace: record.namespace,
+                    podName: record.name,
+                    shell: '/bin/sh',
+                  })
+                }}
+              />
+            ) : null}
+            {canDeletePod ? (
               <ManagementIconButton
                 danger
-                disabled
+                aria-label={deleteLabel}
+                disabled={podDeleteDisabled}
                 icon={<DeleteOutlined />}
-                aria-label={localeCode === 'zh_CN' ? '重建 Pod' : 'Rebuild Pod'}
-                tooltip={capabilityActionTooltip(
-                  localeCode === 'zh_CN' ? '重建 Pod' : 'Rebuild Pod',
-                  { ...podDeleteCapability, reason: podRebuildDisabledReason },
-                )}
-              />
-            ) : (
-              <Popconfirm
-                title={localeCode === 'zh_CN' ? `确认重建 Pod ${value}？` : `Rebuild pod ${value}?`}
-                description={
-                  localeCode === 'zh_CN'
-                    ? '这会删除当前 Pod，由控制器自动重建。'
-                    : 'This deletes the current pod and lets the controller recreate it.'
-                }
-                okText={localeCode === 'zh_CN' ? '重建' : 'Rebuild'}
-                cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
-                okButtonProps={{ danger: true, loading: rebuildPodMutation.isPending }}
-                placement="topRight"
-                onConfirm={() =>
-                  rebuildPodMutation.mutate(podTargetFromRecord(clusterId, record), {
-                    onSuccess: () => {
-                      void message.success(
-                        localeCode === 'zh_CN'
-                          ? 'Pod 已删除，控制器将自动重建'
-                          : 'Pod deleted. The controller should recreate it automatically',
-                      )
-                      void podsQuery.refetch()
+                loading={deletePodMutation.isPending}
+                tooltip={capabilityActionTooltip(deleteLabel, podDeleteCapability)}
+                onClick={() =>
+                  modal.confirm({
+                    title:
+                      localeCode === 'zh_CN'
+                        ? `确认删除 Pod ${record.name}？`
+                        : `Delete pod ${record.name}?`,
+                    content:
+                      localeCode === 'zh_CN'
+                        ? '独立 Pod 会直接消失；受控制器管理的 Pod 可能会自动创建替代实例。'
+                        : 'Standalone pods are removed. A controller-managed pod may be replaced automatically.',
+                    okText: localeCode === 'zh_CN' ? '删除' : 'Delete',
+                    cancelText: localeCode === 'zh_CN' ? '取消' : 'Cancel',
+                    okButtonProps: { danger: true },
+                    onOk: async () => {
+                      try {
+                        await deletePodMutation.mutateAsync(podTargetFromRecord(clusterId, record))
+                        void message.success(localeCode === 'zh_CN' ? 'Pod 已删除' : 'Pod deleted')
+                        void podsQuery.refetch()
+                      } catch (error) {
+                        void message.error(error instanceof Error ? error.message : String(error))
+                        throw error
+                      }
                     },
-                    onError: (error) => void message.error(error.message),
                   })
                 }
-              >
-                <ManagementIconButton
-                  danger
-                  icon={<DeleteOutlined />}
-                  aria-label={localeCode === 'zh_CN' ? '重建 Pod' : 'Rebuild Pod'}
-                  loading={rebuildPodMutation.isPending}
-                  tooltip={localeCode === 'zh_CN' ? '重建 Pod' : 'Rebuild Pod'}
-                />
-              </Popconfirm>
-            )}
+              />
+            ) : null}
           </Space>
         )
       },
     },
   ]
-  const visibleColumns = canShowPodActions
-    ? columns
-    : columns.filter((column) => column.key !== 'actions')
 
   const podQueryPanel = (
     <WorkloadQueryPanel
@@ -620,7 +660,7 @@ export function WorkloadsPodsPage() {
   )
 
   const podBatchBar =
-    canShowPodActions && selectedPodKeys.length > 0 ? (
+    canShowPodDeleteActions && selectedPodKeys.length > 0 ? (
       <ManagementBatchBar
         selectedCount={selectedPodKeys.length}
         selectedLabel={
@@ -739,7 +779,7 @@ export function WorkloadsPodsPage() {
         columnSettingPlacement="header"
         shellClassName="soha-management-table-shell"
         headerExtra={podToolbarExtra}
-        columns={visibleColumns}
+        columns={columns}
         dataSource={orderedPods}
         rowKey={(record) => `${record.namespace}/${record.name}`}
         onRow={(record: Pod) => ({
@@ -781,10 +821,10 @@ export function WorkloadsPodsPage() {
         }
         pageSize={10}
         tableSize={tableSize}
-        scroll={{ x: 1500 }}
+        scroll={{ x: 1540 }}
         selectCurrentPageOnly
         rowSelection={
-          canShowPodActions
+          canShowPodDeleteActions
             ? {
                 columnWidth: 44,
                 selectedRowKeys: selectedPodKeys,

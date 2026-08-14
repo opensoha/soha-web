@@ -6,11 +6,10 @@ import {
   LockOutlined,
   SafetyCertificateOutlined,
   TeamOutlined,
-  UserOutlined,
 } from '@ant-design/icons'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Avatar, Button, Card, Descriptions, Space, Spin, Statistic, Typography } from 'antd'
+import { Button, Card, Descriptions, Space, Spin, Statistic, Typography } from 'antd'
 import { Alert, App, Input, List, Modal, Popconfirm } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { identityRuntimeQueries } from '@/features/identity'
@@ -22,7 +21,7 @@ import { providerPortalMutations } from '../mutations'
 import { providerPortalQueries } from '../queries'
 import { PortalTagsOrEmpty } from '../shared/application-ui'
 import { formatPortalDateTime } from '../shared/formatters'
-import { PortalAccountMenu } from '../shared/account-menu'
+import { PortalAccountMenu, PortalUserAvatar } from '../shared/account-menu'
 import '../provider-portal-pages.css'
 
 const { Text, Title } = Typography
@@ -210,7 +209,7 @@ export function PortalSecurityPage() {
           <div className="soha-portal-detail-main">
             <section className="soha-portal-side-panel">
               <div className="soha-portal-principal is-large">
-                <Avatar icon={<UserOutlined />} size={48} />
+                <PortalUserAvatar size={48} />
                 <div className="soha-portal-principal-copy">
                   <Title level={4}>{principal?.userName || 'User'}</Title>
                   <Text type="secondary" ellipsis title={principal?.email}>

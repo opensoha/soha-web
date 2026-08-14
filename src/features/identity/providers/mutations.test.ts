@@ -9,6 +9,7 @@ const apiMocks = vi.hoisted(() => ({
   createIdentityProvider: vi.fn(),
   deleteIdentityOIDCClient: vi.fn(),
   deleteIdentityProvider: vi.fn(),
+  rotateIdentityProviderSAMLCertificate: vi.fn(),
   rotateIdentityProviderSigningKey: vi.fn(),
   updateIdentityOIDCClient: vi.fn(),
   updateIdentityProvider: vi.fn(),
@@ -110,6 +111,45 @@ describe('identity provider mutation options', () => {
     })
     expect(invalidate).toHaveBeenNthCalledWith(2, {
       queryKey: identityProviderKeys.oidcClients('provider-1'),
+    })
+  })
+
+  it('invalidates provider caches after signing-key rotation', async () => {
+    apiMocks.rotateIdentityProviderSigningKey.mockResolvedValueOnce({ id: 'key-1' })
+    const { invalidate, queryClient } = queryClientWithInvalidationSpy()
+    const observer = new MutationObserver(
+      queryClient,
+      identityProviderMutations.rotateSigningKey(queryClient),
+    )
+
+    await observer.mutate('provider-1')
+
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: identityProviderKeys.lists() })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: identityProviderKeys.detail('provider-1'),
+    })
+  })
+
+  it('invalidates provider caches after SAML certificate rotation', async () => {
+    const variables = { providerId: 'provider-1', input: { overlapSeconds: 604800 } }
+    apiMocks.rotateIdentityProviderSAMLCertificate.mockResolvedValueOnce({
+      active: { id: 'active' },
+      retiring: { id: 'retiring' },
+    })
+    const { invalidate, queryClient } = queryClientWithInvalidationSpy()
+    const options = identityProviderMutations.rotateSAMLCertificate(queryClient)
+    const observer = new MutationObserver(queryClient, options)
+
+    await observer.mutate(variables)
+
+    expect(options.mutationKey).toEqual(identityProviderMutationKeys.rotateSAMLCertificate)
+    expect(apiMocks.rotateIdentityProviderSAMLCertificate).toHaveBeenCalledWith(
+      variables,
+      expect.anything(),
+    )
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: identityProviderKeys.lists() })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: identityProviderKeys.detail('provider-1'),
     })
   })
 

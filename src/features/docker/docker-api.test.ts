@@ -82,6 +82,21 @@ describe('dockerApi', () => {
     expect(apiMocks.delete).toHaveBeenCalledWith('/docker/projects/project%2F1')
   })
 
+  it('creates a quick Agent installation for an existing host record', async () => {
+    const installation = {
+      hostId: 'host/a',
+      operationId: 'operation-1',
+      scriptUrl: 'http://localhost/api/v1/docker/agent-installations/ticket/install.sh',
+      command: 'curl -fsSL http://localhost/install.sh | sh',
+      expiresAt: '2026-08-11T12:15:00Z',
+    }
+    apiMocks.post.mockResolvedValueOnce({ data: installation })
+
+    await expect(dockerApi.createHostAgentInstallation('host/a')).resolves.toEqual(installation)
+
+    expect(apiMocks.post).toHaveBeenCalledWith('/docker/hosts/host%2Fa/agent-installation')
+  })
+
   it('plans host and project operations before idempotent execution', async () => {
     const hostInput = { name: 'preview-host' }
     const plan = {

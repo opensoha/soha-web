@@ -6,6 +6,7 @@ import { App as AntdApp } from 'antd'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAuthStore } from '@/stores/auth-store'
 import { PortalSecurityPage } from './page'
 
 const apiMocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), delete: vi.fn() }))
@@ -54,6 +55,19 @@ beforeAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  useAuthStore.setState({
+    user: {
+      userId: 'user-1',
+      userName: 'admin',
+      email: 'admin@example.test',
+      avatarUrl: 'https://example.test/avatar.png',
+      avatarFit: 'contain',
+      roles: ['platform-admin'],
+      teams: ['operations'],
+      projects: [],
+      tags: ['on-call'],
+    },
+  })
   capabilityState.webauthn = false
   capabilityState.stepUp = false
   Object.defineProperty(window, 'PublicKeyCredential', {
@@ -100,6 +114,7 @@ afterEach(async () => {
   await act(async () => {
     for (const root of mountedRoots.splice(0)) root.unmount()
   })
+  useAuthStore.getState().clearAuth()
   document.body.innerHTML = ''
 })
 
@@ -137,6 +152,11 @@ describe('Provider Portal security page', () => {
     expect(container.textContent).toContain('operations')
     expect(container.textContent).toContain('on-call')
     expect(container.textContent).toContain('oidc')
+    expect(
+      container
+        .querySelector('.soha-portal-principal .soha-portal-user-avatar img')
+        ?.getAttribute('src'),
+    ).toBe('https://example.test/avatar.png')
     expect(container.querySelector('button[aria-label="Account menu"]')).not.toBeNull()
   })
 

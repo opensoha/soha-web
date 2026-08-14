@@ -1,12 +1,10 @@
 import {
   AlertOutlined,
-  BellOutlined,
+  CheckCircleOutlined,
+  DatabaseOutlined,
   EyeOutlined,
   FireOutlined,
-  LinkOutlined,
-  NotificationOutlined,
-  ReloadOutlined,
-  TeamOutlined,
+  WarningOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { Button, Card, Typography } from 'antd'
@@ -18,51 +16,31 @@ import {
   type OverviewChipItem,
   type OverviewMetricItem,
 } from '@/components/overview-visuals'
-import {
-  ManagementIconButton,
-  ManagementState,
-} from '@/components/management-list'
+import { ManagementIconButton, ManagementState } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
 import { formatDateTime } from '@/utils/time'
 import { observabilityAlertQueries } from '../alerts/queries'
-import { observabilityHealingQueries } from '../healing/queries'
-import { observabilityIntegrationQueries } from '../integrations/queries'
-import { observabilityNotificationQueries } from '../notifications/queries'
-import { observabilityOncallQueries } from '../oncall/queries'
-import { observabilityRuleQueries } from '../rules/queries'
+import { observabilityEventQueries } from '../events/queries'
+import { observabilityProviderQueries } from '../provider-queries'
 import '../observability-pages.css'
 import { observabilityOverviewQueries } from './queries'
 
 const { Text } = Typography
 
-function isTerminalStatus(status?: string) {
-  return ['completed', 'resolved', 'rejected', 'failed', 'canceled', 'cancelled'].includes(
-    String(status || '').toLowerCase(),
-  )
-}
-
 export function MonitoringPage() {
   const navigate = useNavigate()
   const summaryQuery = useQuery(observabilityOverviewQueries.summary())
   const alertsQuery = useQuery(observabilityAlertQueries.recent(8))
-  const rulesQuery = useQuery(observabilityRuleQueries.list())
-  const integrationsQuery = useQuery(observabilityIntegrationQueries.list())
-  const policiesQuery = useQuery(observabilityNotificationQueries.policies())
-  const oncallQuery = useQuery(observabilityOncallQueries.schedules())
-  const healingRunsQuery = useQuery(observabilityHealingQueries.recentRuns(6))
+  const providersQuery = useQuery(observabilityProviderQueries.providers())
+  const eventsQuery = useQuery(observabilityEventQueries.list())
 
   const summary = summaryQuery.data
   const recentAlerts = alertsQuery.data ?? []
-  const rules = rulesQuery.data ?? []
-  const integrations = integrationsQuery.data ?? []
-  const policies = policiesQuery.data ?? []
-  const oncallSchedules = oncallQuery.data ?? []
-  const healingRuns = healingRunsQuery.data ?? []
-  const enabledRules = rules.filter((item) => item.enabled).length
-  const enabledIntegrations = integrations.filter((item) => item.enabled).length
-  const enabledPolicies = policies.filter((item) => item.enabled).length
-  const enabledOncall = oncallSchedules.filter((item) => item.enabled).length
-  const pendingHealing = healingRuns.filter((item) => !isTerminalStatus(item.status)).length
+  const providers = providersQuery.data ?? []
+  const recentEvents = (eventsQuery.data ?? []).slice(0, 8)
+  const configuredProviders = providers.filter((item) => item.configured)
+  const healthyProviders = providers.filter((item) => item.runtimeStatus === 'healthy')
+  const unhealthyProviders = configuredProviders.filter((item) => item.runtimeStatus !== 'healthy')
 
   const overviewStats = [
     {
@@ -82,20 +60,20 @@ export function MonitoringPage() {
       tone: (summary?.criticalCount ?? 0) > 0 ? 'danger' : 'default',
     },
     {
-      key: 'rules',
-      label: '启用规则',
-      helper: `共 ${rules.length} 条规则`,
-      value: enabledRules,
-      icon: <BellOutlined />,
+      key: 'healthy-sources',
+      label: '健康数据源',
+      helper: `已配置 ${configuredProviders.length} 个 Provider`,
+      value: healthyProviders.length,
+      icon: <CheckCircleOutlined />,
       tone: 'default',
     },
     {
-      key: 'channels',
-      label: '通知渠道',
-      helper: '可用于投递的渠道数',
-      value: summary?.channelCount ?? 0,
-      icon: <NotificationOutlined />,
-      tone: 'default',
+      key: 'unhealthy-sources',
+      label: '异常数据源',
+      helper: '已配置但未通过运行态校验',
+      value: unhealthyProviders.length,
+      icon: <WarningOutlined />,
+      tone: unhealthyProviders.length > 0 ? 'warning' : 'default',
     },
   ] satisfies OverviewMetricItem[]
 
@@ -123,38 +101,35 @@ export function MonitoringPage() {
     { key: 'info', label: 'Info', value: summary?.infoCount ?? 0, tone: 'default' },
   ] satisfies OverviewChipItem[]
 
-  const operationStats = [
+  const sourceStats = [
     {
-      key: 'integrations',
-      label: '启用集成',
-      value: enabledIntegrations,
-      helper: `共 ${integrations.length} 个来源`,
-      icon: <LinkOutlined />,
+      key: 'total',
+      label: '已发现',
+      value: providers.length,
+      helper: '当前 Provider 能力',
+      icon: <DatabaseOutlined />,
       tone: 'default',
     },
     {
-      key: 'policies',
-      label: '启用通知策略',
-      value: enabledPolicies,
-      helper: `共 ${policies.length} 条策略`,
-      icon: <NotificationOutlined />,
-      tone: 'default',
+      key: 'configured',
+      label: '已配置',
+      value: configuredProviders.length,
+      helper: '存在启用的数据源',
+      tone: 'success',
     },
     {
-      key: 'oncall',
-      label: '启用值班表',
-      value: enabledOncall,
-      helper: `共 ${oncallSchedules.length} 张值班表`,
-      icon: <TeamOutlined />,
-      tone: 'default',
+      key: 'healthy',
+      label: '健康',
+      value: healthyProviders.length,
+      helper: '最近验证成功',
+      tone: 'success',
     },
     {
-      key: 'healing',
-      label: '待处理自愈',
-      value: pendingHealing,
-      helper: `最近 ${healingRuns.length} 条运行`,
-      icon: <ReloadOutlined />,
-      tone: pendingHealing > 0 ? 'warning' : 'default',
+      key: 'unconfigured',
+      label: '未配置',
+      value: providers.filter((item) => !item.configured).length,
+      helper: '仅声明适配能力',
+      tone: 'default',
     },
   ] satisfies OverviewChipItem[]
 
@@ -219,9 +194,17 @@ export function MonitoringPage() {
           )}
         </Card>
 
-        <Card className="soha-overview-panel-card" title="运行链路">
+        <Card
+          className="soha-overview-panel-card"
+          title="数据源运行态"
+          extra={
+            <Button type="text" onClick={() => navigate('/monitoring-workbench/providers')}>
+              配置数据源
+            </Button>
+          }
+        >
           <div className="soha-monitoring-operation-grid">
-            {operationStats.map((item) => (
+            {sourceStats.map((item) => (
               <OverviewChip
                 key={item.key}
                 label={item.label}
@@ -277,6 +260,46 @@ export function MonitoringPage() {
                   >
                     详情
                   </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <Card
+        className="soha-overview-runtime-card"
+        title="近期事件"
+        extra={
+          <ManagementIconButton
+            aria-label="进入事件流"
+            icon={<EyeOutlined />}
+            size="small"
+            tooltip="进入事件流"
+            onClick={() => navigate('/monitoring-workbench/events')}
+          />
+        }
+      >
+        {eventsQuery.isLoading ? (
+          <ManagementState bordered={false} compact kind="loading" title="正在加载事件" />
+        ) : recentEvents.length === 0 ? (
+          <ManagementState bordered={false} compact description="暂无近期事件" />
+        ) : (
+          <div className="soha-monitoring-alert-list">
+            {recentEvents.map((item) => (
+              <div key={item.id} className="soha-overview-attention-row">
+                <div className="soha-overview-attention-main">
+                  <div className="soha-monitoring-alert-title-row">
+                    <Text strong>{item.summary || item.id}</Text>
+                    {item.severity ? <StatusTag value={item.severity} /> : null}
+                  </div>
+                  <div className="soha-overview-inline-caption">
+                    {item.source} / {item.category}
+                  </div>
+                </div>
+                <div className="soha-overview-attention-meta">
+                  <span>{[item.clusterId, item.namespace].filter(Boolean).join(' / ') || '-'}</span>
+                  <span>{formatDateTime(item.occurredAt)}</span>
                 </div>
               </div>
             ))}

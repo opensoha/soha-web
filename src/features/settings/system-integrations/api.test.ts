@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/services/api-client'
-import { systemIntegrationsApi } from './api'
+import { sourceControlApi, systemIntegrationsApi } from './api'
 
 vi.mock('@/services/api-client', () => ({
   api: {
@@ -67,5 +67,31 @@ describe('systemIntegrationsApi', () => {
     await systemIntegrationsApi.create(values)
 
     expect(api.post).toHaveBeenCalledWith('/system-integrations', values)
+  })
+
+  it('reads source repositories and files through the provider-neutral contract', async () => {
+    vi.mocked(api.getEnvelope)
+      .mockResolvedValueOnce({ items: [{ id: 'source/main' }] })
+      .mockResolvedValueOnce({ items: [{ id: 'repo/api' }] })
+      .mockResolvedValueOnce({ items: [{ name: 'main' }] })
+    vi.mocked(api.get).mockResolvedValue({ data: { content: 'services: {}' } })
+
+    await sourceControlApi.connections()
+    await sourceControlApi.repositories('source/main')
+    await sourceControlApi.branches('source/main', 'repo/api')
+    await sourceControlApi.file('source/main', 'repo/api', 'release/v1', 'deploy/compose.yaml')
+
+    expect(api.getEnvelope).toHaveBeenNthCalledWith(1, '/source-connections')
+    expect(api.getEnvelope).toHaveBeenNthCalledWith(
+      2,
+      '/source-connections/source%2Fmain/repositories?limit=200',
+    )
+    expect(api.getEnvelope).toHaveBeenNthCalledWith(
+      3,
+      '/source-connections/source%2Fmain/repositories/repo%2Fapi/branches',
+    )
+    expect(api.get).toHaveBeenCalledWith(
+      '/source-connections/source%2Fmain/repositories/repo%2Fapi/files?ref=release%2Fv1&path=deploy%2Fcompose.yaml',
+    )
   })
 })

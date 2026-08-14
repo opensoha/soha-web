@@ -220,6 +220,25 @@ const testState = vi.hoisted(() => ({
         ],
       }
     }
+    if (path === '/virtualization/vms?page=1&pageSize=500') {
+      return {
+        data: {
+          items: [
+            {
+              id: 'vm-1',
+              name: 'docker-vm',
+              provider: 'pve',
+              connectionId: 'conn-pve',
+              connectionName: 'pve-a',
+              status: 'running',
+            },
+          ],
+          total: 1,
+          page: 1,
+          pageSize: 500,
+        },
+      }
+    }
     if (path === '/virtualization/images?page=1&pageSize=500') {
       return {
         data: {
@@ -531,6 +550,16 @@ describe('docker pages', () => {
         ports: [{ hostPort: 18080, containerPort: 80 }],
       },
     })
+
+    expect(
+      buildProjectPayload({
+        hostId: 'host-1',
+        name: 'remote-stack',
+        sourceKind: 'url',
+        sourceRef: 'https://example.com/compose.yaml',
+        composeContent: 'services:\n  web:\n    image: nginx:alpine\n',
+      }).composeContent,
+    ).toBeUndefined()
   })
 
   it('builds structured container start payload for quick Docker app launch', () => {
@@ -641,30 +670,50 @@ describe('docker pages', () => {
     })
   })
 
-  it('keeps runtime-host onboarding focused on existing hosts', async () => {
+  it('defaults runtime-host onboarding to quick Agent installation', async () => {
     await renderWithProviders(
       <RuntimeHostStepModal onClose={() => undefined} open />,
       '/compute/runtimes/hosts',
     )
 
     expect(document.body.textContent).toContain('接入运行时主机')
-    expect(document.body.textContent).toContain('Agent Endpoint')
-    expect(document.body.textContent).not.toContain('Agent ID')
-    expect(document.body.textContent).not.toContain('IP 地址')
-    expect(document.body.textContent).not.toContain('Docker 版本')
-    expect(document.body.textContent).not.toContain('Compose 版本')
-    expect(document.body.textContent).not.toContain('架构')
+    expect(document.body.textContent).toContain('快速安装 Agent')
+    expect(document.body.textContent).toContain('已有 Agent')
+    expect(document.body.textContent).not.toContain('Agent Endpoint')
+    const labels = Array.from(document.querySelectorAll('label')).map((item) => item.textContent)
+    expect(labels).not.toContain('Agent ID')
+    expect(labels).not.toContain('IP 地址')
+    expect(labels).not.toContain('Docker 版本')
+    expect(labels).not.toContain('Compose 版本')
+    expect(labels).not.toContain('架构')
     expect(document.body.textContent).not.toContain('虚拟化连接')
     expect(document.body.textContent).not.toContain('启动源')
     expect(testState.apiGet).not.toHaveBeenCalledWith('/virtualization/clusters')
+
+    const manualOption = Array.from(document.querySelectorAll('.ant-segmented-item')).find((item) =>
+      item.textContent?.includes('已有 Agent'),
+    ) as HTMLElement | undefined
+    await act(async () => manualOption?.click())
+    expect(document.body.textContent).toContain('Agent Endpoint')
+
+    const nextButton = Array.from(document.querySelectorAll('button')).find(
+      (button) => button.textContent === '下一步',
+    )
+    await act(async () => nextButton?.click())
+    expect(document.body.textContent).toContain('关联虚拟机')
+    expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/vms?page=1&pageSize=500')
   })
 
   it('maps existing-host resource sizes to bytes', () => {
     const payload = buildRuntimeHostPayload({
+      connectionMode: 'quick',
       name: 'existing-host',
       cpuCoreCount: 6,
       memoryGiB: 12,
       diskGiB: 96,
+      virtualizationConnectionId: 'conn-pve',
+      vmId: 'vm-1',
+      vmName: 'docker-vm',
     })
 
     expect(payload).toMatchObject({
@@ -672,7 +721,11 @@ describe('docker pages', () => {
       cpuCoreCount: 6,
       memoryBytes: 12 * 1024 ** 3,
       diskBytes: 96 * 1024 ** 3,
+      virtualizationConnectionId: 'conn-pve',
+      vmId: 'vm-1',
+      vmName: 'docker-vm',
     })
+    expect(payload).not.toHaveProperty('connectionMode')
   })
 
   it('opens one existing-host onboarding action', async () => {
@@ -836,7 +889,7 @@ describe('docker pages', () => {
     expect(document.body.textContent).toContain('构建目录')
   })
 
-  it('splits Compose creation into four focused steps', async () => {
+  it('keeps Compose source configuration in three focused steps', async () => {
     testState.permissionSnapshot = {
       permissionKeys: ['docker.projects.view', 'docker.projects.create'],
       visibleMenuIds: [],
@@ -870,18 +923,50 @@ describe('docker pages', () => {
     )
       .map((item) => item.textContent?.trim())
       .filter(Boolean)
-    expect(stepTitles).toEqual(['基础信息', '项目设置', '部署来源', 'Compose 配置'])
+    expect(stepTitles).toEqual(['基础信息', '项目设置', '部署来源'])
 
     const stepPanels = Array.from(
       document.querySelectorAll('.soha-step-form__content > div'),
     ) as HTMLElement[]
-    expect(stepPanels).toHaveLength(4)
+    expect(stepPanels).toHaveLength(3)
     expect(stepPanels[0]?.textContent).toContain('Docker 主机')
     expect(stepPanels[0]?.textContent).toContain('描述')
+    expect(stepPanels[0]?.textContent).not.toContain('Slug')
     expect(stepPanels[1]?.textContent).toContain('负责人')
-    expect(stepPanels[1]?.textContent).toContain('目标态')
-    expect(stepPanels[2]?.textContent).toContain('来源引用')
-    expect(stepPanels[3]?.textContent).toContain('.env')
+    expect(stepPanels[1]?.textContent).toContain('TTL 秒数')
+    expect(stepPanels[1]?.textContent).not.toContain('目标态')
+    expect(stepPanels[1]?.textContent).not.toContain('状态')
+    expect(stepPanels[2]?.textContent).toContain('在线编辑')
+    expect(stepPanels[2]?.textContent).toContain('在线获取')
+    expect(stepPanels[2]?.textContent).toContain('Git 仓库')
+    expect(stepPanels[2]?.textContent).toContain('项目模板')
+    expect(stepPanels[2]?.textContent).toContain('.env')
+    expect(stepPanels[2]?.textContent).not.toContain('来源引用')
+    expect(stepPanels[2]?.textContent).not.toContain('模板 ID')
+
+    const ttlInput = dialog?.querySelector('#ttlSeconds') as HTMLInputElement | null
+    expect(ttlInput?.value).toBe('600')
+
+    const urlSegment = Array.from(dialog?.querySelectorAll('.ant-segmented-item') ?? []).find(
+      (item) => item.textContent?.includes('在线获取'),
+    ) as HTMLElement | undefined
+    await act(async () => {
+      urlSegment?.click()
+      await Promise.resolve()
+    })
+    expect(dialog?.textContent).toContain('Compose URL')
+
+    const templateSegment = Array.from(dialog?.querySelectorAll('.ant-segmented-item') ?? []).find(
+      (item) => item.textContent?.includes('项目模板'),
+    ) as HTMLElement | undefined
+    await act(async () => {
+      templateSegment?.click()
+      await Promise.resolve()
+    })
+    const templateStepTitles = Array.from(
+      dialog?.querySelectorAll('.soha-step-form__steps .ant-steps-item-title') ?? [],
+    ).map((item) => item.textContent?.trim())
+    expect(templateStepTitles).toEqual(['基础信息', '项目设置', '部署来源'])
   })
 
   it('expands compose projects with their services when service access is available', async () => {
@@ -958,12 +1043,14 @@ describe('docker pages', () => {
     expect(container.querySelector('.soha-management-detail-header')).toBeNull()
     expect(container.querySelector('.soha-resource-tabs')).not.toBeNull()
     expect(container.querySelector('.soha-workload-detail-tabs')).not.toBeNull()
-    expect(container.querySelector('.ant-tabs-tabpane-active .soha-detail-card')).not.toBeNull()
-    expect(tabTexts).toContain('信息')
+    expect(tabTexts).toContain('概览')
     expect(tabTexts).toContain('配置')
     expect(tabTexts).not.toContain('日志')
     expect(tabTexts).not.toContain('Shell')
     expect(tabTexts).not.toContain('卷文件')
+    expect(container.textContent).toContain('Docker 主机')
+    expect(container.textContent).not.toContain('项目概览')
+    expect(container.textContent).not.toContain('容器状态')
     expect(testState.apiGet).toHaveBeenCalledWith('/docker/projects/project-1')
     expect(testState.apiGet).not.toHaveBeenCalledWith(
       '/docker/services?projectId=project-1&page=1&pageSize=100',
@@ -973,7 +1060,7 @@ describe('docker pages', () => {
     )
   })
 
-  it('gates project service and log tabs with their matching permissions', async () => {
+  it('gates project overview services and log tabs with their matching permissions', async () => {
     testState.permissionSnapshot = {
       permissionKeys: ['docker.projects.view', 'docker.services.view'],
       visibleMenuIds: [],
@@ -989,8 +1076,18 @@ describe('docker pages', () => {
     let tabTexts = Array.from(container.querySelectorAll('.ant-tabs-tab-btn')).map((node) =>
       node.textContent?.trim(),
     )
-    expect(tabTexts).toContain('服务')
+    expect(tabTexts).not.toContain('服务')
     expect(tabTexts).not.toContain('日志')
+    expect(container.textContent).toContain('容器状态')
+    expect(container.textContent).not.toContain('项目概览')
+    expect(container.textContent).toContain('Docker 主机')
+    expect(container.textContent).toContain('容器 1')
+    expect(
+      container.querySelector('.ant-tabs-tabpane-active .soha-admin-table-shell'),
+    ).not.toBeNull()
+    expect(testState.apiGet).toHaveBeenCalledWith(
+      '/docker/services?page=1&pageSize=10&projectId=project-1',
+    )
 
     container.remove()
     testState.permissionSnapshot = {
@@ -1012,7 +1109,7 @@ describe('docker pages', () => {
     expect(tabTexts).toContain('日志')
   })
 
-  it('omits list filters from project-scoped service and port tabs', async () => {
+  it('omits list filters from project overview services and port tabs', async () => {
     testState.permissionSnapshot = {
       permissionKeys: [
         'docker.projects.view',
@@ -1032,17 +1129,20 @@ describe('docker pages', () => {
       '/docker/projects/project-1',
     )
 
-    for (const label of ['服务', '端口映射']) {
-      const tab = Array.from(container.querySelectorAll<HTMLElement>('.ant-tabs-tab-btn')).find(
-        (item) => item.textContent?.trim() === label,
-      )
-      expect(tab).toBeDefined()
-      await act(async () => tab?.click())
-      expect(container.querySelector('.ant-tabs-tabpane-active .soha-vrt-query')).toBeNull()
-      expect(
-        container.querySelector('.ant-tabs-tabpane-active .soha-admin-table-shell'),
-      ).not.toBeNull()
-    }
+    expect(container.querySelector('.ant-tabs-tabpane-active .soha-vrt-query')).toBeNull()
+    expect(
+      container.querySelector('.ant-tabs-tabpane-active .soha-admin-table-shell'),
+    ).not.toBeNull()
+
+    const portTab = Array.from(container.querySelectorAll<HTMLElement>('.ant-tabs-tab-btn')).find(
+      (item) => item.textContent?.trim() === '端口映射',
+    )
+    expect(portTab).toBeDefined()
+    await act(async () => portTab?.click())
+    expect(container.querySelector('.ant-tabs-tabpane-active .soha-vrt-query')).toBeNull()
+    expect(
+      container.querySelector('.ant-tabs-tabpane-active .soha-admin-table-shell'),
+    ).not.toBeNull()
 
     expect(container.textContent).toContain('新增映射')
   })

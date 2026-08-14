@@ -54,12 +54,6 @@ async function invalidatePodCaches(queryClient: QueryClient, target?: PodTarget)
 }
 
 export const podMutations = {
-  rebuild: (queryClient: QueryClient) =>
-    mutationOptions({
-      mutationKey: [...workloadKeys.resource('pods'), 'rebuild'] as const,
-      mutationFn: deletePod,
-      onSuccess: (_data, variables) => invalidatePodCaches(queryClient, variables),
-    }),
   remove: (queryClient: QueryClient) =>
     mutationOptions({
       mutationKey: [...workloadKeys.resource('pods'), 'delete'] as const,

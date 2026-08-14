@@ -27,6 +27,20 @@ vi.mock('./system-integrations/legacy-detail-redirect', () => ({
   LegacySourceConnectionDetailRedirect: routePages.legacySourceConnectionDetail,
 }))
 describe('Settings route manifest', () => {
+  it('lets governance viewers reach the overview', () => {
+    const overview = settingsRoutes.find((route) => route.meta.id === 'settings-overview')?.meta
+    const permissionKeys =
+      overview && 'permissionKeysAny' in overview ? overview.permissionKeysAny : []
+
+    expect(permissionKeys).toEqual(
+      expect.arrayContaining([
+        'system.online-users.view',
+        'system.audit.view',
+        'system.operations.view',
+      ]),
+    )
+  })
+
   it('maps each UI route to a distinct leaf', async () => {
     type SettingsRoute = (typeof settingsRoutes)[number]
     type SettingsPageRoute = Extract<SettingsRoute, { readonly load: unknown }>

@@ -269,12 +269,15 @@ describe('menus page modal state', () => {
   it('rebinds modal field values after updating one menu and opening another', async () => {
     await renderWithProviders(<MenusPage />, '/system/menus')
 
-    await clickButton(getRowEditButton('system'))
-    expect(getVisibleInputValues()).toContain('系统')
-    expect(getVisibleInputValues()).toContain('/system')
+    await clickButton(getRowEditButton('virtualization-workbench'))
+    expect(getVisibleInputValues()).toContain('虚拟化管理工作台')
+    expect(getVisibleInputValues()).toContain('/virtualization')
 
     await clickButtonByText('更新')
-    expect(apiPutMock).toHaveBeenCalledWith('/menus/system', expect.any(Object))
+    expect(apiPutMock).toHaveBeenCalledWith(
+      '/menus/virtualization-workbench',
+      expect.any(Object),
+    )
 
     await clickButton(getRowEditButton('configuration'))
 
@@ -282,8 +285,8 @@ describe('menus page modal state', () => {
     expect(inputValues).toContain('配置')
     expect(inputValues).toContain('Configuration')
     expect(inputValues).toContain('/configuration')
-    expect(inputValues).not.toContain('系统')
-    expect(inputValues).not.toContain('/system')
+    expect(inputValues).not.toContain('虚拟化管理工作台')
+    expect(inputValues).not.toContain('/virtualization')
   })
 
   it('shows derived workbench ownership for menu rows and edit state', async () => {

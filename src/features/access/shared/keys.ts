@@ -14,6 +14,9 @@ export const accessKeys = {
   scopeGrantList: () => [...accessKeys.scopeGrants(), 'list'] as const,
   dependencies: () => [...accessKeys.all, 'dependencies'] as const,
   applicationOptions: () => [...accessKeys.dependencies(), 'applications'] as const,
+  applicationEnvironments: () =>
+    [...accessKeys.dependencies(), 'application-environments'] as const,
+  clusterOptions: () => [...accessKeys.dependencies(), 'clusters'] as const,
   loginProviders: () => [...accessKeys.dependencies(), 'login-providers'] as const,
 }
 

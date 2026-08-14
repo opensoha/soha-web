@@ -70,34 +70,6 @@
   white-space: nowrap;
 }
 
-.soha-ai-overview-metrics {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  min-width: 0;
-}
-
-.soha-ai-overview-metrics .ant-statistic {
-  min-height: 58px;
-  padding: 8px 10px;
-  border: 1px solid var(--soha-border-color);
-  border-radius: 6px;
-  background: var(--soha-bg-surface-muted);
-}
-
-.soha-ai-overview-metrics .ant-statistic-title {
-  margin-bottom: 2px;
-  color: var(--soha-text-tertiary);
-  font-size: 12px;
-}
-
-.soha-ai-overview-metrics .ant-statistic-content {
-  color: var(--soha-text-primary);
-  font-size: 20px;
-  line-height: 1.2;
-  font-weight: 700;
-}
-
 .soha-ai-workbench-page {
   height: calc(100vh - var(--soha-app-chrome-height) - 48px);
   min-height: 720px;
@@ -824,10 +796,6 @@
 .soha-ai-overview-actions,
 .soha-ai-workbench__workspace {
     grid-template-columns: 1fr;
-  }
-
-  .soha-ai-overview-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .soha-ai-workbench-page {

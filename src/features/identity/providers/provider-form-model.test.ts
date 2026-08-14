@@ -24,13 +24,14 @@ const proxyProvider: IdentityProvider = {
     outpost_id: 'edge-1',
     skip_auth_paths: '/healthz, /public',
     websocket_enabled: true,
+    allow_private_upstream: true,
     header_mappings: {
       user: 'X-User',
       email: 'X-Email',
     },
     customSetting: 'preserved',
   },
-  secretRefs: { clientSecret: 'secret-ref' },
+  configuredSecretAliases: ['CLIENT_SECRET'],
   createdAt: '2026-07-10T00:00:00Z',
   updatedAt: '2026-07-10T00:00:00Z',
 }
@@ -41,6 +42,7 @@ const client: IdentityOIDCClient = {
   clientId: 'grafana',
   clientType: 'confidential',
   redirectUris: ['https://grafana.example/login'],
+  redirectUriRegexes: ['https://[^/]+\\.example\\.com/callback'],
   postLogoutRedirectUris: ['https://grafana.example/logout'],
   allowedScopes: ['openid', 'email'],
   allowedGrantTypes: ['authorization_code'],
@@ -58,6 +60,7 @@ describe('provider form model', () => {
     expect(defaultProviderValues()).toMatchObject({
       enabled: true,
       proxyMode: 'forward_auth',
+      proxyAllowPrivateUpstream: false,
       proxyPathPrefix: '/',
       proxyWebsocketEnabled: true,
       status: 'enabled',
@@ -72,6 +75,7 @@ describe('provider form model', () => {
       proxyExternalHosts: ['grafana.example.com'],
       proxyHeaderEmail: 'X-Email',
       proxyHeaderUser: 'X-User',
+      proxyAllowPrivateUpstream: true,
       proxyOutpostId: 'edge-1',
       proxyPathPrefix: '/grafana',
       proxySkipAuthPaths: ['/healthz', '/public'],
@@ -86,7 +90,7 @@ describe('provider form model', () => {
       type: 'proxy',
       enabled: true,
       status: 'enabled',
-      secretRefs: { clientSecret: 'secret-ref' },
+      secretRefs: undefined,
       config: expect.objectContaining({
         customSetting: 'preserved',
         externalHosts: ['grafana.example.com'],
@@ -96,6 +100,7 @@ describe('provider form model', () => {
         skipAuthPaths: ['/healthz', '/public'],
         upstreamUrl: 'http://grafana:3000',
         websocketEnabled: true,
+        allowPrivateUpstream: true,
       }),
     })
   })
@@ -107,6 +112,16 @@ describe('provider form model', () => {
     expect(() =>
       providerInputFromValues({ ...defaultProviderValues(), secretRefsJson: 'null' }),
     ).toThrow('Secret refs 必须是 JSON object')
+  })
+
+  it('submits explicitly entered secret references without reading existing values', () => {
+    const values = providerValuesFor(proxyProvider)
+    expect(values.secretRefsJson).toBe('')
+    values.secretRefsJson = '{"CLIENT_SECRET":"soha://secrets/oidc-client"}'
+
+    expect(providerInputFromValues(values).secretRefs).toEqual({
+      CLIENT_SECRET: 'soha://secrets/oidc-client',
+    })
   })
 
   it('submits OIDC providers without unmounted SAML fields', () => {
@@ -153,7 +168,11 @@ describe('provider form model', () => {
     expect(
       oidcClientInputFromValues(client.providerId, {
         ...values,
-        redirectUris: [' https://grafana.example/login ', 'https://grafana.example/login'],
+        redirectRules: [
+          { mode: 'strict', value: ' https://grafana.example/login ' },
+          { mode: 'strict', value: 'https://grafana.example/login' },
+          { mode: 'regex', value: ' https://[^/]+\\.example\\.com/callback ' },
+        ],
         allowedScopes: ['openid', ' email ', 'openid'],
       }),
     ).toEqual({
@@ -162,6 +181,7 @@ describe('provider form model', () => {
       clientSecret: undefined,
       clientType: 'confidential',
       redirectUris: ['https://grafana.example/login'],
+      redirectUriRegexes: ['https://[^/]+\\.example\\.com/callback'],
       postLogoutRedirectUris: ['https://grafana.example/logout'],
       allowedScopes: ['openid', 'email'],
       allowedGrantTypes: ['authorization_code'],
@@ -181,6 +201,7 @@ describe('provider form model', () => {
       requirePkce: true,
       accessTokenTtlSeconds: 3600,
       idTokenTtlSeconds: 300,
+      redirectRules: [{ mode: 'strict', value: '' }],
       refreshTokenTtlSeconds: 0,
     })
   })

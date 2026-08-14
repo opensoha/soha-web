@@ -1,6 +1,7 @@
 import type {
   IdentityOIDCClient,
   IdentityOIDCClientInput,
+  IdentityOIDCRedirectMatchMode,
   IdentityOIDCClientStatus,
   IdentityOIDCClientType,
   IdentityProvider,
@@ -25,6 +26,7 @@ export interface ProviderFormValues {
   proxyHeaderUser: string
   proxyHeaderUserId: string
   proxyMode: ProxyMode
+  proxyAllowPrivateUpstream: boolean
   proxyOutpostId: string
   proxyPathPrefix: string
   proxySkipAuthPaths: string[]
@@ -50,11 +52,19 @@ export interface OIDCClientFormValues {
   clientType: IdentityOIDCClientType
   idTokenTtlSeconds: number
   postLogoutRedirectUris: string[]
-  redirectUris: string[]
+  redirectRules: Array<{ mode: IdentityOIDCRedirectMatchMode; value: string }>
   refreshTokenTtlSeconds: number
   requirePkce: boolean
   status: IdentityOIDCClientStatus
 }
+
+export const oidcRedirectMatchModeOptions: Array<{
+  label: string
+  value: IdentityOIDCRedirectMatchMode
+}> = [
+  { label: '严格', value: 'strict' },
+  { label: '正则表达式', value: 'regex' },
+]
 
 export const providerTypeOptions: Array<{
   label: string
@@ -121,6 +131,8 @@ const knownProxyConfigKeys = [
   'host',
   'hosts',
   'mode',
+  'allowPrivateUpstream',
+  'allow_private_upstream',
   'outpostId',
   'outpost_id',
   'pathPrefix',
@@ -233,6 +245,7 @@ function proxyConfigFromValues(
   const skipAuthPaths = compactStrings(values.proxySkipAuthPaths)
   if (skipAuthPaths.length) config.skipAuthPaths = skipAuthPaths
   config.websocketEnabled = Boolean(values.proxyWebsocketEnabled)
+  config.allowPrivateUpstream = Boolean(values.proxyAllowPrivateUpstream)
 
   const headerMappings: Record<string, string> = {}
   const headerValues = {
@@ -266,6 +279,7 @@ export function defaultProviderValues(): ProviderFormValues {
     proxyHeaderUser: defaultProxyHeaders.user,
     proxyHeaderUserId: defaultProxyHeaders.userId,
     proxyMode: 'forward_auth',
+    proxyAllowPrivateUpstream: false,
     proxyOutpostId: '',
     proxyPathPrefix: '/',
     proxySkipAuthPaths: [],
@@ -308,6 +322,11 @@ export function providerValuesFor(item: IdentityProvider): ProviderFormValues {
     proxyHeaderUser: headerMappings.user || defaultProxyHeaders.user,
     proxyHeaderUserId: headerMappings.userId || defaultProxyHeaders.userId,
     proxyMode: configString(config, 'mode') === 'reverse_proxy' ? 'reverse_proxy' : 'forward_auth',
+    proxyAllowPrivateUpstream: configBoolean(
+      config,
+      'allowPrivateUpstream',
+      'allow_private_upstream',
+    ),
     proxyOutpostId: configString(config, 'outpostId', 'outpost_id'),
     proxyPathPrefix:
       configString(
@@ -335,7 +354,7 @@ export function providerValuesFor(item: IdentityProvider): ProviderFormValues {
       'wantAuthnRequestsSigned',
       'want_authn_requests_signed',
     ),
-    secretRefsJson: jsonText(item.secretRefs),
+    secretRefsJson: '',
     status: item.status,
     type: item.type,
   }
@@ -364,7 +383,9 @@ export function providerInputFromValues(values: ProviderFormValues): IdentityPro
     config,
     enabled: Boolean(values.enabled),
     name: values.name.trim(),
-    secretRefs: parseRecordJSON(values.secretRefsJson, 'Secret refs'),
+    secretRefs: String(values.secretRefsJson ?? '').trim()
+      ? parseRecordJSON(values.secretRefsJson, 'Secret refs')
+      : undefined,
     status: values.status || 'disabled',
     type: values.type || 'oidc',
   }
@@ -380,7 +401,7 @@ export function defaultOIDCClientValues(): OIDCClientFormValues {
     clientType: 'confidential',
     idTokenTtlSeconds: 300,
     postLogoutRedirectUris: [],
-    redirectUris: [],
+    redirectRules: [{ mode: 'strict', value: '' }],
     refreshTokenTtlSeconds: 0,
     requirePkce: true,
     status: 'enabled',
@@ -399,7 +420,10 @@ export function oidcClientValuesFor(client: IdentityOIDCClient): OIDCClientFormV
     clientType: client.clientType || 'confidential',
     idTokenTtlSeconds: client.idTokenTtlSeconds,
     postLogoutRedirectUris: client.postLogoutRedirectUris ?? [],
-    redirectUris: client.redirectUris ?? [],
+    redirectRules: [
+      ...(client.redirectUris ?? []).map((value) => ({ mode: 'strict' as const, value })),
+      ...(client.redirectUriRegexes ?? []).map((value) => ({ mode: 'regex' as const, value })),
+    ],
     refreshTokenTtlSeconds: client.refreshTokenTtlSeconds || 0,
     requirePkce: client.requirePkce,
     status: client.status,
@@ -411,6 +435,7 @@ export function oidcClientInputFromValues(
   values: OIDCClientFormValues,
 ): IdentityOIDCClientInput {
   const clientSecret = values.clientSecret.trim()
+  const redirectRules = values.redirectRules ?? []
   return {
     accessTokenTtlSeconds: Number(values.accessTokenTtlSeconds || 3600),
     allowedGrantTypes: compactStrings(values.allowedGrantTypes),
@@ -421,7 +446,12 @@ export function oidcClientInputFromValues(
     idTokenTtlSeconds: Number(values.idTokenTtlSeconds || 300),
     providerId,
     postLogoutRedirectUris: compactStrings(values.postLogoutRedirectUris),
-    redirectUris: compactStrings(values.redirectUris),
+    redirectUriRegexes: compactStrings(
+      redirectRules.filter((rule) => rule.mode === 'regex').map((rule) => rule.value),
+    ),
+    redirectUris: compactStrings(
+      redirectRules.filter((rule) => rule.mode !== 'regex').map((rule) => rule.value),
+    ),
     refreshTokenTtlSeconds: Number(values.refreshTokenTtlSeconds || 0),
     requirePkce: values.clientType === 'public' || Boolean(values.requirePkce),
     status: values.status || 'enabled',

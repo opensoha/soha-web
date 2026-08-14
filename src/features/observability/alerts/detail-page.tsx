@@ -1,5 +1,11 @@
 import { useState, type ReactNode } from 'react'
 import {
+  ApartmentOutlined,
+  DashboardOutlined,
+  FileSearchOutlined,
+  LineChartOutlined,
+} from '@ant-design/icons'
+import {
   App,
   Button,
   Card,
@@ -21,7 +27,7 @@ import { getAIWorkbenchPathForMode, useAIPageContext } from '@/features/copilot'
 import { formatDateTime } from '@/utils/time'
 import { observabilityRuleQueries } from '../rules'
 import '../observability-pages.css'
-import { alertDisplayStatus, stringifyAlertPayload } from './model'
+import { alertDiagnosticPaths, alertDisplayStatus, stringifyAlertPayload } from './model'
 import { observabilityAlertMutations } from './mutations'
 import { observabilityAlertQueries } from './queries'
 import type { AlertDeliveryMetadata, HealingRun } from './types'
@@ -409,6 +415,10 @@ function AlertEventDetailActions({
 }) {
   const navigate = useNavigate()
   const { event, rule } = detail
+  const snapshot =
+    event?.querySnapshot ??
+    detail.ruleRunsQuery.data?.find((run) => run.querySnapshot)?.querySnapshot
+  const diagnosticPaths = event ? alertDiagnosticPaths(event, snapshot) : undefined
   const search = new URLSearchParams()
   search.set('timeRangeMinutes', '60')
   if (event) {
@@ -428,6 +438,22 @@ function AlertEventDetailActions({
       <Button onClick={() => navigate(getAIWorkbenchPathForMode('root_cause', search))}>
         AI 调查
       </Button>
+      {diagnosticPaths ? (
+        <>
+          <Button icon={<LineChartOutlined />} onClick={() => navigate(diagnosticPaths.metrics)}>
+            指标
+          </Button>
+          <Button icon={<ApartmentOutlined />} onClick={() => navigate(diagnosticPaths.traces)}>
+            链路
+          </Button>
+          <Button icon={<FileSearchOutlined />} onClick={() => navigate(diagnosticPaths.logs)}>
+            日志
+          </Button>
+          <Button icon={<DashboardOutlined />} onClick={() => navigate(diagnosticPaths.dashboards)}>
+            Dashboard
+          </Button>
+        </>
+      ) : null}
       {detail.canAcknowledge && alertDisplayStatus(event) !== 'acknowledged' ? (
         <Button loading={detail.acknowledgeMutation.isPending} onClick={detail.acknowledge}>
           确认

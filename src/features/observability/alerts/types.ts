@@ -1,3 +1,4 @@
+import type { ObservabilityQuerySnapshot } from '@opensoha/contracts/gen/ts/sohaapi'
 import type { ObservabilityJsonValue, ObservabilityPayloadMap } from '../shared/types'
 
 export interface AlertEvent {
@@ -17,6 +18,7 @@ export interface AlertEvent {
   receiver?: string
   generatorUrl?: string
   currentState?: string
+  querySnapshot?: ObservabilityQuerySnapshot
   lastNotificationAt?: string
   startsAt?: string
   endsAt?: string

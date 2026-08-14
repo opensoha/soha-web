@@ -36,4 +36,12 @@ describe('systemQueries', () => {
     expect(audit).toHaveBeenCalledWith('system', auditFilters)
     expect(operations).toHaveBeenCalledWith(operationFilters)
   })
+
+  it('guards system activity summaries with view permissions', () => {
+    expect(systemQueries.sessions(false).enabled).toBe(false)
+    expect(systemQueries.auditSummary(false).enabled).toBe(false)
+    expect(systemQueries.operationSummary(false).enabled).toBe(false)
+    expect(systemQueries.auditSummary().queryKey).toEqual(systemKeys.audit.summary())
+    expect(systemQueries.operationSummary().queryKey).toEqual(systemKeys.operationLogs.summary())
+  })
 })

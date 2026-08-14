@@ -109,7 +109,6 @@ export function prettifyOperationType(operationType: string) {
     'platform.namespace.delete': '命名空间删除',
     'platform.node.update': '节点更新',
     'platform.node.delete': '节点删除',
-    'platform.resource.create': '资源创建',
     'platform.resource.apply': '资源 YAML 应用',
     'platform.resource.delete': '资源删除',
     'platform.custom_resource.create': 'CRD 资源创建',
@@ -249,8 +248,16 @@ export const MENU_WORKBENCH_LABELS: Record<MenuWorkbenchSurface, string> = {
 }
 
 export const MENU_UNGROUPED_FILTER = '__ungrouped__'
-const SETTINGS_WORKBENCH_ROOT_MENU_IDS = new Set(['settings', 'system', 'access'])
-const SECURITY_WORKBENCH_ROOT_MENU_IDS = new Set(['identity'])
+const WORKBENCH_ROOT_MENU_IDS = new Set([
+  'home-workbench',
+  'compute-workbench',
+  'ai-workbench',
+  'monitoring-workbench',
+  'identity',
+  'settings',
+  'system',
+  'access',
+])
 
 export function resolveMenuWorkbenchKey(item: Pick<MenuItem, 'id' | 'path'>): MenuWorkbenchSurface {
   const workbenchId = getMenuWorkbenchId(item)
@@ -337,22 +344,15 @@ export function buildWorkbenchMenuTree(items: MenuItem[]) {
     const directItems: MenuItem[] = []
     const sectionGroups = new Map<string, MenuItem[]>()
 
-    const displayItems =
-      workbenchKey === 'settings'
-        ? workbenchItems.flatMap((item) =>
-            SETTINGS_WORKBENCH_ROOT_MENU_IDS.has(item.id) && item.children?.length
-              ? item.children
-              : [item],
-          )
-        : workbenchKey === 'security'
-          ? workbenchItems.flatMap((item) =>
-              SECURITY_WORKBENCH_ROOT_MENU_IDS.has(item.id) && item.children?.length
-                ? item.children
-                : [item],
-            )
-        : workbenchItems
+    const displayItems = workbenchItems.flatMap((item) =>
+      WORKBENCH_ROOT_MENU_IDS.has(item.id) ? (item.children ?? []) : [item],
+    )
 
     for (const item of displayItems) {
+      if (workbenchKey === 'compute') {
+        directItems.push(item)
+        continue
+      }
       const section = normalizeMenuSection(item.section)
       if (!section) {
         directItems.push(item)
@@ -369,21 +369,19 @@ export function buildWorkbenchMenuTree(items: MenuItem[]) {
         if (sectionCompare !== 0) return sectionCompare
         return resolveMenuSectionLabel(left).localeCompare(resolveMenuSectionLabel(right))
       })
-      .map(
-        ([section, sectionItems]): MenuItem => ({
-          id: `__section__${workbenchKey}__${section}`,
-          labelZh: resolveMenuSectionLabel(section),
-          labelEn: resolveMenuSectionLabel(section, 'en_US'),
-          path: '',
-          iconKey: '',
-          section,
-          sortOrder: 0,
-          enabled: true,
-          syntheticKind: 'section',
-          syntheticWorkbenchKey: workbenchKey,
-          children: [...sectionItems].sort(compareMenuItems),
-        }),
-      )
+      .map(([section, sectionItems]): MenuItem => ({
+        id: `__section__${workbenchKey}__${section}`,
+        labelZh: resolveMenuSectionLabel(section),
+        labelEn: resolveMenuSectionLabel(section, 'en_US'),
+        path: '',
+        iconKey: '',
+        section,
+        sortOrder: 0,
+        enabled: true,
+        syntheticKind: 'section',
+        syntheticWorkbenchKey: workbenchKey,
+        children: [...sectionItems].sort(compareMenuItems),
+      }))
 
     return {
       id: `__workbench__${workbenchKey}`,
@@ -434,6 +432,9 @@ export function filterMenuTree(
   }
 
   const visit = (item: MenuItem, depth = 0): MenuItem | null => {
+    if (options.topLevelOnly && depth > 0) {
+      return null
+    }
     const children = (item.children ?? [])
       .map((child) => visit(child, depth + 1))
       .filter((child): child is MenuItem => Boolean(child))
@@ -479,6 +480,10 @@ export function normalizeMenuSubmitValues(values: Record<string, unknown>) {
       ? values.section.trim()
       : ''
   const visibilityMode = values.visibilityMode === 'explicit' ? 'explicit' : 'derived'
+  const derivedPermissionKeys = getMenuDerivedPermissionKeys({
+    id: typeof values.id === 'string' ? values.id.trim() : '',
+    path: typeof values.path === 'string' ? values.path.trim() : '',
+  })
 
   return {
     id: typeof values.id === 'string' ? values.id.trim() : values.id,
@@ -490,7 +495,7 @@ export function normalizeMenuSubmitValues(values: Record<string, unknown>) {
     sortOrder: values.sortOrder,
     enabled: values.enabled,
     parentId: normalizedParentId ? normalizedParentId : null,
-    roleIds: visibilityMode === 'explicit' ? roleIds : [],
+    roleIds: visibilityMode === 'explicit' && derivedPermissionKeys.length === 0 ? roleIds : [],
   }
 }
 
@@ -533,16 +538,25 @@ export function getMenuDerivedPermissionKeys(
   if (item.derivedPermissionKeys?.length) {
     return compactUniqueStrings(item.derivedPermissionKeys)
   }
+
+  const permissionKeysForRoute = (route: (typeof routeMeta)[number]): string[] => {
+    if (route.permissionStrategy === 'any-child') {
+      return routeMeta
+        .filter((child) => child.parentId === route.id)
+        .flatMap(permissionKeysForRoute)
+    }
+    return route.permissionKeysAny?.length
+      ? route.permissionKeysAny
+      : [resolveRoutePermission(route)].filter((value): value is string => Boolean(value))
+  }
+
   return compactUniqueStrings(
     routeMeta
       .filter((route) => {
         const routeMenuId = resolveRouteMenuId(route)
         return routeMenuId === item.id || route.path === item.path
       })
-      .flatMap((route) =>
-        route.permissionKeysAny?.length ? route.permissionKeysAny : [resolveRoutePermission(route)],
-      )
-      .filter((value): value is string => Boolean(value)),
+      .flatMap(permissionKeysForRoute),
   )
 }
 
@@ -552,21 +566,11 @@ export function summarizeMenuVisibility(
   const derivedPermissionKeys = getMenuDerivedPermissionKeys(item)
   const explicitRoleIds = compactUniqueStrings(item.roleIds ?? [])
 
-  if (item.visibilityMode === 'explicit') {
-    return { derivedPermissionKeys, explicitRoleIds, mode: 'explicit' }
-  }
-  if (item.visibilityMode === 'derived') {
-    return {
-      derivedPermissionKeys,
-      explicitRoleIds,
-      mode: derivedPermissionKeys.length > 0 ? 'derived' : 'unmapped',
-    }
-  }
-  if (explicitRoleIds.length > 0) {
-    return { derivedPermissionKeys, explicitRoleIds, mode: 'explicit' }
-  }
   if (derivedPermissionKeys.length > 0) {
     return { derivedPermissionKeys, explicitRoleIds, mode: 'derived' }
+  }
+  if (item.visibilityMode === 'explicit' || explicitRoleIds.length > 0) {
+    return { derivedPermissionKeys, explicitRoleIds, mode: 'explicit' }
   }
   return { derivedPermissionKeys, explicitRoleIds, mode: 'unmapped' }
 }
@@ -581,6 +585,7 @@ export function getMenuVisibilityModeOptions(summary: MenuVisibilitySummary) {
     {
       value: 'explicit',
       label: '显式覆盖',
+      disabled: summary.derivedPermissionKeys.length > 0,
     },
   ]
 }

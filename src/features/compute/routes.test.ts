@@ -100,6 +100,16 @@ describe('compute route manifest', () => {
         )
         .every((route) => !route.meta.navVisible),
     ).toBe(true)
+    expect(
+      taskRoutes
+        .filter((route) =>
+          ['/compute/tasks/sync', '/compute/tasks/build'].includes(route.meta.path),
+        )
+        .every(
+          (route) =>
+            'menuId' in route.meta && route.meta.menuId === 'compute-workbench-tasks-operations',
+        ),
+    ).toBe(true)
   })
 
   it('allows the overview for every permission accepted by the backend projection', () => {

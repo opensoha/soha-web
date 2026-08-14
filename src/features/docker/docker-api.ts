@@ -4,6 +4,7 @@ import type { OperationalPlan } from '@opensoha/contracts/gen/ts/sohaapi'
 import type {
   DockerContainerStartInput,
   DockerHost,
+  DockerHostAgentInstallation,
   DockerHostInput,
   DockerListParams,
   DockerOperation,
@@ -52,6 +53,12 @@ export const dockerApi = {
     unwrap(api.get<ApiResponse<DockerHost>>(`${BASE}/hosts/${encodeURIComponent(id)}`)),
   createHost: (payload: DockerHostInput) =>
     unwrap(api.post<ApiResponse<DockerHost>>(`${BASE}/hosts`, payload)),
+  createHostAgentInstallation: (id: string) =>
+    unwrap(
+      api.post<ApiResponse<DockerHostAgentInstallation>>(
+        `${BASE}/hosts/${encodeURIComponent(id)}/agent-installation`,
+      ),
+    ),
   updateHost: (id: string, payload: DockerHostInput) =>
     unwrap(api.put<ApiResponse<DockerHost>>(`${BASE}/hosts/${encodeURIComponent(id)}`, payload)),
   deleteHost: (id: string) =>

@@ -3,8 +3,9 @@ import type {
   ObservabilityMetricSeries,
 } from '@opensoha/contracts/gen/ts/sohaapi'
 import { LineChart } from '@visactor/react-vchart'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { Card, Form, Select, Typography } from 'antd'
+import { useSearchParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
 import {
   buildCompactChartSpec,
@@ -14,46 +15,91 @@ import {
 } from '@/components/resource-metrics-panel'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { queryMetrics } from './api'
-import { observabilityScope } from './model'
+import { observabilityScope, signalSearchParams } from './model'
+import { observabilitySignalQueries } from './queries'
 import { queryTimes, SignalQueryForm, SignalState, type SignalFilters } from './shared'
 
 const { Text } = Typography
 
-const metricOptions: Array<{ label: string; value: ObservabilityMetricKey }> = [
-  { label: 'CPU 使用率', value: 'cpu_usage' },
-  { label: '内存使用率', value: 'memory_usage' },
-  { label: '重启率', value: 'restart_rate' },
-  { label: '错误率', value: 'error_rate' },
-  { label: 'P95 延迟', value: 'latency_p95' },
-]
+const metricLabels: Record<ObservabilityMetricKey, string> = {
+  cpu_usage: 'CPU 使用率',
+  memory_usage: '内存使用率',
+  restart_rate: '重启率',
+  error_rate: '错误率',
+  latency_p95: 'P95 延迟',
+}
 
-export function ObservabilityMetricsPage() {
+export function ObservabilityMetricsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { clusterId, namespace } = usePlatformScopeStore()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [form] = Form.useForm<SignalFilters>()
+  const catalog = useQuery(observabilitySignalQueries.metricCatalog())
   const metrics = useMutation({ mutationFn: queryMetrics })
+  const metricOptions = (catalog.data ?? []).map((item) => ({
+    disabled: !item.available,
+    label: metricLabels[item.key as ObservabilityMetricKey] ?? item.label,
+    value: item.key as ObservabilityMetricKey,
+  }))
 
   function submit(values: SignalFilters) {
-    const times = queryTimes(values.rangeMinutes)
+    const times = queryTimes(values.rangeMinutes, values.timeFrom, values.timeTo)
+    const requestedClusterId = searchParams.get('cluster') || clusterId
+    const requestedNamespace = searchParams.get('namespace') || namespace
+    setSearchParams(
+      signalSearchParams(searchParams, {
+        cluster: requestedClusterId,
+        namespace: requestedNamespace,
+        service: values.service,
+        workload: values.workload,
+        metricKey: values.metricKey,
+        from: times.timeFrom,
+        to: times.timeTo,
+      }),
+      { replace: true },
+    )
     metrics.mutate({
       ...times,
       metricKey: values.metricKey,
-      scope: observabilityScope(clusterId, namespace, values.service, values.workload),
+      scope: observabilityScope(
+        requestedClusterId,
+        requestedNamespace,
+        values.service,
+        values.workload,
+      ),
       stepSeconds: values.rangeMinutes <= 60 ? 60 : 300,
     })
   }
 
   return (
-    <div className="soha-page soha-signal-page">
+    <div className={`${embedded ? '' : 'soha-page '}soha-signal-page`}>
       <SignalQueryForm
         form={form}
+        initialValues={{
+          metricKey:
+            metricOptions.find((item) => item.value === searchParams.get('metricKey'))?.value ??
+            'cpu_usage',
+          service: searchParams.get('service') ?? undefined,
+          workload: searchParams.get('workload') ?? undefined,
+          timeFrom: searchParams.get('from') ?? undefined,
+          timeTo: searchParams.get('to') ?? undefined,
+        }}
         loading={metrics.isPending}
         submitLabel="查询指标"
         onFinish={submit}
       >
-        <Form.Item initialValue="cpu_usage" label="指标" name="metricKey">
-          <Select options={metricOptions} />
+        <Form.Item label="指标" name="metricKey">
+          <Select loading={catalog.isLoading} options={metricOptions} />
         </Form.Item>
       </SignalQueryForm>
+      {catalog.error ? (
+        <ManagementState
+          bordered={false}
+          compact
+          kind="error"
+          title="指标目录加载失败"
+          description={catalog.error.message}
+        />
+      ) : null}
       <SignalState error={metrics.error} idle={metrics.isIdle} loading={metrics.isPending} />
       {metrics.data ? (
         <div className="soha-signal-metric-grid">

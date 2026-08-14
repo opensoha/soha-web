@@ -19,5 +19,6 @@ export const observabilityDashboardKeys = {
       input.timeFrom,
       input.timeTo,
       input.stepSeconds ?? 60,
+      JSON.stringify(input.variables ?? {}),
     ] as const,
 }

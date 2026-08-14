@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ReloadOutlined } from '@ant-design/icons'
 import { Button, Card, Tag, Typography } from 'antd'
 import { Terminal } from '@xterm/xterm'
@@ -9,8 +9,10 @@ import './resource-operation-panels.css'
 import { buildSameOriginStreamURL, withStreamTicket } from '@/features/auth/stream-ticket'
 import { useI18n } from '@/i18n'
 import { readTerminalThemeColors } from '@/theme/app-theme'
+import { parseStreamMessage } from '@/utils/stream-message'
 
 const { Text } = Typography
+const TERMINAL_RESIZE_SETTLE_MS = 150
 
 interface TerminalMessage {
   type: string
@@ -33,7 +35,10 @@ function buildTerminalWebSocketURL({
   container?: string
   shell: string
 }) {
-  const url = buildSameOriginStreamURL(`/api/v1/clusters/${encodeURIComponent(clusterId)}/workloads/pods/${encodeURIComponent(podName)}/terminal`, 'ws')
+  const url = buildSameOriginStreamURL(
+    `/api/v1/clusters/${encodeURIComponent(clusterId)}/workloads/pods/${encodeURIComponent(podName)}/terminal`,
+    'ws',
+  )
   url.searchParams.set('namespace', namespace)
   url.searchParams.set('shell', shell)
   if (container) {
@@ -48,12 +53,14 @@ export function PodTerminal({
   podName,
   container,
   shell = '/bin/sh',
+  toolbarContent,
 }: {
   clusterId?: string | null
   namespace?: string | null
   podName: string
   container?: string
   shell?: string
+  toolbarContent?: ReactNode
 }) {
   const { t } = useI18n()
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -61,10 +68,14 @@ export function PodTerminal({
   const fitAddonRef = useRef<FitAddon | null>(null)
   const socketRef = useRef<WebSocket | null>(null)
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
+  const resizeSendTimerRef = useRef<number | null>(null)
+  const lastSentSizeRef = useRef<{ cols: number; rows: number } | null>(null)
   const previousContainerRef = useRef<string | undefined>(container)
   const previousShellRef = useRef<string>(shell)
   const sessionRef = useRef(0)
-  const [connectionState, setConnectionState] = useState<'idle' | 'connecting' | 'connected' | 'closed' | 'error'>('idle')
+  const [connectionState, setConnectionState] = useState<
+    'idle' | 'connecting' | 'connected' | 'closed' | 'error'
+  >('idle')
   const [, setLastMessage] = useState(t('podTerminal.idle', 'Terminal has not been connected yet'))
   const [reconnectNotice, setReconnectNotice] = useState('')
 
@@ -87,10 +98,18 @@ export function PodTerminal({
     if (!terminal || !socket || socket.readyState !== WebSocket.OPEN) {
       return
     }
+    const lastSentSize = lastSentSizeRef.current
+    if (lastSentSize?.cols === terminal.cols && lastSentSize.rows === terminal.rows) return
+    lastSentSizeRef.current = { cols: terminal.cols, rows: terminal.rows }
     socket.send(JSON.stringify({ type: 'resize', cols: terminal.cols, rows: terminal.rows }))
   }, [])
 
   const disposeTerminal = useCallback(() => {
+    if (resizeSendTimerRef.current !== null) {
+      window.clearTimeout(resizeSendTimerRef.current)
+      resizeSendTimerRef.current = null
+    }
+    lastSentSizeRef.current = null
     resizeObserverRef.current?.disconnect()
     resizeObserverRef.current = null
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
@@ -122,7 +141,8 @@ export function PodTerminal({
     const terminal = new Terminal({
       cursorBlink: true,
       fontSize: 13,
-      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace',
+      fontFamily:
+        'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace',
       theme: {
         ...readTerminalThemeColors(),
       },
@@ -165,7 +185,8 @@ export function PodTerminal({
     }
     socket.onmessage = (event) => {
       if (sessionRef.current !== sessionId) return
-      const payload = JSON.parse(String(event.data)) as TerminalMessage
+      const payload = parseStreamMessage<TerminalMessage>(event.data)
+      if (!payload) return
       switch (payload.type) {
         case 'stdout':
         case 'stderr':
@@ -191,7 +212,7 @@ export function PodTerminal({
     }
     socket.onclose = () => {
       if (sessionRef.current !== sessionId) return
-      setConnectionState((current) => current === 'error' ? 'error' : 'closed')
+      setConnectionState((current) => (current === 'error' ? 'error' : 'closed'))
     }
 
     terminal.onData((data) => {
@@ -204,7 +225,13 @@ export function PodTerminal({
     resizeObserverRef.current = new ResizeObserver(() => {
       if (sessionRef.current !== sessionId) return
       fitAddon.fit()
-      sendResize()
+      if (resizeSendTimerRef.current !== null) {
+        window.clearTimeout(resizeSendTimerRef.current)
+      }
+      resizeSendTimerRef.current = window.setTimeout(() => {
+        resizeSendTimerRef.current = null
+        if (sessionRef.current === sessionId) sendResize()
+      }, TERMINAL_RESIZE_SETTLE_MS)
     })
     resizeObserverRef.current.observe(containerRef.current)
   }, [disposeTerminal, sendResize, t, terminalURL])
@@ -230,7 +257,10 @@ export function PodTerminal({
 
     if (containerChanged || shellChanged) {
       const nextNotice = containerChanged
-        ? t('podTerminal.containerReconnected', 'Container changed, terminal reconnected automatically')
+        ? t(
+            'podTerminal.containerReconnected',
+            'Container changed, terminal reconnected automatically',
+          )
         : t('podTerminal.shellReconnected', 'Shell changed, terminal reconnected automatically')
       setReconnectNotice(nextNotice)
     }
@@ -240,14 +270,29 @@ export function PodTerminal({
   }, [canConnect, container, shell, t])
 
   if (!canConnect) {
-    return <ManagementState compact kind="select-scope" title={t('podTerminal.notReady', 'Select a valid cluster and namespace before connecting the terminal')} />
+    return (
+      <ManagementState
+        compact
+        kind="select-scope"
+        title={t(
+          'podTerminal.notReady',
+          'Select a valid cluster and namespace before connecting the terminal',
+        )}
+      />
+    )
   }
 
   return (
     <Card className="soha-detail-card">
       <div className="soha-terminal-toolbar">
         <div className="soha-terminal-toolbar-group">
-          <Text strong>{container ? `${t('common.container', 'Container')}: ${container}` : t('podTerminal.defaultContainer', 'Container: default')}</Text>
+          {toolbarContent ?? (
+            <Text strong>
+              {container
+                ? `${t('common.container', 'Container')}: ${container}`
+                : t('podTerminal.defaultContainer', 'Container: default')}
+            </Text>
+          )}
           <TagByState state={connectionState} />
         </div>
         <Button icon={<ReloadOutlined />} size="small" type="text" onClick={connect}>
@@ -261,7 +306,11 @@ export function PodTerminal({
   )
 }
 
-function TagByState({ state }: { state: 'idle' | 'connecting' | 'connected' | 'closed' | 'error' }) {
+function TagByState({
+  state,
+}: {
+  state: 'idle' | 'connecting' | 'connected' | 'closed' | 'error'
+}) {
   const { localeCode } = useI18n()
   const mapping = {
     idle: { color: undefined, label: localeCode === 'zh_CN' ? '空闲' : 'Idle' },

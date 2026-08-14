@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildAlertRulePayload } from './model'
+import { alertRuleDashboardDraft, alertRuleFormValues, buildAlertRulePayload } from './model'
 
 describe('alert rule model', () => {
   it('parses JSON form fields and comma-separated group labels', () => {
@@ -22,5 +22,70 @@ describe('alert rule model', () => {
       groupBy: ['cluster', 'namespace'],
       labels: { severity: 'critical' },
     })
+  })
+
+  it('builds the guided metric threshold without JSON input', () => {
+    expect(
+      buildAlertRulePayload({
+        mode: 'simple',
+        name: 'CPU High',
+        metricKey: 'cpu_usage',
+        reducer: 'latest',
+        operator: 'gte',
+        thresholdValue: 85,
+        windowMinutes: 15,
+        stepSeconds: 60,
+        clusterId: 'cluster-a',
+        namespace: 'default',
+        severity: 'critical',
+        forSeconds: 120,
+        enabled: true,
+      }),
+    ).toMatchObject({
+      ruleType: 'metrics',
+      datasourceSelector: {
+        sourceKind: 'metrics',
+        clusterId: 'cluster-a',
+        namespace: 'default',
+      },
+      querySpec: { metricKey: 'cpu_usage', windowMinutes: 15, stepSeconds: 60 },
+      thresholdSpec: { reducer: 'latest', operator: 'gte', value: 85 },
+      labels: { severity: 'critical' },
+      forSeconds: 120,
+    })
+  })
+
+  it('keeps complex rules in advanced mode', () => {
+    const values = alertRuleFormValues({
+      id: 'rule-1',
+      name: 'Custom PromQL',
+      ruleType: 'metrics',
+      datasourceSelector: { sourceKind: 'metrics', datasourceIds: ['prom-main'] },
+      querySpec: { query: 'sum(rate(http_requests_total[5m]))' },
+      thresholdSpec: { operator: 'gt', reducer: 'latest', value: 10 },
+      forSeconds: 60,
+      groupBy: [],
+      labels: {},
+      annotations: {},
+      enabled: true,
+      createdAt: '',
+      updatedAt: '',
+    })
+    expect(values.mode).toBe('advanced')
+    expect(values.querySpec).toContain('http_requests_total')
+  })
+
+  it('builds a bounded advanced draft from a Dashboard panel', () => {
+    const draft = alertRuleDashboardDraft(
+      new URLSearchParams(
+        'create=dashboard-panel&dataSourceId=prom-main&name=HTTP+Errors&query=sum%28rate%28http_errors_total%5B5m%5D%29%29&windowMinutes=99999&stepSeconds=30',
+      ),
+    )
+    expect(draft).toMatchObject({ name: 'HTTP Errors', mode: 'advanced', ruleType: 'metrics' })
+    expect(JSON.parse(draft!.datasourceSelector)).toEqual({
+      sourceKind: 'metrics',
+      datasourceIds: ['prom-main'],
+    })
+    expect(JSON.parse(draft!.querySpec)).toMatchObject({ windowMinutes: 1440, stepSeconds: 30 })
   })
 })

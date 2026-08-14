@@ -24,3 +24,19 @@ export const systemIntegrationMutationKeys = {
   test: () => ['settings', 'system-integrations', 'mutation', 'test'] as const,
   authorizeOAuth: () => ['settings', 'system-integrations', 'mutation', 'authorize-oauth'] as const,
 }
+
+export const sourceControlKeys = {
+  all: ['settings', 'source-control'] as const,
+  connections: () => ['settings', 'source-control', 'connections'] as const,
+  repositories: (connectionId: string) =>
+    ['settings', 'source-control', connectionId.trim(), 'repositories'] as const,
+  branches: (connectionId: string, repositoryId: string) =>
+    [
+      'settings',
+      'source-control',
+      connectionId.trim(),
+      'repositories',
+      repositoryId.trim(),
+      'branches',
+    ] as const,
+}

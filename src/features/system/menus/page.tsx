@@ -150,7 +150,7 @@ export function MenusPage() {
   const [editing, setEditing] = useState<MenuItem | null>(null)
   const [sectionFilter, setSectionFilter] = useState<string>('')
   const [workbenchFilter, setWorkbenchFilter] = useState<string>('')
-  const [enabledFilter, setEnabledFilter] = useState<'all' | 'enabled' | 'disabled'>('all')
+  const [enabledFilter, setEnabledFilter] = useState<'all' | 'enabled' | 'disabled'>('enabled')
   const [visibilityFilter, setVisibilityFilter] = useState<
     'all' | 'derived' | 'explicit' | 'unmapped'
   >('all')
@@ -404,14 +404,14 @@ export function MenusPage() {
               treeView === 'workbench' &&
               !sectionFilter &&
               !workbenchFilter &&
-              enabledFilter === 'all' &&
+              enabledFilter === 'enabled' &&
               visibilityFilter === 'all'
             }
             onReset={() => {
               setTreeView('workbench')
               setSectionFilter('')
               setWorkbenchFilter('')
-              setEnabledFilter('all')
+              setEnabledFilter('enabled')
               setVisibilityFilter('all')
             }}
           />
@@ -568,8 +568,7 @@ export function MenusPage() {
                     getFieldValue('visibilityMode') === 'explicit' ? 'explicit' : 'derived',
                 } satisfies Pick<MenuItem, 'id' | 'path' | 'roleIds' | 'visibilityMode'>
                 const visibilitySummary = summarizeMenuVisibility(draftMenu)
-                const visibilityMode =
-                  getFieldValue('visibilityMode') === 'explicit' ? 'explicit' : 'derived'
+                const visibilityMode = visibilitySummary.mode
 
                 return (
                   <>
@@ -585,10 +584,10 @@ export function MenusPage() {
                       }
                       description={
                         visibilitySummary.mode === 'explicit'
-                          ? '仅为少数例外场景保留显式角色覆盖。保存后会提交 roleIds，覆盖默认的 permissionKeys 派生行为。'
+                          ? '仅未映射正式路由权限的自定义菜单可以按角色控制可见性。'
                           : visibilitySummary.mode === 'derived'
                             ? `当前可派生权限键: ${visibilitySummary.derivedPermissionKeys.join(', ')}`
-                            : '该菜单没有匹配到前端路由权限键。若仍需控制可见性，请切换为显式覆盖并填写角色 ID。'
+                            : '该菜单没有匹配到正式路由权限键。自定义菜单可切换为显式覆盖并填写角色 ID。'
                       }
                       style={{ marginBottom: 16 }}
                     />

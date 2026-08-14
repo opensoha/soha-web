@@ -1,4 +1,8 @@
 import { api } from '@/services/api-client'
+import type {
+  PlatformAuditSummary,
+  PlatformOperationSummary,
+} from '@opensoha/contracts/gen/ts/sohaapi'
 import type { ApiResponse } from '@/types'
 import type {
   AccessRoleOption,
@@ -94,9 +98,7 @@ export const systemApi = {
     revoke: (sessionId: string) =>
       api.post<void>(`/auth/sessions/${encodeURIComponent(sessionId)}/revoke`),
     revokeMany: (sessionIds: string[]) =>
-      Promise.allSettled(
-        sessionIds.map((sessionId) => systemApi.sessions.revoke(sessionId)),
-      ),
+      Promise.allSettled(sessionIds.map((sessionId) => systemApi.sessions.revoke(sessionId))),
   },
   announcements: {
     list: () => unwrap(api.get<ApiResponse<Announcement[]>>('/announcements')),
@@ -139,6 +141,7 @@ export const systemApi = {
           }),
         ),
       ),
+    summary: () => unwrap(api.get<ApiResponse<PlatformAuditSummary>>('/audit/summary')),
   },
   operationLogs: {
     list: (filters: OperationLogFilters = {}) =>
@@ -154,5 +157,6 @@ export const systemApi = {
           }),
         ),
       ),
+    summary: () => unwrap(api.get<ApiResponse<PlatformOperationSummary>>('/operations/summary')),
   },
 }

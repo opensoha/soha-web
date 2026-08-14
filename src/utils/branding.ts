@@ -5,6 +5,7 @@ const BRANDING_STORAGE_KEY = 'soha-branding'
 export const defaultBrandingSettings: BrandingSettings = {
   appTitle: 'Soha',
   sidebarTitle: 'Soha',
+  slogan: 'Soha 是一种能力！',
   loginLogoUrl: '',
   expandedLogoUrl: '',
   collapsedLogoUrl: '',
@@ -15,6 +16,7 @@ export function normalizeBrandingSettings(value?: Partial<BrandingSettings> | nu
   return {
     appTitle: String(value?.appTitle ?? defaultBrandingSettings.appTitle).trim() || defaultBrandingSettings.appTitle,
     sidebarTitle: String(value?.sidebarTitle ?? value?.appTitle ?? defaultBrandingSettings.sidebarTitle).trim() || defaultBrandingSettings.sidebarTitle,
+    slogan: String(value?.slogan ?? defaultBrandingSettings.slogan).trim() || defaultBrandingSettings.slogan,
     loginLogoUrl: String(value?.loginLogoUrl ?? '').trim(),
     expandedLogoUrl: String(value?.expandedLogoUrl ?? '').trim(),
     collapsedLogoUrl: String(value?.collapsedLogoUrl ?? '').trim(),

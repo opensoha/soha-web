@@ -24,7 +24,15 @@ vi.mock('antd', async (importOriginal) => {
   const actual = await importOriginal<typeof import('antd')>()
   return {
     ...actual,
-    Popconfirm: ({ children }: { children?: ReactNode }) => <>{children}</>,
+    Popconfirm: ({
+      children,
+      disabled,
+      onConfirm,
+    }: {
+      children?: ReactNode
+      disabled?: boolean
+      onConfirm?: () => void
+    }) => <span onClick={() => !disabled && onConfirm?.()}>{children}</span>,
   }
 })
 
@@ -233,6 +241,20 @@ beforeEach(() => {
             createdAt: '2026-07-10T00:00:00Z',
             updatedAt: '2026-07-10T00:00:00Z',
           },
+          {
+            id: 'provider-saml',
+            applicationId: 'wiki',
+            name: 'Wiki SAML',
+            type: 'saml',
+            enabled: true,
+            config: {
+              entityId: 'https://wiki.example/saml',
+              acsUrls: ['http://wiki.internal/saml/acs'],
+            },
+            status: 'enabled',
+            createdAt: '2026-07-10T00:00:00Z',
+            updatedAt: '2026-07-10T00:00:00Z',
+          },
         ],
       }
     }
@@ -371,6 +393,7 @@ describe('identity providers page behavior', () => {
     expect(testState.apiGet).toHaveBeenCalledWith('/identity/applications')
     expect(container.querySelector('[data-testid="row-provider-grafana"]')).not.toBeNull()
     expect(container.querySelector('[data-testid="row-provider-harbor"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="row-provider-saml"]')).not.toBeNull()
     expect(container.querySelector('.soha-status-tag')?.textContent).toBe('Enabled')
     expect(container.querySelector('.soha-metadata-tag')?.textContent).toBe('OIDC')
 
@@ -397,6 +420,23 @@ describe('identity providers page behavior', () => {
       (container.querySelector('button[aria-label="编辑"]') as HTMLButtonElement).disabled,
     ).toBe(true)
     expect(container.querySelector('[data-testid="oidc-panel"]')?.textContent).toBe('manage:false')
+    expect(
+      Array.from(container.querySelectorAll('button')).find((button) =>
+        button.textContent?.includes('轮换证书'),
+      )?.disabled,
+    ).toBe(true)
+  })
+
+  it('rotates the expanded SAML provider certificate with the default overlap', async () => {
+    const { queryClient } = await renderPage()
+
+    await clickButton('轮换证书')
+    await settle(queryClient)
+
+    expect(testState.apiPost).toHaveBeenCalledWith(
+      '/identity/providers/provider-saml/saml/certificate/rotate',
+      { overlapSeconds: 604800 },
+    )
   })
 
   it('submits provider creates through canonical mutations', async () => {

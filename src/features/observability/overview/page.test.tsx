@@ -32,6 +32,42 @@ const responses = vi.hoisted(() => ({
       updatedAt: '2026-07-10T00:00:00Z',
     },
   ],
+  '/observability/providers': [
+    {
+      providerKey: 'prometheus',
+      displayName: 'Prometheus',
+      protocolVersion: 'v1',
+      signals: ['metrics'],
+      capabilities: ['metrics.query'],
+      runtimeMode: 'builtin',
+      builtIn: true,
+      status: 'supported',
+      configured: true,
+      runtimeStatus: 'healthy',
+    },
+    {
+      providerKey: 'skywalking',
+      displayName: 'SkyWalking',
+      protocolVersion: 'v1',
+      signals: ['traces'],
+      capabilities: ['traces.query'],
+      runtimeMode: 'builtin',
+      builtIn: true,
+      status: 'supported',
+      configured: true,
+      runtimeStatus: 'failed',
+    },
+  ],
+  '/events': [
+    {
+      id: 'event-stream-1',
+      source: 'alertmanager',
+      category: 'alert',
+      severity: 'warning',
+      summary: 'CPU pressure detected',
+      occurredAt: '2026-07-10T00:01:00Z',
+    },
+  ],
   '/alert-rules': [{ id: 'rule-1', name: 'CPU', enabled: true }],
   '/alert-integrations': [
     {
@@ -140,7 +176,9 @@ describe('MonitoringPage', () => {
 
     expect(container.textContent).toContain('活跃告警: 1')
     expect(container.textContent).toContain('High CPU')
-    expect(container.textContent).toContain('待处理自愈: 1')
+    expect(container.textContent).toContain('健康数据源: 1')
+    expect(container.textContent).toContain('异常数据源: 1')
+    expect(container.textContent).toContain('CPU pressure detected')
     expect(apiMocks.get).toHaveBeenCalledWith('/alert-events?limit=8')
   })
 })

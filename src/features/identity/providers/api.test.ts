@@ -8,6 +8,7 @@ import {
   importSAMLLoginSourceMetadata,
   listIdentityOIDCClients,
   listIdentityProviders,
+  rotateIdentityProviderSAMLCertificate,
   rotateIdentityProviderSigningKey,
   rotateSAMLCertificate,
   updateIdentityOIDCClient,
@@ -57,6 +58,7 @@ const client: IdentityOIDCClient = {
   clientId: 'grafana',
   clientType: 'confidential',
   redirectUris: ['https://grafana.example/login'],
+  redirectUriRegexes: ['https://[^/]+\\.example\\.com/login'],
   postLogoutRedirectUris: ['https://grafana.example/logout'],
   allowedScopes: ['openid'],
   allowedGrantTypes: ['authorization_code'],
@@ -73,6 +75,7 @@ const clientInput: IdentityOIDCClientInput = {
   clientId: client.clientId,
   clientType: client.clientType,
   redirectUris: client.redirectUris,
+  redirectUriRegexes: client.redirectUriRegexes,
   postLogoutRedirectUris: client.postLogoutRedirectUris,
   allowedScopes: client.allowedScopes,
   allowedGrantTypes: client.allowedGrantTypes,
@@ -155,7 +158,7 @@ describe('identity providers api', () => {
   })
 
   it('keeps provider and client delete transport results out of the domain', async () => {
-    apiMocks.delete.mockResolvedValue({ data: { status: 'ok' } })
+    apiMocks.delete.mockResolvedValue(undefined)
 
     await expect(deleteIdentityProvider(' provider/id ')).resolves.toBeUndefined()
     await expect(
@@ -191,6 +194,7 @@ describe('identity providers api', () => {
       .mockResolvedValueOnce({ data: validation })
       .mockResolvedValueOnce({ data: source })
       .mockResolvedValueOnce({ data: rotation })
+      .mockResolvedValueOnce({ data: rotation })
 
     await expect(
       validateSAMLMetadata({ source: 'url', url: 'https://idp.example/metadata' }),
@@ -202,6 +206,12 @@ describe('identity providers api', () => {
         metadata: { source: 'url', url: 'https://idp.example/metadata' },
       }),
     ).resolves.toBe(source)
+    await expect(
+      rotateIdentityProviderSAMLCertificate({
+        providerId: ' provider/id ',
+        input: { overlapSeconds: 604800 },
+      }),
+    ).resolves.toBe(rotation)
     await expect(rotateSAMLCertificate(' cert/id ', { overlapSeconds: 3600 })).resolves.toBe(
       rotation,
     )
@@ -211,6 +221,11 @@ describe('identity providers api', () => {
     })
     expect(apiMocks.post).toHaveBeenNthCalledWith(
       3,
+      '/identity/providers/provider%2Fid/saml/certificate/rotate',
+      { overlapSeconds: 604800 },
+    )
+    expect(apiMocks.post).toHaveBeenNthCalledWith(
+      4,
       '/identity/saml/certificates/cert%2Fid/rotate',
       { overlapSeconds: 3600 },
     )

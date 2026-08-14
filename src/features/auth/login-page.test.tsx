@@ -7,7 +7,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "antd";
 import { LoginPage } from "./login-page";
-import { fetchPermissionSnapshot, restoreAuthSession } from "@/features/auth/auth-api";
+import { fetchLoginOptions, fetchPermissionSnapshot, restoreAuthSession } from "@/features/auth/auth-api";
 import { useAuthStore } from "@/stores/auth-store";
 import type { User } from "@/types";
 
@@ -45,6 +45,8 @@ vi.mock("@/stores/preferences-store", () => {
 });
 
 vi.mock("@/utils/branding", () => ({
+  applyBrandingSettings: vi.fn(),
+  persistBrandingSettings: vi.fn(),
   readStoredBrandingSettings: () => ({
     appTitle: "Soha",
     collapsedLogoUrl: "",
@@ -52,6 +54,7 @@ vi.mock("@/utils/branding", () => ({
     faviconUrl: "",
     loginLogoUrl: "",
     sidebarTitle: "Soha",
+    slogan: "让平台协作更简单",
   }),
 }));
 
@@ -198,10 +201,36 @@ describe("login page", () => {
   it("presents the current product capabilities", async () => {
     const container = await renderLoginPage();
 
+    expect(container.querySelector(".soha-auth-flow-title")?.textContent).toBe("让平台协作更简单");
+    expect(container.querySelector(".soha-auth-flow-subtitle")).toBeNull();
+    expect(container.textContent).not.toContain("统一到一个可协同、可治理的工作平台");
     expect(container.textContent).toContain("计算资源工作台");
     expect(container.textContent).toContain("内网工作台");
     expect(container.textContent).toContain("用户角色、组织策略、Secret Store、审计与运行配置");
     expect(container.textContent).not.toContain("虚拟化资源");
+  });
+
+  it("uses public server branding before login", async () => {
+    vi.mocked(fetchLoginOptions).mockResolvedValueOnce({
+      branding: {
+        appTitle: "shanchui",
+        collapsedLogoUrl: "",
+        expandedLogoUrl: "",
+        faviconUrl: "",
+        loginLogoUrl: "",
+        sidebarTitle: "shanchui",
+        slogan: "shanshui",
+      },
+      verification: { sliderEnabled: false },
+    });
+
+    const container = await renderLoginPage();
+
+    await act(async () => {
+      await vi.waitFor(() =>
+        expect(container.querySelector(".soha-auth-flow-title")?.textContent).toBe("shanshui"),
+      );
+    });
   });
 
   it("restores an existing browser session from the login page", async () => {

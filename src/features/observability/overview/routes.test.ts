@@ -7,11 +7,13 @@ vi.mock('./workbench-page', () => ({ ObservabilityWorkbenchPage: workbenchPage }
 vi.mock('./page', () => ({ MonitoringPage: alertingPage }))
 
 describe('observability overview route manifest', () => {
-  it('keeps the signal overview separate from alerting', async () => {
+  it('keeps the canonical overview and hidden alerting compatibility route', async () => {
     expect(observabilityOverviewRoutes.map((route) => route.meta.path)).toEqual([
       '/monitoring-workbench/overview',
       '/monitoring-workbench/alerting',
     ])
+    expect(observabilityOverviewRoutes.map((route) => route.meta.navVisible)).toEqual([true, false])
+    expect(observabilityOverviewRoutes[1].meta.menuId).toBe('monitoring-workbench')
     await expect(observabilityOverviewRoutes[0].load()).resolves.toEqual({
       default: workbenchPage,
     })

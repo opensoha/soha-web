@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { DeleteOutlined, ExportOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Button, Card, Flex, Input, Select, Switch, Tag, Typography } from 'antd'
 import { ManagementState } from '@/components/management-list'
@@ -7,6 +7,7 @@ import { buildSameOriginStreamURL, withStreamTicket } from '@/features/auth/stre
 import { useI18n } from '@/i18n'
 import { api } from '@/services/api-client'
 import { downloadText } from '@/utils/download'
+import { parseStreamMessage } from '@/utils/stream-message'
 import type { ApiResponse, PodLogs } from '@/types'
 
 const { Text } = Typography
@@ -34,7 +35,10 @@ function buildLogStreamURL({
   podName: string
   container?: string
 }) {
-  const url = buildSameOriginStreamURL(`/api/v1/clusters/${encodeURIComponent(clusterId)}/workloads/pods/${encodeURIComponent(podName)}/logs/stream`, 'ws')
+  const url = buildSameOriginStreamURL(
+    `/api/v1/clusters/${encodeURIComponent(clusterId)}/workloads/pods/${encodeURIComponent(podName)}/logs/stream`,
+    'ws',
+  )
   url.searchParams.set('namespace', namespace)
   url.searchParams.set('tailLines', '1')
   if (container) {
@@ -87,9 +91,8 @@ function mergeLogLines(current: string[], incoming: string[]) {
     }
   }
 
-  const merged = incoming.length > current.length
-    ? incoming
-    : [...current, ...incoming].slice(-10000)
+  const merged =
+    incoming.length > current.length ? incoming : [...current, ...incoming].slice(-10000)
   return sameLines(merged, current) ? current : merged
 }
 
@@ -124,16 +127,26 @@ function getEmptyLogMessage({
   localeCode: 'zh_CN' | 'en_US'
 }) {
   if (hasFilter) {
-    return localeCode === 'zh_CN' ? '当前筛选条件下没有匹配的日志内容' : 'No log lines match the current filter'
+    return localeCode === 'zh_CN'
+      ? '当前筛选条件下没有匹配的日志内容'
+      : 'No log lines match the current filter'
   }
   if (previous) {
     return sinceSeconds > 0
-      ? (localeCode === 'zh_CN' ? '当前时间范围内没有可用的历史日志' : 'No historical logs are available for the selected time range')
-      : (localeCode === 'zh_CN' ? '当前没有可用的历史日志' : 'No historical logs are available')
+      ? localeCode === 'zh_CN'
+        ? '当前时间范围内没有可用的历史日志'
+        : 'No historical logs are available for the selected time range'
+      : localeCode === 'zh_CN'
+        ? '当前没有可用的历史日志'
+        : 'No historical logs are available'
   }
   return sinceSeconds > 0
-    ? (localeCode === 'zh_CN' ? '当前时间范围内没有可用的实时日志内容' : 'No current log lines are available for the selected time range')
-    : (localeCode === 'zh_CN' ? '当前没有可用的实时日志内容' : 'No current log lines are available')
+    ? localeCode === 'zh_CN'
+      ? '当前时间范围内没有可用的实时日志内容'
+      : 'No current log lines are available for the selected time range'
+    : localeCode === 'zh_CN'
+      ? '当前没有可用的实时日志内容'
+      : 'No current log lines are available'
 }
 
 export function PodLogViewer({
@@ -146,6 +159,7 @@ export function PodLogViewer({
   onOpenLogCenter,
   onContainerChange,
   streamingDisabledReason,
+  toolbarExtra,
 }: {
   clusterId?: string | null
   namespace?: string | null
@@ -156,10 +170,13 @@ export function PodLogViewer({
   onOpenLogCenter?: () => void
   onContainerChange?: (value: string) => void
   streamingDisabledReason?: string
+  toolbarExtra?: ReactNode
 }) {
   const { t, localeCode } = useI18n()
   const [lines, setLines] = useState<string[]>([])
-  const [connectionState, setConnectionState] = useState<'idle' | 'connecting' | 'connected' | 'closed' | 'error'>('idle')
+  const [connectionState, setConnectionState] = useState<
+    'idle' | 'connecting' | 'connected' | 'closed' | 'error'
+  >('idle')
   const [keyword, setKeyword] = useState('')
   const [autoScroll, setAutoScroll] = useState(true)
   const [sinceSeconds, setSinceSeconds] = useState(0)
@@ -214,29 +231,32 @@ export function PodLogViewer({
     }
   }, [])
 
-  const fetchSnapshot = useCallback(async (requestedHistoryLines: number, preserveScroll = false) => {
-    if (!clusterId || !namespace) return
-    if (preserveScroll && scrollerRef.current) {
-      restoreScrollRef.current = {
-        previousHeight: scrollerRef.current.scrollHeight,
-        previousTop: scrollerRef.current.scrollTop,
+  const fetchSnapshot = useCallback(
+    async (requestedHistoryLines: number, preserveScroll = false) => {
+      if (!clusterId || !namespace) return
+      if (preserveScroll && scrollerRef.current) {
+        restoreScrollRef.current = {
+          previousHeight: scrollerRef.current.scrollHeight,
+          previousTop: scrollerRef.current.scrollTop,
+        }
       }
-    }
-    const params = new URLSearchParams()
-    params.set('namespace', namespace)
-    params.set('tailLines', String(requestedHistoryLines))
-    if (container) params.set('container', container)
-    if (sinceSeconds > 0) params.set('sinceSeconds', String(sinceSeconds))
-    if (previous) params.set('previous', 'true')
-    const response = await api.get<ApiResponse<PodLogs>>(
-      `/clusters/${clusterId}/workloads/pods/${encodeURIComponent(podName)}/logs?${params.toString()}`,
-    )
-    const nextLines = trimLinesAfterBoundary(
-      splitLogContent(response.data?.content ?? ''),
-      previous ? [] : clearBoundaryRef.current,
-    )
-    setLines((current) => mergeLogLines(current, nextLines))
-  }, [clusterId, container, namespace, podName, previous, sinceSeconds])
+      const params = new URLSearchParams()
+      params.set('namespace', namespace)
+      params.set('tailLines', String(requestedHistoryLines))
+      if (container) params.set('container', container)
+      if (sinceSeconds > 0) params.set('sinceSeconds', String(sinceSeconds))
+      if (previous) params.set('previous', 'true')
+      const response = await api.get<ApiResponse<PodLogs>>(
+        `/clusters/${clusterId}/workloads/pods/${encodeURIComponent(podName)}/logs?${params.toString()}`,
+      )
+      const nextLines = trimLinesAfterBoundary(
+        splitLogContent(response.data?.content ?? ''),
+        previous ? [] : clearBoundaryRef.current,
+      )
+      setLines((current) => mergeLogLines(current, nextLines))
+    },
+    [clusterId, container, namespace, podName, previous, sinceSeconds],
+  )
 
   const startPollingSync = useCallback(() => {
     if (pollingTimerRef.current != null) return
@@ -297,9 +317,13 @@ export function PodLogViewer({
 
     socket.onmessage = (event) => {
       if (socketRef.current !== socket) return
-      const payload = JSON.parse(String(event.data)) as LogMessage
+      const payload = parseStreamMessage<LogMessage>(event.data)
+      if (!payload) return
       if (payload.type === 'log') {
-        if (suppressClearedReplayRef.current && clearBoundaryRef.current.includes(payload.data || '')) {
+        if (
+          suppressClearedReplayRef.current &&
+          clearBoundaryRef.current.includes(payload.data || '')
+        ) {
           return
         }
         suppressClearedReplayRef.current = false
@@ -322,11 +346,18 @@ export function PodLogViewer({
 
     socket.onclose = () => {
       if (socketRef.current !== socket) return
-      setConnectionState((current) => current === 'error' ? 'error' : 'closed')
+      setConnectionState((current) => (current === 'error' ? 'error' : 'closed'))
       startPollingSync()
       scheduleReconnect()
     }
-  }, [disconnect, previous, scheduleReconnect, startPollingSync, streamURL, streamingDisabledReason])
+  }, [
+    disconnect,
+    previous,
+    scheduleReconnect,
+    startPollingSync,
+    streamURL,
+    streamingDisabledReason,
+  ])
 
   useEffect(() => {
     if (!clusterId || !namespace || !active) return
@@ -360,13 +391,17 @@ export function PodLogViewer({
     const snapshot = restoreScrollRef.current
     requestAnimationFrame(() => {
       if (!scrollerRef.current) return
-      scrollerRef.current.scrollTop = scrollerRef.current.scrollHeight - snapshot.previousHeight + snapshot.previousTop
+      scrollerRef.current.scrollTop =
+        scrollerRef.current.scrollHeight - snapshot.previousHeight + snapshot.previousTop
       restoreScrollRef.current = null
     })
   }, [lines])
 
   const filteredLines = useMemo(
-    () => (keyword.trim() ? lines.filter((line) => line.toLowerCase().includes(keyword.trim().toLowerCase())) : lines),
+    () =>
+      keyword.trim()
+        ? lines.filter((line) => line.toLowerCase().includes(keyword.trim().toLowerCase()))
+        : lines,
     [keyword, lines],
   )
   const emptyLogMessage = getEmptyLogMessage({
@@ -376,28 +411,33 @@ export function PodLogViewer({
     localeCode,
   })
 
-  const timeRangeLabel = sinceSeconds === 0
-    ? t('podLogViewer.timeAll', 'All available')
-    : sinceSeconds === 300
-      ? t('podLogViewer.time5m', 'Last 5 min')
-      : sinceSeconds === 900
-        ? t('podLogViewer.time15m', 'Last 15 min')
-        : sinceSeconds === 3600
-          ? t('podLogViewer.time1h', 'Last 1 hour')
-          : sinceSeconds === 21600
-            ? t('podLogViewer.time6h', 'Last 6 hours')
-            : `${sinceSeconds}s`
+  const timeRangeLabel =
+    sinceSeconds === 0
+      ? t('podLogViewer.timeAll', 'All available')
+      : sinceSeconds === 300
+        ? t('podLogViewer.time5m', 'Last 5 min')
+        : sinceSeconds === 900
+          ? t('podLogViewer.time15m', 'Last 15 min')
+          : sinceSeconds === 3600
+            ? t('podLogViewer.time1h', 'Last 1 hour')
+            : sinceSeconds === 21600
+              ? t('podLogViewer.time6h', 'Last 6 hours')
+              : `${sinceSeconds}s`
 
-  const exportLogContent = useMemo(() => [
-    `Pod: ${podName}`,
-    `Namespace: ${namespace}`,
-    `Container: ${container || 'default'}`,
-    `Mode: ${previous ? (localeCode === 'zh_CN' ? '历史日志' : 'historical') : (localeCode === 'zh_CN' ? '当前日志' : 'current')}`,
-    `Time Range: ${timeRangeLabel}`,
-    `Exported At: ${new Date().toISOString()}`,
-    '',
-    ...filteredLines,
-  ].join('\n'), [container, filteredLines, localeCode, namespace, podName, previous, timeRangeLabel])
+  const exportLogContent = useMemo(
+    () =>
+      [
+        `Pod: ${podName}`,
+        `Namespace: ${namespace}`,
+        `Container: ${container || 'default'}`,
+        `Mode: ${previous ? (localeCode === 'zh_CN' ? '历史日志' : 'historical') : localeCode === 'zh_CN' ? '当前日志' : 'current'}`,
+        `Time Range: ${timeRangeLabel}`,
+        `Exported At: ${new Date().toISOString()}`,
+        '',
+        ...filteredLines,
+      ].join('\n'),
+    [container, filteredLines, localeCode, namespace, podName, previous, timeRangeLabel],
+  )
 
   useEffect(() => {
     if (!autoScroll || filteredLines.length === 0 || !scrollerRef.current) return
@@ -437,31 +477,72 @@ export function PodLogViewer({
     disconnect()
     setConnectionState('connecting')
     connect()
-  }, [connect, disconnect, fetchSnapshot, historyLines, lines, previous, startPollingSync, streamingDisabledReason])
+  }, [
+    connect,
+    disconnect,
+    fetchSnapshot,
+    historyLines,
+    lines,
+    previous,
+    startPollingSync,
+    streamingDisabledReason,
+  ])
 
   if (!clusterId || !namespace) {
-    return <ManagementState compact kind="select-scope" title={t('podLogViewer.notReady', 'Select a valid cluster and namespace before opening live logs')} />
+    return (
+      <ManagementState
+        compact
+        kind="select-scope"
+        title={t(
+          'podLogViewer.notReady',
+          'Select a valid cluster and namespace before opening live logs',
+        )}
+      />
+    )
   }
 
   if (!active) {
-    return <ManagementState compact title={t('podLogViewer.idle', 'Log stream has not been connected yet')} />
+    return (
+      <ManagementState
+        compact
+        title={t('podLogViewer.idle', 'Log stream has not been connected yet')}
+      />
+    )
   }
 
   return (
     <Card className="soha-detail-card soha-log-card">
       <Flex className="soha-terminal-toolbar soha-log-toolbar" align="center" gap={8} wrap>
-        <Tag color={connectionState === 'connected' ? 'green' : connectionState === 'connecting' ? 'blue' : connectionState === 'error' ? 'red' : connectionState === 'closed' ? 'orange' : undefined}>
+        <Tag
+          color={
+            connectionState === 'connected'
+              ? 'green'
+              : connectionState === 'connecting'
+                ? 'blue'
+                : connectionState === 'error'
+                  ? 'red'
+                  : connectionState === 'closed'
+                    ? 'orange'
+                    : undefined
+          }
+        >
           {connectionState}
         </Tag>
         <Tag color={previous ? 'orange' : 'blue'}>
           {previous
-            ? (localeCode === 'zh_CN' ? '历史日志' : 'Historical logs')
-            : (localeCode === 'zh_CN' ? '当前日志' : 'Current logs')}
+            ? localeCode === 'zh_CN'
+              ? '历史日志'
+              : 'Historical logs'
+            : localeCode === 'zh_CN'
+              ? '当前日志'
+              : 'Current logs'}
         </Tag>
         {streamingDisabledReason ? (
           <>
             <Tag color="orange">{localeCode === 'zh_CN' ? '轮询' : 'Polling'}</Tag>
-            <Text className="soha-log-toolbar-status" type="secondary">{streamingDisabledReason}</Text>
+            <Text className="soha-log-toolbar-status" type="secondary">
+              {streamingDisabledReason}
+            </Text>
           </>
         ) : null}
         {containerOptions && containerOptions.length > 0 ? (
@@ -496,35 +577,63 @@ export function PodLogViewer({
           ]}
         />
         <div className="soha-step-inline">
-          <Text type="secondary" style={{ fontSize: 12 }}>{t('podLogViewer.autoScroll', 'Auto scroll')}</Text>
-          <Switch size="small" checked={autoScroll} onChange={(checked) => setAutoScroll(checked)} />
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {t('podLogViewer.autoScroll', 'Auto scroll')}
+          </Text>
+          <Switch
+            size="small"
+            checked={autoScroll}
+            onChange={(checked) => setAutoScroll(checked)}
+          />
         </div>
         <div className="soha-step-inline">
-          <Text type="secondary" style={{ fontSize: 12 }}>{localeCode === 'zh_CN' ? '历史日志' : 'Historical logs'}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {localeCode === 'zh_CN' ? '历史日志' : 'Historical logs'}
+          </Text>
           <Switch size="small" checked={previous} onChange={(checked) => setPrevious(checked)} />
         </div>
-        <Button icon={<DeleteOutlined />} size="small" type="text" onClick={handleClear}>{t('podLogViewer.clear', 'Clear')}</Button>
+        <Button icon={<DeleteOutlined />} size="small" type="text" onClick={handleClear}>
+          {t('podLogViewer.clear', 'Clear')}
+        </Button>
         <Button
           size="small"
           type="text"
-          onClick={() => downloadText(
-            `${podName}-${previous ? 'historical' : 'current'}-logs.txt`,
-            exportLogContent,
-          )}
+          onClick={() =>
+            downloadText(
+              `${podName}-${previous ? 'historical' : 'current'}-logs.txt`,
+              exportLogContent,
+            )
+          }
           disabled={filteredLines.length === 0}
         >
           {localeCode === 'zh_CN' ? '导出日志' : 'Export Logs'}
         </Button>
-        <Button icon={<ReloadOutlined />} size="small" type="text" onClick={() => fetchSnapshot(historyLines)}>{t('podLogViewer.reconnect', 'Reconnect')}</Button>
+        <Button
+          icon={<ReloadOutlined />}
+          size="small"
+          type="text"
+          onClick={() => fetchSnapshot(historyLines)}
+        >
+          {t('podLogViewer.reconnect', 'Reconnect')}
+        </Button>
+        {toolbarExtra}
         {onOpenLogCenter ? (
           <Button icon={<ExportOutlined />} size="small" onClick={onOpenLogCenter}>
             {localeCode === 'zh_CN' ? '在日志中心打开' : 'Open in Log Center'}
           </Button>
         ) : null}
       </Flex>
-      <div ref={scrollerRef} className="soha-log-shell" onScroll={() => { void handleScroll() }}>
+      <div
+        ref={scrollerRef}
+        className="soha-log-shell"
+        onScroll={() => {
+          void handleScroll()
+        }}
+      >
         {loadingOlder ? (
-          <div className="soha-log-loading">{localeCode === 'zh_CN' ? '加载更早日志中...' : 'Loading older logs...'}</div>
+          <div className="soha-log-loading">
+            {localeCode === 'zh_CN' ? '加载更早日志中...' : 'Loading older logs...'}
+          </div>
         ) : null}
         {filteredLines.length > 0 ? (
           filteredLines.map((line, index) => (

@@ -24,6 +24,7 @@ const APPLICATION_PATH_PREFIXES = [
   '/applications',
   '/application-environments',
   '/build-templates',
+  '/delivery/overview',
   '/delivery/onboarding',
   '/delivery/testing',
   '/delivery/analysis',
@@ -151,19 +152,6 @@ const FRONTEND_MENU_COMPATIBILITY: ReadonlyArray<
     enabled: true,
     permissionKey: 'ai.operations.view',
     requiredParentId: 'ai-workbench',
-  },
-  {
-    id: 'monitoring-workbench-logs',
-    parentId: 'monitoring-workbench',
-    path: '/monitoring-workbench/logs',
-    labelZh: '日志',
-    labelEn: 'Logs',
-    iconKey: 'history',
-    section: 'logging',
-    sortOrder: 62,
-    enabled: true,
-    permissionKey: 'observe.monitoring.view',
-    requiredParentId: 'monitoring-workbench',
   },
   {
     id: 'monitoring-workbench-log-data-sources',
@@ -616,6 +604,7 @@ function sortRuntimeMenuTree(items: RuntimeMenuNode[]): RuntimeMenuNode[] {
 const APPLICATION_SECTION_ORDER: Record<string, number> = {
   builds: 10,
   applications: 10,
+  'delivery-overview': 15,
   'delivery-onboarding': 20,
   'release-board': 30,
   'delivery-testing': 40,
@@ -634,6 +623,7 @@ const APPLICATION_SECTION_ORDER: Record<string, number> = {
 const APPLICATION_MENU_SECTION_OVERRIDES: Record<string, string> = {
   builds: 'delivery',
   applications: 'delivery',
+  'delivery-overview': 'delivery',
   'delivery-onboarding': 'delivery',
   'release-board': 'delivery',
   'delivery-testing': 'delivery',
@@ -736,24 +726,26 @@ function buildRuntimeMenuTree(snapshot?: PermissionSnapshot | null): RuntimeMenu
   const visibleMenus = [...(snapshot?.visibleMenus ?? []), ...getCompatibleVisibleMenus(snapshot)]
   const nodes = new Map<string, RuntimeMenuNode>()
 
-  visibleMenus.forEach((menu) => {
-    const route = findBestRouteForMenu(menu, snapshot)
-    nodes.set(menu.id, {
-      id: menu.id,
-      parentId: menu.parentId,
-      path: menu.path,
-      labelZh: menu.labelZh || menu.id,
-      labelEn: menu.labelEn || menu.labelZh || menu.id,
-      iconKey: menu.iconKey || '',
-      section: normalizeMenuSection(menu.section || ''),
-      sortOrder: typeof menu.sortOrder === 'number' ? menu.sortOrder : 0,
-      enabled: menu.enabled ?? true,
-      workspace: route ? (getRouteWorkspace(route) ?? undefined) : undefined,
-      workbenchId: route ? (getRouteWorkbenchId(route) ?? undefined) : undefined,
-      route,
-      children: [],
+  visibleMenus
+    .filter((menu) => menu.enabled ?? true)
+    .forEach((menu) => {
+      const route = findBestRouteForMenu(menu, snapshot)
+      nodes.set(menu.id, {
+        id: menu.id,
+        parentId: menu.parentId,
+        path: menu.path,
+        labelZh: menu.labelZh || menu.id,
+        labelEn: menu.labelEn || menu.labelZh || menu.id,
+        iconKey: menu.iconKey || '',
+        section: normalizeMenuSection(menu.section || ''),
+        sortOrder: typeof menu.sortOrder === 'number' ? menu.sortOrder : 0,
+        enabled: menu.enabled ?? true,
+        workspace: route ? (getRouteWorkspace(route) ?? undefined) : undefined,
+        workbenchId: route ? (getRouteWorkbenchId(route) ?? undefined) : undefined,
+        route,
+        children: [],
+      })
     })
-  })
 
   const roots: RuntimeMenuNode[] = []
   nodes.forEach((node) => {

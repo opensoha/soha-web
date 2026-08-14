@@ -27,17 +27,18 @@ export const systemKeys = {
     all: ['audit-logs'] as const,
     list: (scope: SystemEndpointScope, filters: AuditLogFilters = {}) =>
       ['audit-logs', scope, normalizeFilters(filters)] as const,
+    summary: () => ['audit-logs', 'summary'] as const,
   },
   operationLogs: {
     all: ['operation-logs'] as const,
     list: (filters: OperationLogFilters = {}) =>
       ['operation-logs', normalizeFilters(filters)] as const,
+    summary: () => ['operation-logs', 'summary'] as const,
   },
 }
 
 export const systemMutationKeys = {
-  sessions: (action: 'revoke' | 'revoke-many') =>
-    ['online-users', 'mutation', action] as const,
+  sessions: (action: 'revoke' | 'revoke-many') => ['online-users', 'mutation', action] as const,
   announcements: (action: 'create' | 'update' | 'publish' | 'withdraw' | 'remove') =>
     ['announcements', 'mutation', action] as const,
   menus: (action: 'create' | 'update' | 'remove') => ['menus', 'mutation', action] as const,

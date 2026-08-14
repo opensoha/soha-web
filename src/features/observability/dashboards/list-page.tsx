@@ -59,7 +59,12 @@ export function ObservabilityDashboardsPage() {
       title: '来源',
       dataIndex: 'source',
       width: 110,
-      render: () => <MetadataTag label="Grafana" tone="orange" />,
+      render: (_: string, record) => (
+        <MetadataTag
+          label={record.tags.includes('soha-template') ? 'Soha 模板' : 'Grafana'}
+          tone={record.tags.includes('soha-template') ? 'blue' : 'orange'}
+        />
+      ),
     },
     {
       title: '数据源',

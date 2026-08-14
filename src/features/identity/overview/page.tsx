@@ -5,12 +5,11 @@ import {
   AuditOutlined,
   KeyOutlined,
   LinkOutlined,
-  ReloadOutlined,
   SafetyCertificateOutlined,
   UserSwitchOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
-import { ManagementDetailHeader, ManagementState } from '@/components/management-list'
+import { ManagementState } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
 import {
   OverviewChip,
@@ -49,7 +48,6 @@ export function IdentityOverviewPage() {
     runtime,
     loading,
     permissions,
-    refreshAll,
   } = useIdentityOverviewData()
   const oidcProviders = providers.filter((provider) => provider.type === 'oidc')
   const proxyProviders = providers.filter((provider) => provider.type === 'proxy')
@@ -142,29 +140,9 @@ export function IdentityOverviewPage() {
       tone: proxyEnabled ? 'success' : 'default',
     },
   ] satisfies OverviewChipItem[]
-  const operationStats = [
-    {
-      key: 'audit',
-      label: '最近审计',
-      value: audits.length,
-      helper: '最近身份相关操作和协议访问记录',
-      icon: <AuditOutlined />,
-      tone: audits.length > 0 ? 'success' : 'default',
-    },
-  ] satisfies OverviewChipItem[]
 
   return (
     <div className="soha-page soha-overview-page soha-identity-overview-page">
-      <ManagementDetailHeader
-        actions={
-          <Button icon={<ReloadOutlined />} onClick={refreshAll}>
-            刷新
-          </Button>
-        }
-        description="查看 Provider Portal、下游 Provider、活跃会话和身份审计的运行状态。"
-        title="总览"
-      />
-
       <div className="soha-overview-metric-grid">
         {overviewStats.map((item) => (
           <OverviewMetricCard
@@ -268,60 +246,6 @@ export function IdentityOverviewPage() {
         </Card>
       </div>
 
-      <Card className="soha-overview-runtime-card" title="运行入口">
-        <div className="soha-overview-chip-grid soha-identity-overview-chip-grid">
-          {operationStats.map((item) => (
-            <OverviewChip
-              key={item.key}
-              label={item.label}
-              value={item.value}
-              helper={item.helper}
-              icon={item.icon}
-              tone={item.tone}
-            />
-          ))}
-        </div>
-        <div className="soha-identity-overview-actions">
-          <Button
-            disabled={!permissions.applications}
-            icon={<AppstoreOutlined />}
-            onClick={() => navigate('/identity/applications')}
-          >
-            应用目录
-          </Button>
-          <Button
-            disabled={!permissions.providers}
-            icon={<ApiOutlined />}
-            onClick={() => navigate('/identity/providers')}
-          >
-            Provider 管理
-          </Button>
-          <Button
-            disabled={!permissions.outposts}
-            icon={<LinkOutlined />}
-            onClick={() => navigate('/identity/outposts')}
-          >
-            Outpost 管理
-          </Button>
-          <Button
-            disabled={!permissions.sessions}
-            icon={<UserSwitchOutlined />}
-            onClick={() => navigate('/system/online-users')}
-          >
-            在线用户
-          </Button>
-          <Button
-            disabled={!permissions.audit}
-            icon={<AuditOutlined />}
-            onClick={() => navigate('/system/audit')}
-          >
-            审计事件
-          </Button>
-          <Button icon={<LinkOutlined />} onClick={() => navigate('/portal')}>
-            门户首页
-          </Button>
-        </div>
-      </Card>
     </div>
   )
 }

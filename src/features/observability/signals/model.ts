@@ -3,14 +3,6 @@ import type {
   ObservabilityTraceSpan,
 } from '@opensoha/contracts/gen/ts/sohaapi'
 
-export interface ServiceSummary {
-  errorSpans: number
-  key: string
-  maxDurationMs: number
-  service: string
-  spans: number
-}
-
 export function observabilityScope(
   clusterId: string | null,
   namespace: string | null,
@@ -26,24 +18,47 @@ export function observabilityScope(
   return Object.values(scope).some(Boolean) ? scope : undefined
 }
 
-export function summarizeServices(spans: ObservabilityTraceSpan[]): ServiceSummary[] {
-  const services = new Map<string, ServiceSummary>()
-  for (const span of spans) {
-    const service = span.service.trim()
-    if (!service) continue
-    const current = services.get(service) ?? {
-      errorSpans: 0,
-      key: service,
-      maxDurationMs: 0,
-      service,
-      spans: 0,
-    }
-    current.spans += 1
-    current.errorSpans += span.error ? 1 : 0
-    current.maxDurationMs = Math.max(current.maxDurationMs, span.durationMs)
-    services.set(service, current)
+export function signalSearchParams(
+  current: URLSearchParams,
+  values: Record<string, number | null | string | undefined>,
+) {
+  const next = new URLSearchParams(current)
+  for (const [key, value] of Object.entries(values)) {
+    const normalized = String(value ?? '').trim()
+    if (normalized) next.set(key, normalized)
+    else next.delete(key)
   }
-  return [...services.values()].sort(
-    (left, right) => right.errorSpans - left.errorSpans || right.maxDurationMs - left.maxDurationMs,
+  return next
+}
+
+export interface TraceWaterfallRow {
+  leftPercent: number
+  span: ObservabilityTraceSpan
+  widthPercent: number
+}
+
+export function traceWaterfallRows(
+  spans: ObservabilityTraceSpan[],
+  traceId: string,
+): TraceWaterfallRow[] {
+  const selected = spans
+    .filter((span) => span.traceId === traceId && Number.isFinite(Date.parse(span.startTime)))
+    .sort((left, right) => Date.parse(left.startTime) - Date.parse(right.startTime))
+  if (selected.length === 0) return []
+  const start = Date.parse(selected[0]!.startTime)
+  const end = Math.max(
+    ...selected.map((span) => Date.parse(span.startTime) + Math.max(0, span.durationMs)),
   )
+  const duration = Math.max(1, end - start)
+  return selected.map((span) => {
+    const leftPercent = ((Date.parse(span.startTime) - start) / duration) * 100
+    return {
+      span,
+      leftPercent,
+      widthPercent: Math.min(
+        100 - leftPercent,
+        Math.max(0.6, (Math.max(0, span.durationMs) / duration) * 100),
+      ),
+    }
+  })
 }

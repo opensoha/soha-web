@@ -49,6 +49,35 @@ export const deliveryRoutes = defineRoutes([
   },
   {
     meta: {
+      id: 'delivery-overview',
+      path: '/delivery/overview',
+      title: '总览',
+      description: '应用、环境、发布与执行态势',
+      icon: 'IconGauge',
+      group: 'delivery',
+      workbenchId: 'delivery',
+      requiresAuth: true,
+      tabbar: true,
+      navVisible: true,
+      menuId: 'delivery-overview',
+      permissionKeysAny: [
+        'delivery.applications.view',
+        'delivery.application-environments.view',
+        'delivery.release-board.view',
+        'delivery.release-bundles.view',
+        'delivery.execution-tasks.view',
+      ],
+      scopeMode: 'passive',
+      workspace: 'application',
+    },
+    shell: 'app',
+    load: async () => {
+      const module = await import('./workbench/overview-page')
+      return { default: module.DeliveryOverviewPage }
+    },
+  },
+  {
+    meta: {
       id: 'application-detail',
       path: '/applications/:applicationId',
       title: '应用详情',

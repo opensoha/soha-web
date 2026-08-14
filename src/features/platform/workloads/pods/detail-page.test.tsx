@@ -4,6 +4,7 @@ import { act } from 'react'
 import { App as AntdApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot, type Root } from 'react-dom/client'
+import type { ReactNode } from 'react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PodDetailPage } from './detail-page'
@@ -20,6 +21,7 @@ const testState = vi.hoisted(() => ({
     setClusterId: vi.fn(),
     setNamespace: vi.fn(),
   },
+  openSession: vi.fn(),
 }))
 
 const apiGetMock = vi.hoisted(() =>
@@ -111,6 +113,10 @@ vi.mock('@/features/platform/cluster-capabilities', () => ({
   }),
 }))
 
+vi.mock('@/features/platform/session-dock', () => ({
+  useRealtimeSessionDock: () => ({ openSession: testState.openSession }),
+}))
+
 vi.mock('@/components/resource-events-timeline', () => ({
   ResourceEventsTimeline: () => <div data-testid="events-panel">events-panel</div>,
 }))
@@ -125,9 +131,16 @@ vi.mock('@/components/resource-metrics-panel', () => {
 vi.mock('@/components/pod-log-viewer', () => {
   testState.runtimeLoads.logs += 1
   return {
-    PodLogViewer: ({ onOpenLogCenter }: { onOpenLogCenter?: () => void }) => (
+    PodLogViewer: ({
+      onOpenLogCenter,
+      toolbarExtra,
+    }: {
+      onOpenLogCenter?: () => void
+      toolbarExtra?: ReactNode
+    }) => (
       <div data-testid="logs-panel">
         logs-panel
+        {toolbarExtra}
         <button onClick={onOpenLogCenter}>在日志中心打开</button>
       </div>
     ),
@@ -136,7 +149,11 @@ vi.mock('@/components/pod-log-viewer', () => {
 
 vi.mock('@/components/pod-terminal', () => {
   testState.runtimeLoads.terminal += 1
-  return { PodTerminal: () => <div data-testid="terminal-panel">terminal-panel</div> }
+  return {
+    PodTerminal: ({ toolbarContent }: { toolbarContent?: ReactNode }) => (
+      <div data-testid="terminal-panel">{toolbarContent}</div>
+    ),
+  }
 })
 
 vi.mock('@/components/k8s-yaml-editor', () => ({
@@ -209,7 +226,9 @@ async function flushAsyncWork() {
   })
 }
 
-async function renderDetail() {
+async function renderDetail(
+  route = '/workloads/pods/prometheus-0?clusterId=url-cluster&namespace=url-namespace',
+) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
@@ -222,11 +241,7 @@ async function renderDetail() {
     root.render(
       <QueryClientProvider client={queryClient}>
         <AntdApp>
-          <MemoryRouter
-            initialEntries={[
-              '/workloads/pods/prometheus-0?clusterId=url-cluster&namespace=url-namespace',
-            ]}
-          >
+          <MemoryRouter initialEntries={[route]}>
             <Routes>
               <Route path="/workloads/pods/:podName" element={<PodDetailPage />} />
               <Route path="/monitoring-workbench/logs" element={<LocationProbe />} />
@@ -251,6 +266,15 @@ async function clickTab(container: HTMLElement, label: string) {
 }
 
 describe('pod detail page lazy boundaries', () => {
+  it('opens the YAML editor directly from the tab query', async () => {
+    const container = await renderDetail(
+      '/workloads/pods/prometheus-0?clusterId=url-cluster&namespace=url-namespace&tab=yaml',
+    )
+
+    expect(apiGetMock.mock.calls.some(([path]) => String(path).includes('/yaml?'))).toBe(true)
+    expect(container.querySelector('[data-testid="yaml-editor"]')).not.toBeNull()
+  })
+
   it('loads tab data and heavy runtimes only after their tab is activated', async () => {
     const container = await renderDetail()
     const requestedPaths = () => apiGetMock.mock.calls.map(([path]) => String(path))
@@ -278,7 +302,10 @@ describe('pod detail page lazy boundaries', () => {
     expect(testState.runtimeLoads.logs).toBe(1)
 
     await clickTab(container, '终端')
-    expect(container.querySelector('[data-testid="terminal-panel"]')).not.toBeNull()
+    const terminalPanel = container.querySelector('[data-testid="terminal-panel"]')
+    expect(terminalPanel?.querySelector('.soha-terminal-controls')).not.toBeNull()
+    expect(terminalPanel?.textContent).toContain('容器:')
+    expect(terminalPanel?.textContent).toContain('Shell:')
     expect(testState.runtimeLoads.terminal).toBe(1)
 
     await clickTab(container, '事件')
@@ -309,5 +336,41 @@ describe('pod detail page lazy boundaries', () => {
     expect(container.querySelector('[data-testid="location"]')?.textContent).toBe(
       '/monitoring-workbench/logs?cluster=url-cluster&namespace=url-namespace&pod=prometheus-0&container=prometheus',
     )
+  })
+
+  it('opens scoped log and terminal sessions in the persistent dock', async () => {
+    const container = await renderDetail()
+
+    await clickTab(container, '日志')
+    const openLogSession = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('打开日志会话'),
+    )
+    await act(async () => openLogSession?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+
+    expect(testState.openSession).toHaveBeenLastCalledWith({
+      clusterId: 'url-cluster',
+      container: 'prometheus',
+      kind: 'logs',
+      namespace: 'url-namespace',
+      podName: 'prometheus-0',
+      streamingDisabledReason: undefined,
+    })
+
+    await clickTab(container, '终端')
+    const openTerminalSession = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('打开终端会话'),
+    )
+    await act(async () =>
+      openTerminalSession?.dispatchEvent(new MouseEvent('click', { bubbles: true })),
+    )
+
+    expect(testState.openSession).toHaveBeenLastCalledWith({
+      clusterId: 'url-cluster',
+      container: 'prometheus',
+      kind: 'terminal',
+      namespace: 'url-namespace',
+      podName: 'prometheus-0',
+      shell: '/bin/sh',
+    })
   })
 })

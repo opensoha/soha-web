@@ -38,12 +38,10 @@ function getRoute(id: string): RouteMeta {
 
 describe('access route authorization', () => {
   it('prefers an exact route over a dynamic sibling', () => {
-    expect(getRouteMeta('/settings/source-control/new').id).toBe(
-      'settings-source-control-create',
-    )
+    expect(getRouteMeta('/settings/source-control/new').id).toBe('settings-source-control-create')
   })
 
-  it('exposes Logs against an older menu snapshot without weakening its permission boundary', () => {
+  it('keeps the legacy Logs page authorized without synthesizing a navigation item', () => {
     const allowed = buildSnapshot({
       permissionKeys: ['workspace.resource.view', 'observe.monitoring.view'],
       visibleMenuIds: ['monitoring-workbench'],
@@ -61,7 +59,7 @@ describe('access route authorization', () => {
       filterSidebarNavByWorkbench(getAccessibleSidebarNav(allowed), 'monitoring').map(
         (item) => item.id,
       ),
-    ).toEqual(['monitoring-workbench-logs'])
+    ).toEqual(['monitoring-workbench'])
   })
 
   it('exposes software storage against an older menu snapshot without weakening its permission boundary', () => {
@@ -1035,7 +1033,6 @@ describe('access route authorization', () => {
     ])
     expect(filterSidebarNavByWorkbench(resourceNav, 'monitoring').map((item) => item.id)).toEqual([
       'monitoring-workbench-overview',
-      'monitoring-workbench-logs',
     ])
   })
 
@@ -1363,21 +1360,21 @@ describe('access route authorization', () => {
     ).toBe(false)
   })
 
-  it('maps virtualization sync into the compute resource management group', () => {
+  it('keeps the legacy sync page behind the canonical task center menu', () => {
     const route = getRoute('compute-workbench-tasks-sync')
     const snapshot = buildSnapshot({
       permissionKeys: ['workspace.resource.view', 'virtualization.sync.view'],
-      visibleMenuIds: ['compute-workbench-tasks-sync'],
+      visibleMenuIds: ['compute-workbench-tasks-operations'],
       visibleMenus: [
         {
-          id: 'compute-workbench-tasks-sync',
+          id: 'compute-workbench-tasks-operations',
           parentId: 'compute-workbench',
-          path: '/compute/tasks/sync',
+          path: '/compute/tasks/operations',
         },
       ],
     })
 
-    expect(route.menuId).toBe('compute-workbench-tasks-sync')
+    expect(route.menuId).toBe('compute-workbench-tasks-operations')
     expect(route.permissionKeysAny).toContain('virtualization.sync.view')
     expect(getRouteWorkbenchId(route)).toBe('compute')
     expect(getRouteScopeMode(route)).toBe('passive')

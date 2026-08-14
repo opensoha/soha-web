@@ -16,6 +16,8 @@ export interface SignalFilters {
   minDurationMs: number
   rangeMinutes: number
   service?: string
+  timeFrom?: string
+  timeTo?: string
   traceId?: string
   workload?: string
 }
@@ -27,7 +29,12 @@ const timeOptions = [
   { label: '最近 24 小时', value: 1440 },
 ]
 
-export function queryTimes(rangeMinutes: number) {
+export function queryTimes(rangeMinutes: number, requestedFrom?: string, requestedTo?: string) {
+  const from = Date.parse(requestedFrom ?? '')
+  const to = Date.parse(requestedTo ?? '')
+  if (Number.isFinite(from) && Number.isFinite(to) && from < to) {
+    return { timeFrom: new Date(from).toISOString(), timeTo: new Date(to).toISOString() }
+  }
   const timeTo = new Date()
   return {
     timeFrom: new Date(timeTo.getTime() - rangeMinutes * 60_000).toISOString(),
@@ -41,6 +48,7 @@ export function SignalQueryForm({
   initialValues,
   loading,
   onFinish,
+  showWorkload = true,
   submitLabel,
 }: {
   children?: React.ReactNode
@@ -48,6 +56,7 @@ export function SignalQueryForm({
   initialValues?: Partial<SignalFilters>
   loading: boolean
   onFinish: (values: SignalFilters) => void
+  showWorkload?: boolean
   submitLabel: string
 }) {
   return (
@@ -56,8 +65,18 @@ export function SignalQueryForm({
         form={form}
         initialValues={{ limit: 100, minDurationMs: 0, rangeMinutes: 15, ...initialValues }}
         layout="vertical"
+        onValuesChange={(changed) => {
+          if ('rangeMinutes' in changed)
+            form.setFieldsValue({ timeFrom: undefined, timeTo: undefined })
+        }}
         onFinish={onFinish}
       >
+        <Form.Item hidden name="timeFrom">
+          <Input />
+        </Form.Item>
+        <Form.Item hidden name="timeTo">
+          <Input />
+        </Form.Item>
         <Flex align="center" className="soha-signal-scope-row" gap={8} justify="space-between" wrap>
           <PlatformScopeToolbar embedded showLabel={false} />
           <Form.Item name="rangeMinutes" noStyle>
@@ -68,9 +87,11 @@ export function SignalQueryForm({
           <Form.Item label="服务" name="service">
             <Input allowClear placeholder="service.name" />
           </Form.Item>
-          <Form.Item label="工作负载" name="workload">
-            <Input allowClear placeholder="可选" />
-          </Form.Item>
+          {showWorkload ? (
+            <Form.Item label="工作负载" name="workload">
+              <Input allowClear placeholder="可选" />
+            </Form.Item>
+          ) : null}
           {children}
         </div>
         <Flex justify="flex-end">
@@ -114,7 +135,7 @@ export function traceInput(
   namespace: string | null,
 ): ObservabilityTraceQueryInput {
   return {
-    ...queryTimes(values.rangeMinutes),
+    ...queryTimes(values.rangeMinutes, values.timeFrom, values.timeTo),
     limit: values.limit,
     minDurationMs: values.minDurationMs,
     traceId: values.traceId?.trim() || undefined,

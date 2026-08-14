@@ -56,11 +56,11 @@ describe('pod mutation options', () => {
     ])
   })
 
-  it('invalidates list and record detail after a single rebuild', async () => {
+  it('invalidates list and record detail after a single delete', async () => {
     const queryClient = new QueryClient()
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue()
     apiMocks.deletePod.mockResolvedValueOnce(undefined)
-    const observer = new MutationObserver(queryClient, podMutations.rebuild(queryClient))
+    const observer = new MutationObserver(queryClient, podMutations.remove(queryClient))
 
     await expect(observer.mutate(targets[0])).resolves.toBeUndefined()
     expect(invalidate).toHaveBeenCalledWith({ queryKey: workloadKeys.lists('pods') })

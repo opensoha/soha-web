@@ -1,17 +1,12 @@
 import {
-  ApartmentOutlined,
   FileProtectOutlined,
-  KeyOutlined,
-  LoginOutlined,
-  MenuOutlined,
   SafetyCertificateOutlined,
   TeamOutlined,
   UserOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { Button, Card } from 'antd'
-import { useNavigate } from 'react-router-dom'
-import { ManagementDetailHeader, ManagementState } from '@/components/management-list'
+import { ManagementState } from '@/components/management-list'
 import {
   OverviewChip,
   OverviewMetricCard,
@@ -20,23 +15,31 @@ import {
 } from '@/components/overview-visuals'
 import { accessQueries } from '@/features/access'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { systemQueries } from '@/features/system'
 import './styles.css'
 
 export function SettingsOverviewPage() {
-  const navigate = useNavigate()
   const permissionQuery = usePermissionSnapshot()
   const permissions = permissionQuery.data?.data
   const canViewUsers = hasPermission(permissions, 'access.users.view')
   const canViewRoles = hasPermission(permissions, 'access.roles.view')
   const canViewTeams = hasPermission(permissions, 'access.groups.view')
   const canViewPolicies = hasPermission(permissions, 'access.policies.view')
+  const canViewOnlineUsers = hasPermission(permissions, 'system.online-users.view')
+  const canViewAudit = hasPermission(permissions, 'system.audit.view')
+  const canViewOperations = hasPermission(permissions, 'system.operations.view')
   const usersQuery = useQuery(accessQueries.users(canViewUsers))
   const rolesQuery = useQuery(accessQueries.roles(canViewRoles))
   const teamsQuery = useQuery(accessQueries.teams(canViewTeams))
   const policiesQuery = useQuery(accessQueries.policies(canViewPolicies))
-  const hasQueryError =
-    permissionQuery.isError ||
-    [usersQuery, rolesQuery, teamsQuery, policiesQuery].some((query) => query.isError)
+  const sessionsQuery = useQuery(systemQueries.sessions(canViewOnlineUsers))
+  const auditSummaryQuery = useQuery(systemQueries.auditSummary(canViewAudit))
+  const operationSummaryQuery = useQuery(systemQueries.operationSummary(canViewOperations))
+  const accessMetricQueries = [usersQuery, rolesQuery, teamsQuery, policiesQuery]
+  const hasAccessMetricsError = accessMetricQueries.some((query) => query.isError)
+  const hasSystemActivityError = [sessionsQuery, auditSummaryQuery, operationSummaryQuery].some(
+    (query) => query.isError,
+  )
 
   const users = usersQuery.data ?? []
   const roles = rolesQuery.data ?? []
@@ -44,107 +47,136 @@ export function SettingsOverviewPage() {
   const policies = policiesQuery.data ?? []
   const activeUsers = users.filter((item) => item.status === 'active').length
   const disabledUsers = users.filter((item) => item.status === 'disabled').length
+  const sessions = sessionsQuery.data ?? []
+  const onlineUsers = new Set(sessions.map((item) => item.userId).filter(Boolean)).size
   const permissionLoading = permissionQuery.isLoading
 
   const overviewStats = [
     {
       key: 'users',
       label: '用户总数',
-      value: canViewUsers ? users.length : '-',
-      helper: canViewUsers ? `正常 ${activeUsers} · 停用 ${disabledUsers}` : '无查看权限',
+      value: canViewUsers && !usersQuery.isError ? users.length : '-',
+      helper: !canViewUsers
+        ? '无查看权限'
+        : usersQuery.isError
+          ? '加载失败'
+          : `正常 ${activeUsers} · 停用 ${disabledUsers}`,
       icon: <UserOutlined />,
-      tone: 'default',
+      tone: usersQuery.isError ? 'danger' : 'default',
     },
     {
       key: 'roles',
       label: '角色数',
-      value: canViewRoles ? roles.length : '-',
-      helper: canViewRoles
-        ? `${roles.filter((item) => item.userCount > 0).length} 个角色已分配用户`
-        : '无查看权限',
+      value: canViewRoles && !rolesQuery.isError ? roles.length : '-',
+      helper: !canViewRoles
+        ? '无查看权限'
+        : rolesQuery.isError
+          ? '加载失败'
+          : `${roles.filter((item) => item.userCount > 0).length} 个角色已分配用户`,
       icon: <SafetyCertificateOutlined />,
-      tone: 'success',
+      tone: rolesQuery.isError ? 'danger' : 'success',
     },
     {
       key: 'teams',
       label: '组织数',
-      value: canViewTeams ? teams.length : '-',
-      helper: canViewTeams
-        ? `${teams.filter((item) => item.userCount > 0).length} 个组织已有成员`
-        : '无查看权限',
+      value: canViewTeams && !teamsQuery.isError ? teams.length : '-',
+      helper: !canViewTeams
+        ? '无查看权限'
+        : teamsQuery.isError
+          ? '加载失败'
+          : `${teams.filter((item) => item.userCount > 0).length} 个组织已有成员`,
       icon: <TeamOutlined />,
-      tone: 'default',
+      tone: teamsQuery.isError ? 'danger' : 'default',
     },
     {
       key: 'policies',
       label: '访问策略',
-      value: canViewPolicies ? policies.length : '-',
-      helper: canViewPolicies
-        ? `允许 ${policies.filter((item) => item.effect === 'allow').length} · 拒绝 ${policies.filter((item) => item.effect === 'deny').length}`
-        : '无查看权限',
+      value: canViewPolicies && !policiesQuery.isError ? policies.length : '-',
+      helper: !canViewPolicies
+        ? '无查看权限'
+        : policiesQuery.isError
+          ? '加载失败'
+          : `允许 ${policies.filter((item) => item.effect === 'allow').length} · 拒绝 ${policies.filter((item) => item.effect === 'deny').length}`,
       icon: <FileProtectOutlined />,
-      tone: 'warning',
+      tone: policiesQuery.isError ? 'danger' : 'warning',
     },
   ] satisfies OverviewMetricItem[]
 
   const userStatus = [
-    { key: 'active', label: '正常用户', value: activeUsers, tone: 'success' },
-    { key: 'disabled', label: '停用用户', value: disabledUsers, tone: 'warning' },
+    {
+      key: 'active',
+      label: '正常用户',
+      value: activeUsers,
+      helper: '当前可正常登录',
+      tone: 'success',
+    },
+    {
+      key: 'disabled',
+      label: '停用用户',
+      value: disabledUsers,
+      helper: '当前已禁止登录',
+      tone: 'warning',
+    },
     {
       key: 'no-role',
       label: '未分配角色',
       value: users.filter((item) => item.roles.length === 0).length,
+      helper: '尚未获得角色权限',
       tone: 'default',
     },
     {
       key: 'no-team',
       label: '未加入组织',
       value: users.filter((item) => item.teams.length === 0).length,
+      helper: '尚未加入任何组织',
       tone: 'default',
     },
   ] satisfies OverviewChipItem[]
 
-  const quickActions = [
-    canViewUsers && { key: 'users', label: '用户', path: '/access/users', icon: <UserOutlined /> },
-    canViewRoles && {
-      key: 'roles',
-      label: '角色',
-      path: '/access/roles',
-      icon: <SafetyCertificateOutlined />,
-    },
-    canViewTeams && {
-      key: 'teams',
-      label: '组织',
-      path: '/access/teams',
-      icon: <ApartmentOutlined />,
-    },
-    canViewPolicies && {
-      key: 'policies',
-      label: '策略',
-      path: '/access/policies',
-      icon: <FileProtectOutlined />,
-    },
-    hasPermission(permissions, 'settings.identity.view') && {
-      key: 'login',
-      label: '登录设置',
-      path: '/settings/login',
-      icon: <LoginOutlined />,
-    },
-    hasPermission(permissions, 'system.menus.view') && {
-      key: 'menus',
-      label: '菜单管理',
-      path: '/system/menus',
-      icon: <MenuOutlined />,
-    },
-    hasPermission(permissions, 'secret.view') && {
-      key: 'secrets',
-      label: 'Secret Store',
-      path: '/settings/secrets',
-      icon: <KeyOutlined />,
-    },
-  ].filter((item): item is Exclude<typeof item, false | undefined> => Boolean(item))
+  const systemActivity = [
+    ...(canViewOnlineUsers && !sessionsQuery.isError
+      ? [
+          {
+            key: 'online-users',
+            label: '在线用户',
+            value: onlineUsers,
+            helper: `${sessions.length} 个活跃会话`,
+            tone: 'success' as const,
+          },
+          {
+            key: 'sessions',
+            label: '活跃会话',
+            value: sessions.length,
+            helper: `${onlineUsers} 个用户在线`,
+            tone: 'default' as const,
+          },
+        ]
+      : []),
+    ...(canViewOperations && !operationSummaryQuery.isError
+      ? [
+          {
+            key: 'operations',
+            label: '操作记录',
+            value: operationSummaryQuery.data?.total ?? 0,
+            helper: `失败 ${operationSummaryQuery.data?.failureCount ?? 0}`,
+            tone: (operationSummaryQuery.data?.failureCount ?? 0) > 0 ? 'warning' : 'default',
+          } as const,
+        ]
+      : []),
+    ...(canViewAudit && !auditSummaryQuery.isError
+      ? [
+          {
+            key: 'audit',
+            label: '审计记录',
+            value: auditSummaryQuery.data?.total ?? 0,
+            helper: `保留 ${auditSummaryQuery.data?.retentionDays ?? 0} 天`,
+            tone: 'default' as const,
+          },
+        ]
+      : []),
+  ] satisfies OverviewChipItem[]
 
-  if (hasQueryError) {
+  if (permissionQuery.isError) {
     return (
       <div className="soha-page soha-settings-overview">
         <ManagementState
@@ -153,12 +185,6 @@ export function SettingsOverviewPage() {
             <Button
               onClick={() => {
                 void permissionQuery.refetch()
-                void Promise.all([
-                  canViewUsers ? usersQuery.refetch() : Promise.resolve(),
-                  canViewRoles ? rolesQuery.refetch() : Promise.resolve(),
-                  canViewTeams ? teamsQuery.refetch() : Promise.resolve(),
-                  canViewPolicies ? policiesQuery.refetch() : Promise.resolve(),
-                ])
               }}
             >
               重试
@@ -171,8 +197,25 @@ export function SettingsOverviewPage() {
 
   return (
     <div className="soha-page soha-overview-page soha-settings-overview">
-      <ManagementDetailHeader title="总览" description="用户、角色、组织与访问策略的管理概览。" />
-
+      {hasAccessMetricsError ? (
+        <ManagementState
+          bordered={false}
+          compact
+          kind="error"
+          title="部分访问治理数据加载失败"
+          actions={
+            <Button
+              onClick={() => {
+                for (const query of accessMetricQueries) {
+                  if (query.isError) void query.refetch()
+                }
+              }}
+            >
+              重试失败项
+            </Button>
+          }
+        />
+      ) : null}
       <div className="soha-overview-metric-grid">
         {overviewStats.map(({ key, ...item }, index) => (
           <OverviewMetricCard
@@ -187,30 +230,62 @@ export function SettingsOverviewPage() {
       </div>
 
       <div className="soha-overview-summary-grid">
-        <Card className="soha-overview-panel-card" title="用户状态">
-          {canViewUsers ? (
+        <Card
+          className="soha-overview-panel-card"
+          title="用户状态"
+          loading={permissionLoading || (canViewUsers && usersQuery.isLoading)}
+        >
+          {canViewUsers && !usersQuery.isError ? (
             <div className="soha-settings-overview-chip-grid">
               {userStatus.map(({ key, ...item }) => (
                 <OverviewChip key={key} {...item} />
               ))}
             </div>
+          ) : usersQuery.isError ? (
+            <ManagementState compact bordered={false} kind="error" title="用户状态加载失败" />
           ) : (
             <ManagementState compact bordered={false} kind="no-permission" />
           )}
         </Card>
 
-        <Card className="soha-overview-panel-card" title="用户管理">
-          {quickActions.length ? (
-            <div className="soha-settings-overview-actions">
-              {quickActions.map((item) => (
-                <Button key={item.key} icon={item.icon} onClick={() => navigate(item.path)}>
-                  {item.label}
+        <Card
+          className="soha-overview-panel-card"
+          title="系统活动"
+          loading={
+            permissionLoading ||
+            (canViewOnlineUsers && sessionsQuery.isLoading) ||
+            (canViewAudit && auditSummaryQuery.isLoading) ||
+            (canViewOperations && operationSummaryQuery.isLoading)
+          }
+        >
+          {hasSystemActivityError ? (
+            <ManagementState
+              bordered={false}
+              compact
+              kind="error"
+              title="部分系统活动加载失败"
+              actions={
+                <Button
+                  onClick={() => {
+                    if (sessionsQuery.isError) void sessionsQuery.refetch()
+                    if (auditSummaryQuery.isError) void auditSummaryQuery.refetch()
+                    if (operationSummaryQuery.isError) void operationSummaryQuery.refetch()
+                  }}
+                >
+                  重试失败项
                 </Button>
+              }
+            />
+          ) : null}
+          {systemActivity.length ? (
+            <div className="soha-settings-overview-chip-grid">
+              {systemActivity.map(({ key, ...item }) => (
+                <OverviewChip key={key} {...item} />
               ))}
             </div>
-          ) : (
+          ) : !hasSystemActivityError ? (
             <ManagementState compact bordered={false} kind="no-permission" />
-          )}
+          ) : null}
         </Card>
       </div>
     </div>

@@ -580,7 +580,7 @@
 }
 
 .soha-pod-actions-column.soha-table-actions-column {
-  --soha-table-actions-column-width: 64px;
+  --soha-table-actions-column-width: 116px;
 }
 
 .soha-deployments-table .soha-workload-actions-column {

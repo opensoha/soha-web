@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Button, Popover, Space, Tag } from 'antd'
 
 interface CompactMappedTagsProps {
@@ -16,7 +15,6 @@ function CompactMappedTags({
   values,
   visibleCount,
 }: CompactMappedTagsProps) {
-  const [open, setOpen] = useState(false)
   if (!values?.length) return emptyText
 
   const visibleValues = values.slice(0, visibleCount)
@@ -39,9 +37,8 @@ function CompactMappedTags({
 
   return (
     <Popover
-      open={open}
-      onOpenChange={setOpen}
-      trigger={[]}
+      trigger="click"
+      destroyOnHidden
       placement="topLeft"
       title={`${values.length} 个${itemLabel}`}
       content={
@@ -58,7 +55,6 @@ function CompactMappedTags({
         onClick={(event) => {
           event.preventDefault()
           event.stopPropagation()
-          setOpen((current) => !current)
         }}
       >
         <Space wrap={false} size={4} className="soha-access-compact-tags">

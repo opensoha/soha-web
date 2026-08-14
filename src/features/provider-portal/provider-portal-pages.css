@@ -246,6 +246,10 @@
   gap: 10px;
 }
 
+.soha-portal-user-avatar img {
+  object-fit: var(--soha-avatar-fit, cover);
+}
+
 .soha-portal-principal.is-large {
   align-items: flex-start;
   margin-bottom: 14px;

@@ -7,6 +7,7 @@ export {
   importSAMLLoginSourceMetadata,
   listIdentityOIDCClients,
   listIdentityProviders,
+  rotateIdentityProviderSAMLCertificate,
   rotateIdentityProviderSigningKey,
   rotateSAMLCertificate,
   updateIdentityOIDCClient,

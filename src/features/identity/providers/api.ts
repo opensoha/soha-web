@@ -10,6 +10,7 @@ import type {
   IdentityProviderFilters,
   IdentityProviderInput,
   IdentitySigningKey,
+  RotateIdentityProviderSAMLCertificateVariables,
   SAMLCertificateRotation,
   SAMLCertificateRotateRequest,
   SAMLMetadataInput,
@@ -67,9 +68,7 @@ export async function updateIdentityProvider({
 }
 
 export async function deleteIdentityProvider(providerId: string): Promise<void> {
-  await api.delete<ApiResponse<{ status: string }>>(
-    `/identity/providers/${encodeURIComponent(providerId.trim())}`,
-  )
+  await api.delete<void>(`/identity/providers/${encodeURIComponent(providerId.trim())}`)
 }
 
 export async function listIdentityOIDCClients(providerId: string): Promise<IdentityOIDCClient[]> {
@@ -104,9 +103,7 @@ export async function updateIdentityOIDCClient({
 export async function deleteIdentityOIDCClient({
   clientId,
 }: DeleteIdentityOIDCClientVariables): Promise<void> {
-  await api.delete<ApiResponse<{ status: string }>>(
-    `/identity/oidc-clients/${encodeURIComponent(clientId.trim())}`,
-  )
+  await api.delete<void>(`/identity/oidc-clients/${encodeURIComponent(clientId.trim())}`)
 }
 
 export async function rotateIdentityProviderSigningKey(
@@ -114,6 +111,17 @@ export async function rotateIdentityProviderSigningKey(
 ): Promise<IdentitySigningKey> {
   const response = await api.post<ApiResponse<IdentitySigningKey>>(
     `/identity/providers/${encodeURIComponent(providerId.trim())}/signing-keys/rotate`,
+  )
+  return response.data
+}
+
+export async function rotateIdentityProviderSAMLCertificate({
+  providerId,
+  input,
+}: RotateIdentityProviderSAMLCertificateVariables): Promise<SAMLCertificateRotation> {
+  const response = await api.post<ApiResponse<SAMLCertificateRotation>>(
+    `/identity/providers/${encodeURIComponent(providerId.trim())}/saml/certificate/rotate`,
+    input,
   )
   return response.data
 }

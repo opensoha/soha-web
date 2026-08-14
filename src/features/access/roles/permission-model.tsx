@@ -57,6 +57,7 @@ const ROUTE_PERMISSION_OWNERS: Record<string, string> = {
   'platform.pods.delete': 'workloads-pods',
   'platform.pods.exec': 'workloads-pods',
   'platform.pods.logs': 'workloads-pods',
+  'platform.pods.update': 'workloads-pods',
   'platform.pods.view': 'workloads-pods',
   'plugin.configure': 'plugins-marketplace',
   'plugin.install': 'plugins-marketplace',
@@ -64,6 +65,22 @@ const ROUTE_PERMISSION_OWNERS: Record<string, string> = {
   'plugin.remove': 'plugins-marketplace',
   'plugin.upgrade': 'plugins-marketplace',
   'plugin.view': 'plugins-marketplace',
+  'docker.operations.cancel': 'compute-workbench-tasks-operations',
+  'docker.operations.claim': 'compute-workbench-tasks-operations',
+  'docker.operations.retry': 'compute-workbench-tasks-operations',
+  'docker.ports.create': 'docker-workbench-projects',
+  'docker.ports.delete': 'docker-workbench-projects',
+  'docker.ports.update': 'docker-workbench-projects',
+  'docker.ports.view': 'docker-workbench-projects',
+  'docker.services.logs': 'docker-workbench-projects',
+  'docker.services.restart': 'docker-workbench-projects',
+  'docker.services.start': 'docker-workbench-projects',
+  'docker.services.stop': 'docker-workbench-projects',
+  'docker.services.terminal': 'docker-workbench-projects',
+  'docker.services.view': 'docker-workbench-projects',
+  'virtualization.operations.cancel': 'compute-workbench-tasks-operations',
+  'virtualization.operations.retry': 'compute-workbench-tasks-operations',
+  'virtualization.sync.sync': 'compute-workbench-tasks-operations',
   'secret.create': 'settings-secrets',
   'secret.revoke': 'settings-secrets',
   'secret.rotate': 'settings-secrets',
@@ -73,6 +90,7 @@ const ROUTE_PERMISSION_OWNERS: Record<string, string> = {
 }
 
 const PERMISSION_WORKBENCH_OWNERS: Record<string, string> = {
+  'platform.resource-creation.use': 'platform',
   'workspace.application.view': 'delivery',
   'workspace.resource.view': 'platform',
 }

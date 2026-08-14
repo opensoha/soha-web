@@ -1,4 +1,8 @@
 import type {
+  SourceBranchListEnvelope,
+  SourceConnectionListEnvelope,
+  SourceFileEnvelope,
+  SourceRepositoryListEnvelope,
   SystemIntegrationEnvelope,
   SystemIntegrationListEnvelope,
   SystemIntegrationTestResultEnvelope,
@@ -18,6 +22,42 @@ function listPath(filters: SystemIntegrationFilters = {}) {
   if (filters.enabled !== undefined) params.set('enabled', String(filters.enabled))
   const query = params.toString()
   return query ? `/system-integrations?${query}` : '/system-integrations'
+}
+
+function sourcePath(connectionId: string, suffix = '') {
+  return `/source-connections/${encodeURIComponent(connectionId)}${suffix}`
+}
+
+function sourceRepositoryPath(connectionId: string, repositoryId: string, suffix = '') {
+  return sourcePath(
+    connectionId,
+    `/repositories/${encodeURIComponent(repositoryId)}${suffix}`,
+  )
+}
+
+export const sourceControlApi = {
+  connections: async () =>
+    (await api.getEnvelope<SourceConnectionListEnvelope>('/source-connections')).items,
+  repositories: async (connectionId: string) =>
+    (
+      await api.getEnvelope<SourceRepositoryListEnvelope>(
+        `${sourcePath(connectionId, '/repositories')}?limit=200`,
+      )
+    ).items,
+  branches: async (connectionId: string, repositoryId: string) =>
+    (
+      await api.getEnvelope<SourceBranchListEnvelope>(
+        sourceRepositoryPath(connectionId, repositoryId, '/branches'),
+      )
+    ).items,
+  file: async (connectionId: string, repositoryId: string, ref: string, path: string) => {
+    const query = new URLSearchParams({ ref, path })
+    return (
+      await api.get<SourceFileEnvelope>(
+        `${sourceRepositoryPath(connectionId, repositoryId, '/files')}?${query}`,
+      )
+    ).data
+  },
 }
 
 export const systemIntegrationsApi = {

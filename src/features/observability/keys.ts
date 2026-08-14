@@ -8,6 +8,7 @@ const alertRoot = [...observabilityRoot, 'alerts'] as const
 const oncallRoot = [...observabilityRoot, 'oncall'] as const
 const healingRoot = [...observabilityRoot, 'healing'] as const
 const logRoot = [...observabilityRoot, 'logs'] as const
+const signalRoot = [...observabilityRoot, 'signals'] as const
 
 function normalizedId(value: string) {
   return value.trim()
@@ -86,6 +87,15 @@ export const observabilityKeys = {
     dataSources: () => [...logRoot, 'data-sources'] as const,
     snapshot: (clusterId: string, query: unknown) =>
       [...logRoot, 'snapshot', normalizedId(clusterId), query] as const,
+  },
+  signals: {
+    all: signalRoot,
+    metricCatalog: () => [...signalRoot, 'metric-catalog'] as const,
+    services: (query: unknown) => [...signalRoot, 'services', query] as const,
+    service: (serviceId: string, query: unknown) =>
+      [...signalRoot, 'service', normalizedId(serviceId), query] as const,
+    topology: (serviceId: string, query: unknown) =>
+      [...signalRoot, 'topology', normalizedId(serviceId), query] as const,
   },
   legacy: {
     monitoringOverviewIntegrations: ['monitoring-overview-integrations'] as const,

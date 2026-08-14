@@ -4,6 +4,7 @@ import {
   createIdentityProvider,
   deleteIdentityOIDCClient,
   deleteIdentityProvider,
+  rotateIdentityProviderSAMLCertificate,
   rotateIdentityProviderSigningKey,
   updateIdentityOIDCClient,
   updateIdentityProvider,
@@ -72,9 +73,17 @@ export const identityProviderMutations = {
           queryKey: identityProviderKeys.oidcClients(variables.providerId),
         }),
     }),
-  rotateSigningKey: () =>
+  rotateSigningKey: (queryClient: QueryClient) =>
     mutationOptions({
       mutationKey: identityProviderMutationKeys.rotateSigningKey,
       mutationFn: rotateIdentityProviderSigningKey,
+      onSuccess: (_key, providerId) => invalidateProvider(queryClient, providerId, true),
+    }),
+  rotateSAMLCertificate: (queryClient: QueryClient) =>
+    mutationOptions({
+      mutationKey: identityProviderMutationKeys.rotateSAMLCertificate,
+      mutationFn: rotateIdentityProviderSAMLCertificate,
+      onSuccess: (_rotation, variables) =>
+        invalidateProvider(queryClient, variables.providerId, true),
     }),
 }

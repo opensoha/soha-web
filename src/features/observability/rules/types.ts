@@ -1,3 +1,4 @@
+import type { ObservabilityQuerySnapshot } from '@opensoha/contracts/gen/ts/sohaapi'
 import type { ObservabilityPayloadMap } from '../shared/types'
 
 export type AlertRuleDatasourceSelector = ObservabilityPayloadMap
@@ -34,16 +35,29 @@ export interface AlertRuleRun {
   summary?: string
   durationMs: number
   error?: string
+  querySnapshot?: ObservabilityQuerySnapshot
   createdAt: string
 }
 
 export interface AlertRuleFormValues {
   id?: string
   name: string
+  mode?: 'simple' | 'advanced'
   ruleType: string
   datasourceSelector: string
   querySpec: string
   thresholdSpec: string
+  metricKey?: string
+  operator?: string
+  thresholdValue?: number
+  reducer?: string
+  windowMinutes?: number
+  stepSeconds?: number
+  clusterId?: string
+  namespace?: string
+  workload?: string
+  severity?: string
+  summary?: string
   forSeconds: number
   groupBy: string
   labels: string

@@ -21,6 +21,13 @@ This reference is the concise operating standard for `soha-web` theme, layout, m
 - `ManagementKeywordField` is the default main query keyword field.
 - `ManagementToolbarSearch` is the default compact headerExtra filter search.
 - `ManagementSearchableListPane` is the default searchable left list.
+- Use the shared `soha-form-segmented` treatment for a fixed set of two to six mutually exclusive
+  form modes. Keep it block-width when the modes define the form below, and never add page-local
+  selected colors; query filters still belong in `ManagementQueryScope`.
+- Step-form modals and deliberately chrome-light nested form modals may visually hide a repeated
+  title with `visuallyHiddenModalTitleStyle`, but must keep the semantic `title` so the dialog
+  remains named for assistive technology. Ordinary management modals retain a concise visible
+  title.
 
 ## Surface Rules
 
@@ -28,6 +35,37 @@ This reference is the concise operating standard for `soha-web` theme, layout, m
 - Table header top corners must match the table shell radius.
 - Query inputs and toolbar searches should read as white surfaces in light mode.
 - Ordinary management buttons in query areas should stay neutral; only the core submit action should use the theme color.
+
+## Workbench Overviews
+
+- Use `OverviewMetricCard` and `OverviewChip` inside the shared overview grids. The grids assign a
+  stable blue, cyan, violet, and teal category sequence; feature pages must not add their own
+  card palettes or use status tones as decoration.
+- Order the page as summary metrics, then scoped operational detail. Use `OverviewSectionBar` for
+  compact section identity and shared neutral panel classes for grouped detail; do not repeat the
+  route title in a page header when the breadcrumb already identifies the overview.
+- Shared overview CSS owns four/three/two/one-column responsiveness. Feature CSS may position a
+  domain scene, but must not redefine overview card columns, spacing, radii, or accent sequences.
+- Keep category color restrained: a light token-derived surface plus colored icon and 2 px bottom
+  rail. Ordinary overview panels and tables remain neutral surfaces.
+- `tone="success"` changes only the bottom rail so healthy cards retain their category identity.
+  `warning` and `danger` override the card accent and tint because they require operator attention.
+- Use theme variables and `color-mix()` so the same rules work in light and dark modes. Do not
+  hard-code overview colors in feature CSS.
+- Render loading per independently fetched summary. Distinguish true empty, error, and
+  no-permission states instead of collapsing all three to zero; expose retry when a failed query
+  controls the whole section.
+- Wrap navigable cards in semantic links or buttons, retain visible `:focus-visible`, and include a
+  text or icon label for status so color is never the only signal.
+
+### AI And Delivery Overviews
+
+- AI overview cards summarize permission-scoped interaction, knowledge, provider, and gateway
+  data on shared surfaces. Chat, graph, and streaming runtime views remain token-driven scene
+  exceptions and must expose loading, empty, error, retry, and streaming state explicitly.
+- Delivery overview cards summarize applications, environments, release flow, and execution
+  evidence. Use success, warning, and danger only for lifecycle meaning; release, rollback, retry,
+  and approval commands remain explicit and confirmation-gated.
 
 ## Tags And Pagination
 

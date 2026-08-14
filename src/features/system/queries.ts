@@ -8,10 +8,11 @@ import {
 import { systemKeys } from './keys'
 
 export const systemQueries = {
-  sessions: () =>
+  sessions: (enabled = true) =>
     queryOptions({
       queryKey: systemKeys.sessions.list(),
       queryFn: systemApi.sessions.list,
+      enabled,
       refetchInterval: 10_000,
     }),
   announcements: () =>
@@ -36,9 +37,21 @@ export const systemQueries = {
       queryKey: systemKeys.audit.list(scope, filters),
       queryFn: () => systemApi.audit.list(scope, filters),
     }),
+  auditSummary: (enabled = true) =>
+    queryOptions({
+      queryKey: systemKeys.audit.summary(),
+      queryFn: systemApi.audit.summary,
+      enabled,
+    }),
   operationLogs: (filters: OperationLogFilters = {}) =>
     queryOptions({
       queryKey: systemKeys.operationLogs.list(filters),
       queryFn: () => systemApi.operationLogs.list(filters),
+    }),
+  operationSummary: (enabled = true) =>
+    queryOptions({
+      queryKey: systemKeys.operationLogs.summary(),
+      queryFn: systemApi.operationLogs.summary,
+      enabled,
     }),
 }

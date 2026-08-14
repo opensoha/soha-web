@@ -7,7 +7,8 @@ describe('observability route manifests', () => {
     const routes = observabilityRouteManifests.flatMap((manifest) => [...manifest])
     expect(validateRouteDefinitions(routes)).toEqual([])
     const paths = routes.map((route) => route.meta.path)
-    expect(paths).toHaveLength(29)
+    expect(new Set(paths).size).toBe(paths.length)
+    expect(paths).toContain('/monitoring-workbench/explore')
     expect(paths).toContain('/monitoring-workbench/dashboards')
     expect(paths).toContain('/monitoring-workbench/dashboards/:dashboardId')
     expect(

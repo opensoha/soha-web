@@ -31,6 +31,8 @@ import {
 } from '@ant-design/icons'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
+import { accessQueries } from '@/features/access'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import {
   ManagementIconButton,
   ManagementKeywordField,
@@ -45,6 +47,7 @@ import type { OperationalPlan } from '@opensoha/contracts/gen/ts/sohaapi'
 import { createUUID } from '@/utils/uuid'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { computeQueries, latestTaskForResource, ResourceTaskActions } from '@/features/compute'
+import { sourceControlApi, sourceControlQueries } from '@/features/settings'
 import { dockerApi } from '../docker-api'
 import { dockerQueries } from '../queries'
 import type {
@@ -92,6 +95,13 @@ interface DockerProjectTreeRow {
   children?: DockerProjectTreeRow[]
 }
 
+interface ComposeProjectFormValues extends DockerProjectInput {
+  sourceConnectionId?: string
+  sourceRepositoryId?: string
+  sourceRevision?: string
+  sourcePath?: string
+}
+
 function isSingleContainerProject(project: DockerProject) {
   return ['single_container', 'git_dockerfile'].includes(project.sourceKind ?? '')
 }
@@ -109,13 +119,41 @@ function QuickStartFormSection({ children, title }: { children: ReactNode; title
   )
 }
 
-export function buildProjectPayload(values: DockerProjectInput): DockerProjectInput {
-  return compactRecord({
-    ...values,
-    composeContent: values.composeContent || DEFAULT_COMPOSE,
-    status: values.status || 'draft',
-    sourceKind: values.sourceKind || 'inline_compose',
+export function buildProjectPayload(values: ComposeProjectFormValues): DockerProjectInput {
+  const { sourceConnectionId, sourceRepositoryId, sourceRevision, sourcePath, ...project } = values
+  const gitSource = project.sourceKind === 'git'
+  const config = compactRecord({
+    ...project.config,
+    sourceConnectionId: gitSource ? sourceConnectionId : undefined,
+    sourceRepositoryId: gitSource ? sourceRepositoryId : undefined,
+    sourceRevision: gitSource ? sourceRevision : undefined,
+    sourcePath: gitSource ? sourcePath : undefined,
   })
+  return compactRecord({
+    ...project,
+    composeContent:
+      project.sourceKind === 'url' ? undefined : project.composeContent || DEFAULT_COMPOSE,
+    desiredState: project.desiredState || 'running',
+    status: project.status || 'draft',
+    sourceKind: project.sourceKind || 'inline_compose',
+    ttlSeconds: project.ttlSeconds || 600,
+    config: Object.keys(config).length ? config : undefined,
+  })
+}
+
+function decodeSourceFile(content: string, encoding: 'utf8' | 'base64') {
+  if (encoding === 'utf8') return content
+  return new TextDecoder().decode(Uint8Array.from(atob(content), (char) => char.charCodeAt(0)))
+}
+
+function projectFormValues(project: DockerProject): ComposeProjectFormValues {
+  return {
+    ...project,
+    sourceConnectionId: stringValue(project.config?.sourceConnectionId),
+    sourceRepositoryId: stringValue(project.config?.sourceRepositoryId),
+    sourceRevision: stringValue(project.config?.sourceRevision),
+    sourcePath: stringValue(project.config?.sourcePath),
+  }
 }
 
 export function buildContainerStartPayload(
@@ -202,7 +240,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
     pageSize: embedded ? 5 : 10,
   })
   const [filterForm] = Form.useForm<DockerFilterState>()
-  const [form] = Form.useForm<DockerProjectInput>()
+  const [form] = Form.useForm<ComposeProjectFormValues>()
   const [containerForm] = Form.useForm<ContainerStartFormValues>()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [currentStep, setCurrentStep] = useState(0)
@@ -240,16 +278,93 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
   })
   const queryClient = useQueryClient()
   const { message } = App.useApp()
+  const permissionSnapshot = usePermissionSnapshot().data?.data
+  const sourceKind = Form.useWatch('sourceKind', form) || 'inline_compose'
+  const sourceConnectionId = Form.useWatch('sourceConnectionId', form) || ''
+  const sourceRepositoryId = Form.useWatch('sourceRepositoryId', form) || ''
+  const canViewSourceControl = hasPermission(
+    permissionSnapshot,
+    'settings.system-integrations.view',
+  )
+  const canViewUsers = hasPermission(permissionSnapshot, 'access.users.view')
+  const canViewTeams = hasPermission(permissionSnapshot, 'access.groups.view')
   const projectsQuery = useQuery(dockerQueries.projects(filters, dockerModuleEnabled))
+  const templatesQuery = useQuery(
+    dockerQueries.templates(
+      { page: 1, pageSize: 200, enabled: true },
+      dockerModuleEnabled && drawerOpen && sourceKind === 'template',
+    ),
+  )
+  const usersQuery = useQuery(accessQueries.users(drawerOpen && canViewUsers))
+  const teamsQuery = useQuery(accessQueries.teams(drawerOpen && canViewTeams))
+  const sourceConnectionsQuery = useQuery(
+    sourceControlQueries.connections(drawerOpen && canViewSourceControl && sourceKind === 'git'),
+  )
+  const sourceRepositoriesQuery = useQuery(
+    sourceControlQueries.repositories(sourceConnectionId, drawerOpen && sourceKind === 'git'),
+  )
+  const sourceBranchesQuery = useQuery(
+    sourceControlQueries.branches(
+      sourceConnectionId,
+      sourceRepositoryId,
+      drawerOpen && sourceKind === 'git',
+    ),
+  )
+  const templates = normalizePage(templatesQuery.data, 1, 200).items
   const tasksQuery = useQuery({
     ...computeQueries.tasks({ domain: 'container_runtime', limit: 100 }),
     enabled: dockerModuleEnabled && canViewOperations,
   })
   const saveMutation = useMutation({
-    mutationFn: (values: DockerProjectInput) =>
-      editing
-        ? dockerApi.updateProject(editing.id, buildProjectPayload(values))
-        : dockerApi.createProject(buildProjectPayload(values)),
+    mutationFn: async (values: ComposeProjectFormValues) => {
+      let resolved = {
+        ...values,
+        desiredState: editing?.desiredState,
+        slug: editing?.slug,
+        status: editing?.status,
+      }
+      if (values.sourceKind === 'template') {
+        const template = templates.find((item) => item.id === values.templateId)
+        if (!template?.composeContent) throw new Error('所选模板没有 Compose 配置')
+        resolved = {
+          ...resolved,
+          composeContent: template.composeContent,
+          envContent: template.envContent,
+          sourceRef: template.name,
+        }
+      }
+      if (values.sourceKind === 'git' && !canViewSourceControl && editing?.sourceKind === 'git') {
+        resolved = {
+          ...resolved,
+          composeContent: editing.composeContent,
+          config: editing.config,
+          sourceRef: editing.sourceRef,
+        }
+      } else if (values.sourceKind === 'git') {
+        const { sourceConnectionId, sourceRepositoryId, sourceRevision, sourcePath } = values
+        if (!sourceConnectionId || !sourceRepositoryId || !sourceRevision || !sourcePath) {
+          throw new Error('请选择代码源、仓库、分支并填写 Compose 文件路径')
+        }
+        const file = await sourceControlApi.file(
+          sourceConnectionId,
+          sourceRepositoryId,
+          sourceRevision,
+          sourcePath,
+        )
+        const repository = sourceRepositoriesQuery.data?.find(
+          (item) => item.id === sourceRepositoryId,
+        )
+        resolved = {
+          ...resolved,
+          composeContent: decodeSourceFile(file.content, file.encoding),
+          sourceRef: `${repository?.fullName || sourceRepositoryId}@${sourceRevision}:${sourcePath}`,
+        }
+      }
+      const payload = buildProjectPayload(resolved)
+      return editing
+        ? dockerApi.updateProject(editing.id, payload)
+        : dockerApi.createProject(payload)
+    },
     onSuccess: () => {
       message.success(editing ? '项目已更新' : '项目已创建')
       setDrawerOpen(false)
@@ -257,6 +372,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
       form.resetFields()
       refreshDocker(queryClient)
     },
+    onError: (error) => void message.error(error.message),
   })
   const containerStartMutation = useMutation({
     mutationFn: (values: ContainerStartFormValues) =>
@@ -323,6 +439,36 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
     ),
   })
   const canStartContainer = canCreateProjects && canDeployProjects && canCreatePorts
+  const ownerOptions = (usersQuery.data ?? []).map((user) => ({
+    value: user.username,
+    label: user.displayName ? `${user.displayName} (${user.username})` : user.username,
+  }))
+  const teamOptions = (teamsQuery.data ?? []).map((team) => ({
+    value: team.slug || team.name,
+    label: team.path || team.name,
+  }))
+  const sourceConnectionOptions = (sourceConnectionsQuery.data ?? []).map((connection) => ({
+    value: connection.id,
+    label: `${connection.name} (${connection.providerType})`,
+  }))
+  const sourceRepositoryOptions = (sourceRepositoriesQuery.data ?? [])
+    .filter((repository) => !repository.archived)
+    .map((repository) => ({ value: repository.id, label: repository.fullName }))
+  const sourceRevisionOptions = (sourceBranchesQuery.data ?? []).map((branch) => ({
+    value: branch.name,
+    label: branch.defaultBranch ? `${branch.name}（默认）` : branch.name,
+  }))
+  const templateOptions = templates.map((template) => ({
+    value: template.id,
+    label: template.name,
+  }))
+  useEffect(() => {
+    if (sourceKind !== 'git' || sourceConnectionId || !sourceConnectionsQuery.data?.length) return
+    const connection =
+      sourceConnectionsQuery.data.find((item) => item.defaultConnection) ??
+      sourceConnectionsQuery.data[0]
+    form.setFieldValue('sourceConnectionId', connection?.id)
+  }, [form, sourceConnectionId, sourceConnectionsQuery.data, sourceKind])
   const serviceActions = [
     { action: 'restart', allowed: canRestartServices, icon: <ReloadOutlined /> },
     { action: 'start', allowed: canStartServices, icon: <PlayCircleOutlined /> },
@@ -551,7 +697,6 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                 icon={<EditOutlined />}
                 onClick={() => {
                   setEditing(project)
-                  form.setFieldsValue(project)
                   setCurrentStep(0)
                   setDrawerOpen(true)
                 }}
@@ -667,11 +812,6 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                   icon={<PlusOutlined />}
                   onClick={() => {
                     setEditing(null)
-                    form.setFieldsValue({
-                      composeContent: DEFAULT_COMPOSE,
-                      status: 'draft',
-                      sourceKind: 'inline_compose',
-                    })
                     setCurrentStep(0)
                     setDrawerOpen(true)
                   }}
@@ -712,6 +852,17 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
         title={editing ? '编辑 Compose 项目' : '创建 Compose 项目'}
         current={currentStep}
         form={form}
+        initialValues={
+          editing
+            ? projectFormValues(editing)
+            : {
+                composeContent: DEFAULT_COMPOSE,
+                desiredState: 'running',
+                status: 'draft',
+                sourceKind: 'inline_compose',
+                ttlSeconds: 600,
+              }
+        }
         loading={saveMutation.isPending}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
@@ -720,108 +871,217 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
         steps={[
           {
             title: '基础信息',
-            fieldNames: ['name', 'hostId', 'slug', 'description'],
+            fieldNames: ['name', 'hostId', 'description'],
             children: (
               <>
                 <Form.Item name="name" label="名称" rules={[{ required: true }]}>
                   <Input />
                 </Form.Item>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <Form.Item name="hostId" label="Docker 主机" rules={[{ required: true }]}>
-                    <Select showSearch={{ optionFilterProp: 'label' }} options={hostOptions} />
-                  </Form.Item>
-                  <Form.Item name="slug" label="Slug">
-                    <Input />
-                  </Form.Item>
-                </div>
+                <Form.Item name="hostId" label="Docker 主机" rules={[{ required: true }]}>
+                  <Select showSearch={{ optionFilterProp: 'label' }} options={hostOptions} />
+                </Form.Item>
                 <Form.Item name="description" label="描述">
-                  <Input />
+                  <TextArea rows={3} maxLength={1000} showCount />
                 </Form.Item>
               </>
             ),
           },
           {
             title: '项目设置',
-            fieldNames: ['environment', 'owner', 'team', 'status', 'desiredState', 'ttlSeconds'],
+            fieldNames: ['environment', 'owner', 'team', 'ttlSeconds'],
             children: (
               <div className="grid gap-3 md:grid-cols-2">
                 <Form.Item name="environment" label="环境">
                   <Input />
                 </Form.Item>
                 <Form.Item name="owner" label="负责人">
-                  <Input />
-                </Form.Item>
-                <Form.Item name="team" label="团队">
-                  <Input />
-                </Form.Item>
-                <Form.Item name="status" label="状态">
-                  <Select
-                    options={['draft', 'defined', 'running', 'stopped', 'failed'].map((item) => ({
-                      value: item,
-                      label: item,
-                    }))}
-                  />
-                </Form.Item>
-                <Form.Item name="desiredState" label="目标态">
                   <Select
                     allowClear
-                    options={['running', 'stopped'].map((item) => ({ value: item, label: item }))}
+                    disabled={!canViewUsers}
+                    showSearch={{ optionFilterProp: 'label' }}
+                    options={ownerOptions}
                   />
                 </Form.Item>
-                <Form.Item name="ttlSeconds" label="TTL 秒数">
-                  <InputNumber min={0} className="w-full" />
+                <Form.Item name="team" label="团队">
+                  <Select
+                    allowClear
+                    disabled={!canViewTeams}
+                    showSearch={{ optionFilterProp: 'label' }}
+                    options={teamOptions}
+                  />
+                </Form.Item>
+                <Form.Item
+                  name="ttlSeconds"
+                  label="TTL 秒数"
+                  rules={[{ required: true, message: '请输入 TTL' }]}
+                >
+                  <InputNumber id="ttlSeconds" min={60} precision={0} className="w-full" />
                 </Form.Item>
               </div>
             ),
           },
           {
             title: '部署来源',
-            fieldNames: ['sourceKind', 'sourceRef', 'templateId'],
+            fieldNames:
+              sourceKind === 'template'
+                ? ['sourceKind', 'templateId']
+                : sourceKind === 'url'
+                  ? ['sourceKind', 'sourceRef']
+                  : sourceKind === 'git' && canViewSourceControl
+                    ? [
+                        'sourceKind',
+                        'sourceConnectionId',
+                        'sourceRepositoryId',
+                        'sourceRevision',
+                        'sourcePath',
+                      ]
+                    : ['sourceKind'],
             children: (
-              <div className="grid gap-3 md:grid-cols-2">
-                <Form.Item name="sourceKind" label="来源类型">
-                  <Select
-                    options={['inline_compose', 'git', 'template'].map((item) => ({
-                      value: item,
-                      label: item,
-                    }))}
+              <>
+                <Form.Item name="sourceKind" label="来源类型" rules={[{ required: true }]}>
+                  <Segmented
+                    block
+                    options={[
+                      { value: 'inline_compose', label: '在线编辑' },
+                      { value: 'url', label: '在线获取' },
+                      {
+                        value: 'git',
+                        label: 'Git 仓库',
+                        disabled: !canViewSourceControl && editing?.sourceKind !== 'git',
+                      },
+                      { value: 'template', label: '项目模板' },
+                    ]}
+                    onChange={(value) => {
+                      if (value === 'inline_compose') {
+                        form.setFieldsValue({
+                          sourceRef: undefined,
+                          sourceConnectionId: undefined,
+                          sourceRepositoryId: undefined,
+                          sourceRevision: undefined,
+                          sourcePath: undefined,
+                          templateId: undefined,
+                        })
+                      } else if (value === 'git') {
+                        form.setFieldsValue({ templateId: undefined, sourcePath: 'compose.yaml' })
+                      } else if (value === 'url') {
+                        form.setFieldsValue({
+                          sourceRef: undefined,
+                          sourceConnectionId: undefined,
+                          sourceRepositoryId: undefined,
+                          sourceRevision: undefined,
+                          sourcePath: undefined,
+                          templateId: undefined,
+                        })
+                      } else {
+                        form.setFieldsValue({
+                          sourceConnectionId: undefined,
+                          sourceRepositoryId: undefined,
+                          sourceRevision: undefined,
+                          sourcePath: undefined,
+                        })
+                      }
+                    }}
                   />
                 </Form.Item>
-                <Form.Item name="sourceRef" label="来源引用">
-                  <Input />
-                </Form.Item>
-                <Form.Item name="templateId" label="模板 ID">
-                  <Input />
-                </Form.Item>
-              </div>
-            ),
-          },
-          {
-            title: 'Compose 配置',
-            fieldNames: ['composeContent', 'envContent'],
-            children: (
-              <Tabs
-                items={[
-                  {
-                    key: 'compose',
-                    label: 'Compose',
-                    children: (
-                      <Form.Item name="composeContent" rules={[{ required: true }]}>
-                        <TextArea rows={16} spellCheck={false} />
-                      </Form.Item>
-                    ),
-                  },
-                  {
-                    key: 'env',
-                    label: '.env',
-                    children: (
-                      <Form.Item name="envContent">
-                        <TextArea rows={12} spellCheck={false} />
-                      </Form.Item>
-                    ),
-                  },
-                ]}
-              />
+                {sourceKind === 'inline_compose' ? (
+                  <Tabs
+                    items={[
+                      {
+                        key: 'compose',
+                        label: 'Compose',
+                        children: (
+                          <Form.Item name="composeContent" preserve rules={[{ required: true }]}>
+                            <TextArea rows={14} spellCheck={false} />
+                          </Form.Item>
+                        ),
+                      },
+                      {
+                        key: 'env',
+                        label: '.env',
+                        children: (
+                          <Form.Item name="envContent" preserve>
+                            <TextArea rows={10} spellCheck={false} />
+                          </Form.Item>
+                        ),
+                      },
+                    ]}
+                  />
+                ) : null}
+                {sourceKind === 'url' ? (
+                  <Form.Item
+                    name="sourceRef"
+                    label="Compose URL"
+                    rules={[
+                      { required: true, message: '请输入 Compose URL' },
+                      { pattern: /^https:\/\//i, message: '仅支持 HTTPS URL' },
+                    ]}
+                  >
+                    <Input placeholder="https://example.com/compose.yaml" />
+                  </Form.Item>
+                ) : null}
+                {sourceKind === 'template' ? (
+                  <Form.Item name="templateId" label="项目模板" rules={[{ required: true }]}>
+                    <Select
+                      showSearch={{ optionFilterProp: 'label' }}
+                      loading={templatesQuery.isLoading}
+                      options={templateOptions}
+                    />
+                  </Form.Item>
+                ) : null}
+                {sourceKind === 'git' && canViewSourceControl ? (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <Form.Item
+                      name="sourceConnectionId"
+                      label="代码源"
+                      rules={[{ required: true }]}
+                    >
+                      <Select
+                        showSearch={{ optionFilterProp: 'label' }}
+                        loading={sourceConnectionsQuery.isLoading}
+                        options={sourceConnectionOptions}
+                        onChange={() =>
+                          form.setFieldsValue({
+                            sourceRepositoryId: undefined,
+                            sourceRevision: undefined,
+                          })
+                        }
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      name="sourceRepositoryId"
+                      label="Git 仓库"
+                      rules={[{ required: true }]}
+                    >
+                      <Select
+                        showSearch={{ optionFilterProp: 'label' }}
+                        loading={sourceRepositoriesQuery.isLoading}
+                        options={sourceRepositoryOptions}
+                        onChange={(repositoryId) => {
+                          const repository = sourceRepositoriesQuery.data?.find(
+                            (item) => item.id === repositoryId,
+                          )
+                          form.setFieldValue('sourceRevision', repository?.defaultBranch)
+                        }}
+                      />
+                    </Form.Item>
+                    <Form.Item name="sourceRevision" label="分支" rules={[{ required: true }]}>
+                      <Select
+                        showSearch={{ optionFilterProp: 'label' }}
+                        loading={sourceBranchesQuery.isLoading}
+                        options={sourceRevisionOptions}
+                      />
+                    </Form.Item>
+                    <Form.Item name="sourcePath" label="Compose 文件" rules={[{ required: true }]}>
+                      <Input placeholder="compose.yaml" />
+                    </Form.Item>
+                  </div>
+                ) : null}
+                {sourceKind === 'git' && !canViewSourceControl ? (
+                  <Form.Item label="Git 来源">
+                    <Input value={editing?.sourceRef} disabled />
+                  </Form.Item>
+                ) : null}
+              </>
             ),
           },
         ]}

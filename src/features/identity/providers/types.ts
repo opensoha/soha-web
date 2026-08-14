@@ -12,6 +12,7 @@ export type IdentityRuntimeProviderType = 'oidc' | 'proxy' | 'saml'
 export type IdentityRuntimeProviderStatus = 'enabled' | 'disabled'
 export type IdentityOIDCClientStatus = 'enabled' | 'disabled'
 export type IdentityOIDCClientType = 'public' | 'confidential'
+export type IdentityOIDCRedirectMatchMode = 'strict' | 'regex'
 
 export interface IdentityProvider {
   id: string
@@ -20,7 +21,7 @@ export interface IdentityProvider {
   type: IdentityRuntimeProviderType
   enabled: boolean
   config?: Record<string, unknown>
-  secretRefs?: Record<string, unknown>
+  configuredSecretAliases?: string[]
   status: IdentityRuntimeProviderStatus
   createdBy?: string
   updatedBy?: string
@@ -34,7 +35,7 @@ export interface IdentityProviderInput {
   type: IdentityRuntimeProviderType
   enabled: boolean
   config: Record<string, unknown>
-  secretRefs: Record<string, unknown>
+  secretRefs?: Record<string, unknown>
   status: IdentityRuntimeProviderStatus
 }
 
@@ -52,6 +53,7 @@ export interface IdentityOIDCClient {
   clientId: string
   clientType: IdentityOIDCClientType
   redirectUris: string[]
+  redirectUriRegexes?: string[]
   postLogoutRedirectUris: string[]
   allowedScopes: string[]
   allowedGrantTypes: string[]
@@ -70,6 +72,7 @@ export interface IdentityOIDCClientInput {
   clientType: IdentityOIDCClientType
   clientSecret?: string
   redirectUris: string[]
+  redirectUriRegexes?: string[]
   postLogoutRedirectUris: string[]
   allowedScopes: string[]
   allowedGrantTypes: string[]
@@ -102,6 +105,11 @@ export interface UpdateIdentityOIDCClientVariables extends CreateIdentityOIDCCli
 export interface DeleteIdentityOIDCClientVariables {
   providerId: string
   clientId: string
+}
+
+export interface RotateIdentityProviderSAMLCertificateVariables {
+  providerId: string
+  input: SAMLCertificateRotateRequest
 }
 
 export interface IdentitySigningKey {

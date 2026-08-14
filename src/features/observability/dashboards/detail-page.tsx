@@ -3,13 +3,21 @@ import type {
   ObservabilityDashboardPanelQueryInput,
   ObservabilityMetricSeries,
 } from '@opensoha/contracts/gen/ts/sohaapi'
+import {
+  AlertOutlined,
+  LeftOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined,
+  RightOutlined,
+  SearchOutlined,
+} from '@ant-design/icons'
 import { LineChart } from '@visactor/react-vchart'
 import { useQuery } from '@tanstack/react-query'
-import { Card, Flex, Select, Typography } from 'antd'
-import { useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Alert, Card, Flex, Select, Space, Table, Typography } from 'antd'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ManagementDataPage } from '@/components/management-data-page'
-import { ManagementState } from '@/components/management-list'
+import { ManagementIconButton, ManagementState } from '@/components/management-list'
 import {
   buildCompactChartSpec,
   compactMetricColors,
@@ -17,6 +25,17 @@ import {
   type CompactChartLine,
 } from '@/components/resource-metrics-panel'
 import { MetadataTag } from '@/components/status-tag'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import {
+  dashboardPanelAlertRulePath,
+  dashboardPanelExplorePath,
+  dashboardPanelQueryInput,
+  dashboardPlaybackParams,
+  dashboardVariableValues,
+  readDashboardPlayback,
+  shiftDashboardPlayback,
+  type DashboardPlaybackWindow,
+} from './model'
 import { observabilityDashboardQueries } from './queries'
 import './styles.css'
 
@@ -37,10 +56,46 @@ const lineColors = [
 
 export function ObservabilityDashboardDetailPage() {
   const dashboardId = decodeURIComponent(useParams<{ dashboardId: string }>().dashboardId ?? '')
-  const [rangeMinutes, setRangeMinutes] = useState(60)
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [playing, setPlaying] = useState(false)
   const dashboardQuery = useQuery(observabilityDashboardQueries.detail(dashboardId))
   const dataSourcesQuery = useQuery(observabilityDashboardQueries.metricDataSources())
-  const panelQuery = useMemo(() => panelQueryInput(rangeMinutes), [rangeMinutes])
+  const permissionQuery = usePermissionSnapshot()
+  const canManageRules = hasPermission(permissionQuery.data?.data, 'observe.alert-rules.manage')
+  const playback = useMemo(() => readDashboardPlayback(searchParams), [searchParams])
+  const variables = useMemo(
+    () => dashboardVariableValues(dashboardQuery.data?.variables ?? [], searchParams),
+    [dashboardQuery.data?.variables, searchParams],
+  )
+  const variableSignature = JSON.stringify(variables)
+  const panelQuery = useMemo(
+    () => dashboardPanelQueryInput(playback, variables),
+    [playback, variables],
+  )
+  const updatePlayback = useCallback(
+    (next: DashboardPlaybackWindow, nextVariables = variables) => {
+      setSearchParams(dashboardPlaybackParams(searchParams, next, nextVariables), {
+        replace: true,
+      })
+    },
+    [searchParams, setSearchParams, variables],
+  )
+
+  useEffect(() => {
+    if (!dashboardQuery.data) return
+    const next = dashboardPlaybackParams(searchParams, playback, variables)
+    if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true })
+  }, [dashboardQuery.data, playback, searchParams, setSearchParams, variableSignature, variables])
+
+  useEffect(() => {
+    if (!playing) return
+    const timer = window.setInterval(
+      () => updatePlayback(shiftDashboardPlayback(playback, 1), variables),
+      5_000,
+    )
+    return () => window.clearInterval(timer)
+  }, [playback, playing, updatePlayback, variableSignature, variables])
 
   if (dashboardQuery.isLoading) {
     return <ManagementState kind="loading" title="正在加载仪表盘" />
@@ -65,11 +120,12 @@ export function ObservabilityDashboardDetailPage() {
         title: dashboard.name,
         meta: (
           <Flex gap={4} wrap>
-            <MetadataTag label="Grafana" tone="orange" />
             <MetadataTag
-              label={
-                dataSourceName ?? (dashboard.dataSourceId ? '数据源不可用' : '未绑定数据源')
-              }
+              label={dashboard.tags.includes('soha-template') ? 'Soha 模板' : 'Grafana'}
+              tone={dashboard.tags.includes('soha-template') ? 'blue' : 'orange'}
+            />
+            <MetadataTag
+              label={dataSourceName ?? (dashboard.dataSourceId ? '数据源不可用' : '未绑定数据源')}
               tone={dataSourceName ? 'blue' : 'orange'}
             />
             {dashboard.tags.slice(0, 5).map((tag) => (
@@ -78,37 +134,105 @@ export function ObservabilityDashboardDetailPage() {
           </Flex>
         ),
         actions: (
-          <Select
-            aria-label="时间范围"
-            options={rangeOptions}
-            value={rangeMinutes}
-            onChange={setRangeMinutes}
-          />
+          <Space wrap>
+            {(dashboard.variables ?? []).map((variable) => (
+              <Select
+                aria-label={variable.label || variable.name}
+                key={variable.name}
+                options={variable.options.map((value) => ({ label: value, value }))}
+                value={variables[variable.name]}
+                onChange={(value) =>
+                  updatePlayback(playback, { ...variables, [variable.name]: value })
+                }
+              />
+            ))}
+            <Select
+              aria-label="时间范围"
+              options={rangeOptions}
+              value={playback.rangeMinutes}
+              onChange={(rangeMinutes) => {
+                const to = new Date()
+                updatePlayback({
+                  from: new Date(to.getTime() - rangeMinutes * 60_000).toISOString(),
+                  rangeMinutes,
+                  to: to.toISOString(),
+                })
+              }}
+            />
+            <Flex gap={2}>
+              <ManagementIconButton
+                aria-label="上一时间窗"
+                icon={<LeftOutlined />}
+                tooltip="上一时间窗"
+                onClick={() => updatePlayback(shiftDashboardPlayback(playback, -1))}
+              />
+              <ManagementIconButton
+                aria-label={playing ? '暂停播放' : '播放时间窗'}
+                icon={playing ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
+                tooltip={playing ? '暂停' : '播放'}
+                onClick={() => setPlaying((value) => !value)}
+              />
+              <ManagementIconButton
+                aria-label="下一时间窗"
+                icon={<RightOutlined />}
+                tooltip="下一时间窗"
+                onClick={() => updatePlayback(shiftDashboardPlayback(playback, 1))}
+              />
+            </Flex>
+          </Space>
         ),
       }}
       tableNode={
-        <div className="soha-dashboard-grid">
-          {dashboard.panels.map((panel) => (
-            <DashboardPanel
-              key={panel.id}
-              dashboardId={dashboard.id}
-              input={panelQuery}
-              panel={panel}
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          {(dashboard.importWarnings ?? []).length > 0 ? (
+            <Alert
+              showIcon
+              type="warning"
+              message="导入兼容提示"
+              description={dashboard.importWarnings
+                ?.slice(0, 5)
+                .map((warning) => warning.message)
+                .join('；')}
             />
-          ))}
-        </div>
+          ) : null}
+          <Typography.Text type="secondary">
+            {new Date(playback.from).toLocaleString()} - {new Date(playback.to).toLocaleString()}
+          </Typography.Text>
+          <div className="soha-dashboard-grid">
+            {dashboard.panels.map((panel) => (
+              <DashboardPanel
+                key={panel.id}
+                canManageRules={canManageRules}
+                dashboardId={dashboard.id}
+                dashboardName={dashboard.name}
+                dataSourceId={dashboard.dataSourceId ?? ''}
+                input={panelQuery}
+                panel={panel}
+                onNavigate={navigate}
+              />
+            ))}
+          </div>
+        </Space>
       }
     />
   )
 }
 
 function DashboardPanel({
+  canManageRules,
   dashboardId,
+  dashboardName,
+  dataSourceId,
   input,
+  onNavigate,
   panel,
 }: {
+  canManageRules: boolean
   dashboardId: string
+  dashboardName: string
+  dataSourceId: string
   input: ObservabilityDashboardPanelQueryInput
+  onNavigate: (path: string) => void
   panel: ObservabilityDashboardPanel
 }) {
   const style = {
@@ -123,9 +247,44 @@ function DashboardPanel({
     )
   }
   return (
-    <Card className="soha-dashboard-panel" size="small" style={style} title={panel.title}>
+    <Card
+      className="soha-dashboard-panel"
+      size="small"
+      style={style}
+      title={panel.title}
+      extra={
+        panel.queryable ? (
+          <Flex gap={2}>
+            <ManagementIconButton
+              aria-label={`在 Explore 打开 ${panel.title}`}
+              icon={<SearchOutlined />}
+              size="small"
+              tooltip="在 Explore 打开"
+              onClick={() => onNavigate(dashboardPanelExplorePath(dashboardId, panel.id, input))}
+            />
+            {canManageRules ? (
+              <ManagementIconButton
+                aria-label={`基于 ${panel.title} 创建告警`}
+                icon={<AlertOutlined />}
+                size="small"
+                tooltip="创建告警"
+                onClick={() =>
+                  onNavigate(dashboardPanelAlertRulePath(dashboardName, dataSourceId, panel, input))
+                }
+              />
+            ) : null}
+          </Flex>
+        ) : undefined
+      }
+    >
       {panel.type === 'text' ? (
         <Paragraph className="soha-dashboard-text-panel">{panel.markdown || '-'}</Paragraph>
+      ) : panel.unsupported ? (
+        <ManagementState
+          bordered={false}
+          compact
+          description={`暂不支持 Grafana ${panel.sourcePanelType || 'plugin'} renderer；原始 JSON 已保留。`}
+        />
       ) : panel.queryable ? (
         <DashboardMetricPanel dashboardId={dashboardId} input={input} panel={panel} />
       ) : (
@@ -163,7 +322,34 @@ function DashboardMetricPanel({
   if (series.length === 0) {
     return <ManagementState bordered={false} compact description="当前范围暂无指标数据" />
   }
-  if (panel.type === 'stat') {
+  return <DashboardMetricSeries panelType={panel.type} series={series} />
+}
+
+export function DashboardMetricSeries({
+  panelType,
+  series,
+}: {
+  panelType: ObservabilityDashboardPanel['type']
+  series: ObservabilityMetricSeries[]
+}) {
+  if (panelType === 'table') {
+    return (
+      <Table
+        columns={[
+          { title: '序列', dataIndex: 'label' },
+          { title: '当前值', dataIndex: 'value' },
+        ]}
+        dataSource={series.map((item) => ({
+          key: item.key,
+          label: item.label,
+          value: formatMetricValue(item.latest, item.unit ?? ''),
+        }))}
+        pagination={false}
+        size="small"
+      />
+    )
+  }
+  if (panelType === 'stat' || panelType === 'gauge') {
     return (
       <Flex className="soha-dashboard-stat-values" gap={16} wrap>
         {series.map((item) => (
@@ -194,13 +380,4 @@ function metricLines(series: ObservabilityMetricSeries[]): CompactChartLine[] {
     points: item.points,
     unit: item.unit ?? '',
   }))
-}
-
-function panelQueryInput(rangeMinutes: number): ObservabilityDashboardPanelQueryInput {
-  const timeTo = new Date()
-  return {
-    timeFrom: new Date(timeTo.getTime() - rangeMinutes * 60_000).toISOString(),
-    timeTo: timeTo.toISOString(),
-    stepSeconds: rangeMinutes <= 60 ? 60 : 300,
-  }
 }

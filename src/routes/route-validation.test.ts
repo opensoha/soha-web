@@ -10,10 +10,14 @@ const permissionCatalog = permissionCatalogArtifact as PermissionCatalog
 describe('route registry validation', () => {
   it('keeps registered ids and canonical paths unique', () => {
     expect(validateRouteDefinitions(appRouteDefinitions)).toEqual([])
-    expect(registeredRouteDefinitions).toHaveLength(243)
-    expect(routeMeta).toHaveLength(243)
+    expect(routeMeta).toHaveLength(registeredRouteDefinitions.length)
     expect(new Set(routeMeta.map((meta) => meta.id)).size).toBe(routeMeta.length)
     expect(new Set(routeMeta.map((meta) => meta.path)).size).toBe(routeMeta.length)
+  })
+
+  it('keeps navigation menu ids unique and aligned with their leaf routes', () => {
+    const navigationRoutes = routeMeta.filter((meta) => meta.navVisible && meta.menuId)
+    expect(new Set(navigationRoutes.map((meta) => meta.menuId)).size).toBe(navigationRoutes.length)
   })
 
   it('only guards routes with active assignable permissions', () => {

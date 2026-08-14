@@ -68,6 +68,12 @@ layer, loading boundaries, and Soha visual system.
   height, padding, or divider overrides.
 - For scan-heavy tables and detail overviews, follow the density, grouping, and decoration rules
   in `references/theme-system.md`.
+- Build workbench overviews with `OverviewMetricCard`, `OverviewChip`, `OverviewSectionBar`, and
+  the shared overview grid/panel classes. Put the summary before operational detail, leave
+  responsive columns to shared CSS, and do not add feature-local card palettes or grid variants.
+- Overview data must distinguish loading, empty, error, and no-permission states. Interactive
+  cards use semantic links or buttons with visible keyboard focus; color must never be the only
+  status signal.
 - Do not repeat the current page identity, generic explanatory copy, or a back-to-list action below
   a breadcrumb that already provides that context and navigation.
 - Keep DAG, topology, terminal, noVNC, charts, and AI graph as token-driven scene exceptions.
@@ -85,6 +91,16 @@ layer, loading boundaries, and Soha visual system.
 - Use XRequest only for AI streaming/provider requests, never for normal CRUD clients.
 - Call same-origin backend proxy paths from browser code. Never place provider tokens, API
   keys, model credentials, or raw authorization secrets in browser configuration or state.
+- Keep AI overview summaries on the shared overview surfaces. Show streaming, loading, empty,
+  error, and retry states explicitly; reserve scene-specific layouts for chat, graph, and runtime
+  experiences.
+
+## Delivery Workbench
+
+- Treat delivery overviews and release boards as management surfaces. Use shared overview
+  components for counts and lifecycle summaries, and semantic tones only for queued, running,
+  succeeded, failed, blocked, or approval states.
+- Keep release, rollback, retry, and other mutating actions explicit and confirmation-gated.
 
 ## Validation
 

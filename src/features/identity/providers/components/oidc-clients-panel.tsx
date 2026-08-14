@@ -1,7 +1,13 @@
 import { useMemo, useState } from 'react'
 import { App, Button, Popconfirm, Space, Typography } from 'antd'
 import type { TableColumnsType } from 'antd'
-import { DeleteOutlined, EditOutlined, KeyOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import {
+  DeleteOutlined,
+  EditOutlined,
+  KeyOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+} from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
 import {
@@ -56,7 +62,9 @@ export function OIDCClientsPanel({
   const createMutation = useMutation(identityProviderMutations.createOIDCClient(queryClient))
   const updateMutation = useMutation(identityProviderMutations.updateOIDCClient(queryClient))
   const deleteMutation = useMutation(identityProviderMutations.removeOIDCClient(queryClient))
-  const rotateSigningKeyMutation = useMutation(identityProviderMutations.rotateSigningKey())
+  const rotateSigningKeyMutation = useMutation(
+    identityProviderMutations.rotateSigningKey(queryClient),
+  )
 
   const closeModal = () => {
     setModalOpen(false)
@@ -124,9 +132,13 @@ export function OIDCClientsPanel({
       },
       {
         title: 'Redirect URIs',
-        dataIndex: 'redirectUris',
+        key: 'redirectUris',
         width: 320,
-        render: (values: string[]) => identityProviderTagsSummary(values),
+        render: (_, record) =>
+          identityProviderTagsSummary([
+            ...record.redirectUris,
+            ...(record.redirectUriRegexes ?? []).map((pattern) => `正则: ${pattern}`),
+          ]),
       },
       {
         title: 'Client Type',

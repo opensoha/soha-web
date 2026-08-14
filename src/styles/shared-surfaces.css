@@ -1,5 +1,21 @@
 /* Styles moved from web/src/styles/globals.css; keep scoped to this shared/component or feature owner. */
 
+.soha-step-form .ant-segmented,
+.soha-form-segmented.ant-segmented {
+  border: 1px solid var(--soha-border-color);
+  background: var(--soha-bg-surface-muted);
+}
+
+.soha-step-form .ant-segmented-item-selected,
+.soha-form-segmented .ant-segmented-item-selected {
+  background: color-mix(in srgb, var(--soha-primary) 8%, var(--soha-bg-surface));
+  color: var(--soha-text-primary);
+  font-weight: 600;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--soha-primary) 38%, transparent),
+    0 1px 4px color-mix(in srgb, var(--soha-primary) 20%, transparent);
+}
+
 .soha-resource-tabs.ant-tabs > .ant-tabs-nav {
   margin-bottom: 0;
   border-bottom: 1px solid var(--soha-border-color);
@@ -399,7 +415,7 @@
   position: absolute;
   inset: auto 0 0;
   height: 2px;
-  background: var(--soha-overview-current-color);
+  background: var(--soha-overview-rail-color, var(--soha-overview-current-color));
   content: '';
   opacity: 0.72;
 }
@@ -597,6 +613,30 @@
   gap: 12px;
 }
 
+.soha-overview-metric-grid > :nth-child(4n + 1),
+.soha-overview-chip-grid > :nth-child(4n + 1),
+.soha-overview-pod-grid > :nth-child(4n + 1) {
+  --soha-overview-accent: var(--soha-accent-blue);
+}
+
+.soha-overview-metric-grid > :nth-child(4n + 2),
+.soha-overview-chip-grid > :nth-child(4n + 2),
+.soha-overview-pod-grid > :nth-child(4n + 2) {
+  --soha-overview-accent: var(--soha-accent-cyan);
+}
+
+.soha-overview-metric-grid > :nth-child(4n + 3),
+.soha-overview-chip-grid > :nth-child(4n + 3),
+.soha-overview-pod-grid > :nth-child(4n + 3) {
+  --soha-overview-accent: var(--soha-accent-violet);
+}
+
+.soha-overview-metric-grid > :nth-child(4n),
+.soha-overview-chip-grid > :nth-child(4n),
+.soha-overview-pod-grid > :nth-child(4n) {
+  --soha-overview-accent: var(--soha-accent-teal);
+}
+
 .soha-overview-card-link {
   display: block;
   min-width: 0;
@@ -629,13 +669,26 @@
 
 .soha-overview-metric-card.ant-card,
 .soha-overview-pod-card.ant-card {
-  --soha-overview-current-bg: var(--soha-overview-icon-bg);
-  --soha-overview-current-border: var(--soha-overview-brand-border);
-  --soha-overview-current-color: var(--soha-primary);
+  --soha-overview-current-bg: color-mix(
+    in srgb,
+    var(--soha-overview-accent, var(--soha-accent-blue)) 9%,
+    var(--soha-bg-surface)
+  );
+  --soha-overview-current-border: color-mix(
+    in srgb,
+    var(--soha-overview-accent, var(--soha-accent-blue)) 28%,
+    var(--soha-border-color)
+  );
+  --soha-overview-current-color: var(--soha-overview-accent, var(--soha-accent-blue));
+  --soha-overview-rail-color: var(--soha-overview-current-color);
   position: relative;
   overflow: hidden;
   border-color: var(--soha-border-color);
-  background: var(--soha-overview-card-bg);
+  background: color-mix(
+    in srgb,
+    var(--soha-overview-accent, var(--soha-accent-blue)) 3%,
+    var(--soha-overview-card-bg)
+  );
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.045);
 }
 
@@ -651,26 +704,41 @@
 
 .soha-overview-metric-card.is-success.ant-card,
 .soha-overview-pod-card.is-success.ant-card {
-  --soha-overview-current-bg: var(--soha-bg-surface);
-  --soha-overview-current-border: var(--soha-border-color);
-  --soha-overview-current-color: var(--soha-success);
-  background: var(--soha-overview-card-success-bg);
+  --soha-overview-rail-color: var(--soha-success);
 }
 
 .soha-overview-metric-card.is-warning.ant-card,
 .soha-overview-pod-card.is-warning.ant-card {
-  --soha-overview-current-bg: var(--soha-bg-surface);
-  --soha-overview-current-border: var(--soha-border-color);
+  --soha-overview-current-bg: color-mix(in srgb, var(--soha-warning) 9%, var(--soha-bg-surface));
+  --soha-overview-current-border: color-mix(
+    in srgb,
+    var(--soha-warning) 28%,
+    var(--soha-border-color)
+  );
   --soha-overview-current-color: var(--soha-warning);
-  background: var(--soha-overview-card-warning-bg);
+  --soha-overview-rail-color: var(--soha-warning);
+  background: color-mix(
+    in srgb,
+    var(--soha-warning) 3%,
+    var(--soha-overview-card-warning-bg)
+  );
 }
 
 .soha-overview-metric-card.is-danger.ant-card,
 .soha-overview-pod-card.is-danger.ant-card {
-  --soha-overview-current-bg: var(--soha-bg-surface);
-  --soha-overview-current-border: var(--soha-border-color);
+  --soha-overview-current-bg: color-mix(in srgb, var(--soha-danger) 9%, var(--soha-bg-surface));
+  --soha-overview-current-border: color-mix(
+    in srgb,
+    var(--soha-danger) 28%,
+    var(--soha-border-color)
+  );
   --soha-overview-current-color: var(--soha-danger);
-  background: var(--soha-overview-card-danger-bg);
+  --soha-overview-rail-color: var(--soha-danger);
+  background: color-mix(
+    in srgb,
+    var(--soha-danger) 3%,
+    var(--soha-overview-card-danger-bg)
+  );
 }
 
 .soha-overview-metric-card-head,
@@ -825,9 +893,18 @@
 }
 
 .soha-overview-chip {
-  --soha-overview-current-bg: var(--soha-overview-icon-bg);
-  --soha-overview-current-border: var(--soha-overview-brand-border);
-  --soha-overview-current-color: var(--soha-primary);
+  --soha-overview-current-bg: color-mix(
+    in srgb,
+    var(--soha-overview-accent, var(--soha-accent-blue)) 9%,
+    var(--soha-bg-surface)
+  );
+  --soha-overview-current-border: color-mix(
+    in srgb,
+    var(--soha-overview-accent, var(--soha-accent-blue)) 28%,
+    var(--soha-border-color)
+  );
+  --soha-overview-current-color: var(--soha-overview-accent, var(--soha-accent-blue));
+  --soha-overview-rail-color: var(--soha-overview-current-color);
   position: relative;
   display: flex;
   flex-direction: column;
@@ -835,7 +912,11 @@
   padding: 12px;
   border: 1px solid var(--soha-border-color);
   border-radius: var(--soha-radius-panel);
-  background: var(--soha-overview-card-bg);
+  background: color-mix(
+    in srgb,
+    var(--soha-overview-accent, var(--soha-accent-blue)) 3%,
+    var(--soha-overview-card-bg)
+  );
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.035);
 }
 
@@ -843,30 +924,45 @@
   position: absolute;
   inset: auto 0 0;
   height: 2px;
-  background: var(--soha-overview-current-color);
+  background: var(--soha-overview-rail-color);
   content: '';
   opacity: 0.72;
 }
 
 .soha-overview-chip.is-success {
-  --soha-overview-current-bg: var(--soha-bg-surface);
-  --soha-overview-current-border: var(--soha-border-color);
-  --soha-overview-current-color: var(--soha-success);
-  background: var(--soha-overview-card-success-bg);
+  --soha-overview-rail-color: var(--soha-success);
 }
 
 .soha-overview-chip.is-warning {
-  --soha-overview-current-bg: var(--soha-bg-surface);
-  --soha-overview-current-border: var(--soha-border-color);
+  --soha-overview-current-bg: color-mix(in srgb, var(--soha-warning) 9%, var(--soha-bg-surface));
+  --soha-overview-current-border: color-mix(
+    in srgb,
+    var(--soha-warning) 28%,
+    var(--soha-border-color)
+  );
   --soha-overview-current-color: var(--soha-warning);
-  background: var(--soha-overview-card-warning-bg);
+  --soha-overview-rail-color: var(--soha-warning);
+  background: color-mix(
+    in srgb,
+    var(--soha-warning) 3%,
+    var(--soha-overview-card-warning-bg)
+  );
 }
 
 .soha-overview-chip.is-danger {
-  --soha-overview-current-bg: var(--soha-bg-surface);
-  --soha-overview-current-border: var(--soha-border-color);
+  --soha-overview-current-bg: color-mix(in srgb, var(--soha-danger) 9%, var(--soha-bg-surface));
+  --soha-overview-current-border: color-mix(
+    in srgb,
+    var(--soha-danger) 28%,
+    var(--soha-border-color)
+  );
   --soha-overview-current-color: var(--soha-danger);
-  background: var(--soha-overview-card-danger-bg);
+  --soha-overview-rail-color: var(--soha-danger);
+  background: color-mix(
+    in srgb,
+    var(--soha-danger) 3%,
+    var(--soha-overview-card-danger-bg)
+  );
 }
 
 .soha-overview-chip-head {

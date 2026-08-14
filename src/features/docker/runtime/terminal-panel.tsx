@@ -9,6 +9,7 @@ import { StatusTag } from '@/components/status-tag'
 import '@/components/resource-operation-panels.css'
 import { withStreamTicket } from '@/features/auth'
 import { readTerminalThemeColors } from '@/theme/app-theme'
+import { parseStreamMessage } from '@/utils/stream-message'
 import {
   dockerRuntimeWebSocketURL,
   runtimeServiceSelector,
@@ -111,7 +112,8 @@ export function DockerProjectTerminalPanel({
       }
       socket.onmessage = (event) => {
         if (socketRef.current !== socket) return
-        const message = JSON.parse(event.data) as TerminalMessage
+        const message = parseStreamMessage<TerminalMessage>(event.data)
+        if (!message) return
         if (message.type === 'stdout' || message.type === 'stderr') {
           terminal.write(message.data || '')
         }
@@ -168,36 +170,33 @@ export function DockerProjectTerminalPanel({
 
   return (
     <div className="soha-pod-terminal-tab-card">
-      <div className="soha-terminal-controls">
-        <div className="soha-terminal-control-group">
-          <Text strong>服务:</Text>
-          {runtimeServiceSelector({
-            disabled: !enabled,
-            loading: servicesLoading,
-            options: serviceOptions,
-            serviceName,
-            onChange: onServiceChange,
-          })}
-        </div>
-        <div className="soha-terminal-control-group">
-          <Text strong>Shell:</Text>
-          <Select
-            disabled={!enabled}
-            options={[
-              { value: '/bin/sh', label: 'sh' },
-              { value: '/bin/bash', label: 'bash' },
-            ]}
-            popupMatchSelectWidth={false}
-            size="small"
-            value={shell}
-            onChange={setShell}
-          />
-        </div>
-      </div>
       <Card className="soha-detail-card" size="small">
         <div className="soha-terminal-toolbar">
           <div className="soha-terminal-toolbar-group">
-            <Text strong>{serviceName ? `服务: ${serviceName}` : '未选择服务'}</Text>
+            <div className="soha-terminal-control-group">
+              <Text strong>服务:</Text>
+              {runtimeServiceSelector({
+                disabled: !enabled,
+                loading: servicesLoading,
+                options: serviceOptions,
+                serviceName,
+                onChange: onServiceChange,
+              })}
+            </div>
+            <div className="soha-terminal-control-group">
+              <Text strong>Shell:</Text>
+              <Select
+                disabled={!enabled}
+                options={[
+                  { value: '/bin/sh', label: 'sh' },
+                  { value: '/bin/bash', label: 'bash' },
+                ]}
+                popupMatchSelectWidth={false}
+                size="small"
+                value={shell}
+                onChange={setShell}
+              />
+            </div>
             <StatusTag value={connectionState} />
           </div>
           <Space size={4} wrap>

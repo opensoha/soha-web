@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import { Card, Descriptions, Select, Space, Spin, Tag, Tooltip, Typography } from 'antd'
+import { CodeOutlined, FileTextOutlined } from '@ant-design/icons'
+import { Button, Card, Descriptions, Select, Space, Spin, Tag, Tooltip, Typography } from 'antd'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementState } from '@/components/management-list'
 import { ResourceEventsTimeline } from '@/components/resource-events-timeline'
@@ -11,6 +12,7 @@ import { hasAllowedAction, hasPermission, usePermissionSnapshot } from '@/featur
 import { useAIPageContext } from '@/features/copilot'
 import { useI18n } from '@/i18n'
 import { useClusterCapability } from '@/features/platform/cluster-capabilities'
+import { useRealtimeSessionDock } from '@/features/platform/session-dock'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import {
@@ -131,11 +133,15 @@ export function PodDetailPage() {
   const canViewPodLogs = hasPermission(permissionSnapshot, 'platform.pods.logs')
   const canExecPod = hasPermission(permissionSnapshot, 'platform.pods.exec')
   const params = useParams()
+  const [searchParams] = useSearchParams()
   const podName = params.podName as string
   const { clusterId, namespace: detailNamespace } = useWorkloadDetailScope()
+  const { openSession } = useRealtimeSessionDock()
   const [container, setContainer] = useState<string>('')
   const [terminalShell, setTerminalShell] = useState('/bin/sh')
-  const [activeTabKey, setActiveTabKey] = useState('overview')
+  const [activeTabKey, setActiveTabKey] = useState(() =>
+    searchParams.get('tab') === 'yaml' ? 'yaml' : 'overview',
+  )
   const [metricsRangeMinutes, setMetricsRangeMinutes] = useState(60)
   const podLogsCapability = useClusterCapability('pod.logs', localeCode)
   const podExecCapability = useClusterCapability('pod.exec', localeCode)
@@ -206,6 +212,31 @@ export function PodDetailPage() {
         : localeCode === 'zh_CN'
           ? '当前环境或资源范围不允许打开 Pod 终端。'
           : 'Pod terminal access is not allowed in the current environment or resource scope.'
+
+  function openLogSession() {
+    if (!clusterId || !detailNamespace) return
+    openSession({
+      clusterId,
+      container: container || undefined,
+      kind: 'logs',
+      namespace: detailNamespace,
+      podName,
+      streamingDisabledReason: logsStreamingDisabledReason,
+    })
+  }
+
+  function openTerminalSession() {
+    if (!clusterId || !detailNamespace) return
+    openSession({
+      clusterId,
+      container: container || undefined,
+      kind: 'terminal',
+      namespace: detailNamespace,
+      podName,
+      shell: terminalShell,
+    })
+  }
+
   useAIPageContext({
     sourceWorkbench: 'platform',
     sourceTitle: `Pod ${podName}`,
@@ -632,6 +663,11 @@ export function PodDetailPage() {
             containerOptions={containerOptions}
             onContainerChange={setContainer}
             streamingDisabledReason={logsStreamingDisabledReason}
+            toolbarExtra={
+              <Button icon={<FileTextOutlined />} size="small" onClick={openLogSession}>
+                {localeCode === 'zh_CN' ? '打开日志会话' : 'Open log session'}
+              </Button>
+            }
             onOpenLogCenter={() => {
               const query = new URLSearchParams()
               if (clusterId) query.set('cluster', clusterId)
@@ -673,38 +709,6 @@ export function PodDetailPage() {
         />
       ) : (
         <div className="soha-pod-terminal-tab-card">
-          <div className="soha-terminal-controls">
-            <div className="soha-terminal-control-group">
-              <Text strong className="text-xs">
-                {localeCode === 'zh_CN' ? '容器:' : 'Container:'}
-              </Text>
-              <Select
-                size="small"
-                placeholder={localeCode === 'zh_CN' ? '选择容器' : 'Select container'}
-                value={container}
-                onChange={(value) => setContainer(String(value || ''))}
-                style={{ width: 220 }}
-                options={containerOptions}
-                allowClear
-              />
-            </div>
-            <div className="soha-terminal-control-group">
-              <Text strong className="text-xs">
-                {localeCode === 'zh_CN' ? 'Shell:' : 'Shell:'}
-              </Text>
-              <Select
-                size="small"
-                value={terminalShell}
-                onChange={(value) => setTerminalShell(String(value))}
-                style={{ width: 180 }}
-                options={[
-                  { value: '/bin/sh', label: '/bin/sh' },
-                  { value: '/bin/bash', label: '/bin/bash' },
-                  { value: '/bin/ash', label: '/bin/ash' },
-                ]}
-              />
-            </div>
-          </div>
           <Suspense
             fallback={
               <Card className="soha-detail-card">
@@ -718,6 +722,43 @@ export function PodDetailPage() {
               podName={podName}
               container={container || undefined}
               shell={terminalShell}
+              toolbarContent={
+                <div className="soha-terminal-controls">
+                  <div className="soha-terminal-control-group">
+                    <Text strong className="text-xs">
+                      {localeCode === 'zh_CN' ? '容器:' : 'Container:'}
+                    </Text>
+                    <Select
+                      size="small"
+                      placeholder={localeCode === 'zh_CN' ? '选择容器' : 'Select container'}
+                      value={container}
+                      onChange={(value) => setContainer(String(value || ''))}
+                      style={{ width: 220 }}
+                      options={containerOptions}
+                      allowClear
+                    />
+                  </div>
+                  <div className="soha-terminal-control-group">
+                    <Text strong className="text-xs">
+                      Shell:
+                    </Text>
+                    <Select
+                      size="small"
+                      value={terminalShell}
+                      onChange={(value) => setTerminalShell(String(value))}
+                      style={{ width: 180 }}
+                      options={[
+                        { value: '/bin/sh', label: '/bin/sh' },
+                        { value: '/bin/bash', label: '/bin/bash' },
+                        { value: '/bin/ash', label: '/bin/ash' },
+                      ]}
+                    />
+                  </div>
+                  <Button icon={<CodeOutlined />} size="small" onClick={openTerminalSession}>
+                    {localeCode === 'zh_CN' ? '打开终端会话' : 'Open terminal session'}
+                  </Button>
+                </div>
+              }
             />
           </Suspense>
         </div>

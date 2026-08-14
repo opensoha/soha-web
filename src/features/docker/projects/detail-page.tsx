@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Card, Descriptions, Input, Tabs } from 'antd'
+import { Card, Descriptions, Input, Space, Tabs, Tag } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { Navigate, useParams } from 'react-router-dom'
 import { useAIPageContext } from '@/features/copilot'
@@ -54,7 +54,15 @@ function ProjectDetailWorkspace() {
   const project = projectQuery.data
   const isSingleContainerProject = project?.sourceKind === 'single_container'
   const projectConfig = project?.config
-  const runtimeServices = normalizePage(detailServicesQuery.data, 1, 100).items
+  const runtimeServicePage = normalizePage(detailServicesQuery.data, 1, 100)
+  const runtimeServices = runtimeServicePage.items
+  const runningServiceCount = runtimeServices.filter(
+    (service) => service.status?.toLowerCase() === 'running',
+  ).length
+  const serviceRestartCount = runtimeServices.reduce(
+    (total, service) => total + (service.restartCount ?? 0),
+    0,
+  )
   const runtimeServiceOptions = useMemo(() => {
     const options = runtimeServices
       .map((service) => ({ label: service.name || service.id, value: service.name || service.id }))
@@ -195,42 +203,47 @@ function ProjectDetailWorkspace() {
       }
   const detailTabItems = [
     {
-      key: 'info',
-      label: '信息',
+      key: 'overview',
+      label: '概览',
       children: (
-        <Card className="soha-detail-card" loading={projectQuery.isLoading}>
-          <Descriptions
-            size="small"
-            column={{ xs: 1, sm: 2, lg: 3 }}
-            items={[
-              { key: 'host', label: 'Docker 主机', children: project?.hostId || '-' },
-              { key: 'environment', label: '环境', children: project?.environment || '-' },
-              { key: 'owner', label: '负责人', children: project?.owner || project?.team || '-' },
-              { key: 'desiredState', label: '目标态', children: project?.desiredState || '-' },
-              {
-                key: 'lastDeployedAt',
-                label: '部署时间',
-                children: formatDateTime(project?.lastDeployedAt),
-              },
-              { key: 'expiresAt', label: '到期', children: formatDateTime(project?.expiresAt) },
-            ]}
-          />
-        </Card>
+        <div className="soha-detail-stack">
+          <Card className="soha-detail-card" loading={projectQuery.isLoading}>
+            <Descriptions
+              size="small"
+              column={{ xs: 1, sm: 2, lg: 3 }}
+              items={[
+                { key: 'host', label: 'Docker 主机', children: project?.hostId || '-' },
+                { key: 'environment', label: '环境', children: project?.environment || '-' },
+                { key: 'owner', label: '负责人', children: project?.owner || project?.team || '-' },
+                { key: 'desiredState', label: '目标态', children: project?.desiredState || '-' },
+                {
+                  key: 'lastDeployedAt',
+                  label: '部署时间',
+                  children: formatDateTime(project?.lastDeployedAt),
+                },
+                { key: 'expiresAt', label: '到期', children: formatDateTime(project?.expiresAt) },
+              ]}
+            />
+          </Card>
+          {canViewServices ? (
+            <Card
+              className="soha-detail-card"
+              loading={detailServicesQuery.isLoading}
+              title="容器状态"
+              extra={
+                <Space size={6} wrap>
+                  <Tag color="blue">容器 {runtimeServicePage.total}</Tag>
+                  <Tag color="green">运行 {runningServiceCount}</Tag>
+                  <Tag color="orange">重启 {serviceRestartCount}</Tag>
+                </Space>
+              }
+            >
+              <ServicesTable fixedProjectId={resolvedProjectId} />
+            </Card>
+          ) : null}
+        </div>
       ),
     },
-    ...(canViewServices
-      ? [
-          {
-            key: 'services',
-            label: '服务',
-            children: (
-              <div className="soha-page-section">
-                <ServicesTable fixedProjectId={resolvedProjectId} />
-              </div>
-            ),
-          },
-        ]
-      : []),
     ...(canViewServiceLogs
       ? [
           {

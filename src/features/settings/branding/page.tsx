@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementState } from '@/components/management-list'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import type { BrandingSettings } from '@/types'
+import { defaultBrandingSettings } from '@/utils/branding'
 import { settingsMutations } from '../mutations'
 import { settingsQueries } from '../queries'
 import { SettingsCard, WIDE_FORM_LAYOUT } from '../shared/components'
@@ -78,7 +79,7 @@ export function BrandingSettingsPage({ embedded = false }: SettingsPageProps = {
             onError: (err) => void message.error(err.message),
           })
         }}
-        initialValues={settings ?? { appTitle: 'Soha', sidebarTitle: 'Soha' }}
+        initialValues={{ ...defaultBrandingSettings, ...settings }}
       >
         <BrandingFormSync settings={settings} />
         <Form.Item name="appTitle" label="网页标题">
@@ -86,6 +87,9 @@ export function BrandingSettingsPage({ embedded = false }: SettingsPageProps = {
         </Form.Item>
         <Form.Item name="sidebarTitle" label="侧边栏标题">
           <Input placeholder="左侧品牌栏文字" />
+        </Form.Item>
+        <Form.Item name="slogan" label="标语">
+          <Input placeholder="登录页主标题" />
         </Form.Item>
 
         <div className="soha-branding-section-title">企业 Logo</div>

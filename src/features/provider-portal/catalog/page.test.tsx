@@ -7,6 +7,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { I18nProvider } from '@/i18n'
+import { useAuthStore } from '@/stores/auth-store'
 import { usePreferencesStore } from '@/stores/preferences-store'
 import { SohaProviderPortalPage } from './page'
 
@@ -153,6 +154,20 @@ beforeAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  window.localStorage.clear()
+  useAuthStore.setState({
+    user: {
+      userId: 'user-1',
+      userName: 'admin',
+      email: 'admin@example.test',
+      avatarUrl: 'https://example.test/avatar.png',
+      avatarFit: 'contain',
+      roles: ['admin'],
+      teams: [],
+      projects: [],
+      tags: [],
+    },
+  })
   permissionMocks.snapshot.permissionKeys = [
     'identity.applications.view',
     'identity.portal.view',
@@ -171,7 +186,9 @@ afterEach(async () => {
   await act(async () => {
     for (const root of mountedRoots.splice(0)) root.unmount()
   })
+  useAuthStore.getState().clearAuth()
   usePreferencesStore.setState({ localeCode: 'zh_CN' })
+  window.localStorage.clear()
   document.body.innerHTML = ''
 })
 
@@ -226,6 +243,16 @@ describe('Provider Portal catalog page', () => {
     expect(container.querySelector('.soha-portal-category')).toBeNull()
     expect(container.querySelector('.soha-portal-mode')).toBeNull()
     expect(container.querySelector('.soha-portal-announcements')).toBeNull()
+    expect(
+      container
+        .querySelector('.soha-portal-principal .soha-portal-user-avatar img')
+        ?.getAttribute('src'),
+    ).toBe('https://example.test/avatar.png')
+    expect(
+      container
+        .querySelector('.soha-portal-principal .soha-portal-user-avatar')
+        ?.getAttribute('style'),
+    ).toContain('--soha-avatar-fit: contain')
     expect(container.querySelectorAll('.soha-portal-side-panel')).toHaveLength(3)
     expect(container.querySelector('button[aria-label="Collapse sidebar"]')).not.toBeNull()
   })
@@ -346,6 +373,61 @@ describe('Provider Portal catalog page', () => {
     expect(visibleCards).toHaveLength(1)
     expect(visibleCards[0]?.textContent).toContain('Build Dashboard')
     expect(visibleCards[0]?.textContent).not.toContain('Operations Console')
+  })
+
+  it('restores portal layout preferences for the same user without sharing them', async () => {
+    const container = await renderPage()
+
+    await act(async () =>
+      container
+        .querySelector('button[aria-label="Collapse application groups"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true })),
+    )
+    await act(async () =>
+      container
+        .querySelector('button[aria-label="Collapse sidebar"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true })),
+    )
+    await act(async () =>
+      container
+        .querySelector('button[aria-label="Switch application card size"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true })),
+    )
+
+    expect(
+      JSON.parse(window.localStorage.getItem('soha-provider-portal-layout:v1:user-1') ?? 'null'),
+    ).toEqual({
+      applicationView: 'small',
+      isGroupCollapsed: true,
+      isSideCollapsed: true,
+    })
+
+    const restoredContainer = await renderPage()
+    expect(restoredContainer.querySelector('.soha-portal-workspace')?.className).toContain(
+      'is-group-collapsed',
+    )
+    expect(restoredContainer.querySelector('.soha-portal-workspace')?.className).toContain(
+      'is-side-collapsed',
+    )
+    expect(restoredContainer.querySelector('.soha-portal-app-grid')?.className).toContain(
+      'is-small',
+    )
+
+    await act(async () => {
+      useAuthStore.setState({
+        user: { ...useAuthStore.getState().user!, userId: 'user-2' },
+      })
+    })
+    const otherUserContainer = await renderPage()
+    expect(otherUserContainer.querySelector('.soha-portal-workspace')?.className).not.toContain(
+      'is-group-collapsed',
+    )
+    expect(otherUserContainer.querySelector('.soha-portal-workspace')?.className).not.toContain(
+      'is-side-collapsed',
+    )
+    expect(otherUserContainer.querySelector('.soha-portal-app-grid')?.className).toContain(
+      'is-medium',
+    )
   })
 
   it('renders application groups as the fixed first workspace column', async () => {

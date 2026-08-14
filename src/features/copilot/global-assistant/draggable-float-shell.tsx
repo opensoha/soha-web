@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react'
 
 export interface FloatPosition {
   x: number
@@ -50,7 +58,19 @@ function browserViewport(): ViewportRect {
   return { width: window.innerWidth, height: window.innerHeight, left: Math.max(0, sidebarRight) }
 }
 
-export function defaultFloatPosition(viewport = browserViewport(), shellSize = DEFAULT_SHELL_SIZE): FloatPosition {
+function availableViewport(): ViewportRect {
+  const viewport = browserViewport()
+  const dockTop = document
+    .querySelector<HTMLElement>('.soha-realtime-session-dock:not([hidden]):not(.is-maximized)')
+    ?.getBoundingClientRect().top
+  if (!dockTop || dockTop >= viewport.height) return viewport
+  return { ...viewport, height: dockTop }
+}
+
+export function defaultFloatPosition(
+  viewport = browserViewport(),
+  shellSize = DEFAULT_SHELL_SIZE,
+): FloatPosition {
   return {
     x: viewport.width - shellSize.width - DEFAULT_MARGIN,
     y: viewport.height - shellSize.height - 96,
@@ -105,7 +125,11 @@ function readStoredPosition(storageKey: string, shellSize: ShellSize) {
     if (typeof parsed.x !== 'number' || typeof parsed.y !== 'number') {
       return defaultFloatPosition(undefined, shellSize)
     }
-    return clampFloatPosition({ x: parsed.x, y: parsed.y, edge: parsed.edge }, browserViewport(), shellSize)
+    return clampFloatPosition(
+      { x: parsed.x, y: parsed.y, edge: parsed.edge },
+      browserViewport(),
+      shellSize,
+    )
   } catch {
     return defaultFloatPosition(undefined, shellSize)
   }
@@ -130,25 +154,33 @@ export function DraggableFloatShell({
   storageKey,
   style,
 }: DraggableFloatShellProps) {
-  const [position, setPosition] = useState<FloatPosition>(() => readStoredPosition(storageKey, shellSize))
+  const [position, setPosition] = useState<FloatPosition>(() =>
+    readStoredPosition(storageKey, shellSize),
+  )
   const [isDragging, setIsDragging] = useState(false)
   const dragRef = useRef<DragState | null>(null)
   const suppressClickRef = useRef(false)
   const shellSizeKey = `${shellSize.width}:${shellSize.height}`
 
-  const commitPosition = useCallback((nextPosition: FloatPosition) => {
-    const viewport = browserViewport()
-    const next = snapToEdge
-      ? snapFloatPosition(nextPosition, viewport, shellSize)
-      : clampFloatPosition(nextPosition, viewport, shellSize)
-    setPosition(next)
-    persistPosition(storageKey, next)
-  }, [shellSize, snapToEdge, storageKey])
+  const commitPosition = useCallback(
+    (nextPosition: FloatPosition) => {
+      const viewport = browserViewport()
+      const next = snapToEdge
+        ? snapFloatPosition(nextPosition, viewport, shellSize)
+        : clampFloatPosition(nextPosition, viewport, shellSize)
+      setPosition(next)
+      persistPosition(storageKey, next)
+    },
+    [shellSize, snapToEdge, storageKey],
+  )
 
-  const setDragging = useCallback((next: boolean) => {
-    setIsDragging(next)
-    onDraggingChange?.(next)
-  }, [onDraggingChange])
+  const setDragging = useCallback(
+    (next: boolean) => {
+      setIsDragging(next)
+      onDraggingChange?.(next)
+    },
+    [onDraggingChange],
+  )
 
   useEffect(() => {
     const onResize = () => {
@@ -159,11 +191,15 @@ export function DraggableFloatShell({
       })
     }
     window.addEventListener('resize', onResize)
+    const refreshDockLayout = () => setPosition((current) => ({ ...current }))
+    window.addEventListener('soha:session-dock-layout', refreshDockLayout)
     const sidebar = document.querySelector('.soha-sider')
-    const observer = sidebar && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(onResize) : null
+    const observer =
+      sidebar && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(onResize) : null
     if (sidebar && observer) observer.observe(sidebar)
     return () => {
       window.removeEventListener('resize', onResize)
+      window.removeEventListener('soha:session-dock-layout', refreshDockLayout)
       observer?.disconnect()
     }
   }, [shellSize, shellSizeKey, storageKey])
@@ -185,10 +221,16 @@ export function DraggableFloatShell({
       if (!nextDragging) return
 
       event.preventDefault()
-      setPosition(clampFloatPosition({
-        x: drag.startX + deltaX,
-        y: drag.startY + deltaY,
-      }, browserViewport(), shellSize))
+      setPosition(
+        clampFloatPosition(
+          {
+            x: drag.startX + deltaX,
+            y: drag.startY + deltaY,
+          },
+          browserViewport(),
+          shellSize,
+        ),
+      )
     }
 
     const onPointerUp = (event: PointerEvent) => {
@@ -220,22 +262,27 @@ export function DraggableFloatShell({
     }
   }, [commitPosition, isDragging, setDragging, shellSize])
 
-  const shellStyle = useMemo<CSSProperties>(() => ({
-    ...style,
-    height: shellSize.height,
-    left: 0,
-    position: 'fixed',
-    top: 0,
-    transform: `translate3d(${Math.round(position.x)}px, ${Math.round(position.y)}px, 0)`,
-    touchAction: disabled ? undefined : 'none',
-    width: shellSize.width,
-    zIndex: 1050,
-  }), [disabled, position.x, position.y, shellSize.height, shellSize.width, style])
+  const shellStyle = useMemo<CSSProperties>(() => {
+    const visiblePosition = clampFloatPosition(position, availableViewport(), shellSize)
+    return {
+      ...style,
+      height: shellSize.height,
+      left: 0,
+      position: 'fixed',
+      top: 0,
+      transform: `translate3d(${Math.round(visiblePosition.x)}px, ${Math.round(visiblePosition.y)}px, 0)`,
+      touchAction: disabled ? undefined : 'none',
+      width: shellSize.width,
+      zIndex: 1050,
+    }
+  }, [disabled, position, shellSize, style])
 
   return (
     <div
       aria-live="polite"
-      className={['soha-ai-global-float-shell', isDragging ? 'is-dragging' : '', className ?? ''].filter(Boolean).join(' ')}
+      className={['soha-ai-global-float-shell', isDragging ? 'is-dragging' : '', className ?? '']
+        .filter(Boolean)
+        .join(' ')}
       data-testid="soha-ai-global-float-shell"
       onClickCapture={(event) => {
         if (!suppressClickRef.current) return

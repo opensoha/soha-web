@@ -66,6 +66,26 @@
   margin-top: 18px;
 }
 
+.soha-identity-redirect-rule-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.soha-identity-redirect-rule {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr) 32px;
+  align-items: start;
+  width: 100%;
+  gap: 8px;
+}
+
+.soha-identity-redirect-rule .ant-form-item {
+  width: 100%;
+  margin-bottom: 0;
+}
+
 .soha-proxy-setup-panel {
   padding: 6px 4px 10px;
 }
@@ -111,7 +131,13 @@
   overflow: auto;
   color: var(--soha-text-color);
   background: var(--soha-bg-surface);
-  font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font:
+    12px/1.6 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
   white-space: pre;
 }
 
@@ -132,6 +158,10 @@
   .soha-identity-provider-form-grid.is-three,
   .soha-identity-provider-json-grid {
     grid-template-columns: 1fr;
+  }
+
+  .soha-identity-redirect-rule {
+    grid-template-columns: 120px minmax(0, 1fr) 32px;
   }
 
   .soha-proxy-setup-heading,

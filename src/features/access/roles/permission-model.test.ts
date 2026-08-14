@@ -1,10 +1,28 @@
-import type { PermissionCatalog } from '@opensoha/contracts/gen/ts/sohaapi'
+import type { PermissionCatalog, PermissionDefinition } from '@opensoha/contracts/gen/ts/sohaapi'
 import permissionCatalogArtifact from '@opensoha/contracts/auth/permission-catalog.json'
 import type { DataNode } from 'antd/es/tree'
 import { describe, expect, it } from 'vitest'
 import { buildRolePermissionTreeData } from './permission-model'
 
-const definitions = (permissionCatalogArtifact as PermissionCatalog).permissions
+const resourceCreationPermission = {
+  key: 'platform.resource-creation.use',
+  domain: 'platform',
+  resource: 'resource-creation',
+  action: 'use',
+  displayName: '使用 Kubernetes YAML 创建器',
+  riskLevel: 'mutate',
+  scopeKinds: ['workspace', 'cluster', 'namespace', 'resource'],
+  approvalPolicy: 'never',
+  status: 'active',
+  assignable: true,
+} satisfies PermissionDefinition
+
+const definitions = [
+  ...(permissionCatalogArtifact as PermissionCatalog).permissions.filter(
+    (permission) => permission.key !== resourceCreationPermission.key,
+  ),
+  resourceCreationPermission,
+]
 
 function nodePath(nodes: DataNode[], targetKey: string, parents: string[] = []): string[] {
   for (const node of nodes) {
@@ -54,6 +72,7 @@ describe('role permission tree model', () => {
       expect(nodePath(tree, `permission:${permissionKey}`)).toContain('route:workloads-deployments')
     }
     expect(nodePath(tree, 'permission:platform.pods.exec')).toContain('route:workloads-pods')
+    expect(nodePath(tree, 'permission:platform.pods.update')).toContain('route:workloads-pods')
   })
 
   it.each([
@@ -70,6 +89,7 @@ describe('role permission tree model', () => {
   })
 
   it.each([
+    ['platform.resource-creation.use', 'workbench:platform'],
     ['workspace.resource.view', 'workbench:platform'],
     ['workspace.application.view', 'workbench:delivery'],
   ])('places %s on its workbench entry', (permissionKey, workbenchID) => {
@@ -84,6 +104,27 @@ describe('role permission tree model', () => {
     expect(treeKeys((platform?.children ?? []) as DataNode[])).not.toContain(
       'permissions:workspace',
     )
+  })
+
+  it.each([
+    ['virtualization.vms.power', 'virtualization-workbench-vms'],
+    ['virtualization.clusters.sync', 'virtualization-workbench-clusters'],
+    ['virtualization.operations.retry', 'compute-workbench-tasks-operations'],
+    ['virtualization.sync.sync', 'compute-workbench-tasks-operations'],
+    ['docker.services.logs', 'docker-workbench-projects'],
+    ['docker.ports.update', 'docker-workbench-projects'],
+    ['docker.operations.retry', 'compute-workbench-tasks-operations'],
+  ])('places compute permission %s under its owning page', (permissionKey, routeID) => {
+    expect(
+      nodePath(buildRolePermissionTreeData(definitions), `permission:${permissionKey}`),
+    ).toContain(`route:${routeID}`)
+  })
+
+  it('does not leave compute permissions in unowned domain buckets', () => {
+    const compute = findNode(buildRolePermissionTreeData(definitions), 'workbench:compute')
+    const keys = treeKeys((compute?.children ?? []) as DataNode[])
+    expect(keys).not.toContain('permissions:docker')
+    expect(keys).not.toContain('permissions:virtualization')
   })
 
   it.each([

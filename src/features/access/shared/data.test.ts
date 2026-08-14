@@ -12,7 +12,12 @@ vi.mock('./api', () => ({
     teams: { list: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
     policies: { list: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
     scopeGrants: { list: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
-    dependencies: { applications: vi.fn(), loginProviders: vi.fn() },
+    dependencies: {
+      applicationEnvironments: vi.fn(),
+      applications: vi.fn(),
+      clusters: vi.fn(),
+      loginProviders: vi.fn(),
+    },
   },
 }))
 
@@ -20,6 +25,7 @@ describe('access data contracts', () => {
   it('builds canonical hierarchical query and mutation keys', () => {
     expect(accessKeys.userList()).toEqual(['access', 'users', 'list'])
     expect(accessKeys.scopeGrantList()).toEqual(['access', 'scope-grants', 'list'])
+    expect(accessKeys.clusterOptions()).toEqual(['access', 'dependencies', 'clusters'])
     expect(accessKeys.loginProviders()).toEqual(['access', 'dependencies', 'login-providers'])
     expect(accessMutationKeys.policies('update')).toEqual([
       'access',
@@ -33,6 +39,8 @@ describe('access data contracts', () => {
     expect(accessQueries.users().queryKey).toEqual(accessKeys.userList())
     expect(accessQueries.policies().queryKey).toEqual(accessKeys.policyList())
     expect(accessQueries.scopeGrants(false).enabled).toBe(false)
+    expect(accessQueries.applicationEnvironments(false).enabled).toBe(false)
+    expect(accessQueries.clusterOptions(false).enabled).toBe(false)
   })
 
   it('binds mutation options to explicit capability operations', () => {

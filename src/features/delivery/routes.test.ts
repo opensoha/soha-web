@@ -5,6 +5,7 @@ import { deliveryRoutes } from './routes'
 const routePages = vi.hoisted(() => ({
   manifests: () => null,
   applications: () => null,
+  overview: () => null,
   applicationDetail: () => null,
   workloadDetail: () => null,
   environments: () => null,
@@ -30,6 +31,7 @@ const routePages = vi.hoisted(() => ({
 
 vi.mock('./manifests/library-page', () => ({ ManifestLibraryPage: routePages.manifests }))
 vi.mock('./applications/list-page', () => ({ ApplicationsPage: routePages.applications }))
+vi.mock('./workbench/overview-page', () => ({ DeliveryOverviewPage: routePages.overview }))
 vi.mock('./applications/detail-page', () => ({
   ApplicationDetailPage: routePages.applicationDetail,
 }))
@@ -69,10 +71,11 @@ vi.mock('./builds/detail-page', () => ({ BuildDetailPage: routePages.buildDetail
 vi.mock('./registries/page', () => ({ RegistriesPage: routePages.registries }))
 
 describe('delivery route manifest', () => {
-  it('maps all 23 routes directly to distinct leaf modules', async () => {
+  it('maps all 24 routes directly to distinct leaf modules', async () => {
     const expectedPages = new Map([
       ['delivery-manifest-library', routePages.manifests],
       ['applications', routePages.applications],
+      ['delivery-overview', routePages.overview],
       ['application-detail', routePages.applicationDetail],
       ['application-workload-detail', routePages.workloadDetail],
       ['application-environments', routePages.environments],
@@ -135,6 +138,20 @@ describe('delivery route manifest', () => {
         path: '/applications',
         permissionKey: 'delivery.applications.view',
         permissionKeysAny: undefined,
+      },
+      {
+        id: 'delivery-overview',
+        menuId: 'delivery-overview',
+        navVisible: true,
+        path: '/delivery/overview',
+        permissionKey: undefined,
+        permissionKeysAny: [
+          'delivery.applications.view',
+          'delivery.application-environments.view',
+          'delivery.release-board.view',
+          'delivery.release-bundles.view',
+          'delivery.execution-tasks.view',
+        ],
       },
       {
         id: 'application-detail',

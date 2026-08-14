@@ -1,5 +1,7 @@
 export { settingsApi } from './api'
 export type { UpsertSettingsRecordInput } from './api'
+export { sourceControlApi } from './system-integrations/api'
+export { sourceControlQueries } from './system-integrations/queries'
 export { AISettingsPage } from './ai/public-page'
 export { settingsKeys, settingsMutationKeys } from './keys'
 export {

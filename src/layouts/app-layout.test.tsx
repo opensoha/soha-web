@@ -369,15 +369,25 @@ describe('app layout workspace navigation', () => {
 
   it('places the permitted resource action before docs in the k8s header', async () => {
     const container = await renderWithProviders('/', {
-      permissionKeys: ['workspace.resource.view', 'overview.view', 'platform.resource.create'],
+      permissionKeys: [
+        'workspace.resource.view',
+        'overview.view',
+        'platform.pods.logs',
+        'platform.resource-creation.use',
+      ],
     })
 
     const headerActions = container.querySelector('.soha-header-right')
+    const sessionButton = headerActions?.querySelector<HTMLButtonElement>(
+      '.soha-header-realtime-sessions',
+    )
     const createButton = headerActions?.querySelector<HTMLButtonElement>(
       '.soha-header-resource-create',
     )
     const docsButton = headerActions?.querySelector<HTMLButtonElement>('button[title="Docs"]')
 
+    expect(sessionButton?.textContent).toContain('实时会话')
+    expect(sessionButton?.nextElementSibling).toBe(createButton)
     expect(createButton?.textContent).toContain('创建资源')
     expect(createButton?.nextElementSibling).toBe(docsButton)
 
@@ -391,7 +401,11 @@ describe('app layout workspace navigation', () => {
 
   it('opens the resource modal from the compatibility query and clears it on close', async () => {
     const container = await renderWithProviders('/?createResource=1', {
-      permissionKeys: ['workspace.resource.view', 'overview.view', 'platform.resource.create'],
+      permissionKeys: [
+        'workspace.resource.view',
+        'overview.view',
+        'platform.resource-creation.use',
+      ],
     })
 
     const dialog = container.querySelector('[role="dialog"][aria-label="创建资源"]')
@@ -418,7 +432,7 @@ describe('app layout workspace navigation', () => {
       permissionKeys: [
         'workspace.resource.view',
         'platform.clusters.view',
-        'platform.resource.create',
+        'platform.resource-creation.use',
       ],
     })
     expect(clusterPage.querySelector('.soha-header-resource-create')).not.toBeNull()
@@ -428,7 +442,7 @@ describe('app layout workspace navigation', () => {
       permissionKeys: [
         'workspace.application.view',
         'delivery.applications.view',
-        'platform.resource.create',
+        'platform.resource-creation.use',
       ],
     })
     expect(applicationPage.querySelector('.soha-header-resource-create')).toBeNull()
@@ -528,7 +542,7 @@ describe('app layout workspace navigation', () => {
       visibleMenuIds: [
         'monitoring-workbench',
         'monitoring-workbench-overview',
-        'monitoring-workbench-logs',
+        'monitoring-workbench-explore',
         'monitoring-workbench-log-data-sources',
         'monitoring-workbench-dashboards',
         'monitoring-workbench-rules',
@@ -557,11 +571,11 @@ describe('app layout workspace navigation', () => {
           enabled: true,
         },
         {
-          id: 'monitoring-workbench-logs',
+          id: 'monitoring-workbench-explore',
           parentId: 'monitoring-workbench',
-          path: '/monitoring-workbench/logs',
-          labelZh: '日志',
-          labelEn: 'Logs',
+          path: '/monitoring-workbench/explore',
+          labelZh: 'Explore',
+          labelEn: 'Explore',
           iconKey: 'history',
           section: 'observe-signals',
           sortOrder: 62,

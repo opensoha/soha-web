@@ -229,9 +229,58 @@ function setDefaultResponses() {
       },
     ],
     '/access/policies': [{ id: 'policy-1', name: '管理员策略', effect: 'allow', priority: 100 }],
+    '/auth/sessions': [
+      {
+        id: 'session-1',
+        userId: 'user-1',
+        userName: 'admin',
+        email: 'admin@example.com',
+        providerType: 'local',
+        status: 'active',
+        createdAt: '2026-08-13T08:00:00Z',
+        lastSeenAt: '2026-08-13T09:00:00Z',
+        expiresAt: '2026-08-14T08:00:00Z',
+      },
+      {
+        id: 'session-2',
+        userId: 'user-1',
+        userName: 'admin',
+        email: 'admin@example.com',
+        providerType: 'oidc',
+        status: 'active',
+        createdAt: '2026-08-13T08:30:00Z',
+        lastSeenAt: '2026-08-13T09:00:00Z',
+        expiresAt: '2026-08-14T08:30:00Z',
+      },
+      {
+        id: 'session-3',
+        userId: 'user-2',
+        userName: 'operator',
+        email: 'operator@example.com',
+        providerType: 'oidc',
+        status: 'active',
+        createdAt: '2026-08-13T08:45:00Z',
+        lastSeenAt: '2026-08-13T09:00:00Z',
+        expiresAt: '2026-08-14T08:45:00Z',
+      },
+    ],
+    '/operations/summary': {
+      total: 8,
+      failureCount: 1,
+      retentionDays: 30,
+      expiredEntryCount: 0,
+      exportRecommended: false,
+    },
+    '/audit/summary': {
+      total: 12,
+      retentionDays: 90,
+      expiredEntryCount: 0,
+      exportRecommended: false,
+    },
     '/settings/branding': {
       appTitle: 'Soha',
       sidebarTitle: 'Soha',
+      slogan: 'Soha 是一种能力！',
       loginLogoUrl: '',
       expandedLogoUrl: 'https://cdn.example.com/logo.svg',
       collapsedLogoUrl: '',
@@ -414,6 +463,9 @@ describe('settings ai page rendering', () => {
         'settings.ai.update',
         'settings.system-integrations.view',
         'settings.runtime-config.view',
+        'system.online-users.view',
+        'system.audit.view',
+        'system.operations.view',
         'observe.ai.view',
       ],
       visibleMenuIds: [
@@ -472,19 +524,27 @@ describe('settings ai page rendering', () => {
     vi.clearAllMocks()
   })
 
-  it('renders user management metrics and menu-aligned actions', async () => {
+  it('renders access and governance metrics without repeated navigation shortcuts', async () => {
     const container = await renderWithProviders(<SettingsOverviewPage />, '/settings/overview')
 
+    expect(container.querySelector('.soha-management-detail-header')).toBeNull()
     expect(container.textContent).toContain('用户总数')
     expect(container.textContent).toContain('角色数')
     expect(container.textContent).toContain('组织数')
     expect(container.textContent).toContain('访问策略')
-    expect(container.textContent).toContain('用户管理')
-    expect(
-      Array.from(container.querySelectorAll('.soha-settings-overview-actions button')).map(
-        (button) => button.textContent?.trim(),
-      ),
-    ).toEqual(['用户', '角色', '组织', '策略', '登录设置'])
+    expect(container.textContent).toContain('当前可正常登录')
+    expect(container.textContent).toContain('当前已禁止登录')
+    expect(container.textContent).toContain('尚未获得角色权限')
+    expect(container.textContent).toContain('尚未加入任何组织')
+    expect(container.textContent).toContain('系统活动')
+    expect(container.textContent).toContain('在线用户2')
+    expect(container.textContent).toContain('3 个活跃会话')
+    expect(container.textContent).toContain('活跃会话3')
+    expect(container.textContent).toContain('操作记录8')
+    expect(container.textContent).toContain('失败 1')
+    expect(container.textContent).toContain('审计记录12')
+    expect(container.textContent).toContain('保留 90 天')
+    expect(container.textContent).not.toContain('常用入口')
     expect(container.textContent).not.toContain('品牌配置')
     expect(container.textContent).not.toContain('认证与品牌')
   })
@@ -512,6 +572,9 @@ describe('settings ai page rendering', () => {
     expect(apiGetMock).not.toHaveBeenCalledWith('/access/roles')
     expect(apiGetMock).not.toHaveBeenCalledWith('/access/teams')
     expect(apiGetMock).not.toHaveBeenCalledWith('/access/policies')
+    expect(apiGetMock).not.toHaveBeenCalledWith('/auth/sessions')
+    expect(apiGetMock).not.toHaveBeenCalledWith('/audit/summary')
+    expect(apiGetMock).not.toHaveBeenCalledWith('/operations/summary')
   })
 
   it('shows retryable errors instead of empty settings data', async () => {
@@ -537,6 +600,45 @@ describe('settings ai page rendering', () => {
       expect(container.textContent).toContain('重试')
     }
   })
+
+  it.each(['/auth/sessions', '/audit/summary', '/operations/summary'])(
+    'keeps primary overview data visible when optional activity query %s fails',
+    async (failingPath) => {
+      apiGetMock.mockImplementation((path: string) =>
+        path === failingPath
+          ? Promise.reject(new Error('request failed'))
+          : Promise.resolve({ data: testState.responses[path] ?? {} }),
+      )
+
+      const overview = await renderWithProviders(<SettingsOverviewPage />, '/settings/overview')
+
+      expect(overview.textContent).toContain('用户总数')
+      expect(overview.textContent).toContain('角色数')
+      expect(overview.textContent).toContain('部分系统活动加载失败')
+      expect(overview.textContent).toContain('重试失败项')
+    },
+  )
+
+  it.each(['/access/users', '/access/roles', '/access/teams', '/access/policies'])(
+    'keeps successful access metrics visible when %s fails',
+    async (failingPath) => {
+      apiGetMock.mockImplementation((path: string) =>
+        path === failingPath
+          ? Promise.reject(new Error('request failed'))
+          : Promise.resolve({ data: testState.responses[path] ?? {} }),
+      )
+
+      const overview = await renderWithProviders(<SettingsOverviewPage />, '/settings/overview')
+
+      expect(overview.textContent).toContain('用户总数')
+      expect(overview.textContent).toContain('角色数')
+      expect(overview.textContent).toContain('组织数')
+      expect(overview.textContent).toContain('访问策略')
+      expect(overview.textContent).toContain('部分访问治理数据加载失败')
+      expect(overview.textContent).toContain('加载失败')
+      expect(overview.textContent).toContain('重试失败项')
+    },
+  )
 
   it('does not request protected settings data without view permissions', async () => {
     testState.snapshot = {
@@ -585,6 +687,7 @@ describe('settings ai page rendering', () => {
     const container = await renderWithProviders(<BrandingSettingsPage />, '/settings/branding')
 
     expect(container.querySelector('img[src="https://cdn.example.com/logo.svg"]')).not.toBeNull()
+    expect((container.querySelector('#slogan') as HTMLInputElement).value).toBe('Soha 是一种能力！')
 
     const saveButton = Array.from(container.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('保存设置'),
@@ -597,7 +700,11 @@ describe('settings ai page rendering', () => {
 
     expect(apiPutMock).toHaveBeenCalledWith(
       '/settings/branding',
-      expect.objectContaining({ appTitle: 'Soha', sidebarTitle: 'Soha' }),
+      expect.objectContaining({
+        appTitle: 'Soha',
+        sidebarTitle: 'Soha',
+        slogan: 'Soha 是一种能力！',
+      }),
     )
   })
 
