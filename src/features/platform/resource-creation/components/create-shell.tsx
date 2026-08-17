@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Alert, App, Button, Modal, Spin, Tabs, Typography } from 'antd'
 import { CheckCircleOutlined, FileTextOutlined, FormOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -9,13 +9,14 @@ import { createUUID } from '@/utils/uuid'
 import { resourceCreationMutations } from '../mutations'
 import { resourceCreationQueries } from '../queries'
 import {
+  buildResourceCreateRequest,
   isPreflightCurrent,
   resolveResourceCreateDefaultNamespace,
   resourceCreateRequestFingerprint,
 } from '../model'
 import { hasResourceCreateForm, loadResourceCreateForm } from '../registry'
-import type { ResourceFormDefinition } from '../forms'
-import type { ResourceCreateContext, ResourceCreateResult, ResourceCreateSource } from '../types'
+import type { PreparedResourceManifest, ResourceFormDefinition } from '../forms'
+import type { ResourceCreateContext, ResourceCreateResult } from '../types'
 import { ResourceCreateResultTable } from './result-table'
 import { ResourcePreflightTable } from './preflight-table'
 import '../styles.css'
@@ -47,23 +48,6 @@ export interface CreateShellProps {
   readonly title?: ReactNode
 }
 
-function createRequest(
-  context: ResourceCreateContext,
-  content: string,
-  mode: 'form' | 'yaml',
-  defaultNamespace?: string,
-) {
-  const source: ResourceCreateSource = mode === 'form' ? 'form' : context.source
-  return {
-    source,
-    ...(defaultNamespace ? { defaultNamespace } : {}),
-    ...(context.resourceGroup ? { resourceGroup: context.resourceGroup } : {}),
-    ...(context.expectedApiVersion ? { expectedApiVersion: context.expectedApiVersion } : {}),
-    ...(context.expectedKind ? { expectedKind: context.expectedKind } : {}),
-    content,
-  }
-}
-
 function ShellBody({
   context: initialContext,
   defaultTemplate,
@@ -86,6 +70,10 @@ function ShellBody({
   const [formDefinition, setFormDefinition] = useState<ResourceFormDefinition>()
   const [formValues, setFormValues] = useState<unknown>()
   const [draft, setDraft] = useState(defaultTemplate)
+  const [preparedManifest, setPreparedManifest] = useState<PreparedResourceManifest | null>(null)
+  const [preparationError, setPreparationError] = useState<string | null>(null)
+  const [preparingManifest, setPreparingManifest] = useState(false)
+  const formRevision = useRef(0)
   const [preflightRequestFingerprint, setPreflightRequestFingerprint] = useState<string | null>(
     null,
   )
@@ -108,7 +96,8 @@ function ShellBody({
     () => (registryResource ? JSON.stringify(registryResource, null, 2) : ''),
     [registryResource],
   )
-  const content = mode === 'form' ? form?.manifest || registryManifest : draft
+  const content =
+    mode === 'form' ? (form?.manifest ?? preparedManifest?.content ?? registryManifest) : draft
   const context = initialContext
   const clusterName =
     clustersQuery.data?.find((cluster) => cluster.id === initialContext.clusterId)?.name || ''
@@ -118,8 +107,8 @@ function ShellBody({
     mode,
   })
   const request = useMemo(
-    () => createRequest(context, content, mode, defaultNamespace),
-    [content, context, defaultNamespace, mode],
+    () => buildResourceCreateRequest(context, content, mode, defaultNamespace, preparedManifest),
+    [content, context, defaultNamespace, mode, preparedManifest],
   )
   const requestFingerprint = useMemo(
     () => resourceCreateRequestFingerprint(context.clusterId, request),
@@ -135,11 +124,16 @@ function ShellBody({
     preflightMutation.data,
   )
   const canExecute = Boolean(preflightCurrent && preflightMutation.data?.ready)
+  const formBusy = preparingManifest || preflightMutation.isPending
 
   useEffect(() => {
     if (!visible) return
     setMode(form || registryFormSupported ? initialMode : 'yaml')
     setDraft(defaultTemplate)
+    setPreparedManifest(null)
+    setPreparationError(null)
+    setPreparingManifest(false)
+    formRevision.current += 1
     setPreflightRequestFingerprint(null)
     setIdempotencyKey(null)
     preflightMutation.reset()
@@ -167,7 +161,10 @@ function ShellBody({
       if (cancelled || !definition) return
       setFormDefinition(definition)
       setFormValues(
-        definition.defaultValues({ namespace: initialContext.defaultNamespace || null }),
+        definition.defaultValues({
+          clusterId: initialContext.clusterId,
+          namespace: initialContext.defaultNamespace || null,
+        }),
       )
     })
     return () => {
@@ -182,19 +179,73 @@ function ShellBody({
   ])
 
   function invalidatePreflight() {
+    formRevision.current += 1
+    setPreparedManifest(null)
+    setPreparationError(null)
+    setPreparingManifest(false)
     setPreflightRequestFingerprint(null)
     setIdempotencyKey(null)
     preflightMutation.reset()
     executeMutation.reset()
   }
 
-  function runPreflight() {
+  async function runPreflight(submittedValues?: unknown) {
+    const revision = formRevision.current
     setPreflightRequestFingerprint(null)
+    setIdempotencyKey(null)
+    setPreparationError(null)
+    preflightMutation.reset()
+    executeMutation.reset()
+
+    let nextContent = content
+    let nextDefaultNamespace = defaultNamespace
+    let nextPreparedManifest = preparedManifest
+    try {
+      if (mode === 'form' && formDefinition && submittedValues != null) {
+        const nextResource = formDefinition.buildManifest(submittedValues)
+        nextDefaultNamespace = resolveResourceCreateDefaultNamespace({
+          contextNamespace: context.defaultNamespace,
+          formNamespace: nextResource.metadata.namespace,
+          mode,
+        })
+        setFormValues(submittedValues)
+        if (formDefinition.prepareManifest) {
+          setPreparingManifest(true)
+          nextPreparedManifest = await formDefinition.prepareManifest(submittedValues, {
+            clusterId: context.clusterId,
+            namespace: nextDefaultNamespace || null,
+          })
+          if (revision !== formRevision.current) return
+          nextContent = nextPreparedManifest.content
+          setPreparedManifest(nextPreparedManifest)
+        } else {
+          nextContent = JSON.stringify(nextResource, null, 2)
+        }
+      }
+    } catch (error) {
+      if (revision !== formRevision.current) return
+      const detail = error instanceof Error ? error.message : String(error)
+      setPreparationError(detail)
+      void message.error(detail)
+      return
+    } finally {
+      if (revision === formRevision.current) setPreparingManifest(false)
+    }
+
+    const nextRequest = buildResourceCreateRequest(
+      context,
+      nextContent,
+      mode,
+      nextDefaultNamespace,
+      nextPreparedManifest,
+    )
+    const nextFingerprint = resourceCreateRequestFingerprint(context.clusterId, nextRequest)
     preflightMutation.mutate(
-      { clusterId: context.clusterId, request },
+      { clusterId: context.clusterId, request: nextRequest },
       {
         onSuccess: () => {
-          setPreflightRequestFingerprint(requestFingerprint)
+          if (revision !== formRevision.current) return
+          setPreflightRequestFingerprint(nextFingerprint)
           setIdempotencyKey(createUUID())
         },
         onError: (error) => void message.error(error.message),
@@ -266,7 +317,8 @@ function ShellBody({
           {form?.content ??
             (formDefinition && formValues != null ? (
               formDefinition.renderForm({
-                loading: preflightMutation.isPending,
+                clusterId: context.clusterId,
+                loading: formBusy,
                 localeCode,
                 namespaceLoading: namespacesQuery.isLoading,
                 namespaceOptions: (namespacesQuery.data ?? []).map((item) => item.name),
@@ -274,7 +326,7 @@ function ShellBody({
                   setFormValues(value)
                   invalidatePreflight()
                 },
-                onSubmit: () => runPreflight(),
+                onSubmit: (values) => void runPreflight(values),
                 submitText: isChinese ? '生成 Manifest 并预检' : 'Build manifest and preflight',
                 value: formValues,
               })
@@ -293,7 +345,7 @@ function ShellBody({
           }
         >
           <K8sYamlEditor
-            applyDisabled={!content.trim() || namespaceRequired || preflightMutation.isPending}
+            applyDisabled={!content.trim() || namespaceRequired || formBusy}
             applyDisabledReason={
               namespaceRequired
                 ? isChinese
@@ -302,11 +354,11 @@ function ShellBody({
                 : undefined
             }
             applyLabel={isChinese ? '预检' : 'Preflight'}
-            applying={preflightMutation.isPending}
+            applying={formBusy}
             editorHeight={
               initialContext.source === 'global_yaml' ? 'min(44vh, 460px)' : 'min(46vh, 480px)'
             }
-            onApply={runPreflight}
+            onApply={() => void runPreflight()}
             onChange={(value) => {
               setDraft(value)
               invalidatePreflight()
@@ -326,13 +378,22 @@ function ShellBody({
         <div className="soha-resource-create-form-actions">
           <Button
             disabled={!form.valid || namespaceRequired}
-            loading={preflightMutation.isPending}
-            onClick={runPreflight}
+            loading={formBusy}
+            onClick={() => void runPreflight()}
             type="primary"
           >
             {isChinese ? '生成 Manifest 并预检' : 'Build manifest and preflight'}
           </Button>
         </div>
+      ) : null}
+
+      {preparationError ? (
+        <Alert
+          description={preparationError}
+          showIcon
+          title={isChinese ? 'Manifest 生成失败' : 'Manifest generation failed'}
+          type="error"
+        />
       ) : null}
 
       {preflightMutation.isError ? (

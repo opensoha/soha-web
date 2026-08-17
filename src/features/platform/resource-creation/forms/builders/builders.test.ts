@@ -3,7 +3,11 @@ import { buildNamespaceManifest, buildServiceAccountManifest } from './access-co
 import { buildConfigMapManifest, buildSecretManifest } from './configuration'
 import { buildIngressManifest, buildServiceManifest } from './network'
 import { buildPersistentVolumeClaimManifest } from './storage'
-import { buildControllerManifest, buildJobManifest } from './workloads'
+import {
+  buildControllerManifest,
+  buildJobManifest,
+  buildWorkloadSnapshotRequest,
+} from './workloads'
 
 const metadata = {
   name: 'demo',
@@ -52,6 +56,8 @@ describe('workload manifest builders', () => {
     const result = buildJobManifest('CronJob', {
       ...metadata,
       ...pod,
+      runtimeSource: 'manual',
+      sourceKind: 'Deployment',
       restartPolicy: 'OnFailure',
       schedule: '*/5 * * * *',
       suspend: true,
@@ -75,12 +81,82 @@ describe('workload manifest builders', () => {
   })
 
   it('builds an ordinary Job without CronJob fields', () => {
-    const result = buildJobManifest('Job', { ...metadata, ...pod, restartPolicy: 'Never' })
+    const result = buildJobManifest('Job', {
+      ...metadata,
+      ...pod,
+      runtimeSource: 'manual',
+      sourceKind: 'Deployment',
+      restartPolicy: 'Never',
+      description: 'nightly cleanup',
+      commandText: '/bin/sh\n-c',
+      argsText: 'php artisan cleanup',
+    })
     expect(result).toMatchObject({
       kind: 'Job',
-      spec: { template: { spec: { restartPolicy: 'Never' } } },
+      metadata: { annotations: { 'soha.io/description': 'nightly cleanup' } },
+      spec: {
+        template: {
+          spec: {
+            containers: [
+              {
+                command: ['/bin/sh', '-c'],
+                args: ['php artisan cleanup'],
+              },
+            ],
+            restartPolicy: 'Never',
+          },
+        },
+      },
     })
     expect(result.spec).not.toHaveProperty('schedule')
+  })
+
+  it('builds a typed snapshot request without leaking blank form values', () => {
+    expect(
+      buildWorkloadSnapshotRequest('CronJob', {
+        ...metadata,
+        ...pod,
+        imagePolicy: 'follow',
+        runtimeSource: 'workload',
+        sourceKind: 'StatefulSet',
+        sourceName: ' api ',
+        sourceContainer: ' worker ',
+        description: ' hourly billing ',
+        commandText: 'php\nartisan',
+        argsText: ' billing:run\n ',
+        restartPolicy: 'OnFailure',
+        schedule: ' */10 * * * * ',
+        suspend: true,
+      }),
+    ).toMatchObject({
+      namespace: 'minio',
+      sourceKind: 'StatefulSet',
+      sourceName: 'api',
+      sourceContainer: 'worker',
+      targetKind: 'WorkloadCronJob',
+      targetName: 'demo',
+      description: 'hourly billing',
+      labels: { team: 'platform' },
+      command: ['php', 'artisan'],
+      args: ['billing:run'],
+      restartPolicy: 'OnFailure',
+      schedule: '*/10 * * * *',
+      suspend: true,
+    })
+  })
+
+  it('keeps the temporary Job manifest renderable after manual fields are removed', () => {
+    expect(
+      buildJobManifest('Job', {
+        ...metadata,
+        containerName: undefined,
+        image: undefined,
+        runtimeSource: 'workload',
+        sourceKind: 'Deployment',
+        sourceName: 'api',
+        restartPolicy: 'Never',
+      } as unknown as Parameters<typeof buildJobManifest>[1]),
+    ).toMatchObject({ spec: { template: { spec: { containers: [{ name: 'app' }] } } } })
   })
 })
 

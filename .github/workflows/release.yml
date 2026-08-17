@@ -9,7 +9,7 @@ on:
       contracts_version:
         description: '@opensoha/contracts npm version to consume'
         required: true
-        default: '0.1.5'
+        default: '0.1.13'
 
 permissions:
   contents: write
@@ -18,7 +18,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     env:
-      CONTRACTS_VERSION: ${{ inputs.contracts_version || '0.1.5' }}
+      CONTRACTS_VERSION: ${{ inputs.contracts_version || '0.1.13' }}
     steps:
       - name: Checkout web
         uses: actions/checkout@v7
@@ -29,6 +29,12 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: soha-web/package-lock.json
+      - name: Verify release version
+        if: startsWith(github.ref, 'refs/tags/v')
+        working-directory: soha-web
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "v${version}" = "${GITHUB_REF_NAME}"
       - name: Install release dependencies
         working-directory: soha-web
         run: |

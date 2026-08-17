@@ -7,6 +7,8 @@ import type {
   ResourceCreateScopeDecision,
   ResourceCreateScopeDecisionRequest,
   ResourcePreflight,
+  WorkloadSnapshot,
+  WorkloadSnapshotRequest,
 } from './types'
 
 interface Envelope<T> {
@@ -32,6 +34,18 @@ export async function decideResourceCreateScope(
   return unwrap(
     await api.post<Envelope<ResourceCreateScopeDecision>>(
       resourceCreationPaths.scopeDecision(clusterId),
+      request,
+    ),
+  )
+}
+
+export async function generateWorkloadSnapshot(
+  clusterId: string,
+  request: WorkloadSnapshotRequest,
+) {
+  return unwrap(
+    await api.post<Envelope<WorkloadSnapshot>>(
+      resourceCreationPaths.workloadSnapshot(clusterId),
       request,
     ),
   )

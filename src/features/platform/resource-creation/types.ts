@@ -16,6 +16,10 @@ import type {
   KubernetesResourceScope,
   KubernetesResourceScopeMode,
   KubernetesResourceWarning,
+  KubernetesWorkloadSnapshot,
+  KubernetesWorkloadSnapshotRequest,
+  KubernetesWorkloadSnapshotSourceKind,
+  KubernetesWorkloadSnapshotTargetKind,
 } from '@opensoha/contracts/gen/ts/sohaapi'
 
 export type ResourceAuthorizationDecision = KubernetesResourceAuthorizationDecision
@@ -35,6 +39,12 @@ export type ResourcePreflightItem = KubernetesResourcePreflightItem
 export type ResourceRef = KubernetesResourceRef
 export type ResourceScope = KubernetesResourceScope
 export type ResourceScopeMode = KubernetesResourceScopeMode
+export type WorkloadSnapshot = KubernetesWorkloadSnapshot
+export type WorkloadSnapshotRequest = Omit<KubernetesWorkloadSnapshotRequest, 'targetKind'> & {
+  targetKind: WorkloadSnapshotTargetKind
+}
+export type WorkloadSnapshotSourceKind = KubernetesWorkloadSnapshotSourceKind
+export type WorkloadSnapshotTargetKind = KubernetesWorkloadSnapshotTargetKind | 'WorkloadCronJob'
 
 export interface ResourceCreateContext {
   readonly clusterId: string

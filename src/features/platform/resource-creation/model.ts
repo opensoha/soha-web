@@ -1,4 +1,33 @@
-import type { ResourceCreateRequest, ResourceCreateScopeDecision, ResourcePreflight } from './types'
+import type {
+  ResourceCreateContext,
+  ResourceCreateRequest,
+  ResourceCreateScopeDecision,
+  ResourceCreateSource,
+  ResourcePreflight,
+} from './types'
+
+export function buildResourceCreateRequest(
+  context: ResourceCreateContext,
+  content: string,
+  mode: 'form' | 'yaml',
+  defaultNamespace?: string,
+  target?: Partial<
+    Pick<ResourceCreateContext, 'expectedApiVersion' | 'expectedKind' | 'resourceGroup'>
+  > | null,
+): ResourceCreateRequest {
+  const source: ResourceCreateSource = mode === 'form' ? 'form' : context.source
+  const resourceGroup = target?.resourceGroup ?? context.resourceGroup
+  const expectedApiVersion = target?.expectedApiVersion ?? context.expectedApiVersion
+  const expectedKind = target?.expectedKind ?? context.expectedKind
+  return {
+    source,
+    ...(defaultNamespace ? { defaultNamespace } : {}),
+    ...(resourceGroup ? { resourceGroup } : {}),
+    ...(expectedApiVersion ? { expectedApiVersion } : {}),
+    ...(expectedKind ? { expectedKind } : {}),
+    content,
+  }
+}
 
 export function resolveCreateEntryAvailability({
   clusterId,

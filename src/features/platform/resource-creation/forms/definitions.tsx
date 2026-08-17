@@ -1,6 +1,7 @@
 import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons'
 import { Button, Col, Form, Input, InputNumber, Row, Select, Space } from 'antd'
 import type { StepFormStep } from '@/components/step-form'
+import { generateWorkloadSnapshot } from '../api'
 import {
   BooleanField,
   JobPolicyFields,
@@ -14,7 +15,12 @@ import { buildNamespaceManifest, buildServiceAccountManifest } from './builders/
 import { buildConfigMapManifest, buildSecretManifest } from './builders/configuration'
 import { buildIngressManifest, buildServiceManifest } from './builders/network'
 import { buildPersistentVolumeClaimManifest } from './builders/storage'
-import { buildControllerManifest, buildJobManifest } from './builders/workloads'
+import {
+  buildControllerManifest,
+  buildJobManifest,
+  buildWorkloadSnapshotRequest,
+} from './builders/workloads'
+import { WorkloadSnapshotFields } from './workload-snapshot-fields'
 import {
   defineResourceForm,
   type ConfigMapFormValues,
@@ -109,11 +115,37 @@ function jobDefinition(kind: 'Job' | 'CronJob') {
       backoffLimit: 6,
       parallelism: 1,
       completions: 1,
+      imagePolicy: 'snapshot',
       restartPolicy: 'Never',
+      runtimeSource: 'manual',
       schedule: kind === 'CronJob' ? '0 * * * *' : undefined,
+      sourceKind: 'Deployment',
       suspend: false,
     }),
     buildManifest: (values) => buildJobManifest(kind, values),
+    prepareManifest: async (values, context) => {
+      const followsSource = kind === 'CronJob' && values.imagePolicy === 'follow'
+      if (values.runtimeSource !== 'workload') {
+        return {
+          content: JSON.stringify(buildJobManifest(kind, values), null, 2),
+          expectedApiVersion: 'batch/v1',
+          expectedKind: kind,
+          resourceGroup: 'workloads',
+        }
+      }
+      const clusterId = context.clusterId?.trim()
+      if (!clusterId) throw new Error('A cluster is required for workload snapshots')
+      const snapshot = await generateWorkloadSnapshot(
+        clusterId,
+        buildWorkloadSnapshotRequest(kind, values),
+      )
+      return {
+        content: snapshot.content,
+        expectedApiVersion: followsSource ? 'workloads.soha.io/v1alpha1' : 'batch/v1',
+        expectedKind: followsSource ? 'WorkloadCronJob' : kind,
+        resourceGroup: followsSource ? 'extensions' : 'workloads',
+      }
+    },
     renderForm: (props) =>
       renderWithSteps(props, [
         {
@@ -127,9 +159,22 @@ function jobDefinition(kind: 'Job' | 'CronJob') {
           children: <JobPolicyFields cron={kind === 'CronJob'} />,
         },
         {
-          title: 'Pod 模板',
-          fieldNames: ['containerName', 'image'],
-          children: <PodTemplateFields />,
+          title: '运行环境',
+          fieldNames: [
+            'runtimeSource',
+            'imagePolicy',
+            'containerName',
+            'image',
+            'sourceKind',
+            'sourceName',
+          ],
+          children: (
+            <WorkloadSnapshotFields
+              clusterId={props.clusterId}
+              kind={kind}
+              localeCode={props.localeCode}
+            />
+          ),
         },
       ]),
   })

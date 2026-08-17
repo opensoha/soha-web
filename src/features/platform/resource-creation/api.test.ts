@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   decideResourceCreateScope,
   executeResourceCreate,
+  generateWorkloadSnapshot,
   listAuthorizedNamespaces,
   preflightResourceCreate,
 } from './api'
@@ -58,6 +59,31 @@ describe('resource creation api', () => {
       2,
       '/clusters/cluster%2Fa/resource-creation/preflight',
       expect.objectContaining({ source: 'list', defaultNamespace: 'minio' }),
+    )
+  })
+
+  it('generates a workload snapshot through the resource creation endpoint', async () => {
+    const snapshot = {
+      content: 'apiVersion: batch/v1\nkind: Job\n',
+      sourceUid: 'deployment-uid',
+      selectedContainer: 'app',
+      containers: [{ name: 'app', image: 'registry.example.com/app:1.0' }],
+      warnings: [],
+    }
+    apiMocks.post.mockResolvedValue({ data: snapshot })
+    const request = {
+      namespace: 'minio',
+      sourceKind: 'Deployment' as const,
+      sourceName: 'api',
+      targetKind: 'Job' as const,
+      targetName: 'api-maintenance',
+      restartPolicy: 'Never' as const,
+    }
+
+    await expect(generateWorkloadSnapshot('cluster/a', request)).resolves.toEqual(snapshot)
+    expect(apiMocks.post).toHaveBeenCalledWith(
+      '/clusters/cluster%2Fa/resource-creation/workload-snapshot',
+      request,
     )
   })
 

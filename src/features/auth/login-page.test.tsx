@@ -8,6 +8,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { App } from "antd";
 import { LoginPage } from "./login-page";
 import { fetchLoginOptions, fetchPermissionSnapshot, restoreAuthSession } from "@/features/auth/auth-api";
+import { authKeys } from "@/features/auth/keys";
 import { useAuthStore } from "@/stores/auth-store";
 import type { User } from "@/types";
 
@@ -78,7 +79,7 @@ async function flushReact() {
   });
 }
 
-async function renderLoginPage() {
+async function renderLoginPage(options: { prefetchLoginOptions?: boolean } = {}) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   containers.push(container);
@@ -93,6 +94,14 @@ async function renderLoginPage() {
       },
     },
   });
+
+  if (options.prefetchLoginOptions) {
+    await queryClient.prefetchQuery({
+      queryKey: authKeys.loginOptions(),
+      queryFn: fetchLoginOptions,
+      staleTime: 60_000,
+    });
+  }
 
   await act(async () => {
     root.render(
@@ -165,6 +174,9 @@ describe("login page", () => {
 
   beforeEach(() => {
     document.documentElement.dataset.themeMode = "light";
+    vi.mocked(fetchLoginOptions).mockResolvedValue({
+      verification: { sliderEnabled: false },
+    });
     vi.mocked(fetchPermissionSnapshot).mockResolvedValue({
       permissionKeys: [],
       visibleMenuIds: [],
@@ -211,7 +223,7 @@ describe("login page", () => {
   });
 
   it("uses public server branding before login", async () => {
-    vi.mocked(fetchLoginOptions).mockResolvedValueOnce({
+    vi.mocked(fetchLoginOptions).mockResolvedValue({
       branding: {
         appTitle: "shanchui",
         collapsedLogoUrl: "",
@@ -224,13 +236,10 @@ describe("login page", () => {
       verification: { sliderEnabled: false },
     });
 
-    const container = await renderLoginPage();
+    const container = await renderLoginPage({ prefetchLoginOptions: true });
 
-    await act(async () => {
-      await vi.waitFor(() =>
-        expect(container.querySelector(".soha-auth-flow-title")?.textContent).toBe("shanshui"),
-      );
-    });
+    expect(fetchLoginOptions).toHaveBeenCalledOnce();
+    expect(container.querySelector(".soha-auth-flow-title")?.textContent).toBe("shanshui");
   });
 
   it("restores an existing browser session from the login page", async () => {

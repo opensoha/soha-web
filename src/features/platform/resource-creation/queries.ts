@@ -1,7 +1,16 @@
 import { queryOptions } from '@tanstack/react-query'
-import { decideResourceCreateScope, listAuthorizedNamespaces, preflightResourceCreate } from './api'
+import {
+  decideResourceCreateScope,
+  generateWorkloadSnapshot,
+  listAuthorizedNamespaces,
+  preflightResourceCreate,
+} from './api'
 import { resourceCreationKeys } from './keys'
-import type { ResourceCreateRequest, ResourceCreateScopeDecisionRequest } from './types'
+import type {
+  ResourceCreateRequest,
+  ResourceCreateScopeDecisionRequest,
+  WorkloadSnapshotRequest,
+} from './types'
 
 export const resourceCreationQueries = {
   namespaces: (clusterId: string | null | undefined) =>
@@ -20,6 +29,19 @@ export const resourceCreationQueries = {
       queryFn: () => decideResourceCreateScope(clusterId ?? '', request),
       enabled: Boolean(clusterId?.trim() && request.resourceGroup.trim() && request.kind.trim()),
       staleTime: 30_000,
+    }),
+  workloadSnapshot: (
+    clusterId: string | null | undefined,
+    request: WorkloadSnapshotRequest | undefined,
+  ) =>
+    queryOptions({
+      queryKey: resourceCreationKeys.workloadSnapshot(clusterId ?? '', request),
+      queryFn: () => {
+        if (!request) throw new Error('A workload snapshot request is required')
+        return generateWorkloadSnapshot(clusterId ?? '', request)
+      },
+      enabled: Boolean(clusterId?.trim() && request),
+      staleTime: 0,
     }),
   preflight: (clusterId: string | null | undefined, request: ResourceCreateRequest) =>
     queryOptions({

@@ -273,7 +273,7 @@ export function DraggableFloatShell({
       transform: `translate3d(${Math.round(visiblePosition.x)}px, ${Math.round(visiblePosition.y)}px, 0)`,
       touchAction: disabled ? undefined : 'none',
       width: shellSize.width,
-      zIndex: 1050,
+      zIndex: 950,
     }
   }, [disabled, position, shellSize, style])
 

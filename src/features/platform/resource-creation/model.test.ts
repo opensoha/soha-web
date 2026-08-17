@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildResourceCreateRequest,
   isPreflightCurrent,
   resolveCreateEntryAvailability,
   resolveResourceCreateDefaultNamespace,
@@ -14,6 +15,35 @@ const scope = {
 }
 
 describe('resource creation model', () => {
+  it('uses a prepared form manifest target for preflight and execution', () => {
+    expect(
+      buildResourceCreateRequest(
+        {
+          clusterId: 'cluster-a',
+          source: 'list',
+          resourceGroup: 'workloads',
+          expectedApiVersion: 'batch/v1',
+          expectedKind: 'CronJob',
+        },
+        'kind: WorkloadCronJob',
+        'form',
+        'ops',
+        {
+          resourceGroup: 'extensions',
+          expectedApiVersion: 'workloads.soha.io/v1alpha1',
+          expectedKind: 'WorkloadCronJob',
+        },
+      ),
+    ).toEqual({
+      source: 'form',
+      defaultNamespace: 'ops',
+      resourceGroup: 'extensions',
+      expectedApiVersion: 'workloads.soha.io/v1alpha1',
+      expectedKind: 'WorkloadCronJob',
+      content: 'kind: WorkloadCronJob',
+    })
+  })
+
   it('uses the namespace selected in a registry form as the request target', () => {
     expect(
       resolveResourceCreateDefaultNamespace({

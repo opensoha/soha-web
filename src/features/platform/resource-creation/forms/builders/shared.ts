@@ -53,8 +53,8 @@ export function buildPodSpec(values: PodTemplateFormValues) {
     nodeSelector: entriesToRecord(values.nodeSelector),
     containers: [
       compactObject({
-        name: values.containerName.trim() || 'app',
-        image: values.image.trim(),
+        name: values.containerName?.trim() || 'app',
+        image: values.image?.trim() || '',
         ports: values.containerPort
           ? [{ name: 'http', containerPort: values.containerPort, protocol: 'TCP' }]
           : undefined,

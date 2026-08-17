@@ -10,6 +10,7 @@ function basePath(clusterId: string) {
 
 export const resourceCreationPaths = {
   scopeDecision: (clusterId: string) => `${basePath(clusterId)}/scope-decision`,
+  workloadSnapshot: (clusterId: string) => `${basePath(clusterId)}/workload-snapshot`,
   preflight: (clusterId: string) => `${basePath(clusterId)}/preflight`,
   execute: (clusterId: string) => `${basePath(clusterId)}/execute`,
 }

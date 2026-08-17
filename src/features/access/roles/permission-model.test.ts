@@ -60,16 +60,49 @@ describe('role permission tree model', () => {
 
   it('places exact workload operations under their owning pages', () => {
     const tree = buildRolePermissionTreeData(definitions)
-    for (const permissionKey of [
-      'platform.deployment.create',
-      'platform.deployment.delete',
-      'platform.deployment.restart',
-      'platform.deployment.rollback',
-      'platform.deployment.scale',
-      'platform.deployment.update',
-      'platform.deployment.view',
-    ]) {
-      expect(nodePath(tree, `permission:${permissionKey}`)).toContain('route:workloads-deployments')
+    const owners = {
+      'workloads-deployments': [
+        'platform.deployment.create',
+        'platform.deployment.delete',
+        'platform.deployment.restart',
+        'platform.deployment.rollback',
+        'platform.deployment.scale',
+        'platform.deployment.update',
+        'platform.deployment.view',
+      ],
+      'workloads-statefulsets': [
+        'platform.workloads.stateful-sets.create',
+        'platform.workloads.stateful-sets.delete',
+        'platform.workloads.stateful-sets.restart',
+        'platform.workloads.stateful-sets.scale',
+        'platform.workloads.stateful-sets.update',
+        'platform.workloads.stateful-sets.view',
+      ],
+      'workloads-daemonsets': [
+        'platform.workloads.daemon-sets.create',
+        'platform.workloads.daemon-sets.delete',
+        'platform.workloads.daemon-sets.restart',
+        'platform.workloads.daemon-sets.update',
+        'platform.workloads.daemon-sets.view',
+      ],
+      'workloads-jobs': [
+        'platform.workloads.jobs.create',
+        'platform.workloads.jobs.delete',
+        'platform.workloads.jobs.update',
+        'platform.workloads.jobs.view',
+      ],
+      'workloads-cronjobs': [
+        'platform.workloads.cron-jobs.create',
+        'platform.workloads.cron-jobs.delete',
+        'platform.workloads.cron-jobs.suspend',
+        'platform.workloads.cron-jobs.update',
+        'platform.workloads.cron-jobs.view',
+      ],
+    }
+    for (const [routeID, permissionKeys] of Object.entries(owners)) {
+      for (const permissionKey of permissionKeys) {
+        expect(nodePath(tree, `permission:${permissionKey}`)).toContain(`route:${routeID}`)
+      }
     }
     expect(nodePath(tree, 'permission:platform.pods.exec')).toContain('route:workloads-pods')
     expect(nodePath(tree, 'permission:platform.pods.update')).toContain('route:workloads-pods')

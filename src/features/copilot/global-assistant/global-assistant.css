@@ -14,7 +14,7 @@
 }
 
 .soha-companion-shell {
-  z-index: 1051 !important;
+  z-index: 951 !important;
 }
 
 .soha-companion-window-document,
@@ -36,7 +36,7 @@
 .soha-companion-native-shell {
   position: fixed;
   inset: 0;
-  z-index: 1051;
+  z-index: 951;
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -341,7 +341,7 @@
   position: fixed;
   right: 24px;
   bottom: 92px;
-  z-index: 1052;
+  z-index: 952;
   display: flex;
   width: min(500px, calc(100vw - 32px));
   max-height: min(720px, calc(100vh - 128px));
@@ -465,7 +465,7 @@
 .soha-ai-selection-toolbar,
 .soha-ai-context-menu {
   position: fixed;
-  z-index: 1053;
+  z-index: 953;
   border: 1px solid var(--soha-border-color);
   border-radius: var(--soha-radius);
   background: var(--soha-bg-surface);

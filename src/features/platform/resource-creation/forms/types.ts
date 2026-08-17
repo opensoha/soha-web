@@ -22,7 +22,15 @@ export interface KeyValueEntry {
 }
 
 export interface ResourceFormContext {
+  clusterId?: string | null
   namespace?: string | null
+}
+
+export interface PreparedResourceManifest {
+  content: string
+  expectedApiVersion: string
+  expectedKind: string
+  resourceGroup: string
 }
 
 export type KubernetesManifest = {
@@ -38,6 +46,7 @@ export type KubernetesManifest = {
 }
 
 export interface ResourceFormRendererProps<Values> {
+  clusterId?: string
   localeCode?: string
   loading?: boolean
   namespaceLoading?: boolean
@@ -54,14 +63,25 @@ export interface ResourceFormDefinition {
   defaultValues: (context: ResourceFormContext) => unknown
   kind: ResourceFormKind
   label: string
+  prepareManifest?: (
+    values: unknown,
+    context: ResourceFormContext,
+  ) => Promise<PreparedResourceManifest>
   renderForm: (props: ResourceFormRendererProps<unknown>) => ReactNode
   scopeMode: ResourceScopeMode
 }
 
 export function defineResourceForm<Values>(
-  definition: Omit<ResourceFormDefinition, 'buildManifest' | 'defaultValues' | 'renderForm'> & {
+  definition: Omit<
+    ResourceFormDefinition,
+    'buildManifest' | 'defaultValues' | 'prepareManifest' | 'renderForm'
+  > & {
     buildManifest: (values: Values) => KubernetesManifest
     defaultValues: (context: ResourceFormContext) => Values
+    prepareManifest?: (
+      values: Values,
+      context: ResourceFormContext,
+    ) => Promise<PreparedResourceManifest>
     renderForm: (props: ResourceFormRendererProps<Values>) => ReactNode
   },
 ): ResourceFormDefinition {
@@ -69,6 +89,9 @@ export function defineResourceForm<Values>(
     ...definition,
     buildManifest: (values) => definition.buildManifest(values as Values),
     defaultValues: definition.defaultValues,
+    prepareManifest: definition.prepareManifest
+      ? (values, context) => definition.prepareManifest!(values as Values, context)
+      : undefined,
     renderForm: (props) =>
       definition.renderForm({ ...props, value: props.value as Values, onChange: props.onChange }),
   }
@@ -106,11 +129,19 @@ export interface WorkloadFormValues extends MetadataFormValues, PodTemplateFormV
 
 export interface JobFormValues extends MetadataFormValues, PodTemplateFormValues {
   activeDeadlineSeconds?: number
+  argsText?: string
   backoffLimit?: number
+  commandText?: string
   completions?: number
+  description?: string
+  imagePolicy?: 'snapshot' | 'follow'
   parallelism?: number
   restartPolicy: 'Never' | 'OnFailure'
+  runtimeSource: 'manual' | 'workload'
   schedule?: string
+  sourceContainer?: string
+  sourceKind: 'Deployment' | 'StatefulSet' | 'DaemonSet'
+  sourceName?: string
   suspend?: boolean
 }
 

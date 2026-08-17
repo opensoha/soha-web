@@ -1,4 +1,8 @@
-import type { ResourceCreateRequest, ResourceCreateScopeDecisionRequest } from './types'
+import type {
+  ResourceCreateRequest,
+  ResourceCreateScopeDecisionRequest,
+  WorkloadSnapshotRequest,
+} from './types'
 
 function normalizeScopeDecision(request: ResourceCreateScopeDecisionRequest) {
   return {
@@ -40,6 +44,13 @@ export const resourceCreationKeys = {
       ...resourceCreationKeys.scopeDecisions(),
       clusterId.trim(),
       normalizeScopeDecision(request),
+    ] as const,
+  workloadSnapshots: () => [...resourceCreationKeys.all, 'workload-snapshot'] as const,
+  workloadSnapshot: (clusterId: string, request?: WorkloadSnapshotRequest) =>
+    [
+      ...resourceCreationKeys.workloadSnapshots(),
+      clusterId.trim(),
+      request ?? null,
     ] as const,
   preflights: () => [...resourceCreationKeys.all, 'preflight'] as const,
   preflight: (clusterId: string, request: ResourceCreateRequest) =>
