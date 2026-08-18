@@ -37,6 +37,23 @@
   padding: 20px;
 }
 
+.soha-workload-snapshot-inheritance {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  width: 100%;
+}
+
+.soha-resource-create-manifest-preview {
+  max-height: 280px;
+  margin: 0;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre;
+}
+
 .soha-resource-create-loading {
   display: grid;
   min-height: 320px;
@@ -73,6 +90,10 @@
 }
 
 @media (max-width: 720px) {
+  .soha-workload-snapshot-inheritance {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .soha-resource-create-toolbar {
     align-items: stretch;
     flex-direction: column;

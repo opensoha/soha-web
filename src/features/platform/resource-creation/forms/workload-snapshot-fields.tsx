@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { Alert, Col, Form, Input, Row, Segmented, Select } from 'antd'
+import { Alert, Checkbox, Col, Form, Input, Row, Segmented, Select } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { workloadQueries } from '@/features/platform/workloads/shared/queries'
 import type { WorkloadKind } from '@/features/platform/workloads/shared/types'
 import { toScopeKey } from '@/types'
 import { resourceCreationQueries } from '../queries'
-import type { WorkloadSnapshotRequest, WorkloadSnapshotSourceKind } from '../types'
+import type {
+  WorkloadSnapshotInheritance,
+  WorkloadSnapshotRequest,
+  WorkloadSnapshotSourceKind,
+} from '../types'
 import { PodTemplateFields } from './field-sections'
-import type { JobFormValues } from './types'
+import { DEFAULT_WORKLOAD_SNAPSHOT_INHERITANCE, type JobFormValues } from './types'
 
 const { TextArea } = Input
 
@@ -34,6 +38,21 @@ const SOURCE_OPTIONS: Array<{
   },
 ]
 
+const INHERITANCE_OPTIONS: Array<{
+  en: string
+  value: WorkloadSnapshotInheritance
+  zh: string
+}> = [
+  { value: 'environment', zh: '环境变量', en: 'Environment variables' },
+  { value: 'storage', zh: '卷与挂载', en: 'Volumes and mounts' },
+  { value: 'resources', zh: '资源请求与限制', en: 'Resource requests and limits' },
+  { value: 'securityContext', zh: '安全上下文', en: 'Security context' },
+  { value: 'scheduling', zh: '运行身份与调度', en: 'Identity and scheduling' },
+  { value: 'initContainers', zh: '初始化容器', en: 'Init containers' },
+  { value: 'templateMetadata', zh: '模板标签与注解', en: 'Template labels and annotations' },
+  { value: 'serviceRuntime', zh: '端口、探针与生命周期', en: 'Ports, probes and lifecycle' },
+]
+
 interface SourceSummary {
   name: string
   namespace: string
@@ -56,6 +75,7 @@ export function WorkloadSnapshotFields({
   const sourceKind = Form.useWatch('sourceKind', form) ?? 'Deployment'
   const sourceName = Form.useWatch('sourceName', form)
   const sourceContainer = Form.useWatch('sourceContainer', form)
+  const inherit = Form.useWatch('inherit', form) ?? DEFAULT_WORKLOAD_SNAPSHOT_INHERITANCE
   const sourceScope = `${namespace?.trim() || ''}/${sourceKind}`
   const previousSourceScope = useRef(sourceScope)
   const previousSourceName = useRef(sourceName)
@@ -88,11 +108,21 @@ export function WorkloadSnapshotFields({
       sourceName: sourceName.trim(),
       targetKind: kind === 'CronJob' && imagePolicy === 'follow' ? 'WorkloadCronJob' : kind,
       targetName: 'snapshot-preview',
+      inherit: [...inherit],
       restartPolicy: 'Never',
       sourceContainer: sourceContainer?.trim() || undefined,
       ...(kind === 'CronJob' ? { schedule: '0 * * * *' } : {}),
     }
-  }, [imagePolicy, kind, namespace, runtimeSource, sourceContainer, sourceKind, sourceName])
+  }, [
+    imagePolicy,
+    inherit,
+    kind,
+    namespace,
+    runtimeSource,
+    sourceContainer,
+    sourceKind,
+    sourceName,
+  ])
   const previewOptions = resourceCreationQueries.workloadSnapshot(clusterId, previewRequest)
   const previewQuery = useQuery({
     ...previewOptions,
@@ -215,6 +245,15 @@ export function WorkloadSnapshotFields({
                     : `Default: ${previewQuery.data.selectedContainer}`
                   : undefined
               }
+            />
+          </Form.Item>
+          <Form.Item label={isChinese ? '继承运行配置' : 'Inherited runtime'} name="inherit">
+            <Checkbox.Group
+              className="soha-workload-snapshot-inheritance"
+              options={INHERITANCE_OPTIONS.map((option) => ({
+                label: isChinese ? option.zh : option.en,
+                value: option.value,
+              }))}
             />
           </Form.Item>
           {sourceListQuery.isError ? (

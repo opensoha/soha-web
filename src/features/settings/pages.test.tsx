@@ -670,6 +670,20 @@ describe('settings ai page rendering', () => {
     }
   })
 
+  it('does not load login role options without the role view permission', async () => {
+    testState.snapshot = {
+      permissionKeys: ['settings.identity.view'],
+      visibleMenuIds: [],
+      visibleMenus: [],
+    }
+
+    const login = await renderWithProviders(<LoginSettingsPage />, '/settings/login')
+
+    expect(login.textContent).toContain('本地账号密码登录')
+    expect(apiGetMock).toHaveBeenCalledWith('/settings/identity')
+    expect(apiGetMock).not.toHaveBeenCalledWith('/access/roles')
+  })
+
   it('renders login settings on /settings/login', async () => {
     const container = await renderWithProviders(<LoginSettingsPage />, '/settings/login')
 

@@ -1,10 +1,14 @@
+/** @vitest-environment jsdom */
+
 import { describe, expect, it } from 'vitest'
 import type { IdentityApplication } from '../shared/types'
 import {
   buildIdentityApplicationInput,
   defaultIdentityApplicationFormValues,
+  IDENTITY_APPLICATION_ICON_MAX_BYTES,
   identityApplicationFormValuesFor,
   identityApplicationTagOptions,
+  readIdentityApplicationIconFile,
 } from './application-form-model'
 
 const application: IdentityApplication = {
@@ -133,5 +137,38 @@ describe('identity application form model', () => {
       providerId: '',
       providerType: 'link',
     })
+  })
+
+  it('converts a supported local icon to a data URL', async () => {
+    const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], 'icon.png', {
+      type: 'image/png',
+    })
+
+    await expect(readIdentityApplicationIconFile(file)).resolves.toBe(
+      'data:image/png;base64,iVBORw==',
+    )
+  })
+
+  it('rejects unsupported or mismatched local icon formats', async () => {
+    await expect(
+      readIdentityApplicationIconFile(new File(['<svg />'], 'icon.svg', { type: 'image/svg+xml' })),
+    ).rejects.toThrow('JPG、PNG、WEBP 或 ICO')
+    await expect(
+      readIdentityApplicationIconFile(new File(['icon'], 'icon.png', { type: 'image/jpeg' })),
+    ).rejects.toThrow('JPG、PNG、WEBP 或 ICO')
+  })
+
+  it('rejects local icons larger than 512KB', async () => {
+    const file = new File([new Uint8Array(IDENTITY_APPLICATION_ICON_MAX_BYTES + 1)], 'icon.png', {
+      type: 'image/png',
+    })
+
+    await expect(readIdentityApplicationIconFile(file)).rejects.toThrow('512KB')
+  })
+
+  it('rejects an empty local icon', async () => {
+    await expect(
+      readIdentityApplicationIconFile(new File([], 'icon.png', { type: 'image/png' })),
+    ).rejects.toThrow('不能为空')
   })
 })

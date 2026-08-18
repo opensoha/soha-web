@@ -18,6 +18,7 @@ const authMocks = vi.hoisted(() => ({ permissions: new Set<string>() }))
 const formLifecycleMocks = vi.hoisted(() => ({
   destroyOnHidden: undefined as boolean | undefined,
   preserve: undefined as boolean | undefined,
+  submit: undefined as ((values: Record<string, unknown>) => void) | undefined,
 }))
 const selectMocks = vi.hoisted(() => ({ setAgentMode: undefined as (() => void) | undefined }))
 const apiGetMock = vi.hoisted(() =>
@@ -51,12 +52,15 @@ const apiGetMock = vi.hoisted(() =>
   }),
 )
 const apiDeleteMock = vi.hoisted(() => vi.fn(async () => ({ data: null })))
+const apiPostMock = vi.hoisted(() =>
+  vi.fn(async (_path: string, _body?: unknown): Promise<{ data: unknown }> => ({ data: {} })),
+)
 
 vi.mock('@/services/api-client', () => ({
   api: {
     delete: apiDeleteMock,
     get: apiGetMock,
-    post: vi.fn(async () => ({ data: {} })),
+    post: apiPostMock,
     put: vi.fn(async () => ({ data: {} })),
   },
 }))
@@ -136,7 +140,16 @@ vi.mock('@/components/admin-table', () => ({
 }))
 vi.mock('antd', async (importOriginal) => {
   const actual = await importOriginal<typeof import('antd')>()
-  const FormMock = ({ children }: { children?: ReactNode }) => <div>{children}</div>
+  const FormMock = ({
+    children,
+    onFinish,
+  }: {
+    children?: ReactNode
+    onFinish?: (values: Record<string, unknown>) => void
+  }) => {
+    formLifecycleMocks.submit = onFinish
+    return <div>{children}</div>
+  }
   FormMock.Item = ({ children }: { children?: ReactNode }) => <div>{children}</div>
   const InputMock = Object.assign(
     (props: InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
@@ -144,7 +157,12 @@ vi.mock('antd', async (importOriginal) => {
       Password: (props: InputHTMLAttributes<HTMLInputElement>) => (
         <input type="password" {...props} />
       ),
-      TextArea: (props: TextareaHTMLAttributes<HTMLTextAreaElement>) => <textarea {...props} />,
+      TextArea: ({
+        autoSize: _autoSize,
+        ...props
+      }: TextareaHTMLAttributes<HTMLTextAreaElement> & { autoSize?: unknown }) => (
+        <textarea {...props} />
+      ),
     },
   )
   const AppMock = Object.assign(({ children }: { children?: ReactNode }) => <>{children}</>, {
@@ -222,6 +240,7 @@ beforeEach(() => {
   ])
   formLifecycleMocks.destroyOnHidden = undefined
   formLifecycleMocks.preserve = undefined
+  formLifecycleMocks.submit = undefined
   selectMocks.setAgentMode = undefined
 })
 afterEach(async () => {
@@ -291,6 +310,77 @@ describe('clusters list page boundaries', () => {
     expect(container.querySelector('input')?.value).toBe('soha-k3s-agent-1')
     expect(container.textContent).not.toContain('Agent Endpoint')
     expect(container.textContent).not.toContain('Agent Token')
+  })
+
+  it('shows and refreshes the Agent apply command after creation', async () => {
+    const command = 'kubectl apply -f https://soha.test/agent.yaml'
+    const refreshedCommand = 'kubectl apply -f https://soha.test/refreshed-agent.yaml'
+    apiPostMock.mockImplementation(async (path: string) => {
+      if (path === '/clusters') return { data: { id: 'cluster-created' } }
+      if (path === '/clusters/cluster-created/agent-installation') {
+        return {
+          data: {
+            clusterId: 'cluster-created',
+            command,
+            expiresAt: '2026-08-17T18:00:00+08:00',
+            manifestUrl: 'https://soha.test/agent.yaml',
+          },
+        }
+      }
+      return { data: {} }
+    })
+
+    const container = await renderPage()
+    const createButton = container.querySelector<HTMLButtonElement>('.soha-clusters-create-button')
+    await act(async () => createButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    await flushAsyncWork()
+    await act(async () => selectMocks.setAgentMode?.())
+    await flushAsyncWork()
+
+    apiGetMock.mockImplementationOnce(() => new Promise(() => {}))
+    await act(async () => {
+      formLifecycleMocks.submit?.({
+        connectionMode: 'agent',
+        name: 'cluster-created',
+        provider: 'standard_kubernetes',
+      })
+    })
+    await flushAsyncWork()
+
+    expect(apiPostMock).toHaveBeenNthCalledWith(
+      1,
+      '/clusters',
+      expect.objectContaining({ connectionMode: 'agent', name: 'cluster-created' }),
+    )
+    expect(apiPostMock).toHaveBeenNthCalledWith(
+      2,
+      '/clusters/cluster-created/agent-installation',
+    )
+    expect(container.textContent).toContain('Agent 安装命令')
+    expect(container.querySelector('textarea')?.value).toBe(command)
+
+    apiPostMock.mockResolvedValueOnce({
+      data: {
+        clusterId: 'cluster-created',
+        command: refreshedCommand,
+        expiresAt: '2026-08-17T19:00:00+08:00',
+        manifestUrl: 'https://soha.test/refreshed-agent.yaml',
+      },
+    })
+    const refreshButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === '刷新命令',
+    )
+    expect(refreshButton).toBeDefined()
+    await act(async () =>
+      refreshButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })),
+    )
+    await flushAsyncWork()
+
+    expect(apiPostMock).toHaveBeenNthCalledWith(
+      3,
+      '/clusters/cluster-created/agent-installation',
+    )
+    expect(container.querySelector('textarea')?.value).toBe(refreshedCommand)
   })
 
   it('loads edit detail on demand and deletes through the capability mutation', async () => {

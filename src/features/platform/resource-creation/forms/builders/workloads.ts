@@ -1,4 +1,9 @@
-import type { JobFormValues, KubernetesManifest, WorkloadFormValues } from '../types'
+import {
+  DEFAULT_WORKLOAD_SNAPSHOT_INHERITANCE,
+  type JobFormValues,
+  type KubernetesManifest,
+  type WorkloadFormValues,
+} from '../types'
 import type { WorkloadSnapshotRequest } from '../../types'
 import { appLabels, buildMetadata, buildPodSpec, compactObject, manifest } from './shared'
 
@@ -106,6 +111,7 @@ export function buildWorkloadSnapshotRequest(
     description: values.description?.trim() || undefined,
     labels: metadata.labels,
     annotations: metadata.annotations,
+    inherit: [...(values.inherit ?? DEFAULT_WORKLOAD_SNAPSHOT_INHERITANCE)],
     command: lines(values.commandText),
     args: lines(values.argsText),
     restartPolicy: values.restartPolicy,

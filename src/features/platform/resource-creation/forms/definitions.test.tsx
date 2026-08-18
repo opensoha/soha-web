@@ -28,6 +28,14 @@ describe('resource form registry', () => {
     expect(namespace?.scopeMode).toBe('cluster')
   })
 
+  it('uses safe workload snapshot defaults for Jobs and CronJobs', () => {
+    for (const kind of ['Job', 'CronJob'] as const) {
+      expect(getResourceFormDefinition(kind)?.defaultValues({ namespace: 'ops' })).toMatchObject({
+        inherit: ['environment', 'storage', 'resources', 'securityContext', 'scheduling'],
+      })
+    }
+  })
+
   it('returns undefined for kinds without a guided form', () => {
     expect(getResourceFormDefinition('ReplicaSet')).toBeUndefined()
   })

@@ -219,6 +219,7 @@ vi.mock('@/components/admin-table', () => ({
                   <div
                     key={`${String(column.key ?? column.dataIndex ?? columnIndex)}-${columnIndex}`}
                     data-testid={`cell-${rowIndex}-${columnIndex}`}
+                    data-column={Array.isArray(column.dataIndex) ? column.dataIndex.join('.') : column.dataIndex}
                   >
                     {content as ReactNode}
                   </div>
@@ -234,6 +235,7 @@ vi.mock('@/components/admin-table', () => ({
 
 let containers: HTMLDivElement[] = []
 let roots: Array<ReturnType<typeof createRoot>> = []
+let currentQueryClient: QueryClient | null = null
 
 function setResponses(responses: Record<string, unknown>) {
   testState.responses = responses
@@ -261,6 +263,7 @@ async function renderWithProviders(node: ReactNode, route = '/workloads/pods') {
       },
     },
   })
+  currentQueryClient = queryClient
 
   await act(async () => {
     root.render(
@@ -275,6 +278,22 @@ async function renderWithProviders(node: ReactNode, route = '/workloads/pods') {
   await flushAsyncWork()
 
   return container
+}
+
+async function rerenderWithProviders(node: ReactNode, route = '/workloads/pods') {
+  const root = roots[roots.length - 1]
+  const queryClient = currentQueryClient
+  if (!root || !queryClient) throw new Error('renderWithProviders must run first')
+  await act(async () => {
+    root.render(
+      <AntdApp>
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={[route]}>{node}</MemoryRouter>
+        </QueryClientProvider>
+      </AntdApp>,
+    )
+  })
+  await flushAsyncWork()
 }
 
 describe('workloads pods page refresh controls', () => {
@@ -362,6 +381,7 @@ describe('workloads pods page refresh controls', () => {
       }
     })
     roots = []
+    currentQueryClient = null
     for (const container of containers) {
       container.remove()
     }
@@ -399,6 +419,64 @@ describe('workloads pods page refresh controls', () => {
     await flushAsyncWork()
 
     expect(apiGetMock.mock.calls.filter(([path]) => path === podListPath)).toHaveLength(2)
+  })
+
+  it('renders pod phase and ready container count in separate columns', async () => {
+    const container = await renderWithProviders(<WorkloadsPodsPage />)
+    await act(async () => {
+      vi.advanceTimersByTime(0)
+      await Promise.resolve()
+    })
+    await flushAsyncWork()
+
+    expect(container.querySelector('[data-column="phase"]')?.textContent).toBe('Running')
+    expect(container.querySelector('[data-column="readyContainers"]')?.textContent).toBe('Ready 1/1')
+  })
+
+  it('clears the previous cluster node filter when the cluster changes', async () => {
+    const container = await renderWithProviders(<WorkloadsPodsPage />)
+    const nodeSelect = Array.from(container.querySelectorAll('.ant-select')).find((item) =>
+      item.textContent?.includes('全部节点'),
+    )
+    expect(nodeSelect).toBeDefined()
+    await act(async () => {
+      nodeSelect
+        ?.querySelector('[role="combobox"]')
+        ?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      vi.runOnlyPendingTimers()
+    })
+    await flushAsyncWork()
+    const nodeOption = Array.from(document.querySelectorAll('[role="option"]')).find(
+      (item) => item.textContent === 'node-a',
+    )
+    expect(nodeOption).toBeDefined()
+    await act(async () => nodeOption?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(container.querySelector('[data-testid="table-rows"]')?.textContent).toBe('1')
+
+    testState.scope.clusterId = 'cluster-b'
+    testState.scope.namespace = null
+    setResponses({
+      '/clusters/cluster-b/workloads/pods': [
+        {
+          name: 'worker-b',
+          namespace: 'default',
+          phase: 'Running',
+          readyContainers: '1/1',
+          restarts: 0,
+          podIp: '10.0.1.10',
+          nodeName: 'node-b',
+          ageSeconds: 60,
+        },
+      ],
+    })
+    await rerenderWithProviders(<WorkloadsPodsPage />)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    await flushAsyncWork()
+
+    expect(container.querySelector('[data-testid="table-rows"]')?.textContent).toBe('1')
+    expect(container.textContent).toContain('worker-b')
   })
 
   it('renders pod CPU and memory resources as compact progress markers', async () => {

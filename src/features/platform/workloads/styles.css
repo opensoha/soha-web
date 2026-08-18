@@ -213,17 +213,14 @@
   padding: 10px 20px 12px;
 }
 
-.soha-related-pod-list.ant-list {
-  padding: 0;
+.soha-related-pod-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.soha-related-pod-list .ant-list-empty-text {
-  padding: 6px 0;
-}
-
-.soha-related-pod-item.ant-list-item {
+.soha-related-pod-item {
   display: block;
-  align-items: center;
   padding: 5px 0;
 }
 
@@ -394,12 +391,15 @@
 }
 
 @media (max-width: 768px) {
-  .soha-related-pod-item.ant-list-item {
-    grid-template-columns: minmax(0, 1fr);
+  .soha-related-pod-line {
+    flex-wrap: wrap;
+    overflow: visible;
+    white-space: normal;
   }
 
-  .soha-related-pod-meta {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .soha-related-pod-name.ant-btn {
+    flex: 1 1 100%;
+    max-width: 100%;
   }
 }
 
@@ -492,20 +492,17 @@
 }
 
 .soha-pod-table-meta.ant-space,
-.soha-pod-table-runtime.ant-space,
 .soha-pod-table-resource-summary.ant-space {
   max-width: 100%;
   overflow: hidden;
 }
 
 .soha-pod-table-meta.ant-space .ant-space-item,
-.soha-pod-table-runtime.ant-space .ant-space-item,
 .soha-pod-table-resource-summary.ant-space .ant-space-item {
   min-width: 0;
 }
 
 .soha-pod-table-meta .ant-tag,
-.soha-pod-table-runtime .ant-tag,
 .soha-pod-table-resource-summary .ant-tag {
   max-width: 96px;
   overflow: hidden;

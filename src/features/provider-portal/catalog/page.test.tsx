@@ -27,6 +27,8 @@ const permissionMocks = vi.hoisted(() => ({
       'identity.applications.view',
       'identity.portal.view',
       'observe.monitoring.view',
+      'workbench.home.view',
+      'workbench.monitoring.view',
       'workspace.resource.view',
     ],
     visibleMenuIds: ['home-workbench', 'monitoring-workbench', 'monitoring-workbench-overview'],
@@ -172,6 +174,8 @@ beforeEach(() => {
     'identity.applications.view',
     'identity.portal.view',
     'observe.monitoring.view',
+    'workbench.home.view',
+    'workbench.monitoring.view',
     'workspace.resource.view',
   ]
   usePreferencesStore.setState({ localeCode: 'en_US' })

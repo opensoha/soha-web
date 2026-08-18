@@ -17,14 +17,23 @@ import {
   getRouteWorkbenchId,
   getRouteWorkspace,
   routeMeta,
+  WORKBENCH_ENTRY_PERMISSION_KEYS,
 } from './meta'
 
-function buildSnapshot(overrides?: Partial<PermissionSnapshot>): PermissionSnapshot {
+const workbenchEntryPermissions = Object.values(WORKBENCH_ENTRY_PERMISSION_KEYS)
+
+function buildSnapshot(
+  overrides?: Partial<PermissionSnapshot>,
+  includeWorkbenchEntries = true,
+): PermissionSnapshot {
   return {
-    permissionKeys: [],
     visibleMenuIds: [],
     visibleMenus: [],
     ...overrides,
+    permissionKeys: [
+      ...(includeWorkbenchEntries ? workbenchEntryPermissions : []),
+      ...(overrides?.permissionKeys ?? []),
+    ],
   }
 }
 
@@ -91,7 +100,7 @@ describe('access route authorization', () => {
     ).toContain('identity-software-storage')
   })
 
-  it('requires the enabled internal workbench menu binding for the portal', () => {
+  it('keeps the portal route authorized when its navigation menu is hidden', () => {
     const snapshot = buildSnapshot({
       permissionKeys: ['identity.portal.view'],
       visibleMenuIds: ['home-workbench'],
@@ -105,7 +114,7 @@ describe('access route authorization', () => {
         getRoute('provider-portal'),
         buildSnapshot({ permissionKeys: ['identity.portal.view'] }),
       ),
-    ).toBe(false)
+    ).toBe(true)
     expect(findLandingPath(snapshot)).toBe('/portal')
   })
 
@@ -331,7 +340,7 @@ describe('access route authorization', () => {
     expect(settingsNav.find((item) => item.id === 'access-users')?.children).toBeUndefined()
   })
 
-  it('does not expose settings center without a navigable settings route', () => {
+  it('exposes settings center from an exact permission without requiring its menu', () => {
     const resourceOnlySnapshot = buildSnapshot({
       permissionKeys: ['workspace.resource.view', 'overview.view'],
       visibleMenuIds: ['dashboard'],
@@ -345,8 +354,10 @@ describe('access route authorization', () => {
 
     expect(canAccessRoute(getRoute('system'), resourceOnlySnapshot)).toBe(false)
     expect(getAccessibleWorkbenchIds(resourceOnlySnapshot)).not.toContain('settings')
-    expect(getAccessibleWorkbenchIds(hiddenSettingsOnlySnapshot)).not.toContain('settings')
-    expect(findFirstAccessiblePathForWorkbench('settings', hiddenSettingsOnlySnapshot)).toBeNull()
+    expect(getAccessibleWorkbenchIds(hiddenSettingsOnlySnapshot)).toContain('settings')
+    expect(findFirstAccessiblePathForWorkbench('settings', hiddenSettingsOnlySnapshot)).toBe(
+      '/settings/overview',
+    )
   })
 
   it('allows account utilities without exposing the settings workbench', () => {
@@ -359,14 +370,14 @@ describe('access route authorization', () => {
     expect(findFirstAccessiblePathForWorkbench('settings', snapshot)).toBeNull()
   })
 
-  it('keeps user-management routes blocked when their menu binding is missing', () => {
+  it('keeps user-management routes authorized when their menu binding is missing', () => {
     const snapshot = buildSnapshot({
       permissionKeys: ['access.roles.view'],
       visibleMenuIds: [],
       visibleMenus: [],
     })
 
-    expect(canAccessRoute(getRoute('access-roles'), snapshot)).toBe(false)
+    expect(canAccessRoute(getRoute('access-roles'), snapshot)).toBe(true)
   })
 
   it('allows scope-grants direct routing from its dedicated view permission', () => {
@@ -548,20 +559,62 @@ describe('access route authorization', () => {
     expect(getRouteWorkspace(getRoute('about'))).toBeNull()
   })
 
-  it('requires workspace permissions for business routes', () => {
-    const appSnapshot = buildSnapshot({
-      permissionKeys: ['delivery.applications.view'],
-      visibleMenuIds: ['builds'],
-      visibleMenus: [{ id: 'builds', path: '/applications' }],
-    })
-    const resourceSnapshot = buildSnapshot({
-      permissionKeys: ['platform.pods.view'],
-      visibleMenuIds: ['workloads'],
-      visibleMenus: [{ id: 'workloads', path: '/workloads' }],
-    })
+  it('requires independent workbench entries for business routes', () => {
+    const appSnapshot = buildSnapshot(
+      {
+        permissionKeys: ['delivery.applications.view'],
+        visibleMenuIds: ['builds'],
+        visibleMenus: [{ id: 'builds', path: '/applications' }],
+      },
+      false,
+    )
+    const resourceSnapshot = buildSnapshot(
+      {
+        permissionKeys: ['platform.pods.view'],
+        visibleMenuIds: ['workloads'],
+        visibleMenus: [{ id: 'workloads', path: '/workloads' }],
+      },
+      false,
+    )
 
     expect(canAccessRoute(getRoute('applications'), appSnapshot)).toBe(false)
     expect(canAccessRoute(getRoute('workloads'), resourceSnapshot)).toBe(false)
+    expect(
+      canAccessRoute(
+        getRoute('applications'),
+        buildSnapshot(
+          {
+            ...appSnapshot,
+            permissionKeys: ['workbench.delivery.view', 'delivery.applications.view'],
+          },
+          false,
+        ),
+      ),
+    ).toBe(true)
+    expect(
+      canAccessRoute(
+        getRoute('workloads'),
+        buildSnapshot(
+          {
+            ...resourceSnapshot,
+            permissionKeys: ['workbench.platform.view', 'platform.pods.view'],
+          },
+          false,
+        ),
+      ),
+    ).toBe(true)
+    expect(
+      canAccessRoute(
+        getRoute('workloads'),
+        buildSnapshot(
+          {
+            ...resourceSnapshot,
+            permissionKeys: ['workspace.resource.view', 'platform.pods.view'],
+          },
+          false,
+        ),
+      ),
+    ).toBe(false)
   })
 
   it('filters business and system sidebar trees by workspace', () => {
@@ -901,7 +954,7 @@ describe('access route authorization', () => {
       'execution-tasks',
     ])
     expect(canAccessRoute(getRoute('release-board'), testerSnapshot)).toBe(false)
-    expect(canAccessRoute(getRoute('delivery-onboarding'), testerSnapshot)).toBe(false)
+    expect(canAccessRoute(getRoute('delivery-onboarding'), testerSnapshot)).toBe(true)
     expect(canAccessRoute(getRoute('build-templates'), testerSnapshot)).toBe(false)
 
     expect(readonlyNav.map((item) => item.id)).toEqual([
@@ -913,8 +966,8 @@ describe('access route authorization', () => {
       'workflows',
       'releases',
     ])
-    expect(canAccessRoute(getRoute('release-board'), readonlySnapshot)).toBe(false)
-    expect(canAccessRoute(getRoute('application-environments'), readonlySnapshot)).toBe(false)
+    expect(canAccessRoute(getRoute('release-board'), readonlySnapshot)).toBe(true)
+    expect(canAccessRoute(getRoute('application-environments'), readonlySnapshot)).toBe(true)
     expect(canAccessRoute(getRoute('workflow-templates'), readonlySnapshot)).toBe(false)
 
     expect(operatorNav.map((item) => item.id)).toEqual([
@@ -1160,24 +1213,27 @@ describe('access route authorization', () => {
     expect(canAccessRoute(getRoute('ai-workbench-evaluations'), viewSnapshot)).toBe(true)
   })
 
-  it('requires resource workspace, AI Gateway view permission, and menu binding', () => {
+  it('requires AI workbench entry and AI Gateway view permission independently of menus', () => {
     const route = getRoute('ai-gateway-manifest')
     const parentRoute = getRoute('ai-workbench')
-    const allowedSnapshot = buildSnapshot({
-      permissionKeys: ['workspace.resource.view', 'ai.gateway.view'],
-      visibleMenuIds: ['ai-workbench', 'ai-gateway-manifest'],
-      visibleMenus: [
-        {
-          id: 'ai-workbench',
-          path: '/ai-workbench',
-        },
-        {
-          id: 'ai-gateway-manifest',
-          parentId: 'ai-workbench',
-          path: '/ai-gateway/manifest',
-        },
-      ],
-    })
+    const allowedSnapshot = buildSnapshot(
+      {
+        permissionKeys: ['workbench.ai.view', 'ai.gateway.view'],
+        visibleMenuIds: ['ai-workbench', 'ai-gateway-manifest'],
+        visibleMenus: [
+          {
+            id: 'ai-workbench',
+            path: '/ai-workbench',
+          },
+          {
+            id: 'ai-gateway-manifest',
+            parentId: 'ai-workbench',
+            path: '/ai-gateway/manifest',
+          },
+        ],
+      },
+      false,
+    )
 
     expect(getRouteWorkspace(route)).toBe('resource')
     expect(getRouteWorkbenchId(route)).toBe('ai')
@@ -1185,13 +1241,38 @@ describe('access route authorization', () => {
     expect(canAccessRoute(route, allowedSnapshot)).toBe(true)
     expect(parentRoute.redirectTo).toBe('/ai-workbench/overview')
     expect(canAccessRoute(parentRoute, allowedSnapshot)).toBe(true)
-    expect(findFirstAccessiblePathForWorkbench('ai', allowedSnapshot)).toBe('/ai-gateway/manifest')
+    expect(findFirstAccessiblePathForWorkbench('ai', allowedSnapshot)).toBe(
+      '/ai-workbench/overview',
+    )
 
     expect(
       canAccessRoute(
         route,
+        buildSnapshot(
+          {
+            permissionKeys: ['ai.gateway.view'],
+            visibleMenuIds: ['ai-workbench', 'ai-gateway-manifest'],
+            visibleMenus: [
+              {
+                id: 'ai-workbench',
+                path: '/ai-workbench',
+              },
+              {
+                id: 'ai-gateway-manifest',
+                parentId: 'ai-workbench',
+                path: '/ai-gateway/manifest',
+              },
+            ],
+          },
+          false,
+        ),
+      ),
+    ).toBe(false)
+    expect(
+      canAccessRoute(
+        route,
         buildSnapshot({
-          permissionKeys: ['ai.gateway.view'],
+          permissionKeys: ['workbench.ai.view'],
           visibleMenuIds: ['ai-workbench', 'ai-gateway-manifest'],
           visibleMenus: [
             {
@@ -1211,32 +1292,12 @@ describe('access route authorization', () => {
       canAccessRoute(
         route,
         buildSnapshot({
-          permissionKeys: ['workspace.resource.view'],
-          visibleMenuIds: ['ai-workbench', 'ai-gateway-manifest'],
-          visibleMenus: [
-            {
-              id: 'ai-workbench',
-              path: '/ai-workbench',
-            },
-            {
-              id: 'ai-gateway-manifest',
-              parentId: 'ai-workbench',
-              path: '/ai-gateway/manifest',
-            },
-          ],
-        }),
-      ),
-    ).toBe(false)
-    expect(
-      canAccessRoute(
-        route,
-        buildSnapshot({
-          permissionKeys: ['workspace.resource.view', 'ai.gateway.view'],
+          permissionKeys: ['workbench.ai.view', 'ai.gateway.view'],
           visibleMenuIds: [],
           visibleMenus: [],
         }),
       ),
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('allows AI Gateway token routing from its exact view permission', () => {
@@ -1260,7 +1321,7 @@ describe('access route authorization', () => {
 
     expect(canAccessRoute(tokenRoute, snapshot)).toBe(true)
     expect(canAccessRoute(parentRoute, snapshot)).toBe(true)
-    expect(findFirstAccessiblePathForWorkbench('ai', snapshot)).toBe('/ai-gateway/tokens')
+    expect(findFirstAccessiblePathForWorkbench('ai', snapshot)).toBe('/ai-workbench/overview')
     expect(canAccessRoute(getRoute('ai-gateway-manifest'), snapshot)).toBe(false)
   })
 
@@ -1314,7 +1375,7 @@ describe('access route authorization', () => {
     ).toBe(false)
   })
 
-  it('requires virtualization workspace permission, route permission, and menu binding', () => {
+  it('requires virtualization workbench entry and route permission independently of menus', () => {
     const route = getRoute('virtualization-workbench-vms')
     const allowedSnapshot = buildSnapshot({
       permissionKeys: ['workspace.resource.view', 'virtualization.vms.view'],
@@ -1341,7 +1402,7 @@ describe('access route authorization', () => {
           visibleMenus: [],
         }),
       ),
-    ).toBe(false)
+    ).toBe(true)
     expect(
       canAccessRoute(
         route,
@@ -1381,7 +1442,7 @@ describe('access route authorization', () => {
     expect(canAccessRoute(route, snapshot)).toBe(true)
   })
 
-  it('requires Docker workspace permission, route permission, and menu binding', () => {
+  it('requires Docker workbench entry and route permission independently of menus', () => {
     const route = getRoute('docker-workbench-projects')
     const allowedSnapshot = buildSnapshot({
       permissionKeys: ['workspace.resource.view', 'docker.projects.view'],
@@ -1408,7 +1469,7 @@ describe('access route authorization', () => {
           visibleMenus: [],
         }),
       ),
-    ).toBe(false)
+    ).toBe(true)
     expect(
       canAccessRoute(
         route,

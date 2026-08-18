@@ -6,7 +6,10 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppLayout } from './app-layout'
+import { WORKBENCH_ENTRY_PERMISSION_KEYS } from '@/routes/meta'
 import type { PermissionSnapshot } from '@/types'
+
+const workbenchEntryPermissions = Object.values(WORKBENCH_ENTRY_PERMISSION_KEYS)
 
 const testState = vi.hoisted(() => ({
   auth: {
@@ -175,6 +178,10 @@ async function renderWithProviders(route: string, snapshotOverrides?: Partial<Pe
   testState.snapshot = {
     ...testState.snapshot,
     ...snapshotOverrides,
+    permissionKeys: [
+      ...workbenchEntryPermissions,
+      ...(snapshotOverrides?.permissionKeys ?? testState.snapshot.permissionKeys),
+    ],
   }
 
   const container = document.createElement('div')

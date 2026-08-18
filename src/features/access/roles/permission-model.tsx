@@ -29,7 +29,8 @@ const PERMISSION_DOMAIN_WORKBENCH: Record<string, string> = {
   settings: 'settings',
   system: 'settings',
   virtualization: 'compute',
-  workspace: 'platform',
+  workbench: 'unknown',
+  workspace: 'unknown',
 }
 
 const ROUTE_PERMISSION_OWNERS: Record<string, string> = {
@@ -111,8 +112,14 @@ const ROUTE_PERMISSION_OWNERS: Record<string, string> = {
 
 const PERMISSION_WORKBENCH_OWNERS: Record<string, string> = {
   'platform.resource-creation.use': 'platform',
-  'workspace.application.view': 'delivery',
-  'workspace.resource.view': 'platform',
+  'workbench.ai.view': 'ai',
+  'workbench.compute.view': 'compute',
+  'workbench.delivery.view': 'delivery',
+  'workbench.home.view': 'home',
+  'workbench.monitoring.view': 'monitoring',
+  'workbench.platform.view': 'platform',
+  'workbench.security.view': 'security',
+  'workbench.settings.view': 'settings',
 }
 
 type RolePermissionTreeNode = DataNode & { children?: RolePermissionTreeNode[] }
@@ -121,6 +128,8 @@ type Translate = (key: string, fallback?: string) => string
 export function normalizePermissionKeys(value: unknown) {
   return toStringArray(value).sort((left, right) => left.localeCompare(right))
 }
+
+export const normalizeRolePermissionKeys = normalizePermissionKeys
 
 function permissionTreeKey(permissionKey: string) {
   return `permission:${permissionKey}`

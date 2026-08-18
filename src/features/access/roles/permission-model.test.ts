@@ -2,7 +2,7 @@ import type { PermissionCatalog, PermissionDefinition } from '@opensoha/contract
 import permissionCatalogArtifact from '@opensoha/contracts/auth/permission-catalog.json'
 import type { DataNode } from 'antd/es/tree'
 import { describe, expect, it } from 'vitest'
-import { buildRolePermissionTreeData } from './permission-model'
+import { buildRolePermissionTreeData, normalizeRolePermissionKeys } from './permission-model'
 
 const resourceCreationPermission = {
   key: 'platform.resource-creation.use',
@@ -17,11 +17,38 @@ const resourceCreationPermission = {
   assignable: true,
 } satisfies PermissionDefinition
 
+const workbenchPermissions = [
+  ['ai', '访问 AI 工作台'],
+  ['compute', '访问计算资源工作台'],
+  ['delivery', '访问应用交付工作台'],
+  ['home', '访问应用门户'],
+  ['monitoring', '访问可观测与值班工作台'],
+  ['platform', '访问 k8s工作台'],
+  ['security', '访问身份与安全工作台'],
+  ['settings', '访问设置中心'],
+].map(
+  ([workbench, displayName]) =>
+    ({
+      key: `workbench.${workbench}.view`,
+      domain: 'workbench',
+      resource: workbench,
+      action: 'view',
+      displayName,
+      riskLevel: 'read',
+      scopeKinds: ['tenant', 'workspace'],
+      approvalPolicy: 'never',
+      status: 'active',
+      assignable: true,
+    }) satisfies PermissionDefinition,
+)
+
 const definitions = [
   ...(permissionCatalogArtifact as PermissionCatalog).permissions.filter(
-    (permission) => permission.key !== resourceCreationPermission.key,
+    (permission) =>
+      permission.key !== resourceCreationPermission.key && !permission.key.startsWith('workbench.'),
   ),
   resourceCreationPermission,
+  ...workbenchPermissions,
 ]
 
 function nodePath(nodes: DataNode[], targetKey: string, parents: string[] = []): string[] {
@@ -50,6 +77,19 @@ function findNode(nodes: DataNode[], targetKey: string): DataNode | undefined {
 }
 
 describe('role permission tree model', () => {
+  it('normalizes role permissions without inferring workbench entry access', () => {
+    expect(normalizeRolePermissionKeys(['platform.pods.view'])).toEqual(['platform.pods.view'])
+    expect(normalizeRolePermissionKeys(['docker.projects.view'])).toEqual(['docker.projects.view'])
+    expect(normalizeRolePermissionKeys(['workspace.resource.view', 'platform.pods.view'])).toEqual([
+      'platform.pods.view',
+      'workspace.resource.view',
+    ])
+    expect(normalizeRolePermissionKeys(['identity.portal.view'])).toEqual(['identity.portal.view'])
+    expect(normalizeRolePermissionKeys(['workspace.application.view'])).toEqual([
+      'workspace.application.view',
+    ])
+  })
+
   it('places sensitive reads under their owning menus', () => {
     const tree = buildRolePermissionTreeData(definitions)
     expect(nodePath(tree, 'permission:platform.configuration.secret-data.view')).toContain(
@@ -123,8 +163,14 @@ describe('role permission tree model', () => {
 
   it.each([
     ['platform.resource-creation.use', 'workbench:platform'],
-    ['workspace.resource.view', 'workbench:platform'],
-    ['workspace.application.view', 'workbench:delivery'],
+    ['workbench.home.view', 'workbench:home'],
+    ['workbench.platform.view', 'workbench:platform'],
+    ['workbench.compute.view', 'workbench:compute'],
+    ['workbench.delivery.view', 'workbench:delivery'],
+    ['workbench.ai.view', 'workbench:ai'],
+    ['workbench.monitoring.view', 'workbench:monitoring'],
+    ['workbench.settings.view', 'workbench:settings'],
+    ['workbench.security.view', 'workbench:security'],
   ])('places %s on its workbench entry', (permissionKey, workbenchID) => {
     const path = nodePath(buildRolePermissionTreeData(definitions), `permission:${permissionKey}`)
     expect(path).toContain(workbenchID)
@@ -137,6 +183,15 @@ describe('role permission tree model', () => {
     expect(treeKeys((platform?.children ?? []) as DataNode[])).not.toContain(
       'permissions:workspace',
     )
+  })
+
+  it('keeps legacy workspace scopes outside workbench entries', () => {
+    const tree = buildRolePermissionTreeData(definitions)
+    for (const permissionKey of ['workspace.resource.view', 'workspace.application.view']) {
+      const path = nodePath(tree, `permission:${permissionKey}`)
+      expect(path).toContain('workbench:unknown')
+      expect(path.some((key) => key.startsWith('entry:'))).toBe(false)
+    }
   })
 
   it.each([

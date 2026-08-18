@@ -6,7 +6,9 @@ import { StepForm } from './step-form'
 import type { StepFormStep } from './step-form'
 
 interface StepFormModalProps<Values> {
+  contentMaxWidth?: number | string
   current: number
+  disabled?: FormProps<Values>['disabled']
   form: FormInstance<Values>
   initialValues?: FormProps<Values>['initialValues']
   loading?: boolean
@@ -21,7 +23,9 @@ interface StepFormModalProps<Values> {
 }
 
 export function StepFormModal<Values>({
+  contentMaxWidth,
   current,
+  disabled,
   form,
   initialValues,
   loading,
@@ -49,7 +53,9 @@ export function StepFormModal<Values>({
       onCancel={onClose}
     >
       <StepForm
+        contentMaxWidth={contentMaxWidth}
         current={current}
+        disabled={disabled}
         form={form}
         initialValues={initialValues}
         loading={loading}

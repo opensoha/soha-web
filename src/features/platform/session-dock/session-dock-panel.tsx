@@ -143,11 +143,16 @@ export function RealtimeSessionDockPanel({
   const handleResizePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (maximized || event.button !== 0) return
     event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
     resizeRef.current = {
       pointerId: event.pointerId,
       startHeight: currentDockHeight(),
       startY: event.clientY,
     }
+  }
+
+  const handleResizePointerEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (resizeRef.current?.pointerId === event.pointerId) resizeRef.current = null
   }
 
   const handleResizeKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -227,6 +232,7 @@ export function RealtimeSessionDockPanel({
           role="separator"
           tabIndex={0}
           onKeyDown={handleResizeKeyDown}
+          onLostPointerCapture={handleResizePointerEnd}
           onPointerDown={handleResizePointerDown}
         />
       ) : null}

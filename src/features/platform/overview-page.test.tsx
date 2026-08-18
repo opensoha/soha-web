@@ -8,6 +8,8 @@ import { I18nProvider } from '@/i18n'
 import { OverviewPage } from './overview-page'
 
 const testState = vi.hoisted(() => ({
+  permissionKeys: ['platform.clusters.view', 'observe.monitoring.view', 'platform.pods.view'],
+  queryEnabled: {} as Record<string, boolean | undefined>,
   clusters: {
     data: [
       {
@@ -28,11 +30,22 @@ const testState = vi.hoisted(() => ({
 
 vi.mock('@tanstack/react-query', () => ({
   queryOptions: (options: unknown) => options,
-  useQuery: (options: { queryKey: readonly unknown[] }) => {
+  useQuery: (options: { enabled?: boolean; queryKey: readonly unknown[] }) => {
+    testState.queryEnabled[String(options.queryKey[0])] = options.enabled
     if (options.queryKey[0] === 'platform') return testState.clusters
     if (options.queryKey[0] === 'monitoring-summary') return testState.summary
     return testState.workload
   },
+}))
+
+vi.mock('@/features/auth', () => ({
+  hasPermission: (snapshot: { permissionKeys?: string[] } | undefined, permission: string) =>
+    snapshot?.permissionKeys?.includes(permission) ?? false,
+  usePermissionSnapshot: () => ({
+    data: { data: { permissionKeys: testState.permissionKeys } },
+    isError: false,
+    isLoading: false,
+  }),
 }))
 
 vi.mock('@/stores/platform-scope-store', () => ({
@@ -81,6 +94,12 @@ describe('OverviewPage error states', () => {
   })
 
   beforeEach(() => {
+    testState.permissionKeys = [
+      'platform.clusters.view',
+      'observe.monitoring.view',
+      'platform.pods.view',
+    ]
+    testState.queryEnabled = {}
     testState.clusters.isError = false
     testState.summary.isError = false
     testState.workload.isError = false
@@ -105,5 +124,18 @@ describe('OverviewPage error states', () => {
 
     expect(container.querySelector('.soha-overview-runtime-card .is-error')).not.toBeNull()
     expect(container.textContent).not.toContain('No workload runtime summary for the platform')
+  })
+
+  it('disables and masks auxiliary data without its exact read permissions', async () => {
+    testState.permissionKeys = []
+    await renderPage()
+
+    expect(testState.queryEnabled).toEqual({
+      platform: false,
+      'monitoring-summary': false,
+      'overview-workload': false,
+    })
+    expect(container.querySelectorAll('.is-no-permission')).toHaveLength(3)
+    expect(container.textContent).not.toContain('Cluster A')
   })
 })

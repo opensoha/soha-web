@@ -1,22 +1,25 @@
 /** @vitest-environment jsdom */
 
-import { act } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createRoot } from "react-dom/client";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { App } from "antd";
-import { LoginPage } from "./login-page";
-import { fetchLoginOptions, fetchPermissionSnapshot, restoreAuthSession } from "@/features/auth/auth-api";
-import { authKeys } from "@/features/auth/keys";
-import { useAuthStore } from "@/stores/auth-store";
-import type { User } from "@/types";
+import { act } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { createRoot } from 'react-dom/client'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { App } from 'antd'
+import { LoginPage } from './login-page'
+import {
+  fetchLoginOptions,
+  fetchPermissionSnapshot,
+  restoreAuthSession,
+} from '@/features/auth/auth-api'
+import { authKeys } from '@/features/auth/keys'
+import { useAuthStore } from '@/stores/auth-store'
+import type { User } from '@/types'
 
-vi.mock("@/features/auth/auth-api", async () => {
-  const actual =
-    await vi.importActual<typeof import("@/features/auth/auth-api")>(
-      "@/features/auth/auth-api",
-    );
+vi.mock('@/features/auth/auth-api', async () => {
+  const actual = await vi.importActual<typeof import('@/features/auth/auth-api')>(
+    '@/features/auth/auth-api',
+  )
   return {
     ...actual,
     fetchAuthProviders: vi.fn(async () => []),
@@ -27,65 +30,65 @@ vi.mock("@/features/auth/auth-api", async () => {
       visibleMenus: [],
     })),
     loginWithPassword: vi.fn(),
-    restoreAuthSession: vi.fn(async () => "unauthenticated"),
-  };
-});
+    restoreAuthSession: vi.fn(async () => 'unauthenticated'),
+  }
+})
 
-vi.mock("@/stores/preferences-store", () => {
+vi.mock('@/stores/preferences-store', () => {
   const state = {
-    currentWorkspace: "resource",
+    currentWorkspace: 'resource',
     setThemeMode: vi.fn(),
-    themeMode: "light",
-  };
+    themeMode: 'light',
+  }
   return {
     usePreferencesStore: Object.assign(
       (selector: (value: typeof state) => unknown) => selector(state),
       { getState: () => state },
     ),
-  };
-});
+  }
+})
 
-vi.mock("@/utils/branding", () => ({
+vi.mock('@/utils/branding', () => ({
   applyBrandingSettings: vi.fn(),
   persistBrandingSettings: vi.fn(),
   readStoredBrandingSettings: () => ({
-    appTitle: "Soha",
-    collapsedLogoUrl: "",
-    expandedLogoUrl: "",
-    faviconUrl: "",
-    loginLogoUrl: "",
-    sidebarTitle: "Soha",
-    slogan: "让平台协作更简单",
+    appTitle: 'Soha',
+    collapsedLogoUrl: '',
+    expandedLogoUrl: '',
+    faviconUrl: '',
+    loginLogoUrl: '',
+    sidebarTitle: 'Soha',
+    slogan: '让平台协作更简单',
   }),
-}));
+}))
 
-let containers: HTMLDivElement[] = [];
-let roots: Array<ReturnType<typeof createRoot>> = [];
+let containers: HTMLDivElement[] = []
+let roots: Array<ReturnType<typeof createRoot>> = []
 
 const user: User = {
-  userId: "user-1",
-  userName: "opensoha",
-  email: "opensoha@soha.local",
+  userId: 'user-1',
+  userName: 'opensoha',
+  email: 'opensoha@soha.local',
   roles: [],
   teams: [],
   projects: [],
   tags: [],
-};
+}
 
 async function flushReact() {
   await act(async () => {
-    await Promise.resolve();
-    await Promise.resolve();
-  });
+    await Promise.resolve()
+    await Promise.resolve()
+  })
 }
 
 async function renderLoginPage(options: { prefetchLoginOptions?: boolean } = {}) {
-  const container = document.createElement("div");
-  document.body.appendChild(container);
-  containers.push(container);
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  containers.push(container)
 
-  const root = createRoot(container);
-  roots.push(root);
+  const root = createRoot(container)
+  roots.push(root)
 
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -93,23 +96,21 @@ async function renderLoginPage(options: { prefetchLoginOptions?: boolean } = {})
         retry: false,
       },
     },
-  });
+  })
 
   if (options.prefetchLoginOptions) {
     await queryClient.prefetchQuery({
       queryKey: authKeys.loginOptions(),
       queryFn: fetchLoginOptions,
       staleTime: 60_000,
-    });
+    })
   }
 
   await act(async () => {
     root.render(
       <QueryClientProvider client={queryClient}>
         <App>
-          <MemoryRouter
-            initialEntries={["/login"]}
-          >
+          <MemoryRouter initialEntries={['/login']}>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/" element={<div>landing page</div>} />
@@ -118,15 +119,15 @@ async function renderLoginPage(options: { prefetchLoginOptions?: boolean } = {})
           </MemoryRouter>
         </App>
       </QueryClientProvider>,
-    );
-  });
+    )
+  })
 
-  await flushReact();
+  await flushReact()
 
-  return container;
+  return container
 }
 
-describe("login page", () => {
+describe('login page', () => {
   beforeAll(() => {
     class ResizeObserverMock {
       observe() {}
@@ -134,11 +135,11 @@ describe("login page", () => {
       disconnect() {}
     }
 
-    Object.defineProperty(window, "matchMedia", {
+    Object.defineProperty(window, 'matchMedia', {
       writable: true,
       value: vi.fn().mockImplementation(() => ({
         matches: false,
-        media: "",
+        media: '',
         onchange: null,
         addListener: vi.fn(),
         removeListener: vi.fn(),
@@ -146,9 +147,9 @@ describe("login page", () => {
         removeEventListener: vi.fn(),
         dispatchEvent: vi.fn(),
       })),
-    });
+    })
 
-    Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
+    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
       configurable: true,
       value: vi.fn(() => ({
         arc: vi.fn(),
@@ -164,127 +165,130 @@ describe("login page", () => {
         setTransform: vi.fn(),
         stroke: vi.fn(),
       })),
-    });
+    })
 
-    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-    vi.stubGlobal("ResizeObserver", ResizeObserverMock);
-    vi.stubGlobal("requestAnimationFrame", vi.fn(() => 1));
-    vi.stubGlobal("cancelAnimationFrame", vi.fn());
-  });
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+    vi.stubGlobal('ResizeObserver', ResizeObserverMock)
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 1),
+    )
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+  })
 
   beforeEach(() => {
-    document.documentElement.dataset.themeMode = "light";
+    document.documentElement.dataset.themeMode = 'light'
     vi.mocked(fetchLoginOptions).mockResolvedValue({
       verification: { sliderEnabled: false },
-    });
+    })
     vi.mocked(fetchPermissionSnapshot).mockResolvedValue({
       permissionKeys: [],
       visibleMenuIds: [],
       visibleMenus: [],
-    });
-    vi.mocked(restoreAuthSession).mockResolvedValue("unauthenticated");
-    useAuthStore.getState().clearAuth();
-  });
+    })
+    vi.mocked(restoreAuthSession).mockResolvedValue('unauthenticated')
+    useAuthStore.getState().clearAuth()
+  })
 
   afterEach(async () => {
     await act(async () => {
       for (const root of roots) {
-        root.unmount();
+        root.unmount()
       }
-    });
-    roots = [];
+    })
+    roots = []
     for (const container of containers) {
-      container.remove();
+      container.remove()
     }
-    containers = [];
-    vi.useRealTimers();
-    vi.clearAllMocks();
-    useAuthStore.getState().clearAuth();
-  });
+    containers = []
+    vi.useRealTimers()
+    vi.clearAllMocks()
+    useAuthStore.getState().clearAuth()
+  })
 
-  it("renders copyright on the login page", async () => {
-    const container = await renderLoginPage();
+  it('renders copyright on the login page', async () => {
+    const container = await renderLoginPage()
 
-    expect(container.querySelector(".soha-auth-copyright")?.textContent).toBe(
-      "© 2026 Soha 版权所有，由项目贡献者设计与开发。",
-    );
-  });
+    expect(container.querySelector('.soha-auth-copyright')?.textContent).toBe(
+      '© 2026 Soha 版权所有，由项目贡献者设计与开发。',
+    )
+  })
 
-  it("presents the current product capabilities", async () => {
-    const container = await renderLoginPage();
+  it('presents the current product capabilities', async () => {
+    const container = await renderLoginPage()
 
-    expect(container.querySelector(".soha-auth-flow-title")?.textContent).toBe("让平台协作更简单");
-    expect(container.querySelector(".soha-auth-flow-subtitle")).toBeNull();
-    expect(container.textContent).not.toContain("统一到一个可协同、可治理的工作平台");
-    expect(container.textContent).toContain("计算资源工作台");
-    expect(container.textContent).toContain("内网工作台");
-    expect(container.textContent).toContain("用户角色、组织策略、Secret Store、审计与运行配置");
-    expect(container.textContent).not.toContain("虚拟化资源");
-  });
+    expect(container.querySelector('.soha-auth-flow-title')?.textContent).toBe('让平台协作更简单')
+    expect(container.querySelector('.soha-auth-flow-subtitle')).toBeNull()
+    expect(container.textContent).not.toContain('统一到一个可协同、可治理的工作平台')
+    expect(container.textContent).toContain('计算资源工作台')
+    expect(container.textContent).toContain('内网工作台')
+    expect(container.textContent).toContain('用户角色、组织策略、Secret Store、审计与运行配置')
+    expect(container.textContent).not.toContain('虚拟化资源')
+  })
 
-  it("uses public server branding before login", async () => {
+  it('uses public server branding before login', async () => {
     vi.mocked(fetchLoginOptions).mockResolvedValue({
       branding: {
-        appTitle: "shanchui",
-        collapsedLogoUrl: "",
-        expandedLogoUrl: "",
-        faviconUrl: "",
-        loginLogoUrl: "",
-        sidebarTitle: "shanchui",
-        slogan: "shanshui",
+        appTitle: 'shanchui',
+        collapsedLogoUrl: '',
+        expandedLogoUrl: '',
+        faviconUrl: '',
+        loginLogoUrl: '',
+        sidebarTitle: 'shanchui',
+        slogan: 'shanshui',
       },
       verification: { sliderEnabled: false },
-    });
+    })
 
-    const container = await renderLoginPage({ prefetchLoginOptions: true });
+    const container = await renderLoginPage({ prefetchLoginOptions: true })
 
-    expect(fetchLoginOptions).toHaveBeenCalledOnce();
-    expect(container.querySelector(".soha-auth-flow-title")?.textContent).toBe("shanshui");
-  });
+    expect(fetchLoginOptions).toHaveBeenCalledOnce()
+    expect(container.querySelector('.soha-auth-flow-title')?.textContent).toBe('shanshui')
+  })
 
-  it("restores an existing browser session from the login page", async () => {
-    vi.useFakeTimers();
+  it('restores an existing browser session from the login page', async () => {
+    vi.useFakeTimers()
     vi.mocked(restoreAuthSession)
-      .mockResolvedValueOnce("unavailable")
+      .mockResolvedValueOnce('unavailable')
       .mockImplementationOnce(async () => {
-        useAuthStore.getState().setUser(user);
-        useAuthStore.getState().setTokens("new-access-token");
-        return "authenticated";
-      });
+        useAuthStore.getState().setUser(user)
+        useAuthStore.getState().setTokens('new-access-token')
+        return 'authenticated'
+      })
 
-    const container = await renderLoginPage();
+    const container = await renderLoginPage()
 
-    expect(container.textContent).toContain("恢复登录状态");
-    expect(container.textContent).toContain("后端服务暂时不可用");
-    expect(container.textContent).not.toContain("登录控制台");
+    expect(container.textContent).toContain('恢复登录状态')
+    expect(container.textContent).toContain('后端服务暂时不可用')
+    expect(container.textContent).not.toContain('登录控制台')
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(2_000);
-    });
-    await flushReact();
+      await vi.advanceTimersByTimeAsync(2_000)
+    })
+    await flushReact()
 
-    expect(restoreAuthSession).toHaveBeenCalledTimes(2);
+    expect(restoreAuthSession).toHaveBeenCalledTimes(2)
     await vi.waitFor(() => {
-      expect(container.textContent).toContain("landing page");
-    });
-  }, 20_000);
+      expect(container.textContent).toContain('landing page')
+    })
+  }, 20_000)
 
-  it("uses the portal as the default landing page when it is accessible", async () => {
+  it('uses the portal as the default landing page when it is accessible', async () => {
     vi.mocked(fetchPermissionSnapshot).mockResolvedValue({
-      permissionKeys: ["identity.portal.view"],
-      visibleMenuIds: ["home-workbench"],
-      visibleMenus: [{ id: "home-workbench", path: "/portal" }],
-    });
+      permissionKeys: ['workbench.home.view', 'identity.portal.view'],
+      visibleMenuIds: ['home-workbench'],
+      visibleMenus: [{ id: 'home-workbench', path: '/portal' }],
+    })
     vi.mocked(restoreAuthSession).mockImplementationOnce(async () => {
-      useAuthStore.getState().setUser(user);
-      useAuthStore.getState().setTokens("new-access-token");
-      return "authenticated";
-    });
+      useAuthStore.getState().setUser(user)
+      useAuthStore.getState().setTokens('new-access-token')
+      return 'authenticated'
+    })
 
-    const container = await renderLoginPage();
+    const container = await renderLoginPage()
 
     await vi.waitFor(() => {
-      expect(container.textContent).toContain("portal landing page");
-    });
-  });
-});
+      expect(container.textContent).toContain('portal landing page')
+    })
+  })
+})

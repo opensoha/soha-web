@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import {
   App,
@@ -12,11 +12,7 @@ import {
   Tooltip,
   Typography,
 } from 'antd'
-import {
-  CodeOutlined,
-  DeleteOutlined,
-  FileTextOutlined,
-} from '@ant-design/icons'
+import { CodeOutlined, DeleteOutlined, FileTextOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
@@ -78,17 +74,14 @@ function podSorter(compareFn: (left: Pod, right: Pod) => number) {
   }
 }
 
-function renderPodRuntimeCell(record: Pod) {
-  const ready = parseReadyContainers(record.readyContainers)
+function renderPodReadyCell(readyContainers: string) {
+  const ready = parseReadyContainers(readyContainers)
   const readyHealthy = ready.total > 0 && ready.ready >= ready.total
 
   return (
-    <Space size={6} wrap={false} className="soha-pod-table-runtime">
-      <StatusTag value={record.phase} />
-      <Tag variant="filled" color={readyHealthy ? 'success' : 'warning'}>
-        {`Ready ${record.readyContainers || '-'}`}
-      </Tag>
-    </Space>
+    <Tag variant="filled" color={readyHealthy ? 'success' : 'warning'}>
+      {`Ready ${readyContainers || '-'}`}
+    </Tag>
   )
 }
 
@@ -219,6 +212,11 @@ export function WorkloadsPodsPage() {
   const [nodeFilter, setNodeFilter] = useState('all')
   const [selectedPodKeys, setSelectedPodKeys] = useState<string[]>([])
   const { densityButton, tableSize } = useWorkloadTableDensity(localeCode)
+
+  useEffect(() => {
+    setNodeFilter('all')
+    setSelectedPodKeys([])
+  }, [clusterId])
 
   const listScope = toScopeKey(clusterId, namespace)
   const podsQueryOptions = podQueries.list(listScope)
@@ -412,16 +410,21 @@ export function WorkloadsPodsPage() {
     {
       title: localeCode === 'zh_CN' ? '运行状态' : 'Runtime',
       dataIndex: 'phase',
-      width: 150,
+      width: 104,
+      sorter: podSorter((left, right) => compareStrings(left.phase, right.phase)),
+      render: (phase: string) => <StatusTag value={phase} />,
+    },
+    {
+      title: localeCode === 'zh_CN' ? '容器' : 'Containers',
+      dataIndex: 'readyContainers',
+      width: 120,
       sorter: podSorter((left, right) => {
-        const phaseCompare = compareStrings(left.phase, right.phase)
-        if (phaseCompare !== 0) return phaseCompare
         const leftReady = parseReadyContainers(left.readyContainers)
         const rightReady = parseReadyContainers(right.readyContainers)
         if (leftReady.total !== rightReady.total) return leftReady.total - rightReady.total
         return leftReady.ready - rightReady.ready
       }),
-      render: (_phase: string, record: Pod) => renderPodRuntimeCell(record),
+      render: (readyContainers: string) => renderPodReadyCell(readyContainers),
     },
     {
       title: localeCode === 'zh_CN' ? '重启' : 'Restarts',

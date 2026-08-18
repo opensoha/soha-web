@@ -22,6 +22,7 @@ import {
 } from './builders/workloads'
 import { WorkloadSnapshotFields } from './workload-snapshot-fields'
 import {
+  DEFAULT_WORKLOAD_SNAPSHOT_INHERITANCE,
   defineResourceForm,
   type ConfigMapFormValues,
   type IngressFormValues,
@@ -116,6 +117,7 @@ function jobDefinition(kind: 'Job' | 'CronJob') {
       parallelism: 1,
       completions: 1,
       imagePolicy: 'snapshot',
+      inherit: [...DEFAULT_WORKLOAD_SNAPSHOT_INHERITANCE],
       restartPolicy: 'Never',
       runtimeSource: 'manual',
       schedule: kind === 'CronJob' ? '0 * * * *' : undefined,
@@ -165,6 +167,7 @@ function jobDefinition(kind: 'Job' | 'CronJob') {
             'imagePolicy',
             'containerName',
             'image',
+            'inherit',
             'sourceKind',
             'sourceName',
           ],

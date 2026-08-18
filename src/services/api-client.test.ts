@@ -2,6 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { clearAuthSession, restoreAuthSession } from '@/features/auth/auth-api'
+import { usePreferencesStore } from '@/stores/preferences-store'
 import { api } from './api-client'
 import { API_ERROR_EVENT, type ApiErrorEventDetail } from './api-error'
 
@@ -40,6 +41,7 @@ describe('api client error handling', () => {
     vi.mocked(clearAuthSession).mockClear()
     vi.mocked(restoreAuthSession).mockClear()
     vi.mocked(restoreAuthSession).mockResolvedValue('unauthenticated')
+    usePreferencesStore.setState({ localeCode: 'zh_CN' })
   })
 
   afterEach(() => {
@@ -71,6 +73,18 @@ describe('api client error handling', () => {
     await expect(api.get<{ data: Array<{ id: string }> }>('/directory/events')).resolves.toEqual({
       data: [{ id: 'event-1' }],
     })
+  })
+
+  it('sends the current interface language with API requests', async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      jsonResponse({ data: {} }, { status: 200 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await api.get('/clusters')
+
+    const headers = new Headers(fetchMock.mock.calls[0]?.[1]?.headers)
+    expect(headers.get('Accept-Language')).toBe('zh-CN')
   })
 
   it('clears auth and emits a typed event when refresh cannot recover a 401', async () => {

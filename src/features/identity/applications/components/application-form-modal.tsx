@@ -1,5 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import {
+  App,
+  Avatar,
   AutoComplete,
   Button,
   Form,
@@ -11,25 +13,113 @@ import {
   Typography,
 } from 'antd'
 import type { FormInstance } from 'antd'
-import { DeleteOutlined, LinkOutlined, PlusOutlined } from '@ant-design/icons'
+import {
+  AppstoreOutlined,
+  DeleteOutlined,
+  LinkOutlined,
+  PlusOutlined,
+  UploadOutlined,
+} from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { accessQueries } from '@/features/access'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useI18n } from '@/i18n'
 import type { IdentityProvider } from '../../providers'
 import type { IdentityApplication, IdentityApplicationInput } from '../../shared/types'
 import {
   buildIdentityApplicationInput,
   defaultIdentityApplicationFormValues,
+  IDENTITY_APPLICATION_ICON_ACCEPT,
   identityApplicationAssignmentSubjectOptions,
   identityApplicationFormValuesFor,
   identityApplicationOIDCScopeOptions,
   identityApplicationProviderTypeOptions,
   identityApplicationStatusOptions,
+  readIdentityApplicationIconFile,
   type IdentityApplicationTagOption,
   type IdentityApplicationFormValues,
 } from '../application-form-model'
 
 const { Text } = Typography
+
+interface ApplicationIconInputProps {
+  id?: string
+  value?: string
+  onChange?: (value: string) => void
+}
+
+function ApplicationIconInput({ id, value = '', onChange }: ApplicationIconInputProps) {
+  const { message } = App.useApp()
+  const { t } = useI18n()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [reading, setReading] = useState(false)
+  const uploadedFileValue = value.startsWith('data:image/')
+
+  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0]
+    event.currentTarget.value = ''
+    if (!file) return
+
+    setReading(true)
+    try {
+      onChange?.(await readIdentityApplicationIconFile(file))
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : t('common.failed', '操作失败'))
+    } finally {
+      setReading(false)
+    }
+  }
+
+  const clearLabel = t('identity.applications.clearIcon', '清除图标')
+
+  return (
+    <div className="soha-identity-app-icon-field">
+      <Avatar
+        alt={t('identity.applications.iconPreview', '应用图标预览')}
+        draggable={false}
+        icon={<AppstoreOutlined />}
+        shape="square"
+        size={32}
+        src={value || undefined}
+      />
+      <Input
+        allowClear
+        id={id}
+        placeholder={
+          uploadedFileValue
+            ? t('identity.applications.iconUploaded', '已上传本地图片')
+            : 'https://example.com/icon.png'
+        }
+        value={uploadedFileValue ? '' : value}
+        onChange={(event) => onChange?.(event.target.value)}
+      />
+      <Button
+        icon={<UploadOutlined />}
+        loading={reading}
+        onClick={() => fileInputRef.current?.click()}
+      >
+        {t('identity.applications.uploadIcon', '上传')}
+      </Button>
+      {value ? (
+        <Button
+          aria-label={clearLabel}
+          icon={<DeleteOutlined />}
+          title={clearLabel}
+          type="text"
+          onClick={() => onChange?.('')}
+        />
+      ) : null}
+      <input
+        ref={fileInputRef}
+        accept={IDENTITY_APPLICATION_ICON_ACCEPT}
+        className="soha-identity-app-icon-file-input"
+        hidden
+        type="file"
+        onChange={(event) => void handleFileChange(event)}
+      />
+    </div>
+  )
+}
 
 interface AssignmentSubjectSelectProps {
   fieldName: number
@@ -78,9 +168,14 @@ export function ApplicationFormModal({
   const [form] = Form.useForm<IdentityApplicationFormValues>()
   const { t } = useI18n()
   const providerType = Form.useWatch('providerType', form) ?? 'link'
-  const usersQuery = useQuery({ ...accessQueries.users(), enabled: open, retry: false })
-  const rolesQuery = useQuery({ ...accessQueries.roles(), enabled: open, retry: false })
-  const teamsQuery = useQuery({ ...accessQueries.teams(), enabled: open, retry: false })
+  const permissionSnapshotQuery = usePermissionSnapshot()
+  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const canViewUsers = hasPermission(permissionSnapshot, 'access.users.view')
+  const canViewRoles = hasPermission(permissionSnapshot, 'access.roles.view')
+  const canViewTeams = hasPermission(permissionSnapshot, 'access.groups.view')
+  const usersQuery = useQuery({ ...accessQueries.users(open && canViewUsers), retry: false })
+  const rolesQuery = useQuery({ ...accessQueries.roles(open && canViewRoles), retry: false })
+  const teamsQuery = useQuery({ ...accessQueries.teams(open && canViewTeams), retry: false })
   const providerSelectOptions = providerOptions
     .filter((provider) => provider.type === providerType)
     .map((provider) => ({
@@ -93,12 +188,15 @@ export function ApplicationFormModal({
     providerType === 'link' ||
     (!providerOptionsLoading && providerSelectOptions.length === 0)
   const subjectOptions = {
-    user: (usersQuery.data ?? []).map((user) => ({
+    user: (canViewUsers ? (usersQuery.data ?? []) : []).map((user) => ({
       label: `${user.displayName || user.username} (${user.email || user.username})`,
       value: user.id,
     })),
-    role: (rolesQuery.data ?? []).map((role) => ({ label: role.name, value: role.id })),
-    team: (teamsQuery.data ?? []).map((team) => ({
+    role: (canViewRoles ? (rolesQuery.data ?? []) : []).map((role) => ({
+      label: role.name,
+      value: role.id,
+    })),
+    team: (canViewTeams ? (teamsQuery.data ?? []) : []).map((team) => ({
       label: team.path || `${team.name} (${team.slug})`,
       value: team.id,
     })),
@@ -223,8 +321,12 @@ export function ApplicationFormModal({
         ) : null}
 
         <div className="soha-identity-form-grid">
-          <Form.Item label={t('identity.applications.iconUrl', '图标地址')} name="iconUrl">
-            <Input placeholder="https://example.com/icon.png" />
+          <Form.Item
+            getValueFromEvent={(nextValue: string) => nextValue}
+            label={t('identity.applications.icon', '图标')}
+            name="iconUrl"
+          >
+            <ApplicationIconInput />
           </Form.Item>
           <Form.Item label={t('identity.applications.tags', '标签')} name="tags">
             <Select

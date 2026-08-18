@@ -34,6 +34,41 @@ export interface IdentityApplicationFormValues {
   tags: string[]
 }
 
+export const IDENTITY_APPLICATION_ICON_ACCEPT = '.jpg,.jpeg,.png,.webp,.ico'
+export const IDENTITY_APPLICATION_ICON_MAX_BYTES = 512 * 1024
+
+const identityApplicationIconTypes: Record<string, readonly string[]> = {
+  '.ico': ['image/ico', 'image/vnd.microsoft.icon', 'image/x-icon'],
+  '.jpeg': ['image/jpeg'],
+  '.jpg': ['image/jpeg'],
+  '.png': ['image/png'],
+  '.webp': ['image/webp'],
+}
+
+export async function readIdentityApplicationIconFile(file: File): Promise<string> {
+  const extension = file.name.toLowerCase().match(/\.[^.]+$/)?.[0] ?? ''
+  const allowedTypes = identityApplicationIconTypes[extension]
+  if (!allowedTypes?.includes(file.type.toLowerCase())) {
+    throw new Error('仅支持 JPG、PNG、WEBP 或 ICO 图片')
+  }
+  if (file.size === 0) {
+    throw new Error('图片文件不能为空')
+  }
+  if (file.size > IDENTITY_APPLICATION_ICON_MAX_BYTES) {
+    throw new Error('图片大小不能超过 512KB')
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result === 'string') resolve(reader.result)
+      else reject(new Error('读取图片失败'))
+    }
+    reader.onerror = () => reject(new Error('读取图片失败'))
+    reader.readAsDataURL(file)
+  })
+}
+
 export const identityApplicationProviderTypeOptions: Array<{
   label: string
   value: IdentityProviderType

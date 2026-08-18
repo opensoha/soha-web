@@ -14,6 +14,7 @@ import {
   ManagementState,
   useManagementTextFilter,
 } from '@/components/management-list'
+import { visuallyHiddenModalTitleStyle } from '@/components/modal-styles'
 import { BooleanTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { settingsQueries } from '@/features/settings'
@@ -303,6 +304,7 @@ export function DirectorySyncPage() {
         width={960}
         open={Boolean(selected)}
         footer={null}
+        styles={{ header: { minHeight: 32 }, title: visuallyHiddenModalTitleStyle }}
         onCancel={() => setSelected(null)}
       >
         <Tabs

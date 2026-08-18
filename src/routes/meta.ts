@@ -181,6 +181,17 @@ function getCompatibleVisibleMenus(snapshot?: PermissionSnapshot | null): Visibl
 
 export type WorkbenchId = keyof typeof WORKBENCH_DEFAULT_PATHS
 
+export const WORKBENCH_ENTRY_PERMISSION_KEYS: Record<WorkbenchId, string> = {
+  home: 'workbench.home.view',
+  platform: 'workbench.platform.view',
+  compute: 'workbench.compute.view',
+  delivery: 'workbench.delivery.view',
+  ai: 'workbench.ai.view',
+  monitoring: 'workbench.monitoring.view',
+  settings: 'workbench.settings.view',
+  security: 'workbench.security.view',
+}
+
 function matchesRoutePrefix(pathname: string, prefixes: string[]) {
   return prefixes.some((prefix) => pathname.startsWith(prefix))
 }
@@ -311,11 +322,14 @@ function deriveWorkbenchIdFromPath(pathname: string): WorkbenchId | null {
   }
   if (
     pathname.startsWith('/access') ||
-    pathname.startsWith('/identity') ||
+    pathname.startsWith('/identity/audit') ||
     pathname.startsWith('/system') ||
     pathname.startsWith('/settings')
   ) {
     return 'settings'
+  }
+  if (pathname.startsWith('/identity') || pathname.startsWith('/internal-workbench')) {
+    return 'security'
   }
   return null
 }
@@ -517,9 +531,6 @@ export function getAccessibleWorkspaces(
 ): BusinessWorkspaceType[] {
   const workspaces: BusinessWorkspaceType[] = []
   ;(['application', 'resource'] as const).forEach((workspace) => {
-    if (!hasWorkspaceAccess(workspace, snapshot)) {
-      return
-    }
     if (findFirstAccessiblePathForWorkspace(workspace, snapshot)) {
       workspaces.push(workspace)
     }
@@ -564,21 +575,16 @@ export function canAccessRoute(route: RouteMeta, snapshot?: PermissionSnapshot |
       .filter((child) => child.parentId === route.id)
       .some((child) => canAccessRoute(child, snapshot))
   }
+  const workbenchId = getRouteWorkbenchId(route)
+  const hasWorkbenchEntry =
+    !workbenchId || snapshot.permissionKeys.includes(WORKBENCH_ENTRY_PERMISSION_KEYS[workbenchId])
   const permissionKey = resolveRoutePermission(route)
   const permissionKeysAny = route.permissionKeysAny ?? []
-  const menuId = resolveRouteMenuId(route)
-  const workspace = getRouteWorkspace(route)
-  const hasWorkspacePermission =
-    workspace === 'application' || workspace === 'resource'
-      ? hasWorkspaceAccess(workspace, snapshot)
-      : true
   const hasPermission =
     permissionKeysAny.length > 0
       ? permissionKeysAny.some((key) => snapshot.permissionKeys.includes(key))
       : !permissionKey || snapshot.permissionKeys.includes(permissionKey)
-  const hasCompatibleMenu = getCompatibleVisibleMenus(snapshot).some((menu) => menu.id === menuId)
-  const hasMenu = !menuId || snapshot.visibleMenuIds.includes(menuId) || hasCompatibleMenu
-  return hasWorkspacePermission && hasPermission && hasMenu
+  return hasWorkbenchEntry && hasPermission
 }
 
 function getSectionOrder(section?: string) {
@@ -594,11 +600,15 @@ function sortRuntimeMenuTree(items: RuntimeMenuNode[]): RuntimeMenuNode[] {
       if (left.sortOrder !== right.sortOrder) return left.sortOrder - right.sortOrder
       return left.path.localeCompare(right.path)
     })
-    .map((item): RuntimeMenuNode => ({
-      ...item,
-      children:
-        item.children && item.children.length > 0 ? sortRuntimeMenuTree(item.children) : undefined,
-    }))
+    .map(
+      (item): RuntimeMenuNode => ({
+        ...item,
+        children:
+          item.children && item.children.length > 0
+            ? sortRuntimeMenuTree(item.children)
+            : undefined,
+      }),
+    )
 }
 
 const APPLICATION_SECTION_ORDER: Record<string, number> = {

@@ -21,6 +21,7 @@ import {
   EditOutlined,
   EyeOutlined,
   PlusOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { AgentInstallation } from '@opensoha/contracts/gen/ts/sohaapi'
@@ -98,6 +99,12 @@ export function ClustersPage() {
 
   const clusters = clustersQuery.data ?? []
   const targetFor = (id: string) => ({ scope: toScopeKey(id, null) })
+  const showAgentInstallation = (clusterId: string) => {
+    agentInstallationMutation.mutate(targetFor(clusterId), {
+      onSuccess: setAgentInstallation,
+      onError: (error) => void message.error(error.message),
+    })
+  }
 
   useEffect(() => {
     const clusterIds = new Set(clusters.map((cluster) => cluster.id))
@@ -246,12 +253,7 @@ export function ClustersPage() {
                 }
                 size="small"
                 tooltip={localeCode === 'zh_CN' ? '安装 Agent' : 'Install Agent'}
-                onClick={() =>
-                  agentInstallationMutation.mutate(targetFor(record.id), {
-                    onSuccess: setAgentInstallation,
-                    onError: (error) => void message.error(error.message),
-                  })
-                }
+                onClick={() => showAgentInstallation(record.id)}
               />
             ) : null
           ) : null}
@@ -380,10 +382,7 @@ export function ClustersPage() {
           void message.success('集群创建成功')
           setModalVisible(false)
           if (values.connectionMode === 'agent') {
-            agentInstallationMutation.mutate(targetFor(cluster.id), {
-              onSuccess: setAgentInstallation,
-              onError: (error) => void message.error(error.message),
-            })
+            showAgentInstallation(cluster.id)
           }
         },
         onError: (error) => void message.error(error.message),
@@ -620,7 +619,7 @@ export function ClustersPage() {
               readOnly
               autoSize={{ minRows: 2, maxRows: 5 }}
             />
-            <Space>
+            <Space wrap>
               <Button
                 icon={<CopyOutlined />}
                 onClick={() => {
@@ -634,12 +633,19 @@ export function ClustersPage() {
               >
                 {localeCode === 'zh_CN' ? '复制' : 'Copy'}
               </Button>
+              <Button
+                icon={<ReloadOutlined />}
+                loading={agentInstallationMutation.isPending}
+                onClick={() => showAgentInstallation(agentInstallation.clusterId)}
+              >
+                {localeCode === 'zh_CN' ? '刷新命令' : 'Refresh command'}
+              </Button>
               <Text type="secondary">
                 {localeCode === 'zh_CN' ? '有效期至' : 'Expires'}{' '}
                 {formatDateTime(agentInstallation.expiresAt)}
               </Text>
             </Space>
-            <div className="soha-form-actions">
+            <div className="soha-form-actions" style={{ marginTop: 0 }}>
               <Button type="primary" onClick={() => setAgentInstallation(null)}>
                 {localeCode === 'zh_CN' ? '完成' : 'Done'}
               </Button>

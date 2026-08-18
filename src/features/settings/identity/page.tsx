@@ -68,6 +68,7 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
     permissionSnapshotQuery.data?.data,
     'settings.identity.update',
   )
+  const canViewRoles = hasPermission(permissionSnapshotQuery.data?.data, 'access.roles.view')
 
   const identityQuery = useQuery(settingsQueries.identity(canViewLoginSettings))
   const runtimeQuery = useQuery({
@@ -75,13 +76,12 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
     enabled: canViewLoginSettings,
   })
   const { data, isLoading } = identityQuery
-  const rolesQuery = useQuery({
-    ...accessQueries.roles(),
-    enabled: canViewLoginSettings,
-  })
+  const rolesQuery = useQuery(accessQueries.roles(canViewLoginSettings && canViewRoles))
   const hasQueryError =
     permissionSnapshotQuery.isError ||
-    [identityQuery, runtimeQuery, rolesQuery].some((query) => query.isError)
+    identityQuery.isError ||
+    runtimeQuery.isError ||
+    (canViewRoles && rolesQuery.isError)
   const saveMutation = useMutation(settingsMutations.identity.save(queryClient))
   const saveIdentity = (input: SaveIdentitySettingsInput) =>
     saveMutation.mutate(
@@ -104,7 +104,7 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
   const providerTypeOptions = LOGIN_PROVIDER_TYPE_OPTIONS.filter(
     (item) => item.value !== 'saml' || samlAvailable || editingProvider?.type === 'saml',
   ).map((item) => (item.value === 'saml' && !samlAvailable ? { ...item, disabled: true } : item))
-  const roleOptions = (rolesQuery.data ?? []).map((role) => ({
+  const roleOptions = (canViewRoles ? (rolesQuery.data ?? []) : []).map((role) => ({
     value: role.id,
     label: role.name || role.id,
   }))
@@ -135,11 +135,9 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
               onClick={() => {
                 void permissionSnapshotQuery.refetch()
                 if (canViewLoginSettings) {
-                  void Promise.all([
-                    identityQuery.refetch(),
-                    runtimeQuery.refetch(),
-                    rolesQuery.refetch(),
-                  ])
+                  void identityQuery.refetch()
+                  void runtimeQuery.refetch()
+                  if (canViewRoles) void rolesQuery.refetch()
                 }
               }}
             >

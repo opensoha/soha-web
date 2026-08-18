@@ -66,16 +66,67 @@ export function buildRolePermissionBrowserData(treeData: DataNode[]): Permission
     .map((node) => {
       const workbench = browserNodeFromTree(node)
       if (!workbench.actions.length) return workbench
+      const resourceCreationActions =
+        workbench.key === 'workbench:platform'
+          ? workbench.actions.filter((action) => action.value === 'platform.resource-creation.use')
+          : []
+      const entryActions = workbench.actions.filter((action) =>
+        action.value.startsWith('workbench.'),
+      )
+      const compatibilityActions =
+        workbench.key === 'workbench:compatibility' ? workbench.actions : []
+      const pageActions =
+        workbench.key === 'workbench:compatibility'
+          ? []
+          : workbench.actions.filter(
+              (action) =>
+                !action.value.startsWith('workbench.') &&
+                action.value !== 'platform.resource-creation.use',
+            )
       return {
         ...workbench,
         actions: [],
         children: [
-          {
-            key: `entry:${workbench.key}`,
-            title: workbench.key === 'workbench:compatibility' ? '保留项' : '工作台入口',
-            actions: workbench.actions,
-            children: [],
-          },
+          ...(entryActions.length
+            ? [
+                {
+                  key: `entry:${workbench.key}`,
+                  title: '工作台入口',
+                  actions: entryActions,
+                  children: [],
+                },
+              ]
+            : []),
+          ...(compatibilityActions.length
+            ? [
+                {
+                  key: `compatibility:${workbench.key}`,
+                  title: '保留项',
+                  actions: compatibilityActions,
+                  children: [],
+                },
+              ]
+            : []),
+          ...(resourceCreationActions.length
+            ? [
+                {
+                  key: 'capability:platform-resource-creation',
+                  title: '资源创建',
+                  actions: resourceCreationActions,
+                  children: [],
+                },
+              ]
+            : []),
+          ...(pageActions.length
+            ? [
+                {
+                  key: `pages:${workbench.key}`,
+                  title: '页面权限',
+                  actions: pageActions,
+                  children: [],
+                },
+              ]
+            : []),
           ...workbench.children,
         ],
       }

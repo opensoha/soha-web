@@ -220,6 +220,7 @@ async function handleMockedAPI(page, event, missingMocks) {
     await fulfillJSON(page, event.requestId, {
       data: {
         permissionKeys: [
+          'workbench.platform.view',
           'workspace.resource.view',
           'platform.clusters.view',
           'platform.deployment.view',

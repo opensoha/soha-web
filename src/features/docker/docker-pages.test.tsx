@@ -390,6 +390,23 @@ async function settleQueries(queryClient: QueryClient) {
   }
 }
 
+async function changeInput(input: HTMLInputElement | null, value: string) {
+  expect(input).not.toBeNull()
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+  await act(async () => {
+    setter?.call(input, value)
+    input?.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+}
+
+async function clickButton(label: string) {
+  const button = Array.from(document.querySelectorAll('button')).find(
+    (item) => item.textContent === label,
+  )
+  expect(button).toBeDefined()
+  await act(async () => button?.click())
+}
+
 describe('docker pages', () => {
   beforeEach(() => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
@@ -704,6 +721,35 @@ describe('docker pages', () => {
     expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/vms?page=1&pageSize=500')
   })
 
+  it('removes the new host when Agent installation command generation fails', async () => {
+    testState.apiPost.mockImplementation(async (path: string) => {
+      if (path === '/docker/hosts') return { data: { id: 'host-created', name: 'runtime-a' } }
+      if (path === '/docker/hosts/host-created/agent-installation') {
+        throw new Error(
+          'Soha 对外访问地址尚未配置，请前往“设置中心 > 运行时配置”设置“访问地址”后重试',
+        )
+      }
+      throw new Error(`Unhandled POST ${path}`)
+    })
+
+    await renderWithProviders(
+      <RuntimeHostStepModal onClose={() => undefined} open />,
+      '/compute/runtimes/hosts',
+    )
+    await changeInput(document.querySelector<HTMLInputElement>('#name'), 'runtime-a')
+    await clickButton('下一步')
+    await clickButton('生成安装命令')
+    await act(async () => {
+      await Promise.resolve()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(testState.apiDelete).toHaveBeenCalledWith('/docker/hosts/host-created')
+    expect(document.body.textContent).toContain('Soha 对外访问地址尚未配置')
+    expect(document.body.textContent).not.toContain('Agent 安装命令生成失败')
+    expect(document.body.textContent).toContain('临时主机记录已自动清理')
+  })
+
   it('maps existing-host resource sizes to bytes', () => {
     const payload = buildRuntimeHostPayload({
       connectionMode: 'quick',
@@ -774,6 +820,7 @@ describe('docker pages', () => {
     expect(tableHeaders).not.toContain('镜像 / 端口')
     expect(document.body.textContent).toContain('nginx:alpine')
     expect(document.body.textContent).toContain('127.0.0.1:18083 -> 80/tcp')
+    expect(testState.apiGet).not.toHaveBeenCalledWith('/docker/hosts?page=1&pageSize=200')
   })
 
   it('reviews a redeploy plan before idempotent execution', async () => {

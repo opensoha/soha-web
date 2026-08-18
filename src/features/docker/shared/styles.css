@@ -364,3 +364,38 @@
 .soha-docker-quick-form-section .ant-segmented {
   padding: 4px;
 }
+
+.soha-runtime-host-ownership-grid,
+.soha-runtime-host-capacity-grid {
+  display: grid;
+  gap: 0 12px;
+}
+
+.soha-runtime-host-ownership-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.soha-runtime-host-capacity-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.soha-runtime-host-ownership-grid > .ant-form-item,
+.soha-runtime-host-capacity-grid > .ant-form-item,
+.soha-runtime-host-vm-field.ant-form-item {
+  min-width: 0;
+  margin-bottom: 16px;
+}
+
+.soha-runtime-host-capacity-grid .ant-input-number {
+  width: 100%;
+}
+
+@media (max-width: 576px) {
+  .soha-runtime-host-ownership-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .soha-runtime-host-capacity-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

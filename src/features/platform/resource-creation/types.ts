@@ -40,7 +40,20 @@ export type ResourceRef = KubernetesResourceRef
 export type ResourceScope = KubernetesResourceScope
 export type ResourceScopeMode = KubernetesResourceScopeMode
 export type WorkloadSnapshot = KubernetesWorkloadSnapshot
-export type WorkloadSnapshotRequest = Omit<KubernetesWorkloadSnapshotRequest, 'targetKind'> & {
+export type WorkloadSnapshotInheritance =
+  | 'environment'
+  | 'storage'
+  | 'resources'
+  | 'securityContext'
+  | 'scheduling'
+  | 'initContainers'
+  | 'templateMetadata'
+  | 'serviceRuntime'
+export type WorkloadSnapshotRequest = Omit<
+  KubernetesWorkloadSnapshotRequest,
+  'inherit' | 'targetKind'
+> & {
+  inherit?: WorkloadSnapshotInheritance[]
   targetKind: WorkloadSnapshotTargetKind
 }
 export type WorkloadSnapshotSourceKind = KubernetesWorkloadSnapshotSourceKind

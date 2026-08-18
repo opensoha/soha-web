@@ -195,6 +195,22 @@ describe('directory sync page', () => {
       await new Promise((resolve) => window.setTimeout(resolve, 0))
     })
 
+    const modalTitle = document.body.querySelector<HTMLElement>('.ant-modal-title')
+    expect(modalTitle?.textContent).toBe('飞书通讯录 · 运行与事件')
+    expect(modalTitle?.style.position).toBe('absolute')
+
+    const runtimePanel = document.body.querySelector<HTMLElement>(
+      '.ant-modal .ant-tabs-tabpane-active > .ant-space',
+    )
+    expect(runtimePanel?.style.minWidth).toBe('0')
+    expect(
+      [...(runtimePanel?.children ?? [])].every(
+        (item) =>
+          (item as HTMLElement).style.width === '100%' &&
+          (item as HTMLElement).style.minWidth === '0',
+      ),
+    ).toBe(true)
+
     expect(document.body.textContent).toContain('事件回调地址')
     expect(document.body.textContent).toContain('待处理 2')
     expect(document.body.textContent).toContain('失败 1')

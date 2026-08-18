@@ -16,7 +16,7 @@ import { accessMutations, invalidateAccessRoles } from '../shared/mutations'
 import { accessQueries } from '../shared/queries'
 import type { AccessRole } from '../shared/types'
 import { useAccessResourceCrud } from '../shared/use-resource-crud'
-import { normalizePermissionKeys } from './permission-model'
+import { normalizePermissionKeys, normalizeRolePermissionKeys } from './permission-model'
 import { RolePermissionBrowser } from './permission-browser'
 import '../shared/styles.css'
 
@@ -150,7 +150,7 @@ export function AccessRolesPage() {
               name: String(values.name ?? '').trim(),
               scope: String(values.scope ?? 'custom'),
               capabilities: crud.editing?.capabilities ?? [],
-              permissionKeys: normalizePermissionKeys(values.permissionKeys),
+              permissionKeys: normalizeRolePermissionKeys(values.permissionKeys),
             })
           } catch {
             return
@@ -174,7 +174,7 @@ export function AccessRolesPage() {
               ? {
                   name: crud.editing.name,
                   scope: crud.editing.scope || 'custom',
-                  permissionKeys: normalizePermissionKeys(crud.editing.permissionKeys),
+                  permissionKeys: normalizeRolePermissionKeys(crud.editing.permissionKeys),
                 }
               : { scope: 'custom', permissionKeys: [] }
           }
@@ -195,14 +195,16 @@ export function AccessRolesPage() {
               shouldUpdate={(prev, next) => prev.permissionKeys !== next.permissionKeys}
             >
               {({ getFieldValue, setFieldsValue }) => {
-                const permissionKeys = normalizePermissionKeys(getFieldValue('permissionKeys'))
+                const permissionKeys = normalizeRolePermissionKeys(getFieldValue('permissionKeys'))
                 return (
                   <RolePermissionBrowser
                     definitions={permissionDefinitions}
                     loading={permissionCatalogQuery.isLoading}
                     permissionKeys={permissionKeys}
                     onChange={(nextPermissionKeys) =>
-                      setFieldsValue({ permissionKeys: nextPermissionKeys })
+                      setFieldsValue({
+                        permissionKeys: normalizeRolePermissionKeys(nextPermissionKeys),
+                      })
                     }
                   />
                 )

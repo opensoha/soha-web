@@ -92,12 +92,31 @@ export function RuntimeHostStepModal({
       const host = editing
         ? await dockerApi.updateHost(editing.id, buildRuntimeHostPayload(values))
         : await dockerApi.createHost(buildRuntimeHostPayload(values))
+      if (!editing && values.connectionMode !== 'manual') {
+        try {
+          return { host, installation: await dockerApi.createHostAgentInstallation(host.id) }
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : String(error)
+          try {
+            await dockerApi.deleteHost(host.id)
+          } catch (cleanupError) {
+            const cleanupDetail =
+              cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+            throw Object.assign(
+              new Error(
+                `${reason}；临时主机记录自动清理失败，请在主机列表中删除 ${host.name || host.id}。清理失败原因：${cleanupDetail}`,
+              ),
+              { cause: cleanupError },
+            )
+          }
+          throw Object.assign(new Error(`${reason}；临时主机记录已自动清理。`), {
+            cause: error,
+          })
+        }
+      }
       return {
         host,
-        installation:
-          !editing && values.connectionMode !== 'manual'
-            ? await dockerApi.createHostAgentInstallation(host.id)
-            : undefined,
+        installation: undefined,
       }
     },
     onSuccess: (result) => {
@@ -109,10 +128,24 @@ export function RuntimeHostStepModal({
       } else {
         message.success(editing ? '运行时主机已更新' : '运行时主机已接入')
       }
+      form.resetFields()
+      setCurrent(0)
       onClose()
     },
-    onError: (error) => void message.error(error.message),
+    onError: (error) =>
+      void message.error(
+        error.message.includes('临时主机记录')
+          ? error.message
+          : `运行时主机接入失败：${error.message}`,
+      ),
   })
+
+  const closeForm = () => {
+    form.resetFields()
+    saveMutation.reset()
+    setCurrent(0)
+    onClose()
+  }
 
   useEffect(() => {
     if (open) setCurrent(0)
@@ -181,16 +214,19 @@ export function RuntimeHostStepModal({
       title: '资源配置',
       children: (
         <>
-          <Form.Item name="environment" label="环境">
-            <Input />
-          </Form.Item>
-          <Form.Item name="owner" label="负责人">
-            <Input />
-          </Form.Item>
-          <Form.Item name="team" label="团队">
-            <Input />
-          </Form.Item>
+          <div className="soha-runtime-host-ownership-grid">
+            <Form.Item name="environment" label="环境">
+              <Input />
+            </Form.Item>
+            <Form.Item name="owner" label="负责人">
+              <Input />
+            </Form.Item>
+            <Form.Item name="team" label="团队">
+              <Input />
+            </Form.Item>
+          </div>
           <Form.Item
+            className="soha-runtime-host-vm-field"
             name="vmId"
             label="关联虚拟机"
             tooltip="关联到 Soha 已管理的虚拟机，用于从运行时主机返回虚拟机资源。裸机可不选择。"
@@ -221,22 +257,28 @@ export function RuntimeHostStepModal({
           <Form.Item name="vmName" hidden>
             <Input />
           </Form.Item>
-          <Form.Item name="cpuCoreCount" label="CPU 核数">
-            <InputNumber min={1} precision={0} className="w-full" />
-          </Form.Item>
-          <Form.Item name="memoryGiB" label="内存 GiB">
-            <InputNumber min={1} precision={0} className="w-full" />
-          </Form.Item>
-          <Form.Item name="diskGiB" label="磁盘 GiB">
-            <InputNumber min={1} precision={0} className="w-full" />
-          </Form.Item>
-          <Form.Item name="availablePortStart" label="端口池起始">
-            <InputNumber min={1} max={65535} className="w-full" />
-          </Form.Item>
-          <Form.Item name="availablePortEnd" label="端口池结束">
-            <InputNumber min={1} max={65535} className="w-full" />
-          </Form.Item>
-          <Descriptions bordered size="small" column={1}>
+          <div className="soha-runtime-host-capacity-grid">
+            <Form.Item name="cpuCoreCount" label="CPU 核数">
+              <InputNumber min={1} precision={0} className="w-full" />
+            </Form.Item>
+            <Form.Item name="memoryGiB" label="内存 GiB">
+              <InputNumber min={1} precision={0} className="w-full" />
+            </Form.Item>
+            <Form.Item name="diskGiB" label="磁盘 GiB">
+              <InputNumber min={1} precision={0} className="w-full" />
+            </Form.Item>
+            <Form.Item name="availablePortStart" label="端口池起始">
+              <InputNumber min={1} max={65535} className="w-full" />
+            </Form.Item>
+            <Form.Item name="availablePortEnd" label="端口池结束">
+              <InputNumber min={1} max={65535} className="w-full" />
+            </Form.Item>
+          </div>
+          <Descriptions
+            bordered
+            size="small"
+            column={{ xs: 1, sm: 2, md: 2, lg: 2, xl: 2, xxl: 2 }}
+          >
             <Descriptions.Item label="接入方式">
               {connectionMode === 'manual' ? '已有 Agent' : '快速安装 Agent'}
             </Descriptions.Item>
@@ -254,7 +296,7 @@ export function RuntimeHostStepModal({
         form={form}
         initialValues={initialValues}
         loading={saveMutation.isPending}
-        onClose={onClose}
+        onClose={closeForm}
         onCurrentChange={setCurrent}
         onFinish={(values) => saveMutation.mutate(values)}
         open={open}

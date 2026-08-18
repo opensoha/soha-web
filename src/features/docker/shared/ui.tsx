@@ -323,9 +323,11 @@ export function useDockerPermissions() {
   const hasDockerPermission = (key: string) => dockerModuleEnabled && hasPermission(snapshot, key)
   return {
     dockerModuleEnabled,
+    canViewHosts: hasDockerPermission('docker.hosts.view'),
     canCreateHosts: hasDockerPermission('docker.hosts.create'),
     canUpdateHosts: hasDockerPermission('docker.hosts.update'),
     canDeleteHosts: hasDockerPermission('docker.hosts.delete'),
+    canViewProjects: hasDockerPermission('docker.projects.view'),
     canCreateProjects: hasDockerPermission('docker.projects.create'),
     canUpdateProjects: hasDockerPermission('docker.projects.update'),
     canDeleteProjects: hasDockerPermission('docker.projects.delete'),
@@ -531,17 +533,13 @@ export function useDockerOptions({
   includeProjects?: boolean
   includeServices?: boolean
 } = {}) {
-  const { moduleEnabled: dockerModuleEnabled } = useWorkbenchModuleEnabled('docker')
-  const hostsQuery = useQuery(dockerQueries.hostOptions(dockerModuleEnabled))
-  const projectsQuery = useQuery(
-    dockerQueries.projectOptions(dockerModuleEnabled && includeProjects),
-  )
-  const servicesQuery = useQuery(
-    dockerQueries.serviceOptions(dockerModuleEnabled && includeServices),
-  )
-  const hosts = normalizePage(hostsQuery.data, 1, 200).items
-  const projects = normalizePage(projectsQuery.data, 1, 200).items
-  const services = normalizePage(servicesQuery.data, 1, 300).items
+  const { canViewHosts, canViewProjects, canViewServices } = useDockerPermissions()
+  const hostsQuery = useQuery(dockerQueries.hostOptions(canViewHosts))
+  const projectsQuery = useQuery(dockerQueries.projectOptions(canViewProjects && includeProjects))
+  const servicesQuery = useQuery(dockerQueries.serviceOptions(canViewServices && includeServices))
+  const hosts = canViewHosts ? normalizePage(hostsQuery.data, 1, 200).items : []
+  const projects = canViewProjects ? normalizePage(projectsQuery.data, 1, 200).items : []
+  const services = canViewServices ? normalizePage(servicesQuery.data, 1, 300).items : []
   return {
     hosts,
     projects,

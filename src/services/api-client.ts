@@ -6,6 +6,7 @@ import {
 } from '@/features/auth/auth-api'
 import type { AuthRefreshStatus } from '@/features/auth/auth-api'
 import { useAuthStore } from '@/stores/auth-store'
+import { usePreferencesStore } from '@/stores/preferences-store'
 import type { ErrorEnvelope } from '@/types'
 import {
   ApiError,
@@ -41,6 +42,12 @@ function getRequestMethod(options: RequestInit) {
 
 function buildRequestHeaders(options: RequestInit, accessToken: string | null) {
   const headers = new Headers(options.headers)
+  if (!headers.has('Accept-Language')) {
+    headers.set(
+      'Accept-Language',
+      usePreferencesStore.getState().localeCode === 'zh_CN' ? 'zh-CN' : 'en-US',
+    )
+  }
   if (!headers.has('Content-Type') && options.body && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json')
   }

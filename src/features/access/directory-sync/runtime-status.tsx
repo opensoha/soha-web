@@ -91,7 +91,12 @@ export function DirectoryRuntimePanel({
     return <Alert showIcon type="error" title="目录事件状态加载失败" description={statusError} />
 
   return (
-    <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+    <Space
+      orientation="vertical"
+      size={12}
+      style={{ minWidth: 0, width: '100%' }}
+      styles={{ item: { minWidth: 0, width: '100%' } }}
+    >
       {connection.policy.mode !== 'scheduled_and_realtime' ? (
         <Alert
           showIcon

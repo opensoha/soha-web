@@ -156,7 +156,7 @@ export function SourceConnectionsPage() {
             bordered={false}
             compact
             title="暂无代码源连接"
-            description="新增 GitLab 连接后，交付、虚拟化等工作台可通过统一代码源接口访问仓库文件。"
+            description="新增 Git 连接后，交付、虚拟化等工作台可通过统一代码源接口访问仓库文件。"
           />
         ),
         columnSettingIconOnly: true,
@@ -169,7 +169,7 @@ export function SourceConnectionsPage() {
                 type="primary"
                 onClick={() => navigate('/settings/source-control/new')}
               >
-                新增 GitLab
+                新增 Git
               </Button>
             ) : null}
             <ManagementDensityButton

@@ -103,6 +103,10 @@ beforeAll(() => {
   })
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   vi.stubGlobal('ResizeObserver', ResizeObserverMock)
+  Object.defineProperty(HTMLElement.prototype, 'setPointerCapture', {
+    configurable: true,
+    value: vi.fn(),
+  })
 })
 
 beforeEach(() => {
@@ -196,6 +200,13 @@ describe('realtime session dock', () => {
       resizeHandle?.dispatchEvent(pointerEvent('pointerdown', 400))
       window.dispatchEvent(pointerEvent('pointermove', 300))
       window.dispatchEvent(pointerEvent('pointerup', 300))
+    })
+    expect(dock?.style.getPropertyValue('--soha-realtime-session-height')).toBe('500px')
+
+    await act(async () => {
+      resizeHandle?.dispatchEvent(pointerEvent('pointerdown', 300))
+      resizeHandle?.dispatchEvent(pointerEvent('lostpointercapture', 300))
+      window.dispatchEvent(pointerEvent('pointermove', 250))
     })
     expect(dock?.style.getPropertyValue('--soha-realtime-session-height')).toBe('500px')
 

@@ -48,8 +48,8 @@ function JobOverview({ detail }: { detail: JobDetail }) {
           ]}
         />
       </Card>
-      <WorkloadRelationsCard resources={detail.relatedResources} namespace={detail.namespace} />
       <WorkloadPodsCard pods={detail.pods} namespace={detail.namespace} />
+      <WorkloadRelationsCard resources={detail.relatedResources} namespace={detail.namespace} />
     </div>
   )
 }

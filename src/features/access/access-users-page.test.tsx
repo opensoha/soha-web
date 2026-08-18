@@ -427,7 +427,7 @@ describe('access users page columns', () => {
     expect(permissionCell?.textContent).not.toContain('管理登录设置')
   })
 
-  it('round-trips exact permissions without editing compatibility capabilities', async () => {
+  it('preserves exact role permissions without inferring a workbench entry', async () => {
     testState.snapshot.permissionKeys = ['access.roles.view', 'access.roles.update']
     testState.responses['/access/roles'] = [
       {

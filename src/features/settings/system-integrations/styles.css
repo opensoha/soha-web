@@ -19,6 +19,17 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.soha-system-integration-provider-step {
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.soha-system-integration-tools {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 24px;
+}
+
 .soha-system-integration-oauth-alert {
   margin-bottom: 24px;
 }

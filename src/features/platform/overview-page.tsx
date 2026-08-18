@@ -20,6 +20,7 @@ import {
   type OverviewMetricItem,
 } from '@/components/overview-visuals'
 import { StatusTag } from '@/components/status-tag'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { formatAgeSeconds, formatDateTime } from '@/utils/time'
@@ -32,7 +33,9 @@ const { Text } = Typography
 
 const clusterTypeLabels: Record<string, { zh: string; en: string }> = {
   standard_kubernetes: { zh: '标准 Kubernetes', en: 'Standard Kubernetes' },
+  k3s: { zh: 'K3s', en: 'K3s' },
   gke: { zh: 'GKE', en: 'GKE' },
+  eks: { zh: 'EKS', en: 'EKS' },
   ack: { zh: 'ACK', en: 'ACK' },
   tke: { zh: 'TKE', en: 'TKE' },
   aks: { zh: 'AKS', en: 'AKS' },
@@ -67,20 +70,27 @@ export function OverviewPage() {
   const { t, localeCode } = useI18n()
   const navigate = useNavigate()
   const { clusterId } = usePlatformScopeStore()
+  const permissionSnapshotQuery = usePermissionSnapshot()
+  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const canViewClusters = hasPermission(permissionSnapshot, 'platform.clusters.view')
+  const canViewMonitoring = hasPermission(permissionSnapshot, 'observe.monitoring.view')
+  const canViewWorkloads = hasPermission(permissionSnapshot, 'platform.pods.view')
 
-  const clustersQuery = useQuery(platformOverviewQueries.clusters())
+  const clustersQuery = useQuery(platformOverviewQueries.clusters(canViewClusters))
 
-  const summaryQuery = useQuery(platformOverviewQueries.monitoringSummary())
+  const summaryQuery = useQuery(platformOverviewQueries.monitoringSummary(canViewMonitoring))
 
-  const clusters = clustersQuery.data ?? []
-  const summary = summaryQuery.data?.data
+  const clusters = canViewClusters ? (clustersQuery.data ?? []) : []
+  const summary = canViewMonitoring ? summaryQuery.data?.data : undefined
   const healthyClusters = clusters.filter((cluster) => cluster.health?.status === 'healthy').length
   const currentCluster = clusters.find((cluster) => cluster.id === clusterId) ?? null
 
-  const workloadOverviewQuery = useQuery(platformOverviewQueries.workload(clusterId))
+  const workloadOverviewQuery = useQuery(
+    platformOverviewQueries.workload(clusterId, canViewWorkloads),
+  )
 
-  const workloadOverviewLoading = workloadOverviewQuery.isLoading
-  const workloadOverviewData = workloadOverviewQuery.data?.data ?? null
+  const workloadOverviewLoading = canViewWorkloads && workloadOverviewQuery.isLoading
+  const workloadOverviewData = canViewWorkloads ? (workloadOverviewQuery.data?.data ?? null) : null
 
   const workloadOverview = useMemo<AggregatedWorkloadOverview | null>(() => {
     if (!workloadOverviewData) return null
@@ -132,7 +142,10 @@ export function OverviewPage() {
   const updatedAt = workloadOverview?.generatedAt
     ? formatDateTime(workloadOverview.generatedAt)
     : '-'
-  const isLoading = clustersQuery.isLoading || summaryQuery.isLoading
+  const isLoading =
+    permissionSnapshotQuery.isLoading ||
+    (canViewClusters && clustersQuery.isLoading) ||
+    (canViewMonitoring && summaryQuery.isLoading)
 
   if (isLoading) {
     return (
@@ -142,12 +155,12 @@ export function OverviewPage() {
     )
   }
 
-  if (clustersQuery.isError) {
+  if (permissionSnapshotQuery.isError) {
     return (
       <div className="soha-page soha-overview-page soha-platform-overview-page">
         <ManagementState
           kind="error"
-          title={localeCode === 'zh_CN' ? '集群概览加载失败' : 'Failed to load cluster overview'}
+          title={localeCode === 'zh_CN' ? '权限信息加载失败' : 'Failed to load permissions'}
         />
       </div>
     )
@@ -158,7 +171,7 @@ export function OverviewPage() {
       key: 'clusters',
       label: localeCode === 'zh_CN' ? '集群总数' : 'Clusters',
       helper: localeCode === 'zh_CN' ? '已登记到控制台的集群' : 'Registered in the console',
-      value: clusters.length,
+      value: !canViewClusters || clustersQuery.isError ? '-' : clusters.length,
       icon: <ClusterOutlined />,
       tone: 'default',
     },
@@ -166,7 +179,7 @@ export function OverviewPage() {
       key: 'healthy',
       label: localeCode === 'zh_CN' ? '健康集群' : 'Healthy',
       helper: localeCode === 'zh_CN' ? '当前健康状态正常' : 'Reporting healthy status',
-      value: healthyClusters,
+      value: !canViewClusters || clustersQuery.isError ? '-' : healthyClusters,
       icon: <CheckCircleOutlined />,
       tone: 'success',
     },
@@ -174,7 +187,7 @@ export function OverviewPage() {
       key: 'alerts',
       label: localeCode === 'zh_CN' ? '活跃告警' : 'Firing Alerts',
       helper: localeCode === 'zh_CN' ? '需要值守的告警压力' : 'Current alert pressure',
-      value: summaryQuery.isError ? '-' : (summary?.firingCount ?? 0),
+      value: !canViewMonitoring || summaryQuery.isError ? '-' : (summary?.firingCount ?? 0),
       icon: <WarningOutlined />,
       tone: (summary?.firingCount ?? 0) > 0 ? 'warning' : 'default',
     },
@@ -182,7 +195,7 @@ export function OverviewPage() {
       key: 'channels',
       label: localeCode === 'zh_CN' ? '通知渠道' : 'Channels',
       helper: localeCode === 'zh_CN' ? '可用通知投递入口' : 'Delivery paths configured',
-      value: summaryQuery.isError ? '-' : (summary?.channelCount ?? 0),
+      value: !canViewMonitoring || summaryQuery.isError ? '-' : (summary?.channelCount ?? 0),
       icon: <AppstoreOutlined />,
       tone: 'default',
     },
@@ -288,7 +301,18 @@ export function OverviewPage() {
             </Text>
           }
         >
-          {summaryQuery.isError ? (
+          {!canViewMonitoring ? (
+            <ManagementState
+              bordered={false}
+              compact
+              kind="no-permission"
+              title={
+                localeCode === 'zh_CN'
+                  ? '无权限查看告警摘要'
+                  : 'No permission to view alert summary'
+              }
+            />
+          ) : summaryQuery.isError ? (
             <ManagementState
               bordered={false}
               compact
@@ -348,7 +372,27 @@ export function OverviewPage() {
             </Text>
           }
         >
-          {clusters.length === 0 ? (
+          {!canViewClusters ? (
+            <ManagementState
+              bordered={false}
+              compact
+              kind="no-permission"
+              title={
+                localeCode === 'zh_CN'
+                  ? '无权限查看集群健康状态'
+                  : 'No permission to view cluster health'
+              }
+            />
+          ) : clustersQuery.isError ? (
+            <ManagementState
+              bordered={false}
+              compact
+              kind="error"
+              title={
+                localeCode === 'zh_CN' ? '集群概览加载失败' : 'Failed to load cluster overview'
+              }
+            />
+          ) : clusters.length === 0 ? (
             <ManagementState
               bordered={false}
               compact
@@ -384,7 +428,7 @@ export function OverviewPage() {
         className="soha-overview-runtime-card"
         title={localeCode === 'zh_CN' ? 'Pod 运行态势' : 'Pod Runtime'}
         extra={
-          clusters.length > 0 ? (
+          canViewWorkloads && clusterId ? (
             <div className="soha-overview-runtime-card-extra">
               <Button
                 type="text"
@@ -397,12 +441,23 @@ export function OverviewPage() {
           ) : null
         }
       >
-        {clusters.length === 0 ? (
+        {!canViewWorkloads ? (
+          <ManagementState
+            bordered={false}
+            compact
+            kind="no-permission"
+            title={
+              localeCode === 'zh_CN'
+                ? '无权限查看 Pod 运行态势'
+                : 'No permission to view pod runtime'
+            }
+          />
+        ) : !clusterId ? (
           <ManagementState
             bordered={false}
             compact
             kind="select-scope"
-            title={localeCode === 'zh_CN' ? '暂无可用集群' : 'No cluster available'}
+            title={localeCode === 'zh_CN' ? '请选择集群' : 'Select a cluster'}
           />
         ) : workloadOverviewLoading ? (
           <div className="flex items-center justify-center h-56">

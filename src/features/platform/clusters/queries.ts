@@ -16,10 +16,11 @@ function hasCluster(scope: ScopeKey) {
 }
 
 export const clusterQueries = {
-  list: () =>
+  list: (enabled = true) =>
     queryOptions<Cluster[]>({
       queryKey: clusterKeys.list(),
       queryFn: listClusters,
+      enabled,
     }),
   capabilities: () =>
     queryOptions({

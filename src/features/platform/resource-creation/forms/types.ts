@@ -1,4 +1,13 @@
 import type { ReactNode } from 'react'
+import type { WorkloadSnapshotInheritance } from '../types'
+
+export const DEFAULT_WORKLOAD_SNAPSHOT_INHERITANCE = [
+  'environment',
+  'storage',
+  'resources',
+  'securityContext',
+  'scheduling',
+] satisfies WorkloadSnapshotInheritance[]
 
 export type ResourceFormKind =
   | 'Deployment'
@@ -135,6 +144,7 @@ export interface JobFormValues extends MetadataFormValues, PodTemplateFormValues
   completions?: number
   description?: string
   imagePolicy?: 'snapshot' | 'follow'
+  inherit?: WorkloadSnapshotInheritance[]
   parallelism?: number
   restartPolicy: 'Never' | 'OnFailure'
   runtimeSource: 'manual' | 'workload'

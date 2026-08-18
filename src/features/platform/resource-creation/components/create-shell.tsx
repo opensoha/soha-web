@@ -1,10 +1,11 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Alert, App, Button, Modal, Spin, Tabs, Typography } from 'antd'
+import { Alert, App, Button, Collapse, Modal, Spin, Tabs, Typography } from 'antd'
 import { CheckCircleOutlined, FileTextOutlined, FormOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementState } from '@/components/management-list'
 import { clusterQueries } from '@/features/platform/clusters/queries'
 import { useI18n } from '@/i18n'
+import { isApiError } from '@/services/api-error'
 import { createUUID } from '@/utils/uuid'
 import { resourceCreationMutations } from '../mutations'
 import { resourceCreationQueries } from '../queries'
@@ -27,6 +28,17 @@ const K8sYamlEditor = lazy(async () => {
   const module = await import('@/components/k8s-yaml-editor')
   return { default: module.K8sYamlEditor }
 })
+
+export function resourceCreationErrorMessage(error: unknown, isChinese: boolean) {
+  const detail = error instanceof Error ? error.message : String(error)
+  const requestId = isApiError(error) ? error.requestId : undefined
+  const requestSuffix = requestId
+    ? isChinese
+      ? `（请求 ID：${requestId}）`
+      : ` (request ID: ${requestId})`
+    : ''
+  return `${detail}${requestSuffix}`
+}
 
 export interface ResourceCreateFormAdapter {
   readonly content: ReactNode
@@ -54,6 +66,7 @@ function ShellBody({
   form,
   formSupported,
   initialMode = 'yaml',
+  onClose,
   onCreated,
   visible,
 }: CreateShellProps & { visible: boolean }) {
@@ -248,13 +261,13 @@ function ShellBody({
           setPreflightRequestFingerprint(nextFingerprint)
           setIdempotencyKey(createUUID())
         },
-        onError: (error) => void message.error(error.message),
+        onError: (error) => void message.error(resourceCreationErrorMessage(error, isChinese)),
       },
     )
   }
 
   function execute() {
-    if (!canExecute) return
+    if (!canExecute || executeMutation.isPending) return
     executeMutation.mutate(
       {
         clusterId: context.clusterId,
@@ -273,8 +286,9 @@ function ShellBody({
                 ? '创建已完成，请检查逐项结果'
                 : 'Creation finished; review the item results',
           )
+          if (result.status === 'succeeded') onClose?.()
         },
-        onError: (error) => void message.error(error.message),
+        onError: (error) => void message.error(resourceCreationErrorMessage(error, isChinese)),
       },
     )
   }
@@ -398,7 +412,7 @@ function ShellBody({
 
       {preflightMutation.isError ? (
         <Alert
-          description={preflightMutation.error.message}
+          description={resourceCreationErrorMessage(preflightMutation.error, isChinese)}
           showIcon
           title={isChinese ? '预检失败' : 'Preflight failed'}
           type="error"
@@ -411,10 +425,26 @@ function ShellBody({
             <Title level={5}>{isChinese ? '预检结果' : 'Preflight result'}</Title>
             <StatusSummary ready={preflightMutation.data.ready} />
           </div>
+          <Collapse
+            className="soha-resource-create-manifest-collapse"
+            defaultActiveKey={['manifest']}
+            items={[
+              {
+                key: 'manifest',
+                label: 'Manifest YAML',
+                children: (
+                  <pre className="soha-resource-create-manifest-preview">
+                    <code>{request.content}</code>
+                  </pre>
+                ),
+              },
+            ]}
+            size="small"
+          />
           <ResourcePreflightTable items={preflightMutation.data.items} />
           <div className="soha-resource-create-submit">
             <Button
-              disabled={!canExecute}
+              disabled={!canExecute || executeMutation.isPending}
               icon={<CheckCircleOutlined />}
               loading={executeMutation.isPending}
               onClick={execute}

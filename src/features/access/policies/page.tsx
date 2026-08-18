@@ -54,36 +54,48 @@ export function AccessPoliciesPage() {
   const canCreatePolicies = hasPermission(snapshot, 'access.policies.create')
   const canUpdatePolicies = hasPermission(snapshot, 'access.policies.update')
   const canDeletePolicies = hasPermission(snapshot, 'access.policies.delete')
+  const canViewRoles = hasPermission(snapshot, 'access.roles.view')
+  const canViewTeams = hasPermission(snapshot, 'access.groups.view')
   const [form] = Form.useForm<Record<string, unknown>>()
   const crud = useAccessResourceCrud({
-    query: accessQueries.policies(),
+    query: accessQueries.policies(canViewPolicies),
     create: accessMutations.policies.create(),
     update: accessMutations.policies.update(),
     delete: accessMutations.policies.delete(),
     invalidate: invalidateAccessPolicies,
   })
   const [searchKeyword, setSearchKeyword] = useState('')
-  const rolesQuery = useQuery(accessQueries.roles())
-  const teamsQuery = useQuery(accessQueries.teams())
+  const rolesQuery = useQuery(accessQueries.roles(canViewRoles))
+  const teamsQuery = useQuery(accessQueries.teams(canViewTeams))
   const roleMap = useMemo(
-    () => Object.fromEntries((rolesQuery.data ?? []).map((item) => [item.id, item.name])),
-    [rolesQuery.data],
+    () =>
+      Object.fromEntries(
+        (canViewRoles ? (rolesQuery.data ?? []) : []).map((item) => [item.id, item.name]),
+      ),
+    [canViewRoles, rolesQuery.data],
   )
   const teamMap = useMemo(
-    () => Object.fromEntries((teamsQuery.data ?? []).map((item) => [item.id, item.name])),
-    [teamsQuery.data],
+    () =>
+      Object.fromEntries(
+        (canViewTeams ? (teamsQuery.data ?? []) : []).map((item) => [item.id, item.name]),
+      ),
+    [canViewTeams, teamsQuery.data],
   )
   const roleOptions = useMemo(
-    () => (rolesQuery.data ?? []).map((item) => ({ value: item.id, label: item.name })),
-    [rolesQuery.data],
+    () =>
+      (canViewRoles ? (rolesQuery.data ?? []) : []).map((item) => ({
+        value: item.id,
+        label: item.name,
+      })),
+    [canViewRoles, rolesQuery.data],
   )
   const teamOptions = useMemo(
     () =>
-      (teamsQuery.data ?? []).map((item) => ({
+      (canViewTeams ? (teamsQuery.data ?? []) : []).map((item) => ({
         value: item.id,
         label: item.path ? `${item.name} (${item.path})` : item.name,
       })),
-    [teamsQuery.data],
+    [canViewTeams, teamsQuery.data],
   )
   const columns: ColumnProps<AccessPolicy>[] = [
     { title: '策略名称', dataIndex: 'name' },
@@ -242,10 +254,16 @@ export function AccessPoliciesPage() {
       dataSource={filteredPolicies}
       rowKey="id"
       loading={crud.isLoading}
-      refreshing={crud.isFetching || rolesQuery.isFetching || teamsQuery.isFetching}
-      onRefresh={() =>
-        void Promise.all([crud.refetch(), rolesQuery.refetch(), teamsQuery.refetch()])
+      refreshing={
+        crud.isFetching ||
+        (canViewRoles && rolesQuery.isFetching) ||
+        (canViewTeams && teamsQuery.isFetching)
       }
+      onRefresh={() => {
+        void crud.refetch()
+        if (canViewRoles) void rolesQuery.refetch()
+        if (canViewTeams) void teamsQuery.refetch()
+      }}
       placeholder="搜索策略、主体、目标或动作"
       searchKeyword={searchKeyword}
       setSearchKeyword={setSearchKeyword}

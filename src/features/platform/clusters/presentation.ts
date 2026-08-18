@@ -2,7 +2,9 @@ import type { Cluster } from './types'
 
 export const clusterTypeOptions = [
   { value: 'standard_kubernetes', labelZh: '标准 Kubernetes', labelEn: 'Standard Kubernetes' },
+  { value: 'k3s', labelZh: 'K3s', labelEn: 'K3s' },
   { value: 'gke', labelZh: 'GKE', labelEn: 'GKE' },
+  { value: 'eks', labelZh: 'EKS', labelEn: 'EKS' },
   { value: 'ack', labelZh: 'ACK', labelEn: 'ACK' },
   { value: 'tke', labelZh: 'TKE', labelEn: 'TKE' },
   { value: 'aks', labelZh: 'AKS', labelEn: 'AKS' },

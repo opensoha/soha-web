@@ -43,7 +43,9 @@ export const clusterMutations = {
     mutationOptions({
       mutationKey: [...clusterKeys.all, 'create'] as const,
       mutationFn: (values: ClusterPayload) => createCluster(values),
-      onSuccess: () => queryClient.invalidateQueries({ queryKey: clusterKeys.list() }),
+      onSuccess: () => {
+        void queryClient.invalidateQueries({ queryKey: clusterKeys.list() })
+      },
     }),
   update: (queryClient: QueryClient) =>
     mutationOptions({

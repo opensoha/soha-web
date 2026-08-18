@@ -20,6 +20,10 @@ const testState = vi.hoisted(() => ({
   responses: {} as Record<string, unknown>,
 }))
 
+const apiGetMock = vi.hoisted(() =>
+  vi.fn((path: string) => Promise.resolve({ data: testState.responses[path] ?? [] })),
+)
+
 vi.mock('@/features/auth/permission-snapshot', async () => {
   const actual = await vi.importActual<typeof import('@/features/auth/permission-snapshot')>(
     '@/features/auth/permission-snapshot',
@@ -35,7 +39,7 @@ vi.mock('@/features/auth/permission-snapshot', async () => {
 
 vi.mock('@/services/api-client', () => ({
   api: {
-    get: vi.fn((path: string) => Promise.resolve({ data: testState.responses[path] ?? [] })),
+    get: apiGetMock,
     post: vi.fn(),
     put: vi.fn(),
     delete: vi.fn(),
@@ -234,6 +238,24 @@ describe('frontend access authorization splits', () => {
     expect(document.body.textContent).toContain('集群地域')
     expect(document.body.textContent).toContain('请求来源')
     expect(document.body.textContent).toContain('审批状态')
+  })
+
+  it('does not load policy role and team options without their view permissions', async () => {
+    setSnapshot(['access.policies.view'])
+
+    await renderWithProviders(<AccessPoliciesPage />, '/access/policies')
+
+    expect(apiGetMock).toHaveBeenCalledWith('/access/policies')
+    expect(apiGetMock).not.toHaveBeenCalledWith('/access/roles')
+    expect(apiGetMock).not.toHaveBeenCalledWith('/access/teams')
+  })
+
+  it('loads policy team options with the group view permission', async () => {
+    setSnapshot(['access.policies.view', 'access.groups.view'])
+
+    await renderWithProviders(<AccessPoliciesPage />, '/access/policies')
+
+    expect(apiGetMock).toHaveBeenCalledWith('/access/teams')
   })
 
   it('blocks the scope-grants page without the dedicated view permission', async () => {

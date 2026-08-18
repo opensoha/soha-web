@@ -60,6 +60,23 @@
   gap: 12px;
 }
 
+.soha-identity-app-icon-field {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.soha-identity-app-icon-field .ant-avatar {
+  border: 1px solid var(--soha-border-color);
+  background: var(--soha-fill-weak);
+}
+
+.soha-identity-app-icon-file-input {
+  display: none !important;
+}
+
 .soha-identity-switch-row {
   display: flex;
   flex-wrap: wrap;
