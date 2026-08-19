@@ -1,25 +1,23 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import {
   Alert,
   App,
   Button,
-  Card,
-  Col,
+  Drawer,
   Flex,
   Input,
   InputNumber,
-  List,
-  Row,
   Select,
   Space,
-  Tag,
+  Tabs,
   Typography,
 } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ManagementDetailHeader, ManagementState } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
-import { getAIModelSettingsPath, getAIWorkbenchPathForMode } from '../../workbench/navigation'
+import { AdminTable } from '@/components/admin-table'
+import { ManagementState } from '@/components/management-list'
+import { MetadataTag } from '@/components/status-tag'
+import { AISettingsPage } from '@/features/settings'
 import { displayWorkbenchSessionTitle } from '../../workbench/model'
 import {
   TOOLSET_BUDGET_FIELDS,
@@ -37,7 +35,7 @@ import { observeMutations } from '../mutations'
 import { observeQueries } from '../queries'
 import '../../copilot-pages.css'
 
-const { Paragraph, Text } = Typography
+const { Paragraph, Text, Title } = Typography
 
 function buildScopeSummary(scope?: WorkbenchSessionScope) {
   if (!scope) return '未固定上下文'
@@ -49,7 +47,6 @@ function buildScopeSummary(scope?: WorkbenchSessionScope) {
 }
 
 export function AIToolsPage() {
-  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const requestedSessionId = searchParams.get('session') || undefined
   const queryClient = useQueryClient()
@@ -59,6 +56,7 @@ export function AIToolsPage() {
   const [disabledToolNames, setDisabledToolNames] = useState<string[]>([])
   const [budgetOverrides, setBudgetOverrides] = useState<Record<string, number>>({})
   const [scopeOverrides, setScopeOverrides] = useState<Partial<WorkbenchSessionScope>>({})
+  const [sessionDrawerOpen, setSessionDrawerOpen] = useState(false)
   const catalogQuery = useQuery(observeQueries.tools.catalog())
   const sessionDetailQuery = useQuery(observeQueries.tools.session(requestedSessionId))
 
@@ -197,252 +195,246 @@ export function AIToolsPage() {
 
   return (
     <div className="soha-page">
-      <ManagementDetailHeader
-        title="工具与技能"
-        description="全局配置镜像与会话级装配入口，统一查看 MCP adapters、数据源和技能能力。"
-      />
-      <Row gutter={[16, 16]}>
-        <Col xs={24} xl={12}>
-          <Card title="MCP Adapters">
-            <List
-              dataSource={adapters}
-              renderItem={(item) => (
-                <List.Item>
-                  <List.Item.Meta
-                    title={
-                      <Space>
-                        <Text strong>{item.name}</Text>
-                        <Tag>{item.sourceKind}</Tag>
-                      </Space>
-                    }
-                    description={item.description}
-                  />
-                </List.Item>
-              )}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} xl={12}>
-          <Card title="Data Sources">
-            <List
-              dataSource={dataSources}
-              renderItem={(item) => (
-                <List.Item>
-                  <List.Item.Meta
-                    title={
-                      <Space>
-                        <Text strong>{item.name}</Text>
-                        <Tag>{item.backendType}</Tag>
-                      </Space>
-                    }
-                    description={`${item.sourceKind} / ${item.mcpAdapter}`}
-                  />
-                  <StatusTag
-                    value={item.validationStatus || (item.enabled ? 'enabled' : 'disabled')}
-                  />
-                </List.Item>
-              )}
-            />
-          </Card>
-        </Col>
-        <Col xs={24}>
-          <Card title="会话级装配">
-            {!requestedSessionId || !currentSession ? (
-              <ManagementState
-                bordered={false}
-                compact
-                kind="select-scope"
-                title="未选择会话"
-                description="先从左侧菜单进入一个会话，再配置工具装配。"
+      <Tabs
+        className="soha-resource-tabs"
+        defaultActiveKey="adapters"
+        tabBarExtraContent={
+          requestedSessionId ? (
+            <Button
+              loading={sessionDetailQuery.isLoading}
+              onClick={() => setSessionDrawerOpen(true)}
+            >
+              配置当前会话
+            </Button>
+          ) : null
+        }
+        items={[
+          {
+            key: 'adapters',
+            label: `MCP Adapters (${adapters.length})`,
+            children: (
+              <AdminTable
+                columnSettingPlacement="hidden"
+                columns={[
+                  { title: '名称', dataIndex: 'name', key: 'name' },
+                  {
+                    title: '来源类型',
+                    dataIndex: 'sourceKind',
+                    key: 'sourceKind',
+                    width: 180,
+                    render: (value: string) => <MetadataTag label={value} />,
+                  },
+                  { title: '说明', dataIndex: 'description', key: 'description' },
+                ]}
+                dataSource={adapters}
+                loading={catalogQuery.isLoading}
+                pagination={false}
+                rowKey="id"
+                empty={
+                  catalogQuery.isError ? (
+                    <ManagementState kind="error" title="MCP Adapters 加载失败" />
+                  ) : (
+                    <ManagementState title="暂无 MCP Adapter" />
+                  )
+                }
               />
-            ) : (
-              <Space orientation="vertical" size={16} style={{ width: '100%' }}>
-                <Flex justify="space-between" align="start" gap={12} wrap="wrap">
-                  <Space size={[8, 8]} wrap>
-                    <Tag color="blue">{displayWorkbenchSessionTitle(currentSession.title)}</Tag>
-                    <Tag>{currentSession.metadata?.mode || 'general'}</Tag>
-                    <Tag>{buildScopeSummary(currentSession.metadata?.scope)}</Tag>
-                    <Tag>
-                      {selectedAdapterIds.length > 0
-                        ? `${selectedAdapterIds.length} adapters`
-                        : 'auto adapters'}
-                    </Tag>
-                    <Tag>{disabledToolNames.length} disabled tools</Tag>
-                    <Tag>{countObjectKeys(cleanedBudgetOverrides)} budgets</Tag>
-                  </Space>
-                  <Space wrap>
-                    <Button onClick={clearToolset}>恢复自动选择</Button>
-                    <Button onClick={applyRecommendedToolset}>应用推荐预设</Button>
-                    <Button
-                      type="primary"
-                      loading={patchSessionMutation.isPending}
-                      onClick={saveToolset}
-                    >
-                      保存会话级装配
-                    </Button>
-                  </Space>
-                </Flex>
+            ),
+          },
+          {
+            key: 'sources',
+            label: `数据源 (${dataSources.length})`,
+            children: <AISettingsPage embedded section="data-sources" />,
+          },
+          {
+            key: 'skills',
+            label: `Skills (${skills.length})`,
+            children: <AISettingsPage embedded section="skills" />,
+          },
+        ]}
+      />
 
-                {unavailableSelectedAdapterIds.length > 0 ? (
-                  <Alert
-                    type="warning"
-                    showIcon
-                    title="部分已选 adapter 当前没有启用数据源"
-                    description={`${unavailableSelectedAdapterIds.join(', ')} 会保留在会话策略中，但运行时相关工具可能被跳过。`}
-                  />
-                ) : null}
+      <Drawer
+        destroyOnHidden
+        open={sessionDrawerOpen}
+        title="会话级工具装配"
+        size={720}
+        loading={sessionDetailQuery.isLoading}
+        onClose={() => setSessionDrawerOpen(false)}
+        footer={
+          currentSession ? (
+            <Flex justify="space-between" gap={12} wrap="wrap">
+              <Space wrap>
+                <Button onClick={clearToolset}>恢复自动选择</Button>
+                <Button onClick={applyRecommendedToolset}>应用推荐预设</Button>
+              </Space>
+              <Button type="primary" loading={patchSessionMutation.isPending} onClick={saveToolset}>
+                保存会话级装配
+              </Button>
+            </Flex>
+          ) : null
+        }
+      >
+        {!requestedSessionId || !currentSession ? (
+          <ManagementState
+            bordered={false}
+            compact
+            kind={sessionDetailQuery.isError ? 'error' : 'select-scope'}
+            title={sessionDetailQuery.isError ? '会话加载失败' : '未选择会话'}
+            description={
+              sessionDetailQuery.isError
+                ? '无法读取当前会话，请稍后重试。'
+                : '先从左侧菜单进入一个会话，再配置工具装配。'
+            }
+          />
+        ) : (
+          <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+            <Space size={[8, 8]} wrap>
+              <MetadataTag tone="blue" label={displayWorkbenchSessionTitle(currentSession.title)} />
+              <MetadataTag label={currentSession.metadata?.mode || 'general'} />
+              <MetadataTag label={buildScopeSummary(currentSession.metadata?.scope)} />
+              <MetadataTag
+                label={
+                  selectedAdapterIds.length > 0
+                    ? `${selectedAdapterIds.length} adapters`
+                    : 'auto adapters'
+                }
+              />
+              <MetadataTag label={`${disabledToolNames.length} disabled tools`} />
+              <MetadataTag label={`${countObjectKeys(cleanedBudgetOverrides)} budgets`} />
+            </Space>
 
-                <Card size="small" title="Adapters 与工具">
-                  <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-                    <Select
-                      mode="multiple"
-                      allowClear
-                      maxTagCount="responsive"
-                      showSearch={{ optionFilterProp: 'label' }}
-                      placeholder="留空表示自动允许所有已注册 adapter"
-                      value={selectedAdapterIds}
-                      onChange={(value: string[]) => setSelectedAdapterIds(value)}
-                      options={adapters.map((item) => ({
-                        value: item.id,
-                        label: `${item.name} (${item.sourceKind})`,
-                      }))}
-                    />
-                    <Select
-                      mode="multiple"
-                      allowClear
-                      maxTagCount="responsive"
-                      showSearch={{ optionFilterProp: 'label' }}
-                      placeholder="选择要屏蔽的工具，保存为 adapter.tool"
-                      value={disabledToolNames}
-                      onChange={(value: string[]) =>
-                        setDisabledToolNames(canonicalDisabledToolNames(value, adapters))
-                      }
-                      options={disabledToolOptions}
-                    />
-                    <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                      禁用工具会以 `adapter.tool` 形式保存，避免同名工具跨 adapter 被误屏蔽。
-                    </Paragraph>
-                  </Space>
-                </Card>
+            {unavailableSelectedAdapterIds.length > 0 ? (
+              <Alert
+                type="warning"
+                showIcon
+                title="部分已选 adapter 当前没有启用数据源"
+                description={`${unavailableSelectedAdapterIds.join(', ')} 会保留在会话策略中，但运行时相关工具可能被跳过。`}
+              />
+            ) : null}
 
-                <Card size="small" title="Skills">
-                  <Select
-                    mode="multiple"
-                    allowClear
-                    maxTagCount="responsive"
-                    showSearch={{ optionFilterProp: 'label' }}
-                    placeholder="选择会话级技能；留空表示沿用全局启用项"
-                    value={selectedSkillIds}
-                    onChange={(value: string[]) => setSelectedSkillIds(value)}
-                    options={skills
-                      .filter((item) => item.enabled)
-                      .map((item) => ({ value: item.id, label: item.name }))}
-                  />
-                </Card>
+            <section>
+              <Title level={5}>Adapters 与工具</Title>
+              <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+                <Select
+                  mode="multiple"
+                  allowClear
+                  maxTagCount="responsive"
+                  showSearch={{ optionFilterProp: 'label' }}
+                  placeholder="留空表示自动允许所有已注册 adapter"
+                  style={{ width: '100%' }}
+                  value={selectedAdapterIds}
+                  onChange={(value: string[]) => setSelectedAdapterIds(value)}
+                  options={adapters.map((item) => ({
+                    value: item.id,
+                    label: `${item.name} (${item.sourceKind})`,
+                  }))}
+                />
+                <Select
+                  mode="multiple"
+                  allowClear
+                  maxTagCount="responsive"
+                  showSearch={{ optionFilterProp: 'label' }}
+                  placeholder="选择要屏蔽的工具，保存为 adapter.tool"
+                  style={{ width: '100%' }}
+                  value={disabledToolNames}
+                  onChange={(value: string[]) =>
+                    setDisabledToolNames(canonicalDisabledToolNames(value, adapters))
+                  }
+                  options={disabledToolOptions}
+                />
+                <Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                  禁用工具会以 `adapter.tool` 形式保存，避免同名工具跨 adapter 被误屏蔽。
+                </Paragraph>
+              </Space>
+            </section>
 
-                <Card size="small" title="Budget Overrides">
-                  <Space orientation="vertical" size={8} style={{ width: '100%' }}>
-                    {TOOLSET_BUDGET_FIELDS.map((field) => (
-                      <Flex key={field.key} justify="space-between" align="center" gap={12}>
-                        <span>
-                          <Text strong>{field.label}</Text>
-                          <Text type="secondary" style={{ display: 'block' }}>
-                            {field.description}
-                          </Text>
-                        </span>
-                        <InputNumber
-                          min={0}
-                          suffix={field.suffix}
-                          value={budgetOverrides[field.key]}
-                          onChange={(value) => setBudgetOverrideValue(field.key, value)}
-                        />
-                      </Flex>
-                    ))}
-                  </Space>
-                </Card>
+            <section>
+              <Title level={5}>Skills</Title>
+              <Select
+                mode="multiple"
+                allowClear
+                maxTagCount="responsive"
+                showSearch={{ optionFilterProp: 'label' }}
+                placeholder="选择会话级技能；留空表示沿用全局启用项"
+                style={{ width: '100%' }}
+                value={selectedSkillIds}
+                onChange={(value: string[]) => setSelectedSkillIds(value)}
+                options={skills
+                  .filter((item) => item.enabled)
+                  .map((item) => ({ value: item.id, label: item.name }))}
+              />
+            </section>
 
-                <Card size="small" title="Scope Overrides">
-                  <Space orientation="vertical" size={8} style={{ width: '100%' }}>
-                    <Alert
-                      type="info"
-                      showIcon
-                      title="Scope override 会叠加到当前会话范围"
-                      description={`当前会话范围：${buildScopeSummary(currentSession.metadata?.scope)}`}
-                    />
-                    <Input
-                      placeholder="Override cluster"
-                      value={scopeOverrides.clusterId || ''}
-                      onChange={(event) => setScopeOverrideValue('clusterId', event.target.value)}
-                    />
-                    <Input
-                      placeholder="Override namespace"
-                      value={scopeOverrides.namespace || ''}
-                      onChange={(event) => setScopeOverrideValue('namespace', event.target.value)}
-                    />
-                    <Input
-                      placeholder="Override workload"
-                      value={scopeOverrides.workload || ''}
-                      onChange={(event) => setScopeOverrideValue('workload', event.target.value)}
-                    />
-                    <Input
-                      placeholder="Override service"
-                      value={scopeOverrides.service || ''}
-                      onChange={(event) => setScopeOverrideValue('service', event.target.value)}
-                    />
-                    <Input
-                      placeholder="Override alert ID"
-                      value={scopeOverrides.alertId || ''}
-                      onChange={(event) => setScopeOverrideValue('alertId', event.target.value)}
-                    />
+            <section>
+              <Title level={5}>Budget Overrides</Title>
+              <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+                {TOOLSET_BUDGET_FIELDS.map((field) => (
+                  <Flex key={field.key} justify="space-between" align="center" gap={12} wrap="wrap">
+                    <span style={{ flex: '1 1 220px' }}>
+                      <Text strong>{field.label}</Text>
+                      <Text type="secondary" style={{ display: 'block' }}>
+                        {field.description}
+                      </Text>
+                    </span>
                     <InputNumber
                       min={0}
-                      suffix="minutes"
-                      placeholder="Override time range"
-                      value={scopeOverrides.timeRangeMinutes}
-                      onChange={(value) => setScopeOverrideNumberValue('timeRangeMinutes', value)}
+                      suffix={field.suffix}
+                      style={{ width: 180, maxWidth: '100%' }}
+                      value={budgetOverrides[field.key]}
+                      onChange={(value) => setBudgetOverrideValue(field.key, value)}
                     />
-                  </Space>
-                </Card>
+                  </Flex>
+                ))}
               </Space>
-            )}
-          </Card>
-        </Col>
-        <Col xs={24}>
-          <Card title="Skills Registry">
-            <List
-              dataSource={skills}
-              locale={{ emptyText: '暂无全局 skills 配置' }}
-              renderItem={(item) => (
-                <List.Item>
-                  <List.Item.Meta
-                    title={
-                      <Space>
-                        <Text strong>{item.name}</Text>
-                        <Tag>{item.id}</Tag>
-                      </Space>
-                    }
-                    description={item.description || (item.scopes ?? []).join(', ')}
-                  />
-                  <StatusTag value={item.enabled ? 'enabled' : 'disabled'} />
-                </List.Item>
-              )}
-            />
-            <Space style={{ marginTop: 16 }}>
-              <Button onClick={() => navigate(getAIModelSettingsPath(searchParams))}>
-                前往 AI 设置
-              </Button>
-              <Button
-                type="primary"
-                onClick={() =>
-                  navigate(getAIWorkbenchPathForMode(currentSession?.metadata?.mode, searchParams))
-                }
-              >
-                回到 AI 工作台
-              </Button>
-            </Space>
-          </Card>
-        </Col>
-      </Row>
+            </section>
+
+            <section>
+              <Title level={5}>Scope Overrides</Title>
+              <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+                <Alert
+                  type="info"
+                  showIcon
+                  title="Scope override 会叠加到当前会话范围"
+                  description={`当前会话范围：${buildScopeSummary(currentSession.metadata?.scope)}`}
+                />
+                <Input
+                  placeholder="Override cluster"
+                  value={scopeOverrides.clusterId || ''}
+                  onChange={(event) => setScopeOverrideValue('clusterId', event.target.value)}
+                />
+                <Input
+                  placeholder="Override namespace"
+                  value={scopeOverrides.namespace || ''}
+                  onChange={(event) => setScopeOverrideValue('namespace', event.target.value)}
+                />
+                <Input
+                  placeholder="Override workload"
+                  value={scopeOverrides.workload || ''}
+                  onChange={(event) => setScopeOverrideValue('workload', event.target.value)}
+                />
+                <Input
+                  placeholder="Override service"
+                  value={scopeOverrides.service || ''}
+                  onChange={(event) => setScopeOverrideValue('service', event.target.value)}
+                />
+                <Input
+                  placeholder="Override alert ID"
+                  value={scopeOverrides.alertId || ''}
+                  onChange={(event) => setScopeOverrideValue('alertId', event.target.value)}
+                />
+                <InputNumber
+                  min={0}
+                  suffix="minutes"
+                  placeholder="Override time range"
+                  style={{ width: '100%' }}
+                  value={scopeOverrides.timeRangeMinutes}
+                  onChange={(value) => setScopeOverrideNumberValue('timeRangeMinutes', value)}
+                />
+              </Space>
+            </section>
+          </Space>
+        )}
+      </Drawer>
     </div>
   )
 }

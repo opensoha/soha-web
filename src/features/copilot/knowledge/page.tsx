@@ -1,11 +1,5 @@
 import { useState } from 'react'
-import {
-  DeleteOutlined,
-  EyeOutlined,
-  PlusOutlined,
-  SearchOutlined,
-  SyncOutlined,
-} from '@ant-design/icons'
+import { DeleteOutlined, EyeOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Alert,
@@ -16,16 +10,21 @@ import {
   Input,
   List,
   Modal,
+  Popconfirm,
   Select,
   Space,
-  Tag,
   Tabs,
   Typography,
 } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { ManagementDataPage } from '@/components/management-data-page'
-import { ManagementState, ManagementTableToolbar } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
+import {
+  ManagementQueryActions,
+  ManagementQueryField,
+  ManagementState,
+  ManagementTableToolbar,
+} from '@/components/management-list'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { knowledgeMutations } from './mutations'
 import { knowledgeQueries } from './queries'
@@ -110,15 +109,24 @@ export function KnowledgeCenterPage() {
             aria-label={`查看知识库 ${record.name}`}
             onClick={() => setSelectedBase(record)}
           />
-          <Button
-            danger
-            type="text"
-            icon={<DeleteOutlined />}
-            aria-label={`删除知识库 ${record.name}`}
-            loading={deleteMutation.isPending && deleteMutation.variables === record.id}
+          <Popconfirm
+            cancelText="取消"
+            description="知识库及其来源、文档和索引将不可恢复。"
             disabled={!canDeleteBase}
-            onClick={() => void deleteMutation.mutateAsync(record.id)}
-          />
+            okButtonProps={{ danger: true }}
+            okText="删除"
+            title={`删除知识库 ${record.name}？`}
+            onConfirm={() => deleteMutation.mutateAsync(record.id)}
+          >
+            <Button
+              danger
+              type="text"
+              icon={<DeleteOutlined />}
+              aria-label={`删除知识库 ${record.name}`}
+              loading={deleteMutation.isPending && deleteMutation.variables === record.id}
+              disabled={!canDeleteBase}
+            />
+          </Popconfirm>
         </Space>
       ),
     },
@@ -141,85 +149,48 @@ export function KnowledgeCenterPage() {
   return (
     <ManagementDataPage
       className="soha-ai-knowledge-center"
-      header={{
-        title: 'Knowledge Center',
-        description: '管理知识库并验证检索结果。知识内容仅在服务端按当前身份和作用域授权。',
+      query={{
+        form: searchForm,
+        initialValues: { topK: 8, filters: {} },
+        collapsible: false,
+        onFinish: (values) => searchMutation.mutate(values as KnowledgeSearchInput),
         actions: (
-          <ManagementTableToolbar>
-            {canCreateBase ? (
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
-                新建知识库
-              </Button>
-            ) : null}
-          </ManagementTableToolbar>
+          <ManagementQueryActions
+            loading={searchMutation.isPending}
+            resetLabel="清空"
+            submitLabel="检索"
+            onReset={() => {
+              searchForm.resetFields()
+              searchMutation.reset()
+            }}
+          />
         ),
-      }}
-      beforeQuery={
-        <Card size="small" variant="outlined" title="检索验证">
-          <Form
-            form={searchForm}
-            layout="inline"
-            initialValues={{ topK: 8, filters: {} }}
-            onFinish={(values) => searchMutation.mutate(values)}
-          >
-            <Form.Item
+        children: (
+          <>
+            <ManagementQueryField
+              grow
+              label="检索问题"
               name="query"
               rules={[{ required: true, message: '请输入检索问题' }]}
-              style={{ flex: 1 }}
             >
               <Input placeholder="输入要从知识库检索的问题" allowClear />
-            </Form.Item>
-            <Form.Item
+            </ManagementQueryField>
+            <ManagementQueryField
+              label="知识库"
               name="knowledgeBaseIds"
+              width={320}
+              minWidth={240}
               rules={[{ required: true, message: '请选择知识库' }]}
             >
               <Select
                 mode="multiple"
                 placeholder="选择知识库"
                 options={bases.map((base) => ({ label: base.name, value: base.id }))}
-                style={{ minWidth: 240 }}
               />
-            </Form.Item>
-            <Button
-              htmlType="submit"
-              type="primary"
-              icon={<SearchOutlined />}
-              loading={searchMutation.isPending}
-            >
-              检索
-            </Button>
-          </Form>
-          {searchMutation.isError ? (
-            <Alert
-              type="error"
-              showIcon
-              title="检索失败"
-              description="知识服务暂时不可用或当前身份无权检索。"
-            />
-          ) : null}
-          {searchMutation.data?.data ? (
-            <List
-              header={
-                <Space wrap>
-                  <Text>命中 {searchMutation.data.data.hits?.length ?? 0} 条</Text>
-                  <Tag>{searchMutation.data.data.timingMs ?? '-'} ms</Tag>
-                  {searchMutation.data.data.noAnswer ? <Tag color="warning">证据不足</Tag> : null}
-                </Space>
-              }
-              dataSource={searchMutation.data.data.hits ?? []}
-              renderItem={(hit) => (
-                <List.Item>
-                  <List.Item.Meta
-                    title={hit.title || hit.documentId || '检索片段'}
-                    description={hit.content || hit.source || '-'}
-                  />
-                  {typeof hit.score === 'number' ? <Tag>{hit.score.toFixed(3)}</Tag> : null}
-                </List.Item>
-              )}
-            />
-          ) : null}
-        </Card>
-      }
+            </ManagementQueryField>
+          </>
+        ),
+      }}
       table={
         basesQuery.isError
           ? {
@@ -233,6 +204,19 @@ export function KnowledgeCenterPage() {
               dataSource: bases,
               loading: basesQuery.isLoading,
               rowKey: 'id',
+              toolbarExtra: (
+                <ManagementTableToolbar>
+                  {canCreateBase ? (
+                    <Button
+                      type="primary"
+                      icon={<PlusOutlined />}
+                      onClick={() => setCreateOpen(true)}
+                    >
+                      新建知识库
+                    </Button>
+                  ) : null}
+                </ManagementTableToolbar>
+              ),
               empty: (
                 <ManagementState
                   title="暂无知识库"
@@ -242,6 +226,44 @@ export function KnowledgeCenterPage() {
             }
       }
     >
+      {searchMutation.isError ? (
+        <Alert
+          type="error"
+          showIcon
+          title="检索失败"
+          description="知识服务暂时不可用或当前身份无权检索。"
+        />
+      ) : null}
+      {searchMutation.data?.data ? (
+        <List
+          bordered
+          size="small"
+          header={
+            <Space wrap>
+              <Text>命中 {searchMutation.data.data.hits?.length ?? 0} 条</Text>
+              <Text type="secondary">{searchMutation.data.data.timingMs ?? '-'} ms</Text>
+              {searchMutation.data.data.noAnswer ? (
+                <StatusTag value="warning" label="证据不足" />
+              ) : null}
+            </Space>
+          }
+          dataSource={searchMutation.data.data.hits ?? []}
+          renderItem={(hit) => (
+            <List.Item
+              extra={
+                typeof hit.score === 'number' ? (
+                  <Text type="secondary">{hit.score.toFixed(3)}</Text>
+                ) : null
+              }
+            >
+              <List.Item.Meta
+                title={hit.title || hit.documentId || '检索片段'}
+                description={hit.content || hit.source || '-'}
+              />
+            </List.Item>
+          )}
+        />
+      ) : null}
       <Modal
         open={createOpen}
         title="新建知识库"
@@ -346,7 +368,7 @@ export function KnowledgeCenterPage() {
                   dataSource={documentsQuery.data?.data ?? []}
                   locale={{ emptyText: documentsQuery.isError ? '文档加载失败' : '暂无文档' }}
                   renderItem={(item) => (
-                    <List.Item extra={<Tag>{item.chunkCount ?? 0} chunks</Tag>}>
+                    <List.Item extra={<MetadataTag label={`${item.chunkCount ?? 0} chunks`} />}>
                       <List.Item.Meta
                         title={item.title}
                         description={item.uri || item.version || '-'}

@@ -29,8 +29,6 @@ function AIProductionOperationsPageContent() {
   }
   return (
     <ProductionOperationsPage
-      title="AI Operations"
-      description="统一查看 AI 平台容量、SLO、备份恢复、索引重建与演练证据。"
       notice={
         <Alert
           showIcon

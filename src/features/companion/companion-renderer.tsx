@@ -57,6 +57,8 @@ export function CompanionRenderer({ interaction, pack, state }: CompanionRendere
       <Suspense fallback={<SohaOrbit state={state} stateAnimation={stateAnimation} />}>
         <Live2DCubismRenderer
           interaction={interaction}
+          key={`${pack.pluginId}:${pack.version}:${pack.manifest.entryAsset}`}
+          pack={pack}
           state={state}
           stateAnimation={stateAnimation}
         />

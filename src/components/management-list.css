@@ -641,15 +641,27 @@
     width: 100%;
   }
 
+  .soha-management-query-field .ant-form-item-row {
+    flex-direction: column;
+  }
+
   .soha-management-query-field .ant-form-item-label {
-    flex: 0 0 68px !important;
-    max-width: 68px;
+    flex: 0 0 auto !important;
+    width: 100%;
+    max-width: 100%;
+    padding-bottom: 4px;
     text-align: left;
+    line-height: 20px;
+  }
+
+  .soha-management-query-field .ant-form-item-label > label {
+    height: auto;
   }
 
   .soha-management-query-field .ant-form-item-control {
-    flex: 1 1 0 !important;
-    max-width: calc(100% - 68px);
+    flex: 1 1 auto !important;
+    width: 100%;
+    max-width: 100%;
   }
 
   .soha-management-query-actions {

@@ -15,11 +15,16 @@ import {
   DownOutlined,
   ExpandOutlined,
   FileTextOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons'
-import { Button, Spin, Tabs, Tooltip } from 'antd'
+import { useQuery } from '@tanstack/react-query'
+import { Button, Select, Spin, Tabs, Tooltip, Typography } from 'antd'
 import { useI18n } from '@/i18n'
-import type { RealtimeSession } from './types'
+import { podQueries } from '../workloads/pods/queries'
+import type { RealtimeSession, RealtimeSessionInput } from './types'
 import './session-dock.css'
+
+const { Text } = Typography
 
 const PodLogViewer = lazy(async () => {
   const module = await import('@/components/pod-log-viewer')
@@ -39,6 +44,7 @@ interface RealtimeSessionDockPanelProps {
   onCloseSession: (sessionId: string) => void
   onMaximize: () => void
   onMinimize: () => void
+  onReplaceSession: (sessionId: string, input: RealtimeSessionInput) => void
   sessions: RealtimeSession[]
   visible: boolean
 }
@@ -74,7 +80,118 @@ function defaultDockHeight() {
   )
 }
 
-function SessionContent({ session }: { session: RealtimeSession }) {
+function TerminalSessionContent({
+  onReplaceSession,
+  session,
+}: {
+  onReplaceSession: RealtimeSessionDockPanelProps['onReplaceSession']
+  session: RealtimeSession
+}) {
+  const { localeCode } = useI18n()
+  const podDetailQuery = useQuery(
+    podQueries.detail(
+      { clusterId: session.clusterId, namespace: session.namespace },
+      session.podName,
+    ),
+  )
+  const containerOptions = (podDetailQuery.data?.containers ?? []).map(({ name }) => ({
+    label: name,
+    value: name,
+  }))
+  const containerLoadError =
+    localeCode === 'zh_CN' ? '容器列表加载失败' : 'Failed to load containers'
+  const reloadContainersLabel = localeCode === 'zh_CN' ? '重新加载容器' : 'Reload containers'
+  if (session.container && !containerOptions.some(({ value }) => value === session.container)) {
+    containerOptions.unshift({ label: session.container, value: session.container })
+  }
+
+  const replaceTerminal = (container: string | undefined, shell: string) => {
+    onReplaceSession(session.id, {
+      clusterId: session.clusterId,
+      container,
+      kind: 'terminal',
+      namespace: session.namespace,
+      podName: session.podName,
+      shell,
+    })
+  }
+
+  return (
+    <PodTerminal
+      clusterId={session.clusterId}
+      namespace={session.namespace}
+      podName={session.podName}
+      container={session.container}
+      shell={session.shell}
+      toolbarContent={
+        <>
+          <div className="soha-terminal-control-group">
+            <Text strong className="text-xs">
+              {localeCode === 'zh_CN' ? '容器:' : 'Container:'}
+            </Text>
+            <Select
+              allowClear
+              aria-label={localeCode === 'zh_CN' ? '选择容器' : 'Select container'}
+              loading={podDetailQuery.isLoading}
+              options={containerOptions}
+              placeholder={localeCode === 'zh_CN' ? '默认容器' : 'Default container'}
+              size="small"
+              status={podDetailQuery.isError ? 'error' : undefined}
+              style={{ width: 220 }}
+              value={session.container}
+              onChange={(value) =>
+                replaceTerminal(value ? String(value) : undefined, session.shell ?? '/bin/sh')
+              }
+            />
+            {podDetailQuery.isError ? (
+              <>
+                <Text type="danger" className="text-xs">
+                  {containerLoadError}
+                </Text>
+                <Tooltip title={reloadContainersLabel}>
+                  <Button
+                    aria-label={reloadContainersLabel}
+                    danger
+                    icon={<ReloadOutlined />}
+                    loading={podDetailQuery.isFetching}
+                    size="small"
+                    type="text"
+                    onClick={() => void podDetailQuery.refetch()}
+                  />
+                </Tooltip>
+              </>
+            ) : null}
+          </div>
+          <div className="soha-terminal-control-group">
+            <Text strong className="text-xs">
+              Shell:
+            </Text>
+            <Select
+              aria-label={localeCode === 'zh_CN' ? '选择 Shell' : 'Select shell'}
+              options={[
+                { value: '/bin/sh', label: '/bin/sh' },
+                { value: '/bin/bash', label: '/bin/bash' },
+                { value: '/bin/ash', label: '/bin/ash' },
+              ]}
+              size="small"
+              style={{ width: 180 }}
+              value={session.shell ?? '/bin/sh'}
+              onChange={(value) => replaceTerminal(session.container, String(value))}
+            />
+          </div>
+        </>
+      }
+    />
+  )
+}
+
+function SessionContent({
+  onReplaceSession,
+  session,
+}: {
+  onReplaceSession: RealtimeSessionDockPanelProps['onReplaceSession']
+  session: RealtimeSession
+}) {
   return (
     <div className="soha-realtime-session-pane">
       <Suspense
@@ -94,13 +211,7 @@ function SessionContent({ session }: { session: RealtimeSession }) {
             streamingDisabledReason={session.streamingDisabledReason}
           />
         ) : (
-          <PodTerminal
-            clusterId={session.clusterId}
-            namespace={session.namespace}
-            podName={session.podName}
-            container={session.container}
-            shell={session.shell}
-          />
+          <TerminalSessionContent session={session} onReplaceSession={onReplaceSession} />
         )}
       </Suspense>
     </div>
@@ -115,6 +226,7 @@ export function RealtimeSessionDockPanel({
   onCloseSession,
   onMaximize,
   onMinimize,
+  onReplaceSession,
   sessions,
   visible,
 }: RealtimeSessionDockPanelProps) {
@@ -339,7 +451,9 @@ export function RealtimeSessionDockPanel({
                           ) : null}
                         </span>
                       ),
-                      children: <SessionContent session={session} />,
+                      children: (
+                        <SessionContent session={session} onReplaceSession={onReplaceSession} />
+                      ),
                     }
                   })}
                   size="small"

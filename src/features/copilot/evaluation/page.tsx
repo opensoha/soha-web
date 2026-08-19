@@ -1,19 +1,7 @@
 import { useState } from 'react'
 import { EyeOutlined, PlusOutlined, ReloadOutlined, RocketOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  Alert,
-  Button,
-  Descriptions,
-  Drawer,
-  Form,
-  Input,
-  Modal,
-  Select,
-  Space,
-  Tabs,
-  Tag,
-} from 'antd'
+import { Alert, Button, Descriptions, Drawer, Form, Input, Modal, Select, Space, Tabs } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementDataPage } from '@/components/management-data-page'
@@ -22,7 +10,7 @@ import {
   ManagementState,
   ManagementTableToolbar,
 } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { evaluationMutations } from './mutations'
 import { evaluationQueries } from './queries'
@@ -83,9 +71,7 @@ export function EvaluationStudioPage() {
       render: (refs: Record<string, string>) => (
         <Space size={4} wrap>
           {Object.entries(refs).map(([kind, ref]) => (
-            <Tag key={kind}>
-              {kind}: {ref}
-            </Tag>
+            <MetadataTag key={kind} label={`${kind}: ${ref}`} />
           ))}
         </Space>
       ),
@@ -107,12 +93,11 @@ export function EvaluationStudioPage() {
             {Object.entries(scores)
               .sort(([left], [right]) => left.localeCompare(right))
               .map(([name, score]) => (
-                <Tag
+                <StatusTag
                   key={name}
-                  color={score >= 0.8 ? 'success' : score >= 0.5 ? 'warning' : 'error'}
-                >
-                  {name}: {(score * 100).toFixed(0)}%
-                </Tag>
+                  value={score >= 0.8 ? 'passed' : score >= 0.5 ? 'warning' : 'failed'}
+                  label={`${name}: ${(score * 100).toFixed(0)}%`}
+                />
               ))}
           </Space>
         ) : (
@@ -190,36 +175,6 @@ export function EvaluationStudioPage() {
   return (
     <ManagementDataPage
       className="soha-ai-evaluation-studio"
-      header={{
-        title: 'Evaluation Studio',
-        description: '用固定数据集评测 Prompt、模型、Retrieval Policy 与 Harness 版本。',
-        actions: (
-          <ManagementTableToolbar>
-            <Button
-              icon={<ReloadOutlined />}
-              loading={runsQuery.isFetching || datasetsQuery.isFetching}
-              onClick={() => void Promise.all([runsQuery.refetch(), datasetsQuery.refetch()])}
-            >
-              刷新
-            </Button>
-            {canCreate ? (
-              <Button icon={<PlusOutlined />} onClick={() => setDatasetOpen(true)}>
-                新建数据集
-              </Button>
-            ) : null}
-            {canExecute ? (
-              <Button
-                type="primary"
-                icon={<RocketOutlined />}
-                disabled={!datasets.length}
-                onClick={() => setRunOpen(true)}
-              >
-                启动评测
-              </Button>
-            ) : null}
-          </ManagementTableToolbar>
-        ),
-      }}
       beforeQuery={
         <Alert
           type="warning"
@@ -230,6 +185,33 @@ export function EvaluationStudioPage() {
       }
       tableNode={
         <Tabs
+          className="soha-resource-tabs"
+          tabBarExtraContent={
+            <ManagementTableToolbar>
+              <Button
+                icon={<ReloadOutlined />}
+                loading={runsQuery.isFetching || datasetsQuery.isFetching}
+                onClick={() => void Promise.all([runsQuery.refetch(), datasetsQuery.refetch()])}
+              >
+                刷新
+              </Button>
+              {canCreate ? (
+                <Button icon={<PlusOutlined />} onClick={() => setDatasetOpen(true)}>
+                  新建数据集
+                </Button>
+              ) : null}
+              {canExecute ? (
+                <Button
+                  type="primary"
+                  icon={<RocketOutlined />}
+                  disabled={!datasets.length}
+                  onClick={() => setRunOpen(true)}
+                >
+                  启动评测
+                </Button>
+              ) : null}
+            </ManagementTableToolbar>
+          }
           items={[
             {
               key: 'runs',
@@ -437,7 +419,10 @@ export function EvaluationStudioPage() {
               key: 'passed',
               width: 100,
               render: (passed: boolean) => (
-                <Tag color={passed ? 'success' : 'error'}>{passed ? 'Passed' : 'Failed'}</Tag>
+                <StatusTag
+                  value={passed ? 'passed' : 'failed'}
+                  label={passed ? 'Passed' : 'Failed'}
+                />
               ),
             },
             {
@@ -446,9 +431,7 @@ export function EvaluationStudioPage() {
               key: 'scores',
               render: (scores: Record<string, number>) =>
                 Object.entries(scores).map(([name, score]) => (
-                  <Tag key={name}>
-                    {name}: {(score * 100).toFixed(0)}%
-                  </Tag>
+                  <MetadataTag key={name} label={`${name}: ${(score * 100).toFixed(0)}%`} />
                 )),
             },
             {

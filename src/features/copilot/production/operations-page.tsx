@@ -1,13 +1,15 @@
 import type { ReactNode } from 'react'
 import { ReloadOutlined } from '@ant-design/icons'
-import { Button, Space, Tabs, Typography } from 'antd'
+import { Space, Tabs } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementDataPage } from '@/components/management-data-page'
-import { ManagementState, ManagementTableToolbar } from '@/components/management-list'
+import {
+  ManagementIconButton,
+  ManagementState,
+  ManagementTableToolbar,
+} from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
-
-const { Text } = Typography
 
 export interface ProductionRecord {
   id: string
@@ -31,8 +33,6 @@ export interface ProductionTab<T extends ProductionRecord = ProductionRecord> {
 }
 
 interface ProductionOperationsPageProps {
-  title: string
-  description: string
   tabs: ProductionTab[]
   actions?: ReactNode
   onRefresh: () => void
@@ -74,8 +74,6 @@ const defaultColumns: TableColumnsType<ProductionRecord> = [
 ]
 
 export function ProductionOperationsPage({
-  title,
-  description,
   tabs,
   actions,
   onRefresh,
@@ -86,22 +84,23 @@ export function ProductionOperationsPage({
   return (
     <ManagementDataPage
       className="soha-ai-production-capability"
-      header={{
-        title,
-        description,
-        actions: (
-          <ManagementTableToolbar>
-            <Button icon={<ReloadOutlined />} loading={refreshing} onClick={onRefresh}>
-              刷新
-            </Button>
-            {actions}
-          </ManagementTableToolbar>
-        ),
-      }}
       beforeQuery={notice}
       tableNode={
         <Tabs
+          className="soha-resource-tabs"
           destroyOnHidden
+          tabBarExtraContent={
+            <ManagementTableToolbar>
+              <ManagementIconButton
+                aria-label="刷新"
+                tooltip="刷新"
+                icon={<ReloadOutlined />}
+                loading={refreshing}
+                onClick={onRefresh}
+              />
+              {actions}
+            </ManagementTableToolbar>
+          }
           items={tabs.map((tab) => ({
             key: tab.key,
             label: `${tab.label} (${tab.records.length})`,
@@ -122,6 +121,7 @@ export function ProductionOperationsPage({
                 ]}
                 dataSource={tab.records}
                 loading={tab.loading}
+                columnSettingIconOnly
                 rowKey="id"
                 empty={
                   tab.error ? (
@@ -144,7 +144,6 @@ export function ProductionOperationsPage({
           {children}
         </Space>
       ) : null}
-      <Text type="secondary">所有长任务均返回 operation 或 run ID，并由服务端状态机推进。</Text>
     </ManagementDataPage>
   )
 }

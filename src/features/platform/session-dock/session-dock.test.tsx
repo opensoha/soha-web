@@ -1,14 +1,23 @@
 /** @vitest-environment jsdom */
 
-import { act } from 'react'
+import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { podQueries } from '../workloads/pods/queries'
 import {
   RealtimeSessionDockProvider,
   RealtimeSessionDockTrigger,
   useRealtimeSessionDock,
 } from './session-dock'
+
+const { getPodDetailMock } = vi.hoisted(() => ({ getPodDetailMock: vi.fn() }))
+
+vi.mock('../workloads/pods/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../workloads/pods/api')>()),
+  getPodDetail: getPodDetailMock,
+}))
 
 vi.mock('@/i18n', () => ({
   useI18n: () => ({
@@ -18,8 +27,27 @@ vi.mock('@/i18n', () => ({
 }))
 
 vi.mock('@/components/pod-terminal', () => ({
-  PodTerminal: ({ clusterId, podName }: { clusterId: string; podName: string }) => (
-    <div data-testid={`terminal:${clusterId}:${podName}`}>terminal</div>
+  PodTerminal: ({
+    clusterId,
+    container,
+    podName,
+    shell,
+    toolbarContent,
+  }: {
+    clusterId: string
+    container?: string
+    podName: string
+    shell?: string
+    toolbarContent?: ReactNode
+  }) => (
+    <div
+      data-container={container ?? ''}
+      data-shell={shell ?? ''}
+      data-testid={`terminal:${clusterId}:${podName}`}
+    >
+      {toolbarContent}
+      terminal
+    </div>
   ),
 }))
 
@@ -110,6 +138,7 @@ beforeAll(() => {
 })
 
 beforeEach(() => {
+  getPodDetailMock.mockReset()
   usePlatformScopeStore.setState({ clusterId: 'cluster-a', namespace: 'team-a' })
 })
 
@@ -136,23 +165,65 @@ async function click(element: Element | null | undefined) {
   await flushAsyncWork()
 }
 
+async function selectOption(select: Element | null | undefined, optionLabel: string) {
+  expect(select).not.toBeNull()
+  await act(async () => {
+    select
+      ?.querySelector('.ant-select-content')
+      ?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+  })
+  await flushAsyncWork()
+  const option = Array.from(document.body.querySelectorAll('.ant-select-item-option')).find(
+    (item) => item.textContent === optionLabel,
+  )
+  expect(option).not.toBeUndefined()
+  await act(async () => {
+    option?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    option?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  })
+  await flushAsyncWork()
+}
+
 function pointerEvent(type: string, clientY: number) {
   const event = new MouseEvent(type, { bubbles: true, button: 0, clientY })
   Object.defineProperty(event, 'pointerId', { value: 1 })
   return event
 }
 
-async function renderDock() {
+async function renderDock({ preloadPodDetails = true } = {}) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   roots.push(root)
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  })
+  if (preloadPodDetails) {
+    queryClient.setQueryData(
+      podQueries.detail({ clusterId: 'cluster-a', namespace: 'team-a' }, 'pod-a').queryKey,
+      {
+        containers: [
+          { image: 'api:latest', name: 'api', ready: true, restartCount: 0 },
+          { image: 'sidecar:latest', name: 'sidecar', ready: true, restartCount: 0 },
+        ],
+        name: 'pod-a',
+        namespace: 'team-a',
+        phase: 'Running',
+      },
+    )
+    queryClient.setQueryData(
+      podQueries.detail({ clusterId: 'cluster-b', namespace: 'team-b' }, 'pod-c').queryKey,
+      { containers: [], name: 'pod-c', namespace: 'team-b', phase: 'Running' },
+    )
+  }
   await act(async () => {
     root.render(
-      <RealtimeSessionDockProvider visible>
-        <RealtimeSessionDockTrigger />
-        <SessionHarness />
-      </RealtimeSessionDockProvider>,
+      <QueryClientProvider client={queryClient}>
+        <RealtimeSessionDockProvider visible>
+          <RealtimeSessionDockTrigger />
+          <SessionHarness />
+        </RealtimeSessionDockProvider>
+      </QueryClientProvider>,
     )
   })
   return container
@@ -246,5 +317,64 @@ describe('realtime session dock', () => {
     await click(removeButtons?.item(1))
     expect(container.querySelector('[data-testid="logs:cluster-a:pod-b"]')).toBeNull()
     expect(container.querySelector('[data-testid="terminal:cluster-a:pod-a"]')).not.toBeNull()
+  })
+
+  it('switches a terminal container and shell in the current tab', async () => {
+    const container = await renderDock()
+    const terminalButton = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('terminal-a'),
+    )
+
+    await click(terminalButton)
+    await act(async () => {
+      await vi.dynamicImportSettled()
+    })
+    await flushAsyncWork()
+
+    let terminal = container.querySelector<HTMLElement>('[data-testid="terminal:cluster-a:pod-a"]')
+    expect(terminal?.textContent).toContain('容器:')
+    expect(terminal?.textContent).toContain('Shell:')
+    expect(terminal?.dataset.container).toBe('api')
+    expect(terminal?.dataset.shell).toBe('/bin/sh')
+
+    let selects = terminal?.querySelectorAll('.ant-select')
+    expect(selects).toHaveLength(2)
+    await selectOption(selects?.item(0), 'sidecar')
+
+    terminal = container.querySelector<HTMLElement>('[data-testid="terminal:cluster-a:pod-a"]')
+    expect(terminal?.dataset.container).toBe('sidecar')
+    expect(container.querySelectorAll('[data-cluster-id="cluster-a"] [role="tab"]')).toHaveLength(1)
+
+    selects = terminal?.querySelectorAll('.ant-select')
+    await selectOption(selects?.item(1), '/bin/ash')
+    terminal = container.querySelector<HTMLElement>('[data-testid="terminal:cluster-a:pod-a"]')
+    expect(terminal?.dataset.shell).toBe('/bin/ash')
+    expect(container.querySelectorAll('[data-cluster-id="cluster-a"] [role="tab"]')).toHaveLength(1)
+  })
+
+  it('shows and retries container loading errors', async () => {
+    getPodDetailMock.mockRejectedValue(new Error('unavailable'))
+    const container = await renderDock({ preloadPodDetails: false })
+    const terminalButton = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('terminal-a'),
+    )
+
+    await click(terminalButton)
+    await act(async () => {
+      await vi.dynamicImportSettled()
+    })
+    await flushAsyncWork()
+    await flushAsyncWork()
+
+    const terminal = container.querySelector<HTMLElement>(
+      '[data-testid="terminal:cluster-a:pod-a"]',
+    )
+    expect(terminal?.textContent).toContain('容器列表加载失败')
+    const retryButton = terminal?.querySelector('[aria-label="重新加载容器"]')
+    expect(retryButton).not.toBeNull()
+    expect(getPodDetailMock).toHaveBeenCalledTimes(1)
+
+    await click(retryButton)
+    expect(getPodDetailMock).toHaveBeenCalledTimes(2)
   })
 })

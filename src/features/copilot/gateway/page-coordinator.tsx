@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import {
   CheckOutlined,
   CloseOutlined,
@@ -8,7 +8,6 @@ import {
   LinkOutlined,
   KeyOutlined,
   ReloadOutlined,
-  SafetyCertificateOutlined,
   StopOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -17,25 +16,21 @@ import {
   Alert,
   App,
   Button,
-  Card,
   Descriptions,
   Form,
   Input,
   Modal,
   Popconfirm,
   Space,
-  Tag,
   Typography,
 } from 'antd'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  ManagementDetailHeader,
   ManagementIconButton,
   ManagementState,
-  ManagementTableToolbar,
   useManagementTextFilter,
 } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useAuthStore } from '@/stores/auth-store'
 import {
@@ -49,8 +44,6 @@ import {
   firstString,
   gatewayTokenPurposeFromRecord,
   gatewayTokenPurposeOptions,
-  gatewayMenuMeta,
-  gatewaySectionMeta,
   gatewaySectionPaths,
   gatewayTabBelongsToSection,
   gatewayTabSectionMap,
@@ -256,7 +249,7 @@ function auditInvocation(record: GatewayAuditLog) {
     <Space orientation="vertical" size={4}>
       <Space size={4} wrap>
         <Text strong>{target}</Text>
-        {record.action ? <Tag>{auditActionLabel(record.action)}</Tag> : null}
+        {record.action ? <MetadataTag label={auditActionLabel(record.action)} /> : null}
       </Space>
       {auditScopeSummary(record)}
     </Space>
@@ -388,7 +381,7 @@ function tokenPurposeLabel(value: string) {
 
 function tokenPurposeSummary(record: { metadata?: Record<string, unknown>; scopes?: string[] }) {
   const purpose = gatewayTokenPurposeFromRecord(record)
-  return <Tag>{tokenPurposeLabel(purpose)}</Tag>
+  return <MetadataTag label={tokenPurposeLabel(purpose)} />
 }
 
 function tokenRelayLimitsSummary(metadata?: Record<string, unknown>) {
@@ -452,9 +445,9 @@ function modelCallRoute(record: LLMCallLog) {
           .join(' / ') || '-'}
       </Text>
       <Space size={4} wrap>
-        {record.providerKind ? <Tag>{record.providerKind}</Tag> : null}
-        {record.endpoint ? <Tag>{record.endpoint}</Tag> : null}
-        {record.stream ? <Tag>stream</Tag> : null}
+        {record.providerKind ? <MetadataTag label={record.providerKind} /> : null}
+        {record.endpoint ? <MetadataTag label={record.endpoint} /> : null}
+        {record.stream ? <MetadataTag label="stream" /> : null}
       </Space>
     </Space>
   )
@@ -488,15 +481,6 @@ function modelCallLatency(record: LLMCallLog) {
 
 function relayModelRanking(metrics?: LLMRelayMetrics) {
   return metrics?.modelRanking ?? metrics?.topModels ?? []
-}
-
-function cardTitle(icon: ReactNode, title: string) {
-  return (
-    <Space size={8}>
-      {icon}
-      <span>{title}</span>
-    </Space>
-  )
 }
 
 function JsonBlock({ value }: { value: unknown }) {
@@ -719,8 +703,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
   const upstreamsQuery = useQuery(
     gatewayQueries.relay.upstreams(
       { providerKind: upstreamProviderFilter, status: upstreamStatusFilter },
-      canRelayView &&
-        (isRelay || isTokens || (isCallLogs && sectionActiveTab === 'model-calls')),
+      canRelayView && (isRelay || isTokens || (isCallLogs && sectionActiveTab === 'model-calls')),
     ),
   )
   const modelRoutesQuery = useQuery(
@@ -1013,8 +996,6 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
     onError: (error: Error) => message.error(error.message),
   })
 
-  const gatewayPanelMeta = gatewaySectionMeta[section]
-
   const aiClientColumns: TableColumnsType<AIClient> = [
     {
       title: 'Client',
@@ -1027,7 +1008,12 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
         </Space>
       ),
     },
-    { title: '类型', dataIndex: 'kind', width: 140, render: (value) => <Tag>{value}</Tag> },
+    {
+      title: '类型',
+      dataIndex: 'kind',
+      width: 140,
+      render: (value) => <MetadataTag label={value} />,
+    },
     {
       title: '状态',
       dataIndex: 'status',
@@ -1088,7 +1074,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
       title: 'Provider',
       dataIndex: 'providerKind',
       width: 150,
-      render: (value) => <Tag>{value}</Tag>,
+      render: (value) => <MetadataTag label={value} />,
     },
     {
       title: 'Base URL',
@@ -1104,7 +1090,8 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
       title: 'API key',
       dataIndex: 'apiKeyPrefix',
       width: 140,
-      render: (value) => (value ? <Tag>{value}</Tag> : <Text type="secondary">未配置</Text>),
+      render: (value) =>
+        value ? <MetadataTag label={value} /> : <Text type="secondary">未配置</Text>,
     },
     {
       title: '模型',
@@ -1191,7 +1178,8 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
       title: 'Provider',
       dataIndex: 'providerKind',
       width: 150,
-      render: (value) => (value ? <Tag>{value}</Tag> : <Text type="secondary">any</Text>),
+      render: (value) =>
+        value ? <MetadataTag label={value} /> : <Text type="secondary">any</Text>,
     },
     {
       title: '上游',
@@ -1211,7 +1199,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
       title: 'Upstream model',
       dataIndex: 'upstreamModel',
       width: 220,
-      render: (value) => <Tag>{value}</Tag>,
+      render: (value) => <MetadataTag label={value} />,
     },
     {
       title: '优先级 / 权重',
@@ -1332,7 +1320,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
       title: 'Cache',
       dataIndex: 'cacheStatus',
       width: 120,
-      render: (value) => (value ? <Tag>{value}</Tag> : <Text type="secondary">-</Text>),
+      render: (value) => (value ? <MetadataTag label={value} /> : <Text type="secondary">-</Text>),
     },
     {
       title: '错误',
@@ -1355,7 +1343,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
   ]
 
   const relayRankingColumns: TableColumnsType<{ key: string; count: number }> = [
-    { title: '模型', dataIndex: 'key', render: (value) => <Tag>{value}</Tag> },
+    { title: '模型', dataIndex: 'key', render: (value) => <MetadataTag label={value} /> },
     { title: '调用数', dataIndex: 'count', width: 120, render: formatNumber },
   ]
 
@@ -1371,7 +1359,12 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
         </Space>
       ),
     },
-    { title: 'Owner', dataIndex: 'userId', width: 180, render: (value) => <Tag>{value}</Tag> },
+    {
+      title: 'Owner',
+      dataIndex: 'userId',
+      width: 180,
+      render: (value) => <MetadataTag label={value} />,
+    },
     {
       title: '用途',
       key: 'purpose',
@@ -1496,7 +1489,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
       title: '服务账号',
       dataIndex: 'serviceAccountId',
       width: 180,
-      render: (value) => <Tag>{value}</Tag>,
+      render: (value) => <MetadataTag label={value} />,
     },
     {
       title: '用途',
@@ -1573,7 +1566,12 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
         </Space>
       ),
     },
-    { title: 'Tool', dataIndex: 'toolName', width: 240, render: (value) => <Tag>{value}</Tag> },
+    {
+      title: 'Tool',
+      dataIndex: 'toolName',
+      width: 240,
+      render: (value) => <MetadataTag label={value} />,
+    },
     {
       title: 'Effect',
       dataIndex: 'effect',
@@ -1704,7 +1702,12 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
         </Space>
       ),
     },
-    { title: 'Skill', dataIndex: 'skillId', width: 180, render: (value) => <Tag>{value}</Tag> },
+    {
+      title: 'Skill',
+      dataIndex: 'skillId',
+      width: 180,
+      render: (value) => <MetadataTag label={value} />,
+    },
     {
       title: 'Capabilities',
       dataIndex: 'capabilityRefs',
@@ -1763,7 +1766,12 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
         </Space>
       ),
     },
-    { title: 'Domain', dataIndex: 'domain', width: 120, render: (value) => <Tag>{value}</Tag> },
+    {
+      title: 'Domain',
+      dataIndex: 'domain',
+      width: 120,
+      render: (value) => <MetadataTag label={value} />,
+    },
     { title: 'Action', dataIndex: 'action', width: 110 },
     {
       title: 'Risk',
@@ -1844,14 +1852,24 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
         </Space>
       ),
     },
-    { title: 'Tool', dataIndex: 'toolName', width: 240, render: (value) => <Tag>{value}</Tag> },
+    {
+      title: 'Tool',
+      dataIndex: 'toolName',
+      width: 240,
+      render: (value) => <MetadataTag label={value} />,
+    },
     {
       title: 'Risk',
       dataIndex: 'riskLevel',
       width: 100,
       render: (value) => <StatusTag value={value} />,
     },
-    { title: '策略', dataIndex: 'strategy', width: 170, render: (value) => <Tag>{value}</Tag> },
+    {
+      title: '策略',
+      dataIndex: 'strategy',
+      width: 170,
+      render: (value) => <MetadataTag label={value} />,
+    },
     {
       title: 'Trace',
       key: 'trace',
@@ -1920,7 +1938,12 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
   ]
 
   const governanceHealthColumns: TableColumnsType<GovernanceHealthCheck> = [
-    { title: 'Check', dataIndex: 'name', width: 220, render: (value) => <Tag>{value}</Tag> },
+    {
+      title: 'Check',
+      dataIndex: 'name',
+      width: 220,
+      render: (value) => <MetadataTag label={value} />,
+    },
     {
       title: 'Status',
       dataIndex: 'status',
@@ -1978,7 +2001,12 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
       width: 120,
       render: (value) => <StatusTag value={value} />,
     },
-    { title: 'Type', dataIndex: 'type', width: 250, render: (value) => <Tag>{value}</Tag> },
+    {
+      title: 'Type',
+      dataIndex: 'type',
+      width: 250,
+      render: (value) => <MetadataTag label={value} />,
+    },
     { title: 'Count', dataIndex: 'count', width: 90, render: (value) => value ?? 1 },
     {
       title: 'Risk',
@@ -2026,7 +2054,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
   ]
 
   const governanceMetricColumns: TableColumnsType<GovernanceMetricCount> = [
-    { title: 'Key', dataIndex: 'key', render: (value) => <Tag>{value}</Tag> },
+    { title: 'Key', dataIndex: 'key', render: (value) => <MetadataTag label={value} /> },
     { title: 'Count', dataIndex: 'count', width: 90 },
   ]
 
@@ -2078,7 +2106,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
                 {item}
               </Button>
             ))}
-            {value.length > 5 ? <Tag>+{value.length - 5}</Tag> : null}
+            {value.length > 5 ? <MetadataTag label={`+${value.length - 5}`} /> : null}
           </Space>
         ) : (
           <Text type="secondary">-</Text>
@@ -2108,7 +2136,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
       title: 'Category',
       dataIndex: 'categoryLabel',
       width: 150,
-      render: (value) => <Tag>{value}</Tag>,
+      render: (value) => <MetadataTag label={value} />,
     },
     {
       title: 'Severity',
@@ -2169,8 +2197,18 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
       width: 110,
       render: (value) => <StatusTag value={value} />,
     },
-    { title: 'Type', dataIndex: 'type', width: 210, render: (value) => <Tag>{value}</Tag> },
-    { title: 'Action', dataIndex: 'action', width: 230, render: (value) => <Tag>{value}</Tag> },
+    {
+      title: 'Type',
+      dataIndex: 'type',
+      width: 210,
+      render: (value) => <MetadataTag label={value} />,
+    },
+    {
+      title: 'Action',
+      dataIndex: 'action',
+      width: 230,
+      render: (value) => <MetadataTag label={value} />,
+    },
     {
       title: 'Target',
       key: 'target',
@@ -2220,268 +2258,235 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
 
   return (
     <div className="soha-page">
-      <ManagementDetailHeader
-        title="企业 AI 运维控制面"
-        description="统一管理 AI client、用户 login key、service account、tool grant、access policy、skill binding、审批与调用日志。"
-        actions={
-          <ManagementTableToolbar>
-            <Button size="small" icon={<ReloadOutlined />} onClick={() => void refreshAll()}>
-              刷新
-            </Button>
-          </ManagementTableToolbar>
+      <Suspense
+        fallback={
+          <ManagementState
+            bordered={false}
+            compact
+            title="正在加载 AI Gateway"
+            description="正在准备当前控制面分区。"
+          />
         }
-      />
-
-      <Card
-        size="small"
-        variant="outlined"
-        className="soha-management-panel-card"
-        title={cardTitle(<SafetyCertificateOutlined />, gatewayPanelMeta.title)}
       >
-        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-          <Text type="secondary">{gatewayPanelMeta.description}</Text>
-          {section === 'tokens' || section === 'governance' || section === 'call-logs' ? (
-            <Text type="secondary">
-              {sectionActiveTab === 'tokens'
-                ? '用户 login key 在这里聚合展示；管理员可吊销，明文只在生成或轮换后展示一次。'
-                : gatewayMenuMeta[sectionActiveTab].description}
-            </Text>
-          ) : null}
-          {
-            <Suspense
-              fallback={
-                <ManagementState
-                  bordered={false}
-                  compact
-                  title="正在加载 AI Gateway"
-                  description="正在准备当前控制面分区。"
-                />
-              }
-            >
-              {section === 'relay' ? (
-                <GatewayRelaySection
-                  activeTab={sectionActiveTab}
-                  onTabChange={setActiveTab}
-                  metrics={{
-                    requests: formatNumber(
-                      relayMetric(relayMetrics, 'requestsToday', 'totalCalls'),
-                    ),
-                    successRate: formatPercent(relayMetric(relayMetrics, 'successRate')),
-                    failure: formatNumber(relayMetric(relayMetrics, 'failureCount')),
-                    ttfb: formatDurationMs(relayMetric(relayMetrics, 'averageTTFBMs', 'avgTTFBMs')),
-                    ttft: formatDurationMs(relayMetric(relayMetrics, 'averageTTFTMs', 'avgTTFTMs')),
-                    duration: formatDurationMs(
-                      relayMetric(relayMetrics, 'averageDurationMs', 'avgDurationMs'),
-                    ),
-                    tokensPerSecond: formatNumber(relayMetric(relayMetrics, 'tokensPerSecond')),
-                    cache: `${formatNumber(relayMetric(relayMetrics, 'cacheHitCount'))} hit / ${formatNumber(relayMetric(relayMetrics, 'cacheReadTokens'))} read / ${formatNumber(relayMetric(relayMetrics, 'cacheWriteTokens'))} write`,
-                  }}
-                  rankingColumns={relayRankingColumns}
-                  ranking={relayModelRanking(relayMetrics)}
-                  metricsLoading={relayMetricsQuery.isLoading}
-                  metricsFetching={relayMetricsQuery.isFetching}
-                  recentErrors={(
-                    relayMetrics?.recentErrors ??
-                    modelCalls.filter((item) => item.status && item.status !== 'success')
-                  ).slice(0, 5)}
-                  modelCallColumns={modelCallColumns}
-                  modelCalls={modelCalls}
-                  modelCallsLoading={modelCallsQuery.isLoading}
-                  modelCallsFetching={modelCallsQuery.isFetching}
-                  modelCallFilters={modelCallFilters}
-                  onModelCallFiltersChange={setModelCallFilters}
-                  canRelayView={canRelayView}
-                  canRelayCreate={canRelayCreate}
-                  upstreamColumns={upstreamColumns}
-                  upstreams={filteredUpstreams}
-                  upstreamsLoading={upstreamsQuery.isLoading}
-                  upstreamsFetching={upstreamsQuery.isFetching}
-                  upstreamFilter={upstreamFilter}
-                  upstreamProviderFilter={upstreamProviderFilter}
-                  upstreamStatusFilter={upstreamStatusFilter}
-                  onUpstreamFilterChange={setUpstreamFilter}
-                  onUpstreamProviderFilterChange={setUpstreamProviderFilter}
-                  onUpstreamStatusFilterChange={setUpstreamStatusFilter}
-                  onRefreshUpstreams={() => void upstreamsQuery.refetch()}
-                  onCreateUpstream={() => setDrawer({ kind: 'relay-upstream' })}
-                  modelRouteColumns={modelRouteColumns}
-                  modelRoutes={filteredModelRoutes}
-                  modelRoutesLoading={modelRoutesQuery.isLoading}
-                  modelRoutesFetching={modelRoutesQuery.isFetching}
-                  modelRouteFilter={modelRouteFilter}
-                  modelRouteProviderFilter={modelRouteProviderFilter}
-                  modelRouteUpstreamFilter={modelRouteUpstreamFilter}
-                  onModelRouteFilterChange={setModelRouteFilter}
-                  onModelRouteProviderFilterChange={setModelRouteProviderFilter}
-                  onModelRouteUpstreamFilterChange={setModelRouteUpstreamFilter}
-                  onRefreshModelRoutes={() => void modelRoutesQuery.refetch()}
-                  onCreateModelRoute={() => setDrawer({ kind: 'relay-route' })}
-                  onRefreshAll={() => void refreshAll()}
-                  onRefreshModelCalls={() => void modelCallsQuery.refetch()}
-                  expandedErrorRowRender={(record) => (
-                    <JsonBlock
-                      value={{
-                        requestId: record.requestId,
-                        routeTrace: record.routeTrace,
-                        metadata: record.metadata,
-                        errorCode: record.errorCode,
-                        errorMessage: record.errorMessage,
-                      }}
-                    />
-                  )}
-                  expandedModelCallRowRender={(record) => (
-                    <JsonBlock
-                      value={{
-                        requestId: record.requestId,
-                        sourceIp: record.sourceIp,
-                        userAgent: record.userAgent,
-                        routeTrace: record.routeTrace,
-                        metadata: record.metadata,
-                      }}
-                    />
-                  )}
-                />
-              ) : section === 'manifest' ? (
-                <GatewayManifestSection
-                  manifest={manifest}
-                  loading={manifestQuery.isLoading}
-                  clients={clients}
-                  filters={manifestFilters}
-                  toolColumns={toolColumns}
-                  canInvoke={canInvoke}
-                  onFiltersChange={setManifestFilters}
-                  onRefresh={() => void manifestQuery.refetch()}
-                />
-              ) : section === 'clients' ? (
-                <GatewayClientsSection
-                  columns={aiClientColumns}
-                  clients={filteredClients}
-                  loading={clientsQuery.isLoading}
-                  canCreate={canCreateClients}
-                  filter={clientFilter}
-                  onFilterChange={setClientFilter}
-                  onCreate={() => setDrawer({ kind: 'ai-client' })}
-                />
-              ) : section === 'tokens' ? (
-                <GatewayTokensSection
-                  activeTab={sectionActiveTab}
-                  onTabChange={setActiveTab}
-                  tokenColumns={tokenColumns}
-                  personalTokens={filteredPersonalTokens}
-                  personalTokensLoading={personalTokensQuery.isLoading}
-                  serviceAccountColumns={serviceAccountColumns}
-                  serviceAccounts={serviceAccounts}
-                  serviceAccountsLoading={serviceAccountsQuery.isLoading}
-                  serviceTokenColumns={serviceAccountTokenColumns}
-                  serviceTokens={filteredServiceAccountTokens}
-                  serviceTokensLoading={serviceAccountTokensQuery.isLoading}
-                  canViewAll={canViewTokens}
-                  canCreate={canCreateTokens}
-                  canRevoke={canRevokeTokens}
-                  canInvoke={canInvoke}
-                  tokenFilter={tokenFilter}
-                  serviceTokenFilter={serviceTokenFilter}
-                  onTokenFilterChange={setTokenFilter}
-                  onServiceTokenFilterChange={setServiceTokenFilter}
-                  onCreatePersonalToken={() => setDrawer({ kind: 'personal-token' })}
-                  onCreateServiceAccount={() => setDrawer({ kind: 'service-account' })}
-                  onRevokeServiceToken={() => setDrawer({ kind: 'service-token-revoke' })}
-                />
-              ) : section === 'governance' ? (
-                <GatewayGovernanceSection
-                  activeTab={sectionActiveTab}
-                  onTabChange={setActiveTab}
-                  canCreateGrants={canCreateGrants}
-                  canCreatePolicies={canCreatePolicies}
-                  canCreateSkills={canCreateSkills}
-                  grantColumns={grantColumns}
-                  grants={filteredGrants}
-                  grantsLoading={grantsQuery.isLoading}
-                  grantFilter={grantFilter}
-                  onGrantFilterChange={setGrantFilter}
-                  onCreateGrant={() => setDrawer({ kind: 'tool-grant' })}
-                  policyColumns={policyColumns}
-                  policies={filteredPolicies}
-                  policiesLoading={policiesQuery.isLoading}
-                  policyFilter={policyFilter}
-                  onPolicyFilterChange={setPolicyFilter}
-                  onCreatePolicy={() => setDrawer({ kind: 'access-policy' })}
-                  bindingColumns={bindingColumns}
-                  bindings={bindings}
-                  bindingsLoading={bindingsQuery.isLoading}
-                  onCreateBinding={() => setDrawer({ kind: 'skill-binding' })}
-                  governanceStatus={governanceStatus}
-                  governanceLoading={governanceQuery.isLoading}
-                  governanceFetching={governanceQuery.isFetching}
-                  governanceWindowHours={governanceWindowHours}
-                  onGovernanceWindowChange={setGovernanceWindowHours}
-                  onRefreshGovernance={() => void governanceQuery.refetch()}
-                  governanceHealthColumns={governanceHealthColumns}
-                  governanceCoverageColumns={governanceCoverageColumns}
-                  governanceFindingColumns={governanceFindingColumns}
-                  governanceMetricColumns={governanceMetricColumns}
-                  governanceRedactionColumns={governanceRedactionColumns}
-                  governanceQueueColumns={governanceQueueColumns}
-                  governanceTokenFindingColumns={governanceTokenFindingColumns}
-                  governanceRecommendationColumns={governanceRecommendationColumns}
-                  approvalColumns={approvalColumns}
-                  approvals={approvalRequests}
-                  approvalsLoading={approvalsQuery.isLoading}
-                  approvalFilters={approvalFilters}
-                  clients={clients}
-                  manifest={manifest}
-                  onApprovalFiltersChange={setApprovalFilters}
-                  onRefreshApprovals={() => void approvalsQuery.refetch()}
-                  expandedApprovalRowRender={(record) => <ApprovalTracePanel record={record} />}
-                />
-              ) : (
-                <GatewayCallLogsSection
-                  activeTab={sectionActiveTab}
-                  onTabChange={setActiveTab}
-                  columns={auditColumns}
-                  logs={auditLogs}
-                  loading={auditQuery.isLoading}
-                  filters={auditFilters}
-                  clients={clients}
-                  manifest={manifest}
-                  modelCallColumns={modelCallColumns}
-                  modelCalls={modelCalls}
-                  modelCallsLoading={modelCallsQuery.isLoading}
-                  modelCallsFetching={modelCallsQuery.isFetching}
-                  modelCallFilters={modelCallFilters}
-                  upstreams={upstreams}
-                  canRelayView={canRelayView}
-                  onModelCallFiltersChange={setModelCallFilters}
-                  onRefreshModelCalls={() => void modelCallsQuery.refetch()}
-                  expandedModelCallRowRender={(record) => (
-                    <JsonBlock
-                      value={{
-                        requestId: record.requestId,
-                        sourceIp: record.sourceIp,
-                        userAgent: record.userAgent,
-                        routeTrace: record.routeTrace,
-                        metadata: record.metadata,
-                      }}
-                    />
-                  )}
-                  onFiltersChange={setAuditFilters}
-                  onRefresh={() => void auditQuery.refetch()}
-                  expandedRowRender={(record) => (
-                    <JsonBlock
-                      value={{
-                        requestId: record.requestId,
-                        sourceIp: record.sourceIp,
-                        resourceScope: record.resourceScope,
-                        metadata: record.metadata,
-                      }}
-                    />
-                  )}
-                />
-              )}
-            </Suspense>
-          }
-        </Space>
-      </Card>
+        {section === 'relay' ? (
+          <GatewayRelaySection
+            activeTab={sectionActiveTab}
+            onTabChange={setActiveTab}
+            metrics={{
+              requests: formatNumber(relayMetric(relayMetrics, 'requestsToday', 'totalCalls')),
+              successRate: formatPercent(relayMetric(relayMetrics, 'successRate')),
+              failure: formatNumber(relayMetric(relayMetrics, 'failureCount')),
+              ttfb: formatDurationMs(relayMetric(relayMetrics, 'averageTTFBMs', 'avgTTFBMs')),
+              ttft: formatDurationMs(relayMetric(relayMetrics, 'averageTTFTMs', 'avgTTFTMs')),
+              duration: formatDurationMs(
+                relayMetric(relayMetrics, 'averageDurationMs', 'avgDurationMs'),
+              ),
+              tokensPerSecond: formatNumber(relayMetric(relayMetrics, 'tokensPerSecond')),
+              cache: `${formatNumber(relayMetric(relayMetrics, 'cacheHitCount'))} hit / ${formatNumber(relayMetric(relayMetrics, 'cacheReadTokens'))} read / ${formatNumber(relayMetric(relayMetrics, 'cacheWriteTokens'))} write`,
+            }}
+            rankingColumns={relayRankingColumns}
+            ranking={relayModelRanking(relayMetrics)}
+            metricsLoading={relayMetricsQuery.isLoading}
+            metricsFetching={relayMetricsQuery.isFetching}
+            recentErrors={(
+              relayMetrics?.recentErrors ??
+              modelCalls.filter((item) => item.status && item.status !== 'success')
+            ).slice(0, 5)}
+            modelCallColumns={modelCallColumns}
+            modelCalls={modelCalls}
+            modelCallsLoading={modelCallsQuery.isLoading}
+            modelCallsFetching={modelCallsQuery.isFetching}
+            modelCallFilters={modelCallFilters}
+            onModelCallFiltersChange={setModelCallFilters}
+            canRelayView={canRelayView}
+            canRelayCreate={canRelayCreate}
+            upstreamColumns={upstreamColumns}
+            upstreams={filteredUpstreams}
+            upstreamsLoading={upstreamsQuery.isLoading}
+            upstreamsFetching={upstreamsQuery.isFetching}
+            upstreamFilter={upstreamFilter}
+            upstreamProviderFilter={upstreamProviderFilter}
+            upstreamStatusFilter={upstreamStatusFilter}
+            onUpstreamFilterChange={setUpstreamFilter}
+            onUpstreamProviderFilterChange={setUpstreamProviderFilter}
+            onUpstreamStatusFilterChange={setUpstreamStatusFilter}
+            onRefreshUpstreams={() => void upstreamsQuery.refetch()}
+            onCreateUpstream={() => setDrawer({ kind: 'relay-upstream' })}
+            modelRouteColumns={modelRouteColumns}
+            modelRoutes={filteredModelRoutes}
+            modelRoutesLoading={modelRoutesQuery.isLoading}
+            modelRoutesFetching={modelRoutesQuery.isFetching}
+            modelRouteFilter={modelRouteFilter}
+            modelRouteProviderFilter={modelRouteProviderFilter}
+            modelRouteUpstreamFilter={modelRouteUpstreamFilter}
+            onModelRouteFilterChange={setModelRouteFilter}
+            onModelRouteProviderFilterChange={setModelRouteProviderFilter}
+            onModelRouteUpstreamFilterChange={setModelRouteUpstreamFilter}
+            onRefreshModelRoutes={() => void modelRoutesQuery.refetch()}
+            onCreateModelRoute={() => setDrawer({ kind: 'relay-route' })}
+            onRefreshAll={() => void refreshAll()}
+            onRefreshModelCalls={() => void modelCallsQuery.refetch()}
+            expandedErrorRowRender={(record) => (
+              <JsonBlock
+                value={{
+                  requestId: record.requestId,
+                  routeTrace: record.routeTrace,
+                  metadata: record.metadata,
+                  errorCode: record.errorCode,
+                  errorMessage: record.errorMessage,
+                }}
+              />
+            )}
+            expandedModelCallRowRender={(record) => (
+              <JsonBlock
+                value={{
+                  requestId: record.requestId,
+                  sourceIp: record.sourceIp,
+                  userAgent: record.userAgent,
+                  routeTrace: record.routeTrace,
+                  metadata: record.metadata,
+                }}
+              />
+            )}
+          />
+        ) : section === 'manifest' ? (
+          <GatewayManifestSection
+            manifest={manifest}
+            loading={manifestQuery.isLoading}
+            clients={clients}
+            filters={manifestFilters}
+            toolColumns={toolColumns}
+            canInvoke={canInvoke}
+            onFiltersChange={setManifestFilters}
+            onRefresh={() => void manifestQuery.refetch()}
+          />
+        ) : section === 'clients' ? (
+          <GatewayClientsSection
+            columns={aiClientColumns}
+            clients={filteredClients}
+            loading={clientsQuery.isLoading}
+            canCreate={canCreateClients}
+            filter={clientFilter}
+            onFilterChange={setClientFilter}
+            onCreate={() => setDrawer({ kind: 'ai-client' })}
+          />
+        ) : section === 'tokens' ? (
+          <GatewayTokensSection
+            activeTab={sectionActiveTab}
+            onTabChange={setActiveTab}
+            tokenColumns={tokenColumns}
+            personalTokens={filteredPersonalTokens}
+            personalTokensLoading={personalTokensQuery.isLoading}
+            serviceAccountColumns={serviceAccountColumns}
+            serviceAccounts={serviceAccounts}
+            serviceAccountsLoading={serviceAccountsQuery.isLoading}
+            serviceTokenColumns={serviceAccountTokenColumns}
+            serviceTokens={filteredServiceAccountTokens}
+            serviceTokensLoading={serviceAccountTokensQuery.isLoading}
+            canViewAll={canViewTokens}
+            canCreate={canCreateTokens}
+            canRevoke={canRevokeTokens}
+            canInvoke={canInvoke}
+            tokenFilter={tokenFilter}
+            serviceTokenFilter={serviceTokenFilter}
+            onTokenFilterChange={setTokenFilter}
+            onServiceTokenFilterChange={setServiceTokenFilter}
+            onCreatePersonalToken={() => setDrawer({ kind: 'personal-token' })}
+            onCreateServiceAccount={() => setDrawer({ kind: 'service-account' })}
+            onRevokeServiceToken={() => setDrawer({ kind: 'service-token-revoke' })}
+          />
+        ) : section === 'governance' ? (
+          <GatewayGovernanceSection
+            activeTab={sectionActiveTab}
+            onTabChange={setActiveTab}
+            canCreateGrants={canCreateGrants}
+            canCreatePolicies={canCreatePolicies}
+            canCreateSkills={canCreateSkills}
+            grantColumns={grantColumns}
+            grants={filteredGrants}
+            grantsLoading={grantsQuery.isLoading}
+            grantFilter={grantFilter}
+            onGrantFilterChange={setGrantFilter}
+            onCreateGrant={() => setDrawer({ kind: 'tool-grant' })}
+            policyColumns={policyColumns}
+            policies={filteredPolicies}
+            policiesLoading={policiesQuery.isLoading}
+            policyFilter={policyFilter}
+            onPolicyFilterChange={setPolicyFilter}
+            onCreatePolicy={() => setDrawer({ kind: 'access-policy' })}
+            bindingColumns={bindingColumns}
+            bindings={bindings}
+            bindingsLoading={bindingsQuery.isLoading}
+            onCreateBinding={() => setDrawer({ kind: 'skill-binding' })}
+            governanceStatus={governanceStatus}
+            governanceLoading={governanceQuery.isLoading}
+            governanceFetching={governanceQuery.isFetching}
+            governanceWindowHours={governanceWindowHours}
+            onGovernanceWindowChange={setGovernanceWindowHours}
+            onRefreshGovernance={() => void governanceQuery.refetch()}
+            governanceHealthColumns={governanceHealthColumns}
+            governanceCoverageColumns={governanceCoverageColumns}
+            governanceFindingColumns={governanceFindingColumns}
+            governanceMetricColumns={governanceMetricColumns}
+            governanceRedactionColumns={governanceRedactionColumns}
+            governanceQueueColumns={governanceQueueColumns}
+            governanceTokenFindingColumns={governanceTokenFindingColumns}
+            governanceRecommendationColumns={governanceRecommendationColumns}
+            approvalColumns={approvalColumns}
+            approvals={approvalRequests}
+            approvalsLoading={approvalsQuery.isLoading}
+            approvalFilters={approvalFilters}
+            clients={clients}
+            manifest={manifest}
+            onApprovalFiltersChange={setApprovalFilters}
+            onRefreshApprovals={() => void approvalsQuery.refetch()}
+            expandedApprovalRowRender={(record) => <ApprovalTracePanel record={record} />}
+          />
+        ) : (
+          <GatewayCallLogsSection
+            activeTab={sectionActiveTab}
+            onTabChange={setActiveTab}
+            columns={auditColumns}
+            logs={auditLogs}
+            loading={auditQuery.isLoading}
+            filters={auditFilters}
+            clients={clients}
+            manifest={manifest}
+            modelCallColumns={modelCallColumns}
+            modelCalls={modelCalls}
+            modelCallsLoading={modelCallsQuery.isLoading}
+            modelCallsFetching={modelCallsQuery.isFetching}
+            modelCallFilters={modelCallFilters}
+            upstreams={upstreams}
+            canRelayView={canRelayView}
+            onModelCallFiltersChange={setModelCallFilters}
+            onRefreshModelCalls={() => void modelCallsQuery.refetch()}
+            expandedModelCallRowRender={(record) => (
+              <JsonBlock
+                value={{
+                  requestId: record.requestId,
+                  sourceIp: record.sourceIp,
+                  userAgent: record.userAgent,
+                  routeTrace: record.routeTrace,
+                  metadata: record.metadata,
+                }}
+              />
+            )}
+            onFiltersChange={setAuditFilters}
+            onRefresh={() => void auditQuery.refetch()}
+            expandedRowRender={(record) => (
+              <JsonBlock
+                value={{
+                  requestId: record.requestId,
+                  sourceIp: record.sourceIp,
+                  resourceScope: record.resourceScope,
+                  metadata: record.metadata,
+                }}
+              />
+            )}
+          />
+        )}
+      </Suspense>
 
       {drawer ? (
         <Suspense fallback={null}>

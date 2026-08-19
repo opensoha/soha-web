@@ -429,7 +429,7 @@ const apiGetMock = vi.hoisted(() =>
         data: baseMessages,
       }
     }
-    if (path === '/copilot/agent-runs') {
+    if (path.startsWith('/copilot/agent-runs')) {
       return {
         data: [...testState.agentRuns],
       }
@@ -1431,7 +1431,7 @@ describe('AIWorkbenchPage', () => {
 
     const container = await renderPage()
 
-    expect(apiGetMock).toHaveBeenCalledWith('/copilot/agent-runs')
+    expect(apiGetMock).toHaveBeenCalledWith('/copilot/agent-runs?sessionId=session-1')
     expect(container.textContent).toContain('Checking live run.')
     expect(container.textContent).toContain('实时分析链路')
 

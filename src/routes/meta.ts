@@ -56,127 +56,43 @@ const WORKBENCH_FALLBACK_PATHS: Partial<
   settings: ['/settings/login'],
 }
 
-// Compatibility entries keep newly shipped frontend routes reachable while an
-// older permission snapshot still lacks the corresponding seeded menu record.
-// Permission checks remain authoritative; these entries never grant access.
-const FRONTEND_MENU_COMPATIBILITY: ReadonlyArray<
-  VisibleMenu & { permissionKey: string; requiredParentId: string }
-> = [
-  {
-    id: 'identity-software-storage',
-    parentId: 'identity',
-    path: '/internal-workbench/software-storage',
-    labelZh: '存储文件',
-    labelEn: 'Storage Files',
-    iconKey: 'server',
-    section: 'software',
-    sortOrder: 10,
-    enabled: true,
-    permissionKey: 'software.package.view',
-    requiredParentId: 'identity',
-  },
-  {
-    id: 'ai-workbench-knowledge-pipelines',
-    parentId: 'ai-workbench',
-    path: '/ai-workbench/knowledge-pipelines',
-    labelZh: 'Knowledge Pipelines',
-    labelEn: 'Knowledge Pipelines',
-    iconKey: 'book',
-    section: 'ai-interaction',
-    sortOrder: 25,
-    enabled: true,
-    permissionKey: 'ai.knowledge.connectors.view',
-    requiredParentId: 'ai-workbench',
-  },
-  {
-    id: 'ai-workbench-evaluation-lifecycle',
-    parentId: 'ai-workbench',
-    path: '/ai-workbench/evaluation-lifecycle',
-    labelZh: 'Evaluation Lifecycle',
-    labelEn: 'Evaluation Lifecycle',
-    iconKey: 'inspect',
-    section: 'ai-interaction',
-    sortOrder: 55,
-    enabled: true,
-    permissionKey: 'ai.evaluations.execute',
-    requiredParentId: 'ai-workbench',
-  },
-  {
-    id: 'ai-workbench-memory',
-    parentId: 'ai-workbench',
-    path: '/ai-workbench/memory',
-    labelZh: 'Memory Policies',
-    labelEn: 'Memory Policies',
-    iconKey: 'inspect',
-    section: 'ai-engineering',
-    sortOrder: 15,
-    enabled: true,
-    permissionKey: 'ai.memory.view',
-    requiredParentId: 'ai-workbench',
-  },
-  {
-    id: 'ai-workbench-provider-fleet',
-    parentId: 'ai-workbench',
-    path: '/ai-workbench/provider-fleet',
-    labelZh: 'Provider Fleet',
-    labelEn: 'Provider Fleet',
-    iconKey: 'puzzle',
-    section: 'ai-engineering',
-    sortOrder: 35,
-    enabled: true,
-    permissionKey: 'ai.agent-fleet.view',
-    requiredParentId: 'ai-workbench',
-  },
-  {
-    id: 'ai-workbench-environments',
-    parentId: 'ai-workbench',
-    path: '/ai-workbench/environments',
-    labelZh: 'Agent Environments',
-    labelEn: 'Agent Environments',
-    iconKey: 'puzzle',
-    section: 'ai-engineering',
-    sortOrder: 40,
-    enabled: true,
-    permissionKey: 'ai.environments.view',
-    requiredParentId: 'ai-workbench',
-  },
-  {
-    id: 'ai-workbench-production-operations',
-    parentId: 'ai-workbench',
-    path: '/ai-workbench/production-operations',
-    labelZh: 'AI Operations',
-    labelEn: 'AI Operations',
-    iconKey: 'gauge',
-    section: 'ai-governance',
-    sortOrder: 40,
-    enabled: true,
-    permissionKey: 'ai.operations.view',
-    requiredParentId: 'ai-workbench',
-  },
-  {
-    id: 'monitoring-workbench-log-data-sources',
-    parentId: 'monitoring-workbench',
-    path: '/monitoring-workbench/log-data-sources',
-    labelZh: '日志数据源',
-    labelEn: 'Log Data Sources',
-    iconKey: 'server',
-    section: 'logging',
-    sortOrder: 63,
-    enabled: true,
-    permissionKey: 'observe.log-data-sources.view',
-    requiredParentId: 'monitoring-workbench',
-  },
-]
+// Keep only the legacy tree attachment here. Route identity, path and
+// permissions stay owned by the route registry.
+const FRONTEND_MENU_COMPATIBILITY = [
+  ['internal-workbench-software-storage', 'identity'],
+  ['ai-workbench-knowledge-pipelines', 'ai-workbench'],
+  ['ai-workbench-evaluation-lifecycle', 'ai-workbench'],
+  ['ai-workbench-memory', 'ai-workbench'],
+  ['ai-workbench-provider-fleet', 'ai-workbench'],
+  ['ai-workbench-environments', 'ai-workbench'],
+  ['ai-workbench-production-operations', 'ai-workbench'],
+  ['monitoring-workbench-log-data-sources', 'monitoring-workbench'],
+] as const
 
 function getCompatibleVisibleMenus(snapshot?: PermissionSnapshot | null): VisibleMenu[] {
   if (!snapshot) return []
   const visibleMenuIds = new Set(snapshot.visibleMenuIds)
-  return FRONTEND_MENU_COMPATIBILITY.filter(
-    (menu) =>
-      !visibleMenuIds.has(menu.id) &&
-      visibleMenuIds.has(menu.requiredParentId) &&
-      snapshot.permissionKeys.includes(menu.permissionKey),
-  )
+  return FRONTEND_MENU_COMPATIBILITY.flatMap(([routeId, requiredParentId]) => {
+    const route = routeMeta.find((item) => item.id === routeId)
+    const menuId = route?.menuId
+    if (!route || !menuId || visibleMenuIds.has(menuId) || !visibleMenuIds.has(requiredParentId)) {
+      return []
+    }
+    const permissionKeys = route.permissionKeysAny?.length
+      ? route.permissionKeysAny
+      : [resolveRoutePermission(route)]
+    if (!permissionKeys.some((key) => key && snapshot.permissionKeys.includes(key))) return []
+
+    return [
+      {
+        id: menuId,
+        parentId: requiredParentId,
+        path: route.path,
+        labelZh: route.title,
+        sortOrder: routeMeta.indexOf(route),
+      },
+    ]
+  })
 }
 
 export type WorkbenchId = keyof typeof WORKBENCH_DEFAULT_PATHS
@@ -651,6 +567,7 @@ const APPLICATION_MENU_SECTION_OVERRIDES: Record<string, string> = {
 
 const AI_MENU_SECTION_OVERRIDES: Record<string, string> = {
   'ai-workbench-chat': 'ai-interaction',
+  'ai-workbench-companion': 'ai-interaction',
   'ai-workbench-inspection': 'ai-interaction',
   'ai-workbench-knowledge': 'ai-interaction',
   'ai-workbench-agent-runs': 'ai-interaction',

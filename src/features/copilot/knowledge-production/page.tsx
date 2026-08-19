@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { PlusOutlined, SafetyCertificateOutlined, SyncOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button, Form, Input, Modal, Select, Space } from 'antd'
+import { Button, Form, Input, Modal, Popconfirm, Select, Space } from 'antd'
 import { ProductionOperationsPage } from '../production/operations-page'
 import { AIWorkbenchFeatureGate } from '../production/feature-gate'
 import { knowledgeProductionMutations } from './mutations'
@@ -52,8 +52,6 @@ function KnowledgeProductionPageContent() {
   }
   return (
     <ProductionOperationsPage
-      title="Knowledge Pipelines"
-      description="管理外部 Connector、异步 Ingestion、索引修订与 Retrieval Playground 的生产操作。"
       refreshing={connectors.isFetching || jobs.isFetching}
       onRefresh={() => void Promise.all([connectors.refetch(), jobs.refetch()])}
       actions={
@@ -96,27 +94,16 @@ function KnowledgeProductionPageContent() {
               <Button type="link" onClick={() => jobAction.mutate({ id: row.id, action: 'retry' })}>
                 重试
               </Button>
-              <Button
-                danger
-                type="link"
-                onClick={() => jobAction.mutate({ id: row.id, action: 'cancel' })}
+              <Popconfirm
+                title="确认取消同步任务？"
+                onConfirm={() => jobAction.mutate({ id: row.id, action: 'cancel' })}
               >
-                取消
-              </Button>
+                <Button danger type="link">
+                  取消
+                </Button>
+              </Popconfirm>
             </Space>
           ),
-        },
-        {
-          key: 'revisions',
-          label: 'Revisions',
-          records: [],
-          emptyDescription: '索引发布修订由 Knowledge Center 中的知识库视图展示。',
-        },
-        {
-          key: 'playground',
-          label: 'Retrieval Playground',
-          records: [],
-          emptyDescription: '检索验证继续使用 Knowledge Center 的可追溯搜索面板。',
         },
       ]}
     >

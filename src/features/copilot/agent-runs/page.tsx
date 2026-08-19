@@ -1,11 +1,16 @@
 import { useMemo, useState } from 'react'
 import { ReloadOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { Button, Input, Space, Tag } from 'antd'
+import { Space } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { ManagementDataPage } from '@/components/management-data-page'
-import { ManagementState, ManagementTableToolbar } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
+import {
+  ManagementIconButton,
+  ManagementState,
+  ManagementTableToolbar,
+  ManagementToolbarSearch,
+} from '@/components/management-list'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { workbenchQueries } from '../workbench/queries'
 import type { WorkbenchAgentRun } from '../workbench/types'
 
@@ -45,7 +50,7 @@ export function AgentRunsPage() {
         values?.length ? (
           <Space size={4} wrap>
             {values.map((value) => (
-              <Tag key={value}>{value}</Tag>
+              <MetadataTag key={value} label={value} />
             ))}
           </Space>
         ) : (
@@ -63,29 +68,26 @@ export function AgentRunsPage() {
 
   return (
     <ManagementDataPage
-      header={{
+      table={{
         title: 'Agent Runs',
-        description:
-          '查看通过统一 Agent 运行合同执行的任务。Provider、能力和版本信息来自运行记录。',
-        actions: (
+        columnSettingIconOnly: true,
+        columnSettingPlacement: 'header',
+        headerExtra: (
           <ManagementTableToolbar>
-            <Input.Search
+            <ManagementToolbarSearch
               value={keyword}
-              allowClear
               placeholder="搜索 Run、Provider 或能力"
-              onChange={(event) => setKeyword(event.target.value)}
+              onChange={setKeyword}
             />
-            <Button
+            <ManagementIconButton
+              aria-label="刷新 Agent Runs"
+              tooltip="刷新"
               icon={<ReloadOutlined />}
               loading={runsQuery.isFetching}
               onClick={() => void runsQuery.refetch()}
-            >
-              刷新
-            </Button>
+            />
           </ManagementTableToolbar>
         ),
-      }}
-      table={{
         columns,
         dataSource: filteredRuns,
         loading: runsQuery.isLoading,

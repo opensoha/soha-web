@@ -88,7 +88,7 @@ export const copilotObserveRoutes = defineRoutes([
     meta: {
       id: 'ai-workbench-chat',
       path: '/ai-workbench/chat',
-      title: '通用聊天',
+      title: '对话与分析',
       description: '通用会话与问答排障',
       icon: 'IconComment',
       group: 'observe',
@@ -157,8 +157,8 @@ export const copilotObserveRoutes = defineRoutes([
     meta: {
       id: 'ai-workbench-inspection',
       path: '/ai-workbench/inspection',
-      title: '巡检',
-      description: '巡检任务、运行记录与自动化策略',
+      title: '巡检与自动化',
+      description: '巡检任务、运行记录、分析模板与自动化策略',
       icon: 'IconComment',
       group: 'observe',
       workbenchId: 'ai',
@@ -272,8 +272,8 @@ export const copilotObserveRoutes = defineRoutes([
     meta: {
       id: 'ai-workbench-model-settings',
       path: '/ai-workbench/model-settings',
-      title: 'AI 设置',
-      description: '选择 Workbench 默认模型、数据源、技能与自动化策略',
+      title: '默认模型',
+      description: '选择 AI Workbench 默认模型与模型路由',
       icon: 'IconComment',
       group: 'observe',
       workbenchId: 'ai',

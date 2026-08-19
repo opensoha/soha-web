@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button, Form, Input, Modal, Select } from 'antd'
+import { Button, Form, Input, Modal, Popconfirm, Select } from 'antd'
 import { ProductionOperationsPage } from '../production/operations-page'
 import { AIWorkbenchFeatureGate } from '../production/feature-gate'
 import { environmentMutations } from './mutations'
@@ -31,15 +31,13 @@ function EnvironmentsPageContent() {
   }
   return (
     <ProductionOperationsPage
-      title="Agent Environments"
-      description="管理 Environment Template、Lease、Quota、Snapshot 与垃圾回收。"
       refreshing={templates.isFetching || leases.isFetching}
       onRefresh={() => void Promise.all([templates.refetch(), leases.refetch()])}
       actions={
         <>
-          <Button icon={<DeleteOutlined />} onClick={() => gc.mutate()}>
-            运行 GC
-          </Button>
+          <Popconfirm title="确认运行环境 GC？" onConfirm={() => gc.mutate()}>
+            <Button icon={<DeleteOutlined />}>运行 GC</Button>
+          </Popconfirm>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
             新建模板
           </Button>
@@ -62,22 +60,12 @@ function EnvironmentsPageContent() {
           error: leases.isError,
           emptyDescription: 'Agent 或 Evaluation 获取环境后会显示租约。',
           actions: (row) => (
-            <Button danger type="link" onClick={() => release.mutate(row.id)}>
-              释放
-            </Button>
+            <Popconfirm title="确认释放环境租约？" onConfirm={() => release.mutate(row.id)}>
+              <Button danger type="link">
+                释放
+              </Button>
+            </Popconfirm>
           ),
-        },
-        {
-          key: 'quotas',
-          label: 'Quotas',
-          records: [],
-          emptyDescription: 'Quota 由模板与服务端策略共同约束。',
-        },
-        {
-          key: 'snapshots',
-          label: 'Snapshots',
-          records: [],
-          emptyDescription: '可回放快照在 Environment backend 支持后显示。',
         },
       ]}
     >

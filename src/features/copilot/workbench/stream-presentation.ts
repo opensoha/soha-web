@@ -1,6 +1,10 @@
 import type { WorkbenchSource } from '@opensoha/contracts/gen/ts/sohaapi'
 
-import { canonicalWorkbenchAgentStatus, type WorkbenchStreamState } from './stream'
+import {
+  canonicalWorkbenchAgentStatus,
+  WorkbenchStreamTransportError,
+  type WorkbenchStreamState,
+} from './stream'
 import type { WorkbenchArtifact, WorkbenchToolCall } from './types'
 import type { ConversationMessage, WorkbenchBubbleStatus } from './conversation'
 import type { WorkbenchArtifactEntry } from './artifacts'
@@ -250,12 +254,19 @@ export class WorkbenchStreamEventError extends Error {
 }
 
 export function workbenchStreamErrorMessage(err: Error) {
-  if (err instanceof WorkbenchStreamEventError && err.code) return `${err.message} (${err.code})`
+  if (
+    (err instanceof WorkbenchStreamEventError || err instanceof WorkbenchStreamTransportError) &&
+    err.code
+  )
+    return `${err.message} (${err.code})`
   return err.message
 }
 
 export function isRetryableWorkbenchStreamError(err: Error) {
-  return err instanceof WorkbenchStreamEventError && err.retryable === true
+  return (
+    (err instanceof WorkbenchStreamEventError || err instanceof WorkbenchStreamTransportError) &&
+    err.retryable === true
+  )
 }
 
 export function streamBubbleStatus(state: WorkbenchStreamState): WorkbenchBubbleStatus {

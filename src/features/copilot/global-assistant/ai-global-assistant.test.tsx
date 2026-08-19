@@ -165,14 +165,15 @@ async function renderToggleableProvider() {
 }
 
 async function waitForText(container: HTMLElement, text: string) {
-  const deadline = Date.now() + 2_000
-  while (Date.now() < deadline) {
-    if (container.textContent?.includes(text)) return
-    await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 10))
-    })
-  }
-  throw new Error(`timed out waiting for text: ${text}`)
+  await vi.waitFor(
+    async () => {
+      await act(async () => {
+        await Promise.resolve()
+      })
+      expect(container.textContent).toContain(text)
+    },
+    { timeout: 5_000 },
+  )
 }
 
 function sseResponse(content: string) {

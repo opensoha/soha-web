@@ -4,6 +4,12 @@ export interface SettingsPageProps {
   embedded?: boolean
 }
 
+export type AISettingsSection = 'model' | 'companion' | 'skills' | 'data-sources' | 'profiles'
+
+export interface AISettingsPageProps extends SettingsPageProps {
+  section?: AISettingsSection
+}
+
 export interface LoginProviderSettings {
   id: string
   name: string

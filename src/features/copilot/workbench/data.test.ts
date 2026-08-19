@@ -13,6 +13,7 @@ const apiMocks = vi.hoisted(() => ({
   catalog: vi.fn(),
   agentRuns: {
     all: vi.fn(),
+    session: vi.fn(),
   },
 }))
 
@@ -46,7 +47,7 @@ describe('workbench data options', () => {
     expect(apiMocks.sessions.detail).toHaveBeenCalledWith('session-1')
     expect(apiMocks.sessions.messages).toHaveBeenCalledWith('session-1')
     expect(apiMocks.catalog).toHaveBeenCalledOnce()
-    expect(apiMocks.agentRuns.all).toHaveBeenCalledOnce()
+    expect(apiMocks.agentRuns.session).toHaveBeenCalledWith('session-1')
   })
 
   it('disables session-scoped queries without a session id', () => {

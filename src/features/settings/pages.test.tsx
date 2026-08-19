@@ -31,6 +31,8 @@ const testState = vi.hoisted(() => ({
       'settings.system-integrations.view',
       'settings.runtime-config.view',
       'observe.ai.view',
+      'observe.ai.chat',
+      'plugin.view',
     ],
     visibleMenuIds: [
       'settings',
@@ -75,7 +77,10 @@ const testState = vi.hoisted(() => ({
 }))
 
 const apiGetMock = vi.hoisted(() =>
-  vi.fn((path: string) => Promise.resolve({ data: testState.responses[path] ?? {} })),
+  vi.fn(
+    (path: string): Promise<{ data: unknown }> =>
+      Promise.resolve({ data: testState.responses[path] ?? {} }),
+  ),
 )
 const apiPostMock = vi.hoisted(() => vi.fn(() => Promise.resolve({ data: {} })))
 const apiPutMock = vi.hoisted(() => vi.fn(() => Promise.resolve({ data: {} })))
@@ -467,6 +472,8 @@ describe('settings ai page rendering', () => {
         'system.audit.view',
         'system.operations.view',
         'observe.ai.view',
+        'observe.ai.chat',
+        'plugin.view',
       ],
       visibleMenuIds: [
         'settings',
@@ -885,32 +892,71 @@ describe('settings ai page rendering', () => {
     expect(document.body.textContent).toContain('管理员')
   })
 
-  it('renders full AI settings content under ai-workbench model settings', async () => {
+  it('keeps the default model page focused on model routing', async () => {
     const container = await renderWithProviders(
       <AISettingsPage embedded />,
       '/ai-workbench/model-settings',
     )
 
     expect(container.querySelector('[data-testid="ai-workbench-model-section"]')).not.toBeNull()
-    expect(container.querySelector('[data-testid="ai-agent-runtime-section"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="ai-companion-section"]')).toBeNull()
+    expect(container.querySelector('[data-testid="ai-agent-runtime-section"]')).toBeNull()
     expect(container.textContent).toContain('Workbench 默认模型')
     expect(container.textContent).toContain('模型 Provider 在 AI Gateway 管理')
     expect(container.textContent).toContain('gpt-public')
-    expect(container.textContent).not.toContain('Provider Connections')
-    expect(container.textContent).not.toContain('Base URL')
-    expect(container.textContent).not.toContain('API Key')
-    expect(container.textContent).toContain('刷新')
+    expect(container.textContent).not.toContain('导入模型目录')
+    expect(container.textContent).not.toContain('保存 Skills')
+    expect(apiGetMock).not.toHaveBeenCalledWith('/copilot/data-sources')
+    expect(apiGetMock).not.toHaveBeenCalledWith('/copilot/analysis-profiles')
+    expect(apiGetMock).not.toHaveBeenCalledWith('/copilot/workbench/catalog')
+    expect(apiGetMock).not.toHaveBeenCalledWith('/copilot/agent-runs')
+    expect(apiGetMock).not.toHaveBeenCalledWith('/plugins/installed')
   })
 
-  it('surfaces Agent Runtime providers and recent Hermes runs in model settings', async () => {
+  it('waits for the settings form to mount before updating its values', async () => {
+    let resolveModelRoutes: ((value: { data: unknown }) => void) | undefined
+    apiGetMock.mockImplementation((path: string) =>
+      path === '/ai-gateway/relay/model-routes?includeDisabled=true'
+        ? new Promise((resolve) => {
+            resolveModelRoutes = resolve
+          })
+        : Promise.resolve({ data: testState.responses[path] ?? {} }),
+    )
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
     const container = await renderWithProviders(
       <AISettingsPage embedded />,
       '/ai-workbench/model-settings',
     )
+    expect(container.querySelector('[data-testid="ai-workbench-model-form"]')).toBeNull()
 
-    expect(container.textContent).toContain('Hermes Agent')
-    expect(container.textContent).toContain('hermes-agent-runner')
-    expect(container.textContent).toContain('agent-run-1')
+    await act(async () => {
+      resolveModelRoutes?.({
+        data: testState.responses['/ai-gateway/relay/model-routes?includeDisabled=true'],
+      })
+      await Promise.resolve()
+    })
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="ai-workbench-model-form"]')).not.toBeNull()
+    })
+
+    expect(consoleError.mock.calls.flat().join(' ')).not.toContain(
+      'Instance created by `useForm` is not connected',
+    )
+    consoleError.mockRestore()
+  })
+
+  it('renders Companion independently from AI settings administration', async () => {
+    const container = await renderWithProviders(
+      <AISettingsPage embedded section="companion" />,
+      '/ai-workbench/companion',
+    )
+
+    expect(container.querySelector('[data-testid="ai-companion-section"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="ai-workbench-model-section"]')).toBeNull()
+    expect(container.textContent).toContain('导入模型目录')
+    expect(apiGetMock).toHaveBeenCalledWith('/plugins/installed')
+    expect(apiGetMock).not.toHaveBeenCalledWith('/settings/ai')
   })
 
   it('does not render legacy provider connection controls', async () => {
@@ -953,8 +999,8 @@ describe('settings ai page rendering', () => {
 
   it('saves skills registry without provider connection payloads', async () => {
     const container = await renderWithProviders(
-      <AISettingsPage embedded />,
-      '/ai-workbench/model-settings',
+      <AISettingsPage embedded section="skills" />,
+      '/ai-workbench/tool-settings',
     )
     const saveButton = Array.from(container.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('保存 Skills'),

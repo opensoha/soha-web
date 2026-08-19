@@ -62,6 +62,7 @@ export function GatewayTokensSection({
   return (
     <Tabs
       activeKey={activeTab}
+      className="soha-resource-tabs"
       onChange={(key) => onTabChange(key as GatewayTabKey)}
       destroyOnHidden
       items={[

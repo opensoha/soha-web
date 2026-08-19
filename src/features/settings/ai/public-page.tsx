@@ -1,13 +1,13 @@
 import { lazy, Suspense } from 'react'
 import { Spin } from 'antd'
-import type { SettingsPageProps } from '../types'
+import type { AISettingsPageProps } from '../types'
 
 const AISettingsPageContent = lazy(async () => {
   const module = await import('./page')
   return { default: module.AISettingsPage }
 })
 
-export function AISettingsPage(props: SettingsPageProps) {
+export function AISettingsPage(props: AISettingsPageProps) {
   return (
     <Suspense
       fallback={

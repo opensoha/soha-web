@@ -959,7 +959,9 @@ export function AppLayout() {
       enabled={globalAssistantEnabled}
       permissionSnapshot={snapshot}
       renderCompanion={(props) =>
-        currentWorkbenchId === 'settings' ? null : <AssistantCompanionOverlay {...props} />
+        currentWorkbenchId === 'settings' || currentWorkbenchId === 'ai' ? null : (
+          <AssistantCompanionOverlay {...props} />
+        )
       }
     >
       <RealtimeSessionDockProvider visible={currentWorkbenchId === 'platform'}>

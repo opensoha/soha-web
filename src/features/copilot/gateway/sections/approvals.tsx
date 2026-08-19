@@ -1,8 +1,12 @@
 import type { ReactNode } from 'react'
-import { ReloadOutlined } from '@ant-design/icons'
 import type { TableColumnsType } from 'antd'
-import { Button, DatePicker, Input, Select, Space } from 'antd'
+import { DatePicker, Input, Select, Space } from 'antd'
 import { AdminTable } from '@/components/admin-table'
+import {
+  ManagementQueryField,
+  ManagementQueryPanel,
+  ManagementRefreshButton,
+} from '@/components/management-list'
 import type {
   AIClient,
   ApprovalFilterState,
@@ -50,81 +54,91 @@ export function GatewayApprovalsSection({
 
   return (
     <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-      <Space wrap>
-        <Input
-          style={{ width: 220 }}
-          placeholder="approvalRequestId"
-          value={filters.id}
-          onChange={(event) =>
-            onFiltersChange({
-              ...filters,
-              id: event.target.value,
-              status: event.target.value ? '' : filters.status,
-            })
-          }
-        />
-        <Select
-          allowClear
-          style={{ width: 150 }}
-          placeholder="状态"
-          options={approvalStatusOptions}
-          value={filters.status || undefined}
-          onChange={(value) => onFiltersChange({ ...filters, status: value ?? '' })}
-        />
-        <Input
-          style={{ width: 180 }}
-          placeholder="actorId"
-          value={filters.actor}
-          onChange={(event) => onFiltersChange({ ...filters, actor: event.target.value })}
-        />
-        <Select
-          allowClear
-          style={{ width: 220 }}
-          placeholder="AI client"
-          options={clientOptions}
-          value={filters.aiClientId || undefined}
-          onChange={(value) => onFiltersChange({ ...filters, aiClientId: value ?? '' })}
-        />
-        <Select
-          allowClear
-          style={{ width: 260 }}
-          placeholder="Tool"
-          options={toolOptions}
-          value={filters.toolName || undefined}
-          onChange={(value) => onFiltersChange({ ...filters, toolName: value ?? '' })}
-        />
-        <Select
-          allowClear
-          style={{ width: 140 }}
-          placeholder="Risk"
-          options={riskLevelOptions}
-          value={filters.riskLevel || undefined}
-          onChange={(value) => onFiltersChange({ ...filters, riskLevel: value ?? '' })}
-        />
-        <Select
-          allowClear
-          style={{ width: 190 }}
-          placeholder="Strategy"
-          options={approvalRequestStrategyOptions}
-          value={filters.strategy || undefined}
-          onChange={(value) => onFiltersChange({ ...filters, strategy: value ?? '' })}
-        />
-        <RangePicker
-          showTime
-          allowClear
-          style={{ width: 340 }}
-          placeholder={['开始时间', '结束时间']}
-          onChange={(value) =>
-            onFiltersChange({
-              ...filters,
-              ...gatewayTimeRangeQuery(value as GatewayTimeRangeValue),
-            })
-          }
-        />
-        <Button icon={<ReloadOutlined />} onClick={onRefresh}>
-          刷新
-        </Button>
-      </Space>
+      <ManagementQueryPanel
+        actions={
+          <ManagementRefreshButton aria-label="刷新审批请求" tooltip="刷新" onClick={onRefresh} />
+        }
+      >
+        <ManagementQueryField label="Request ID" width={220}>
+          <Input
+            placeholder="approvalRequestId"
+            value={filters.id}
+            onChange={(event) =>
+              onFiltersChange({
+                ...filters,
+                id: event.target.value,
+                status: event.target.value ? '' : filters.status,
+              })
+            }
+          />
+        </ManagementQueryField>
+        <ManagementQueryField label="状态" width={150}>
+          <Select
+            allowClear
+            placeholder="全部状态"
+            options={approvalStatusOptions}
+            value={filters.status || undefined}
+            onChange={(value) => onFiltersChange({ ...filters, status: value ?? '' })}
+          />
+        </ManagementQueryField>
+        <ManagementQueryField label="Actor" width={180}>
+          <Input
+            placeholder="actorId"
+            value={filters.actor}
+            onChange={(event) => onFiltersChange({ ...filters, actor: event.target.value })}
+          />
+        </ManagementQueryField>
+        <ManagementQueryField label="AI Client" width={220}>
+          <Select
+            allowClear
+            placeholder="全部 Client"
+            options={clientOptions}
+            value={filters.aiClientId || undefined}
+            onChange={(value) => onFiltersChange({ ...filters, aiClientId: value ?? '' })}
+          />
+        </ManagementQueryField>
+        <ManagementQueryField label="Tool" width={260}>
+          <Select
+            allowClear
+            placeholder="全部 Tool"
+            options={toolOptions}
+            value={filters.toolName || undefined}
+            onChange={(value) => onFiltersChange({ ...filters, toolName: value ?? '' })}
+          />
+        </ManagementQueryField>
+        <ManagementQueryField label="Risk" width={140}>
+          <Select
+            allowClear
+            placeholder="全部风险"
+            options={riskLevelOptions}
+            value={filters.riskLevel || undefined}
+            onChange={(value) => onFiltersChange({ ...filters, riskLevel: value ?? '' })}
+          />
+        </ManagementQueryField>
+        <ManagementQueryField label="Strategy" width={190}>
+          <Select
+            allowClear
+            placeholder="全部策略"
+            options={approvalRequestStrategyOptions}
+            value={filters.strategy || undefined}
+            onChange={(value) => onFiltersChange({ ...filters, strategy: value ?? '' })}
+          />
+        </ManagementQueryField>
+        <ManagementQueryField label="时间范围" width={340}>
+          <RangePicker
+            showTime
+            allowClear
+            style={{ width: '100%' }}
+            placeholder={['开始时间', '结束时间']}
+            onChange={(value) =>
+              onFiltersChange({
+                ...filters,
+                ...gatewayTimeRangeQuery(value as GatewayTimeRangeValue),
+              })
+            }
+          />
+        </ManagementQueryField>
+      </ManagementQueryPanel>
       <AdminTable
         shellClassName="soha-management-table-shell"
         columnSettingIconOnly

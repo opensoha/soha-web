@@ -126,14 +126,22 @@
   align-items: center;
   padding: 0 12px;
   color: var(--soha-terminal-fg);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    Liberation Mono,
+    monospace;
   font-size: 12px;
-  border-bottom: 1px solid var(--soha-terminal-row-divider);
 }
 
 .soha-log-row-plain {
   display: block;
+  box-sizing: border-box;
   padding: 6px 12px;
+  line-height: 20px;
 }
 
 .soha-log-loading {
@@ -143,7 +151,6 @@
   padding: 8px 12px;
   color: color-mix(in srgb, var(--soha-terminal-fg) 92%, transparent);
   background: var(--soha-terminal-overlay-bg);
-  border-bottom: 1px solid var(--soha-terminal-row-divider);
   font-size: 12px;
 }
 

@@ -54,5 +54,9 @@ export const workbenchApi = {
   catalog: () => api.get<ApiResponse<WorkbenchCatalog>>('/copilot/workbench/catalog'),
   agentRuns: {
     all: () => api.get<ApiResponse<WorkbenchAgentRun[]>>('/copilot/agent-runs'),
+    session: (sessionId: string) =>
+      api.get<ApiResponse<WorkbenchAgentRun[]>>(
+        `/copilot/agent-runs?sessionId=${encodeURIComponent(sessionId)}`,
+      ),
   },
 }

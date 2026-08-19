@@ -22,6 +22,7 @@ describe('workbenchApi', () => {
     await workbenchApi.sessions.messages('session-1')
     await workbenchApi.catalog()
     await workbenchApi.agentRuns.all()
+    await workbenchApi.agentRuns.session('session / 1')
 
     expect(apiMocks.get.mock.calls).toEqual([
       ['/copilot/sessions'],
@@ -29,6 +30,7 @@ describe('workbenchApi', () => {
       ['/copilot/sessions/session-1/messages'],
       ['/copilot/workbench/catalog'],
       ['/copilot/agent-runs'],
+      ['/copilot/agent-runs?sessionId=session%20%2F%201'],
     ])
   })
 

@@ -3,6 +3,9 @@ import type { TableColumnsType } from 'antd'
 import { Button, DatePicker, Descriptions, Input, Select, Space, Tabs } from 'antd'
 import { AdminTable } from '@/components/admin-table'
 import {
+  ManagementQueryField,
+  ManagementQueryPanel,
+  ManagementRefreshButton,
   ManagementState,
   ManagementTableToolbar,
   ManagementToolbarSearch,
@@ -91,6 +94,7 @@ export function GatewayRelaySection(props: GatewayRelaySectionProps) {
   return (
     <Tabs
       activeKey={props.activeTab}
+      className="soha-resource-tabs"
       onChange={(key) => props.onTabChange(key as GatewayTabKey)}
       destroyOnHidden
       items={[
@@ -184,31 +188,36 @@ export function GatewayRelaySection(props: GatewayRelaySectionProps) {
           label: '上游管理',
           children: (
             <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-              <Space wrap>
-                <Select
-                  allowClear
-                  style={{ width: 190 }}
-                  placeholder="Provider"
-                  options={relayProviderKindOptions}
-                  value={props.upstreamProviderFilter || undefined}
-                  onChange={(value) => props.onUpstreamProviderFilterChange(value ?? '')}
-                />
-                <Select
-                  allowClear
-                  style={{ width: 160 }}
-                  placeholder="状态"
-                  options={relayUpstreamStatusOptions}
-                  value={props.upstreamStatusFilter || undefined}
-                  onChange={(value) => props.onUpstreamStatusFilterChange(value ?? '')}
-                />
-                <Button
-                  icon={<ReloadOutlined />}
-                  loading={props.upstreamsFetching}
-                  onClick={props.onRefreshUpstreams}
-                >
-                  刷新
-                </Button>
-              </Space>
+              <ManagementQueryPanel
+                collapsible={false}
+                actions={
+                  <ManagementRefreshButton
+                    aria-label="刷新上游"
+                    tooltip="刷新"
+                    loading={props.upstreamsFetching}
+                    onClick={props.onRefreshUpstreams}
+                  />
+                }
+              >
+                <ManagementQueryField label="Provider" width={190}>
+                  <Select
+                    allowClear
+                    placeholder="全部 Provider"
+                    options={relayProviderKindOptions}
+                    value={props.upstreamProviderFilter || undefined}
+                    onChange={(value) => props.onUpstreamProviderFilterChange(value ?? '')}
+                  />
+                </ManagementQueryField>
+                <ManagementQueryField label="状态" width={160}>
+                  <Select
+                    allowClear
+                    placeholder="全部状态"
+                    options={relayUpstreamStatusOptions}
+                    value={props.upstreamStatusFilter || undefined}
+                    onChange={(value) => props.onUpstreamStatusFilterChange(value ?? '')}
+                  />
+                </ManagementQueryField>
+              </ManagementQueryPanel>
               <AdminTable
                 shellClassName="soha-management-table-shell"
                 columnSettingIconOnly
@@ -247,32 +256,37 @@ export function GatewayRelaySection(props: GatewayRelaySectionProps) {
           label: '模型路由',
           children: (
             <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-              <Space wrap>
-                <Select
-                  allowClear
-                  style={{ width: 190 }}
-                  placeholder="Provider"
-                  options={relayProviderKindOptions}
-                  value={props.modelRouteProviderFilter || undefined}
-                  onChange={(value) => props.onModelRouteProviderFilterChange(value ?? '')}
-                />
-                <Select
-                  allowClear
-                  showSearch
-                  style={{ width: 260 }}
-                  placeholder="上游"
-                  options={upstreamOptions}
-                  value={props.modelRouteUpstreamFilter || undefined}
-                  onChange={(value) => props.onModelRouteUpstreamFilterChange(value ?? '')}
-                />
-                <Button
-                  icon={<ReloadOutlined />}
-                  loading={props.modelRoutesFetching}
-                  onClick={props.onRefreshModelRoutes}
-                >
-                  刷新
-                </Button>
-              </Space>
+              <ManagementQueryPanel
+                collapsible={false}
+                actions={
+                  <ManagementRefreshButton
+                    aria-label="刷新模型路由"
+                    tooltip="刷新"
+                    loading={props.modelRoutesFetching}
+                    onClick={props.onRefreshModelRoutes}
+                  />
+                }
+              >
+                <ManagementQueryField label="Provider" width={190}>
+                  <Select
+                    allowClear
+                    placeholder="全部 Provider"
+                    options={relayProviderKindOptions}
+                    value={props.modelRouteProviderFilter || undefined}
+                    onChange={(value) => props.onModelRouteProviderFilterChange(value ?? '')}
+                  />
+                </ManagementQueryField>
+                <ManagementQueryField label="上游" width={260}>
+                  <Select
+                    allowClear
+                    showSearch
+                    placeholder="全部上游"
+                    options={upstreamOptions}
+                    value={props.modelRouteUpstreamFilter || undefined}
+                    onChange={(value) => props.onModelRouteUpstreamFilterChange(value ?? '')}
+                  />
+                </ManagementQueryField>
+              </ManagementQueryPanel>
               <AdminTable
                 shellClassName="soha-management-table-shell"
                 columnSettingIconOnly
@@ -311,127 +325,139 @@ export function GatewayRelaySection(props: GatewayRelaySectionProps) {
           label: 'Model Calls',
           children: (
             <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-              <Space wrap>
-                <Input
-                  style={{ width: 180 }}
-                  placeholder="调用者 ID"
-                  value={props.modelCallFilters.actor}
-                  onChange={(event) =>
-                    props.onModelCallFiltersChange({
-                      ...props.modelCallFilters,
-                      actor: event.target.value,
-                    })
-                  }
-                />
-                <Input
-                  style={{ width: 180 }}
-                  placeholder="Token ID"
-                  value={props.modelCallFilters.tokenId}
-                  onChange={(event) =>
-                    props.onModelCallFiltersChange({
-                      ...props.modelCallFilters,
-                      tokenId: event.target.value,
-                    })
-                  }
-                />
-                <Input
-                  style={{ width: 200 }}
-                  placeholder="Public model"
-                  value={props.modelCallFilters.publicModel}
-                  onChange={(event) =>
-                    props.onModelCallFiltersChange({
-                      ...props.modelCallFilters,
-                      publicModel: event.target.value,
-                    })
-                  }
-                />
-                <Select
-                  allowClear
-                  showSearch
-                  style={{ width: 240 }}
-                  placeholder="上游"
-                  options={upstreamOptions}
-                  value={props.modelCallFilters.upstreamId || undefined}
-                  onChange={(value) =>
-                    props.onModelCallFiltersChange({
-                      ...props.modelCallFilters,
-                      upstreamId: value ?? '',
-                    })
-                  }
-                />
-                <Select
-                  allowClear
-                  style={{ width: 170 }}
-                  placeholder="Provider"
-                  options={relayProviderKindOptions}
-                  value={props.modelCallFilters.providerKind || undefined}
-                  onChange={(value) =>
-                    props.onModelCallFiltersChange({
-                      ...props.modelCallFilters,
-                      providerKind: value ?? '',
-                    })
-                  }
-                />
-                <Select
-                  allowClear
-                  style={{ width: 190 }}
-                  placeholder="Endpoint"
-                  options={relayEndpointOptions}
-                  value={props.modelCallFilters.endpoint || undefined}
-                  onChange={(value) =>
-                    props.onModelCallFiltersChange({
-                      ...props.modelCallFilters,
-                      endpoint: value ?? '',
-                    })
-                  }
-                />
-                <Select
-                  allowClear
-                  style={{ width: 170 }}
-                  placeholder="状态"
-                  options={relayCallStatusOptions}
-                  value={props.modelCallFilters.status || undefined}
-                  onChange={(value) =>
-                    props.onModelCallFiltersChange({
-                      ...props.modelCallFilters,
-                      status: value ?? '',
-                    })
-                  }
-                />
-                <Select
-                  allowClear
-                  style={{ width: 170 }}
-                  placeholder="Cache"
-                  options={relayCacheStatusOptions}
-                  value={props.modelCallFilters.cacheStatus || undefined}
-                  onChange={(value) =>
-                    props.onModelCallFiltersChange({
-                      ...props.modelCallFilters,
-                      cacheStatus: value ?? '',
-                    })
-                  }
-                />
-                <RangePicker
-                  showTime
-                  allowClear
-                  style={{ width: 340 }}
-                  placeholder={['开始时间', '结束时间']}
-                  onChange={(value) =>
-                    props.onModelCallFiltersChange({
-                      ...props.modelCallFilters,
-                      ...gatewayTimeRangeQuery(value as GatewayTimeRangeValue),
-                    })
-                  }
-                />
-                <Button
-                  icon={<ReloadOutlined />}
-                  disabled={!props.canRelayView}
-                  loading={props.modelCallsFetching}
-                  onClick={props.onRefreshModelCalls}
-                >
-                  刷新
-                </Button>
-              </Space>
+              <ManagementQueryPanel
+                actions={
+                  <ManagementRefreshButton
+                    aria-label="刷新 Model Calls"
+                    tooltip="刷新"
+                    disabled={!props.canRelayView}
+                    loading={props.modelCallsFetching}
+                    onClick={props.onRefreshModelCalls}
+                  />
+                }
+              >
+                <ManagementQueryField label="Actor" width={180}>
+                  <Input
+                    placeholder="调用者 ID"
+                    value={props.modelCallFilters.actor}
+                    onChange={(event) =>
+                      props.onModelCallFiltersChange({
+                        ...props.modelCallFilters,
+                        actor: event.target.value,
+                      })
+                    }
+                  />
+                </ManagementQueryField>
+                <ManagementQueryField label="Token" width={180}>
+                  <Input
+                    placeholder="Token ID"
+                    value={props.modelCallFilters.tokenId}
+                    onChange={(event) =>
+                      props.onModelCallFiltersChange({
+                        ...props.modelCallFilters,
+                        tokenId: event.target.value,
+                      })
+                    }
+                  />
+                </ManagementQueryField>
+                <ManagementQueryField label="Public Model" width={200}>
+                  <Input
+                    placeholder="模型名称"
+                    value={props.modelCallFilters.publicModel}
+                    onChange={(event) =>
+                      props.onModelCallFiltersChange({
+                        ...props.modelCallFilters,
+                        publicModel: event.target.value,
+                      })
+                    }
+                  />
+                </ManagementQueryField>
+                <ManagementQueryField label="上游" width={240}>
+                  <Select
+                    allowClear
+                    showSearch
+                    placeholder="全部上游"
+                    options={upstreamOptions}
+                    value={props.modelCallFilters.upstreamId || undefined}
+                    onChange={(value) =>
+                      props.onModelCallFiltersChange({
+                        ...props.modelCallFilters,
+                        upstreamId: value ?? '',
+                      })
+                    }
+                  />
+                </ManagementQueryField>
+                <ManagementQueryField label="Provider" width={170}>
+                  <Select
+                    allowClear
+                    placeholder="全部 Provider"
+                    options={relayProviderKindOptions}
+                    value={props.modelCallFilters.providerKind || undefined}
+                    onChange={(value) =>
+                      props.onModelCallFiltersChange({
+                        ...props.modelCallFilters,
+                        providerKind: value ?? '',
+                      })
+                    }
+                  />
+                </ManagementQueryField>
+                <ManagementQueryField label="Endpoint" width={190}>
+                  <Select
+                    allowClear
+                    placeholder="全部 Endpoint"
+                    options={relayEndpointOptions}
+                    value={props.modelCallFilters.endpoint || undefined}
+                    onChange={(value) =>
+                      props.onModelCallFiltersChange({
+                        ...props.modelCallFilters,
+                        endpoint: value ?? '',
+                      })
+                    }
+                  />
+                </ManagementQueryField>
+                <ManagementQueryField label="状态" width={170}>
+                  <Select
+                    allowClear
+                    placeholder="全部状态"
+                    options={relayCallStatusOptions}
+                    value={props.modelCallFilters.status || undefined}
+                    onChange={(value) =>
+                      props.onModelCallFiltersChange({
+                        ...props.modelCallFilters,
+                        status: value ?? '',
+                      })
+                    }
+                  />
+                </ManagementQueryField>
+                <ManagementQueryField label="Cache" width={170}>
+                  <Select
+                    allowClear
+                    placeholder="全部 Cache 状态"
+                    options={relayCacheStatusOptions}
+                    value={props.modelCallFilters.cacheStatus || undefined}
+                    onChange={(value) =>
+                      props.onModelCallFiltersChange({
+                        ...props.modelCallFilters,
+                        cacheStatus: value ?? '',
+                      })
+                    }
+                  />
+                </ManagementQueryField>
+                <ManagementQueryField label="时间范围" width={340}>
+                  <RangePicker
+                    showTime
+                    allowClear
+                    style={{ width: '100%' }}
+                    placeholder={['开始时间', '结束时间']}
+                    onChange={(value) =>
+                      props.onModelCallFiltersChange({
+                        ...props.modelCallFilters,
+                        ...gatewayTimeRangeQuery(value as GatewayTimeRangeValue),
+                      })
+                    }
+                  />
+                </ManagementQueryField>
+              </ManagementQueryPanel>
               {props.canRelayView ? (
                 <AdminTable
                   shellClassName="soha-management-table-shell"

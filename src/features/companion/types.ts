@@ -15,11 +15,20 @@ export type CompanionVisualState =
   | 'hover'
   | 'idle'
 
+type CompanionAsset = CompanionPackManifest['assets'][number]
+
+export interface CompanionRenderManifest extends Omit<CompanionPackManifest, 'assets' | 'license'> {
+  assets: Array<Pick<CompanionAsset, 'path'> & Partial<Omit<CompanionAsset, 'path'>>>
+  license?: CompanionPackManifest['license']
+}
+
 export interface CompanionPackSelection {
-  manifest: CompanionPackManifest
+  manifest: CompanionRenderManifest
   pluginId: string
   version: string
   installed?: InstalledPlugin
+  loadAsset?: (path: string) => Promise<Blob>
+  local?: boolean
 }
 
 export type { CompanionInteractionReceipt, CompanionPackManifest, CompanionProfile }

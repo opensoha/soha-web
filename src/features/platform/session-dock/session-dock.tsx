@@ -70,6 +70,25 @@ export function RealtimeSessionDockProvider({
     setDockOpen(true)
   }, [])
 
+  const replaceSession = useCallback((sessionId: string, input: RealtimeSessionInput) => {
+    const replacement = normalizeRealtimeSession(input)
+    if (!replacement) return
+
+    setSessions((current) => {
+      const index = current.findIndex((session) => session.id === sessionId)
+      if (index < 0) return current
+      const next = current.filter(
+        (session) => session.id !== sessionId && session.id !== replacement.id,
+      )
+      next.splice(Math.min(index, next.length), 0, replacement)
+      return next
+    })
+    setActiveSessionKeys((current) => ({
+      ...current,
+      [replacement.clusterId]: replacement.id,
+    }))
+  }, [])
+
   const closeSession = useCallback(
     (sessionId: string) => {
       const closing = sessions.find((session) => session.id === sessionId)
@@ -158,6 +177,7 @@ export function RealtimeSessionDockProvider({
             onCloseSession={closeSession}
             onMaximize={maximizeDock}
             onMinimize={minimizeDock}
+            onReplaceSession={replaceSession}
           />
         </Suspense>
       ) : null}

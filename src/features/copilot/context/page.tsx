@@ -1,7 +1,7 @@
 import { BugOutlined } from '@ant-design/icons'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Alert, Button, Card, Form, Input, InputNumber, Select, Space, Typography } from 'antd'
-import { ManagementDetailHeader, ManagementState } from '@/components/management-list'
+import { ManagementState } from '@/components/management-list'
 import { knowledgeQueries } from '../knowledge/queries'
 import { contextMutations } from './mutations'
 import type { ContextInspectInput, ContextInspectorFormValues } from './types'
@@ -35,10 +35,6 @@ export function ContextInspectorPage() {
 
   return (
     <div className="soha-page soha-ai-context-inspector">
-      <ManagementDetailHeader
-        title="Context Inspector"
-        description="预览 Context Builder 在当前身份、知识范围和预算下生成的上下文信封。此操作不会启动 Agent Run。"
-      />
       <div className="grid gap-3 xl:grid-cols-[minmax(320px,0.8fr)_minmax(0,1.2fr)]">
         <Card size="small" variant="outlined" title="检查输入">
           <Form
@@ -61,7 +57,15 @@ export function ContextInspectorPage() {
               <Input.TextArea rows={4} placeholder="描述希望模型或 Agent 完成的任务" />
             </Form.Item>
             <Form.Item name="mode" label="模式">
-              <Input placeholder="analysis" />
+              <Select
+                options={[
+                  { value: 'analysis', label: '通用分析' },
+                  { value: 'root_cause', label: '根因分析' },
+                  { value: 'performance', label: '性能分析' },
+                  { value: 'trace', label: '链路分析' },
+                  { value: 'inspection_review', label: '巡检复盘' },
+                ]}
+              />
             </Form.Item>
             <Form.Item name="knowledgeBaseIds" label="知识库">
               <Select

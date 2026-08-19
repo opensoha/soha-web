@@ -49,8 +49,6 @@ function EvaluationLifecyclePageContent() {
   }
   return (
     <ProductionOperationsPage
-      title="Evaluation Lifecycle"
-      description="连接 Candidate Executor、隔离 Replay、Feedback Curation 与 Release Gate。"
       notice={
         <Alert
           showIcon
@@ -69,12 +67,6 @@ function EvaluationLifecyclePageContent() {
         </Button>
       }
       tabs={[
-        {
-          key: 'executor',
-          label: 'Executor',
-          records: [],
-          emptyDescription: '从 Evaluation Studio 选择已有 run 后触发 Candidate Executor。',
-        },
         {
           key: 'replays',
           label: 'Replays',

@@ -1,4 +1,5 @@
-import { Space, Tag, Typography } from 'antd'
+import { Space, Typography } from 'antd'
+import { MetadataTag } from '@/components/status-tag'
 
 const { Text } = Typography
 
@@ -20,9 +21,9 @@ export function compactList(values?: string[], max = 3) {
   return (
     <Space size={[4, 4]} wrap>
       {items.slice(0, max).map((item) => (
-        <Tag key={item}>{item}</Tag>
+        <MetadataTag key={item} label={item} />
       ))}
-      {items.length > max ? <Tag>+{items.length - max}</Tag> : null}
+      {items.length > max ? <MetadataTag label={`+${items.length - max}`} /> : null}
     </Space>
   )
 }

@@ -1,19 +1,59 @@
 import { Link } from 'react-router-dom'
-import { ApiOutlined, BookOutlined, PlayCircleOutlined, RobotOutlined } from '@ant-design/icons'
+import {
+  ApiOutlined,
+  AuditOutlined,
+  BookOutlined,
+  ExperimentOutlined,
+  PlayCircleOutlined,
+  RobotOutlined,
+  WarningOutlined,
+} from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { Button } from 'antd'
 import { ManagementState } from '@/components/management-list'
-import { OverviewMetricCard, type OverviewMetricItem } from '@/components/overview-visuals'
+import {
+  OverviewChip,
+  OverviewMetricCard,
+  type OverviewChipItem,
+  type OverviewMetricItem,
+} from '@/components/overview-visuals'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { evaluationQueries } from '../../evaluation/queries'
 import { gatewayQueries } from '../../gateway/queries'
 import { knowledgeQueries } from '../../knowledge/queries'
+import { aiProductionOperationsQueries } from '../../production-operations/queries'
 import { getAIWorkbenchPathForMode } from '../../workbench/navigation'
 import { workbenchQueries } from '../../workbench/queries'
 import '../../copilot-pages.css'
 
+const pendingApprovalFilters = {
+  id: '',
+  status: 'pending',
+  actor: '',
+  aiClientId: '',
+  toolName: '',
+  riskLevel: '',
+  strategy: '',
+  from: '',
+  to: '',
+}
+
 function domainHelper(allowed: boolean, error: boolean, detail: string) {
   if (!allowed) return '无查看权限'
   return error ? '服务暂时不可用，进入对应页面重试' : detail
+}
+
+function operationalSummary(
+  allowed: boolean,
+  loading: boolean,
+  error: boolean,
+  value: number,
+  helper: string,
+): Pick<OverviewChipItem, 'value' | 'helper' | 'tone'> {
+  if (!allowed) return { value: '-', helper: '无查看权限' }
+  if (loading) return { value: '-', helper: '加载中' }
+  if (error) return { value: '-', helper: '加载失败，进入页面重试', tone: 'danger' }
+  return { value, helper, tone: value > 0 ? 'warning' : 'default' }
 }
 
 export function AIObserveOverviewPage() {
@@ -24,6 +64,9 @@ export function AIObserveOverviewPage() {
   const canKnowledge = hasPermission(snapshot, 'ai.knowledge.view')
   const canGateway = hasPermission(snapshot, 'ai.gateway.view')
   const canRelay = hasPermission(snapshot, 'ai.gateway.relay.view')
+  const canEvaluate = hasPermission(snapshot, 'ai.evaluations.view')
+  const canApprovals = hasPermission(snapshot, 'ai.gateway.approvals.view')
+  const canOperations = hasPermission(snapshot, 'ai.operations.view')
 
   const sessionsQuery = useQuery(workbenchQueries.sessions.all(canChat))
   const catalogQuery = useQuery({ ...workbenchQueries.catalog(), enabled: canObserve })
@@ -33,6 +76,12 @@ export function AIObserveOverviewPage() {
     gatewayQueries.manifest({ aiClientId: '', skillId: '', source: '' }, canGateway),
   )
   const relayQuery = useQuery(gatewayQueries.relay.metrics(canRelay))
+  const evaluationsQuery = useQuery({ ...evaluationQueries.runs(), enabled: canEvaluate })
+  const approvalsQuery = useQuery(gatewayQueries.approvals(pendingApprovalFilters, canApprovals))
+  const operationsQuery = useQuery({
+    ...aiProductionOperationsQueries.snapshots(),
+    enabled: canOperations,
+  })
 
   const sessions = sessionsQuery.data?.data ?? []
   const catalog = catalogQuery.data?.data
@@ -40,10 +89,23 @@ export function AIObserveOverviewPage() {
   const bases = basesQuery.data?.data ?? []
   const manifest = manifestQuery.data?.data
   const relay = relayQuery.data?.data
+  const evaluations = evaluationsQuery.data?.data ?? []
+  const approvals = approvalsQuery.data?.data ?? []
+  const operations = operationsQuery.data?.data ?? []
   const interactionAllowed = canChat || canObserve
   const interactionError = sessionsQuery.isError || runsQuery.isError
   const gatewayAllowed = canGateway || canRelay
   const gatewayError = manifestQuery.isError || relayQuery.isError
+  const knowledgeAnomalies = bases.filter(
+    (base) => base.status && !['active', 'ready'].includes(base.status),
+  ).length
+  const failedEvaluations = evaluations.filter((run) => run.status === 'failed').length
+  const anomalousRuns = runs.filter((run) =>
+    ['failed', 'canceled', 'cancelled', 'callback_timeout', 'timed_out'].includes(run.status),
+  ).length
+  const activeOperations = operations.filter((operation) =>
+    ['queued', 'running', 'pending'].includes(operation.status),
+  ).length
 
   const overviewStats: Array<
     OverviewMetricItem & { allowed: boolean; loading: boolean; path: string }
@@ -122,6 +184,79 @@ export function AIObserveOverviewPage() {
     },
   ]
 
+  const operationalActions: Array<OverviewChipItem & { path: string; allowed: boolean }> = [
+    {
+      key: 'knowledge',
+      label: '知识库',
+      ...operationalSummary(
+        canKnowledge,
+        basesQuery.isLoading,
+        basesQuery.isError,
+        knowledgeAnomalies,
+        '异常知识库',
+      ),
+      icon: <BookOutlined />,
+      path: '/ai-workbench/knowledge',
+      allowed: canKnowledge,
+    },
+    {
+      key: 'evaluations',
+      label: '评测回归',
+      ...operationalSummary(
+        canEvaluate,
+        evaluationsQuery.isLoading,
+        evaluationsQuery.isError,
+        failedEvaluations,
+        '失败评测',
+      ),
+      icon: <ExperimentOutlined />,
+      path: '/ai-workbench/evaluations',
+      allowed: canEvaluate,
+    },
+    {
+      key: 'approvals',
+      label: '审批请求',
+      ...operationalSummary(
+        canApprovals,
+        approvalsQuery.isLoading,
+        approvalsQuery.isError,
+        approvals.length,
+        '待审批',
+      ),
+      icon: <AuditOutlined />,
+      path: '/ai-gateway/governance?tab=approvals',
+      allowed: canApprovals,
+    },
+    {
+      key: 'agent-runs',
+      label: 'Agent Runs',
+      ...operationalSummary(
+        canObserve,
+        runsQuery.isLoading,
+        runsQuery.isError,
+        anomalousRuns,
+        '异常运行',
+      ),
+      icon: <WarningOutlined />,
+      path: '/ai-workbench/agent-runs',
+      allowed: canObserve,
+    },
+    {
+      key: 'operations',
+      label: '生产操作',
+      ...operationalSummary(
+        canOperations,
+        operationsQuery.isLoading,
+        operationsQuery.isError,
+        activeOperations,
+        '进行中或待执行',
+      ),
+      icon: <PlayCircleOutlined />,
+      path: '/ai-workbench/production-operations',
+      allowed: canOperations,
+    },
+  ]
+
   if (permissionQuery.isError) {
     return (
       <div className="soha-page soha-overview-page soha-ai-unified-overview">
@@ -152,6 +287,28 @@ export function AIObserveOverviewPage() {
           )
         })}
       </div>
+      <section className="soha-overview-alert-stack" aria-label="待处理事项">
+        <div className="soha-overview-chip-grid">
+          {operationalActions.map((action) => {
+            const { key, path, allowed, ...item } = action
+            const chip = <OverviewChip {...item} />
+            return allowed ? (
+              <Link
+                aria-label={`查看${String(item.label)}`}
+                className="soha-overview-card-link"
+                key={key}
+                to={path}
+              >
+                {chip}
+              </Link>
+            ) : (
+              <div aria-disabled="true" key={key}>
+                {chip}
+              </div>
+            )
+          })}
+        </div>
+      </section>
     </div>
   )
 }

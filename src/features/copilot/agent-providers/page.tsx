@@ -1,11 +1,11 @@
 import { useNavigate } from 'react-router-dom'
 import { AppstoreAddOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { Button, Space, Tag } from 'antd'
+import { Button, Space } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { ManagementDataPage } from '@/components/management-data-page'
 import { ManagementState, ManagementTableToolbar } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { workbenchQueries } from '../workbench/queries'
 import type { WorkbenchAgentProvider } from '../workbench/types'
 
@@ -35,7 +35,7 @@ export function AgentProvidersPage() {
         values?.length ? (
           <Space size={4} wrap>
             {values.map((value) => (
-              <Tag key={value}>{value}</Tag>
+              <MetadataTag key={value} label={value} />
             ))}
           </Space>
         ) : (
@@ -53,11 +53,11 @@ export function AgentProvidersPage() {
 
   return (
     <ManagementDataPage
-      header={{
+      table={{
         title: 'Agent Providers',
-        description:
-          '展示运行时当前可用的 Provider 投影。插件已安装不代表所有 Agent 节点已经激活。',
-        actions: (
+        columnSettingIconOnly: true,
+        columnSettingPlacement: 'header',
+        headerExtra: (
           <ManagementTableToolbar>
             <Button
               icon={<ReloadOutlined />}
@@ -75,8 +75,6 @@ export function AgentProvidersPage() {
             </Button>
           </ManagementTableToolbar>
         ),
-      }}
-      table={{
         columns,
         dataSource: providers,
         loading: catalogQuery.isLoading,

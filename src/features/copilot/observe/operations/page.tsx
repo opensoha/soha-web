@@ -11,29 +11,24 @@ import {
   Alert,
   App,
   Button,
-  Card,
   Flex,
   Form,
   Input,
   InputNumber,
   Modal,
   Popconfirm,
-  Segmented,
   Select,
   Space,
   Switch,
-  Tag,
+  Tabs,
   Typography,
 } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
-import {
-  ManagementDetailHeader,
-  ManagementIconButton,
-  ManagementTableToolbar,
-} from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
+import { ManagementIconButton } from '@/components/management-list'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { AISettingsPage } from '@/features/settings'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { getAIWorkbenchPathForMode, getAIWorkbenchPathForSession } from '../../workbench/navigation'
 import { observeKeys } from '../keys'
@@ -48,7 +43,7 @@ import type {
 } from '../types'
 import '../../copilot-pages.css'
 
-const { Paragraph, Text } = Typography
+const { Text } = Typography
 
 const INSPECTION_CHECK_OPTIONS = [
   { value: 'cluster_health', label: 'Cluster Health' },
@@ -141,8 +136,14 @@ export function AIOperationsPage() {
   const canUpdateAISettings = hasPermission(permissionSnapshot, 'settings.ai.update')
   const requestedView = searchParams.get('view')
   const requestedInspectionRunId = searchParams.get('inspectionRunId')?.trim() ?? ''
-  const [activeView, setActiveView] = useState<'tasks' | 'runs' | 'policies'>(
-    requestedView === 'runs' ? 'runs' : requestedView === 'policies' ? 'policies' : 'tasks',
+  const [activeView, setActiveView] = useState<'tasks' | 'runs' | 'policies' | 'profiles'>(
+    requestedView === 'runs'
+      ? 'runs'
+      : requestedView === 'policies'
+        ? 'policies'
+        : requestedView === 'profiles'
+          ? 'profiles'
+          : 'tasks',
   )
   const [taskModalOpen, setTaskModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<InspectionTask | null>(null)
@@ -257,6 +258,10 @@ export function AIOperationsPage() {
     }
     if (requestedView === 'policies') {
       setActiveView('policies')
+      return
+    }
+    if (requestedView === 'profiles') {
+      setActiveView('profiles')
     }
   }, [requestedInspectionRunId, requestedView])
 
@@ -320,158 +325,120 @@ export function AIOperationsPage() {
 
   return (
     <div className="soha-page">
-      <ManagementDetailHeader
-        title="巡检与自动化"
-        description="统一查看巡检任务、巡检运行、自动化策略，并把发现结果送入 AI 会话。"
-        actions={
-          <ManagementTableToolbar>
+      <Tabs
+        activeKey={activeView}
+        className="soha-resource-tabs is-header-only"
+        onChange={(value) => setActiveView(value as typeof activeView)}
+        items={[
+          { key: 'tasks', label: '巡检任务' },
+          { key: 'runs', label: '巡检运行' },
+          { key: 'policies', label: '自动化策略' },
+          { key: 'profiles', label: '分析模板' },
+        ]}
+      />
+
+      {activeView === 'tasks' ? (
+        <AdminTable
+          title="巡检任务"
+          headerExtra={
             <Button
-              onClick={() => navigate(getAIWorkbenchPathForMode('inspection_review'))}
-              disabled={!canUseChat}
-            >
-              进入巡检复盘工作台
-            </Button>
-            <Button
+              size="small"
+              type="primary"
               icon={<PlusOutlined />}
               onClick={openCreateTask}
               disabled={!canCreateInspection}
               title={canCreateInspection ? undefined : '缺少 observe.ai.inspection.create 权限'}
             >
-              新建巡检任务
-            </Button>
-            <Button
-              type="primary"
-              onClick={() => navigate(getAIWorkbenchPathForMode('general'))}
-              disabled={!canUseChat}
-            >
-              新建会话
-            </Button>
-          </ManagementTableToolbar>
-        }
-      />
-      <Card styles={{ body: { paddingBottom: 8 } }}>
-        <Segmented
-          value={activeView}
-          onChange={(value) => setActiveView(value as typeof activeView)}
-          options={[
-            { value: 'tasks', label: '巡检任务' },
-            { value: 'runs', label: '巡检运行' },
-            { value: 'policies', label: '自动化策略' },
-          ]}
-        />
-        <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
-          把巡检任务、巡检运行与自动化策略放在同一工作区，避免在调查和自动化之间来回跳转。
-        </Paragraph>
-      </Card>
-
-      {activeView === 'tasks' ? (
-        <Card
-          size="small"
-          variant="outlined"
-          className="soha-management-panel-card"
-          title="巡检任务"
-          extra={
-            <Button
-              size="small"
-              icon={<PlusOutlined />}
-              onClick={openCreateTask}
-              disabled={!canCreateInspection}
-            >
               新建任务
             </Button>
           }
-        >
-          <AdminTable
-            shellClassName="soha-management-table-shell"
-            columnSettingIconOnly
-            columnSettingPlacement="header"
-            rowKey="id"
-            dataSource={tasks}
-            loading={tasksQuery.isLoading}
-            tableSize="small"
-            pageSize={10}
-            columns={[
-              { title: '任务名称', dataIndex: 'title' },
-              {
-                title: '范围',
-                dataIndex: 'scopeType',
-                render: (_value: string, record: InspectionTask) =>
-                  [record.scopeType, record.clusterId, record.namespace]
-                    .filter(Boolean)
-                    .join(' / '),
-              },
-              {
-                title: '检查项',
-                dataIndex: 'checks',
-                render: (value: string[]) => (
-                  <Space wrap>
-                    {(value ?? []).map((item) => (
-                      <Tag key={item}>{item}</Tag>
-                    ))}
-                  </Space>
-                ),
-              },
-              {
-                title: '间隔',
-                dataIndex: 'intervalMinutes',
-                render: (value: number) => `${value} min`,
-              },
-              {
-                title: '启用',
-                dataIndex: 'enabled',
-                render: (value: boolean) => <StatusTag value={value ? 'enabled' : 'disabled'} />,
-              },
-              {
-                ...tableColumnPresets.action,
-                title: '操作',
-                dataIndex: 'id',
-                render: (_value: string, record: InspectionTask) => (
-                  <Space className="soha-row-action-icons">
+          shellClassName="soha-management-table-shell"
+          columnSettingIconOnly
+          columnSettingPlacement="header"
+          rowKey="id"
+          dataSource={tasks}
+          loading={tasksQuery.isLoading}
+          tableSize="small"
+          pageSize={10}
+          columns={[
+            { title: '任务名称', dataIndex: 'title' },
+            {
+              title: '范围',
+              dataIndex: 'scopeType',
+              render: (_value: string, record: InspectionTask) =>
+                [record.scopeType, record.clusterId, record.namespace].filter(Boolean).join(' / '),
+            },
+            {
+              title: '检查项',
+              dataIndex: 'checks',
+              render: (value: string[]) => (
+                <Space wrap>
+                  {(value ?? []).map((item) => (
+                    <MetadataTag key={item} label={item} />
+                  ))}
+                </Space>
+              ),
+            },
+            {
+              title: '间隔',
+              dataIndex: 'intervalMinutes',
+              render: (value: number) => `${value} min`,
+            },
+            {
+              title: '启用',
+              dataIndex: 'enabled',
+              render: (value: boolean) => <StatusTag value={value ? 'enabled' : 'disabled'} />,
+            },
+            {
+              ...tableColumnPresets.action,
+              title: '操作',
+              dataIndex: 'id',
+              render: (_value: string, record: InspectionTask) => (
+                <Space className="soha-row-action-icons">
+                  <ManagementIconButton
+                    aria-label="编辑巡检任务"
+                    size="small"
+                    tooltip="编辑"
+                    icon={<EditOutlined />}
+                    onClick={() => openEditTask(record)}
+                    disabled={!canUpdateInspection}
+                    title={
+                      canUpdateInspection ? undefined : '缺少 observe.ai.inspection.update 权限'
+                    }
+                  />
+                  <ManagementIconButton
+                    aria-label="立即执行巡检"
+                    size="small"
+                    tooltip="立即执行"
+                    icon={<PlayCircleOutlined />}
+                    loading={executeMutation.isPending}
+                    onClick={() => executeMutation.mutate(record.id)}
+                    disabled={!canRunInspection}
+                    title={canRunInspection ? undefined : '缺少 observe.ai.inspection.run 权限'}
+                  />
+                  <Popconfirm
+                    title="确认删除巡检任务？"
+                    description="关联巡检运行记录会一并删除。"
+                    onConfirm={() => deleteTaskMutation.mutate(record.id)}
+                    okButtonProps={{ danger: true, loading: deleteTaskMutation.isPending }}
+                  >
                     <ManagementIconButton
-                      aria-label="编辑巡检任务"
+                      aria-label="删除巡检任务"
                       size="small"
-                      tooltip="编辑"
-                      icon={<EditOutlined />}
-                      onClick={() => openEditTask(record)}
-                      disabled={!canUpdateInspection}
+                      tooltip="删除"
+                      icon={<DeleteOutlined />}
+                      danger
+                      disabled={!canDeleteInspection}
                       title={
-                        canUpdateInspection ? undefined : '缺少 observe.ai.inspection.update 权限'
+                        canDeleteInspection ? undefined : '缺少 observe.ai.inspection.delete 权限'
                       }
                     />
-                    <ManagementIconButton
-                      aria-label="立即执行巡检"
-                      size="small"
-                      tooltip="立即执行"
-                      icon={<PlayCircleOutlined />}
-                      loading={executeMutation.isPending}
-                      onClick={() => executeMutation.mutate(record.id)}
-                      disabled={!canRunInspection}
-                      title={canRunInspection ? undefined : '缺少 observe.ai.inspection.run 权限'}
-                    />
-                    <Popconfirm
-                      title="确认删除巡检任务？"
-                      description="关联巡检运行记录会一并删除。"
-                      onConfirm={() => deleteTaskMutation.mutate(record.id)}
-                      okButtonProps={{ danger: true, loading: deleteTaskMutation.isPending }}
-                    >
-                      <ManagementIconButton
-                        aria-label="删除巡检任务"
-                        size="small"
-                        tooltip="删除"
-                        icon={<DeleteOutlined />}
-                        danger
-                        disabled={!canDeleteInspection}
-                        title={
-                          canDeleteInspection ? undefined : '缺少 observe.ai.inspection.delete 权限'
-                        }
-                      />
-                    </Popconfirm>
-                  </Space>
-                ),
-              },
-            ]}
-          />
-        </Card>
+                  </Popconfirm>
+                </Space>
+              ),
+            },
+          ]}
+        />
       ) : null}
 
       <Modal
@@ -558,12 +525,7 @@ export function AIOperationsPage() {
       </Modal>
 
       {activeView === 'runs' ? (
-        <Card
-          size="small"
-          variant="outlined"
-          className="soha-management-panel-card"
-          title="巡检运行记录"
-        >
+        <>
           {requestedInspectionRunId ? (
             <Alert
               type={runs.some((item) => item.id === requestedInspectionRunId) ? 'info' : 'warning'}
@@ -582,6 +544,16 @@ export function AIOperationsPage() {
             />
           ) : null}
           <AdminTable
+            title="巡检运行记录"
+            headerExtra={
+              <Button
+                size="small"
+                onClick={() => navigate(getAIWorkbenchPathForMode('inspection_review'))}
+                disabled={!canUseChat}
+              >
+                进入巡检复盘工作台
+              </Button>
+            }
             shellClassName="soha-management-table-shell"
             columnSettingIconOnly
             columnSettingPlacement="header"
@@ -597,7 +569,9 @@ export function AIOperationsPage() {
                 render: (value: string) => (
                   <Space size={6} wrap>
                     <Text>{value}</Text>
-                    {value === requestedInspectionRunId ? <Tag color="blue">已定位</Tag> : null}
+                    {value === requestedInspectionRunId ? (
+                      <MetadataTag label="已定位" tone="blue" />
+                    ) : null}
                   </Space>
                 ),
               },
@@ -642,31 +616,11 @@ export function AIOperationsPage() {
               },
             ]}
           />
-        </Card>
+        </>
       ) : null}
 
       {activeView === 'policies' ? (
-        <Card
-          size="small"
-          variant="outlined"
-          className="soha-management-panel-card"
-          title="自动化策略"
-          extra={
-            <Button
-              size="small"
-              icon={<PlusOutlined />}
-              onClick={openCreatePolicy}
-              disabled={!canUpdateAISettings}
-              title={canUpdateAISettings ? undefined : '缺少 settings.ai.update 权限'}
-            >
-              新建策略
-            </Button>
-          }
-        >
-          <Paragraph type="secondary">
-            自动化策略只负责触发和分析范围，不应隐式替代会话级 toolset
-            选择。需要深入分析时，优先把结果送回 AI 工作台。
-          </Paragraph>
+        <>
           {!canUpdateAISettings ? (
             <Alert
               type="warning"
@@ -677,6 +631,19 @@ export function AIOperationsPage() {
             />
           ) : null}
           <AdminTable
+            title="自动化策略"
+            headerExtra={
+              <Button
+                size="small"
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={openCreatePolicy}
+                disabled={!canUpdateAISettings}
+                title={canUpdateAISettings ? undefined : '缺少 settings.ai.update 权限'}
+              >
+                新建策略
+              </Button>
+            }
             shellClassName="soha-management-table-shell"
             columnSettingIconOnly
             columnSettingPlacement="header"
@@ -694,7 +661,7 @@ export function AIOperationsPage() {
                 render: (value: string[]) => (
                   <Space wrap>
                     {(value ?? []).map((item) => (
-                      <Tag key={item}>{item}</Tag>
+                      <MetadataTag key={item} label={item} />
                     ))}
                   </Space>
                 ),
@@ -755,8 +722,10 @@ export function AIOperationsPage() {
               },
             ]}
           />
-        </Card>
+        </>
       ) : null}
+
+      {activeView === 'profiles' ? <AISettingsPage embedded section="profiles" /> : null}
 
       <Modal
         title={editingPolicy ? '编辑自动化策略' : '新建自动化策略'}

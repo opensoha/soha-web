@@ -51,14 +51,14 @@
     ]
   },
   "summary": {
-    "runtimePaths": 245,
-    "metadataPaths": 245,
-    "overlappingPaths": 245,
+    "runtimePaths": 246,
+    "metadataPaths": 246,
+    "overlappingPaths": 246,
     "runtimeOnlyPaths": 0,
     "metadataOnlyPaths": 0,
     "inlineJsxPaths": 0,
-    "lazyRouteLoads": 209,
-    "lazySourceModules": 206
+    "lazyRouteLoads": 210,
+    "lazySourceModules": 207
   },
   "paths": {
     "runtime": [
@@ -83,6 +83,7 @@
       "/ai-workbench/agent-providers",
       "/ai-workbench/agent-runs",
       "/ai-workbench/chat",
+      "/ai-workbench/companion",
       "/ai-workbench/context",
       "/ai-workbench/environments",
       "/ai-workbench/evaluation-lifecycle",
@@ -330,6 +331,7 @@
       "/ai-workbench/agent-providers",
       "/ai-workbench/agent-runs",
       "/ai-workbench/chat",
+      "/ai-workbench/companion",
       "/ai-workbench/context",
       "/ai-workbench/environments",
       "/ai-workbench/evaluation-lifecycle",
@@ -577,6 +579,7 @@
       "/ai-workbench/agent-providers",
       "/ai-workbench/agent-runs",
       "/ai-workbench/chat",
+      "/ai-workbench/companion",
       "/ai-workbench/context",
       "/ai-workbench/environments",
       "/ai-workbench/evaluation-lifecycle",
@@ -1012,6 +1015,11 @@
         "exportName": "ClustersPage",
         "moduleExport": "ClustersPage",
         "source": "@/features/platform/clusters/list-page"
+      },
+      {
+        "exportName": "CompanionSettingsPage",
+        "moduleExport": "CompanionSettingsPage",
+        "source": "@/features/companion/settings-page"
       },
       {
         "exportName": "CompanionWindowPage",
@@ -1865,6 +1873,7 @@
       "@/features/auth/login-page",
       "@/features/auth/oidc-callback-page",
       "@/features/auth/user-profile-page",
+      "@/features/companion/settings-page",
       "@/features/companion/window-page",
       "@/features/compute/overview/page",
       "@/features/compute/tasks/build-page",
@@ -2073,6 +2082,7 @@
       "@/features/auth/login-page": ["LoginPage"],
       "@/features/auth/oidc-callback-page": ["OIDCCallbackPage", "OIDCCallbackPage"],
       "@/features/auth/user-profile-page": ["UserProfilePage"],
+      "@/features/companion/settings-page": ["CompanionSettingsPage"],
       "@/features/companion/window-page": ["CompanionWindowPage"],
       "@/features/compute/overview/page": ["ComputeOverviewPage"],
       "@/features/compute/tasks/build-page": ["ComputeBuildTasksPage"],
@@ -2343,5 +2353,5 @@
       "@/features/virtualization/virtual-machines/list-page": ["VirtualizationVmsPage"]
     }
   },
-  "generatedAt": "2026-08-13T10:18:06.218Z"
+  "generatedAt": "2026-08-19T09:03:09.642Z"
 }

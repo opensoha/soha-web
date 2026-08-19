@@ -29,7 +29,7 @@ export function normalizeRealtimeSession(input: RealtimeSessionInput): RealtimeS
     podName,
     container ?? '',
     shell ?? '',
-  ])
+  ]).replace(/[^a-zA-Z0-9]/gu, (character) => `_${character.codePointAt(0)!.toString(16)}_`)
 
   return {
     ...input,

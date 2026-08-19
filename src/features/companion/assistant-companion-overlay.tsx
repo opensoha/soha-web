@@ -15,6 +15,7 @@ import { usePreferencesStore } from '@/stores/preferences-store'
 import { companionApi, companionKeys } from './api'
 import { builtinCompanionPack, BUILTIN_COMPANION_PLUGIN_ID } from './builtin-pack'
 import { CompanionRenderer } from './companion-renderer'
+import { useLocalCompanionPackStore } from './local-live2d-store'
 import {
   companionInteractionAnimation,
   companionInteractionId,
@@ -37,7 +38,9 @@ interface AssistantCompanionOverlayProps {
 function activePack(
   selectedPluginId: string,
   installed: InstalledPlugin[],
+  localPack: CompanionPackSelection | null,
 ): CompanionPackSelection {
+  if (localPack) return localPack
   if (selectedPluginId === BUILTIN_COMPANION_PLUGIN_ID) return builtinCompanionPack
   const plugin = installed?.find(
     (item) =>
@@ -68,6 +71,7 @@ export function AssistantCompanionOverlay({
   const queryClient = useQueryClient()
   const selectedPluginId = usePreferencesStore((state) => state.selectedCompanionPluginId)
   const bubbleEnabled = usePreferencesStore((state) => state.companionBubbleEnabled)
+  const localPack = useLocalCompanionPackStore((state) => state.pack)
   const [dragging, setDragging] = useState(false)
   const [hovered, setHovered] = useState(false)
   const [interactionMotion, setInteractionMotion] = useState<CompanionInteractionMotion>()
@@ -80,8 +84,12 @@ export function AssistantCompanionOverlay({
   })
   const pack = useMemo(
     () =>
-      activePack(selectedPluginId, Array.isArray(installedQuery.data) ? installedQuery.data : []),
-    [installedQuery.data, selectedPluginId],
+      activePack(
+        selectedPluginId,
+        Array.isArray(installedQuery.data) ? installedQuery.data : [],
+        localPack,
+      ),
+    [installedQuery.data, localPack, selectedPluginId],
   )
   const interactionMutation = useMutation({
     mutationFn: (interactionId: string) =>
@@ -139,7 +147,7 @@ export function AssistantCompanionOverlay({
       }))
       interactionTimerRef.current = window.setTimeout(() => setInteractionMotion(undefined), 600)
     }
-    void interactionMutation.mutateAsync(interactionId).catch(() => undefined)
+    if (!pack.local) void interactionMutation.mutateAsync(interactionId).catch(() => undefined)
   }
 
   const companion = (

@@ -51,6 +51,17 @@ export interface WorkbenchStreamState {
   done: boolean
 }
 
+export class WorkbenchStreamTransportError extends Error {
+  readonly code: string
+  readonly retryable = true
+
+  constructor(message: string, code: string) {
+    super(message)
+    this.name = 'WorkbenchStreamTransportError'
+    this.code = code
+  }
+}
+
 function parseSSEFrame(frame: string): WorkbenchStreamEvent[] {
   const data = frame
     .split(/\r?\n/)
@@ -120,6 +131,14 @@ export function isRunningWorkbenchAgentStatus(status?: string) {
 export function isTerminalWorkbenchAgentStatus(status?: string) {
   const canonical = canonicalWorkbenchAgentStatus(status)
   return canonical === 'succeeded' || canonical === 'failed' || canonical === 'cancelled'
+}
+
+function isTerminalWorkbenchStreamEvent(event: WorkbenchStreamEvent) {
+  return (
+    event.type === 'message.done' ||
+    event.type === 'error' ||
+    (event.type === 'agent.status' && isTerminalWorkbenchAgentStatus(event.status))
+  )
 }
 
 export function workbenchStreamEventKey(
@@ -307,6 +326,23 @@ export async function streamWorkbenchMessage(
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let rest = ''
+  let terminalReceived = false
+
+  const dispatch = async (event: WorkbenchStreamEvent) => {
+    terminalReceived ||= isTerminalWorkbenchStreamEvent(event)
+    await onEvent(event)
+  }
+
+  const parseChunk = (chunk: string, buffered = '') => {
+    try {
+      return parseSSEChunk(chunk, buffered)
+    } catch {
+      throw new WorkbenchStreamTransportError(
+        'Workbench stream returned an invalid event.',
+        'stream_parse_error',
+      )
+    }
+  }
 
   try {
     for (;;) {
@@ -314,16 +350,22 @@ export async function streamWorkbenchMessage(
       if (done) {
         break
       }
-      const parsed = parseSSEChunk(decoder.decode(value, { stream: true }), rest)
+      const parsed = parseChunk(decoder.decode(value, { stream: true }), rest)
       rest = parsed.rest
       for (const event of parsed.events) {
-        await onEvent(event)
+        await dispatch(event)
       }
     }
 
-    const parsed = parseSSEChunk(`${decoder.decode()}\n\n`, rest)
+    const parsed = parseChunk(`${decoder.decode()}\n\n`, rest)
     for (const event of parsed.events) {
-      await onEvent(event)
+      await dispatch(event)
+    }
+    if (!terminalReceived) {
+      throw new WorkbenchStreamTransportError(
+        'Workbench stream ended before a terminal event.',
+        'stream_incomplete',
+      )
     }
   } finally {
     reader.releaseLock()

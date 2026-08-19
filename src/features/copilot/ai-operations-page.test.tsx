@@ -7,6 +7,7 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AIOperationsPage } from './observe/operations/page'
+import { AIToolsPage } from './observe/tools/page'
 import type { PermissionSnapshot } from '@/types'
 
 const testState = vi.hoisted(() => ({
@@ -18,6 +19,7 @@ const testState = vi.hoisted(() => ({
       'observe.ai.inspection.create',
       'observe.ai.inspection.update',
       'observe.ai.inspection.delete',
+      'settings.ai.view',
       'settings.ai.update',
     ],
     visibleMenuIds: [],
@@ -89,6 +91,28 @@ const apiGetMock = vi.hoisted(() =>
         },
       }
     }
+    if (path === '/copilot/data-sources') return { data: [] }
+    if (path === '/copilot/data-source-capabilities') return { data: [] }
+    if (path === '/copilot/analysis-profiles') {
+      return {
+        data: [
+          { id: 'profile:inspection', name: '巡检模板', mode: 'inspection', enabled: true },
+          { id: 'profile:root-cause', name: '根因模板', mode: 'root_cause', enabled: true },
+        ],
+      }
+    }
+    if (path === '/settings/ai') {
+      return { data: { skillsRegistry: [], workbenchModel: { enabled: true } } }
+    }
+    if (path === '/copilot/sessions/session-1') {
+      return {
+        data: {
+          id: 'session-1',
+          title: '支付告警调查',
+          metadata: { mode: 'root_cause', toolset: {} },
+        },
+      }
+    }
     throw new Error(`Unhandled GET ${path}`)
   }),
 )
@@ -148,6 +172,32 @@ async function renderOperationsPage(route = '/ai-workbench/inspection') {
         <AntdApp>
           <MemoryRouter initialEntries={[route]}>
             <AIOperationsPage />
+          </MemoryRouter>
+        </AntdApp>
+      </QueryClientProvider>,
+    )
+  })
+
+  await flush()
+  return container
+}
+
+async function renderToolsPage() {
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  containers.push(container)
+
+  const root = createRoot(container)
+  roots.push(root)
+
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+
+  await act(async () => {
+    root.render(
+      <QueryClientProvider client={queryClient}>
+        <AntdApp>
+          <MemoryRouter initialEntries={['/ai-workbench/tool-settings?session=session-1']}>
+            <AIToolsPage />
           </MemoryRouter>
         </AntdApp>
       </QueryClientProvider>,
@@ -248,12 +298,12 @@ describe('AIOperationsPage delete actions', () => {
 
     expect(apiDeleteMock).toHaveBeenCalledWith('/copilot/inspection-tasks/task-1')
 
-    const policySegment = Array.from(container.querySelectorAll('.ant-segmented-item')).find(
-      (item) => item.textContent?.includes('自动化策略'),
+    const policyTab = Array.from(container.querySelectorAll('.ant-tabs-tab')).find((item) =>
+      item.textContent?.includes('自动化策略'),
     ) as HTMLElement | undefined
-    expect(policySegment).toBeTruthy()
+    expect(policyTab).toBeTruthy()
     await act(async () => {
-      policySegment?.click()
+      policyTab?.click()
     })
     await flush()
 
@@ -284,12 +334,12 @@ describe('AIOperationsPage delete actions', () => {
     } as PermissionSnapshot
     const container = await renderOperationsPage()
 
-    const runsSegment = Array.from(container.querySelectorAll('.ant-segmented-item')).find((item) =>
+    const runsTab = Array.from(container.querySelectorAll('.ant-tabs-tab')).find((item) =>
       item.textContent?.includes('巡检运行'),
     ) as HTMLElement | undefined
-    expect(runsSegment).toBeTruthy()
+    expect(runsTab).toBeTruthy()
     await act(async () => {
-      runsSegment?.click()
+      runsTab?.click()
     })
     await flush()
 
@@ -327,16 +377,62 @@ describe('AIOperationsPage delete actions', () => {
     expect(apiGetMock).not.toHaveBeenCalledWith('/copilot/automation-policies')
     expect(container.textContent).toContain('支付命名空间巡检')
 
-    const policySegment = Array.from(container.querySelectorAll('.ant-segmented-item')).find(
-      (item) => item.textContent?.includes('自动化策略'),
+    const policyTab = Array.from(container.querySelectorAll('.ant-tabs-tab')).find((item) =>
+      item.textContent?.includes('自动化策略'),
     ) as HTMLElement | undefined
-    expect(policySegment).toBeTruthy()
+    expect(policyTab).toBeTruthy()
     await act(async () => {
-      policySegment?.click()
+      policyTab?.click()
     })
     await flush()
 
     expect(container.textContent).toContain('缺少 settings.ai.update 权限')
     expect(apiGetMock).not.toHaveBeenCalledWith('/copilot/automation-policies')
+  })
+
+  it('keeps analysis profile management inside inspection', async () => {
+    testState.snapshot = {
+      permissionKeys: ['observe.ai.view', 'settings.ai.view', 'settings.ai.update'],
+      visibleMenuIds: [],
+      visibleMenus: [],
+    } as PermissionSnapshot
+    const container = await renderOperationsPage('/ai-workbench/inspection?view=profiles')
+
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('根因模板')
+    })
+    expect(apiGetMock).toHaveBeenCalledWith('/copilot/analysis-profiles')
+    expect(apiGetMock).toHaveBeenCalledWith('/copilot/data-sources')
+    expect(container.textContent).not.toContain('Workbench 默认模型')
+  })
+
+  it('keeps session tool configuration out of resource tabs and opens it on demand', async () => {
+    const container = await renderToolsPage()
+    const tabs = Array.from(container.querySelectorAll('.ant-tabs-tab'))
+
+    expect(tabs).toHaveLength(3)
+    expect(tabs.map((tab) => tab.textContent)).toEqual([
+      'MCP Adapters (0)',
+      '数据源 (0)',
+      'Skills (0)',
+    ])
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+
+    const configureButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === '配置当前会话',
+    )
+    expect(configureButton).toBeTruthy()
+
+    await act(async () => configureButton?.click())
+    await flush()
+
+    const dialog = document.body.querySelector('[role="dialog"]')
+    expect(dialog?.textContent).toContain('会话级工具装配')
+    expect(dialog?.querySelectorAll('.ant-select')).toHaveLength(3)
+    expect(
+      Array.from(dialog?.querySelectorAll<HTMLElement>('.ant-select') ?? []).every(
+        (select) => select.style.width === '100%',
+      ),
+    ).toBe(true)
   })
 })

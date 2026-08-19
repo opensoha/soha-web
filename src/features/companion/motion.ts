@@ -1,4 +1,4 @@
-import type { CompanionPackManifest, CompanionVisualState } from './types'
+import type { CompanionRenderManifest, CompanionVisualState } from './types'
 
 export interface CompanionInteractionMotion {
   animation: string
@@ -6,7 +6,7 @@ export interface CompanionInteractionMotion {
 }
 
 export function companionStateAnimation(
-  manifest: CompanionPackManifest,
+  manifest: CompanionRenderManifest,
   state: CompanionVisualState,
 ) {
   if (state === 'disabled') return undefined
@@ -14,7 +14,7 @@ export function companionStateAnimation(
 }
 
 export function companionInteractionAnimation(
-  manifest: CompanionPackManifest,
+  manifest: CompanionRenderManifest,
   interactionId: string,
 ) {
   const interaction = manifest.interactions?.find((item) => item.id === interactionId)
@@ -23,7 +23,7 @@ export function companionInteractionAnimation(
 }
 
 export function companionInteractionId(
-  manifest: CompanionPackManifest,
+  manifest: CompanionRenderManifest,
   requestedInteraction: string | null | undefined,
 ) {
   return requestedInteraction &&

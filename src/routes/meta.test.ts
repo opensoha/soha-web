@@ -100,6 +100,35 @@ describe('access route authorization', () => {
     ).toContain('identity-software-storage')
   })
 
+  it('derives compatibility menu access and path from the canonical route metadata', () => {
+    const allowed = buildSnapshot({
+      permissionKeys: ['ai.evaluations.view'],
+      visibleMenuIds: ['ai-workbench'],
+      visibleMenus: [{ id: 'ai-workbench', path: '/ai-workbench' }],
+    })
+    const stalePermission = buildSnapshot({
+      permissionKeys: ['ai.evaluations.execute'],
+      visibleMenuIds: ['ai-workbench'],
+      visibleMenus: [{ id: 'ai-workbench', path: '/ai-workbench' }],
+    })
+
+    expect(
+      filterSidebarNavByWorkbench(getAccessibleSidebarNav(allowed), 'ai'),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'ai-workbench-evaluation-lifecycle',
+          path: '/ai-workbench/evaluation-lifecycle',
+        }),
+      ]),
+    )
+    expect(
+      filterSidebarNavByWorkbench(getAccessibleSidebarNav(stalePermission), 'ai').map(
+        (item) => item.id,
+      ),
+    ).not.toContain('ai-workbench-evaluation-lifecycle')
+  })
+
   it('keeps the portal route authorized when its navigation menu is hidden', () => {
     const snapshot = buildSnapshot({
       permissionKeys: ['identity.portal.view'],

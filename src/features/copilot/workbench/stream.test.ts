@@ -7,6 +7,7 @@ import {
   parseSSEChunk,
   reduceWorkbenchStreamState,
   streamWorkbenchMessage,
+  WorkbenchStreamTransportError,
 } from './stream'
 
 const authMocks = vi.hoisted(() => ({
@@ -367,6 +368,57 @@ describe('workbench stream helpers', () => {
       code: 'provider_unavailable',
       retryable: true,
     })
+  })
+
+  it('rejects EOF before a terminal event as retryable', async () => {
+    const delta: WorkbenchStreamEvent = {
+      id: 'evt-delta',
+      sessionId: 'session-1',
+      messageId: 'message-1',
+      sequence: 1,
+      createdAt,
+      type: 'message.delta',
+      role: 'assistant',
+      contentDelta: 'partial',
+    }
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(delta)}\n\n`))
+        controller.close()
+      },
+    })
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response(body)))
+    authMocks.getStoredAccessToken.mockReturnValue(null)
+
+    await expect(
+      streamWorkbenchMessage('/stream', { content: 'hello' }, () => undefined),
+    ).rejects.toEqual(
+      expect.objectContaining<Partial<WorkbenchStreamTransportError>>({
+        name: 'WorkbenchStreamTransportError',
+        code: 'stream_incomplete',
+        retryable: true,
+      }),
+    )
+  })
+
+  it('classifies malformed SSE data as a retryable transport error', async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('data: {invalid json}\n\n'))
+        controller.close()
+      },
+    })
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response(body)))
+    authMocks.getStoredAccessToken.mockReturnValue(null)
+
+    await expect(
+      streamWorkbenchMessage('/stream', { content: 'hello' }, () => undefined),
+    ).rejects.toEqual(
+      expect.objectContaining<Partial<WorkbenchStreamTransportError>>({
+        code: 'stream_parse_error',
+        retryable: true,
+      }),
+    )
   })
 
   it('refreshes authentication once before opening an SSE stream', async () => {

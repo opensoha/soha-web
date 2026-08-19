@@ -98,6 +98,21 @@ describe('role permission tree model', () => {
     expect(nodePath(tree, 'permission:platform.helm.values.view')).toContain('route:helm-releases')
   })
 
+  it.each([
+    ['observe.ai.chat', 'ai-workbench-chat'],
+    ['observe.ai.root-cause.run', 'ai-workbench-chat'],
+    ['observe.ai.inspection.cancel', 'ai-workbench-inspection'],
+    ['observe.ai.inspection.create', 'ai-workbench-inspection'],
+    ['observe.ai.inspection.delete', 'ai-workbench-inspection'],
+    ['observe.ai.inspection.run', 'ai-workbench-inspection'],
+    ['observe.ai.inspection.update', 'ai-workbench-inspection'],
+    ['observe.ai.inspection.validate', 'ai-workbench-inspection'],
+  ])('places AI permission %s under its owning page', (permissionKey, routeID) => {
+    expect(
+      nodePath(buildRolePermissionTreeData(definitions), `permission:${permissionKey}`),
+    ).toContain(`route:${routeID}`)
+  })
+
   it('places exact workload operations under their owning pages', () => {
     const tree = buildRolePermissionTreeData(definitions)
     const owners = {

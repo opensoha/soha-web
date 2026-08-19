@@ -1,9 +1,15 @@
-import { PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons'
+import { PlayCircleOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import type { TableColumnsType } from 'antd'
-import { Button, Descriptions, Input, Select, Space } from 'antd'
+import { Descriptions, Input, Select, Space } from 'antd'
 import { AdminTable } from '@/components/admin-table'
-import { ManagementIconButton, ManagementState } from '@/components/management-list'
+import {
+  ManagementIconButton,
+  ManagementQueryField,
+  ManagementQueryPanel,
+  ManagementRefreshButton,
+  ManagementState,
+} from '@/components/management-list'
 import { GatewayToolInvokeDrawer } from '../tool-invoke-drawer'
 import type { AIClient, GatewayManifest, GatewayTool } from '../types'
 import { compactList } from '../presentation'
@@ -58,33 +64,38 @@ export function GatewayManifestSection({
 
   return (
     <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-      <Space wrap>
-        <Select
-          allowClear
-          style={{ width: 260 }}
-          placeholder="AI client"
-          options={clientOptions}
-          value={filters.aiClientId || undefined}
-          onChange={(value) => onFiltersChange({ ...filters, aiClientId: value ?? '' })}
-        />
-        <Select
-          allowClear
-          style={{ width: 260 }}
-          placeholder="Skill"
-          options={skillOptions}
-          value={filters.skillId || undefined}
-          onChange={(value) => onFiltersChange({ ...filters, skillId: value ?? '' })}
-        />
-        <Input
-          style={{ width: 180 }}
-          placeholder="source"
-          value={filters.source}
-          onChange={(event) => onFiltersChange({ ...filters, source: event.target.value })}
-        />
-        <Button icon={<ReloadOutlined />} onClick={onRefresh}>
-          刷新
-        </Button>
-      </Space>
+      <ManagementQueryPanel
+        collapsible={false}
+        actions={
+          <ManagementRefreshButton aria-label="刷新 Manifest" tooltip="刷新" onClick={onRefresh} />
+        }
+      >
+        <ManagementQueryField label="AI Client" width={260}>
+          <Select
+            allowClear
+            placeholder="全部 Client"
+            options={clientOptions}
+            value={filters.aiClientId || undefined}
+            onChange={(value) => onFiltersChange({ ...filters, aiClientId: value ?? '' })}
+          />
+        </ManagementQueryField>
+        <ManagementQueryField label="Skill" width={260}>
+          <Select
+            allowClear
+            placeholder="全部 Skill"
+            options={skillOptions}
+            value={filters.skillId || undefined}
+            onChange={(value) => onFiltersChange({ ...filters, skillId: value ?? '' })}
+          />
+        </ManagementQueryField>
+        <ManagementQueryField label="Source" width={180}>
+          <Input
+            placeholder="来源"
+            value={filters.source}
+            onChange={(event) => onFiltersChange({ ...filters, source: event.target.value })}
+          />
+        </ManagementQueryField>
+      </ManagementQueryPanel>
       {manifest ? (
         <>
           <Descriptions

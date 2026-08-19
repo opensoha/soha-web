@@ -65,6 +65,7 @@ vi.mock('@/features/copilot/workbench/pages/chat-page', mockRoutePage('AIWorkben
 vi.mock('@/features/copilot/observe/operations/page', mockRoutePage('AIOperationsPage'))
 vi.mock('@/features/copilot/observe/tools/page', mockRoutePage('AIToolsPage'))
 vi.mock('@/features/copilot/observe/model-settings/page', mockRoutePage('AIModelSettingsPage'))
+vi.mock('@/features/companion/settings-page', mockRoutePage('CompanionSettingsPage'))
 vi.mock('@/features/copilot/observe/overview/page', mockRoutePage('AIObserveOverviewPage'))
 vi.mock(
   '@/features/virtualization/virtual-machines/detail-page',
@@ -268,6 +269,7 @@ describe('router deep-link baseline', () => {
     ['/monitoring-workbench/alerts/event-1', 'AlertEventDetailPage'],
     ['/observability/alerts/event-1', 'AlertEventDetailPage'],
     ['/ai-workbench/chat', 'AIWorkbenchChatPage'],
+    ['/ai-workbench/companion', 'CompanionSettingsPage'],
     ['/ai-workbench/inspection', 'AIOperationsPage'],
     ['/ai-workbench/tool-settings', 'AIToolsPage'],
     ['/ai-workbench/model-settings', 'AIModelSettingsPage'],

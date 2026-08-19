@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { PlusOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button, Form, Input, InputNumber, Modal, Space } from 'antd'
+import { Button, Form, Input, InputNumber, Modal, Popconfirm, Space } from 'antd'
 import { ProductionOperationsPage } from '../production/operations-page'
 import { AIWorkbenchFeatureGate } from '../production/feature-gate'
 import { providerFleetMutations } from './mutations'
@@ -37,8 +37,6 @@ function ProviderFleetPageContent() {
   }
   return (
     <ProductionOperationsPage
-      title="Provider Fleet"
-      description="以 canary、批次与 LKG 约束 Agent Provider fleet rollout，并运行 adapter conformance。"
       refreshing={rollouts.isFetching || runs.isFetching}
       onRefresh={() => void Promise.all([rollouts.refetch(), runs.refetch()])}
       actions={
@@ -62,13 +60,14 @@ function ProviderFleetPageContent() {
               <Button type="link" onClick={() => action.mutate({ id: row.id, action: 'resume' })}>
                 继续
               </Button>
-              <Button
-                danger
-                type="link"
-                onClick={() => action.mutate({ id: row.id, action: 'rollback' })}
+              <Popconfirm
+                title="确认回滚 Provider rollout？"
+                onConfirm={() => action.mutate({ id: row.id, action: 'rollback' })}
               >
-                回滚
-              </Button>
+                <Button danger type="link">
+                  回滚
+                </Button>
+              </Popconfirm>
             </Space>
           ),
         },

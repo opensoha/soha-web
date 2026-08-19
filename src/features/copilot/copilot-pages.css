@@ -1,78 +1,8 @@
 /* Styles moved from web/src/styles/globals.css; keep scoped to this component or feature owner. */
 
-.soha-ai-overview-console.ant-card .ant-card-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.65fr);
-  gap: 12px;
-  padding: 10px 14px;
-}
-
-.soha-ai-overview-actions {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(120px, 1fr));
-  gap: 8px;
-  min-width: 0;
-}
-
-.soha-ai-overview-action {
-  display: flex;
-  min-width: 0;
-  min-height: 58px;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border: 1px solid var(--soha-border-color);
-  border-radius: 6px;
-  background: var(--soha-bg-surface);
-  color: inherit;
-  cursor: pointer;
-  text-align: left;
-}
-
-.soha-ai-overview-action:hover {
-  border-color: var(--soha-text-tertiary);
-  background: var(--soha-fill-weak);
-}
-
-.soha-ai-overview-action-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 auto;
-  border: 1px solid var(--soha-border-color);
-  border-radius: 6px;
-  background: var(--soha-fill-weak);
-  color: var(--soha-text-primary);
-}
-
-.soha-ai-overview-action-main {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.soha-ai-overview-action-label {
-  color: var(--soha-text-primary);
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 18px;
-}
-
-.soha-ai-overview-action-detail {
-  color: var(--soha-text-tertiary);
-  font-size: 12px;
-  line-height: 16px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .soha-ai-workbench-page {
   height: calc(100vh - var(--soha-app-chrome-height) - 48px);
-  min-height: 720px;
+  min-height: 0;
 }
 
 .soha-ai-workbench {
@@ -97,7 +27,7 @@
 .soha-ai-workbench__conversation-card,
 .soha-ai-workbench__empty-state {
   border-color: var(--soha-border-color);
-  border-radius: 8px;
+  border-radius: var(--soha-radius-panel);
   background: var(--soha-bg-surface);
   box-shadow: none;
 }
@@ -111,8 +41,7 @@
   gap: 10px;
   padding: 10px;
   border: 1px solid var(--soha-border-color);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--soha-bg-surface) 92%, var(--soha-fill-weak) 8%) 0%, var(--soha-bg-surface) 100%);
+  background: var(--soha-bg-surface);
   overflow: hidden;
 }
 
@@ -153,7 +82,7 @@
   min-height: 40px;
   align-items: center;
   padding: 0 8px;
-  border-radius: 7px;
+  border-radius: var(--soha-radius-control);
   border: 1px solid transparent;
 }
 
@@ -189,7 +118,7 @@
   gap: 6px;
   padding: 8px;
   border: 1px solid var(--soha-border-color);
-  border-radius: 7px;
+  border-radius: var(--soha-radius-control);
   background: color-mix(in srgb, var(--soha-bg-surface) 92%, var(--soha-fill-weak) 8%);
 }
 
@@ -223,7 +152,7 @@
 .soha-ai-workbench__mode-option > span {
   color: var(--soha-text-primary);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 18px;
 }
 
@@ -258,7 +187,7 @@
   overflow: hidden;
   color: var(--soha-text-primary);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 18px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -293,8 +222,12 @@
   transition: opacity 0.16s ease;
 }
 
-.soha-ai-workbench__conversations .ant-conversations-item:hover .soha-ai-workbench__conversation-label-actions,
-.soha-ai-workbench__conversations .ant-conversations-item-active .soha-ai-workbench__conversation-label-actions,
+.soha-ai-workbench__conversations
+  .ant-conversations-item:hover
+  .soha-ai-workbench__conversation-label-actions,
+.soha-ai-workbench__conversations
+  .ant-conversations-item-active
+  .soha-ai-workbench__conversation-label-actions,
 .soha-ai-workbench__conversation-label:focus-within .soha-ai-workbench__conversation-label-actions {
   opacity: 1;
 }
@@ -329,7 +262,7 @@
   display: inline-flex;
   align-items: center;
   border: 1px solid var(--soha-border-color);
-  border-radius: 8px;
+  border-radius: var(--soha-radius-control);
   background: var(--soha-bg-surface);
   color: var(--soha-text-secondary);
   cursor: pointer;
@@ -371,8 +304,7 @@
   flex-direction: column;
   padding: 16px;
   border: 1px solid var(--soha-border-color);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--soha-bg-surface) 97%, var(--soha-fill-weak) 3%) 0%, var(--soha-bg-surface) 100%);
+  background: var(--soha-bg-surface);
 }
 
 .soha-ai-workbench__conversation-subtitle.ant-typography {
@@ -409,7 +341,7 @@
   gap: 3px;
   padding: 10px;
   border: 1px solid var(--soha-border-color);
-  border-radius: 8px;
+  border-radius: var(--soha-radius-control);
   background: color-mix(in srgb, var(--soha-bg-surface) 92%, var(--soha-fill-weak) 8%);
   color: var(--soha-text-secondary);
   cursor: pointer;
@@ -433,7 +365,7 @@
 .soha-ai-workbench__artifact-title {
   color: var(--soha-text-primary);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .soha-ai-workbench__artifact-meta,
@@ -457,7 +389,7 @@
   gap: 8px;
   padding: 8px 10px;
   border: 1px solid var(--soha-border-color);
-  border-radius: 8px;
+  border-radius: var(--soha-radius-control);
   background: color-mix(in srgb, var(--soha-bg-surface) 92%, var(--soha-fill-weak) 8%);
 }
 
@@ -521,7 +453,7 @@
   flex: 0 0 auto;
   width: 28px;
   height: 28px;
-  border-radius: 7px;
+  border-radius: var(--soha-radius-control);
   background: var(--soha-fill-medium);
   color: var(--soha-text-primary);
 }
@@ -564,7 +496,7 @@
   min-width: 0;
   padding: 10px;
   border: 1px solid var(--soha-border-color);
-  border-radius: 8px;
+  border-radius: var(--soha-radius-control);
   background: color-mix(in srgb, var(--soha-bg-surface) 90%, var(--soha-fill-weak) 10%);
 }
 
@@ -582,7 +514,7 @@
 .soha-ai-workbench__skill-chip {
   min-width: 0;
   border: 1px solid var(--soha-border-color);
-  border-radius: 7px;
+  border-radius: var(--soha-radius-control);
   background: color-mix(in srgb, var(--soha-bg-surface) 92%, var(--soha-fill-weak) 8%);
   color: var(--soha-text-primary);
   cursor: pointer;
@@ -620,7 +552,7 @@
 .soha-ai-workbench__focus-value {
   overflow: hidden;
   font-size: 16px;
-  font-weight: 750;
+  font-weight: 600;
   line-height: 20px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -651,7 +583,7 @@
   flex: 0 0 auto;
   width: 26px;
   height: 26px;
-  border-radius: 6px;
+  border-radius: var(--soha-radius-control);
   background: var(--soha-fill-medium);
   color: var(--soha-text-primary);
 }
@@ -725,7 +657,7 @@
 .soha-ai-workbench__skill-chip > span:first-child {
   overflow: hidden;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 17px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -738,7 +670,7 @@
 .soha-ai-workbench__skill-empty {
   padding: 8px;
   border: 1px solid var(--soha-border-color);
-  border-radius: 7px;
+  border-radius: var(--soha-radius-control);
   color: var(--soha-text-secondary);
   font-size: 12px;
   text-align: center;
@@ -767,7 +699,6 @@
 }
 
 @media (max-width: 1200px) {
-
   .soha-ai-workbench__workspace {
     grid-template-columns: 1fr;
   }
@@ -777,7 +708,7 @@
   }
 
   .soha-ai-workbench-sidebar,
-.soha-ai-workbench__tools-pane {
+  .soha-ai-workbench__tools-pane {
     display: grid;
     grid-column: 1 / -1;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -785,16 +716,13 @@
   }
 
   .soha-ai-workbench__tools-header,
-.soha-ai-workbench__tool-section {
+  .soha-ai-workbench__tool-section {
     grid-column: 1 / -1;
   }
 }
 
 @media (max-width: 768px) {
-
-  .soha-ai-overview-console.ant-card .ant-card-body,
-.soha-ai-overview-actions,
-.soha-ai-workbench__workspace {
+  .soha-ai-workbench__workspace {
     grid-template-columns: 1fr;
   }
 
@@ -803,7 +731,7 @@
   }
 
   .soha-ai-workbench-sidebar,
-.soha-ai-workbench__tools-pane {
+  .soha-ai-workbench__tools-pane {
     max-height: none;
   }
 
@@ -823,15 +751,14 @@
   }
 
   .soha-ai-workbench-sidebar,
-.soha-ai-workbench__tools-pane {
+  .soha-ai-workbench__tools-pane {
     padding: 12px;
   }
 
   .soha-ai-workbench-sidebar,
-.soha-ai-workbench__tools-pane {
+  .soha-ai-workbench__tools-pane {
     grid-template-columns: 1fr;
   }
-
 }
 
 .soha-workbench-graph-canvas {
@@ -849,7 +776,8 @@
 .soha-workbench-graph-node__card {
   --soha-workbench-graph-accent: var(--soha-graph-muted);
   padding: 12px 14px;
-  border: 1px solid color-mix(in srgb, var(--soha-workbench-graph-accent) 42%, var(--soha-workflow-node-border) 58%);
+  border: 1px solid
+    color-mix(in srgb, var(--soha-workbench-graph-accent) 42%, var(--soha-workflow-node-border) 58%);
   border-radius: 12px;
   background: var(--soha-workflow-node-bg);
   box-shadow: var(--soha-shadow-soft);
@@ -914,7 +842,7 @@
   border-radius: 10px;
   background: var(--soha-bg-surface-muted);
   color: var(--soha-text-secondary);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
   font-size: 12px;
   line-height: 1.5;
   white-space: pre-wrap;

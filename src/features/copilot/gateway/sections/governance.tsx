@@ -1,9 +1,12 @@
 import { lazy, Suspense } from 'react'
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import { PlusOutlined } from '@ant-design/icons'
 import type { TableColumnsType } from 'antd'
 import { Alert, Button, Descriptions, Select, Space, Tabs } from 'antd'
 import { AdminTable } from '@/components/admin-table'
 import {
+  ManagementQueryField,
+  ManagementQueryPanel,
+  ManagementRefreshButton,
   ManagementState,
   ManagementTableToolbar,
   ManagementToolbarSearch,
@@ -96,6 +99,7 @@ export function GatewayGovernanceSection(props: GatewayGovernanceSectionProps) {
   return (
     <Tabs
       activeKey={props.activeTab}
+      className="soha-resource-tabs"
       onChange={(key) => props.onTabChange(key as GatewayTabKey)}
       destroyOnHidden
       items={[
@@ -188,21 +192,25 @@ export function GatewayGovernanceSection(props: GatewayGovernanceSectionProps) {
           label: 'Governance',
           children: (
             <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-              <Space wrap>
-                <Select
-                  style={{ width: 140 }}
-                  options={governanceWindowOptions}
-                  value={props.governanceWindowHours}
-                  onChange={(value) => props.onGovernanceWindowChange(String(value))}
-                />
-                <Button
-                  icon={<ReloadOutlined />}
-                  loading={props.governanceFetching}
-                  onClick={props.onRefreshGovernance}
-                >
-                  刷新
-                </Button>
-              </Space>
+              <ManagementQueryPanel
+                collapsible={false}
+                actions={
+                  <ManagementRefreshButton
+                    aria-label="刷新 Governance"
+                    tooltip="刷新"
+                    loading={props.governanceFetching}
+                    onClick={props.onRefreshGovernance}
+                  />
+                }
+              >
+                <ManagementQueryField label="时间窗口" width={140}>
+                  <Select
+                    options={governanceWindowOptions}
+                    value={props.governanceWindowHours}
+                    onChange={(value) => props.onGovernanceWindowChange(String(value))}
+                  />
+                </ManagementQueryField>
+              </ManagementQueryPanel>
               {status ? (
                 <>
                   <Descriptions

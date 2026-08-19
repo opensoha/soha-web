@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { PlusOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Button, Form, Input, InputNumber, Modal, Select } from 'antd'
+import { Alert, Button, Form, Input, InputNumber, Modal, Popconfirm, Select } from 'antd'
 import { ProductionOperationsPage } from '../production/operations-page'
 import { AIWorkbenchFeatureGate } from '../production/feature-gate'
 import { memoryMutations } from './mutations'
@@ -30,8 +30,6 @@ function MemoryPoliciesPageContent() {
   }
   return (
     <ProductionOperationsPage
-      title="Memory Policies"
-      description="管理长期 Memory 的同意、TTL、来源追踪与删除传播。"
       notice={
         <Alert
           showIcon
@@ -64,16 +62,12 @@ function MemoryPoliciesPageContent() {
           error: records.isError,
           emptyDescription: '启用策略并产生可信事实后显示 Memory。',
           actions: (row) => (
-            <Button danger type="link" onClick={() => remove.mutate(row.id)}>
-              删除并传播
-            </Button>
+            <Popconfirm title="确认删除并传播该 Memory？" onConfirm={() => remove.mutate(row.id)}>
+              <Button danger type="link">
+                删除并传播
+              </Button>
+            </Popconfirm>
           ),
-        },
-        {
-          key: 'provenance',
-          label: 'Context Provenance',
-          records: [],
-          emptyDescription: 'Memory 记录的 SourceRef、TraceRef 和用户动作在详情证据中展示。',
         },
       ]}
     >
