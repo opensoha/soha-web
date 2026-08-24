@@ -1,8 +1,27 @@
 import { forwardRef, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
-import { Alert, Button, Card, Empty, Form, Input, Segmented, Space, Spin, Tooltip, Typography } from 'antd'
+import {
+  Alert,
+  Button,
+  Card,
+  Empty,
+  Form,
+  Input,
+  Segmented,
+  Space,
+  Spin,
+  Tooltip,
+  Typography,
+} from 'antd'
 import type { AlertProps, ButtonProps, FormProps } from 'antd'
-import { ColumnHeightOutlined, DownOutlined, ReloadOutlined, SearchOutlined, UpOutlined } from '@ant-design/icons'
+import {
+  ColumnHeightOutlined,
+  DownOutlined,
+  ReloadOutlined,
+  SearchOutlined,
+  UpOutlined,
+} from '@ant-design/icons'
+import { localeText, useI18n } from '@/i18n'
 import './management-list.css'
 
 const { Text } = Typography
@@ -50,7 +69,10 @@ interface ManagementQueryFieldProps extends React.ComponentProps<typeof Form.Ite
   width?: number | string
 }
 
-interface ManagementQueryScopeProps extends Omit<React.ComponentProps<typeof Segmented>, 'block' | 'label' | 'size'> {
+interface ManagementQueryScopeProps extends Omit<
+  React.ComponentProps<typeof Segmented>,
+  'block' | 'label' | 'size'
+> {
   label?: ReactNode
 }
 
@@ -69,7 +91,10 @@ interface ManagementQueryActionsProps {
   submitLabel?: ReactNode
 }
 
-interface ManagementToolbarSearchProps extends Omit<React.ComponentProps<typeof Input>, 'onChange' | 'size' | 'style' | 'value'> {
+interface ManagementToolbarSearchProps extends Omit<
+  React.ComponentProps<typeof Input>,
+  'onChange' | 'size' | 'style' | 'value'
+> {
   size?: 'sm' | 'md' | 'lg' | number
   style?: CSSProperties
   value: string
@@ -131,7 +156,10 @@ interface ManagementStateProps {
   title?: ReactNode
 }
 
-const managementStatePresets: Record<ManagementStateKind, { description: ReactNode; title: ReactNode; type: AlertProps['type'] }> = {
+const managementStatePresets: Record<
+  ManagementStateKind,
+  { description: ReactNode; title: ReactNode; type: AlertProps['type'] }
+> = {
   empty: {
     title: '暂无数据',
     description: '当前筛选条件下没有可展示的记录。',
@@ -174,6 +202,21 @@ const managementStatePresets: Record<ManagementStateKind, { description: ReactNo
   },
 }
 
+const managementStateEnglish: Record<ManagementStateKind, { description: string; title: string }> =
+  {
+    empty: { title: 'No data', description: 'No records match the current filters.' },
+    error: { title: 'Failed to load', description: 'The request failed. Try again later.' },
+    loading: { title: 'Loading', description: 'Reading the latest data.' },
+    'no-permission': {
+      title: 'Access denied',
+      description: 'Your account cannot access this page.',
+    },
+    'not-configured': { title: 'Not configured', description: 'Runtime data appears after setup.' },
+    'not-found': { title: 'Resource not found', description: 'The resource is unavailable.' },
+    'select-scope': { title: 'Select a scope', description: 'Select a cluster or namespace.' },
+    unsupported: { title: 'Unsupported', description: 'Unavailable in the current runtime mode.' },
+  }
+
 function classNames(...items: Array<string | false | null | undefined>) {
   return items.filter(Boolean).join(' ')
 }
@@ -184,7 +227,9 @@ function formatQueryFieldSize(value?: number | string) {
 }
 
 function normalizeFilterText(value: unknown) {
-  return String(value ?? '').trim().toLowerCase()
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
 }
 
 function recordMatchesFilter(values: unknown[], filterText: string) {
@@ -207,7 +252,12 @@ export function ManagementQueryPanel({
 }: ManagementQueryPanelProps) {
   return (
     <Card className="soha-management-query-card" variant="outlined">
-      <Form {...formProps} className="soha-management-query-form" layout="horizontal" onFinish={onFinish}>
+      <Form
+        {...formProps}
+        className="soha-management-query-form"
+        layout="horizontal"
+        onFinish={onFinish}
+      >
         <ManagementQueryGrid
           actions={actions}
           collapsible={collapsible}
@@ -230,10 +280,13 @@ export function ManagementQueryGrid({
   collapsible = true,
   defaultExpanded = false,
   expanded,
-  lessLabel = '收起',
-  moreLabel = '更多',
+  lessLabel,
+  moreLabel,
   onExpandedChange,
 }: ManagementQueryGridProps) {
+  const { localeCode } = useI18n()
+  const resolvedLessLabel = lessLabel ?? localeText(localeCode, '收起', 'Collapse')
+  const resolvedMoreLabel = moreLabel ?? localeText(localeCode, '更多', 'More')
   const gridRef = useRef<HTMLDivElement | null>(null)
   const fieldsRef = useRef<HTMLDivElement | null>(null)
   const actionsRef = useRef<HTMLDivElement | null>(null)
@@ -249,7 +302,11 @@ export function ManagementQueryGrid({
     const actionBar = actionsRef.current
     if (!grid || !fields || !actionBar) return undefined
 
-    const setFieldVisibility = (fieldItems: HTMLElement[], nextCanExpand: boolean, nextExpanded: boolean) => {
+    const setFieldVisibility = (
+      fieldItems: HTMLElement[],
+      nextCanExpand: boolean,
+      nextExpanded: boolean,
+    ) => {
       const shouldHideOverflowFields = nextCanExpand && !nextExpanded
       const visibleRowTop = fieldItems[0]?.offsetTop ?? 0
       fieldItems.forEach((field) => {
@@ -262,28 +319,51 @@ export function ManagementQueryGrid({
     }
 
     const measureNow = () => {
-      const fieldItems = Array.from(fields.querySelectorAll<HTMLElement>('.soha-management-query-field'))
+      const fieldItems = Array.from(
+        fields.querySelectorAll<HTMLElement>('.soha-management-query-field'),
+      )
+      const firstFieldHeight = fieldItems[0]?.getBoundingClientRect().height ?? 0
+      if (firstFieldHeight > 0) {
+        fields.style.setProperty(
+          '--soha-management-query-collapsed-height',
+          `${Math.ceil(firstFieldHeight)}px`,
+        )
+      }
       const gridWidth = grid.getBoundingClientRect().width
       const gridColumnGap = Number.parseFloat(window.getComputedStyle(grid).columnGap) || 0
       const fieldColumnGap = Number.parseFloat(window.getComputedStyle(fields).columnGap) || 0
       const actionColumnGap = Number.parseFloat(window.getComputedStyle(actionBar).columnGap) || 0
       const firstTwoFields = fieldItems.slice(0, 2)
-      const firstTwoFieldsWidth = firstTwoFields.reduce((sum, field) => sum + field.getBoundingClientRect().width, 0)
-        + (firstTwoFields.length > 1 ? fieldColumnGap : 0)
-      const allFieldsWidth = fieldItems.reduce((sum, field) => sum + field.getBoundingClientRect().width, 0)
-        + (fieldItems.length > 1 ? fieldColumnGap * (fieldItems.length - 1) : 0)
-      const actionItems = Array.from(actionBar.children).filter((child): child is HTMLElement => child instanceof HTMLElement)
-      const baseActionItems = actionItems.filter((item) => !item.classList.contains('soha-management-query-more-button'))
-      const baseActionWidth = baseActionItems.reduce((sum, item) => sum + item.getBoundingClientRect().width, 0)
-        + (baseActionItems.length > 1 ? actionColumnGap * (baseActionItems.length - 1) : 0)
-      const toggleButtonWidth = actionItems.find((item) => item.classList.contains('soha-management-query-more-button'))?.getBoundingClientRect().width ?? 64
+      const firstTwoFieldsWidth =
+        firstTwoFields.reduce((sum, field) => sum + field.getBoundingClientRect().width, 0) +
+        (firstTwoFields.length > 1 ? fieldColumnGap : 0)
+      const allFieldsWidth =
+        fieldItems.reduce((sum, field) => sum + field.getBoundingClientRect().width, 0) +
+        (fieldItems.length > 1 ? fieldColumnGap * (fieldItems.length - 1) : 0)
+      const actionItems = Array.from(actionBar.children).filter(
+        (child): child is HTMLElement => child instanceof HTMLElement,
+      )
+      const baseActionItems = actionItems.filter(
+        (item) => !item.classList.contains('soha-management-query-more-button'),
+      )
+      const baseActionWidth =
+        baseActionItems.reduce((sum, item) => sum + item.getBoundingClientRect().width, 0) +
+        (baseActionItems.length > 1 ? actionColumnGap * (baseActionItems.length - 1) : 0)
+      const toggleButtonWidth =
+        actionItems
+          .find((item) => item.classList.contains('soha-management-query-more-button'))
+          ?.getBoundingClientRect().width ?? 64
       const baseSideBySideFieldWidth = gridWidth - baseActionWidth - gridColumnGap
-      const shouldStackWithoutToggle = firstTwoFields.length > 1 && baseSideBySideFieldWidth < firstTwoFieldsWidth
+      const shouldStackWithoutToggle =
+        firstTwoFields.length > 1 && baseSideBySideFieldWidth < firstTwoFieldsWidth
       const availableWithoutToggle = shouldStackWithoutToggle ? gridWidth : baseSideBySideFieldWidth
       const needsToggle = allFieldsWidth > availableWithoutToggle
-      const finalActionWidth = baseActionWidth + (needsToggle && baseActionItems.length > 0 ? actionColumnGap + toggleButtonWidth : 0)
+      const finalActionWidth =
+        baseActionWidth +
+        (needsToggle && baseActionItems.length > 0 ? actionColumnGap + toggleButtonWidth : 0)
       const finalSideBySideFieldWidth = gridWidth - finalActionWidth - gridColumnGap
-      const nextStackActions = firstTwoFields.length > 1 && finalSideBySideFieldWidth < firstTwoFieldsWidth
+      const nextStackActions =
+        firstTwoFields.length > 1 && finalSideBySideFieldWidth < firstTwoFieldsWidth
       const finalAvailableFieldWidth = nextStackActions ? gridWidth : finalSideBySideFieldWidth
       const nextCanExpand = collapsible && allFieldsWidth > finalAvailableFieldWidth
 
@@ -324,7 +404,15 @@ export function ManagementQueryGrid({
     }
 
     return undefined
-  }, [children, collapsible, expanded, internalExpanded, isControlled, onExpandedChange, activeExpanded])
+  }, [
+    children,
+    collapsible,
+    expanded,
+    internalExpanded,
+    isControlled,
+    onExpandedChange,
+    activeExpanded,
+  ])
 
   const updateExpanded = (nextExpanded: boolean) => {
     if (!isControlled) {
@@ -336,7 +424,9 @@ export function ManagementQueryGrid({
   useLayoutEffect(() => {
     const fields = fieldsRef.current
     if (!fields) return undefined
-    const fieldItems = Array.from(fields.querySelectorAll<HTMLElement>('.soha-management-query-field'))
+    const fieldItems = Array.from(
+      fields.querySelectorAll<HTMLElement>('.soha-management-query-field'),
+    )
     const shouldHideOverflowFields = canExpand && !activeExpanded
     const visibleRowTop = fieldItems[0]?.offsetTop ?? 0
     fieldItems.forEach((field) => {
@@ -349,20 +439,21 @@ export function ManagementQueryGrid({
     return undefined
   }, [activeExpanded, canExpand])
 
-  const toggleButton = collapsible && canExpand ? (
-    <Button
-      aria-expanded={activeExpanded}
-      autoInsertSpace={false}
-      className="soha-management-query-more-button"
-      htmlType="button"
-      icon={activeExpanded ? <UpOutlined /> : <DownOutlined />}
-      iconPlacement="end"
-      size="small"
-      onClick={() => updateExpanded(!activeExpanded)}
-    >
-      {activeExpanded ? lessLabel : moreLabel}
-    </Button>
-  ) : null
+  const toggleButton =
+    collapsible && canExpand ? (
+      <Button
+        aria-expanded={activeExpanded}
+        autoInsertSpace={false}
+        className="soha-management-query-more-button"
+        htmlType="button"
+        icon={activeExpanded ? <UpOutlined /> : <DownOutlined />}
+        iconPlacement="end"
+        size="small"
+        onClick={() => updateExpanded(!activeExpanded)}
+      >
+        {activeExpanded ? resolvedLessLabel : resolvedMoreLabel}
+      </Button>
+    ) : null
 
   return (
     <div
@@ -374,7 +465,9 @@ export function ManagementQueryGrid({
         stackActions && 'is-actions-stacked',
       )}
     >
-      <div ref={fieldsRef} className="soha-management-query-fields">{children}</div>
+      <div ref={fieldsRef} className="soha-management-query-fields">
+        {children}
+      </div>
       <div ref={actionsRef} className="soha-management-query-actions">
         {actions}
         {toggleButton}
@@ -383,11 +476,19 @@ export function ManagementQueryGrid({
   )
 }
 
-export function ManagementQueryField({ grow = false, minWidth, style, width, ...props }: ManagementQueryFieldProps) {
+export function ManagementQueryField({
+  grow = false,
+  minWidth,
+  style,
+  width,
+  ...props
+}: ManagementQueryFieldProps) {
   const fieldStyle = {
     ...style,
     ...(width ? { '--soha-management-query-field-width': formatQueryFieldSize(width) } : {}),
-    ...(minWidth ? { '--soha-management-query-field-min-width': formatQueryFieldSize(minWidth) } : {}),
+    ...(minWidth
+      ? { '--soha-management-query-field-min-width': formatQueryFieldSize(minWidth) }
+      : {}),
   } as CSSProperties
 
   return (
@@ -399,9 +500,13 @@ export function ManagementQueryField({ grow = false, minWidth, style, width, ...
   )
 }
 
-export function ManagementQueryScope({ label = '范围', ...props }: ManagementQueryScopeProps) {
+export function ManagementQueryScope({ label, ...props }: ManagementQueryScopeProps) {
+  const { localeCode } = useI18n()
   return (
-    <ManagementQueryField className="soha-management-query-scope" label={label}>
+    <ManagementQueryField
+      className="soha-management-query-scope"
+      label={label ?? localeText(localeCode, '范围', 'Scope')}
+    >
       <Segmented {...props} size="small" />
     </ManagementQueryField>
   )
@@ -410,7 +515,7 @@ export function ManagementQueryScope({ label = '范围', ...props }: ManagementQ
 export function ManagementKeywordField({
   grow = false,
   inputProps,
-  label = '关键词',
+  label,
   minWidth = 300,
   name,
   onChange,
@@ -419,6 +524,7 @@ export function ManagementKeywordField({
   width = 300,
   ...props
 }: ManagementKeywordFieldProps) {
+  const { localeCode, t } = useI18n()
   const isControlledSearch = value !== undefined || Boolean(onChange)
   const resolvedName = name ?? (isControlledSearch ? undefined : 'search')
   const handleChange = onChange
@@ -429,7 +535,7 @@ export function ManagementKeywordField({
     <ManagementQueryField
       {...props}
       grow={grow}
-      label={label}
+      label={label ?? localeText(localeCode, '关键词', t('common.keyword', 'Keyword'))}
       minWidth={minWidth}
       name={resolvedName}
       width={width}
@@ -450,26 +556,17 @@ export function ManagementQueryActions({
   disabledReset = false,
   loading = false,
   onReset,
-  resetLabel = '重置',
-  submitLabel = '查询',
+  resetLabel,
+  submitLabel,
 }: ManagementQueryActionsProps) {
+  const { localeCode } = useI18n()
   return (
     <>
-      <Button
-        autoInsertSpace={false}
-        disabled={disabledReset}
-        htmlType="button"
-        onClick={onReset}
-      >
-        {resetLabel}
+      <Button autoInsertSpace={false} disabled={disabledReset} htmlType="button" onClick={onReset}>
+        {resetLabel ?? localeText(localeCode, '重置', 'Reset')}
       </Button>
-      <Button
-        autoInsertSpace={false}
-        htmlType="submit"
-        loading={loading}
-        type="primary"
-      >
-        {submitLabel}
+      <Button autoInsertSpace={false} htmlType="submit" loading={loading} type="primary">
+        {submitLabel ?? localeText(localeCode, '查询', 'Query')}
       </Button>
     </>
   )
@@ -484,7 +581,8 @@ export function ManagementToolbarSearch({
   value,
   ...inputProps
 }: ManagementToolbarSearchProps) {
-  const width = typeof size === 'number' ? `${size}px` : 'var(--soha-management-toolbar-search-width, 320px)'
+  const width =
+    typeof size === 'number' ? `${size}px` : 'var(--soha-management-toolbar-search-width, 320px)'
   return (
     <Input
       {...inputProps}
@@ -515,7 +613,7 @@ export function ManagementSearchableListPane<T>({
   activeKey,
   className,
   emptyDescription,
-  emptyTitle = '暂无数据',
+  emptyTitle,
   getItemKey,
   isLoading = false,
   itemClassName,
@@ -523,52 +621,59 @@ export function ManagementSearchableListPane<T>({
   onItemSelect,
   onSearchChange,
   renderItem,
-  searchPlaceholder = '搜索',
+  searchPlaceholder,
   searchValue,
 }: ManagementSearchableListPaneProps<T>) {
+  const { localeCode } = useI18n()
+  const resolvedEmptyTitle = emptyTitle ?? localeText(localeCode, '暂无数据', 'No data')
+  const resolvedSearchPlaceholder = searchPlaceholder ?? localeText(localeCode, '搜索', 'Search')
   return (
     <aside className={classNames('soha-management-searchable-list-pane', className)}>
       <Input
         allowClear
         className="soha-management-searchable-list-pane__search"
         prefix={<SearchOutlined />}
-        placeholder={searchPlaceholder}
+        placeholder={resolvedSearchPlaceholder}
         value={searchValue}
         onChange={(event) => onSearchChange(event.target.value)}
       />
       <div className="soha-management-searchable-list-pane__items">
-        {isLoading ? <ManagementState bordered={false} compact kind="loading" title="正在加载" /> : null}
+        {isLoading ? <ManagementState bordered={false} compact kind="loading" /> : null}
         {!isLoading && items.length === 0 ? (
           <ManagementState
             bordered={false}
             compact
             description={emptyDescription}
             kind="empty"
-            title={emptyTitle}
+            title={resolvedEmptyTitle}
           />
         ) : null}
         {!isLoading
           ? items.map((item) => {
-            const itemKey = getItemKey(item)
-            const active = itemKey === activeKey
-            return (
-              <div
-                className={classNames('soha-management-searchable-list-pane__item', itemClassName, active && 'is-active')}
-                key={itemKey}
-                role="button"
-                tabIndex={0}
-                onClick={() => onItemSelect(item)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault()
-                    onItemSelect(item)
-                  }
-                }}
-              >
-                {renderItem(item, { active })}
-              </div>
-            )
-          })
+              const itemKey = getItemKey(item)
+              const active = itemKey === activeKey
+              return (
+                <div
+                  className={classNames(
+                    'soha-management-searchable-list-pane__item',
+                    itemClassName,
+                    active && 'is-active',
+                  )}
+                  key={itemKey}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onItemSelect(item)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      onItemSelect(item)
+                    }
+                  }}
+                >
+                  {renderItem(item, { active })}
+                </div>
+              )
+            })
           : null}
       </div>
     </aside>
@@ -610,39 +715,58 @@ export function ManagementTableToolbar({ batchBar, children }: ManagementTableTo
   )
 }
 
-export function ManagementBatchBar({ children, selectedCount, selectedLabel }: ManagementBatchBarProps) {
+export function ManagementBatchBar({
+  children,
+  selectedCount,
+  selectedLabel,
+}: ManagementBatchBarProps) {
+  const { localeCode } = useI18n()
   return (
     <div className="soha-management-batchbar">
-      <Text type="secondary">{selectedLabel ?? `已选 ${selectedCount} 项`}</Text>
+      <Text type="secondary">
+        {selectedLabel ??
+          (localeCode === 'zh_CN' ? `已选 ${selectedCount} 项` : `${selectedCount} selected`)}
+      </Text>
       {children}
     </div>
   )
 }
 
-export const ManagementIconButton = forwardRef<HTMLButtonElement, ManagementIconButtonProps>(function ManagementIconButton(
-  { tooltip, ...buttonProps },
-  ref,
-) {
-  const nativeTitle = typeof tooltip === 'string' ? tooltip : undefined
-  return (
-    <Tooltip title={tooltip}>
-      <Button
-        {...buttonProps}
-        ref={ref}
-        className={classNames('soha-management-icon-action', buttonProps.className)}
-        title={buttonProps.title ?? nativeTitle}
-        type="text"
-      />
-    </Tooltip>
-  )
-})
+export const ManagementIconButton = forwardRef<HTMLButtonElement, ManagementIconButtonProps>(
+  function ManagementIconButton({ tooltip, ...buttonProps }, ref) {
+    const nativeTitle = typeof tooltip === 'string' ? tooltip : undefined
+    return (
+      <Tooltip title={tooltip}>
+        <Button
+          {...buttonProps}
+          ref={ref}
+          className={classNames('soha-management-icon-action', buttonProps.className)}
+          title={buttonProps.title ?? nativeTitle}
+          type="text"
+        />
+      </Tooltip>
+    )
+  },
+)
 
 export function ManagementRefreshButton({ tooltip, ...buttonProps }: ManagementIconButtonProps) {
-  return <ManagementIconButton {...buttonProps} icon={buttonProps.icon ?? <ReloadOutlined />} tooltip={tooltip} />
+  return (
+    <ManagementIconButton
+      {...buttonProps}
+      icon={buttonProps.icon ?? <ReloadOutlined />}
+      tooltip={tooltip}
+    />
+  )
 }
 
 export function ManagementDensityButton({ tooltip, ...buttonProps }: ManagementIconButtonProps) {
-  return <ManagementIconButton {...buttonProps} icon={buttonProps.icon ?? <ColumnHeightOutlined />} tooltip={tooltip} />
+  return (
+    <ManagementIconButton
+      {...buttonProps}
+      icon={buttonProps.icon ?? <ColumnHeightOutlined />}
+      tooltip={tooltip}
+    />
+  )
 }
 
 export function ManagementState({
@@ -654,9 +778,12 @@ export function ManagementState({
   kind = 'empty',
   title,
 }: ManagementStateProps) {
+  const { localeCode } = useI18n()
   const preset = managementStatePresets[kind]
-  const resolvedTitle = title ?? preset.title
-  const resolvedDescription = description ?? preset.description
+  const englishPreset = managementStateEnglish[kind]
+  const resolvedTitle = title ?? localeText(localeCode, String(preset.title), englishPreset.title)
+  const resolvedDescription =
+    description ?? localeText(localeCode, String(preset.description), englishPreset.description)
   const stateClassName = classNames(
     'soha-management-state',
     `is-${kind}`,
@@ -683,7 +810,9 @@ export function ManagementState({
         <Text strong>{resolvedTitle}</Text>
         <Text type="secondary">{resolvedDescription}</Text>
       </Space>
-    ) : resolvedTitle
+    ) : (
+      resolvedTitle
+    )
 
     return (
       <div className={stateClassName}>
@@ -707,12 +836,24 @@ export function ManagementState({
   )
 }
 
-export function ManagementDetailHeader({ actions, className, description, meta, title }: ManagementDetailHeaderProps) {
+export function ManagementDetailHeader({
+  actions,
+  className,
+  description,
+  meta,
+  title,
+}: ManagementDetailHeaderProps) {
   return (
     <div className={classNames('soha-management-detail-header', className)}>
       <div className="soha-management-detail-header-main">
-        <Text strong className="soha-management-detail-header-title">{title}</Text>
-        {description ? <Text type="secondary" className="soha-management-detail-header-description">{description}</Text> : null}
+        <Text strong className="soha-management-detail-header-title">
+          {title}
+        </Text>
+        {description ? (
+          <Text type="secondary" className="soha-management-detail-header-description">
+            {description}
+          </Text>
+        ) : null}
         {meta ? <div className="soha-management-detail-header-meta">{meta}</div> : null}
       </div>
       {actions ? <div className="soha-management-detail-header-actions">{actions}</div> : null}

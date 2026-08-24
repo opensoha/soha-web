@@ -25,6 +25,8 @@ vi.mock('@/stores/platform-scope-store', () => ({
 }))
 
 vi.mock('@/i18n', () => ({
+  localeText: (localeCode: string, chinese: string, english: string) =>
+    localeCode === 'zh_CN' ? chinese : english,
   useI18n: () => ({
     localeCode: 'zh_CN' as const,
     t: (_key: string, fallback?: string) => fallback ?? _key,

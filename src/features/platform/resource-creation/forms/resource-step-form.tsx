@@ -27,7 +27,7 @@ export function ResourceStepForm<Values extends object>({
       loading={loading}
       onCurrentChange={setCurrent}
       onFinish={(values) => onSubmit?.(values as Values)}
-      onValuesChange={(_, values) => onChange(values as Values)}
+      onValuesChange={() => onChange(form.getFieldsValue(true) as Values)}
       steps={steps}
       submitText={submitText ?? '生成 Manifest'}
     />

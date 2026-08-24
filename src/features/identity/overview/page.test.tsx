@@ -354,7 +354,7 @@ describe('IdentityOverviewPage', () => {
     expect(container.textContent).toContain('provider-kind')
     expect(container.textContent).toContain('actor-1')
     expect(container.querySelectorAll('.soha-status-tag')).toHaveLength(6)
-    expect(container.querySelector('[data-color="success"]')?.textContent).toBe('success')
+    expect(container.querySelector('[data-color="success"]')?.textContent).toBe('成功')
     expect(container.querySelector('[data-color="error"]')?.textContent).toBe('denied')
     expect(container.textContent).not.toContain(
       '查看 Provider Portal、下游 Provider、活跃会话和身份审计的运行状态。',

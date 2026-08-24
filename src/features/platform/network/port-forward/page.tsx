@@ -29,6 +29,7 @@ import {
   capabilityActionTooltip,
   useClusterCapability,
 } from '@/features/platform/cluster-capabilities'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
@@ -295,16 +296,11 @@ export function NetworkPortForwardPage() {
         dataSource: clusterId ? filteredItems : [],
         rowKey: 'sessionId',
         loading: query.isLoading,
-        paginationSummary: (
-          <Text className="soha-workload-table-summary" type="secondary">
-            {localeCode === 'zh_CN'
-              ? `当前 ${filteredItems.length} / ${rawItems.length} 条`
-              : `${filteredItems.length} / ${rawItems.length} items`}
-          </Text>
-        ),
-        pageSize: 10,
+        localSorting: true,
+        pageSize: K8S_TABLE_PAGE_SIZE,
         tableSize,
         scroll: { x: 'max-content' },
+        viewportScroll: true,
         empty: (
           <PlatformTableState
             description={effectiveEmpty}

@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   App,
+  Alert,
   Descriptions,
   Drawer,
   Empty,
   Form,
   Input,
-  List,
   Popconfirm,
+  Progress,
   Select,
   Space,
+  Spin,
   Typography,
 } from 'antd'
+import type { TableProps } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { FileTextOutlined, RedoOutlined, StopOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -35,21 +38,25 @@ import {
 } from '@/components/management-list'
 import { MetadataTag, StatusTag, type MetadataTagTone } from '@/components/status-tag'
 import { useAIPageContext } from '@/features/copilot'
+import { localeText, useI18n } from '@/i18n'
+import { formatStatusLabel } from '@/i18n/status'
 import { formatDateTime } from '@/utils/time'
 import type { ComputeTaskFilters } from '../api'
 import { computeMutations } from '../mutations'
 import { computeQueries } from '../queries'
+import { ComputeStreamStatus } from '../stream-status'
+import { useComputeTaskStream } from './use-compute-task-stream'
 import '../compute.css'
 
 const { Text } = Typography
-const DEFAULT_TASK_PAGE_SIZE = 20
-const TASK_PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
+const DEFAULT_TASK_PAGE_SIZE = 15
+const TASK_PAGE_SIZE_OPTIONS = [10, 15, 20, 50, 100]
 
-const TASK_CATEGORY_LABELS: Record<ComputeTaskCategory, string> = {
-  sync: '同步',
-  build: '构建',
-  lifecycle: '生命周期',
-  operation: '操作',
+const TASK_CATEGORY_LABELS: Record<ComputeTaskCategory, [string, string]> = {
+  sync: ['同步', 'Sync'],
+  build: ['构建', 'Build'],
+  lifecycle: ['生命周期', 'Lifecycle'],
+  operation: ['操作', 'Operation'],
 }
 
 const TASK_CATEGORY_TONES: Record<ComputeTaskCategory, MetadataTagTone> = {
@@ -57,6 +64,59 @@ const TASK_CATEGORY_TONES: Record<ComputeTaskCategory, MetadataTagTone> = {
   build: 'purple',
   lifecycle: 'blue',
   operation: 'default',
+}
+
+const TASK_KIND_LABELS: Record<string, [string, string]> = {
+  asset_sync: ['资产同步', 'Asset sync'],
+  connection_test: ['连接检查', 'Connection check'],
+  container_start: ['启动容器', 'Start container'],
+  host_sync: ['主机同步', 'Host sync'],
+  host_provision: ['主机创建', 'Host provision'],
+  port_reserve: ['预留端口', 'Reserve port'],
+  project_deploy: ['项目部署', 'Project deploy'],
+  service_action: ['服务操作', 'Service action'],
+  vm_action: ['虚拟机操作', 'VM action'],
+  vm_create: ['创建虚拟机', 'Create VM'],
+}
+
+const VERIFICATION_SUMMARY_LABELS: Record<string, [string, string]> = {
+  'resource verification is not available for this task': [
+    '该任务暂不支持资源结果验证',
+    'Resource verification is not available for this task',
+  ],
+  'target resource is observable after task completion': [
+    '任务完成后目标资源可观测',
+    'Target resource is observable after task completion',
+  ],
+  'task finished but the target resource could not be verified': [
+    '任务已结束，但无法验证目标资源',
+    'Task finished but the target resource could not be verified',
+  ],
+  'the source task did not complete successfully': [
+    '源任务未成功完成',
+    'The source task did not complete successfully',
+  ],
+  'this task has no verifiable target resource': [
+    '该任务没有可验证的目标资源',
+    'This task has no verifiable target resource',
+  ],
+  'waiting for the source task to finish': [
+    '等待源任务结束',
+    'Waiting for the source task to finish',
+  ],
+}
+
+function taskKindLabel(kind: string, localeCode: 'zh_CN' | 'en_US') {
+  return TASK_KIND_LABELS[kind]?.[localeCode === 'zh_CN' ? 0 : 1] ?? kind
+}
+
+function taskCategoryLabel(category: ComputeTaskCategory, localeCode: 'zh_CN' | 'en_US') {
+  return TASK_CATEGORY_LABELS[category][localeCode === 'zh_CN' ? 0 : 1]
+}
+
+function verificationSummaryLabel(summary: string | undefined, localeCode: 'zh_CN' | 'en_US') {
+  if (!summary) return '-'
+  return VERIFICATION_SUMMARY_LABELS[summary]?.[localeCode === 'zh_CN' ? 0 : 1] ?? summary
 }
 
 export function computeTaskCategoryFromPath(pathname: string): ComputeTaskCategory | undefined {
@@ -78,6 +138,8 @@ export function computeTaskFiltersFromLocation(
       computeTaskCategoryFromPath(pathname),
     resourceKind: search.get('resourceKind') || undefined,
     resourceId: search.get('resourceId') || undefined,
+    sortBy: (search.get('sortBy') as ComputeTaskFilters['sortBy'] | null) ?? undefined,
+    sortOrder: (search.get('sortOrder') as ComputeTaskFilters['sortOrder'] | null) ?? undefined,
     limit: DEFAULT_TASK_PAGE_SIZE,
   }
 }
@@ -105,11 +167,20 @@ export function searchFromTaskFilters(
   drawer?: { domain: ComputeTaskDomain; taskId: string },
 ) {
   const params = new URLSearchParams()
-  ;(['category', 'resourceKind', 'resourceId', 'domain', 'providerKey', 'status'] as const).forEach(
-    (key) => {
-      if (filters[key]) params.set(key, String(filters[key]))
-    },
-  )
+  ;(
+    [
+      'category',
+      'resourceKind',
+      'resourceId',
+      'domain',
+      'providerKey',
+      'status',
+      'sortBy',
+      'sortOrder',
+    ] as const
+  ).forEach((key) => {
+    if (filters[key]) params.set(key, String(filters[key]))
+  })
   if (drawer) {
     params.set('domain', drawer.domain)
     params.set('taskId', drawer.taskId)
@@ -120,6 +191,7 @@ export function searchFromTaskFilters(
 
 export function ComputeTasksPage() {
   const { message } = App.useApp()
+  const { localeCode } = useI18n()
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const initialFilters = useMemo(
@@ -137,6 +209,11 @@ export function ComputeTasksPage() {
   const selectedTaskId = searchParams.get('view') === 'logs' ? searchParams.get('taskId') || '' : ''
   const selectedDomain =
     (searchParams.get('domain') as ComputeTaskDomain | null) ?? 'virtualization'
+  const taskStream = useComputeTaskStream({
+    domain: selectedDomain,
+    taskId: selectedTaskId,
+    enabled: Boolean(selectedTaskId),
+  })
   const taskQuery = useQuery(computeQueries.task(selectedDomain, selectedTaskId))
   const logsQuery = useQuery(computeQueries.taskLogs(selectedDomain, selectedTaskId))
   const cancelMutation = useMutation(computeMutations.cancelTask(queryClient))
@@ -161,9 +238,9 @@ export function ComputeTasksPage() {
 
   useAIPageContext({
     sourceWorkbench: 'compute',
-    sourceTitle: '计算任务中心',
+    sourceTitle: localeText(localeCode, '计算任务中心', 'Compute task center'),
     entityKind: 'compute.tasks',
-    entityName: '计算资源任务',
+    entityName: localeText(localeCode, '计算资源任务', 'Compute tasks'),
     visibleFilters: { ...filters },
     pinnedData: { taskCount: items.length },
   })
@@ -214,58 +291,121 @@ export function ComputeTasksPage() {
       { domain: task.domain, taskId: task.id },
       {
         onSuccess: () =>
-          void message.success(action === 'cancel' ? '任务已取消' : '任务已重新排队'),
+          void message.success(
+            action === 'cancel'
+              ? localeText(localeCode, '任务已取消', 'Task canceled')
+              : localeText(localeCode, '任务已重新排队', 'Task queued for retry'),
+          ),
       },
     )
   }
 
+  const activeSortBy = filters.sortBy ?? 'createdAt'
+  const tableSortOrder = (filters.sortOrder ?? 'desc') === 'asc' ? 'ascend' : 'descend'
+  const handleTableChange: NonNullable<TableProps<ComputeTaskView>['onChange']> = (
+    _pagination,
+    _tableFilters,
+    sorter,
+    extra,
+  ) => {
+    if (extra.action !== 'sort') return
+    const selectedSorter = Array.isArray(sorter) ? sorter[0] : sorter
+    if (!selectedSorter?.order || !selectedSorter.field) return
+    updateFilters({
+      ...filters,
+      sortBy: String(selectedSorter.field) as ComputeTaskFilters['sortBy'],
+      sortOrder: selectedSorter.order === 'ascend' ? 'asc' : 'desc',
+    })
+  }
+
   const columns: ColumnsType<ComputeTaskView> = [
     {
-      title: '任务',
+      title: localeText(localeCode, '任务', 'Task'),
+      dataIndex: 'kind',
+      key: 'kind',
       fixed: 'left',
+      sorter: true,
+      sortOrder: activeSortBy === 'kind' ? tableSortOrder : null,
       width: 250,
       render: (_value, record) => (
         <Space orientation="vertical" size={0}>
-          <Text strong>{record.kind}</Text>
+          <Text strong>{taskKindLabel(record.kind, localeCode)}</Text>
           <Text type="secondary">{record.id}</Text>
         </Space>
       ),
     },
     {
-      title: '领域',
+      title: localeText(localeCode, '领域', 'Domain'),
       dataIndex: 'domain',
+      key: 'domain',
+      sorter: true,
+      sortOrder: activeSortBy === 'domain' ? tableSortOrder : null,
       width: 145,
       render: (value) => (
         <MetadataTag
-          label={value === 'container_runtime' ? '容器运行时' : '虚拟化'}
+          label={
+            value === 'container_runtime'
+              ? localeText(localeCode, '容器运行时', 'Container runtime')
+              : localeText(localeCode, '虚拟化', 'Virtualization')
+          }
           tone={value === 'container_runtime' ? 'cyan' : 'blue'}
         />
       ),
     },
     {
-      title: '类别',
+      title: localeText(localeCode, '类别', 'Category'),
       dataIndex: 'category',
       width: 110,
       render: (value: ComputeTaskCategory) => (
-        <MetadataTag label={TASK_CATEGORY_LABELS[value]} tone={TASK_CATEGORY_TONES[value]} />
+        <MetadataTag
+          label={taskCategoryLabel(value, localeCode)}
+          tone={TASK_CATEGORY_TONES[value]}
+        />
       ),
     },
     {
-      title: '状态',
+      title: localeText(localeCode, '状态', 'Status'),
       dataIndex: 'normalizedStatus',
+      key: 'status',
+      sorter: true,
+      sortOrder: activeSortBy === 'status' ? tableSortOrder : null,
       width: 120,
-      render: (value) => <StatusTag value={value} />,
+      render: (value, record) => (
+        <Space orientation="vertical" size={2}>
+          <StatusTag value={value} />
+          {(record.progress ?? 0) > 0 && (record.progress ?? 0) < 1 ? (
+            <Progress
+              percent={Math.round((record.progress ?? 0) * 100)}
+              showInfo={false}
+              size={[64, 4]}
+            />
+          ) : null}
+        </Space>
+      ),
     },
     {
-      title: '关联资源',
+      title: localeText(localeCode, '关联资源', 'Related resources'),
       width: 240,
       render: (_value, record) =>
         record.resources.map((item) => item.displayName).join(' / ') || '-',
     },
-    { title: '创建时间', dataIndex: 'createdAt', width: 170, render: formatDateTime },
-    { title: '摘要', dataIndex: 'summary', width: 260, render: (value) => value || '-' },
     {
-      title: '操作',
+      title: localeText(localeCode, '创建时间', 'Created at'),
+      dataIndex: 'createdAt',
+      key: 'createdAt',
+      sorter: true,
+      sortOrder: activeSortBy === 'createdAt' ? tableSortOrder : null,
+      width: 170,
+      render: formatDateTime,
+    },
+    {
+      title: localeText(localeCode, '摘要', 'Summary'),
+      dataIndex: 'summary',
+      width: 260,
+      render: (value) => value || '-',
+    },
+    {
+      title: localeText(localeCode, '操作', 'Actions'),
       key: 'actions',
       className: 'soha-compute-task-actions-column soha-table-actions-column',
       fixed: 'right',
@@ -274,33 +414,39 @@ export function ComputeTasksPage() {
         <Space className="soha-row-action-icons" size={4}>
           {record.availableActions.includes('logs') ? (
             <ManagementIconButton
-              aria-label="查看任务日志"
+              aria-label={localeText(localeCode, '查看任务日志', 'View task logs')}
               icon={<FileTextOutlined />}
               size="small"
-              tooltip="查看日志"
+              tooltip={localeText(localeCode, '查看日志', 'View logs')}
               onClick={() => openLogs(record)}
             />
           ) : null}
           {record.availableActions.includes('cancel') ? (
-            <Popconfirm title="确认取消任务？" onConfirm={() => mutateTask('cancel', record)}>
+            <Popconfirm
+              title={localeText(localeCode, '确认取消任务？', 'Cancel this task?')}
+              onConfirm={() => mutateTask('cancel', record)}
+            >
               <ManagementIconButton
-                aria-label="取消任务"
+                aria-label={localeText(localeCode, '取消任务', 'Cancel task')}
                 danger
                 icon={<StopOutlined />}
                 size="small"
                 loading={cancelMutation.isPending && cancelMutation.variables?.taskId === record.id}
-                tooltip="取消"
+                tooltip={localeText(localeCode, '取消', 'Cancel')}
               />
             </Popconfirm>
           ) : null}
           {record.availableActions.includes('retry') ? (
-            <Popconfirm title="确认重试任务？" onConfirm={() => mutateTask('retry', record)}>
+            <Popconfirm
+              title={localeText(localeCode, '确认重试任务？', 'Retry this task?')}
+              onConfirm={() => mutateTask('retry', record)}
+            >
               <ManagementIconButton
-                aria-label="重试任务"
+                aria-label={localeText(localeCode, '重试任务', 'Retry task')}
                 icon={<RedoOutlined />}
                 size="small"
                 loading={retryMutation.isPending && retryMutation.variables?.taskId === record.id}
-                tooltip="重试"
+                tooltip={localeText(localeCode, '重试', 'Retry')}
               />
             </Popconfirm>
           ) : null}
@@ -333,16 +479,22 @@ export function ComputeTasksPage() {
                   })
                   updateFilters({ limit: DEFAULT_TASK_PAGE_SIZE })
                 }}
-                submitLabel="筛选"
+                submitLabel={localeText(localeCode, '筛选', 'Filter')}
               />
             }
           >
             <ManagementQueryScope
-              label="任务领域"
+              label={localeText(localeCode, '任务领域', 'Task domain')}
               options={[
-                { label: '全部', value: 'all' },
-                { label: '虚拟化', value: 'virtualization' },
-                { label: '容器运行时', value: 'container_runtime' },
+                { label: localeText(localeCode, '全部', 'All'), value: 'all' },
+                {
+                  label: localeText(localeCode, '虚拟化', 'Virtualization'),
+                  value: 'virtualization',
+                },
+                {
+                  label: localeText(localeCode, '容器运行时', 'Container runtime'),
+                  value: 'container_runtime',
+                },
               ]}
               value={filters.domain ?? 'all'}
               onChange={(value) => {
@@ -354,10 +506,10 @@ export function ComputeTasksPage() {
             <Form.Item name="domain" hidden>
               <Input />
             </Form.Item>
-            <ManagementQueryField label="状态" name="status">
+            <ManagementQueryField label={localeText(localeCode, '状态', 'Status')} name="status">
               <Select
                 allowClear
-                placeholder="全部状态"
+                placeholder={localeText(localeCode, '全部状态', 'All statuses')}
                 options={[
                   'queued',
                   'running',
@@ -366,19 +518,28 @@ export function ComputeTasksPage() {
                   'canceled',
                   'timeout',
                   'unknown',
-                ].map((value) => ({ value, label: value }))}
+                ].map((value) => ({ value, label: formatStatusLabel(value, localeCode) }))}
               />
             </ManagementQueryField>
-            <ManagementQueryField label="Provider" name="providerKey">
-              <Input allowClear placeholder="Provider key" />
+            <ManagementQueryField
+              label={localeText(localeCode, '提供方', 'Provider')}
+              name="providerKey"
+            >
+              <Input
+                allowClear
+                placeholder={localeText(localeCode, '提供方标识', 'Provider key')}
+              />
             </ManagementQueryField>
-            <ManagementQueryField label="类别" name="category">
+            <ManagementQueryField
+              label={localeText(localeCode, '类别', 'Category')}
+              name="category"
+            >
               <Select
                 allowClear
-                placeholder="全部类别"
-                options={Object.entries(TASK_CATEGORY_LABELS).map(([value, label]) => ({
+                placeholder={localeText(localeCode, '全部类别', 'All categories')}
+                options={Object.keys(TASK_CATEGORY_LABELS).map((value) => ({
                   value,
-                  label,
+                  label: taskCategoryLabel(value as ComputeTaskCategory, localeCode),
                 }))}
               />
             </ManagementQueryField>
@@ -389,24 +550,37 @@ export function ComputeTasksPage() {
           columns,
           dataSource: items,
           loading: tasksQuery.isLoading,
-          empty: tasksQuery.isError ? '任务列表加载失败' : '暂无匹配任务',
+          empty: tasksQuery.isError
+            ? localeText(localeCode, '任务列表加载失败', 'Failed to load tasks')
+            : localeText(localeCode, '暂无匹配任务', 'No matching tasks'),
           columnSettingIconOnly: true,
           columnSettingPlacement: 'header',
           headerExtra: (
             <ManagementTableToolbar>
               <ManagementDensityButton
-                aria-label="切换表格密度"
+                aria-label={localeText(localeCode, '切换表格密度', 'Toggle table density')}
                 size="small"
-                tooltip={tableSize === 'small' ? '切换为宽松密度' : '切换为紧凑密度'}
+                tooltip={
+                  tableSize === 'small'
+                    ? localeText(localeCode, '切换为宽松密度', 'Use relaxed density')
+                    : localeText(localeCode, '切换为紧凑密度', 'Use compact density')
+                }
                 onClick={() =>
                   setTableSize((current) => (current === 'small' ? 'middle' : 'small'))
                 }
               />
+              {selectedTaskId ? (
+                <ComputeStreamStatus
+                  status={taskStream.status}
+                  observedAt={taskStream.lastEventAt}
+                  localeCode={localeCode}
+                />
+              ) : null}
               <ManagementRefreshButton
-                aria-label="刷新任务列表"
+                aria-label={localeText(localeCode, '刷新任务列表', 'Refresh task list')}
                 loading={tasksQuery.isFetching}
                 size="small"
-                tooltip="刷新"
+                tooltip={localeText(localeCode, '刷新', 'Refresh')}
                 onClick={() => void tasksQuery.refetch()}
               />
             </ManagementTableToolbar>
@@ -423,77 +597,124 @@ export function ComputeTasksPage() {
           },
           paginationSummary: (
             <Text type="secondary">
-              当前第 {currentPage} 页，本页 {items.length} 条
-              {tasksQuery.data?.nextCursor ? '，还有更多' : ''}
+              {localeText(
+                localeCode,
+                `当前第 ${currentPage} 页，本页 ${items.length} 条${tasksQuery.data?.nextCursor ? '，还有更多' : ''}`,
+                `Page ${currentPage}, ${items.length} items${tasksQuery.data?.nextCursor ? ', more available' : ''}`,
+              )}
             </Text>
           ),
+          onChange: handleTableChange,
           scroll: { x: 1391 },
           tableSize,
+          viewportScroll: true,
         }}
       />
       <Drawer
-        title="任务日志"
+        title={localeText(localeCode, '任务日志', 'Task logs')}
         size="large"
         open={Boolean(selectedTaskId)}
         destroyOnHidden
+        styles={{ wrapper: { maxWidth: 'calc(100vw - 24px)' } }}
+        extra={
+          selectedTaskId ? (
+            <ComputeStreamStatus
+              status={taskStream.status}
+              observedAt={taskStream.lastEventAt}
+              localeCode={localeCode}
+            />
+          ) : null
+        }
         onClose={closeLogs}
       >
         {selectedTask ? (
           <Space orientation="vertical" size={16} style={{ width: '100%' }}>
-            <Descriptions size="small" column={2} bordered>
-              <Descriptions.Item label="任务">{selectedTask.kind}</Descriptions.Item>
-              <Descriptions.Item label="状态">
+            {selectedTask.failure ? (
+              <Alert
+                showIcon
+                type="error"
+                title={selectedTask.failure.message || selectedTask.failure.code}
+              />
+            ) : null}
+            <Descriptions size="small" column={1} bordered>
+              <Descriptions.Item label={localeText(localeCode, '任务', 'Task')}>
+                {taskKindLabel(selectedTask.kind, localeCode)}
+              </Descriptions.Item>
+              <Descriptions.Item label={localeText(localeCode, '状态', 'Status')}>
                 <StatusTag value={selectedTask.normalizedStatus} />
               </Descriptions.Item>
-              <Descriptions.Item label="任务 ID" span={2}>
+              <Descriptions.Item label={localeText(localeCode, '任务 ID', 'Task ID')}>
                 <Text copyable>{selectedTask.id}</Text>
               </Descriptions.Item>
-              <Descriptions.Item label="领域">
-                {selectedTask.domain === 'container_runtime' ? '容器运行时' : '虚拟化'}
+              <Descriptions.Item label={localeText(localeCode, '领域', 'Domain')}>
+                {selectedTask.domain === 'container_runtime'
+                  ? localeText(localeCode, '容器运行时', 'Container runtime')
+                  : localeText(localeCode, '虚拟化', 'Virtualization')}
               </Descriptions.Item>
-              <Descriptions.Item label="创建时间">
+              <Descriptions.Item label={localeText(localeCode, '创建时间', 'Created at')}>
                 {formatDateTime(selectedTask.createdAt)}
               </Descriptions.Item>
-              <Descriptions.Item label="Provider">
+              <Descriptions.Item label={localeText(localeCode, '提供方', 'Provider')}>
                 {[selectedTask.providerKey, selectedTask.providerSource]
                   .filter(Boolean)
                   .join(' / ') || '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="发起人">
+              <Descriptions.Item label={localeText(localeCode, '发起人', 'Requested by')}>
                 {selectedTask.requestedBy || '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="尝试次数">
+              <Descriptions.Item label={localeText(localeCode, '尝试次数', 'Attempts')}>
                 {selectedTask.attemptCount ?? '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="结束时间">
+              <Descriptions.Item label={localeText(localeCode, '结束时间', 'Finished at')}>
                 {formatDateTime(selectedTask.finishedAt)}
               </Descriptions.Item>
-              <Descriptions.Item label="摘要" span={2}>
+              <Descriptions.Item label={localeText(localeCode, '摘要', 'Summary')}>
                 {selectedTask.summary || '-'}
               </Descriptions.Item>
+              <Descriptions.Item label={localeText(localeCode, '心跳', 'Heartbeat')}>
+                <StatusTag value={selectedTask.heartbeat?.status || 'unknown'} />
+              </Descriptions.Item>
+              <Descriptions.Item label={localeText(localeCode, '结果验证', 'Result verification')}>
+                <StatusTag value={selectedTask.verification?.status || 'unknown'} />
+              </Descriptions.Item>
+              <Descriptions.Item label={localeText(localeCode, '验证说明', 'Verification details')}>
+                {verificationSummaryLabel(selectedTask.verification?.summary, localeCode)}
+              </Descriptions.Item>
             </Descriptions>
-            <List
-              loading={logsQuery.isLoading}
-              dataSource={logsQuery.data ?? []}
-              locale={{
-                emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无日志" />,
-              }}
-              renderItem={(log) => (
-                <List.Item>
-                  <Space orientation="vertical" size={2} style={{ width: '100%' }}>
-                    <Space wrap>
-                      <StatusTag value={log.logLevel} />
-                      <Text type="secondary">{formatDateTime(log.createdAt)}</Text>
+            {logsQuery.isLoading ? (
+              <Spin
+                description={localeText(localeCode, '正在加载任务日志...', 'Loading task logs...')}
+              />
+            ) : logsQuery.data?.length ? (
+              <div className="soha-compute-task-log-list">
+                {logsQuery.data.map((log) => (
+                  <div className="soha-compute-task-log-row" key={log.id}>
+                    <Space orientation="vertical" size={2} style={{ width: '100%' }}>
+                      <Space wrap>
+                        <StatusTag value={log.logLevel} />
+                        <Text type="secondary">{formatDateTime(log.createdAt)}</Text>
+                      </Space>
+                      <Text>{log.message}</Text>
+                      {log.payload ? <Text code>{log.payload}</Text> : null}
                     </Space>
-                    <Text>{log.message}</Text>
-                    {log.payload ? <Text code>{log.payload}</Text> : null}
-                  </Space>
-                </List.Item>
-              )}
-            />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={localeText(localeCode, '暂无日志', 'No logs')}
+              />
+            )}
           </Space>
         ) : taskQuery.isLoading ? null : (
-          <Empty description="任务不存在或不可访问" />
+          <Empty
+            description={localeText(
+              localeCode,
+              '任务不存在或不可访问',
+              'Task not found or unavailable',
+            )}
+          />
         )}
       </Drawer>
     </>

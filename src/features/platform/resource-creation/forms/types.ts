@@ -56,6 +56,7 @@ export type KubernetesManifest = {
 
 export interface ResourceFormRendererProps<Values> {
   clusterId?: string
+  identityDisabled?: boolean
   localeCode?: string
   loading?: boolean
   namespaceLoading?: boolean
@@ -157,9 +158,10 @@ export interface JobFormValues extends MetadataFormValues, PodTemplateFormValues
 
 export interface ServicePortFormValue {
   name?: string
+  nodePort?: number
   port: number
   protocol: 'TCP' | 'UDP' | 'SCTP'
-  targetPort: number
+  targetPort: number | string
 }
 
 export interface ServiceFormValues extends MetadataFormValues {

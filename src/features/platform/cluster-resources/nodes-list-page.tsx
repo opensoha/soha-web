@@ -29,6 +29,9 @@ import {
   stringifyMap,
   stringifyTaints,
 } from '@/features/platform/node-resource-utils'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
+import { ResourceStreamStatus } from '@/features/platform/shared/resource-stream-status'
+import { useKubernetesResourceStream } from '@/features/platform/shared/resource-stream'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { formatAgeSeconds } from '@/utils/time'
@@ -40,7 +43,7 @@ import type { ClusterNode } from './types'
 import '@/features/platform/styles/base.css'
 
 export function ClusterNodesPage() {
-  const { t } = useI18n()
+  const { t, localeCode } = useI18n()
   const { message } = App.useApp()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -50,7 +53,15 @@ export function ClusterNodesPage() {
   const [drainingNodeName, setDrainingNodeName] = useState<string | null>(null)
   const [drainForm] = Form.useForm()
   const [nodeTableSize, setNodeTableSize] = useState<'middle' | 'small'>('small')
-  const nodesQuery = useQuery(nodeQueries.list(scope))
+  const nodeListQuery = nodeQueries.list(scope)
+  const nodeStream = useKubernetesResourceStream({
+    clusterId,
+    kinds: ['Node', 'Pod', 'Event'],
+    onEvent: () => void queryClient.invalidateQueries({ queryKey: nodeListQuery.queryKey }),
+    onFallback: () => void queryClient.invalidateQueries({ queryKey: nodeListQuery.queryKey }),
+    onResyncRequired: () => queryClient.invalidateQueries({ queryKey: nodeListQuery.queryKey }),
+  })
+  const nodesQuery = useQuery(nodeListQuery)
   const nodes = nodesQuery.data ?? []
   const canShowNodeActions = nodes.some((node) =>
     ['update', 'delete'].some((action) => hasAllowedAction(node.allowedActions, action)),
@@ -85,10 +96,37 @@ export function ClusterNodesPage() {
 
   const detailPath = (name: string) =>
     `/cluster-resources/nodes/${encodeURIComponent(name)}?clusterId=${encodeURIComponent(clusterId || '')}`
+  const copy =
+    localeCode === 'zh_CN'
+      ? {
+          unschedulable: '禁止调度',
+          restoreScheduling: '恢复调度',
+          drain: '排空节点',
+          edit: '编辑节点',
+          deleted: '节点对象已删除',
+          updated: '节点配置已更新',
+          drained: '节点已禁止调度，可迁移 Pod 已完成驱逐',
+          drainWarning:
+            '节点会先进入禁止调度状态，再驱逐可迁移的 Pod。DaemonSet 和静态 Pod 不会被驱逐。',
+          deleteDescription: '这会删除 Kubernetes 中的 Node 对象，不会自动回收底层机器。',
+        }
+      : {
+          unschedulable: 'Disable Scheduling',
+          restoreScheduling: 'Enable Scheduling',
+          drain: 'Drain Node',
+          edit: 'Edit Node',
+          deleted: 'Node object deleted',
+          updated: 'Node configuration updated',
+          drained: 'Node cordoned and evictable pods drained',
+          drainWarning:
+            'The node will be cordoned before evictable pods are drained. DaemonSet and static pods are not evicted.',
+          deleteDescription:
+            'This deletes the Kubernetes Node object without reclaiming the underlying machine.',
+        }
 
   const nodeColumns: TableColumnsType<ClusterNode> = [
     {
-      title: '名称',
+      title: t('common.name', '名称'),
       dataIndex: 'name',
       render: (name: string) => (
         <Button type="text" onClick={() => navigate(detailPath(name))}>
@@ -98,33 +136,46 @@ export function ClusterNodesPage() {
     },
     {
       ...tableColumnPresets.status,
-      title: '状态',
+      title: t('common.status', '状态'),
       dataIndex: 'status',
       render: (status: string, record) => (
         <Space size={4} wrap>
           <StatusTag value={status} />
-          {record.unschedulable ? <StatusTag label="禁止调度" value="warning" /> : null}
+          {record.unschedulable ? <StatusTag label={copy.unschedulable} value="warning" /> : null}
         </Space>
       ),
     },
     {
-      title: '角色',
+      title: t('common.role', '角色'),
       dataIndex: 'roles',
+      className: 'soha-table-cell-wrap',
       render: (roles: string[]) =>
-        roles?.map((role) => <MetadataTag key={role} label={role} />) ?? '-',
+        roles?.length ? (
+          <Space size={[4, 4]} wrap>
+            {roles.map((role) => (
+              <MetadataTag key={role} label={role} />
+            ))}
+          </Space>
+        ) : (
+          '-'
+        ),
     },
     { title: 'IP', dataIndex: 'internalIp', render: (value: string) => value || '-' },
-    { title: 'Version', dataIndex: 'version', render: (value: string) => value || '-' },
-    { title: 'Pods', dataIndex: 'podCount' },
+    {
+      title: t('common.version', '版本'),
+      dataIndex: 'version',
+      render: (value: string) => value || '-',
+    },
+    { title: t('common.pods', 'Pods'), dataIndex: 'podCount' },
     {
       ...tableColumnPresets.datetime,
-      title: 'Age',
+      title: t('common.age', '时长'),
       dataIndex: 'ageSeconds',
       render: (value: number) => formatAgeSeconds(value),
     },
     {
       ...tableColumnPresets.action,
-      title: '操作',
+      title: t('common.actions', '操作'),
       dataIndex: 'name',
       key: 'actions',
       width: 176,
@@ -134,31 +185,44 @@ export function ClusterNodesPage() {
           schedulabilityMutation.isPending && schedulabilityMutation.variables?.name === name
         const canUpdate = hasAllowedAction(record.allowedActions, 'update')
         const canDelete = hasAllowedAction(record.allowedActions, 'delete')
-        const schedulabilityLabel = record.unschedulable ? '恢复调度' : '禁止调度'
+        const schedulabilityLabel = record.unschedulable
+          ? copy.restoreScheduling
+          : copy.unschedulable
         return (
           <Space size={2} className="soha-row-action-icons">
             <ManagementIconButton
-              aria-label={`查看节点 ${name}`}
+              aria-label={`${t('common.details', '详情')} ${name}`}
               icon={<EyeOutlined />}
               size="small"
-              tooltip="详情"
+              tooltip={t('common.details', '详情')}
               onClick={() => navigate(detailPath(name))}
             />
             {canUpdate ? (
               <Popconfirm
-                title={`确认${schedulabilityLabel}节点 ${name}？`}
+                title={
+                  localeCode === 'zh_CN'
+                    ? `确认${schedulabilityLabel}节点 ${name}？`
+                    : `Confirm ${schedulabilityLabel.toLowerCase()} for node ${name}?`
+                }
                 description={
                   record.unschedulable
-                    ? '恢复后，新的 Pod 可以再次调度到该节点。'
-                    : '现有 Pod 不受影响，但新的 Pod 将不再调度到该节点。'
+                    ? localeCode === 'zh_CN'
+                      ? '恢复后，新的 Pod 可以再次调度到该节点。'
+                      : 'New pods can be scheduled to this node again.'
+                    : localeCode === 'zh_CN'
+                      ? '现有 Pod 不受影响，但新的 Pod 将不再调度到该节点。'
+                      : 'Existing pods are unaffected, but new pods will not be scheduled here.'
                 }
                 okText={schedulabilityLabel}
-                cancelText="取消"
+                cancelText={t('common.cancel', '取消')}
                 onConfirm={() =>
                   schedulabilityMutation.mutate(
                     { scope, name, unschedulable: !record.unschedulable },
                     {
-                      onSuccess: () => void message.success(`已${schedulabilityLabel}`),
+                      onSuccess: () =>
+                        void message.success(
+                          localeCode === 'zh_CN' ? `已${schedulabilityLabel}` : schedulabilityLabel,
+                        ),
                       onError: (error) => void message.error(error.message),
                     },
                   )
@@ -175,12 +239,12 @@ export function ClusterNodesPage() {
             ) : null}
             {canUpdate ? (
               <ManagementIconButton
-                aria-label={`排空节点 ${name}`}
+                aria-label={`${copy.drain} ${name}`}
                 danger
                 icon={<ClearOutlined />}
                 loading={drainNodeMutation.isPending && drainNodeMutation.variables?.name === name}
                 size="small"
-                tooltip="排空节点"
+                tooltip={copy.drain}
                 onClick={() => {
                   drainForm.resetFields()
                   setDrainingNodeName(name)
@@ -189,38 +253,42 @@ export function ClusterNodesPage() {
             ) : null}
             {canUpdate ? (
               <ManagementIconButton
-                aria-label={`编辑节点 ${name}`}
+                aria-label={`${copy.edit} ${name}`}
                 icon={<EditOutlined />}
                 size="small"
-                tooltip="编辑"
+                tooltip={t('common.edit', '编辑')}
                 onClick={() => setEditingNodeName(name)}
               />
             ) : null}
             {canDelete ? (
               <Popconfirm
-                title={`确认删除节点 ${name}？`}
-                description="这会删除 Kubernetes 中的 Node 对象，不会自动回收底层机器。"
-                okText="删除"
-                cancelText="取消"
+                title={
+                  localeCode === 'zh_CN'
+                    ? `确认删除节点 ${name}？`
+                    : `Confirm deletion of node ${name}?`
+                }
+                description={copy.deleteDescription}
+                okText={t('common.delete', '删除')}
+                cancelText={t('common.cancel', '取消')}
                 okButtonProps={{ danger: true, loading: deleting }}
                 placement="topRight"
                 onConfirm={() =>
                   deleteNodeMutation.mutate(
                     { scope, name },
                     {
-                      onSuccess: () => void message.success('节点对象已删除'),
+                      onSuccess: () => void message.success(copy.deleted),
                       onError: (error) => void message.error(error.message),
                     },
                   )
                 }
               >
                 <ManagementIconButton
-                  aria-label={`删除节点 ${name}`}
+                  aria-label={localeCode === 'zh_CN' ? `删除节点 ${name}` : `Delete node ${name}`}
                   danger
                   icon={<DeleteOutlined />}
                   loading={deleting}
                   size="small"
-                  tooltip="删除"
+                  tooltip={t('common.delete', '删除')}
                 />
               </Popconfirm>
             ) : null}
@@ -245,19 +313,24 @@ export function ClusterNodesPage() {
           shellClassName="soha-management-table-shell"
           headerExtra={
             <ManagementTableToolbar>
+              <ResourceStreamStatus
+                status={nodeStream.status}
+                lastEventAt={nodeStream.lastEventAt}
+                localeCode={localeCode}
+              />
               <ManagementDensityButton
-                aria-label="切换表格密度"
-                title="切换表格密度"
-                tooltip="切换表格密度"
+                aria-label={localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'}
+                title={localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'}
+                tooltip={localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'}
                 onClick={() =>
                   setNodeTableSize((current) => (current === 'middle' ? 'small' : 'middle'))
                 }
               />
               <ManagementRefreshButton
-                aria-label="刷新"
+                aria-label={t('common.refresh', '刷新')}
                 loading={nodesQuery.isFetching}
-                title="刷新"
-                tooltip="刷新"
+                title={t('common.refresh', '刷新')}
+                tooltip={t('common.refresh', '刷新')}
                 onClick={() => void nodesQuery.refetch()}
               />
             </ManagementTableToolbar>
@@ -270,16 +343,18 @@ export function ClusterNodesPage() {
           dataSource={nodes}
           rowKey="name"
           loading={nodesQuery.isLoading}
-          pageSize={10}
+          localSorting
+          pageSize={K8S_TABLE_PAGE_SIZE}
           tableSize={nodeTableSize}
           scroll={{ x: 'max-content' }}
+          viewportScroll
           expandedRowRender={(record: ClusterNode) => <NodeResourcePanel node={record} />}
           hideExpandedColumn={false}
         />
       )}
 
       <Modal
-        title={editingNodeName ? `编辑节点 ${editingNodeName}` : '编辑节点'}
+        title={editingNodeName ? `${copy.edit} ${editingNodeName}` : copy.edit}
         open={!!editingNodeName}
         footer={null}
         width={720}
@@ -307,7 +382,7 @@ export function ClusterNodesPage() {
                 },
                 {
                   onSuccess: () => {
-                    void message.success('节点配置已更新')
+                    void message.success(copy.updated)
                     setEditingNodeName(null)
                   },
                   onError: (error) => void message.error(error.message),
@@ -322,9 +397,9 @@ export function ClusterNodesPage() {
               <Input.TextArea rows={8} />
             </Form.Item>
             <div className="soha-form-actions">
-              <Button onClick={() => setEditingNodeName(null)}>取消</Button>
+              <Button onClick={() => setEditingNodeName(null)}>{t('common.cancel', '取消')}</Button>
               <Button htmlType="submit" type="primary" loading={updateNodeMutation.isPending}>
-                保存
+                {t('common.save', '保存')}
               </Button>
             </div>
           </Form>
@@ -332,21 +407,17 @@ export function ClusterNodesPage() {
       </Modal>
 
       <Modal
-        title={drainingNodeName ? `排空节点 ${drainingNodeName}` : '排空节点'}
+        title={drainingNodeName ? `${copy.drain} ${drainingNodeName}` : copy.drain}
         open={!!drainingNodeName}
-        okText="确认排空"
-        cancelText="取消"
+        okText={localeCode === 'zh_CN' ? '确认排空' : 'Confirm Drain'}
+        cancelText={t('common.cancel', '取消')}
         okButtonProps={{ danger: true }}
         confirmLoading={drainNodeMutation.isPending}
         mask={{ closable: !drainNodeMutation.isPending }}
         onCancel={() => !drainNodeMutation.isPending && setDrainingNodeName(null)}
         onOk={() => drainForm.submit()}
       >
-        <Alert
-          type="warning"
-          showIcon
-          title="节点会先进入禁止调度状态，再驱逐可迁移的 Pod。DaemonSet 和静态 Pod 不会被驱逐。"
-        />
+        <Alert type="warning" showIcon title={copy.drainWarning} />
         <Form
           form={drainForm}
           layout="vertical"
@@ -363,7 +434,7 @@ export function ClusterNodesPage() {
               },
               {
                 onSuccess: () => {
-                  void message.success('节点已禁止调度，可迁移 Pod 已完成驱逐')
+                  void message.success(copy.drained)
                   setDrainingNodeName(null)
                 },
                 onError: (error) => void message.error(error.message),
@@ -372,10 +443,18 @@ export function ClusterNodesPage() {
           }}
         >
           <Form.Item name="deleteEmptyDirData" valuePropName="checked">
-            <Checkbox>允许删除使用 emptyDir 的 Pod（本地临时数据会丢失）</Checkbox>
+            <Checkbox>
+              {localeCode === 'zh_CN'
+                ? '允许删除使用 emptyDir 的 Pod（本地临时数据会丢失）'
+                : 'Allow deletion of pods using emptyDir (local temporary data will be lost)'}
+            </Checkbox>
           </Form.Item>
           <Form.Item name="force" valuePropName="checked">
-            <Checkbox>强制驱逐没有控制器管理的 Pod</Checkbox>
+            <Checkbox>
+              {localeCode === 'zh_CN'
+                ? '强制驱逐没有控制器管理的 Pod'
+                : 'Force eviction of pods without a controller'}
+            </Checkbox>
           </Form.Item>
         </Form>
       </Modal>

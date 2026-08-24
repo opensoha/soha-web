@@ -56,7 +56,8 @@ export const observabilityKeys = {
     all: alertRoot,
     lists: () => [...alertRoot, 'list'] as const,
     list: () => [...alertRoot, 'list'] as const,
-    recent: (limit: number) => [...alertRoot, 'list', 'recent', limit] as const,
+    recent: (limit: number, clusterId?: string) =>
+      [...alertRoot, 'list', 'recent', limit, normalizedId(clusterId ?? '')] as const,
     detail: (eventId: string) => [...alertRoot, 'detail', normalizedId(eventId)] as const,
     healingRuns: (eventId: string) =>
       [...alertRoot, 'detail', normalizedId(eventId), 'healing-runs'] as const,

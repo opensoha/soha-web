@@ -40,6 +40,7 @@ describe('settingsQueries', () => {
     expect(settingsQueries.identity(false).enabled).toBe(false)
     expect(settingsQueries.branding(false).enabled).toBe(false)
     expect(settingsQueries.ai.detail(false).enabled).toBe(false)
+    expect(settingsQueries.ai.skills(false).enabled).toBe(false)
     expect(settingsQueries.ai.dataSources(false).enabled).toBe(false)
     expect(settingsQueries.ai.analysisProfiles(false).enabled).toBe(false)
     expect(settingsQueries.ai.dataSourceCapabilities(false).enabled).toBe(false)

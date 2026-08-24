@@ -13,6 +13,7 @@ import {
   ManagementQueryPanel,
 } from '@/components/management-list'
 import { formatDateTime } from '@/utils/time'
+import { localeText, useI18n } from '@/i18n'
 import { dockerApi } from '../docker-api'
 import { dockerQueries } from '../queries'
 import type { DockerTemplate, DockerTemplateInput } from '../docker-types'
@@ -40,7 +41,7 @@ export function buildTemplatePayload(values: DockerTemplateInput): DockerTemplat
 }
 
 function TemplatesTable() {
-  const [filters, setFilters] = useState<DockerFilterState>({ page: 1, pageSize: 10 })
+  const [filters, setFilters] = useState<DockerFilterState>({ page: 1, pageSize: 15 })
   const [filterForm] = Form.useForm<DockerFilterState>()
   const [form] = Form.useForm<DockerTemplateInput>()
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -50,6 +51,7 @@ function TemplatesTable() {
     useDockerPermissions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
+  const { localeCode } = useI18n()
   const templatesQuery = useQuery(dockerQueries.templates(filters, dockerModuleEnabled))
   const saveMutation = useMutation({
     mutationFn: (values: DockerTemplateInput) =>
@@ -57,7 +59,11 @@ function TemplatesTable() {
         ? dockerApi.updateTemplate(editing.id, buildTemplatePayload(values))
         : dockerApi.createTemplate(buildTemplatePayload(values)),
     onSuccess: () => {
-      message.success(editing ? '模板已更新' : '模板已创建')
+      message.success(
+        editing
+          ? localeText(localeCode, '模板已更新', 'Template updated')
+          : localeText(localeCode, '模板已创建', 'Template created'),
+      )
       setDrawerOpen(false)
       setEditing(null)
       form.resetFields()
@@ -67,14 +73,14 @@ function TemplatesTable() {
   const deleteMutation = useMutation({
     mutationFn: dockerApi.deleteTemplate,
     onSuccess: () => {
-      message.success('模板已删除')
+      message.success(localeText(localeCode, '模板已删除', 'Template deleted'))
       refreshDocker(queryClient)
     },
   })
-  const page = normalizePage(templatesQuery.data, filters.page ?? 1, filters.pageSize ?? 10)
+  const page = normalizePage(templatesQuery.data, filters.page ?? 1, filters.pageSize ?? 15)
   const columns: ColumnsType<DockerTemplate> = [
     {
-      title: '模板',
+      title: localeText(localeCode, '模板', 'Template'),
       dataIndex: 'name',
       fixed: 'left',
       width: 220,
@@ -85,17 +91,32 @@ function TemplatesTable() {
         </Space>
       ),
     },
-    { title: '类型', dataIndex: 'templateKind', width: 130, render: (value) => value || 'compose' },
-    { title: '状态', dataIndex: 'enabled', width: 100, render: boolTag },
     {
-      title: '变量',
+      title: localeText(localeCode, '类型', 'Type'),
+      dataIndex: 'templateKind',
+      width: 130,
+      render: (value) => value || 'compose',
+    },
+    {
+      title: localeText(localeCode, '状态', 'Status'),
+      dataIndex: 'enabled',
+      width: 100,
+      render: boolTag,
+    },
+    {
+      title: localeText(localeCode, '变量', 'Variables'),
       dataIndex: 'variables',
       width: 130,
       render: (value) => Object.keys(value ?? {}).length,
     },
-    { title: '更新时间', dataIndex: 'updatedAt', width: 155, render: formatDateTime },
     {
-      title: '操作',
+      title: localeText(localeCode, '更新时间', 'Updated at'),
+      dataIndex: 'updatedAt',
+      width: 155,
+      render: formatDateTime,
+    },
+    {
+      title: localeText(localeCode, '操作', 'Actions'),
       align: 'center',
       className: 'soha-table-actions-column',
       fixed: 'right',
@@ -105,9 +126,9 @@ function TemplatesTable() {
           <Space className="soha-row-action-icons">
             {canUpdateTemplates ? (
               <ManagementIconButton
-                aria-label="编辑模板"
+                aria-label={localeText(localeCode, '编辑模板', 'Edit template')}
                 size="small"
-                tooltip="编辑"
+                tooltip={localeText(localeCode, '编辑', 'Edit')}
                 icon={<EditOutlined />}
                 onClick={() => {
                   setEditing(record)
@@ -118,11 +139,14 @@ function TemplatesTable() {
               />
             ) : null}
             {canDeleteTemplates ? (
-              <Popconfirm title="确认删除模板？" onConfirm={() => deleteMutation.mutate(record.id)}>
+              <Popconfirm
+                title={localeText(localeCode, '确认删除模板？', 'Delete this template?')}
+                onConfirm={() => deleteMutation.mutate(record.id)}
+              >
                 <ManagementIconButton
-                  aria-label="删除模板"
+                  aria-label={localeText(localeCode, '删除模板', 'Delete template')}
                   size="small"
-                  tooltip="删除"
+                  tooltip={localeText(localeCode, '删除', 'Delete')}
                   danger
                   icon={<DeleteOutlined />}
                 />
@@ -142,27 +166,39 @@ function TemplatesTable() {
               loading={templatesQuery.isFetching}
               onReset={() => {
                 filterForm.resetFields()
-                setFilters({ page: 1, pageSize: filters.pageSize ?? 10 })
+                setFilters({ page: 1, pageSize: filters.pageSize ?? 15 })
               }}
             />
           }
           onFinish={(values) => setFilters((current) => ({ ...current, ...values, page: 1 }))}
         >
-          <ManagementKeywordField placeholder="模板名称或描述" />
-          <ManagementQueryField minWidth={132} width={150} name="kind" label="类型">
+          <ManagementKeywordField
+            placeholder={localeText(localeCode, '模板名称或描述', 'Template name or description')}
+          />
+          <ManagementQueryField
+            minWidth={132}
+            width={150}
+            name="kind"
+            label={localeText(localeCode, '类型', 'Type')}
+          >
             <Select
               allowClear
-              placeholder="全部"
+              placeholder={localeText(localeCode, '全部', 'All')}
               options={[{ value: 'compose', label: 'compose' }]}
             />
           </ManagementQueryField>
-          <ManagementQueryField minWidth={132} width={150} name="enabled" label="启用">
+          <ManagementQueryField
+            minWidth={132}
+            width={150}
+            name="enabled"
+            label={localeText(localeCode, '启用', 'Enabled')}
+          >
             <Select
               allowClear
-              placeholder="全部"
+              placeholder={localeText(localeCode, '全部', 'All')}
               options={[
-                { value: true, label: '启用' },
-                { value: false, label: '停用' },
+                { value: true, label: localeText(localeCode, '启用', 'Enabled') },
+                { value: false, label: localeText(localeCode, '停用', 'Disabled') },
               ]}
             />
           </ManagementQueryField>
@@ -192,7 +228,7 @@ function TemplatesTable() {
                   setDrawerOpen(true)
                 }}
               >
-                新增模板
+                {localeText(localeCode, '新增模板', 'Add template')}
               </Button>
             </>
           ) : null
@@ -201,7 +237,11 @@ function TemplatesTable() {
         onRefresh={() => templatesQuery.refetch()}
       />
       <StepFormModal
-        title={editing ? '编辑模板' : '新增模板'}
+        title={
+          editing
+            ? localeText(localeCode, '编辑模板', 'Edit template')
+            : localeText(localeCode, '新增模板', 'Add template')
+        }
         current={currentStep}
         form={form}
         loading={saveMutation.isPending}
@@ -211,29 +251,37 @@ function TemplatesTable() {
         onFinish={(values) => saveMutation.mutate(values)}
         steps={[
           {
-            title: '基本信息',
+            title: localeText(localeCode, '基本信息', 'Basic information'),
             fieldNames: ['name', 'templateKind'],
             children: (
               <>
-                <Form.Item name="name" label="名称" rules={[{ required: true }]}>
+                <Form.Item
+                  name="name"
+                  label={localeText(localeCode, '名称', 'Name')}
+                  rules={[{ required: true }]}
+                >
                   <Input />
                 </Form.Item>
                 <div className="grid gap-3 md:grid-cols-2">
-                  <Form.Item name="templateKind" label="类型">
+                  <Form.Item name="templateKind" label={localeText(localeCode, '类型', 'Type')}>
                     <Select options={[{ value: 'compose', label: 'compose' }]} />
                   </Form.Item>
-                  <Form.Item name="enabled" label="启用" valuePropName="checked">
+                  <Form.Item
+                    name="enabled"
+                    label={localeText(localeCode, '启用', 'Enabled')}
+                    valuePropName="checked"
+                  >
                     <Switch />
                   </Form.Item>
                 </div>
-                <Form.Item name="description" label="描述">
+                <Form.Item name="description" label={localeText(localeCode, '描述', 'Description')}>
                   <Input />
                 </Form.Item>
               </>
             ),
           },
           {
-            title: '模板内容',
+            title: localeText(localeCode, '模板内容', 'Template content'),
             fieldNames: ['composeContent'],
             children: (
               <Tabs
@@ -261,7 +309,7 @@ function TemplatesTable() {
             ),
           },
         ]}
-        submitText="保存"
+        submitText={localeText(localeCode, '保存', 'Save')}
         width={760}
       />
     </>

@@ -11,6 +11,23 @@ export function resolveWorkloadNamespace(
   return rowNamespace ?? ''
 }
 
+function buildWorkloadScopeQuery(namespace: string | null, clusterId: string | null) {
+  const params = new URLSearchParams()
+  if (clusterId) params.set('clusterId', clusterId)
+  if (namespace) params.set('namespace', namespace)
+  return params.toString()
+}
+
+export function buildWorkloadListPagePath(
+  resource: string,
+  namespace: string | null,
+  clusterId: string | null,
+) {
+  const query = buildWorkloadScopeQuery(namespace, clusterId)
+  const path = `/workloads/${resource}`
+  return query ? `${path}?${query}` : path
+}
+
 export function buildWorkloadDetailPath(
   resource: string,
   name: string,
@@ -18,15 +35,8 @@ export function buildWorkloadDetailPath(
   rowNamespace: string,
   clusterId: string | null,
 ) {
-  const params = new URLSearchParams()
-  if (clusterId) {
-    params.set('clusterId', clusterId)
-  }
   const resolvedNamespace = resolveWorkloadNamespace(selectedNamespace, null, rowNamespace)
-  if (resolvedNamespace) {
-    params.set('namespace', resolvedNamespace)
-  }
-  const query = params.toString()
+  const query = buildWorkloadScopeQuery(resolvedNamespace, clusterId)
   const path = `/workloads/${resource}/${encodeURIComponent(name)}`
   return query ? `${path}?${query}` : path
 }

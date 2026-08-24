@@ -112,7 +112,6 @@ export const copilotGatewayRoutes = defineRoutes([
         'ai.gateway.approvals.view',
         'ai.gateway.grants.view',
         'ai.gateway.policies.view',
-        'ai.gateway.skills.view',
       ],
       scopeMode: 'passive',
     },

@@ -77,7 +77,7 @@ describe('Copilot route manifests', () => {
 
   it('forms one valid Copilot registry', () => {
     const routes = copilotRouteManifests.flatMap((manifest) => [...manifest])
-    expect(routes).toHaveLength(25)
+    expect(routes).toHaveLength(28)
     expect(validateRouteDefinitions(routes)).toEqual([])
   })
 })

@@ -7,11 +7,6 @@
   white-space: nowrap;
 }
 
-.soha-platform-table .ant-table-tbody > tr > td:not(.ant-table-cell-ellipsis) {
-  overflow: visible;
-  text-overflow: clip;
-}
-
 .soha-platform-table .ant-table-thead > tr > th:first-child,
 .soha-platform-table .ant-table-tbody > tr > td:first-child {
   padding-left: 10px;
@@ -196,6 +191,21 @@
 .soha-platform-table .ant-table-tbody > tr > td .ant-typography,
 .soha-platform-table .ant-table-tbody > tr > td .soha-resource-cell-copy,
 .soha-platform-table .ant-table-tbody > tr > td .soha-resource-cell-copy .ant-typography {
+  white-space: nowrap;
+}
+
+.soha-platform-table .ant-table-cell.soha-table-cell-wrap,
+.soha-platform-table .ant-table-cell.soha-table-cell-wrap .ant-typography {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.soha-platform-table .ant-table-cell.soha-table-cell-ellipsis {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

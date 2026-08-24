@@ -1,9 +1,17 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { Alert, App, Button, Card, Descriptions, Space, Spin, Tabs } from 'antd'
-import { ArrowLeftOutlined, HistoryOutlined } from '@ant-design/icons'
+import {
+  ArrowLeftOutlined,
+  DiffOutlined,
+  HistoryOutlined,
+  RollbackOutlined,
+} from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
+import { OperationalPlanModal } from '@/components/operational-plan-modal'
+import { YamlDraftDiffEditor } from '@/components/yaml-draft-diff-editor'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import {
   ManagementDetailHeader,
   ManagementState,
@@ -18,8 +26,9 @@ import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import type { TableColumnsType, TabsProps } from 'antd'
 import { helmMutations } from '../mutations'
+import { planHelmReleaseRollback } from '../api'
 import { helmQueries } from '../queries'
-import type { HelmReleaseHistory, HelmReleaseTarget } from '../types'
+import type { HelmReleaseHistory, HelmReleaseRollbackVariables, HelmReleaseTarget } from '../types'
 import '@/features/platform/extensions/styles.css'
 
 const HelmReleaseValuesPanel = lazy(async () => {
@@ -46,6 +55,8 @@ export function HelmReleaseDetailPage() {
     searchParams.get('tab') === 'history' || !canViewValues ? 'history' : 'values'
   const [activeTab, setActiveTab] = useState(requestedTab)
   const [valuesDraft, setValuesDraft] = useState('')
+  const [selectedRevision, setSelectedRevision] = useState<string | null>(null)
+  const [pendingRollback, setPendingRollback] = useState<HelmReleaseRollbackVariables | null>(null)
   const target: HelmReleaseTarget | null = clusterId
     ? { clusterId, name: releaseName, namespace: detailNamespace }
     : null
@@ -54,7 +65,23 @@ export function HelmReleaseDetailPage() {
     helmQueries.releaseValues(target, canViewValues && activeTab === 'values'),
   )
   const historyQuery = useQuery(helmQueries.releaseHistory(target, activeTab === 'history'))
+  const currentManifestQuery = useQuery(
+    helmQueries.releaseManifest(
+      target,
+      detailQuery.data?.revision,
+      activeTab === 'history' && canViewValues && Boolean(selectedRevision),
+    ),
+  )
+  const selectedManifestQuery = useQuery(
+    helmQueries.releaseManifest(
+      target,
+      selectedRevision ?? undefined,
+      activeTab === 'history' && canViewValues && Boolean(selectedRevision),
+    ),
+  )
   const updateMutation = useMutation(helmMutations.updateValues(queryClient))
+  const rollbackPlanMutation = useMutation({ mutationFn: planHelmReleaseRollback })
+  const rollbackMutation = useMutation(helmMutations.rollbackRelease(queryClient))
 
   useEffect(() => setActiveTab(requestedTab), [requestedTab])
   useEffect(() => setValuesDraft(valuesQuery.data?.content ?? ''), [valuesQuery.data?.content])
@@ -68,6 +95,20 @@ export function HelmReleaseDetailPage() {
   )
   const mutationsDisabled = capability.status !== 'available'
   const capabilityReason = mutationsDisabled ? capability.reason : ''
+  const clearRollbackPlan = () => {
+    rollbackPlanMutation.reset()
+    setPendingRollback(null)
+  }
+  const requestRollback = (record: HelmReleaseHistory) => {
+    if (!target) return
+    const revision = Number(record.revision)
+    if (!Number.isInteger(revision) || revision < 1) return
+    const variables = { ...target, revision, wait: true, timeoutSeconds: 300 }
+    setPendingRollback(variables)
+    rollbackPlanMutation.mutate(variables, {
+      onError: (error) => void message.error(error.message),
+    })
+  }
 
   const historyColumns: TableColumnsType<HelmReleaseHistory> = [
     { title: 'Revision', dataIndex: 'revision', width: 96 },
@@ -88,6 +129,47 @@ export function HelmReleaseDetailPage() {
       title: localeCode === 'zh_CN' ? '更新时间' : 'Updated',
       dataIndex: 'updatedAt',
       render: (value?: string) => (value ? formatDateTime(value) : '-'),
+    },
+    {
+      title: '',
+      key: 'actions',
+      width: 112,
+      align: 'center',
+      render: (_value, record) => {
+        const isCurrent = record.revision === detail?.revision
+        const canRollback = hasAllowedAction(record.allowedActions, 'rollback') && !isCurrent
+        return (
+          <Space size={2}>
+            {canViewValues ? (
+              <Button
+                aria-label={
+                  localeCode === 'zh_CN'
+                    ? `比较 revision ${record.revision}`
+                    : `Compare revision ${record.revision}`
+                }
+                icon={<DiffOutlined />}
+                size="small"
+                type={selectedRevision === record.revision ? 'primary' : 'text'}
+                onClick={() => setSelectedRevision(record.revision)}
+              />
+            ) : null}
+            {canRollback ? (
+              <Button
+                aria-label={
+                  localeCode === 'zh_CN'
+                    ? `回滚到 revision ${record.revision}`
+                    : `Rollback to revision ${record.revision}`
+                }
+                disabled={mutationsDisabled}
+                icon={<RollbackOutlined />}
+                size="small"
+                type="text"
+                onClick={() => requestRollback(record)}
+              />
+            ) : null}
+          </Space>
+        )
+      },
     },
   ]
 
@@ -140,14 +222,41 @@ export function HelmReleaseDetailPage() {
       ),
       children:
         activeTab === 'history' ? (
-          <AdminTable
-            className="soha-platform-table"
-            columns={historyColumns}
-            dataSource={historyQuery.data ?? []}
-            rowKey={(record) => record.revision}
-            pageSize={10}
-            tableSize="small"
-          />
+          <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+            <AdminTable
+              className="soha-platform-table"
+              columns={historyColumns}
+              dataSource={historyQuery.data ?? []}
+              rowKey={(record) => record.revision}
+              pageSize={K8S_TABLE_PAGE_SIZE}
+              tableSize="small"
+              localSorting
+              viewportScroll
+            />
+            {selectedRevision &&
+            !currentManifestQuery.isLoading &&
+            !selectedManifestQuery.isLoading &&
+            currentManifestQuery.data &&
+            selectedManifestQuery.data ? (
+              <YamlDraftDiffEditor
+                editable={false}
+                modified={selectedManifestQuery.data.content}
+                original={currentManifestQuery.data.content}
+                title={localeCode === 'zh_CN' ? '渲染清单差异' : 'Rendered manifest diff'}
+                leftLabel={`Revision ${selectedRevision}`}
+                rightLabel={`Current · Revision ${currentManifestQuery.data.revision}`}
+              />
+            ) : selectedRevision && (currentManifestQuery.error || selectedManifestQuery.error) ? (
+              <Alert
+                showIcon
+                type="error"
+                title={localeCode === 'zh_CN' ? '清单加载失败' : 'Failed to load manifests'}
+                description={(currentManifestQuery.error || selectedManifestQuery.error)?.message}
+              />
+            ) : selectedRevision ? (
+              <Spin />
+            ) : null}
+          </Space>
         ) : null,
     },
   ]
@@ -226,6 +335,27 @@ export function HelmReleaseDetailPage() {
           <Tabs activeKey={activeTab} onChange={setActiveTab} items={visibleTabs} />
         </>
       )}
+      <OperationalPlanModal
+        confirmText={localeCode === 'zh_CN' ? '确认回滚' : 'Confirm rollback'}
+        loading={rollbackMutation.isPending}
+        onCancel={clearRollbackPlan}
+        onConfirm={() => {
+          if (!pendingRollback) return
+          rollbackMutation.mutate(pendingRollback, {
+            onSuccess: () => {
+              void message.success(
+                localeCode === 'zh_CN'
+                  ? `已回滚到 revision ${pendingRollback.revision}`
+                  : `Rolled back to revision ${pendingRollback.revision}`,
+              )
+              clearRollbackPlan()
+            },
+            onError: (error) => void message.error(error.message),
+          })
+        }}
+        plan={rollbackPlanMutation.data ?? null}
+        title={localeCode === 'zh_CN' ? '确认 Helm 回滚' : 'Confirm Helm rollback'}
+      />
     </div>
   )
 }

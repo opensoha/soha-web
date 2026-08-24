@@ -6,6 +6,8 @@ export {
   observabilityAlertMutations,
 } from './mutations'
 export { observabilityAlertQueries } from './queries'
+export { useAlertEventStream } from './use-alert-event-stream'
+export type { AlertEventStreamStatus } from './use-alert-event-stream'
 export type {
   AlertDeliveryLog,
   AlertDeliveryMetadata,

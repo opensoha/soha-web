@@ -207,7 +207,7 @@ describe('network resource list pages', () => {
     vi.clearAllMocks()
   })
 
-  it('keeps service search controls in a separate card and summarizes results in pagination', async () => {
+  it('keeps service search controls in a separate card and uses shared pagination', async () => {
     setResponses({
       '/clusters/cluster-a/network/services?namespace=team-a': [
         {
@@ -238,9 +238,8 @@ describe('network resource list pages', () => {
     expect(
       container.querySelector('input[placeholder="搜索 Service / namespace / type / port"]'),
     ).not.toBeNull()
-    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
-      '当前 2 / 2 条',
-    )
+    expect(container.querySelector('[data-testid="pagination-summary"]')).toBeNull()
+    expect(container.textContent).toContain('53/UDP')
 
     const headerButtons = Array.from(
       container.querySelectorAll('[data-testid="header-extra"] button'),
@@ -263,9 +262,6 @@ describe('network resource list pages', () => {
     })
 
     expect(container.querySelector('[data-testid="row-count"]')?.textContent).toBe('1')
-    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
-      '当前 1 / 2 条',
-    )
     expect(container.textContent).toContain('core-dns')
     expect(container.textContent).not.toContain('web')
   })
@@ -294,9 +290,7 @@ describe('network resource list pages', () => {
     expect(
       container.querySelector('input[placeholder="搜索 GatewayClass / controller"]'),
     ).not.toBeNull()
-    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
-      '当前 1 / 1 条',
-    )
+    expect(container.querySelector('[data-testid="pagination-summary"]')).toBeNull()
     expect(container.textContent).not.toContain('集群级资源')
   })
 
@@ -338,9 +332,7 @@ describe('network resource list pages', () => {
     expect(
       container.querySelector('input[placeholder="搜索 PVC / namespace / storageClass"]'),
     ).not.toBeNull()
-    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
-      '当前 2 / 2 条',
-    )
+    expect(container.querySelector('[data-testid="pagination-summary"]')).toBeNull()
 
     const headerButtons = Array.from(
       container.querySelectorAll('[data-testid="header-extra"] button'),
@@ -363,9 +355,6 @@ describe('network resource list pages', () => {
     })
 
     expect(container.querySelector('[data-testid="row-count"]')?.textContent).toBe('1')
-    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
-      '当前 1 / 2 条',
-    )
     expect(container.textContent).toContain('data-core')
     expect(container.textContent).not.toContain('cache')
   })

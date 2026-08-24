@@ -54,6 +54,8 @@ vi.mock('@/features/platform/cluster-capabilities', () => ({
 }))
 
 vi.mock('@/i18n', () => ({
+  localeText: (localeCode: string, chinese: string, english: string) =>
+    localeCode === 'zh_CN' ? chinese : english,
   useI18n: () => ({
     localeCode: 'zh_CN' as const,
     t: (_key: string, fallback?: string) => fallback ?? _key,
@@ -215,9 +217,7 @@ describe('platform access-control leaf pages', () => {
 
     expect(container.textContent).toContain('builder')
     expect(container.querySelector('input[placeholder="搜索 ServiceAccounts"]')).not.toBeNull()
-    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
-      '当前 1 / 1 条',
-    )
+    expect(container.querySelector('[data-testid="pagination-summary"]')).toBeNull()
     expect(apiGetMock).toHaveBeenCalledWith(
       '/clusters/cluster-a/access-control/serviceaccounts?namespace=team-a',
     )

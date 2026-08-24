@@ -12,7 +12,6 @@ import { useNavigate } from 'react-router-dom'
 import type { TableColumnsType } from 'antd'
 import { AdminTable } from '@/components/admin-table'
 import {
-  ManagementDetailHeader,
   ManagementIconButton,
   ManagementState,
   ManagementTableToolbar,
@@ -21,6 +20,7 @@ import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasAllowedAction, hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useAIPageContext } from '@/features/copilot'
 import { parseStringMap, stringifyMap } from '@/features/platform/node-resource-utils'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { tableColumnPresets } from '@/utils/table-columns'
@@ -171,13 +171,6 @@ export function ClusterNamespacesPage() {
 
   return (
     <div className="soha-page">
-      <ManagementDetailHeader
-        title={t('page.namespaces.title', 'Namespaces')}
-        description={t(
-          'page.namespaces.desc',
-          'Manage namespaces in the current cluster scope and jump into related workload views.',
-        )}
-      />
       {!clusterId ? (
         <ManagementState
           compact
@@ -193,9 +186,11 @@ export function ClusterNamespacesPage() {
           dataSource={namespacesQuery.data ?? []}
           rowKey="name"
           loading={namespacesQuery.isLoading}
-          pageSize={10}
+          localSorting
+          pageSize={K8S_TABLE_PAGE_SIZE}
           tableSize="small"
           scroll={{ x: 'max-content' }}
+          viewportScroll
           headerExtra={
             <ManagementTableToolbar>
               {canCreate ? (

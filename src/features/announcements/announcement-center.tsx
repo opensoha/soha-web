@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Badge, Button, List, Modal, Popover, Space, Tag, Tabs, Typography, message } from 'antd'
+import { App, Badge, Button, Modal, Popover, Space, Tag, Tabs, Typography } from 'antd'
 import { BellOutlined } from '@ant-design/icons'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { HeaderActionButton } from '@/components/header-action-button'
 import { ManagementState } from '@/components/management-list'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { localeText, useI18n } from '@/i18n'
+import type { LocaleCode } from '@/i18n'
 import { formatDateTime } from '@/utils/time'
 import { markAnnouncementRead } from './api'
 import { announcementKeys } from './keys'
@@ -17,11 +19,15 @@ const { Paragraph, Text, Title } = Typography
 
 export const announcementInboxQueryKey = announcementKeys.inboxRoot
 
-function levelTag(level: string) {
+function levelTag(level: string, localeCode: LocaleCode) {
   const normalized = String(level || '').toLowerCase()
-  if (normalized === 'critical') return <Tag color="red">严重</Tag>
-  if (normalized === 'warning') return <Tag color="gold">警告</Tag>
-  return <Tag color="blue">信息</Tag>
+  if (normalized === 'critical') {
+    return <Tag color="red">{localeText(localeCode, '严重', 'Critical')}</Tag>
+  }
+  if (normalized === 'warning') {
+    return <Tag color="gold">{localeText(localeCode, '警告', 'Warning')}</Tag>
+  }
+  return <Tag color="blue">{localeText(localeCode, '信息', 'Info')}</Tag>
 }
 
 function formatAnnouncementTime(item: AnnouncementInboxItem) {
@@ -33,84 +39,92 @@ function AnnouncementList({
   onRead,
   onPreview,
   readingID,
+  localeCode,
 }: {
   items: AnnouncementInboxItem[]
   onRead: (id: string) => void
   onPreview: (item: AnnouncementInboxItem) => void
   readingID?: string | null
+  localeCode: LocaleCode
 }) {
   if (items.length === 0) {
     return (
       <ManagementState
         bordered={false}
         compact
-        title="暂无公告"
-        description="当前没有需要处理的公告。"
+        title={localeText(localeCode, '暂无公告', 'No announcements')}
+        description={localeText(
+          localeCode,
+          '当前没有需要处理的公告。',
+          'There are no announcements requiring attention.',
+        )}
       />
     )
   }
 
   return (
-    <List
-      dataSource={items}
-      renderItem={(item) => (
-        <List.Item
-          className="soha-announcement-center-item"
-          actions={[
-            <Button key="preview" size="small" type="link" onClick={() => onPreview(item)}>
-              查看
-            </Button>,
-            item.isRead ? (
-              <Text type="secondary" key="read">
-                {item.readAt ? `已读 ${formatDateTime(item.readAt)}` : '已读'}
+    <div className="soha-announcement-center-list" role="list">
+      {items.map((item) => (
+        <div className="soha-announcement-center-item" key={item.id} role="listitem">
+          <div className="soha-announcement-center-item__body">
+            <Space size={8} wrap>
+              <Button
+                type="link"
+                className="soha-system-linklike"
+                onClick={() => onPreview(item)}
+              >
+                {item.title}
+              </Button>
+              {item.sticky ? (
+                <Tag color="purple">{localeText(localeCode, '置顶', 'Pinned')}</Tag>
+              ) : null}
+              {levelTag(item.level, localeCode)}
+            </Space>
+            <Space orientation="vertical" size={4} style={{ width: '100%' }}>
+              {item.summary ? <Text>{item.summary}</Text> : null}
+              <Paragraph
+                style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}
+                ellipsis={{
+                  rows: 2,
+                  expandable: true,
+                  symbol: localeText(localeCode, '展开', 'Expand'),
+                }}
+              >
+                {item.content}
+              </Paragraph>
+              <Text type="secondary">{formatAnnouncementTime(item)}</Text>
+            </Space>
+          </div>
+          <div className="soha-announcement-center-item__actions">
+            <Button size="small" type="link" onClick={() => onPreview(item)}>
+              {localeText(localeCode, '查看', 'View')}
+            </Button>
+            {item.isRead ? (
+              <Text type="secondary">
+                {item.readAt
+                  ? `${localeText(localeCode, '已读', 'Read')} ${formatDateTime(item.readAt)}`
+                  : localeText(localeCode, '已读', 'Read')}
               </Text>
             ) : (
               <Button
-                key="mark-read"
                 size="small"
                 type="link"
                 loading={readingID === item.id}
                 onClick={() => onRead(item.id)}
               >
-                标记已读
+                {localeText(localeCode, '标记已读', 'Mark as read')}
               </Button>
-            ),
-          ]}
-        >
-          <List.Item.Meta
-            title={
-              <Space size={8} wrap>
-                <Button
-                  type="link"
-                  className="soha-system-linklike"
-                  onClick={() => onPreview(item)}
-                >
-                  {item.title}
-                </Button>
-                {item.sticky ? <Tag color="purple">置顶</Tag> : null}
-                {levelTag(item.level)}
-              </Space>
-            }
-            description={
-              <Space orientation="vertical" size={4} style={{ width: '100%' }}>
-                {item.summary ? <Text>{item.summary}</Text> : null}
-                <Paragraph
-                  style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}
-                  ellipsis={{ rows: 2, expandable: true, symbol: '展开' }}
-                >
-                  {item.content}
-                </Paragraph>
-                <Text type="secondary">{formatAnnouncementTime(item)}</Text>
-              </Space>
-            }
-          />
-        </List.Item>
-      )}
-    />
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
   )
 }
 
 export function AnnouncementBell() {
+  const { localeCode } = useI18n()
+  const { message } = App.useApp()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const canViewAnnouncements = hasPermission(
@@ -138,7 +152,9 @@ export function AnnouncementBell() {
     mutationFn: markAnnouncementRead,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: announcementInboxQueryKey })
-      void message.success('公告已标记为已读')
+      void message.success(
+        localeText(localeCode, '公告已标记为已读', 'Announcement marked as read'),
+      )
     },
     onError: (err: Error) => void message.error(err.message),
   })
@@ -166,19 +182,22 @@ export function AnnouncementBell() {
               }}
             >
               <Title level={5} style={{ margin: 0 }}>
-                公告中心
+                {localeText(localeCode, '公告中心', 'Announcements')}
               </Title>
-              <Text type="secondary">{`${unreadCount} 条未读`}</Text>
+              <Text type="secondary">
+                {localeCode === 'zh_CN' ? `${unreadCount} 条未读` : `${unreadCount} unread`}
+              </Text>
             </div>
             <Tabs
               size="small"
               items={[
                 {
                   key: 'unread',
-                  label: `未读 (${unreadCount})`,
+                  label: `${localeText(localeCode, '未读', 'Unread')} (${unreadCount})`,
                   children: (
                     <AnnouncementList
                       items={unreadItems}
+                      localeCode={localeCode}
                       onRead={handleMarkRead}
                       onPreview={setModalItem}
                       readingID={markReadMutation.variables as string | null}
@@ -187,10 +206,11 @@ export function AnnouncementBell() {
                 },
                 {
                   key: 'all',
-                  label: `全部 (${items.length})`,
+                  label: `${localeText(localeCode, '全部', 'All')} (${items.length})`,
                   children: (
                     <AnnouncementList
                       items={items}
+                      localeCode={localeCode}
                       onRead={handleMarkRead}
                       onPreview={setModalItem}
                       readingID={markReadMutation.variables as string | null}
@@ -203,7 +223,13 @@ export function AnnouncementBell() {
         }
       >
         <HeaderActionButton
-          ariaLabel={unreadCount > 0 ? `公告中心，${unreadCount} 条未读` : '公告中心'}
+          ariaLabel={
+            unreadCount > 0
+              ? localeCode === 'zh_CN'
+                ? `公告中心，${unreadCount} 条未读`
+                : `Announcements, ${unreadCount} unread`
+              : localeText(localeCode, '公告中心', 'Announcements')
+          }
           className="soha-header-bell"
           icon={
             <Badge count={unreadCount} size="small" overflowCount={99}>
@@ -215,11 +241,11 @@ export function AnnouncementBell() {
 
       <Modal
         open={Boolean(modalItem)}
-        title={modalItem?.title || '公告'}
+        title={modalItem?.title || localeText(localeCode, '公告', 'Announcement')}
         onCancel={() => setModalItem(null)}
         footer={[
           <Button key="close" onClick={() => setModalItem(null)}>
-            稍后查看
+            {localeText(localeCode, '稍后查看', 'Later')}
           </Button>,
           <Button
             key="read"
@@ -229,7 +255,7 @@ export function AnnouncementBell() {
               if (modalItem) void handleMarkRead(modalItem.id)
             }}
           >
-            已读
+            {localeText(localeCode, '已读', 'Mark as read')}
           </Button>,
         ]}
         destroyOnHidden
@@ -237,8 +263,10 @@ export function AnnouncementBell() {
         {modalItem ? (
           <Space orientation="vertical" size={12} style={{ width: '100%' }}>
             <Space size={8} wrap>
-              {modalItem.sticky ? <Tag color="purple">置顶</Tag> : null}
-              {levelTag(modalItem.level)}
+              {modalItem.sticky ? (
+                <Tag color="purple">{localeText(localeCode, '置顶', 'Pinned')}</Tag>
+              ) : null}
+              {levelTag(modalItem.level, localeCode)}
               <Text type="secondary">{formatAnnouncementTime(modalItem)}</Text>
             </Space>
             {modalItem.summary ? <Text>{modalItem.summary}</Text> : null}

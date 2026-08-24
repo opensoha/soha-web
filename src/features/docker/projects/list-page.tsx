@@ -47,6 +47,8 @@ import type { OperationalPlan } from '@opensoha/contracts/gen/ts/sohaapi'
 import { createUUID } from '@/utils/uuid'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { computeQueries, latestTaskForResource, ResourceTaskActions } from '@/features/compute'
+import { localeText, useI18n } from '@/i18n'
+import { formatStatusLabel } from '@/i18n/status'
 import { sourceControlApi, sourceControlQueries } from '@/features/settings'
 import { dockerApi } from '../docker-api'
 import { dockerQueries } from '../queries'
@@ -106,8 +108,10 @@ function isSingleContainerProject(project: DockerProject) {
   return ['single_container', 'git_dockerfile'].includes(project.sourceKind ?? '')
 }
 
-function projectTypeLabel(project: DockerProject) {
-  return isSingleContainerProject(project) ? '单容器' : 'Compose'
+function projectTypeLabel(project: DockerProject, localeCode: 'zh_CN' | 'en_US') {
+  return isSingleContainerProject(project)
+    ? localeText(localeCode, '单容器', 'Single container')
+    : 'Compose'
 }
 
 function QuickStartFormSection({ children, title }: { children: ReactNode; title: string }) {
@@ -237,7 +241,7 @@ export function buildContainerStartPayload(
 function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
   const [filters, setFilters] = useState<DockerFilterState>({
     page: 1,
-    pageSize: embedded ? 5 : 10,
+    pageSize: embedded ? 5 : 15,
   })
   const [filterForm] = Form.useForm<DockerFilterState>()
   const [form] = Form.useForm<ComposeProjectFormValues>()
@@ -278,6 +282,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
   })
   const queryClient = useQueryClient()
   const { message } = App.useApp()
+  const { localeCode } = useI18n()
   const permissionSnapshot = usePermissionSnapshot().data?.data
   const sourceKind = Form.useWatch('sourceKind', form) || 'inline_compose'
   const sourceConnectionId = Form.useWatch('sourceConnectionId', form) || ''
@@ -429,7 +434,11 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
       refreshDocker(queryClient)
     },
   })
-  const page = normalizePage(projectsQuery.data, filters.page ?? 1, filters.pageSize ?? 10)
+  const page = normalizePage(
+    projectsQuery.data,
+    filters.page ?? 1,
+    filters.pageSize ?? (embedded ? 5 : 15),
+  )
   const projectServiceQueries = useQueries({
     queries: page.items.map((project) =>
       dockerQueries.projectServices(
@@ -526,7 +535,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
   }
   const columns: ColumnsType<DockerProjectTreeRow> = [
     {
-      title: '项目',
+      title: localeText(localeCode, '项目', 'Project'),
       fixed: 'left',
       width: 190,
       render: (_value, record) =>
@@ -535,21 +544,21 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
             <Link to={`/compute/runtimes/projects/${record.project.id}`}>
               {record.project.name}
             </Link>
-            <MetadataTag label={projectTypeLabel(record.project)} tone="purple" />
+            <MetadataTag label={projectTypeLabel(record.project, localeCode)} tone="purple" />
           </Space>
         ) : (
           <Text type="secondary">-</Text>
         ),
     },
     {
-      title: '服务',
+      title: localeText(localeCode, '服务', 'Service'),
       width: 190,
       render: (_value, record) =>
         record.kind === 'service' && record.service ? (
           <Space orientation="vertical" size={4}>
             <Space size={4}>
               <Text>{record.service.name}</Text>
-              <MetadataTag label="服务" tone="cyan" />
+              <MetadataTag label={localeText(localeCode, '服务', 'Service')} tone="cyan" />
             </Space>
             <Text type="secondary">{record.service.containerId || record.service.id}</Text>
           </Space>
@@ -558,13 +567,13 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
         ),
     },
     {
-      title: '状态',
+      title: localeText(localeCode, '状态', 'Status'),
       width: 110,
       render: (_value, record) =>
         statusTag(record.kind === 'service' ? record.service?.status : record.project.status),
     },
     {
-      title: '主机',
+      title: localeText(localeCode, '主机', 'Host'),
       width: 170,
       render: (_value, record) => {
         const hostId = record.kind === 'service' ? record.service?.hostId : record.project.hostId
@@ -572,7 +581,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
       },
     },
     {
-      title: '镜像',
+      title: localeText(localeCode, '镜像', 'Image'),
       width: 210,
       render: (_value, record) => {
         const image =
@@ -590,7 +599,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
       },
     },
     {
-      title: '端口',
+      title: localeText(localeCode, '端口', 'Ports'),
       width: 220,
       render: (_value, record) =>
         record.kind === 'project' && isSingleContainerProject(record.project) ? (
@@ -601,7 +610,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
     },
     {
       ...tableColumnPresets.task,
-      title: '最近任务',
+      title: localeText(localeCode, '最近任务', 'Latest task'),
       render: (_value, record) =>
         record.kind === 'service' ? (
           <Text type="secondary">-</Text>
@@ -614,7 +623,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
         ),
     },
     {
-      title: '操作',
+      title: localeText(localeCode, '操作', 'Actions'),
       align: 'center',
       className: 'soha-table-actions-column',
       fixed: 'right',
@@ -626,9 +635,13 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
               {serviceActions.map(({ action, icon }) => (
                 <ManagementIconButton
                   key={action}
-                  aria-label={`${operationActionLabel(action)}服务`}
+                  aria-label={localeText(
+                    localeCode,
+                    `${operationActionLabel(action, localeCode)}服务`,
+                    `${operationActionLabel(action, localeCode)} service`,
+                  )}
                   size="small"
-                  tooltip={operationActionLabel(action)}
+                  tooltip={operationActionLabel(action, localeCode)}
                   icon={icon}
                   loading={serviceActionMutation.isPending}
                   onClick={() => serviceActionMutation.mutate({ id: record.service!.id, action })}
@@ -642,9 +655,9 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
           <Space className="soha-row-action-icons">
             {canDeployProjects ? (
               <ManagementIconButton
-                aria-label="部署项目"
+                aria-label={localeText(localeCode, '部署项目', 'Deploy project')}
                 size="small"
-                tooltip="部署"
+                tooltip={localeText(localeCode, '部署', 'Deploy')}
                 icon={<PlayCircleOutlined />}
                 loading={deployPlanMutation.isPending || deployMutation.isPending}
                 onClick={() => reviewDeploy(project, 'deploy')}
@@ -652,9 +665,9 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
             ) : null}
             {canDeployProjects ? (
               <ManagementIconButton
-                aria-label="重启项目"
+                aria-label={localeText(localeCode, '重启项目', 'Restart project')}
                 size="small"
-                tooltip="重启"
+                tooltip={localeText(localeCode, '重启', 'Restart')}
                 icon={<ReloadOutlined />}
                 loading={deployPlanMutation.isPending || deployMutation.isPending}
                 onClick={() => reviewDeploy(project, 'restart')}
@@ -662,9 +675,9 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
             ) : null}
             {canDeployProjects ? (
               <ManagementIconButton
-                aria-label="停止项目"
+                aria-label={localeText(localeCode, '停止项目', 'Stop project')}
                 size="small"
-                tooltip="停止"
+                tooltip={localeText(localeCode, '停止', 'Stop')}
                 icon={<PoweroffOutlined />}
                 loading={deployPlanMutation.isPending || deployMutation.isPending}
                 onClick={() => reviewDeploy(project, 'down')}
@@ -672,9 +685,9 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
             ) : null}
             {canDeployProjects && isSingleContainerProject(project) ? (
               <ManagementIconButton
-                aria-label="销毁重建应用"
+                aria-label={localeText(localeCode, '销毁重建应用', 'Recreate application')}
                 size="small"
-                tooltip="销毁重建"
+                tooltip={localeText(localeCode, '销毁重建', 'Recreate')}
                 danger
                 icon={<SyncOutlined />}
                 loading={deployPlanMutation.isPending || deployMutation.isPending}
@@ -683,17 +696,17 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
             ) : null}
             <Link to={`/compute/runtimes/projects/${project.id}`}>
               <ManagementIconButton
-                aria-label="查看容器详情"
+                aria-label={localeText(localeCode, '查看容器详情', 'View container details')}
                 size="small"
-                tooltip="详情"
+                tooltip={localeText(localeCode, '详情', 'Details')}
                 icon={<FileTextOutlined />}
               />
             </Link>
             {canUpdateProjects ? (
               <ManagementIconButton
-                aria-label="编辑项目"
+                aria-label={localeText(localeCode, '编辑项目', 'Edit project')}
                 size="small"
-                tooltip="编辑"
+                tooltip={localeText(localeCode, '编辑', 'Edit')}
                 icon={<EditOutlined />}
                 onClick={() => {
                   setEditing(project)
@@ -706,15 +719,23 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
               <Popconfirm
                 title={
                   isSingleContainerProject(project)
-                    ? '确认删除单容器服务？'
-                    : '确认删除 Compose 项目？'
+                    ? localeText(
+                        localeCode,
+                        '确认删除单容器服务？',
+                        'Delete this single-container service?',
+                      )
+                    : localeText(
+                        localeCode,
+                        '确认删除 Compose 项目？',
+                        'Delete this Compose project?',
+                      )
                 }
                 onConfirm={() => deleteMutation.mutate(project.id)}
               >
                 <ManagementIconButton
-                  aria-label="删除项目"
+                  aria-label={localeText(localeCode, '删除项目', 'Delete project')}
                   size="small"
-                  tooltip="删除"
+                  tooltip={localeText(localeCode, '删除', 'Delete')}
                   danger
                   icon={<DeleteOutlined />}
                 />
@@ -736,42 +757,67 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                 loading={projectsQuery.isFetching}
                 onReset={() => {
                   filterForm.resetFields()
-                  setFilters({ page: 1, pageSize: filters.pageSize ?? 10 })
+                  setFilters({ page: 1, pageSize: filters.pageSize ?? (embedded ? 5 : 15) })
                 }}
               />
             }
             onFinish={(values) => setFilters((current) => ({ ...current, ...values, page: 1 }))}
           >
-            <ManagementKeywordField placeholder="项目、Slug 或来源" />
-            <ManagementQueryField minWidth={180} width={220} name="hostId" label="主机">
+            <ManagementKeywordField
+              placeholder={localeText(localeCode, '项目、Slug 或来源', 'Project, slug, or source')}
+            />
+            <ManagementQueryField
+              minWidth={180}
+              width={220}
+              name="hostId"
+              label={localeText(localeCode, '主机', 'Host')}
+            >
               <Select
                 allowClear
                 showSearch={{ optionFilterProp: 'label' }}
-                placeholder="全部主机"
+                placeholder={localeText(localeCode, '全部主机', 'All hosts')}
                 options={hostOptions}
               />
             </ManagementQueryField>
-            <ManagementQueryField minWidth={132} width={150} name="status" label="状态">
+            <ManagementQueryField
+              minWidth={132}
+              width={150}
+              name="status"
+              label={localeText(localeCode, '状态', 'Status')}
+            >
               <Select
                 allowClear
-                placeholder="全部"
+                placeholder={localeText(localeCode, '全部', 'All')}
                 options={['draft', 'defined', 'running', 'stopped', 'failed'].map((item) => ({
                   value: item,
-                  label: item,
+                  label: formatStatusLabel(item, localeCode),
                 }))}
               />
             </ManagementQueryField>
-            <ManagementQueryField minWidth={132} width={150} name="sourceKind" label="类型">
+            <ManagementQueryField
+              minWidth={132}
+              width={150}
+              name="sourceKind"
+              label={localeText(localeCode, '类型', 'Type')}
+            >
               <Select
                 allowClear
-                placeholder="全部"
+                placeholder={localeText(localeCode, '全部', 'All')}
                 options={[
                   { value: 'compose', label: 'Compose' },
-                  { value: 'single_container', label: '单容器' },
+                  {
+                    value: 'single_container',
+                    label: localeText(localeCode, '单容器', 'Single container'),
+                  },
                 ]}
               />
             </ManagementQueryField>
-            <ManagementQueryField minWidth={150} width={180} name="environment" label="环境">
+            <ManagementQueryField
+              minWidth={150}
+              width={180}
+              name="environment"
+              label={localeText(localeCode, '环境', 'Environment')}
+            >
               <Input allowClear placeholder="dev / test" />
             </ManagementQueryField>
           </ManagementQueryPanel>
@@ -803,7 +849,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                     setContainerDrawerOpen(true)
                   }}
                 >
-                  快速启动
+                  {localeText(localeCode, '快速启动', 'Quick start')}
                 </Button>
               ) : null}
               {canCreateProjects ? (
@@ -816,7 +862,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                     setDrawerOpen(true)
                   }}
                 >
-                  创建 Compose
+                  {localeText(localeCode, '创建 Compose', 'Create Compose project')}
                 </Button>
               ) : null}
             </>
@@ -832,7 +878,11 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
         }}
       />
       <OperationalPlanModal
-        confirmText={deployPlan ? operationActionLabel(deployPlan.action) : '确认执行'}
+        confirmText={
+          deployPlan
+            ? operationActionLabel(deployPlan.action, localeCode)
+            : localeText(localeCode, '确认执行', 'Confirm')
+        }
         loading={deployMutation.isPending}
         onCancel={() => setDeployPlan(null)}
         onConfirm={() => {
@@ -845,11 +895,17 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
         }}
         plan={deployPlan?.plan ?? null}
         title={
-          deployPlan ? `${operationActionLabel(deployPlan.action)}：${deployPlan.project.name}` : ''
+          deployPlan
+            ? `${operationActionLabel(deployPlan.action, localeCode)}: ${deployPlan.project.name}`
+            : ''
         }
       />
       <StepFormModal
-        title={editing ? '编辑 Compose 项目' : '创建 Compose 项目'}
+        title={
+          editing
+            ? localeText(localeCode, '编辑 Compose 项目', 'Edit Compose project')
+            : localeText(localeCode, '创建 Compose 项目', 'Create Compose project')
+        }
         current={currentStep}
         form={form}
         initialValues={
@@ -870,31 +926,39 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
         onFinish={(values) => saveMutation.mutate(values)}
         steps={[
           {
-            title: '基础信息',
+            title: localeText(localeCode, '基础信息', 'Basic information'),
             fieldNames: ['name', 'hostId', 'description'],
             children: (
               <>
-                <Form.Item name="name" label="名称" rules={[{ required: true }]}>
+                <Form.Item
+                  name="name"
+                  label={localeText(localeCode, '名称', 'Name')}
+                  rules={[{ required: true }]}
+                >
                   <Input />
                 </Form.Item>
-                <Form.Item name="hostId" label="Docker 主机" rules={[{ required: true }]}>
+                <Form.Item
+                  name="hostId"
+                  label={localeText(localeCode, 'Docker 主机', 'Docker host')}
+                  rules={[{ required: true }]}
+                >
                   <Select showSearch={{ optionFilterProp: 'label' }} options={hostOptions} />
                 </Form.Item>
-                <Form.Item name="description" label="描述">
+                <Form.Item name="description" label={localeText(localeCode, '描述', 'Description')}>
                   <TextArea rows={3} maxLength={1000} showCount />
                 </Form.Item>
               </>
             ),
           },
           {
-            title: '项目设置',
+            title: localeText(localeCode, '项目设置', 'Project settings'),
             fieldNames: ['environment', 'owner', 'team', 'ttlSeconds'],
             children: (
               <div className="grid gap-3 md:grid-cols-2">
-                <Form.Item name="environment" label="环境">
+                <Form.Item name="environment" label={localeText(localeCode, '环境', 'Environment')}>
                   <Input />
                 </Form.Item>
-                <Form.Item name="owner" label="负责人">
+                <Form.Item name="owner" label={localeText(localeCode, '负责人', 'Owner')}>
                   <Select
                     allowClear
                     disabled={!canViewUsers}
@@ -902,7 +966,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                     options={ownerOptions}
                   />
                 </Form.Item>
-                <Form.Item name="team" label="团队">
+                <Form.Item name="team" label={localeText(localeCode, '团队', 'Team')}>
                   <Select
                     allowClear
                     disabled={!canViewTeams}
@@ -912,8 +976,13 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                 </Form.Item>
                 <Form.Item
                   name="ttlSeconds"
-                  label="TTL 秒数"
-                  rules={[{ required: true, message: '请输入 TTL' }]}
+                  label={localeText(localeCode, 'TTL 秒数', 'TTL seconds')}
+                  rules={[
+                    {
+                      required: true,
+                      message: localeText(localeCode, '请输入 TTL', 'Enter a TTL'),
+                    },
+                  ]}
                 >
                   <InputNumber id="ttlSeconds" min={60} precision={0} className="w-full" />
                 </Form.Item>
@@ -921,7 +990,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
             ),
           },
           {
-            title: '部署来源',
+            title: localeText(localeCode, '部署来源', 'Deployment source'),
             fieldNames:
               sourceKind === 'template'
                 ? ['sourceKind', 'templateId']
@@ -938,18 +1007,28 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                     : ['sourceKind'],
             children: (
               <>
-                <Form.Item name="sourceKind" label="来源类型" rules={[{ required: true }]}>
+                <Form.Item
+                  name="sourceKind"
+                  label={localeText(localeCode, '来源类型', 'Source type')}
+                  rules={[{ required: true }]}
+                >
                   <Segmented
                     block
                     options={[
-                      { value: 'inline_compose', label: '在线编辑' },
-                      { value: 'url', label: '在线获取' },
+                      {
+                        value: 'inline_compose',
+                        label: localeText(localeCode, '在线编辑', 'Inline editor'),
+                      },
+                      { value: 'url', label: localeText(localeCode, '在线获取', 'Remote URL') },
                       {
                         value: 'git',
-                        label: 'Git 仓库',
+                        label: localeText(localeCode, 'Git 仓库', 'Git repository'),
                         disabled: !canViewSourceControl && editing?.sourceKind !== 'git',
                       },
-                      { value: 'template', label: '项目模板' },
+                      {
+                        value: 'template',
+                        label: localeText(localeCode, '项目模板', 'Project template'),
+                      },
                     ]}
                     onChange={(value) => {
                       if (value === 'inline_compose') {
@@ -1020,7 +1099,11 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                   </Form.Item>
                 ) : null}
                 {sourceKind === 'template' ? (
-                  <Form.Item name="templateId" label="项目模板" rules={[{ required: true }]}>
+                  <Form.Item
+                    name="templateId"
+                    label={localeText(localeCode, '项目模板', 'Project template')}
+                    rules={[{ required: true }]}
+                  >
                     <Select
                       showSearch={{ optionFilterProp: 'label' }}
                       loading={templatesQuery.isLoading}
@@ -1032,7 +1115,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                   <div className="grid gap-3 md:grid-cols-2">
                     <Form.Item
                       name="sourceConnectionId"
-                      label="代码源"
+                      label={localeText(localeCode, '代码源', 'Source connection')}
                       rules={[{ required: true }]}
                     >
                       <Select
@@ -1049,7 +1132,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                     </Form.Item>
                     <Form.Item
                       name="sourceRepositoryId"
-                      label="Git 仓库"
+                      label={localeText(localeCode, 'Git 仓库', 'Git repository')}
                       rules={[{ required: true }]}
                     >
                       <Select
@@ -1064,20 +1147,28 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                         }}
                       />
                     </Form.Item>
-                    <Form.Item name="sourceRevision" label="分支" rules={[{ required: true }]}>
+                    <Form.Item
+                      name="sourceRevision"
+                      label={localeText(localeCode, '分支', 'Branch')}
+                      rules={[{ required: true }]}
+                    >
                       <Select
                         showSearch={{ optionFilterProp: 'label' }}
                         loading={sourceBranchesQuery.isLoading}
                         options={sourceRevisionOptions}
                       />
                     </Form.Item>
-                    <Form.Item name="sourcePath" label="Compose 文件" rules={[{ required: true }]}>
+                    <Form.Item
+                      name="sourcePath"
+                      label={localeText(localeCode, 'Compose 文件', 'Compose file')}
+                      rules={[{ required: true }]}
+                    >
                       <Input placeholder="compose.yaml" />
                     </Form.Item>
                   </div>
                 ) : null}
                 {sourceKind === 'git' && !canViewSourceControl ? (
-                  <Form.Item label="Git 来源">
+                  <Form.Item label={localeText(localeCode, 'Git 来源', 'Git source')}>
                     <Input value={editing?.sourceRef} disabled />
                   </Form.Item>
                 ) : null}
@@ -1085,11 +1176,11 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
             ),
           },
         ]}
-        submitText="保存"
+        submitText={localeText(localeCode, '保存', 'Save')}
         width={780}
       />
       <StepFormModal
-        title="快速启动 Docker 应用"
+        title={localeText(localeCode, '快速启动 Docker 应用', 'Quick start Docker application')}
         current={containerStep}
         form={containerForm}
         initialValues={{
@@ -1121,7 +1212,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
         onFinish={(values) => containerStartMutation.mutate(values)}
         steps={[
           {
-            title: '来源',
+            title: localeText(localeCode, '来源', 'Source'),
             fieldNames: [
               'sourceKind',
               'name',
@@ -1134,41 +1225,72 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
             ],
             children: (
               <div className="soha-docker-quick-form">
-                <QuickStartFormSection title="来源方式">
-                  <Form.Item name="sourceKind" label="应用来源" rules={[{ required: true }]}>
+                <QuickStartFormSection title={localeText(localeCode, '来源方式', 'Source type')}>
+                  <Form.Item
+                    name="sourceKind"
+                    label={localeText(localeCode, '应用来源', 'Application source')}
+                    rules={[{ required: true }]}
+                  >
                     <Segmented
                       block
                       onChange={(value) =>
                         setContainerSourceKind(value as 'image' | 'git_dockerfile')
                       }
                       options={[
-                        { value: 'image', label: '已有镜像', icon: <CloudOutlined /> },
-                        { value: 'git_dockerfile', label: 'Git 构建', icon: <BranchesOutlined /> },
+                        {
+                          value: 'image',
+                          label: localeText(localeCode, '已有镜像', 'Existing image'),
+                          icon: <CloudOutlined />,
+                        },
+                        {
+                          value: 'git_dockerfile',
+                          label: localeText(localeCode, 'Git 构建', 'Git build'),
+                          icon: <BranchesOutlined />,
+                        },
                       ]}
                     />
                   </Form.Item>
                 </QuickStartFormSection>
-                <QuickStartFormSection title="应用与目标">
+                <QuickStartFormSection
+                  title={localeText(localeCode, '应用与目标', 'Application and target')}
+                >
                   <div className="grid gap-3 md:grid-cols-2">
-                    <Form.Item name="name" label="应用名称" rules={[{ required: true }]}>
+                    <Form.Item
+                      name="name"
+                      label={localeText(localeCode, '应用名称', 'Application name')}
+                      rules={[{ required: true }]}
+                    >
                       <Input placeholder="preview-api" />
                     </Form.Item>
-                    <Form.Item name="hostId" label="Docker 主机" rules={[{ required: true }]}>
+                    <Form.Item
+                      name="hostId"
+                      label={localeText(localeCode, 'Docker 主机', 'Docker host')}
+                      rules={[{ required: true }]}
+                    >
                       <Select
                         showSearch={{ optionFilterProp: 'label' }}
                         options={hostOptions}
                         onChange={applyContainerHostDefaults}
                       />
                     </Form.Item>
-                    <Form.Item name="architecture" label="架构">
+                    <Form.Item
+                      name="architecture"
+                      label={localeText(localeCode, '架构', 'Architecture')}
+                    >
                       <Select options={ARCHITECTURE_OPTIONS} />
                     </Form.Item>
                   </div>
                 </QuickStartFormSection>
-                <QuickStartFormSection title="镜像与构建">
+                <QuickStartFormSection
+                  title={localeText(localeCode, '镜像与构建', 'Image and build')}
+                >
                   <Form.Item
                     name="image"
-                    label={containerSourceKind === 'git_dockerfile' ? '构建镜像' : '镜像'}
+                    label={
+                      containerSourceKind === 'git_dockerfile'
+                        ? localeText(localeCode, '构建镜像', 'Build image')
+                        : localeText(localeCode, '镜像', 'Image')
+                    }
                     rules={[{ required: true }]}
                   >
                     <Input
@@ -1183,12 +1305,16 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                     <>
                       <Form.Item
                         name={['gitBuild', 'repositoryUrl']}
-                        label="Git 仓库"
+                        label={localeText(localeCode, 'Git 仓库', 'Git repository')}
                         rules={[
                           { required: true },
                           {
                             pattern: /^(https?|ssh):\/\/[^\s]+$/i,
-                            message: '请输入有效的仓库 URL',
+                            message: localeText(
+                              localeCode,
+                              '请输入有效的仓库 URL',
+                              'Enter a valid repository URL',
+                            ),
                           },
                         ]}
                       >
@@ -1197,7 +1323,11 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                       <div className="grid gap-3 md:grid-cols-3">
                         <Form.Item
                           name={['gitBuild', 'ref']}
-                          label="分支 / Tag / Commit"
+                          label={localeText(
+                            localeCode,
+                            '分支 / Tag / Commit',
+                            'Branch / Tag / Commit',
+                          )}
                           rules={[{ required: true }]}
                         >
                           <Input placeholder="main" />
@@ -1211,7 +1341,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                         </Form.Item>
                         <Form.Item
                           name={['gitBuild', 'contextDir']}
-                          label="构建目录"
+                          label={localeText(localeCode, '构建目录', 'Build context')}
                           rules={[{ required: true }]}
                         >
                           <Input placeholder="." />
@@ -1220,14 +1350,18 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                       <div className="grid gap-3 md:grid-cols-2">
                         <Form.Item
                           name={['gitBuild', 'pull']}
-                          label="拉取最新基础镜像"
+                          label={localeText(
+                            localeCode,
+                            '拉取最新基础镜像',
+                            'Pull latest base image',
+                          )}
                           valuePropName="checked"
                         >
                           <Switch />
                         </Form.Item>
                         <Form.Item
                           name={['gitBuild', 'noCache']}
-                          label="禁用构建缓存"
+                          label={localeText(localeCode, '禁用构建缓存', 'Disable build cache')}
                           valuePropName="checked"
                         >
                           <Switch />
@@ -1235,7 +1369,10 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                       </div>
                     </>
                   ) : (
-                    <Form.Item name="imagePullPolicy" label="拉取策略">
+                    <Form.Item
+                      name="imagePullPolicy"
+                      label={localeText(localeCode, '拉取策略', 'Pull policy')}
+                    >
                       <Select
                         allowClear
                         options={['always', 'missing', 'never'].map((item) => ({
@@ -1250,12 +1387,15 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
             ),
           },
           {
-            title: '运行配置',
+            title: localeText(localeCode, '运行配置', 'Runtime configuration'),
             fieldNames: ['restartPolicy', 'environmentVariables', 'resources'],
             children: (
               <>
                 <div className="grid gap-3 md:grid-cols-2">
-                  <Form.Item name="restartPolicy" label="重启策略">
+                  <Form.Item
+                    name="restartPolicy"
+                    label={localeText(localeCode, '重启策略', 'Restart policy')}
+                  >
                     <Select
                       options={['unless-stopped', 'always', 'on-failure', 'no'].map((item) => ({
                         value: item,
@@ -1263,19 +1403,25 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                       }))}
                     />
                   </Form.Item>
-                  <Form.Item name="environment" label="环境">
+                  <Form.Item
+                    name="environment"
+                    label={localeText(localeCode, '环境', 'Environment')}
+                  >
                     <Input />
                   </Form.Item>
-                  <Form.Item name="owner" label="负责人">
+                  <Form.Item name="owner" label={localeText(localeCode, '负责人', 'Owner')}>
                     <Input />
                   </Form.Item>
-                  <Form.Item name="team" label="团队">
+                  <Form.Item name="team" label={localeText(localeCode, '团队', 'Team')}>
                     <Input />
                   </Form.Item>
-                  <Form.Item name="ttlSeconds" label="TTL 秒数">
+                  <Form.Item
+                    name="ttlSeconds"
+                    label={localeText(localeCode, 'TTL 秒数', 'TTL seconds')}
+                  >
                     <InputNumber min={0} className="w-full" />
                   </Form.Item>
-                  <Form.Item name="command" label="启动命令">
+                  <Form.Item name="command" label={localeText(localeCode, '启动命令', 'Command')}>
                     <Input />
                   </Form.Item>
                   <Form.Item name="entrypoint" label="Entrypoint">
@@ -1292,13 +1438,17 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                         >
                           <Form.Item
                             name={[field.name, 'name']}
-                            label={index === 0 ? '变量名' : undefined}
+                            label={
+                              index === 0 ? localeText(localeCode, '变量名', 'Variable') : undefined
+                            }
                           >
                             <Input placeholder="APP_ENV" />
                           </Form.Item>
                           <Form.Item
                             name={[field.name, 'value']}
-                            label={index === 0 ? '变量值' : undefined}
+                            label={
+                              index === 0 ? localeText(localeCode, '变量值', 'Value') : undefined
+                            }
                           >
                             <Input />
                           </Form.Item>
@@ -1312,19 +1462,28 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                         </div>
                       ))}
                       <Button type="dashed" icon={<PlusOutlined />} onClick={() => add({})}>
-                        添加环境变量
+                        {localeText(localeCode, '添加环境变量', 'Add environment variable')}
                       </Button>
                     </div>
                   )}
                 </Form.List>
                 <div className="grid gap-3 md:grid-cols-3">
-                  <Form.Item name={['resources', 'cpus']} label="CPU 限制">
+                  <Form.Item
+                    name={['resources', 'cpus']}
+                    label={localeText(localeCode, 'CPU 限制', 'CPU limit')}
+                  >
                     <InputNumber min={0} step={0.1} className="w-full" />
                   </Form.Item>
-                  <Form.Item name={['resources', 'memoryMiB']} label="内存限制 MiB">
+                  <Form.Item
+                    name={['resources', 'memoryMiB']}
+                    label={localeText(localeCode, '内存限制 MiB', 'Memory limit MiB')}
+                  >
                     <InputNumber min={0} className="w-full" />
                   </Form.Item>
-                  <Form.Item name={['resources', 'memoryReservationMiB']} label="内存预留 MiB">
+                  <Form.Item
+                    name={['resources', 'memoryReservationMiB']}
+                    label={localeText(localeCode, '内存预留 MiB', 'Memory reservation MiB')}
+                  >
                     <InputNumber min={0} className="w-full" />
                   </Form.Item>
                 </div>
@@ -1335,7 +1494,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
             ),
           },
           {
-            title: '网络与存储',
+            title: localeText(localeCode, '网络与存储', 'Network and storage'),
             fieldNames: ['ports', 'volumes', 'network'],
             children: (
               <>
@@ -1348,7 +1507,9 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                           className="rounded border border-[var(--soha-border-color)] p-3"
                         >
                           <div className="mb-2 flex items-center justify-between">
-                            <Text strong>端口 {index + 1}</Text>
+                            <Text strong>
+                              {localeText(localeCode, `端口 ${index + 1}`, `Port ${index + 1}`)}
+                            </Text>
                             {fields.length > 1 ? (
                               <Button
                                 type="text"
@@ -1359,27 +1520,36 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                             ) : null}
                           </div>
                           <div className="grid gap-3 md:grid-cols-4">
-                            <Form.Item name={[field.name, 'name']} label="名称">
+                            <Form.Item
+                              name={[field.name, 'name']}
+                              label={localeText(localeCode, '名称', 'Name')}
+                            >
                               <Input placeholder="http" />
                             </Form.Item>
                             <Form.Item
                               name={[field.name, 'containerPort']}
-                              label="容器端口"
+                              label={localeText(localeCode, '容器端口', 'Container port')}
                               rules={[{ required: true }]}
                             >
                               <InputNumber min={1} max={65535} className="w-full" />
                             </Form.Item>
                             <Form.Item
                               name={[field.name, 'hostPort']}
-                              label="主机端口"
+                              label={localeText(localeCode, '主机端口', 'Host port')}
                               rules={[{ required: true }]}
                             >
                               <InputNumber min={1} max={65535} className="w-full" />
                             </Form.Item>
-                            <Form.Item name={[field.name, 'hostIp']} label="监听 IP">
+                            <Form.Item
+                              name={[field.name, 'hostIp']}
+                              label={localeText(localeCode, '监听 IP', 'Listen IP')}
+                            >
                               <Input placeholder="0.0.0.0" />
                             </Form.Item>
-                            <Form.Item name={[field.name, 'protocol']} label="协议">
+                            <Form.Item
+                              name={[field.name, 'protocol']}
+                              label={localeText(localeCode, '协议', 'Protocol')}
+                            >
                               <Select
                                 options={[
                                   { value: 'tcp', label: 'tcp' },
@@ -1387,7 +1557,10 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                                 ]}
                               />
                             </Form.Item>
-                            <Form.Item name={[field.name, 'exposureScope']} label="暴露范围">
+                            <Form.Item
+                              name={[field.name, 'exposureScope']}
+                              label={localeText(localeCode, '暴露范围', 'Exposure')}
+                            >
                               <Select
                                 options={['internal', 'vpn', 'public'].map((item) => ({
                                   value: item,
@@ -1395,10 +1568,16 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                                 }))}
                               />
                             </Form.Item>
-                            <Form.Item name={[field.name, 'domainName']} label="访问域名">
+                            <Form.Item
+                              name={[field.name, 'domainName']}
+                              label={localeText(localeCode, '访问域名', 'Domain name')}
+                            >
                               <Input placeholder="preview.internal.example.com" />
                             </Form.Item>
-                            <Form.Item name={[field.name, 'domainScheme']} label="域名协议">
+                            <Form.Item
+                              name={[field.name, 'domainScheme']}
+                              label={localeText(localeCode, '域名协议', 'Scheme')}
+                            >
                               <Select
                                 options={[
                                   { value: 'http', label: 'http' },
@@ -1429,7 +1608,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                           })
                         }
                       >
-                        添加端口
+                        {localeText(localeCode, '添加端口', 'Add port')}
                       </Button>
                     </div>
                   )}
@@ -1443,7 +1622,9 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                           className="rounded border border-[var(--soha-border-color)] p-3"
                         >
                           <div className="mb-2 flex items-center justify-between">
-                            <Text strong>卷 {index + 1}</Text>
+                            <Text strong>
+                              {localeText(localeCode, `卷 ${index + 1}`, `Volume ${index + 1}`)}
+                            </Text>
                             <Button
                               type="text"
                               danger
@@ -1452,10 +1633,16 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                             />
                           </div>
                           <div className="grid gap-3 md:grid-cols-4">
-                            <Form.Item name={[field.name, 'name']} label="名称">
+                            <Form.Item
+                              name={[field.name, 'name']}
+                              label={localeText(localeCode, '名称', 'Name')}
+                            >
                               <Input placeholder="data" />
                             </Form.Item>
-                            <Form.Item name={[field.name, 'type']} label="类型">
+                            <Form.Item
+                              name={[field.name, 'type']}
+                              label={localeText(localeCode, '类型', 'Type')}
+                            >
                               <Select
                                 options={[
                                   { value: 'bind', label: 'bind' },
@@ -1463,15 +1650,27 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                                 ]}
                               />
                             </Form.Item>
-                            <Form.Item name={[field.name, 'source']} label="来源">
-                              <Input placeholder="/data/app 或 app-data" />
+                            <Form.Item
+                              name={[field.name, 'source']}
+                              label={localeText(localeCode, '来源', 'Source')}
+                            >
+                              <Input
+                                placeholder={localeText(
+                                  localeCode,
+                                  '/data/app 或 app-data',
+                                  '/data/app or app-data',
+                                )}
+                              />
                             </Form.Item>
-                            <Form.Item name={[field.name, 'target']} label="挂载路径">
+                            <Form.Item
+                              name={[field.name, 'target']}
+                              label={localeText(localeCode, '挂载路径', 'Mount path')}
+                            >
                               <Input placeholder="/var/lib/app" />
                             </Form.Item>
                             <Form.Item
                               name={[field.name, 'readOnly']}
-                              label="只读"
+                              label={localeText(localeCode, '只读', 'Read-only')}
                               valuePropName="checked"
                             >
                               <Switch />
@@ -1484,19 +1683,28 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                         icon={<PlusOutlined />}
                         onClick={() => add({ type: 'bind', readOnly: false })}
                       >
-                        添加卷
+                        {localeText(localeCode, '添加卷', 'Add volume')}
                       </Button>
                     </div>
                   )}
                 </Form.List>
-                <Form.Item name="network" label="外部网络">
-                  <Input placeholder="traefik 或已有 Docker network" />
+                <Form.Item
+                  name="network"
+                  label={localeText(localeCode, '外部网络', 'External network')}
+                >
+                  <Input
+                    placeholder={localeText(
+                      localeCode,
+                      'traefik 或已有 Docker network',
+                      'traefik or an existing Docker network',
+                    )}
+                  />
                 </Form.Item>
               </>
             ),
           },
           {
-            title: '确认启动',
+            title: localeText(localeCode, '确认启动', 'Review'),
             children: (
               <Descriptions
                 bordered
@@ -1505,17 +1713,20 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                 items={[
                   {
                     key: 'source',
-                    label: '来源',
-                    children: containerSourceKind === 'git_dockerfile' ? 'Git 构建' : '已有镜像',
+                    label: localeText(localeCode, '来源', 'Source'),
+                    children:
+                      containerSourceKind === 'git_dockerfile'
+                        ? localeText(localeCode, 'Git 构建', 'Git build')
+                        : localeText(localeCode, '已有镜像', 'Existing image'),
                   },
                   {
                     key: 'name',
-                    label: '应用',
+                    label: localeText(localeCode, '应用', 'Application'),
                     children: containerReviewValues.name || '-',
                   },
                   {
                     key: 'host',
-                    label: 'Docker 主机',
+                    label: localeText(localeCode, 'Docker 主机', 'Docker host'),
                     children:
                       hostOptions.find((item) => item.value === containerReviewValues.hostId)
                         ?.label ||
@@ -1524,39 +1735,50 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                   },
                   {
                     key: 'image',
-                    label: containerSourceKind === 'git_dockerfile' ? '构建镜像' : '镜像',
+                    label:
+                      containerSourceKind === 'git_dockerfile'
+                        ? localeText(localeCode, '构建镜像', 'Build image')
+                        : localeText(localeCode, '镜像', 'Image'),
                     children: containerReviewValues.image || '-',
                   },
                   ...(containerSourceKind === 'git_dockerfile'
                     ? [
                         {
                           key: 'repository',
-                          label: 'Git 仓库',
+                          label: localeText(localeCode, 'Git 仓库', 'Git repository'),
                           children: containerReviewValues.gitBuild?.repositoryUrl || '-',
                         },
                         {
                           key: 'ref',
-                          label: '版本',
+                          label: localeText(localeCode, '版本', 'Revision'),
                           children: containerReviewValues.gitBuild?.ref || 'main',
                         },
                       ]
                     : []),
                   {
                     key: 'ports',
-                    label: '端口',
-                    children: `${containerReviewValues.ports?.length || 0} 项`,
+                    label: localeText(localeCode, '端口', 'Ports'),
+                    children: localeText(
+                      localeCode,
+                      `${containerReviewValues.ports?.length || 0} 项`,
+                      `${containerReviewValues.ports?.length || 0}`,
+                    ),
                   },
                   {
                     key: 'volumes',
-                    label: '卷',
-                    children: `${containerReviewValues.volumes?.length || 0} 项`,
+                    label: localeText(localeCode, '卷', 'Volumes'),
+                    children: localeText(
+                      localeCode,
+                      `${containerReviewValues.volumes?.length || 0} 项`,
+                      `${containerReviewValues.volumes?.length || 0}`,
+                    ),
                   },
                 ]}
               />
             ),
           },
         ]}
-        submitText="启动"
+        submitText={localeText(localeCode, '启动', 'Start')}
         width={820}
       />
     </>

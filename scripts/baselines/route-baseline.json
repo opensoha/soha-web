@@ -51,14 +51,14 @@
     ]
   },
   "summary": {
-    "runtimePaths": 246,
-    "metadataPaths": 246,
-    "overlappingPaths": 246,
+    "runtimePaths": 250,
+    "metadataPaths": 250,
+    "overlappingPaths": 250,
     "runtimeOnlyPaths": 0,
     "metadataOnlyPaths": 0,
     "inlineJsxPaths": 0,
-    "lazyRouteLoads": 210,
-    "lazySourceModules": 207
+    "lazyRouteLoads": 214,
+    "lazySourceModules": 211
   },
   "paths": {
     "runtime": [
@@ -85,12 +85,14 @@
       "/ai-workbench/chat",
       "/ai-workbench/companion",
       "/ai-workbench/context",
+      "/ai-workbench/data-sources",
       "/ai-workbench/environments",
       "/ai-workbench/evaluation-lifecycle",
       "/ai-workbench/evaluations",
       "/ai-workbench/inspection",
       "/ai-workbench/knowledge",
       "/ai-workbench/knowledge-pipelines",
+      "/ai-workbench/mcp",
       "/ai-workbench/memory",
       "/ai-workbench/model-settings",
       "/ai-workbench/overview",
@@ -98,6 +100,7 @@
       "/ai-workbench/production-operations",
       "/ai-workbench/provider-fleet",
       "/ai-workbench/root-cause",
+      "/ai-workbench/skills",
       "/ai-workbench/tool-settings",
       "/application-environments",
       "/application-environments/:applicationEnvironmentId",
@@ -118,6 +121,7 @@
       "/compute/overview",
       "/compute/runtimes",
       "/compute/runtimes/hosts",
+      "/compute/runtimes/hosts/:id",
       "/compute/runtimes/projects",
       "/compute/runtimes/projects/:projectId",
       "/compute/runtimes/templates",
@@ -333,12 +337,14 @@
       "/ai-workbench/chat",
       "/ai-workbench/companion",
       "/ai-workbench/context",
+      "/ai-workbench/data-sources",
       "/ai-workbench/environments",
       "/ai-workbench/evaluation-lifecycle",
       "/ai-workbench/evaluations",
       "/ai-workbench/inspection",
       "/ai-workbench/knowledge",
       "/ai-workbench/knowledge-pipelines",
+      "/ai-workbench/mcp",
       "/ai-workbench/memory",
       "/ai-workbench/model-settings",
       "/ai-workbench/overview",
@@ -346,6 +352,7 @@
       "/ai-workbench/production-operations",
       "/ai-workbench/provider-fleet",
       "/ai-workbench/root-cause",
+      "/ai-workbench/skills",
       "/ai-workbench/tool-settings",
       "/application-environments",
       "/application-environments/:applicationEnvironmentId",
@@ -366,6 +373,7 @@
       "/compute/overview",
       "/compute/runtimes",
       "/compute/runtimes/hosts",
+      "/compute/runtimes/hosts/:id",
       "/compute/runtimes/projects",
       "/compute/runtimes/projects/:projectId",
       "/compute/runtimes/templates",
@@ -581,12 +589,14 @@
       "/ai-workbench/chat",
       "/ai-workbench/companion",
       "/ai-workbench/context",
+      "/ai-workbench/data-sources",
       "/ai-workbench/environments",
       "/ai-workbench/evaluation-lifecycle",
       "/ai-workbench/evaluations",
       "/ai-workbench/inspection",
       "/ai-workbench/knowledge",
       "/ai-workbench/knowledge-pipelines",
+      "/ai-workbench/mcp",
       "/ai-workbench/memory",
       "/ai-workbench/model-settings",
       "/ai-workbench/overview",
@@ -594,6 +604,7 @@
       "/ai-workbench/production-operations",
       "/ai-workbench/provider-fleet",
       "/ai-workbench/root-cause",
+      "/ai-workbench/skills",
       "/ai-workbench/tool-settings",
       "/application-environments",
       "/application-environments/:applicationEnvironmentId",
@@ -614,6 +625,7 @@
       "/compute/overview",
       "/compute/runtimes",
       "/compute/runtimes/hosts",
+      "/compute/runtimes/hosts/:id",
       "/compute/runtimes/projects",
       "/compute/runtimes/projects/:projectId",
       "/compute/runtimes/templates",
@@ -852,6 +864,11 @@
         "source": "@/features/copilot/agent-runs/page"
       },
       {
+        "exportName": "AIDataSourcesPage",
+        "moduleExport": "AIDataSourcesPage",
+        "source": "@/features/copilot/observe/data-sources/page"
+      },
+      {
         "exportName": "AIGatewayCallLogsPage",
         "moduleExport": "AIGatewayCallLogsPage",
         "source": "@/features/copilot/gateway/pages/call-logs-page"
@@ -882,6 +899,11 @@
         "source": "@/features/copilot/gateway/pages/tokens-page"
       },
       {
+        "exportName": "AIMCPPage",
+        "moduleExport": "AIMCPPage",
+        "source": "@/features/copilot/observe/mcp/page"
+      },
+      {
         "exportName": "AIModelSettingsPage",
         "moduleExport": "AIModelSettingsPage",
         "source": "@/features/copilot/observe/model-settings/page"
@@ -900,6 +922,11 @@
         "exportName": "AIProductionOperationsPage",
         "moduleExport": "AIProductionOperationsPage",
         "source": "@/features/copilot/production-operations/page"
+      },
+      {
+        "exportName": "AISkillsPage",
+        "moduleExport": "AISkillsPage",
+        "source": "@/features/copilot/observe/skills/page"
       },
       {
         "exportName": "AIToolsPage",
@@ -1195,6 +1222,11 @@
         "exportName": "DirectorySyncPage",
         "moduleExport": "DirectorySyncPage",
         "source": "@/features/access/directory-sync/page"
+      },
+      {
+        "exportName": "DockerHostDetailPage",
+        "moduleExport": "DockerHostDetailPage",
+        "source": "@/features/docker/hosts/detail-page"
       },
       {
         "exportName": "DockerHostsPage",
@@ -1894,9 +1926,12 @@
       "@/features/copilot/knowledge-production/page",
       "@/features/copilot/knowledge/page",
       "@/features/copilot/memory/page",
+      "@/features/copilot/observe/data-sources/page",
+      "@/features/copilot/observe/mcp/page",
       "@/features/copilot/observe/model-settings/page",
       "@/features/copilot/observe/operations/page",
       "@/features/copilot/observe/overview/page",
+      "@/features/copilot/observe/skills/page",
       "@/features/copilot/observe/tools/page",
       "@/features/copilot/production-operations/page",
       "@/features/copilot/provider-fleet/page",
@@ -1927,6 +1962,7 @@
       "@/features/delivery/workflow-templates/page",
       "@/features/delivery/workflows/detail-page",
       "@/features/delivery/workflows/list-page",
+      "@/features/docker/hosts/detail-page",
       "@/features/docker/hosts/page",
       "@/features/docker/projects/detail-page",
       "@/features/docker/projects/list-page",
@@ -2103,9 +2139,12 @@
       "@/features/copilot/knowledge-production/page": ["KnowledgeProductionPage"],
       "@/features/copilot/knowledge/page": ["KnowledgeCenterPage"],
       "@/features/copilot/memory/page": ["MemoryPoliciesPage"],
+      "@/features/copilot/observe/data-sources/page": ["AIDataSourcesPage"],
+      "@/features/copilot/observe/mcp/page": ["AIMCPPage"],
       "@/features/copilot/observe/model-settings/page": ["AIModelSettingsPage"],
       "@/features/copilot/observe/operations/page": ["AIOperationsPage"],
       "@/features/copilot/observe/overview/page": ["AIObserveOverviewPage"],
+      "@/features/copilot/observe/skills/page": ["AISkillsPage"],
       "@/features/copilot/observe/tools/page": ["AIToolsPage"],
       "@/features/copilot/production-operations/page": ["AIProductionOperationsPage"],
       "@/features/copilot/provider-fleet/page": ["ProviderFleetPage"],
@@ -2136,6 +2175,7 @@
       "@/features/delivery/workflow-templates/page": ["WorkflowTemplatesPage"],
       "@/features/delivery/workflows/detail-page": ["WorkflowDetailPage"],
       "@/features/delivery/workflows/list-page": ["WorkflowsPage"],
+      "@/features/docker/hosts/detail-page": ["DockerHostDetailPage"],
       "@/features/docker/hosts/page": ["DockerHostsPage"],
       "@/features/docker/projects/detail-page": ["DockerProjectDetailPage"],
       "@/features/docker/projects/list-page": ["DockerProjectsPage"],
@@ -2353,5 +2393,5 @@
       "@/features/virtualization/virtual-machines/list-page": ["VirtualizationVmsPage"]
     }
   },
-  "generatedAt": "2026-08-19T09:03:09.642Z"
+  "generatedAt": "2026-08-23T14:57:13.054Z"
 }

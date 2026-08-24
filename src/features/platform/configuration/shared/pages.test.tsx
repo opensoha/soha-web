@@ -44,6 +44,8 @@ vi.mock('@/stores/platform-scope-store', () => ({
 }))
 
 vi.mock('@/i18n', () => ({
+  localeText: (localeCode: string, chinese: string, english: string) =>
+    localeCode === 'zh_CN' ? chinese : english,
   useI18n: () => ({
     localeCode: 'zh_CN' as const,
     t: (_key: string, fallback?: string) => fallback ?? _key,
@@ -217,9 +219,7 @@ describe('configuration leaf pages', () => {
     expect(
       configMaps.querySelector('input[placeholder="搜索 ConfigMaps 名称 / 命名空间"]'),
     ).not.toBeNull()
-    expect(configMaps.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
-      '当前 1 / 1 条',
-    )
+    expect(configMaps.querySelector('[data-testid="pagination-summary"]')).toBeNull()
     expect(configMaps.querySelector('[data-testid="column-keys"]')?.textContent).not.toContain(
       '__actions',
     )
@@ -290,6 +290,14 @@ describe('configuration leaf pages', () => {
 
     expect(container.textContent).toContain('aGVsbG8=')
     expect(container.textContent).toContain('hello')
+
+    const expandButton = container.querySelector<HTMLElement>('.ant-table-row-expand-icon')
+    expect(expandButton).not.toBeNull()
+    await act(async () => expandButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+
+    expect(container.textContent).toContain('Base64 编码值')
+    expect(container.textContent).toContain('解码后内容')
+    expect(container.querySelectorAll('.soha-config-data-value')).toHaveLength(2)
   })
 
   it('shows scope selection before resolving list-backed details', async () => {

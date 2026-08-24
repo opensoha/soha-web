@@ -10,6 +10,16 @@ import { tableColumnPresets } from '@/utils/table-columns'
 const captured = vi.hoisted(() => ({
   tableProps: null as any,
 }))
+const i18n = vi.hoisted(() => ({
+  localeCode: 'zh_CN' as 'zh_CN' | 'en_US',
+}))
+
+vi.mock('@/i18n', () => ({
+  useI18n: () => ({
+    localeCode: i18n.localeCode,
+    t: (_key: string, fallback = '') => fallback,
+  }),
+}))
 
 vi.mock('antd', () => ({
   Alert: ({ description, message }: { description?: ReactNode; message?: ReactNode }) => (
@@ -40,7 +50,14 @@ vi.mock('antd', () => ({
   Space: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Table: (props: any) => {
     captured.tableProps = props
-    return <div data-testid="table-proxy" />
+    return (
+      <div data-testid="table-proxy">
+        <table>
+          <thead className="ant-table-thead" />
+        </table>
+        <ul className="ant-table-pagination" />
+      </div>
+    )
   },
   Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
   Typography: {
@@ -73,6 +90,7 @@ describe('AdminTable', () => {
 
   afterEach(async () => {
     captured.tableProps = null
+    i18n.localeCode = 'zh_CN'
     await act(async () => {
       for (const root of roots) {
         root.unmount()
@@ -102,7 +120,8 @@ describe('AdminTable', () => {
     expect(captured.tableProps?.size).toBe('small')
     expect(captured.tableProps?.pagination).toMatchObject({
       current: 1,
-      pageSize: 10,
+      pageSize: 15,
+      pageSizeOptions: [10, 15, 20, 50, 100],
       showLessItems: true,
       showSizeChanger: true,
       size: 'small',
@@ -144,8 +163,95 @@ describe('AdminTable', () => {
       />,
     )
 
-    expect(captured.tableProps?.pagination.showTotal(3, [1, 3])).toBe('当前 1-3 / 3 条')
+    expect(captured.tableProps?.pagination.showTotal(24, [1, 10])).toBe('当前 1-10 / 24 条')
     expect(captured.tableProps?.pagination.showTotal(0, [0, 0])).toBe('当前 0 / 0 条')
+  })
+
+  it('shows the shared pagination range summary in English', async () => {
+    i18n.localeCode = 'en_US'
+    await renderNode(
+      <AdminTable
+        columns={[{ title: 'A', dataIndex: 'a' }]}
+        dataSource={[{ id: '1', a: 'a' }]}
+        rowKey="id"
+      />,
+    )
+
+    expect(captured.tableProps?.pagination.showTotal(24, [1, 10])).toBe('1-10 / 24 items')
+    expect(captured.tableProps?.pagination.showTotal(0, [0, 0])).toBe('0 / 0 items')
+  })
+
+  it('fits a viewport-scrolling table inside the content area', async () => {
+    const container = await renderNode(
+      <main className="soha-content" style={{ paddingBottom: 24 }}>
+        <AdminTable
+          columns={[{ title: 'A', dataIndex: 'a' }]}
+          dataSource={[{ id: '1', a: 'a' }]}
+          rowKey="id"
+          viewportScroll
+        />
+      </main>,
+    )
+    const content = container.querySelector<HTMLElement>('.soha-content')!
+    const header = container.querySelector<HTMLElement>('.ant-table-thead')!
+    const pagination = container.querySelector<HTMLElement>('.ant-table-pagination')!
+    Object.defineProperty(content, 'clientHeight', { configurable: true, value: 923 })
+    content.getBoundingClientRect = () => ({ bottom: 979, top: 56 } as DOMRect)
+    header.getBoundingClientRect = () => ({ bottom: 230 } as DOMRect)
+    pagination.getBoundingClientRect = () => ({ height: 36 } as DOMRect)
+
+    await act(async () => window.dispatchEvent(new Event('resize')))
+
+    expect(captured.tableProps?.scroll.y).toBe(681)
+    expect(
+      container.querySelector('.soha-admin-table-shell')?.classList.contains('is-viewport-scroll'),
+    ).toBe(true)
+
+    Object.defineProperty(content, 'clientHeight', { configurable: true, value: 500 })
+    await act(async () => window.dispatchEvent(new Event('resize')))
+    expect(captured.tableProps?.scroll.y).toBeUndefined()
+  })
+
+  it('adds local sorting to scalar columns without replacing explicit sorters', async () => {
+    const explicitSorter = vi.fn(() => 0)
+    await renderNode(
+      <AdminTable
+        columns={[
+          { title: 'Name', dataIndex: 'name' },
+          { title: 'Namespace', dataIndex: 'namespace' },
+          { title: 'Age', dataIndex: 'ageSeconds' },
+          { title: 'Selector', dataIndex: 'selector' },
+          { title: 'Status', dataIndex: 'status', sorter: explicitSorter },
+        ]}
+        dataSource={[
+          {
+            id: '1',
+            name: 'service-10',
+            namespace: 'zeta',
+            ageSeconds: 10,
+            selector: { app: 'api' },
+            status: 'ready',
+          },
+          {
+            id: '2',
+            name: 'service-2',
+            namespace: 'alpha',
+            ageSeconds: 2,
+            selector: { app: 'web' },
+            status: 'pending',
+          },
+        ]}
+        localSorting
+        rowKey="id"
+      />,
+    )
+
+    const [name, namespace, age, selector, status] = captured.tableProps.columns
+    expect(name.sorter({ name: 'service-10' }, { name: 'service-2' })).toBeGreaterThan(0)
+    expect(namespace.sorter({ namespace: 'zeta' }, { namespace: 'alpha' })).toBeGreaterThan(0)
+    expect(age.sorter({ ageSeconds: 2 }, { ageSeconds: 10 })).toBeLessThan(0)
+    expect(selector.sorter).toBeUndefined()
+    expect(status.sorter).toBe(explicitSorter)
   })
 
   it('separates server page and page-size callbacks', async () => {

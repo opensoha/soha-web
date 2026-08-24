@@ -8,6 +8,7 @@ export type {
   HelmRelease,
   HelmReleaseDetail,
   HelmReleaseHistory,
+  HelmReleaseManifest,
   HelmValues,
 } from '@/types'
 
@@ -19,6 +20,12 @@ export interface HelmReleaseTarget {
 
 export interface UpdateHelmValuesVariables extends HelmReleaseTarget {
   content: string
+}
+
+export interface HelmReleaseRollbackVariables extends HelmReleaseTarget {
+  revision: number
+  wait: boolean
+  timeoutSeconds: number
 }
 
 export interface HelmChartCatalogInput {

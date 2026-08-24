@@ -1,4 +1,7 @@
 export { observabilityKeys, observabilityMutationKeys } from './keys'
+export { observabilityAlertQueries, useAlertEventStream } from './alerts'
+export type { AlertEventStreamStatus } from './alerts'
+export type { AlertEvent } from './alerts'
 export { LogExplorer } from './logs/log-explorer'
 export { buildLogExplorerPath } from './logs/model'
 export type { LogExplorerPreset } from './logs/model'

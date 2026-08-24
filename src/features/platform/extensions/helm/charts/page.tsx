@@ -3,6 +3,7 @@ import { Alert, Space, Spin, Tag, Typography } from 'antd'
 import { CloudDownloadOutlined, LinkOutlined, RocketOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import {
   ManagementDensityButton,
   ManagementIconButton,
@@ -26,9 +27,8 @@ import { formatHelmChartCount, getHelmChartBadges, hasHelmChartSecuritySummary }
 import '@/features/platform/extensions/styles.css'
 
 const { Text } = Typography
-const DEFAULT_PAGE_SIZE = 20
 const MAX_PAGE_SIZE = 60
-const PAGE_SIZE_OPTIONS = [20, 40, 60]
+const PAGE_SIZE_OPTIONS = [K8S_TABLE_PAGE_SIZE, 30, MAX_PAGE_SIZE]
 
 const HelmChartDrawer = lazy(async () => {
   const module = await import('./chart-drawer')
@@ -41,7 +41,7 @@ export function HelmChartsPage() {
   const capability = useClusterCapability('helm.releases', localeCode)
   const [searchKeyword, setSearchKeyword] = useState('')
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+  const [pageSize, setPageSize] = useState(K8S_TABLE_PAGE_SIZE)
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const [selectedChart, setSelectedChart] = useState<HelmChart | null>(null)
   const [initialDrawerTab, setInitialDrawerTab] = useState<'overview' | 'install'>('overview')
@@ -294,6 +294,7 @@ export function HelmChartsPage() {
         }
         tableSize={tableSize}
         scroll={{ x: 'max-content' }}
+        viewportScroll
         onRow={(record: HelmChart) => ({
           onClick: () => openDrawer(record),
           style: { cursor: 'pointer' },

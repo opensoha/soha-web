@@ -131,8 +131,33 @@
   word-break: break-word;
 }
 
-.soha-announcement-center-item .ant-list-item-meta {
+.soha-announcement-center-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.soha-announcement-center-item {
+  display: flex;
   align-items: flex-start;
+  gap: 8px 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--soha-border-color);
+}
+
+.soha-announcement-center-item:last-child {
+  border-bottom: 0;
+}
+
+.soha-announcement-center-item__body {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.soha-announcement-center-item__actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
 }
 
 .soha-resource-cell {

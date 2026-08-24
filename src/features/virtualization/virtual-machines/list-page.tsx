@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   App,
@@ -21,6 +21,7 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import {
   DeleteOutlined,
+  CopyOutlined,
   PlayCircleOutlined,
   PlusOutlined,
   PoweroffOutlined,
@@ -30,6 +31,8 @@ import {
 import { hasAllowedAction, hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useAIPageContext } from '@/features/copilot'
 import { useWorkbenchModuleEnabled } from '@/features/modules'
+import { localeText, useI18n } from '@/i18n'
+import { formatStatusLabel } from '@/i18n/status'
 import { dockerApi, dockerKeys } from '@/features/docker'
 import type { DockerQuickCreateHostInput } from '@/features/docker'
 import { formatDateTime } from '@/utils/time'
@@ -239,7 +242,9 @@ function pageTablePagination<T>(
 export function VirtualizationVmsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [currentStep, setCurrentStep] = useState(0)
-  const [filters, setFilters] = useState<VirtualizationListParams>({ page: 1, pageSize: 10 })
+  const [filters, setFilters] = useState<VirtualizationListParams>({ page: 1, pageSize: 15 })
+  const [searchParams, setSearchParams] = useSearchParams()
+  const cloneSourceId = searchParams.get('clone') ?? ''
   const [filterForm] = Form.useForm<VirtualizationListParams>()
   const [form] = Form.useForm<VirtualMachineFormValues>()
   const [pendingTaskId, setPendingTaskId] = useState<string | null>(null)
@@ -248,6 +253,7 @@ export function VirtualizationVmsPage() {
   const [pendingResizeTaskId, setPendingResizeTaskId] = useState<string | null>(null)
   const [resizeTarget, setResizeTarget] = useState<VirtualMachine | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<VirtualMachine | null>(null)
+  const [cloneSource, setCloneSource] = useState<VirtualMachine | null>(null)
   const [resizeStep, setResizeStep] = useState(0)
   const [resizeForm] = Form.useForm<VirtualMachineResizeFormValues>()
   const { virtualizationModuleEnabled, canCreateVMs } = useVirtualizationPermissions()
@@ -257,6 +263,7 @@ export function VirtualizationVmsPage() {
     dockerModuleEnabled && hasPermission(permissionSnapshotQuery.data?.data, 'docker.hosts.create')
   const queryClient = useQueryClient()
   const { message } = App.useApp()
+  const { localeCode } = useI18n()
   const createProvider = Form.useWatch('provider', form) ?? 'kubevirt'
   const createSourceMode =
     Form.useWatch('sourceMode', form) ??
@@ -302,6 +309,12 @@ export function VirtualizationVmsPage() {
     ),
   )
   const vmsQuery = useQuery(virtualizationQueries.vms(filters, virtualizationModuleEnabled))
+  const cloneSourceQuery = useQuery(
+    virtualizationQueries.vmDetail(
+      cloneSourceId,
+      virtualizationModuleEnabled && canCreateVMs && Boolean(cloneSourceId),
+    ),
+  )
   const clustersQuery = useQuery(virtualizationQueries.clusters(virtualizationModuleEnabled))
   const imagesQuery = useQuery(virtualizationQueries.imageOptions(virtualizationModuleEnabled))
   const flavorsQuery = useQuery(virtualizationQueries.flavors(virtualizationModuleEnabled))
@@ -343,6 +356,7 @@ export function VirtualizationVmsPage() {
         setCreatePlan(null)
         setPendingCreate(null)
         setDrawerOpen(false)
+        setCloneSource(null)
         form.resetFields()
       },
     ),
@@ -545,19 +559,47 @@ export function VirtualizationVmsPage() {
       ).map((value) => ({ value, label: value })),
     [pveCapabilityAssets, selectedCluster?.config?.defaultBridge],
   )
+  const openCloneModal = useCallback(
+    (source: VirtualMachine) => {
+      setCurrentStep(0)
+      form.resetFields()
+      setCloneSource(source)
+      setDrawerOpen(true)
+    },
+    [form],
+  )
+  useEffect(() => {
+    const source = cloneSourceQuery.data?.vm
+    if (!cloneSourceId || !source) return
+    if (source.provider === 'pve' && pveVMSourceRef(source)) {
+      openCloneModal(source)
+    } else {
+      void message.warning('当前 Provider 暂不支持从虚拟机快捷克隆')
+    }
+    const next = new URLSearchParams(searchParams)
+    next.delete('clone')
+    setSearchParams(next, { replace: true })
+  }, [
+    cloneSourceId,
+    cloneSourceQuery.data?.vm,
+    message,
+    openCloneModal,
+    searchParams,
+    setSearchParams,
+  ])
   const discoveredNetworkOptions = Array.from(
     new Set([
       ...discoveredNetworks.map((item) => item.network).filter(Boolean),
       ...pveBridgeOptions.map((item) => item.value),
     ]),
   ).map((value) => ({ value, label: value }))
-  const vmPage = normalizePage(vmsQuery.data, filters.page ?? 1, filters.pageSize ?? 10)
+  const vmPage = normalizePage(vmsQuery.data, filters.page ?? 1, filters.pageSize ?? 15)
   const selectedFlavor = compatibleFlavors.find((item) => item.id === selectedFlavorId)
   useAIPageContext({
     sourceWorkbench: 'compute',
-    sourceTitle: '虚拟机列表',
+    sourceTitle: localeText(localeCode, '虚拟机列表', 'Virtual machines'),
     entityKind: 'virtualization.vm-list',
-    entityName: '虚拟机列表',
+    entityName: localeText(localeCode, '虚拟机列表', 'Virtual machines'),
     virtualizationConnectionId: selectedConnectionId,
     visibleFilters: {
       ...filters,
@@ -576,27 +618,27 @@ export function VirtualizationVmsPage() {
   })
   const columns: ColumnsType<VirtualMachine> = [
     {
-      title: '名称',
+      title: localeText(localeCode, '名称', 'Name'),
       dataIndex: 'name',
       fixed: 'left',
       width: 210,
       render: (_value, record) => vmIdentity(record),
     },
     {
-      title: 'Provider',
+      title: localeText(localeCode, '提供方', 'Provider'),
       dataIndex: 'provider',
       render: (value) => providerTag(value),
       width: 90,
     },
     {
-      title: '连接',
+      title: localeText(localeCode, '连接', 'Connection'),
       dataIndex: 'connectionName',
       render: (value, record) => tableTooltipText(value || record.connectionId || '-'),
       ellipsis: tableEllipsis,
       width: 160,
     },
     {
-      title: '命名空间/节点',
+      title: localeText(localeCode, '命名空间/节点', 'Namespace / Node'),
       render: (_value, record) =>
         vmMetadataTags([
           ...(record.namespace ? [{ label: record.namespace, tone: 'purple' as const }] : []),
@@ -605,13 +647,13 @@ export function VirtualizationVmsPage() {
       width: 160,
     },
     {
-      title: '电源',
+      title: localeText(localeCode, '电源', 'Power'),
       dataIndex: 'powerState',
       render: (_value, record) => statusTag(virtualMachineDisplayStatus(record)),
       width: 100,
     },
     {
-      title: '地址',
+      title: localeText(localeCode, '地址', 'Addresses'),
       dataIndex: 'ipAddresses',
       render: (value: string[]) =>
         vmMetadataTags([
@@ -625,7 +667,7 @@ export function VirtualizationVmsPage() {
       width: 200,
     },
     {
-      title: '规格',
+      title: localeText(localeCode, '规格', 'Resources'),
       render: (_value, record) =>
         record.flavorName
           ? vmMetadataTags([{ label: record.flavorName, tone: 'purple' }])
@@ -641,7 +683,7 @@ export function VirtualizationVmsPage() {
       width: 210,
     },
     {
-      title: '镜像',
+      title: localeText(localeCode, '镜像', 'Image'),
       dataIndex: 'bootImageName',
       render: (value, record) =>
         vmMetadataTags(
@@ -653,50 +695,59 @@ export function VirtualizationVmsPage() {
     },
     {
       ...tableColumnPresets.datetime,
-      title: '创建时间',
+      title: localeText(localeCode, '创建时间', 'Created at'),
       dataIndex: 'createdAt',
       render: formatDateTime,
     },
     {
       ...tableColumnPresets.action,
-      title: '操作',
-      width: 130,
+      title: localeText(localeCode, '操作', 'Actions'),
+      width: 156,
       render: (_value, record) => {
         const canPower = (action: string) => hasAllowedAction(record.allowedActions, action)
         return (
           <Space className="soha-row-action-icons">
             {canPower('start') ? (
               <ManagementIconButton
-                aria-label="启动虚拟机"
+                aria-label={localeText(localeCode, '启动虚拟机', 'Start virtual machine')}
                 size="small"
-                tooltip="启动"
+                tooltip={localeText(localeCode, '启动', 'Start')}
                 icon={<PlayCircleOutlined />}
                 onClick={() => powerMutation.mutate({ id: record.id, action: 'start' })}
               />
             ) : null}
             {canPower('stop') ? (
               <ManagementIconButton
-                aria-label="停止虚拟机"
+                aria-label={localeText(localeCode, '停止虚拟机', 'Stop virtual machine')}
                 size="small"
-                tooltip="停止"
+                tooltip={localeText(localeCode, '停止', 'Stop')}
                 icon={<PoweroffOutlined />}
                 onClick={() => powerMutation.mutate({ id: record.id, action: 'stop' })}
               />
             ) : null}
             {canPower('restart') ? (
               <ManagementIconButton
-                aria-label="重启虚拟机"
+                aria-label={localeText(localeCode, '重启虚拟机', 'Restart virtual machine')}
                 size="small"
-                tooltip="重启"
+                tooltip={localeText(localeCode, '重启', 'Restart')}
                 icon={<ReloadOutlined />}
                 onClick={() => powerMutation.mutate({ id: record.id, action: 'restart' })}
               />
             ) : null}
+            {canCreateVMs && record.provider === 'pve' && pveVMSourceRef(record) ? (
+              <ManagementIconButton
+                aria-label={localeText(localeCode, '克隆虚拟机', 'Clone virtual machine')}
+                size="small"
+                tooltip={localeText(localeCode, '克隆', 'Clone')}
+                icon={<CopyOutlined />}
+                onClick={() => openCloneModal(record)}
+              />
+            ) : null}
             {canPower('resize') ? (
               <ManagementIconButton
-                aria-label="调整虚拟机规格"
+                aria-label={localeText(localeCode, '调整虚拟机规格', 'Resize virtual machine')}
                 size="small"
-                tooltip="调整规格"
+                tooltip={localeText(localeCode, '调整规格', 'Resize')}
                 icon={<SettingOutlined />}
                 onClick={() => {
                   setResizeTarget(record)
@@ -714,9 +765,9 @@ export function VirtualizationVmsPage() {
             ) : null}
             {canPower('delete') ? (
               <ManagementIconButton
-                aria-label="删除虚拟机"
+                aria-label={localeText(localeCode, '删除虚拟机', 'Delete virtual machine')}
                 size="small"
-                tooltip="删除"
+                tooltip={localeText(localeCode, '删除', 'Delete')}
                 danger
                 icon={<DeleteOutlined />}
                 onClick={() => setDeleteTarget(record)}
@@ -737,7 +788,7 @@ export function VirtualizationVmsPage() {
             <TaskProgressBanner
               task={streamedTask}
               status={streamStatus}
-              title="正在创建虚拟机"
+              title={localeText(localeCode, '正在创建虚拟机', 'Creating virtual machine')}
               onCancel={
                 streamedTask?.id ? () => cancelCreateMutation.mutate(streamedTask.id) : undefined
               }
@@ -746,7 +797,7 @@ export function VirtualizationVmsPage() {
             <TaskProgressBanner
               task={streamedResizeTask}
               status={resizeStreamStatus}
-              title="正在调整虚拟机规格"
+              title={localeText(localeCode, '正在调整虚拟机规格', 'Resizing virtual machine')}
             />
           </Space>
         }
@@ -756,33 +807,59 @@ export function VirtualizationVmsPage() {
               loading={vmsQuery.isFetching}
               onReset={() => {
                 filterForm.resetFields()
-                setFilters((current) => ({ page: 1, pageSize: current.pageSize ?? 10 }))
+                setFilters((current) => ({ page: 1, pageSize: current.pageSize ?? 15 }))
               }}
             />
           ),
           children: (
             <>
-              <ManagementKeywordField label="关键字" placeholder="搜索名称、IP 或节点" />
-              <ManagementQueryField minWidth={180} name="connectionId" label="连接" width={180}>
+              <ManagementKeywordField
+                label={localeText(localeCode, '关键字', 'Keyword')}
+                placeholder={localeText(
+                  localeCode,
+                  '搜索名称、IP 或节点',
+                  'Search name, IP, or node',
+                )}
+              />
+              <ManagementQueryField
+                minWidth={180}
+                name="connectionId"
+                label={localeText(localeCode, '连接', 'Connection')}
+                width={180}
+              >
                 <Select
                   allowClear
                   showSearch={{ optionFilterProp: 'label' }}
-                  placeholder="全部连接"
+                  placeholder={localeText(localeCode, '全部连接', 'All connections')}
                   options={clusters.map((item) => ({ value: item.id, label: item.name }))}
                 />
               </ManagementQueryField>
-              <ManagementQueryField minWidth={136} name="status" label="状态" width={136}>
+              <ManagementQueryField
+                minWidth={136}
+                name="status"
+                label={localeText(localeCode, '状态', 'Status')}
+                width={136}
+              >
                 <Select
                   allowClear
-                  placeholder="全部状态"
+                  placeholder={localeText(localeCode, '全部状态', 'All statuses')}
                   options={['running', 'stopped', 'pending', 'failed'].map((item) => ({
                     value: item,
-                    label: item,
+                    label: formatStatusLabel(item, localeCode),
                   }))}
                 />
               </ManagementQueryField>
-              <ManagementQueryField minWidth={160} name="provider" label="Provider" width={160}>
-                <Select allowClear placeholder="全部 Provider" options={providerOptions} />
+              <ManagementQueryField
+                minWidth={160}
+                name="provider"
+                label={localeText(localeCode, '提供方', 'Provider')}
+                width={160}
+              >
+                <Select
+                  allowClear
+                  placeholder={localeText(localeCode, '全部提供方', 'All providers')}
+                  options={providerOptions}
+                />
               </ManagementQueryField>
             </>
           ),
@@ -802,6 +879,7 @@ export function VirtualizationVmsPage() {
                   onClick={() => {
                     setCurrentStep(0)
                     form.resetFields()
+                    setCloneSource(null)
                     form.setFieldValue('provider', defaultProvider)
                     form.setFieldValue(
                       'sourceMode',
@@ -812,7 +890,7 @@ export function VirtualizationVmsPage() {
                     setDrawerOpen(true)
                   }}
                 >
-                  创建虚拟机
+                  {localeText(localeCode, '创建虚拟机', 'Create virtual machine')}
                 </Button>
               ) : null
             }
@@ -821,31 +899,55 @@ export function VirtualizationVmsPage() {
             loading={vmsQuery.isLoading}
             dataSource={vmPage.items}
             columns={columns}
-            scroll={{ x: 1550 }}
+            scroll={{ x: 1580 }}
             pagination={pageTablePagination(vmPage, setFilters)}
-            paginationSummary={virtualizationPageSummary}
+            paginationSummary={(total, range) =>
+              localeText(
+                localeCode,
+                virtualizationPageSummary(total, range),
+                total > 0 ? `${range[0]}-${range[1]} of ${total}` : '0 of 0',
+              )
+            }
           />
         }
         afterTable={
           <StepFormModal
-            title="创建虚拟机"
+            title={localeText(localeCode, '创建虚拟机', 'Create virtual machine')}
             current={currentStep}
             form={form}
             loading={createPlanMutation.isPending || runtimePlanMutation.isPending}
             open={drawerOpen}
-            onClose={() => setDrawerOpen(false)}
-            onCurrentChange={setCurrentStep}
-            initialValues={{
-              provider: defaultProvider,
-              sourceMode: defaultProvider === 'pve' ? 'template_clone' : 'datasource_clone',
-              kubevirtNetworkType: 'pod',
-              kubevirtInterfaceBinding: 'bridge',
-              enableCloudInit: false,
-              registerRuntimeHost: false,
-              runtimeAvailablePortStart: 20000,
-              runtimeAvailablePortEnd: 39999,
-              startAfterCreate: true,
+            onClose={() => {
+              setDrawerOpen(false)
+              setCloneSource(null)
             }}
+            onCurrentChange={setCurrentStep}
+            initialValues={
+              cloneSource
+                ? {
+                    name: `${cloneSource.name}-clone`,
+                    provider: 'pve',
+                    connectionId: cloneSource.connectionId,
+                    sourceMode: 'vm_clone',
+                    templateId: pveVMSourceRef(cloneSource),
+                    node: cloneSource.node,
+                    pveBridge: cloneSource.network,
+                    enableCloudInit: false,
+                    registerRuntimeHost: false,
+                    startAfterCreate: true,
+                  }
+                : {
+                    provider: defaultProvider,
+                    sourceMode: defaultProvider === 'pve' ? 'template_clone' : 'datasource_clone',
+                    kubevirtNetworkType: 'pod',
+                    kubevirtInterfaceBinding: 'bridge',
+                    enableCloudInit: false,
+                    registerRuntimeHost: false,
+                    runtimeAvailablePortStart: 20000,
+                    runtimeAvailablePortEnd: 39999,
+                    startAfterCreate: true,
+                  }
+            }
             onFinish={(values) => {
               const vmPayload = buildCreateVmPayload(values)
               if (values.registerRuntimeHost) {
@@ -856,7 +958,7 @@ export function VirtualizationVmsPage() {
             }}
             steps={[
               {
-                title: '基础配置',
+                title: localeText(localeCode, '基础配置', 'Basic configuration'),
                 fieldNames: [
                   'name',
                   'provider',
@@ -868,11 +970,19 @@ export function VirtualizationVmsPage() {
                 ],
                 children: (
                   <>
-                    <Form.Item name="name" label="名称" rules={[{ required: true }]}>
+                    <Form.Item
+                      name="name"
+                      label={localeText(localeCode, '名称', 'Name')}
+                      rules={[{ required: true }]}
+                    >
                       <Input />
                     </Form.Item>
                     <div className="soha-vrt-form-grid soha-vrt-form-grid--2">
-                      <Form.Item name="provider" label="Provider" rules={[{ required: true }]}>
+                      <Form.Item
+                        name="provider"
+                        label={localeText(localeCode, '提供方', 'Provider')}
+                        rules={[{ required: true }]}
+                      >
                         <Select
                           options={providerOptions}
                           onChange={(provider) =>
@@ -887,7 +997,11 @@ export function VirtualizationVmsPage() {
                           }
                         />
                       </Form.Item>
-                      <Form.Item name="connectionId" label="连接" rules={[{ required: true }]}>
+                      <Form.Item
+                        name="connectionId"
+                        label={localeText(localeCode, '连接', 'Connection')}
+                        rules={[{ required: true }]}
+                      >
                         <Select
                           showSearch={{ optionFilterProp: 'label' }}
                           options={clusters
@@ -896,7 +1010,11 @@ export function VirtualizationVmsPage() {
                         />
                       </Form.Item>
                     </div>
-                    <Form.Item name="sourceMode" label="创建模式" rules={[{ required: true }]}>
+                    <Form.Item
+                      name="sourceMode"
+                      label={localeText(localeCode, '创建模式', 'Creation mode')}
+                      rules={[{ required: true }]}
+                    >
                       <Select
                         onChange={() =>
                           form.setFieldsValue({ bootImageId: undefined, templateId: undefined })
@@ -904,21 +1022,44 @@ export function VirtualizationVmsPage() {
                         options={
                           createProvider === 'pve'
                             ? [
-                                { value: 'template_clone', label: '模板克隆' },
-                                { value: 'vm_clone', label: '虚拟机完整克隆' },
-                                { value: 'iso_install', label: 'ISO 安装' },
+                                {
+                                  value: 'template_clone',
+                                  label: localeText(localeCode, '模板克隆', 'Template clone'),
+                                },
+                                {
+                                  value: 'vm_clone',
+                                  label: localeText(localeCode, '虚拟机完整克隆', 'Full VM clone'),
+                                },
+                                {
+                                  value: 'iso_install',
+                                  label: localeText(localeCode, 'ISO 安装', 'ISO install'),
+                                },
                               ]
                             : [
-                                { value: 'datasource_clone', label: 'DataSource 克隆' },
-                                { value: 'pvc_clone', label: 'PVC 克隆' },
+                                {
+                                  value: 'datasource_clone',
+                                  label: localeText(
+                                    localeCode,
+                                    'DataSource 克隆',
+                                    'DataSource clone',
+                                  ),
+                                },
+                                {
+                                  value: 'pvc_clone',
+                                  label: localeText(localeCode, 'PVC 克隆', 'PVC clone'),
+                                },
                               ]
                         }
                       />
                     </Form.Item>
-                    <Form.Item name="flavorId" label="规格">
+                    <Form.Item name="flavorId" label={localeText(localeCode, '规格', 'Flavor')}>
                       <Select
                         allowClear
-                        placeholder="可选；未选择时使用下方计算规格"
+                        placeholder={localeText(
+                          localeCode,
+                          '可选；未选择时使用下方计算规格',
+                          'Optional; use the resource fields below when empty',
+                        )}
                         showSearch={{ optionFilterProp: 'label' }}
                         options={compatibleFlavors
                           .filter((item) => item.enabled !== false)
@@ -941,11 +1082,11 @@ export function VirtualizationVmsPage() {
                       label={
                         createProvider === 'pve'
                           ? createSourceMode === 'iso_install'
-                            ? '安装 ISO'
+                            ? localeText(localeCode, '安装 ISO', 'Install ISO')
                             : createSourceMode === 'vm_clone'
-                              ? '源虚拟机'
-                              : '模板'
-                          : '启动镜像'
+                              ? localeText(localeCode, '源虚拟机', 'Source VM')
+                              : localeText(localeCode, '模板', 'Template')
+                          : localeText(localeCode, '启动镜像', 'Boot image')
                       }
                       rules={[{ required: true }]}
                     >
@@ -970,7 +1111,11 @@ export function VirtualizationVmsPage() {
                           createSourceMode === 'vm_clone'
                             ? pveCloneSources.map((item) => ({
                                 value: pveVMSourceRef(item),
-                                label: `${item.name || pveVMSourceRef(item)} / 虚拟机（完整克隆）`,
+                                label: localeText(
+                                  localeCode,
+                                  `${item.name || pveVMSourceRef(item)} / 虚拟机（完整克隆）`,
+                                  `${item.name || pveVMSourceRef(item)} / VM (full clone)`,
+                                ),
                               }))
                             : images
                                 .filter(
@@ -1000,7 +1145,7 @@ export function VirtualizationVmsPage() {
                 ),
               },
               {
-                title: '计算规格',
+                title: localeText(localeCode, '计算规格', 'Compute resources'),
                 fieldNames: ['cpu', 'memoryMiB', 'diskGiB'],
                 children: (
                   <>
@@ -1008,16 +1153,26 @@ export function VirtualizationVmsPage() {
                       className="soha-vrt-form-alert"
                       type="info"
                       showIcon
-                      title="可保留规格模板值，也可在这里覆盖 CPU、内存和系统盘。"
+                      title={localeText(
+                        localeCode,
+                        '可保留规格模板值，也可在这里覆盖 CPU、内存和系统盘。',
+                        'Keep the flavor values or override CPU, memory, and system disk here.',
+                      )}
                     />
                     <div className="soha-vrt-form-grid soha-vrt-form-grid--3">
-                      <Form.Item name="cpu" label="CPU 核数">
+                      <Form.Item name="cpu" label={localeText(localeCode, 'CPU 核数', 'CPU cores')}>
                         <InputNumber min={1} precision={0} className="soha-vrt-fill" />
                       </Form.Item>
-                      <Form.Item name="memoryMiB" label="内存 MiB">
+                      <Form.Item
+                        name="memoryMiB"
+                        label={localeText(localeCode, '内存 MiB', 'Memory MiB')}
+                      >
                         <InputNumber min={128} step={128} precision={0} className="soha-vrt-fill" />
                       </Form.Item>
-                      <Form.Item name="diskGiB" label="系统盘 GiB">
+                      <Form.Item
+                        name="diskGiB"
+                        label={localeText(localeCode, '系统盘 GiB', 'System disk GiB')}
+                      >
                         <InputNumber min={1} precision={0} className="soha-vrt-fill" />
                       </Form.Item>
                     </div>
@@ -1025,40 +1180,64 @@ export function VirtualizationVmsPage() {
                 ),
               },
               {
-                title: '存储网络',
+                title: localeText(localeCode, '存储网络', 'Storage and network'),
                 children: (
                   <>
                     <div className="soha-vrt-form-grid soha-vrt-form-grid--2">
-                      <Form.Item name="namespace" label="命名空间">
+                      <Form.Item
+                        name="namespace"
+                        label={localeText(localeCode, '命名空间', 'Namespace')}
+                      >
                         <Input />
                       </Form.Item>
-                      <Form.Item name="node" label="节点">
+                      <Form.Item name="node" label={localeText(localeCode, '节点', 'Node')}>
                         {createProvider === 'pve' ? (
                           <AutoComplete
                             allowClear
                             options={pveNodeOptions}
-                            placeholder="选择或输入 PVE 节点"
+                            placeholder={localeText(
+                              localeCode,
+                              '选择或输入 PVE 节点',
+                              'Select or enter a PVE node',
+                            )}
                           />
                         ) : (
-                          <Input disabled placeholder="当前由集群调度" />
+                          <Input
+                            disabled
+                            placeholder={localeText(
+                              localeCode,
+                              '当前由集群调度',
+                              'Scheduled by the cluster',
+                            )}
+                          />
                         )}
                       </Form.Item>
                     </div>
                     {createProvider === 'pve' ? (
                       <div className="soha-vrt-form-grid soha-vrt-form-grid--2">
-                        <Form.Item name="pveStorage" label="PVE 存储">
+                        <Form.Item
+                          name="pveStorage"
+                          label={localeText(localeCode, 'PVE 存储', 'PVE storage')}
+                        >
                           {pveStorageOptions.length > 0 ? (
                             <Select allowClear options={pveStorageOptions} />
                           ) : (
                             <Input placeholder="local-lvm" />
                           )}
                         </Form.Item>
-                        <Form.Item name="pveBridge" label="PVE 网桥">
+                        <Form.Item
+                          name="pveBridge"
+                          label={localeText(localeCode, 'PVE 网桥', 'PVE bridge')}
+                        >
                           {pveBridgeOptions.length > 0 ? (
                             <Select
                               allowClear
                               options={pveBridgeOptions}
-                              placeholder="选择已同步网桥"
+                              placeholder={localeText(
+                                localeCode,
+                                '选择已同步网桥',
+                                'Select a synchronized bridge',
+                              )}
                             />
                           ) : (
                             <Input placeholder="vmbr0" />
@@ -1066,17 +1245,27 @@ export function VirtualizationVmsPage() {
                         </Form.Item>
                         {createSourceMode === 'iso_install' ? (
                           <>
-                            <Form.Item name="pveIso" label="安装 ISO">
+                            <Form.Item
+                              name="pveIso"
+                              label={localeText(localeCode, '安装 ISO', 'Install ISO')}
+                            >
                               <Input placeholder="local:iso/ubuntu.iso" />
                             </Form.Item>
-                            <Form.Item name="pveOsType" label="客体系统类型" initialValue="l26">
+                            <Form.Item
+                              name="pveOsType"
+                              label={localeText(localeCode, '客体系统类型', 'Guest OS type')}
+                              initialValue="l26"
+                            >
                               <Select
                                 options={[
                                   { value: 'l26', label: 'Linux 2.6+ 内核' },
                                   { value: 'l24', label: 'Linux 2.4 内核' },
                                   { value: 'win11', label: 'Windows 11 / Server 2022' },
                                   { value: 'win10', label: 'Windows 10 / Server 2016-2019' },
-                                  { value: 'other', label: '其他系统' },
+                                  {
+                                    value: 'other',
+                                    label: localeText(localeCode, '其他系统', 'Other'),
+                                  },
                                 ]}
                               />
                             </Form.Item>
@@ -1085,7 +1274,11 @@ export function VirtualizationVmsPage() {
                           <Alert
                             type="info"
                             showIcon
-                            title="模板将作为系统盘来源，存储用于承载克隆后的磁盘。"
+                            title={localeText(
+                              localeCode,
+                              '模板将作为系统盘来源，存储用于承载克隆后的磁盘。',
+                              'The template supplies the system disk; storage holds the cloned disk.',
+                            )}
                           />
                         )}
                       </div>
@@ -1096,18 +1289,38 @@ export function VirtualizationVmsPage() {
                             <Input placeholder="fast-ssd" />
                           </Form.Item>
                           {createSourceMode === 'pvc_clone' ? (
-                            <Form.Item name="kubevirtDataVolumeName" label="PVC 名称">
+                            <Form.Item
+                              name="kubevirtDataVolumeName"
+                              label={localeText(localeCode, 'PVC 名称', 'PVC name')}
+                            >
                               <Input placeholder="existing-root-pvc" />
                             </Form.Item>
                           ) : (
-                            <Form.Item name="kubevirtDataVolumeName" label="DataVolume 名称">
+                            <Form.Item
+                              name="kubevirtDataVolumeName"
+                              label={localeText(localeCode, 'DataVolume 名称', 'DataVolume name')}
+                            >
                               <Input placeholder="demo-rootdisk" />
                             </Form.Item>
                           )}
-                          <Form.Item name="kubevirtNetworkType" label="KubeVirt 网络类型">
+                          <Form.Item
+                            name="kubevirtNetworkType"
+                            label={localeText(
+                              localeCode,
+                              'KubeVirt 网络类型',
+                              'KubeVirt network type',
+                            )}
+                          >
                             <Select
                               options={[
-                                { value: 'pod', label: 'Pod 默认网络' },
+                                {
+                                  value: 'pod',
+                                  label: localeText(
+                                    localeCode,
+                                    'Pod 默认网络',
+                                    'Default Pod network',
+                                  ),
+                                },
                                 { value: 'multus', label: 'Multus' },
                               ]}
                             />
@@ -1117,7 +1330,7 @@ export function VirtualizationVmsPage() {
                             label={
                               kubevirtNetworkType === 'multus'
                                 ? 'NetworkAttachmentDefinition'
-                                : '网络'
+                                : localeText(localeCode, '网络', 'Network')
                             }
                           >
                             <Input
@@ -1127,7 +1340,10 @@ export function VirtualizationVmsPage() {
                             />
                           </Form.Item>
                           {kubevirtNetworkType === 'multus' ? (
-                            <Form.Item name="kubevirtNetworkAttachmentDefinition" label="NAD 引用">
+                            <Form.Item
+                              name="kubevirtNetworkAttachmentDefinition"
+                              label={localeText(localeCode, 'NAD 引用', 'NAD reference')}
+                            >
                               <Input placeholder="apps/docker-build-net" />
                             </Form.Item>
                           ) : null}
@@ -1154,7 +1370,7 @@ export function VirtualizationVmsPage() {
                 ),
               },
               {
-                title: '附加资源',
+                title: localeText(localeCode, '附加资源', 'Additional resources'),
                 children: (
                   <Space orientation="vertical" className="soha-vrt-fill" size="large">
                     <Form.List name="disks">
@@ -1165,14 +1381,33 @@ export function VirtualizationVmsPage() {
                               key={key}
                               className="soha-vrt-form-grid soha-vrt-form-grid--disk-row"
                             >
-                              <div className="soha-vrt-form-row-hint">系统自动分配磁盘标识</div>
+                              <div className="soha-vrt-form-row-hint">
+                                {localeText(
+                                  localeCode,
+                                  '系统自动分配磁盘标识',
+                                  'Disk ID assigned automatically',
+                                )}
+                              </div>
                               <Form.Item
                                 name={[name, 'storage']}
-                                rules={[{ required: true, message: '请选择虚拟化存储' }]}
+                                rules={[
+                                  {
+                                    required: true,
+                                    message: localeText(
+                                      localeCode,
+                                      '请选择虚拟化存储',
+                                      'Select virtualization storage',
+                                    ),
+                                  },
+                                ]}
                               >
                                 <Select
                                   showSearch
-                                  placeholder="选择虚拟化存储"
+                                  placeholder={localeText(
+                                    localeCode,
+                                    '选择虚拟化存储',
+                                    'Select virtualization storage',
+                                  )}
                                   options={pveStorageOptions}
                                 />
                               </Form.Item>
@@ -1180,8 +1415,12 @@ export function VirtualizationVmsPage() {
                                 <InputNumber min={1} addonAfter="GiB" />
                               </Form.Item>
                               <ManagementIconButton
-                                aria-label="移除附加磁盘"
-                                tooltip="移除"
+                                aria-label={localeText(
+                                  localeCode,
+                                  '移除附加磁盘',
+                                  'Remove additional disk',
+                                )}
+                                tooltip={localeText(localeCode, '移除', 'Remove')}
                                 icon={<DeleteOutlined />}
                                 onClick={() => remove(name)}
                               />
@@ -1194,7 +1433,7 @@ export function VirtualizationVmsPage() {
                               !selectedCluster?.capabilities?.includes(VM_CAPABILITIES.diskAdd)
                             }
                           >
-                            新增附加磁盘
+                            {localeText(localeCode, '新增附加磁盘', 'Add disk')}
                           </Button>
                         </Space>
                       )}
@@ -1207,20 +1446,40 @@ export function VirtualizationVmsPage() {
                               key={key}
                               className="soha-vrt-form-grid soha-vrt-form-grid--network-row"
                             >
-                              <div className="soha-vrt-form-row-hint">系统自动分配网卡标识</div>
+                              <div className="soha-vrt-form-row-hint">
+                                {localeText(
+                                  localeCode,
+                                  '系统自动分配网卡标识',
+                                  'Interface ID assigned automatically',
+                                )}
+                              </div>
                               <Form.Item name={[name, 'network']} rules={[{ required: true }]}>
                                 <Select
                                   showSearch
-                                  placeholder="选择虚拟化网络"
+                                  placeholder={localeText(
+                                    localeCode,
+                                    '选择虚拟化网络',
+                                    'Select virtualization network',
+                                  )}
                                   options={pveBridgeOptions}
                                 />
                               </Form.Item>
                               <Form.Item name={[name, 'model']}>
-                                <Input placeholder="接口型号，如 virtio" />
+                                <Input
+                                  placeholder={localeText(
+                                    localeCode,
+                                    '接口型号，如 virtio',
+                                    'Interface model, for example virtio',
+                                  )}
+                                />
                               </Form.Item>
                               <ManagementIconButton
-                                aria-label="移除附加网卡"
-                                tooltip="移除"
+                                aria-label={localeText(
+                                  localeCode,
+                                  '移除附加网卡',
+                                  'Remove additional interface',
+                                )}
+                                tooltip={localeText(localeCode, '移除', 'Remove')}
                                 icon={<DeleteOutlined />}
                                 onClick={() => remove(name)}
                               />
@@ -1233,7 +1492,7 @@ export function VirtualizationVmsPage() {
                               !selectedCluster?.capabilities?.includes(VM_CAPABILITIES.networkAdd)
                             }
                           >
-                            新增网卡
+                            {localeText(localeCode, '新增网卡', 'Add network interface')}
                           </Button>
                         </Space>
                       )}
@@ -1260,11 +1519,23 @@ export function VirtualizationVmsPage() {
                   <>
                     <Form.Item
                       name="registerRuntimeHost"
-                      label="同时接入为运行时主机"
+                      label={localeText(
+                        localeCode,
+                        '同时接入为运行时主机',
+                        'Connect as a runtime host',
+                      )}
                       tooltip={
                         canCreateRuntimeHosts
-                          ? '创建 VM 后安装 Soha Agent，并登记到运行时主机。'
-                          : '需要启用容器运行时模块并具备运行时主机创建权限。'
+                          ? localeText(
+                              localeCode,
+                              '创建 VM 后安装 Soha Agent，并登记到运行时主机。',
+                              'Install Soha Agent after VM creation and register it as a runtime host.',
+                            )
+                          : localeText(
+                              localeCode,
+                              '需要启用容器运行时模块并具备运行时主机创建权限。',
+                              'Requires the container runtime module and runtime host create permission.',
+                            )
                       }
                       valuePropName="checked"
                     >
@@ -1281,22 +1552,46 @@ export function VirtualizationVmsPage() {
                       <>
                         <Form.Item
                           name="runtimeControlPlaneBaseURL"
-                          label="Soha 控制面地址"
+                          label={localeText(
+                            localeCode,
+                            'Soha 控制面地址',
+                            'Soha control plane URL',
+                          )}
                           rules={[
-                            { required: true, message: '请输入虚拟机可访问的 Soha 控制面地址' },
+                            {
+                              required: true,
+                              message: localeText(
+                                localeCode,
+                                '请输入虚拟机可访问的 Soha 控制面地址',
+                                'Enter a Soha control plane URL reachable by the VM',
+                              ),
+                            },
                           ]}
-                          tooltip="新虚拟机内的 Agent 使用此地址注册并回传任务。"
+                          tooltip={localeText(
+                            localeCode,
+                            '新虚拟机内的 Agent 使用此地址注册并回传任务。',
+                            'The Agent in the new VM uses this URL to register and report tasks.',
+                          )}
                         >
                           <Input placeholder="http://soha.internal:8080" />
                         </Form.Item>
                         <div className="soha-vrt-form-grid soha-vrt-form-grid--3">
-                          <Form.Item name="runtimeEnvironment" label="运行环境">
+                          <Form.Item
+                            name="runtimeEnvironment"
+                            label={localeText(localeCode, '运行环境', 'Environment')}
+                          >
                             <Input placeholder="dev / test" />
                           </Form.Item>
-                          <Form.Item name="runtimeAvailablePortStart" label="端口池起始">
+                          <Form.Item
+                            name="runtimeAvailablePortStart"
+                            label={localeText(localeCode, '端口池起始', 'Port pool start')}
+                          >
                             <InputNumber min={1} max={65535} className="soha-vrt-fill" />
                           </Form.Item>
-                          <Form.Item name="runtimeAvailablePortEnd" label="端口池结束">
+                          <Form.Item
+                            name="runtimeAvailablePortEnd"
+                            label={localeText(localeCode, '端口池结束', 'Port pool end')}
+                          >
                             <InputNumber min={1} max={65535} className="soha-vrt-fill" />
                           </Form.Item>
                         </div>
@@ -1306,7 +1601,11 @@ export function VirtualizationVmsPage() {
                           items={[
                             {
                               key: 'runtime-advanced',
-                              label: '运行时高级设置',
+                              label: localeText(
+                                localeCode,
+                                '运行时高级设置',
+                                'Advanced runtime settings',
+                              ),
                               children: (
                                 <>
                                   {createProvider === 'pve' ? (
@@ -1318,31 +1617,55 @@ export function VirtualizationVmsPage() {
                                         <Select
                                           allowClear
                                           options={pveSnippetStorageOptions}
-                                          placeholder="选择支持 snippets 的存储"
+                                          placeholder={localeText(
+                                            localeCode,
+                                            '选择支持 snippets 的存储',
+                                            'Select storage with snippets support',
+                                          )}
                                         />
                                       ) : (
                                         <Input placeholder="local" />
                                       )}
                                     </Form.Item>
                                   ) : null}
-                                  <Form.Item name="runtimeEndpoint" label="Agent 对外地址">
+                                  <Form.Item
+                                    name="runtimeEndpoint"
+                                    label={localeText(
+                                      localeCode,
+                                      'Agent 对外地址',
+                                      'Agent public endpoint',
+                                    )}
+                                  >
                                     <Input placeholder="http://__SOHA_VM_IP__:18080" />
                                   </Form.Item>
                                   <Form.Item
                                     name="runtimeAgentInstallScript"
-                                    label="Agent 安装脚本"
+                                    label={localeText(
+                                      localeCode,
+                                      'Agent 安装脚本',
+                                      'Agent install script',
+                                    )}
                                   >
                                     <Input.TextArea rows={3} spellCheck={false} />
                                   </Form.Item>
                                   <div className="soha-vrt-form-grid soha-vrt-form-grid--2">
-                                    <Form.Item name="runtimeOwner" label="负责人">
+                                    <Form.Item
+                                      name="runtimeOwner"
+                                      label={localeText(localeCode, '负责人', 'Owner')}
+                                    >
                                       <Input />
                                     </Form.Item>
-                                    <Form.Item name="runtimeTeam" label="团队">
+                                    <Form.Item
+                                      name="runtimeTeam"
+                                      label={localeText(localeCode, '团队', 'Team')}
+                                    >
                                       <Input />
                                     </Form.Item>
                                   </div>
-                                  <Form.Item name="runtimeTTLSeconds" label="有效期秒数">
+                                  <Form.Item
+                                    name="runtimeTTLSeconds"
+                                    label={localeText(localeCode, '有效期秒数', 'TTL seconds')}
+                                  >
                                     <InputNumber min={0} className="soha-vrt-fill" />
                                   </Form.Item>
                                 </>
@@ -1355,7 +1678,7 @@ export function VirtualizationVmsPage() {
                       <>
                         <Form.Item
                           name="enableCloudInit"
-                          label="启用 Cloud-Init"
+                          label={localeText(localeCode, '启用 Cloud-Init', 'Enable Cloud-Init')}
                           valuePropName="checked"
                         >
                           <Switch />
@@ -1364,7 +1687,14 @@ export function VirtualizationVmsPage() {
                           <>
                             {createProvider === 'pve' ? (
                               <div className="soha-vrt-form-grid soha-vrt-form-grid--2">
-                                <Form.Item name="pveCloudInitUser" label="Cloud-Init 用户名">
+                                <Form.Item
+                                  name="pveCloudInitUser"
+                                  label={localeText(
+                                    localeCode,
+                                    'Cloud-Init 用户名',
+                                    'Cloud-Init username',
+                                  )}
+                                >
                                   <Input placeholder="ubuntu" />
                                 </Form.Item>
                                 <Form.Item name="pveSnippetStorage" label="Snippet Storage">
@@ -1372,7 +1702,11 @@ export function VirtualizationVmsPage() {
                                     <Select
                                       allowClear
                                       options={pveSnippetStorageOptions}
-                                      placeholder="选择支持 snippets 的存储"
+                                      placeholder={localeText(
+                                        localeCode,
+                                        '选择支持 snippets 的存储',
+                                        'Select storage with snippets support',
+                                      )}
                                     />
                                   ) : (
                                     <Input placeholder="local" />
@@ -1381,7 +1715,14 @@ export function VirtualizationVmsPage() {
                                 <Form.Item name="pveCloudInitSSHKeys" label="SSH Keys">
                                   <Input.TextArea rows={3} placeholder="ssh-rsa AAAA..." />
                                 </Form.Item>
-                                <Form.Item name="pveCICustom" label="cicustom 引用">
+                                <Form.Item
+                                  name="pveCICustom"
+                                  label={localeText(
+                                    localeCode,
+                                    'cicustom 引用',
+                                    'cicustom reference',
+                                  )}
+                                >
                                   <Input placeholder="user=local:snippets/bootstrap.yaml" />
                                 </Form.Item>
                               </div>
@@ -1398,7 +1739,15 @@ export function VirtualizationVmsPage() {
                             </Form.Item>
                           </>
                         ) : (
-                          <Alert type="info" showIcon title="本次创建不使用 Cloud-Init" />
+                          <Alert
+                            type="info"
+                            showIcon
+                            title={localeText(
+                              localeCode,
+                              '本次创建不使用 Cloud-Init',
+                              'Cloud-Init is disabled for this creation',
+                            )}
+                          />
                         )}
                       </>
                     )}
@@ -1406,7 +1755,7 @@ export function VirtualizationVmsPage() {
                 ),
               },
               {
-                title: '确认',
+                title: localeText(localeCode, '确认', 'Review'),
                 children: (
                   <>
                     <Alert
@@ -1414,21 +1763,41 @@ export function VirtualizationVmsPage() {
                       type="info"
                       title={
                         registerRuntimeHost
-                          ? '确认创建虚拟机并接入运行时主机'
-                          : '确认提交虚拟机创建任务'
+                          ? localeText(
+                              localeCode,
+                              '确认创建虚拟机并接入运行时主机',
+                              'Create the VM and connect it as a runtime host',
+                            )
+                          : localeText(
+                              localeCode,
+                              '确认提交虚拟机创建任务',
+                              'Submit virtual machine creation',
+                            )
                       }
                       description={
                         registerRuntimeHost
-                          ? '虚拟机创建完成后将等待 Soha Agent 注册，运行时主机随后上线。'
+                          ? localeText(
+                              localeCode,
+                              '虚拟机创建完成后将等待 Soha Agent 注册，运行时主机随后上线。',
+                              'After VM creation, Soha waits for the Agent to register before the runtime host becomes available.',
+                            )
                           : enableCloudInit
-                            ? 'Cloud-Init 已启用，相关初始化配置将随创建任务提交。'
-                            : 'Cloud-Init 未启用，本次仅提交虚拟机、存储和网络配置。'
+                            ? localeText(
+                                localeCode,
+                                'Cloud-Init 已启用，相关初始化配置将随创建任务提交。',
+                                'Cloud-Init configuration will be submitted with the creation task.',
+                              )
+                            : localeText(
+                                localeCode,
+                                'Cloud-Init 未启用，本次仅提交虚拟机、存储和网络配置。',
+                                'Only VM, storage, and network configuration will be submitted.',
+                              )
                       }
                     />
                     <Form.Item
                       className="mt-4"
                       name="startAfterCreate"
-                      label="创建后启动"
+                      label={localeText(localeCode, '创建后启动', 'Start after creation')}
                       valuePropName="checked"
                     >
                       <Switch disabled={registerRuntimeHost} />
@@ -1437,7 +1806,15 @@ export function VirtualizationVmsPage() {
                 ),
               },
             ]}
-            submitText={registerRuntimeHost ? '生成创建与接入计划' : '提交创建'}
+            submitText={
+              registerRuntimeHost
+                ? localeText(
+                    localeCode,
+                    '生成创建与接入计划',
+                    'Generate creation and connection plan',
+                  )
+                : localeText(localeCode, '提交创建', 'Submit creation')
+            }
             width={820}
           />
         }

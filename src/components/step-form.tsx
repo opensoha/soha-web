@@ -1,6 +1,7 @@
 import type { MouseEvent, ReactNode } from 'react'
 import { Button, Form, Steps } from 'antd'
 import type { FormInstance, FormProps } from 'antd'
+import { localeText, useI18n } from '@/i18n'
 import './step-form.css'
 
 type StepFormFieldNames = Parameters<FormInstance['validateFields']>[0]
@@ -25,21 +26,26 @@ interface StepFormProps extends Omit<FormProps, 'children'> {
 }
 
 export function StepForm({
-  cancelText = '取消',
+  cancelText,
   className,
   contentMaxWidth = 640,
   current,
   form,
   layout = 'vertical',
   loading,
-  nextText = '下一步',
+  nextText,
   onCancel,
   onCurrentChange,
-  previousText = '上一步',
+  previousText,
   steps,
-  submitText = '保存',
+  submitText,
   ...formProps
 }: StepFormProps) {
+  const { localeCode } = useI18n()
+  const resolvedCancelText = cancelText ?? localeText(localeCode, '取消', 'Cancel')
+  const resolvedNextText = nextText ?? localeText(localeCode, '下一步', 'Next')
+  const resolvedPreviousText = previousText ?? localeText(localeCode, '上一步', 'Previous')
+  const resolvedSubmitText = submitText ?? localeText(localeCode, '保存', 'Save')
   const activeStep = steps[current]
 
   const stopFormSubmit = (event: MouseEvent<HTMLElement>) => {
@@ -82,6 +88,7 @@ export function StepForm({
         className="soha-step-form__steps"
         current={current}
         items={steps.map((step) => ({ title: step.title }))}
+        responsive={false}
         size="small"
       />
       <div className="soha-step-form__content" style={{ maxWidth: contentMaxWidth }}>
@@ -100,21 +107,21 @@ export function StepForm({
               onCancel(event)
             }}
           >
-            {cancelText}
+            {resolvedCancelText}
           </Button>
         ) : null}
         {current > 0 ? (
           <Button htmlType="button" onClick={goPrevious}>
-            {previousText}
+            {resolvedPreviousText}
           </Button>
         ) : null}
         {current < steps.length - 1 ? (
           <Button htmlType="button" type="primary" onClick={goNext}>
-            {nextText}
+            {resolvedNextText}
           </Button>
         ) : (
           <Button htmlType="submit" loading={loading} onClick={submitForm} type="primary">
-            {submitText}
+            {resolvedSubmitText}
           </Button>
         )}
       </div>

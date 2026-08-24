@@ -16,10 +16,15 @@ import type {
 export type SystemEndpointScope = 'system' | 'identity'
 
 export interface LogFilters {
+  clusterId?: string
+  limit?: number
   metadataKey?: string
   metadataValue?: string
+  namespace?: string
   requestMethod?: string
   requestPath?: string
+  resourceKind?: string
+  resourceName?: string
   result?: string
 }
 
@@ -133,8 +138,13 @@ export const systemApi = {
         api.get<ApiResponse<AuditLog[]>>(
           withQuery(auditEventsPath(scope), {
             action: filters.action,
+            clusterId: filters.clusterId,
+            limit: filters.limit == null ? undefined : String(filters.limit),
+            namespace: filters.namespace,
             requestMethod: filters.requestMethod,
             requestPath: filters.requestPath,
+            resourceKind: filters.resourceKind,
+            resourceName: filters.resourceName,
             result: filters.result,
             metadataKey: filters.metadataKey,
             metadataValue: filters.metadataValue,
@@ -149,8 +159,13 @@ export const systemApi = {
         api.get<ApiResponse<OperationLog[]>>(
           withQuery('/operations/logs', {
             operationType: filters.operationType,
+            clusterId: filters.clusterId,
+            limit: filters.limit == null ? undefined : String(filters.limit),
+            namespace: filters.namespace,
             requestMethod: filters.requestMethod,
             requestPath: filters.requestPath,
+            resourceKind: filters.resourceKind,
+            resourceName: filters.resourceName,
             result: filters.result,
             metadataKey: filters.metadataKey,
             metadataValue: filters.metadataValue,

@@ -9,11 +9,11 @@ import {
   Space,
   Spin,
   Tag,
-  Typography,
 } from 'antd'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import {
   ManagementDensityButton,
   ManagementIconButton,
@@ -39,8 +39,6 @@ import { crdQueries } from './queries'
 import type { CRD, CRDResourceInstance } from './types'
 import { getServedVersions, isNamespacedCRD } from './utils'
 
-const { Text } = Typography
-
 const CRDResourceEditorModal = lazy(async () => {
   const module = await import('./resource-editor-modal')
   return { default: module.CRDResourceEditorModal }
@@ -59,6 +57,14 @@ function formatResourceAge(createdAt?: string, ageSeconds?: number) {
   if (createdAt) return formatRelativeTime(createdAt)
   if (typeof ageSeconds === 'number') return formatAgeSeconds(ageSeconds)
   return '-'
+}
+
+function resourceAgeSeconds(record: CRDResourceInstance, now: number) {
+  if (record.createdAt) {
+    const createdAt = Date.parse(record.createdAt)
+    if (Number.isFinite(createdAt)) return Math.max(0, (now - createdAt) / 1000)
+  }
+  return typeof record.ageSeconds === 'number' ? record.ageSeconds : Number.POSITIVE_INFINITY
 }
 
 export function CRDKindWorkspace({ crd }: { crd: CRD }) {
@@ -140,6 +146,12 @@ export function CRDKindWorkspace({ crd }: { crd: CRD }) {
       ...tableColumnPresets.datetime,
       title: 'Age',
       key: 'age',
+      sorter: (left, right) => {
+        const now = Date.now()
+        const leftAge = resourceAgeSeconds(left, now)
+        const rightAge = resourceAgeSeconds(right, now)
+        return leftAge === rightAge ? 0 : leftAge - rightAge
+      },
       render: (_value, record) => formatResourceAge(record.createdAt, record.ageSeconds),
     },
     {
@@ -273,13 +285,8 @@ export function CRDKindWorkspace({ crd }: { crd: CRD }) {
         dataSource={mutationsDisabled ? [] : filteredResources}
         rowKey={(record) => `${record.namespace || '__cluster__'}:${record.name}`}
         loading={resourcesQuery.isLoading}
-        paginationSummary={
-          <Text className="soha-workload-table-summary" type="secondary">
-            {localeCode === 'zh_CN'
-              ? `当前 ${filteredResources.length} / ${rawResources.length} 条`
-              : `${filteredResources.length} / ${rawResources.length} items`}
-          </Text>
-        }
+        localSorting
+        pageSize={K8S_TABLE_PAGE_SIZE}
         empty={
           capabilityReason ? (
             <Alert
@@ -294,6 +301,7 @@ export function CRDKindWorkspace({ crd }: { crd: CRD }) {
         }
         tableSize={tableSize}
         scroll={{ x: 'max-content' }}
+        viewportScroll
         headerExtra={
           <ManagementTableToolbar>
             <Button

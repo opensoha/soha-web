@@ -11,7 +11,6 @@ import {
   Popconfirm,
   Select,
   Space,
-  Switch,
   Tooltip,
   Typography,
 } from 'antd'
@@ -27,6 +26,7 @@ import {
 } from '@ant-design/icons'
 import { formatDateTime } from '@/utils/time'
 import { computeQueries, latestTaskForResource, ResourceTaskActions } from '@/features/compute'
+import { localeText, useI18n } from '@/i18n'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { BooleanTag, MetadataTag, StatusTag } from '@/components/status-tag'
 import {
@@ -50,7 +50,7 @@ import {
   isSyncOperation,
   latestNonEmptyOperationMessage,
   localTableSummary,
-  operationKind,
+  operationKindLabel,
   operationTime,
   providerLabel,
   riskReasons,
@@ -188,6 +188,7 @@ export function VirtualizationClustersPage() {
   } = useVirtualizationPermissions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
+  const { localeCode } = useI18n()
   const clustersQuery = useQuery(virtualizationQueries.clusters(virtualizationModuleEnabled))
   const clusterOperationsQuery = useQuery(
     virtualizationQueries.operations({}, virtualizationModuleEnabled),
@@ -278,14 +279,14 @@ export function VirtualizationClustersPage() {
 
   const columns: ColumnsType<VirtualizationCluster> = [
     {
-      title: '名称',
+      title: localeText(localeCode, '名称', 'Name'),
       dataIndex: 'name',
       render: tableTooltipText,
       ellipsis: tableEllipsis,
       width: 180,
     },
     {
-      title: 'Provider',
+      title: localeText(localeCode, '提供方', 'Provider'),
       dataIndex: 'provider',
       render: (value: string) => (
         <MetadataTag label={providerLabel(value)} tone={value === 'pve' ? 'gold' : 'blue'} />
@@ -293,7 +294,7 @@ export function VirtualizationClustersPage() {
       width: 120,
     },
     {
-      title: '接入目标',
+      title: localeText(localeCode, '接入目标', 'Target'),
       render: (_value, record) =>
         tableTooltipText(
           record.provider === 'kubevirt'
@@ -304,20 +305,22 @@ export function VirtualizationClustersPage() {
       width: 280,
     },
     {
-      title: '健康',
+      title: localeText(localeCode, '健康', 'Health'),
       dataIndex: 'health',
       render: (value, record) => statusTag(value || record.status),
       width: 120,
     },
     {
-      title: '风险',
+      title: localeText(localeCode, '风险', 'Risk'),
       render: (_value, record) => {
-        const reasons = riskReasons(record).join(' / ') || '正常'
-        const value = record.riskLevel || (reasons === '正常' ? 'normal' : 'warning')
+        const reasons = riskReasons(record).join(' / ') || localeText(localeCode, '正常', 'Normal')
+        const value =
+          record.riskLevel ||
+          (reasons === localeText(localeCode, '正常', 'Normal') ? 'normal' : 'warning')
         return (
           <Tooltip title={reasons}>
             <span>
-              <StatusTag value={value} label={value === 'normal' ? '正常' : value} />
+              <StatusTag value={value} />
             </span>
           </Tooltip>
         )
@@ -326,14 +329,14 @@ export function VirtualizationClustersPage() {
     },
     {
       ...tableColumnPresets.datetime,
-      title: '最近同步',
+      title: localeText(localeCode, '最近同步', 'Last sync'),
       dataIndex: 'lastSyncedAt',
       render: formatDateTime,
       width: 180,
     },
     {
       ...tableColumnPresets.task,
-      title: '最近任务',
+      title: localeText(localeCode, '最近任务', 'Latest task'),
       render: (_value, record) => (
         <ResourceTaskActions
           task={latestTaskForResource(computeTasksQuery.data?.items ?? [], 'connection', record.id)}
@@ -344,42 +347,42 @@ export function VirtualizationClustersPage() {
     },
     {
       ...tableColumnPresets.action,
-      title: '操作',
+      title: localeText(localeCode, '操作', 'Actions'),
       width: 168,
       render: (_value, record) => (
         <Space className="soha-row-action-icons">
           {canTestClusters ? (
             <ManagementIconButton
-              aria-label="测试连接"
+              aria-label={localeText(localeCode, '测试连接', 'Test connection')}
               size="small"
-              tooltip="测试"
+              tooltip={localeText(localeCode, '测试', 'Test')}
               icon={<ThunderboltOutlined />}
               onClick={() => testMutation.mutate(record.id)}
             />
           ) : null}
           {canSyncClusters ? (
             <ManagementIconButton
-              aria-label="同步连接"
+              aria-label={localeText(localeCode, '同步连接', 'Sync connection')}
               size="small"
-              tooltip="同步"
+              tooltip={localeText(localeCode, '同步', 'Sync')}
               icon={<CloudSyncOutlined />}
               onClick={() => syncMutation.mutate(record.id)}
             />
           ) : null}
           {canUpdateClusters ? (
             <ManagementIconButton
-              aria-label="编辑连接"
+              aria-label={localeText(localeCode, '编辑连接', 'Edit connection')}
               size="small"
-              tooltip="编辑"
+              tooltip={localeText(localeCode, '编辑', 'Edit')}
               icon={<EditOutlined />}
               onClick={() => openEditor(record)}
             />
           ) : null}
           {canDeleteClusters ? (
             <ManagementIconButton
-              aria-label="删除连接"
+              aria-label={localeText(localeCode, '删除连接', 'Delete connection')}
               size="small"
-              tooltip="删除"
+              tooltip={localeText(localeCode, '删除', 'Delete')}
               danger
               icon={<DeleteOutlined />}
               loading={deletePreviewMutation.isPending || deleteMutation.isPending}
@@ -403,36 +406,78 @@ export function VirtualizationClustersPage() {
       <div className="soha-vrt-query">
         <ManagementQueryPanel
           collapsible
-          actions={<Button onClick={resetClusterFilters}>重置</Button>}
+          actions={
+            <Button autoInsertSpace={false} onClick={resetClusterFilters}>
+              {localeText(localeCode, '重置', 'Reset')}
+            </Button>
+          }
         >
-          <ManagementQueryField label="异常过滤" minWidth={180} width={180}>
-            <Switch
-              checked={showOnlyAbnormal}
-              onChange={setShowOnlyAbnormal}
-              checkedChildren="仅异常"
-              unCheckedChildren="全部"
+          <ManagementQueryField
+            label={localeText(localeCode, '健康', 'Health')}
+            minWidth={200}
+            width={200}
+          >
+            <Select
+              value={showOnlyAbnormal ? 'unhealthy' : 'all'}
+              options={[
+                { value: 'all', label: localeText(localeCode, '全部', 'All') },
+                {
+                  value: 'unhealthy',
+                  label: localeText(localeCode, '仅异常', 'Unhealthy only'),
+                },
+              ]}
+              onChange={(value) => setShowOnlyAbnormal(value === 'unhealthy')}
             />
           </ManagementQueryField>
-          <ManagementQueryField label="启用状态" minWidth={180} width={180}>
+          <ManagementQueryField
+            label={localeText(localeCode, '启用状态', 'Enabled')}
+            minWidth={200}
+            width={200}
+          >
             <Select
               value={enabledFilter}
               onChange={setEnabledFilter}
-              options={ENABLED_FILTER_OPTIONS}
+              options={ENABLED_FILTER_OPTIONS.map((option) => ({
+                ...option,
+                label:
+                  option.value === 'all'
+                    ? localeText(localeCode, '全部', 'All')
+                    : option.value === 'enabled'
+                      ? localeText(localeCode, '仅启用', 'Enabled only')
+                      : localeText(localeCode, '仅禁用', 'Disabled only'),
+              }))}
             />
           </ManagementQueryField>
-          <ManagementQueryField label="Provider" minWidth={160} width={160}>
+          <ManagementQueryField
+            label={localeText(localeCode, '提供方', 'Provider')}
+            minWidth={200}
+            width={200}
+          >
             <Select
               value={providerFilter}
               onChange={setProviderFilter}
-              options={VIRTUALIZATION_PROVIDER_FILTER_OPTIONS}
+              options={VIRTUALIZATION_PROVIDER_FILTER_OPTIONS.map((option) => ({
+                ...option,
+                label:
+                  option.value === 'all' ? localeText(localeCode, '全部', 'All') : option.label,
+              }))}
             />
           </ManagementQueryField>
-          <ManagementQueryField label="同步状态" minWidth={180} width={180}>
-            <Switch
-              checked={showNeverSynced}
-              onChange={setShowNeverSynced}
-              checkedChildren="未同步"
-              unCheckedChildren="全部"
+          <ManagementQueryField
+            label={localeText(localeCode, '同步状态', 'Sync')}
+            minWidth={200}
+            width={200}
+          >
+            <Select
+              value={showNeverSynced ? 'never_synced' : 'all'}
+              options={[
+                { value: 'all', label: localeText(localeCode, '全部', 'All') },
+                {
+                  value: 'never_synced',
+                  label: localeText(localeCode, '未同步', 'Never synced'),
+                },
+              ]}
+              onChange={(value) => setShowNeverSynced(value === 'never_synced')}
             />
           </ManagementQueryField>
         </ManagementQueryPanel>
@@ -442,18 +487,28 @@ export function VirtualizationClustersPage() {
         actions={
           canCreateClusters ? (
             <Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor()}>
-              新增连接
+              {localeText(localeCode, '新增连接', 'Add connection')}
             </Button>
           ) : null
         }
         toolbarExtra={
           selectedClusterRowKeys.length > 0 ? (
             <div className="soha-vrt-selection-bar">
-              <Text type="secondary">已选择 {selectedClusterRowKeys.length} 个连接</Text>
+              <Text type="secondary">
+                {localeText(
+                  localeCode,
+                  `已选择 ${selectedClusterRowKeys.length} 个连接`,
+                  `${selectedClusterRowKeys.length} connections selected`,
+                )}
+              </Text>
               <Space wrap>
                 {canTestClusters ? (
                   <Popconfirm
-                    title="确认批量测试连接？"
+                    title={localeText(
+                      localeCode,
+                      '确认批量测试连接？',
+                      'Test selected connections?',
+                    )}
                     description={bulkActionSummary(
                       '将测试',
                       clusterRows
@@ -462,12 +517,18 @@ export function VirtualizationClustersPage() {
                     )}
                     onConfirm={() => batchTestMutation.mutate(selectedClusterRowKeys.map(String))}
                   >
-                    <Button loading={batchTestMutation.isPending}>批量测试</Button>
+                    <Button loading={batchTestMutation.isPending}>
+                      {localeText(localeCode, '批量测试', 'Test selected')}
+                    </Button>
                   </Popconfirm>
                 ) : null}
                 {canSyncClusters ? (
                   <Popconfirm
-                    title="确认批量同步连接？"
+                    title={localeText(
+                      localeCode,
+                      '确认批量同步连接？',
+                      'Sync selected connections?',
+                    )}
                     description={bulkActionSummary(
                       '将同步',
                       clusterRows
@@ -477,11 +538,13 @@ export function VirtualizationClustersPage() {
                     onConfirm={() => batchSyncMutation.mutate(selectedClusterRowKeys.map(String))}
                   >
                     <Button type="primary" loading={batchSyncMutation.isPending}>
-                      批量同步
+                      {localeText(localeCode, '批量同步', 'Sync selected')}
                     </Button>
                   </Popconfirm>
                 ) : null}
-                <Button onClick={() => setSelectedClusterRowKeys([])}>清空选择</Button>
+                <Button onClick={() => setSelectedClusterRowKeys([])}>
+                  {localeText(localeCode, '清空选择', 'Clear selection')}
+                </Button>
               </Space>
             </div>
           ) : null
@@ -499,7 +562,11 @@ export function VirtualizationClustersPage() {
         loading={clustersQuery.isLoading || clusterOperationsQuery.isLoading}
         dataSource={clusterRows}
         columns={columns}
-        paginationSummary={localTableSummary(clusterRows.length, clustersQuery.data?.length ?? 0)}
+        paginationSummary={localeText(
+          localeCode,
+          localTableSummary(clusterRows.length, clustersQuery.data?.length ?? 0),
+          `${clusterRows.length} of ${clustersQuery.data?.length ?? 0}`,
+        )}
         expandable={{
           expandedRowRender: (record: VirtualizationCluster) => {
             const failedSync = failedSyncForConnection(record.id)
@@ -516,35 +583,39 @@ export function VirtualizationClustersPage() {
                     ? record.kubernetesClusterId || '-'
                     : record.endpoint || '-'}
                 </Descriptions.Item>
-                <Descriptions.Item label="默认命名空间">
+                <Descriptions.Item
+                  label={localeText(localeCode, '默认命名空间', 'Default namespace')}
+                >
                   {record.defaultNamespace || '-'}
                 </Descriptions.Item>
-                <Descriptions.Item label="校验 TLS">
+                <Descriptions.Item label={localeText(localeCode, '校验 TLS', 'Verify TLS')}>
                   <BooleanTag
                     value={record.verifyTls !== false}
-                    trueLabel="开启"
-                    falseLabel="关闭"
+                    trueLabel={localeText(localeCode, '开启', 'On')}
+                    falseLabel={localeText(localeCode, '关闭', 'Off')}
                   />
                 </Descriptions.Item>
-                <Descriptions.Item label="最近同步">
+                <Descriptions.Item label={localeText(localeCode, '最近同步', 'Last sync')}>
                   {formatDateTime(record.lastSyncedAt)}
                 </Descriptions.Item>
-                <Descriptions.Item label="Region">{record.region || '-'}</Descriptions.Item>
-                <Descriptions.Item label="风险等级">
-                  <StatusTag
-                    value={record.riskLevel || 'normal'}
-                    label={record.riskLevel || '正常'}
-                  />
+                <Descriptions.Item label={localeText(localeCode, '区域', 'Region')}>
+                  {record.region || '-'}
                 </Descriptions.Item>
-                <Descriptions.Item label="凭证">
+                <Descriptions.Item label={localeText(localeCode, '风险等级', 'Risk level')}>
+                  <StatusTag value={record.riskLevel || 'normal'} />
+                </Descriptions.Item>
+                <Descriptions.Item label={localeText(localeCode, '凭证', 'Credentials')}>
                   <BooleanTag
                     value={record.credentialConfigured !== false}
-                    trueLabel="已配置"
-                    falseLabel="未配置"
+                    trueLabel={localeText(localeCode, '已配置', 'Configured')}
+                    falseLabel={localeText(localeCode, '未配置', 'Not configured')}
                     falseColor="error"
                   />
                 </Descriptions.Item>
-                <Descriptions.Item label="风险说明" span="filled">
+                <Descriptions.Item
+                  label={localeText(localeCode, '风险说明', 'Risk details')}
+                  span="filled"
+                >
                   {riskReasons(record).join(' / ') || '正常'}
                 </Descriptions.Item>
                 {record.provider === 'kubevirt' ? (
@@ -579,7 +650,7 @@ export function VirtualizationClustersPage() {
                 <Descriptions.Item label="最近失败同步" span="filled">
                   {failedSync
                     ? tableTooltipTextButton(
-                        `${operationKind(failedSync)} · ${latestNonEmptyOperationMessage(failedSync)}`,
+                        `${operationKindLabel(failedSync, localeCode)} · ${latestNonEmptyOperationMessage(failedSync)}`,
                         () => setSelectedConnectionOperation(failedSync),
                       )
                     : '-'}
@@ -587,7 +658,7 @@ export function VirtualizationClustersPage() {
                 <Descriptions.Item label="最近异常任务" span="filled">
                   {latestAbnormal
                     ? tableTooltipTextButton(
-                        `${operationKind(latestAbnormal)} · ${latestNonEmptyOperationMessage(latestAbnormal)}`,
+                        `${operationKindLabel(latestAbnormal, localeCode)} · ${latestNonEmptyOperationMessage(latestAbnormal)}`,
                         () => setSelectedConnectionOperation(latestAbnormal),
                       )
                     : '-'}
@@ -598,10 +669,22 @@ export function VirtualizationClustersPage() {
         }}
       />
       <Modal
-        title={deletePreview ? `删除连接：${deletePreview.cluster.name}` : '删除连接'}
+        title={
+          deletePreview
+            ? localeText(
+                localeCode,
+                `删除连接：${deletePreview.cluster.name}`,
+                `Delete connection: ${deletePreview.cluster.name}`,
+              )
+            : localeText(localeCode, '删除连接', 'Delete connection')
+        }
         open={Boolean(deletePreview)}
-        okText={deleteForceRequired ? '确认从 Soha 删除' : '确认删除连接'}
-        cancelText="取消"
+        okText={
+          deleteForceRequired
+            ? localeText(localeCode, '确认从 Soha 删除', 'Remove from Soha')
+            : localeText(localeCode, '确认删除连接', 'Delete connection')
+        }
+        cancelText={localeText(localeCode, '取消', 'Cancel')}
         okButtonProps={{ danger: true, disabled: deleteBlocked, loading: deleteMutation.isPending }}
         onOk={() => {
           if (!deletePreview || deleteBlocked) return
@@ -623,7 +706,7 @@ export function VirtualizationClustersPage() {
         }}
       />
       <Drawer
-        title="连接关联异常任务"
+        title={localeText(localeCode, '连接关联异常任务', 'Connection task issues')}
         size="large"
         motion={stableDrawerMotion}
         open={Boolean(selectedConnectionOperation)}
@@ -631,20 +714,24 @@ export function VirtualizationClustersPage() {
       >
         <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           <Descriptions size="small" column={1} bordered>
-            <Descriptions.Item label="任务 ID">{selectedConnectionOperation?.id}</Descriptions.Item>
-            <Descriptions.Item label="类型">
-              {selectedConnectionOperation ? operationKind(selectedConnectionOperation) : '-'}
+            <Descriptions.Item label={localeText(localeCode, '任务 ID', 'Task ID')}>
+              {selectedConnectionOperation?.id}
             </Descriptions.Item>
-            <Descriptions.Item label="状态">
+            <Descriptions.Item label={localeText(localeCode, '类型', 'Type')}>
+              {selectedConnectionOperation
+                ? operationKindLabel(selectedConnectionOperation, localeCode)
+                : '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label={localeText(localeCode, '状态', 'Status')}>
               {statusTag(selectedConnectionOperation?.status)}
             </Descriptions.Item>
-            <Descriptions.Item label="连接">
+            <Descriptions.Item label={localeText(localeCode, '连接', 'Connection')}>
               {selectedConnectionOperation?.connectionId || '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="摘要">
+            <Descriptions.Item label={localeText(localeCode, '摘要', 'Summary')}>
               {selectedConnectionOperation?.message || '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="开始时间">
+            <Descriptions.Item label={localeText(localeCode, '开始时间', 'Started at')}>
               {formatDateTime(
                 operationTime(selectedConnectionOperation || ({} as VirtualizationOperation)),
               )}
@@ -663,7 +750,7 @@ export function VirtualizationClustersPage() {
               )
             }
           >
-            查看该连接全部任务
+            {localeText(localeCode, '查看该连接全部任务', 'View all connection tasks')}
           </Button>
         </Space>
       </Drawer>

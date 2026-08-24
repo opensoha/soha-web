@@ -5,6 +5,8 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useQuery } from '@tanstack/react-query'
+import { I18nProvider } from '@/i18n'
+import { usePreferencesStore } from '@/stores/preferences-store'
 import { ComputeOverviewPage } from './page'
 
 const testState = vi.hoisted(() => ({
@@ -24,6 +26,11 @@ vi.mock('@tanstack/react-query', async (importOriginal) => ({
   useQuery: vi.fn(),
 }))
 vi.mock('@/features/copilot', () => ({ useAIPageContext: vi.fn() }))
+vi.mock('./provider-instances-panel', () => ({
+  ProviderInstancesPanel: ({ localeCode }: { localeCode: 'zh_CN' | 'en_US' }) => (
+    <div>{localeCode === 'zh_CN' ? '提供方实例' : 'Provider instances'}</div>
+  ),
+}))
 vi.mock('@/features/auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/auth')>()),
   usePermissionSnapshot: () => ({
@@ -38,7 +45,13 @@ function render(node: ReactNode) {
   document.body.appendChild(container)
   const root = createRoot(container)
   roots.push(root)
-  act(() => root.render(<MemoryRouter>{node}</MemoryRouter>))
+  act(() =>
+    root.render(
+      <I18nProvider>
+        <MemoryRouter>{node}</MemoryRouter>
+      </I18nProvider>,
+    ),
+  )
   return container
 }
 
@@ -55,6 +68,7 @@ afterEach(() => {
     'docker.hosts.view',
     'docker.projects.view',
   ]
+  usePreferencesStore.setState({ localeCode: 'zh_CN' })
 })
 
 describe('compute overview page', () => {
@@ -94,7 +108,19 @@ describe('compute overview page', () => {
             summary: { queued: 1, running: 2, failed: 0 },
           },
           attention: [
-            { code: 'agent_waiting', severity: 'warning', summary: '1 台主机等待 Agent' },
+            {
+              code: 'runtime_host_unavailable',
+              severity: 'warning',
+              summary: 'Container runtime host needs attention',
+              resources: [
+                {
+                  domain: 'container_runtime',
+                  kind: 'runtime_host',
+                  id: 'runtime-1',
+                  displayName: 'runtime-edge-1',
+                },
+              ],
+            },
           ],
           providerHealth: [
             {
@@ -102,8 +128,11 @@ describe('compute overview page', () => {
               providerKey: 'pve',
               status: 'degraded',
               generation: 4,
+              checkedAt: '2026-08-23T12:00:00Z',
             },
           ],
+          generatedAt: '2026-08-23T12:00:00Z',
+          freshness: { status: 'fresh', observedAt: '2026-08-23T12:00:00Z' },
           partial: true,
           warnings: [{ code: 'runtime_unavailable', message: '运行时数据暂不可用' }],
         },
@@ -123,9 +152,24 @@ describe('compute overview page', () => {
     expect(text).toContain('虚拟化')
     expect(text).toContain('接入状态')
     expect(text).toContain('任务运行')
-    expect(text).toContain('运行健康')
-    expect(text).toContain('Provider 健康')
+    expect(text).not.toContain('运行健康')
+    expect(text).toContain('提供方健康')
     expect(text).toContain('pve')
+    expect(text).toContain('服务降级，请检查连接状态')
+    expect(text).toContain('最近检查')
+    expect(text).not.toContain('代际')
+    expect(text).not.toContain('Generation')
+    expect(text).toContain('runtime-edge-1')
+    expect(text).toContain('运行时主机需要关注')
+    expect(text).not.toContain('影响 1 个资源')
+    expect(container.querySelector('a[href="/compute/runtimes/hosts/runtime-1"]')).not.toBeNull()
+    expect(container.querySelector('a[href="/compute/virtualization/clusters"]')).not.toBeNull()
+    expect(text).not.toContain('数据时间')
+    expect(container.querySelector('.soha-compute-overview-freshness')).toBeNull()
+    expect(text).not.toContain('统一查看虚拟化连接、Agent 主机与运行时主机')
+    expect(text).not.toContain('集中查看同步、构建与资源操作的执行状态')
+    expect(text).not.toContain('优先处理不可用资源、接入异常与失败任务')
+    expect(text).not.toContain('查看已加载计算提供方的激活代际与健康状态')
     expect(container.querySelector('.soha-overview-page')).not.toBeNull()
     expect(container.querySelectorAll('.soha-overview-metric-card')).toHaveLength(4)
     expect(
@@ -137,6 +181,9 @@ describe('compute overview page', () => {
     expect(container.querySelector('a[href^="/compute/access"]')).toBeNull()
     expect(container.querySelector('a[href="/compute/virtualization/clusters"]')).not.toBeNull()
     expect(container.querySelector('.soha-compute-section')).toBeNull()
+    expect(
+      container.querySelectorAll('.soha-overview-runtime-layout > .soha-overview-runtime-card'),
+    ).toHaveLength(2)
   })
 
   it('does not render virtualization destinations for a Docker-only identity', () => {
@@ -166,5 +213,46 @@ describe('compute overview page', () => {
     expect(container.querySelector('a[href^="/compute/virtualization"]')).toBeNull()
     expect(container.querySelector('a[href="/compute/runtimes/hosts"]')).not.toBeNull()
     expect(container.querySelector('a[href="/compute/tasks/operations"]')).not.toBeNull()
+  })
+
+  it('renders the compute overview in English without Chinese UI labels', () => {
+    usePreferencesStore.setState({ localeCode: 'en_US' })
+    vi.mocked(useQuery).mockReturnValue({
+      data: {
+        data: {
+          virtualization: {
+            status: 'ok',
+            summary: {
+              connectionsTotal: 1,
+              connectionsHealthy: 1,
+              vmsTotal: 2,
+              vmsRunning: 2,
+              vmsStopped: 0,
+            },
+          },
+          runtimes: { status: 'ok', summary: { total: 1, available: 1, error: 0 } },
+          runtimeWorkloads: { status: 'ok', summary: { projects: 1, services: 2, containers: 2 } },
+          tasks: { status: 'ok', summary: { queued: 1, running: 1, failed: 0 } },
+          attention: [],
+          providerHealth: [],
+          partial: false,
+          warnings: [],
+        },
+      },
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    } as never)
+
+    const text = render(<ComputeOverviewPage />).textContent ?? ''
+
+    expect(text).toContain('Virtual machines')
+    expect(text).toContain('Access status')
+    expect(text).toContain('Task activity')
+    expect(text).toContain('Needs attention')
+    expect(text).not.toContain('虚拟机')
+    expect(text).not.toContain('接入状态')
+    expect(text).not.toContain('任务运行')
+    expect(text).not.toContain('需要关注')
   })
 })

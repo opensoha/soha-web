@@ -22,7 +22,7 @@ const apiGetMock = vi.hoisted(() =>
         availableNumber: 3,
         updatedNumber: 3,
         ageSeconds: 300,
-        allowedActions: ['restart', 'delete'],
+        allowedActions: ['update', 'restart', 'delete'],
       },
     ],
   })),
@@ -73,6 +73,11 @@ vi.mock('@/features/platform/workloads/shared/list-controls', () => ({
   WorkloadSearchInput: () => null,
   WorkloadTableEmpty: () => null,
   WorkloadTableSummary: () => null,
+}))
+vi.mock('@/features/platform/workloads/shared/workload-quick-edit-modal', () => ({
+  WorkloadQuickEditModal: ({ name, namespace }: { name: string; namespace: string }) => (
+    <div data-edit-name={name} data-edit-namespace={namespace} />
+  ),
 }))
 vi.mock('@/components/admin-table', () => ({
   AdminTable: ({
@@ -156,7 +161,9 @@ describe('daemonset list actions', () => {
   it('uses the record namespace for restart actions', async () => {
     const container = await renderPage()
     const restartButton = container.querySelector('button[aria-label="重启"]')
+    const editButton = container.querySelector('button[aria-label="编辑 node-agent"]')
     expect(restartButton).toBeInstanceOf(HTMLButtonElement)
+    expect(editButton).toBeInstanceOf(HTMLButtonElement)
     expect(container.querySelector('button[aria-label="删除"]')).toBeInstanceOf(HTMLButtonElement)
 
     await act(async () => restartButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
@@ -165,5 +172,9 @@ describe('daemonset list actions', () => {
       namespace: 'record-ns',
       name: 'node-agent',
     })
+
+    await act(async () => editButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(container.querySelector('[data-edit-name="node-agent"]')).not.toBeNull()
+    expect(container.querySelector('[data-edit-namespace="record-ns"]')).not.toBeNull()
   })
 })

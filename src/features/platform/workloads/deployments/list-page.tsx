@@ -11,7 +11,13 @@ import {
   Tooltip,
   Typography,
 } from 'antd'
-import { DeleteOutlined, EditOutlined, ReloadOutlined, UndoOutlined } from '@ant-design/icons'
+import {
+  DeleteOutlined,
+  EditOutlined,
+  FormOutlined,
+  ReloadOutlined,
+  UndoOutlined,
+} from '@ant-design/icons'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
@@ -31,6 +37,9 @@ import {
   type ClusterCapabilityDecision,
   useClusterCapability,
 } from '@/features/platform/cluster-capabilities'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
+import { ResourceStreamStatus } from '@/features/platform/shared/resource-stream-status'
+import { useKubernetesResourceStream } from '@/features/platform/shared/resource-stream'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { formatAgeSeconds, formatDateTime } from '@/utils/time'
 import {
@@ -57,10 +66,10 @@ import {
   WorkloadRefreshButton,
   WorkloadSearchInput,
   WorkloadTableEmpty,
-  WorkloadTableSummary,
   renderWorkloadNameLink,
   useWorkloadTableDensity,
 } from '../shared/list-controls'
+import { WorkloadQuickEditModal } from '../shared/workload-quick-edit-modal'
 import '@/features/platform/workloads/styles.css'
 
 const { Text } = Typography
@@ -86,7 +95,9 @@ function isWorkloadMutationPending<T extends DeploymentTarget>(
 function buildWorkloadActionColumn<T extends WorkloadActionRecord>({
   capability,
   deleteMutation,
+  editCapability,
   localeCode,
+  onEdit,
   onRestart,
   onRollback,
   onScale,
@@ -102,7 +113,9 @@ function buildWorkloadActionColumn<T extends WorkloadActionRecord>({
     mutate: (value: DeploymentTarget) => void
     variables?: DeploymentTarget
   }
+  editCapability: ClusterCapabilityDecision
   localeCode: 'zh_CN' | 'en_US'
+  onEdit?: (record: T, name: string) => void
   onRestart?: (record: T, name: string) => void
   onRollback?: (record: T, name: string) => void
   onScale?: (record: T, name: string) => void
@@ -121,6 +134,7 @@ function buildWorkloadActionColumn<T extends WorkloadActionRecord>({
   const restartLabel = localeCode === 'zh_CN' ? '重启' : 'Restart'
   const resolvedScaleLabel = scaleLabel ?? (localeCode === 'zh_CN' ? '扩缩' : 'Scale')
   const rollbackLabel = localeCode === 'zh_CN' ? '回滚' : 'Rollback'
+  const editLabel = localeCode === 'zh_CN' ? '编辑' : 'Edit'
   const deleteLabel = localeCode === 'zh_CN' ? '删除' : 'Delete'
 
   return {
@@ -134,14 +148,24 @@ function buildWorkloadActionColumn<T extends WorkloadActionRecord>({
     onCell: () => ({ className: WORKLOAD_ACTIONS_COLUMN_CLASS_NAME }),
     render: (name: string, record: T) => {
       const canRestart = Boolean(onRestart) && hasAllowedAction(record.allowedActions, 'restart')
+      const canEdit = Boolean(onEdit) && hasAllowedAction(record.allowedActions, 'update')
       const canScale = Boolean(onScale) && hasAllowedAction(record.allowedActions, 'scale')
       const canRollback = Boolean(onRollback) && hasAllowedAction(record.allowedActions, 'rollback')
       const canDelete = hasAllowedAction(record.allowedActions, 'delete')
-      if (!canRestart && !canScale && !canRollback && !canDelete) return '-'
+      if (!canEdit && !canRestart && !canScale && !canRollback && !canDelete) return '-'
 
       const deletePending = isWorkloadMutationPending(deleteMutation, name, record.namespace)
       return (
         <Space size={4} className="soha-deployment-action-cell">
+          {canEdit ? (
+            <ManagementIconButton
+              icon={<FormOutlined />}
+              aria-label={`${editLabel} ${name}`}
+              disabled={editCapability.disabled}
+              tooltip={capabilityActionTooltip(editLabel, editCapability)}
+              onClick={() => onEdit?.(record, name)}
+            />
+          ) : null}
           {canRestart ? (
             <ManagementIconButton
               icon={<ReloadOutlined />}
@@ -226,12 +250,24 @@ export function WorkloadsDeploymentsPage() {
   const queryClient = useQueryClient()
   const { clusterId, namespace } = usePlatformScopeStore()
   const listScope = toScopeKey(clusterId, namespace)
+  const deploymentStream = useKubernetesResourceStream({
+    clusterId,
+    namespace,
+    kinds: ['Deployment', 'ReplicaSet', 'Pod', 'Event'],
+    onEvent: () =>
+      void queryClient.invalidateQueries({ queryKey: workloadKeys.lists('deployments') }),
+    onFallback: () =>
+      void queryClient.invalidateQueries({ queryKey: workloadKeys.lists('deployments') }),
+    onResyncRequired: () =>
+      queryClient.invalidateQueries({ queryKey: workloadKeys.lists('deployments') }),
+  })
   const deploymentsQuery = useQuery(deploymentQueries.list(listScope))
   const [scaleTarget, setScaleTarget] = useState<{
     name: string
     namespace: string
     replicas: number
   } | null>(null)
+  const [editTarget, setEditTarget] = useState<Deployment | null>(null)
   const [searchKeyword, setSearchKeyword] = useState('')
   const [healthFilter, setHealthFilter] = useState('all')
   const [selectedDeploymentKeys, setSelectedDeploymentKeys] = useState<string[]>([])
@@ -242,17 +278,19 @@ export function WorkloadsDeploymentsPage() {
   const [batchRollbackDrafts, setBatchRollbackDrafts] = useState<BatchRollbackDraft[]>([])
   const { densityButton, tableSize } = useWorkloadTableDensity(localeCode)
   const workloadMutationCapability = useClusterCapability('workload.mutations', localeCode)
+  const yamlApplyCapability = useClusterCapability('resource.yaml.apply', localeCode)
   const workloadMutationDisabled = workloadMutationCapability.disabled
 
   const deployments = deploymentsQuery.data ?? []
   const isLoading = deploymentsQuery.isLoading
-  const canShowActions =
-    !workloadMutationDisabled &&
-    deployments.some((item) =>
-      ['restart', 'scale', 'rollback', 'delete'].some((action) =>
-        hasAllowedAction(item.allowedActions, action),
-      ),
-    )
+  const canShowActions = deployments.some(
+    (item) =>
+      (!yamlApplyCapability.disabled && hasAllowedAction(item.allowedActions, 'update')) ||
+      (!workloadMutationDisabled &&
+        ['restart', 'scale', 'rollback', 'delete'].some((action) =>
+          hasAllowedAction(item.allowedActions, action),
+        )),
+  )
   const targetFor = (name: string, targetNamespace: string) => ({
     name,
     scope: toScopeKey(clusterId, targetNamespace),
@@ -268,7 +306,10 @@ export function WorkloadsDeploymentsPage() {
     timeRangeMinutes: 60,
     visibleFilters: { searchKeyword, healthFilter },
     pinnedData: { total: deployments.length },
-    promptHint: '分析当前 Deployment 列表的健康状态、重启、滚动发布和相关事件。',
+    promptHint:
+      localeCode === 'zh_CN'
+        ? '分析当前 Deployment 列表的健康状态、重启、滚动发布和相关事件。'
+        : 'Analyze Deployment health, restarts, rollouts, and related events in this list.',
   })
 
   const restartMutation = useMutation(deploymentMutations.restart(queryClient))
@@ -458,7 +499,7 @@ export function WorkloadsDeploymentsPage() {
       render: (_: unknown, record: Deployment) => <StatusTag value={getDeploymentHealth(record)} />,
     },
     {
-      title: 'Ready',
+      title: localeCode === 'zh_CN' ? '就绪' : 'Ready',
       dataIndex: 'readyReplicas',
       width: 88,
       render: (_: number, record: Deployment) =>
@@ -471,7 +512,7 @@ export function WorkloadsDeploymentsPage() {
     },
     { title: localeCode === 'zh_CN' ? '可用' : 'Available', dataIndex: 'available', width: 88 },
     {
-      title: 'Age',
+      title: t('common.age', '时长'),
       dataIndex: 'ageSeconds',
       width: 104,
       render: (value: number) => formatAgeSeconds(value),
@@ -479,15 +520,19 @@ export function WorkloadsDeploymentsPage() {
     buildWorkloadActionColumn<Deployment>({
       capability: workloadMutationCapability,
       deleteMutation: deleteActionMutation,
+      editCapability: yamlApplyCapability,
       localeCode,
+      onEdit: (record) => setEditTarget(record),
       onRestart: (record, name) =>
         restartMutation.mutate(targetFor(name, record.namespace), {
-          onSuccess: () => void message.success('已触发重启'),
+          onSuccess: () =>
+            void message.success(localeCode === 'zh_CN' ? '已触发重启' : 'Restart triggered'),
           onError: (error) => void message.error(error.message),
         }),
       onRollback: (record, name) =>
         rollbackMutation.mutate(targetFor(name, record.namespace), {
-          onSuccess: () => void message.success('已触发回滚'),
+          onSuccess: () =>
+            void message.success(localeCode === 'zh_CN' ? '已触发回滚' : 'Rollback triggered'),
           onError: (error) => void message.error(error.message),
         }),
       onScale: (record, name) =>
@@ -499,7 +544,7 @@ export function WorkloadsDeploymentsPage() {
       restartMutation: restartActionMutation,
       rollbackMutation: rollbackActionMutation,
       toTarget: targetFor,
-      width: 148,
+      width: 180,
     }),
   ]
 
@@ -594,6 +639,11 @@ export function WorkloadsDeploymentsPage() {
           </Button>
         </span>
       </Tooltip>
+      <ResourceStreamStatus
+        status={deploymentStream.status}
+        lastEventAt={deploymentStream.lastEventAt}
+        localeCode={localeCode}
+      />
       {densityButton}
       <WorkloadRefreshButton
         disabled={!clusterId}
@@ -635,13 +685,7 @@ export function WorkloadsDeploymentsPage() {
           }),
         })}
         loading={isLoading}
-        paginationSummary={
-          <WorkloadTableSummary
-            filteredCount={filteredDeployments.length}
-            localeCode={localeCode}
-            totalCount={deployments.length}
-          />
-        }
+        localSorting
         empty={
           <WorkloadTableEmpty
             clusterId={clusterId}
@@ -651,9 +695,10 @@ export function WorkloadsDeploymentsPage() {
             totalCount={deployments.length}
           />
         }
-        pageSize={10}
+        pageSize={K8S_TABLE_PAGE_SIZE}
         tableSize={tableSize}
         scroll={{ x: 'max-content' }}
+        viewportScroll
         selectCurrentPageOnly
         rowSelection={
           canShowActions
@@ -676,7 +721,7 @@ export function WorkloadsDeploymentsPage() {
               },
               {
                 onSuccess: () => {
-                  void message.success('已触发扩缩容')
+                  void message.success(localeCode === 'zh_CN' ? '已触发扩缩容' : 'Scale triggered')
                   setScaleTarget(null)
                 },
                 onError: (error) => void message.error(error.message),
@@ -698,6 +743,14 @@ export function WorkloadsDeploymentsPage() {
           />
         </div>
       </Modal>
+      {editTarget ? (
+        <WorkloadQuickEditModal
+          kind="deployments"
+          name={editTarget.name}
+          namespace={editTarget.namespace}
+          onClose={() => setEditTarget(null)}
+        />
+      ) : null}
       <Modal
         title={localeCode === 'zh_CN' ? '批量回滚' : 'Batch rollback deployments'}
         open={batchRollbackVisible}

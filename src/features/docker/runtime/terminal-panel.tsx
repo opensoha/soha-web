@@ -8,6 +8,7 @@ import { ManagementState } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
 import '@/components/resource-operation-panels.css'
 import { withStreamTicket } from '@/features/auth'
+import { localeText, useI18n } from '@/i18n'
 import { readTerminalThemeColors } from '@/theme/app-theme'
 import { parseStreamMessage } from '@/utils/stream-message'
 import {
@@ -28,6 +29,7 @@ export function DockerProjectTerminalPanel({
   servicesLoading,
   onServiceChange,
 }: DockerRuntimePanelProps) {
+  const { localeCode } = useI18n()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -161,8 +163,12 @@ export function DockerProjectTerminalPanel({
         <ManagementState
           compact
           kind="no-permission"
-          title="Shell 不可用"
-          description="Docker 模块或当前权限不允许连接运行时 Shell。"
+          title={localeText(localeCode, 'Shell 不可用', 'Shell unavailable')}
+          description={localeText(
+            localeCode,
+            'Docker 模块或当前权限不允许连接运行时 Shell。',
+            'The Docker module or your permissions do not allow runtime Shell access.',
+          )}
         />
       </Card>
     )
@@ -174,12 +180,13 @@ export function DockerProjectTerminalPanel({
         <div className="soha-terminal-toolbar">
           <div className="soha-terminal-toolbar-group">
             <div className="soha-terminal-control-group">
-              <Text strong>服务:</Text>
+              <Text strong>{localeText(localeCode, '服务', 'Service')}:</Text>
               {runtimeServiceSelector({
                 disabled: !enabled,
                 loading: servicesLoading,
                 options: serviceOptions,
                 serviceName,
+                localeCode,
                 onChange: onServiceChange,
               })}
             </div>
@@ -207,7 +214,7 @@ export function DockerProjectTerminalPanel({
               type="primary"
               onClick={connect}
             >
-              连接
+              {localeText(localeCode, '连接', 'Connect')}
             </Button>
             <Button
               icon={<DisconnectOutlined />}
@@ -215,7 +222,7 @@ export function DockerProjectTerminalPanel({
               type="text"
               onClick={disposeTerminal}
             >
-              断开
+              {localeText(localeCode, '断开', 'Disconnect')}
             </Button>
           </Space>
         </div>

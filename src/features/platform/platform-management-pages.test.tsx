@@ -297,7 +297,7 @@ describe('platform RBAC list pages', () => {
     expect(container.textContent).not.toContain('editor-binding')
   })
 
-  it('keeps RBAC search controls in a query card and summarizes results in pagination', async () => {
+  it('keeps RBAC search controls in a query card and uses shared pagination', async () => {
     setResponses({
       '/clusters/cluster-a/access-control/serviceaccounts?namespace=team-a': [
         {
@@ -316,9 +316,7 @@ describe('platform RBAC list pages', () => {
     expect(container.querySelector('[data-testid="table-title"]')).toBeNull()
     expect(container.querySelector('[data-testid="toolbar"]')).toBeNull()
     expect(container.querySelector('input[placeholder="搜索 ServiceAccounts"]')).not.toBeNull()
-    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
-      '当前 1 / 1 条',
-    )
+    expect(container.querySelector('[data-testid="pagination-summary"]')).toBeNull()
 
     const headerButtons = Array.from(
       container.querySelectorAll('[data-testid="header-extra"] button'),
@@ -449,7 +447,7 @@ describe('platform configuration list pages', () => {
     vi.clearAllMocks()
   })
 
-  it('keeps configuration query controls in a separate card and summarizes results in pagination', async () => {
+  it('keeps configuration query controls in a separate card and uses shared pagination', async () => {
     setResponses({
       '/clusters/cluster-a/configuration/configmaps?namespace=team-a': [
         {
@@ -481,9 +479,7 @@ describe('platform configuration list pages', () => {
     expect(
       container.querySelector('input[placeholder="搜索 ConfigMaps 名称 / 命名空间"]'),
     ).not.toBeNull()
-    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
-      '当前 2 / 2 条',
-    )
+    expect(container.querySelector('[data-testid="pagination-summary"]')).toBeNull()
 
     const headerButtons = Array.from(
       container.querySelectorAll('[data-testid="header-extra"] button'),
@@ -506,9 +502,6 @@ describe('platform configuration list pages', () => {
     })
 
     expect(container.querySelector('[data-testid="row-count"]')?.textContent).toBe('1')
-    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
-      '当前 1 / 2 条',
-    )
     expect(container.textContent).toContain('app-config')
     expect(container.textContent).not.toContain('platform-config')
   })
@@ -572,9 +565,7 @@ describe('platform network port forward page', () => {
     expect(
       container.querySelector('input[placeholder="搜索会话 / Namespace / 目标 / 状态 / 端口"]'),
     ).not.toBeNull()
-    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
-      '当前 2 / 2 条',
-    )
+    expect(container.querySelector('[data-testid="pagination-summary"]')).toBeNull()
 
     const headerButtons = Array.from(
       container.querySelectorAll('[data-testid="header-extra"] button'),
@@ -597,9 +588,6 @@ describe('platform network port forward page', () => {
     })
 
     expect(container.querySelector('[data-testid="row-count"]')?.textContent).toBe('1')
-    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
-      '当前 1 / 2 条',
-    )
     expect(container.textContent).toContain('Pod/api')
     expect(container.textContent).not.toContain('Service/web')
   })

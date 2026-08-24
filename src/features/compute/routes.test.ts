@@ -13,6 +13,7 @@ const routePages = vi.hoisted(() => ({
   storage: () => null,
   flavors: () => null,
   hosts: () => null,
+  hostDetail: () => null,
   projects: () => null,
   projectDetail: () => null,
   templates: () => null,
@@ -43,6 +44,9 @@ vi.mock('@/features/virtualization/flavors/list-page', () => ({
   VirtualizationFlavorsPage: routePages.flavors,
 }))
 vi.mock('@/features/docker/hosts/page', () => ({ DockerHostsPage: routePages.hosts }))
+vi.mock('@/features/docker', () => ({
+  DockerHostDetailPage: routePages.hostDetail,
+}))
 vi.mock('@/features/docker/projects/list-page', () => ({
   DockerProjectsPage: routePages.projects,
 }))
@@ -63,8 +67,8 @@ describe('compute route manifest', () => {
       pageRoutes.map(async (route) => (await route.load()).default),
     )
 
-    expect(pageRoutes).toHaveLength(14)
-    expect(new Set(loadedPages).size).toBe(14)
+    expect(pageRoutes).toHaveLength(15)
+    expect(new Set(loadedPages).size).toBe(15)
     expect(
       computeRoutes
         .filter((route) => route.meta.navVisible)

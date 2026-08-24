@@ -1,14 +1,26 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Button, Checkbox, Popover, Table, Typography } from 'antd'
 import { SettingOutlined } from '@ant-design/icons'
 import { ManagementState } from '@/components/management-list'
 import { useI18n } from '@/i18n'
+import type { LocaleCode } from '@/i18n'
 import './admin-table.css'
 
-const DEFAULT_PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
-const DEFAULT_PAGINATION_SUMMARY = (total: number, range: [number, number]) =>
-  total > 0 ? `当前 ${range[0]}-${range[1]} / ${total} 条` : '当前 0 / 0 条'
+const DEFAULT_PAGE_SIZE_OPTIONS = [10, 15, 20, 50, 100]
+const VIEWPORT_SCROLL_MIN_BODY_HEIGHT = 240
+const VIEWPORT_SCROLL_MIN_CONTAINER_HEIGHT = 640
+const VIEWPORT_SCROLL_MIN_WIDTH = 768
+const DEFAULT_PAGINATION_SUMMARY = (
+  localeCode: LocaleCode,
+  total: number,
+  range: [number, number],
+) => {
+  if (total <= 0) return localeCode === 'zh_CN' ? '当前 0 / 0 条' : '0 / 0 items'
+  return localeCode === 'zh_CN'
+    ? `当前 ${range[0]}-${range[1]} / ${total} 条`
+    : `${range[0]}-${range[1]} / ${total} items`
+}
 const ACTION_COLUMN_CLASS_NAME = 'soha-table-actions-column'
 const AUTO_ACTION_COLUMN_CLASS_NAME = 'soha-table-actions-column--auto'
 const { Text } = Typography
@@ -24,7 +36,9 @@ export interface AdminTableProps {
   expandedRowRender?: (record: any, index?: number) => ReactNode
   headerExtra?: ReactNode
   hideExpandedColumn?: boolean
+  localSorting?: boolean
   loading?: boolean
+  onChange?: any
   onRow?: any
   pageSize?: number
   pagination?: any
@@ -44,6 +58,7 @@ export interface AdminTableProps {
   title?: ReactNode
   toolbar?: ReactNode
   toolbarExtra?: ReactNode
+  viewportScroll?: boolean
 }
 
 function getColumnId(column: any, index: number) {
@@ -113,6 +128,60 @@ function normalizeTableColumn(column: any): any {
   }
 }
 
+function getColumnValue(record: any, dataIndex: string | number | Array<string | number>) {
+  const path = Array.isArray(dataIndex) ? dataIndex : [dataIndex]
+  return path.reduce((value, key) => (value == null ? undefined : value[key]), record)
+}
+
+function isSortableValue(value: unknown) {
+  return (
+    typeof value === 'string' ||
+    typeof value === 'boolean' ||
+    (typeof value === 'number' && Number.isFinite(value)) ||
+    value instanceof Date
+  )
+}
+
+function compareSortableValues(left: unknown, right: unknown, collator: Intl.Collator) {
+  if (left == null && right == null) return 0
+  if (left == null) return 1
+  if (right == null) return -1
+  if (typeof left === 'number' && typeof right === 'number') return left - right
+  if (typeof left === 'boolean' && typeof right === 'boolean') {
+    return Number(left) - Number(right)
+  }
+  if (left instanceof Date && right instanceof Date) return left.getTime() - right.getTime()
+  return collator.compare(String(left), String(right))
+}
+
+function addLocalSorters(columns: any[], dataSource: any[], collator: Intl.Collator): any[] {
+  return columns.map((column) => {
+    if (Array.isArray(column?.children)) {
+      return { ...column, children: addLocalSorters(column.children, dataSource, collator) }
+    }
+    if (
+      isActionColumn(column) ||
+      Object.prototype.hasOwnProperty.call(column, 'sorter') ||
+      column?.dataIndex == null
+    ) {
+      return column
+    }
+    const sampleValue = dataSource
+      .map((record) => getColumnValue(record, column.dataIndex))
+      .find((value) => value != null)
+    if (!isSortableValue(sampleValue)) return column
+    return {
+      ...column,
+      sorter: (left: any, right: any) =>
+        compareSortableValues(
+          getColumnValue(left, column.dataIndex),
+          getColumnValue(right, column.dataIndex),
+          collator,
+        ),
+    }
+  })
+}
+
 function getColumnLabel(column: any, index: number) {
   if (isActionColumn(column)) return '操作'
   if (typeof column?.title === 'string' && column.title) return column.title
@@ -142,8 +211,9 @@ export function AdminTable({
   empty,
   enableColumnSelection = true,
   headerExtra,
+  localSorting = false,
   loading,
-  pageSize = 10,
+  pageSize = 15,
   pagination,
   paginationSummary,
   rowKey,
@@ -157,10 +227,22 @@ export function AdminTable({
   title,
   toolbar,
   toolbarExtra,
+  viewportScroll = false,
   ...rest
 }: AdminTableProps) {
-  const { t } = useI18n()
-  const normalizedColumns = useMemo(() => columns.map(normalizeTableColumn), [columns])
+  const { localeCode, t } = useI18n()
+  const localSortCollator = useMemo(
+    () =>
+      new Intl.Collator(localeCode === 'zh_CN' ? 'zh-CN' : 'en-US', {
+        numeric: true,
+        sensitivity: 'base',
+      }),
+    [localeCode],
+  )
+  const normalizedColumns = useMemo(() => {
+    const nextColumns = columns.map(normalizeTableColumn)
+    return localSorting ? addLocalSorters(nextColumns, dataSource, localSortCollator) : nextColumns
+  }, [columns, dataSource, localSortCollator, localSorting])
   const columnOptions = useMemo(() => normalizedColumns.map((column, index) => ({
     id: getColumnId(column, index),
     label: getColumnLabel(column, index),
@@ -174,6 +256,8 @@ export function AdminTable({
   const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const [currentPageSize, setCurrentPageSize] = useState(pageSize)
+  const [viewportScrollY, setViewportScrollY] = useState<number>()
+  const tableShellRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const nextIds = selectableColumnOptions.map((option) => option.id)
@@ -260,7 +344,9 @@ export function AdminTable({
                 ? paginationSummary(total, range)
                 : paginationSummary
             )
-          : (inheritedPagination?.showTotal ?? DEFAULT_PAGINATION_SUMMARY),
+          : (inheritedPagination?.showTotal ??
+            ((total: number, range: [number, number]) =>
+              DEFAULT_PAGINATION_SUMMARY(localeCode, total, range))),
         onChange: (nextPage: number, nextPageSize: number) => {
           if (nextPageSize !== currentPageSize) {
             setCurrentPage(nextPage)
@@ -274,10 +360,56 @@ export function AdminTable({
         },
       }
 
+  useLayoutEffect(() => {
+    if (!viewportScroll) {
+      setViewportScrollY(undefined)
+      return
+    }
+    const shell = tableShellRef.current
+    const content = shell?.closest<HTMLElement>('.soha-content')
+    if (!shell || !content) return
+
+    const updateScrollHeight = () => {
+      if (
+        window.innerWidth < VIEWPORT_SCROLL_MIN_WIDTH ||
+        content.clientHeight < VIEWPORT_SCROLL_MIN_CONTAINER_HEIGHT
+      ) {
+        setViewportScrollY(undefined)
+        return
+      }
+      const tableHeader = shell.querySelector<HTMLElement>('.ant-table-thead')
+      if (!tableHeader) return
+      const paginationElement = shell.querySelector<HTMLElement>('.ant-table-pagination')
+      const contentRect = content.getBoundingClientRect()
+      const headerRect = tableHeader.getBoundingClientRect()
+      const paddingBottom = Number.parseFloat(window.getComputedStyle(content).paddingBottom) || 0
+      const paginationHeight = paginationElement?.getBoundingClientRect().height ?? 0
+      const headerBottom = headerRect.bottom - contentRect.top + content.scrollTop
+      const availableHeight = Math.floor(
+        content.clientHeight - headerBottom - paddingBottom - paginationHeight - 8,
+      )
+      const nextHeight =
+        availableHeight >= VIEWPORT_SCROLL_MIN_BODY_HEIGHT ? availableHeight : undefined
+      setViewportScrollY((current) => (current === nextHeight ? current : nextHeight))
+    }
+
+    updateScrollHeight()
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updateScrollHeight)
+    resizeObserver?.observe(content)
+    resizeObserver?.observe(shell)
+    if (shell.parentElement) resizeObserver?.observe(shell.parentElement)
+    window.addEventListener('resize', updateScrollHeight)
+    return () => {
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', updateScrollHeight)
+    }
+  }, [dataSource.length, viewportScroll])
+
   const resolvedScroll = useMemo(() => ({
     x: scroll?.x ?? estimatedScrollWidth,
-    y: scroll?.y,
-  }), [estimatedScrollWidth, scroll?.x, scroll?.y])
+    y: scroll?.y ?? viewportScrollY,
+  }), [estimatedScrollWidth, scroll?.x, scroll?.y, viewportScrollY])
 
   const columnSetting = enableColumnSelection && columnSettingPlacement !== 'hidden' && selectableColumnOptions.length > 1 ? (
     <Popover
@@ -337,11 +469,16 @@ export function AdminTable({
 
   const hasHeader = Boolean(title || resolvedHeaderExtra)
   const hasToolbar = Boolean(toolbar || resolvedToolbarExtra)
-  const resolvedShellClassName = ['soha-admin-table-shell', shellClassName, hasHeader || hasToolbar ? 'is-panel' : ''].filter(Boolean).join(' ')
+  const resolvedShellClassName = [
+    'soha-admin-table-shell',
+    shellClassName,
+    hasHeader || hasToolbar ? 'is-panel' : '',
+    viewportScroll ? 'is-viewport-scroll' : '',
+  ].filter(Boolean).join(' ')
   const resolvedTableClassName = ['soha-admin-table', className].filter(Boolean).join(' ')
 
   const tableShell = (
-    <div className={resolvedShellClassName}>
+    <div ref={tableShellRef} className={resolvedShellClassName}>
       {hasHeader ? (
         <div className="soha-admin-table-header">
           <div className="soha-admin-table-header-main">{title}</div>

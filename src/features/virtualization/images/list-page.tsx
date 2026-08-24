@@ -21,6 +21,7 @@ import { tableColumnPresets } from '@/utils/table-columns'
 import { StepFormModal } from '@/components/step-form-modal'
 import { BooleanTag, MetadataTag, StatusTag } from '@/components/status-tag'
 import { ManagementDataPage } from '@/components/management-data-page'
+import { localeText, useI18n } from '@/i18n'
 import {
   ManagementIconButton,
   ManagementKeywordField,
@@ -73,29 +74,31 @@ function tableTooltipText(value: unknown) {
   )
 }
 
-function imageResourceType(record: VirtualizationImage) {
+function imageResourceType(record: VirtualizationImage, localeCode: 'zh_CN' | 'en_US') {
   const sourceKind = String(record.assetKind || record.sourceKind || record.source || '')
     .trim()
     .toLowerCase()
   const contentType = String(record.config?.contentType || '')
     .trim()
     .toLowerCase()
-  if (sourceKind === 'template') return 'VM 模板'
-  if (sourceKind === 'lxc_template' || contentType === 'vztmpl') return 'CT 模板'
-  if (sourceKind === 'iso' || contentType === 'iso') return 'ISO 镜像'
-  if (contentType === 'images') return 'VM 磁盘'
-  if (contentType === 'rootdir') return 'CT 根卷'
+  if (sourceKind === 'template') return localeText(localeCode, 'VM 模板', 'VM template')
+  if (sourceKind === 'lxc_template' || contentType === 'vztmpl')
+    return localeText(localeCode, 'CT 模板', 'CT template')
+  if (sourceKind === 'iso' || contentType === 'iso')
+    return localeText(localeCode, 'ISO 镜像', 'ISO image')
+  if (contentType === 'images') return localeText(localeCode, 'VM 磁盘', 'VM disk')
+  if (contentType === 'rootdir') return localeText(localeCode, 'CT 根卷', 'CT root volume')
   return (
     {
       datasource: 'DataSource',
-      pvc: 'PVC 镜像源',
-      storage: '存储池',
-      storage_content: '存储内容',
-      image: '磁盘/卷',
-      images: 'VM 磁盘',
-      rootdir: 'CT 根卷',
+      pvc: localeText(localeCode, 'PVC 镜像源', 'PVC image source'),
+      storage: localeText(localeCode, '存储池', 'Storage pool'),
+      storage_content: localeText(localeCode, '存储内容', 'Storage content'),
+      image: localeText(localeCode, '磁盘/卷', 'Disk / Volume'),
+      images: localeText(localeCode, 'VM 磁盘', 'VM disk'),
+      rootdir: localeText(localeCode, 'CT 根卷', 'CT root volume'),
       datavolume: 'DataVolume',
-      persistentvolumeclaim: 'PVC 卷',
+      persistentvolumeclaim: localeText(localeCode, 'PVC 卷', 'PVC volume'),
     }[sourceKind] ||
     sourceKind ||
     '-'
@@ -124,10 +127,11 @@ interface VirtualizationImagesPageProps {
 export function VirtualizationImagesPage({
   category: imageCategory = 'catalog',
 }: VirtualizationImagesPageProps = {}) {
+  const { localeCode } = useI18n()
   const [editing, setEditing] = useState<VirtualizationImage | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [currentStep, setCurrentStep] = useState(0)
-  const [filters, setFilters] = useState<VirtualizationListParams>({ page: 1, pageSize: 10 })
+  const [filters, setFilters] = useState<VirtualizationListParams>({ page: 1, pageSize: 15 })
   const [filterForm] = Form.useForm<VirtualizationListParams>()
   const [form] = Form.useForm<VirtualizationImageInput>()
   const { virtualizationModuleEnabled, canCreateImages, canUpdateImages, canDeleteImages } =
@@ -142,10 +146,10 @@ export function VirtualizationImagesPage({
     ),
   )
   const clustersQuery = useQuery(virtualizationQueries.clusters(virtualizationModuleEnabled))
-  const imagesPage = normalizePage(imagesQuery.data, filters.page ?? 1, filters.pageSize ?? 10)
+  const imagesPage = normalizePage(imagesQuery.data, filters.page ?? 1, filters.pageSize ?? 15)
   const clusters = clustersQuery.data ?? []
   const afterSave = () => {
-    message.success('镜像入口已保存')
+    message.success(localeText(localeCode, '镜像入口已保存', 'Image entry saved'))
     setDrawerOpen(false)
     setEditing(null)
     form.resetFields()
@@ -158,7 +162,7 @@ export function VirtualizationImagesPage({
   )
   const deleteMutation = useMutation(
     withVirtualizationMutationSuccess(virtualizationMutations.deleteImage(queryClient), () =>
-      message.success('镜像入口已删除'),
+      message.success(localeText(localeCode, '镜像入口已删除', 'Image entry deleted')),
     ),
   )
   const savePending = createMutation.isPending || updateMutation.isPending
@@ -186,7 +190,7 @@ export function VirtualizationImagesPage({
   }
   const columns: ColumnsType<VirtualizationImage> = [
     {
-      title: '名称',
+      title: localeText(localeCode, '名称', 'Name'),
       dataIndex: 'name',
       fixed: 'left',
       render: tableTooltipText,
@@ -194,7 +198,7 @@ export function VirtualizationImagesPage({
       width: 180,
     },
     {
-      title: 'Provider',
+      title: localeText(localeCode, '提供方', 'Provider'),
       dataIndex: 'provider',
       render: (value: string) => (
         <MetadataTag label={providerLabel(value)} tone={value === 'pve' ? 'gold' : 'blue'} />
@@ -202,57 +206,62 @@ export function VirtualizationImagesPage({
       width: 120,
     },
     {
-      title: '连接',
+      title: localeText(localeCode, '连接', 'Connection'),
       dataIndex: 'connectionName',
       render: (value, record) => tableTooltipText(value || record.connectionId || '-'),
       ellipsis: tableEllipsis,
       width: 200,
     },
     {
-      title: '类型',
+      title: localeText(localeCode, '类型', 'Type'),
       render: (_value, record) => (
         <MetadataTag
-          label={imageResourceType(record)}
+          label={imageResourceType(record, localeCode)}
           tone={imageCategory === 'storage' ? 'gold' : 'blue'}
         />
       ),
       width: 160,
     },
     {
-      title: '引用',
+      title: localeText(localeCode, '引用', 'Reference'),
       dataIndex: 'sourceRef',
       render: (value) => tableTooltipText(value || '-'),
       ellipsis: tableEllipsis,
       width: 280,
     },
     {
-      title: '可用性',
+      title: localeText(localeCode, '可用性', 'Availability'),
       render: (_value, record) => (
         <BooleanTag
           value={record.ready !== false}
-          trueLabel="可用"
-          falseLabel="不可用"
+          trueLabel={localeText(localeCode, '可用', 'Available')}
+          falseLabel={localeText(localeCode, '不可用', 'Unavailable')}
           falseColor="error"
         />
       ),
       width: 110,
     },
     {
-      title: '大小',
+      title: localeText(localeCode, '大小', 'Size'),
       dataIndex: 'sizeGiB',
       render: (value) => (value ? `${value} GiB` : '-'),
       width: 100,
     },
-    { title: '状态', dataIndex: 'status', render: statusTag, width: 120 },
+    {
+      title: localeText(localeCode, '状态', 'Status'),
+      dataIndex: 'status',
+      render: statusTag,
+      width: 120,
+    },
     {
       ...tableColumnPresets.datetime,
-      title: '更新时间',
+      title: localeText(localeCode, '更新时间', 'Updated at'),
       dataIndex: 'updatedAt',
       render: formatDateTime,
     },
     {
       ...tableColumnPresets.action,
-      title: '操作',
+      title: localeText(localeCode, '操作', 'Actions'),
       render: (_value, record) => {
         const canUpdate = canUpdateImages && hasAllowedAction(record.allowedActions, 'update')
         const canDelete = canDeleteImages && hasAllowedAction(record.allowedActions, 'delete')
@@ -261,22 +270,22 @@ export function VirtualizationImagesPage({
           <Space className="soha-row-action-icons">
             {canUpdate ? (
               <ManagementIconButton
-                aria-label="编辑镜像"
+                aria-label={localeText(localeCode, '编辑镜像', 'Edit image')}
                 size="small"
-                tooltip="编辑"
+                tooltip={localeText(localeCode, '编辑', 'Edit')}
                 icon={<EditOutlined />}
                 onClick={() => openImageEditor(record)}
               />
             ) : null}
             {canDelete ? (
               <Popconfirm
-                title="确认删除镜像入口？"
+                title={localeText(localeCode, '确认删除镜像入口？', 'Delete this image entry?')}
                 onConfirm={() => deleteMutation.mutate(record.id)}
               >
                 <ManagementIconButton
-                  aria-label="删除镜像"
+                  aria-label={localeText(localeCode, '删除镜像', 'Delete image')}
                   size="small"
-                  tooltip="删除"
+                  tooltip={localeText(localeCode, '删除', 'Delete')}
                   danger
                   icon={<DeleteOutlined />}
                 />
@@ -297,30 +306,50 @@ export function VirtualizationImagesPage({
             loading={imagesQuery.isFetching}
             onReset={() => {
               filterForm.resetFields()
-              setFilters((current) => ({ page: 1, pageSize: current.pageSize ?? 10 }))
+              setFilters((current) => ({ page: 1, pageSize: current.pageSize ?? 15 }))
             }}
           />
         ),
         children: (
           <>
             <ManagementKeywordField
-              label="关键字"
+              label={localeText(localeCode, '关键字', 'Keyword')}
               placeholder={
-                imageCategory === 'catalog' ? '搜索镜像、模板或 ISO' : '搜索存储、磁盘或卷'
+                imageCategory === 'catalog'
+                  ? localeText(
+                      localeCode,
+                      '搜索镜像、模板或 ISO',
+                      'Search images, templates, or ISO',
+                    )
+                  : localeText(
+                      localeCode,
+                      '搜索存储、磁盘或卷',
+                      'Search storage, disks, or volumes',
+                    )
               }
             />
-            <ManagementQueryField minWidth={180} name="connectionId" label="连接" width={180}>
+            <ManagementQueryField
+              minWidth={180}
+              name="connectionId"
+              label={localeText(localeCode, '连接', 'Connection')}
+              width={180}
+            >
               <Select
                 allowClear
                 showSearch={{ optionFilterProp: 'label' }}
-                placeholder="全部连接"
+                placeholder={localeText(localeCode, '全部连接', 'All connections')}
                 options={clusters.map((item) => ({ value: item.id, label: item.name }))}
               />
             </ManagementQueryField>
-            <ManagementQueryField minWidth={160} name="provider" label="Provider" width={160}>
+            <ManagementQueryField
+              minWidth={160}
+              name="provider"
+              label={localeText(localeCode, '提供方', 'Provider')}
+              width={160}
+            >
               <Select
                 allowClear
-                placeholder="全部 Provider"
+                placeholder={localeText(localeCode, '全部提供方', 'All providers')}
                 options={VIRTUALIZATION_PROVIDER_OPTIONS}
               />
             </ManagementQueryField>
@@ -337,7 +366,7 @@ export function VirtualizationImagesPage({
           actions={
             canCreateImages && imageCategory === 'catalog' ? (
               <Button type="primary" icon={<PlusOutlined />} onClick={() => openImageEditor()}>
-                新增镜像入口
+                {localeText(localeCode, '新增镜像入口', 'Add image entry')}
               </Button>
             ) : null
           }
@@ -348,7 +377,13 @@ export function VirtualizationImagesPage({
           columns={columns}
           scroll={{ x: 1546 }}
           pagination={pageTablePagination(imagesPage, setFilters)}
-          paginationSummary={virtualizationPageSummary}
+          paginationSummary={(total, range) =>
+            localeText(
+              localeCode,
+              virtualizationPageSummary(total, range),
+              total > 0 ? `${range[0]}-${range[1]} of ${total}` : '0 of 0',
+            )
+          }
           expandable={{
             expandedRowRender: (record: VirtualizationImage) => (
               <Descriptions
@@ -356,20 +391,34 @@ export function VirtualizationImagesPage({
                 bordered
                 column={{ xs: 1, sm: 1, md: 2, lg: 2, xl: 2, xxl: 2 }}
               >
-                <Descriptions.Item label="命名空间">{record.namespace || '-'}</Descriptions.Item>
-                <Descriptions.Item label="系统">{record.osType || '-'}</Descriptions.Item>
-                <Descriptions.Item label="节点">{record.node || '-'}</Descriptions.Item>
-                <Descriptions.Item label="存储">{record.storage || '-'}</Descriptions.Item>
+                <Descriptions.Item label={localeText(localeCode, '命名空间', 'Namespace')}>
+                  {record.namespace || '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label={localeText(localeCode, '系统', 'Operating system')}>
+                  {record.osType || '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label={localeText(localeCode, '节点', 'Node')}>
+                  {record.node || '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label={localeText(localeCode, '存储', 'Storage')}>
+                  {record.storage || '-'}
+                </Descriptions.Item>
                 <Descriptions.Item label="StorageClass">
                   {record.storageClass || '-'}
                 </Descriptions.Item>
-                <Descriptions.Item label="来源类型">
+                <Descriptions.Item label={localeText(localeCode, '来源类型', 'Source type')}>
                   {record.sourceKind || record.source || '-'}
                 </Descriptions.Item>
-                <Descriptions.Item label="来源引用" span="filled">
+                <Descriptions.Item
+                  label={localeText(localeCode, '来源引用', 'Source reference')}
+                  span="filled"
+                >
                   {record.sourceRef || '-'}
                 </Descriptions.Item>
-                <Descriptions.Item label="描述" span="filled">
+                <Descriptions.Item
+                  label={localeText(localeCode, '描述', 'Description')}
+                  span="filled"
+                >
                   {record.description || '-'}
                 </Descriptions.Item>
               </Descriptions>
@@ -379,7 +428,11 @@ export function VirtualizationImagesPage({
       }
       afterTable={
         <StepFormModal
-          title={editing ? '编辑镜像入口' : '新增镜像入口'}
+          title={
+            editing
+              ? localeText(localeCode, '编辑镜像入口', 'Edit image entry')
+              : localeText(localeCode, '新增镜像入口', 'Add image entry')
+          }
           current={currentStep}
           form={form}
           loading={savePending}
@@ -394,15 +447,23 @@ export function VirtualizationImagesPage({
           }}
           steps={[
             {
-              title: '基本信息',
+              title: localeText(localeCode, '基本信息', 'Basic information'),
               fieldNames: ['name', 'provider', 'connectionId'],
               children: (
                 <>
-                  <Form.Item name="name" label="名称" rules={[{ required: true }]}>
+                  <Form.Item
+                    name="name"
+                    label={localeText(localeCode, '名称', 'Name')}
+                    rules={[{ required: true }]}
+                  >
                     <Input />
                   </Form.Item>
                   <div className="grid gap-3 md:grid-cols-2">
-                    <Form.Item name="provider" label="Provider" rules={[{ required: true }]}>
+                    <Form.Item
+                      name="provider"
+                      label={localeText(localeCode, '提供方', 'Provider')}
+                      rules={[{ required: true }]}
+                    >
                       <Select
                         options={[
                           { value: 'kubevirt', label: 'KubeVirt' },
@@ -410,7 +471,11 @@ export function VirtualizationImagesPage({
                         ]}
                       />
                     </Form.Item>
-                    <Form.Item name="connectionId" label="连接" rules={[{ required: true }]}>
+                    <Form.Item
+                      name="connectionId"
+                      label={localeText(localeCode, '连接', 'Connection')}
+                      rules={[{ required: true }]}
+                    >
                       <Select
                         showSearch={{ optionFilterProp: 'label' }}
                         options={clusters
@@ -423,12 +488,16 @@ export function VirtualizationImagesPage({
               ),
             },
             {
-              title: '来源配置',
+              title: localeText(localeCode, '来源配置', 'Source configuration'),
               fieldNames: ['sourceKind', 'sourceRef'],
               children: (
                 <>
                   <div className="grid gap-3 md:grid-cols-2">
-                    <Form.Item name="sourceKind" label="来源类型" rules={[{ required: true }]}>
+                    <Form.Item
+                      name="sourceKind"
+                      label={localeText(localeCode, '来源类型', 'Source type')}
+                      rules={[{ required: true }]}
+                    >
                       <Select
                         options={
                           imageProvider === 'pve'
@@ -443,7 +512,11 @@ export function VirtualizationImagesPage({
                         }
                       />
                     </Form.Item>
-                    <Form.Item name="sourceRef" label="来源引用" rules={[{ required: true }]}>
+                    <Form.Item
+                      name="sourceRef"
+                      label={localeText(localeCode, '来源引用', 'Source reference')}
+                      rules={[{ required: true }]}
+                    >
                       <Input
                         placeholder={
                           imageProvider === 'pve' ? 'VMID 或 storage:volume' : 'namespace/name'
@@ -452,26 +525,38 @@ export function VirtualizationImagesPage({
                     </Form.Item>
                   </div>
                   {imageProvider === 'kubevirt' ? (
-                    <Form.Item name="namespace" label="命名空间">
+                    <Form.Item
+                      name="namespace"
+                      label={localeText(localeCode, '命名空间', 'Namespace')}
+                    >
                       <Input />
                     </Form.Item>
                   ) : null}
                   <div className="grid gap-3 md:grid-cols-2">
-                    <Form.Item name="osType" label="操作系统">
+                    <Form.Item
+                      name="osType"
+                      label={localeText(localeCode, '操作系统', 'Operating system')}
+                    >
                       <Input placeholder="alpine / ubuntu / windows" />
                     </Form.Item>
-                    <Form.Item name="sizeGiB" label="大小 GiB">
+                    <Form.Item
+                      name="sizeGiB"
+                      label={localeText(localeCode, '大小 GiB', 'Size GiB')}
+                    >
                       <InputNumber min={1} className="w-full" />
                     </Form.Item>
                   </div>
-                  <Form.Item name="description" label="描述">
+                  <Form.Item
+                    name="description"
+                    label={localeText(localeCode, '描述', 'Description')}
+                  >
                     <Input.TextArea rows={3} />
                   </Form.Item>
                 </>
               ),
             },
           ]}
-          submitText="保存"
+          submitText={localeText(localeCode, '保存', 'Save')}
         />
       }
     />

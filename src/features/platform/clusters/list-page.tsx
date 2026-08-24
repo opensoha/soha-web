@@ -39,6 +39,7 @@ import {
 } from '@/components/management-list'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { tableColumnPresets } from '@/utils/table-columns'
@@ -587,14 +588,11 @@ export function ClustersPage() {
         dataSource={filteredClusters}
         rowKey="id"
         loading={clustersQuery.isLoading}
-        paginationSummary={
-          localeCode === 'zh_CN'
-            ? `当前 ${filteredClusters.length} / ${clusters.length} 条`
-            : `${filteredClusters.length} / ${clusters.length} items`
-        }
-        pageSize={20}
+        localSorting
+        pageSize={K8S_TABLE_PAGE_SIZE}
         tableSize={tableSize}
         scroll={{ x: 'max-content' }}
+        viewportScroll
         rowSelection={{
           selectedRowKeys,
           onChange: (nextSelectedRowKeys: Key[]) => {

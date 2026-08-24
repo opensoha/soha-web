@@ -10,9 +10,13 @@ export function buildHelmReleaseListPath(clusterId: string, namespace?: string |
   return buildClusterScopedPath(clusterId, 'helm/releases', namespace)
 }
 
-function buildHelmReleaseResourcePath(target: HelmReleaseTarget, suffix?: string) {
+function buildHelmReleaseResourcePath(
+  target: HelmReleaseTarget,
+  suffix?: string,
+  params?: Record<string, string | number | boolean | null | undefined>,
+) {
   const resource = `helm/releases/${encodeURIComponent(target.name)}${suffix ? `/${suffix}` : ''}`
-  return buildClusterScopedPath(target.clusterId, resource, target.namespace)
+  return buildClusterScopedPath(target.clusterId, resource, target.namespace, params)
 }
 
 export const buildHelmReleaseDetailResourcePath = (target: HelmReleaseTarget) =>
@@ -21,6 +25,12 @@ export const buildHelmReleaseValuesPath = (target: HelmReleaseTarget) =>
   buildHelmReleaseResourcePath(target, 'values')
 export const buildHelmReleaseHistoryPath = (target: HelmReleaseTarget) =>
   buildHelmReleaseResourcePath(target, 'history')
+export const buildHelmReleaseManifestPath = (target: HelmReleaseTarget, revision?: string) =>
+  buildHelmReleaseResourcePath(target, 'manifest', { revision })
+export const buildHelmReleaseRollbackPlanPath = (target: HelmReleaseTarget) =>
+  buildHelmReleaseResourcePath(target, 'rollback/plan')
+export const buildHelmReleaseRollbackPath = (target: HelmReleaseTarget) =>
+  buildHelmReleaseResourcePath(target, 'rollback')
 export const buildHelmReleaseDeletePath = (target: HelmReleaseTarget) =>
   buildHelmReleaseResourcePath(target)
 

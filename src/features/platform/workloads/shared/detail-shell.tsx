@@ -5,6 +5,7 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
 import { PlatformResourceOverview } from '@/features/platform/shared/resource-overview'
+import { ResourceGitOpsStatus } from '@/features/platform/shared/resource-gitops-status'
 import { useI18n } from '@/i18n'
 import { useClusterCapability } from '@/features/platform/cluster-capabilities'
 import type { TabsProps } from 'antd'
@@ -18,6 +19,17 @@ const K8sYamlEditor = lazy(async () => {
   const mod = await import('@/components/k8s-yaml-editor')
   return { default: mod.K8sYamlEditor }
 })
+
+const ResourceGraphPanel = lazy(async () => {
+  const mod = await import('@/features/platform/shared/resource-insights/resource-graph-panel')
+  return { default: mod.ResourceGraphPanel }
+})
+
+const RESOURCE_GRAPH_KINDS: Partial<Record<WorkloadKind, string>> = {
+  deployments: 'Deployment',
+  pods: 'Pod',
+  replicasets: 'ReplicaSet',
+}
 
 /* ─── generic workload detail ─── */
 
@@ -34,7 +46,8 @@ export interface WorkloadMeta {
 export type WorkloadDetailExtraOverview = ReactNode | ((detail: WorkloadMeta) => ReactNode)
 
 export type WorkloadDetailExtraTabPanes =
-  NonNullable<TabsProps['items']> | ((detail: WorkloadMeta) => NonNullable<TabsProps['items']>)
+  | NonNullable<TabsProps['items']>
+  | ((detail: WorkloadMeta) => NonNullable<TabsProps['items']>)
 
 export function WorkloadDetailShell({
   title,
@@ -128,6 +141,7 @@ export function WorkloadDetailShell({
     typeof extraOverview === 'function' ? extraOverview(detail) : extraOverview
   const resolvedExtraTabPanes =
     typeof extraTabPanes === 'function' ? extraTabPanes(detail) : (extraTabPanes ?? [])
+  const graphKind = RESOURCE_GRAPH_KINDS[resource]
 
   return (
     <div className="soha-page soha-workload-detail-page">
@@ -154,10 +168,29 @@ export function WorkloadDetailShell({
                   name={detail.name}
                   namespace={detail.namespace}
                 />
+                <ResourceGitOpsStatus
+                  clusterId={clusterId}
+                  kind={title}
+                  name={detail.name}
+                  namespace={detail.namespace}
+                />
                 {resolvedExtraOverview}
               </div>
             ),
           },
+          ...(graphKind
+            ? [
+                {
+                  key: 'relationships',
+                  label: localeCode === 'zh_CN' ? '关系' : 'Relationships',
+                  children: (
+                    <Suspense fallback={<Spin size="large" />}>
+                      <ResourceGraphPanel kind={graphKind} name={detail.name} scope={detailScope} />
+                    </Suspense>
+                  ),
+                },
+              ]
+            : []),
           ...(yamlLast ? resolvedExtraTabPanes : []),
           {
             key: 'yaml',

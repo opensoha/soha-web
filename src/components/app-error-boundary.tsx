@@ -1,4 +1,4 @@
-import type { ErrorInfo, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Component } from 'react'
 import { Button, Result } from 'antd'
 
@@ -19,8 +19,18 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
     return { error }
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('Unhandled React render error', error, info.componentStack)
+  componentDidCatch(error: Error) {
+    console.error(
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        component: 'react',
+        service: 'soha-web',
+        event: 'ui.render.failed',
+        message: 'Unhandled React render error',
+        error_type: error.name || 'Error',
+      }),
+    )
   }
 
   handleReload = () => {
@@ -41,7 +51,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
         <Result
           status="500"
           title="页面渲染失败"
-          subTitle={this.state.error.message || '当前页面发生未处理错误。'}
+          subTitle="当前页面发生未处理错误，请重新加载。"
           extra={[
             <Button key="reload" type="primary" onClick={this.handleReload}>
               重新加载

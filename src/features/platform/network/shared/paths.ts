@@ -40,9 +40,15 @@ export function buildNetworkYAMLPath(kind: NetworkKind, scope: ScopeKey, name: s
   return networkPath(kind, scope, `/${encodeURIComponent(normalizeName(name))}/yaml`)
 }
 
-export function buildNetworkRoutePath(kind: NetworkKind, name: string, namespace: string) {
+export function buildNetworkRoutePath(
+  kind: NetworkKind,
+  name: string,
+  namespace: string,
+  options?: { tab?: string },
+) {
   const search = new URLSearchParams()
   if (namespace.trim()) search.set('namespace', namespace.trim())
+  if (options?.tab?.trim()) search.set('tab', options.tab.trim())
   const query = search.toString()
   return `/network/${kind}/${encodeURIComponent(normalizeName(name))}${query ? `?${query}` : ''}`
 }

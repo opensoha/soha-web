@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Alert, App, Button, Collapse, Modal, Spin, Tabs, Typography } from 'antd'
+import { Alert, App, Button, Collapse, Spin, Tabs, Typography } from 'antd'
 import { CheckCircleOutlined, FileTextOutlined, FormOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementState } from '@/components/management-list'
+import { StepFormModal } from '@/components/step-form-modal'
 import { clusterQueries } from '@/features/platform/clusters/queries'
 import { useI18n } from '@/i18n'
 import { isApiError } from '@/services/api-error'
@@ -495,17 +496,14 @@ export function CreateShell(props: CreateShellProps) {
     return <ShellBody {...props} visible />
   }
   return (
-    <Modal
-      destroyOnHidden
-      footer={null}
-      mask={{ closable: false }}
-      onCancel={props.onClose}
-      open={props.open}
-      styles={{ body: { maxHeight: 'calc(100vh - 160px)', overflowY: 'auto' } }}
+    <StepFormModal
+      bodyClassName="soha-resource-create-modal__body"
+      onClose={() => props.onClose?.()}
+      open={Boolean(props.open)}
       title={title}
       width="min(1120px, calc(100vw - 32px))"
     >
       <ShellBody {...props} visible={Boolean(props.open)} />
-    </Modal>
+    </StepFormModal>
   )
 }

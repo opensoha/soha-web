@@ -1,5 +1,21 @@
 import type { CSSProperties } from 'react'
 
+export const viewportModalStyle: CSSProperties = {
+  top: 16,
+  paddingBottom: 0,
+}
+
+export const scrollableModalBodyStyle: CSSProperties = {
+  maxHeight: 'calc(100dvh - 96px)',
+  overflowY: 'auto',
+  overscrollBehavior: 'contain',
+  scrollbarGutter: 'stable',
+}
+
+export const hiddenModalHeaderStyle: CSSProperties = {
+  minHeight: 32,
+}
+
 export const visuallyHiddenModalTitleStyle: CSSProperties = {
   position: 'absolute',
   width: 1,

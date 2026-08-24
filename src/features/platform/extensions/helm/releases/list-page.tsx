@@ -1,9 +1,10 @@
 import { useDeferredValue, useMemo, useState } from 'react'
-import { Alert, App, Button, Popconfirm, Space, Typography } from 'antd'
+import { Alert, App, Button, Popconfirm, Space } from 'antd'
 import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import {
   ManagementDensityButton,
   ManagementIconButton,
@@ -29,8 +30,6 @@ import { buildHelmReleaseRoutePath } from '../paths'
 import { helmQueries } from '../queries'
 import type { HelmRelease } from '../types'
 import '@/features/platform/extensions/styles.css'
-
-const { Text } = Typography
 
 export function HelmReleasesPage() {
   const { t, localeCode } = useI18n()
@@ -219,15 +218,11 @@ export function HelmReleasesPage() {
         dataSource={clusterId ? filteredItems : []}
         rowKey={(record) => `${record.namespace}:${record.name}`}
         loading={releasesQuery.isLoading}
-        paginationSummary={
-          <Text className="soha-workload-table-summary" type="secondary">
-            {localeCode === 'zh_CN'
-              ? `当前 ${filteredItems.length} / ${rawItems.length} 条`
-              : `${filteredItems.length} / ${rawItems.length} items`}
-          </Text>
-        }
+        localSorting
+        pageSize={K8S_TABLE_PAGE_SIZE}
         tableSize={tableSize}
         scroll={{ x: 'max-content' }}
+        viewportScroll
         onRow={(record: HelmRelease) => ({
           onClick: () => navigate(buildHelmReleaseRoutePath(record.name, record.namespace)),
           style: { cursor: 'pointer' },

@@ -1,5 +1,5 @@
 import { useDeferredValue, useMemo, useState } from 'react'
-import { Alert, App, Popconfirm, Typography } from 'antd'
+import { Alert, App, Popconfirm } from 'antd'
 import { DeleteOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementDataPage } from '@/components/management-data-page'
@@ -16,6 +16,7 @@ import { TABLE_ACTIONS_COLUMN_CLASS_NAME } from '@/components/resource-actions'
 import { hasAllowedAction } from '@/features/auth'
 import { useClusterCapability } from '@/features/platform/cluster-capabilities'
 import { CreateEntry } from '@/features/platform/resource-creation/components/create-entry'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import type { TableColumnsType } from 'antd'
@@ -24,8 +25,6 @@ import { accessControlQueries } from './queries'
 import { accessControlScopeFromSelection, accessControlTargetFromRecord } from './scope'
 import type { AccessControlKind, AccessControlResourceRecord } from './types'
 import '../styles.css'
-
-const { Text } = Typography
 
 function normalizeKeyword(value: string) {
   return value.trim().toLowerCase()
@@ -245,17 +244,12 @@ export function AccessControlResourceListPage<T extends AccessControlResourceRec
           </ManagementTableToolbar>
         ),
         loading: query.isLoading,
-        pageSize: 10,
-        paginationSummary: (
-          <Text className="soha-workload-table-summary" type="secondary">
-            {localeCode === 'zh_CN'
-              ? `当前 ${filteredItems.length} / ${rawItems.length} 条`
-              : `${filteredItems.length} / ${rawItems.length} items`}
-          </Text>
-        ),
+        localSorting: true,
+        pageSize: K8S_TABLE_PAGE_SIZE,
         rowKey,
         scroll: { x: 'max-content' },
         tableSize,
+        viewportScroll: true,
       }}
     />
   )

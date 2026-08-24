@@ -13,6 +13,7 @@ import {
   capabilityActionTooltip,
   useClusterCapability,
 } from '@/features/platform/cluster-capabilities'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
 import { formatAgeSeconds } from '@/utils/time'
@@ -29,7 +30,6 @@ import {
   WorkloadRefreshButton,
   WorkloadSearchInput,
   WorkloadTableEmpty,
-  WorkloadTableSummary,
 } from '@/features/platform/workloads/shared/list-controls'
 import { jobMutations } from './mutations'
 import { jobQueries } from './queries'
@@ -81,19 +81,27 @@ export function WorkloadsJobsPage() {
         ),
     },
     { title: t('common.namespace', 'Namespace'), dataIndex: 'namespace', width: 160 },
-    { title: 'Completions', dataIndex: 'completions', width: 120 },
-    { title: 'Succeeded', dataIndex: 'succeeded', width: 104 },
-    { title: 'Failed', dataIndex: 'failed', width: 88 },
-    { title: 'Active', dataIndex: 'active', width: 88 },
     {
-      title: 'Mode',
+      title: localeCode === 'zh_CN' ? '完成数' : 'Completions',
+      dataIndex: 'completions',
+      width: 120,
+    },
+    {
+      title: localeCode === 'zh_CN' ? '成功' : 'Succeeded',
+      dataIndex: 'succeeded',
+      width: 104,
+    },
+    { title: localeCode === 'zh_CN' ? '失败' : 'Failed', dataIndex: 'failed', width: 88 },
+    { title: localeCode === 'zh_CN' ? '活跃' : 'Active', dataIndex: 'active', width: 88 },
+    {
+      title: localeCode === 'zh_CN' ? '模式' : 'Mode',
       dataIndex: 'completionMode',
       width: 140,
       render: (value: string) => value || '-',
     },
     {
       ...tableColumnPresets.datetime,
-      title: 'Age',
+      title: localeCode === 'zh_CN' ? '时长' : 'Age',
       dataIndex: 'ageSeconds',
       width: 104,
       render: (value: number) => formatAgeSeconds(value),
@@ -188,13 +196,8 @@ export function WorkloadsJobsPage() {
         dataSource={filteredJobs}
         rowKey={(record) => `${record.namespace}/${record.name}`}
         loading={jobsQuery.isLoading}
-        paginationSummary={
-          <WorkloadTableSummary
-            filteredCount={filteredJobs.length}
-            localeCode={localeCode}
-            totalCount={jobs.length}
-          />
-        }
+        localSorting
+        pageSize={K8S_TABLE_PAGE_SIZE}
         empty={
           <WorkloadTableEmpty
             clusterId={clusterId}
@@ -206,6 +209,7 @@ export function WorkloadsJobsPage() {
         }
         tableSize={tableSize}
         scroll={{ x: 'max-content' }}
+        viewportScroll
       />
     </div>
   )

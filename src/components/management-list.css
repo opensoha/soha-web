@@ -37,7 +37,7 @@
 }
 
 .soha-management-query-grid.is-collapsible.is-collapsed .soha-management-query-fields {
-  max-height: 28px;
+  max-height: var(--soha-management-query-collapsed-height, 28px);
   overflow: hidden;
 }
 

@@ -1,6 +1,6 @@
 import { useDeferredValue, useMemo, useState } from 'react'
-import { App, Popconfirm, Typography } from 'antd'
-import { DeleteOutlined } from '@ant-design/icons'
+import { App, Popconfirm, Space } from 'antd'
+import { DeleteOutlined, FormOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { ManagementDataPage } from '@/components/management-data-page'
@@ -17,6 +17,7 @@ import {
 import { TABLE_ACTIONS_COLUMN_CLASS_NAME } from '@/components/resource-actions'
 import { hasAllowedAction } from '@/features/auth'
 import { CreateEntry } from '@/features/platform/resource-creation/components/create-entry'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
@@ -30,8 +31,6 @@ import type {
   ConfigurationScopeMode,
 } from './types'
 import '../styles.css'
-
-const { Text } = Typography
 
 function normalizeKeyword(value: string) {
   return value.trim().toLowerCase()
@@ -69,6 +68,7 @@ export function ConfigurationResourceListPage<T extends ConfigurationResourceRec
   emptyDescription,
   kind,
   label,
+  onEdit,
   scopeMode = 'namespace',
   singularLabel,
 }: {
@@ -77,6 +77,7 @@ export function ConfigurationResourceListPage<T extends ConfigurationResourceRec
   emptyDescription: { en_US: string; zh_CN: string }
   kind: ConfigurationKind
   label: string
+  onEdit?: (record: T) => void
   scopeMode?: ConfigurationScopeMode
   singularLabel?: string
 }) {
@@ -107,7 +108,11 @@ export function ConfigurationResourceListPage<T extends ConfigurationResourceRec
       : emptyDescription[localeCode]
   const densityLabel = localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'
   const canCreate = Boolean(defaultTemplate && singularLabel)
-  const canShowActions = rawItems.some((item) => hasAllowedAction(item.allowedActions, 'delete'))
+  const canShowActions = rawItems.some(
+    (item) =>
+      hasAllowedAction(item.allowedActions, 'delete') ||
+      Boolean(onEdit && hasAllowedAction(item.allowedActions, 'update')),
+  )
   const searchDimensions = scopeMode === 'namespace' ? '名称 / 命名空间' : '名称'
   const englishSearchDimensions = scopeMode === 'namespace' ? 'name / namespace' : 'name'
 
@@ -116,12 +121,13 @@ export function ConfigurationResourceListPage<T extends ConfigurationResourceRec
     dataIndex: '__actions',
     fixed: 'right',
     align: 'center',
-    width: 52,
+    width: onEdit ? 84 : 52,
     onHeaderCell: () => ({ className: TABLE_ACTIONS_COLUMN_CLASS_NAME }),
     onCell: () => ({ className: TABLE_ACTIONS_COLUMN_CLASS_NAME }),
     render: (_value, record) => {
+      const canEdit = Boolean(onEdit && hasAllowedAction(record.allowedActions, 'update'))
       const canDelete = hasAllowedAction(record.allowedActions, 'delete')
-      if (!canDelete) return null
+      if (!canEdit && !canDelete) return null
       const target = configurationTargetFromRecord(clusterId, record)
       const deleting =
         removeMutation.isPending &&
@@ -129,32 +135,47 @@ export function ConfigurationResourceListPage<T extends ConfigurationResourceRec
         removeMutation.variables.scope.namespace === target.scope.namespace
       const deleteLabel = localeCode === 'zh_CN' ? '删除' : 'Delete'
       return (
-        <Popconfirm
-          title={localeCode === 'zh_CN' ? `确认删除 ${record.name}？` : `Delete ${record.name}?`}
-          description={
-            localeCode === 'zh_CN'
-              ? '此操作不可恢复，删除后集群资源立即消失。'
-              : 'This deletes the resource immediately and cannot be undone.'
-          }
-          okText={deleteLabel}
-          cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
-          okButtonProps={{ danger: true, loading: deleting }}
-          placement="topRight"
-          onConfirm={() =>
-            removeMutation.mutate(target, {
-              onSuccess: () => void message.success(localeCode === 'zh_CN' ? '已删除' : 'Deleted'),
-              onError: (error) => void message.error(error.message),
-            })
-          }
-        >
-          <ManagementIconButton
-            danger
-            icon={<DeleteOutlined />}
-            aria-label={deleteLabel}
-            loading={deleting}
-            tooltip={deleteLabel}
-          />
-        </Popconfirm>
+        <Space size={2} className="soha-row-action-icons">
+          {canEdit ? (
+            <ManagementIconButton
+              aria-label={`${localeCode === 'zh_CN' ? '编辑' : 'Edit'} ${record.name}`}
+              icon={<FormOutlined />}
+              onClick={() => onEdit?.(record)}
+              tooltip={localeCode === 'zh_CN' ? '编辑' : 'Edit'}
+            />
+          ) : null}
+          {canDelete ? (
+            <Popconfirm
+              title={
+                localeCode === 'zh_CN' ? `确认删除 ${record.name}？` : `Delete ${record.name}?`
+              }
+              description={
+                localeCode === 'zh_CN'
+                  ? '此操作不可恢复，删除后集群资源立即消失。'
+                  : 'This deletes the resource immediately and cannot be undone.'
+              }
+              okText={deleteLabel}
+              cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
+              okButtonProps={{ danger: true, loading: deleting }}
+              placement="topRight"
+              onConfirm={() =>
+                removeMutation.mutate(target, {
+                  onSuccess: () =>
+                    void message.success(localeCode === 'zh_CN' ? '已删除' : 'Deleted'),
+                  onError: (error) => void message.error(error.message),
+                })
+              }
+            >
+              <ManagementIconButton
+                danger
+                icon={<DeleteOutlined />}
+                aria-label={deleteLabel}
+                loading={deleting}
+                tooltip={deleteLabel}
+              />
+            </Popconfirm>
+          ) : null}
+        </Space>
       )
     },
   }
@@ -229,13 +250,7 @@ export function ConfigurationResourceListPage<T extends ConfigurationResourceRec
         dataSource: clusterId ? filteredItems : [],
         rowKey: (record) => `${record.namespace ?? ''}/${record.name}`,
         loading: query.isLoading,
-        paginationSummary: (
-          <Text className="soha-workload-table-summary" type="secondary">
-            {localeCode === 'zh_CN'
-              ? `当前 ${filteredItems.length} / ${rawItems.length} 条`
-              : `${filteredItems.length} / ${rawItems.length} items`}
-          </Text>
-        ),
+        localSorting: true,
         empty: (
           <ManagementState
             bordered={false}
@@ -244,9 +259,10 @@ export function ConfigurationResourceListPage<T extends ConfigurationResourceRec
             kind={!clusterId ? 'select-scope' : 'empty'}
           />
         ),
-        pageSize: 10,
+        pageSize: K8S_TABLE_PAGE_SIZE,
         tableSize,
         scroll: { x: 'max-content' },
+        viewportScroll: true,
       }}
     />
   )

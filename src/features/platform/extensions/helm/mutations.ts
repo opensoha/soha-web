@@ -1,5 +1,10 @@
 import { mutationOptions, type QueryClient } from '@tanstack/react-query'
-import { deleteHelmRelease, installHelmChart, updateHelmReleaseValues } from './api'
+import {
+  deleteHelmRelease,
+  installHelmChart,
+  rollbackHelmRelease,
+  updateHelmReleaseValues,
+} from './api'
 import { helmKeys } from './keys'
 
 export const helmMutations = {
@@ -20,6 +25,20 @@ export const helmMutations = {
           queryClient.invalidateQueries({ queryKey: helmKeys.releaseDetail(variables) }),
           queryClient.invalidateQueries({ queryKey: helmKeys.releaseHistory(variables) }),
           queryClient.invalidateQueries({ queryKey: helmKeys.releases(variables.clusterId) }),
+        ]),
+    }),
+  rollbackRelease: (queryClient: QueryClient) =>
+    mutationOptions({
+      mutationKey: [...helmKeys.all, 'rollback-release'] as const,
+      mutationFn: rollbackHelmRelease,
+      onSuccess: (_data, variables) =>
+        Promise.all([
+          queryClient.invalidateQueries({ queryKey: helmKeys.releaseDetail(variables) }),
+          queryClient.invalidateQueries({ queryKey: helmKeys.releaseHistory(variables) }),
+          queryClient.invalidateQueries({ queryKey: helmKeys.releases(variables.clusterId) }),
+          queryClient.invalidateQueries({
+            queryKey: helmKeys.releaseManifest(variables),
+          }),
         ]),
     }),
   installChart: (queryClient: QueryClient) =>

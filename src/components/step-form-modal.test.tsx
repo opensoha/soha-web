@@ -5,15 +5,39 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { StepFormModal } from './step-form-modal'
 
 const lifecycle = vi.hoisted(() => ({
+  bodyClassName: undefined as string | undefined,
+  bodyStyle: undefined as Record<string, unknown> | undefined,
   contentMaxWidth: undefined as number | string | undefined,
   destroyOnHidden: undefined as boolean | undefined,
   disabled: undefined as boolean | undefined,
+  modalStyle: undefined as Record<string, unknown> | undefined,
   preserve: undefined as boolean | undefined,
+  title: undefined as ReactNode,
+  titleStyle: undefined as Record<string, unknown> | undefined,
 }))
 
 vi.mock('antd', () => ({
-  Modal: ({ children, destroyOnHidden }: { children?: ReactNode; destroyOnHidden?: boolean }) => {
+  Modal: ({
+    children,
+    classNames,
+    destroyOnHidden,
+    style,
+    styles,
+    title,
+  }: {
+    children?: ReactNode
+    classNames?: { body?: string }
+    destroyOnHidden?: boolean
+    style?: Record<string, unknown>
+    styles?: { body?: Record<string, unknown>; title?: Record<string, unknown> }
+    title?: ReactNode
+  }) => {
+    lifecycle.bodyClassName = classNames?.body
+    lifecycle.bodyStyle = styles?.body
     lifecycle.destroyOnHidden = destroyOnHidden
+    lifecycle.modalStyle = style
+    lifecycle.title = title
+    lifecycle.titleStyle = styles?.title
     return <>{children}</>
   },
 }))
@@ -37,10 +61,15 @@ vi.mock('./step-form', () => ({
 
 describe('StepFormModal lifecycle', () => {
   beforeEach(() => {
+    lifecycle.bodyClassName = undefined
+    lifecycle.bodyStyle = undefined
     lifecycle.contentMaxWidth = undefined
     lifecycle.destroyOnHidden = undefined
     lifecycle.disabled = undefined
+    lifecycle.modalStyle = undefined
     lifecycle.preserve = undefined
+    lifecycle.title = undefined
+    lifecycle.titleStyle = undefined
   })
 
   it('discards the external form store after closing', () => {
@@ -63,5 +92,32 @@ describe('StepFormModal lifecycle', () => {
     expect(lifecycle.destroyOnHidden).toBe(true)
     expect(lifecycle.disabled).toBe(true)
     expect(lifecycle.preserve).toBe(false)
+    expect(lifecycle.bodyClassName).toBe('soha-step-form-modal__body')
+    expect(lifecycle.bodyStyle).toMatchObject({
+      maxHeight: 'calc(100dvh - 96px)',
+      overflowY: 'auto',
+      overscrollBehavior: 'contain',
+    })
+    expect(lifecycle.modalStyle).toMatchObject({ top: 16, paddingBottom: 0 })
+    expect(lifecycle.title).toBe('Test form')
+    expect(lifecycle.titleStyle).toMatchObject({ position: 'absolute', width: 1, height: 1 })
+  })
+
+  it('hosts an existing StepForm without rendering a second form', () => {
+    const html = renderToStaticMarkup(
+      <StepFormModal
+        bodyClassName="feature-step-form"
+        onClose={() => undefined}
+        open
+        title="Composed form"
+      >
+        <span>existing step form</span>
+      </StepFormModal>,
+    )
+
+    expect(html).toContain('existing step form')
+    expect(lifecycle.contentMaxWidth).toBeUndefined()
+    expect(lifecycle.bodyClassName).toBe('soha-step-form-modal__body feature-step-form')
+    expect(lifecycle.title).toBe('Composed form')
   })
 })

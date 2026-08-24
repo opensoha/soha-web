@@ -430,7 +430,7 @@ describe('workloads pods page refresh controls', () => {
     await flushAsyncWork()
 
     expect(container.querySelector('[data-column="phase"]')?.textContent).toBe('Running')
-    expect(container.querySelector('[data-column="readyContainers"]')?.textContent).toBe('Ready 1/1')
+    expect(container.querySelector('[data-column="readyContainers"]')?.textContent).toBe('就绪 1/1')
   })
 
   it('clears the previous cluster node filter when the cluster changes', async () => {

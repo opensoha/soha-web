@@ -63,3 +63,70 @@ export interface AggregatedWorkloadOverview extends Omit<
   namespaceBreakdown: AggregatedNamespaceBreakdown[]
   problematicPods: AggregatedProblematicPod[]
 }
+
+export type OverviewActivitySource = 'kubernetes' | 'audit' | 'operation'
+
+export interface OverviewActivityItem {
+  id: string
+  source: OverviewActivitySource
+  title: string
+  description: string
+  status: string
+  timestamp: string
+  path: string
+}
+
+export interface OverviewCapacitySummary {
+  cpuPercent?: number
+  memoryPercent?: number
+  podPercent?: number
+  readyNodes: number
+  totalNodes: number
+  unschedulableNodes: number
+  signalNodes: number
+}
+
+export interface OverviewCapabilityGovernance {
+  approvalRequired: number
+  highRisk: number
+  partial: number
+  supported: number
+  items: Array<{
+    key: string
+    label: string
+    riskLevel: string
+    requiresApproval: boolean
+    status: string
+  }>
+}
+
+export interface OverviewFleetReadiness {
+  healthy: number
+  stale: number
+  unhealthy: number
+  versions: number
+}
+
+export type OverviewResourceKind =
+  | 'pods'
+  | 'deployments'
+  | 'services'
+  | 'configmaps'
+  | 'namespaces'
+  | 'nodes'
+  | 'hpas'
+  | 'networkpolicies'
+
+export interface OverviewResourceSearchResult {
+  key: string
+  kind: OverviewResourceKind
+  name: string
+  namespace?: string
+  status?: string
+  path: string
+}
+
+export interface OverviewResourceSearchPage {
+  items: OverviewResourceSearchResult[]
+  truncated: boolean
+}

@@ -49,16 +49,24 @@ export function WorkloadsReplicaSetsPage() {
       width: 160,
     },
     {
-      title: 'Ready',
+      title: localeCode === 'zh_CN' ? '就绪' : 'Ready',
       dataIndex: 'readyReplicas',
       width: 190,
       render: (_: number, record) => renderReady(record.readyReplicas, record.desiredReplicas),
     },
-    { title: 'Desired', dataIndex: 'desiredReplicas', width: 96 },
-    { title: 'Available', dataIndex: 'availableReplicas', width: 110 },
+    {
+      title: localeCode === 'zh_CN' ? '期望' : 'Desired',
+      dataIndex: 'desiredReplicas',
+      width: 96,
+    },
+    {
+      title: localeCode === 'zh_CN' ? '可用' : 'Available',
+      dataIndex: 'availableReplicas',
+      width: 110,
+    },
     {
       ...tableColumnPresets.datetime,
-      title: 'Age',
+      title: localeCode === 'zh_CN' ? '时长' : 'Age',
       dataIndex: 'ageSeconds',
       width: 120,
       render: (value: number) => formatAgeSeconds(value),

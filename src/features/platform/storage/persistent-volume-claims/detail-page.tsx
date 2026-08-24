@@ -16,6 +16,7 @@ import {
 import { toStorageScope } from '../shared/scope'
 import { persistentVolumeClaimMutations } from './mutations'
 import { persistentVolumeClaimQueries } from './queries'
+import { PersistentVolumeClaimLifecyclePanel } from './lifecycle-panel'
 
 const StorageYAMLPanel = lazy(() => import('../shared/yaml-panel'))
 
@@ -136,6 +137,7 @@ export function StoragePvcDetailPage() {
                     { key: 'AccessModes', value: detail.accessModes?.join(', ') || '-' },
                   ]}
                 />
+                <PersistentVolumeClaimLifecyclePanel claim={detail} />
                 <Card
                   className="soha-detail-card"
                   title={`${localeCode === 'zh_CN' ? '使用此 PVC 的 Pods' : 'Pods using this PVC'}${detail.podsTruncated ? ' (first 200)' : ''}`}

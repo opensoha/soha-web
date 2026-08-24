@@ -46,7 +46,7 @@ export function K8sYamlEditor({
   applyDisabled,
   applyDisabledReason,
   applying,
-  editorHeight = 620,
+  editorHeight = 'clamp(360px, 64vh, 620px)',
   applyLabel,
 }: {
   value: string

@@ -7,6 +7,9 @@ const routePages = vi.hoisted(() => ({
   rootCause: () => null,
   performance: () => null,
   operations: () => null,
+  mcp: () => null,
+  dataSources: () => null,
+  skills: () => null,
   tools: () => null,
   modelSettings: () => null,
   overview: () => null,
@@ -31,6 +34,9 @@ vi.mock('../workbench/pages/performance-page', () => ({
   AIWorkbenchPerformancePage: routePages.performance,
 }))
 vi.mock('./operations/page', () => ({ AIOperationsPage: routePages.operations }))
+vi.mock('./mcp/page', () => ({ AIMCPPage: routePages.mcp }))
+vi.mock('./data-sources/page', () => ({ AIDataSourcesPage: routePages.dataSources }))
+vi.mock('./skills/page', () => ({ AISkillsPage: routePages.skills }))
 vi.mock('./tools/page', () => ({ AIToolsPage: routePages.tools }))
 vi.mock('./model-settings/page', () => ({
   AIModelSettingsPage: routePages.modelSettings,
@@ -71,13 +77,16 @@ describe('Copilot Observe route manifests', () => {
     expect(loaded.get('/ai-workbench/root-cause')).toBe(routePages.rootCause)
     expect(loaded.get('/ai-workbench/performance')).toBe(routePages.performance)
     expect(loaded.get('/ai-workbench/inspection')).toBe(routePages.operations)
+    expect(loaded.get('/ai-workbench/mcp')).toBe(routePages.mcp)
+    expect(loaded.get('/ai-workbench/data-sources')).toBe(routePages.dataSources)
+    expect(loaded.get('/ai-workbench/skills')).toBe(routePages.skills)
     expect(loaded.get('/ai-workbench/tool-settings')).toBe(routePages.tools)
     expect(loaded.get('/ai-workbench/model-settings')).toBe(routePages.modelSettings)
   })
 
   it('has unique, valid route definitions', () => {
     const routes = copilotObserveRouteManifests.flatMap((manifest) => [...manifest])
-    expect(routes).toHaveLength(19)
+    expect(routes).toHaveLength(22)
     expect(validateRouteDefinitions(routes)).toEqual([])
   })
 })

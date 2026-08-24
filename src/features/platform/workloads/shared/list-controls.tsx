@@ -9,7 +9,7 @@ import {
   ManagementState,
 } from '@/components/management-list'
 
-const { Link, Text } = Typography
+const { Link } = Typography
 
 export type WorkloadLocaleCode = 'zh_CN' | 'en_US'
 
@@ -91,24 +91,6 @@ export function WorkloadQueryPanel({
     >
       {children}
     </ManagementQueryPanel>
-  )
-}
-
-export function WorkloadTableSummary({
-  filteredCount,
-  localeCode,
-  totalCount,
-}: {
-  filteredCount: number
-  localeCode: WorkloadLocaleCode
-  totalCount: number
-}) {
-  return (
-    <Text className="soha-workload-table-summary" type="secondary">
-      {localeCode === 'zh_CN'
-        ? `当前 ${filteredCount} / ${totalCount} 条`
-        : `${filteredCount} / ${totalCount} items`}
-    </Text>
   )
 }
 

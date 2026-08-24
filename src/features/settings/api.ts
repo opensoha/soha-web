@@ -38,6 +38,10 @@ export const settingsApi = {
   },
   ai: {
     get: () => unwrap(api.get<ApiResponse<AISettings>>('/settings/ai')),
+    skills: () =>
+      unwrap(
+        api.get<ApiResponse<{ skillsRegistry: AISkillSetting[] }>>('/settings/ai/skills'),
+      ),
     modelRoutes: () =>
       unwrap(
         api.get<ApiResponse<LLMModelRoute[]>>(

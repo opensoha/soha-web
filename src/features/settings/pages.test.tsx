@@ -307,6 +307,16 @@ function setDefaultResponses() {
         },
       ],
     },
+    '/settings/ai/skills': {
+      skillsRegistry: [
+        {
+          id: 'skill-1',
+          name: 'Skill One',
+          category: 'observability',
+          enabled: true,
+        },
+      ],
+    },
     '/ai-gateway/relay/model-routes?includeDisabled=true': [
       {
         id: 'route-openai',
@@ -1000,13 +1010,15 @@ describe('settings ai page rendering', () => {
   it('saves skills registry without provider connection payloads', async () => {
     const container = await renderWithProviders(
       <AISettingsPage embedded section="skills" />,
-      '/ai-workbench/tool-settings',
+      '/ai-workbench/skills',
     )
     const saveButton = Array.from(container.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('保存 Skills'),
     ) as HTMLButtonElement | undefined
 
     expect(saveButton).toBeTruthy()
+    expect(apiGetMock).toHaveBeenCalledWith('/settings/ai/skills')
+    expect(apiGetMock).not.toHaveBeenCalledWith('/settings/ai')
 
     await act(async () => {
       saveButton?.click()

@@ -4,20 +4,18 @@ import {
   Alert,
   App,
   Button,
+  Card,
   Drawer,
   Flex,
   Input,
   InputNumber,
   Select,
   Space,
-  Tabs,
   Typography,
 } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AdminTable } from '@/components/admin-table'
 import { ManagementState } from '@/components/management-list'
 import { MetadataTag } from '@/components/status-tag'
-import { AISettingsPage } from '@/features/settings'
 import { displayWorkbenchSessionTitle } from '../../workbench/model'
 import {
   TOOLSET_BUDGET_FIELDS,
@@ -34,6 +32,7 @@ import { observeKeys } from '../keys'
 import { observeMutations } from '../mutations'
 import { observeQueries } from '../queries'
 import '../../copilot-pages.css'
+import './styles.css'
 
 const { Paragraph, Text, Title } = Typography
 
@@ -47,7 +46,7 @@ function buildScopeSummary(scope?: WorkbenchSessionScope) {
 }
 
 export function AIToolsPage() {
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const requestedSessionId = searchParams.get('session') || undefined
   const queryClient = useQueryClient()
   const { message } = App.useApp()
@@ -58,6 +57,7 @@ export function AIToolsPage() {
   const [scopeOverrides, setScopeOverrides] = useState<Partial<WorkbenchSessionScope>>({})
   const [sessionDrawerOpen, setSessionDrawerOpen] = useState(false)
   const catalogQuery = useQuery(observeQueries.tools.catalog())
+  const sessionsQuery = useQuery(observeQueries.overview.sessions())
   const sessionDetailQuery = useQuery(observeQueries.tools.session(requestedSessionId))
 
   const adapters = useMemo(() => catalogQuery.data?.adapters ?? [], [catalogQuery.data?.adapters])
@@ -193,65 +193,56 @@ export function AIToolsPage() {
     })
   }
 
+  const selectSession = (sessionId?: string) => {
+    const next = new URLSearchParams(searchParams)
+    if (sessionId) next.set('session', sessionId)
+    else next.delete('session')
+    setSessionDrawerOpen(false)
+    setSearchParams(next)
+  }
+
   return (
     <div className="soha-page">
-      <Tabs
-        className="soha-resource-tabs"
-        defaultActiveKey="adapters"
-        tabBarExtraContent={
-          requestedSessionId ? (
+      <Card className="soha-session-assembly-card" size="small">
+        <Flex align="center" gap={12} justify="space-between" wrap="wrap">
+          <Select
+            allowClear
+            showSearch={{ optionFilterProp: 'label' }}
+            loading={sessionsQuery.isLoading}
+            placeholder="选择会话"
+            className="soha-session-assembly-card__select"
+            value={requestedSessionId}
+            options={(sessionsQuery.data ?? []).map((session) => ({
+              value: session.id,
+              label: displayWorkbenchSessionTitle(session.title),
+            }))}
+            onChange={selectSession}
+          />
+          <Flex align="center" gap={8} wrap="wrap">
+            {currentSession ? (
+              <>
+                <MetadataTag label={currentSession.metadata?.mode || 'general'} />
+                <MetadataTag label={buildScopeSummary(currentSession.metadata?.scope)} />
+                <MetadataTag
+                  tone="blue"
+                  label={`${selectedAdapterIds.length || 'auto'} adapters / ${selectedSkillIds.length || 'global'} skills`}
+                />
+              </>
+            ) : null}
             <Button
+              type="primary"
+              disabled={!requestedSessionId}
               loading={sessionDetailQuery.isLoading}
               onClick={() => setSessionDrawerOpen(true)}
             >
-              配置当前会话
+              配置装配
             </Button>
-          ) : null
-        }
-        items={[
-          {
-            key: 'adapters',
-            label: `MCP Adapters (${adapters.length})`,
-            children: (
-              <AdminTable
-                columnSettingPlacement="hidden"
-                columns={[
-                  { title: '名称', dataIndex: 'name', key: 'name' },
-                  {
-                    title: '来源类型',
-                    dataIndex: 'sourceKind',
-                    key: 'sourceKind',
-                    width: 180,
-                    render: (value: string) => <MetadataTag label={value} />,
-                  },
-                  { title: '说明', dataIndex: 'description', key: 'description' },
-                ]}
-                dataSource={adapters}
-                loading={catalogQuery.isLoading}
-                pagination={false}
-                rowKey="id"
-                empty={
-                  catalogQuery.isError ? (
-                    <ManagementState kind="error" title="MCP Adapters 加载失败" />
-                  ) : (
-                    <ManagementState title="暂无 MCP Adapter" />
-                  )
-                }
-              />
-            ),
-          },
-          {
-            key: 'sources',
-            label: `数据源 (${dataSources.length})`,
-            children: <AISettingsPage embedded section="data-sources" />,
-          },
-          {
-            key: 'skills',
-            label: `Skills (${skills.length})`,
-            children: <AISettingsPage embedded section="skills" />,
-          },
-        ]}
-      />
+          </Flex>
+        </Flex>
+        {sessionsQuery.isError ? (
+          <ManagementState compact kind="error" title="会话列表加载失败" />
+        ) : null}
+      </Card>
 
       <Drawer
         destroyOnHidden

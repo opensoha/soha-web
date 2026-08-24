@@ -182,6 +182,19 @@ describe('network manifest builders', () => {
     })
   })
 
+  it('preserves named target ports and normalizes numeric input', () => {
+    expect(
+      buildServiceManifest({
+        ...metadata,
+        type: 'ClusterIP',
+        ports: [
+          { name: 'named', port: 80, targetPort: 'http', protocol: 'TCP' },
+          { name: 'numeric', port: 81, targetPort: '8081', protocol: 'TCP' },
+        ],
+      }),
+    ).toMatchObject({ spec: { ports: [{ targetPort: 'http' }, { targetPort: 8081 }] } })
+  })
+
   it('uses externalName instead of a selector for ExternalName services', () => {
     const result = buildServiceManifest({
       ...metadata,
@@ -194,6 +207,27 @@ describe('network manifest builders', () => {
       spec: { type: 'ExternalName', externalName: 'database.example.com' },
     })
     expect(result.spec).not.toHaveProperty('selector')
+    expect(result.spec).not.toHaveProperty('ports')
+  })
+
+  it('includes nodePort only for Service types that expose it', () => {
+    const port = {
+      name: 'http',
+      port: 80,
+      targetPort: 8080,
+      nodePort: 30080,
+      protocol: 'TCP' as const,
+    }
+    expect(buildServiceManifest({ ...metadata, type: 'NodePort', ports: [port] })).toMatchObject({
+      spec: { ports: [{ nodePort: 30080 }] },
+    })
+    expect(
+      buildServiceManifest({ ...metadata, type: 'LoadBalancer', ports: [port] }),
+    ).toMatchObject({ spec: { ports: [{ nodePort: 30080 }] } })
+    expect(buildServiceManifest({ ...metadata, type: 'ClusterIP', ports: [port] }).spec).toEqual({
+      type: 'ClusterIP',
+      ports: [{ name: 'http', port: 80, targetPort: 8080, protocol: 'TCP' }],
+    })
   })
 
   it('builds Ingress v1 service backends and TLS', () => {

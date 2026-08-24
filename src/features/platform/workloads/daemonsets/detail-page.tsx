@@ -32,11 +32,31 @@ function DaemonSetOverview({ detail }: { detail: DaemonSetDetail }) {
           column={{ xs: 1, sm: 2, md: 3 }}
           size="small"
           items={[
-            { key: 'desired', label: 'Desired', children: detail.desiredNumber ?? '-' },
-            { key: 'current', label: 'Current', children: detail.currentNumber ?? '-' },
-            { key: 'ready', label: 'Ready', children: detail.readyNumber ?? '-' },
-            { key: 'available', label: 'Available', children: detail.availableNumber ?? '-' },
-            { key: 'updated', label: 'Updated', children: detail.updatedNumber ?? '-' },
+            {
+              key: 'desired',
+              label: localeCode === 'zh_CN' ? '期望' : 'Desired',
+              children: detail.desiredNumber ?? '-',
+            },
+            {
+              key: 'current',
+              label: localeCode === 'zh_CN' ? '当前' : 'Current',
+              children: detail.currentNumber ?? '-',
+            },
+            {
+              key: 'ready',
+              label: localeCode === 'zh_CN' ? '就绪' : 'Ready',
+              children: detail.readyNumber ?? '-',
+            },
+            {
+              key: 'available',
+              label: localeCode === 'zh_CN' ? '可用' : 'Available',
+              children: detail.availableNumber ?? '-',
+            },
+            {
+              key: 'updated',
+              label: localeCode === 'zh_CN' ? '已更新' : 'Updated',
+              children: detail.updatedNumber ?? '-',
+            },
             {
               key: 'strategy',
               label: localeCode === 'zh_CN' ? '更新策略' : 'Update Strategy',

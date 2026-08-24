@@ -255,7 +255,10 @@ export function PodDetailPage() {
       activeTab: activeTabKey,
       container,
     },
-    promptHint: `排查 Pod ${podName} 的状态、容器、事件、日志、指标和节点相关问题。`,
+    promptHint:
+      localeCode === 'zh_CN'
+        ? `排查 Pod ${podName} 的状态、容器、事件、日志、指标和节点相关问题。`
+        : `Investigate status, containers, events, logs, metrics, and node issues for Pod ${podName}.`,
   })
   const podTimelineEvents = useMemo(
     () =>
@@ -312,7 +315,13 @@ export function PodDetailPage() {
     {
       title: localeCode === 'zh_CN' ? '就绪' : 'Ready',
       dataIndex: 'ready',
-      render: (value: boolean) => <BooleanTag value={value} trueLabel="Yes" falseLabel="No" />,
+      render: (value: boolean) => (
+        <BooleanTag
+          value={value}
+          trueLabel={localeCode === 'zh_CN' ? '是' : 'Yes'}
+          falseLabel={localeCode === 'zh_CN' ? '否' : 'No'}
+        />
+      ),
     },
     {
       title: localeCode === 'zh_CN' ? '状态' : 'State',

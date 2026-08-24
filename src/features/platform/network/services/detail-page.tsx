@@ -14,8 +14,10 @@ import { formatAgeSeconds } from '@/utils/time'
 import type { TableColumnsType, TabsProps } from 'antd'
 import { NetworkDetailShell } from '../shared/detail-shell'
 import { resolveNetworkNamespace } from '../shared/scope'
+import { ServicePortDisplay, ServiceTypeTag } from './port-display'
 import { serviceQueries } from './queries'
 import type { ServiceBackendPod, ServiceEndpoint } from './types'
+import { ServiceDiagnosticsPanel } from './diagnostics-panel'
 
 const ResourceMetricsPanel = lazy(async () => {
   const module = await import('@/components/resource-metrics-panel')
@@ -36,7 +38,9 @@ export function ServiceDetailPage() {
   const serviceName = (params.serviceName as string | undefined) ?? ''
   const detailNamespace = resolveNetworkNamespace(namespace, searchParams.get('namespace'))
   const scope = toScopeKey(clusterId, detailNamespace)
-  const [activeTabKey, setActiveTabKey] = useState('overview')
+  const [activeTabKey, setActiveTabKey] = useState(() =>
+    searchParams.get('tab') === 'yaml' ? 'yaml' : 'overview',
+  )
   const detailQuery = useQuery(serviceQueries.detail(scope, serviceName))
   const service = detailQuery.data
 
@@ -64,6 +68,7 @@ export function ServiceDetailPage() {
       type: service?.type,
       clusterIp: service?.clusterIp,
       ports: service?.ports,
+      portMappings: service?.portMappings,
       selector: service?.selector,
       activeTab: activeTabKey,
     },
@@ -146,6 +151,19 @@ export function ServiceDetailPage() {
 
   const extraTabs: NonNullable<TabsProps['items']> = [
     {
+      key: 'diagnostics',
+      label: localeCode === 'zh_CN' ? '诊断' : 'Diagnostics',
+      children:
+        activeTabKey === 'diagnostics' ? (
+          <ServiceDiagnosticsPanel
+            clusterId={clusterId}
+            namespace={detailNamespace}
+            portMappings={service.portMappings}
+            serviceName={service.name}
+          />
+        ) : null,
+    },
+    {
       key: 'metrics',
       label: localeCode === 'zh_CN' ? '指标' : 'Metrics',
       children:
@@ -192,9 +210,12 @@ export function ServiceDetailPage() {
       label="Service"
       onTabChange={setActiveTabKey}
       overviewExtra={[
-        { key: 'Type', value: service.type },
+        { key: 'Type', value: <ServiceTypeTag type={service.type} /> },
         { key: 'Cluster IP', value: service.clusterIp || '-' },
-        { key: 'Ports', value: service.ports?.join(', ') || '-' },
+        {
+          key: 'Ports',
+          value: <ServicePortDisplay portMappings={service.portMappings} ports={service.ports} />,
+        },
       ]}
       overviewContent={
         <>

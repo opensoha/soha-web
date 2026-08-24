@@ -1,71 +1,82 @@
 import type { ReactNode } from 'react'
 import { Modal } from 'antd'
 import type { FormInstance, FormProps, ModalProps } from 'antd'
-import { visuallyHiddenModalTitleStyle } from './modal-styles'
+import {
+  hiddenModalHeaderStyle,
+  scrollableModalBodyStyle,
+  viewportModalStyle,
+  visuallyHiddenModalTitleStyle,
+} from './modal-styles'
 import { StepForm } from './step-form'
 import type { StepFormStep } from './step-form'
 
-interface StepFormModalProps<Values> {
+interface StepFormModalBaseProps {
+  bodyClassName?: string
+  onClose: () => void
+  open: boolean
+  title: ReactNode
+  width?: ModalProps['width']
+}
+
+interface ManagedStepFormModalProps<Values> extends StepFormModalBaseProps {
+  children?: never
   contentMaxWidth?: number | string
   current: number
   disabled?: FormProps<Values>['disabled']
   form: FormInstance<Values>
   initialValues?: FormProps<Values>['initialValues']
   loading?: boolean
-  onClose: () => void
   onCurrentChange: (current: number) => void
   onFinish: (values: Values) => void
-  open: boolean
   steps: StepFormStep[]
   submitText?: ReactNode
-  title: string
-  width?: ModalProps['width']
 }
 
-export function StepFormModal<Values>({
-  contentMaxWidth,
-  current,
-  disabled,
-  form,
-  initialValues,
-  loading,
-  onClose,
-  onCurrentChange,
-  onFinish,
-  open,
-  steps,
-  submitText,
-  title,
-  width = 720,
-}: StepFormModalProps<Values>) {
+interface ComposedStepFormModalProps extends StepFormModalBaseProps {
+  children: ReactNode
+}
+
+type StepFormModalProps<Values> = ManagedStepFormModalProps<Values> | ComposedStepFormModalProps
+
+export function StepFormModal<Values>(props: StepFormModalProps<Values>) {
+  const { bodyClassName, onClose, open, title, width = 720 } = props
   return (
     <Modal
+      classNames={{
+        body: ['soha-step-form-modal__body', bodyClassName].filter(Boolean).join(' '),
+      }}
       destroyOnHidden
       footer={null}
       mask={{ closable: false }}
       open={open}
+      style={viewportModalStyle}
       styles={{
-        header: { minHeight: 32 },
+        body: scrollableModalBodyStyle,
+        header: hiddenModalHeaderStyle,
         title: visuallyHiddenModalTitleStyle,
       }}
       title={title}
       width={width}
       onCancel={onClose}
     >
-      <StepForm
-        contentMaxWidth={contentMaxWidth}
-        current={current}
-        disabled={disabled}
-        form={form}
-        initialValues={initialValues}
-        loading={loading}
-        onCancel={onClose}
-        onCurrentChange={onCurrentChange}
-        onFinish={onFinish}
-        preserve={false}
-        steps={steps}
-        submitText={submitText}
-      />
+      {'children' in props ? (
+        props.children
+      ) : (
+        <StepForm
+          contentMaxWidth={props.contentMaxWidth}
+          current={props.current}
+          disabled={props.disabled}
+          form={props.form}
+          initialValues={props.initialValues}
+          loading={props.loading}
+          onCancel={onClose}
+          onCurrentChange={props.onCurrentChange}
+          onFinish={props.onFinish}
+          preserve={false}
+          steps={props.steps}
+          submitText={props.submitText}
+        />
+      )}
     </Modal>
   )
 }

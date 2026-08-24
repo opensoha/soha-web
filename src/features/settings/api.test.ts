@@ -18,15 +18,18 @@ describe('settingsApi', () => {
       .mockResolvedValueOnce({ data: { appTitle: 'Soha' } })
       .mockResolvedValueOnce({ data: { providers: [] } })
       .mockResolvedValueOnce({ data: { skillsRegistry: [] } })
+      .mockResolvedValueOnce({ data: { skillsRegistry: [{ id: 'logs' }] } })
 
     await expect(settingsApi.branding.get()).resolves.toEqual({ appTitle: 'Soha' })
     await expect(settingsApi.identity.get()).resolves.toEqual({ providers: [] })
     await expect(settingsApi.ai.get()).resolves.toEqual({ skillsRegistry: [] })
+    await expect(settingsApi.ai.skills()).resolves.toEqual({ skillsRegistry: [{ id: 'logs' }] })
 
     expect(apiMocks.get.mock.calls.map(([path]) => path)).toEqual([
       '/settings/branding',
       '/settings/identity',
       '/settings/ai',
+      '/settings/ai/skills',
     ])
   })
 

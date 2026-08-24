@@ -220,20 +220,36 @@ export function ConfigurationDataTable({
   emptyDescription: string
   rows: ConfigurationDataRow[]
 }) {
+  const { localeCode } = useI18n()
+
   return (
     <Table<ConfigurationDataRow>
       className="soha-platform-table soha-config-data-table"
       columns={columns}
       dataSource={rows}
       expandable={{
-        expandedRowRender: (record) => (
-          <div className="soha-config-data-expanded">
-            <pre className="soha-json-block">{record.value || '-'}</pre>
-            {record.decoded !== undefined ? (
-              <pre className="soha-json-block">{record.decoded || '-'}</pre>
-            ) : null}
-          </div>
-        ),
+        expandedRowRender: (record) => {
+          const hasDecodedValue = record.decoded !== undefined
+          const encodedLabel = localeCode === 'zh_CN' ? 'Base64 编码值' : 'Base64 encoded value'
+          const decodedLabel = localeCode === 'zh_CN' ? '解码后内容' : 'Decoded content'
+          const contentLabel = localeCode === 'zh_CN' ? '内容' : 'Content'
+          const valueLabel = hasDecodedValue ? encodedLabel : contentLabel
+
+          return (
+            <div className="soha-config-data-expanded">
+              <section className="soha-config-data-value" aria-label={valueLabel}>
+                <div className="soha-config-data-value-label">{valueLabel}</div>
+                <pre className="soha-json-block">{record.value || '-'}</pre>
+              </section>
+              {hasDecodedValue ? (
+                <section className="soha-config-data-value" aria-label={decodedLabel}>
+                  <div className="soha-config-data-value-label">{decodedLabel}</div>
+                  <pre className="soha-json-block">{record.decoded || '-'}</pre>
+                </section>
+              ) : null}
+            </div>
+          )
+        },
         rowExpandable: (record) => Boolean(record.value || record.decoded),
       }}
       locale={{

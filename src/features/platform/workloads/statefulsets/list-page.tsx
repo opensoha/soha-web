@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { App, InputNumber, Modal, Popconfirm, Space, Typography } from 'antd'
-import { DeleteOutlined, EditOutlined, ReloadOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, FormOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import type { TableColumnsType } from 'antd'
@@ -14,6 +14,7 @@ import {
   capabilityActionTooltip,
   useClusterCapability,
 } from '@/features/platform/cluster-capabilities'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import {
   buildWorkloadDetailPath,
   includesSearch,
@@ -26,8 +27,8 @@ import {
   WorkloadRefreshButton,
   WorkloadSearchInput,
   WorkloadTableEmpty,
-  WorkloadTableSummary,
 } from '@/features/platform/workloads/shared/list-controls'
+import { WorkloadQuickEditModal } from '@/features/platform/workloads/shared/workload-quick-edit-modal'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
@@ -65,18 +66,21 @@ export function WorkloadsStatefulSetsPage() {
   const scaleMutation = useMutation(statefulSetMutations.scale(queryClient))
   const deleteMutation = useMutation(statefulSetMutations.remove(queryClient))
   const [scaleTarget, setScaleTarget] = useState<ScaleStatefulSetVariables | null>(null)
+  const [editTarget, setEditTarget] = useState<StatefulSet | null>(null)
   const [searchKeyword, setSearchKeyword] = useState('')
   const { densityButton, tableSize } = useWorkloadTableDensity(localeCode)
   const workloadMutationCapability = useClusterCapability('workload.mutations', localeCode)
+  const yamlApplyCapability = useClusterCapability('resource.yaml.apply', localeCode)
 
   const statefulSets = statefulSetsQuery.data ?? []
-  const canShowActions =
-    !workloadMutationCapability.disabled &&
-    statefulSets.some((item) =>
-      ['restart', 'scale', 'delete'].some((action) =>
-        hasAllowedAction(item.allowedActions, action),
-      ),
-    )
+  const canShowActions = statefulSets.some(
+    (item) =>
+      (!yamlApplyCapability.disabled && hasAllowedAction(item.allowedActions, 'update')) ||
+      (!workloadMutationCapability.disabled &&
+        ['restart', 'scale', 'delete'].some((action) =>
+          hasAllowedAction(item.allowedActions, action),
+        )),
+  )
   const targetFor = (name: string, targetNamespace: string): StatefulSetTarget => ({
     name,
     scope: toScopeKey(clusterId, targetNamespace),
@@ -114,15 +118,19 @@ export function WorkloadsStatefulSetsPage() {
       render: (value: string) => <TableCellText value={value} />,
     },
     {
-      title: 'Ready',
+      title: localeCode === 'zh_CN' ? '就绪' : 'Ready',
       dataIndex: 'readyReplicas',
       width: 96,
       render: (_value: number, record) => `${record.readyReplicas}/${record.desiredReplicas}`,
     },
-    { title: 'Current', dataIndex: 'currentReplicas', width: 96 },
+    {
+      title: localeCode === 'zh_CN' ? '当前' : 'Current',
+      dataIndex: 'currentReplicas',
+      width: 96,
+    },
     {
       ...tableColumnPresets.datetime,
-      title: 'Age',
+      title: localeCode === 'zh_CN' ? '时长' : 'Age',
       dataIndex: 'ageSeconds',
       width: 104,
       render: (value: number) => formatAgeSeconds(value),
@@ -132,15 +140,16 @@ export function WorkloadsStatefulSetsPage() {
       title: '',
       dataIndex: 'name',
       key: 'actions',
-      width: 116,
+      width: 148,
       align: 'center',
       onHeaderCell: () => ({ className: WORKLOAD_ACTIONS_COLUMN_CLASS_NAME }),
       onCell: () => ({ className: WORKLOAD_ACTIONS_COLUMN_CLASS_NAME }),
       render: (name: string, record) => {
         const canRestart = hasAllowedAction(record.allowedActions, 'restart')
+        const canEdit = hasAllowedAction(record.allowedActions, 'update')
         const canScale = hasAllowedAction(record.allowedActions, 'scale')
         const canDelete = hasAllowedAction(record.allowedActions, 'delete')
-        if (!canRestart && !canScale && !canDelete) return '-'
+        if (!canEdit && !canRestart && !canScale && !canDelete) return '-'
 
         const restartLabel = localeCode === 'zh_CN' ? '重启' : 'Restart'
         const scaleLabel = localeCode === 'zh_CN' ? '扩缩' : 'Scale'
@@ -150,6 +159,18 @@ export function WorkloadsStatefulSetsPage() {
 
         return (
           <Space size={4} className="soha-deployment-action-cell">
+            {canEdit ? (
+              <ManagementIconButton
+                icon={<FormOutlined />}
+                aria-label={`${localeCode === 'zh_CN' ? '编辑' : 'Edit'} ${name}`}
+                disabled={yamlApplyCapability.disabled}
+                tooltip={capabilityActionTooltip(
+                  localeCode === 'zh_CN' ? '编辑' : 'Edit',
+                  yamlApplyCapability,
+                )}
+                onClick={() => setEditTarget(record)}
+              />
+            ) : null}
             {canRestart ? (
               <ManagementIconButton
                 icon={<ReloadOutlined />}
@@ -265,13 +286,8 @@ export function WorkloadsStatefulSetsPage() {
         dataSource={filteredStatefulSets}
         rowKey={(record) => `${record.namespace}/${record.name}`}
         loading={statefulSetsQuery.isLoading}
-        paginationSummary={
-          <WorkloadTableSummary
-            filteredCount={filteredStatefulSets.length}
-            localeCode={localeCode}
-            totalCount={statefulSets.length}
-          />
-        }
+        localSorting
+        pageSize={K8S_TABLE_PAGE_SIZE}
         empty={
           <WorkloadTableEmpty
             clusterId={clusterId}
@@ -283,6 +299,7 @@ export function WorkloadsStatefulSetsPage() {
         }
         tableSize={tableSize}
         scroll={{ x: 'max-content' }}
+        viewportScroll
       />
       <Modal
         title={localeCode === 'zh_CN' ? 'StatefulSet 扩缩容' : 'Scale StatefulSet'}
@@ -311,6 +328,14 @@ export function WorkloadsStatefulSetsPage() {
           />
         </div>
       </Modal>
+      {editTarget ? (
+        <WorkloadQuickEditModal
+          kind="statefulsets"
+          name={editTarget.name}
+          namespace={editTarget.namespace}
+          onClose={() => setEditTarget(null)}
+        />
+      ) : null}
     </div>
   )
 }

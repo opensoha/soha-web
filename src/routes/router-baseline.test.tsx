@@ -63,6 +63,9 @@ vi.mock('@/features/settings/branding/page', mockRoutePage('BrandingSettingsPage
 vi.mock('@/features/auth/about-page', mockRoutePage('AboutPage'))
 vi.mock('@/features/copilot/workbench/pages/chat-page', mockRoutePage('AIWorkbenchChatPage'))
 vi.mock('@/features/copilot/observe/operations/page', mockRoutePage('AIOperationsPage'))
+vi.mock('@/features/copilot/observe/mcp/page', mockRoutePage('AIMCPPage'))
+vi.mock('@/features/copilot/observe/data-sources/page', mockRoutePage('AIDataSourcesPage'))
+vi.mock('@/features/copilot/observe/skills/page', mockRoutePage('AISkillsPage'))
 vi.mock('@/features/copilot/observe/tools/page', mockRoutePage('AIToolsPage'))
 vi.mock('@/features/copilot/observe/model-settings/page', mockRoutePage('AIModelSettingsPage'))
 vi.mock('@/features/companion/settings-page', mockRoutePage('CompanionSettingsPage'))
@@ -271,6 +274,9 @@ describe('router deep-link baseline', () => {
     ['/ai-workbench/chat', 'AIWorkbenchChatPage'],
     ['/ai-workbench/companion', 'CompanionSettingsPage'],
     ['/ai-workbench/inspection', 'AIOperationsPage'],
+    ['/ai-workbench/mcp', 'AIMCPPage'],
+    ['/ai-workbench/data-sources', 'AIDataSourcesPage'],
+    ['/ai-workbench/skills', 'AISkillsPage'],
     ['/ai-workbench/tool-settings', 'AIToolsPage'],
     ['/ai-workbench/model-settings', 'AIModelSettingsPage'],
     ['/storage', 'StoragePvcPage'],

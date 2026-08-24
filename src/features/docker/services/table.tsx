@@ -16,6 +16,8 @@ import {
   ManagementQueryPanel,
 } from '@/components/management-list'
 import { formatDateTime } from '@/utils/time'
+import { localeText, useI18n } from '@/i18n'
+import { formatStatusLabel } from '@/i18n/status'
 import { dockerApi } from '../docker-api'
 import { dockerQueries } from '../queries'
 import type { DockerService } from '../docker-types'
@@ -44,7 +46,7 @@ export function ServicesTable({
 }) {
   const [filters, setFilters] = useState<DockerFilterState>({
     page: 1,
-    pageSize: embedded ? 5 : 10,
+    pageSize: embedded ? 5 : 15,
     projectId: fixedProjectId,
   })
   const [filterForm] = Form.useForm<DockerFilterState>()
@@ -58,16 +60,27 @@ export function ServicesTable({
   const { hostOptions, projectOptions } = useDockerOptions({ includeServices: false })
   const queryClient = useQueryClient()
   const { message } = App.useApp()
+  const { localeCode } = useI18n()
   const servicesQuery = useQuery(dockerQueries.services(filters, dockerModuleEnabled))
   const actionMutation = useMutation({
     mutationFn: ({ id, action }: { id: string; action: string }) =>
       dockerApi.serviceAction(id, action),
     onSuccess: (_response, variables) => {
-      message.success(`${variables.action} 任务已提交`)
+      message.success(
+        localeText(
+          localeCode,
+          `${operationActionLabel(variables.action, localeCode)}任务已提交`,
+          `${operationActionLabel(variables.action, localeCode)} task submitted`,
+        ),
+      )
       refreshDocker(queryClient)
     },
   })
-  const page = normalizePage(servicesQuery.data, filters.page ?? 1, filters.pageSize ?? 10)
+  const page = normalizePage(
+    servicesQuery.data,
+    filters.page ?? 1,
+    filters.pageSize ?? (embedded ? 5 : 15),
+  )
   const serviceActions = [
     { action: 'restart', allowed: canRestartServices, icon: <ReloadOutlined /> },
     { action: 'start', allowed: canStartServices, icon: <PlayCircleOutlined /> },
@@ -75,7 +88,7 @@ export function ServicesTable({
   ].filter((item) => item.allowed)
   const columns: ColumnsType<DockerService> = [
     {
-      title: '服务',
+      title: localeText(localeCode, '服务', 'Service'),
       dataIndex: 'name',
       fixed: 'left',
       width: 180,
@@ -86,32 +99,52 @@ export function ServicesTable({
         </Space>
       ),
     },
-    { title: '状态', dataIndex: 'status', width: 110, render: statusTag },
-    { title: '镜像', dataIndex: 'image', width: 240, render: (value) => value || '-' },
     {
-      title: '项目',
+      title: localeText(localeCode, '状态', 'Status'),
+      dataIndex: 'status',
+      width: 110,
+      render: (value) => statusTag(value, localeCode),
+    },
+    {
+      title: localeText(localeCode, '镜像', 'Image'),
+      dataIndex: 'image',
+      width: 240,
+      render: (value) => value || '-',
+    },
+    {
+      title: localeText(localeCode, '项目', 'Project'),
       dataIndex: 'projectId',
       width: 180,
       render: (value) => projectOptions.find((item) => item.value === value)?.label || value,
     },
     {
-      title: '主机',
+      title: localeText(localeCode, '主机', 'Host'),
       dataIndex: 'hostId',
       width: 170,
       render: (value) => hostOptions.find((item) => item.value === value)?.label || value,
     },
     { title: 'CPU', dataIndex: 'cpuPercent', width: 90, render: formatPercent },
-    { title: '内存', dataIndex: 'memoryBytes', width: 110, render: formatBytes },
     {
-      title: '网络',
+      title: localeText(localeCode, '内存', 'Memory'),
+      dataIndex: 'memoryBytes',
+      width: 110,
+      render: formatBytes,
+    },
+    {
+      title: localeText(localeCode, '网络', 'Network'),
       width: 150,
       render: (_value, record) =>
         `${formatBytes(record.networkRxBytes)} / ${formatBytes(record.networkTxBytes)}`,
     },
-    { title: '重启', dataIndex: 'restartCount', width: 80 },
-    { title: '最近同步', dataIndex: 'lastSeenAt', width: 155, render: formatDateTime },
+    { title: localeText(localeCode, '重启', 'Restarts'), dataIndex: 'restartCount', width: 80 },
     {
-      title: '操作',
+      title: localeText(localeCode, '最近同步', 'Last seen'),
+      dataIndex: 'lastSeenAt',
+      width: 155,
+      render: formatDateTime,
+    },
+    {
+      title: localeText(localeCode, '操作', 'Actions'),
       align: 'center',
       className: 'soha-table-actions-column',
       fixed: 'right',
@@ -122,9 +155,9 @@ export function ServicesTable({
             {serviceActions.map(({ action, icon }) => (
               <ManagementIconButton
                 key={action}
-                aria-label={operationActionLabel(action)}
+                aria-label={operationActionLabel(action, localeCode)}
                 size="small"
-                tooltip={operationActionLabel(action)}
+                tooltip={operationActionLabel(action, localeCode)}
                 icon={icon}
                 loading={actionMutation.isPending}
                 onClick={() => actionMutation.mutate({ id: record.id, action })}
@@ -132,9 +165,9 @@ export function ServicesTable({
             ))}
             {canViewServiceLogs ? (
               <ManagementIconButton
-                aria-label="查看日志"
+                aria-label={localeText(localeCode, '查看日志', 'View logs')}
                 size="small"
-                tooltip="日志"
+                tooltip={localeText(localeCode, '日志', 'Logs')}
                 icon={<FileTextOutlined />}
                 loading={actionMutation.isPending}
                 onClick={() => actionMutation.mutate({ id: record.id, action: 'logs' })}
@@ -157,7 +190,7 @@ export function ServicesTable({
                   filterForm.resetFields()
                   setFilters({
                     page: 1,
-                    pageSize: filters.pageSize ?? 10,
+                    pageSize: filters.pageSize ?? (embedded ? 5 : 15),
                     projectId: fixedProjectId,
                   })
                 }}
@@ -172,32 +205,53 @@ export function ServicesTable({
               }))
             }
           >
-            <ManagementKeywordField placeholder="服务、镜像或容器" />
-            <ManagementQueryField minWidth={180} width={220} name="hostId" label="主机">
+            <ManagementKeywordField
+              placeholder={localeText(
+                localeCode,
+                '服务、镜像或容器',
+                'Service, image, or container',
+              )}
+            />
+            <ManagementQueryField
+              minWidth={180}
+              width={220}
+              name="hostId"
+              label={localeText(localeCode, '主机', 'Host')}
+            >
               <Select
                 allowClear
                 showSearch={{ optionFilterProp: 'label' }}
-                placeholder="全部主机"
+                placeholder={localeText(localeCode, '全部主机', 'All hosts')}
                 options={hostOptions}
               />
             </ManagementQueryField>
             {!fixedProjectId ? (
-              <ManagementQueryField minWidth={180} width={220} name="projectId" label="项目">
+              <ManagementQueryField
+                minWidth={180}
+                width={220}
+                name="projectId"
+                label={localeText(localeCode, '项目', 'Project')}
+              >
                 <Select
                   allowClear
                   showSearch={{ optionFilterProp: 'label' }}
-                  placeholder="全部项目"
+                  placeholder={localeText(localeCode, '全部项目', 'All projects')}
                   options={projectOptions}
                 />
               </ManagementQueryField>
             ) : null}
-            <ManagementQueryField minWidth={132} width={150} name="status" label="状态">
+            <ManagementQueryField
+              minWidth={132}
+              width={150}
+              name="status"
+              label={localeText(localeCode, '状态', 'Status')}
+            >
               <Select
                 allowClear
-                placeholder="全部"
+                placeholder={localeText(localeCode, '全部', 'All')}
                 options={['defined', 'running', 'exited', 'failed', 'unknown'].map((item) => ({
                   value: item,
-                  label: item,
+                  label: formatStatusLabel(item, localeCode),
                 }))}
               />
             </ManagementQueryField>

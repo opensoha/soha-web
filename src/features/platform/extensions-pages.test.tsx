@@ -279,7 +279,7 @@ describe('CRD catalog page', () => {
     vi.clearAllMocks()
   })
 
-  it('keeps the CRD catalog query controls outside the table and summarizes pagination on the left', async () => {
+  it('keeps the CRD catalog query controls outside the table and uses shared pagination', async () => {
     const container = await renderWithProviders(<CRDPage />)
 
     expect(container.querySelector('[data-testid="page-header"]')).toBeNull()
@@ -288,9 +288,7 @@ describe('CRD catalog page', () => {
     expect(
       container.querySelector('input[placeholder="搜索 API Group / CRD / Kind / Version"]'),
     ).not.toBeNull()
-    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
-      '当前 1 / 1 条',
-    )
+    expect(container.querySelector('[data-testid="pagination-summary"]')).toBeNull()
 
     const headerButtons = Array.from(
       container.querySelectorAll('[data-testid="header-extra"] button'),
@@ -315,7 +313,7 @@ describe('CRD catalog page', () => {
     expect(container.querySelector('[data-testid="cell-0-2"]')?.textContent).toContain('2 个')
   })
 
-  it('keeps Helm release list filters in the query card and search results in pagination summary', async () => {
+  it('keeps Helm release list filters in the query card and uses shared pagination', async () => {
     setResponses({
       '/clusters/cluster-a/helm/releases?namespace=team-a': [
         {
@@ -348,9 +346,7 @@ describe('CRD catalog page', () => {
         'input[placeholder="搜索 Release / Namespace / Chart / 状态 / 版本"]',
       ),
     ).not.toBeNull()
-    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
-      '当前 2 / 2 条',
-    )
+    expect(container.querySelector('[data-testid="pagination-summary"]')).toBeNull()
 
     const headerButtons = Array.from(
       container.querySelectorAll('[data-testid="header-extra"] button'),
@@ -375,9 +371,6 @@ describe('CRD catalog page', () => {
     })
 
     expect(container.querySelector('[data-testid="row-count"]')?.textContent).toBe('1')
-    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
-      '当前 1 / 2 条',
-    )
     expect(container.textContent).toContain('cert-manager')
     expect(container.textContent).not.toContain('ingress-nginx')
   })
@@ -583,8 +576,8 @@ describe('CRD catalog page', () => {
       ],
     }
     setResponses({
-      '/clusters/cluster-a/helm/charts?limit=20&offset=0': catalog,
-      '/clusters/cluster-a/helm/charts?keyword=metrics&limit=20&offset=0': {
+      '/clusters/cluster-a/helm/charts?limit=15&offset=0': catalog,
+      '/clusters/cluster-a/helm/charts?keyword=metrics&limit=15&offset=0': {
         ...catalog,
         query: 'metrics',
         totalCount: 1,
@@ -592,7 +585,7 @@ describe('CRD catalog page', () => {
         chartCount: 1,
         charts: [catalog.charts[1]],
       },
-      '/clusters/cluster-a/helm/charts?limit=20&offset=0&keyword=metrics': {
+      '/clusters/cluster-a/helm/charts?limit=15&offset=0&keyword=metrics': {
         ...catalog,
         query: 'metrics',
         totalCount: 1,

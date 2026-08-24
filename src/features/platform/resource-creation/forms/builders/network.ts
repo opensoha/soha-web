@@ -1,20 +1,31 @@
 import type { IngressFormValues, KubernetesManifest, ServiceFormValues } from '../types'
 import { buildMetadata, compactObject, entriesToRecord, manifest } from './shared'
 
+function normalizeTargetPort(value: number | string) {
+  if (typeof value === 'number') return value
+  const normalized = value.trim()
+  return /^\d+$/.test(normalized) ? Number(normalized) : normalized
+}
+
 export function buildServiceManifest(values: ServiceFormValues): KubernetesManifest {
+  const exposesNodePorts = values.type === 'NodePort' || values.type === 'LoadBalancer'
   return manifest('v1', 'Service', buildMetadata(values), {
     spec: compactObject({
       type: values.type,
       externalName: values.type === 'ExternalName' ? values.externalName?.trim() : undefined,
       selector: values.type === 'ExternalName' ? undefined : entriesToRecord(values.selector),
-      ports: values.ports.map((port) =>
-        compactObject({
-          name: port.name?.trim(),
-          port: port.port,
-          targetPort: port.targetPort,
-          protocol: port.protocol,
-        }),
-      ),
+      ports:
+        values.type === 'ExternalName'
+          ? undefined
+          : values.ports.map((port) =>
+              compactObject({
+                name: port.name?.trim(),
+                port: port.port,
+                targetPort: normalizeTargetPort(port.targetPort),
+                nodePort: exposesNodePorts ? port.nodePort : undefined,
+                protocol: port.protocol,
+              }),
+            ),
     }),
   })
 }

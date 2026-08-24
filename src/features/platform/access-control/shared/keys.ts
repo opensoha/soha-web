@@ -33,4 +33,11 @@ export const accessControlKeys = {
     ] as const,
   yaml: (kind: AccessControlKind, scope: ScopeKey, name: string) =>
     [...accessControlKeys.detail(kind, scope, name), 'yaml'] as const,
+  accessReview: (scope: ScopeKey, name: string) =>
+    [
+      ...accessControlKeys.resource('serviceaccounts'),
+      'access-review',
+      normalizeAccessControlScope('serviceaccounts', scope),
+      normalizeName(name),
+    ] as const,
 }

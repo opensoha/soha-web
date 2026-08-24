@@ -14,6 +14,8 @@ import {
 } from '@/components/management-list'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useWorkbenchModuleEnabled } from '@/features/modules'
+import { localeText, useI18n } from '@/i18n'
+import { formatStatusLabel } from '@/i18n/status'
 import { invalidateDockerQueries } from '../mutations'
 import { dockerQueries } from '../queries'
 import type {
@@ -78,19 +80,11 @@ export const DEFAULT_CONTAINER_PORTS = [
 type DockerProjectPortDisplay = Partial<DockerContainerPortInput>
 type AdminTableProps = ComponentProps<typeof AdminTable>
 
-const DOCKER_PAGINATION_SUMMARY: NonNullable<AdminTableProps['paginationSummary']> = (
-  total,
-  range,
-) => {
-  if (total <= 0) return '当前 0 / 0 条'
-  return `当前 ${range[0]}-${range[1]} / ${total} 条`
-}
-
 function classNames(...items: Array<string | false | null | undefined>) {
   return items.filter(Boolean).join(' ')
 }
 
-export function statusTag(value?: string) {
+export function statusTag(value?: string, _record?: unknown) {
   if (!value) return <Text type="secondary">-</Text>
   return <StatusTag value={value} />
 }
@@ -298,7 +292,27 @@ export function operationTone(record: DockerOperation): OverviewTone {
   return 'default'
 }
 
-export function operationActionLabel(action: string) {
+export function operationActionLabel(
+  action: string,
+  localeCode: Parameters<typeof formatStatusLabel>[1] = 'zh_CN',
+) {
+  if (localeCode !== 'zh_CN') {
+    return (
+      (
+        {
+          deploy: 'Deploy',
+          redeploy: 'Redeploy',
+          start: 'Start',
+          stop: 'Stop',
+          restart: 'Restart',
+          down: 'Down',
+          pull: 'Pull',
+          build: 'Build',
+          destroy: 'Destroy',
+        } as Record<string, string>
+      )[action] ?? action
+    )
+  }
   return (
     (
       {
@@ -364,12 +378,15 @@ export function DockerTableHeader({
   title: string
   tone?: OverviewTone
 }) {
+  const { localeCode } = useI18n()
   return (
     <ManagementDetailHeader
       title={
         <Space size={8} wrap>
           <span>{title}</span>
-          {status ? <Badge status={badgeStatusForTone(tone)} text={status} /> : null}
+          {status ? (
+            <Badge status={badgeStatusForTone(tone)} text={formatStatusLabel(status, localeCode)} />
+          ) : null}
         </Space>
       }
       meta={meta.length > 0 ? meta.map((item) => <span key={item}>{item}</span>) : undefined}
@@ -403,15 +420,27 @@ export function DockerAdminTable({
   className,
   enableDensity = true,
   onRefresh,
-  paginationSummary = DOCKER_PAGINATION_SUMMARY,
+  paginationSummary,
   refreshing,
   scroll,
   shellClassName,
   showColumnSettings = true,
   showRefresh = true,
   title,
+  viewportScroll,
   ...tableProps
 }: DockerAdminTableProps) {
+  const { localeCode } = useI18n()
+  const resolvedPaginationSummary =
+    paginationSummary ??
+    ((total: number, range: [number, number]) =>
+      total <= 0
+        ? localeText(localeCode, '当前 0 / 0 条', '0 of 0')
+        : localeText(
+            localeCode,
+            `当前 ${range[0]}-${range[1]} / ${total} 条`,
+            `${range[0]}-${range[1]} of ${total}`,
+          ))
   const [tableSize, setTableSize] = useState<NonNullable<AdminTableProps['tableSize']>>('small')
   const toolbarExtra =
     actions || enableDensity || (showRefresh && onRefresh) ? (
@@ -419,18 +448,22 @@ export function DockerAdminTable({
         {actions}
         {enableDensity ? (
           <ManagementDensityButton
-            aria-label="切换表格密度"
+            aria-label={localeText(localeCode, '切换表格密度', 'Toggle table density')}
             size="small"
-            tooltip={tableSize === 'small' ? '切换为宽松密度' : '切换为紧凑密度'}
+            tooltip={tableText(
+              localeCode,
+              tableSize === 'small' ? '切换为宽松密度' : '切换为紧凑密度',
+              tableSize === 'small' ? 'Switch to relaxed density' : 'Switch to compact density',
+            )}
             onClick={() => setTableSize((current) => (current === 'small' ? 'middle' : 'small'))}
           />
         ) : null}
         {showRefresh && onRefresh ? (
           <ManagementRefreshButton
-            aria-label="刷新列表"
+            aria-label={localeText(localeCode, '刷新列表', 'Refresh list')}
             loading={refreshing}
             size="small"
-            tooltip="刷新"
+            tooltip={localeText(localeCode, '刷新', 'Refresh')}
             onClick={onRefresh}
           />
         ) : null}
@@ -443,7 +476,7 @@ export function DockerAdminTable({
       className={classNames('soha-vrt-table', className)}
       columnSettingIconOnly
       columnSettingPlacement={showColumnSettings ? (title ? 'header' : 'toolbar') : 'hidden'}
-      paginationSummary={paginationSummary}
+      paginationSummary={resolvedPaginationSummary}
       scroll={scroll}
       shellClassName={classNames(
         'soha-management-table-shell',
@@ -453,8 +486,17 @@ export function DockerAdminTable({
       tableSize={tableSize}
       title={title}
       toolbarExtra={toolbarExtra}
+      viewportScroll={viewportScroll ?? showColumnSettings}
     />
   )
+}
+
+function tableText(
+  localeCode: Parameters<typeof formatStatusLabel>[1],
+  chinese: string,
+  english: string,
+) {
+  return localeText(localeCode, chinese, english)
 }
 
 export function MetricCard({

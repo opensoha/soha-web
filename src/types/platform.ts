@@ -554,6 +554,14 @@ export interface HelmReleaseHistory {
   allowedActions?: string[]
 }
 
+export interface HelmReleaseManifest {
+  name: string
+  namespace: string
+  revision: string
+  content: string
+  digest: string
+}
+
 export interface HelmValues {
   name: string
   namespace: string

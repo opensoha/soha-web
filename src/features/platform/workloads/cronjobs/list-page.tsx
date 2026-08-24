@@ -1,5 +1,10 @@
 import { useMemo, useState } from 'react'
-import { DeleteOutlined, PauseCircleOutlined, PlayCircleOutlined } from '@ant-design/icons'
+import {
+  DeleteOutlined,
+  FormOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined,
+} from '@ant-design/icons'
 import { App, Popconfirm, Space } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -14,6 +19,7 @@ import {
   capabilityActionTooltip,
   useClusterCapability,
 } from '@/features/platform/cluster-capabilities'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
 import { formatAgeSeconds, formatRelativeTime } from '@/utils/time'
@@ -30,8 +36,8 @@ import {
   WorkloadRefreshButton,
   WorkloadSearchInput,
   WorkloadTableEmpty,
-  WorkloadTableSummary,
 } from '@/features/platform/workloads/shared/list-controls'
+import { WorkloadQuickEditModal } from '@/features/platform/workloads/shared/workload-quick-edit-modal'
 import { cronJobMutations } from './mutations'
 import { cronJobQueries } from './queries'
 import type { CronJob, CronJobTarget } from './types'
@@ -47,17 +53,19 @@ export function WorkloadsCronJobsPage() {
   const suspendMutation = useMutation(cronJobMutations.suspend(queryClient))
   const removeMutation = useMutation(cronJobMutations.remove(queryClient))
   const [searchKeyword, setSearchKeyword] = useState('')
+  const [editTarget, setEditTarget] = useState<CronJob | null>(null)
   const { densityButton, tableSize } = useWorkloadTableDensity(localeCode)
   const workloadMutationCapability = useClusterCapability('workload.mutations', localeCode)
+  const yamlApplyCapability = useClusterCapability('resource.yaml.apply', localeCode)
 
   const cronJobs = cronJobsQuery.data ?? []
-  const canShowActions =
-    !workloadMutationCapability.disabled &&
-    cronJobs.some(
-      (item) =>
-        hasAllowedAction(item.allowedActions, 'suspend') ||
-        hasAllowedAction(item.allowedActions, 'delete'),
-    )
+  const canShowActions = cronJobs.some(
+    (item) =>
+      (!yamlApplyCapability.disabled && hasAllowedAction(item.allowedActions, 'update')) ||
+      (!workloadMutationCapability.disabled &&
+        (hasAllowedAction(item.allowedActions, 'suspend') ||
+          hasAllowedAction(item.allowedActions, 'delete'))),
+  )
   const filteredCronJobs = useMemo(
     () =>
       cronJobs.filter((item) =>
@@ -88,23 +96,31 @@ export function WorkloadsCronJobsPage() {
         ),
     },
     { title: t('common.namespace', 'Namespace'), dataIndex: 'namespace', width: 160 },
-    { title: 'Schedule', dataIndex: 'schedule', width: 180 },
+    {
+      title: localeCode === 'zh_CN' ? '调度计划' : 'Schedule',
+      dataIndex: 'schedule',
+      width: 180,
+    },
     {
       ...tableColumnPresets.status,
       title: localeCode === 'zh_CN' ? '暂停' : 'Suspend',
       dataIndex: 'suspend',
-      width: 96,
+      width: 128,
       render: (suspend: boolean) => (
         <BooleanTag
           value={suspend}
-          trueLabel="Yes"
-          falseLabel="No"
+          trueLabel={localeCode === 'zh_CN' ? '是' : 'Yes'}
+          falseLabel={localeCode === 'zh_CN' ? '否' : 'No'}
           trueColor="orange"
           falseColor="green"
         />
       ),
     },
-    { title: 'Active', dataIndex: 'activeJobs', width: 88 },
+    {
+      title: localeCode === 'zh_CN' ? '活跃' : 'Active',
+      dataIndex: 'activeJobs',
+      width: 88,
+    },
     {
       ...tableColumnPresets.datetime,
       title: localeCode === 'zh_CN' ? '上次调度' : 'Last Schedule',
@@ -114,7 +130,7 @@ export function WorkloadsCronJobsPage() {
     },
     {
       ...tableColumnPresets.datetime,
-      title: 'Age',
+      title: localeCode === 'zh_CN' ? '时长' : 'Age',
       dataIndex: 'ageSeconds',
       width: 104,
       render: (value: number) => formatAgeSeconds(value),
@@ -128,8 +144,9 @@ export function WorkloadsCronJobsPage() {
       width: 96,
       render: (name: string, record: CronJob) => {
         const canSuspend = hasAllowedAction(record.allowedActions, 'suspend')
+        const canEdit = hasAllowedAction(record.allowedActions, 'update')
         const canDelete = hasAllowedAction(record.allowedActions, 'delete')
-        if (!canSuspend && !canDelete) return null
+        if (!canEdit && !canSuspend && !canDelete) return null
 
         const target = targetFor(name, record.namespace)
         const actionLabel = record.suspend
@@ -151,6 +168,18 @@ export function WorkloadsCronJobsPage() {
 
         return (
           <Space size={4} className="soha-deployment-action-cell">
+            {canEdit ? (
+              <ManagementIconButton
+                icon={<FormOutlined />}
+                aria-label={`${localeCode === 'zh_CN' ? '编辑' : 'Edit'} ${name}`}
+                disabled={yamlApplyCapability.disabled}
+                tooltip={capabilityActionTooltip(
+                  localeCode === 'zh_CN' ? '编辑' : 'Edit',
+                  yamlApplyCapability,
+                )}
+                onClick={() => setEditTarget(record)}
+              />
+            ) : null}
             {canSuspend ? (
               <Popconfirm
                 title={
@@ -268,13 +297,8 @@ export function WorkloadsCronJobsPage() {
         dataSource={filteredCronJobs}
         rowKey={(record) => `${record.namespace}/${record.name}`}
         loading={cronJobsQuery.isLoading}
-        paginationSummary={
-          <WorkloadTableSummary
-            filteredCount={filteredCronJobs.length}
-            localeCode={localeCode}
-            totalCount={cronJobs.length}
-          />
-        }
+        localSorting
+        pageSize={K8S_TABLE_PAGE_SIZE}
         empty={
           <WorkloadTableEmpty
             clusterId={clusterId}
@@ -286,7 +310,16 @@ export function WorkloadsCronJobsPage() {
         }
         tableSize={tableSize}
         scroll={{ x: 'max-content' }}
+        viewportScroll
       />
+      {editTarget ? (
+        <WorkloadQuickEditModal
+          kind="cronjobs"
+          name={editTarget.name}
+          namespace={editTarget.namespace}
+          onClose={() => setEditTarget(null)}
+        />
+      ) : null}
     </div>
   )
 }

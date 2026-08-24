@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { formatAgeSeconds } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import type { TableColumnsType } from 'antd'
 import { ConfigurationNameLink, ConfigurationResourceListPage } from '../shared/list-page'
+import { ConfigurationQuickEditModal } from '../shared/configuration-quick-edit-modal'
 import type { PodDisruptionBudgetResource } from './types'
 
 const columns: TableColumnsType<PodDisruptionBudgetResource> = [
@@ -44,15 +46,27 @@ const columns: TableColumnsType<PodDisruptionBudgetResource> = [
 ]
 
 export function ConfigurationPodDisruptionBudgetsPage() {
+  const [editing, setEditing] = useState<PodDisruptionBudgetResource | null>(null)
   return (
-    <ConfigurationResourceListPage
-      columns={columns}
-      emptyDescription={{
-        zh_CN: '当前范围没有 PodDisruptionBudgets',
-        en_US: 'No pod disruption budgets in the current scope',
-      }}
-      kind="poddisruptionbudgets"
-      label="PodDisruptionBudgets"
-    />
+    <>
+      <ConfigurationResourceListPage
+        columns={columns}
+        emptyDescription={{
+          zh_CN: '当前范围没有 PodDisruptionBudgets',
+          en_US: 'No pod disruption budgets in the current scope',
+        }}
+        kind="poddisruptionbudgets"
+        label="PodDisruptionBudgets"
+        onEdit={setEditing}
+      />
+      {editing ? (
+        <ConfigurationQuickEditModal
+          kind="poddisruptionbudgets"
+          name={editing.name}
+          namespace={editing.namespace}
+          onClose={() => setEditing(null)}
+        />
+      ) : null}
+    </>
   )
 }

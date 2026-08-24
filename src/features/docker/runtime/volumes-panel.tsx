@@ -7,6 +7,7 @@ import { MetadataTag } from '@/components/status-tag'
 import '@/components/resource-operation-panels.css'
 import { downloadText } from '@/utils/download'
 import { dockerQueries } from '../queries'
+import { localeText, useI18n } from '@/i18n'
 import type { DockerProjectVolumeFileEntry } from '../docker-types'
 import { runtimeServiceSelector, type DockerRuntimePanelProps } from './shared'
 import './styles.css'
@@ -22,6 +23,7 @@ export function DockerProjectVolumesPanel({
   servicesLoading,
   onServiceChange,
 }: DockerRuntimePanelProps) {
+  const { localeCode } = useI18n()
   const [target, setTarget] = useState('')
   const [currentPath, setCurrentPath] = useState('/')
   const [previewPath, setPreviewPath] = useState('')
@@ -80,8 +82,12 @@ export function DockerProjectVolumesPanel({
         <ManagementState
           compact
           kind="no-permission"
-          title="卷文件不可用"
-          description="Docker 模块或当前权限不允许浏览运行时卷文件。"
+          title={localeText(localeCode, '卷文件不可用', 'Volume files unavailable')}
+          description={localeText(
+            localeCode,
+            'Docker 模块或当前权限不允许浏览运行时卷文件。',
+            'The Docker module or your permissions do not allow browsing runtime volume files.',
+          )}
         />
       </Card>
     )
@@ -91,7 +97,7 @@ export function DockerProjectVolumesPanel({
     <Card
       className="soha-detail-card"
       size="small"
-      title="卷文件"
+      title={localeText(localeCode, '卷文件', 'Volume files')}
       extra={
         <Space size={8} wrap>
           {runtimeServiceSelector({
@@ -99,13 +105,14 @@ export function DockerProjectVolumesPanel({
             loading: servicesLoading,
             options: serviceOptions,
             serviceName,
+            localeCode,
             onChange: onServiceChange,
           })}
           <Select
             disabled={!enabled || volumes.length === 0}
             loading={volumesQuery.isFetching}
             options={volumes.map((volume) => ({ label: volume.target, value: volume.target }))}
-            placeholder="选择卷"
+            placeholder={localeText(localeCode, '选择卷', 'Select volume')}
             popupMatchSelectWidth={false}
             size="small"
             style={{ minWidth: 180 }}
@@ -126,7 +133,7 @@ export function DockerProjectVolumesPanel({
               filesQuery.refetch()
             }}
           >
-            刷新
+            {localeText(localeCode, '刷新', 'Refresh')}
           </Button>
         </Space>
       }
@@ -135,14 +142,18 @@ export function DockerProjectVolumesPanel({
         <ManagementState
           compact
           kind="empty"
-          title="没有可浏览的卷"
-          description="该服务没有声明可从容器内浏览的卷挂载。"
+          title={localeText(localeCode, '没有可浏览的卷', 'No browsable volumes')}
+          description={localeText(
+            localeCode,
+            '该服务没有声明可从容器内浏览的卷挂载。',
+            'This service does not expose a volume mount that can be browsed from the container.',
+          )}
         />
       ) : (
         <>
           <div className="soha-docker-volume-toolbar">
             <Button disabled={currentPath === '/'} size="small" onClick={goParent}>
-              上级
+              {localeText(localeCode, '上级', 'Parent')}
             </Button>
             <Input
               size="small"
@@ -151,7 +162,9 @@ export function DockerProjectVolumesPanel({
             />
             {selectedVolume ? (
               <Space size={6} wrap>
-                {selectedVolume.readOnly ? <MetadataTag label="只读" /> : null}
+                {selectedVolume.readOnly ? (
+                  <MetadataTag label={localeText(localeCode, '只读', 'Read-only')} />
+                ) : null}
                 {selectedVolume.source ? (
                   <Text type="secondary">{selectedVolume.source}</Text>
                 ) : null}
@@ -166,7 +179,7 @@ export function DockerProjectVolumesPanel({
                 </div>
               ) : entries.length === 0 ? (
                 <div className="soha-docker-volume-list-state">
-                  <Text type="secondary">暂无文件</Text>
+                  <Text type="secondary">{localeText(localeCode, '暂无文件', 'No files')}</Text>
                 </div>
               ) : (
                 entries.map((entry) => (
@@ -190,7 +203,10 @@ export function DockerProjectVolumesPanel({
             <div className="soha-docker-volume-preview">
               <div className="soha-docker-volume-preview-toolbar">
                 <Text type="secondary">
-                  {fileQuery.isFetching ? '正在读取文件...' : previewPath || '选择文件预览'}
+                  {fileQuery.isFetching
+                    ? localeText(localeCode, '正在读取文件...', 'Reading file...')
+                    : previewPath ||
+                      localeText(localeCode, '选择文件预览', 'Select a file to preview')}
                 </Text>
                 <Button
                   disabled={!preview}
@@ -204,7 +220,7 @@ export function DockerProjectVolumesPanel({
                     )
                   }
                 >
-                  下载
+                  {localeText(localeCode, '下载', 'Download')}
                 </Button>
               </div>
               <TextArea
@@ -212,7 +228,9 @@ export function DockerProjectVolumesPanel({
                 rows={18}
                 spellCheck={false}
                 value={
-                  preview ? `${preview.truncated ? '[内容已截断]\n' : ''}${preview.content}` : ''
+                  preview
+                    ? `${preview.truncated ? localeText(localeCode, '[内容已截断]\n', '[Content truncated]\n') : ''}${preview.content}`
+                    : ''
                 }
               />
             </div>

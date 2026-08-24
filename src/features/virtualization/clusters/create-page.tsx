@@ -3,6 +3,7 @@ import { Alert, App, Collapse, Descriptions, Form, Input, Segmented, Select, Swi
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { StepFormModal } from '@/components/step-form-modal'
 import type { StepFormStep } from '@/components/step-form'
+import { localeText, useI18n } from '@/i18n'
 import {
   virtualizationMutations,
   withVirtualizationMutationSuccess,
@@ -92,8 +93,13 @@ export function VirtualizationConnectionStepModal({
   )
   const queryClient = useQueryClient()
   const { message } = App.useApp()
+  const { localeCode } = useI18n()
   const finish = () => {
-    message.success(editing ? '虚拟化连接已更新' : '虚拟化连接已创建')
+    message.success(
+      editing
+        ? localeText(localeCode, '虚拟化连接已更新', 'Virtualization connection updated')
+        : localeText(localeCode, '虚拟化连接已创建', 'Virtualization connection created'),
+    )
     onSuccess?.()
     onClose()
   }
@@ -129,16 +135,22 @@ export function VirtualizationConnectionStepModal({
 
   const steps: StepFormStep[] = [
     {
-      title: '基本信息',
+      title: localeText(localeCode, '基本信息', 'Basic information'),
       fieldNames: ['name', 'provider'],
       children: (
         <>
-          <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
+          <Form.Item
+            name="name"
+            label={localeText(localeCode, '名称', 'Name')}
+            rules={[
+              { required: true, message: localeText(localeCode, '请输入名称', 'Enter a name') },
+            ]}
+          >
             <Input />
           </Form.Item>
           <Form.Item
             name="provider"
-            label="Provider"
+            label={localeText(localeCode, '提供方', 'Provider')}
             rules={[{ required: true, message: '请选择 Provider' }]}
           >
             <Select
@@ -170,7 +182,7 @@ export function VirtualizationConnectionStepModal({
       ),
     },
     {
-      title: '连接配置',
+      title: localeText(localeCode, '连接配置', 'Connection configuration'),
       fieldNames:
         provider === 'kubevirt'
           ? ['kubernetesClusterId']
@@ -187,13 +199,21 @@ export function VirtualizationConnectionStepModal({
                 type={selectedPlatformCluster?.connectionMode === 'agent' ? 'warning' : 'info'}
                 title={
                   selectedPlatformCluster?.connectionMode === 'agent'
-                    ? '当前集群使用 Agent 通道'
-                    : '当前连接使用直连 kubeconfig 通道'
+                    ? localeText(
+                        localeCode,
+                        '当前集群使用 Agent 通道',
+                        'This cluster uses the Agent channel',
+                      )
+                    : localeText(
+                        localeCode,
+                        '当前连接使用直连 kubeconfig 通道',
+                        'This connection uses direct kubeconfig access',
+                      )
                 }
               />
               <Form.Item
                 name="kubernetesClusterId"
-                label="Kubernetes 集群"
+                label={localeText(localeCode, 'Kubernetes 集群', 'Kubernetes cluster')}
                 rules={[{ required: true, message: '请选择 Kubernetes 集群' }]}
               >
                 <Select
@@ -214,7 +234,10 @@ export function VirtualizationConnectionStepModal({
                   }}
                 />
               </Form.Item>
-              <Form.Item name="defaultNamespace" label="默认命名空间">
+              <Form.Item
+                name="defaultNamespace"
+                label={localeText(localeCode, '默认命名空间', 'Default namespace')}
+              >
                 <Input />
               </Form.Item>
               <Form.Item name="backendUrl" label="Console Backend URL">
@@ -224,7 +247,17 @@ export function VirtualizationConnectionStepModal({
                 <Input placeholder="https://prometheus.example" />
               </Form.Item>
               <Form.Item name="prometheusBearerToken" label="Prometheus Bearer Token">
-                <Input.Password placeholder={editing ? '留空保持现有 Token' : '可选'} />
+                <Input.Password
+                  placeholder={
+                    editing
+                      ? localeText(
+                          localeCode,
+                          '留空保持现有 Token',
+                          'Leave empty to keep the current token',
+                        )
+                      : localeText(localeCode, '可选', 'Optional')
+                  }
+                />
               </Form.Item>
             </>
           ) : (
@@ -237,16 +270,23 @@ export function VirtualizationConnectionStepModal({
                 <Input placeholder="https://pve.example:8006" />
               </Form.Item>
               {editing ? (
-                <Form.Item label="更新凭证">
+                <Form.Item label={localeText(localeCode, '更新凭证', 'Update credentials')}>
                   <Switch checked={replaceCredential} onChange={setReplaceCredential} />
                 </Form.Item>
               ) : null}
               {showPVECredentialFields ? (
                 <>
-                  <Form.Item label="认证方式">
+                  <Form.Item label={localeText(localeCode, '认证方式', 'Authentication')}>
                     <Segmented
                       block
-                      options={PVE_AUTH_OPTIONS}
+                      options={PVE_AUTH_OPTIONS.map((option) =>
+                        option.value === 'password'
+                          ? {
+                              ...option,
+                              label: localeText(localeCode, '账号密码', 'Username and password'),
+                            }
+                          : option,
+                      )}
                       value={pveAuthMode}
                       onChange={(value) => setPveAuthMode(value as PVEAuthMode)}
                     />
@@ -321,14 +361,18 @@ export function VirtualizationConnectionStepModal({
               ) : null}
             </>
           )}
-          <Form.Item name="verifyTls" label="校验 TLS" valuePropName="checked">
+          <Form.Item
+            name="verifyTls"
+            label={localeText(localeCode, '校验 TLS', 'Verify TLS')}
+            valuePropName="checked"
+          >
             <Switch />
           </Form.Item>
         </>
       ),
     },
     {
-      title: '可选配置',
+      title: localeText(localeCode, '可选配置', 'Optional settings'),
       children: (
         <>
           {provider === 'pve' ? (
@@ -337,20 +381,40 @@ export function VirtualizationConnectionStepModal({
               items={[
                 {
                   key: 'pve-resource-defaults',
-                  label: 'PVE 资源默认值（可选）',
+                  label: localeText(
+                    localeCode,
+                    'PVE 资源默认值（可选）',
+                    'PVE resource defaults (optional)',
+                  ),
                   forceRender: true,
                   children: (
                     <>
-                      <Form.Item name="defaultNode" label="默认节点">
+                      <Form.Item
+                        name="defaultNode"
+                        label={localeText(localeCode, '默认节点', 'Default node')}
+                      >
                         <Input />
                       </Form.Item>
-                      <Form.Item name="defaultStorage" label="默认存储">
+                      <Form.Item
+                        name="defaultStorage"
+                        label={localeText(localeCode, '默认存储', 'Default storage')}
+                      >
                         <Input />
                       </Form.Item>
-                      <Form.Item name="defaultBridge" label="默认网桥">
+                      <Form.Item
+                        name="defaultBridge"
+                        label={localeText(localeCode, '默认网桥', 'Default bridge')}
+                      >
                         <Input />
                       </Form.Item>
-                      <Form.Item name="defaultSnippetStorage" label="默认 Snippet Storage">
+                      <Form.Item
+                        name="defaultSnippetStorage"
+                        label={localeText(
+                          localeCode,
+                          '默认 Snippet Storage',
+                          'Default snippet storage',
+                        )}
+                      >
                         <Input />
                       </Form.Item>
                     </>
@@ -359,15 +423,21 @@ export function VirtualizationConnectionStepModal({
               ]}
             />
           ) : null}
-          <Form.Item name="enabled" label="创建后启用" valuePropName="checked">
+          <Form.Item
+            name="enabled"
+            label={localeText(localeCode, '创建后启用', 'Enable after creation')}
+            valuePropName="checked"
+          >
             <Switch />
           </Form.Item>
-          <Form.Item name="description" label="描述">
+          <Form.Item name="description" label={localeText(localeCode, '描述', 'Description')}>
             <Input.TextArea rows={3} />
           </Form.Item>
           <Descriptions bordered size="small" column={1}>
-            <Descriptions.Item label="Provider">{provider}</Descriptions.Item>
-            <Descriptions.Item label="接入方式">
+            <Descriptions.Item label={localeText(localeCode, '提供方', 'Provider')}>
+              {provider}
+            </Descriptions.Item>
+            <Descriptions.Item label={localeText(localeCode, '接入方式', 'Access mode')}>
               {provider === 'kubevirt'
                 ? selectedPlatformCluster?.connectionMode || 'direct'
                 : 'direct'}
@@ -392,8 +462,16 @@ export function VirtualizationConnectionStepModal({
       }}
       open={open}
       steps={steps}
-      submitText={editing ? '保存连接' : '创建连接'}
-      title={editing ? '编辑虚拟化连接' : '新增虚拟化连接'}
+      submitText={
+        editing
+          ? localeText(localeCode, '保存连接', 'Save connection')
+          : localeText(localeCode, '创建连接', 'Create connection')
+      }
+      title={
+        editing
+          ? localeText(localeCode, '编辑虚拟化连接', 'Edit virtualization connection')
+          : localeText(localeCode, '新增虚拟化连接', 'Add virtualization connection')
+      }
     />
   )
 }

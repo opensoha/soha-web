@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { App, Button, Descriptions, Form, Input, Popconfirm, Select, Space, Typography } from 'antd'
+import { Link } from 'react-router-dom'
+import { App, Button, Descriptions, Form, Input, Popconfirm, Select, Space } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -15,6 +16,8 @@ import {
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { computeQueries, latestTaskForResource, ResourceTaskActions } from '@/features/compute'
+import { localeText, useI18n } from '@/i18n'
+import { formatStatusLabel } from '@/i18n/status'
 import { dockerApi } from '../docker-api'
 import { dockerQueries } from '../queries'
 import type { DockerHost, DockerQuickCreateHostInput } from '../docker-types'
@@ -33,8 +36,6 @@ import {
   type DockerFilterState,
   useDockerPermissions,
 } from '../shared/ui'
-
-const { Text } = Typography
 
 interface QuickCreateHostFormValues extends DockerQuickCreateHostInput {
   memoryGiB?: number
@@ -56,7 +57,7 @@ export function buildQuickHostPayload(
 function HostsTable({ embedded = false }: { embedded?: boolean }) {
   const [filters, setFilters] = useState<DockerFilterState>({
     page: 1,
-    pageSize: embedded ? 5 : 10,
+    pageSize: embedded ? 5 : 15,
   })
   const [filterForm] = Form.useForm<DockerFilterState>()
   const [editorOpen, setEditorOpen] = useState(false)
@@ -65,6 +66,7 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
     useDockerPermissions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
+  const { localeCode } = useI18n()
   const hostsQuery = useQuery(dockerQueries.hosts(filters, dockerModuleEnabled))
   const tasksQuery = useQuery({
     ...computeQueries.tasks({ domain: 'container_runtime', limit: 100 }),
@@ -73,21 +75,39 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
   const deleteMutation = useMutation({
     mutationFn: dockerApi.deleteHost,
     onSuccess: () => {
-      message.success('主机已删除')
+      message.success(localeText(localeCode, '主机已删除', 'Host deleted'))
       refreshDocker(queryClient)
     },
   })
-  const page = normalizePage(hostsQuery.data, filters.page ?? 1, filters.pageSize ?? 10)
+  const page = normalizePage(
+    hostsQuery.data,
+    filters.page ?? 1,
+    filters.pageSize ?? (embedded ? 5 : 15),
+  )
   const columns: ColumnsType<DockerHost> = [
     {
-      title: '名称',
+      title: localeText(localeCode, '名称', 'Name'),
       dataIndex: 'name',
       fixed: 'left',
       width: 190,
-      render: (value, record) => <Text strong>{value || record.id}</Text>,
+      render: (value, record) => (
+        <Link to={`/compute/runtimes/hosts/${encodeURIComponent(record.id)}`}>
+          {value || record.id}
+        </Link>
+      ),
     },
-    { title: '状态', dataIndex: 'status', width: 110, render: statusTag },
-    { title: '架构', dataIndex: 'architecture', width: 120, render: architectureTag },
+    {
+      title: localeText(localeCode, '状态', 'Status'),
+      dataIndex: 'status',
+      width: 110,
+      render: statusTag,
+    },
+    {
+      title: localeText(localeCode, '架构', 'Architecture'),
+      dataIndex: 'architecture',
+      width: 120,
+      render: architectureTag,
+    },
     {
       title: 'Endpoint',
       dataIndex: 'endpoint',
@@ -101,7 +121,7 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
         record.vmName || record.vmId || record.virtualizationConnectionId || '-',
     },
     {
-      title: '规格',
+      title: localeText(localeCode, '规格', 'Resources'),
       width: 180,
       render: (_value, record) => {
         const values = [
@@ -118,10 +138,15 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
         return values.length > 0 ? <Space size={4}>{values}</Space> : '-'
       },
     },
-    { title: '心跳', dataIndex: 'lastHeartbeatAt', width: 155, render: formatDateTime },
+    {
+      title: localeText(localeCode, '心跳', 'Heartbeat'),
+      dataIndex: 'lastHeartbeatAt',
+      width: 155,
+      render: formatDateTime,
+    },
     {
       ...tableColumnPresets.task,
-      title: '最近任务',
+      title: localeText(localeCode, '最近任务', 'Latest task'),
       render: (_value, record) => (
         <ResourceTaskActions
           task={latestTaskForResource(tasksQuery.data?.items ?? [], 'runtime_host', record.id)}
@@ -131,7 +156,7 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
       ),
     },
     {
-      title: '操作',
+      title: localeText(localeCode, '操作', 'Actions'),
       align: 'center',
       className: 'soha-table-actions-column',
       fixed: 'right',
@@ -141,9 +166,9 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
           <Space className="soha-row-action-icons">
             {canUpdateHosts ? (
               <ManagementIconButton
-                aria-label="编辑主机"
+                aria-label={localeText(localeCode, '编辑主机', 'Edit host')}
                 size="small"
-                tooltip="编辑"
+                tooltip={localeText(localeCode, '编辑', 'Edit')}
                 icon={<EditOutlined />}
                 onClick={() => {
                   setEditing(record)
@@ -153,13 +178,13 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
             ) : null}
             {canDeleteHosts ? (
               <Popconfirm
-                title="确认删除 Docker 主机？"
+                title={localeText(localeCode, '确认删除 Docker 主机？', 'Delete this Docker host?')}
                 onConfirm={() => deleteMutation.mutate(record.id)}
               >
                 <ManagementIconButton
-                  aria-label="删除主机"
+                  aria-label={localeText(localeCode, '删除主机', 'Delete host')}
                   size="small"
-                  tooltip="删除"
+                  tooltip={localeText(localeCode, '删除', 'Delete')}
                   danger
                   icon={<DeleteOutlined />}
                 />
@@ -180,24 +205,52 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
                 loading={hostsQuery.isFetching}
                 onReset={() => {
                   filterForm.resetFields()
-                  setFilters({ page: 1, pageSize: filters.pageSize ?? 10 })
+                  setFilters({ page: 1, pageSize: filters.pageSize ?? (embedded ? 5 : 15) })
                 }}
               />
             }
             onFinish={(values) => setFilters((current) => ({ ...current, ...values, page: 1 }))}
           >
-            <ManagementKeywordField placeholder="主机、Endpoint、VM 或 IP" />
-            <ManagementQueryField minWidth={132} width={150} name="status" label="状态">
+            <ManagementKeywordField
+              placeholder={localeText(
+                localeCode,
+                '主机、Endpoint、VM 或 IP',
+                'Host, endpoint, VM, or IP',
+              )}
+            />
+            <ManagementQueryField
+              minWidth={132}
+              width={150}
+              name="status"
+              label={localeText(localeCode, '状态', 'Status')}
+            >
               <Select
                 allowClear
-                placeholder="全部"
-                options={HOST_STATUS_OPTIONS.map((item) => ({ value: item, label: item }))}
+                placeholder={localeText(localeCode, '全部', 'All')}
+                options={HOST_STATUS_OPTIONS.map((item) => ({
+                  value: item,
+                  label: formatStatusLabel(item, localeCode),
+                }))}
               />
             </ManagementQueryField>
-            <ManagementQueryField minWidth={148} width={170} name="architecture" label="架构">
-              <Select allowClear placeholder="全部" options={ARCHITECTURE_OPTIONS} />
+            <ManagementQueryField
+              minWidth={148}
+              width={170}
+              name="architecture"
+              label={localeText(localeCode, '架构', 'Architecture')}
+            >
+              <Select
+                allowClear
+                placeholder={localeText(localeCode, '全部', 'All')}
+                options={ARCHITECTURE_OPTIONS}
+              />
             </ManagementQueryField>
-            <ManagementQueryField minWidth={150} width={180} name="environment" label="环境">
+            <ManagementQueryField
+              minWidth={150}
+              width={180}
+              name="environment"
+              label={localeText(localeCode, '环境', 'Environment')}
+            >
               <Input allowClear placeholder="dev / test" />
             </ManagementQueryField>
           </ManagementQueryPanel>
@@ -217,15 +270,19 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
               bordered
               column={{ xs: 1, sm: 1, md: 2, lg: 2, xl: 2, xxl: 2 }}
             >
-              <Descriptions.Item label="环境">{record.environment || '-'}</Descriptions.Item>
-              <Descriptions.Item label="归属">
+              <Descriptions.Item label={localeText(localeCode, '环境', 'Environment')}>
+                {record.environment || '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label={localeText(localeCode, '归属', 'Owner')}>
                 {record.owner || record.team || '-'}
               </Descriptions.Item>
               <Descriptions.Item label="VM ID">{record.vmId || '-'}</Descriptions.Item>
-              <Descriptions.Item label="虚拟化连接">
+              <Descriptions.Item
+                label={localeText(localeCode, '虚拟化连接', 'Virtualization connection')}
+              >
                 {record.virtualizationConnectionId || '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="端口池">
+              <Descriptions.Item label={localeText(localeCode, '端口池', 'Port pool')}>
                 {record.availablePortStart && record.availablePortEnd
                   ? `${record.availablePortStart}-${record.availablePortEnd}`
                   : '-'}
@@ -246,7 +303,7 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
                 setEditorOpen(true)
               }}
             >
-              新增主机
+              {localeText(localeCode, '新增主机', 'Add host')}
             </Button>
           ) : null
         }

@@ -360,7 +360,7 @@ describe('extensions capability pages', () => {
       allowedActions: ['create'],
     }
     setResponses({
-      '/clusters/cluster-a/helm/charts?limit=20&offset=0': {
+      '/clusters/cluster-a/helm/charts?limit=15&offset=0': {
         repository: { id: 'artifacthub', name: 'Artifact Hub', url: 'https://artifacthub.io' },
         refreshedAt: '2026-01-01T00:00:00Z',
         totalCount: 1,

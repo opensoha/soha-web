@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildRelatedResourcePath,
   buildWorkloadDetailPath,
+  buildWorkloadListPagePath,
   localizeRelatedResourceKind,
 } from './workloads-model'
 
@@ -41,6 +42,12 @@ describe('workload relation paths', () => {
   it('keeps cluster and namespace scope in workload detail links', () => {
     expect(buildWorkloadDetailPath('pods', 'api/server', null, 'team/a', 'cluster/a')).toBe(
       '/workloads/pods/api%2Fserver?clusterId=cluster%2Fa&namespace=team%2Fa',
+    )
+  })
+
+  it('builds scoped workload list and event detail routes', () => {
+    expect(buildWorkloadListPagePath('pods', 'team/a', 'cluster/a')).toBe(
+      '/workloads/pods?clusterId=cluster%2Fa&namespace=team%2Fa',
     )
   })
 })

@@ -21,7 +21,7 @@ const apiGetMock = vi.hoisted(() =>
         readyReplicas: 1,
         currentReplicas: 2,
         ageSeconds: 300,
-        allowedActions: ['restart', 'scale', 'delete'],
+        allowedActions: ['update', 'restart', 'scale', 'delete'],
       },
     ],
   })),
@@ -84,6 +84,12 @@ vi.mock('@/features/platform/workloads/shared/list-controls', () => ({
   WorkloadSearchInput: () => null,
   WorkloadTableEmpty: () => null,
   WorkloadTableSummary: () => null,
+}))
+
+vi.mock('@/features/platform/workloads/shared/workload-quick-edit-modal', () => ({
+  WorkloadQuickEditModal: ({ name, namespace }: { name: string; namespace: string }) => (
+    <div data-edit-name={name} data-edit-namespace={namespace} />
+  ),
 }))
 
 vi.mock('@/components/admin-table', () => ({
@@ -193,8 +199,10 @@ describe('statefulset list actions', () => {
 
     const restartButton = container.querySelector('button[aria-label="重启"]')
     const scaleButton = container.querySelector('button[aria-label="扩缩"]')
+    const editButton = container.querySelector('button[aria-label="编辑 database"]')
     expect(restartButton).toBeInstanceOf(HTMLButtonElement)
     expect(scaleButton).toBeInstanceOf(HTMLButtonElement)
+    expect(editButton).toBeInstanceOf(HTMLButtonElement)
     expect(container.querySelector('button[aria-label="删除"]')).toBeInstanceOf(HTMLButtonElement)
 
     await act(async () => restartButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
@@ -214,5 +222,9 @@ describe('statefulset list actions', () => {
       name: 'database',
       replicas: 2,
     })
+
+    await act(async () => editButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(container.querySelector('[data-edit-name="database"]')).not.toBeNull()
+    expect(container.querySelector('[data-edit-namespace="record-ns"]')).not.toBeNull()
   })
 })

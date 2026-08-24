@@ -1,7 +1,13 @@
 import { queryOptions } from '@tanstack/react-query'
 import { clusterQueries } from '@/features/platform/clusters/queries'
-import { getOverviewMonitoringSummary, getOverviewWorkload } from './api'
+import {
+  getOverviewEvents,
+  getOverviewMonitoringSummary,
+  getOverviewWorkload,
+  searchOverviewResources,
+} from './api'
 import { platformOverviewKeys } from './keys'
+import type { OverviewResourceKind } from './types'
 
 export const platformOverviewQueries = {
   clusters: clusterQueries.list,
@@ -10,6 +16,24 @@ export const platformOverviewQueries = {
       queryKey: platformOverviewKeys.monitoringSummary(),
       queryFn: getOverviewMonitoringSummary,
       enabled,
+      refetchInterval: 15_000,
+    }),
+  events: (clusterId: string | null | undefined, enabled = true, limit = 20) =>
+    queryOptions({
+      queryKey: platformOverviewKeys.events(clusterId, limit),
+      queryFn: () => getOverviewEvents(clusterId!, limit),
+      enabled: enabled && Boolean(clusterId),
+    }),
+  resourceSearch: (
+    clusterId: string | null | undefined,
+    kind: OverviewResourceKind,
+    keyword: string,
+    enabled = true,
+  ) =>
+    queryOptions({
+      queryKey: platformOverviewKeys.resourceSearch(clusterId, kind, keyword),
+      queryFn: () => searchOverviewResources(clusterId!, kind, keyword),
+      enabled: enabled && Boolean(clusterId) && Boolean(keyword.trim()),
     }),
   workload: (clusterId: string | null | undefined, enabled = true) =>
     queryOptions({

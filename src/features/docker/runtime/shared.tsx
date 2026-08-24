@@ -1,5 +1,7 @@
 import { Select } from 'antd'
 import { buildSameOriginStreamURL } from '@/features/auth'
+import { localeText } from '@/i18n'
+import type { LocaleCode } from '@/i18n'
 
 export interface DockerRuntimeServiceOption {
   label: string
@@ -54,20 +56,22 @@ export function runtimeServiceSelector({
   onChange,
   options,
   serviceName,
+  localeCode,
 }: {
   disabled?: boolean
   loading?: boolean
   onChange: (serviceName: string) => void
   options: DockerRuntimeServiceOption[]
   serviceName?: string
+  localeCode: LocaleCode
 }) {
   return (
     <Select
-      aria-label="服务"
+      aria-label={localeText(localeCode, '服务', 'Service')}
       disabled={disabled}
       loading={loading}
       options={options}
-      placeholder="选择服务"
+      placeholder={localeText(localeCode, '选择服务', 'Select service')}
       popupMatchSelectWidth={false}
       size="small"
       style={{ minWidth: 180 }}

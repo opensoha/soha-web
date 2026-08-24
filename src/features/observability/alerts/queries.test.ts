@@ -6,6 +6,11 @@ describe('alert queries', () => {
   it('uses canonical list and detail fan-out keys', () => {
     expect(observabilityAlertQueries.list().queryKey).toEqual(observabilityKeys.alerts.list())
     expect(observabilityAlertQueries.recent(8).queryKey).toEqual(observabilityKeys.alerts.recent(8))
+    expect(observabilityAlertQueries.recent(8, 'cluster-a').queryKey).toEqual(
+      observabilityKeys.alerts.recent(8, 'cluster-a'),
+    )
+    expect(observabilityAlertQueries.list().refetchInterval).toBe(15_000)
+    expect(observabilityAlertQueries.recent(8).refetchInterval).toBe(15_000)
     expect(observabilityAlertQueries.detail('event-1').queryKey).toEqual(
       observabilityKeys.alerts.detail('event-1'),
     )

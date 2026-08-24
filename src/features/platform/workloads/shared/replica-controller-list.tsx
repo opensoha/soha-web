@@ -12,13 +12,13 @@ import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
 import { includesSearch, normalizeSearchKeyword } from '@/features/platform/workloads-model'
 import { useClusterCapability } from '@/features/platform/cluster-capabilities'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import {
   useWorkloadTableDensity,
   WorkloadQueryPanel,
   WorkloadRefreshButton,
   WorkloadSearchInput,
   WorkloadTableEmpty,
-  WorkloadTableSummary,
 } from './list-controls'
 import { workloadMutations } from './mutations'
 import { workloadQueries } from './queries'
@@ -139,13 +139,7 @@ export function ReplicaControllerListPage<T extends ReplicaControllerRecord>({
         dataSource={clusterId ? filteredRecords : []}
         rowKey={(record) => `${record.namespace}/${record.name}`}
         loading={listQuery.isLoading}
-        paginationSummary={
-          <WorkloadTableSummary
-            filteredCount={filteredRecords.length}
-            localeCode={localeCode}
-            totalCount={records.length}
-          />
-        }
+        localSorting
         empty={
           <WorkloadTableEmpty
             clusterId={clusterId}
@@ -155,9 +149,10 @@ export function ReplicaControllerListPage<T extends ReplicaControllerRecord>({
             totalCount={records.length}
           />
         }
-        pageSize={10}
+        pageSize={K8S_TABLE_PAGE_SIZE}
         tableSize={tableSize}
         scroll={{ x: 'max-content' }}
+        viewportScroll
         headerExtra={
           <ManagementTableToolbar>
             {densityButton}

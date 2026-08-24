@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import {
   Alert,
   App,
   Button,
+  Card,
   Col,
+  Flex,
   Form,
   Input,
   InputNumber,
@@ -16,11 +18,16 @@ import {
   Space,
   Spin,
   Switch,
+  Typography,
 } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { ManagementIconButton, ManagementState } from '@/components/management-list'
+import {
+  ManagementIconButton,
+  ManagementState,
+  ManagementToolbarSearch,
+} from '@/components/management-list'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import {
@@ -44,6 +51,8 @@ import {
   EditOutlined,
   FolderOpenOutlined,
   LinkOutlined,
+  PlusOutlined,
+  SaveOutlined,
 } from '@ant-design/icons'
 import {
   PLAYBOOK_OPTIONS,
@@ -74,6 +83,8 @@ import type { AISettingsPageProps } from '../types'
 import '../shared/styles.css'
 import './styles.css'
 
+const { Paragraph, Text } = Typography
+
 export function AISettingsPage({ embedded = false, section = 'model' }: AISettingsPageProps = {}) {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
@@ -86,6 +97,7 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
   const [skillsModalVisible, setSkillsModalVisible] = useState(false)
   const [editingSkill, setEditingSkill] = useState<AISkillSetting | null>(null)
   const [skillsRegistryDraft, setSkillsRegistryDraft] = useState<AISkillSetting[]>([])
+  const [skillsFilter, setSkillsFilter] = useState('')
   const [dataSourceSourceKind, setDataSourceSourceKind] = useState('logs')
   const [dataSourceBackendType, setDataSourceBackendType] = useState('es')
   const canViewAISettings = hasPermission(permissionSnapshotQuery.data?.data, 'settings.ai.view')
@@ -93,6 +105,23 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
     permissionSnapshotQuery.data?.data,
     'settings.ai.update',
   )
+  const canViewDataSources =
+    hasPermission(permissionSnapshotQuery.data?.data, 'ai.data-sources.view') || canViewAISettings
+  const canCreateDataSources =
+    hasPermission(permissionSnapshotQuery.data?.data, 'ai.data-sources.create') ||
+    canManageAISettings
+  const canUpdateDataSources =
+    hasPermission(permissionSnapshotQuery.data?.data, 'ai.data-sources.update') ||
+    canManageAISettings
+  const canValidateDataSources =
+    hasPermission(permissionSnapshotQuery.data?.data, 'ai.data-sources.validate') ||
+    canManageAISettings
+  const canViewSkills =
+    hasPermission(permissionSnapshotQuery.data?.data, 'ai.gateway.skills.view') ||
+    canViewAISettings
+  const canManageSkills =
+    hasPermission(permissionSnapshotQuery.data?.data, 'ai.gateway.skills.update') ||
+    canManageAISettings
   const canUseCompanion = hasPermission(permissionSnapshotQuery.data?.data, 'observe.ai.chat')
   const canViewPlugins = hasPermission(permissionSnapshotQuery.data?.data, 'plugin.view')
   const showModel = section === 'model'
@@ -100,7 +129,13 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
   const showSkills = section === 'skills'
   const showDataSources = section === 'data-sources'
   const showProfiles = section === 'profiles'
-  const canViewSection = showCompanion ? canUseCompanion : canViewAISettings
+  const canViewSection = showCompanion
+    ? canUseCompanion
+    : showSkills
+      ? canViewSkills
+      : showDataSources
+        ? canViewDataSources
+        : canViewAISettings
   const companionMode = usePreferencesStore((state) => state.companionMode)
   const companionBubbleEnabled = usePreferencesStore((state) => state.companionBubbleEnabled)
   const selectedCompanionPluginId = usePreferencesStore((state) => state.selectedCompanionPluginId)
@@ -127,26 +162,28 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
     }
   }, [dataSourceModalVisible, editingDataSource])
 
-  const settingsQuery = useQuery(
-    settingsQueries.ai.detail(canViewAISettings && (showModel || showSkills)),
-  )
+  const settingsQuery = useQuery(settingsQueries.ai.detail(canViewAISettings && showModel))
   const { data } = settingsQuery
+  const skillsQuery = useQuery(settingsQueries.ai.skills(canViewSkills && showSkills))
   const modelRoutesQuery = useQuery(settingsQueries.ai.modelRoutes(canViewAISettings && showModel))
   const dataSourcesQuery = useQuery(
-    settingsQueries.ai.dataSources(canViewAISettings && (showDataSources || showProfiles)),
+    settingsQueries.ai.dataSources(
+      (canViewDataSources && showDataSources) || (canViewAISettings && showProfiles),
+    ),
   )
   const profilesQuery = useQuery(
     settingsQueries.ai.analysisProfiles(canViewAISettings && showProfiles),
   )
   const capabilitiesQuery = useQuery(
-    settingsQueries.ai.dataSourceCapabilities(canViewAISettings && showDataSources),
+    settingsQueries.ai.dataSourceCapabilities(canViewDataSources && showDataSources),
   )
   const companionPacksQuery = useQuery(
     pluginQueries.installed(showCompanion && canUseCompanion && canViewPlugins),
   )
   const hasQueryError =
     permissionSnapshotQuery.isError ||
-    ((showModel || showSkills) && settingsQuery.isError) ||
+    (showModel && settingsQuery.isError) ||
+    (showSkills && skillsQuery.isError) ||
     (showModel && modelRoutesQuery.isError) ||
     ((showDataSources || showProfiles) && dataSourcesQuery.isError) ||
     (showProfiles && profilesQuery.isError) ||
@@ -154,7 +191,8 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
     (showCompanion && canViewPlugins && companionPacksQuery.isError)
   const isPageLoading =
     permissionSnapshotQuery.isLoading ||
-    ((showModel || showSkills) && settingsQuery.isLoading) ||
+    (showModel && settingsQuery.isLoading) ||
+    (showSkills && skillsQuery.isLoading) ||
     (showModel && modelRoutesQuery.isLoading) ||
     ((showDataSources || showProfiles) && dataSourcesQuery.isLoading) ||
     (showProfiles && profilesQuery.isLoading) ||
@@ -258,9 +296,9 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
   )
 
   useEffect(() => {
-    if (!settings || !showSkills) return
+    if (!showSkills || !skillsQuery.data) return
     setSkillsRegistryDraft(
-      (settings?.skillsRegistry ?? []).map((item) => ({
+      skillsQuery.data.map((item) => ({
         id: item.id,
         name: item.name,
         category: item.category,
@@ -275,7 +313,17 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
         outputSchema: item.outputSchema ?? {},
       })),
     )
-  }, [settings, showSkills])
+  }, [showSkills, skillsQuery.data])
+
+  const visibleSkills = useMemo(() => {
+    const keyword = skillsFilter.trim().toLowerCase()
+    if (!keyword) return skillsRegistryDraft
+    return skillsRegistryDraft.filter((item) =>
+      [item.id, item.name, item.category, item.ownerModule, item.description]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(keyword)),
+    )
+  }, [skillsFilter, skillsRegistryDraft])
 
   if (isPageLoading) {
     return (
@@ -296,7 +344,8 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
                 void permissionSnapshotQuery.refetch()
                 if (canViewSection) {
                   void Promise.all([
-                    showModel || showSkills ? settingsQuery.refetch() : Promise.resolve(),
+                    showModel ? settingsQuery.refetch() : Promise.resolve(),
+                    showSkills ? skillsQuery.refetch() : Promise.resolve(),
                     showModel ? modelRoutesQuery.refetch() : Promise.resolve(),
                     showDataSources || showProfiles
                       ? dataSourcesQuery.refetch()
@@ -326,7 +375,11 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
           description={
             showCompanion
               ? '当前账号没有使用 Companion 的权限。'
-              : '当前账号没有查看 AI 设置的权限。'
+              : showSkills
+                ? '当前账号没有查看 Skills 的权限。'
+                : showDataSources
+                  ? '当前账号没有查看 Data Sources 的权限。'
+                  : '当前账号没有查看 AI 设置的权限。'
           }
         />
       </div>
@@ -397,31 +450,35 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
       title: '操作',
       dataIndex: 'id',
       render: (_: unknown, record: DataSource) =>
-        canManageAISettings ? (
+        canValidateDataSources || canUpdateDataSources ? (
           <Space className="soha-row-action-icons">
-            <ManagementIconButton
-              aria-label="校验数据源连接"
-              tooltip="校验连接"
-              icon={<CheckCircleOutlined />}
-              loading={
-                validateDataSourceMutation.isPending &&
-                validateDataSourceMutation.variables === record.id
-              }
-              size="small"
-              onClick={() => validateDataSource(record.id)}
-            />
-            <ManagementIconButton
-              aria-label="编辑数据源"
-              tooltip="编辑"
-              icon={<EditOutlined />}
-              size="small"
-              onClick={() => {
-                setEditingDataSource(record)
-                setDataSourceSourceKind(record.sourceKind)
-                setDataSourceBackendType(record.backendType)
-                setDataSourceModalVisible(true)
-              }}
-            />
+            {canValidateDataSources ? (
+              <ManagementIconButton
+                aria-label="校验数据源连接"
+                tooltip="校验连接"
+                icon={<CheckCircleOutlined />}
+                loading={
+                  validateDataSourceMutation.isPending &&
+                  validateDataSourceMutation.variables === record.id
+                }
+                size="small"
+                onClick={() => validateDataSource(record.id)}
+              />
+            ) : null}
+            {canUpdateDataSources ? (
+              <ManagementIconButton
+                aria-label="编辑数据源"
+                tooltip="编辑"
+                icon={<EditOutlined />}
+                size="small"
+                onClick={() => {
+                  setEditingDataSource(record)
+                  setDataSourceSourceKind(record.sourceKind)
+                  setDataSourceBackendType(record.backendType)
+                  setDataSourceModalVisible(true)
+                }}
+              />
+            ) : null}
           </Space>
         ) : (
           '-'
@@ -694,90 +751,76 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
       {showModel ? workbenchModelCard : null}
       {showCompanion ? companionCard : null}
       {showSkills ? (
-        <div className="soha-settings-table-section">
-          <SettingsAdminTable
-            headerExtra={
-              canManageAISettings ? (
-                <Space>
-                  <Button
-                    onClick={() => {
-                      setEditingSkill(null)
-                      setSkillsModalVisible(true)
-                    }}
-                  >
-                    新增
-                  </Button>
-                  <Button
-                    type="primary"
-                    loading={saveSkillsMutation.isPending}
-                    onClick={() => saveSkills()}
-                  >
-                    保存 Skills
-                  </Button>
-                </Space>
-              ) : null
-            }
-            rowKey="id"
-            dataSource={skillsRegistryDraft}
-            empty={
-              <ManagementState
-                bordered={false}
-                compact
-                title="暂无全局 Skills"
-                description="可先新增 MCP、logs、metrics、traces 这类技能条目。"
-              />
-            }
-            columns={[
-              { title: 'ID', dataIndex: 'id' },
-              { title: '名称', dataIndex: 'name' },
-              {
-                title: '分类',
-                dataIndex: 'category',
-                render: (value?: string) => value || '-',
-              },
-              {
-                title: '归属模块',
-                dataIndex: 'ownerModule',
-                render: (value?: string) => value || '-',
-              },
-              {
-                title: '说明',
-                dataIndex: 'description',
-                render: (value?: string) => value || '-',
-              },
-              {
-                title: '作用域',
-                dataIndex: 'scopes',
-                render: (value?: string[]) => (
-                  <div className="flex flex-wrap gap-1">
-                    {(value ?? []).map((item) => (
-                      <MetadataTag key={item} label={item} />
-                    ))}
+        <section className="soha-skill-registry">
+          <Flex className="soha-skill-registry__toolbar" align="center" justify="space-between">
+            <ManagementToolbarSearch
+              placeholder="搜索 Skills"
+              size={280}
+              value={skillsFilter}
+              onChange={setSkillsFilter}
+            />
+            {canManageSkills ? (
+              <Space size={8}>
+                <Button
+                  icon={<PlusOutlined />}
+                  size="small"
+                  onClick={() => {
+                    setEditingSkill(null)
+                    setSkillsModalVisible(true)
+                  }}
+                >
+                  新增
+                </Button>
+                <Button
+                  type="primary"
+                  icon={<SaveOutlined />}
+                  size="small"
+                  loading={saveSkillsMutation.isPending}
+                  onClick={() => saveSkills()}
+                >
+                  保存 Skills
+                </Button>
+              </Space>
+            ) : null}
+          </Flex>
+
+          {visibleSkills.length === 0 ? (
+            <ManagementState
+              compact
+              title={skillsRegistryDraft.length === 0 ? '暂无全局 Skills' : '没有匹配的 Skills'}
+            />
+          ) : (
+            <div className="soha-skill-card-list" role="list">
+              {visibleSkills.map((record) => (
+                <Card className="soha-skill-card" key={record.id} role="listitem" size="small">
+                  <div className="soha-skill-card__identity">
+                    <Flex align="center" gap={8} wrap>
+                      <Text strong>{record.name}</Text>
+                      <StatusTag value={record.enabled ? 'enabled' : 'disabled'} />
+                    </Flex>
+                    <Text type="secondary" copyable={{ text: record.id }}>
+                      {record.id}
+                    </Text>
                   </div>
-                ),
-              },
-              {
-                title: '能力引用',
-                dataIndex: 'capabilityRefs',
-                render: (value?: string[]) => (
-                  <div className="flex flex-wrap gap-1">
-                    {(value ?? []).slice(0, 3).map((item) => (
-                      <MetadataTag key={item} label={item} />
-                    ))}
+
+                  <div className="soha-skill-card__content">
+                    <Paragraph type="secondary" ellipsis={{ rows: 2 }}>
+                      {record.description || '暂无说明'}
+                    </Paragraph>
+                    <Flex gap={6} wrap>
+                      {record.category ? <MetadataTag label={record.category} /> : null}
+                      {record.ownerModule ? <MetadataTag label={record.ownerModule} /> : null}
+                      {(record.scopes ?? []).map((item) => (
+                        <MetadataTag key={`scope:${item}`} label={item} />
+                      ))}
+                      {(record.capabilityRefs ?? []).slice(0, 3).map((item) => (
+                        <MetadataTag key={`capability:${item}`} tone="blue" label={item} />
+                      ))}
+                    </Flex>
                   </div>
-                ),
-              },
-              {
-                title: '启用',
-                dataIndex: 'enabled',
-                render: (value: boolean) => <StatusTag value={value ? 'enabled' : 'disabled'} />,
-              },
-              {
-                title: '排序',
-                dataIndex: 'id',
-                render: (_: unknown, record: AISkillSetting) =>
-                  canManageAISettings ? (
-                    <Space className="soha-row-action-icons">
+
+                  {canManageSkills ? (
+                    <Space className="soha-skill-card__actions" size={2}>
                       <ManagementIconButton
                         aria-label="上移 Skill"
                         tooltip="上移"
@@ -812,18 +855,6 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
                           })
                         }}
                       />
-                    </Space>
-                  ) : (
-                    '-'
-                  ),
-              },
-              {
-                ...tableColumnPresets.action,
-                title: '操作',
-                dataIndex: 'id',
-                render: (_: unknown, record: AISkillSetting) =>
-                  canManageAISettings ? (
-                    <Space className="soha-row-action-icons">
                       <ManagementIconButton
                         aria-label="编辑 Skill"
                         tooltip="编辑"
@@ -836,7 +867,7 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
                       />
                       <Popconfirm
                         title="确认删除 Skill？"
-                        description="删除后会从当前草稿列表移除，保存设置后生效。"
+                        description="保存设置后生效。"
                         okButtonProps={{ danger: true }}
                         onConfirm={() =>
                           setSkillsRegistryDraft((current) =>
@@ -853,19 +884,18 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
                         />
                       </Popconfirm>
                     </Space>
-                  ) : (
-                    '-'
-                  ),
-              },
-            ]}
-          />
-        </div>
+                  ) : null}
+                </Card>
+              ))}
+            </div>
+          )}
+        </section>
       ) : null}
       {showDataSources ? (
         <div className="soha-settings-table-section">
           <SettingsAdminTable
             headerExtra={
-              canManageAISettings ? (
+              canCreateDataSources ? (
                 <Button
                   type="primary"
                   onClick={() => {
@@ -1061,7 +1091,7 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
             {...DEFAULT_FORM_LAYOUT}
             initialValues={buildDataSourceFormValues(editingDataSource)}
             onFinish={(values) => {
-              if (!canManageAISettings) return
+              if (editingDataSource ? !canUpdateDataSources : !canCreateDataSources) return
               saveDataSource({
                 id: editingDataSource?.id,
                 values: values as Record<string, unknown>,
@@ -1303,7 +1333,7 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
               >
                 取消
               </Button>
-              {canManageAISettings ? (
+              {(editingDataSource ? canUpdateDataSources : canCreateDataSources) ? (
                 <Button htmlType="submit" type="primary" loading={dataSourceMutation.isPending}>
                   保存
                 </Button>

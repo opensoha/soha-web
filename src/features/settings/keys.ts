@@ -11,6 +11,7 @@ export const settingsKeys = {
   ai: {
     all: ['settings', 'ai'] as const,
     detail: () => ['settings', 'ai', 'detail'] as const,
+    skills: () => ['settings', 'ai', 'skills'] as const,
     modelRoutes: () => ['settings', 'ai', 'model-routes'] as const,
     dataSources: () => ['settings', 'ai', 'data-sources'] as const,
     analysisProfiles: () => ['settings', 'ai', 'analysis-profiles'] as const,

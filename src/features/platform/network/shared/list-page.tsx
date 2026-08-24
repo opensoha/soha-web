@@ -1,6 +1,6 @@
 import { useDeferredValue, useMemo, useState } from 'react'
-import { DeleteOutlined } from '@ant-design/icons'
-import { App, Popconfirm, Typography } from 'antd'
+import { DeleteOutlined, EditOutlined } from '@ant-design/icons'
+import { App, Popconfirm, Space } from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { UseQueryResult } from '@tanstack/react-query'
 import { ManagementDataPage } from '@/components/management-data-page'
@@ -17,6 +17,7 @@ import { TABLE_ACTIONS_COLUMN_CLASS_NAME } from '@/components/resource-actions'
 import { hasAllowedAction } from '@/features/auth'
 import { CreateEntry } from '@/features/platform/resource-creation/components/create-entry'
 import { getResourceCreateTemplate } from '@/features/platform/resource-creation/templates'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import { useAIPageContext } from '@/features/copilot'
 import type { AIPageContext } from '@/features/copilot'
 import { useI18n } from '@/i18n'
@@ -26,8 +27,6 @@ import { networkMutations } from './mutations'
 import { networkTargetFromRecord } from './scope'
 import type { NetworkKind, NetworkResourceRecord } from './types'
 import '../styles.css'
-
-const { Text } = Typography
 
 function normalizeKeyword(value: string) {
   return value.trim().toLowerCase()
@@ -49,6 +48,7 @@ export function NetworkResourceListPage<T extends NetworkResourceRecord>({
   emptyDescription,
   kind,
   noMatchDescription,
+  onEdit,
   onRow,
   query,
   rowKey,
@@ -61,6 +61,7 @@ export function NetworkResourceListPage<T extends NetworkResourceRecord>({
   emptyDescription: { en_US: string; zh_CN: string }
   kind: NetworkKind
   noMatchDescription: { en_US: string; zh_CN: string }
+  onEdit?: (record: T) => void
   onRow?: (record: T) => Record<string, string>
   query: UseQueryResult<T[], Error>
   rowKey?: string | ((record: T) => string)
@@ -85,8 +86,11 @@ export function NetworkResourceListPage<T extends NetworkResourceRecord>({
       ),
     [normalizedKeyword, rawItems, searchValues],
   )
-  const canShowActions =
+  const canShowEdit =
+    Boolean(onEdit) && rawItems.some((item) => hasAllowedAction(item.allowedActions, 'update'))
+  const canShowDelete =
     deletable && rawItems.some((item) => hasAllowedAction(item.allowedActions, 'delete'))
+  const canShowActions = canShowEdit || canShowDelete
   useAIPageContext(buildAIPageContext(rawItems, searchKeyword))
   const removeMutation = useMutation(networkMutations.remove(kind, queryClient))
   const densityLabel = localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'
@@ -104,11 +108,13 @@ export function NetworkResourceListPage<T extends NetworkResourceRecord>({
     dataIndex: '__actions',
     fixed: 'right',
     align: 'center',
-    width: 52,
+    width: canShowEdit && canShowDelete ? 84 : 52,
     onHeaderCell: () => ({ className: TABLE_ACTIONS_COLUMN_CLASS_NAME }),
     onCell: () => ({ className: TABLE_ACTIONS_COLUMN_CLASS_NAME }),
     render: (_value, record) => {
-      if (!hasAllowedAction(record.allowedActions, 'delete')) return null
+      const canEdit = Boolean(onEdit && hasAllowedAction(record.allowedActions, 'update'))
+      const canDelete = deletable && hasAllowedAction(record.allowedActions, 'delete')
+      if (!canEdit && !canDelete) return null
       const target = networkTargetFromRecord(clusterId, record)
       const deleting =
         removeMutation.isPending &&
@@ -116,32 +122,51 @@ export function NetworkResourceListPage<T extends NetworkResourceRecord>({
         removeMutation.variables.scope.namespace === target.scope.namespace
       const deleteLabel = localeCode === 'zh_CN' ? '删除' : 'Delete'
       return (
-        <Popconfirm
-          title={localeCode === 'zh_CN' ? `确认删除 ${record.name}？` : `Delete ${record.name}?`}
-          description={
-            localeCode === 'zh_CN'
-              ? '此操作不可恢复，删除后集群资源立即消失。'
-              : 'This deletes the resource immediately and cannot be undone.'
-          }
-          okText={deleteLabel}
-          cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
-          okButtonProps={{ danger: true, loading: deleting }}
-          placement="topRight"
-          onConfirm={() =>
-            removeMutation.mutate(target, {
-              onSuccess: () => void message.success(localeCode === 'zh_CN' ? '已删除' : 'Deleted'),
-              onError: (error) => void message.error(error.message),
-            })
-          }
+        <Space
+          size={2}
+          className="soha-row-action-icons"
+          onClick={(event) => event.stopPropagation()}
         >
-          <ManagementIconButton
-            danger
-            icon={<DeleteOutlined />}
-            aria-label={deleteLabel}
-            loading={deleting}
-            tooltip={deleteLabel}
-          />
-        </Popconfirm>
+          {canEdit ? (
+            <ManagementIconButton
+              icon={<EditOutlined />}
+              aria-label={localeCode === 'zh_CN' ? `编辑 ${record.name}` : `Edit ${record.name}`}
+              tooltip={localeCode === 'zh_CN' ? '编辑' : 'Edit'}
+              onClick={() => onEdit?.(record)}
+            />
+          ) : null}
+          {canDelete ? (
+            <Popconfirm
+              title={
+                localeCode === 'zh_CN' ? `确认删除 ${record.name}？` : `Delete ${record.name}?`
+              }
+              description={
+                localeCode === 'zh_CN'
+                  ? '此操作不可恢复，删除后集群资源立即消失。'
+                  : 'This deletes the resource immediately and cannot be undone.'
+              }
+              okText={deleteLabel}
+              cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
+              okButtonProps={{ danger: true, loading: deleting }}
+              placement="topRight"
+              onConfirm={() =>
+                removeMutation.mutate(target, {
+                  onSuccess: () =>
+                    void message.success(localeCode === 'zh_CN' ? '已删除' : 'Deleted'),
+                  onError: (error) => void message.error(error.message),
+                })
+              }
+            >
+              <ManagementIconButton
+                danger
+                icon={<DeleteOutlined />}
+                aria-label={deleteLabel}
+                loading={deleting}
+                tooltip={deleteLabel}
+              />
+            </Popconfirm>
+          ) : null}
+        </Space>
       )
     },
   }
@@ -190,15 +215,11 @@ export function NetworkResourceListPage<T extends NetworkResourceRecord>({
         rowKey: rowKey ?? ((record) => `${record.namespace}/${record.name}`),
         onRow,
         loading: query.isLoading,
-        paginationSummary: (
-          <Text className="soha-workload-table-summary" type="secondary">
-            {localeCode === 'zh_CN'
-              ? `当前 ${filteredItems.length} / ${rawItems.length} 条`
-              : `${filteredItems.length} / ${rawItems.length} items`}
-          </Text>
-        ),
+        localSorting: true,
+        pageSize: K8S_TABLE_PAGE_SIZE,
         tableSize,
         scroll: { x: 'max-content' },
+        viewportScroll: true,
         headerExtra: (
           <ManagementTableToolbar>
             {createKind ? (

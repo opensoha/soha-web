@@ -15,6 +15,9 @@ export function useVirtualizationPermissions() {
   return {
     virtualizationModuleEnabled,
     canCreateVMs,
+    canPowerVMs,
+    canResizeVMs,
+    canDeleteVMs,
     canManageVMs: canCreateVMs || canPowerVMs || canResizeVMs || canDeleteVMs,
     canCreateClusters: hasVirtualizationPermission('virtualization.clusters.create'),
     canUpdateClusters: hasVirtualizationPermission('virtualization.clusters.update'),

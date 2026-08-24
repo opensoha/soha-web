@@ -34,10 +34,12 @@ export function KeyValueFields({ label, name }: { label: string; name: NamePath 
 }
 
 export function MetadataFields({
+  identityDisabled = false,
   namespaced = true,
   namespaceLoading = false,
   namespaceOptions = [],
 }: {
+  identityDisabled?: boolean
   namespaced?: boolean
   namespaceLoading?: boolean
   namespaceOptions?: readonly string[]
@@ -51,7 +53,7 @@ export function MetadataFields({
             name="name"
             rules={[{ required: true, message: '请输入资源名称' }]}
           >
-            <Input placeholder="example" />
+            <Input disabled={identityDisabled} placeholder="example" />
           </Form.Item>
         </Col>
         {namespaced ? (
@@ -62,6 +64,7 @@ export function MetadataFields({
               rules={[{ required: true, message: '请选择命名空间' }]}
             >
               <Select
+                disabled={identityDisabled}
                 loading={namespaceLoading}
                 options={namespaceOptions.map((value) => ({ label: value, value }))}
                 placeholder="请选择命名空间"

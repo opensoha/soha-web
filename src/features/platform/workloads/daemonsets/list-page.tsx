@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { App, Popconfirm, Space } from 'antd'
-import { DeleteOutlined, ReloadOutlined } from '@ant-design/icons'
+import { DeleteOutlined, FormOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import type { TableColumnsType } from 'antd'
@@ -13,6 +13,7 @@ import {
   capabilityActionTooltip,
   useClusterCapability,
 } from '@/features/platform/cluster-capabilities'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import {
   buildWorkloadDetailPath,
   includesSearch,
@@ -25,8 +26,8 @@ import {
   WorkloadRefreshButton,
   WorkloadSearchInput,
   WorkloadTableEmpty,
-  WorkloadTableSummary,
 } from '@/features/platform/workloads/shared/list-controls'
+import { WorkloadQuickEditModal } from '@/features/platform/workloads/shared/workload-quick-edit-modal'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
@@ -62,15 +63,18 @@ export function WorkloadsDaemonSetsPage() {
   const restartMutation = useMutation(daemonSetMutations.restart(queryClient))
   const deleteMutation = useMutation(daemonSetMutations.remove(queryClient))
   const [searchKeyword, setSearchKeyword] = useState('')
+  const [editTarget, setEditTarget] = useState<DaemonSet | null>(null)
   const { densityButton, tableSize } = useWorkloadTableDensity(localeCode)
   const workloadMutationCapability = useClusterCapability('workload.mutations', localeCode)
+  const yamlApplyCapability = useClusterCapability('resource.yaml.apply', localeCode)
 
   const daemonSets = daemonSetsQuery.data ?? []
-  const canShowActions =
-    !workloadMutationCapability.disabled &&
-    daemonSets.some((item) =>
-      ['restart', 'delete'].some((action) => hasAllowedAction(item.allowedActions, action)),
-    )
+  const canShowActions = daemonSets.some(
+    (item) =>
+      (!yamlApplyCapability.disabled && hasAllowedAction(item.allowedActions, 'update')) ||
+      (!workloadMutationCapability.disabled &&
+        ['restart', 'delete'].some((action) => hasAllowedAction(item.allowedActions, action))),
+  )
   const targetFor = (name: string, targetNamespace: string): DaemonSetTarget => ({
     name,
     scope: toScopeKey(clusterId, targetNamespace),
@@ -101,14 +105,34 @@ export function WorkloadsDaemonSetsPage() {
       dataIndex: 'namespace',
       width: 160,
     },
-    { title: 'Desired', dataIndex: 'desiredNumber', width: 96 },
-    { title: 'Current', dataIndex: 'currentNumber', width: 96 },
-    { title: 'Ready', dataIndex: 'readyNumber', width: 96 },
-    { title: 'Available', dataIndex: 'availableNumber', width: 110 },
-    { title: 'Updated', dataIndex: 'updatedNumber', width: 96 },
+    {
+      title: localeCode === 'zh_CN' ? '期望' : 'Desired',
+      dataIndex: 'desiredNumber',
+      width: 96,
+    },
+    {
+      title: localeCode === 'zh_CN' ? '当前' : 'Current',
+      dataIndex: 'currentNumber',
+      width: 96,
+    },
+    {
+      title: localeCode === 'zh_CN' ? '就绪' : 'Ready',
+      dataIndex: 'readyNumber',
+      width: 96,
+    },
+    {
+      title: localeCode === 'zh_CN' ? '可用' : 'Available',
+      dataIndex: 'availableNumber',
+      width: 110,
+    },
+    {
+      title: localeCode === 'zh_CN' ? '已更新' : 'Updated',
+      dataIndex: 'updatedNumber',
+      width: 96,
+    },
     {
       ...tableColumnPresets.datetime,
-      title: 'Age',
+      title: localeCode === 'zh_CN' ? '时长' : 'Age',
       dataIndex: 'ageSeconds',
       width: 104,
       render: (value: number) => formatAgeSeconds(value),
@@ -118,14 +142,15 @@ export function WorkloadsDaemonSetsPage() {
       title: '',
       dataIndex: 'name',
       key: 'actions',
-      width: 84,
+      width: 116,
       align: 'center',
       onHeaderCell: () => ({ className: WORKLOAD_ACTIONS_COLUMN_CLASS_NAME }),
       onCell: () => ({ className: WORKLOAD_ACTIONS_COLUMN_CLASS_NAME }),
       render: (name: string, record) => {
         const canRestart = hasAllowedAction(record.allowedActions, 'restart')
+        const canEdit = hasAllowedAction(record.allowedActions, 'update')
         const canDelete = hasAllowedAction(record.allowedActions, 'delete')
-        if (!canRestart && !canDelete) return '-'
+        if (!canEdit && !canRestart && !canDelete) return '-'
 
         const restartLabel = localeCode === 'zh_CN' ? '重启' : 'Restart'
         const deleteLabel = localeCode === 'zh_CN' ? '删除' : 'Delete'
@@ -134,6 +159,18 @@ export function WorkloadsDaemonSetsPage() {
 
         return (
           <Space size={4} className="soha-deployment-action-cell">
+            {canEdit ? (
+              <ManagementIconButton
+                icon={<FormOutlined />}
+                aria-label={`${localeCode === 'zh_CN' ? '编辑' : 'Edit'} ${name}`}
+                disabled={yamlApplyCapability.disabled}
+                tooltip={capabilityActionTooltip(
+                  localeCode === 'zh_CN' ? '编辑' : 'Edit',
+                  yamlApplyCapability,
+                )}
+                onClick={() => setEditTarget(record)}
+              />
+            ) : null}
             {canRestart ? (
               <ManagementIconButton
                 icon={<ReloadOutlined />}
@@ -233,13 +270,8 @@ export function WorkloadsDaemonSetsPage() {
         dataSource={filteredDaemonSets}
         rowKey={(record) => `${record.namespace}/${record.name}`}
         loading={daemonSetsQuery.isLoading}
-        paginationSummary={
-          <WorkloadTableSummary
-            filteredCount={filteredDaemonSets.length}
-            localeCode={localeCode}
-            totalCount={daemonSets.length}
-          />
-        }
+        localSorting
+        pageSize={K8S_TABLE_PAGE_SIZE}
         empty={
           <WorkloadTableEmpty
             clusterId={clusterId}
@@ -251,7 +283,16 @@ export function WorkloadsDaemonSetsPage() {
         }
         tableSize={tableSize}
         scroll={{ x: 'max-content' }}
+        viewportScroll
       />
+      {editTarget ? (
+        <WorkloadQuickEditModal
+          kind="daemonsets"
+          name={editTarget.name}
+          namespace={editTarget.namespace}
+          onClose={() => setEditTarget(null)}
+        />
+      ) : null}
     </div>
   )
 }

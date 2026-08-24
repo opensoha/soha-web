@@ -15,6 +15,10 @@ export interface WorkloadReference {
   readonly name: string
 }
 
+export interface UpdateWorkloadYAMLVariables extends WorkloadReference {
+  readonly content: string
+}
+
 export interface WorkloadEvent {
   name: string
   namespace?: string

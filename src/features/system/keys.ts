@@ -2,8 +2,8 @@ import type { AuditLogFilters, OperationLogFilters, SystemEndpointScope } from '
 
 function normalizeFilters<T extends object>(filters: T) {
   return Object.fromEntries(
-    Object.entries(filters as Record<string, string | undefined>)
-      .map(([key, value]) => [key, value?.trim() ?? ''] as const)
+    Object.entries(filters as Record<string, string | number | undefined>)
+      .map(([key, value]) => [key, String(value ?? '').trim()] as const)
       .filter(([, value]) => Boolean(value)),
   )
 }

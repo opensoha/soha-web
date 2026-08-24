@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import type { ComputeTaskView } from '@opensoha/contracts/gen/ts/sohaapi'
 import { ManagementIconButton } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
+import { localeText, useI18n } from '@/i18n'
 import { computeMutations } from '../mutations'
 
 const { Text } = Typography
@@ -30,6 +31,7 @@ export function ResourceTaskActions({
 }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { localeCode } = useI18n()
   const { message } = App.useApp()
   const cancelMutation = useMutation(computeMutations.cancelTask(queryClient))
   const retryMutation = useMutation(computeMutations.retryTask(queryClient))
@@ -53,7 +55,11 @@ export function ResourceTaskActions({
       { domain: task.domain, taskId: task.id },
       {
         onSuccess: () =>
-          void message.success(action === 'cancel' ? '任务已取消' : '任务已重新排队'),
+          void message.success(
+            action === 'cancel'
+              ? localeText(localeCode, '任务已取消', 'Task canceled')
+              : localeText(localeCode, '任务已重新排队', 'Task queued for retry'),
+          ),
       },
     )
   }
@@ -63,31 +69,37 @@ export function ResourceTaskActions({
       <StatusTag value={task.normalizedStatus} />
       {task.availableActions.includes('logs') ? (
         <ManagementIconButton
-          aria-label="查看最近任务日志"
+          aria-label={localeText(localeCode, '查看最近任务日志', 'View latest task logs')}
           size="small"
-          tooltip="查看日志"
+          tooltip={localeText(localeCode, '查看日志', 'View logs')}
           icon={<FileTextOutlined />}
           onClick={openLogs}
         />
       ) : null}
       {task.availableActions.includes('cancel') ? (
-        <Popconfirm title="确认取消任务？" onConfirm={() => mutate('cancel')}>
+        <Popconfirm
+          title={localeText(localeCode, '确认取消任务？', 'Cancel this task?')}
+          onConfirm={() => mutate('cancel')}
+        >
           <ManagementIconButton
-            aria-label="取消最近任务"
+            aria-label={localeText(localeCode, '取消最近任务', 'Cancel latest task')}
             size="small"
             danger
-            tooltip="取消"
+            tooltip={localeText(localeCode, '取消', 'Cancel')}
             icon={<StopOutlined />}
             loading={cancelMutation.isPending}
           />
         </Popconfirm>
       ) : null}
       {task.availableActions.includes('retry') ? (
-        <Popconfirm title="确认重试任务？" onConfirm={() => mutate('retry')}>
+        <Popconfirm
+          title={localeText(localeCode, '确认重试任务？', 'Retry this task?')}
+          onConfirm={() => mutate('retry')}
+        >
           <ManagementIconButton
-            aria-label="重试最近任务"
+            aria-label={localeText(localeCode, '重试最近任务', 'Retry latest task')}
             size="small"
-            tooltip="重试"
+            tooltip={localeText(localeCode, '重试', 'Retry')}
             icon={<RedoOutlined />}
             loading={retryMutation.isPending}
           />

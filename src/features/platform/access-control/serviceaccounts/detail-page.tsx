@@ -5,6 +5,7 @@ import { AccessControlResourceDetailPage } from '../shared/detail-page'
 import { AccessControlMetadataOverview } from '../shared/metadata-overview'
 import { AccessControlReferencedByRelationships } from '../shared/relationships'
 import type { ServiceAccountDetail } from './types'
+import { ServiceAccountEffectiveAccessPanel } from './effective-access-panel'
 
 const { Text } = Typography
 
@@ -25,6 +26,9 @@ export function PlatformAccessControlServiceAccountDetailPage() {
     <AccessControlResourceDetailPage<ServiceAccountDetail>
       kind="serviceaccounts"
       label="ServiceAccount"
+      renderEffectiveAccess={(detail) => (
+        <ServiceAccountEffectiveAccessPanel name={detail.name} namespace={detail.namespace} />
+      )}
       renderOverview={(detail) => (
         <AccessControlMetadataOverview
           detail={detail}

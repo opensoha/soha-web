@@ -7,11 +7,13 @@ export const observabilityAlertQueries = {
     queryOptions({
       queryKey: observabilityKeys.alerts.list(),
       queryFn: observabilityAlertApi.list,
+      refetchInterval: 15_000,
     }),
-  recent: (limit: number) =>
+  recent: (limit: number, clusterId?: string) =>
     queryOptions({
-      queryKey: observabilityKeys.alerts.recent(limit),
-      queryFn: () => observabilityAlertApi.recent(limit),
+      queryKey: observabilityKeys.alerts.recent(limit, clusterId),
+      queryFn: () => observabilityAlertApi.recent(limit, clusterId),
+      refetchInterval: 15_000,
     }),
   detail: (eventId: string) =>
     queryOptions({

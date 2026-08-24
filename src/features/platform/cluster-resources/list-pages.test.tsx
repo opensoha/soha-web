@@ -168,6 +168,7 @@ describe('cluster resource list pages', () => {
     const nodes = await renderPage(<ClusterNodesPage />)
     const namespaces = await renderPage(<ClusterNamespacesPage />)
 
+    expect(namespaces.querySelector('h1')).toBeNull()
     expect(nodes.querySelector('[data-testid="admin-table"]')?.getAttribute('data-count')).toBe('1')
     expect(
       namespaces.querySelector('[data-testid="admin-table"]')?.getAttribute('data-count'),

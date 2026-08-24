@@ -40,6 +40,8 @@ import {
   useDockerPermissions,
 } from '../shared/ui'
 import { formatDateTime } from '@/utils/time'
+import { localeText, useI18n } from '@/i18n'
+import { formatStatusLabel } from '@/i18n/status'
 
 const { Text } = Typography
 
@@ -67,7 +69,7 @@ export function PortsTable({
 }) {
   const [filters, setFilters] = useState<DockerFilterState>({
     page: 1,
-    pageSize: embedded ? 5 : 10,
+    pageSize: embedded ? 5 : 15,
     hostId: fixedHostId,
     projectId: fixedProjectId,
   })
@@ -78,6 +80,7 @@ export function PortsTable({
   const [editing, setEditing] = useState<DockerPortMapping | null>(null)
   const { dockerModuleEnabled, canCreatePorts, canUpdatePorts, canDeletePorts, canViewServices } =
     useDockerPermissions()
+  const { localeCode } = useI18n()
   const { hostOptions, projectOptions, serviceOptions } = useDockerOptions({
     includeServices: canViewServices,
   })
@@ -90,7 +93,11 @@ export function PortsTable({
         ? dockerApi.updatePort(editing.id, buildPortPayload(values))
         : dockerApi.createPort(buildPortPayload(values)),
     onSuccess: () => {
-      message.success(editing ? '端口映射已更新' : '端口映射已创建')
+      message.success(
+        editing
+          ? localeText(localeCode, '端口映射已更新', 'Port mapping updated')
+          : localeText(localeCode, '端口映射已创建', 'Port mapping created'),
+      )
       setDrawerOpen(false)
       setEditing(null)
       form.resetFields()
@@ -100,23 +107,36 @@ export function PortsTable({
   const deleteMutation = useMutation({
     mutationFn: dockerApi.deletePort,
     onSuccess: () => {
-      message.success('端口映射已删除')
+      message.success(localeText(localeCode, '端口映射已删除', 'Port mapping deleted'))
       refreshDocker(queryClient)
     },
   })
-  const page = normalizePage(portsQuery.data, filters.page ?? 1, filters.pageSize ?? 10)
+  const page = normalizePage(
+    portsQuery.data,
+    filters.page ?? 1,
+    filters.pageSize ?? (embedded ? 5 : 15),
+  )
   const columns: ColumnsType<DockerPortMapping> = [
     {
-      title: '名称',
+      title: localeText(localeCode, '名称', 'Name'),
       dataIndex: 'name',
       fixed: 'left',
       width: 180,
       render: (value) => <Text strong>{value}</Text>,
     },
-    { title: '状态', dataIndex: 'status', width: 105, render: statusTag },
-    { title: '映射', width: 220, render: (_value, record) => formatPort(record) },
     {
-      title: '域名',
+      title: localeText(localeCode, '状态', 'Status'),
+      dataIndex: 'status',
+      width: 105,
+      render: (value) => statusTag(value, localeCode),
+    },
+    {
+      title: localeText(localeCode, '映射', 'Mapping'),
+      width: 220,
+      render: (_value, record) => formatPort(record),
+    },
+    {
+      title: localeText(localeCode, '域名', 'Domain'),
       dataIndex: 'domainName',
       width: 220,
       render: (value, record) =>
@@ -130,13 +150,22 @@ export function PortsTable({
         ),
     },
     {
-      title: '暴露范围',
+      title: localeText(localeCode, '暴露范围', 'Exposure'),
       dataIndex: 'exposureScope',
       width: 110,
-      render: (value) => value || 'internal',
+      render: (value) => {
+        const scope = value || 'internal'
+        return scope === 'internal'
+          ? localeText(localeCode, '内部', 'Internal')
+          : scope === 'vpn'
+            ? 'VPN'
+            : scope === 'public'
+              ? localeText(localeCode, '公网', 'Public')
+              : scope
+      },
     },
     {
-      title: '访问地址',
+      title: localeText(localeCode, '访问地址', 'Access URL'),
       width: 250,
       render: (_value, record) => {
         const url = formatAccessURL(record)
@@ -150,13 +179,13 @@ export function PortsTable({
       },
     },
     {
-      title: '主机',
+      title: localeText(localeCode, '主机', 'Host'),
       dataIndex: 'hostId',
       width: 170,
       render: (value) => hostOptions.find((item) => item.value === value)?.label || value,
     },
     {
-      title: '项目/服务',
+      title: localeText(localeCode, '项目/服务', 'Project / Service'),
       width: 190,
       render: (_value, record) =>
         [
@@ -166,10 +195,20 @@ export function PortsTable({
           .filter(Boolean)
           .join(' / ') || '-',
     },
-    { title: '负责人', dataIndex: 'owner', width: 120, render: (value) => value || '-' },
-    { title: '到期', dataIndex: 'expiresAt', width: 155, render: formatDateTime },
     {
-      title: '操作',
+      title: localeText(localeCode, '负责人', 'Owner'),
+      dataIndex: 'owner',
+      width: 120,
+      render: (value) => value || '-',
+    },
+    {
+      title: localeText(localeCode, '到期', 'Expires at'),
+      dataIndex: 'expiresAt',
+      width: 155,
+      render: formatDateTime,
+    },
+    {
+      title: localeText(localeCode, '操作', 'Actions'),
       align: 'center',
       className: 'soha-table-actions-column',
       fixed: 'right',
@@ -179,9 +218,9 @@ export function PortsTable({
           <Space className="soha-row-action-icons">
             {canUpdatePorts ? (
               <ManagementIconButton
-                aria-label="编辑端口映射"
+                aria-label={localeText(localeCode, '编辑端口映射', 'Edit port mapping')}
                 size="small"
-                tooltip="编辑"
+                tooltip={localeText(localeCode, '编辑', 'Edit')}
                 icon={<EditOutlined />}
                 onClick={() => {
                   setEditing(record)
@@ -193,13 +232,13 @@ export function PortsTable({
             ) : null}
             {canDeletePorts ? (
               <Popconfirm
-                title="确认删除端口映射？"
+                title={localeText(localeCode, '确认删除端口映射？', 'Delete this port mapping?')}
                 onConfirm={() => deleteMutation.mutate(record.id)}
               >
                 <ManagementIconButton
-                  aria-label="删除端口映射"
+                  aria-label={localeText(localeCode, '删除端口映射', 'Delete port mapping')}
                   size="small"
-                  tooltip="删除"
+                  tooltip={localeText(localeCode, '删除', 'Delete')}
                   danger
                   icon={<DeleteOutlined />}
                 />
@@ -222,7 +261,7 @@ export function PortsTable({
                   filterForm.resetFields()
                   setFilters({
                     page: 1,
-                    pageSize: filters.pageSize ?? 10,
+                    pageSize: filters.pageSize ?? (embedded ? 5 : 15),
                     hostId: fixedHostId,
                     projectId: fixedProjectId,
                   })
@@ -239,34 +278,55 @@ export function PortsTable({
               }))
             }
           >
-            <ManagementKeywordField placeholder="名称、访问地址或负责人" />
+            <ManagementKeywordField
+              placeholder={localeText(
+                localeCode,
+                '名称、访问地址或负责人',
+                'Name, access URL, or owner',
+              )}
+            />
             {!fixedHostId ? (
-              <ManagementQueryField minWidth={180} width={220} name="hostId" label="主机">
+              <ManagementQueryField
+                minWidth={180}
+                width={220}
+                name="hostId"
+                label={localeText(localeCode, '主机', 'Host')}
+              >
                 <Select
                   allowClear
                   showSearch={{ optionFilterProp: 'label' }}
-                  placeholder="全部主机"
+                  placeholder={localeText(localeCode, '全部主机', 'All hosts')}
                   options={hostOptions}
                 />
               </ManagementQueryField>
             ) : null}
             {!fixedProjectId ? (
-              <ManagementQueryField minWidth={180} width={220} name="projectId" label="项目">
+              <ManagementQueryField
+                minWidth={180}
+                width={220}
+                name="projectId"
+                label={localeText(localeCode, '项目', 'Project')}
+              >
                 <Select
                   allowClear
                   showSearch={{ optionFilterProp: 'label' }}
-                  placeholder="全部项目"
+                  placeholder={localeText(localeCode, '全部项目', 'All projects')}
                   options={projectOptions}
                 />
               </ManagementQueryField>
             ) : null}
-            <ManagementQueryField minWidth={132} width={150} name="status" label="状态">
+            <ManagementQueryField
+              minWidth={132}
+              width={150}
+              name="status"
+              label={localeText(localeCode, '状态', 'Status')}
+            >
               <Select
                 allowClear
-                placeholder="全部"
+                placeholder={localeText(localeCode, '全部', 'All')}
                 options={['active', 'reserved', 'released', 'expired'].map((item) => ({
                   value: item,
-                  label: item,
+                  label: formatStatusLabel(item, localeCode),
                 }))}
               />
             </ManagementQueryField>
@@ -302,7 +362,7 @@ export function PortsTable({
                   setDrawerOpen(true)
                 }}
               >
-                新增映射
+                {localeText(localeCode, '新增映射', 'Add mapping')}
               </Button>
             </>
           ) : null
@@ -314,7 +374,11 @@ export function PortsTable({
         onRefresh={() => portsQuery.refetch()}
       />
       <StepFormModal
-        title={editing ? '编辑端口映射' : '新增端口映射'}
+        title={
+          editing
+            ? localeText(localeCode, '编辑端口映射', 'Edit port mapping')
+            : localeText(localeCode, '新增端口映射', 'Add port mapping')
+        }
         current={currentStep}
         form={form}
         loading={saveMutation.isPending}
@@ -324,32 +388,44 @@ export function PortsTable({
         onFinish={(values) => saveMutation.mutate(values)}
         steps={[
           {
-            title: '端口配置',
+            title: localeText(localeCode, '端口配置', 'Port configuration'),
             fieldNames: ['name', 'hostId', 'hostPort', 'containerPort'],
             children: (
               <>
-                <Form.Item name="name" label="名称" rules={[{ required: true }]}>
+                <Form.Item
+                  name="name"
+                  label={localeText(localeCode, '名称', 'Name')}
+                  rules={[{ required: true }]}
+                >
                   <Input />
                 </Form.Item>
                 <div className="grid gap-3 md:grid-cols-2">
                   <Form.Item
                     name="hostId"
-                    label="Docker 主机"
+                    label={localeText(localeCode, 'Docker 主机', 'Docker host')}
                     rules={[{ required: true }]}
                     hidden={Boolean(fixedHostId)}
                   >
                     <Select showSearch={{ optionFilterProp: 'label' }} options={hostOptions} />
                   </Form.Item>
-                  <Form.Item name="hostIp" label="监听 IP">
+                  <Form.Item name="hostIp" label={localeText(localeCode, '监听 IP', 'Listen IP')}>
                     <Input placeholder="0.0.0.0" />
                   </Form.Item>
-                  <Form.Item name="hostPort" label="主机端口" rules={[{ required: true }]}>
+                  <Form.Item
+                    name="hostPort"
+                    label={localeText(localeCode, '主机端口', 'Host port')}
+                    rules={[{ required: true }]}
+                  >
                     <InputNumber min={1} max={65535} className="w-full" />
                   </Form.Item>
-                  <Form.Item name="containerPort" label="容器端口" rules={[{ required: true }]}>
+                  <Form.Item
+                    name="containerPort"
+                    label={localeText(localeCode, '容器端口', 'Container port')}
+                    rules={[{ required: true }]}
+                  >
                     <InputNumber min={1} max={65535} className="w-full" />
                   </Form.Item>
-                  <Form.Item name="protocol" label="协议">
+                  <Form.Item name="protocol" label={localeText(localeCode, '协议', 'Protocol')}>
                     <Select
                       options={[
                         { value: 'tcp', label: 'tcp' },
@@ -357,33 +433,45 @@ export function PortsTable({
                       ]}
                     />
                   </Form.Item>
-                  <Form.Item name="exposureScope" label="暴露范围">
+                  <Form.Item
+                    name="exposureScope"
+                    label={localeText(localeCode, '暴露范围', 'Exposure')}
+                  >
                     <Select
                       options={['internal', 'vpn', 'public'].map((item) => ({
                         value: item,
-                        label: item,
+                        label:
+                          item === 'internal'
+                            ? localeText(localeCode, '内部', 'Internal')
+                            : item === 'vpn'
+                              ? 'VPN'
+                              : localeText(localeCode, '公网', 'Public'),
                       }))}
                     />
                   </Form.Item>
-                  <Form.Item name="status" label="状态">
+                  <Form.Item name="status" label={localeText(localeCode, '状态', 'Status')}>
                     <Select
                       options={['active', 'reserved', 'released', 'expired'].map((item) => ({
                         value: item,
-                        label: item,
+                        label: formatStatusLabel(item, localeCode),
                       }))}
                     />
                   </Form.Item>
-                  <Form.Item name="owner" label="负责人">
+                  <Form.Item name="owner" label={localeText(localeCode, '负责人', 'Owner')}>
                     <Input />
                   </Form.Item>
-                  <Form.Item name="projectId" label="项目" hidden={Boolean(fixedProjectId)}>
+                  <Form.Item
+                    name="projectId"
+                    label={localeText(localeCode, '项目', 'Project')}
+                    hidden={Boolean(fixedProjectId)}
+                  >
                     <Select
                       allowClear
                       showSearch={{ optionFilterProp: 'label' }}
                       options={projectOptions}
                     />
                   </Form.Item>
-                  <Form.Item name="serviceId" label="服务">
+                  <Form.Item name="serviceId" label={localeText(localeCode, '服务', 'Service')}>
                     <Select
                       allowClear
                       showSearch={{ optionFilterProp: 'label' }}
@@ -395,14 +483,20 @@ export function PortsTable({
             ),
           },
           {
-            title: '访问配置',
+            title: localeText(localeCode, '访问配置', 'Access configuration'),
             children: (
               <>
                 <div className="grid gap-3 md:grid-cols-[1fr_160px_120px]">
-                  <Form.Item name="domainName" label="访问域名">
+                  <Form.Item
+                    name="domainName"
+                    label={localeText(localeCode, '访问域名', 'Domain name')}
+                  >
                     <Input placeholder="preview.internal.example.com" />
                   </Form.Item>
-                  <Form.Item name="domainScheme" label="域名协议">
+                  <Form.Item
+                    name="domainScheme"
+                    label={localeText(localeCode, '域名协议', 'Scheme')}
+                  >
                     <Select
                       options={[
                         { value: 'http', label: 'http' },
@@ -414,17 +508,23 @@ export function PortsTable({
                     <Switch />
                   </Form.Item>
                 </div>
-                <Form.Item name="accessUrl" label="访问地址">
+                <Form.Item
+                  name="accessUrl"
+                  label={localeText(localeCode, '访问地址', 'Access URL')}
+                >
                   <Input placeholder="http://10.0.0.10:8080" />
                 </Form.Item>
-                <Form.Item name="expiresAt" label="到期时间">
+                <Form.Item
+                  name="expiresAt"
+                  label={localeText(localeCode, '到期时间', 'Expires at')}
+                >
                   <Input placeholder="2026-06-01T10:00:00Z" />
                 </Form.Item>
               </>
             ),
           },
         ]}
-        submitText="保存"
+        submitText={localeText(localeCode, '保存', 'Save')}
       />
     </>
   )

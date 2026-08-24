@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { parse } from 'yaml'
 import { IngressDetailPage } from '../ingresses/detail-page'
 import { NetworkIngressesPage } from '../ingresses/list-page'
 import { ServiceDetailPage } from '../services/detail-page'
@@ -25,7 +26,12 @@ const testState = vi.hoisted(() => ({
 const apiMocks = vi.hoisted(() => ({
   delete: vi.fn(),
   get: vi.fn((path: string) => Promise.resolve({ data: testState.responses[path] ?? [] })),
-  put: vi.fn((path: string) => Promise.resolve({ data: testState.responses[path] ?? {} })),
+  post: vi.fn((path: string, _body?: unknown) =>
+    Promise.resolve({ data: testState.responses[path] ?? {} }),
+  ),
+  put: vi.fn((path: string, _body?: { content: string }) =>
+    Promise.resolve({ data: testState.responses[path] ?? {} }),
+  ),
 }))
 
 vi.mock('@/stores/platform-scope-store', () => ({
@@ -57,17 +63,28 @@ vi.mock('@/components/admin-table', () => ({
     dataSource,
     empty,
     headerExtra,
+    localSorting,
+    pageSize,
     paginationSummary,
     title,
+    viewportScroll,
   }: {
     columns: Array<Record<string, any>>
     dataSource: Array<Record<string, any>>
     empty?: ReactNode
     headerExtra?: ReactNode
+    localSorting?: boolean
+    pageSize?: number
     paginationSummary?: ReactNode
     title?: ReactNode
+    viewportScroll?: boolean
   }) => (
-    <div data-testid="admin-table">
+    <div
+      data-page-size={pageSize}
+      data-testid="admin-table"
+      data-local-sorting={localSorting}
+      data-viewport-scroll={viewportScroll}
+    >
       {title ? <div data-testid="table-title">{title}</div> : null}
       {headerExtra ? <div data-testid="header-extra">{headerExtra}</div> : null}
       {paginationSummary ? <div data-testid="pagination-summary">{paginationSummary}</div> : null}
@@ -96,6 +113,8 @@ let containers: HTMLDivElement[] = []
 let roots: Array<ReturnType<typeof createRoot>> = []
 
 function installDomMocks() {
+  const getComputedStyle = window.getComputedStyle.bind(window)
+
   class ResizeObserverMock {
     observe() {}
     unobserve() {}
@@ -115,6 +134,10 @@ function installDomMocks() {
       dispatchEvent: vi.fn(),
     })),
   })
+  Object.defineProperty(window, 'getComputedStyle', {
+    writable: true,
+    value: (element: Element) => getComputedStyle(element),
+  })
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   vi.stubGlobal('ResizeObserver', ResizeObserverMock)
 }
@@ -125,7 +148,12 @@ async function flush() {
   await new Promise((resolve) => window.setTimeout(resolve, 0))
 }
 
-async function renderPage(node: ReactNode, route: string, routePath: string) {
+async function renderPage(
+  node: ReactNode,
+  route: string,
+  routePath: string,
+  extraRoutes?: ReactNode,
+) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   containers.push(container)
@@ -137,11 +165,10 @@ async function renderPage(node: ReactNode, route: string, routePath: string) {
     root.render(
       <AntdApp>
         <QueryClientProvider client={queryClient}>
-          <MemoryRouter
-            initialEntries={[route]}
-          >
+          <MemoryRouter initialEntries={[route]}>
             <Routes>
               <Route path={routePath} element={node} />
+              {extraRoutes}
             </Routes>
           </MemoryRouter>
         </QueryClientProvider>
@@ -189,7 +216,9 @@ describe('network core pages', () => {
     containers = []
   })
 
-  it('preserves Service list search, summary, and API path', async () => {
+  it('preserves Service list search and API path without overriding shared pagination', async () => {
+    const yamlPath = '/clusters/cluster-a/network/services/core-dns/yaml?namespace=team-a'
+    const planPath = '/clusters/cluster-a/resources/update-plan'
     testState.responses['/clusters/cluster-a/network/services?namespace=team-a'] = [
       {
         name: 'core-dns',
@@ -198,7 +227,7 @@ describe('network core pages', () => {
         clusterIp: '10.43.0.10',
         ports: ['53/UDP'],
         ageSeconds: 60,
-        allowedActions: ['view'],
+        allowedActions: ['view', 'update'],
       },
       {
         name: 'web',
@@ -206,10 +235,50 @@ describe('network core pages', () => {
         type: 'NodePort',
         clusterIp: '10.43.1.20',
         ports: ['80/TCP'],
+        portMappings: [
+          {
+            name: 'http',
+            protocol: 'TCP',
+            targetPort: '8080',
+            port: 80,
+            nodePort: 30001,
+          },
+        ],
         ageSeconds: 120,
         allowedActions: ['view'],
       },
     ]
+    testState.responses[yamlPath] = {
+      kind: 'Service',
+      name: 'core-dns',
+      namespace: 'team-a',
+      content: JSON.stringify({
+        apiVersion: 'v1',
+        kind: 'Service',
+        metadata: {
+          labels: { 'k8s-app': 'kube-dns' },
+          name: 'core-dns',
+          namespace: 'team-a',
+          resourceVersion: '12',
+        },
+        spec: {
+          clusterIP: '10.43.0.10',
+          clusterIPs: ['10.43.0.10'],
+          ports: [{ name: 'dns', port: 53, protocol: 'UDP', targetPort: 'dns' }],
+          selector: { 'k8s-app': 'kube-dns' },
+          type: 'ClusterIP',
+        },
+      }),
+    }
+    testState.responses[planPath] = {
+      capability: 'k8s.resources.update',
+      target: 'cluster-a/team-a/Service/core-dns',
+      ready: true,
+      riskLevel: 'mutate',
+      requiresApproval: false,
+      changes: [{ action: 'update', resource: 'Service/core-dns', summary: 'dry-run passed' }],
+      warnings: [],
+    }
     const container = await renderPage(
       <NetworkServicesPage />,
       '/network/services',
@@ -219,9 +288,23 @@ describe('network core pages', () => {
     expect(apiMocks.get).toHaveBeenCalledWith(
       '/clusters/cluster-a/network/services?namespace=team-a',
     )
-    expect(container.querySelector('[data-testid="pagination-summary"]')?.textContent).toContain(
-      '当前 2 / 2 条',
-    )
+    expect(
+      container.querySelector('[data-testid="admin-table"]')?.getAttribute('data-page-size'),
+    ).toBe('15')
+    expect(
+      container.querySelector('[data-testid="admin-table"]')?.getAttribute('data-local-sorting'),
+    ).toBe('true')
+    expect(
+      container.querySelector('[data-testid="admin-table"]')?.getAttribute('data-viewport-scroll'),
+    ).toBe('true')
+    expect(container.querySelector('[data-testid="pagination-summary"]')).toBeNull()
+    expect(container.textContent).toContain('NodePort: 30001')
+    expect(container.textContent).toContain('Port: http · 80/TCP')
+    expect(container.textContent).toContain('TargetPort: 8080')
+    expect(container.querySelectorAll('.soha-service-port-arrow')).toHaveLength(2)
+    expect(container.querySelectorAll('.soha-metadata-tag')).toHaveLength(5)
+    expect(container.querySelectorAll('.ant-tag-gold')).toHaveLength(2)
+    expect(container.querySelectorAll('.ant-tag-cyan')).toHaveLength(1)
     const input = container.querySelector(
       'input[placeholder="搜索 Service / namespace / type / port"]',
     ) as HTMLInputElement
@@ -232,6 +315,68 @@ describe('network core pages', () => {
       await flush()
     })
     expect(container.querySelector('[data-testid="row-count"]')?.textContent).toBe('1')
+    const editButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="编辑 core-dns"]',
+    )
+    expect(editButton).not.toBeNull()
+    await act(async () => {
+      editButton?.click()
+      await flush()
+    })
+    await act(flush)
+    await act(flush)
+    expect(apiMocks.get).toHaveBeenCalledWith(yamlPath)
+    await act(async () => {
+      await vi.waitFor(() => expect(document.querySelector('#name')).not.toBeNull())
+    })
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')
+    expect(dialog?.textContent).toContain('编辑 Service · core-dns')
+    const nameInput = Array.from(dialog?.querySelectorAll<HTMLInputElement>('input') ?? []).find(
+      (input) => input.value === 'core-dns',
+    )
+    expect(nameInput?.disabled).toBe(true)
+
+    const nextButton = Array.from(dialog?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(
+      (button) => button.textContent?.includes('下一步'),
+    )
+    await act(async () => {
+      nextButton?.click()
+      await flush()
+    })
+    expect(dialog?.querySelector<HTMLInputElement>('input[aria-label="容器端口"]')?.value).toBe(
+      'dns',
+    )
+
+    const saveButton = Array.from(dialog?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(
+      (button) => button.textContent?.includes('保存更改'),
+    )
+    await act(async () => {
+      saveButton?.click()
+      await flush()
+    })
+    await act(flush)
+    expect(apiMocks.post).toHaveBeenCalledWith(
+      planPath,
+      expect.objectContaining({ kind: 'Service', name: 'core-dns' }),
+    )
+    const confirmButton = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.textContent?.includes('确认更新'),
+    )
+    await act(async () => {
+      confirmButton?.click()
+      await flush()
+    })
+    await act(flush)
+    const [, request] = apiMocks.put.mock.calls[apiMocks.put.mock.calls.length - 1] ?? []
+    expect(apiMocks.put).toHaveBeenCalledWith(yamlPath, expect.any(Object))
+    expect(parse(request?.content ?? '')).toMatchObject({
+      metadata: { name: 'core-dns', namespace: 'team-a', resourceVersion: '12' },
+      spec: {
+        clusterIP: '10.43.0.10',
+        clusterIPs: ['10.43.0.10'],
+        ports: [{ name: 'dns', port: 53, protocol: 'UDP', targetPort: 'dns' }],
+      },
+    })
   })
 
   it('renders Ingress list from the unchanged endpoint', async () => {
@@ -271,6 +416,14 @@ describe('network core pages', () => {
       type: 'ClusterIP',
       clusterIp: '10.43.0.20',
       ports: ['80/TCP'],
+      portMappings: [
+        {
+          name: 'http',
+          protocol: 'TCP',
+          targetPort: '8080',
+          port: 80,
+        },
+      ],
       selector: { app: 'api' },
       ageSeconds: 60,
       backendPods: [
@@ -303,6 +456,8 @@ describe('network core pages', () => {
 
     expect(requested()).toEqual([detailPath])
     expect(container.textContent).toContain('api-1')
+    expect(container.textContent).toContain('Port: http · 80/TCP')
+    expect(container.textContent).toContain('TargetPort: 8080')
     expect(requested()).not.toContain(metricsPath)
     expect(requested()).not.toContain(eventsPath)
     expect(requested()).not.toContain(yamlPath)

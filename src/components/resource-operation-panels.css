@@ -166,8 +166,8 @@
 
 .soha-yaml-editor-shell {
   flex: 1 1 auto;
-  min-height: 540px;
-  height: clamp(540px, 64vh, 840px);
+  min-height: clamp(320px, calc(100dvh - 220px), 540px);
+  height: clamp(360px, 64vh, 840px);
   border-radius: var(--soha-radius);
   overflow: hidden;
   border: 1px solid var(--soha-border-color);
@@ -178,8 +178,8 @@
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0;
   flex: 1 1 auto;
-  min-height: 540px;
-  height: clamp(540px, 64vh, 840px);
+  min-height: clamp(320px, calc(100dvh - 220px), 540px);
+  height: clamp(360px, 64vh, 840px);
   border: 1px solid var(--soha-border-color);
   border-radius: var(--soha-radius);
   overflow: hidden;

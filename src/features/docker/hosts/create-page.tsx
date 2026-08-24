@@ -17,6 +17,7 @@ import { StepFormModal } from '@/components/step-form-modal'
 import type { StepFormStep } from '@/components/step-form'
 import { virtualizationQueries } from '@/features/virtualization'
 import { formatDateTime } from '@/utils/time'
+import { localeText, useI18n } from '@/i18n'
 import { dockerApi } from '../docker-api'
 import { dockerQueries } from '../queries'
 import type { DockerHost, DockerHostAgentInstallation, DockerHostInput } from '../docker-types'
@@ -78,6 +79,7 @@ export function RuntimeHostStepModal({
   const connectionMode = Form.useWatch('connectionMode', form) ?? (editing ? 'manual' : 'quick')
   const queryClient = useQueryClient()
   const { message } = App.useApp()
+  const { localeCode } = useI18n()
   const virtualMachinesQuery = useQuery(virtualizationQueries.vms({ page: 1, pageSize: 500 }, open))
   const virtualMachines = Array.isArray(virtualMachinesQuery.data)
     ? virtualMachinesQuery.data
@@ -104,14 +106,27 @@ export function RuntimeHostStepModal({
               cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
             throw Object.assign(
               new Error(
-                `${reason}；临时主机记录自动清理失败，请在主机列表中删除 ${host.name || host.id}。清理失败原因：${cleanupDetail}`,
+                localeText(
+                  localeCode,
+                  `${reason}；临时主机记录自动清理失败，请在主机列表中删除 ${host.name || host.id}。清理失败原因：${cleanupDetail}`,
+                  `${reason}; failed to clean up the temporary host. Delete ${host.name || host.id} from the host list. Cleanup error: ${cleanupDetail}`,
+                ),
               ),
               { cause: cleanupError },
             )
           }
-          throw Object.assign(new Error(`${reason}；临时主机记录已自动清理。`), {
-            cause: error,
-          })
+          throw Object.assign(
+            new Error(
+              localeText(
+                localeCode,
+                `${reason}；临时主机记录已自动清理。`,
+                `${reason}; the temporary host was removed.`,
+              ),
+            ),
+            {
+              cause: error,
+            },
+          )
         }
       }
       return {
@@ -124,9 +139,13 @@ export function RuntimeHostStepModal({
       onSuccess?.()
       if (result.installation) {
         setInstallation(result.installation)
-        message.success('安装命令已生成')
+        message.success(localeText(localeCode, '安装命令已生成', 'Install command generated'))
       } else {
-        message.success(editing ? '运行时主机已更新' : '运行时主机已接入')
+        message.success(
+          editing
+            ? localeText(localeCode, '运行时主机已更新', 'Runtime host updated')
+            : localeText(localeCode, '运行时主机已接入', 'Runtime host connected'),
+        )
       }
       form.resetFields()
       setCurrent(0)
@@ -136,7 +155,11 @@ export function RuntimeHostStepModal({
       void message.error(
         error.message.includes('临时主机记录')
           ? error.message
-          : `运行时主机接入失败：${error.message}`,
+          : localeText(
+              localeCode,
+              `运行时主机接入失败：${error.message}`,
+              `Failed to connect runtime host: ${error.message}`,
+            ),
       ),
   })
 
@@ -166,7 +189,7 @@ export function RuntimeHostStepModal({
 
   const steps: StepFormStep[] = [
     {
-      title: 'Agent 连接',
+      title: localeText(localeCode, 'Agent 连接', 'Agent connection'),
       fieldNames:
         connectionMode === 'manual'
           ? ['connectionMode', 'name', 'endpoint']
@@ -174,27 +197,61 @@ export function RuntimeHostStepModal({
       children: (
         <>
           {!editing ? (
-            <Form.Item name="connectionMode" label="接入方式" rules={[{ required: true }]}>
+            <Form.Item
+              name="connectionMode"
+              label={localeText(localeCode, '接入方式', 'Connection mode')}
+              rules={[{ required: true }]}
+            >
               <Segmented
                 block
                 options={[
-                  { label: '快速安装 Agent', value: 'quick' },
-                  { label: '已有 Agent', value: 'manual' },
+                  {
+                    label: localeText(localeCode, '快速安装 Agent', 'Quick Agent install'),
+                    value: 'quick',
+                  },
+                  {
+                    label: localeText(localeCode, '已有 Agent', 'Existing Agent'),
+                    value: 'manual',
+                  },
                 ]}
               />
             </Form.Item>
           ) : null}
-          <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
+          <Form.Item
+            name="name"
+            label={localeText(localeCode, '名称', 'Name')}
+            rules={[
+              { required: true, message: localeText(localeCode, '请输入名称', 'Enter a name') },
+            ]}
+          >
             <Input />
           </Form.Item>
           {connectionMode === 'manual' ? (
             <Form.Item
               name="endpoint"
               label="Agent Endpoint"
-              tooltip="Soha Server 可访问的 Soha Agent HTTP 地址。其余运行时信息会在 Agent 上报后自动更新。"
+              tooltip={localeText(
+                localeCode,
+                'Soha Server 可访问的 Soha Agent HTTP 地址。其余运行时信息会在 Agent 上报后自动更新。',
+                'The Soha Agent HTTP address reachable by Soha Server. Other runtime details update after the Agent reports.',
+              )}
               rules={[
-                { required: true, message: '请输入 Agent Endpoint' },
-                { type: 'url', message: '请输入有效的 HTTP 或 HTTPS 地址' },
+                {
+                  required: true,
+                  message: localeText(
+                    localeCode,
+                    '请输入 Agent Endpoint',
+                    'Enter the Agent endpoint',
+                  ),
+                },
+                {
+                  type: 'url',
+                  message: localeText(
+                    localeCode,
+                    '请输入有效的 HTTP 或 HTTPS 地址',
+                    'Enter a valid HTTP or HTTPS URL',
+                  ),
+                },
               ]}
             >
               <Input placeholder="http://10.0.0.10:18080" />
@@ -203,33 +260,45 @@ export function RuntimeHostStepModal({
             <Alert
               showIcon
               type="info"
-              title="保存后生成限时安装命令"
-              description="Agent 上报后会自动填写 Endpoint、Agent ID、IP、架构以及 Docker/Compose 版本。"
+              title={localeText(
+                localeCode,
+                '保存后生成限时安装命令',
+                'Generate a time-limited install command',
+              )}
+              description={localeText(
+                localeCode,
+                'Agent 上报后会自动填写 Endpoint、Agent ID、IP、架构以及 Docker/Compose 版本。',
+                'Endpoint, Agent ID, IP, architecture, and Docker/Compose versions update after the Agent reports.',
+              )}
             />
           )}
         </>
       ),
     },
     {
-      title: '资源配置',
+      title: localeText(localeCode, '资源配置', 'Resources'),
       children: (
         <>
           <div className="soha-runtime-host-ownership-grid">
-            <Form.Item name="environment" label="环境">
+            <Form.Item name="environment" label={localeText(localeCode, '环境', 'Environment')}>
               <Input />
             </Form.Item>
-            <Form.Item name="owner" label="负责人">
+            <Form.Item name="owner" label={localeText(localeCode, '负责人', 'Owner')}>
               <Input />
             </Form.Item>
-            <Form.Item name="team" label="团队">
+            <Form.Item name="team" label={localeText(localeCode, '团队', 'Team')}>
               <Input />
             </Form.Item>
           </div>
           <Form.Item
             className="soha-runtime-host-vm-field"
             name="vmId"
-            label="关联虚拟机"
-            tooltip="关联到 Soha 已管理的虚拟机，用于从运行时主机返回虚拟机资源。裸机可不选择。"
+            label={localeText(localeCode, '关联虚拟机', 'Virtual machine')}
+            tooltip={localeText(
+              localeCode,
+              '关联到 Soha 已管理的虚拟机，用于从运行时主机返回虚拟机资源。裸机可不选择。',
+              'Link a Soha-managed virtual machine for navigation from this host. Leave empty for bare metal.',
+            )}
           >
             <Select
               allowClear
@@ -240,7 +309,11 @@ export function RuntimeHostStepModal({
                   label: [vm.name, vm.connectionName ?? vm.provider].filter(Boolean).join(' · '),
                   value: vm.id,
                 }))}
-              placeholder="选择 Soha 已管理的虚拟机"
+              placeholder={localeText(
+                localeCode,
+                '选择 Soha 已管理的虚拟机',
+                'Select a Soha-managed virtual machine',
+              )}
               showSearch={{ optionFilterProp: 'label' }}
               onChange={(vmId) => {
                 const vm = virtualMachines.find((item) => item.id === vmId)
@@ -258,19 +331,25 @@ export function RuntimeHostStepModal({
             <Input />
           </Form.Item>
           <div className="soha-runtime-host-capacity-grid">
-            <Form.Item name="cpuCoreCount" label="CPU 核数">
+            <Form.Item name="cpuCoreCount" label={localeText(localeCode, 'CPU 核数', 'CPU cores')}>
               <InputNumber min={1} precision={0} className="w-full" />
             </Form.Item>
-            <Form.Item name="memoryGiB" label="内存 GiB">
+            <Form.Item name="memoryGiB" label={localeText(localeCode, '内存 GiB', 'Memory GiB')}>
               <InputNumber min={1} precision={0} className="w-full" />
             </Form.Item>
-            <Form.Item name="diskGiB" label="磁盘 GiB">
+            <Form.Item name="diskGiB" label={localeText(localeCode, '磁盘 GiB', 'Disk GiB')}>
               <InputNumber min={1} precision={0} className="w-full" />
             </Form.Item>
-            <Form.Item name="availablePortStart" label="端口池起始">
+            <Form.Item
+              name="availablePortStart"
+              label={localeText(localeCode, '端口池起始', 'Port pool start')}
+            >
               <InputNumber min={1} max={65535} className="w-full" />
             </Form.Item>
-            <Form.Item name="availablePortEnd" label="端口池结束">
+            <Form.Item
+              name="availablePortEnd"
+              label={localeText(localeCode, '端口池结束', 'Port pool end')}
+            >
               <InputNumber min={1} max={65535} className="w-full" />
             </Form.Item>
           </div>
@@ -279,10 +358,14 @@ export function RuntimeHostStepModal({
             size="small"
             column={{ xs: 1, sm: 2, md: 2, lg: 2, xl: 2, xxl: 2 }}
           >
-            <Descriptions.Item label="接入方式">
-              {connectionMode === 'manual' ? '已有 Agent' : '快速安装 Agent'}
+            <Descriptions.Item label={localeText(localeCode, '接入方式', 'Connection mode')}>
+              {connectionMode === 'manual'
+                ? localeText(localeCode, '已有 Agent', 'Existing Agent')
+                : localeText(localeCode, '快速安装 Agent', 'Quick Agent install')}
             </Descriptions.Item>
-            <Descriptions.Item label="Provider">Docker</Descriptions.Item>
+            <Descriptions.Item label={localeText(localeCode, '提供方', 'Provider')}>
+              Docker
+            </Descriptions.Item>
           </Descriptions>
         </>
       ),
@@ -302,17 +385,29 @@ export function RuntimeHostStepModal({
         open={open}
         steps={steps}
         submitText={
-          editing ? '保存主机' : connectionMode === 'manual' ? '接入主机' : '生成安装命令'
+          editing
+            ? localeText(localeCode, '保存主机', 'Save host')
+            : connectionMode === 'manual'
+              ? localeText(localeCode, '接入主机', 'Connect host')
+              : localeText(localeCode, '生成安装命令', 'Generate install command')
         }
-        title={editing ? '编辑运行时主机' : '接入运行时主机'}
+        title={
+          editing
+            ? localeText(localeCode, '编辑运行时主机', 'Edit runtime host')
+            : localeText(localeCode, '接入运行时主机', 'Connect runtime host')
+        }
         width={680}
       />
       <Modal
         destroyOnHidden
-        footer={<Button onClick={() => setInstallation(null)}>关闭</Button>}
+        footer={
+          <Button onClick={() => setInstallation(null)}>
+            {localeText(localeCode, '关闭', 'Close')}
+          </Button>
+        }
         mask={{ closable: false }}
         open={Boolean(installation)}
-        title="快速安装 Agent"
+        title={localeText(localeCode, '快速安装 Agent', 'Quick Agent install')}
         width={680}
         onCancel={() => setInstallation(null)}
       >
@@ -320,30 +415,51 @@ export function RuntimeHostStepModal({
           <Alert
             showIcon
             type={agentReported ? 'success' : 'info'}
-            title={agentReported ? 'Agent 已上报' : '等待 Agent 上报'}
+            title={
+              agentReported
+                ? localeText(localeCode, 'Agent 已上报', 'Agent reported')
+                : localeText(localeCode, '等待 Agent 上报', 'Waiting for Agent')
+            }
             description={
               agentReported
-                ? '运行时主机信息已自动更新。'
-                : '安装票据有效期内，在目标 Linux 主机执行下列命令。'
+                ? localeText(
+                    localeCode,
+                    '运行时主机信息已自动更新。',
+                    'Runtime host details have been updated.',
+                  )
+                : localeText(
+                    localeCode,
+                    '安装票据有效期内，在目标 Linux 主机执行下列命令。',
+                    'Run this command on the target Linux host before the ticket expires.',
+                  )
             }
           />
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-3">
-              <Typography.Text strong>安装命令</Typography.Text>
+              <Typography.Text strong>
+                {localeText(localeCode, '安装命令', 'Install command')}
+              </Typography.Text>
               <Typography.Text
-                copyable={{ text: installation?.command ?? '', tooltips: ['复制命令', '已复制'] }}
+                copyable={{
+                  text: installation?.command ?? '',
+                  tooltips: [
+                    localeText(localeCode, '复制命令', 'Copy command'),
+                    localeText(localeCode, '已复制', 'Copied'),
+                  ],
+                }}
               >
-                复制
+                {localeText(localeCode, '复制', 'Copy')}
               </Typography.Text>
             </div>
             <Input.TextArea
-              aria-label="Agent 安装命令"
+              aria-label={localeText(localeCode, 'Agent 安装命令', 'Agent install command')}
               autoSize={{ minRows: 3, maxRows: 6 }}
               readOnly
               value={installation?.command ?? ''}
             />
             <Typography.Text type="secondary">
-              有效期至 {formatDateTime(installation?.expiresAt)}
+              {localeText(localeCode, '有效期至', 'Expires at')}{' '}
+              {formatDateTime(installation?.expiresAt)}
             </Typography.Text>
           </div>
           {agentReported ? (
@@ -354,20 +470,24 @@ export function RuntimeHostStepModal({
               items={[
                 { key: 'agentId', label: 'Agent ID', children: hostQuery.data?.agentId || '-' },
                 { key: 'endpoint', label: 'Endpoint', children: hostQuery.data?.endpoint || '-' },
-                { key: 'ipAddress', label: 'IP 地址', children: hostQuery.data?.ipAddress || '-' },
+                {
+                  key: 'ipAddress',
+                  label: localeText(localeCode, 'IP 地址', 'IP address'),
+                  children: hostQuery.data?.ipAddress || '-',
+                },
                 {
                   key: 'architecture',
-                  label: '架构',
+                  label: localeText(localeCode, '架构', 'Architecture'),
                   children: hostQuery.data?.architecture || '-',
                 },
                 {
                   key: 'dockerVersion',
-                  label: 'Docker 版本',
+                  label: localeText(localeCode, 'Docker 版本', 'Docker version'),
                   children: hostQuery.data?.dockerVersion || '-',
                 },
                 {
                   key: 'composeVersion',
-                  label: 'Compose 版本',
+                  label: localeText(localeCode, 'Compose 版本', 'Compose version'),
                   children: hostQuery.data?.composeVersion || '-',
                 },
               ]}

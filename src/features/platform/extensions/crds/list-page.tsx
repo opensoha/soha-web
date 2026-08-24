@@ -4,6 +4,7 @@ import { RightOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import {
   ManagementDensityButton,
   ManagementRefreshButton,
@@ -165,16 +166,11 @@ export function CRDPage() {
         dataSource={clusterId ? filteredApiGroups : []}
         rowKey="group"
         loading={catalogQuery.isLoading}
-        paginationSummary={
-          <Text className="soha-workload-table-summary" type="secondary">
-            {localeCode === 'zh_CN'
-              ? `当前 ${filteredApiGroups.length} / ${apiGroups.length} 条`
-              : `${filteredApiGroups.length} / ${apiGroups.length} items`}
-          </Text>
-        }
-        pageSize={10}
+        localSorting
+        pageSize={K8S_TABLE_PAGE_SIZE}
         tableSize={tableSize}
         scroll={{ x: 'max-content' }}
+        viewportScroll
         onRow={(record: CRDApiGroupSummary) => ({
           onClick: () => openGroup(record.group),
           style: { cursor: 'pointer' },

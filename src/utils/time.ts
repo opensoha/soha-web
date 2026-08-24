@@ -9,6 +9,7 @@ export function formatDateTime(value?: string | null) {
 
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
+  if (date.getUTCFullYear() <= 1) return '-'
 
   return new Intl.DateTimeFormat(getLocaleCode(), {
     year: 'numeric',

@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const apiMocks = vi.hoisted(() => ({ getEnvelope: vi.fn(), post: vi.fn() }))
+const apiMocks = vi.hoisted(() => ({
+  getEnvelope: vi.fn(),
+  post: vi.fn(),
+  postWithHeaders: vi.fn(),
+}))
 
 vi.mock('@/services/api-client', () => ({ api: apiMocks }))
 
@@ -10,6 +14,7 @@ describe('compute api', () => {
   beforeEach(() => {
     apiMocks.getEnvelope.mockReset()
     apiMocks.post.mockReset()
+    apiMocks.postWithHeaders.mockReset()
   })
 
   it('uses canonical contract endpoints and omits empty filters', async () => {
@@ -22,18 +27,20 @@ describe('compute api', () => {
       category: 'operation',
       resourceKind: 'project',
       resourceId: 'project-1',
+      sortBy: 'kind',
+      sortOrder: 'asc',
     })
 
     expect(apiMocks.getEnvelope).toHaveBeenNthCalledWith(1, '/compute/overview')
     expect(apiMocks.getEnvelope).toHaveBeenNthCalledWith(
       2,
-      '/compute/tasks?domain=container_runtime&status=failed&category=operation&resourceKind=project&resourceId=project-1',
+      '/compute/tasks?domain=container_runtime&status=failed&category=operation&resourceKind=project&resourceId=project-1&sortBy=kind&sortOrder=asc',
     )
   })
 
   it('uses the unified task detail, log, cancel, and retry endpoints', async () => {
     apiMocks.getEnvelope.mockResolvedValue({ data: {} })
-    apiMocks.post.mockResolvedValue({ data: {} })
+    apiMocks.postWithHeaders.mockResolvedValue({ data: {} })
 
     await computeApi.task('virtualization', 'task/one')
     await computeApi.taskLogs('virtualization', 'task/one')
@@ -48,13 +55,52 @@ describe('compute api', () => {
       2,
       '/compute/tasks/virtualization/task%2Fone/logs',
     )
-    expect(apiMocks.post).toHaveBeenNthCalledWith(
+    expect(apiMocks.postWithHeaders).toHaveBeenNthCalledWith(
       1,
       '/compute/tasks/virtualization/task%2Fone/cancel',
+      {},
+      expect.objectContaining({ 'Idempotency-Key': expect.stringMatching(/^compute-cancel-/) }),
     )
-    expect(apiMocks.post).toHaveBeenNthCalledWith(
+    expect(apiMocks.postWithHeaders).toHaveBeenNthCalledWith(
       2,
       '/compute/tasks/container_runtime/task%2Ftwo/retry',
+      {},
+      expect.objectContaining({ 'Idempotency-Key': expect.stringMatching(/^compute-retry-/) }),
+    )
+  })
+
+  it('uses typed provider, relation, and action endpoints', async () => {
+    apiMocks.getEnvelope.mockResolvedValue({ items: [] })
+    apiMocks.postWithHeaders.mockResolvedValue({ data: {} })
+
+    await computeApi.providerInstances({ domain: 'virtualization', providerKey: 'pve', limit: 15 })
+    await computeApi.resourceRelations('container_runtime', 'runtime_host', 'host/one')
+    await computeApi.checkProviderHealth('virtualization', 'pve', 'connection/one', {
+      expectedGeneration: 1,
+    })
+    await computeApi.executeResourceAction('virtualization', 'vm', 'vm/one', 'restart', {
+      reason: 'operator request',
+    })
+
+    expect(apiMocks.getEnvelope).toHaveBeenNthCalledWith(
+      1,
+      '/compute/provider-instances?domain=virtualization&providerKey=pve&limit=15',
+    )
+    expect(apiMocks.getEnvelope).toHaveBeenNthCalledWith(
+      2,
+      '/compute/resources/container_runtime/runtime_host/host%2Fone/relations',
+    )
+    expect(apiMocks.postWithHeaders).toHaveBeenNthCalledWith(
+      1,
+      '/compute/provider-instances/virtualization/pve/connection%2Fone/health-checks',
+      { expectedGeneration: 1 },
+      expect.objectContaining({ 'Idempotency-Key': expect.stringMatching(/^compute-provider-health-/) }),
+    )
+    expect(apiMocks.postWithHeaders).toHaveBeenNthCalledWith(
+      2,
+      '/compute/resources/virtualization/vm/vm%2Fone/actions/restart',
+      { reason: 'operator request' },
+      expect.objectContaining({ 'Idempotency-Key': expect.stringMatching(/^compute-resource-action-/) }),
     )
   })
 })

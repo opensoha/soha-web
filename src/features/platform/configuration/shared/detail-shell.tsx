@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementState } from '@/components/management-list'
 import { TableCellText } from '@/components/table-cell-content'
 import { PlatformResourceOverview } from '@/features/platform/shared/resource-overview'
+import { ResourceGitOpsStatus } from '@/features/platform/shared/resource-gitops-status'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
@@ -168,6 +169,7 @@ export function ConfigurationDetailShell<TDetail extends ConfigurationDetailBase
   dataTab,
   detail,
   kind,
+  label,
   overviewExtra,
   overviewContent,
   scopeMode = 'namespace',
@@ -193,6 +195,12 @@ export function ConfigurationDetailShell<TDetail extends ConfigurationDetailBase
       children: (
         <div className="soha-detail-stack">
           <ConfigurationResourceOverview detail={detail} extra={overviewExtra} />
+          <ResourceGitOpsStatus
+            clusterId={target.scope.clusterId}
+            kind={label}
+            name={detail.name}
+            namespace={detail.namespace}
+          />
           {overviewContent}
         </div>
       ),

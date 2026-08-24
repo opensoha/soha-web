@@ -51,6 +51,12 @@ describe('access-control contracts', () => {
       ...accessControlKeys.detail('roles', namespacedScope, 'reader'),
       'yaml',
     ])
+    expect(accessControlKeys.accessReview(namespacedScope, ' builder ')).toEqual([
+      ...accessControlKeys.resource('serviceaccounts'),
+      'access-review',
+      { clusterId: 'cluster-a', namespace: 'team/a' },
+      'builder',
+    ])
     expect(
       accessControlKeys.list('rolebindings', namespacedScope, {
         subjectKind: ' ServiceAccount ',

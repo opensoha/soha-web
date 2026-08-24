@@ -902,7 +902,7 @@ export function AppLayout() {
   const activeLogo = sidebarCollapsed
     ? collapsedLogo || expandedLogo
     : expandedLogo || collapsedLogo
-  const languageSwitchLabel = localeCode === 'zh_CN' ? 'EN' : '中文'
+  const languageSwitchLabel = localeCode === 'zh_CN' ? '中文' : 'EN'
   const languageSwitchTitle =
     localeCode === 'zh_CN'
       ? t('layout.switchLanguageToEnglish', 'Switch to English')

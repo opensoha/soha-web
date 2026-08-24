@@ -237,6 +237,25 @@ export const computeRoutes = defineRoutes([
   {
     meta: {
       ...computeRootMeta,
+      id: 'docker-workbench-host-detail',
+      path: '/compute/runtimes/hosts/:id',
+      title: '运行时主机详情',
+      description: '运行时主机状态、资源关系与任务上下文',
+      icon: 'IconServer',
+      tabbar: false,
+      navVisible: false,
+      parentId: 'docker-workbench-hosts',
+      permissionKey: 'docker.hosts.view',
+    },
+    shell: 'app',
+    load: async () => {
+      const module = await import('@/features/docker')
+      return { default: module.DockerHostDetailPage }
+    },
+  },
+  {
+    meta: {
+      ...computeRootMeta,
       id: 'docker-workbench-projects',
       path: '/compute/runtimes/projects',
       title: '容器管理',

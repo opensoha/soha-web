@@ -51,6 +51,12 @@ export const settingsQueries = {
         },
         enabled,
       }),
+    skills: (enabled = true) =>
+      queryOptions({
+        queryKey: settingsKeys.ai.skills(),
+        queryFn: async () => (await settingsApi.ai.skills()).skillsRegistry ?? [],
+        enabled,
+      }),
     modelRoutes: (enabled: boolean) =>
       queryOptions({
         queryKey: settingsKeys.ai.modelRoutes(),

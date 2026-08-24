@@ -17,6 +17,14 @@ export const helmKeys = {
     [...helmKeys.releases(target.clusterId), target.namespace, target.name, 'values'] as const,
   releaseHistory: (target: HelmReleaseTarget) =>
     [...helmKeys.releases(target.clusterId), target.namespace, target.name, 'history'] as const,
+  releaseManifest: (target: HelmReleaseTarget, revision?: string) =>
+    [
+      ...helmKeys.releases(target.clusterId),
+      target.namespace,
+      target.name,
+      'manifest',
+      revision || 'current',
+    ] as const,
   charts: (clusterId?: string | null) => [...helmKeys.all, 'charts', clusterId ?? null] as const,
   chartCatalog: (input: HelmChartCatalogInput) =>
     [

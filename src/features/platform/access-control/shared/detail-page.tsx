@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { App, Card, Space, Spin, Tabs, Typography } from 'antd'
+import { App, Card, Spin, Tabs, Typography } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
@@ -52,33 +52,31 @@ function AccessControlYAMLTab({
         </Card>
       }
     >
-      <div style={{ height: 620 }}>
-        <K8sYamlEditor
-          value={draft}
-          onApply={() =>
-            updateMutation.mutate(
-              { ...target, content: draft },
-              {
-                onSuccess: (yaml) => {
-                  setDraft(yaml.content ?? draft)
-                  void message.success(t('yamlEditor.applySuccess', 'YAML applied'))
-                },
-                onError: (error) => void message.error(error.message),
+      <K8sYamlEditor
+        value={draft}
+        onApply={() =>
+          updateMutation.mutate(
+            { ...target, content: draft },
+            {
+              onSuccess: (yaml) => {
+                setDraft(yaml.content ?? draft)
+                void message.success(t('yamlEditor.applySuccess', 'YAML applied'))
               },
-            )
-          }
-          onChange={setDraft}
-          onReset={() => setDraft(serverValue)}
-          onSave={() =>
-            void message.info(
-              localeCode === 'zh_CN' ? '暂不支持本地草稿' : 'Local draft save disabled here',
-            )
-          }
-          applyDisabled={!draft.trim() || updateMutation.isPending}
-          applying={updateMutation.isPending}
-          saveDisabled
-        />
-      </div>
+              onError: (error) => void message.error(error.message),
+            },
+          )
+        }
+        onChange={setDraft}
+        onReset={() => setDraft(serverValue)}
+        onSave={() =>
+          void message.info(
+            localeCode === 'zh_CN' ? '暂不支持本地草稿' : 'Local draft save disabled here',
+          )
+        }
+        applyDisabled={!draft.trim() || updateMutation.isPending}
+        applying={updateMutation.isPending}
+        saveDisabled
+      />
     </Suspense>
   )
 }
@@ -86,13 +84,13 @@ function AccessControlYAMLTab({
 export function renderAccessControlRuleSummaries(values: string[] | undefined, emptyLabel: string) {
   if (!values?.length) return <Text type="secondary">{emptyLabel}</Text>
   return (
-    <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+    <div className="soha-access-control-rule-list">
       {values.map((value) => (
-        <Card key={value} className="soha-detail-card" styles={{ body: { padding: 12 } }}>
+        <div key={value} className="soha-access-control-rule-item">
           <Paragraph style={{ margin: 0 }}>{value}</Paragraph>
-        </Card>
+        </div>
       ))}
-    </Space>
+    </div>
   )
 }
 
@@ -100,11 +98,13 @@ export function AccessControlResourceDetailPage<TDetail extends AccessControlDet
   kind,
   label,
   renderOverview,
+  renderEffectiveAccess,
   renderRelationships,
 }: {
   kind: AccessControlKind
   label: string
   renderOverview: (detail: TDetail) => ReactNode
+  renderEffectiveAccess?: (detail: TDetail) => ReactNode
   renderRelationships?: (detail: TDetail) => ReactNode
 }) {
   const { localeCode } = useI18n()
@@ -178,6 +178,15 @@ export function AccessControlResourceDetailPage<TDetail extends AccessControlDet
             key: 'relationships',
             label: localeCode === 'zh_CN' ? '关联关系' : 'Relationships',
             children: activeTabKey === 'relationships' ? renderRelationships(detail) : null,
+          },
+        ]
+      : []),
+    ...(renderEffectiveAccess
+      ? [
+          {
+            key: 'effective-access',
+            label: localeCode === 'zh_CN' ? '有效权限' : 'Effective Access',
+            children: activeTabKey === 'effective-access' ? renderEffectiveAccess(detail) : null,
           },
         ]
       : []),

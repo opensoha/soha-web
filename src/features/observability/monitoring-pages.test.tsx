@@ -299,11 +299,7 @@ async function renderWithProviders(node: React.ReactNode, route: string) {
     root.render(
       <AntdApp>
         <QueryClientProvider client={queryClient}>
-          <MemoryRouter
-            initialEntries={[route]}
-          >
-            {node}
-          </MemoryRouter>
+          <MemoryRouter initialEntries={[route]}>{node}</MemoryRouter>
         </QueryClientProvider>
       </AntdApp>,
     )
@@ -649,7 +645,7 @@ describe('observability monitoring pages', () => {
 
     expect(container.textContent).toContain('事件流')
     expect(container.textContent).toContain('alertmanager')
-    expect(container.textContent).toContain('warning')
+    expect(container.textContent).toContain('警告')
     expect(container.textContent).toContain('CPU pressure detected')
     expect(apiGetMock).toHaveBeenCalledWith('/events')
   })

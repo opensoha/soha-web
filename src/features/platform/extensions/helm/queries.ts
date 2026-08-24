@@ -4,6 +4,7 @@ import {
   getHelmChartValues,
   getHelmReleaseDetail,
   getHelmReleaseHistory,
+  getHelmReleaseManifest,
   getHelmReleaseValues,
   listHelmCharts,
   listHelmReleases,
@@ -39,6 +40,14 @@ export const helmQueries = {
     queryOptions({
       queryKey: target ? helmKeys.releaseHistory(target) : [...helmKeys.all, 'history', 'disabled'],
       queryFn: () => getHelmReleaseHistory(target!),
+      enabled: active && Boolean(target?.clusterId && target.namespace && target.name),
+    }),
+  releaseManifest: (target: HelmReleaseTarget | null, revision?: string, active = true) =>
+    queryOptions({
+      queryKey: target
+        ? helmKeys.releaseManifest(target, revision)
+        : [...helmKeys.all, 'manifest', 'disabled'],
+      queryFn: () => getHelmReleaseManifest(target!, revision),
       enabled: active && Boolean(target?.clusterId && target.namespace && target.name),
     }),
   chartCatalog: (input: HelmChartCatalogInput | null) =>

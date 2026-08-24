@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { TableCellText } from '@/components/table-cell-content'
 import { formatAgeSeconds } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import type { TableColumnsType } from 'antd'
 import { ConfigurationNameLink, ConfigurationResourceListPage } from '../shared/list-page'
+import { ConfigurationQuickEditModal } from '../shared/configuration-quick-edit-modal'
 import type { HorizontalPodAutoscalerResource } from './types'
 
 const columns: TableColumnsType<HorizontalPodAutoscalerResource> = [
@@ -37,15 +39,27 @@ const columns: TableColumnsType<HorizontalPodAutoscalerResource> = [
 ]
 
 export function ConfigurationHPAPage() {
+  const [editing, setEditing] = useState<HorizontalPodAutoscalerResource | null>(null)
   return (
-    <ConfigurationResourceListPage
-      columns={columns}
-      emptyDescription={{
-        zh_CN: '当前范围没有 HPA',
-        en_US: 'No HPA resources in the current scope',
-      }}
-      kind="hpas"
-      label="HorizontalPodAutoscalers"
-    />
+    <>
+      <ConfigurationResourceListPage
+        columns={columns}
+        emptyDescription={{
+          zh_CN: '当前范围没有 HPA',
+          en_US: 'No HPA resources in the current scope',
+        }}
+        kind="hpas"
+        label="HorizontalPodAutoscalers"
+        onEdit={setEditing}
+      />
+      {editing ? (
+        <ConfigurationQuickEditModal
+          kind="hpas"
+          name={editing.name}
+          namespace={editing.namespace}
+          onClose={() => setEditing(null)}
+        />
+      ) : null}
+    </>
   )
 }

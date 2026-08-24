@@ -70,13 +70,55 @@
 .soha-config-data-expanded {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
+  min-width: 0;
+  gap: 10px;
+}
+
+.soha-config-data-table .ant-table-expanded-row > td {
+  padding: 10px 12px 12px !important;
+  background: var(--soha-bg-surface) !important;
+}
+
+.soha-config-data-value {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--soha-border-color);
+  border-radius: var(--soha-radius-control);
+  background: var(--soha-bg-surface-muted);
+}
+
+.soha-config-data-value-label {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--soha-border-color);
+  background: var(--soha-bg-surface);
+  color: var(--soha-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
 }
 
 .soha-config-data-expanded .soha-json-block {
+  box-sizing: border-box;
+  width: 100%;
+  max-height: min(38vh, 360px);
   margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 0;
+  background: var(--soha-bg-surface-muted);
+  color: var(--soha-text-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  letter-spacing: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  tab-size: 2;
+  white-space: pre;
+  word-break: normal;
 }
 
 .soha-config-reference-table .ant-table-tbody > tr > td {

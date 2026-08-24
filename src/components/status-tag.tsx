@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 import { Tag } from 'antd'
+import { useI18n } from '@/i18n'
+import { formatStatusLabel } from '@/i18n/status'
 
 type TagColor =
   | 'default'
@@ -72,6 +74,10 @@ function pickStatusColor(value?: null | string): TagColor {
       'docker_ready',
       'true',
       'allow',
+      'live',
+      'accepted',
+      'fresh',
+      'verified',
     ].includes(normalized)
   ) {
     return 'success'
@@ -90,9 +96,13 @@ function pickStatusColor(value?: null | string): TagColor {
       'pending-upgrade',
       'draft',
       'degraded',
+      'medium',
       'maintenance',
       'target',
       'agent_registered',
+      'polling',
+      'partial',
+      'reconnecting',
     ].includes(normalized)
   ) {
     if (normalized === 'draft') return 'magenta'
@@ -108,6 +118,8 @@ function pickStatusColor(value?: null | string): TagColor {
       'failed',
       'disconnected',
       'critical',
+      'high',
+      'vulnerability',
       'crashloopbackoff',
       'terminating',
       'notready',
@@ -118,12 +130,13 @@ function pickStatusColor(value?: null | string): TagColor {
       'agent_failed',
       'timeout',
       'callback_timeout',
+      'stale',
     ].includes(normalized)
   ) {
     return 'error'
   }
 
-  if (['acknowledged', 'info'].includes(normalized)) {
+  if (['acknowledged', 'configuration', 'info', 'low'].includes(normalized)) {
     return 'processing'
   }
 
@@ -131,6 +144,7 @@ function pickStatusColor(value?: null | string): TagColor {
     [
       'attention',
       'checking',
+      'connecting',
       'defined',
       'initializing',
       'provisioning',
@@ -147,14 +161,9 @@ function pickStatusColor(value?: null | string): TagColor {
   return 'default'
 }
 
-export function StatusTag({
-  label,
-  value,
-}: {
-  label?: ReactNode
-  value?: null | string
-}) {
-  const displayLabel = label ?? ((value || '').trim() || '-')
+export function StatusTag({ label, value }: { label?: ReactNode; value?: null | string }) {
+  const { localeCode } = useI18n()
+  const displayLabel = label ?? formatStatusLabel(value, localeCode)
   return (
     <Tag
       className="soha-status-tag"

@@ -89,7 +89,10 @@ export function DeploymentDetailPage() {
       rolloutStatus: rolloutStatus?.status,
       desiredReplicas: rolloutStatus?.desiredReplicas,
     },
-    promptHint: `排查 Deployment ${deploymentName} 的副本、Pod、滚动发布、事件、日志和指标。`,
+    promptHint:
+      localeCode === 'zh_CN'
+        ? `排查 Deployment ${deploymentName} 的副本、Pod、滚动发布、事件、日志和指标。`
+        : `Investigate replicas, Pods, rollouts, events, logs, and metrics for Deployment ${deploymentName}.`,
   })
   const deploymentTimelineEvents = useMemo(
     () =>
@@ -114,7 +117,7 @@ export function DeploymentDetailPage() {
           {rolloutStatus ? (
             <div className="soha-rollout-status-compact">
               <span className="soha-rollout-status-chip">
-                <Text type="secondary">Revision</Text>
+                <Text type="secondary">{localeCode === 'zh_CN' ? '版本' : 'Revision'}</Text>
                 <Text strong>{rolloutStatus.revision || '-'}</Text>
               </span>
               <span className="soha-rollout-status-chip">
@@ -171,7 +174,7 @@ export function DeploymentDetailPage() {
                   <Text
                     strong
                     className="soha-rollout-history-revision"
-                  >{`Revision ${record.revision || '-'}`}</Text>
+                  >{`${localeCode === 'zh_CN' ? '版本' : 'Revision'} ${record.revision || '-'}`}</Text>
                   <Tag className="soha-rollout-history-tag">{`${localeCode === 'zh_CN' ? '副本' : 'Replicas'} ${record.replicas ?? '-'}`}</Tag>
                   <Tag className="soha-rollout-history-tag">{`${localeCode === 'zh_CN' ? '就绪' : 'Ready'} ${record.readyReplicas ?? '-'}`}</Tag>
                   <Text type="secondary" className="soha-rollout-history-image">
@@ -187,12 +190,20 @@ export function DeploymentDetailPage() {
           )}
         </div>
       </Card>
-      <Card className="soha-detail-card" size="small" title="交付联动">
+      <Card
+        className="soha-detail-card"
+        size="small"
+        title={localeCode === 'zh_CN' ? '交付联动' : 'Delivery integration'}
+      >
         {matchedBindings.length === 0 ? (
           <ManagementState
             bordered={false}
             compact
-            title="当前 Deployment 尚未绑定到任何应用环境"
+            title={
+              localeCode === 'zh_CN'
+                ? '当前 Deployment 尚未绑定到任何应用环境'
+                : 'This Deployment is not bound to an application environment'
+            }
           />
         ) : (
           <div className="soha-list-panel">
@@ -229,12 +240,14 @@ export function DeploymentDetailPage() {
                     <StatusTag value={latestRelease?.status || 'unknown'} />
                     <Text type="secondary" className="text-xs">
                       {latestRelease?.createdAt
-                        ? `最近发布: ${formatDateTime(latestRelease.createdAt)}`
+                        ? `${localeCode === 'zh_CN' ? '最近发布' : 'Latest release'}: ${formatDateTime(latestRelease.createdAt)}`
                         : latestWorkflow?.updatedAt
-                          ? `最近工作流: ${formatDateTime(latestWorkflow.updatedAt)}`
+                          ? `${localeCode === 'zh_CN' ? '最近工作流' : 'Latest workflow'}: ${formatDateTime(latestWorkflow.updatedAt)}`
                           : latestBuild?.createdAt
-                            ? `最近构建: ${formatDateTime(latestBuild.createdAt)}`
-                            : '暂无执行记录'}
+                            ? `${localeCode === 'zh_CN' ? '最近构建' : 'Latest build'}: ${formatDateTime(latestBuild.createdAt)}`
+                            : localeCode === 'zh_CN'
+                              ? '暂无执行记录'
+                              : 'No execution records'}
                     </Text>
                   </div>
                 </div>

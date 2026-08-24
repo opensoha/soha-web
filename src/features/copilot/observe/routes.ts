@@ -42,6 +42,7 @@ export const copilotObserveRoutes = defineRoutes([
         'observe.ai.chat',
         'ai.knowledge.view',
         'ai.context.inspect',
+        'ai.data-sources.view',
         'ai.evaluations.view',
         'ai.gateway.view',
         'ai.gateway.invoke',
@@ -247,10 +248,79 @@ export const copilotObserveRoutes = defineRoutes([
   },
   {
     meta: {
+      id: 'ai-workbench-mcp',
+      path: '/ai-workbench/mcp',
+      title: 'MCP',
+      description: 'MCP Adapter 与工具能力目录',
+      icon: 'IconLink',
+      group: 'observe',
+      workbenchId: 'ai',
+      requiresAuth: true,
+      tabbar: true,
+      navVisible: true,
+      parentId: 'ai-workbench',
+      menuId: 'ai-workbench-mcp',
+      permissionKey: 'observe.ai.view',
+      scopeMode: 'passive',
+    },
+    shell: 'app',
+    load: async () => {
+      const module = await import('./mcp/page')
+      return { default: module.AIMCPPage }
+    },
+  },
+  {
+    meta: {
+      id: 'ai-workbench-data-sources',
+      path: '/ai-workbench/data-sources',
+      title: 'Data Sources',
+      description: '管理 AI 分析数据源、连接校验与能力映射',
+      icon: 'IconServer',
+      group: 'observe',
+      workbenchId: 'ai',
+      requiresAuth: true,
+      tabbar: true,
+      navVisible: true,
+      parentId: 'ai-workbench',
+      menuId: 'ai-workbench-data-sources',
+      permissionKeysAny: ['ai.data-sources.view', 'settings.ai.view'],
+      scopeMode: 'passive',
+    },
+    shell: 'app',
+    load: async () => {
+      const module = await import('./data-sources/page')
+      return { default: module.AIDataSourcesPage }
+    },
+  },
+  {
+    meta: {
+      id: 'ai-workbench-skills',
+      path: '/ai-workbench/skills',
+      title: 'Skills',
+      description: '全局 Skill registry 与能力引用',
+      icon: 'IconPlugin',
+      group: 'observe',
+      workbenchId: 'ai',
+      requiresAuth: true,
+      tabbar: true,
+      navVisible: true,
+      parentId: 'ai-workbench',
+      menuId: 'ai-workbench-skills',
+      permissionKeysAny: ['ai.gateway.skills.view', 'settings.ai.view'],
+      scopeMode: 'passive',
+    },
+    shell: 'app',
+    load: async () => {
+      const module = await import('./skills/page')
+      return { default: module.AISkillsPage }
+    },
+  },
+  {
+    meta: {
       id: 'ai-workbench-tool-settings',
       path: '/ai-workbench/tool-settings',
-      title: '工具与技能',
-      description: '查看并配置工具、技能与数据源',
+      title: '会话装配',
+      description: '为 AI 会话绑定 MCP、Skills、预算与作用域',
       icon: 'IconComment',
       group: 'observe',
       workbenchId: 'ai',

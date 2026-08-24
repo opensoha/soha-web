@@ -22,10 +22,11 @@ async function unwrapItem<T>(request: Promise<ApiResponse<T>>): Promise<T> {
 
 export const observabilityAlertApi = {
   list: () => unwrapList(api.get<ApiResponse<AlertEvent[]>>('/alert-events')),
-  recent: (limit: number) =>
-    unwrapList(
-      api.get<ApiResponse<AlertEvent[]>>(`/alert-events?limit=${Math.max(1, Math.trunc(limit))}`),
-    ),
+  recent: (limit: number, clusterId?: string) => {
+    const query = new URLSearchParams({ limit: String(Math.max(1, Math.trunc(limit))) })
+    if (clusterId?.trim()) query.set('clusterId', clusterId.trim())
+    return unwrapList(api.get<ApiResponse<AlertEvent[]>>(`/alert-events?${query.toString()}`))
+  },
   detail: (eventId: string) =>
     unwrapItem(api.get<ApiResponse<AlertEvent>>(`/alert-events/${encodeURIComponent(eventId)}`)),
   healingRuns: (eventId: string) =>

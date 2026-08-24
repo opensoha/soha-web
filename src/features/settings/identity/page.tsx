@@ -7,7 +7,6 @@ import {
   Col,
   Form,
   Input,
-  Modal,
   Popconfirm,
   Row,
   Select,
@@ -19,8 +18,8 @@ import {
 } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { StepForm } from '@/components/step-form'
 import type { StepFormStep } from '@/components/step-form'
+import { StepFormModal } from '@/components/step-form-modal'
 import {
   ManagementDensityButton,
   ManagementIconButton,
@@ -627,69 +626,58 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
           />
         }
       />
-      <Modal
-        title={editingProvider ? '编辑登录源' : '新增登录源'}
+      <StepFormModal
+        key={editingProvider?.id || 'new-login-provider'}
+        contentMaxWidth={680}
+        current={providerStep}
+        form={providerForm}
+        initialValues={providerInitialValues}
+        loading={saveMutation.isPending}
         open={providerModalVisible}
-        width={760}
-        onCancel={() => {
+        onClose={() => {
           setProviderModalVisible(false)
           setEditingProvider(null)
           setProviderStep(0)
         }}
-        footer={null}
-        destroyOnHidden
-      >
-        <StepForm
-          key={editingProvider?.id || 'new-login-provider'}
-          contentMaxWidth={680}
-          current={providerStep}
-          form={providerForm}
-          initialValues={providerInitialValues}
-          loading={saveMutation.isPending}
-          onCancel={() => {
-            setProviderModalVisible(false)
-            setEditingProvider(null)
-            setProviderStep(0)
-          }}
-          onCurrentChange={setProviderStep}
-          onFinish={(values) => {
-            if (!canManageLoginSettings) return
-            const sourceType = String(values.type || 'oidc')
-            if (sourceType === 'saml' && !samlAvailable) {
-              void message.error('SAML Runtime 不可用，无法启用或保存该登录源')
-              return
-            }
-            const sourceID = String(values.id || editingProvider?.id || newLoginProviderID()).trim()
-            const nextProvider = applyProviderPreset(sourceType, {
-              ...values,
-              id: sourceID,
-              redirectUrl: String(values.redirectUrl || defaultRedirectPath(sourceID)),
-              frontendRedirectUrl: String(
-                values.frontendRedirectUrl || defaultFrontendRedirectPath(),
-              ),
-            })
-            const nextProviders = [...providers]
-            const index = nextProviders.findIndex((item) => item.id === nextProvider.id)
-            if (index >= 0) {
-              nextProviders[index] = nextProvider
-            } else {
-              nextProviders.push(nextProvider)
-            }
-            saveIdentity({
-              values: {
-                providers: nextProviders,
-                defaultProviderId: settings?.defaultProviderId || nextProvider.id,
-              },
-              successMessage: editingProvider ? '登录源已保存' : '登录源已新增',
-            })
-            setProviderModalVisible(false)
-            setEditingProvider(null)
-            setProviderStep(0)
-          }}
-          preserve={false}
-          steps={providerSteps}
-        />
-      </Modal>
+        onCurrentChange={setProviderStep}
+        onFinish={(values) => {
+          if (!canManageLoginSettings) return
+          const sourceType = String(values.type || 'oidc')
+          if (sourceType === 'saml' && !samlAvailable) {
+            void message.error('SAML Runtime 不可用，无法启用或保存该登录源')
+            return
+          }
+          const sourceID = String(values.id || editingProvider?.id || newLoginProviderID()).trim()
+          const nextProvider = applyProviderPreset(sourceType, {
+            ...values,
+            id: sourceID,
+            redirectUrl: String(values.redirectUrl || defaultRedirectPath(sourceID)),
+            frontendRedirectUrl: String(
+              values.frontendRedirectUrl || defaultFrontendRedirectPath(),
+            ),
+          })
+          const nextProviders = [...providers]
+          const index = nextProviders.findIndex((item) => item.id === nextProvider.id)
+          if (index >= 0) {
+            nextProviders[index] = nextProvider
+          } else {
+            nextProviders.push(nextProvider)
+          }
+          saveIdentity({
+            values: {
+              providers: nextProviders,
+              defaultProviderId: settings?.defaultProviderId || nextProvider.id,
+            },
+            successMessage: editingProvider ? '登录源已保存' : '登录源已新增',
+          })
+          setProviderModalVisible(false)
+          setEditingProvider(null)
+          setProviderStep(0)
+        }}
+        steps={providerSteps}
+        title={editingProvider ? '编辑登录源' : '新增登录源'}
+        width={760}
+      />
     </div>
   )
 

@@ -107,7 +107,7 @@ const testState = vi.hoisted(() => ({
         ],
       }
     }
-    if (path === '/virtualization/vms?page=1&pageSize=10') {
+    if (path === '/virtualization/vms?page=1&pageSize=15') {
       return {
         data: {
           items: [
@@ -151,7 +151,7 @@ const testState = vi.hoisted(() => ({
           ],
           total: 2,
           page: 1,
-          pageSize: 10,
+          pageSize: 15,
         },
       }
     }
@@ -317,7 +317,7 @@ const testState = vi.hoisted(() => ({
         },
       }
     }
-    if (path === '/virtualization/images?page=1&pageSize=10&category=catalog') {
+    if (path === '/virtualization/images?page=1&pageSize=15&category=catalog') {
       return {
         data: {
           items: [
@@ -344,11 +344,11 @@ const testState = vi.hoisted(() => ({
           ],
           total: 2,
           page: 1,
-          pageSize: 10,
+          pageSize: 15,
         },
       }
     }
-    if (path === '/virtualization/images?page=1&pageSize=10&category=storage') {
+    if (path === '/virtualization/images?page=1&pageSize=15&category=storage') {
       return {
         data: {
           items: [
@@ -378,7 +378,7 @@ const testState = vi.hoisted(() => ({
           ],
           total: 3,
           page: 1,
-          pageSize: 10,
+          pageSize: 15,
         },
       }
     }
@@ -796,7 +796,7 @@ describe('virtualization pages', () => {
   it('loads paginated VMs and creates from flavor plus image with provider fields', async () => {
     const container = await renderWithProviders(<VirtualizationVmsPage />)
 
-    expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/vms?page=1&pageSize=10')
+    expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/vms?page=1&pageSize=15')
     expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/clusters')
     expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/images?pageSize=500')
     expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/flavors')
@@ -874,7 +874,7 @@ describe('virtualization pages', () => {
       expect.stringContaining('关键字'),
       expect.stringContaining('连接'),
       expect.stringContaining('状态'),
-      expect.stringContaining('Provider'),
+      expect.stringContaining('提供方'),
     ])
     expect(
       fields.map((field) => field.style.getPropertyValue('--soha-management-query-field-width')),
@@ -1140,13 +1140,14 @@ describe('virtualization pages', () => {
     expect(container.textContent).toContain('standard-2c4g')
     expect(container.textContent).toContain('ubuntu-24.04')
     expect(container.textContent).toContain('10.0.0.8')
-    expect(container.textContent).toContain('Provider 摘要')
+    expect(container.textContent).toContain('高级信息')
+    expect(container.textContent).toContain('资源关系')
     expect(container.textContent).toContain('运行与硬件')
     expect(container.textContent).toContain('网络与身份')
     expect(container.textContent).toContain('初始化与来源')
     expect(container.textContent).toContain('build-vm.apps.svc.cluster.local')
     expect(container.textContent).toContain('10.96.0.10')
-    expect(container.textContent).toContain('cloudInitNoCloud')
+    expect(container.textContent).toContain('Cloud-Init NoCloud')
     expect(container.textContent).toContain('任务历史')
     expect(container.textContent).toContain('vm ready')
     expect(container.textContent).toContain('最近异常任务')
@@ -1247,7 +1248,7 @@ describe('virtualization pages', () => {
     const container = await renderWithProviders(<VirtualizationVmsPage />)
 
     expect(testState.apiGet).toHaveBeenCalledWith('/modules')
-    expect(testState.apiGet).not.toHaveBeenCalledWith('/virtualization/vms?page=1&pageSize=10')
+    expect(testState.apiGet).not.toHaveBeenCalledWith('/virtualization/vms?page=1&pageSize=15')
     expect(testState.apiGet).not.toHaveBeenCalledWith('/virtualization/clusters')
     expect(testState.apiGet).not.toHaveBeenCalledWith('/virtualization/images')
     expect(testState.apiGet).not.toHaveBeenCalledWith('/virtualization/flavors')
@@ -1438,7 +1439,7 @@ describe('virtualization pages', () => {
     )
 
     expect(testState.apiGet).toHaveBeenCalledWith(
-      '/virtualization/images?page=1&pageSize=10&category=catalog',
+      '/virtualization/images?page=1&pageSize=15&category=catalog',
     )
     expect(container.textContent).toContain('KubeVirt')
     expect(container.textContent).toContain('PVE')
@@ -1465,7 +1466,7 @@ describe('virtualization pages', () => {
     )
 
     expect(testState.apiGet).toHaveBeenCalledWith(
-      '/virtualization/images?page=1&pageSize=10&category=storage',
+      '/virtualization/images?page=1&pageSize=15&category=storage',
     )
     expect(container.textContent).toContain('存储池')
     expect(container.textContent).toContain('VM 磁盘')

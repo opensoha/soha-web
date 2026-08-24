@@ -18,6 +18,18 @@
   min-width: 0;
 }
 
+.soha-resource-create-modal__body .soha-resource-create-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding-bottom: 8px;
+  background: var(--soha-bg-surface);
+}
+
+.soha-resource-create-modal__body .soha-resource-create-shell .soha-step-form__steps {
+  top: 50px;
+}
+
 .soha-resource-create-cluster-hint {
   flex: 0 0 auto;
   font-size: 12px;
@@ -90,6 +102,10 @@
 }
 
 @media (max-width: 720px) {
+  .soha-resource-create-modal__body .soha-resource-create-shell .soha-step-form__steps {
+    position: static;
+  }
+
   .soha-workload-snapshot-inheritance {
     grid-template-columns: minmax(0, 1fr);
   }

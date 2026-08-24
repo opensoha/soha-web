@@ -24,6 +24,7 @@ import {
 } from '@ant-design/icons'
 import { hasAllowedAction } from '@/features/auth'
 import { getAIWorkbenchPathForMode } from '@/features/copilot'
+import { localeText, useI18n } from '@/i18n'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
@@ -51,7 +52,7 @@ import {
   latestNonEmptyOperationMessage,
   localTableSummary,
   nextOperationSearch,
-  operationKind,
+  operationKindLabel,
   operationParamsFromSearch,
   operationTime,
   selectableOperationIds,
@@ -128,6 +129,7 @@ export function OperationsTable({
     useVirtualizationPermissions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
+  const { localeCode } = useI18n()
   const operationParams = {
     assetType: assetType ?? parsedSearch.query.assetType,
     taskKind: assetType ? undefined : parsedSearch.query.taskKind,
@@ -182,7 +184,13 @@ export function OperationsTable({
     withVirtualizationMutationSuccess(
       virtualizationMutations.cancelOperations(queryClient),
       (_response, ids) => {
-        message.success(`已提交 ${ids.length} 个任务的取消请求`)
+        message.success(
+          localeText(
+            localeCode,
+            `已提交 ${ids.length} 个任务的取消请求`,
+            `Cancellation requested for ${ids.length} tasks`,
+          ),
+        )
         setSelectedTaskRowKeys([])
       },
     ),
@@ -191,21 +199,27 @@ export function OperationsTable({
     withVirtualizationMutationSuccess(
       virtualizationMutations.retryOperations(queryClient),
       (_response, ids) => {
-        message.success(`已提交 ${ids.length} 个任务的重试请求`)
+        message.success(
+          localeText(
+            localeCode,
+            `已提交 ${ids.length} 个任务的重试请求`,
+            `Retry requested for ${ids.length} tasks`,
+          ),
+        )
         setSelectedTaskRowKeys([])
       },
     ),
   )
   const columns: ColumnsType<VirtualizationOperation> = [
     {
-      title: '类型',
+      title: localeText(localeCode, '类型', 'Type'),
       dataIndex: 'operationType',
-      render: (_value, record) => tableTooltipText(operationKind(record)),
+      render: (_value, record) => tableTooltipText(operationKindLabel(record, localeCode)),
       ellipsis: tableEllipsis,
       width: 140,
     },
     {
-      title: '资源',
+      title: localeText(localeCode, '资源', 'Resource'),
       dataIndex: 'targetName',
       render: (value, record) =>
         tableTooltipText(value || record.targetType || record.assetType || '-'),
@@ -213,7 +227,7 @@ export function OperationsTable({
       width: 180,
     },
     {
-      title: '连接',
+      title: localeText(localeCode, '连接', 'Connection'),
       dataIndex: 'connectionName',
       render: (value, record) => tableTooltipText(value || record.connectionId || '-'),
       ellipsis: tableEllipsis,
@@ -221,27 +235,27 @@ export function OperationsTable({
     },
     {
       ...tableColumnPresets.status,
-      title: '状态',
+      title: localeText(localeCode, '状态', 'Status'),
       dataIndex: 'status',
       render: statusTag,
       width: 120,
     },
     {
-      title: '异常摘要',
+      title: localeText(localeCode, '异常摘要', 'Failure summary'),
       dataIndex: 'message',
       render: (_value, record) => tableTooltipText(latestNonEmptyOperationMessage(record)),
       ellipsis: tableEllipsis,
       width: 320,
     },
     {
-      title: '运行时长',
+      title: localeText(localeCode, '运行时长', 'Duration'),
       render: (_value, record) => tableTooltipText(formatOperationDuration(record)),
       ellipsis: tableEllipsis,
       width: 140,
     },
     {
       ...tableColumnPresets.datetime,
-      title: '最近心跳',
+      title: localeText(localeCode, '最近心跳', 'Last heartbeat'),
       dataIndex: 'lastHeartbeatAt',
       render: (value) => tableTooltipText(formatDateTime(value)),
       ellipsis: tableEllipsis,
@@ -249,7 +263,7 @@ export function OperationsTable({
     },
     {
       ...tableColumnPresets.datetime,
-      title: '开始时间',
+      title: localeText(localeCode, '开始时间', 'Started at'),
       dataIndex: 'startedAt',
       render: (_value, record) => tableTooltipText(formatDateTime(operationTime(record))),
       ellipsis: tableEllipsis,
@@ -257,7 +271,7 @@ export function OperationsTable({
     },
     {
       ...tableColumnPresets.action,
-      title: '操作',
+      title: localeText(localeCode, '操作', 'Actions'),
       dataIndex: 'id',
       width: 176,
       render: (_value, record) => {
@@ -266,16 +280,16 @@ export function OperationsTable({
         return (
           <Space className="soha-row-action-icons" wrap>
             <ManagementIconButton
-              aria-label="查看日志"
+              aria-label={localeText(localeCode, '查看日志', 'View logs')}
               size="small"
-              tooltip="日志"
+              tooltip={localeText(localeCode, '日志', 'Logs')}
               icon={<FileTextOutlined />}
               onClick={() => setSelectedOperation(record)}
             />
             <ManagementIconButton
-              aria-label="AI 调查"
+              aria-label={localeText(localeCode, 'AI 调查', 'AI investigation')}
               size="small"
-              tooltip="AI 调查"
+              tooltip={localeText(localeCode, 'AI 调查', 'AI investigation')}
               icon={<SearchOutlined />}
               onClick={() =>
                 navigate(
@@ -290,7 +304,7 @@ export function OperationsTable({
             />
             {record.vmId ? (
               <ManagementIconButton
-                aria-label="查看虚拟机"
+                aria-label={localeText(localeCode, '查看虚拟机', 'View virtual machine')}
                 size="small"
                 tooltip="VM"
                 icon={<FileTextOutlined />}
@@ -302,11 +316,14 @@ export function OperationsTable({
               />
             ) : null}
             {canCancel ? (
-              <Popconfirm title="确认取消任务？" onConfirm={() => cancelMutation.mutate(record.id)}>
+              <Popconfirm
+                title={localeText(localeCode, '确认取消任务？', 'Cancel this task?')}
+                onConfirm={() => cancelMutation.mutate(record.id)}
+              >
                 <ManagementIconButton
-                  aria-label="取消任务"
+                  aria-label={localeText(localeCode, '取消任务', 'Cancel task')}
                   size="small"
-                  tooltip="取消"
+                  tooltip={localeText(localeCode, '取消', 'Cancel')}
                   danger
                   icon={<PoweroffOutlined />}
                 />
@@ -314,9 +331,9 @@ export function OperationsTable({
             ) : null}
             {canRetry ? (
               <ManagementIconButton
-                aria-label="重试任务"
+                aria-label={localeText(localeCode, '重试任务', 'Retry task')}
                 size="small"
-                tooltip="重试"
+                tooltip={localeText(localeCode, '重试', 'Retry')}
                 icon={<ReloadOutlined />}
                 onClick={() => retryMutation.mutate(record.id)}
               />
@@ -336,18 +353,18 @@ export function OperationsTable({
   const statusSummary = [
     {
       key: 'pending',
-      label: '待处理',
+      label: localeText(localeCode, '待处理', 'Pending'),
       value: counts.pending,
       tone: counts.pending > 0 ? 'warning' : 'default',
     },
     {
       key: 'abnormal',
-      label: '失败/超时',
+      label: localeText(localeCode, '失败/超时', 'Failed / Timed out'),
       value: counts.abnormal,
       tone: counts.abnormal > 0 ? 'danger' : 'default',
     },
-    { key: 'sync', label: '同步任务', value: counts.sync },
-    { key: 'vm', label: 'VM 任务', value: counts.vm },
+    { key: 'sync', label: localeText(localeCode, '同步任务', 'Sync tasks'), value: counts.sync },
+    { key: 'vm', label: localeText(localeCode, 'VM 任务', 'VM tasks'), value: counts.vm },
   ] satisfies Array<{ key: string; label: string; value: number; tone?: OverviewTone }>
   const selectPreset = (nextPreset: OperationFilterPreset) => {
     setPreset(nextPreset)
@@ -377,24 +394,46 @@ export function OperationsTable({
       <div className="soha-vrt-query soha-vrt-operations-query">
         <ManagementQueryPanel
           collapsible
-          actions={<Button onClick={resetOperationFilters}>重置</Button>}
+          actions={
+            <Button onClick={resetOperationFilters}>
+              {localeText(localeCode, '重置', 'Reset')}
+            </Button>
+          }
         >
-          <ManagementQueryField label="任务视图" minWidth={300} width={360}>
+          <ManagementQueryField
+            label={localeText(localeCode, '任务视图', 'Task view')}
+            minWidth={300}
+            width={360}
+          >
             {assetType === 'asset_sync' ? (
-              <MetadataTag tone="blue" label="同步任务" />
+              <MetadataTag tone="blue" label={localeText(localeCode, '同步任务', 'Sync tasks')} />
             ) : (
               <Segmented
                 size="small"
                 value={preset}
                 options={OPERATION_FILTER_PRESETS.map((item) => ({
-                  label: item.label,
+                  label:
+                    item.key === 'all'
+                      ? localeText(localeCode, '全部任务', 'All tasks')
+                      : item.key === 'pending'
+                        ? localeText(localeCode, '待处理', 'Pending')
+                        : item.key === 'abnormal'
+                          ? localeText(localeCode, '失败/超时', 'Failed / Timed out')
+                          : item.key === 'asset_sync'
+                            ? localeText(localeCode, '同步任务', 'Sync tasks')
+                            : localeText(localeCode, 'VM 任务', 'VM tasks'),
                   value: item.key,
                 }))}
                 onChange={(value) => selectPreset(value as OperationFilterPreset)}
               />
             )}
           </ManagementQueryField>
-          <ManagementQueryField grow label="任务统计" minWidth={420} width={560}>
+          <ManagementQueryField
+            grow
+            label={localeText(localeCode, '任务统计', 'Task summary')}
+            minWidth={420}
+            width={560}
+          >
             <div className="soha-vrt-commandbar-meta">
               {statusSummary.map((item) => (
                 <span key={item.key}>
@@ -412,11 +451,17 @@ export function OperationsTable({
         toolbarExtra={
           selectedTaskRowKeys.length > 0 ? (
             <div className="soha-vrt-selection-bar">
-              <Text type="secondary">已选择 {selectedTaskRowKeys.length} 个任务</Text>
+              <Text type="secondary">
+                {localeText(
+                  localeCode,
+                  `已选择 ${selectedTaskRowKeys.length} 个任务`,
+                  `${selectedTaskRowKeys.length} tasks selected`,
+                )}
+              </Text>
               <Space wrap>
                 {canCancelOperations ? (
                   <Popconfirm
-                    title="确认批量取消任务？"
+                    title={localeText(localeCode, '确认批量取消任务？', 'Cancel selected tasks?')}
                     description={bulkActionSummary(
                       '将取消',
                       filteredOperations
@@ -435,13 +480,13 @@ export function OperationsTable({
                       )}
                       loading={batchCancelMutation.isPending}
                     >
-                      批量取消
+                      {localeText(localeCode, '批量取消', 'Cancel selected')}
                     </Button>
                   </Popconfirm>
                 ) : null}
                 {canRetryOperations ? (
                   <Popconfirm
-                    title="确认批量重试任务？"
+                    title={localeText(localeCode, '确认批量重试任务？', 'Retry selected tasks?')}
                     description={bulkActionSummary(
                       '将重试',
                       filteredOperations
@@ -458,11 +503,13 @@ export function OperationsTable({
                       )}
                       loading={batchRetryMutation.isPending}
                     >
-                      批量重试
+                      {localeText(localeCode, '批量重试', 'Retry selected')}
                     </Button>
                   </Popconfirm>
                 ) : null}
-                <Button onClick={() => setSelectedTaskRowKeys([])}>清空选择</Button>
+                <Button onClick={() => setSelectedTaskRowKeys([])}>
+                  {localeText(localeCode, '清空选择', 'Clear selection')}
+                </Button>
               </Space>
             </div>
           ) : null
@@ -476,36 +523,44 @@ export function OperationsTable({
         onRefresh={() => void operationsQuery.refetch()}
         dataSource={filteredOperations}
         columns={columns}
-        paginationSummary={localTableSummary(filteredOperations.length, operations.length)}
+        paginationSummary={localeText(
+          localeCode,
+          localTableSummary(filteredOperations.length, operations.length),
+          `${filteredOperations.length} of ${operations.length}`,
+        )}
         scroll={{ x: 1640 }}
       />
       <Drawer
-        title="任务日志"
+        title={localeText(localeCode, '任务日志', 'Task logs')}
         size="large"
         motion={stableDrawerMotion}
         open={Boolean(selectedOperation)}
         onClose={() => setSelectedOperation(null)}
       >
         <Descriptions size="small" column={1} bordered>
-          <Descriptions.Item label="任务 ID">{selectedOperation?.id}</Descriptions.Item>
-          <Descriptions.Item label="类型">
-            {selectedOperation ? operationKind(selectedOperation) : '-'}
+          <Descriptions.Item label={localeText(localeCode, '任务 ID', 'Task ID')}>
+            {selectedOperation?.id}
           </Descriptions.Item>
-          <Descriptions.Item label="状态">{statusTag(selectedOperation?.status)}</Descriptions.Item>
-          <Descriptions.Item label="资源">
+          <Descriptions.Item label={localeText(localeCode, '类型', 'Type')}>
+            {selectedOperation ? operationKindLabel(selectedOperation, localeCode) : '-'}
+          </Descriptions.Item>
+          <Descriptions.Item label={localeText(localeCode, '状态', 'Status')}>
+            {statusTag(selectedOperation?.status)}
+          </Descriptions.Item>
+          <Descriptions.Item label={localeText(localeCode, '资源', 'Resource')}>
             {selectedOperation?.targetName || selectedOperation?.targetType || '-'}
           </Descriptions.Item>
-          <Descriptions.Item label="连接">
+          <Descriptions.Item label={localeText(localeCode, '连接', 'Connection')}>
             {selectedOperation?.connectionName || selectedOperation?.connectionId || '-'}
           </Descriptions.Item>
           <Descriptions.Item label="VM">{selectedOperation?.vmId || '-'}</Descriptions.Item>
-          <Descriptions.Item label="开始时间">
+          <Descriptions.Item label={localeText(localeCode, '开始时间', 'Started at')}>
             {formatDateTime(selectedOperation?.startedAt || selectedOperation?.createdAt)}
           </Descriptions.Item>
-          <Descriptions.Item label="最近心跳">
+          <Descriptions.Item label={localeText(localeCode, '最近心跳', 'Last heartbeat')}>
             {formatDateTime(selectedOperation?.lastHeartbeatAt)}
           </Descriptions.Item>
-          <Descriptions.Item label="完成时间">
+          <Descriptions.Item label={localeText(localeCode, '完成时间', 'Completed at')}>
             {formatDateTime(selectedOperation?.completedAt)}
           </Descriptions.Item>
         </Descriptions>
@@ -535,10 +590,10 @@ export function OperationsTable({
                 ''
               if (!text) return
               await navigator.clipboard.writeText(text)
-              message.success('日志已复制')
+              message.success(localeText(localeCode, '日志已复制', 'Logs copied'))
             }}
           >
-            复制日志
+            {localeText(localeCode, '复制日志', 'Copy logs')}
           </Button>
         </div>
         <pre className="mt-4 max-h-[520px] overflow-auto rounded border border-[var(--soha-border-color)] bg-[var(--soha-bg-surface-muted)] p-3 text-xs">
@@ -553,7 +608,9 @@ export function OperationsTable({
               ? selectedOperation.logs.join('\n')
               : selectedOperation?.logText) ||
             selectedOperation?.message ||
-            (logsQuery.isLoading ? '日志加载中' : '暂无日志')}
+            (logsQuery.isLoading
+              ? localeText(localeCode, '日志加载中', 'Loading logs')
+              : localeText(localeCode, '暂无日志', 'No logs'))}
         </pre>
       </Drawer>
     </>

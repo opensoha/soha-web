@@ -47,6 +47,9 @@ describe('systemApi', () => {
 
     await systemApi.audit.list('identity', {
       action: ' login ',
+      clusterId: ' cluster-a ',
+      limit: 8,
+      namespace: ' prod ',
       requestMethod: ' POST ',
       requestPath: ' /api/v1/auth/login ',
       result: '',
@@ -64,7 +67,7 @@ describe('systemApi', () => {
 
     expect(apiMocks.get).toHaveBeenNthCalledWith(
       1,
-      '/identity/audit/events?action=login&requestMethod=POST&requestPath=%2Fapi%2Fv1%2Fauth%2Flogin&metadataKey=usageSnapshot.templateId&metadataValue=template%2Fa',
+      '/identity/audit/events?action=login&clusterId=cluster-a&limit=8&namespace=prod&requestMethod=POST&requestPath=%2Fapi%2Fv1%2Fauth%2Flogin&metadataKey=usageSnapshot.templateId&metadataValue=template%2Fa',
     )
     expect(apiMocks.get).toHaveBeenNthCalledWith(2, '/audit/logs?result=failure')
     expect(apiMocks.get).toHaveBeenNthCalledWith(

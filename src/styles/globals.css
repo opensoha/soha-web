@@ -215,7 +215,7 @@ a {
   justify-content: flex-start;
   height: var(--soha-app-chrome-height);
   min-height: var(--soha-app-chrome-height);
-  padding: 12px;
+  padding: 2px 12px;
   border-bottom: 1px solid transparent;
   background: var(--soha-bg-surface);
 }
@@ -224,8 +224,8 @@ a {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  height: 31px;
-  min-height: 31px;
+  height: 100%;
+  min-height: 0;
   width: 100%;
   padding: 0;
   border: none;
@@ -482,9 +482,10 @@ a {
 
 .soha-brand-logo {
   display: block;
-  width: 31px;
-  height: 31px;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
+  object-position: left center;
   border-radius: var(--soha-radius);
 }
 
@@ -1002,6 +1003,35 @@ a {
 /* ─── Login Page Hero Logo ─── */
 
 /* ─── Branding Upload Zones ─── */
+
+@media (min-width: 769px) and (max-width: 1200px) {
+  .soha-header {
+    display: block;
+    height: auto;
+    min-height: var(--soha-app-chrome-height);
+    padding-block: 8px;
+  }
+
+  .soha-header-top-row {
+    flex-wrap: wrap;
+  }
+
+  .soha-header-main {
+    flex: 0 0 100%;
+  }
+
+  .soha-header-context {
+    flex: 0 0 auto;
+    justify-content: flex-start;
+  }
+
+  .soha-header-right {
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    max-width: 100%;
+    justify-content: flex-start;
+  }
+}
 
 @media (max-width: 768px) {
   .soha-sider.ant-layout-sider-collapsed {

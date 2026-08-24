@@ -91,6 +91,18 @@ const apiGetMock = vi.hoisted(() =>
         },
       }
     }
+    if (path === '/copilot/sessions') {
+      return {
+        data: [
+          {
+            id: 'session-1',
+            title: '支付告警调查',
+            updatedAt: '2026-08-20T10:00:00Z',
+            metadata: { mode: 'root_cause', toolset: {} },
+          },
+        ],
+      }
+    }
     if (path === '/copilot/data-sources') return { data: [] }
     if (path === '/copilot/data-source-capabilities') return { data: [] }
     if (path === '/copilot/analysis-profiles') {
@@ -406,20 +418,15 @@ describe('AIOperationsPage delete actions', () => {
     expect(container.textContent).not.toContain('Workbench 默认模型')
   })
 
-  it('keeps session tool configuration out of resource tabs and opens it on demand', async () => {
+  it('keeps session assembly on its own page and opens it on demand', async () => {
     const container = await renderToolsPage()
-    const tabs = Array.from(container.querySelectorAll('.ant-tabs-tab'))
-
-    expect(tabs).toHaveLength(3)
-    expect(tabs.map((tab) => tab.textContent)).toEqual([
-      'MCP Adapters (0)',
-      '数据源 (0)',
-      'Skills (0)',
-    ])
+    expect(container.querySelectorAll('.ant-tabs-tab')).toHaveLength(0)
+    expect(container.querySelector('.soha-session-assembly-card')).not.toBeNull()
+    expect(container.textContent).toContain('支付告警调查')
     expect(document.body.querySelector('[role="dialog"]')).toBeNull()
 
     const configureButton = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent?.trim() === '配置当前会话',
+      (button) => button.textContent?.trim() === '配置装配',
     )
     expect(configureButton).toBeTruthy()
 

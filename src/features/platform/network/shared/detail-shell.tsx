@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { App, Card, Spin, Tabs } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PlatformResourceOverview } from '@/features/platform/shared/resource-overview'
+import { ResourceGitOpsStatus } from '@/features/platform/shared/resource-gitops-status'
 import { useI18n } from '@/i18n'
 import type { TabsProps } from 'antd'
 import { networkMutations } from './mutations'
@@ -14,6 +15,16 @@ const K8sYamlEditor = lazy(async () => {
   const module = await import('@/components/k8s-yaml-editor')
   return { default: module.K8sYamlEditor }
 })
+
+const ResourceGraphPanel = lazy(async () => {
+  const module = await import('@/features/platform/shared/resource-insights/resource-graph-panel')
+  return { default: module.ResourceGraphPanel }
+})
+
+const RESOURCE_GRAPH_KINDS: Partial<Record<NetworkKind, string>> = {
+  ingresses: 'Ingress',
+  services: 'Service',
+}
 
 export function NetworkResourceOverview({
   ageLabel,
@@ -112,6 +123,7 @@ export function NetworkDetailShell({
   detail,
   extraTabs = [],
   kind,
+  label,
   onTabChange,
   overviewExtra,
   overviewContent,
@@ -130,6 +142,7 @@ export function NetworkDetailShell({
   target: NetworkTarget
 }) {
   const { t } = useI18n()
+  const graphKind = RESOURCE_GRAPH_KINDS[kind]
   const items: NonNullable<TabsProps['items']> = [
     {
       key: 'overview',
@@ -137,10 +150,29 @@ export function NetworkDetailShell({
       children: (
         <div className="soha-detail-stack">
           <NetworkResourceOverview ageLabel={ageLabel} detail={detail} extra={overviewExtra} />
+          <ResourceGitOpsStatus
+            clusterId={target.scope.clusterId}
+            kind={label}
+            name={detail.name}
+            namespace={detail.namespace}
+          />
           {overviewContent}
         </div>
       ),
     },
+    ...(graphKind
+      ? [
+          {
+            key: 'relationships',
+            label: t('common.relationships', 'Relationships'),
+            children: (
+              <Suspense fallback={<Spin size="large" />}>
+                <ResourceGraphPanel kind={graphKind} name={detail.name} scope={target.scope} />
+              </Suspense>
+            ),
+          },
+        ]
+      : []),
     ...extraTabs,
     {
       key: 'yaml',

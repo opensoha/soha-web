@@ -29,12 +29,36 @@ function JobOverview({ detail }: { detail: JobDetail }) {
           column={{ xs: 1, sm: 2, md: 3 }}
           size="small"
           items={[
-            { key: 'completions', label: 'Completions', children: detail.completions ?? '-' },
-            { key: 'parallelism', label: 'Parallelism', children: detail.parallelism ?? '-' },
-            { key: 'succeeded', label: 'Succeeded', children: detail.succeeded ?? 0 },
-            { key: 'failed', label: 'Failed', children: detail.failed ?? 0 },
-            { key: 'active', label: 'Active', children: detail.active ?? 0 },
-            { key: 'mode', label: 'Mode', children: detail.completionMode || '-' },
+            {
+              key: 'completions',
+              label: localeCode === 'zh_CN' ? '完成数' : 'Completions',
+              children: detail.completions ?? '-',
+            },
+            {
+              key: 'parallelism',
+              label: localeCode === 'zh_CN' ? '并行度' : 'Parallelism',
+              children: detail.parallelism ?? '-',
+            },
+            {
+              key: 'succeeded',
+              label: localeCode === 'zh_CN' ? '成功' : 'Succeeded',
+              children: detail.succeeded ?? 0,
+            },
+            {
+              key: 'failed',
+              label: localeCode === 'zh_CN' ? '失败' : 'Failed',
+              children: detail.failed ?? 0,
+            },
+            {
+              key: 'active',
+              label: localeCode === 'zh_CN' ? '活跃' : 'Active',
+              children: detail.active ?? 0,
+            },
+            {
+              key: 'mode',
+              label: localeCode === 'zh_CN' ? '模式' : 'Mode',
+              children: detail.completionMode || '-',
+            },
             {
               key: 'startTime',
               label: localeCode === 'zh_CN' ? '开始时间' : 'Start Time',

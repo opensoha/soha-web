@@ -1,0 +1,35 @@
+.soha-service-port-list {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: 100%;
+}
+
+.soha-service-port-chain {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: max-content;
+  white-space: nowrap;
+}
+
+.soha-service-port-arrow {
+  flex: 0 0 auto;
+  color: var(--soha-text-tertiary);
+  font-size: 11px;
+}
+
+@media (max-width: 640px) {
+  .soha-service-port-chain {
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .soha-service-port-arrow {
+    margin-inline-start: 12px;
+    transform: rotate(90deg);
+  }
+}

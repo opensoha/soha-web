@@ -6,16 +6,9 @@ import {
   ManagementRefreshButton,
   ManagementTableToolbar,
 } from '@/components/management-list'
+import { localeText, useI18n } from '@/i18n'
 
 type AdminTableProps = ComponentProps<typeof AdminTable>
-
-const DEFAULT_PAGINATION_SUMMARY: NonNullable<AdminTableProps['paginationSummary']> = (
-  total,
-  range,
-) => {
-  if (total <= 0) return '当前 0 / 0 条'
-  return `当前 ${range[0]}-${range[1]} / ${total} 条`
-}
 
 function classNames(...items: Array<string | false | null | undefined>) {
   return items.filter(Boolean).join(' ')
@@ -47,16 +40,28 @@ export function VirtualizationAdminTable({
   enableDensity = true,
   onRefresh,
   pagination,
-  paginationSummary = DEFAULT_PAGINATION_SUMMARY,
+  paginationSummary,
   refreshing,
   shellClassName,
   showColumnSettings = true,
   showRefresh = true,
   title,
   toolbarExtra,
+  viewportScroll,
   ...tableProps
 }: VirtualizationAdminTableProps) {
+  const { localeCode } = useI18n()
   const [tableSize, setTableSize] = useState<NonNullable<AdminTableProps['tableSize']>>('small')
+  const resolvedPaginationSummary =
+    paginationSummary ??
+    ((total: number, range: [number, number]) =>
+      total <= 0
+        ? localeText(localeCode, '当前 0 / 0 条', '0 of 0')
+        : localeText(
+            localeCode,
+            `当前 ${range[0]}-${range[1]} / ${total} 条`,
+            `${range[0]}-${range[1]} of ${total}`,
+          ))
   const tableControls =
     toolbarExtra || actions || enableDensity || (showRefresh && onRefresh) ? (
       <ManagementTableToolbar>
@@ -64,18 +69,22 @@ export function VirtualizationAdminTable({
         {actions}
         {enableDensity ? (
           <ManagementDensityButton
-            aria-label="切换表格密度"
+            aria-label={localeText(localeCode, '切换表格密度', 'Toggle table density')}
             size="small"
-            tooltip={tableSize === 'small' ? '切换为宽松密度' : '切换为紧凑密度'}
+            tooltip={
+              tableSize === 'small'
+                ? localeText(localeCode, '切换为宽松密度', 'Use relaxed density')
+                : localeText(localeCode, '切换为紧凑密度', 'Use compact density')
+            }
             onClick={() => setTableSize((current) => (current === 'small' ? 'middle' : 'small'))}
           />
         ) : null}
         {showRefresh && onRefresh ? (
           <ManagementRefreshButton
-            aria-label="刷新列表"
+            aria-label={localeText(localeCode, '刷新列表', 'Refresh list')}
             loading={refreshing}
             size="small"
-            tooltip="刷新"
+            tooltip={localeText(localeCode, '刷新', 'Refresh')}
             onClick={onRefresh}
           />
         ) : null}
@@ -89,11 +98,12 @@ export function VirtualizationAdminTable({
       columnSettingIconOnly
       columnSettingPlacement={showColumnSettings ? (title ? 'header' : 'toolbar') : 'hidden'}
       pagination={pagination}
-      paginationSummary={pagination === false ? undefined : paginationSummary}
+      paginationSummary={pagination === false ? undefined : resolvedPaginationSummary}
       shellClassName={classNames('soha-management-table-shell', shellClassName)}
       tableSize={tableSize}
       title={title}
       toolbarExtra={tableControls}
+      viewportScroll={viewportScroll ?? showColumnSettings}
     />
   )
 }

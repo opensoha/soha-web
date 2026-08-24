@@ -19,6 +19,7 @@ import { tableColumnPresets } from '@/utils/table-columns'
 import { StepFormModal } from '@/components/step-form-modal'
 import { BooleanTag } from '@/components/status-tag'
 import { ManagementDataPage } from '@/components/management-data-page'
+import { localeText, useI18n } from '@/i18n'
 import {
   ManagementIconButton,
   ManagementKeywordField,
@@ -73,6 +74,7 @@ export function VirtualizationFlavorsPage() {
     useVirtualizationPermissions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
+  const { localeCode } = useI18n()
   const flavorsQuery = useQuery(virtualizationQueries.flavors(virtualizationModuleEnabled))
   const flavors = flavorsQuery.data ?? []
   const textFilteredFlavors = useManagementTextFilter(
@@ -90,7 +92,7 @@ export function VirtualizationFlavorsPage() {
     })
   }, [flavorFilters.enabled, textFilteredFlavors])
   const afterSave = () => {
-    message.success('规格已保存')
+    message.success(localeText(localeCode, '规格已保存', 'Flavor saved'))
     setDrawerOpen(false)
     setEditing(null)
     form.resetFields()
@@ -103,7 +105,7 @@ export function VirtualizationFlavorsPage() {
   )
   const deleteMutation = useMutation(
     withVirtualizationMutationSuccess(virtualizationMutations.deleteFlavor(queryClient), () =>
-      message.success('规格已删除'),
+      message.success(localeText(localeCode, '规格已删除', 'Flavor deleted')),
     ),
   )
   const savePending = createMutation.isPending || updateMutation.isPending
@@ -116,7 +118,7 @@ export function VirtualizationFlavorsPage() {
   }
   const columns: ColumnsType<VirtualizationFlavor> = [
     {
-      title: '名称',
+      title: localeText(localeCode, '名称', 'Name'),
       dataIndex: 'name',
       fixed: 'left',
       render: tableTooltipText,
@@ -124,16 +126,22 @@ export function VirtualizationFlavorsPage() {
       width: 180,
     },
     { title: 'CPU', dataIndex: 'cpu', width: 90 },
-    { title: '内存 MiB', dataIndex: 'memoryMiB', width: 120 },
-    { title: '磁盘 GiB', dataIndex: 'diskGiB', width: 120 },
+    { title: localeText(localeCode, '内存 MiB', 'Memory MiB'), dataIndex: 'memoryMiB', width: 120 },
+    { title: localeText(localeCode, '磁盘 GiB', 'Disk GiB'), dataIndex: 'diskGiB', width: 120 },
     {
-      title: '状态',
+      title: localeText(localeCode, '状态', 'Status'),
       dataIndex: 'enabled',
-      render: (value) => <BooleanTag value={value !== false} trueLabel="启用" falseLabel="禁用" />,
+      render: (value) => (
+        <BooleanTag
+          value={value !== false}
+          trueLabel={localeText(localeCode, '启用', 'Enabled')}
+          falseLabel={localeText(localeCode, '禁用', 'Disabled')}
+        />
+      ),
       width: 100,
     },
     {
-      title: '描述',
+      title: localeText(localeCode, '描述', 'Description'),
       dataIndex: 'description',
       render: (value) => tableTooltipText(value || '-'),
       ellipsis: tableEllipsis,
@@ -141,7 +149,7 @@ export function VirtualizationFlavorsPage() {
     },
     {
       ...tableColumnPresets.action,
-      title: '操作',
+      title: localeText(localeCode, '操作', 'Actions'),
       render: (_value, record) => {
         const canUpdate = canUpdateFlavors && hasAllowedAction(record.allowedActions, 'update')
         const canDelete = canDeleteFlavors && hasAllowedAction(record.allowedActions, 'delete')
@@ -150,19 +158,22 @@ export function VirtualizationFlavorsPage() {
           <Space className="soha-row-action-icons">
             {canUpdate ? (
               <ManagementIconButton
-                aria-label="编辑规格"
+                aria-label={localeText(localeCode, '编辑规格', 'Edit flavor')}
                 size="small"
-                tooltip="编辑"
+                tooltip={localeText(localeCode, '编辑', 'Edit')}
                 icon={<EditOutlined />}
                 onClick={() => openEditor(record)}
               />
             ) : null}
             {canDelete ? (
-              <Popconfirm title="确认删除规格？" onConfirm={() => deleteMutation.mutate(record.id)}>
+              <Popconfirm
+                title={localeText(localeCode, '确认删除规格？', 'Delete this flavor?')}
+                onConfirm={() => deleteMutation.mutate(record.id)}
+              >
                 <ManagementIconButton
-                  aria-label="删除规格"
+                  aria-label={localeText(localeCode, '删除规格', 'Delete flavor')}
                   size="small"
-                  tooltip="删除"
+                  tooltip={localeText(localeCode, '删除', 'Delete')}
                   danger
                   icon={<DeleteOutlined />}
                 />
@@ -188,9 +199,31 @@ export function VirtualizationFlavorsPage() {
         ),
         children: (
           <>
-            <ManagementKeywordField label="关键字" placeholder="搜索规格名称或描述" />
-            <ManagementQueryField minWidth={180} name="enabled" label="启用状态" width={180}>
-              <Select options={ENABLED_FILTER_OPTIONS} />
+            <ManagementKeywordField
+              label={localeText(localeCode, '关键字', 'Keyword')}
+              placeholder={localeText(
+                localeCode,
+                '搜索规格名称或描述',
+                'Search flavor name or description',
+              )}
+            />
+            <ManagementQueryField
+              minWidth={180}
+              name="enabled"
+              label={localeText(localeCode, '启用状态', 'Enabled')}
+              width={180}
+            >
+              <Select
+                options={ENABLED_FILTER_OPTIONS.map((option) => ({
+                  ...option,
+                  label:
+                    option.value === 'all'
+                      ? localeText(localeCode, '全部', 'All')
+                      : option.value === 'enabled'
+                        ? localeText(localeCode, '仅启用', 'Enabled only')
+                        : localeText(localeCode, '仅禁用', 'Disabled only'),
+                }))}
+              />
             </ManagementQueryField>
           </>
         ),
@@ -207,7 +240,7 @@ export function VirtualizationFlavorsPage() {
           actions={
             canCreateFlavors ? (
               <Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor()}>
-                新增规格
+                {localeText(localeCode, '新增规格', 'Add flavor')}
               </Button>
             ) : null
           }
@@ -216,13 +249,21 @@ export function VirtualizationFlavorsPage() {
           loading={flavorsQuery.isLoading}
           dataSource={flavorRows}
           columns={columns}
-          paginationSummary={localTableSummary(flavorRows.length, flavors.length)}
+          paginationSummary={localeText(
+            localeCode,
+            localTableSummary(flavorRows.length, flavors.length),
+            `${flavorRows.length} of ${flavors.length}`,
+          )}
           scroll={{ x: 1070 }}
         />
       }
       afterTable={
         <StepFormModal
-          title={editing ? '编辑规格' : '新增规格'}
+          title={
+            editing
+              ? localeText(localeCode, '编辑规格', 'Edit flavor')
+              : localeText(localeCode, '新增规格', 'Add flavor')
+          }
           current={currentStep}
           form={form}
           loading={savePending}
@@ -237,21 +278,29 @@ export function VirtualizationFlavorsPage() {
           initialValues={{ cpu: 2, memoryMiB: 4096, diskGiB: 40, enabled: true }}
           steps={[
             {
-              title: '基本信息',
+              title: localeText(localeCode, '基本信息', 'Basic information'),
               fieldNames: ['name'],
               children: (
                 <>
-                  <Form.Item name="name" label="名称" rules={[{ required: true }]}>
+                  <Form.Item
+                    name="name"
+                    label={localeText(localeCode, '名称', 'Name')}
+                    rules={[{ required: true }]}
+                  >
                     <Input />
                   </Form.Item>
-                  <Form.Item name="enabled" label="启用" valuePropName="checked">
+                  <Form.Item
+                    name="enabled"
+                    label={localeText(localeCode, '启用', 'Enabled')}
+                    valuePropName="checked"
+                  >
                     <Switch />
                   </Form.Item>
                 </>
               ),
             },
             {
-              title: '资源规格',
+              title: localeText(localeCode, '资源规格', 'Resources'),
               fieldNames: ['cpu', 'memoryMiB', 'diskGiB'],
               children: (
                 <>
@@ -259,21 +308,32 @@ export function VirtualizationFlavorsPage() {
                     <Form.Item name="cpu" label="CPU" rules={[{ required: true }]}>
                       <InputNumber min={1} className="w-full" />
                     </Form.Item>
-                    <Form.Item name="memoryMiB" label="内存 MiB" rules={[{ required: true }]}>
+                    <Form.Item
+                      name="memoryMiB"
+                      label={localeText(localeCode, '内存 MiB', 'Memory MiB')}
+                      rules={[{ required: true }]}
+                    >
                       <InputNumber min={128} className="w-full" />
                     </Form.Item>
-                    <Form.Item name="diskGiB" label="磁盘 GiB" rules={[{ required: true }]}>
+                    <Form.Item
+                      name="diskGiB"
+                      label={localeText(localeCode, '磁盘 GiB', 'Disk GiB')}
+                      rules={[{ required: true }]}
+                    >
                       <InputNumber min={1} className="w-full" />
                     </Form.Item>
                   </div>
-                  <Form.Item name="description" label="描述">
+                  <Form.Item
+                    name="description"
+                    label={localeText(localeCode, '描述', 'Description')}
+                  >
                     <Input.TextArea rows={3} />
                   </Form.Item>
                 </>
               ),
             },
           ]}
-          submitText="保存"
+          submitText={localeText(localeCode, '保存', 'Save')}
         />
       }
     />

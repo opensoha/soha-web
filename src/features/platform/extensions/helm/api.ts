@@ -1,5 +1,6 @@
 import { api } from '@/services/api-client'
 import type { ApiResponse } from '@/types'
+import type { OperationalPlan } from '@opensoha/contracts/gen/ts/sohaapi'
 import {
   buildHelmChartCatalogPath,
   buildHelmChartDetailPath,
@@ -8,6 +9,9 @@ import {
   buildHelmReleaseDeletePath,
   buildHelmReleaseDetailResourcePath,
   buildHelmReleaseHistoryPath,
+  buildHelmReleaseManifestPath,
+  buildHelmReleaseRollbackPath,
+  buildHelmReleaseRollbackPlanPath,
   buildHelmReleaseListPath,
   buildHelmReleaseValuesPath,
 } from './paths'
@@ -23,6 +27,8 @@ import type {
   HelmRelease,
   HelmReleaseDetail,
   HelmReleaseHistory,
+  HelmReleaseManifest,
+  HelmReleaseRollbackVariables,
   HelmReleaseTarget,
   HelmValues,
   UpdateHelmValuesVariables,
@@ -57,6 +63,44 @@ export async function getHelmReleaseHistory(
     buildHelmReleaseHistoryPath(target),
   )
   return response.data ?? []
+}
+
+export async function getHelmReleaseManifest(
+  target: HelmReleaseTarget,
+  revision?: string,
+): Promise<HelmReleaseManifest> {
+  const response = await api.get<ApiResponse<HelmReleaseManifest>>(
+    buildHelmReleaseManifestPath(target, revision),
+  )
+  return response.data
+}
+
+export async function planHelmReleaseRollback(
+  variables: HelmReleaseRollbackVariables,
+): Promise<OperationalPlan> {
+  const response = await api.post<ApiResponse<OperationalPlan>>(
+    buildHelmReleaseRollbackPlanPath(variables),
+    {
+      revision: variables.revision,
+      wait: variables.wait,
+      timeoutSeconds: variables.timeoutSeconds,
+    },
+  )
+  return response.data
+}
+
+export async function rollbackHelmRelease(
+  variables: HelmReleaseRollbackVariables,
+): Promise<HelmReleaseDetail> {
+  const response = await api.post<ApiResponse<HelmReleaseDetail>>(
+    buildHelmReleaseRollbackPath(variables),
+    {
+      revision: variables.revision,
+      wait: variables.wait,
+      timeoutSeconds: variables.timeoutSeconds,
+    },
+  )
+  return response.data
 }
 
 export async function updateHelmReleaseValues(

@@ -11,6 +11,7 @@ import {
   ManagementQueryPanel,
 } from '@/components/management-list'
 import { formatDateTime } from '@/utils/time'
+import { localeText, useI18n } from '@/i18n'
 import { dockerApi } from '../docker-api'
 import { dockerQueries } from '../queries'
 import type { DockerOperation, DockerOperationLog } from '../docker-types'
@@ -31,6 +32,16 @@ import {
 const { Text } = Typography
 type OperationPreset = 'all' | 'pending' | 'abnormal' | 'host' | 'project' | 'service'
 
+function operationKindLabel(value: string, localeCode: 'zh_CN' | 'en_US') {
+  const labels: Record<string, [string, string]> = {
+    host_provision: ['主机构建', 'Host provisioning'],
+    project_deploy: ['项目部署', 'Project deployment'],
+    service_action: ['服务操作', 'Service action'],
+  }
+  const label = labels[value]
+  return label ? localeText(localeCode, label[0], label[1]) : value
+}
+
 function OperationLogDrawer({
   operation,
   logs,
@@ -44,6 +55,7 @@ function OperationLogDrawer({
   open: boolean
   onClose: () => void
 }) {
+  const { localeCode } = useI18n()
   const text = logs.length
     ? logs
         .map(
@@ -53,17 +65,32 @@ function OperationLogDrawer({
         .join('\n')
     : JSON.stringify(operation?.payload ?? {}, null, 2)
   return (
-    <Drawer title="操作日志" size="large" open={open} onClose={onClose}>
+    <Drawer
+      title={localeText(localeCode, '操作日志', 'Operation logs')}
+      size="large"
+      open={open}
+      onClose={onClose}
+    >
       {operation ? (
         <Descriptions size="small" column={2} bordered className="mb-3">
-          <Descriptions.Item label="任务 ID">{operation.id}</Descriptions.Item>
-          <Descriptions.Item label="状态">{statusTag(operation.status)}</Descriptions.Item>
-          <Descriptions.Item label="类型">{operation.operationKind}</Descriptions.Item>
-          <Descriptions.Item label="发起人">{operation.requestedBy || '-'}</Descriptions.Item>
+          <Descriptions.Item label={localeText(localeCode, '任务 ID', 'Task ID')}>
+            {operation.id}
+          </Descriptions.Item>
+          <Descriptions.Item label={localeText(localeCode, '状态', 'Status')}>
+            {statusTag(operation.status)}
+          </Descriptions.Item>
+          <Descriptions.Item label={localeText(localeCode, '类型', 'Type')}>
+            {operationKindLabel(operation.operationKind ?? '-', localeCode)}
+          </Descriptions.Item>
+          <Descriptions.Item label={localeText(localeCode, '发起人', 'Requested by')}>
+            {operation.requestedBy || '-'}
+          </Descriptions.Item>
         </Descriptions>
       ) : null}
       <pre className="max-h-[560px] overflow-auto rounded border border-[var(--soha-border-color)] bg-[var(--soha-bg-surface-muted)] p-3 text-xs">
-        {loading ? '日志加载中' : text || '暂无日志'}
+        {loading
+          ? localeText(localeCode, '日志加载中', 'Loading logs')
+          : text || localeText(localeCode, '暂无日志', 'No logs')}
       </pre>
     </Drawer>
   )
@@ -79,11 +106,12 @@ export function OperationsTable({
   const [preset, setPreset] = useState<OperationPreset>(initialPreset)
   const [filters, setFilters] = useState<DockerFilterState>({
     page: 1,
-    pageSize: embedded ? 6 : 10,
+    pageSize: embedded ? 6 : 15,
   })
   const [filterForm] = Form.useForm<DockerFilterState>()
   const [selectedOperation, setSelectedOperation] = useState<DockerOperation | null>(null)
   const { dockerModuleEnabled, canCancelOperations, canRetryOperations } = useDockerPermissions()
+  const { localeCode } = useI18n()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const presetFilter = useMemo<DockerFilterState>(() => {
@@ -102,42 +130,56 @@ export function OperationsTable({
   const cancelMutation = useMutation({
     mutationFn: dockerApi.cancelOperation,
     onSuccess: () => {
-      message.success('任务已取消')
+      message.success(localeText(localeCode, '任务已取消', 'Task canceled'))
       refreshDocker(queryClient)
     },
   })
   const retryMutation = useMutation({
     mutationFn: dockerApi.retryOperation,
     onSuccess: () => {
-      message.success('重试任务已提交')
+      message.success(localeText(localeCode, '重试任务已提交', 'Retry task submitted'))
       refreshDocker(queryClient)
     },
   })
-  const page = normalizePage(operationsQuery.data, filters.page ?? 1, filters.pageSize ?? 10)
+  const page = normalizePage(
+    operationsQuery.data,
+    filters.page ?? 1,
+    filters.pageSize ?? (embedded ? 6 : 15),
+  )
   const logs = queryData(logsQuery.data, [])
   const columns: ColumnsType<DockerOperation> = [
     {
-      title: '任务',
+      title: localeText(localeCode, '任务', 'Task'),
       dataIndex: 'operationKind',
       fixed: 'left',
       width: 190,
       render: (value, record) => (
         <Space orientation="vertical" size={0}>
-          <Text strong>{value}</Text>
+          <Text strong>{operationKindLabel(value, localeCode)}</Text>
           <Text type="secondary">{record.id}</Text>
         </Space>
       ),
     },
-    { title: '状态', dataIndex: 'status', width: 115, render: statusTag },
     {
-      title: '关联对象',
+      title: localeText(localeCode, '状态', 'Status'),
+      dataIndex: 'status',
+      width: 115,
+      render: (value) => statusTag(value, localeCode),
+    },
+    {
+      title: localeText(localeCode, '关联对象', 'Related resources'),
       width: 240,
       render: (_value, record) =>
         [record.hostId, record.projectId, record.serviceId].filter(Boolean).join(' / ') || '-',
     },
-    { title: '发起人', dataIndex: 'requestedBy', width: 130, render: (value) => value || '-' },
     {
-      title: '尝试',
+      title: localeText(localeCode, '发起人', 'Requested by'),
+      dataIndex: 'requestedBy',
+      width: 130,
+      render: (value) => value || '-',
+    },
+    {
+      title: localeText(localeCode, '尝试', 'Attempts'),
       width: 90,
       render: (_value, record) => `${record.attemptCount ?? 0}/${record.maxRetries ?? 0}`,
     },
@@ -147,10 +189,20 @@ export function OperationsTable({
       width: 150,
       render: (value) => value || '-',
     },
-    { title: '开始', dataIndex: 'startedAt', width: 155, render: formatDateTime },
-    { title: '结束', dataIndex: 'finishedAt', width: 155, render: formatDateTime },
     {
-      title: '操作',
+      title: localeText(localeCode, '开始', 'Started at'),
+      dataIndex: 'startedAt',
+      width: 155,
+      render: formatDateTime,
+    },
+    {
+      title: localeText(localeCode, '结束', 'Finished at'),
+      dataIndex: 'finishedAt',
+      width: 155,
+      render: formatDateTime,
+    },
+    {
+      title: localeText(localeCode, '操作', 'Actions'),
       align: 'center',
       className: 'soha-table-actions-column',
       fixed: 'right',
@@ -158,17 +210,17 @@ export function OperationsTable({
       render: (_value, record) => (
         <Space className="soha-row-action-icons">
           <ManagementIconButton
-            aria-label="查看日志"
+            aria-label={localeText(localeCode, '查看日志', 'View logs')}
             size="small"
-            tooltip="日志"
+            tooltip={localeText(localeCode, '日志', 'Logs')}
             icon={<FileTextOutlined />}
             onClick={() => setSelectedOperation(record)}
           />
           {canCancelOperations && isPendingOperation(record.status) ? (
             <ManagementIconButton
-              aria-label="取消任务"
+              aria-label={localeText(localeCode, '取消任务', 'Cancel task')}
               size="small"
-              tooltip="取消"
+              tooltip={localeText(localeCode, '取消', 'Cancel')}
               danger
               icon={<PoweroffOutlined />}
               loading={cancelMutation.isPending}
@@ -177,9 +229,9 @@ export function OperationsTable({
           ) : null}
           {canRetryOperations && isAbnormalOperation(record.status) ? (
             <ManagementIconButton
-              aria-label="重试任务"
+              aria-label={localeText(localeCode, '重试任务', 'Retry task')}
               size="small"
-              tooltip="重试"
+              tooltip={localeText(localeCode, '重试', 'Retry')}
               icon={<ReloadOutlined />}
               loading={retryMutation.isPending}
               onClick={() => retryMutation.mutate(record.id)}
@@ -201,13 +253,17 @@ export function OperationsTable({
                 onReset={() => {
                   filterForm.resetFields()
                   setPreset(initialPreset)
-                  setFilters({ page: 1, pageSize: filters.pageSize ?? (embedded ? 6 : 10) })
+                  setFilters({ page: 1, pageSize: filters.pageSize ?? (embedded ? 6 : 15) })
                 }}
               />
             }
             onFinish={(values) => setFilters((current) => ({ ...current, ...values, page: 1 }))}
           >
-            <ManagementQueryField minWidth={360} width={460} label="任务视图">
+            <ManagementQueryField
+              minWidth={360}
+              width={460}
+              label={localeText(localeCode, '任务视图', 'Task view')}
+            >
               <Segmented<OperationPreset>
                 value={preset}
                 onChange={(value) => {
@@ -215,16 +271,22 @@ export function OperationsTable({
                   setFilters((current) => ({ ...current, page: 1 }))
                 }}
                 options={[
-                  { value: 'all', label: '全部' },
-                  { value: 'pending', label: '待处理' },
-                  { value: 'abnormal', label: '异常' },
-                  { value: 'host', label: '主机构建' },
+                  { value: 'all', label: localeText(localeCode, '全部', 'All') },
+                  { value: 'pending', label: localeText(localeCode, '待处理', 'Pending') },
+                  { value: 'abnormal', label: localeText(localeCode, '异常', 'Failed') },
+                  { value: 'host', label: localeText(localeCode, '主机构建', 'Host provisioning') },
                   { value: 'project', label: 'Compose' },
-                  { value: 'service', label: '服务' },
+                  { value: 'service', label: localeText(localeCode, '服务', 'Service') },
                 ]}
               />
             </ManagementQueryField>
-            <ManagementKeywordField placeholder="任务 ID、类型或发起人" />
+            <ManagementKeywordField
+              placeholder={localeText(
+                localeCode,
+                '任务 ID、类型或发起人',
+                'Task ID, type, or requester',
+              )}
+            />
           </ManagementQueryPanel>
         </div>
       ) : null}
@@ -239,7 +301,11 @@ export function OperationsTable({
         pagination={pageTablePagination(page, embedded, setFilters)}
         title={
           embedded ? (
-            <Text strong>{initialPreset === 'pending' ? '待处理任务' : '操作记录'}</Text>
+            <Text strong>
+              {initialPreset === 'pending'
+                ? localeText(localeCode, '待处理任务', 'Pending tasks')
+                : localeText(localeCode, '操作记录', 'Operations')}
+            </Text>
           ) : undefined
         }
         enableDensity={!embedded}

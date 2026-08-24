@@ -3,6 +3,8 @@ import { Card, Descriptions, Input, Space, Tabs, Tag } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { Navigate, useParams } from 'react-router-dom'
 import { useAIPageContext } from '@/features/copilot'
+import { localeText, useI18n } from '@/i18n'
+import { formatStatusLabel } from '@/i18n/status'
 import { formatDateTime } from '@/utils/time'
 import { dockerQueries } from '../queries'
 import { PortsTable } from '../ports/table'
@@ -38,6 +40,7 @@ function RuntimeBoundary({ children }: { children: ReactNode }) {
 
 function ProjectDetailWorkspace() {
   const { projectId } = useParams()
+  const { localeCode } = useI18n()
   const resolvedProjectId = projectId ?? ''
   const {
     dockerModuleEnabled,
@@ -76,7 +79,9 @@ function ProjectDetailWorkspace() {
   const defaultRuntimeServiceName = runtimeServiceOptions[0]?.value || ''
   useAIPageContext({
     sourceWorkbench: 'compute',
-    sourceTitle: project?.name ? `Docker 项目 ${project.name}` : 'Docker 项目详情',
+    sourceTitle: project?.name
+      ? localeText(localeCode, `Docker 项目 ${project.name}`, `Docker project ${project.name}`)
+      : localeText(localeCode, 'Docker 项目详情', 'Docker project details'),
     entityKind: 'docker.project',
     entityName: project?.name ?? resolvedProjectId,
     dockerHostId: project?.hostId,
@@ -109,48 +114,60 @@ function ProjectDetailWorkspace() {
   const runtimeConfigTab = isSingleContainerProject
     ? {
         key: 'config',
-        label: '配置',
+        label: localeText(localeCode, '配置', 'Configuration'),
         children: (
           <Card className="soha-detail-card" loading={projectQuery.isLoading}>
             <Descriptions
               size="small"
               column={{ xs: 1, sm: 2, lg: 3 }}
               items={[
-                { key: 'image', label: '镜像', children: configTextValue(projectConfig, 'image') },
+                {
+                  key: 'image',
+                  label: localeText(localeCode, '镜像', 'Image'),
+                  children: configTextValue(projectConfig, 'image'),
+                },
                 {
                   key: 'architecture',
-                  label: '架构',
+                  label: localeText(localeCode, '架构', 'Architecture'),
                   children: architectureTag(configTextValue(projectConfig, 'architecture')),
                 },
                 {
                   key: 'platform',
-                  label: '平台',
+                  label: localeText(localeCode, '平台', 'Platform'),
                   children: configTextValue(projectConfig, 'platform'),
                 },
                 {
                   key: 'serviceName',
-                  label: '服务名',
+                  label: localeText(localeCode, '服务名', 'Service name'),
                   children: configTextValue(projectConfig, 'serviceName'),
                 },
                 {
                   key: 'restartPolicy',
-                  label: '重启策略',
+                  label: localeText(localeCode, '重启策略', 'Restart policy'),
                   children: configTextValue(projectConfig, 'restartPolicy'),
                 },
                 {
                   key: 'command',
-                  label: '启动命令',
+                  label: localeText(localeCode, '启动命令', 'Command'),
                   children: configTextValue(projectConfig, 'command'),
                 },
                 {
                   key: 'ports',
-                  label: '端口',
-                  children: `${configArrayCount(projectConfig, 'ports')} 个`,
+                  label: localeText(localeCode, '端口', 'Ports'),
+                  children: localeText(
+                    localeCode,
+                    `${configArrayCount(projectConfig, 'ports')} 个`,
+                    `${configArrayCount(projectConfig, 'ports')}`,
+                  ),
                 },
                 {
                   key: 'volumes',
-                  label: '卷',
-                  children: `${configArrayCount(projectConfig, 'volumes')} 个`,
+                  label: localeText(localeCode, '卷', 'Volumes'),
+                  children: localeText(
+                    localeCode,
+                    `${configArrayCount(projectConfig, 'volumes')} 个`,
+                    `${configArrayCount(projectConfig, 'volumes')}`,
+                  ),
                 },
               ]}
             />
@@ -204,7 +221,7 @@ function ProjectDetailWorkspace() {
   const detailTabItems = [
     {
       key: 'overview',
-      label: '概览',
+      label: localeText(localeCode, '概览', 'Overview'),
       children: (
         <div className="soha-detail-stack">
           <Card className="soha-detail-card" loading={projectQuery.isLoading}>
@@ -212,16 +229,36 @@ function ProjectDetailWorkspace() {
               size="small"
               column={{ xs: 1, sm: 2, lg: 3 }}
               items={[
-                { key: 'host', label: 'Docker 主机', children: project?.hostId || '-' },
-                { key: 'environment', label: '环境', children: project?.environment || '-' },
-                { key: 'owner', label: '负责人', children: project?.owner || project?.team || '-' },
-                { key: 'desiredState', label: '目标态', children: project?.desiredState || '-' },
+                {
+                  key: 'host',
+                  label: localeText(localeCode, 'Docker 主机', 'Docker host'),
+                  children: project?.hostId || '-',
+                },
+                {
+                  key: 'environment',
+                  label: localeText(localeCode, '环境', 'Environment'),
+                  children: project?.environment || '-',
+                },
+                {
+                  key: 'owner',
+                  label: localeText(localeCode, '负责人', 'Owner'),
+                  children: project?.owner || project?.team || '-',
+                },
+                {
+                  key: 'desiredState',
+                  label: localeText(localeCode, '目标态', 'Desired state'),
+                  children: formatStatusLabel(project?.desiredState, localeCode),
+                },
                 {
                   key: 'lastDeployedAt',
-                  label: '部署时间',
+                  label: localeText(localeCode, '部署时间', 'Deployed at'),
                   children: formatDateTime(project?.lastDeployedAt),
                 },
-                { key: 'expiresAt', label: '到期', children: formatDateTime(project?.expiresAt) },
+                {
+                  key: 'expiresAt',
+                  label: localeText(localeCode, '到期', 'Expires at'),
+                  children: formatDateTime(project?.expiresAt),
+                },
               ]}
             />
           </Card>
@@ -229,16 +266,34 @@ function ProjectDetailWorkspace() {
             <Card
               className="soha-detail-card"
               loading={detailServicesQuery.isLoading}
-              title="容器状态"
+              title={localeText(localeCode, '容器状态', 'Container status')}
               extra={
                 <Space size={6} wrap>
-                  <Tag color="blue">容器 {runtimeServicePage.total}</Tag>
-                  <Tag color="green">运行 {runningServiceCount}</Tag>
-                  <Tag color="orange">重启 {serviceRestartCount}</Tag>
+                  <Tag color="blue">
+                    {localeText(
+                      localeCode,
+                      `容器 ${runtimeServicePage.total}`,
+                      `Containers ${runtimeServicePage.total}`,
+                    )}
+                  </Tag>
+                  <Tag color="green">
+                    {localeText(
+                      localeCode,
+                      `运行 ${runningServiceCount}`,
+                      `Running ${runningServiceCount}`,
+                    )}
+                  </Tag>
+                  <Tag color="orange">
+                    {localeText(
+                      localeCode,
+                      `重启 ${serviceRestartCount}`,
+                      `Restarts ${serviceRestartCount}`,
+                    )}
+                  </Tag>
                 </Space>
               }
             >
-              <ServicesTable fixedProjectId={resolvedProjectId} />
+              <ServicesTable embedded fixedProjectId={resolvedProjectId} />
             </Card>
           ) : null}
         </div>
@@ -248,7 +303,7 @@ function ProjectDetailWorkspace() {
       ? [
           {
             key: 'logs',
-            label: '日志',
+            label: localeText(localeCode, '日志', 'Logs'),
             children: (
               <RuntimeBoundary>
                 <DockerProjectLogsPanel
@@ -290,7 +345,7 @@ function ProjectDetailWorkspace() {
       ? [
           {
             key: 'volumes',
-            label: '卷文件',
+            label: localeText(localeCode, '卷文件', 'Volume files'),
             children: (
               <RuntimeBoundary>
                 <DockerProjectVolumesPanel
@@ -311,7 +366,7 @@ function ProjectDetailWorkspace() {
       ? [
           {
             key: 'ports',
-            label: '端口映射',
+            label: localeText(localeCode, '端口映射', 'Port mappings'),
             children: (
               <div className="soha-page-section">
                 <PortsTable fixedProjectId={resolvedProjectId} fixedHostId={project?.hostId} />

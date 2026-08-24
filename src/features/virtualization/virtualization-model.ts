@@ -1,5 +1,6 @@
 import { hasAllowedAction } from '@/features/auth'
 import type { DockerPayloadMap, DockerQuickCreateHostInput } from '@/features/docker'
+import { localeText } from '@/i18n'
 import type {
   CreateVirtualMachineInput,
   VirtualMachine,
@@ -218,6 +219,18 @@ export function badgeStatusForTone(
 
 export function operationKind(record: VirtualizationOperation) {
   return record.operationType || record.type || record.action || '-'
+}
+
+export function operationKindLabel(record: VirtualizationOperation, localeCode: 'zh_CN' | 'en_US') {
+  const kind = operationKind(record)
+  const labels: Record<string, [string, string]> = {
+    asset_sync: ['资产同步', 'Asset sync'],
+    connection_test: ['连接检查', 'Connection test'],
+    vm_action: ['虚拟机操作', 'VM action'],
+    vm_create: ['创建虚拟机', 'Create VM'],
+  }
+  const label = labels[kind]
+  return label ? localeText(localeCode, label[0], label[1]) : kind
 }
 
 export function operationTime(record: VirtualizationOperation) {

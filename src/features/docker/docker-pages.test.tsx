@@ -52,8 +52,8 @@ const testState = vi.hoisted(() => ({
         ],
       }
     }
-    if (path === '/docker/hosts?page=1&pageSize=10') {
-      return { data: { items: [], total: 0, page: 1, pageSize: 10 } }
+    if (path === '/docker/hosts?page=1&pageSize=15') {
+      return { data: { items: [], total: 0, page: 1, pageSize: 15 } }
     }
     if (path === '/docker/hosts?page=1&pageSize=200') {
       return {
@@ -82,7 +82,7 @@ const testState = vi.hoisted(() => ({
         },
       }
     }
-    if (path === '/docker/projects?page=1&pageSize=10') {
+    if (path === '/docker/projects?page=1&pageSize=15') {
       return {
         data: {
           items: [
@@ -117,7 +117,7 @@ const testState = vi.hoisted(() => ({
           ],
           total: 2,
           page: 1,
-          pageSize: 10,
+          pageSize: 15,
         },
       }
     }
@@ -168,10 +168,10 @@ const testState = vi.hoisted(() => ({
         },
       }
     }
-    if (path === '/docker/projects?page=1&pageSize=10&sourceKind=compose') {
-      return { data: { items: [], total: 0, page: 1, pageSize: 10 } }
+    if (path === '/docker/projects?page=1&pageSize=15&sourceKind=compose') {
+      return { data: { items: [], total: 0, page: 1, pageSize: 15 } }
     }
-    if (path === '/docker/projects?page=1&pageSize=10&sourceKind=single_container') {
+    if (path === '/docker/projects?page=1&pageSize=15&sourceKind=single_container') {
       return {
         data: {
           items: [
@@ -196,7 +196,7 @@ const testState = vi.hoisted(() => ({
           ],
           total: 1,
           page: 1,
-          pageSize: 10,
+          pageSize: 15,
         },
       }
     }
@@ -865,6 +865,11 @@ describe('docker pages', () => {
     })
     expect(document.body.textContent).toContain('销毁并重建 soha-orbstack-smoke')
     expect(document.body.textContent).toContain('将重新拉取镜像')
+    const approvalCheckbox = document.querySelector(
+      '.ant-modal input[type="checkbox"]',
+    ) as HTMLInputElement | null
+    expect(approvalCheckbox).not.toBeNull()
+    await act(async () => approvalCheckbox?.click())
     const confirmButton = Array.from(document.querySelectorAll('.ant-modal-footer button')).find(
       (button) => button.textContent?.includes('销毁重建'),
     ) as HTMLButtonElement | undefined
@@ -1064,7 +1069,7 @@ describe('docker pages', () => {
     await renderWithProviders(<DockerProjectsPage />)
 
     expect(testState.apiGet).toHaveBeenCalledWith('/modules')
-    expect(testState.apiGet).not.toHaveBeenCalledWith('/docker/projects?page=1&pageSize=10')
+    expect(testState.apiGet).not.toHaveBeenCalledWith('/docker/projects?page=1&pageSize=15')
     expect(testState.apiGet).not.toHaveBeenCalledWith('/docker/hosts?page=1&pageSize=200')
     expect(document.body.textContent).not.toContain('创建 Compose')
     expect(document.body.textContent).not.toContain('快速启动')
@@ -1133,7 +1138,7 @@ describe('docker pages', () => {
       container.querySelector('.ant-tabs-tabpane-active .soha-admin-table-shell'),
     ).not.toBeNull()
     expect(testState.apiGet).toHaveBeenCalledWith(
-      '/docker/services?page=1&pageSize=10&projectId=project-1',
+      '/docker/services?page=1&pageSize=5&projectId=project-1',
     )
 
     container.remove()

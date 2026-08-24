@@ -31,6 +31,9 @@ import {
   capabilityActionTooltip,
   useClusterCapability,
 } from '@/features/platform/cluster-capabilities'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
+import { ResourceStreamStatus } from '@/features/platform/shared/resource-stream-status'
+import { useKubernetesResourceStream } from '@/features/platform/shared/resource-stream'
 import { useRealtimeSessionDock } from '@/features/platform/session-dock'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { formatAgeSeconds } from '@/utils/time'
@@ -39,7 +42,6 @@ import {
   compareStrings,
   formatCpuDisplay,
   formatMemoryDisplay,
-  formatRefreshTimestamp,
   includesSearch,
   normalizeSearchKeyword,
   parseCpuValue,
@@ -53,12 +55,12 @@ import {
   WorkloadRefreshButton,
   WorkloadSearchInput,
   WorkloadTableEmpty,
-  WorkloadTableSummary,
   useWorkloadTableDensity,
 } from '../shared/list-controls'
 import { podMutations } from './mutations'
 import { podQueries } from './queries'
 import { podTargetFromRecord, type Pod } from './types'
+import { workloadKeys } from '../shared/keys'
 import '@/features/platform/workloads/styles.css'
 
 const { Link, Text } = Typography
@@ -74,13 +76,13 @@ function podSorter(compareFn: (left: Pod, right: Pod) => number) {
   }
 }
 
-function renderPodReadyCell(readyContainers: string) {
+function renderPodReadyCell(readyContainers: string, readyLabel: string) {
   const ready = parseReadyContainers(readyContainers)
   const readyHealthy = ready.total > 0 && ready.ready >= ready.total
 
   return (
     <Tag variant="filled" color={readyHealthy ? 'success' : 'warning'}>
-      {`Ready ${readyContainers || '-'}`}
+      {`${readyLabel} ${readyContainers || '-'}`}
     </Tag>
   )
 }
@@ -220,14 +222,23 @@ export function WorkloadsPodsPage() {
 
   const listScope = toScopeKey(clusterId, namespace)
   const podsQueryOptions = podQueries.list(listScope)
+  const podStream = useKubernetesResourceStream({
+    clusterId,
+    namespace,
+    kinds: ['Pod', 'Event'],
+    onEvent: () => void queryClient.invalidateQueries({ queryKey: workloadKeys.lists('pods') }),
+    onFallback: () => void queryClient.invalidateQueries({ queryKey: workloadKeys.lists('pods') }),
+    onResyncRequired: () => queryClient.invalidateQueries({ queryKey: workloadKeys.lists('pods') }),
+  })
   const podsQuery = useQuery({
     ...podsQueryOptions,
-    refetchInterval: autoRefreshEnabled && clusterId ? autoRefreshIntervalSeconds * 1000 : false,
+    refetchInterval:
+      !podStream.live && autoRefreshEnabled && clusterId
+        ? autoRefreshIntervalSeconds * 1000
+        : false,
   })
 
   const isLoading = podsQuery.isLoading
-  const isBackgroundRefreshing =
-    podsQuery.isFetching && !podsQuery.isLoading && !manualRefreshPending
 
   const pods = podsQuery.data ?? []
   const normalizedKeyword = normalizeSearchKeyword(searchKeyword)
@@ -241,7 +252,10 @@ export function WorkloadsPodsPage() {
     timeRangeMinutes: 60,
     visibleFilters: { searchKeyword, phaseFilter, restartFilter, pvcFilter, nodeFilter },
     pinnedData: { total: pods.length },
-    promptHint: '分析当前 Pod 列表中的异常状态、重启、节点分布和存储挂载风险。',
+    promptHint:
+      localeCode === 'zh_CN'
+        ? '分析当前 Pod 列表中的异常状态、重启、节点分布和存储挂载风险。'
+        : 'Analyze abnormal Pod states, restarts, node distribution, and storage mount risks.',
   })
   const nodeOptions = useMemo(
     () => Array.from(new Set(pods.map((item) => item.nodeName).filter(Boolean))).sort(),
@@ -318,22 +332,6 @@ export function WorkloadsPodsPage() {
             ? '部分 Pod 当前不允许删除'
             : 'Some selected pods do not allow delete'
           : ''
-
-  const refreshStatusLabel = manualRefreshPending
-    ? localeCode === 'zh_CN'
-      ? '手动刷新中…'
-      : 'Manual refresh in progress…'
-    : isBackgroundRefreshing
-      ? localeCode === 'zh_CN'
-        ? '自动刷新中…'
-        : 'Auto refresh in progress…'
-      : clusterId
-        ? localeCode === 'zh_CN'
-          ? `更新于 ${formatRefreshTimestamp(podsQuery.dataUpdatedAt, localeCode)}`
-          : `Updated at ${formatRefreshTimestamp(podsQuery.dataUpdatedAt, localeCode)}`
-        : localeCode === 'zh_CN'
-          ? '选择集群后开始刷新'
-          : 'Select a cluster to start refreshing'
 
   const deletePodMutation = useMutation(podMutations.remove(queryClient))
   const batchDeletePodsMutation = useMutation(podMutations.removeBatch(queryClient))
@@ -424,7 +422,8 @@ export function WorkloadsPodsPage() {
         if (leftReady.total !== rightReady.total) return leftReady.total - rightReady.total
         return leftReady.ready - rightReady.ready
       }),
-      render: (readyContainers: string) => renderPodReadyCell(readyContainers),
+      render: (readyContainers: string) =>
+        renderPodReadyCell(readyContainers, localeCode === 'zh_CN' ? '就绪' : 'Ready'),
     },
     {
       title: localeCode === 'zh_CN' ? '重启' : 'Restarts',
@@ -736,9 +735,6 @@ export function WorkloadsPodsPage() {
 
   const podToolbarExtra = (
     <ManagementTableToolbar batchBar={podBatchBar}>
-      <Text className="soha-refresh-meta" type="secondary">
-        {refreshStatusLabel}
-      </Text>
       <div className="soha-refresh-controls">
         <Text className="soha-refresh-meta" type="secondary">
           {localeCode === 'zh_CN' ? '自动刷新' : 'Auto refresh'}
@@ -747,14 +743,14 @@ export function WorkloadsPodsPage() {
           size="small"
           checked={autoRefreshEnabled}
           onChange={setAutoRefreshEnabled}
-          disabled={!clusterId}
+          disabled={!clusterId || podStream.live}
         />
         <Select
           className="soha-platform-compact-field"
           size="small"
           value={autoRefreshIntervalSeconds}
           onChange={(value) => setAutoRefreshIntervalSeconds(Number(value))}
-          disabled={!clusterId || !autoRefreshEnabled}
+          disabled={!clusterId || podStream.live || !autoRefreshEnabled}
           style={{ width: 96 }}
           options={[
             { value: 5, label: localeCode === 'zh_CN' ? '5 秒' : '5s' },
@@ -763,6 +759,11 @@ export function WorkloadsPodsPage() {
           ]}
         />
       </div>
+      <ResourceStreamStatus
+        status={podStream.status}
+        lastEventAt={podStream.lastEventAt}
+        localeCode={localeCode}
+      />
       {densityButton}
       <WorkloadRefreshButton
         label={t('common.refresh', 'Refresh')}
@@ -806,13 +807,7 @@ export function WorkloadsPodsPage() {
           }),
         })}
         loading={isLoading}
-        paginationSummary={
-          <WorkloadTableSummary
-            filteredCount={orderedPods.length}
-            localeCode={localeCode}
-            totalCount={pods.length}
-          />
-        }
+        localSorting
         empty={
           <WorkloadTableEmpty
             clusterId={clusterId}
@@ -822,9 +817,10 @@ export function WorkloadsPodsPage() {
             totalCount={pods.length}
           />
         }
-        pageSize={10}
+        pageSize={K8S_TABLE_PAGE_SIZE}
         tableSize={tableSize}
         scroll={{ x: 1540 }}
+        viewportScroll
         selectCurrentPageOnly
         rowSelection={
           canShowPodDeleteActions

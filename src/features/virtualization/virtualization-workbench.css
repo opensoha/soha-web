@@ -516,6 +516,10 @@
   justify-content: flex-end;
 }
 
+.soha-vrt-vm-detail-actions {
+  padding: 0 2px 14px;
+}
+
 .soha-vrt-vm-detail-section {
   padding: 14px 2px 8px;
   border-top: 1px solid var(--soha-border-color);

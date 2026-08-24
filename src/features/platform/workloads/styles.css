@@ -648,6 +648,32 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.soha-workload-overview-metric-link {
+  display: block;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--soha-radius-panel);
+}
+
+.soha-workload-overview-metric-link .soha-overview-metric-card {
+  height: 100%;
+}
+
+.soha-workload-overview-metric-link:hover .soha-overview-metric-card {
+  border-color: rgba(var(--soha-primary-rgb), 0.45);
+}
+
+.soha-workload-overview-metric-link:focus-visible {
+  outline: 2px solid var(--soha-primary);
+  outline-offset: 2px;
+}
+
+.soha-workload-overview-event-link {
+  color: var(--soha-primary);
+  font-weight: 600;
+}
+
 .soha-workload-overview-events.ant-card .ant-card-head {
   min-height: 56px;
   padding-inline: 18px;

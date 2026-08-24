@@ -63,7 +63,7 @@ export function WorkloadPodsCard({ pods = [], namespace }: { pods?: Pod[]; names
                 {pod.podIp || '-'}
               </Tag>
               <Tag color="success" className="soha-related-pod-tag">
-                {`Ready ${pod.readyContainers || '-'}`}
+                {`${localeCode === 'zh_CN' ? '就绪' : 'Ready'} ${pod.readyContainers || '-'}`}
               </Tag>
               <Tag
                 color={(pod.restarts ?? 0) > 0 ? 'warning' : 'default'}

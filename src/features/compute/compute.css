@@ -11,6 +11,64 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.soha-compute-provider-instance-list {
+  display: grid;
+}
+
+.soha-compute-provider-instance-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-block: 10px;
+  border-bottom: 1px solid var(--soha-border-color);
+}
+
+.soha-compute-provider-instance-row:first-child {
+  padding-top: 0;
+}
+
+.soha-compute-provider-instance-row:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.soha-compute-provider-instance-main {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.soha-compute-relation-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 12px;
+  border-bottom: 1px solid var(--soha-border-color);
+}
+
+.soha-compute-relation-row:last-child {
+  border-bottom: 0;
+}
+
+.soha-compute-relation-chain {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.soha-compute-task-log-row {
+  padding-block: 10px;
+  border-bottom: 1px solid var(--soha-border-color);
+}
+
+.soha-compute-task-log-row:last-child {
+  border-bottom: 0;
+}
+
 .soha-compute-attention-row.is-critical {
   border-inline-start: 3px solid var(--soha-danger);
 }
@@ -23,8 +81,51 @@
   border-inline-start: 3px solid var(--soha-primary);
 }
 
+.soha-compute-overview-link-row {
+  color: inherit;
+  text-decoration: none;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.soha-compute-overview-link-row:hover {
+  color: inherit;
+  border-color: var(--soha-primary);
+  background: color-mix(in srgb, var(--soha-primary) 4%, var(--soha-overview-card-bg));
+}
+
+.soha-compute-overview-link-row:focus-visible {
+  outline: 2px solid var(--soha-primary);
+  outline-offset: 2px;
+}
+
+.soha-compute-overview-row-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--soha-primary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 @media (max-width: 768px) {
+  .soha-compute-chip-grid {
+    grid-template-columns: 1fr;
+  }
+
   .soha-compute-overview-page .soha-overview-panel-card .ant-card-extra {
     margin-inline-end: 44px;
+  }
+
+  .soha-compute-provider-instance-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .soha-compute-relation-row,
+  .soha-compute-relation-chain {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

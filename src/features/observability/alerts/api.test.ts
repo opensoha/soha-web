@@ -10,7 +10,11 @@ describe('alert api', () => {
   it('keeps the bounded overview endpoint', async () => {
     apiMocks.get.mockResolvedValue({ data: [] })
     await observabilityAlertApi.recent(8)
-    expect(apiMocks.get).toHaveBeenCalledWith('/alert-events?limit=8')
+    await observabilityAlertApi.recent(8, 'cluster/a')
+    expect(apiMocks.get.mock.calls.map(([path]) => path)).toEqual([
+      '/alert-events?limit=8',
+      '/alert-events?limit=8&clusterId=cluster%2Fa',
+    ])
   })
 
   it('keeps detail fan-out endpoints encoded', async () => {

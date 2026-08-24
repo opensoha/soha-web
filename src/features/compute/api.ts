@@ -1,5 +1,14 @@
 import type {
+  ComputeDomain,
   ComputeOverviewEnvelope,
+  ComputeProviderDiscoverRequest,
+  ComputeProviderDomain,
+  ComputeProviderInstanceEnvelope,
+  ComputeProviderInstanceListEnvelope,
+  ComputeProviderReadRequest,
+  ComputeResourceActionRequest,
+  ComputeResourceKind,
+  ComputeResourceRelationListEnvelope,
   ComputeTaskCategory,
   ComputeTaskDomain,
   ComputeTaskEnvelope,
@@ -16,6 +25,15 @@ interface ComputeTaskFilters {
   category?: ComputeTaskCategory
   resourceKind?: string
   resourceId?: string
+  sortBy?: 'createdAt' | 'kind' | 'domain' | 'status'
+  sortOrder?: 'asc' | 'desc'
+  cursor?: string
+  limit?: number
+}
+
+interface ComputeProviderInstanceFilters {
+  domain?: ComputeProviderDomain
+  providerKey?: string
   cursor?: string
   limit?: number
 }
@@ -31,6 +49,48 @@ function queryString(filters: object) {
 
 export const computeApi = {
   overview: () => api.getEnvelope<ComputeOverviewEnvelope>('/compute/overview'),
+  providerInstances: (filters: ComputeProviderInstanceFilters = {}) =>
+    api.getEnvelope<ComputeProviderInstanceListEnvelope>(
+      `/compute/provider-instances${queryString(filters)}`,
+    ),
+  providerInstance: (domain: ComputeProviderDomain, providerKey: string, instanceRef: string) =>
+    api.getEnvelope<ComputeProviderInstanceEnvelope>(providerInstancePath(domain, providerKey, instanceRef)),
+  checkProviderHealth: (
+    domain: ComputeProviderDomain,
+    providerKey: string,
+    instanceRef: string,
+    input: ComputeProviderReadRequest,
+  ) =>
+    postIdempotent<ComputeTaskEnvelope>(
+      `${providerInstancePath(domain, providerKey, instanceRef)}/health-checks`,
+      input,
+      'provider-health',
+    ),
+  discoverProvider: (
+    domain: ComputeProviderDomain,
+    providerKey: string,
+    instanceRef: string,
+    input: ComputeProviderDiscoverRequest,
+  ) =>
+    postIdempotent<ComputeTaskEnvelope>(
+      `${providerInstancePath(domain, providerKey, instanceRef)}/discoveries`,
+      input,
+      'provider-discovery',
+    ),
+  resourceRelations: (domain: ComputeDomain, kind: ComputeResourceKind, id: string) =>
+    api.getEnvelope<ComputeResourceRelationListEnvelope>(`${resourcePath(domain, kind, id)}/relations`),
+  executeResourceAction: (
+    domain: ComputeDomain,
+    kind: ComputeResourceKind,
+    id: string,
+    action: string,
+    input: ComputeResourceActionRequest = {},
+  ) =>
+    postIdempotent<ComputeTaskEnvelope>(
+      `${resourcePath(domain, kind, id)}/actions/${encodeURIComponent(action)}`,
+      input,
+      'resource-action',
+    ),
   tasks: (filters: ComputeTaskFilters = {}) =>
     api.getEnvelope<ComputeTaskListEnvelope>(`/compute/tasks${queryString(filters)}`),
   task: (domain: ComputeTaskDomain, taskId: string) =>
@@ -38,13 +98,33 @@ export const computeApi = {
   taskLogs: (domain: ComputeTaskDomain, taskId: string) =>
     api.getEnvelope<ComputeTaskLogListEnvelope>(`${taskPath(domain, taskId)}/logs`),
   cancelTask: (domain: ComputeTaskDomain, taskId: string) =>
-    api.post<ComputeTaskEnvelope>(`${taskPath(domain, taskId)}/cancel`),
+    postIdempotent<ComputeTaskEnvelope>(`${taskPath(domain, taskId)}/cancel`, {}, 'cancel'),
   retryTask: (domain: ComputeTaskDomain, taskId: string) =>
-    api.post<ComputeTaskEnvelope>(`${taskPath(domain, taskId)}/retry`),
+    postIdempotent<ComputeTaskEnvelope>(`${taskPath(domain, taskId)}/retry`, {}, 'retry'),
+}
+
+function postIdempotent<T>(path: string, body: unknown, action: string) {
+  const random = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
+  return api.postWithHeaders<T>(path, body, {
+    'Idempotency-Key': `compute-${action}-${random}`,
+  })
+}
+
+function providerInstancePath(
+  domain: ComputeProviderDomain,
+  providerKey: string,
+  instanceRef: string,
+) {
+  return `/compute/provider-instances/${encodeURIComponent(domain)}/${encodeURIComponent(providerKey)}/${encodeURIComponent(instanceRef)}`
+}
+
+function resourcePath(domain: ComputeDomain, kind: ComputeResourceKind, id: string) {
+  return `/compute/resources/${encodeURIComponent(domain)}/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`
 }
 
 function taskPath(domain: ComputeTaskDomain, taskId: string) {
   return `/compute/tasks/${encodeURIComponent(domain)}/${encodeURIComponent(taskId)}`
 }
 
-export type { ComputeTaskFilters }
+export { taskPath }
+export type { ComputeProviderInstanceFilters, ComputeTaskFilters }

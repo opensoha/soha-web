@@ -374,6 +374,19 @@ describe('app layout workspace navigation', () => {
     expect(container.querySelector('.soha-workspace-switcher-shell')).toBeNull()
   })
 
+  it.each([
+    ['zh_CN', '中文'],
+    ['en_US', 'EN'],
+  ] as const)('shows the current %s language in the header', async (localeCode, label) => {
+    testState.prefs.localeCode = localeCode
+
+    const container = await renderWithProviders('/')
+
+    expect(
+      container.querySelector<HTMLButtonElement>('.soha-header-preferences button')?.textContent,
+    ).toBe(label)
+  })
+
   it('places the permitted resource action before docs in the k8s header', async () => {
     const container = await renderWithProviders('/', {
       permissionKeys: [

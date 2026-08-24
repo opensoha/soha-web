@@ -270,6 +270,32 @@ describe('role permission tree model', () => {
     expect(findNode(tree, 'route:ai-workbench-agent-providers')?.title).toBe('Agent 提供方')
   })
 
+  it('places Skills permissions under the independent Skills page', () => {
+    for (const permissionKey of [
+      'ai.gateway.skills.view',
+      'ai.gateway.skills.create',
+      'ai.gateway.skills.update',
+      'ai.gateway.skills.delete',
+    ]) {
+      expect(nodePath(buildRolePermissionTreeData(definitions), `permission:${permissionKey}`)).toContain(
+        'route:ai-workbench-skills',
+      )
+    }
+  })
+
+  it('places Data Sources permissions under the independent Data Sources page', () => {
+    for (const permissionKey of [
+      'ai.data-sources.view',
+      'ai.data-sources.create',
+      'ai.data-sources.update',
+      'ai.data-sources.validate',
+    ]) {
+      expect(nodePath(buildRolePermissionTreeData(definitions), `permission:${permissionKey}`)).toContain(
+        'route:ai-workbench-data-sources',
+      )
+    }
+  })
+
   it('preserves legacy and unknown stored permissions in a disabled compatibility area', () => {
     const tree = buildRolePermissionTreeData(definitions, [
       'ai.gateway.manage',

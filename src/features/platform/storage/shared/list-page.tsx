@@ -1,5 +1,5 @@
 import { useDeferredValue, useMemo, useState } from 'react'
-import { App, Popconfirm, Typography } from 'antd'
+import { App, Popconfirm } from 'antd'
 import { DeleteOutlined } from '@ant-design/icons'
 import {
   useMutation,
@@ -21,14 +21,13 @@ import {
 } from '@/components/management-list'
 import { hasAllowedAction } from '@/features/auth'
 import { CreateEntry } from '@/features/platform/resource-creation/components/create-entry'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import type { ScopeKey } from '@/types'
 import { toClusterStorageScope, toStorageScope } from './scope'
 import type { StorageTarget } from './types'
 import '../styles.css'
-
-const { Text } = Typography
 
 function includesSearch(values: Array<string | undefined | null>, keyword: string) {
   if (!keyword) return true
@@ -174,15 +173,11 @@ export function StorageListPage<T extends { allowedActions?: string[]; name: str
         dataSource: clusterId ? filteredItems : [],
         rowKey,
         loading: query.isLoading,
-        paginationSummary: (
-          <Text className="soha-workload-table-summary" type="secondary">
-            {localeCode === 'zh_CN'
-              ? `当前 ${filteredItems.length} / ${rawItems.length} 条`
-              : `${filteredItems.length} / ${rawItems.length} items`}
-          </Text>
-        ),
+        localSorting: true,
+        pageSize: K8S_TABLE_PAGE_SIZE,
         tableSize,
         scroll: { x: 'max-content' },
+        viewportScroll: true,
         headerExtra: (
           <ManagementTableToolbar>
             <CreateEntry

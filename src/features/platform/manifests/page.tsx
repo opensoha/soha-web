@@ -14,18 +14,21 @@ import {
 } from '@/components/management-list'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { manifestQueries, type ManifestPackage } from '@/features/delivery'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { useI18n } from '@/i18n'
 import { formatDateTime } from '@/utils/time'
 import './styles.css'
 
 const { Text } = Typography
 
 export function PlatformManifestsPage() {
+  const { localeCode, t } = useI18n()
   const navigate = useNavigate()
   const { clusterId, namespace } = usePlatformScopeStore()
   const [selected, setSelected] = useState<ManifestPackage | null>(null)
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
-  const [pagination, setPagination] = useState({ page: 1, pageSize: 20 })
+  const [pagination, setPagination] = useState({ page: 1, pageSize: K8S_TABLE_PAGE_SIZE })
 
   useEffect(() => {
     setPagination((current) => ({ ...current, page: 1 }))
@@ -55,7 +58,7 @@ export function PlatformManifestsPage() {
 
   const columns: TableColumnsType<(typeof scopedBindings)[number]> = [
     {
-      title: '应用清单',
+      title: t('common.manifest', '应用清单'),
       dataIndex: ['manifest', 'name'],
       render: (_value, item) => (
         <Button
@@ -67,44 +70,49 @@ export function PlatformManifestsPage() {
         </Button>
       ),
     },
-    { title: '应用 ID', dataIndex: ['manifest', 'applicationId'] },
+    { title: t('common.applicationId', '应用 ID'), dataIndex: ['manifest', 'applicationId'] },
     {
-      title: '环境',
+      title: t('common.environment', '环境'),
       dataIndex: 'environmentKey',
       width: 110,
       render: (value) => <MetadataTag label={value} />,
     },
-    { title: '集群', dataIndex: 'clusterId' },
-    { title: 'Namespace', dataIndex: 'namespace' },
+    { title: t('common.cluster', '集群'), dataIndex: 'clusterId' },
+    { title: t('common.namespace', '命名空间'), dataIndex: 'namespace' },
     {
-      title: '版本',
+      title: t('common.version', '版本'),
       dataIndex: ['manifest', 'currentRevision'],
       width: 90,
       render: (value: number) => (value > 0 ? `v${value}` : '-'),
     },
     {
-      title: '运行状态',
+      title: t('common.runtimeStatus', '运行状态'),
       dataIndex: 'status',
       width: 120,
       render: (value: string) => <StatusTag value={value || 'not_deployed'} />,
     },
-    { title: '更新时间', dataIndex: ['manifest', 'updatedAt'], width: 180, render: formatDateTime },
     {
-      title: '操作',
+      title: t('common.updatedAt', '更新时间'),
+      dataIndex: ['manifest', 'updatedAt'],
+      width: 180,
+      render: formatDateTime,
+    },
+    {
+      title: t('common.actions', '操作'),
       key: 'actions',
       fixed: 'right',
       render: (_value, item) => (
         <Space size={4}>
           <ManagementIconButton
-            aria-label="查看 YAML"
+            aria-label={t('common.viewYaml', '查看 YAML')}
             icon={<CodeOutlined />}
-            tooltip="查看 YAML"
+            tooltip={t('common.viewYaml', '查看 YAML')}
             onClick={() => setSelected(item.manifest)}
           />
           <ManagementIconButton
-            aria-label="前往应用清单库"
+            aria-label={t('common.openManifestLibrary', '打开应用清单库')}
             icon={<ExportOutlined />}
-            tooltip="前往清单库"
+            tooltip={t('common.openManifestLibrary', '打开应用清单库')}
             onClick={() =>
               navigate(
                 `/delivery/manifests?applicationId=${encodeURIComponent(item.manifest.applicationId)}`,
@@ -121,24 +129,32 @@ export function PlatformManifestsPage() {
       <ManagementDataPage
         className="soha-platform-manifests"
         table={{
-          title: <Text strong>应用清单</Text>,
+          title: <Text strong>{t('common.manifest', '应用清单')}</Text>,
           headerExtra: (
             <ManagementTableToolbar>
               <Button icon={<ExportOutlined />} onClick={() => navigate('/delivery/manifests')}>
-                打开应用清单库
+                {t('common.openManifestLibrary', '打开应用清单库')}
               </Button>
               <ManagementDensityButton
-                aria-label="切换表格密度"
-                tooltip={tableSize === 'small' ? '切换为舒展密度' : '切换为紧凑密度'}
+                aria-label={localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'}
+                tooltip={
+                  tableSize === 'small'
+                    ? localeCode === 'zh_CN'
+                      ? '切换为舒展密度'
+                      : 'Use comfortable density'
+                    : localeCode === 'zh_CN'
+                      ? '切换为紧凑密度'
+                      : 'Use compact density'
+                }
                 onClick={() =>
                   setTableSize((current) => (current === 'small' ? 'middle' : 'small'))
                 }
               />
               <ManagementRefreshButton
-                aria-label="刷新清单"
+                aria-label={localeCode === 'zh_CN' ? '刷新清单' : 'Refresh manifests'}
                 disabled={!clusterId}
                 loading={manifestsQuery.isFetching}
-                tooltip="刷新"
+                tooltip={t('common.refresh', '刷新')}
                 onClick={() => void manifestsQuery.refetch()}
               />
             </ManagementTableToolbar>
@@ -160,15 +176,30 @@ export function PlatformManifestsPage() {
           },
           paginationSummary: (total, range) => (
             <Text type="secondary">
-              {total > 0 ? `当前 ${range[0]}-${range[1]} / ${total} 条` : '当前 0 / 0 条'}
+              {localeCode === 'zh_CN'
+                ? total > 0
+                  ? `当前 ${range[0]}-${range[1]} / ${total} 条`
+                  : '当前 0 / 0 条'
+                : total > 0
+                  ? `${range[0]}-${range[1]} / ${total} items`
+                  : '0 / 0 items'}
             </Text>
           ),
           scroll: { x: 'max-content' },
+          viewportScroll: true,
           empty: (
             <ManagementState
               bordered={false}
               compact
-              description={clusterId ? '当前作用域没有绑定的应用清单' : '请先选择集群'}
+              description={
+                clusterId
+                  ? localeCode === 'zh_CN'
+                    ? '当前作用域没有绑定的应用清单'
+                    : 'No manifests are bound in the current scope'
+                  : localeCode === 'zh_CN'
+                    ? '请先选择集群'
+                    : 'Please select a cluster'
+              }
               kind={!clusterId ? 'select-scope' : 'empty'}
             />
           ),

@@ -8,7 +8,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { PlatformManifestsPage } from './page'
 
 const testState = vi.hoisted(() => ({
-  apiGet: vi.fn(async () => ({ data: { items: [], total: 0, page: 1, pageSize: 20 } })),
+  apiGet: vi.fn(async () => ({ data: { items: [], total: 0, page: 1, pageSize: 15 } })),
 }))
 
 vi.mock('@/stores/platform-scope-store', () => ({

@@ -67,6 +67,19 @@
   text-align: right;
 }
 
+.soha-access-control-rule-list {
+  display: grid;
+  gap: 8px;
+}
+
+.soha-access-control-rule-item {
+  padding: 10px 12px;
+  border: 1px solid var(--soha-border-color);
+  border-radius: var(--soha-radius-control);
+  background: var(--soha-fill-weak);
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 768px) {
   .soha-rbac-scope-note {
     max-width: none;

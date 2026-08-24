@@ -82,6 +82,19 @@ describe('StatusTag', () => {
     await act(async () => root.unmount())
   })
 
+  it('localizes canonical status values when no explicit label is supplied', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(<StatusTag value="running" />)
+    })
+
+    expect(container.textContent).toBe('运行中')
+    await act(async () => root.unmount())
+  })
+
   it('uses the same filled treatment for categorical metadata', async () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
