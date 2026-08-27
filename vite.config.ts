@@ -4,7 +4,7 @@ import path from 'path'
 
 const apiProxyTarget = process.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:8080'
 
-export default defineConfig(({ mode }) => ({
+export default defineConfig(() => ({
   plugins: [react()],
   test: {
     fileParallelism: false,
@@ -50,7 +50,7 @@ export default defineConfig(({ mode }) => ({
   },
   build: {
     target: 'esnext',
-    outDir: mode === 'app' ? '../soha-app/frontend/dist' : 'dist',
+    outDir: 'dist',
     emptyOutDir: true,
     manifest: true,
     sourcemap: false,
