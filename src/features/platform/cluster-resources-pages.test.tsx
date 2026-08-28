@@ -42,10 +42,6 @@ vi.mock('@/services/api-client', () => ({
   },
 }))
 
-vi.mock('@/components/platform-cluster-scope-hint', () => ({
-  PlatformClusterScopeHint: () => <div data-testid="scope-hint">scope-hint</div>,
-}))
-
 vi.mock('@/features/platform/node-resource-utils', () => ({
   NodeResourcePanel: () => <div data-testid="node-resource-panel">node-resource-panel</div>,
   parseStringMap: () => ({}),
@@ -83,10 +79,7 @@ async function renderWithProviders(node: ReactNode) {
     root.render(
       <AntdApp>
         <QueryClientProvider client={queryClient}>
-          <MemoryRouter
-          >
-            {node}
-          </MemoryRouter>
+          <MemoryRouter>{node}</MemoryRouter>
         </QueryClientProvider>
       </AntdApp>,
     )

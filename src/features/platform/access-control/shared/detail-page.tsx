@@ -4,6 +4,7 @@ import { App, Card, Spin, Tabs, Typography } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
+import { useAIPageContext } from '@/features/copilot'
 import { useClusterCapability } from '@/features/platform/cluster-capabilities'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
@@ -17,6 +18,14 @@ import {
 } from './scope'
 import type { AccessControlDetailBase, AccessControlKind, AccessControlTarget } from './types'
 import '../styles.css'
+
+const ACCESS_CONTROL_ENTITY_KINDS: Record<AccessControlKind, string> = {
+  serviceaccounts: 'ServiceAccount',
+  roles: 'Role',
+  rolebindings: 'RoleBinding',
+  clusterroles: 'ClusterRole',
+  clusterrolebindings: 'ClusterRoleBinding',
+}
 
 const { Paragraph, Text } = Typography
 
@@ -122,6 +131,14 @@ export function AccessControlResourceDetailPage<TDetail extends AccessControlDet
   const yamlCapability = useClusterCapability('resource.yaml.apply', localeCode)
   const [activeTabKey, setActiveTabKey] = useState('overview')
   const detail = detailQuery.data
+  useAIPageContext({
+    sourceWorkbench: 'platform',
+    sourceTitle: label,
+    entityKind: ACCESS_CONTROL_ENTITY_KINDS[kind],
+    entityName: name,
+    clusterId: clusterId || undefined,
+    namespace: detailNamespace || undefined,
+  })
 
   if (!clusterId || (scopeMode === 'namespace' && !detailNamespace)) {
     return (

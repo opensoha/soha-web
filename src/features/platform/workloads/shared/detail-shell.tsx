@@ -4,6 +4,7 @@ import { App, Tabs, Card, Spin } from 'antd'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
+import { useAIPageContext } from '@/features/copilot'
 import { PlatformResourceOverview } from '@/features/platform/shared/resource-overview'
 import { ResourceGitOpsStatus } from '@/features/platform/shared/resource-gitops-status'
 import { useI18n } from '@/i18n'
@@ -31,6 +32,17 @@ const RESOURCE_GRAPH_KINDS: Partial<Record<WorkloadKind, string>> = {
   replicasets: 'ReplicaSet',
 }
 
+const WORKLOAD_ENTITY_KINDS: Record<WorkloadKind, string> = {
+  deployments: 'Deployment',
+  pods: 'Pod',
+  replicasets: 'ReplicaSet',
+  replicationcontrollers: 'ReplicationController',
+  statefulsets: 'StatefulSet',
+  daemonsets: 'DaemonSet',
+  jobs: 'Job',
+  cronjobs: 'CronJob',
+}
+
 /* ─── generic workload detail ─── */
 
 export interface WorkloadMeta {
@@ -46,8 +58,7 @@ export interface WorkloadMeta {
 export type WorkloadDetailExtraOverview = ReactNode | ((detail: WorkloadMeta) => ReactNode)
 
 export type WorkloadDetailExtraTabPanes =
-  | NonNullable<TabsProps['items']>
-  | ((detail: WorkloadMeta) => NonNullable<TabsProps['items']>)
+  NonNullable<TabsProps['items']> | ((detail: WorkloadMeta) => NonNullable<TabsProps['items']>)
 
 export function WorkloadDetailShell({
   title,
@@ -96,6 +107,15 @@ export function WorkloadDetailShell({
   const yamlApplyDisabledReason = yamlApplyCapability.disabled
     ? yamlApplyCapability.reason
     : undefined
+  useAIPageContext({
+    sourceWorkbench: 'platform',
+    sourceTitle: title,
+    entityKind: WORKLOAD_ENTITY_KINDS[resource],
+    entityName: name,
+    clusterId: clusterId || undefined,
+    namespace: detailNamespace || undefined,
+    workload: name,
+  })
 
   const applyYamlMutation = useMutation({
     mutationFn: () =>

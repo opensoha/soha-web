@@ -116,29 +116,20 @@ describe('compute route manifest', () => {
     ).toBe(true)
   })
 
-  it('allows the overview for every permission accepted by the backend projection', () => {
+  it('uses the independent workbench entry permission for the root and overview', () => {
+    const root = computeRoutes.find((route) => route.meta.id === 'compute-workbench')
     const overview = computeRoutes.find((route) => route.meta.id === 'compute-workbench-overview')
-    if (!overview || !('permissionKeysAny' in overview.meta)) {
-      throw new Error('missing compute overview permission metadata')
+    if (
+      !root ||
+      !overview ||
+      !('permissionKey' in root.meta) ||
+      !('permissionKey' in overview.meta)
+    ) {
+      throw new Error('missing Compute workbench entry permission metadata')
     }
 
-    expect(overview.meta.permissionKeysAny).toEqual([
-      'virtualization.overview.view',
-      'virtualization.vms.view',
-      'virtualization.clusters.view',
-      'virtualization.images.view',
-      'virtualization.storage.view',
-      'virtualization.flavors.view',
-      'virtualization.operations.view',
-      'virtualization.sync.view',
-      'docker.overview.view',
-      'docker.hosts.view',
-      'docker.projects.view',
-      'docker.services.view',
-      'docker.ports.view',
-      'docker.templates.view',
-      'docker.operations.view',
-    ])
+    expect(root.meta.permissionKey).toBe('workbench.compute.view')
+    expect(overview.meta.permissionKey).toBe('workbench.compute.view')
   })
 
   it('uses a dedicated permission for virtualization storage', () => {

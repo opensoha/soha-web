@@ -11,6 +11,7 @@ import type {
   AccessRole,
   ResetAccessUserMFAVariables,
   AccessScopeGrant,
+  AccessScopeGrantSubject,
   AccessTeam,
   AccessUpdateVariables,
   AccessUser,
@@ -27,6 +28,12 @@ async function discard(request: Promise<unknown>): Promise<void> {
 
 function resourcePath(resource: string, id: string) {
   return `/${resource}/${encodeURIComponent(id)}`
+}
+
+function scopeGrantPath(subject: AccessScopeGrantSubject, id?: string) {
+  const resource = subject.subjectType === 'user' ? 'users' : 'teams'
+  const base = `/access/${resource}/${encodeURIComponent(subject.subjectId)}/scope-grants`
+  return id ? `${base}/${encodeURIComponent(id)}` : base
 }
 
 export const accessApi = {
@@ -69,11 +76,14 @@ export const accessApi = {
     delete: (id: string) => discard(api.delete(resourcePath('access/policies', id))),
   },
   scopeGrants: {
-    list: () => unwrap(api.get<ApiResponse<AccessScopeGrant[]>>('/access/scope-grants')),
-    create: (values: AccessMutationValues) => discard(api.post('/access/scope-grants', values)),
-    update: ({ id, values }: AccessUpdateVariables) =>
-      discard(api.put(resourcePath('access/scope-grants', id), values)),
-    delete: (id: string) => discard(api.delete(resourcePath('access/scope-grants', id))),
+    list: (subject: AccessScopeGrantSubject) =>
+      unwrap(api.get<ApiResponse<AccessScopeGrant[]>>(scopeGrantPath(subject))),
+    create: ({ values, ...subject }: AccessScopeGrantSubject & { values: AccessMutationValues }) =>
+      discard(api.post(scopeGrantPath(subject), values)),
+    update: ({ id, values, ...subject }: AccessScopeGrantSubject & AccessUpdateVariables) =>
+      discard(api.put(scopeGrantPath(subject, id), values)),
+    delete: ({ id, ...subject }: AccessScopeGrantSubject & { id: string }) =>
+      discard(api.delete(scopeGrantPath(subject, id))),
   },
   dependencies: {
     applications: () => unwrap(api.get<ApiResponse<AccessApplicationOption[]>>('/applications')),

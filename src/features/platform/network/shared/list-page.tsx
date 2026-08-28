@@ -18,7 +18,7 @@ import { hasAllowedAction } from '@/features/auth'
 import { CreateEntry } from '@/features/platform/resource-creation/components/create-entry'
 import { getResourceCreateTemplate } from '@/features/platform/resource-creation/templates'
 import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
-import { useAIPageContext } from '@/features/copilot'
+import { encodeAIContextForElement, useAIPageContext } from '@/features/copilot'
 import type { AIPageContext } from '@/features/copilot'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
@@ -27,6 +27,20 @@ import { networkMutations } from './mutations'
 import { networkTargetFromRecord } from './scope'
 import type { NetworkKind, NetworkResourceRecord } from './types'
 import '../styles.css'
+
+const NETWORK_ENTITY_KINDS: Record<NetworkKind, string> = {
+  services: 'Service',
+  ingresses: 'Ingress',
+  gatewayclasses: 'GatewayClass',
+  gateways: 'Gateway',
+  httproutes: 'HTTPRoute',
+  backendtlspolicies: 'BackendTLSPolicy',
+  grpcroutes: 'GRPCRoute',
+  referencegrants: 'ReferenceGrant',
+  endpointslices: 'EndpointSlice',
+  ingressclasses: 'IngressClass',
+  networkpolicies: 'NetworkPolicy',
+}
 
 function normalizeKeyword(value: string) {
   return value.trim().toLowerCase()
@@ -102,6 +116,22 @@ export function NetworkResourceListPage<T extends NetworkResourceRecord>({
     : normalizedKeyword && rawItems.length > 0
       ? noMatchDescription[localeCode]
       : emptyDescription[localeCode]
+  const rowProps = (record: T) => {
+    const provided = onRow?.(record) ?? {}
+    return {
+      ...provided,
+      'data-ai-context':
+        provided['data-ai-context'] ??
+        encodeAIContextForElement({
+          sourceWorkbench: 'platform',
+          entityKind: NETWORK_ENTITY_KINDS[kind],
+          entityName: record.name,
+          clusterId: clusterId || undefined,
+          namespace: record.namespace || undefined,
+          service: kind === 'services' ? record.name : undefined,
+        }),
+    }
+  }
 
   const actionColumn: TableColumnsType<T>[number] = {
     title: '',
@@ -213,7 +243,7 @@ export function NetworkResourceListPage<T extends NetworkResourceRecord>({
         columns: canShowActions ? [...columns, actionColumn] : columns,
         dataSource: clusterId ? filteredItems : [],
         rowKey: rowKey ?? ((record) => `${record.namespace}/${record.name}`),
-        onRow,
+        onRow: rowProps,
         loading: query.isLoading,
         localSorting: true,
         pageSize: K8S_TABLE_PAGE_SIZE,

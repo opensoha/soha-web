@@ -118,7 +118,7 @@ function DashboardPanelExplore({
     )
   }
   return (
-    <Space direction="vertical" size={12} style={{ width: '100%' }}>
+    <Space orientation="vertical" size={12} style={{ width: '100%' }}>
       <Button icon={<ArrowLeftOutlined />} onClick={() => onBack(dashboardId)}>
         返回 Dashboard
       </Button>

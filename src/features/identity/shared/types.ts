@@ -65,25 +65,6 @@ export interface IdentityApplicationInput {
   assignments: IdentityApplicationAssignment[]
 }
 
-export interface IdentityApplicationPolicy {
-  applicationId: string
-  applicationSlug: string
-  applicationName: string
-  category?: string
-  providerId?: string
-  providerType: IdentityProviderType
-  portalVisible: boolean
-  status: IdentityApplicationStatus
-  assignments: IdentityApplicationAssignment[]
-  conditions?: IdentityApplicationPolicyConditions
-  updatedAt: string
-}
-
-export interface IdentityApplicationPolicyInput {
-  assignments: IdentityApplicationAssignment[]
-  conditions?: IdentityApplicationPolicyConditions
-}
-
 export interface IdentityApplicationPolicyConditions {
   requireMfa: boolean
   allowedCidrs: string[]

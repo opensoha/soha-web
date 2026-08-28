@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Button, Form, Input, Modal, Popconfirm, Select, Space } from 'antd'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
@@ -10,23 +10,25 @@ import {
 } from '@/components/management-list'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { tableColumnPresets } from '@/utils/table-columns'
+import { useI18n } from '@/i18n'
 import { AccessManagementTablePage } from '../shared/management-page'
 import { renderCompactMappedTags } from '../shared/compact-mapped-tags'
 import { accessMutations, invalidateAccessRoles } from '../shared/mutations'
 import { accessQueries } from '../shared/queries'
 import type { AccessRole } from '../shared/types'
 import { useAccessResourceCrud } from '../shared/use-resource-crud'
-import { normalizePermissionKeys, normalizeRolePermissionKeys } from './permission-model'
+import {
+  localizePermissionDefinitions,
+  normalizePermissionKeys,
+  normalizeRolePermissionKeys,
+} from './permission-model'
 import { RolePermissionBrowser } from './permission-browser'
 import '../shared/styles.css'
 
 type ColumnProps<T> = TableColumnsType<T>[number]
-const ROLE_SCOPE_OPTIONS = [
-  { value: 'system', label: '系统角色' },
-  { value: 'custom', label: '自定义角色' },
-]
 
 export function AccessRolesPage() {
+  const { localeCode, t } = useI18n()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const snapshot = permissionSnapshotQuery.data?.data
   const canViewRoles = hasPermission(snapshot, 'access.roles.view')
@@ -34,7 +36,11 @@ export function AccessRolesPage() {
   const canUpdateRoles = hasPermission(snapshot, 'access.roles.update')
   const canDeleteRoles = hasPermission(snapshot, 'access.roles.delete')
   const permissionCatalogQuery = useQuery(accessQueries.permissionCatalog(canViewRoles))
-  const permissionDefinitions = permissionCatalogQuery.data?.permissions ?? []
+  const permissionDefinitions = useMemo(
+    () =>
+      localizePermissionDefinitions(permissionCatalogQuery.data?.permissions ?? [], localeCode, t),
+    [localeCode, permissionCatalogQuery.data?.permissions, t],
+  )
   const permissionLabelMap = Object.fromEntries(
     permissionDefinitions.map((permission) => [permission.key, permission.displayName]),
   )
@@ -48,25 +54,30 @@ export function AccessRolesPage() {
   })
   const [searchKeyword, setSearchKeyword] = useState('')
   const columns: ColumnProps<AccessRole>[] = [
-    { title: '角色名称', dataIndex: 'name', width: 128 },
-    { title: '范围', dataIndex: 'scope', width: 88, render: (value: string) => value || 'custom' },
+    { title: t('access.roles.column.name', '角色名称'), dataIndex: 'name', width: 128 },
     {
-      title: '精确权限',
+      title: t('access.roles.column.scope', '范围'),
+      dataIndex: 'scope',
+      width: 88,
+      render: (value: string) => value || 'custom',
+    },
+    {
+      title: t('access.roles.column.permissions', '精确权限'),
       dataIndex: 'permissionKeys',
       width: 320,
       render: (values?: string[]) =>
         renderCompactMappedTags(
           normalizePermissionKeys(values),
           permissionLabelMap,
-          '未配置',
+          t('access.roles.unconfigured', '未配置'),
           1,
-          '权限键',
+          t('access.roles.permissionKey', '权限键'),
         ),
     },
-    { title: '绑定用户', dataIndex: 'userCount', width: 88 },
+    { title: t('access.roles.column.users', '绑定用户'), dataIndex: 'userCount', width: 88 },
     {
       ...tableColumnPresets.action,
-      title: '操作',
+      title: t('common.actions', '操作'),
       dataIndex: 'id',
       render: (_: unknown, record: AccessRole) => (
         <Space className="soha-row-action-icons">
@@ -74,24 +85,24 @@ export function AccessRolesPage() {
             <>
               {canUpdateRoles ? (
                 <ManagementIconButton
-                  aria-label="编辑角色"
+                  aria-label={t('access.roles.edit', '编辑角色')}
                   icon={<EditOutlined />}
                   size="small"
-                  tooltip="编辑"
+                  tooltip={t('common.edit', '编辑')}
                   onClick={() => crud.openEdit(record)}
                 />
               ) : null}
               {canDeleteRoles ? (
                 <Popconfirm
-                  title="确认删除？"
+                  title={t('access.roles.confirmDelete', '确认删除？')}
                   onConfirm={() => crud.deleteMutation.mutate(record.id)}
                 >
                   <ManagementIconButton
-                    aria-label="删除角色"
+                    aria-label={t('access.roles.delete', '删除角色')}
                     danger
                     icon={<DeleteOutlined />}
                     size="small"
-                    tooltip="删除"
+                    tooltip={t('common.delete', '删除')}
                   />
                 </Popconfirm>
               ) : null}
@@ -113,19 +124,22 @@ export function AccessRolesPage() {
   if (!canViewRoles) {
     return (
       <div className="soha-page">
-        <ManagementState kind="no-permission" description="当前账号没有角色管理权限。" />
+        <ManagementState
+          kind="no-permission"
+          description={t('access.roles.noPermission', '当前账号没有角色管理权限。')}
+        />
       </div>
     )
   }
 
   return (
     <AccessManagementTablePage<AccessRole>
-      resourceName="角色"
+      resourceName={t('access.roles.resourceName', '角色')}
       columns={columns}
       createAction={
         canCreateRoles ? (
           <Button size="small" icon={<PlusOutlined />} type="primary" onClick={crud.openCreate}>
-            添加角色
+            {t('access.roles.add', '添加角色')}
           </Button>
         ) : null
       }
@@ -134,12 +148,16 @@ export function AccessRolesPage() {
       loading={crud.isLoading}
       refreshing={crud.isFetching}
       onRefresh={() => void crud.refetch()}
-      placeholder="搜索角色、范围或权限键"
+      placeholder={t('access.roles.search', '搜索角色、范围或权限键')}
       searchKeyword={searchKeyword}
       setSearchKeyword={setSearchKeyword}
     >
       <Modal
-        title={crud.editing ? `编辑角色: ${crud.editing.name}` : '添加角色'}
+        title={
+          crud.editing
+            ? `${t('access.roles.edit', '编辑角色')}: ${crud.editing.name}`
+            : t('access.roles.add', '添加角色')
+        }
         open={crud.modalVisible}
         onCancel={crud.closeModal}
         onOk={async () => {
@@ -149,15 +167,15 @@ export function AccessRolesPage() {
             crud.handleSubmit({
               name: String(values.name ?? '').trim(),
               scope: String(values.scope ?? 'custom'),
-              capabilities: crud.editing?.capabilities ?? [],
+              capabilities: [],
               permissionKeys: normalizeRolePermissionKeys(values.permissionKeys),
             })
           } catch {
             return
           }
         }}
-        okText={crud.editing ? '更新' : '创建'}
-        cancelText="取消"
+        okText={crud.editing ? t('common.update', '更新') : t('common.create', '创建')}
+        cancelText={t('common.cancel', '取消')}
         confirmLoading={crud.isSaving}
         centered
         width={1000}
@@ -181,15 +199,22 @@ export function AccessRolesPage() {
         >
           <Form.Item
             name="name"
-            label="角色名称"
-            rules={[{ required: true, message: '请输入角色名称' }]}
+            label={t('access.roles.form.name', '角色名称')}
+            rules={[
+              { required: true, message: t('access.roles.form.nameRequired', '请输入角色名称') },
+            ]}
           >
             <Input />
           </Form.Item>
-          <Form.Item name="scope" label="角色范围">
-            <Select options={ROLE_SCOPE_OPTIONS} />
+          <Form.Item name="scope" label={t('access.roles.form.scope', '角色范围')}>
+            <Select
+              options={[
+                { value: 'system', label: t('access.roles.scope.system', '系统角色') },
+                { value: 'custom', label: t('access.roles.scope.custom', '自定义角色') },
+              ]}
+            />
           </Form.Item>
-          <Form.Item label="角色权限">
+          <Form.Item label={t('access.roles.form.permissions', '角色权限')}>
             <Form.Item
               noStyle
               shouldUpdate={(prev, next) => prev.permissionKeys !== next.permissionKeys}
@@ -199,8 +224,10 @@ export function AccessRolesPage() {
                 return (
                   <RolePermissionBrowser
                     definitions={permissionDefinitions}
+                    error={permissionCatalogQuery.isError}
                     loading={permissionCatalogQuery.isLoading}
                     permissionKeys={permissionKeys}
+                    onRetry={() => void permissionCatalogQuery.refetch()}
                     onChange={(nextPermissionKeys) =>
                       setFieldsValue({
                         permissionKeys: normalizeRolePermissionKeys(nextPermissionKeys),

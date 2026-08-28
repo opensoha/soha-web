@@ -66,13 +66,13 @@ export function identityApplicationAssignmentsSummary(
   emptyLabel = 'All authenticated users',
 ) {
   const assignments = application.assignments ?? []
-  if (!assignments.length) return <Text type="secondary">{emptyLabel}</Text>
+  if (!assignments.length) return <MetadataTag label={emptyLabel} tone="blue" />
   return (
     <Space size={[4, 4]} wrap>
       {assignments.slice(0, 4).map((assignment) => (
         <MetadataTag
           key={`${assignment.subjectType}:${assignment.subjectId}`}
-          label={`${assignment.subjectType}:${assignment.subjectId}`}
+          label={`${assignment.effect === 'deny' ? 'Deny · ' : ''}${assignment.subjectType} · ${assignment.subjectId}`}
         />
       ))}
       {assignments.length > 4 ? <MetadataTag label={`+${assignments.length - 4}`} /> : null}

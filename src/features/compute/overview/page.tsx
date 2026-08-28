@@ -129,6 +129,8 @@ export function ComputeOverviewPage() {
     hasPermission(snapshot, 'virtualization.operations.view') ||
     hasPermission(snapshot, 'virtualization.sync.view') ||
     hasPermission(snapshot, 'docker.operations.view')
+  const canTestProvider = hasPermission(snapshot, 'virtualization.clusters.test')
+  const canDiscoverProvider = hasPermission(snapshot, 'virtualization.sync.sync')
   const overviewQuery = useQuery(
     computeQueries.overview(canViewVirtualization || canViewDocker || canViewTasks),
   )
@@ -145,7 +147,20 @@ export function ComputeOverviewPage() {
     entityKind: 'compute.overview',
     entityName: localeText(localeCode, '计算资源总览', 'Compute overview'),
     pinnedData: overview
-      ? { partial: overview.partial, attentionCount: overview.attention.length }
+      ? {
+          partial: overview.partial,
+          attentionCount: overview.attention.length,
+          resourceRefs: overview.attention
+            .flatMap((item) => item.resources ?? [])
+            .slice(0, 20)
+            .map(({ domain, kind, id, displayName }) => ({ domain, kind, id, displayName })),
+          toolRefs: [
+            'compute.overview.read',
+            'compute.resources.read',
+            'compute.resource_relations.list',
+            'compute.tasks.list',
+          ],
+        }
       : undefined,
   })
 
@@ -296,6 +311,15 @@ export function ComputeOverviewPage() {
     <div className="soha-page soha-overview-page soha-compute-page soha-compute-overview-page">
       {overviewQuery.isError ? (
         <Alert
+          action={
+            <Button
+              aria-label={localeText(localeCode, '重试加载计算资源总览', 'Retry compute overview')}
+              size="small"
+              onClick={() => void overviewQuery.refetch()}
+            >
+              {localeText(localeCode, '重试', 'Retry')}
+            </Button>
+          }
           showIcon
           type="error"
           title={localeText(localeCode, '计算资源总览加载失败', 'Failed to load compute overview')}
@@ -409,6 +433,8 @@ export function ComputeOverviewPage() {
       </div>
 
       <ProviderInstancesPanel
+        canDiscover={canDiscoverProvider}
+        canTest={canTestProvider}
         enabled={canViewVirtualization || canViewDocker}
         localeCode={localeCode}
       />

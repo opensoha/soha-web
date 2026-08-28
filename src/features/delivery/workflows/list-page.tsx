@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Key } from 'react'
 import { Alert, App, Button, Collapse, Descriptions, Space, Tag, Timeline, Typography } from 'antd'
-import { CheckOutlined, CloseOutlined, LinkOutlined, PlayCircleOutlined } from '@ant-design/icons'
+import { CheckOutlined, CloseOutlined, LinkOutlined } from '@ant-design/icons'
 import type { TableColumnsType } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -242,13 +242,12 @@ export function WorkflowsPage() {
   const focusedGatewayApprovalRequestId = searchParams.get('gatewayApprovalRequestId')?.trim() ?? ''
   const [expandedWorkflowRunIds, setExpandedWorkflowRunIds] = useState<string[]>([])
   const permissionSnapshotQuery = usePermissionSnapshot()
-  const canTriggerWorkflow = hasPermission(
+  const canReviewWorkflow = hasPermission(
     permissionSnapshotQuery.data?.data,
     'delivery.workflows.trigger',
   )
 
   const workflowsQuery = useQuery(deliveryQueries.workflows.list())
-  const triggerMutation = useMutation(deliveryMutations.workflows.trigger(queryClient))
   const approveMutation = useMutation(deliveryMutations.workflows.approve(queryClient))
   const rejectMutation = useMutation(deliveryMutations.workflows.reject(queryClient))
 
@@ -270,7 +269,14 @@ export function WorkflowsPage() {
       render: (value: string, record: WorkflowRun) => (
         <Space orientation="vertical" size={0}>
           <Space size={6} wrap>
-            <Text strong>{value}</Text>
+            <Button
+              type="link"
+              size="small"
+              aria-label="查看工作流详情"
+              onClick={() => navigate(`/workflows/${record.id}`)}
+            >
+              {value}
+            </Button>
             {record.id === focusedWorkflowRunId ? <Tag color="blue">已定位</Tag> : null}
           </Space>
           <Text type="secondary">{record.id}</Text>
@@ -327,29 +333,7 @@ export function WorkflowsPage() {
       dataIndex: 'id',
       render: (_: unknown, record: WorkflowRun) => (
         <Space className="soha-row-action-icons" size={2}>
-          {canTriggerWorkflow ? (
-            <ManagementIconButton
-              aria-label={localeCode === 'zh_CN' ? '触发工作流' : 'Trigger workflow'}
-              icon={<PlayCircleOutlined />}
-              size="small"
-              tooltip={localeCode === 'zh_CN' ? '触发' : 'Trigger'}
-              onClick={() =>
-                triggerMutation.mutate(
-                  {
-                    applicationId: record.applicationId,
-                    workflowName: record.workflowName,
-                    clusterId: record.clusterId,
-                    namespace: record.namespace,
-                    deploymentName: record.deploymentName,
-                    triggerBuild: true,
-                    triggerRelease: true,
-                  },
-                  { onError: (error) => message.error(error.message) },
-                )
-              }
-            />
-          ) : null}
-          {canTriggerWorkflow && record.status === 'waiting_approval' ? (
+          {canReviewWorkflow && record.status === 'waiting_approval' ? (
             <ManagementIconButton
               aria-label="批准工作流"
               icon={<CheckOutlined />}
@@ -363,7 +347,7 @@ export function WorkflowsPage() {
               }
             />
           ) : null}
-          {canTriggerWorkflow && record.status === 'waiting_approval' ? (
+          {canReviewWorkflow && record.status === 'waiting_approval' ? (
             <ManagementIconButton
               aria-label="拒绝工作流"
               danger

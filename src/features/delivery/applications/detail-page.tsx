@@ -6,6 +6,7 @@ import {
   Button,
   Card,
   Descriptions,
+  Drawer,
   Form,
   Input,
   Modal,
@@ -14,7 +15,6 @@ import {
   Space,
   Switch,
   Tabs,
-  Tag,
   Tooltip,
   Typography,
 } from 'antd'
@@ -39,16 +39,13 @@ import {
   isReleaseDagValidationNodeType,
   type ReleaseDagNodeDefinition,
 } from '@/components/release-flow-dag-definition'
-import { StatusTag } from '@/components/status-tag'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useAIPageContext } from '@/features/copilot'
 import { useClusterCapabilityForCluster } from '@/features/platform'
+import { isApiError } from '@/services/api-error'
 import {
-  countRuntimeArtifacts,
   countWorkflowValidationNodes,
-  runtimeValidationNodeCount,
-  summarizeDeliveryBuildSignal,
-  summarizeDeliveryValidationSignal,
   workflowTemplateValidationNodeCount,
 } from '../delivery-status'
 import { DeliveryTable } from '../delivery-table'
@@ -58,6 +55,7 @@ import {
   useApplicationCenterState,
 } from '../application-center-model'
 import { deliveryMutations } from '../mutations'
+import { ManifestLibraryWorkspace } from '../manifests'
 import { deliveryQueries } from '../queries'
 import type {
   ApplicationDeliveryActionKind,
@@ -67,7 +65,6 @@ import type {
   ApplicationRuntimeWorkload,
   ApplicationServiceComponent,
   ApplicationServiceContainer,
-  BuildRecord,
   BuildSource,
   DeliveryApplicationBindingSummary,
   DeliveryPlan,
@@ -76,7 +73,6 @@ import type {
   ExecutionArtifact,
   ExecutionTask,
   ReleaseBundle,
-  ReleaseRecord,
   WorkflowRun,
   WorkflowTemplate,
 } from '../types'
@@ -215,16 +211,6 @@ function summarizeExecutionTask(task?: ExecutionTask | null) {
   return `${task.status} · ${task.taskKind}`
 }
 
-function summarizeBuildRecord(record?: BuildRecord | null) {
-  if (!record) return '-'
-  return `${record.status} · ${record.sourceSystem}`
-}
-
-function summarizeReleaseRecord(record?: ReleaseRecord | null) {
-  if (!record) return '-'
-  return `${record.status} · ${record.clusterId}/${record.namespace}`
-}
-
 function summarizeReleaseBundle(bundle?: ReleaseBundle | null) {
   if (!bundle) return '-'
   return `${bundle.status} · ${bundle.version}`
@@ -246,27 +232,30 @@ function renderWorkflowTemplateAnalysisTags(
   hasTemplateRef = false,
 ) {
   if (!template) {
-    if (hasTemplateRef) return <Tag color="red">模板缺失</Tag>
-    return <Tag color="orange">无模板</Tag>
+    if (hasTemplateRef) return <StatusTag value="error" label="模板缺失" />
+    return <StatusTag value="warning" label="无模板" />
   }
   const analysis = analyzeReleaseDagDefinition(template.definition)
   return (
     <Space wrap>
-      <Tag>{`${analysis.nodeCount} nodes`}</Tag>
-      <Tag color={analysis.validationNodeCount > 0 ? 'green' : 'orange'}>
-        {analysis.validationNodeCount > 0 ? '有验证节点' : '无验证节点'}
-      </Tag>
-      <Tag color={analysis.rollbackNodeCount > 0 ? 'green' : 'gold'}>
-        {analysis.rollbackNodeCount > 0 ? '有回滚节点' : '无回滚节点'}
-      </Tag>
+      <MetadataTag label={`${analysis.nodeCount} 个节点`} />
+      <StatusTag
+        value={analysis.validationNodeCount > 0 ? 'success' : 'warning'}
+        label={analysis.validationNodeCount > 0 ? '有验证节点' : '无验证节点'}
+      />
+      <StatusTag
+        value={analysis.rollbackNodeCount > 0 ? 'success' : 'warning'}
+        label={analysis.rollbackNodeCount > 0 ? '有回滚节点' : '无回滚节点'}
+      />
       {analysis.approvalNodeCount > 0 || requiresApproval ? (
-        <Tag color="gold">包含审批</Tag>
+        <StatusTag value="warning" label="包含审批" />
       ) : (
-        <Tag>无审批</Tag>
+        <StatusTag value="default" label="无审批" />
       )}
-      <Tag color={analysis.isReleaseDagCompatible ? 'green' : 'red'}>
-        {analysis.isReleaseDagCompatible ? 'DAG 正常' : 'DAG 异常'}
-      </Tag>
+      <StatusTag
+        value={analysis.isReleaseDagCompatible ? 'success' : 'error'}
+        label={analysis.isReleaseDagCompatible ? 'DAG 正常' : 'DAG 异常'}
+      />
     </Space>
   )
 }
@@ -321,7 +310,7 @@ function renderWorkflowTemplatePreview(
         </div>
       ))}
       {analysis.definition.nodes.length > nodes.length ? (
-        <Tag>{`+${analysis.definition.nodes.length - nodes.length}`}</Tag>
+        <MetadataTag label={`+${analysis.definition.nodes.length - nodes.length}`} />
       ) : null}
     </div>
   )
@@ -376,11 +365,6 @@ function collectWorkflowCapabilityRows(
         artifactKinds: node.artifactKinds,
       }))
   })
-}
-
-function summarizeWorkflowRun(run?: WorkflowRun | null) {
-  if (!run) return '-'
-  return `${run.status} · ${countWorkflowValidationNodes(run)} validation nodes`
 }
 
 function summarizeArtifacts(artifacts?: ExecutionArtifact[] | null) {
@@ -475,19 +459,6 @@ function buildDeliveryPlanPayload(
   }
 }
 
-function deliveryPlanRiskColor(risk?: string) {
-  switch (risk) {
-    case 'high':
-      return 'red'
-    case 'medium':
-      return 'gold'
-    case 'low':
-      return 'green'
-    default:
-      return 'default'
-  }
-}
-
 function disabledReason(reasons: Array<string | false | undefined>) {
   return reasons.find(Boolean) || ''
 }
@@ -495,15 +466,36 @@ function disabledReason(reasons: Array<string | false | undefined>) {
 export function ApplicationDetailPage() {
   const { applicationId } = useParams()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { message } = App.useApp()
   const queryClient = useQueryClient()
-  const initialTab = searchParams.get('tab') === 'delivery' ? 'delivery' : 'services'
+  const requestedTab = searchParams.get('tab')
+  const activeTab =
+    requestedTab === 'services' || requestedTab === 'environments' || requestedTab === 'delivery'
+      ? requestedTab
+      : 'overview'
+  const requestedSection = searchParams.get('section')
+  const activeSection =
+    activeTab === 'delivery'
+      ? requestedSection === 'pipeline' || requestedSection === 'verification'
+        ? requestedSection
+        : 'release'
+      : activeTab === 'services'
+        ? requestedSection === 'resources'
+          ? requestedSection
+          : 'components'
+        : activeTab === 'overview'
+          ? requestedSection === 'permissions' || requestedSection === 'capabilities'
+            ? requestedSection
+            : requestedSection === 'application'
+              ? requestedSection
+              : 'runtime'
+          : undefined
   const focusedBuildId = searchParams.get('buildId')?.trim() ?? ''
   const focusedReleaseId = searchParams.get('releaseId')?.trim() ?? ''
   const focusedWorkflowRunId = searchParams.get('workflowRunId')?.trim() ?? ''
+  const focusedServiceId = searchParams.get('serviceId')?.trim() ?? ''
   const [activeEnvironmentId, setActiveEnvironmentId] = useState('')
-  const [activeTab, setActiveTab] = useState(initialTab)
   const [serviceKeyword, setServiceKeyword] = useState('')
   const [serviceModalVisible, setServiceModalVisible] = useState(false)
   const [editingService, setEditingService] = useState<ApplicationServiceComponent | null>(null)
@@ -519,6 +511,33 @@ export function ApplicationDetailPage() {
   const [repositoryForm] = Form.useForm<RepositoryFormValues>()
   const [buildSourceForm] = Form.useForm<BuildSourceFormValues>()
   const [deliveryForm] = Form.useForm<DeliveryActionFormValues>()
+  const setActiveTab = (tab: string) => {
+    const next = new URLSearchParams(searchParams)
+    next.set('tab', tab)
+    if (tab !== 'services') next.delete('serviceId')
+    if (tab === 'delivery') next.set('section', 'release')
+    else if (tab === 'services') next.set('section', 'components')
+    else if (tab === 'overview') next.set('section', 'runtime')
+    else next.delete('section')
+    setSearchParams(next, { replace: true })
+  }
+  const setActiveSection = (section: string) => {
+    const next = new URLSearchParams(searchParams)
+    next.set('section', section)
+    if (section !== 'components') next.delete('serviceId')
+    setSearchParams(next, { replace: true })
+  }
+  const setFocusedService = (serviceId?: string) => {
+    const next = new URLSearchParams(searchParams)
+    if (serviceId) {
+      next.set('tab', 'services')
+      next.set('section', 'components')
+      next.set('serviceId', serviceId)
+    } else {
+      next.delete('serviceId')
+    }
+    setSearchParams(next, { replace: true })
+  }
   const permissionSnapshotQuery = usePermissionSnapshot()
   const managementState = useApplicationCenterState()
   const permissionSnapshot = permissionSnapshotQuery.data?.data
@@ -595,6 +614,7 @@ export function ApplicationDetailPage() {
       focusedReleaseId,
       focusedWorkflowRunId,
       activeEnvironmentId,
+      focusedServiceId,
     },
     pinnedData: {
       environmentCount: environments.length,
@@ -644,7 +664,7 @@ export function ApplicationDetailPage() {
       setPendingDeliveryPlan(plan)
       setConfirmedDeliveryPlan(null)
       setDeliveryPlanModalVisible(true)
-      message.success('DeliveryPlan 已生成')
+      message.success('交付计划已生成')
     },
     onError: (err: Error) => message.error(err.message),
   })
@@ -658,7 +678,7 @@ export function ApplicationDetailPage() {
       setConfirmedDeliveryPlan(result.plan.status === 'confirmed' ? result : null)
       message.success(
         result.plan.status === 'waiting_approval'
-          ? 'DeliveryPlan 已提交审批'
+          ? '交付计划已提交审批'
           : `${DELIVERY_ACTION_LABELS[result.plan.action]}已触发`,
       )
     },
@@ -671,9 +691,7 @@ export function ApplicationDetailPage() {
       void approvalOptions.onSuccess?.(plan, variables, onMutateResult, context)
       setPendingDeliveryPlan(plan)
       message.success(
-        variables.action === 'approve'
-          ? 'DeliveryPlan 已批准，可再次确认执行'
-          : 'DeliveryPlan 已拒绝',
+        variables.action === 'approve' ? '交付计划已批准，可再次确认执行' : '交付计划已拒绝',
       )
     },
     onError: (err: Error) => message.error(err.message),
@@ -870,20 +888,6 @@ export function ApplicationDetailPage() {
   )
   const effectiveImageTag =
     selectedImageTag || selectedBuildSource?.defaultTag || runtime?.application.defaultTag || ''
-  const deliverySignal = summarizeDeliveryBuildSignal([detail ?? {}, ...bindings])
-  const runtimeValidationCount = runtimeValidationNodeCount(bindings)
-  const gateSignal = summarizeDeliveryValidationSignal(bindings, {
-    validationNodes: runtimeValidationCount,
-  })
-  const runtimeTargetCount = bindings.reduce(
-    (sum, binding) => sum + (binding.targetCount || binding.targets?.length || 0),
-    0,
-  )
-  const runtimeArtifactCount = countRuntimeArtifacts(
-    detail,
-    releaseBundleArtifactsQuery.data,
-    latestExecutionArtifactsQuery.data,
-  )
   const validationNodeCount = workflowTemplateValidationNodeCount(
     selectedDeliveryBinding?.workflowTemplate,
   )
@@ -933,29 +937,29 @@ export function ApplicationDetailPage() {
     createDeliveryPlanMutation.isPending || confirmDeliveryPlanMutation.isPending
   const buildDisabledReason = disabledReason([
     !selectedDeliveryBinding && '无环境绑定',
-    !effectiveImageTag && '缺少 imageTag/defaultTag',
+    !effectiveImageTag && '缺少镜像 Tag / 默认 Tag',
     !canTriggerBuild && '缺少构建权限',
   ])
   const deployDisabledReason = disabledReason([
     !selectedDeliveryBinding && '无环境绑定',
-    !selectedDeliveryTarget && '无 target',
+    !selectedDeliveryTarget && '无发布目标',
     deliveryTargetCapabilityReason,
-    !effectiveImageTag && '缺少 imageTag/defaultTag',
+    !effectiveImageTag && '缺少镜像 Tag / 默认 Tag',
     !canTriggerRelease && '缺少发布权限',
   ])
   const buildDeployDisabledReason = disabledReason([
     !selectedDeliveryBinding && '无环境绑定',
-    !selectedDeliveryTarget && '无 target',
-    !selectedDeliveryBinding?.workflowTemplate && '无 workflow template',
+    !selectedDeliveryTarget && '无发布目标',
+    !selectedDeliveryBinding?.workflowTemplate && '无发布流程模板',
     deliveryTargetCapabilityReason,
-    !effectiveImageTag && '缺少 imageTag/defaultTag',
+    !effectiveImageTag && '缺少镜像 Tag / 默认 Tag',
     !canTriggerBuild && '缺少构建权限',
     !canTriggerWorkflow && '缺少工作流权限',
   ])
   const verifyDisabledReason = disabledReason([
     !selectedDeliveryBinding && '无环境绑定',
-    !selectedDeliveryTarget && '无 target',
-    !selectedDeliveryBinding?.workflowTemplate && '无 workflow template',
+    !selectedDeliveryTarget && '无发布目标',
+    !selectedDeliveryBinding?.workflowTemplate && '无发布流程模板',
     validationNodeCount === 0 && '无验证节点',
     deliveryTargetCapabilityReason,
     !canTriggerWorkflow && '缺少工作流权限',
@@ -964,7 +968,27 @@ export function ApplicationDetailPage() {
   if (runtimeQuery.isLoading) {
     return (
       <div className="soha-page">
-        <ManagementState kind="loading" title="Loading..." />
+        <ManagementState kind="loading" title="正在加载应用" />
+      </div>
+    )
+  }
+
+  if (runtimeQuery.isError) {
+    const notFound = isApiError(runtimeQuery.error) && runtimeQuery.error.status === 404
+    return (
+      <div className="soha-page">
+        <ManagementState
+          kind={notFound ? 'not-found' : 'error'}
+          title={notFound ? '应用不存在' : '应用加载失败'}
+          description={notFound ? '应用不存在或已被删除' : '暂时无法读取应用运行态，请重试。'}
+          actions={
+            notFound ? undefined : (
+              <Button aria-label="重试" onClick={() => void runtimeQuery.refetch()}>
+                重试
+              </Button>
+            )
+          }
+        />
       </div>
     )
   }
@@ -972,7 +996,7 @@ export function ApplicationDetailPage() {
   if (!runtime) {
     return (
       <div className="soha-page">
-        <ManagementState kind="not-found" description="Application not found" />
+        <ManagementState kind="not-found" title="应用不存在" description="应用不存在或已被删除" />
       </div>
     )
   }
@@ -990,7 +1014,27 @@ export function ApplicationDetailPage() {
           .some((value) => value?.toLowerCase().includes(normalizedServiceKeyword)),
       )
     : services
-  const summaryBindings = bindings.slice(0, 4)
+  const focusedService = services.find((service) => service.id === focusedServiceId)
+  const focusedServiceBuildSource = runtime.application.buildSources?.find(
+    (source) => source.id === focusedService?.buildSourceId,
+  )
+  const focusedServiceWorkloads = focusedService
+    ? (runtime.environments ?? []).flatMap((environment) =>
+        (environment.workloads ?? [])
+          .filter(
+            (workload) =>
+              workload.serviceId === focusedService.id ||
+              workload.serviceKey === focusedService.key,
+          )
+          .map((workload) => ({
+            ...workload,
+            environmentName:
+              environment.environmentName ||
+              environment.environmentKey ||
+              environment.environmentId,
+          })),
+      )
+    : []
   const latestBuilds = latestBuildsQuery.data ?? []
   const latestReleases = latestReleasesQuery.data ?? []
   const latestWorkflows = latestWorkflowsQuery.data ?? []
@@ -1090,7 +1134,7 @@ export function ApplicationDetailPage() {
           title: '交付方式',
           dataIndex: 'serviceKind',
           width: 180,
-          render: (value?: string) => <Tag>{serviceKindLabel(value)}</Tag>,
+          render: (value?: string) => <MetadataTag label={serviceKindLabel(value)} />,
         },
         ...visibleEnvironments.map((environment) => ({
           title:
@@ -1201,7 +1245,7 @@ export function ApplicationDetailPage() {
       ) : null}
       <Modal
         width={820}
-        title="DeliveryPlan 确认"
+        title="交付计划确认"
         open={deliveryPlanModalVisible}
         onCancel={() => setDeliveryPlanModalVisible(false)}
         footer={[
@@ -1307,18 +1351,19 @@ export function ApplicationDetailPage() {
                   key: 'risk',
                   label: '风险',
                   children: (
-                    <Tag color={deliveryPlanRiskColor(pendingDeliveryPlan.riskLevel)}>
-                      {pendingDeliveryPlan.riskLevel || 'unknown'}
-                    </Tag>
+                    <StatusTag
+                      value={pendingDeliveryPlan.riskLevel || 'unknown'}
+                      label={pendingDeliveryPlan.riskLevel || 'unknown'}
+                    />
                   ),
                 },
                 {
                   key: 'approval',
                   label: '审批',
                   children: pendingDeliveryPlan.requiresApproval ? (
-                    <Tag color="gold">需要审批</Tag>
+                    <StatusTag value="warning" label="需要审批" />
                   ) : (
-                    <Tag>无需审批</Tag>
+                    <StatusTag value="default" label="无需审批" />
                   ),
                 },
                 {
@@ -1343,159 +1388,12 @@ export function ApplicationDetailPage() {
         items={(() => {
           const existingTabs = [
             {
-              key: 'overview',
-              label: '总览',
-              children: (
-                <Space orientation="vertical" size={16} style={{ width: '100%' }}>
-                  <div className="soha-application-runtime-service-summary">
-                    <Card className="soha-management-panel-card" size="small">
-                      <Text type="secondary">服务组件</Text>
-                      <strong>{services.length}</strong>
-                    </Card>
-                    <Card className="soha-management-panel-card" size="small">
-                      <Text type="secondary">容器</Text>
-                      <strong>
-                        {services.reduce((sum, item) => sum + (item.containers?.length ?? 0), 0)}
-                      </strong>
-                    </Card>
-                    <Card className="soha-management-panel-card" size="small">
-                      <Text type="secondary">环境</Text>
-                      <strong>{environments.length}</strong>
-                    </Card>
-                    <Card className="soha-management-panel-card" size="small">
-                      <Text type="secondary">运行目标</Text>
-                      <strong>
-                        {environments.reduce((sum, item) => sum + (item.workloads?.length ?? 0), 0)}
-                      </strong>
-                    </Card>
-                  </div>
-                  <div className="soha-application-runtime-delivery-summary">
-                    <Card className="soha-management-panel-card" size="small">
-                      <Text type="secondary">交付态势</Text>
-                      <div className="soha-application-runtime-delivery-summary__main">
-                        <Tag color={deliverySignal.color}>{deliverySignal.label}</Tag>
-                        <Text>{summarizeBuildRecord(detail?.latestBuild)}</Text>
-                      </div>
-                    </Card>
-                    <Card className="soha-management-panel-card" size="small">
-                      <Text type="secondary">门禁状态</Text>
-                      <div className="soha-application-runtime-delivery-summary__main">
-                        <Tag color={gateSignal.color}>{gateSignal.label}</Tag>
-                        <Text>{runtimeValidationCount} 个验证节点</Text>
-                      </div>
-                    </Card>
-                    <Card className="soha-management-panel-card" size="small">
-                      <Text type="secondary">候选版本</Text>
-                      <div className="soha-application-runtime-delivery-summary__main">
-                        <strong>{detail?.latestBundle?.version || '-'}</strong>
-                        <Text>{runtimeArtifactCount} 个交付物线索</Text>
-                      </div>
-                    </Card>
-                    <Card className="soha-management-panel-card" size="small">
-                      <Text type="secondary">环境矩阵</Text>
-                      <div className="soha-application-runtime-delivery-summary__main">
-                        <strong>{bindings.length}</strong>
-                        <Text>{runtimeTargetCount} 个发布目标</Text>
-                      </div>
-                    </Card>
-                  </div>
-                  <div className="soha-application-runtime-overview-grid">
-                    <Card className="soha-management-panel-card" title="最近执行">
-                      <Space orientation="vertical" style={{ width: '100%' }} size={12}>
-                        <Descriptions
-                          column={1}
-                          items={[
-                            {
-                              key: 'build',
-                              label: 'Build',
-                              children: summarizeBuildRecord(latestBuilds[0]),
-                            },
-                            {
-                              key: 'workflow',
-                              label: 'Workflow',
-                              children: summarizeWorkflowRun(latestWorkflows[0]),
-                            },
-                            {
-                              key: 'release',
-                              label: 'Release',
-                              children: summarizeReleaseRecord(latestReleases[0]),
-                            },
-                            {
-                              key: 'bundle',
-                              label: 'Bundle',
-                              children: summarizeReleaseBundle(detail?.latestBundle),
-                            },
-                            {
-                              key: 'task',
-                              label: 'Execution Task',
-                              children: summarizeExecutionTask(detail?.latestExecutionTask),
-                            },
-                            {
-                              key: 'artifacts',
-                              label: 'Artifacts',
-                              children: summarizeArtifacts(
-                                detail?.latestExecutionTask?.artifacts ??
-                                  latestExecutionArtifactsQuery.data,
-                              ),
-                            },
-                          ]}
-                        />
-                      </Space>
-                    </Card>
-                    <Card className="soha-management-panel-card" title="环境概览">
-                      <Space orientation="vertical" style={{ width: '100%' }} size={12}>
-                        {summaryBindings.length > 0 ? (
-                          summaryBindings.map((binding) => (
-                            <div
-                              className="soha-application-runtime-binding-row"
-                              key={binding.applicationEnvironmentId}
-                            >
-                              <div className="soha-application-runtime-binding-row__main">
-                                <strong>
-                                  {binding.environmentName ||
-                                    binding.environmentKey ||
-                                    binding.environmentId}
-                                </strong>
-                                <Text type="secondary">
-                                  {binding.workflowTemplate?.name ||
-                                    binding.workflowTemplateName ||
-                                    '未绑定工作流模板'}
-                                </Text>
-                              </div>
-                              <Space wrap>
-                                <Tag>{summarizeBindingStatus(binding)}</Tag>
-                                <Tag>{binding.targetCount} targets</Tag>
-                                <ManagementIconButton
-                                  aria-label="查看绑定配置"
-                                  icon={<LinkOutlined />}
-                                  size="small"
-                                  tooltip="绑定配置"
-                                  onClick={() => setActiveTab('settings')}
-                                />
-                              </Space>
-                            </div>
-                          ))
-                        ) : (
-                          <ManagementState
-                            bordered={false}
-                            compact
-                            description="尚未绑定任何环境"
-                            kind="not-configured"
-                          />
-                        )}
-                      </Space>
-                    </Card>
-                  </div>
-                </Space>
-              ),
-            },
-            {
               key: 'settings',
               label: '配置',
               children: (
                 <div className="soha-application-runtime-settings-grid">
                   <Card
-                    className="soha-management-panel-card"
+                    className="soha-management-panel-card soha-application-settings-summary"
                     title="应用配置"
                     extra={
                       managementState.canUpdateApplication ? (
@@ -1506,7 +1404,7 @@ export function ApplicationDetailPage() {
                     }
                   >
                     <Descriptions
-                      column={1}
+                      column={{ xs: 1, sm: 2, lg: 4 }}
                       items={[
                         { key: 'key', label: '应用 Key', children: runtime.application.key || '-' },
                         { key: 'group', label: '分组', children: runtime.application.group || '-' },
@@ -1549,7 +1447,7 @@ export function ApplicationDetailPage() {
                       {
                         title: '提供方',
                         dataIndex: 'provider',
-                        render: (value: string) => <Tag>{value}</Tag>,
+                        render: (value: string) => <MetadataTag label={value} />,
                       },
                       { title: '路径', dataIndex: 'path' },
                       { title: '默认分支', dataIndex: 'defaultBranch' },
@@ -1608,7 +1506,7 @@ export function ApplicationDetailPage() {
                         title: '类型',
                         dataIndex: 'type',
                         render: (_: unknown, record: BuildSource) => (
-                          <Tag>{summarizeBuildSource(record)}</Tag>
+                          <MetadataTag label={summarizeBuildSource(record)} />
                         ),
                       },
                       {
@@ -1677,118 +1575,124 @@ export function ApplicationDetailPage() {
                         : []),
                     ]}
                   />
-                  <DeliveryTable
-                    title="环境绑定"
-                    actions={
-                      managementState.canCreateBinding ? (
-                        <Button type="primary" icon={<PlusOutlined />} onClick={openBindingCreate}>
-                          新建绑定
-                        </Button>
-                      ) : null
-                    }
-                    rowKey="id"
-                    dataSource={managementState.filteredBindings}
-                    loading={managementState.bindingsQuery.isLoading}
-                    refreshing={managementState.bindingsQuery.isFetching}
-                    onRefresh={() => void managementState.bindingsQuery.refetch()}
-                    columns={[
-                      {
-                        title: '环境',
-                        dataIndex: 'environmentId',
-                        render: (value: string, record: ApplicationEnvironment) =>
-                          record.environmentKey || value,
-                      },
-                      {
-                        title: '构建来源',
-                        dataIndex: 'buildPolicy',
-                        render: (value: ApplicationEnvironment['buildPolicy']) =>
-                          value?.sourceId || '-',
-                      },
-                      {
-                        title: '发布流程模板',
-                        dataIndex: 'workflowTemplateId',
-                        render: (value?: string) =>
-                          managementState.workflowTemplateMap[value || '']?.name || value || '-',
-                      },
-                      {
-                        title: '模板健康',
-                        dataIndex: 'id',
-                        render: (value: string, record: ApplicationEnvironment) =>
-                          renderEnvironmentBindingWorkflowHealth(
-                            record,
-                            bindingSummaryById[value],
-                            managementState.workflowTemplateMap,
-                          ),
-                      },
-                      {
-                        title: '发布目标',
-                        dataIndex: 'targets',
-                        render: (targets: ApplicationEnvironment['targets']) =>
-                          renderBindingTargets(targets),
-                      },
-                      {
-                        title: '资源选择器',
-                        dataIndex: 'resourceSelector',
-                        render: (value: ApplicationEnvironment['resourceSelector']) =>
-                          renderSelectorLabels(value),
-                      },
-                      {
-                        title: '最近状态',
-                        dataIndex: 'id',
-                        render: (value: string) => (
-                          <StatusTag value={summarizeBindingStatus(bindingSummaryById[value])} />
-                        ),
-                      },
-                      {
-                        title: '操作',
-                        dataIndex: 'id',
-                        fixed: 'right',
-                        align: 'center',
-                        width: 112,
-                        render: (_: unknown, record: ApplicationEnvironment) => (
-                          <Space className="soha-row-action-icons" size={2}>
-                            <ManagementIconButton
-                              aria-label="查看运行态"
-                              icon={<ArrowRightOutlined />}
-                              size="small"
-                              tooltip="运行态"
-                              onClick={() => {
-                                setActiveEnvironmentId(record.id)
-                                setActiveTab('services')
-                              }}
-                            />
-                            {managementState.canUpdateBinding ? (
-                              <ManagementIconButton
-                                aria-label="编辑绑定"
-                                icon={<EditOutlined />}
-                                size="small"
-                                tooltip="编辑"
-                                onClick={() => openBindingEdit(record)}
-                              />
-                            ) : null}
-                            {managementState.canDeleteBinding ? (
-                              <Popconfirm
-                                title="确认删除绑定？"
-                                onConfirm={() =>
-                                  managementState.deleteBindingMutation.mutate(record.id)
-                                }
-                                placement="topRight"
-                              >
-                                <ManagementIconButton
-                                  aria-label="删除绑定"
-                                  danger
-                                  icon={<DeleteOutlined />}
-                                  size="small"
-                                  tooltip="删除"
-                                />
-                              </Popconfirm>
-                            ) : null}
-                          </Space>
-                        ),
-                      },
-                    ]}
-                  />
                 </div>
+              ),
+            },
+            {
+              key: 'environment-bindings',
+              label: '环境绑定',
+              children: (
+                <DeliveryTable
+                  title="环境绑定"
+                  actions={
+                    managementState.canCreateBinding ? (
+                      <Button type="primary" icon={<PlusOutlined />} onClick={openBindingCreate}>
+                        新建绑定
+                      </Button>
+                    ) : null
+                  }
+                  rowKey="id"
+                  dataSource={managementState.filteredBindings}
+                  loading={managementState.bindingsQuery.isLoading}
+                  refreshing={managementState.bindingsQuery.isFetching}
+                  onRefresh={() => void managementState.bindingsQuery.refetch()}
+                  columns={[
+                    {
+                      title: '环境',
+                      dataIndex: 'environmentId',
+                      render: (value: string, record: ApplicationEnvironment) =>
+                        record.environmentKey || value,
+                    },
+                    {
+                      title: '构建来源',
+                      dataIndex: 'buildPolicy',
+                      render: (value: ApplicationEnvironment['buildPolicy']) =>
+                        value?.sourceId || '-',
+                    },
+                    {
+                      title: '发布流程模板',
+                      dataIndex: 'workflowTemplateId',
+                      render: (value?: string) =>
+                        managementState.workflowTemplateMap[value || '']?.name || value || '-',
+                    },
+                    {
+                      title: '模板健康',
+                      dataIndex: 'id',
+                      render: (value: string, record: ApplicationEnvironment) =>
+                        renderEnvironmentBindingWorkflowHealth(
+                          record,
+                          bindingSummaryById[value],
+                          managementState.workflowTemplateMap,
+                        ),
+                    },
+                    {
+                      title: '发布目标',
+                      dataIndex: 'targets',
+                      render: (targets: ApplicationEnvironment['targets']) =>
+                        renderBindingTargets(targets),
+                    },
+                    {
+                      title: '资源选择器',
+                      dataIndex: 'resourceSelector',
+                      render: (value: ApplicationEnvironment['resourceSelector']) =>
+                        renderSelectorLabels(value),
+                    },
+                    {
+                      title: '最近状态',
+                      dataIndex: 'id',
+                      render: (value: string) => (
+                        <StatusTag value={summarizeBindingStatus(bindingSummaryById[value])} />
+                      ),
+                    },
+                    {
+                      title: '操作',
+                      dataIndex: 'id',
+                      fixed: 'right',
+                      align: 'center',
+                      width: 112,
+                      render: (_: unknown, record: ApplicationEnvironment) => (
+                        <Space className="soha-row-action-icons" size={2}>
+                          <ManagementIconButton
+                            aria-label="查看运行态"
+                            icon={<ArrowRightOutlined />}
+                            size="small"
+                            tooltip="运行态"
+                            onClick={() => {
+                              setActiveEnvironmentId(record.id)
+                              setActiveTab('environments')
+                            }}
+                          />
+                          {managementState.canUpdateBinding ? (
+                            <ManagementIconButton
+                              aria-label="编辑绑定"
+                              icon={<EditOutlined />}
+                              size="small"
+                              tooltip="编辑"
+                              onClick={() => openBindingEdit(record)}
+                            />
+                          ) : null}
+                          {managementState.canDeleteBinding ? (
+                            <Popconfirm
+                              title="确认删除绑定？"
+                              onConfirm={() =>
+                                managementState.deleteBindingMutation.mutate(record.id)
+                              }
+                              placement="topRight"
+                            >
+                              <ManagementIconButton
+                                aria-label="删除绑定"
+                                danger
+                                icon={<DeleteOutlined />}
+                                size="small"
+                                tooltip="删除"
+                              />
+                            </Popconfirm>
+                          ) : null}
+                        </Space>
+                      ),
+                    },
+                  ]}
+                />
               ),
             },
             {
@@ -1796,29 +1700,18 @@ export function ApplicationDetailPage() {
               label: '权限',
               children: (
                 <div className="soha-application-runtime-settings-grid">
-                  <Card
-                    className="soha-management-panel-card"
-                    title="Application + Environment Key"
-                    extra={
-                      <Button
-                        icon={<LinkOutlined />}
-                        onClick={() => navigate('/access/scope-grants')}
-                      >
-                        授权范围
-                      </Button>
-                    }
-                  >
+                  <Card className="soha-management-panel-card" title="应用与环境权限键">
                     <Descriptions
                       column={1}
                       items={[
                         {
                           key: 'app',
-                          label: 'Application',
+                          label: '应用',
                           children: `${runtime.application.name} / ${runtime.application.key}`,
                         },
                         {
                           key: 'scope',
-                          label: 'Scope',
+                          label: '范围',
                           children:
                             bindings
                               .map((binding) => binding.environmentKey || binding.environmentId)
@@ -1831,9 +1724,11 @@ export function ApplicationDetailPage() {
                           children: (
                             <Space wrap>
                               {permissionRows.map((item) => (
-                                <Tag key={item.key} color={item.enabled ? 'green' : 'red'}>
-                                  {`${item.label}: ${item.enabled ? '允许' : '缺失'}`}
-                                </Tag>
+                                <StatusTag
+                                  key={item.key}
+                                  value={item.enabled ? 'success' : 'error'}
+                                  label={`${item.label}: ${item.enabled ? '允许' : '缺失'}`}
+                                />
                               ))}
                             </Space>
                           ),
@@ -1862,8 +1757,12 @@ export function ApplicationDetailPage() {
                       {
                         title: '审批',
                         dataIndex: 'requiresApproval',
-                        render: (value: boolean) =>
-                          value ? <Tag color="gold">需要</Tag> : <Tag>无需</Tag>,
+                        render: (value: boolean) => (
+                          <StatusTag
+                            value={value ? 'warning' : 'default'}
+                            label={value ? '需要' : '无需'}
+                          />
+                        ),
                       },
                       {
                         title: '发布目标',
@@ -1910,52 +1809,58 @@ export function ApplicationDetailPage() {
                           className="soha-application-service-card"
                           title={service.name}
                           extra={<StatusTag value={service.enabled ? 'enabled' : 'disabled'} />}
-                          actions={
-                            canUpdateService || canDeleteService
+                          actions={[
+                            <ManagementIconButton
+                              key="detail"
+                              aria-label="查看服务详情"
+                              icon={<ArrowRightOutlined />}
+                              size="small"
+                              tooltip="详情"
+                              onClick={() => setFocusedService(service.id)}
+                            />,
+                            ...(canUpdateService
                               ? [
-                                  ...(canUpdateService
-                                    ? [
-                                        <ManagementIconButton
-                                          key="edit"
-                                          aria-label="编辑服务组件"
-                                          icon={<EditOutlined />}
-                                          size="small"
-                                          tooltip="编辑"
-                                          onClick={() => openServiceModal(service)}
-                                        />,
-                                      ]
-                                    : []),
-                                  ...(canDeleteService
-                                    ? [
-                                        <Popconfirm
-                                          key="delete"
-                                          title="确认删除该服务组件？"
-                                          onConfirm={() =>
-                                            deleteServiceMutation.mutate({
-                                              applicationId: applicationId ?? '',
-                                              serviceId: service.id,
-                                            })
-                                          }
-                                        >
-                                          <ManagementIconButton
-                                            aria-label="删除服务组件"
-                                            danger
-                                            icon={<DeleteOutlined />}
-                                            size="small"
-                                            tooltip="删除"
-                                          />
-                                        </Popconfirm>,
-                                      ]
-                                    : []),
+                                  <ManagementIconButton
+                                    key="edit"
+                                    aria-label="编辑服务组件"
+                                    icon={<EditOutlined />}
+                                    size="small"
+                                    tooltip="编辑"
+                                    onClick={() => openServiceModal(service)}
+                                  />,
                                 ]
-                              : undefined
-                          }
+                              : []),
+                            ...(canDeleteService
+                              ? [
+                                  <Popconfirm
+                                    key="delete"
+                                    title="确认删除该服务组件？"
+                                    onConfirm={() =>
+                                      deleteServiceMutation.mutate({
+                                        applicationId: applicationId ?? '',
+                                        serviceId: service.id,
+                                      })
+                                    }
+                                  >
+                                    <ManagementIconButton
+                                      aria-label="删除服务组件"
+                                      danger
+                                      icon={<DeleteOutlined />}
+                                      size="small"
+                                      tooltip="删除"
+                                    />
+                                  </Popconfirm>,
+                                ]
+                              : []),
+                          ]}
                         >
                           <div className="soha-application-service-card__body">
                             <div className="soha-application-service-card__meta">
-                              <Tag>{serviceKindLabel(service.serviceKind)}</Tag>
-                              {service.ownerTeam ? <Tag>{service.ownerTeam}</Tag> : null}
-                              {service.buildSourceId ? <Tag>{service.buildSourceId}</Tag> : null}
+                              <MetadataTag label={serviceKindLabel(service.serviceKind)} />
+                              {service.ownerTeam ? <MetadataTag label={service.ownerTeam} /> : null}
+                              {service.buildSourceId ? (
+                                <MetadataTag label={service.buildSourceId} />
+                              ) : null}
                             </div>
                             <Text type="secondary">
                               {service.repositoryPath || '未配置服务仓库'}
@@ -1971,7 +1876,7 @@ export function ApplicationDetailPage() {
                                     {container.imageRepository || '未配置镜像仓库'}
                                   </Text>
                                   {container.runtimePorts?.length ? (
-                                    <Tag>{container.runtimePorts.join(', ')}</Tag>
+                                    <MetadataTag label={container.runtimePorts.join(', ')} />
                                   ) : null}
                                 </div>
                               ))}
@@ -2017,17 +1922,18 @@ export function ApplicationDetailPage() {
                   <Card className="soha-management-panel-card">
                     <Space wrap>
                       {environments.map((item) => (
-                        <Tag
+                        <Button
                           key={item.applicationEnvironmentId}
-                          color={
+                          size="small"
+                          type={
                             activeEnvironmentId === item.applicationEnvironmentId
-                              ? 'blue'
-                              : undefined
+                              ? 'primary'
+                              : 'default'
                           }
                           onClick={() => setActiveEnvironmentId(item.applicationEnvironmentId)}
                         >
                           {item.environmentName || item.environmentKey || item.environmentId}
-                        </Tag>
+                        </Button>
                       ))}
                     </Space>
                   </Card>
@@ -2066,9 +1972,9 @@ export function ApplicationDetailPage() {
                             </div>
                             <Text type="secondary">{`${workload.workloadKind} · ${workload.namespace}`}</Text>
                             <Space wrap>
-                              <Tag>Desired {workload.desiredReplicas}</Tag>
-                              <Tag>Ready {workload.readyReplicas}</Tag>
-                              <Tag>{workload.clusterId}</Tag>
+                              <MetadataTag label={`期望 ${workload.desiredReplicas}`} />
+                              <MetadataTag label={`就绪 ${workload.readyReplicas}`} />
+                              <MetadataTag label={workload.clusterId} />
                             </Space>
                           </Space>
                         </Card>
@@ -2220,17 +2126,21 @@ export function ApplicationDetailPage() {
                           />
                         ) : null}
                         <Space wrap>
-                          <Tag>
-                            {selectedDeliveryBinding?.workflowTemplateName ||
+                          <MetadataTag
+                            label={
+                              selectedDeliveryBinding?.workflowTemplateName ||
                               selectedDeliveryBinding?.workflowTemplate?.name ||
-                              '未绑定 workflow'}
-                          </Tag>
-                          <Tag>{selectedDeliveryBinding?.targetCount ?? 0} targets</Tag>
-                          <Tag>{validationNodeCount} 验证节点</Tag>
+                              '未绑定发布流程'
+                            }
+                          />
+                          <MetadataTag
+                            label={`${selectedDeliveryBinding?.targetCount ?? 0} 个发布目标`}
+                          />
+                          <MetadataTag label={`${validationNodeCount} 个验证节点`} />
                           {effectiveImageTag ? (
-                            <Tag>imageTag {effectiveImageTag}</Tag>
+                            <MetadataTag label={`镜像 Tag ${effectiveImageTag}`} />
                           ) : (
-                            <Tag color="warning">缺少 imageTag</Tag>
+                            <StatusTag value="warning" label="缺少镜像 Tag" />
                           )}
                         </Space>
                         <Space wrap>
@@ -2254,9 +2164,7 @@ export function ApplicationDetailPage() {
                               部署
                             </Button>
                           </Tooltip>
-                          <Tooltip
-                            title={buildDeployDisabledReason || '通过 workflow template 编排'}
-                          >
+                          <Tooltip title={buildDeployDisabledReason || '通过发布流程模板编排'}>
                             <Button
                               type="primary"
                               icon={<PlayCircleOutlined />}
@@ -2281,18 +2189,18 @@ export function ApplicationDetailPage() {
                       </div>
                     </Form>
                   </Card>
-                  <Card className="soha-management-panel-card" title="Release Bundle">
+                  <Card className="soha-management-panel-card" title="版本包">
                     <Descriptions
                       column={1}
                       items={[
                         {
                           key: 'bundle',
-                          label: '当前 Bundle',
+                          label: '当前版本包',
                           children: summarizeReleaseBundle(detail?.latestBundle),
                         },
                         {
                           key: 'bundleArtifacts',
-                          label: 'Bundle 交付物',
+                          label: '版本包交付物',
                           children: summarizeArtifacts(releaseBundleArtifactsQuery.data),
                         },
                         {
@@ -2309,7 +2217,7 @@ export function ApplicationDetailPage() {
                     />
                   </Card>
                   <DeliveryTable
-                    title="Build / Release / Workflow"
+                    title="构建 / 发布 / 工作流"
                     rowKey="id"
                     pagination={false}
                     dataSource={focusedRuntimeEvidence}
@@ -2322,7 +2230,7 @@ export function ApplicationDetailPage() {
                           <Space size={6} wrap>
                             <Text>{value}</Text>
                             {value === focusedRuntimeEvidenceId ? (
-                              <Tag color="blue">已定位</Tag>
+                              <StatusTag value="info" label="已定位" />
                             ) : null}
                           </Space>
                         ),
@@ -2482,7 +2390,7 @@ export function ApplicationDetailPage() {
                               <strong>{node.name}</strong>
                               <Text type="secondary">{releaseDagNodeLabel(node.type)}</Text>
                             </span>
-                            <Tag>{`${node.timeoutSeconds ?? 300}s`}</Tag>
+                            <MetadataTag label={`${node.timeoutSeconds ?? 300}s`} />
                           </div>
                         ))
                       ) : (
@@ -2499,7 +2407,7 @@ export function ApplicationDetailPage() {
                     <Space orientation="vertical" style={{ width: '100%' }}>
                       <Button
                         type="primary"
-                        onClick={() => setActiveTab('settings')}
+                        onClick={() => setActiveTab('environments')}
                         disabled={!bindings[0]?.applicationEnvironmentId}
                       >
                         查看绑定配置
@@ -2619,9 +2527,55 @@ export function ApplicationDetailPage() {
           const tab = (key: string) => existingTabs.find((item) => item.key === key)!
           return [
             {
+              key: 'overview',
+              label: '概览',
+              children: (
+                <Tabs
+                  className="soha-resource-tabs soha-application-section-tabs"
+                  activeKey={activeSection}
+                  onChange={setActiveSection}
+                  items={[
+                    { key: 'runtime', label: '运行概览', children: serviceEnvironmentWorkspace },
+                    { ...tab('settings'), key: 'application', label: '应用配置' },
+                    tab('permissions'),
+                    { ...tab('capabilities'), label: '交付能力' },
+                  ]}
+                />
+              ),
+            },
+            {
               key: 'services',
-              label: '服务与环境',
-              children: serviceEnvironmentWorkspace,
+              label: '服务',
+              children: (
+                <Tabs
+                  className="soha-resource-tabs soha-application-section-tabs"
+                  activeKey={activeSection}
+                  onChange={setActiveSection}
+                  items={[
+                    { ...tab('services'), key: 'components', label: '服务组件' },
+                    {
+                      key: 'resources',
+                      label: '扩展资源',
+                      children: (
+                        <ManifestLibraryWorkspace
+                          applicationId={applicationId ?? ''}
+                          services={services}
+                        />
+                      ),
+                    },
+                  ]}
+                />
+              ),
+            },
+            {
+              key: 'environments',
+              label: '环境',
+              children: (
+                <>
+                  {tab('environment-bindings').children}
+                  {tab('environments').children}
+                </>
+              ),
             },
             {
               key: 'delivery',
@@ -2629,6 +2583,8 @@ export function ApplicationDetailPage() {
               children: (
                 <Tabs
                   className="soha-resource-tabs soha-application-section-tabs"
+                  activeKey={activeSection}
+                  onChange={setActiveSection}
                   items={[
                     { ...tab('delivery'), key: 'release', label: '发布变更' },
                     tab('pipeline'),
@@ -2637,23 +2593,212 @@ export function ApplicationDetailPage() {
                 />
               ),
             },
-            {
-              key: 'settings',
-              label: '设置',
-              children: (
-                <Tabs
-                  className="soha-resource-tabs soha-application-section-tabs"
-                  items={[
-                    { ...tab('settings'), key: 'application', label: '应用配置' },
-                    tab('permissions'),
-                    { ...tab('capabilities'), label: '交付能力' },
-                  ]}
-                />
-              ),
-            },
           ]
         })()}
       />
+      <Drawer
+        open={Boolean(focusedService)}
+        title={focusedService?.name}
+        size={1040}
+        destroyOnHidden
+        onClose={() => setFocusedService()}
+        extra={
+          focusedService && canUpdateService ? (
+            <Button
+              icon={<EditOutlined />}
+              onClick={() => {
+                setFocusedService()
+                openServiceModal(focusedService)
+              }}
+            >
+              编辑服务
+            </Button>
+          ) : null
+        }
+      >
+        {focusedService ? (
+          <Tabs
+            className="soha-resource-tabs"
+            items={[
+              {
+                key: 'basic',
+                label: '基本信息',
+                children: (
+                  <Descriptions
+                    bordered
+                    column={2}
+                    items={[
+                      { key: 'key', label: '服务 Key', children: focusedService.key },
+                      {
+                        key: 'kind',
+                        label: '服务类型',
+                        children: serviceKindLabel(focusedService.serviceKind),
+                      },
+                      {
+                        key: 'owner',
+                        label: '负责人团队',
+                        children: focusedService.ownerTeam || '-',
+                      },
+                      {
+                        key: 'status',
+                        label: '状态',
+                        children: (
+                          <StatusTag value={focusedService.enabled ? 'enabled' : 'disabled'} />
+                        ),
+                      },
+                      {
+                        key: 'repository',
+                        label: '代码仓库',
+                        children: focusedService.repositoryPath || '-',
+                      },
+                      {
+                        key: 'branch',
+                        label: '默认分支',
+                        children: focusedService.defaultBranch || '-',
+                      },
+                      {
+                        key: 'description',
+                        label: '描述',
+                        span: 2,
+                        children: focusedService.description || '-',
+                      },
+                    ]}
+                  />
+                ),
+              },
+              {
+                key: 'build',
+                label: '构建',
+                children: (
+                  <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+                    <Card className="soha-management-panel-card" title="构建来源">
+                      <Descriptions
+                        column={2}
+                        items={[
+                          {
+                            key: 'source',
+                            label: '来源',
+                            children: focusedServiceBuildSource
+                              ? summarizeBuildSource(focusedServiceBuildSource)
+                              : focusedService.buildSourceId || '未配置',
+                          },
+                          {
+                            key: 'repository',
+                            label: '服务仓库',
+                            children: focusedService.repositoryPath || '-',
+                          },
+                          {
+                            key: 'branch',
+                            label: '默认分支',
+                            children: focusedService.defaultBranch || '-',
+                          },
+                        ]}
+                      />
+                    </Card>
+                    <DeliveryTable
+                      title="容器"
+                      pagination={false}
+                      rowKey={(container: ApplicationServiceContainer) =>
+                        container.id || container.name
+                      }
+                      dataSource={focusedService.containers ?? []}
+                      columns={[
+                        { title: '容器', dataIndex: 'name' },
+                        {
+                          title: '镜像仓库',
+                          dataIndex: 'imageRepository',
+                          render: (value?: string) => value || '-',
+                        },
+                        {
+                          title: 'Dockerfile',
+                          dataIndex: 'dockerfilePath',
+                          render: (value?: string) => value || 'Dockerfile',
+                        },
+                        {
+                          title: '构建上下文',
+                          dataIndex: 'buildContextDir',
+                          render: (value?: string) => value || '.',
+                        },
+                        {
+                          title: '端口',
+                          dataIndex: 'runtimePorts',
+                          render: (value?: number[]) => value?.join(', ') || '-',
+                        },
+                      ]}
+                    />
+                  </Space>
+                ),
+              },
+              {
+                key: 'deploy',
+                label: '部署',
+                children: (
+                  <DeliveryTable
+                    title="环境运行目标"
+                    pagination={false}
+                    rowKey={(workload: ApplicationRuntimeWorkload) =>
+                      `${workload.applicationEnvironmentId}/${workload.workloadName}`
+                    }
+                    dataSource={focusedServiceWorkloads}
+                    columns={[
+                      { title: '环境', dataIndex: 'environmentName' },
+                      { title: 'Workload', dataIndex: 'workloadName' },
+                      { title: '类型', dataIndex: 'workloadKind' },
+                      {
+                        title: '目标',
+                        key: 'target',
+                        render: (_: unknown, workload: ApplicationRuntimeWorkload) =>
+                          `${workload.clusterId} / ${workload.namespace}`,
+                      },
+                      {
+                        title: '副本',
+                        key: 'replicas',
+                        render: (_: unknown, workload: ApplicationRuntimeWorkload) =>
+                          `${workload.readyReplicas}/${workload.desiredReplicas}`,
+                      },
+                      {
+                        title: '状态',
+                        key: 'status',
+                        render: (_: unknown, workload: ApplicationRuntimeWorkload) => (
+                          <StatusTag value={workload.healthStatus || summarizeStatus(workload)} />
+                        ),
+                      },
+                      {
+                        title: '操作',
+                        key: 'actions',
+                        render: (_: unknown, workload: ApplicationRuntimeWorkload) => (
+                          <ManagementIconButton
+                            aria-label="查看服务运行态"
+                            icon={<ArrowRightOutlined />}
+                            size="small"
+                            tooltip="运行态"
+                            onClick={() =>
+                              navigate(
+                                `/applications/${runtime.application.id}/application-environments/${workload.applicationEnvironmentId}/workloads/${encodeURIComponent(workload.workloadName)}`,
+                              )
+                            }
+                          />
+                        ),
+                      },
+                    ]}
+                  />
+                ),
+              },
+              {
+                key: 'resources',
+                label: '扩展资源',
+                children: (
+                  <ManifestLibraryWorkspace
+                    applicationId={applicationId ?? ''}
+                    serviceId={focusedService.id}
+                    services={services}
+                  />
+                ),
+              },
+            ]}
+          />
+        ) : null}
+      </Drawer>
       <Modal
         title={editingService ? '编辑服务组件' : '新建服务组件'}
         open={serviceModalVisible}

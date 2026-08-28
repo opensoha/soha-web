@@ -1,5 +1,6 @@
 import type { PermissionDefinition } from '@opensoha/contracts/gen/ts/sohaapi'
 import type { DataNode } from 'antd/es/tree'
+import type { LocaleCode } from '@/i18n'
 import { resolveRoutePermission, routeMeta } from '@/routes/meta'
 import { toStringArray } from '../shared/utils'
 
@@ -111,6 +112,7 @@ const ROUTE_PERMISSION_OWNERS: Record<string, string> = {
   'docker.operations.cancel': 'compute-workbench-tasks-operations',
   'docker.operations.claim': 'compute-workbench-tasks-operations',
   'docker.operations.retry': 'compute-workbench-tasks-operations',
+  'docker.overview.view': 'compute-workbench-overview',
   'docker.ports.create': 'docker-workbench-projects',
   'docker.ports.delete': 'docker-workbench-projects',
   'docker.ports.update': 'docker-workbench-projects',
@@ -123,6 +125,7 @@ const ROUTE_PERMISSION_OWNERS: Record<string, string> = {
   'docker.services.view': 'docker-workbench-projects',
   'virtualization.operations.cancel': 'compute-workbench-tasks-operations',
   'virtualization.operations.retry': 'compute-workbench-tasks-operations',
+  'virtualization.overview.view': 'compute-workbench-overview',
   'virtualization.sync.sync': 'compute-workbench-tasks-operations',
   'secret.create': 'settings-secrets',
   'secret.revoke': 'settings-secrets',
@@ -145,7 +148,21 @@ const PERMISSION_WORKBENCH_OWNERS: Record<string, string> = {
 }
 
 type RolePermissionTreeNode = DataNode & { children?: RolePermissionTreeNode[] }
-type Translate = (key: string, fallback?: string) => string
+export type Translate = (key: string, fallback?: string) => string
+
+export function localizePermissionDefinitions(
+  definitions: PermissionDefinition[],
+  localeCode: LocaleCode,
+  translate: Translate,
+) {
+  return definitions.map((permission) => ({
+    ...permission,
+    displayName: translate(
+      `permission.key.${permission.key}`,
+      localeCode === 'zh_CN' ? permission.displayName : permission.key,
+    ),
+  }))
+}
 
 export function normalizePermissionKeys(value: unknown) {
   return toStringArray(value).sort((left, right) => left.localeCompare(right))
@@ -271,14 +288,8 @@ export function buildRolePermissionTreeData(
       key: permissionTreeKey(definition.key),
       title:
         definition.riskLevel === 'high'
-          ? `${definition.displayName} · 高风险`
+          ? `${definition.displayName} · ${translate?.('access.roles.highRisk', '高风险') ?? '高风险'}`
           : definition.displayName,
-    }
-    const owner = permissionOwner(definition.key)
-    const ownerNode = owner ? nodeByRouteID.get(owner) : null
-    if (ownerNode) {
-      ownerNode.children = [...(ownerNode.children ?? []), node]
-      return
     }
     const workbenchOwner = PERMISSION_WORKBENCH_OWNERS[definition.key]
     if (workbenchOwner) {
@@ -286,6 +297,12 @@ export function buildRolePermissionTreeData(
         ...(permissionsByWorkbench.get(workbenchOwner) ?? []),
         node,
       ])
+      return
+    }
+    const owner = permissionOwner(definition.key)
+    const ownerNode = owner ? nodeByRouteID.get(owner) : null
+    if (ownerNode) {
+      ownerNode.children = [...(ownerNode.children ?? []), node]
       return
     }
     const workbench = PERMISSION_DOMAIN_WORKBENCH[definition.domain] || 'unknown'
@@ -318,7 +335,9 @@ export function buildRolePermissionTreeData(
 
   const workbenchTree = Array.from(rootsByWorkbench.entries())
     .map(([workbench, children]) => {
-      const title = ROLE_PERMISSION_WORKBENCH_LABELS[workbench] || workbench
+      const fallbackTitle = ROLE_PERMISSION_WORKBENCH_LABELS[workbench] || workbench
+      const title =
+        translate?.(`access.roles.workbench.${workbench}`, fallbackTitle) ?? fallbackTitle
       const prunedChildren = pruneEmptyNodes(
         children.sort((left, right) => {
           const leftID = String(left.key).replace('route:', '')
@@ -350,14 +369,15 @@ export function buildRolePermissionTreeData(
   if (compatibilityKeys.length) {
     workbenchTree.push({
       key: 'workbench:compatibility',
-      title: '兼容权限（只读）',
+      title:
+        translate?.('access.roles.compatibilityReadonly', '兼容权限（只读）') ?? '兼容权限（只读）',
       children: compatibilityKeys.map((permissionKey) => {
         const definition = definitionByKey.get(permissionKey)
         return {
           key: permissionTreeKey(permissionKey),
           title: definition
             ? `${definition.displayName} (${permissionKey})`
-            : `未知权限 (${permissionKey})`,
+            : `${translate?.('access.roles.unknownPermission', '未知权限') ?? '未知权限'} (${permissionKey})`,
           disabled: true,
         }
       }),

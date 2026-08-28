@@ -2,7 +2,13 @@ import type { PermissionCatalog, PermissionDefinition } from '@opensoha/contract
 import permissionCatalogArtifact from '@opensoha/contracts/auth/permission-catalog.json'
 import type { DataNode } from 'antd/es/tree'
 import { describe, expect, it } from 'vitest'
-import { buildRolePermissionTreeData, normalizeRolePermissionKeys } from './permission-model'
+import { enUS } from '@/i18n/locales/en_US'
+import { zhCN } from '@/i18n/locales/zh_CN'
+import {
+  buildRolePermissionTreeData,
+  localizePermissionDefinitions,
+  normalizeRolePermissionKeys,
+} from './permission-model'
 
 const resourceCreationPermission = {
   key: 'platform.resource-creation.use',
@@ -77,6 +83,24 @@ function findNode(nodes: DataNode[], targetKey: string): DataNode | undefined {
 }
 
 describe('role permission tree model', () => {
+  it('uses readable localized Compute permission names', () => {
+    const computePermission = definitions.find(
+      (definition) => definition.key === 'virtualization.vms.view',
+    )
+    if (!computePermission) throw new Error('missing Compute permission fixture')
+    const translate =
+      (dictionary: Record<string, string>) =>
+      (key: string, fallback = key) =>
+        dictionary[key] || fallback
+
+    expect(
+      localizePermissionDefinitions([computePermission], 'en_US', translate(enUS))[0].displayName,
+    ).toBe('View virtual machines')
+    expect(
+      localizePermissionDefinitions([computePermission], 'zh_CN', translate(zhCN))[0].displayName,
+    ).toBe('查看虚拟机')
+  })
+
   it('normalizes role permissions without inferring workbench entry access', () => {
     expect(normalizeRolePermissionKeys(['platform.pods.view'])).toEqual(['platform.pods.view'])
     expect(normalizeRolePermissionKeys(['docker.projects.view'])).toEqual(['docker.projects.view'])
@@ -211,7 +235,6 @@ describe('role permission tree model', () => {
 
   it.each([
     ['virtualization.vms.power', 'virtualization-workbench-vms'],
-    ['virtualization.clusters.sync', 'virtualization-workbench-clusters'],
     ['virtualization.operations.retry', 'compute-workbench-tasks-operations'],
     ['virtualization.sync.sync', 'compute-workbench-tasks-operations'],
     ['docker.services.logs', 'docker-workbench-projects'],
@@ -277,9 +300,9 @@ describe('role permission tree model', () => {
       'ai.gateway.skills.update',
       'ai.gateway.skills.delete',
     ]) {
-      expect(nodePath(buildRolePermissionTreeData(definitions), `permission:${permissionKey}`)).toContain(
-        'route:ai-workbench-skills',
-      )
+      expect(
+        nodePath(buildRolePermissionTreeData(definitions), `permission:${permissionKey}`),
+      ).toContain('route:ai-workbench-skills')
     }
   })
 
@@ -290,9 +313,9 @@ describe('role permission tree model', () => {
       'ai.data-sources.update',
       'ai.data-sources.validate',
     ]) {
-      expect(nodePath(buildRolePermissionTreeData(definitions), `permission:${permissionKey}`)).toContain(
-        'route:ai-workbench-data-sources',
-      )
+      expect(
+        nodePath(buildRolePermissionTreeData(definitions), `permission:${permissionKey}`),
+      ).toContain('route:ai-workbench-data-sources')
     }
   })
 

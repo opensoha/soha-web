@@ -1,12 +1,13 @@
 import { Alert, App, Button, Input, Modal, Space, Typography } from 'antd'
 import { CopyOutlined } from '@ant-design/icons'
+import type { IdentityOIDCClientSecretReveal } from '../types'
 
 const { Paragraph, Text } = Typography
 
-export interface IdentityOIDCSecretReveal {
-  clientId: string
-  clientSecret: string
-}
+export type IdentityOIDCSecretReveal = Pick<
+  IdentityOIDCClientSecretReveal,
+  'clientId' | 'clientSecret'
+>
 
 interface SecretRevealModalProps {
   onClose: () => void
@@ -18,7 +19,7 @@ export function SecretRevealModal({ onClose, value }: SecretRevealModalProps) {
 
   return (
     <Modal
-      okText="我已保存"
+      okText="关闭"
       onCancel={onClose}
       onOk={onClose}
       open={Boolean(value)}
@@ -27,8 +28,8 @@ export function SecretRevealModal({ onClose, value }: SecretRevealModalProps) {
       <Space className="soha-identity-secret-reveal" orientation="vertical" size={12}>
         <Alert
           showIcon
-          type="warning"
-          title="Client secret 仅展示一次。关闭后需要轮换 secret 才能再次获得新值。"
+          type="info"
+          title="Client Secret 已加密保存，稍后仍可再次查看；每次查看都会记录审计日志。"
         />
         <div>
           <Text type="secondary">Client ID</Text>

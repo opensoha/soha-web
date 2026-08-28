@@ -25,7 +25,9 @@ import {
 } from '@/features/platform/workloads-model'
 import {
   renderWorkloadNameLink,
+  useWorkloadListAIContext,
   useWorkloadTableDensity,
+  workloadRowAIContext,
   WorkloadQueryPanel,
   WorkloadRefreshButton,
   WorkloadSearchInput,
@@ -62,6 +64,15 @@ export function WorkloadsJobsPage() {
       ),
     [jobs, searchKeyword],
   )
+
+  useWorkloadListAIContext({
+    clusterId,
+    itemCount: jobs.length,
+    kind: 'jobs',
+    label: 'Jobs',
+    namespace,
+    searchKeyword,
+  })
 
   const remove = (target: JobTarget) =>
     removeMutation.mutate(target, {
@@ -195,6 +206,7 @@ export function WorkloadsJobsPage() {
         columns={canShowActions ? columns : columns.filter((column) => column.key !== 'actions')}
         dataSource={filteredJobs}
         rowKey={(record) => `${record.namespace}/${record.name}`}
+        onRow={(record: Job) => workloadRowAIContext('jobs', record, clusterId)}
         loading={jobsQuery.isLoading}
         localSorting
         pageSize={K8S_TABLE_PAGE_SIZE}

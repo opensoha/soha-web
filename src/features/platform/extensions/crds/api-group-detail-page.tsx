@@ -8,6 +8,7 @@ import {
   ManagementState,
   ManagementTableToolbar,
 } from '@/components/management-list'
+import { useAIPageContext } from '@/features/copilot'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { CRDKindWorkspace } from './kind-workspace'
@@ -35,6 +36,13 @@ export function CRDApiGroupDetailPage() {
     () => groupCRDs.find((item) => item.name === selectedCRDName) ?? groupCRDs[0] ?? null,
     [groupCRDs, selectedCRDName],
   )
+  useAIPageContext({
+    sourceWorkbench: 'platform',
+    sourceTitle: decodedGroupName || 'Kubernetes API Group',
+    entityKind: 'CustomResourceDefinition',
+    entityName: selectedCRD?.name || decodedGroupName,
+    clusterId: clusterId || undefined,
+  })
 
   useEffect(() => {
     if (!groupCRDs.length) {

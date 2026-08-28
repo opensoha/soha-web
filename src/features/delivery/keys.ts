@@ -14,6 +14,7 @@ import type {
 const ROOT = ['delivery'] as const
 const APPLICATIONS = [...ROOT, 'applications'] as const
 const ENVIRONMENTS = [...ROOT, 'environments'] as const
+const ENVIRONMENT_CATALOG = [...ROOT, 'environment-catalog'] as const
 const BUILD_TEMPLATES = [...ROOT, 'templates', 'build'] as const
 const WORKFLOW_TEMPLATES = [...ROOT, 'templates', 'workflow'] as const
 const BLUEPRINTS = [...ROOT, 'blueprints'] as const
@@ -119,6 +120,10 @@ export const deliveryKeys = {
       [...APPLICATIONS, 'detail', normalizeDeliveryId(id), 'runtime'] as const,
     services: (id: string) =>
       [...APPLICATIONS, 'detail', normalizeDeliveryId(id), 'services'] as const,
+  },
+  environmentCatalog: {
+    all: ENVIRONMENT_CATALOG,
+    list: () => [...ENVIRONMENT_CATALOG, 'list'] as const,
   },
   environments: {
     all: ENVIRONMENTS,

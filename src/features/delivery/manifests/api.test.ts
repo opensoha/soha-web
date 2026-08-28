@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { manifestApi } from './api'
-import type { ManifestPackageInput } from './types'
+import type { ManifestEnvironmentBindingUpdateInput, ManifestPackageInput } from './types'
 
 const apiMocks = vi.hoisted(() => ({
   delete: vi.fn(),
@@ -18,13 +18,14 @@ describe('manifestApi', () => {
     apiMocks.get.mockResolvedValue({ data: [] })
     await manifestApi.list({
       applicationId: 'app/a',
+      serviceId: 'service/a',
       clusterId: 'dev cluster',
       namespace: 'team-a',
     })
     await manifestApi.revisions('package/a')
 
     expect(apiMocks.get.mock.calls.map(([path]) => path)).toEqual([
-      '/delivery/manifest-packages?applicationId=app%2Fa&clusterId=dev+cluster&namespace=team-a',
+      '/delivery/manifest-packages?applicationId=app%2Fa&serviceId=service%2Fa&clusterId=dev+cluster&namespace=team-a',
       '/delivery/manifest-packages/package%2Fa/revisions',
     ])
   })
@@ -84,6 +85,26 @@ describe('manifestApi', () => {
         expectedPackageUpdatedAt: '2026-07-30T00:00:00Z',
       },
     )
+  })
+
+  it('preserves the complete environment binding update', async () => {
+    apiMocks.put.mockResolvedValue({ data: { id: 'binding-1' } })
+    const input = {
+      applicationEnvironmentId: 'environment-1',
+      clusterId: 'cluster-1',
+      namespace: 'demo',
+      overlay: { replicas: '3' },
+      rolloutStrategyId: 'strategy-1',
+      verificationPolicyId: 'policy-1',
+      driftPolicy: 'report',
+      deletionPolicy: 'orphan',
+      enabled: false,
+      expectedVersion: 4,
+    } satisfies ManifestEnvironmentBindingUpdateInput
+
+    await manifestApi.updateBinding('binding/1', input)
+
+    expect(apiMocks.put).toHaveBeenCalledWith('/delivery/manifest-bindings/binding%2F1', input)
   })
 
   it('loads every deployment page for a manifest package', async () => {

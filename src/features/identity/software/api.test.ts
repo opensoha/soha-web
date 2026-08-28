@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   deleteSoftwarePackage,
+  getSoftwarePackageDownloadRecords,
   getSoftwareStorage,
   importSoftwarePackage,
   listSoftwarePackages,
@@ -33,6 +34,7 @@ const softwarePackage = {
   sizeBytes: 7,
   sha256: 'a'.repeat(64),
   downloadPath: '/api/v1/software/packages/pkg%2F1/download',
+  downloadCount: 0,
   createdAt: '2026-08-08T00:00:00Z',
   updatedAt: '2026-08-08T00:00:00Z',
 } satisfies SoftwarePackage
@@ -43,18 +45,25 @@ describe('software package api', () => {
   it('keeps the paginated list envelope and normalizes filters', async () => {
     apiMocks.getEnvelope.mockResolvedValueOnce({ items: [softwarePackage], nextCursor: 'next' })
 
-    await expect(listSoftwarePackages({ platform: ' darwin ', arch: ' arm64 ' })).resolves.toEqual({
+    await expect(
+      listSoftwarePackages({
+        platform: ' darwin ',
+        arch: ' arm64 ',
+        storageIntegrationId: ' storage-1 ',
+      }),
+    ).resolves.toEqual({
       items: [softwarePackage],
       nextCursor: 'next',
     })
     expect(apiMocks.getEnvelope).toHaveBeenCalledWith(
-      '/software/packages?platform=darwin&arch=arm64&limit=200',
+      '/software/packages?platform=darwin&arch=arm64&storageIntegrationId=storage-1&limit=200',
     )
   })
 
   it('uploads multipart fields and encodes delete ids', async () => {
     apiMocks.upload.mockResolvedValueOnce({ data: softwarePackage })
     const input: SoftwarePackageUploadInput = {
+      storageIntegrationId: 'storage-1',
       softwareId: 'soha',
       name: 'Soha Desktop',
       publisher: 'OpenSoha',
@@ -68,6 +77,7 @@ describe('software package api', () => {
     const formData = apiMocks.upload.mock.calls[0]?.[1] as FormData
     expect(apiMocks.upload.mock.calls[0]?.[0]).toBe('/software/packages')
     expect(formData.get('softwareId')).toBe('soha')
+    expect(formData.get('storageIntegrationId')).toBe('storage-1')
     expect(formData.get('file')).toBe(input.file)
 
     await deleteSoftwarePackage(softwarePackage.id)
@@ -100,7 +110,17 @@ describe('software package api', () => {
     }
     apiMocks.getEnvelope.mockResolvedValueOnce({ data: storage })
 
-    await expect(getSoftwareStorage()).resolves.toEqual(storage)
-    expect(apiMocks.getEnvelope).toHaveBeenCalledWith('/software/storage?limit=200')
+    await expect(getSoftwareStorage(' storage-1 ')).resolves.toEqual(storage)
+    expect(apiMocks.getEnvelope).toHaveBeenCalledWith(
+      '/software/storage?limit=200&storageIntegrationId=storage-1',
+    )
+  })
+
+  it('loads encoded package download records', async () => {
+    apiMocks.getEnvelope.mockResolvedValueOnce({ items: [] })
+    await expect(getSoftwarePackageDownloadRecords('pkg/1')).resolves.toEqual({ items: [] })
+    expect(apiMocks.getEnvelope).toHaveBeenCalledWith(
+      '/software/packages/pkg%2F1/download-records?limit=50',
+    )
   })
 })

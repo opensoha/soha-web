@@ -36,9 +36,16 @@
   padding: 16px;
 }
 
-.soha-system-announcement-list .ant-list-item {
+.soha-system-announcement-item {
+  align-items: flex-start;
   padding-top: 18px;
   padding-bottom: 18px;
+}
+
+.soha-system-announcement-main {
+  flex: 1;
+  align-items: flex-start;
+  flex-direction: column;
 }
 
 .soha-system-announcement-extra {

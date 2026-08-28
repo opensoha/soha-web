@@ -10,7 +10,7 @@ import {
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button, Card, Descriptions, Space, Spin, Statistic, Typography } from 'antd'
-import { Alert, App, Input, List, Modal, Popconfirm } from 'antd'
+import { Alert, App, Empty, Input, Modal, Popconfirm } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { identityRuntimeQueries } from '@/features/identity'
 import type {
@@ -331,31 +331,36 @@ export function PortalSecurityPage() {
                       Use recovery code
                     </Button>
                   </Space>
-                  <List
-                    dataSource={credentialsQuery.data ?? []}
-                    loading={credentialsQuery.isLoading}
-                    locale={{ emptyText: 'No MFA credentials' }}
-                    renderItem={(credential) => (
-                      <List.Item
-                        actions={[
-                          <Popconfirm
-                            key="revoke"
-                            title="Revoke this credential?"
-                            onConfirm={() => revokeMutation.mutate(credential.id)}
-                          >
-                            <Button danger size="small">
-                              Revoke
-                            </Button>
-                          </Popconfirm>,
-                        ]}
-                      >
-                        <List.Item.Meta
-                          title={credential.displayName}
-                          description={`${credential.type} · ${formatPortalDateTime(credential.lastUsedAt || credential.createdAt)}`}
-                        />
-                      </List.Item>
-                    )}
-                  />
+                  {credentialsQuery.isLoading ? (
+                    <Spin size="small" />
+                  ) : credentialsQuery.data?.length ? (
+                    <ul className="soha-list-panel">
+                      {credentialsQuery.data.map((credential) => (
+                        <li key={credential.id} className="soha-list-row">
+                          <div className="soha-list-row-meta">
+                            <div>
+                              <Text strong>{credential.displayName}</Text>
+                              <div>
+                                <Text type="secondary">{`${credential.type} · ${formatPortalDateTime(credential.lastUsedAt || credential.createdAt)}`}</Text>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="soha-list-row-extra">
+                            <Popconfirm
+                              title="Revoke this credential?"
+                              onConfirm={() => revokeMutation.mutate(credential.id)}
+                            >
+                              <Button danger size="small">
+                                Revoke
+                              </Button>
+                            </Popconfirm>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No MFA credentials" />
+                  )}
                 </Space>
               )}
             </section>
@@ -479,16 +484,15 @@ export function PortalSecurityPage() {
           description="Store these codes securely. Each code can be used only once."
           type="warning"
         />
-        <List
-          dataSource={recoveryCodes}
-          renderItem={(code) => (
-            <List.Item>
+        <ul className="soha-list-panel">
+          {recoveryCodes.map((code) => (
+            <li key={code} className="soha-list-row">
               <Text code copyable>
                 {code}
               </Text>
-            </List.Item>
-          )}
-        />
+            </li>
+          ))}
+        </ul>
       </Modal>
     </div>
   )

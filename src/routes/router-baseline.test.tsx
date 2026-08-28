@@ -41,17 +41,14 @@ vi.mock(
 )
 vi.mock('@/features/provider-portal/security/page', mockRoutePage('PortalSecurityPage'))
 vi.mock('@/features/identity/outposts/list-page', mockRoutePage('IdentityOutpostsPage'))
-vi.mock('@/features/identity/policies/list-page', mockRoutePage('IdentityPoliciesPage'))
 vi.mock('@/features/identity/applications/list-page', mockRoutePage('IdentityApplicationsPage'))
 vi.mock('@/features/identity/overview/page', mockRoutePage('IdentityOverviewPage'))
 vi.mock('@/features/identity/software/page', mockRoutePage('SoftwareLibraryPage'))
-vi.mock('@/features/identity/software/storage-page', mockRoutePage('SoftwareStoragePage'))
 vi.mock('@/features/identity/providers/list-page', mockRoutePage('IdentityProvidersPage'))
 vi.mock('@/features/access/users/page', mockRoutePage('AccessUsersPage'))
 vi.mock('@/features/access/roles/page', mockRoutePage('AccessRolesPage'))
 vi.mock('@/features/access/teams/page', mockRoutePage('AccessTeamsPage'))
 vi.mock('@/features/access/policies/page', mockRoutePage('AccessPoliciesPage'))
-vi.mock('@/features/access/scope-grants/page', mockRoutePage('AccessScopeGrantsPage'))
 vi.mock('@/features/system/sessions/page', mockRoutePage('OnlineUsersPage'))
 vi.mock('@/features/system/announcements/page', mockRoutePage('AnnouncementsPage'))
 vi.mock('@/features/system/menus/page', mockRoutePage('MenusPage'))
@@ -211,17 +208,15 @@ describe('router deep-link baseline', () => {
     ['/internal-workbench', 'IdentityOverviewPage'],
     ['/internal-workbench/overview', 'IdentityOverviewPage'],
     ['/internal-workbench/software', 'SoftwareLibraryPage'],
-    ['/internal-workbench/software-storage', 'SoftwareStoragePage'],
     ['/identity/applications', 'IdentityApplicationsPage'],
     ['/identity/providers', 'IdentityProvidersPage'],
     ['/identity/outposts', 'IdentityOutpostsPage'],
-    ['/identity/policies', 'IdentityPoliciesPage'],
+    ['/identity/policies', 'IdentityApplicationsPage'],
     ['/identity/audit', 'AuditLogsPage'],
     ['/access/users', 'AccessUsersPage'],
     ['/access/roles', 'AccessRolesPage'],
     ['/access/teams', 'AccessTeamsPage'],
     ['/access/policies', 'AccessPoliciesPage'],
-    ['/access/scope-grants', 'AccessScopeGrantsPage'],
     ['/system', 'OnlineUsersPage'],
     ['/system/online-users', 'OnlineUsersPage'],
     ['/system/announcements', 'AnnouncementsPage'],

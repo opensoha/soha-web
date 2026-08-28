@@ -1,4 +1,4 @@
-import { App, Card, Space, Typography } from 'antd'
+import { App, Button, Card, Space, Typography } from 'antd'
 import { ReloadOutlined, SyncOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -15,9 +15,13 @@ import { computeQueries } from '../queries'
 const { Text } = Typography
 
 export function ProviderInstancesPanel({
+  canDiscover,
+  canTest,
   enabled,
   localeCode,
 }: {
+  canDiscover: boolean
+  canTest: boolean
   enabled: boolean
   localeCode: 'zh_CN' | 'en_US'
 }) {
@@ -56,6 +60,18 @@ export function ProviderInstancesPanel({
           compact
           kind="error"
           title={localeCode === 'zh_CN' ? '提供方实例加载失败' : 'Provider instances unavailable'}
+          actions={
+            <Button
+              aria-label={
+                localeCode === 'zh_CN' ? '重试加载提供方实例' : 'Retry provider instances'
+              }
+              loading={instancesQuery.isFetching}
+              size="small"
+              onClick={() => void instancesQuery.refetch()}
+            >
+              {localeCode === 'zh_CN' ? '重试' : 'Retry'}
+            </Button>
+          }
         />
       ) : items.length === 0 ? (
         <ManagementState
@@ -101,55 +117,63 @@ export function ProviderInstancesPanel({
                     {formatDateTime(instance.lastObservedAt)}
                   </Text>
                 </div>
-                {canInspect ? (
+                {canInspect && (canTest || canDiscover) ? (
                   <Space size={4}>
-                    <ManagementIconButton
-                      aria-label={
-                        localeCode === 'zh_CN' ? '检查连接健康' : 'Check connection health'
-                      }
-                      icon={<ReloadOutlined />}
-                      loading={busy}
-                      size="small"
-                      tooltip={localeCode === 'zh_CN' ? '检查连接健康' : 'Check connection health'}
-                      onClick={() =>
-                        healthMutation.mutate(
-                          {
-                            domain: instance.snapshot.domain,
-                            providerKey: instance.snapshot.providerKey,
-                            instanceRef: instance.instanceRef,
-                            input: { expectedGeneration: instance.snapshot.generation },
-                          },
-                          {
-                            onSuccess: (result) => openTask(result.data.domain, result.data.id),
-                            onError: (error) => void message.error(error.message),
-                          },
-                        )
-                      }
-                    />
-                    <ManagementIconButton
-                      aria-label={localeCode === 'zh_CN' ? '发现并同步资源' : 'Discover resources'}
-                      icon={<SyncOutlined />}
-                      loading={busy}
-                      size="small"
-                      tooltip={localeCode === 'zh_CN' ? '发现并同步资源' : 'Discover resources'}
-                      onClick={() =>
-                        discoveryMutation.mutate(
-                          {
-                            domain: instance.snapshot.domain,
-                            providerKey: instance.snapshot.providerKey,
-                            instanceRef: instance.instanceRef,
-                            input: {
-                              expectedGeneration: instance.snapshot.generation,
-                              maxItems: 1000,
+                    {canTest ? (
+                      <ManagementIconButton
+                        aria-label={
+                          localeCode === 'zh_CN' ? '检查连接健康' : 'Check connection health'
+                        }
+                        icon={<ReloadOutlined />}
+                        loading={busy}
+                        size="small"
+                        tooltip={
+                          localeCode === 'zh_CN' ? '检查连接健康' : 'Check connection health'
+                        }
+                        onClick={() =>
+                          healthMutation.mutate(
+                            {
+                              domain: instance.snapshot.domain,
+                              providerKey: instance.snapshot.providerKey,
+                              instanceRef: instance.instanceRef,
+                              input: { expectedGeneration: instance.snapshot.generation },
                             },
-                          },
-                          {
-                            onSuccess: (result) => openTask(result.data.domain, result.data.id),
-                            onError: (error) => void message.error(error.message),
-                          },
-                        )
-                      }
-                    />
+                            {
+                              onSuccess: (result) => openTask(result.data.domain, result.data.id),
+                              onError: (error) => void message.error(error.message),
+                            },
+                          )
+                        }
+                      />
+                    ) : null}
+                    {canDiscover ? (
+                      <ManagementIconButton
+                        aria-label={
+                          localeCode === 'zh_CN' ? '发现并同步资源' : 'Discover resources'
+                        }
+                        icon={<SyncOutlined />}
+                        loading={busy}
+                        size="small"
+                        tooltip={localeCode === 'zh_CN' ? '发现并同步资源' : 'Discover resources'}
+                        onClick={() =>
+                          discoveryMutation.mutate(
+                            {
+                              domain: instance.snapshot.domain,
+                              providerKey: instance.snapshot.providerKey,
+                              instanceRef: instance.instanceRef,
+                              input: {
+                                expectedGeneration: instance.snapshot.generation,
+                                maxItems: 1000,
+                              },
+                            },
+                            {
+                              onSuccess: (result) => openTask(result.data.domain, result.data.id),
+                              onError: (error) => void message.error(error.message),
+                            },
+                          )
+                        }
+                      />
+                    ) : null}
                   </Space>
                 ) : null}
               </div>

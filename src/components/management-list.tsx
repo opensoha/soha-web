@@ -590,7 +590,6 @@ export function ManagementToolbarSearch({
       className={classNames('soha-management-toolbar-search', inputProps.className)}
       placeholder={placeholder}
       prefix={inputProps.prefix ?? <SearchOutlined />}
-      size="small"
       style={{ width, maxWidth: '100%', ...style }}
       value={value}
       onChange={(event) => onChange(event.target.value)}

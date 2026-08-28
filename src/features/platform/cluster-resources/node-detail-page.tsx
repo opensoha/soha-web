@@ -5,6 +5,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import type { TableColumnsType } from 'antd'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementDetailHeader, ManagementState } from '@/components/management-list'
+import { useAIPageContext } from '@/features/copilot'
 import { StatusTag } from '@/components/status-tag'
 import { PlatformResourceOverview } from '@/features/platform/shared/resource-overview'
 import {
@@ -52,6 +53,14 @@ export function NodeDetailPage() {
   const updateNodeMutation = useMutation(nodeMutations.update(queryClient))
   const yamlCapability = useClusterCapabilityForCluster('resource.yaml.view', localeCode, clusterId)
   const yamlAvailable = yamlCapability.status === 'available'
+  useAIPageContext({
+    sourceWorkbench: 'platform',
+    sourceTitle: localeCode === 'zh_CN' ? '节点详情' : 'Node Detail',
+    entityKind: 'Node',
+    entityName: nodeName,
+    clusterId: clusterId || undefined,
+    node: nodeName,
+  })
 
   useEffect(() => {
     if (requestedClusterId && requestedClusterId !== scopedClusterId) {

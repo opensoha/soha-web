@@ -76,6 +76,9 @@ layer, loading boundaries, and Soha visual system.
   status signal.
 - Do not repeat the current page identity, generic explanatory copy, or a back-to-list action below
   a breadcrumb that already provides that context and navigation.
+- Keep field and section explanations out of the default layout. When non-obvious guidance is
+  necessary, place it in a keyboard-focusable `?` tooltip beside the relevant label or title;
+  delete generic, obvious, or redundant overview copy instead of converting it into help text.
 - Keep DAG, topology, terminal, noVNC, charts, and AI graph as token-driven scene exceptions.
 - Prefer current Ant Design 6 APIs such as `Card.styles.body`, `Alert.title`, and
   `showSearch={{ optionFilterProp: 'label' }}`.

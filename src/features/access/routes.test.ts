@@ -7,7 +7,6 @@ const routePages = vi.hoisted(() => ({
   teams: () => null,
   policies: () => null,
   directorySync: () => null,
-  scopeGrants: () => null,
 }))
 
 vi.mock('./users/page', () => ({ AccessUsersPage: routePages.users }))
@@ -15,29 +14,29 @@ vi.mock('./roles/page', () => ({ AccessRolesPage: routePages.roles }))
 vi.mock('./teams/page', () => ({ AccessTeamsPage: routePages.teams }))
 vi.mock('./policies/page', () => ({ AccessPoliciesPage: routePages.policies }))
 vi.mock('./directory-sync/page', () => ({ DirectorySyncPage: routePages.directorySync }))
-vi.mock('./scope-grants/page', () => ({ AccessScopeGrantsPage: routePages.scopeGrants }))
 
 describe('access route manifest', () => {
-  it('maps all access routes to distinct leaf modules', async () => {
+  it('maps all access pages to distinct leaf modules', async () => {
     const expectedPages = new Map([
       ['access-users', routePages.users],
       ['access-roles', routePages.roles],
       ['access-teams', routePages.teams],
       ['access-policies', routePages.policies],
       ['access-directory-sync', routePages.directorySync],
-      ['access-scope-grants', routePages.scopeGrants],
     ])
 
     const loadedPages = await Promise.all(
-      accessRoutes.map(async (route) => {
-        const module = await route.load()
-        expect(module.default).toBe(expectedPages.get(route.meta.id))
-        return module.default
-      }),
+      accessRoutes
+        .filter((route) => 'load' in route)
+        .map(async (route) => {
+          const module = await route.load()
+          expect(module.default).toBe(expectedPages.get(route.meta.id))
+          return module.default
+        }),
     )
 
-    expect(loadedPages).toHaveLength(6)
-    expect(new Set(loadedPages).size).toBe(6)
+    expect(loadedPages).toHaveLength(5)
+    expect(new Set(loadedPages).size).toBe(5)
   })
 
   it('preserves access paths, permissions, and navigation metadata', () => {
@@ -78,12 +77,6 @@ describe('access route manifest', () => {
         navVisible: true,
         path: '/access/directory-sync',
         permissionKey: 'access.directory.view',
-      },
-      {
-        id: 'access-scope-grants',
-        navVisible: false,
-        path: '/access/scope-grants',
-        permissionKey: 'access.scope-grants.view',
       },
     ])
   })

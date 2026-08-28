@@ -24,7 +24,7 @@ import {
   RocketOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
+import { Navigate, useSearchParams } from 'react-router-dom'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementDensityButton,
@@ -39,6 +39,7 @@ import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { formatDateTime } from '@/utils/time'
 import { deliveryQueries } from '../queries'
+import type { ApplicationServiceComponent } from '../types'
 import { manifestMutations } from './mutations'
 import { manifestQueries } from './queries'
 import { ManifestOperationsPanel } from './operations-panel'
@@ -66,10 +67,11 @@ spec:
                   number: 80
 `
 
-function emptyInput(): ManifestPackageInput {
+function emptyInput(applicationId = '', serviceId?: string): ManifestPackageInput {
   return {
     name: '',
-    applicationId: '',
+    applicationId,
+    serviceId,
     renderer: 'raw_yaml',
     files: [{ path: 'base/ingress.yaml', content: DEFAULT_INGRESS }],
     bindings: [],
@@ -77,12 +79,36 @@ function emptyInput(): ManifestPackageInput {
 }
 
 export function ManifestLibraryPage() {
+  const [searchParams] = useSearchParams()
+  const applicationId = searchParams.get('applicationId')?.trim()
+  if (applicationId) {
+    return (
+      <Navigate
+        replace
+        to={`/applications/${encodeURIComponent(applicationId)}?tab=services&section=resources`}
+      />
+    )
+  }
+  return <ManifestLibraryWorkspace readOnly />
+}
+
+export function ManifestLibraryWorkspace({
+  applicationId,
+  serviceId,
+  services = [],
+  readOnly = false,
+}: {
+  applicationId?: string
+  serviceId?: string
+  services?: ApplicationServiceComponent[]
+  readOnly?: boolean
+}) {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const [queryForm] = Form.useForm()
   const [editorForm] = Form.useForm<ManifestPackageInput>()
   const [searchParams, setSearchParams] = useSearchParams()
-  const filter = useMemo<ManifestFilter>(() => {
+  const urlFilter = useMemo<ManifestFilter>(() => {
     const page = Number(searchParams.get('page'))
     const pageSize = Number(searchParams.get('pageSize'))
     return {
@@ -92,15 +118,22 @@ export function ManifestLibraryPage() {
       pageSize: Number.isInteger(pageSize) && pageSize > 0 ? pageSize : 20,
     }
   }, [searchParams])
+  const [scopedFilter, setScopedFilter] = useState<ManifestFilter>({
+    applicationId,
+    serviceId,
+    page: 1,
+    pageSize: 20,
+  })
+  const filter = applicationId ? { ...scopedFilter, applicationId, serviceId } : urlFilter
   const [editing, setEditing] = useState<ManifestPackage | null | undefined>(undefined)
   const [revisionTarget, setRevisionTarget] = useState<ManifestPackage | null>(null)
   const [publishTarget, setPublishTarget] = useState<ManifestPackage | null>(null)
   const [publishNote, setPublishNote] = useState('')
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const snapshot = usePermissionSnapshot().data?.data
-  const canEdit = hasPermission(snapshot, 'delivery.application.update')
-  const canDelete = hasPermission(snapshot, 'delivery.application.delete')
-  const canPublish = hasPermission(snapshot, 'delivery.releases.trigger')
+  const canEdit = !readOnly && hasPermission(snapshot, 'delivery.application.update')
+  const canDelete = !readOnly && hasPermission(snapshot, 'delivery.application.delete')
+  const canPublish = !readOnly && hasPermission(snapshot, 'delivery.releases.trigger')
   const selectedApplicationId = Form.useWatch('applicationId', editorForm)
   const packagesQuery = useQuery(manifestQueries.list(filter))
   const applicationsQuery = useQuery(deliveryQueries.applications.list())
@@ -127,6 +160,14 @@ export function ManifestLibraryPage() {
     () => new Map(applicationOptions.map((item) => [item.value, item.label])),
     [applicationOptions],
   )
+  const serviceOptions = useMemo(
+    () => services.map((item) => ({ value: item.id, label: item.name || item.key || item.id })),
+    [services],
+  )
+  const serviceNames = useMemo(
+    () => new Map(serviceOptions.map((item) => [item.value, item.label])),
+    [serviceOptions],
+  )
   const environmentOptions = useMemo(
     () =>
       (environmentsQuery.data ?? [])
@@ -146,7 +187,16 @@ export function ManifestLibraryPage() {
     })
   }, [filter.applicationId, filter.search, queryForm])
 
+  useEffect(() => {
+    if (!applicationId) return
+    setScopedFilter({ applicationId, serviceId, page: 1, pageSize: 20 })
+  }, [applicationId, serviceId])
+
   const updateFilter = (next: ManifestFilter) => {
+    if (applicationId) {
+      setScopedFilter({ ...next, applicationId, serviceId })
+      return
+    }
     const params = new URLSearchParams()
     if (next.search) params.set('search', next.search)
     if (next.applicationId) params.set('applicationId', next.applicationId)
@@ -163,12 +213,13 @@ export function ManifestLibraryPage() {
             name: item.name,
             description: item.description,
             applicationId: item.applicationId,
+            serviceId: item.serviceId,
             businessLineId: item.businessLineId,
             renderer: item.renderer,
             files: item.files,
             bindings: item.bindings,
           }
-        : emptyInput(),
+        : emptyInput(applicationId, serviceId),
     )
   }
 
@@ -207,10 +258,20 @@ export function ManifestLibraryPage() {
         )
       },
     },
+    ...(applicationId
+      ? []
+      : [
+          {
+            title: '应用',
+            dataIndex: 'applicationId',
+            render: (value: string) => applicationNames.get(value) || value,
+          },
+        ]),
     {
-      title: '应用',
-      dataIndex: 'applicationId',
-      render: (value: string) => applicationNames.get(value) || value,
+      title: '归属',
+      dataIndex: 'serviceId',
+      width: 160,
+      render: (value?: string) => (value ? serviceNames.get(value) || value : '应用级'),
     },
     {
       title: '渲染方式',
@@ -320,19 +381,21 @@ export function ManifestLibraryPage() {
           children: (
             <>
               <ManagementKeywordField name="search" placeholder="搜索清单或应用 ID" />
-              <ManagementQueryField label="应用" name="applicationId">
-                <Select
-                  allowClear
-                  showSearch={{ optionFilterProp: 'label' }}
-                  options={applicationOptions}
-                  placeholder="全部应用"
-                />
-              </ManagementQueryField>
+              {!applicationId ? (
+                <ManagementQueryField label="应用" name="applicationId">
+                  <Select
+                    allowClear
+                    showSearch={{ optionFilterProp: 'label' }}
+                    options={applicationOptions}
+                    placeholder="全部应用"
+                  />
+                </ManagementQueryField>
+              ) : null}
             </>
           ),
         }}
         table={{
-          title: <Text strong>应用清单</Text>,
+          title: <Text strong>{applicationId ? '扩展资源' : '应用清单'}</Text>,
           headerExtra: (
             <ManagementTableToolbar>
               {canEdit ? (
@@ -414,9 +477,21 @@ export function ManifestLibraryPage() {
                     </Form.Item>
                     <Form.Item label="所属应用" name="applicationId" rules={[{ required: true }]}>
                       <Select
+                        disabled={Boolean(applicationId)}
                         showSearch={{ optionFilterProp: 'label' }}
                         options={applicationOptions}
-                        onChange={() => editorForm.setFieldValue('bindings', [])}
+                        onChange={() => {
+                          editorForm.setFieldValue('serviceId', undefined)
+                          editorForm.setFieldValue('bindings', [])
+                        }}
+                      />
+                    </Form.Item>
+                    <Form.Item label="所属服务" name="serviceId" extra="留空表示应用级共享资源">
+                      <Select
+                        allowClear
+                        disabled={Boolean(serviceId) || !selectedApplicationId}
+                        options={serviceOptions}
+                        placeholder="应用级"
                       />
                     </Form.Item>
                     <Form.Item label="业务线 ID" name="businessLineId">

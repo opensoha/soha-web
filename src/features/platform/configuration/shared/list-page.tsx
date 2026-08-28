@@ -16,6 +16,7 @@ import {
 } from '@/components/management-list'
 import { TABLE_ACTIONS_COLUMN_CLASS_NAME } from '@/components/resource-actions'
 import { hasAllowedAction } from '@/features/auth'
+import { encodeAIContextForElement, useAIPageContext } from '@/features/copilot'
 import { CreateEntry } from '@/features/platform/resource-creation/components/create-entry'
 import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import { useI18n } from '@/i18n'
@@ -31,6 +32,20 @@ import type {
   ConfigurationScopeMode,
 } from './types'
 import '../styles.css'
+
+const CONFIGURATION_ENTITY_KINDS: Record<ConfigurationKind, string> = {
+  configmaps: 'ConfigMap',
+  secrets: 'Secret',
+  resourcequotas: 'ResourceQuota',
+  limitranges: 'LimitRange',
+  hpas: 'HorizontalPodAutoscaler',
+  poddisruptionbudgets: 'PodDisruptionBudget',
+  priorityclasses: 'PriorityClass',
+  runtimeclasses: 'RuntimeClass',
+  leases: 'Lease',
+  mutatingwebhookconfigurations: 'MutatingWebhookConfiguration',
+  validatingwebhookconfigurations: 'ValidatingWebhookConfiguration',
+}
 
 function normalizeKeyword(value: string) {
   return value.trim().toLowerCase()
@@ -108,6 +123,16 @@ export function ConfigurationResourceListPage<T extends ConfigurationResourceRec
       : emptyDescription[localeCode]
   const densityLabel = localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'
   const canCreate = Boolean(defaultTemplate && singularLabel)
+  const entityKind = singularLabel || CONFIGURATION_ENTITY_KINDS[kind]
+  useAIPageContext({
+    sourceWorkbench: 'platform',
+    sourceTitle: label,
+    entityKind,
+    clusterId: clusterId || undefined,
+    namespace: scopeMode === 'namespace' ? namespace || undefined : undefined,
+    visibleFilters: { keyword: searchKeyword || undefined },
+    pinnedData: { itemCount: rawItems.length },
+  })
   const canShowActions = rawItems.some(
     (item) =>
       hasAllowedAction(item.allowedActions, 'delete') ||
@@ -249,6 +274,15 @@ export function ConfigurationResourceListPage<T extends ConfigurationResourceRec
         columns: canShowActions ? [...columns, actionColumn] : columns,
         dataSource: clusterId ? filteredItems : [],
         rowKey: (record) => `${record.namespace ?? ''}/${record.name}`,
+        onRow: (record: T) => ({
+          'data-ai-context': encodeAIContextForElement({
+            sourceWorkbench: 'platform',
+            entityKind,
+            entityName: record.name,
+            clusterId: clusterId || undefined,
+            namespace: record.namespace || undefined,
+          }),
+        }),
         loading: query.isLoading,
         localSorting: true,
         empty: (

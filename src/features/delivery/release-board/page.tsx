@@ -1,10 +1,11 @@
 import { useMemo } from 'react'
-import { Card, Space, Typography } from 'antd'
+import { Space, Typography } from 'antd'
 import { ArrowRightOutlined } from '@ant-design/icons'
 import type { TableColumnsType } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { ManagementIconButton } from '@/components/management-list'
+import { OverviewMetricCard, type OverviewMetricItem } from '@/components/overview-visuals'
 import { BooleanTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useI18n } from '@/i18n'
@@ -59,6 +60,35 @@ export function ReleaseBoardPage() {
 
   const rows = releaseBoardQuery.data ?? []
   const summary = useMemo(() => summarizeReleaseBoard(rows), [rows])
+  const summaryMetrics: OverviewMetricItem[] = [
+    {
+      key: 'bindings',
+      label: '环境绑定',
+      value: summary.total,
+      helper: `${summary.targets} 个发布目标`,
+    },
+    {
+      key: 'running',
+      label: '执行中',
+      value: summary.running,
+      helper: '构建 / 工作流 / 发布',
+      tone: 'warning',
+    },
+    {
+      key: 'approval',
+      label: '待审批',
+      value: summary.approval,
+      helper: '人工审批门禁',
+      tone: 'warning',
+    },
+    {
+      key: 'ready',
+      label: '可推广',
+      value: summary.ready,
+      helper: `${summary.blocked} 个阻塞`,
+      tone: summary.blocked > 0 ? 'danger' : 'success',
+    },
+  ]
   const columns: ColumnProps<ReleaseBoardEntry>[] = [
     {
       title: t('common.application', 'Application'),
@@ -168,34 +198,17 @@ export function ReleaseBoardPage() {
 
   return (
     <div className="soha-page">
-      <div className="soha-release-board-summary">
-        <Card className="soha-application-signal-card" size="small">
-          <span className="soha-application-signal-card__label">环境绑定</span>
-          <strong>{summary.total}</strong>
-          <Text type="secondary">{summary.targets} 个发布目标</Text>
-        </Card>
-        <Card className="soha-application-signal-card" size="small">
-          <span className="soha-application-signal-card__label">执行中</span>
-          <strong>{summary.running}</strong>
-          <Text type="secondary">构建 / 工作流 / 发布</Text>
-        </Card>
-        <Card className="soha-application-signal-card" size="small">
-          <span className="soha-application-signal-card__label">待审批</span>
-          <strong>{summary.approval}</strong>
-          <Text type="secondary">人工审批门禁</Text>
-        </Card>
-        <Card className="soha-application-signal-card" size="small">
-          <span className="soha-application-signal-card__label">可推广</span>
-          <strong>{summary.ready}</strong>
-          <Text type="secondary">{summary.blocked} 个阻塞</Text>
-        </Card>
+      <div className="soha-overview-metric-grid">
+        {summaryMetrics.map(({ key, ...item }) => (
+          <OverviewMetricCard key={key} {...item} />
+        ))}
       </div>
       <DeliveryGatewayReadinessPanel
         title="AI Gateway 构建发布辅助"
-        description="用于读取应用环境、版本包、执行任务和 diff，并在授权允许时通过统一 delivery action 触发构建、发布或验证；常规发布看板和手工触发入口保持可用。"
+        description="用于读取应用环境、版本包、执行任务和 diff，并在授权允许时通过统一 delivery action 生成交付计划；人工操作从所属应用的交付入口发起。"
         skillId="delivery-developer"
-        manualPath="/application-environments"
-        manualTitle="手工配置"
+        manualPath="/applications"
+        manualTitle="应用中心"
         capabilities={[
           'delivery.application_environments.list',
           'delivery.release_targets.list',

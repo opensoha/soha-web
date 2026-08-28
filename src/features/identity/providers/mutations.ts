@@ -1,6 +1,5 @@
 import { mutationOptions, type QueryClient } from '@tanstack/react-query'
 import {
-  createIdentityOIDCClient,
   createIdentityProvider,
   deleteIdentityOIDCClient,
   deleteIdentityProvider,
@@ -45,15 +44,6 @@ export const identityProviderMutations = {
       mutationKey: identityProviderMutationKeys.remove,
       mutationFn: deleteIdentityProvider,
       onSuccess: (_result, providerId) => invalidateProvider(queryClient, providerId, true),
-    }),
-  createOIDCClient: (queryClient: QueryClient) =>
-    mutationOptions({
-      mutationKey: identityProviderMutationKeys.createOIDCClient,
-      mutationFn: createIdentityOIDCClient,
-      onSuccess: (_result, variables) =>
-        queryClient.invalidateQueries({
-          queryKey: identityProviderKeys.oidcClients(variables.providerId),
-        }),
     }),
   updateOIDCClient: (queryClient: QueryClient) =>
     mutationOptions({

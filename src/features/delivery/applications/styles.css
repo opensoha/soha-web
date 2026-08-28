@@ -2,6 +2,8 @@
 
 .soha-application-center-results {
   display: flex;
+  width: 100%;
+  max-width: 1120px;
   flex-direction: column;
   gap: 12px;
 }
@@ -14,18 +16,13 @@
   gap: 12px;
 }
 
-.soha-application-center-toolbar__groups {
-  min-width: 0;
-  overflow-x: auto;
-}
-
-.soha-application-center-toolbar__groups .ant-segmented {
-  width: max-content;
+.soha-application-center-toolbar__groups .ant-select {
+  width: 180px;
 }
 
 .soha-application-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
   align-items: stretch;
   gap: 12px;
 }
@@ -109,8 +106,22 @@
   white-space: nowrap;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767px) {
+  .soha-application-center-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .soha-application-center-toolbar__groups .ant-select {
+    width: 100%;
+  }
+
   .soha-application-center-toolbar__actions {
+    width: 100%;
+  }
+
+  .soha-application-center-toolbar__groups .soha-management-table-toolbar-actions,
+  .soha-application-center-toolbar__actions .soha-management-table-toolbar-actions {
     width: 100%;
   }
 
@@ -118,69 +129,23 @@
     flex: 1 1 auto;
     width: auto !important;
   }
-}
 
-.soha-application-runtime-service-summary {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
+  .soha-application-center-toolbar__groups .ant-select,
+  .soha-application-center-toolbar__actions .ant-input-affix-wrapper,
+  .soha-application-center-toolbar__actions .ant-btn,
+  .soha-application-card__link,
+  .soha-application-card__more.ant-btn {
+    min-height: 44px;
+  }
 
-.soha-application-runtime-service-summary .ant-card-body {
-  display: flex;
-  min-height: 72px;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-.soha-application-runtime-service-summary strong {
-  color: var(--soha-text-primary);
-  font-size: 24px;
-  line-height: 1;
-}
-
-.soha-application-runtime-delivery-summary {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.soha-application-runtime-delivery-summary .ant-card-body {
-  display: flex;
-  min-height: 82px;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.soha-application-runtime-delivery-summary__main {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.soha-application-runtime-delivery-summary__main strong {
-  color: var(--soha-text-primary);
-  font-size: 20px;
-  line-height: 1.1;
-}
-
-.soha-application-runtime-delivery-summary__main .ant-typography {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.soha-application-runtime-delivery-summary__main .ant-tag {
-  width: fit-content;
-  margin-inline-end: 0;
+  .soha-application-card__more.ant-btn {
+    width: 44px;
+  }
 }
 
 .soha-application-delivery-actions.ant-card {
   border-color: var(--soha-border-color);
-  border-radius: var(--soha-radius);
+  border-radius: var(--soha-radius-panel);
   box-shadow: none;
 }
 
@@ -208,7 +173,6 @@
   border-top: 1px solid var(--soha-border-color);
 }
 
-.soha-application-runtime-overview-grid,
 .soha-application-runtime-delivery-grid,
 .soha-application-runtime-pipeline-grid,
 .soha-application-runtime-settings-grid,
@@ -222,8 +186,22 @@
   grid-column: 1 / -1;
 }
 
+.soha-application-runtime-settings-grid > .soha-application-settings-summary {
+  grid-column: 1 / -1;
+}
+
+.soha-application-runtime-delivery-grid {
+  grid-template-columns: minmax(260px, 0.75fr) minmax(0, 1.75fr);
+}
+
 .soha-application-runtime-delivery-grid > .soha-application-delivery-actions {
   grid-column: 1 / -1;
+}
+
+@media (max-width: 1024px) {
+  .soha-application-runtime-delivery-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .soha-application-runtime-binding-row {
@@ -341,8 +319,7 @@
 .soha-application-runtime-delivery-grid .ant-card,
 .soha-application-runtime-pipeline-grid .ant-card,
 .soha-application-runtime-settings-grid .ant-card,
-.soha-application-runtime-verification-grid .ant-card,
-.soha-application-runtime-overview-grid .ant-card {
+.soha-application-runtime-verification-grid .ant-card {
   border-color: var(--soha-border-color);
   border-radius: var(--soha-radius);
   box-shadow: none;

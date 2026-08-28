@@ -22,7 +22,9 @@ import {
 } from '@/features/platform/workloads-model'
 import {
   renderWorkloadNameLink,
+  useWorkloadListAIContext,
   useWorkloadTableDensity,
+  workloadRowAIContext,
   WorkloadQueryPanel,
   WorkloadRefreshButton,
   WorkloadSearchInput,
@@ -95,6 +97,15 @@ export function WorkloadsStatefulSetsPage() {
       ),
     [searchKeyword, statefulSets],
   )
+
+  useWorkloadListAIContext({
+    clusterId,
+    itemCount: statefulSets.length,
+    kind: 'statefulsets',
+    label: 'StatefulSets',
+    namespace,
+    searchKeyword,
+  })
 
   const columns: TableColumnsType<StatefulSet> = [
     {
@@ -285,6 +296,7 @@ export function WorkloadsStatefulSetsPage() {
         columns={canShowActions ? columns : columns.filter((column) => column.key !== 'actions')}
         dataSource={filteredStatefulSets}
         rowKey={(record) => `${record.namespace}/${record.name}`}
+        onRow={(record: StatefulSet) => workloadRowAIContext('statefulsets', record, clusterId)}
         loading={statefulSetsQuery.isLoading}
         localSorting
         pageSize={K8S_TABLE_PAGE_SIZE}

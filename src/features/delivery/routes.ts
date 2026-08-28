@@ -11,9 +11,8 @@ export const deliveryRoutes = defineRoutes([
       group: 'delivery',
       workbenchId: 'delivery',
       requiresAuth: true,
-      tabbar: true,
-      navVisible: true,
-      menuId: 'delivery-manifest-library',
+      tabbar: false,
+      navVisible: false,
       permissionKey: 'delivery.applications.view',
       scopeMode: 'passive',
       workspace: 'application',
@@ -129,9 +128,8 @@ export const deliveryRoutes = defineRoutes([
       icon: 'IconAppCenter',
       group: 'delivery',
       requiresAuth: true,
-      tabbar: true,
-      navVisible: true,
-      menuId: 'application-environments',
+      tabbar: false,
+      navVisible: false,
       permissionKey: 'delivery.application-environments.view',
       scopeMode: 'passive',
       workspace: 'application',
@@ -162,6 +160,29 @@ export const deliveryRoutes = defineRoutes([
     load: async () => {
       const module = await import('./environments/detail-page')
       return { default: module.ApplicationEnvironmentDetailPage }
+    },
+  },
+  {
+    meta: {
+      id: 'delivery-environments',
+      path: '/delivery/environments',
+      title: '环境目录',
+      description: '可复用交付环境与应用使用关系',
+      icon: 'IconAppCenter',
+      group: 'delivery',
+      workbenchId: 'delivery',
+      requiresAuth: true,
+      tabbar: true,
+      navVisible: true,
+      menuId: 'delivery-environment-directory',
+      permissionKey: 'delivery.application-environments.view',
+      scopeMode: 'passive',
+      workspace: 'application',
+    },
+    shell: 'app',
+    load: async () => {
+      const module = await import('./environments/catalog-page')
+      return { default: module.EnvironmentCatalogPage }
     },
   },
   {
@@ -219,9 +240,8 @@ export const deliveryRoutes = defineRoutes([
       group: 'delivery',
       workbenchId: 'delivery',
       requiresAuth: true,
-      tabbar: true,
-      navVisible: true,
-      menuId: 'delivery-onboarding',
+      tabbar: false,
+      navVisible: false,
       permissionKey: 'delivery.applications.view',
       scopeMode: 'passive',
       workspace: 'application',

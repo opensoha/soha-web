@@ -242,7 +242,15 @@ export function ComputeTasksPage() {
     entityKind: 'compute.tasks',
     entityName: localeText(localeCode, '计算资源任务', 'Compute tasks'),
     visibleFilters: { ...filters },
-    pinnedData: { taskCount: items.length },
+    pinnedData: {
+      taskCount: items.length,
+      taskRefs: items.slice(0, 20).map((item) => ({
+        domain: item.domain,
+        id: item.id,
+        status: item.normalizedStatus,
+      })),
+      toolRefs: ['compute.tasks.list', 'compute.tasks.get', 'compute.task_logs.list'],
+    },
   })
 
   const updateFilters = (next: ComputeTaskFilters) => {

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import {
   Alert,
+  App,
   Button,
   Card,
   DatePicker,
@@ -8,17 +9,16 @@ import {
   Drawer,
   Form,
   Input,
-  List,
   Modal,
   Popconfirm,
   Select,
   Space,
+  Spin,
   Statistic,
   Switch,
   Tag,
   Tabs,
   Typography,
-  message,
 } from 'antd'
 import {
   DeleteOutlined,
@@ -47,6 +47,7 @@ const MODAL_FORM_LAYOUT = {
 }
 
 export function AnnouncementsPage() {
+  const { message } = App.useApp()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const [modalVisible, setModalVisible] = useState(false)
@@ -245,61 +246,56 @@ export function AnnouncementsPage() {
           items={announcementTabs.map((item) => ({
             key: item.key,
             label: item.label,
-            children: (
-              <List
-                className="soha-system-announcement-list"
-                itemLayout="vertical"
-                loading={isLoading}
-                dataSource={filteredAnnouncements}
-                locale={{ emptyText: <Alert type="info" showIcon title="当前分组下暂无公告" /> }}
-                renderItem={(record: Announcement) => {
+            children: isLoading ? (
+              <Spin size="small" />
+            ) : filteredAnnouncements.length ? (
+              <ul className="soha-list-panel soha-system-announcement-list">
+                {filteredAnnouncements.map((record: Announcement) => {
                   const lifecycle = buildAnnouncementLifecycle(record)
                   return (
-                    <List.Item
-                      key={record.id}
-                      actions={[renderAnnouncementActions(record)]}
-                      extra={
+                    <li key={record.id} className="soha-list-row soha-system-announcement-item">
+                      <div className="soha-list-row-meta soha-system-announcement-main">
+                        <Space size={8} wrap>
+                          <Button
+                            type="link"
+                            className="soha-system-linklike"
+                            onClick={() => setPreviewing(record)}
+                          >
+                            {record.title}
+                          </Button>
+                          <StatusTag value={record.level} />
+                          <StatusTag value={record.status} />
+                          {record.sticky ? <Tag color="purple">置顶</Tag> : null}
+                          {lifecycle === 'scheduled' ? <Tag color="gold">待生效</Tag> : null}
+                          {lifecycle === 'expired' ? <Tag>已过期</Tag> : null}
+                        </Space>
+                        <div>
+                          {record.summary ? (
+                            <Text>{record.summary}</Text>
+                          ) : (
+                            <Text type="secondary">无摘要</Text>
+                          )}
+                        </div>
+                        <Paragraph
+                          className="soha-system-announcement-content"
+                          ellipsis={{ rows: 3, expandable: true, symbol: '展开正文' }}
+                        >
+                          {record.content}
+                        </Paragraph>
+                      </div>
+                      <div className="soha-list-row-extra">
                         <div className="soha-system-announcement-extra">
                           <Text type="secondary">{`发布时间 ${formatDateTime(record.publishedAt || record.updatedAt || record.createdAt)}`}</Text>
                           <Text type="secondary">{`生效窗口 ${formatDateTime(record.startsAt)} ~ ${formatDateTime(record.endsAt)}`}</Text>
                         </div>
-                      }
-                    >
-                      <List.Item.Meta
-                        title={
-                          <Space size={8} wrap>
-                            <Button
-                              type="link"
-                              className="soha-system-linklike"
-                              onClick={() => setPreviewing(record)}
-                            >
-                              {record.title}
-                            </Button>
-                            <StatusTag value={record.level} />
-                            <StatusTag value={record.status} />
-                            {record.sticky ? <Tag color="purple">置顶</Tag> : null}
-                            {lifecycle === 'scheduled' ? <Tag color="gold">待生效</Tag> : null}
-                            {lifecycle === 'expired' ? <Tag>已过期</Tag> : null}
-                          </Space>
-                        }
-                        description={
-                          record.summary ? (
-                            <Text>{record.summary}</Text>
-                          ) : (
-                            <Text type="secondary">无摘要</Text>
-                          )
-                        }
-                      />
-                      <Paragraph
-                        className="soha-system-announcement-content"
-                        ellipsis={{ rows: 3, expandable: true, symbol: '展开正文' }}
-                      >
-                        {record.content}
-                      </Paragraph>
-                    </List.Item>
+                        {renderAnnouncementActions(record)}
+                      </div>
+                    </li>
                   )
-                }}
-              />
+                })}
+              </ul>
+            ) : (
+              <Alert type="info" showIcon title="当前分组下暂无公告" />
             ),
           }))}
         />

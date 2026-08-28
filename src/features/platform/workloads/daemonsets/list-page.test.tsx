@@ -67,7 +67,9 @@ vi.mock('@/components/management-list', () => ({
 }))
 vi.mock('@/features/platform/workloads/shared/list-controls', () => ({
   renderWorkloadNameLink: (name: string) => <span>{name}</span>,
+  useWorkloadListAIContext: () => undefined,
   useWorkloadTableDensity: () => ({ densityButton: null, tableSize: 'small' as const }),
+  workloadRowAIContext: () => ({}),
   WorkloadQueryPanel: ({ children }: { children?: ReactNode }) => <>{children}</>,
   WorkloadRefreshButton: () => null,
   WorkloadSearchInput: () => null,

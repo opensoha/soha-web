@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
 import { useAIPageContext } from '@/features/copilot'
+import { deliveryQueries, type ApplicationEnvironment } from '@/features/delivery'
 import { useI18n } from '@/i18n'
 import { ResourceEventsTimeline } from '@/components/resource-events-timeline'
 import { StatusTag } from '@/components/status-tag'
@@ -17,8 +18,6 @@ import { WorkloadDetailShell } from '../shared/detail-shell'
 import { WorkloadPodsCard, WorkloadRelationsCard } from '../shared/workload-relations'
 import { useWorkloadDetailScope } from '../shared/detail-scope'
 import { deploymentQueries } from './queries'
-import { deploymentLinkageQueries } from './linkage-queries'
-import type { ApplicationEnvironment } from './types'
 import '@/features/platform/workloads/styles.css'
 
 const { Text } = Typography
@@ -37,11 +36,11 @@ export function DeploymentDetailPage() {
   const detailScope = { clusterId, namespace: detailNamespace }
   const deploymentDetailQuery = useQuery(deploymentQueries.detail(detailScope, deploymentName))
 
-  const bindingsQuery = useQuery(deploymentLinkageQueries.applicationEnvironments())
-  const applicationsQuery = useQuery(deploymentLinkageQueries.applications())
-  const buildsQuery = useQuery(deploymentLinkageQueries.builds())
-  const workflowsQuery = useQuery(deploymentLinkageQueries.workflows())
-  const releasesQuery = useQuery(deploymentLinkageQueries.releases())
+  const bindingsQuery = useQuery(deliveryQueries.environments.list())
+  const applicationsQuery = useQuery(deliveryQueries.applications.list())
+  const buildsQuery = useQuery(deliveryQueries.builds.list())
+  const workflowsQuery = useQuery(deliveryQueries.workflows.list())
+  const releasesQuery = useQuery(deliveryQueries.releases.list())
   const metricsQueryOptions = deploymentQueries.metrics(detailScope, deploymentName)
   const metricsQuery = useQuery({
     ...metricsQueryOptions,

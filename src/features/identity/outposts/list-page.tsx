@@ -5,6 +5,7 @@ import { DeleteOutlined, EditOutlined, KeyOutlined, PlusOutlined } from '@ant-de
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
+  ManagementDensityButton,
   ManagementIconButton,
   ManagementKeywordField,
   ManagementQueryActions,
@@ -85,6 +86,7 @@ export function IdentityOutpostsPage() {
     query: '',
   })
   const [editing, setEditing] = useState<IdentityOutpost | null>(null)
+  const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const [modalOpen, setModalOpen] = useState(false)
   const [createdToken, setCreatedToken] = useState<IdentityOutpostCreatedToken | null>(null)
   const snapshot = usePermissionSnapshot().data?.data
@@ -364,6 +366,14 @@ export function IdentityOutpostsPage() {
               >
                 {t('identity.outposts.create', '新建 Outpost')}
               </Button>
+              <ManagementDensityButton
+                aria-label={t('common.tableDensity', '切换表格密度')}
+                title={t('common.tableDensity', '切换表格密度')}
+                tooltip={t('common.tableDensity', '切换表格密度')}
+                onClick={() =>
+                  setTableSize((current) => (current === 'small' ? 'middle' : 'small'))
+                }
+              />
               <ManagementRefreshButton
                 aria-label={t('common.refresh', '刷新')}
                 loading={outpostsQuery.isFetching}
@@ -373,6 +383,7 @@ export function IdentityOutpostsPage() {
               />
             </ManagementTableToolbar>
           ),
+          tableSize,
           empty: (
             <ManagementState
               description="创建 embedded 或外部 Outpost 后，可在 Proxy Provider 中绑定使用。"

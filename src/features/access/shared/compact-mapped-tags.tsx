@@ -1,4 +1,5 @@
 import { Button, Popover, Space, Tag } from 'antd'
+import { useI18n } from '@/i18n'
 
 interface CompactMappedTagsProps {
   emptyText: string
@@ -15,6 +16,7 @@ function CompactMappedTags({
   values,
   visibleCount,
 }: CompactMappedTagsProps) {
+  const { localeCode } = useI18n()
   if (!values?.length) return emptyText
 
   const visibleValues = values.slice(0, visibleCount)
@@ -40,7 +42,9 @@ function CompactMappedTags({
       trigger="click"
       destroyOnHidden
       placement="topLeft"
-      title={`${values.length} 个${itemLabel}`}
+      title={
+        localeCode === 'zh_CN' ? `${values.length} 个${itemLabel}` : `${values.length} ${itemLabel}`
+      }
       content={
         <div className="soha-access-permission-popover">
           {values.map((value) => renderTag(value, 'soha-access-permission-popover-tag'))}
@@ -51,7 +55,11 @@ function CompactMappedTags({
         type="text"
         size="small"
         className="soha-access-compact-tags-trigger"
-        aria-label={`查看 ${values.length} 个${itemLabel}`}
+        aria-label={
+          localeCode === 'zh_CN'
+            ? `查看 ${values.length} 个${itemLabel}`
+            : `View ${values.length} ${itemLabel}`
+        }
         onClick={(event) => {
           event.preventDefault()
           event.stopPropagation()

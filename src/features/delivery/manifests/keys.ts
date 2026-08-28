@@ -5,6 +5,7 @@ const ROOT = ['delivery', 'manifests'] as const
 export function normalizeManifestFilter(filter: ManifestFilter = {}): ManifestFilter {
   return {
     applicationId: filter.applicationId?.trim() || undefined,
+    serviceId: filter.serviceId?.trim() || undefined,
     clusterId: filter.clusterId?.trim() || undefined,
     namespace: filter.namespace?.trim() || undefined,
     search: filter.search?.trim() || undefined,

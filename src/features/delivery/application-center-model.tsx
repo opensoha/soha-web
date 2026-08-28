@@ -275,6 +275,100 @@ export function useApplicationCenterState() {
 
 export type ApplicationCenterState = ReturnType<typeof useApplicationCenterState>
 
+export function ApplicationForm({
+  application,
+  onCancel,
+  onCreated,
+  state,
+}: {
+  application: DeliveryApplication | null
+  onCancel: () => void
+  onCreated?: (application: DeliveryApplication) => void
+  state: ApplicationCenterState
+}) {
+  return (
+    <Form
+      form={state.appForm}
+      key={application?.id ?? 'application-center-app'}
+      layout="vertical"
+      initialValues={
+        application
+          ? {
+              ...application,
+              group: splitApplicationGroups(application.group),
+              enabled: application.enabled,
+            }
+          : { group: [] }
+      }
+      onFinish={(values) => {
+        if (application) {
+          state.updateAppMutation.mutate({
+            id: application.id,
+            payload: {
+              ...values,
+              group: joinApplicationGroups(values.group as string[] | string),
+              language: application.language,
+              buildSources: state.buildSources,
+            },
+          })
+          return
+        }
+        void state.createAppMutation
+          .mutateAsync({
+            name: values.name,
+            key: values.key,
+            group: joinApplicationGroups(values.group as string[] | string),
+            enabled: true,
+          })
+          .then((created) => onCreated?.(created))
+          .catch(() => undefined)
+      }}
+    >
+      <Form.Item
+        name="name"
+        label="应用名称"
+        rules={[{ required: true, message: '请输入应用名称' }]}
+      >
+        <Input />
+      </Form.Item>
+      <Form.Item
+        name="key"
+        label="应用 Key"
+        rules={[{ required: true, message: '请输入应用 Key' }]}
+      >
+        <Input />
+      </Form.Item>
+      <Form.Item name="group" label="应用分组">
+        <Select
+          mode="tags"
+          tokenSeparators={[',', '，', ';', '；', '/']}
+          placeholder="可选，用于筛选应用"
+          maxTagCount="responsive"
+          options={state.applicationGroupOptions.map((group) => ({
+            value: group,
+            label: group,
+          }))}
+        />
+      </Form.Item>
+      {application ? (
+        <Form.Item name="enabled" label="启用" valuePropName="checked">
+          <Switch />
+        </Form.Item>
+      ) : null}
+      <div className="soha-form-actions">
+        <Button onClick={onCancel}>取消</Button>
+        <Button
+          htmlType="submit"
+          type="primary"
+          loading={state.createAppMutation.isPending || state.updateAppMutation.isPending}
+        >
+          保存
+        </Button>
+      </div>
+    </Form>
+  )
+}
+
 export function ApplicationCenterModals({ state }: { state: ApplicationCenterState }) {
   const selectedTargetCandidate = (record: Record<string, unknown>) =>
     (state.targetCandidatesQuery.data?.items ?? []).find(
@@ -285,91 +379,24 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
   return (
     <>
       <Modal
-        title={state.editingApp ? '编辑应用' : '创建应用'}
-        open={state.appModalVisible}
+        title="编辑应用"
+        open={state.appModalVisible && Boolean(state.editingApp)}
         onCancel={() => {
           state.setAppModalVisible(false)
           state.setEditingApp(null)
         }}
         footer={null}
         destroyOnHidden
-        width={state.editingApp ? 640 : 520}
+        width={640}
       >
-        <Form
-          form={state.appForm}
-          key={state.editingApp?.id ?? 'application-center-app'}
-          layout="vertical"
-          initialValues={
-            state.editingApp
-              ? {
-                  ...state.editingApp,
-                  group: splitApplicationGroups(state.editingApp.group),
-                  enabled: state.editingApp.enabled,
-                }
-              : undefined
-          }
-          onFinish={(values) => {
-            if (state.editingApp) {
-              const payload = {
-                ...values,
-                group: joinApplicationGroups(values.group as string[] | string),
-                language: state.editingApp.language,
-                buildSources: state.buildSources,
-              }
-              state.updateAppMutation.mutate({ id: state.editingApp.id, payload })
-            } else {
-              state.createAppMutation.mutate({
-                name: values.name,
-                key: values.key,
-                enabled: true,
-              })
-            }
+        <ApplicationForm
+          application={state.editingApp}
+          state={state}
+          onCancel={() => {
+            state.setAppModalVisible(false)
+            state.setEditingApp(null)
           }}
-        >
-          <Form.Item
-            name="name"
-            label="应用名称"
-            rules={[{ required: true, message: '请输入应用名称' }]}
-          >
-            <Input />
-          </Form.Item>
-          <Form.Item
-            name="key"
-            label="应用 Key"
-            rules={[{ required: true, message: '请输入应用 Key' }]}
-          >
-            <Input />
-          </Form.Item>
-          {state.editingApp ? (
-            <>
-              <Form.Item name="group" label="应用分组">
-                <Select
-                  mode="tags"
-                  tokenSeparators={[',', '，', ';', '；', '/']}
-                  placeholder="可选，用于筛选应用"
-                  maxTagCount="responsive"
-                  options={state.applicationGroupOptions.map((group) => ({
-                    value: group,
-                    label: group,
-                  }))}
-                />
-              </Form.Item>
-              <Form.Item name="enabled" label="启用" valuePropName="checked">
-                <Switch />
-              </Form.Item>
-            </>
-          ) : null}
-          <div className="soha-form-actions">
-            <Button onClick={() => state.setAppModalVisible(false)}>取消</Button>
-            <Button
-              htmlType="submit"
-              type="primary"
-              loading={state.createAppMutation.isPending || state.updateAppMutation.isPending}
-            >
-              保存
-            </Button>
-          </div>
-        </Form>
+        />
       </Modal>
 
       <Modal

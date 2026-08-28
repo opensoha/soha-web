@@ -24,7 +24,13 @@ vi.mock('./api', () => ({
 describe('access data contracts', () => {
   it('builds canonical hierarchical query and mutation keys', () => {
     expect(accessKeys.userList()).toEqual(['access', 'users', 'list'])
-    expect(accessKeys.scopeGrantList()).toEqual(['access', 'scope-grants', 'list'])
+    expect(accessKeys.scopeGrantList({ subjectType: 'user', subjectId: 'user-1' })).toEqual([
+      'access',
+      'scope-grants',
+      'user',
+      'user-1',
+      'list',
+    ])
     expect(accessKeys.clusterOptions()).toEqual(['access', 'dependencies', 'clusters'])
     expect(accessKeys.loginProviders()).toEqual(['access', 'dependencies', 'login-providers'])
     expect(accessMutationKeys.policies('update')).toEqual([
@@ -38,7 +44,9 @@ describe('access data contracts', () => {
   it('binds query options to their canonical keys', () => {
     expect(accessQueries.users().queryKey).toEqual(accessKeys.userList())
     expect(accessQueries.policies().queryKey).toEqual(accessKeys.policyList())
-    expect(accessQueries.scopeGrants(false).enabled).toBe(false)
+    expect(
+      accessQueries.scopeGrants({ subjectType: 'team', subjectId: 'team-1' }, false).enabled,
+    ).toBe(false)
     expect(accessQueries.applicationEnvironments(false).enabled).toBe(false)
     expect(accessQueries.clusterOptions(false).enabled).toBe(false)
   })

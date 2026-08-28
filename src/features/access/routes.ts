@@ -106,24 +106,4 @@ export const accessRoutes = defineRoutes([
       return { default: module.DirectorySyncPage }
     },
   },
-  {
-    meta: {
-      id: 'access-scope-grants',
-      path: '/access/scope-grants',
-      title: '授权范围',
-      description: '应用范围授权',
-      icon: 'IconShield',
-      group: 'access',
-      requiresAuth: true,
-      tabbar: false,
-      navVisible: false,
-      permissionKey: 'access.scope-grants.view',
-      scopeMode: 'passive',
-    },
-    shell: 'app',
-    load: async () => {
-      const module = await import('./scope-grants/page')
-      return { default: module.AccessScopeGrantsPage }
-    },
-  },
 ] as const)

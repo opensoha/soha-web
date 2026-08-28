@@ -3,6 +3,7 @@ import { Button, Card, Descriptions, Spin, Tag, Typography } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementState } from '@/components/management-list'
+import { useAIPageContext } from '@/features/copilot'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { StatusTag } from '@/components/status-tag'
@@ -34,6 +35,13 @@ export function ClusterDetailPage() {
 
   const detail = clusterDetailQuery.data
   const summary = detail?.summary
+  useAIPageContext({
+    sourceWorkbench: 'platform',
+    sourceTitle: localeCode === 'zh_CN' ? '集群详情' : 'Cluster Detail',
+    entityKind: 'Cluster',
+    entityName: summary?.name || clusterId,
+    clusterId,
+  })
   const nodeColumns: TableColumnsType<Node> = [
     {
       title: localeCode === 'zh_CN' ? '节点' : 'Node',

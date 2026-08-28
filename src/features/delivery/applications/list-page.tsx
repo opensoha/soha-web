@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import './styles.css'
-import { App, Button, Card, Dropdown, Segmented, Space, Typography } from 'antd'
+import { App, Button, Card, Dropdown, Select, Typography } from 'antd'
 import {
   AppstoreOutlined,
   DeleteOutlined,
@@ -9,11 +9,12 @@ import {
   PlusOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementIconButton,
   ManagementState,
+  ManagementTableToolbar,
   ManagementToolbarSearch,
 } from '@/components/management-list'
 import {
@@ -23,6 +24,7 @@ import {
 } from '../application-center-model'
 import { deliveryQueries } from '../queries'
 import type { DeliveryApplication, ReleaseBoardEntry } from '../types'
+import { ApplicationEntryModal, type ApplicationEntryMode } from '../workbench/onboarding-page'
 
 const { Text } = Typography
 
@@ -40,7 +42,12 @@ type ApplicationListFilters = {
 export function ApplicationsPage() {
   const { modal } = App.useApp()
   const managementState = useApplicationCenterState()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [filters, setFilters] = useState<ApplicationListFilters>({ group: 'all', search: '' })
+  const requestedMode = searchParams.get('mode')
+  const entryMode: ApplicationEntryMode =
+    requestedMode === 'manual' || requestedMode === 'ai' ? requestedMode : 'quick'
+  const entryOpen = searchParams.get('action') === 'create'
 
   const applicationsQuery = useQuery(deliveryQueries.applications.list())
   const releaseBoardQuery = useQuery(deliveryQueries.releaseBoard.list())
@@ -84,9 +91,25 @@ export function ApplicationsPage() {
   }, [applicationRows, filters])
 
   const openCreateApplication = () => {
-    managementState.setEditingApp(null)
-    managementState.setBuildSources([])
-    managementState.setAppModalVisible(true)
+    const next = new URLSearchParams(searchParams)
+    next.set('action', 'create')
+    next.set('mode', managementState.canCreateApplication ? 'quick' : 'manual')
+    setSearchParams(next, { replace: true })
+  }
+
+  const closeApplicationEntry = () => {
+    const next = new URLSearchParams(searchParams)
+    next.delete('action')
+    next.delete('mode')
+    next.delete('templateId')
+    setSearchParams(next, { replace: true })
+  }
+
+  const changeApplicationEntryMode = (mode: ApplicationEntryMode) => {
+    const next = new URLSearchParams(searchParams)
+    next.set('action', 'create')
+    next.set('mode', mode)
+    setSearchParams(next, { replace: true })
   }
 
   const openEditApplication = (app: DeliveryApplication) => {
@@ -102,41 +125,66 @@ export function ApplicationsPage() {
           <section className="soha-application-center-results">
             <div className="soha-application-center-toolbar">
               <div className="soha-application-center-toolbar__groups">
-                <Segmented
-                  size="small"
-                  value={filters.group}
-                  options={[
-                    { label: '全部', value: 'all' },
-                    { label: '未分组', value: 'unassigned' },
-                    ...managementState.applicationGroupOptions.map((group) => ({
-                      label: group,
-                      value: group,
-                    })),
-                  ]}
-                  onChange={(group) => setFilters((current) => ({ ...current, group }))}
-                />
+                <ManagementTableToolbar>
+                  <Select
+                    aria-label="应用分组"
+                    value={filters.group}
+                    showSearch={{ optionFilterProp: 'label' }}
+                    options={[
+                      { label: '全部', value: 'all' },
+                      { label: '未分组', value: 'unassigned' },
+                      ...managementState.applicationGroupOptions.map((group) => ({
+                        label: group,
+                        value: group,
+                      })),
+                    ]}
+                    onChange={(group) => setFilters((current) => ({ ...current, group }))}
+                  />
+                </ManagementTableToolbar>
               </div>
-              <Space className="soha-application-center-toolbar__actions" size={8}>
-                <ManagementToolbarSearch
-                  size={220}
-                  placeholder="搜索应用"
-                  value={filters.search ?? ''}
-                  onChange={(search) => setFilters((current) => ({ ...current, search }))}
-                />
-                <Button
-                  type="primary"
-                  size="small"
-                  icon={<PlusOutlined />}
-                  disabled={!managementState.canCreateApplication}
-                  onClick={openCreateApplication}
-                >
-                  创建应用
-                </Button>
-              </Space>
+              <div className="soha-application-center-toolbar__actions">
+                <ManagementTableToolbar>
+                  <ManagementToolbarSearch
+                    placeholder="搜索应用"
+                    value={filters.search ?? ''}
+                    onChange={(search) => setFilters((current) => ({ ...current, search }))}
+                  />
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    disabled={
+                      !managementState.canCreateApplication &&
+                      !managementState.canUpdateApplication
+                    }
+                    onClick={openCreateApplication}
+                  >
+                    创建 / 接入应用
+                  </Button>
+                </ManagementTableToolbar>
+              </div>
             </div>
 
             {applicationsQuery.isLoading || releaseBoardQuery.isLoading ? (
               <ManagementState compact kind="loading" title="正在加载应用" />
+            ) : applicationsQuery.isError || releaseBoardQuery.isError ? (
+              <ManagementState
+                compact
+                kind="error"
+                title="应用加载失败"
+                description="暂时无法读取应用或发布目标，请重试。"
+                actions={
+                  <Button
+                    aria-label="重试"
+                    size="small"
+                    onClick={() => {
+                      if (applicationsQuery.isError) void applicationsQuery.refetch()
+                      if (releaseBoardQuery.isError) void releaseBoardQuery.refetch()
+                    }}
+                  >
+                    重试
+                  </Button>
+                }
+              />
             ) : visibleRows.length === 0 ? (
               <ManagementState
                 compact
@@ -236,6 +284,14 @@ export function ApplicationsPage() {
         }
       />
       <ApplicationCenterModals state={managementState} />
+      <ApplicationEntryModal
+        mode={entryMode}
+        open={entryOpen}
+        state={managementState}
+        templateId={searchParams.get('templateId')}
+        onCancel={closeApplicationEntry}
+        onModeChange={changeApplicationEntryMode}
+      />
     </>
   )
 }

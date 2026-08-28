@@ -184,6 +184,7 @@ export function ClusterNodesPage() {
         const changingSchedulability =
           schedulabilityMutation.isPending && schedulabilityMutation.variables?.name === name
         const canUpdate = hasAllowedAction(record.allowedActions, 'update')
+        const canDrain = hasAllowedAction(record.allowedActions, 'drain')
         const canDelete = hasAllowedAction(record.allowedActions, 'delete')
         const schedulabilityLabel = record.unschedulable
           ? copy.restoreScheduling
@@ -237,7 +238,7 @@ export function ClusterNodesPage() {
                 />
               </Popconfirm>
             ) : null}
-            {canUpdate ? (
+            {canDrain ? (
               <ManagementIconButton
                 aria-label={`${copy.drain} ${name}`}
                 danger

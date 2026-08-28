@@ -60,6 +60,7 @@ vi.mock('@/components/admin-table', () => ({
     columns = [],
     dataSource = [],
     headerExtra,
+    tableSize,
   }: {
     columns?: Array<{
       dataIndex?: string
@@ -68,8 +69,9 @@ vi.mock('@/components/admin-table', () => ({
     }>
     dataSource?: Array<Record<string, unknown>>
     headerExtra?: ReactNode
+    tableSize?: string
   }) => (
-    <div data-count={dataSource.length} data-testid="admin-table">
+    <div data-count={dataSource.length} data-table-size={tableSize} data-testid="admin-table">
       {headerExtra}
       {dataSource.length}
       {dataSource.flatMap((record) =>
@@ -85,12 +87,24 @@ vi.mock('@/components/admin-table', () => ({
   ),
 }))
 vi.mock('@/components/management-list', () => ({
-  ManagementDensityButton: () => null,
+  ManagementDensityButton: ({
+    'aria-label': ariaLabel,
+    onClick,
+  }: {
+    'aria-label': string
+    onClick?: () => void
+  }) => (
+    <button aria-label={ariaLabel} onClick={onClick}>
+      {ariaLabel}
+    </button>
+  ),
   ManagementDetailHeader: ({ title }: { title?: ReactNode }) => <h1>{title}</h1>,
   ManagementIconButton: forwardRef<HTMLButtonElement, { 'aria-label': string }>(
     ({ 'aria-label': ariaLabel }, ref) => <button ref={ref} aria-label={ariaLabel} />,
   ),
-  ManagementRefreshButton: () => null,
+  ManagementRefreshButton: ({ 'aria-label': ariaLabel }: { 'aria-label': string }) => (
+    <button aria-label={ariaLabel}>{ariaLabel}</button>
+  ),
   ManagementState: ({ title }: { title?: ReactNode }) => <div>{title}</div>,
   ManagementTableToolbar: ({ children }: { children?: ReactNode }) => <>{children}</>,
 }))
@@ -177,6 +191,20 @@ describe('cluster resource list pages', () => {
     expect(apiMocks.get).toHaveBeenCalledWith('/clusters/cluster-a/namespaces')
   })
 
+  it('provides density and refresh through the shared namespace table toolbar', async () => {
+    testState.scope.clusterId = 'cluster-a'
+    const namespaces = await renderPage(<ClusterNamespacesPage />)
+
+    expect(namespaces.querySelector('[aria-label="切换表格密度"]')).not.toBeNull()
+    expect(namespaces.querySelector('[aria-label="刷新"]')).not.toBeNull()
+    expect(namespaces.querySelector('[data-table-size="small"]')).not.toBeNull()
+
+    await act(async () => {
+      ;(namespaces.querySelector('[aria-label="切换表格密度"]') as HTMLButtonElement).click()
+    })
+    expect(namespaces.querySelector('[data-table-size="middle"]')).not.toBeNull()
+  })
+
   it('renders node and namespace mutations only when their permissions are allowed', async () => {
     testState.scope.clusterId = 'cluster-a'
     testState.responses['/clusters/cluster-a/infrastructure/nodes'] = [
@@ -189,6 +217,7 @@ describe('cluster resource list pages', () => {
     const readonlyNodes = await renderPage(<ClusterNodesPage />)
     const readonlyNamespaces = await renderPage(<ClusterNamespacesPage />)
     expect(readonlyNodes.querySelector('[aria-label="编辑节点 node-a"]')).toBeNull()
+    expect(readonlyNodes.querySelector('[aria-label="排空节点 node-a"]')).toBeNull()
     expect(readonlyNodes.querySelector('[aria-label="删除节点 node-a"]')).toBeNull()
     expect(readonlyNamespaces.querySelector('[aria-label="编辑命名空间 team-a"]')).toBeNull()
     expect(readonlyNamespaces.querySelector('[aria-label="删除命名空间 team-a"]')).toBeNull()
@@ -196,7 +225,7 @@ describe('cluster resource list pages', () => {
 
     testState.permissions = ['platform.namespaces.create']
     testState.responses['/clusters/cluster-a/infrastructure/nodes'] = [
-      { name: 'node-b', allowedActions: ['view', 'update', 'delete'] },
+      { name: 'node-b', allowedActions: ['view', 'update', 'drain', 'delete'] },
     ]
     testState.responses['/clusters/cluster-a/namespaces'] = [
       { name: 'team-b', allowedActions: ['view', 'update', 'delete'] },
@@ -204,6 +233,7 @@ describe('cluster resource list pages', () => {
     const writableNodes = await renderPage(<ClusterNodesPage />)
     const writableNamespaces = await renderPage(<ClusterNamespacesPage />)
     expect(writableNodes.querySelector('[aria-label="编辑节点 node-b"]')).not.toBeNull()
+    expect(writableNodes.querySelector('[aria-label="排空节点 node-b"]')).not.toBeNull()
     expect(writableNodes.querySelector('[aria-label="删除节点 node-b"]')).not.toBeNull()
     expect(writableNamespaces.querySelector('[aria-label="编辑命名空间 team-b"]')).not.toBeNull()
     expect(writableNamespaces.querySelector('[aria-label="删除命名空间 team-b"]')).not.toBeNull()

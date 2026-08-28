@@ -435,12 +435,13 @@ export function oidcClientInputFromValues(
   values: OIDCClientFormValues,
 ): IdentityOIDCClientInput {
   const clientSecret = values.clientSecret.trim()
+  const clientId = values.clientId.trim()
   const redirectRules = values.redirectRules ?? []
   return {
     accessTokenTtlSeconds: Number(values.accessTokenTtlSeconds || 3600),
     allowedGrantTypes: compactStrings(values.allowedGrantTypes),
     allowedScopes: compactStrings(values.allowedScopes),
-    clientId: values.clientId.trim(),
+    ...(clientId ? { clientId } : {}),
     clientSecret: clientSecret || undefined,
     clientType: values.clientType || 'confidential',
     idTokenTtlSeconds: Number(values.idTokenTtlSeconds || 300),

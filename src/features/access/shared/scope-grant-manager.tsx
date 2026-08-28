@@ -54,7 +54,8 @@ export function ScopeGrantManager({
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState<AccessScopeGrant | null>(null)
   const [grantModalVisible, setGrantModalVisible] = useState(false)
-  const grantsQuery = useQuery(accessQueries.scopeGrants(visible && Boolean(subjectId)))
+  const subject = { subjectId: subjectId ?? '', subjectType }
+  const grantsQuery = useQuery(accessQueries.scopeGrants(subject, visible && Boolean(subjectId)))
   const applicationsQuery = useQuery(
     accessQueries.applicationOptions(visible && canViewApplications),
   )
@@ -67,13 +68,7 @@ export function ScopeGrantManager({
     () => Object.fromEntries((clustersQuery.data ?? []).map((item) => [item.id, item.name])),
     [clustersQuery.data],
   )
-  const grants = useMemo(
-    () =>
-      (grantsQuery.data ?? []).filter(
-        (item) => item.subjectType === subjectType && item.subjectId === subjectId,
-      ),
-    [grantsQuery.data, subjectId, subjectType],
-  )
+  const grants = grantsQuery.data ?? []
 
   const createMutation = useMutation({
     ...accessMutations.scopeGrants.create(),
@@ -105,10 +100,10 @@ export function ScopeGrantManager({
 
   const submitGrant = (payload: Record<string, unknown>) => {
     if (editing) {
-      updateMutation.mutate({ id: editing.id, values: payload })
+      updateMutation.mutate({ ...subject, id: editing.id, values: payload })
       return
     }
-    createMutation.mutate(payload)
+    createMutation.mutate({ ...subject, values: payload })
   }
 
   const columns: ColumnProps<AccessScopeGrant>[] = [
@@ -177,7 +172,10 @@ export function ScopeGrantManager({
                 />
               ) : null}
               {canDeleteScopeGrants ? (
-                <Popconfirm title="确认删除？" onConfirm={() => deleteMutation.mutate(record.id)}>
+                <Popconfirm
+                  title="确认删除？"
+                  onConfirm={() => deleteMutation.mutate({ ...subject, id: record.id })}
+                >
                   <ManagementIconButton
                     aria-label="删除授权项"
                     danger

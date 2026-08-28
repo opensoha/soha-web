@@ -71,10 +71,6 @@ vi.mock('@/components/platform-scope-toolbar', () => ({
   PlatformScopeToolbar: () => <div data-testid="scope-toolbar">scope-toolbar</div>,
 }))
 
-vi.mock('@/components/platform-cluster-scope-hint', () => ({
-  PlatformClusterScopeHint: () => <div data-testid="scope-hint">scope-hint</div>,
-}))
-
 vi.mock('@/components/admin-table', () => ({
   AdminTable: ({
     columns,

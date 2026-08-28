@@ -8,6 +8,7 @@ import type {
   ManifestRevision,
   ManifestSource,
   ManifestEnvironmentBinding,
+  ManifestEnvironmentBindingUpdateInput,
   ManifestRenderResult,
   ManifestExecutionTask,
   ManifestSyncRun,
@@ -70,6 +71,13 @@ export const manifestApi = {
   ) => unwrap(api.put<ApiResponse<ManifestSource>>(`${ROOT}/${segment(id)}/source`, input)),
   bindings: (id: string) =>
     unwrap(api.get<ApiResponse<ManifestEnvironmentBinding[]>>(`${ROOT}/${segment(id)}/bindings`)),
+  updateBinding: (id: string, input: ManifestEnvironmentBindingUpdateInput) =>
+    unwrap(
+      api.put<ApiResponse<ManifestEnvironmentBinding>>(
+        `/delivery/manifest-bindings/${segment(id)}`,
+        input,
+      ),
+    ),
   render: (id: string, bindingId: string, revision = 0) =>
     unwrap(
       api.post<ApiResponse<ManifestRenderResult>>(`${ROOT}/${segment(id)}/render`, {

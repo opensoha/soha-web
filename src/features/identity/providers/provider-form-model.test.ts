@@ -193,6 +193,16 @@ describe('provider form model', () => {
     })
   })
 
+  it('omits a blank Client ID so the server can generate it', () => {
+    expect(
+      oidcClientInputFromValues('provider-1', {
+        ...defaultOIDCClientValues(),
+        clientId: '   ',
+        redirectRules: [{ mode: 'strict', value: 'https://app.example.com/oauth/callback' }],
+      }),
+    ).not.toHaveProperty('clientId')
+  })
+
   it('keeps new OIDC defaults on authorization code and PKCE', () => {
     expect(defaultOIDCClientValues()).toMatchObject({
       allowedGrantTypes: ['authorization_code'],

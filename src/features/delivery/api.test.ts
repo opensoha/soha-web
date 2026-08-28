@@ -62,6 +62,18 @@ describe('deliveryApi', () => {
     ])
   })
 
+  it('keeps the platform environment catalog separate from application bindings', async () => {
+    apiMocks.get.mockResolvedValue({ data: [] })
+
+    await deliveryApi.environmentCatalog.list()
+    await deliveryApi.environments.list()
+
+    expect(apiMocks.get.mock.calls.map(([path]) => path)).toEqual([
+      '/delivery/environments',
+      '/application-environments',
+    ])
+  })
+
   it('imports selected Kubernetes workloads in observe-only mode', async () => {
     const payload = {
       clusterId: 'cluster-a',

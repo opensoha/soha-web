@@ -93,9 +93,6 @@ vi.mock('@/features/platform/node-resource-utils', () => ({
   stringifyMap: () => '{}',
   stringifyTaints: () => '[]',
 }))
-vi.mock('@/components/platform-cluster-scope-hint', () => ({
-  PlatformClusterScopeHint: () => <div>scope-hint</div>,
-}))
 vi.mock('@/components/status-tag', () => ({
   StatusTag: ({ value }: { value?: string }) => <span>{value}</span>,
 }))
@@ -162,9 +159,7 @@ async function renderDetail() {
     root.render(
       <AntdApp>
         <QueryClientProvider client={queryClient}>
-          <MemoryRouter
-            initialEntries={['/cluster-resources/nodes/node-a?clusterId=url-cluster']}
-          >
+          <MemoryRouter initialEntries={['/cluster-resources/nodes/node-a?clusterId=url-cluster']}>
             <Routes>
               <Route path="/cluster-resources/nodes/:nodeName" element={<NodeDetailPage />} />
             </Routes>

@@ -26,6 +26,12 @@ const application: IdentityApplication = {
   sortOrder: 10,
   status: 'enabled',
   metadata: {
+    accessPolicy: {
+      allowedCidrs: [' 10.0.0.0/8 ', '10.0.0.0/8'],
+      endTimeUtc: '18:00',
+      requireMfa: true,
+      startTimeUtc: '09:00',
+    },
     custom: { retained: true },
     oidcClientId: 'legacy-client',
     oidcRedirectUri: 'https://legacy.example/callback',
@@ -75,50 +81,53 @@ describe('identity application form model', () => {
     ])
   })
 
-  it('reads legacy top-level OIDC fields before nested fields', () => {
-    expect(identityApplicationFormValuesFor(application)).toMatchObject({
-      oidcClientId: 'legacy-client',
-      oidcRedirectUri: 'https://legacy.example/callback',
-      oidcScopes: ['openid', 'email'],
-      providerId: 'provider-1',
-      providerType: 'oidc',
-    })
-  })
-
-  it('writes canonical nested OIDC values while preserving unknown metadata', () => {
+  it('removes obsolete OIDC launch overrides while preserving unrelated metadata', () => {
     const values = identityApplicationFormValuesFor(application)
     const input = buildIdentityApplicationInput(
       {
         ...values,
         assignments: [
-          { effect: 'allow', subjectId: ' admin ', subjectType: 'role' },
-          { effect: 'allow', subjectId: ' ', subjectType: 'team' },
+          { effect: 'deny', subjectIds: [' admin ', 'viewer', 'admin'], subjectType: 'role' },
+          { effect: 'allow', subjectIds: [' '], subjectType: 'team' },
         ],
+        allowedCidrs: [' 192.168.0.0/16 ', '192.168.0.0/16'],
+        endTimeUtc: ' 20:00 ',
         name: ' Grafana Enterprise ',
-        oidcClientId: ' client-new ',
-        oidcRedirectUri: ' https://new.example/callback ',
-        oidcScopes: ['openid', ' email ', 'openid', ''],
         providerId: ' provider-new ',
+        requireMfa: false,
+        startTimeUtc: ' 08:00 ',
         tags: ['metrics', ' metrics ', '', 'dashboards'],
       },
       application,
     )
 
     expect(input).toMatchObject({
-      assignments: [{ effect: 'allow', subjectId: 'admin', subjectType: 'role' }],
+      assignments: [
+        { effect: 'deny', subjectId: 'admin', subjectType: 'role' },
+        { effect: 'deny', subjectId: 'viewer', subjectType: 'role' },
+      ],
       name: 'Grafana Enterprise',
       providerId: 'provider-new',
       tags: ['metrics', 'dashboards'],
     })
     expect(input.metadata).toEqual({
-      custom: { retained: true },
-      oidc: {
-        clientId: 'client-new',
-        customOIDC: 'retained',
-        redirectUri: 'https://new.example/callback',
-        scopes: ['openid', 'email'],
+      accessPolicy: {
+        allowedCidrs: ['192.168.0.0/16'],
+        endTimeUtc: '20:00',
+        requireMfa: false,
+        startTimeUtc: '08:00',
       },
+      custom: { retained: true },
     })
+    expect(values).toMatchObject({
+      allowedCidrs: ['10.0.0.0/8'],
+      endTimeUtc: '18:00',
+      requireMfa: true,
+      startTimeUtc: '09:00',
+    })
+    expect(values).not.toHaveProperty('oidcClientId')
+    expect(values).not.toHaveProperty('oidcRedirectUri')
+    expect(values).not.toHaveProperty('oidcScopes')
   })
 
   it('removes OIDC config for another provider type and reserves provider binding for edits', () => {
@@ -129,7 +138,15 @@ describe('identity application form model', () => {
     }
 
     expect(buildIdentityApplicationInput(editValues, application)).toMatchObject({
-      metadata: { custom: { retained: true } },
+      metadata: {
+        accessPolicy: {
+          allowedCidrs: ['10.0.0.0/8'],
+          endTimeUtc: '18:00',
+          requireMfa: true,
+          startTimeUtc: '09:00',
+        },
+        custom: { retained: true },
+      },
       providerId: 'provider-2',
       providerType: 'link',
     })

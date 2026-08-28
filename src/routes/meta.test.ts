@@ -71,35 +71,6 @@ describe('access route authorization', () => {
     ).toEqual(['monitoring-workbench'])
   })
 
-  it('exposes software storage against an older menu snapshot without weakening its permission boundary', () => {
-    const allowed = buildSnapshot({
-      permissionKeys: ['software.package.view'],
-      visibleMenuIds: ['identity', 'identity-software'],
-      visibleMenus: [
-        { id: 'identity', path: '/internal-workbench' },
-        {
-          id: 'identity-software',
-          parentId: 'identity',
-          path: '/internal-workbench/software',
-        },
-      ],
-    })
-    const missingPermission = buildSnapshot({
-      visibleMenuIds: ['identity', 'identity-software'],
-      visibleMenus: [{ id: 'identity', path: '/internal-workbench' }],
-    })
-
-    expect(canAccessRoute(getRoute('internal-workbench-software-storage'), allowed)).toBe(true)
-    expect(canAccessRoute(getRoute('internal-workbench-software-storage'), missingPermission)).toBe(
-      false,
-    )
-    expect(
-      getAccessibleSidebarNav(allowed)
-        .find((item) => item.id === 'identity')
-        ?.children?.map((item) => item.id),
-    ).toContain('identity-software-storage')
-  })
-
   it('derives compatibility menu access and path from the canonical route metadata', () => {
     const allowed = buildSnapshot({
       permissionKeys: ['ai.evaluations.view'],
@@ -112,9 +83,7 @@ describe('access route authorization', () => {
       visibleMenus: [{ id: 'ai-workbench', path: '/ai-workbench' }],
     })
 
-    expect(
-      filterSidebarNavByWorkbench(getAccessibleSidebarNav(allowed), 'ai'),
-    ).toEqual(
+    expect(filterSidebarNavByWorkbench(getAccessibleSidebarNav(allowed), 'ai')).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: 'ai-workbench-evaluation-lifecycle',
@@ -211,7 +180,6 @@ describe('access route authorization', () => {
         'identity-applications',
         'identity-providers',
         'identity-outposts',
-        'identity-policies',
         'system',
         'system-online-users',
         'announcements',
@@ -258,13 +226,6 @@ describe('access route authorization', () => {
           path: '/identity/outposts',
           section: 'provider',
           sortOrder: 30,
-        },
-        {
-          id: 'identity-policies',
-          parentId: 'identity',
-          path: '/identity/policies',
-          section: 'provider',
-          sortOrder: 40,
         },
         { id: 'system', path: '/system', section: 'admin', sortOrder: 225 },
         {
@@ -407,15 +368,6 @@ describe('access route authorization', () => {
     })
 
     expect(canAccessRoute(getRoute('access-roles'), snapshot)).toBe(true)
-  })
-
-  it('allows scope-grants direct routing from its dedicated view permission', () => {
-    const snapshot = buildSnapshot({
-      permissionKeys: ['access.scope-grants.view'],
-    })
-
-    expect(canAccessRoute(getRoute('access-scope-grants'), snapshot)).toBe(true)
-    expect(canAccessRoute(getRoute('access-roles'), snapshot)).toBe(false)
   })
 
   it('requires the exact RBAC permission and child menu binding', () => {
@@ -705,13 +657,12 @@ describe('access route authorization', () => {
     const applicationNav = filterSidebarNavByWorkspace(nav, 'application')
     const systemNav = filterSidebarNavByWorkspace(nav, 'system')
 
-    expect(applicationNav.map((item) => item.id)).toEqual(['builds', 'application-environments'])
+    expect(applicationNav.map((item) => item.id)).toEqual(['builds'])
     expect(applicationNav[0].section).toBe('delivery')
-    expect(applicationNav[1].section).toBe('delivery-platform')
     expect(systemNav.map((item) => item.id)).toEqual(['system'])
   })
 
-  it('pins application center to the first delivery workbench menu row', () => {
+  it('pins delivery overview outside groups before application delivery menus', () => {
     const snapshot = buildSnapshot({
       permissionKeys: [
         'workspace.application.view',
@@ -719,7 +670,7 @@ describe('access route authorization', () => {
         'delivery.application-environments.view',
         'delivery.release-board.view',
       ],
-      visibleMenuIds: ['release-board', 'application-environments', 'builds'],
+      visibleMenuIds: ['release-board', 'application-environments', 'builds', 'delivery-overview'],
       visibleMenus: [
         {
           id: 'release-board',
@@ -751,6 +702,16 @@ describe('access route authorization', () => {
           sortOrder: 99,
           enabled: true,
         },
+        {
+          id: 'delivery-overview',
+          path: '/delivery/overview',
+          labelZh: '总览',
+          labelEn: 'Overview',
+          iconKey: 'layout-dashboard',
+          section: 'deliver',
+          sortOrder: 100,
+          enabled: true,
+        },
       ],
     })
 
@@ -760,15 +721,11 @@ describe('access route authorization', () => {
     )
 
     expect(deliveryNav.map((item) => item.id)).toEqual([
+      'delivery-overview',
       'builds',
       'release-board',
-      'application-environments',
     ])
-    expect(deliveryNav.map((item) => item.section)).toEqual([
-      'delivery',
-      'delivery',
-      'delivery-platform',
-    ])
+    expect(deliveryNav.map((item) => item.section)).toEqual(['', 'delivery', 'delivery'])
   })
 
   it('groups delivery workbench menus by user task while accepting legacy backend sections', () => {
@@ -776,24 +733,33 @@ describe('access route authorization', () => {
       permissionKeys: [
         'workspace.application.view',
         'delivery.applications.view',
+        'delivery.application-environments.view',
         'delivery.release-board.view',
         'delivery.release-bundles.view',
         'delivery.execution-tasks.view',
         'delivery.workflows.view',
         'delivery.releases.view',
+        'delivery.build-templates.view',
         'delivery.workflow-templates.view',
+        'delivery.registries.view',
       ],
       visibleMenuIds: [
+        'delivery-overview',
         'builds',
         'delivery-onboarding',
+        'delivery-manifest-library',
+        'application-environments',
         'release-board',
         'delivery-testing',
         'delivery-analysis',
         'release-bundles',
-        'execution-tasks',
         'workflows',
+        'execution-tasks',
         'releases',
+        'delivery-blueprints',
+        'build-templates',
         'workflow-templates',
+        'registries',
       ],
       visibleMenus: [
         { id: 'workflow-templates', path: '/workflow-templates', section: 'deliver', sortOrder: 1 },
@@ -820,6 +786,32 @@ describe('access route authorization', () => {
           section: 'deliver',
           sortOrder: 9,
         },
+        {
+          id: 'delivery-manifest-library',
+          path: '/delivery/manifests',
+          section: 'deliver',
+          sortOrder: 10,
+        },
+        {
+          id: 'application-environments',
+          path: '/application-environments',
+          section: 'deliver',
+          sortOrder: 11,
+        },
+        {
+          id: 'delivery-blueprints',
+          path: '/delivery/blueprints',
+          section: 'deliver',
+          sortOrder: 12,
+        },
+        { id: 'build-templates', path: '/build-templates', section: 'deliver', sortOrder: 13 },
+        { id: 'registries', path: '/registries', section: 'deliver', sortOrder: 14 },
+        {
+          id: 'delivery-overview',
+          path: '/delivery/overview',
+          section: 'deliver',
+          sortOrder: 100,
+        },
         { id: 'builds', path: '/applications', section: 'deliver', sortOrder: 99 },
       ],
     })
@@ -830,16 +822,19 @@ describe('access route authorization', () => {
     )
 
     expect(deliveryNav.map((item) => `${item.id}:${item.section}`)).toEqual([
+      'delivery-overview:',
       'builds:delivery',
-      'delivery-onboarding:delivery',
       'release-board:delivery',
       'delivery-testing:delivery',
       'delivery-analysis:delivery',
       'release-bundles:delivery-records',
-      'execution-tasks:delivery-records',
       'workflows:delivery-records',
+      'execution-tasks:delivery-records',
       'releases:delivery-records',
+      'delivery-blueprints:delivery-platform',
+      'build-templates:delivery-platform',
       'workflow-templates:delivery-platform',
+      'registries:delivery-platform',
     ])
   })
 
@@ -991,8 +986,8 @@ describe('access route authorization', () => {
       'delivery-testing',
       'delivery-analysis',
       'release-bundles',
-      'execution-tasks',
       'workflows',
+      'execution-tasks',
       'releases',
     ])
     expect(canAccessRoute(getRoute('release-board'), readonlySnapshot)).toBe(true)
@@ -1004,7 +999,6 @@ describe('access route authorization', () => {
       'release-board',
       'build-templates',
       'workflow-templates',
-      'application-environments',
       'registries',
     ])
     expect(canAccessRoute(getRoute('application-environments'), operatorSnapshot)).toBe(true)

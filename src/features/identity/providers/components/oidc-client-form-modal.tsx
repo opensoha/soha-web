@@ -20,6 +20,7 @@ interface OIDCClientFormModalProps {
   open: boolean
   providerId: string
   submitting: boolean
+  title?: string
 }
 
 export function OIDCClientFormModal({
@@ -29,6 +30,7 @@ export function OIDCClientFormModal({
   open,
   providerId,
   submitting,
+  title,
 }: OIDCClientFormModalProps) {
   const [form] = Form.useForm<OIDCClientFormValues>()
   const clientType = Form.useWatch('clientType', form)
@@ -44,7 +46,7 @@ export function OIDCClientFormModal({
       footer={null}
       onCancel={onCancel}
       open={open}
-      title={editing ? '编辑 OIDC client' : '新建 OIDC client'}
+      title={title ?? (editing ? '编辑 OIDC client' : '新建 OIDC client')}
       width={840}
     >
       <Form
@@ -55,12 +57,8 @@ export function OIDCClientFormModal({
         onFinish={(values) => onSubmit(oidcClientInputFromValues(providerId, values))}
       >
         <div className="soha-identity-provider-form-grid">
-          <Form.Item
-            label="Client ID"
-            name="clientId"
-            rules={[{ required: true, message: '请输入 Client ID' }]}
-          >
-            <Input placeholder="grafana" />
+          <Form.Item extra="新建时留空由服务端自动生成" label="Client ID" name="clientId">
+            <Input placeholder="留空自动生成" />
           </Form.Item>
           <Form.Item label="Client Secret" name="clientSecret">
             <Input.Password
@@ -117,7 +115,7 @@ export function OIDCClientFormModal({
                         { required: true, whitespace: true, message: '请输入 URI 或正则表达式' },
                       ]}
                     >
-                      <Input placeholder="http://grafana.internal/login/generic_oauth" />
+                      <Input placeholder="https://app.example.com/oauth/callback" />
                     </Form.Item>
                     <Tooltip title="删除规则">
                       <Button
@@ -147,7 +145,7 @@ export function OIDCClientFormModal({
         <Form.Item label="Post Logout Redirect URIs" name="postLogoutRedirectUris">
           <Select
             mode="tags"
-            placeholder="http://grafana.internal/logout"
+            placeholder="https://app.example.com/logout"
             tokenSeparators={[',']}
           />
         </Form.Item>

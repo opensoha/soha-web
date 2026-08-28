@@ -4,6 +4,8 @@ import { App, Card, Spin, Tabs } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PlatformResourceOverview } from '@/features/platform/shared/resource-overview'
 import { ResourceGitOpsStatus } from '@/features/platform/shared/resource-gitops-status'
+import { useAIPageContext } from '@/features/copilot'
+import type { AIPageContext } from '@/features/copilot'
 import { useI18n } from '@/i18n'
 import type { TabsProps } from 'antd'
 import { networkMutations } from './mutations'
@@ -24,6 +26,20 @@ const ResourceGraphPanel = lazy(async () => {
 const RESOURCE_GRAPH_KINDS: Partial<Record<NetworkKind, string>> = {
   ingresses: 'Ingress',
   services: 'Service',
+}
+
+const NETWORK_ENTITY_KINDS: Record<NetworkKind, string> = {
+  services: 'kubernetes.service',
+  ingresses: 'kubernetes.ingress',
+  gatewayclasses: 'kubernetes.gatewayclass',
+  gateways: 'kubernetes.gateway',
+  httproutes: 'kubernetes.httproute',
+  backendtlspolicies: 'kubernetes.backendtlspolicy',
+  grpcroutes: 'kubernetes.grpcroute',
+  referencegrants: 'kubernetes.referencegrant',
+  endpointslices: 'kubernetes.endpointslice',
+  ingressclasses: 'kubernetes.ingressclass',
+  networkpolicies: 'kubernetes.networkpolicy',
 }
 
 export function NetworkResourceOverview({
@@ -119,6 +135,7 @@ function NetworkYAMLTab({
 export function NetworkDetailShell({
   activeTabKey,
   ageLabel,
+  aiContext,
   clusterScoped = false,
   detail,
   extraTabs = [],
@@ -131,6 +148,7 @@ export function NetworkDetailShell({
 }: {
   activeTabKey: string
   ageLabel?: ReactNode
+  aiContext?: Partial<AIPageContext>
   clusterScoped?: boolean
   detail: NetworkResourceRecord
   extraTabs?: NonNullable<TabsProps['items']>
@@ -143,6 +161,16 @@ export function NetworkDetailShell({
 }) {
   const { t } = useI18n()
   const graphKind = RESOURCE_GRAPH_KINDS[kind]
+  useAIPageContext({
+    sourceWorkbench: 'platform',
+    sourceTitle: `${label} ${detail.name}`,
+    entityKind: NETWORK_ENTITY_KINDS[kind],
+    entityName: detail.name,
+    clusterId: target.scope.clusterId || undefined,
+    namespace: detail.namespace || undefined,
+    service: kind === 'services' ? detail.name : undefined,
+    ...aiContext,
+  })
   const items: NonNullable<TabsProps['items']> = [
     {
       key: 'overview',

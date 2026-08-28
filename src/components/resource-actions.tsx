@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { DeleteOutlined } from '@ant-design/icons'
-import { message, Popconfirm } from 'antd'
+import { App, Popconfirm } from 'antd'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ManagementIconButton } from '@/components/management-list'
 import { useI18n } from '@/i18n'
@@ -25,6 +25,7 @@ export function useResourceActions<T extends Record<string, any>>(options: {
   listInvalidationKey?: unknown[]
 }): { column: ColumnProps<T>; modalNode: React.ReactNode } {
   const { localeCode } = useI18n()
+  const { message } = App.useApp()
   const { clusterId } = usePlatformScopeStore()
   const queryClient = useQueryClient()
   const [deleting, setDeleting] = useState<string | null>(null)

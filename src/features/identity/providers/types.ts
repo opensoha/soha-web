@@ -52,6 +52,7 @@ export interface IdentityOIDCClient {
   providerId: string
   clientId: string
   clientType: IdentityOIDCClientType
+  clientSecretAvailable?: boolean
   redirectUris: string[]
   redirectUriRegexes?: string[]
   postLogoutRedirectUris: string[]
@@ -68,7 +69,7 @@ export interface IdentityOIDCClient {
 
 export interface IdentityOIDCClientInput {
   providerId?: string
-  clientId: string
+  clientId?: string
   clientType: IdentityOIDCClientType
   clientSecret?: string
   redirectUris: string[]
@@ -86,6 +87,12 @@ export interface IdentityOIDCClientInput {
 export interface IdentityOIDCClientCreated {
   client: IdentityOIDCClient
   clientSecret?: string
+}
+
+export interface IdentityOIDCClientSecretReveal {
+  clientId: string
+  clientSecret: string
+  revealedAt: string
 }
 
 export interface UpdateIdentityProviderVariables {

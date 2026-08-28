@@ -31,7 +31,9 @@ import {
 } from '@/features/platform/workloads-model'
 import {
   renderWorkloadNameLink,
+  useWorkloadListAIContext,
   useWorkloadTableDensity,
+  workloadRowAIContext,
   WorkloadQueryPanel,
   WorkloadRefreshButton,
   WorkloadSearchInput,
@@ -76,6 +78,15 @@ export function WorkloadsCronJobsPage() {
       ),
     [cronJobs, searchKeyword],
   )
+
+  useWorkloadListAIContext({
+    clusterId,
+    itemCount: cronJobs.length,
+    kind: 'cronjobs',
+    label: 'CronJobs',
+    namespace,
+    searchKeyword,
+  })
 
   const targetFor = (name: string, targetNamespace: string): CronJobTarget => ({
     scope: toScopeKey(clusterId, targetNamespace),
@@ -296,6 +307,7 @@ export function WorkloadsCronJobsPage() {
         columns={canShowActions ? columns : columns.filter((column) => column.key !== 'actions')}
         dataSource={filteredCronJobs}
         rowKey={(record) => `${record.namespace}/${record.name}`}
+        onRow={(record: CronJob) => workloadRowAIContext('cronjobs', record, clusterId)}
         loading={cronJobsQuery.isLoading}
         localSorting
         pageSize={K8S_TABLE_PAGE_SIZE}

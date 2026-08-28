@@ -468,7 +468,7 @@ describe('access users page columns', () => {
     expect(api.put).toHaveBeenCalledWith('/access/roles/ops', {
       name: '运维角色',
       scope: 'custom',
-      capabilities: ['view', 'create'],
+      capabilities: [],
       permissionKeys: ['platform.configuration.secret-data.view', 'platform.helm.values.view'],
     })
   })

@@ -8,11 +8,13 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { IdentityApplicationsPage } from './list-page'
 
 const testState = vi.hoisted(() => ({
+  applicationProviderType: 'link' as 'link' | 'oidc',
   permissionKeys: [
     'identity.applications.view',
     'identity.applications.create',
     'identity.applications.update',
     'identity.applications.delete',
+    'identity.providers.create',
   ],
   apiGet: vi.fn(),
   apiDelete: vi.fn(),
@@ -59,14 +61,16 @@ vi.mock('@/components/admin-table', () => ({
     columns,
     dataSource,
     headerExtra,
+    tableSize,
     toolbar,
   }: {
     columns: MockColumn[]
     dataSource: Array<Record<string, unknown>>
     headerExtra?: ReactNode
+    tableSize?: string
     toolbar?: ReactNode
   }) => (
-    <div>
+    <div data-table-size={tableSize}>
       {headerExtra}
       {toolbar}
       {dataSource.map((record) => (
@@ -152,7 +156,7 @@ vi.mock('./components/application-form-modal', () => ({
               name: 'Grafana',
               portalVisible: true,
               providerId: application ? 'provider-1' : '',
-              providerType: 'link',
+              providerType: testState.applicationProviderType,
               slug: 'grafana',
               sortOrder: 10,
               status: 'enabled',
@@ -166,11 +170,74 @@ vi.mock('./components/application-form-modal', () => ({
     ) : null,
 }))
 
+vi.mock('../providers', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../providers')>()
+  return {
+    ...actual,
+    ProviderFormModal: ({
+      onSubmit,
+      open,
+    }: {
+      onSubmit: (input: unknown) => void
+      open: boolean
+    }) =>
+      open ? (
+        <button
+          onClick={() =>
+            onSubmit({
+              applicationId: 'grafana',
+              config: {},
+              enabled: true,
+              name: 'Example OIDC',
+              status: 'enabled',
+              type: 'oidc',
+            })
+          }
+        >
+          提交 Provider
+        </button>
+      ) : null,
+    OIDCClientFormModal: ({
+      onSubmit,
+      open,
+      providerId,
+    }: {
+      onSubmit: (input: unknown) => void
+      open: boolean
+      providerId: string
+    }) =>
+      open ? (
+        <button
+          onClick={() =>
+            onSubmit({
+              providerId,
+              clientType: 'confidential',
+              redirectUris: ['https://app.example.com/oauth/callback'],
+              postLogoutRedirectUris: [],
+              allowedScopes: ['openid'],
+              allowedGrantTypes: ['authorization_code'],
+              requirePkce: true,
+              accessTokenTtlSeconds: 3600,
+              idTokenTtlSeconds: 300,
+              refreshTokenTtlSeconds: 0,
+              status: 'enabled',
+            })
+          }
+        >
+          提交 Client
+        </button>
+      ) : null,
+    SecretRevealModal: ({ value }: { value: { clientSecret: string } | null }) =>
+      value ? <div data-testid="onboarding-secret">{value.clientSecret}</div> : null,
+  }
+})
+
 const application = {
   id: 'grafana',
   slug: 'grafana',
   name: 'Grafana',
   description: 'Dashboards',
+  launchUrl: 'https://grafana.example.com',
   tags: ['metrics'],
   providerType: 'link',
   portalVisible: true,
@@ -225,26 +292,30 @@ beforeEach(() => {
     'identity.applications.create',
     'identity.applications.update',
     'identity.applications.delete',
+    'identity.providers.create',
   ]
+  testState.applicationProviderType = 'link'
   testState.apiGet.mockImplementation(async (path: string) => {
     if (path.startsWith('/identity/applications')) return { data: [application] }
     if (path.startsWith('/identity/providers')) return { data: [provider] }
-    if (path === '/identity/provider-capabilities') {
-      return {
-        data: [
-          {
-            type: 'oidc',
-            status: 'ready',
-            endpoints: ['/authorize'],
-            description: 'OIDC provider ready',
-          },
-        ],
-      }
-    }
+    if (path === '/identity/capabilities') return { data: { stepUp: { available: true } } }
     return { data: [] }
   })
-  testState.apiPost.mockResolvedValue({ data: application })
-  testState.apiPut.mockResolvedValue({ data: application })
+  testState.apiPost.mockImplementation(async (path: string) => {
+    if (path === '/identity/providers') return { data: provider }
+    if (path === '/identity/providers/provider-1/oidc-clients') {
+      return {
+        data: {
+          client: { id: 'client-1', providerId: provider.id, clientId: 'generated-client-id' },
+          clientSecret: 'revealable-client-secret',
+        },
+      }
+    }
+    return { data: { ...application, providerType: testState.applicationProviderType } }
+  })
+  testState.apiPut.mockImplementation(async (_path: string, input: Record<string, unknown>) => ({
+    data: { ...application, ...input },
+  }))
   testState.apiDelete.mockResolvedValue({ data: { status: 'ok' } })
 })
 
@@ -314,16 +385,36 @@ async function clickButtonByLabel(container: HTMLElement, label: string) {
 }
 
 describe('identity applications page behavior', () => {
-  it('loads canonical applications and provider capabilities and applies search filters', async () => {
+  it('loads applications without the provider summary cards and applies search filters', async () => {
     const { container, queryClient } = await renderPage()
 
     expect(testState.apiGet).toHaveBeenCalledWith('/identity/applications')
-    expect(testState.apiGet).toHaveBeenCalledWith('/identity/provider-capabilities')
+    expect(testState.apiGet).not.toHaveBeenCalledWith('/identity/provider-capabilities')
     expect(container.querySelector('[data-testid="row-grafana"]')).not.toBeNull()
-    expect(container.textContent).toContain('OIDC provider ready')
+    expect(container.textContent).not.toContain('OIDC provider ready')
     const applicationRow = container.querySelector('[data-testid="row-grafana"]')
-    expect(applicationRow?.querySelector('.soha-status-tag')?.textContent).toBe('enabled')
+    expect(
+      applicationRow
+        ?.querySelector('button[aria-label="Grafana 启用状态"]')
+        ?.getAttribute('aria-checked'),
+    ).toBe('true')
+    expect(
+      applicationRow
+        ?.querySelector('button[aria-label="Grafana 门户可见"]')
+        ?.getAttribute('aria-checked'),
+    ).toBe('true')
     expect(applicationRow?.querySelector('.soha-metadata-tag')?.textContent).toBe('LINK')
+    expect(applicationRow?.textContent).toContain('所有已登录用户')
+    expect(
+      applicationRow
+        ?.querySelector('.soha-identity-access-scope')
+        ?.classList.contains('ant-space-vertical'),
+    ).toBe(false)
+    expect(
+      applicationRow
+        ?.querySelector('a[href="https://grafana.example.com"]')
+        ?.getAttribute('target'),
+    ).toBe('_blank')
 
     const search = container.querySelector('.soha-management-query-field input')
     if (!(search instanceof HTMLInputElement)) throw new Error('Application search input not found')
@@ -332,6 +423,34 @@ describe('identity applications page behavior', () => {
     await settle(queryClient)
 
     expect(testState.apiGet).toHaveBeenCalledWith('/identity/applications?q=harbor')
+  })
+
+  it('updates enabled and portal visibility from independent switches', async () => {
+    const { container, queryClient } = await renderPage()
+
+    await clickButtonByLabel(container, 'Grafana 启用状态')
+    await settle(queryClient)
+
+    expect(testState.apiPut).toHaveBeenCalledWith(
+      '/identity/applications/grafana',
+      expect.objectContaining({ status: 'disabled' }),
+    )
+
+    await clickButtonByLabel(container, 'Grafana 门户可见')
+    await settle(queryClient)
+
+    expect(testState.apiPut).toHaveBeenCalledWith(
+      '/identity/applications/grafana',
+      expect.objectContaining({ portalVisible: false }),
+    )
+  })
+
+  it('switches table density from the shared table toolbar', async () => {
+    const { container } = await renderPage()
+
+    expect(container.querySelector('[data-table-size="small"]')).not.toBeNull()
+    await clickButtonByLabel(container, '切换表格密度')
+    expect(container.querySelector('[data-table-size="middle"]')).not.toBeNull()
   })
 
   it('keeps application management controls permission-gated', async () => {
@@ -345,9 +464,13 @@ describe('identity applications page behavior', () => {
     expect(
       (container.querySelector('button[aria-label="编辑"]') as HTMLButtonElement).disabled,
     ).toBe(true)
+    expect(
+      (container.querySelector('button[aria-label="Grafana 启用状态"]') as HTMLButtonElement)
+        .disabled,
+    ).toBe(true)
   })
 
-  it('wires create and update forms through capability mutations', async () => {
+  it('wires create and update forms through application mutations', async () => {
     const { container, queryClient } = await renderPage()
 
     await clickButton(container, '新建应用')
@@ -384,5 +507,34 @@ describe('identity applications page behavior', () => {
     await settle(queryClient)
 
     expect(testState.apiDelete).toHaveBeenCalledWith('/identity/applications/grafana')
+  })
+
+  it('guides OIDC creation through Application, Provider, binding, and first Client', async () => {
+    testState.applicationProviderType = 'oidc'
+    const { container, queryClient } = await renderPage()
+
+    await clickButton(container, '新建应用')
+    await clickButton(container, '提交应用')
+    await settle(queryClient)
+    await clickButton(container, '提交 Provider')
+    await settle(queryClient)
+    await clickButton(container, '提交 Client')
+    await settle(queryClient)
+
+    expect(testState.apiPost).toHaveBeenCalledWith(
+      '/identity/providers',
+      expect.objectContaining({ applicationId: 'grafana', type: 'oidc' }),
+    )
+    expect(testState.apiPut).toHaveBeenCalledWith(
+      '/identity/applications/grafana',
+      expect.objectContaining({ providerId: 'provider-1', providerType: 'oidc' }),
+    )
+    expect(testState.apiPost).toHaveBeenCalledWith(
+      '/identity/providers/provider-1/oidc-clients',
+      expect.objectContaining({ providerId: 'provider-1' }),
+    )
+    expect(container.querySelector('[data-testid="onboarding-secret"]')?.textContent).toBe(
+      'revealable-client-secret',
+    )
   })
 })

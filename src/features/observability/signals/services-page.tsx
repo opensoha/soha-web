@@ -2,7 +2,7 @@ import type { ObservabilityService } from '@opensoha/contracts/gen/ts/sohaapi'
 import { EyeOutlined, LineChartOutlined, ShareAltOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
-import { Alert, Descriptions, Drawer, Form, List, Space, Typography } from 'antd'
+import { Alert, Descriptions, Drawer, Form, Space, Typography } from 'antd'
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
@@ -174,7 +174,7 @@ export function ObservabilityServicesPage() {
         }}
       />
       {services.data?.meta.warnings?.map((warning) => (
-        <Alert key={warning} message={warning} showIcon type="warning" />
+        <Alert key={warning} title={warning} showIcon type="warning" />
       ))}
       {services.isLoading ? (
         <ManagementState bordered={false} compact kind="loading" title="正在查询服务" />
@@ -237,19 +237,20 @@ export function ObservabilityServicesPage() {
             </Descriptions>
             <div className="soha-service-drawer-section">
               <Title level={5}>端点</Title>
-              <List
-                dataSource={service.data.data.endpoints}
-                locale={{ emptyText: '暂无端点' }}
-                renderItem={(endpoint) => (
-                  <List.Item
-                    extra={
-                      <StatusTag label={statusLabel(endpoint.status)} value={endpoint.status} />
-                    }
-                  >
-                    <Text>{endpoint.name}</Text>
-                  </List.Item>
-                )}
-              />
+              {service.data.data.endpoints.length ? (
+                <ul className="soha-list-panel">
+                  {service.data.data.endpoints.map((endpoint) => (
+                    <li key={endpoint.name} className="soha-list-row">
+                      <Text>{endpoint.name}</Text>
+                      <div className="soha-list-row-extra">
+                        <StatusTag label={statusLabel(endpoint.status)} value={endpoint.status} />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <ManagementState bordered={false} compact description="暂无端点" />
+              )}
             </div>
             <div className="soha-service-drawer-section">
               <Space>
@@ -266,19 +267,21 @@ export function ObservabilityServicesPage() {
                   title="拓扑加载失败"
                   description={topology.error.message}
                 />
-              ) : (
-                <List
-                  className="soha-topology-edge-list"
-                  dataSource={topology.data?.data.edges ?? []}
-                  locale={{ emptyText: '当前范围暂无服务依赖' }}
-                  renderItem={(edge) => (
-                    <List.Item>
+              ) : (topology.data?.data.edges ?? []).length ? (
+                <ul className="soha-list-panel soha-topology-edge-list">
+                  {(topology.data?.data.edges ?? []).map((edge) => (
+                    <li
+                      key={`${edge.sourceServiceId}:${edge.targetServiceId}`}
+                      className="soha-list-row"
+                    >
                       <Text code>{edge.sourceServiceId}</Text>
                       <Text type="secondary">→</Text>
                       <Text code>{edge.targetServiceId}</Text>
-                    </List.Item>
-                  )}
-                />
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <ManagementState bordered={false} compact description="当前范围暂无服务依赖" />
               )}
             </div>
           </>

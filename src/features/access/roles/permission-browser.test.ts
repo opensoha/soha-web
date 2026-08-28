@@ -80,7 +80,7 @@ describe('role permission browser model', () => {
       const entry = workbench?.children.find(
         (node) => node.key === `entry:workbench:${workbenchID}`,
       )
-      expect(entry?.title).toBe('工作台入口')
+      expect(entry?.title, workbenchID).toBe('工作台入口')
       expect(entry && permissionValuesForNode(entry)).toEqual([permissionKey])
     }
 

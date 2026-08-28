@@ -9,7 +9,6 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import type { PermissionSnapshot } from '@/types'
 import { AccessPoliciesPage } from './policies/page'
 import { AccessRolesPage } from './roles/page'
-import { AccessScopeGrantsPage } from './scope-grants/page'
 
 const testState = vi.hoisted(() => ({
   snapshot: {
@@ -88,7 +87,6 @@ function setDefaultResponses() {
     '/access/roles': [],
     '/access/teams': [],
     '/access/policies': [],
-    '/access/scope-grants': [],
     '/applications': [],
     '/application-environments': [],
     '/clusters': [],
@@ -256,103 +254,5 @@ describe('frontend access authorization splits', () => {
     await renderWithProviders(<AccessPoliciesPage />, '/access/policies')
 
     expect(apiGetMock).toHaveBeenCalledWith('/access/teams')
-  })
-
-  it('blocks the scope-grants page without the dedicated view permission', async () => {
-    const container = await renderWithProviders(<AccessScopeGrantsPage />, '/access/scope-grants')
-
-    expect(container.textContent).toContain('当前账号没有授权范围页面权限。')
-  })
-
-  it('keeps scope-grants mutations hidden for view-only access', async () => {
-    setSnapshot(['access.scope-grants.view'])
-
-    const container = await renderWithProviders(<AccessScopeGrantsPage />, '/access/scope-grants')
-
-    expect(container.textContent).toContain('授权范围')
-    expect(getButtonTexts(container)).not.toContain('新建授权项')
-  })
-
-  it('shows the scope-grants create action when the create permission is present', async () => {
-    setSnapshot(['access.scope-grants.view', 'access.scope-grants.create'])
-
-    const container = await renderWithProviders(<AccessScopeGrantsPage />, '/access/scope-grants')
-
-    expect(container.textContent).toContain('授权范围')
-    expect(getButtonTexts(container)).toContain('新建授权项')
-  })
-
-  it('uses catalog-backed selectors instead of raw scope IDs', async () => {
-    setSnapshot([
-      'access.scope-grants.view',
-      'access.scope-grants.create',
-      'access.roles.view',
-      'access.users.view',
-      'delivery.applications.view',
-      'delivery.application-environments.view',
-    ])
-    testState.responses['/access/users'] = [
-      {
-        id: 'user-1',
-        username: 'alice',
-        email: 'alice@example.com',
-        displayName: 'Alice',
-        tags: [],
-        roles: [],
-        teams: [],
-        projects: [],
-        loginSources: [],
-      },
-    ]
-    testState.responses['/access/roles'] = [
-      {
-        id: 'developer',
-        name: 'Developer',
-        scope: 'workspace',
-        capabilities: [],
-        userCount: 1,
-      },
-    ]
-    testState.responses['/applications'] = [
-      { id: 'app-1', name: 'Checkout', group: 'payments', businessLineId: 'payments' },
-    ]
-    testState.responses['/application-environments'] = [
-      {
-        id: 'binding-1',
-        applicationId: 'app-1',
-        businessLineId: 'payments',
-        environmentId: 'prod',
-        environmentKey: 'production',
-      },
-    ]
-
-    const container = await renderWithProviders(<AccessScopeGrantsPage />, '/access/scope-grants')
-    const createButton = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent?.trim() === '新建授权项',
-    )
-
-    await act(async () => {
-      createButton?.click()
-      await Promise.resolve()
-    })
-
-    const dialogs = document.body.querySelectorAll<HTMLElement>('[role="dialog"]')
-    const editor = dialogs[dialogs.length - 1]
-    const editorTitleId = editor?.getAttribute('aria-labelledby')
-    const editorTitle = editorTitleId ? document.getElementById(editorTitleId) : null
-    const scopeTypeControl = editor?.querySelector('#scopeType')
-    expect(editorTitle?.textContent).toBe('新建授权项')
-    expect(editorTitle?.style.position).toBe('absolute')
-    expect(scopeTypeControl?.classList.contains('soha-form-segmented')).toBe(true)
-    expect(editor?.textContent).toContain('授权主体')
-    expect(editor?.textContent).toContain('授权范围')
-    expect(editor?.textContent).toContain('业务范围')
-    expect(editor?.textContent).toContain('应用（留空为全部）')
-    expect(editor?.textContent).toContain('环境（留空为全部）')
-    expect(editor?.textContent).toContain('范围内角色')
-    expect(editor?.textContent).not.toContain('主体 ID')
-    expect(editor?.textContent).not.toContain('范围 Key')
-    expect(editor?.textContent).not.toContain('环境 IDs')
-    expect(editor?.textContent).not.toContain('应用 IDs')
   })
 })

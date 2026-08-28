@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { PermissionDefinition } from '@opensoha/contracts/gen/ts/sohaapi'
-import { Button, Checkbox, Empty, Spin, Tree } from 'antd'
-import { LeftOutlined, RightOutlined } from '@ant-design/icons'
+import { Alert, Button, Checkbox, Empty, Spin, Tree } from 'antd'
+import { LeftOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons'
 import type { DataNode } from 'antd/es/tree'
 import { useI18n } from '@/i18n'
 import { buildRolePermissionTreeData } from './permission-model'
@@ -26,9 +26,11 @@ type PermissionBrowserData = {
 
 type RolePermissionBrowserProps = {
   definitions: PermissionDefinition[]
+  error?: boolean
   loading?: boolean
   permissionKeys: string[]
   onChange: (permissionKeys: string[]) => void
+  onRetry?: () => void
 }
 
 function nodeTitle(node: DataNode) {
@@ -193,16 +195,30 @@ function menuTreeData(nodes: PermissionBrowserNode[]): DataNode[] {
 
 export function RolePermissionBrowser({
   definitions,
+  error,
   loading,
   permissionKeys,
   onChange,
+  onRetry,
 }: RolePermissionBrowserProps) {
-  const { t } = useI18n()
-  const { workbenches } = useMemo(
-    () =>
-      buildRolePermissionBrowserData(buildRolePermissionTreeData(definitions, permissionKeys, t)),
-    [definitions, permissionKeys, t],
-  )
+  const { localeCode, t } = useI18n()
+  const { workbenches } = useMemo(() => {
+    const data = buildRolePermissionBrowserData(
+      buildRolePermissionTreeData(definitions, permissionKeys, t),
+    )
+    const syntheticTitles: Record<string, string> = {
+      工作台入口: t('access.roles.workbenchEntry', '工作台入口'),
+      保留项: t('access.roles.compatibilityItems', '保留项'),
+      资源创建: t('access.roles.resourceCreation', '资源创建'),
+      页面权限: t('access.roles.pagePermissions', '页面权限'),
+    }
+    const localize = (node: PermissionBrowserNode): PermissionBrowserNode => ({
+      ...node,
+      title: syntheticTitles[node.title] ?? node.title,
+      children: node.children.map(localize),
+    })
+    return { workbenches: data.workbenches.map(localize) }
+  }, [definitions, permissionKeys, t])
   const [activeScopeKey, setActiveScopeKey] = useState('')
   const [activeMenuKey, setActiveMenuKey] = useState('')
   const [mobileStage, setMobileStage] = useState<'workbenches' | 'menus' | 'actions'>('workbenches')
@@ -247,24 +263,53 @@ export function RolePermissionBrowser({
       </div>
     )
   }
+  if (error) {
+    return (
+      <Alert
+        showIcon
+        title={t('access.roles.catalogLoadFailed', '权限目录加载失败')}
+        description={t('access.roles.catalogLoadFailedDescription', '请重试后再配置角色权限。')}
+        type="error"
+        action={
+          onRetry ? (
+            <Button size="small" icon={<ReloadOutlined />} onClick={onRetry}>
+              {t('common.retry', '重试')}
+            </Button>
+          ) : null
+        }
+      />
+    )
+  }
   if (!workbenches.length)
-    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="权限目录为空" />
+    return (
+      <Empty
+        image={Empty.PRESENTED_IMAGE_SIMPLE}
+        description={t('access.roles.catalogEmpty', '权限目录为空')}
+      />
+    )
 
   return (
     <div className="soha-role-permission-browser">
       <div className="soha-role-permission-browser-summary">
         <span>
-          精确权限 {selectionState(permissionKeys, assignableValues).selected}/
-          {assignableValues.length}
+          {t('access.roles.exactPermissions', '精确权限')}{' '}
+          {selectionState(permissionKeys, assignableValues).selected}/{assignableValues.length}
         </span>
-        {compatibilityCount ? <span>兼容权限 {compatibilityCount}（只读）</span> : null}
+        {compatibilityCount ? (
+          <span>
+            {t('access.roles.compatibilityPermissions', '兼容权限')} {compatibilityCount}
+            {t('access.roles.readonlySuffix', '（只读）')}
+          </span>
+        ) : null}
       </div>
       <div className={`soha-role-permission-browser-grid is-stage-${mobileStage}`}>
         <section
           className="soha-role-permission-browser-pane is-workbenches"
           data-permission-level="workbenches"
         >
-          <header className="soha-role-permission-browser-pane-header">工作台</header>
+          <header className="soha-role-permission-browser-pane-header">
+            {t('access.roles.workbenches', '工作台')}
+          </header>
           <div className="soha-role-permission-browser-pane-body">
             {workbenches.map((workbench) => {
               const targets = editablePermissionValuesForNode(workbench)
@@ -277,7 +322,11 @@ export function RolePermissionBrowser({
                   className={`soha-role-permission-browser-row${active ? ' is-active' : ''}`}
                 >
                   <Checkbox
-                    aria-label={`选择${workbench.title}全部权限`}
+                    aria-label={
+                      localeCode === 'zh_CN'
+                        ? `选择${workbench.title}全部权限`
+                        : `Select all permissions for ${workbench.title}`
+                    }
                     checked={state.checked}
                     disabled={targets.length === 0}
                     indeterminate={state.indeterminate}
@@ -313,10 +362,10 @@ export function RolePermissionBrowser({
               type="text"
               size="small"
               icon={<LeftOutlined />}
-              aria-label="返回工作台"
+              aria-label={t('access.roles.backToWorkbenches', '返回工作台')}
               onClick={() => setMobileStage('workbenches')}
             />
-            <span>{activeWorkbench?.title ?? '菜单与页面'}</span>
+            <span>{activeWorkbench?.title ?? t('access.roles.menusAndPages', '菜单与页面')}</span>
           </header>
           <div className="soha-role-permission-browser-pane-body">
             <Tree
@@ -365,13 +414,13 @@ export function RolePermissionBrowser({
               type="text"
               size="small"
               icon={<LeftOutlined />}
-              aria-label="返回菜单与页面"
+              aria-label={t('access.roles.backToMenus', '返回菜单与页面')}
               onClick={() => setMobileStage('menus')}
             />
-            <span>{activeMenu?.title ?? '页面动作'}</span>
+            <span>{activeMenu?.title ?? t('access.roles.pageActions', '页面动作')}</span>
             {activeMenu?.actions.some((action) => !action.disabled) ? (
               <Checkbox
-                aria-label="选择当前页面全部权限"
+                aria-label={t('access.roles.selectCurrentPageAll', '选择当前页面全部权限')}
                 checked={
                   selectionState(
                     permissionKeys,
@@ -397,7 +446,7 @@ export function RolePermissionBrowser({
                   )
                 }
               >
-                全选
+                {t('common.selectAll', '全选')}
               </Checkbox>
             ) : null}
           </header>
@@ -414,7 +463,9 @@ export function RolePermissionBrowser({
                 </Checkbox>
               ))
             ) : (
-              <div className="soha-role-permission-browser-empty">此菜单没有直接功能权限</div>
+              <div className="soha-role-permission-browser-empty">
+                {t('access.roles.noDirectPermissions', '此菜单没有直接功能权限')}
+              </div>
             )}
           </div>
         </section>

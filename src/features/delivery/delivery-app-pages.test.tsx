@@ -5,7 +5,7 @@ import { act } from 'react'
 import { App as AntApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot } from 'react-dom/client'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   BuildTemplatesPage,
@@ -15,15 +15,22 @@ import {
 import { ApplicationsPage } from './applications/list-page'
 import { ExecutionTasksPage } from './execution-tasks/list-page'
 import { ReleaseBundlesPage } from './release-bundles/list-page'
+import { ReleasesPage } from './releases/list-page'
 import { WorkflowsPage } from './workflows/list-page'
 import { runtimeEvidencePath } from './template-usage-runtime-links'
 import { ApplicationEnvironmentsPage } from './environments/list-page'
+import { ApplicationEnvironmentDetailPage } from './environments/detail-page'
+import { EnvironmentCatalogPage } from './environments/catalog-page'
 import { ReleaseBoardPage } from './release-board/page'
 import { WorkflowTemplatesPage } from './workflow-templates/page'
 import { RegistriesPage } from './registries/page'
 import { DeliveryAnalysisPage } from './workbench/analysis-page'
 import { DeliveryOnboardingPage } from './workbench/onboarding-page'
 import { DeliveryTestingPage } from './workbench/testing-page'
+import {
+  AIPageContextRegistry,
+  type AIPageContextRegistryValue,
+} from '@/features/copilot/global-assistant/ai-context-provider'
 
 const workflowDefinition = {
   schemaVersion: 2,
@@ -135,6 +142,8 @@ const testState = vi.hoisted(() => ({
     visibleMenus: [],
   },
   forceHighBuildTemplateUsage: false,
+  applicationsListError: false,
+  releaseBoardError: false,
   gatewayManifestMode: 'approval' as 'approval' | 'restricted' | 'unavailable',
   apiGet: vi.fn(async (path: string) => {
     if (path.startsWith('/ai-gateway/capabilities')) {
@@ -241,6 +250,9 @@ const testState = vi.hoisted(() => ({
       }
     }
     if (path === '/applications') {
+      if (testState.applicationsListError) {
+        throw new Error('applications unavailable')
+      }
       return {
         data: [
           {
@@ -337,6 +349,38 @@ const testState = vi.hoisted(() => ({
             updatedAt: '2026-05-08T12:00:00Z',
           },
         ],
+      }
+    }
+    if (path === '/delivery/environments') {
+      return {
+        data: [
+          {
+            id: 'env-test',
+            key: 'test',
+            name: '测试环境',
+            tier: 'non-production',
+            stageLevel: 20,
+            sortOrder: 20,
+            isProduction: false,
+            requiresApproval: false,
+            enabled: true,
+            createdAt: '2026-05-01T00:00:00Z',
+            updatedAt: '2026-05-08T12:00:00Z',
+          },
+        ],
+      }
+    }
+    if (path === '/application-environments/binding-1/detail') {
+      return {
+        data: {
+          binding: {
+            id: 'binding-1',
+            applicationId: 'app-1',
+            environmentId: 'env-test',
+            environmentKey: 'test',
+            targets: [],
+          },
+        },
       }
     }
     if (path === '/workflow-templates') {
@@ -479,6 +523,9 @@ const testState = vi.hoisted(() => ({
       return { data: [] }
     }
     if (path === '/delivery/release-board') {
+      if (testState.releaseBoardError) {
+        throw new Error('release board unavailable')
+      }
       return {
         data: [
           {
@@ -1026,6 +1073,11 @@ async function renderWithProviders(node: ReactNode, route = '/applications') {
   return container
 }
 
+function LocationProbe() {
+  const location = useLocation()
+  return <span data-testid="location-probe">{`${location.pathname}${location.search}`}</span>
+}
+
 function findButton(container: ParentNode, text: string) {
   const button = Array.from(container.querySelectorAll('button')).find((item) =>
     item.textContent?.includes(text),
@@ -1096,6 +1148,8 @@ describe('ApplicationsPage workspace layout', () => {
     testState.apiPost.mockClear()
     testState.apiPut.mockClear()
     testState.forceHighBuildTemplateUsage = false
+    testState.applicationsListError = false
+    testState.releaseBoardError = false
     testState.gatewayManifestMode = 'approval'
     testState.permissionSnapshot.permissionKeys = [...defaultPermissionKeys]
     class ResizeObserverMock {
@@ -1147,13 +1201,13 @@ describe('ApplicationsPage workspace layout', () => {
     const container = await renderWithProviders(<ApplicationsPage />)
 
     expect(container.textContent).not.toContain('接入应用/服务')
-    expect(container.textContent).toContain('创建应用')
-    expect(container.textContent).toContain('未分组')
+    expect(container.textContent).toContain('创建 / 接入应用')
+    expect(container.querySelector('[aria-label="应用分组"]')).not.toBeNull()
     expect(container.textContent).toContain('ERP Front Main')
     expect(container.textContent).toContain('全部')
     expect(container.textContent).toContain('erp-front')
     expect(container.textContent).toContain('erp-front-main')
-    expect(container.textContent).toContain('frontend')
+    expect(container.querySelector('[title="erp-front / frontend"]')).not.toBeNull()
     expect(container.textContent).toContain('mall')
     expect(container.textContent).not.toContain('执行中')
     expect(container.textContent).not.toContain('失败待处理')
@@ -1179,27 +1233,72 @@ describe('ApplicationsPage workspace layout', () => {
     expect(container.textContent).not.toContain('应用详细清单')
   })
 
-  it('creates an application boundary with only name and key', async () => {
+  it('quick-creates an application from the unified entry modal', async () => {
     const container = await renderWithProviders(<ApplicationsPage />)
 
-    await clickButton(findButton(container, '创建应用'))
+    await clickButton(findButton(container, '创建 / 接入应用'))
 
     const modal = document.querySelector('.ant-modal') as HTMLElement
-    expect(modal.textContent).toContain('创建应用')
-    expect(modal.textContent).not.toContain('应用分组')
+    expect(modal.textContent).toContain('创建 / 接入应用')
+    expect(modal.textContent).toContain('快速创建')
+    expect(modal.textContent).toContain('手工接入')
+    expect(modal.textContent).toContain('AI 接入')
+    expect(modal.textContent).toContain('应用分组')
     expect(modal.textContent).not.toContain('语言')
     expect(modal.textContent).not.toContain('启用')
 
     await setInputValue(document.querySelector('#name') as HTMLInputElement, 'Payments')
     await setInputValue(document.querySelector('#key') as HTMLInputElement, 'payments')
+    const groupInput = document.querySelector('#group') as HTMLInputElement
+    await act(async () => {
+      groupInput.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    const frontendOption = Array.from(document.querySelectorAll('.ant-select-item-option')).find(
+      (item) => item.textContent?.includes('frontend'),
+    ) as HTMLElement
+    await act(async () => {
+      frontendOption.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
     await clickButton(modal.querySelector('button[type="submit"]') as HTMLButtonElement)
 
     expect(testState.apiPost).toHaveBeenCalledWith('/applications', {
       name: 'Payments',
       key: 'payments',
+      group: 'frontend',
       enabled: true,
     })
   })
+
+  it('distinguishes filtered-empty results from request failures', async () => {
+    const container = await renderWithProviders(<ApplicationsPage />)
+
+    await setInputValue(
+      container.querySelector('input[placeholder="搜索应用"]') as HTMLInputElement,
+      'missing-app',
+    )
+    expect(container.textContent).toContain('没有匹配的应用')
+    expect(container.querySelectorAll('.soha-application-card')).toHaveLength(0)
+  })
+
+  it.each(['applications', 'release board'] as const)(
+    'shows a retryable error state when %s fails',
+    async (source) => {
+      testState.applicationsListError = source === 'applications'
+      testState.releaseBoardError = source === 'release board'
+      const container = await renderWithProviders(<ApplicationsPage />)
+
+      expect(container.textContent).toContain('应用加载失败')
+      expect(container.textContent).not.toContain('暂无应用')
+
+      testState.applicationsListError = false
+      testState.releaseBoardError = false
+      await clickButton(container.querySelector('[aria-label="重试"]') as HTMLButtonElement)
+
+      expect(container.textContent).toContain('ERP Front Main')
+    },
+  )
 
   it('builds typed build template payloads without form-only text fields', () => {
     const values = {
@@ -1320,46 +1419,68 @@ describe('ApplicationsPage workspace layout', () => {
     ).toBe(true)
   })
 
-  it('renders application environment bindings and create/edit/delete entry points for managers', async () => {
+  it('keeps the legacy application environment index read-only and enters the owning app', async () => {
     const container = await renderWithProviders(
-      <ApplicationEnvironmentsPage />,
+      <Routes>
+        <Route path="/application-environments" element={<ApplicationEnvironmentsPage />} />
+        <Route path="/applications/:applicationId" element={<LocationProbe />} />
+      </Routes>,
       '/application-environments',
     )
 
     expect(testState.apiGet).toHaveBeenCalledWith('/application-environments')
     expect(testState.apiGet).toHaveBeenCalledWith('/applications')
-    expect(testState.apiGet).toHaveBeenCalledWith('/workflow-templates')
     expect(container.textContent).toContain('ERP Front Main')
     expect(container.textContent).toContain('test')
     expect(container.textContent).toContain('Release DAG')
     expect(container.textContent).toContain('1')
-    expect(hasButtonText(container, '新建绑定')).toBe(true)
-    expect(hasButtonText(container, '导入集群服务')).toBe(true)
-    expect(container.querySelector('[aria-label="编辑绑定"]')).not.toBeNull()
-    expect(container.querySelector('[aria-label="删除绑定"]')).not.toBeNull()
-
-    await clickButton(findButton(container, '新建绑定'))
-    expect(document.body.textContent).toContain('新建应用环境绑定')
-    expect(document.body.textContent).toContain('目标元数据(JSON)')
-
-    await clickButton(findButton(container, '导入集群服务'))
-    expect(document.body.textContent).toContain('导入集群服务')
-    expect(document.body.textContent).toContain('Helm Release')
-    expect(testState.apiGet).toHaveBeenCalledWith('/clusters')
-  })
-
-  it('hides application environment binding writes for readonly users', async () => {
-    testState.permissionSnapshot.permissionKeys = [...readonlyPermissionKeys]
-    const container = await renderWithProviders(
-      <ApplicationEnvironmentsPage />,
-      '/application-environments',
-    )
-
-    expect(container.textContent).toContain('ERP Front Main')
     expect(hasButtonText(container, '新建绑定')).toBe(false)
     expect(hasButtonText(container, '导入集群服务')).toBe(false)
     expect(container.querySelector('[aria-label="编辑绑定"]')).toBeNull()
     expect(container.querySelector('[aria-label="删除绑定"]')).toBeNull()
+
+    await clickButton(container.querySelector<HTMLButtonElement>('[aria-label="进入应用环境"]')!)
+    expect(container.querySelector('[data-testid="location-probe"]')?.textContent).toBe(
+      '/applications/app-1?tab=environments',
+    )
+  })
+
+  it('shows the read-only platform environment catalog and application usage', async () => {
+    const container = await renderWithProviders(
+      <EnvironmentCatalogPage />,
+      '/delivery/environments',
+    )
+
+    expect(testState.apiGet).toHaveBeenCalledWith('/delivery/environments')
+    expect(testState.apiGet).toHaveBeenCalledWith('/application-environments')
+    expect(testState.apiGet).toHaveBeenCalledWith('/applications')
+    expect(container.textContent).toContain('测试环境')
+    expect(container.textContent).toContain('test')
+    expect(container.textContent).toContain('ERP Front Main')
+    expect(container.textContent).toContain('1 个应用')
+    expect(hasButtonText(container, '新建环境')).toBe(false)
+    expect(container.querySelector('[aria-label="编辑环境"]')).toBeNull()
+    expect(container.querySelector('[aria-label="删除环境"]')).toBeNull()
+  })
+
+  it('preserves context when adapting a legacy application environment detail URL', async () => {
+    const container = await renderWithProviders(
+      <Routes>
+        <Route
+          path="/application-environments/:applicationEnvironmentId"
+          element={<ApplicationEnvironmentDetailPage />}
+        />
+        <Route path="/applications/:applicationId" element={<LocationProbe />} />
+      </Routes>,
+      '/application-environments/binding-1?releaseId=release-1',
+    )
+
+    expect(testState.apiGet).toHaveBeenCalledWith('/application-environments/binding-1/detail')
+    const location = container.querySelector('[data-testid="location-probe"]')?.textContent ?? ''
+    expect(location).toContain('/applications/app-1?')
+    expect(location).toContain('tab=environments')
+    expect(location).toContain('applicationEnvironmentId=binding-1')
+    expect(location).toContain('releaseId=release-1')
   })
 
   it('renders workflow template DAG preview, impact summary, and JSON panel', async () => {
@@ -1451,8 +1572,15 @@ describe('ApplicationsPage workspace layout', () => {
   })
 
   it('shows Gateway approval drilldown context on workflow list', async () => {
+    testState.permissionSnapshot.permissionKeys = [
+      ...defaultPermissionKeys,
+      'delivery.workflows.trigger',
+    ]
     const container = await renderWithProviders(
-      <WorkflowsPage />,
+      <>
+        <WorkflowsPage />
+        <LocationProbe />
+      </>,
       '/workflows?workflowRunId=workflow-1&gatewayApprovalRequestId=approval-1',
     )
 
@@ -1467,6 +1595,35 @@ describe('ApplicationsPage workspace layout', () => {
     expect(container.textContent).toContain('Raw trace')
     expect(container.textContent).toContain('approve')
     expect(container.textContent).toContain('Waiting for production approver')
+    expect(container.querySelector('[aria-label="触发工作流"]')).toBeNull()
+    expect(container.querySelector('[aria-label="批准工作流"]')).not.toBeNull()
+    expect(container.querySelector('[aria-label="拒绝工作流"]')).not.toBeNull()
+    await clickButton(container.querySelector('[aria-label="查看工作流详情"]') as HTMLButtonElement)
+    expect(container.querySelector('[data-testid="location-probe"]')?.textContent).toBe(
+      '/workflows/workflow-1',
+    )
+  })
+
+  it('keeps release history read only and links to its detail', async () => {
+    testState.permissionSnapshot.permissionKeys = [
+      ...defaultPermissionKeys,
+      'delivery.releases.trigger',
+    ]
+    const container = await renderWithProviders(
+      <>
+        <ReleasesPage />
+        <LocationProbe />
+      </>,
+      '/releases',
+    )
+
+    expect(testState.apiGet).toHaveBeenCalledWith('/releases')
+    expect(container.textContent).toContain('app-1')
+    expect(container.querySelector('[aria-label="部署"]')).toBeNull()
+    await clickButton(container.querySelector('[aria-label="查看发布详情"]') as HTMLButtonElement)
+    expect(container.querySelector('[data-testid="location-probe"]')?.textContent).toBe(
+      '/releases/release-1',
+    )
   })
 
   it('renders unified release board workbench signals', async () => {
@@ -1494,7 +1651,11 @@ describe('ApplicationsPage workspace layout', () => {
     expect(container.textContent).toContain('需要审批')
     expect(container.textContent).toContain('AI Gateway 可用，调用需要审批')
     expect(container.textContent).toContain('delivery.actions.trigger / 审批')
-    expect(container.textContent).toContain('手工配置')
+    expect(container.textContent).toContain('应用中心')
+    expect(container.textContent).not.toContain('手工配置')
+    expect(container.textContent).not.toContain('手工触发入口')
+    expect(container.querySelectorAll('.soha-overview-metric-card')).toHaveLength(4)
+    expect(container.querySelector('.soha-application-signal-card')).toBeNull()
   })
 
   it('renders execution task summary for delivery triage', async () => {
@@ -1511,25 +1672,50 @@ describe('ApplicationsPage workspace layout', () => {
     expect(container.textContent).toContain('binding-1')
     expect(container.textContent).toContain('1 · erp-front')
     expect(container.textContent).toContain('task-failed')
+    expect(container.querySelector('[aria-label="查看执行日志"]')).toBeNull()
+    expect(container.querySelector('[aria-label="查看执行详情"]')).not.toBeNull()
+    expect(container.querySelectorAll('.soha-overview-metric-card')).toHaveLength(4)
+    expect(container.querySelector('.soha-application-signal-card')).toBeNull()
   })
 
-  it('highlights and opens focused execution task from runtime evidence link', async () => {
+  it('keeps legacy execution focus without opening a duplicate log modal', async () => {
     const container = await renderWithProviders(
       <ExecutionTasksPage />,
       '/delivery/execution-tasks?executionTaskId=task-running&releaseBundleId=bundle-1',
     )
 
     expect(testState.apiGet).toHaveBeenCalledWith('/delivery/execution-tasks')
-    expect(testState.apiGet).toHaveBeenCalledWith('/delivery/execution-tasks/task-running/logs')
+    expect(testState.apiGet).not.toHaveBeenCalledWith('/delivery/execution-tasks/task-running/logs')
     expect(container.textContent).toContain('已定位执行任务 task-running')
     expect(container.textContent).toContain('executionTaskId=task-running')
     expect(container.textContent).toContain('releaseBundleId=bundle-1')
     expect(container.textContent).toContain('已定位')
-    expect(document.body.textContent).toContain('任务日志 · task-running')
+    expect(document.body.textContent).not.toContain('任务日志 · task-running')
+  })
+
+  it('opens the dedicated execution task detail from the list', async () => {
+    const container = await renderWithProviders(
+      <>
+        <ExecutionTasksPage />
+        <LocationProbe />
+      </>,
+      '/delivery/execution-tasks',
+    )
+
+    await clickButton(container.querySelector('[aria-label="查看执行详情"]') as HTMLButtonElement)
+    expect(container.querySelector('[data-testid="location-probe"]')?.textContent).toBe(
+      '/delivery/execution-tasks/task-running',
+    )
   })
 
   it('renders release bundle candidate summary', async () => {
-    const container = await renderWithProviders(<ReleaseBundlesPage />, '/delivery/release-bundles')
+    const container = await renderWithProviders(
+      <>
+        <ReleaseBundlesPage />
+        <LocationProbe />
+      </>,
+      '/delivery/release-bundles',
+    )
 
     expect(testState.apiGet).toHaveBeenCalledWith('/delivery/release-bundles')
     expect(container.textContent).toContain('候选版本')
@@ -1540,6 +1726,12 @@ describe('ApplicationsPage workspace layout', () => {
     expect(container.textContent).toContain('bundle-1')
     expect(container.textContent).toContain('registry.local/erp-front:1.2.3')
     expect(container.textContent).toContain('2.0.0-rc1')
+    expect(container.querySelectorAll('.soha-overview-metric-card')).toHaveLength(4)
+    expect(container.querySelector('.soha-application-signal-card')).toBeNull()
+    await clickButton(container.querySelector('[aria-label="查看版本包详情"]') as HTMLButtonElement)
+    expect(container.querySelector('[data-testid="location-probe"]')?.textContent).toBe(
+      '/delivery/release-bundles/bundle-1',
+    )
   })
 
   it('highlights focused release bundle from runtime evidence link', async () => {
@@ -1572,54 +1764,50 @@ describe('ApplicationsPage workspace layout', () => {
     )
   })
 
-  it('renders application onboarding as a dual-mode workbench entry', async () => {
-    const container = await renderWithProviders(<DeliveryOnboardingPage />, '/delivery/onboarding')
+  it('opens manual onboarding from the application center query', async () => {
+    await renderWithProviders(<ApplicationsPage />, '/applications?action=create&mode=manual')
 
-    expect(testState.apiGet).toHaveBeenCalledWith('/applications')
-    expect(testState.apiGet).toHaveBeenCalledWith('/delivery/blueprints')
-    expect(testState.apiGet).toHaveBeenCalledWith('/delivery/release-board')
-    expect(container.textContent).toContain('应用 / 服务接入')
-    expect(container.textContent).toContain('常规模式保持完整可用')
-    expect(container.textContent).toContain('接入对象边界')
-    expect(container.textContent).toContain('AI Gateway 接入辅助')
-    expect(testState.apiGet).toHaveBeenCalledWith(
-      '/ai-gateway/capabilities?source=delivery-workbench&skillId=delivery-developer',
+    const applicationAdvanced = document.querySelector(
+      '.soha-delivery-onboarding-advanced--application .ant-collapse-header',
     )
-    expect(container.textContent).toContain('AI Gateway 可直接辅助')
-    expect(container.textContent).toContain('可见能力')
-    expect(container.textContent).toContain('服务组件')
-    expect(container.textContent).toContain('DeliveryDraft')
-    expect(container.textContent).toContain('接入新服务')
-    expect(container.textContent).toContain('待接入服务线索')
-    expect(container.textContent).toContain('ERP Front Main')
+    const serviceAdvanced = document.querySelector(
+      '.soha-delivery-onboarding-service .soha-delivery-onboarding-advanced .ant-collapse-header',
+    )
+    expect(applicationAdvanced?.textContent).toContain('高级应用与发布配置（可选）')
+    expect(applicationAdvanced?.getAttribute('aria-expanded')).toBe('false')
+    expect(serviceAdvanced?.textContent).toContain('高级构建与工作负载配置（可选）')
+    expect(serviceAdvanced?.getAttribute('aria-expanded')).toBe('false')
+    expect(document.body.textContent).toContain('服务组件')
+    expect(document.body.textContent).toContain('生成草稿')
+    expect(document.body.textContent).not.toContain('待接入服务线索')
   })
 
-  it('creates and confirms a manual DeliveryDraft from onboarding', async () => {
-    const container = await renderWithProviders(<DeliveryOnboardingPage />, '/delivery/onboarding')
+  it('creates and confirms a manual DeliveryDraft from the application center', async () => {
+    await renderWithProviders(<ApplicationsPage />, '/applications?action=create&mode=manual')
 
-    await setInputValue(container.querySelector('#appName') as HTMLInputElement, 'Draft Demo')
-    await setInputValue(container.querySelector('#appKey') as HTMLInputElement, 'draft-demo')
+    await setInputValue(document.querySelector('#appName') as HTMLInputElement, 'Draft Demo')
+    await setInputValue(document.querySelector('#appKey') as HTMLInputElement, 'draft-demo')
     await setInputValue(
-      container.querySelector('#repositoryUrl') as HTMLInputElement,
+      document.querySelector('#repositoryUrl') as HTMLInputElement,
       'https://github.com/octocat/Hello-World.git',
     )
-    await setInputValue(container.querySelector('#clusterId') as HTMLInputElement, 'cluster-test')
-    await setInputValue(container.querySelector('#namespace') as HTMLInputElement, 'delivery-smoke')
-    await setInputValue(container.querySelector('#services_0_name') as HTMLInputElement, 'API')
-    await setInputValue(container.querySelector('#services_0_key') as HTMLInputElement, 'api')
+    await setInputValue(document.querySelector('#clusterId') as HTMLInputElement, 'cluster-test')
+    await setInputValue(document.querySelector('#namespace') as HTMLInputElement, 'delivery-smoke')
+    await setInputValue(document.querySelector('#services_0_name') as HTMLInputElement, 'API')
+    await setInputValue(document.querySelector('#services_0_key') as HTMLInputElement, 'api')
     await setInputValue(
-      container.querySelector('#services_0_workloadName') as HTMLInputElement,
+      document.querySelector('#services_0_workloadName') as HTMLInputElement,
       'draft-demo-api',
     )
-    await clickButton(findButton(container, '添加服务'))
-    await setInputValue(container.querySelector('#services_1_name') as HTMLInputElement, 'Worker')
-    await setInputValue(container.querySelector('#services_1_key') as HTMLInputElement, 'worker')
+    await clickButton(findButton(document, '添加服务'))
+    await setInputValue(document.querySelector('#services_1_name') as HTMLInputElement, 'Worker')
+    await setInputValue(document.querySelector('#services_1_key') as HTMLInputElement, 'worker')
     await setInputValue(
-      container.querySelector('#services_1_workloadName') as HTMLInputElement,
+      document.querySelector('#services_1_workloadName') as HTMLInputElement,
       'draft-demo-worker',
     )
-    await setInputValue(container.querySelector('#environmentKey') as HTMLInputElement, 'dev')
-    await clickButton(findButton(container, '生成草稿'))
+    await setInputValue(document.querySelector('#environmentKey') as HTMLInputElement, 'dev')
+    await clickButton(findButton(document, '生成草稿'))
 
     expect(testState.apiPost).toHaveBeenCalledWith(
       '/delivery/drafts',
@@ -1656,7 +1844,7 @@ describe('ApplicationsPage workspace layout', () => {
         ]),
       }),
     )
-    expect(document.body.textContent).toContain('DeliveryDraft 预览确认')
+    expect(document.body.textContent).toContain('创建 / 接入应用')
     expect(document.body.textContent).toContain('确认前不会创建或修改平台对象')
 
     await clickButton(findButton(document, '确认创建交付对象'))
@@ -1666,14 +1854,14 @@ describe('ApplicationsPage workspace layout', () => {
   })
 
   it('initializes all services from the selected blueprint', async () => {
-    const container = await renderWithProviders(
-      <DeliveryOnboardingPage />,
-      '/delivery/onboarding?templateId=blueprint-1',
+    await renderWithProviders(
+      <ApplicationsPage />,
+      '/applications?action=create&mode=manual&templateId=blueprint-1',
     )
 
-    expect((container.querySelector('#services_0_key') as HTMLInputElement).value).toBe('web')
-    expect((container.querySelector('#services_1_key') as HTMLInputElement).value).toBe('worker')
-    await clickButton(findButton(container, '生成草稿'))
+    expect((document.querySelector('#services_0_key') as HTMLInputElement).value).toBe('web')
+    expect((document.querySelector('#services_1_key') as HTMLInputElement).value).toBe('worker')
+    await clickButton(findButton(document, '生成草稿'))
 
     expect(testState.apiPost).toHaveBeenCalledWith(
       '/delivery/drafts',
@@ -1704,6 +1892,9 @@ describe('ApplicationsPage workspace layout', () => {
     expect(container.textContent).toContain('常规模式保持完整可用')
     expect(container.textContent).toContain('1.2.3')
     expect(container.textContent).toContain('可晋级')
+    expect(container.querySelectorAll('.soha-delivery-workbench-action-card')).toHaveLength(0)
+    expect(container.querySelectorAll('.soha-overview-metric-card')).toHaveLength(5)
+    expect(container.querySelector('.soha-application-signal-card')).toBeNull()
   })
 
   it('renders issue analysis with failed task evidence and normal workflow links', async () => {
@@ -1723,19 +1914,61 @@ describe('ApplicationsPage workspace layout', () => {
     expect(container.textContent).toContain('task-failed')
     expect(container.textContent).toContain('需处理')
     expect(container.textContent).toContain('查看影响面')
+    expect(container.querySelectorAll('.soha-delivery-workbench-action-card')).toHaveLength(0)
+    expect(container.querySelectorAll('.soha-overview-metric-card')).toHaveLength(4)
+    expect(container.querySelector('.soha-application-signal-card')).toBeNull()
   })
 
-  it('downgrades delivery AI entrypoints when Gateway capabilities are restricted', async () => {
-    testState.gatewayManifestMode = 'restricted'
-    const container = await renderWithProviders(<DeliveryOnboardingPage />, '/delivery/onboarding')
-
-    expect(testState.apiGet).toHaveBeenCalledWith(
-      '/ai-gateway/capabilities?source=delivery-workbench&skillId=delivery-developer',
+  it('launches AI onboarding from the unified entry modal', async () => {
+    const launchAssistant = vi.fn(async () => {})
+    const registry: AIPageContextRegistryValue = {
+      currentContext: {
+        sourceWorkbench: 'delivery',
+        sourceRoute: '/applications',
+        sourceTitle: '应用 / 服务接入',
+      },
+      launchAssistant,
+      openAssistant: vi.fn(),
+      openWorkbench: vi.fn(),
+      registerPageContext: vi.fn(() => () => {}),
+    }
+    await renderWithProviders(
+      <AIPageContextRegistry.Provider value={registry}>
+        <ApplicationsPage />
+      </AIPageContextRegistry.Provider>,
+      '/applications?action=create&mode=ai',
     )
-    expect(container.textContent).toContain('AI Gateway 能力受限')
-    expect(container.textContent).toContain('缺失能力')
-    expect(container.textContent).toContain('delivery.onboarding.analyze_repo')
-    expect(container.textContent).toContain('手工接入')
-    expect(container.textContent).toContain('生成草稿')
+
+    expect(document.body.textContent).toContain('AI 接入服务')
+    expect(document.body.textContent).toContain('不会直接写入控制面')
+
+    await clickButton(findButton(document, '开始 AI 接入'))
+
+    expect(launchAssistant).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'analyze-page',
+        contextOverride: expect.objectContaining({
+          sourceWorkbench: 'delivery',
+          entityKind: 'delivery.application',
+          promptHint: expect.stringContaining('生成 DeliveryDraft 草稿'),
+        }),
+      }),
+    )
+  })
+
+  it('preserves onboarding query parameters when redirecting the legacy entry', async () => {
+    const container = await renderWithProviders(
+      <Routes>
+        <Route path="/delivery/onboarding" element={<DeliveryOnboardingPage />} />
+        <Route path="/applications" element={<LocationProbe />} />
+      </Routes>,
+      '/delivery/onboarding?templateId=blueprint-1',
+    )
+
+    const location = container.querySelector('[data-testid="location-probe"]')?.textContent ?? ''
+    expect(location).toContain('/applications?')
+    expect(location).toContain('action=create')
+    expect(location).toContain('mode=manual')
+    expect(location).toContain('templateId=blueprint-1')
   })
 })

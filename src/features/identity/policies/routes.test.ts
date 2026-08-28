@@ -1,22 +1,18 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { identityPolicyRoutes } from './routes'
 
-const routePage = vi.hoisted(() => () => null)
-vi.mock('./list-page', () => ({ IdentityPoliciesPage: routePage }))
-
 describe('identity policy route', () => {
-  it('is available from navigation and preserves direct access', async () => {
+  it('preserves the old URL as a hidden application redirect', () => {
     const [route] = identityPolicyRoutes
     expect(route.meta).toEqual(
       expect.objectContaining({
         id: 'identity-policies',
         path: '/identity/policies',
-        navVisible: true,
-        menuId: 'identity-policies',
+        navVisible: false,
         tabbar: false,
-        permissionKey: 'identity.policies.view',
+        permissionKey: 'identity.applications.view',
       }),
     )
-    await expect(route.load()).resolves.toEqual({ default: routePage })
+    expect(route).toEqual(expect.objectContaining({ redirectTo: '/identity/applications' }))
   })
 })

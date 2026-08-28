@@ -51,14 +51,14 @@
     ]
   },
   "summary": {
-    "runtimePaths": 250,
-    "metadataPaths": 250,
-    "overlappingPaths": 250,
+    "runtimePaths": 249,
+    "metadataPaths": 249,
+    "overlappingPaths": 249,
     "runtimeOnlyPaths": 0,
     "metadataOnlyPaths": 0,
     "inlineJsxPaths": 0,
-    "lazyRouteLoads": 214,
-    "lazySourceModules": 211
+    "lazyRouteLoads": 212,
+    "lazySourceModules": 209
   },
   "paths": {
     "runtime": [
@@ -68,7 +68,6 @@
       "/access/directory-sync",
       "/access/policies",
       "/access/roles",
-      "/access/scope-grants",
       "/access/teams",
       "/access/users",
       "/account/profile",
@@ -157,6 +156,7 @@
       "/configuration/validatingwebhookconfigurations/:name",
       "/delivery/analysis",
       "/delivery/blueprints",
+      "/delivery/environments",
       "/delivery/execution-tasks",
       "/delivery/execution-tasks/:executionTaskId",
       "/delivery/manifests",
@@ -180,7 +180,6 @@
       "/internal-workbench",
       "/internal-workbench/overview",
       "/internal-workbench/software",
-      "/internal-workbench/software-storage",
       "/login",
       "/login/callback",
       "/manifests",
@@ -320,7 +319,6 @@
       "/access/directory-sync",
       "/access/policies",
       "/access/roles",
-      "/access/scope-grants",
       "/access/teams",
       "/access/users",
       "/account/profile",
@@ -409,6 +407,7 @@
       "/configuration/validatingwebhookconfigurations/:name",
       "/delivery/analysis",
       "/delivery/blueprints",
+      "/delivery/environments",
       "/delivery/execution-tasks",
       "/delivery/execution-tasks/:executionTaskId",
       "/delivery/manifests",
@@ -432,7 +431,6 @@
       "/internal-workbench",
       "/internal-workbench/overview",
       "/internal-workbench/software",
-      "/internal-workbench/software-storage",
       "/login",
       "/login/callback",
       "/manifests",
@@ -572,7 +570,6 @@
       "/access/directory-sync",
       "/access/policies",
       "/access/roles",
-      "/access/scope-grants",
       "/access/teams",
       "/access/users",
       "/account/profile",
@@ -661,6 +658,7 @@
       "/configuration/validatingwebhookconfigurations/:name",
       "/delivery/analysis",
       "/delivery/blueprints",
+      "/delivery/environments",
       "/delivery/execution-tasks",
       "/delivery/execution-tasks/:executionTaskId",
       "/delivery/manifests",
@@ -684,7 +682,6 @@
       "/internal-workbench",
       "/internal-workbench/overview",
       "/internal-workbench/software",
-      "/internal-workbench/software-storage",
       "/login",
       "/login/callback",
       "/manifests",
@@ -837,11 +834,6 @@
         "exportName": "AccessRolesPage",
         "moduleExport": "AccessRolesPage",
         "source": "@/features/access/roles/page"
-      },
-      {
-        "exportName": "AccessScopeGrantsPage",
-        "moduleExport": "AccessScopeGrantsPage",
-        "source": "@/features/access/scope-grants/page"
       },
       {
         "exportName": "AccessTeamsPage",
@@ -1226,7 +1218,7 @@
       {
         "exportName": "DockerHostDetailPage",
         "moduleExport": "DockerHostDetailPage",
-        "source": "@/features/docker/hosts/detail-page"
+        "source": "@/features/docker"
       },
       {
         "exportName": "DockerHostsPage",
@@ -1252,6 +1244,11 @@
         "exportName": "EndpointSliceDetailPage",
         "moduleExport": "EndpointSliceDetailPage",
         "source": "@/features/platform/network/resources/endpointslice-detail-page"
+      },
+      {
+        "exportName": "EnvironmentCatalogPage",
+        "moduleExport": "EnvironmentCatalogPage",
+        "source": "@/features/delivery/environments/catalog-page"
       },
       {
         "exportName": "EnvironmentsPage",
@@ -1337,11 +1334,6 @@
         "exportName": "IdentityOverviewPage",
         "moduleExport": "IdentityOverviewPage",
         "source": "@/features/identity/overview/page"
-      },
-      {
-        "exportName": "IdentityPoliciesPage",
-        "moduleExport": "IdentityPoliciesPage",
-        "source": "@/features/identity/policies/list-page"
       },
       {
         "exportName": "IdentityProvidersPage",
@@ -1739,11 +1731,6 @@
         "source": "@/features/identity/software/page"
       },
       {
-        "exportName": "SoftwareStoragePage",
-        "moduleExport": "SoftwareStoragePage",
-        "source": "@/features/identity/software/storage-page"
-      },
-      {
         "exportName": "SohaProviderPortalPage",
         "moduleExport": "SohaProviderPortalPage",
         "source": "@/features/provider-portal/catalog/page"
@@ -1898,7 +1885,6 @@
       "@/features/access/directory-sync/page",
       "@/features/access/policies/page",
       "@/features/access/roles/page",
-      "@/features/access/scope-grants/page",
       "@/features/access/teams/page",
       "@/features/access/users/page",
       "@/features/auth/about-page",
@@ -1943,6 +1929,7 @@
       "@/features/delivery/blueprints/page",
       "@/features/delivery/build-templates/page",
       "@/features/delivery/builds/detail-page",
+      "@/features/delivery/environments/catalog-page",
       "@/features/delivery/environments/detail-page",
       "@/features/delivery/environments/list-page",
       "@/features/delivery/execution-tasks/detail-page",
@@ -1962,7 +1949,7 @@
       "@/features/delivery/workflow-templates/page",
       "@/features/delivery/workflows/detail-page",
       "@/features/delivery/workflows/list-page",
-      "@/features/docker/hosts/detail-page",
+      "@/features/docker",
       "@/features/docker/hosts/page",
       "@/features/docker/projects/detail-page",
       "@/features/docker/projects/list-page",
@@ -1970,10 +1957,8 @@
       "@/features/identity/applications/list-page",
       "@/features/identity/outposts/list-page",
       "@/features/identity/overview/page",
-      "@/features/identity/policies/list-page",
       "@/features/identity/providers/list-page",
       "@/features/identity/software/page",
-      "@/features/identity/software/storage-page",
       "@/features/observability/alerts/detail-page",
       "@/features/observability/alerts/page",
       "@/features/observability/dashboards/detail-page",
@@ -2111,7 +2096,6 @@
       "@/features/access/directory-sync/page": ["DirectorySyncPage"],
       "@/features/access/policies/page": ["AccessPoliciesPage"],
       "@/features/access/roles/page": ["AccessRolesPage"],
-      "@/features/access/scope-grants/page": ["AccessScopeGrantsPage"],
       "@/features/access/teams/page": ["AccessTeamsPage"],
       "@/features/access/users/page": ["AccessUsersPage"],
       "@/features/auth/about-page": ["AboutPage"],
@@ -2156,6 +2140,7 @@
       "@/features/delivery/blueprints/page": ["DeliveryBlueprintsPage"],
       "@/features/delivery/build-templates/page": ["BuildTemplatesPage"],
       "@/features/delivery/builds/detail-page": ["BuildDetailPage"],
+      "@/features/delivery/environments/catalog-page": ["EnvironmentCatalogPage"],
       "@/features/delivery/environments/detail-page": ["ApplicationEnvironmentDetailPage"],
       "@/features/delivery/environments/list-page": ["ApplicationEnvironmentsPage"],
       "@/features/delivery/execution-tasks/detail-page": ["ExecutionTaskDetailPage"],
@@ -2175,7 +2160,7 @@
       "@/features/delivery/workflow-templates/page": ["WorkflowTemplatesPage"],
       "@/features/delivery/workflows/detail-page": ["WorkflowDetailPage"],
       "@/features/delivery/workflows/list-page": ["WorkflowsPage"],
-      "@/features/docker/hosts/detail-page": ["DockerHostDetailPage"],
+      "@/features/docker": ["DockerHostDetailPage"],
       "@/features/docker/hosts/page": ["DockerHostsPage"],
       "@/features/docker/projects/detail-page": ["DockerProjectDetailPage"],
       "@/features/docker/projects/list-page": ["DockerProjectsPage"],
@@ -2183,10 +2168,8 @@
       "@/features/identity/applications/list-page": ["IdentityApplicationsPage"],
       "@/features/identity/outposts/list-page": ["IdentityOutpostsPage"],
       "@/features/identity/overview/page": ["IdentityOverviewPage"],
-      "@/features/identity/policies/list-page": ["IdentityPoliciesPage"],
       "@/features/identity/providers/list-page": ["IdentityProvidersPage"],
       "@/features/identity/software/page": ["SoftwareLibraryPage"],
-      "@/features/identity/software/storage-page": ["SoftwareStoragePage"],
       "@/features/observability/alerts/detail-page": [
         "AlertEventDetailPage",
         "AlertEventDetailPage"
@@ -2393,5 +2376,5 @@
       "@/features/virtualization/virtual-machines/list-page": ["VirtualizationVmsPage"]
     }
   },
-  "generatedAt": "2026-08-23T14:57:13.054Z"
+  "generatedAt": "2026-08-27T15:33:10.674Z"
 }

@@ -28,6 +28,9 @@ interface ProviderFormModalProps {
   samlAvailable: boolean
   samlUnavailableReason?: string
   submitting: boolean
+  initialApplicationId?: string
+  lockedType?: IdentityRuntimeProviderType
+  title?: string
 }
 
 function SAMLConfigFields() {
@@ -200,6 +203,9 @@ export function ProviderFormModal({
   samlAvailable,
   samlUnavailableReason,
   submitting,
+  initialApplicationId,
+  lockedType,
+  title,
 }: ProviderFormModalProps) {
   const { message } = App.useApp()
   const { localeCode } = useI18n()
@@ -207,8 +213,17 @@ export function ProviderFormModal({
   const [form] = Form.useForm<ProviderFormValues>()
 
   useEffect(() => {
-    if (open) form.setFieldsValue(editing ? providerValuesFor(editing) : defaultProviderValues())
-  }, [editing, form, open])
+    if (!open) return
+    const values = editing
+      ? providerValuesFor(editing)
+      : {
+          ...defaultProviderValues(),
+          applicationId: initialApplicationId ?? '',
+          type: lockedType ?? 'oidc',
+        }
+    form.setFieldsValue(values)
+    onProviderTypeChange(values.type)
+  }, [editing, form, initialApplicationId, lockedType, onProviderTypeChange, open])
 
   const submit = (values: ProviderFormValues) => {
     try {
@@ -225,7 +240,8 @@ export function ProviderFormModal({
       onCancel={onCancel}
       open={open}
       title={
-        editing ? (zh ? '编辑 Provider' : 'Edit Provider') : zh ? '新建 Provider' : 'New Provider'
+        title ??
+        (editing ? (zh ? '编辑 Provider' : 'Edit Provider') : zh ? '新建 Provider' : 'New Provider')
       }
       width={860}
     >
@@ -245,7 +261,7 @@ export function ProviderFormModal({
             name="name"
             rules={[{ required: true, message: '请输入 Provider 名称' }]}
           >
-            <Input placeholder="Grafana OIDC" />
+            <Input placeholder="Example OIDC Provider" />
           </Form.Item>
           <Form.Item
             label={zh ? '应用' : 'Application'}
@@ -253,6 +269,7 @@ export function ProviderFormModal({
             rules={[{ required: true, message: '请选择应用' }]}
           >
             <Select
+              disabled={!editing && Boolean(initialApplicationId)}
               loading={applicationsLoading}
               options={applicationOptions}
               placeholder="选择下游应用"
@@ -261,6 +278,7 @@ export function ProviderFormModal({
           </Form.Item>
           <Form.Item label={zh ? '类型' : 'Type'} name="type">
             <Select
+              disabled={!editing && Boolean(lockedType)}
               options={providerTypeOptions.map((option) => ({
                 ...option,
                 disabled: option.value === 'saml' && !samlAvailable && editing?.type !== 'saml',

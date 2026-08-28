@@ -5,10 +5,11 @@ import { act } from 'react'
 import { App as AntApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot } from 'react-dom/client'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApplicationDetailPage } from './applications/detail-page'
 import { api } from '@/services/api-client'
+import { ApiError } from '@/services/api-error'
 
 const workflowDefinition = {
   schemaVersion: 2,
@@ -60,6 +61,7 @@ const testState = vi.hoisted(() => ({
   detailWithoutImageTagDefaults: false,
   deliveryActionsAgentStatus: 'available' as 'available' | 'partial' | 'unsupported',
   deliveryClusterConnectionMode: 'direct_kubeconfig',
+  runtimeStatus: 'ok' as 'ok' | 'not-found' | 'error',
   lastDeliveryPlan: undefined as undefined | Record<string, unknown>,
   apiGet: vi.fn(async (path: string) => {
     if (path === '/applications') {
@@ -170,7 +172,64 @@ const testState = vi.hoisted(() => ({
         ],
       }
     }
+    if (path === '/delivery/manifest-packages?applicationId=app-1&page=1&pageSize=20') {
+      return {
+        data: {
+          items: [
+            {
+              id: 'manifest-1',
+              name: 'Checkout ingress',
+              applicationId: 'app-1',
+              serviceId: 'svc-api',
+              renderer: 'raw_yaml',
+              status: 'draft',
+              currentRevision: 0,
+              files: [],
+              bindings: [],
+              createdAt: '2026-05-01T00:00:00Z',
+              updatedAt: '2026-05-10T00:00:00Z',
+            },
+          ],
+          total: 1,
+          page: 1,
+          pageSize: 20,
+        },
+      }
+    }
+    if (
+      path ===
+      '/delivery/manifest-packages?applicationId=app-1&serviceId=svc-api&page=1&pageSize=20'
+    ) {
+      return {
+        data: {
+          items: [
+            {
+              id: 'manifest-1',
+              name: 'Checkout ingress',
+              applicationId: 'app-1',
+              serviceId: 'svc-api',
+              renderer: 'raw_yaml',
+              status: 'draft',
+              currentRevision: 0,
+              files: [],
+              bindings: [],
+              createdAt: '2026-05-01T00:00:00Z',
+              updatedAt: '2026-05-10T00:00:00Z',
+            },
+          ],
+          total: 1,
+          page: 1,
+          pageSize: 20,
+        },
+      }
+    }
     if (path === '/applications/app-1/runtime') {
+      if (testState.runtimeStatus === 'not-found') {
+        throw new ApiError(404, 'application not found')
+      }
+      if (testState.runtimeStatus === 'error') {
+        throw new ApiError(500, 'runtime unavailable')
+      }
       const defaultTag = testState.detailWithoutImageTagDefaults ? undefined : 'latest'
       return {
         data: {
@@ -734,6 +793,11 @@ vi.mock('@/services/api-client', () => ({
 let containers: HTMLDivElement[] = []
 let roots: Array<ReturnType<typeof createRoot>> = []
 
+function LocationProbe() {
+  const location = useLocation()
+  return <output data-testid="location">{`${location.pathname}${location.search}`}</output>
+}
+
 async function renderWithProviders(node: ReactNode, route = '/applications/app-1') {
   const container = document.createElement('div')
   document.body.appendChild(container)
@@ -754,7 +818,15 @@ async function renderWithProviders(node: ReactNode, route = '/applications/app-1
         <QueryClientProvider client={queryClient}>
           <MemoryRouter initialEntries={[route]}>
             <Routes>
-              <Route path="/applications/:applicationId" element={node} />
+              <Route
+                path="/applications/:applicationId"
+                element={
+                  <>
+                    {node}
+                    <LocationProbe />
+                  </>
+                }
+              />
             </Routes>
           </MemoryRouter>
         </QueryClientProvider>
@@ -802,6 +874,7 @@ describe('ApplicationDetailPage workbench', () => {
     testState.detailWithoutImageTagDefaults = false
     testState.deliveryActionsAgentStatus = 'available'
     testState.deliveryClusterConnectionMode = 'direct_kubeconfig'
+    testState.runtimeStatus = 'ok'
     vi.mocked(api.post).mockClear()
     class ResizeObserverMock {
       observe() {}
@@ -847,7 +920,7 @@ describe('ApplicationDetailPage workbench', () => {
     vi.clearAllMocks()
   })
 
-  it('renders service-environment, delivery and settings workspaces', async () => {
+  it('renders overview, service, environment and delivery workspaces', async () => {
     const container = await renderWithProviders(<ApplicationDetailPage />)
 
     expect(testState.apiGet).toHaveBeenCalledWith('/applications/app-1/runtime')
@@ -869,20 +942,18 @@ describe('ApplicationDetailPage workbench', () => {
     expect(container.textContent).not.toContain('返回应用中心')
     const page = container.querySelector('.soha-page')
     const tabs = container.querySelector('.soha-page > .ant-tabs')
-    const serviceEnvironmentPane = container.querySelector('.ant-tabs-tabpane-active')
+    const overviewPane = container.querySelector('.ant-tabs-tabpane-active')
     expect(page?.firstElementChild).toBe(tabs)
     expect(tabs?.classList.contains('soha-resource-tabs')).toBe(true)
     expect(
       Array.from(
         container.querySelectorAll('.soha-page > .ant-tabs > .ant-tabs-nav .ant-tabs-tab'),
       ).map((tab) => tab.textContent),
-    ).toEqual(['服务与环境', '交付', '设置'])
+    ).toEqual(['概览', '服务', '环境', '交付'])
+    expect(overviewPane?.querySelector('.soha-application-runtime-service-summary')).toBeNull()
+    expect(overviewPane?.querySelector('.soha-application-delivery-actions')).toBeNull()
     expect(
-      serviceEnvironmentPane?.querySelector('.soha-application-runtime-service-summary'),
-    ).toBeNull()
-    expect(serviceEnvironmentPane?.querySelector('.soha-application-delivery-actions')).toBeNull()
-    expect(
-      serviceEnvironmentPane?.querySelector('.soha-application-service-environment-matrix'),
+      overviewPane?.querySelector('.soha-application-service-environment-matrix'),
     ).not.toBeNull()
     expect(container.textContent).toContain('Checkout API')
     expect(container.textContent).toContain('Kubernetes Workload')
@@ -891,7 +962,64 @@ describe('ApplicationDetailPage workbench', () => {
     expect(container.textContent).toContain('1.2.3')
     expect(container.textContent).not.toContain('交付操作')
 
-    clickTab(container, '设置')
+    clickTab(container, '服务')
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(container.textContent).toContain('服务组件')
+    expect(container.textContent).toContain('新建服务')
+    expect(container.querySelector('.soha-application-service-grid')).not.toBeNull()
+
+    act(() => {
+      container
+        .querySelector<HTMLButtonElement>('[aria-label="查看服务详情"]')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    const serviceDrawer = document.body.querySelector<HTMLElement>('.ant-drawer')!
+    expect(serviceDrawer.textContent).toContain('Checkout API')
+    expect(serviceDrawer.textContent).toContain('基本信息')
+    expect(serviceDrawer.textContent).toContain('构建')
+    expect(serviceDrawer.textContent).toContain('部署')
+    expect(serviceDrawer.textContent).toContain('扩展资源')
+    expect(container.querySelector('[data-testid="location"]')?.textContent).toContain(
+      'serviceId=svc-api',
+    )
+
+    clickTab(serviceDrawer, '扩展资源')
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(testState.apiGet).toHaveBeenCalledWith(
+      '/delivery/manifest-packages?applicationId=app-1&serviceId=svc-api&page=1&pageSize=20',
+    )
+
+    clickTab(container, '扩展资源')
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(testState.apiGet).toHaveBeenCalledWith(
+      '/delivery/manifest-packages?applicationId=app-1&page=1&pageSize=20',
+    )
+    expect(container.textContent).toContain('Checkout ingress')
+    expect(container.textContent).toContain('Checkout API')
+    expect(container.textContent).toContain('新建清单包')
+    expect(container.querySelector('[data-testid="location"]')?.textContent).toBe(
+      '/applications/app-1?tab=services&section=resources',
+    )
+
+    clickTab(container, '环境')
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(container.textContent).toContain('环境绑定')
+    expect(container.textContent).toContain('新建绑定')
+    expect(container.textContent).toContain('模板健康')
+    expect(container.querySelector('.soha-application-runtime-environment-stack')).not.toBeNull()
+
+    clickTab(container, '概览')
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
@@ -899,23 +1027,20 @@ describe('ApplicationDetailPage workbench', () => {
     expect(container.querySelector('.ant-tabs-tabpane-active .soha-resource-tabs')).not.toBeNull()
     expect(container.textContent).toContain('权限')
     expect(container.textContent).toContain('交付能力')
+    clickTab(container, '应用配置')
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
     expect(container.textContent).toContain('应用配置')
     expect(container.textContent).toContain('编辑应用')
     expect(container.textContent).toContain('构建来源')
-    expect(container.textContent).toContain('环境绑定')
-    expect(container.textContent).toContain('新建绑定')
-    expect(container.textContent).toContain('模板健康')
-    expect(container.textContent).toContain('有验证节点')
-    expect(container.textContent).toContain('无回滚节点')
-    expect(container.textContent).toContain('DAG 正常')
-    expect(container.textContent).toContain('app=checkout-api')
     expect(container.querySelector('.soha-application-runtime-settings-grid')).not.toBeNull()
 
     clickTab(container, '权限')
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
-    expect(container.textContent).toContain('Application + Environment Key')
+    expect(container.textContent).toContain('应用与环境权限键')
     expect(container.textContent).toContain('权限快照')
     expect(container.textContent).toContain('构建: 允许')
     expect(container.textContent).toContain('环境授权上下文')
@@ -927,7 +1052,7 @@ describe('ApplicationDetailPage workbench', () => {
     expect(container.textContent).toContain('发布变更')
     expect(container.textContent).toContain('工作流')
     expect(container.textContent).toContain('验证')
-    expect(container.textContent).toContain('Release Bundle')
+    expect(container.textContent).toContain('版本包')
     expect(container.textContent).toContain('Task 交付物')
     expect(container.textContent).toContain('build-1')
     expect(container.textContent).toContain('release-1')
@@ -957,7 +1082,7 @@ describe('ApplicationDetailPage workbench', () => {
     expect(container.textContent).toContain('DAG 节点数')
     expect(container.querySelector('.soha-application-runtime-verification-grid')).not.toBeNull()
 
-    clickTab(container, '设置')
+    clickTab(container, '概览')
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
@@ -971,12 +1096,22 @@ describe('ApplicationDetailPage workbench', () => {
     expect(container.textContent).toContain('external-test-platform')
     expect(container.textContent).toContain('外部 AI 测试平台尚未接入')
 
-    clickTab(container, '服务与环境')
+    clickTab(container, '概览')
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
     expect(container.textContent).toContain('Checkout API')
     expect(container.querySelector('.soha-application-service-environment-matrix')).not.toBeNull()
+  })
+
+  it('maps the legacy settings query to the overview workspace', async () => {
+    const container = await renderWithProviders(
+      <ApplicationDetailPage />,
+      '/applications/app-1?tab=settings&section=permissions',
+    )
+
+    expect(container.querySelector('.ant-tabs-tab-active')?.textContent).toBe('概览')
+    expect(container.textContent).toContain('应用与环境权限键')
   })
 
   it('opens delivery tab and highlights focused build evidence from query params', async () => {
@@ -988,7 +1123,7 @@ describe('ApplicationDetailPage workbench', () => {
     expect(testState.apiGet).toHaveBeenCalledWith('/builds?applicationId=app-1')
     expect(container.textContent).toContain('已定位交付证据 build-1')
     expect(container.textContent).toContain('buildId=build-1')
-    expect(container.textContent).toContain('Build / Release / Workflow')
+    expect(container.textContent).toContain('构建 / 发布 / 工作流')
     expect(container.textContent).toContain('已定位')
   })
 
@@ -1020,7 +1155,7 @@ describe('ApplicationDetailPage workbench', () => {
       '/applications/app-1/delivery-actions',
       expect.anything(),
     )
-    expect(document.body.textContent).toContain('DeliveryPlan 确认')
+    expect(document.body.textContent).toContain('交付计划确认')
     expect(document.body.textContent).toContain('确认前不会触发执行')
 
     await act(async () => {
@@ -1034,6 +1169,52 @@ describe('ApplicationDetailPage workbench', () => {
     expect(api.post).toHaveBeenCalledWith('/delivery/plans/plan-1/confirm', {})
     expect(document.body.textContent).toContain('计划已确认并触发执行')
   })
+
+  it('persists top-level and nested tabs in the URL', async () => {
+    const container = await renderWithProviders(
+      <ApplicationDetailPage />,
+      '/applications/app-1?tab=settings&section=capabilities',
+    )
+    const location = container.querySelector('[data-testid="location"]') as HTMLOutputElement
+
+    expect(container.textContent).toContain('能力就绪')
+    expect(location.textContent).toContain('tab=settings&section=capabilities')
+
+    clickTab(container, '权限')
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(location.textContent).toContain('tab=settings&section=permissions')
+
+    clickTab(container, '交付')
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(location.textContent).toContain('tab=delivery&section=release')
+
+    clickTab(container, '工作流')
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(location.textContent).toContain('tab=delivery&section=pipeline')
+  })
+
+  it.each([
+    ['not-found', '应用不存在', '应用不存在或已被删除'],
+    ['error', '应用加载失败', '暂时无法读取应用运行态，请重试。'],
+  ] as const)(
+    'renders %s runtime failures explicitly',
+    async (runtimeStatus, title, description) => {
+      testState.runtimeStatus = runtimeStatus
+      const container = await renderWithProviders(<ApplicationDetailPage />)
+
+      expect(container.textContent).toContain(title)
+      expect(container.textContent).toContain(description)
+      if (runtimeStatus === 'error') {
+        expect(container.querySelector('[aria-label="重试"]')).not.toBeNull()
+      }
+    },
+  )
 
   it('creates a DeliveryPlan when deploy is clicked', async () => {
     const container = await renderWithProviders(

@@ -6,6 +6,7 @@ import type {
   DeleteIdentityOIDCClientVariables,
   IdentityOIDCClient,
   IdentityOIDCClientCreated,
+  IdentityOIDCClientSecretReveal,
   IdentityProvider,
   IdentityProviderFilters,
   IdentityProviderInput,
@@ -104,6 +105,15 @@ export async function deleteIdentityOIDCClient({
   clientId,
 }: DeleteIdentityOIDCClientVariables): Promise<void> {
   await api.delete<void>(`/identity/oidc-clients/${encodeURIComponent(clientId.trim())}`)
+}
+
+export async function revealIdentityOIDCClientSecret(
+  clientId: string,
+): Promise<IdentityOIDCClientSecretReveal> {
+  const response = await api.post<ApiResponse<IdentityOIDCClientSecretReveal>>(
+    `/identity/oidc-clients/${encodeURIComponent(clientId.trim())}/secret/reveal`,
+  )
+  return response.data
 }
 
 export async function rotateIdentityProviderSigningKey(

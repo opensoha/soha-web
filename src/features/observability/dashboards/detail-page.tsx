@@ -183,12 +183,12 @@ export function ObservabilityDashboardDetailPage() {
         ),
       }}
       tableNode={
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           {(dashboard.importWarnings ?? []).length > 0 ? (
             <Alert
               showIcon
               type="warning"
-              message="导入兼容提示"
+              title="导入兼容提示"
               description={dashboard.importWarnings
                 ?.slice(0, 5)
                 .map((warning) => warning.message)

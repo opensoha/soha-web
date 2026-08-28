@@ -39,6 +39,7 @@ import {
 } from '@/components/management-list'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { encodeAIContextForElement, useAIPageContext } from '@/features/copilot'
 import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
@@ -173,6 +174,18 @@ export function ClustersPage() {
     clusters,
     localeCode,
   ])
+  useAIPageContext({
+    sourceWorkbench: 'platform',
+    sourceTitle: localeCode === 'zh_CN' ? '集群' : 'Clusters',
+    entityKind: 'Cluster',
+    visibleFilters: {
+      keyword: appliedSearchText || undefined,
+      status: appliedStatusFilter,
+      type: appliedTypeFilter,
+      mode: appliedModeFilter,
+    },
+    pinnedData: { itemCount: clusters.length },
+  })
 
   const columns: TableColumnsType<Cluster> = [
     {
@@ -586,6 +599,14 @@ export function ClustersPage() {
         headerExtra={tableHeaderExtra}
         columns={columns}
         dataSource={filteredClusters}
+        onRow={(record: Cluster) => ({
+          'data-ai-context': encodeAIContextForElement({
+            sourceWorkbench: 'platform',
+            entityKind: 'Cluster',
+            entityName: record.name,
+            clusterId: record.id,
+          }),
+        })}
         rowKey="id"
         loading={clustersQuery.isLoading}
         localSorting

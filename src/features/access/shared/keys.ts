@@ -1,3 +1,5 @@
+import type { AccessScopeGrantSubject } from './types'
+
 export const accessKeys = {
   all: ['access'] as const,
   permissions: () => [...accessKeys.all, 'permissions'] as const,
@@ -11,7 +13,8 @@ export const accessKeys = {
   policies: () => [...accessKeys.all, 'policies'] as const,
   policyList: () => [...accessKeys.policies(), 'list'] as const,
   scopeGrants: () => [...accessKeys.all, 'scope-grants'] as const,
-  scopeGrantList: () => [...accessKeys.scopeGrants(), 'list'] as const,
+  scopeGrantList: (subject: AccessScopeGrantSubject) =>
+    [...accessKeys.scopeGrants(), subject.subjectType, subject.subjectId, 'list'] as const,
   dependencies: () => [...accessKeys.all, 'dependencies'] as const,
   applicationOptions: () => [...accessKeys.dependencies(), 'applications'] as const,
   applicationEnvironments: () =>

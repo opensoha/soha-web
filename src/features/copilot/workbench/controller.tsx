@@ -48,6 +48,7 @@ import { useNavigate } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { systemKeys } from '@/features/system'
 import type { WorkbenchSendMessageStreamRequest } from '@opensoha/contracts/gen/ts/sohaapi'
 import {
   getAIModelSettingsPath,
@@ -458,6 +459,7 @@ export function AIWorkbenchController() {
     void queryClient.invalidateQueries({
       queryKey: workbenchKeys.sessions.detail(requestedSessionId),
     })
+    void queryClient.invalidateQueries({ queryKey: systemKeys.audit.all })
   }, [agentRunsQuery.data?.data, finalAgentRunIds, queryClient, requestedSessionId])
 
   useEffect(() => {
@@ -644,6 +646,7 @@ export function AIWorkbenchController() {
         queryKey: workbenchKeys.sessions.detail(payload.sessionId),
       })
       await queryClient.invalidateQueries({ queryKey: workbenchKeys.agentRuns.all() })
+      await queryClient.invalidateQueries({ queryKey: systemKeys.audit.all })
       setLocalMessages((items) =>
         items.filter(
           (item) =>

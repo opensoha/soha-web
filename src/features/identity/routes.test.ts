@@ -23,7 +23,6 @@ describe('Identity route manifests', () => {
       'internal-workbench',
       'internal-workbench-overview',
       'internal-workbench-software',
-      'internal-workbench-software-storage',
       'identity-applications',
       'identity-providers',
       'identity-outposts',

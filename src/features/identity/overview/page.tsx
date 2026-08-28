@@ -3,6 +3,10 @@ import {
   ApiOutlined,
   AppstoreOutlined,
   AuditOutlined,
+  CheckCircleOutlined,
+  CloudServerOutlined,
+  DatabaseOutlined,
+  FileOutlined,
   KeyOutlined,
   LinkOutlined,
   SafetyCertificateOutlined,
@@ -37,6 +41,17 @@ function latestUpdated(items: Array<{ updatedAt?: string; createdAt?: string }>)
   return latest ? new Date(latest).toISOString() : ''
 }
 
+function formatStorageBytes(value: number) {
+  const units = ['B', 'KiB', 'MiB', 'GiB']
+  let size = value
+  let index = 0
+  while (size >= 1024 && index < units.length - 1) {
+    size /= 1024
+    index += 1
+  }
+  return `${size >= 10 || index === 0 ? size.toFixed(0) : size.toFixed(1)} ${units[index]}`
+}
+
 export function IdentityOverviewPage() {
   const navigate = useNavigate()
   const {
@@ -45,9 +60,13 @@ export function IdentityOverviewPage() {
     outposts,
     sessions,
     audits,
+    softwareStorage,
+    storageIntegrations,
+    softwareError,
     runtime,
     loading,
     permissions,
+    refreshAll,
   } = useIdentityOverviewData()
   const oidcProviders = providers.filter((provider) => provider.type === 'oidc')
   const proxyProviders = providers.filter((provider) => provider.type === 'proxy')
@@ -63,6 +82,13 @@ export function IdentityOverviewPage() {
   const proxyEnabled = proxyProviders.some(
     (provider) => provider.enabled && provider.status === 'enabled',
   )
+  const enabledStorageIntegrations = storageIntegrations.filter((item) => item.enabled)
+  const healthyStorageIntegrations = storageIntegrations.filter(
+    (item) => item.enabled && item.healthStatus === 'healthy',
+  )
+  const storageProviderTypes = [
+    ...new Set(storageIntegrations.map((item) => item.providerType.toUpperCase())),
+  ]
   const overviewStats = [
     {
       key: 'applications',
@@ -140,6 +166,41 @@ export function IdentityOverviewPage() {
       tone: proxyEnabled ? 'success' : 'default',
     },
   ] satisfies OverviewChipItem[]
+  const softwareStatus = [
+    {
+      key: 'storage-sources',
+      label: '存储源',
+      value: permissions.storageIntegrations ? storageIntegrations.length : '-',
+      helper: permissions.storageIntegrations
+        ? storageProviderTypes.join(' / ') || '尚未配置对象存储'
+        : '无存储配置查看权限',
+      icon: <CloudServerOutlined />,
+    },
+    {
+      key: 'storage-enabled',
+      label: '已启用',
+      value: permissions.storageIntegrations ? enabledStorageIntegrations.length : '-',
+      helper: permissions.storageIntegrations
+        ? `${healthyStorageIntegrations.length} 个连接正常`
+        : '无存储配置查看权限',
+      icon: <CheckCircleOutlined />,
+      tone: healthyStorageIntegrations.length > 0 ? 'success' : 'default',
+    },
+    {
+      key: 'software-files',
+      label: '文件数量',
+      value: softwareStorage?.objectCount ?? '-',
+      helper: '全部存储合计',
+      icon: <FileOutlined />,
+    },
+    {
+      key: 'software-size',
+      label: '已用空间',
+      value: softwareStorage ? formatStorageBytes(softwareStorage.totalBytes) : '-',
+      helper: '全部软件包占用',
+      icon: <DatabaseOutlined />,
+    },
+  ] satisfies OverviewChipItem[]
 
   return (
     <div className="soha-page soha-overview-page soha-identity-overview-page">
@@ -156,6 +217,51 @@ export function IdentityOverviewPage() {
           />
         ))}
       </div>
+
+      <Card
+        className="soha-overview-panel-card"
+        title="软件库"
+        extra={
+          <Button
+            size="small"
+            icon={<AppstoreOutlined />}
+            onClick={() => navigate('/internal-workbench/software')}
+          >
+            软件库
+          </Button>
+        }
+      >
+        {!permissions.software ? (
+          <ManagementState compact bordered={false} kind="no-permission" title="无软件库权限" />
+        ) : softwareError ? (
+          <ManagementState
+            compact
+            bordered={false}
+            kind="error"
+            title="软件库摘要加载失败"
+            actions={
+              <Button size="small" onClick={refreshAll}>
+                重试
+              </Button>
+            }
+          />
+        ) : loading.software ? (
+          <ManagementState compact bordered={false} kind="loading" />
+        ) : (
+          <div className="soha-overview-chip-grid">
+            {softwareStatus.map((item) => (
+              <OverviewChip
+                key={item.key}
+                label={item.label}
+                value={item.value}
+                helper={item.helper}
+                icon={item.icon}
+                tone={item.tone}
+              />
+            ))}
+          </div>
+        )}
+      </Card>
 
       <div className="soha-overview-summary-grid">
         <Card
@@ -245,7 +351,6 @@ export function IdentityOverviewPage() {
           )}
         </Card>
       </div>
-
     </div>
   )
 }

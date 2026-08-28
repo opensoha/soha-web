@@ -1,7 +1,8 @@
-import { CheckCircleOutlined, ExperimentOutlined, RocketOutlined } from '@ant-design/icons'
+import { ExperimentOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { Button, Card, Space, Steps, Typography, type TableColumnsType } from 'antd'
 import { useNavigate } from 'react-router-dom'
+import { OverviewMetricCard, type OverviewMetricItem } from '@/components/overview-visuals'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
@@ -10,14 +11,12 @@ import { DeliveryTable } from '../delivery-table'
 import { deliveryQueries } from '../queries'
 import type { ReleaseBundle } from '../types'
 import {
-  ActionCards,
   isActiveStatus,
   isBlockedStatus,
   isReadyStatus,
   ManualModeAlert,
   releaseBundleUpdatedAt,
   sortByLatest,
-  StatCards,
   VERIFY_TASK_KINDS,
   WorkbenchHeader,
   workflowValidationCount,
@@ -53,33 +52,40 @@ export function DeliveryTestingPage() {
   const candidateBundles = bundles.filter(
     (bundle) => governanceByBundle.get(bundle.id)?.decision !== 'blocked',
   )
-  const testingStats = [
+  const testingStats: OverviewMetricItem[] = [
     {
+      key: 'candidates',
       label: '候选版本',
       value: candidateBundles.length,
-      hint: `${bundles.filter((item) => isReadyStatus(item.status)).length} 个已就绪`,
+      helper: `${bundles.filter((item) => isReadyStatus(item.status)).length} 个已就绪`,
     },
     {
+      key: 'verification',
       label: '验证任务',
       value: verifyTasks.length,
-      hint: `${verifyTasks.filter((item) => isActiveStatus(item.status)).length} 个执行中`,
+      helper: `${verifyTasks.filter((item) => isActiveStatus(item.status)).length} 个执行中`,
     },
     {
+      key: 'blocked',
       label: '阻塞证据',
       value:
         bundles.filter((item) => isBlockedStatus(item.status)).length +
         verifyTasks.filter((item) => isBlockedStatus(item.status)).length,
-      hint: '来自版本包和验证任务',
+      helper: '来自版本包和验证任务',
+      tone: 'danger',
     },
     {
+      key: 'dag',
       label: 'DAG 验证节点',
       value: board.reduce((sum, item) => sum + workflowValidationCount(item), 0),
-      hint: '来自工作流节点执行记录',
+      helper: '来自工作流节点执行记录',
     },
     {
+      key: 'promotion',
       label: '晋级门禁',
       value: governance.filter((item) => item.decision === 'passed').length,
-      hint: `${governance.filter((item) => item.decision === 'blocked').length} 个禁止晋级`,
+      helper: `${governance.filter((item) => item.decision === 'blocked').length} 个禁止晋级`,
+      tone: 'success',
     },
   ]
   const loading = bundlesQuery.isLoading || tasksQuery.isLoading || releaseBoardQuery.isLoading
@@ -159,30 +165,11 @@ export function DeliveryTestingPage() {
         description="面向测试人员聚合候选版本、验证任务、测试证据和晋级判断，AI 只在证据之上生成摘要和建议。"
       />
       <ManualModeAlert description="常规模式可以直接查看版本包、执行任务和发布看板；AI 摘要必须回链到版本包、任务日志或分析 run ID。" />
-      <StatCards items={testingStats} />
-      <ActionCards
-        items={[
-          {
-            label: '查看版本包',
-            description: '检查不可变候选版本和交付物元数据。',
-            icon: <RocketOutlined />,
-            path: '/delivery/release-bundles',
-            type: 'primary',
-          },
-          {
-            label: '查看执行任务',
-            description: '查看验证任务、日志、回调和重试状态。',
-            icon: <ExperimentOutlined />,
-            path: '/delivery/execution-tasks',
-          },
-          {
-            label: '查看构建发布',
-            description: '按应用环境查看候选版本和门禁态势。',
-            icon: <CheckCircleOutlined />,
-            path: '/release-board',
-          },
-        ]}
-      />
+      <div className="soha-overview-metric-grid">
+        {testingStats.map(({ key, ...item }) => (
+          <OverviewMetricCard key={key} {...item} />
+        ))}
+      </div>
       <div className="soha-delivery-workbench-grid">
         <DeliveryGatewayReadinessPanel
           title="AI Gateway 验证辅助"

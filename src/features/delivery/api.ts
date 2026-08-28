@@ -20,6 +20,7 @@ import type {
   DeliveryDraft,
   DeliveryDraftConfirmResult,
   DeliveryDraftInput,
+  DeliveryEnvironment,
   DeliveryExecutionLog,
   DeliveryGatewayManifest,
   DeliveryGatewayReadinessParams,
@@ -51,7 +52,6 @@ import type {
   ReleaseBoardEntry,
   ReleaseBundle,
   ReleaseRecord,
-  ReleaseTriggerInput,
   RenderedDeliverySpec,
   ResourceMetrics,
   RolloutHistoryRecord,
@@ -59,7 +59,6 @@ import type {
   WorkflowDecisionInput,
   WorkflowRun,
   WorkflowTemplate,
-  WorkflowTriggerInput,
   KubernetesServiceImportInput,
   KubernetesServiceImportResult,
   HelmReleaseCandidate,
@@ -230,6 +229,9 @@ export const deliveryApi = {
     deleteService: (applicationId: string, serviceId: string) =>
       discard(api.delete(`/applications/${segment(applicationId)}/services/${segment(serviceId)}`)),
   },
+  environmentCatalog: {
+    list: () => unwrap(api.get<ApiResponse<DeliveryEnvironment[]>>('/delivery/environments')),
+  },
   environments: {
     list: () => unwrap(api.get<ApiResponse<ApplicationEnvironment[]>>('/application-environments')),
     detail: (id: string) =>
@@ -331,7 +333,6 @@ export const deliveryApi = {
   workflows: {
     list: (params: DeliveryListParams = {}) =>
       unwrap(api.get<ApiResponse<WorkflowRun[]>>(applicationListPath('/workflows', params))),
-    trigger: (payload: WorkflowTriggerInput) => discard(api.post('/workflows/trigger', payload)),
     approve: ({ id, comment }: WorkflowDecisionInput) =>
       discard(api.post(`/workflows/${segment(id)}/approve`, { comment })),
     reject: ({ id, comment }: WorkflowDecisionInput) =>
@@ -340,7 +341,6 @@ export const deliveryApi = {
   releases: {
     list: (params: DeliveryListParams = {}) =>
       unwrap(api.get<ApiResponse<ReleaseRecord[]>>(applicationListPath('/releases', params))),
-    trigger: (payload: ReleaseTriggerInput) => discard(api.post('/releases/trigger', payload)),
   },
   registries: {
     list: async () => (await api.getEnvelope<RegistryConnectionListEnvelope>('/registries')).items,

@@ -27,8 +27,18 @@ vi.mock('@tanstack/react-query', async (importOriginal) => ({
 }))
 vi.mock('@/features/copilot', () => ({ useAIPageContext: vi.fn() }))
 vi.mock('./provider-instances-panel', () => ({
-  ProviderInstancesPanel: ({ localeCode }: { localeCode: 'zh_CN' | 'en_US' }) => (
-    <div>{localeCode === 'zh_CN' ? '提供方实例' : 'Provider instances'}</div>
+  ProviderInstancesPanel: ({
+    canDiscover,
+    canTest,
+    localeCode,
+  }: {
+    canDiscover: boolean
+    canTest: boolean
+    localeCode: 'zh_CN' | 'en_US'
+  }) => (
+    <div data-can-discover={String(canDiscover)} data-can-test={String(canTest)}>
+      {localeCode === 'zh_CN' ? '提供方实例' : 'Provider instances'}
+    </div>
   ),
 }))
 vi.mock('@/features/auth', async (importOriginal) => ({
@@ -84,6 +94,45 @@ describe('compute overview page', () => {
     render(<ComputeOverviewPage />)
 
     expect(useQuery).toHaveBeenCalledWith(expect.objectContaining({ enabled: true }))
+  })
+
+  it('exposes provider actions only for their exact permissions', () => {
+    testState.permissionKeys = [
+      'virtualization.clusters.view',
+      'virtualization.clusters.test',
+      'virtualization.sync.sync',
+    ]
+    vi.mocked(useQuery).mockReturnValue({
+      data: { data: { attention: [], providerHealth: [], partial: false, warnings: [] } },
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    } as never)
+
+    const container = render(<ComputeOverviewPage />)
+    const panel = container.querySelector('[data-can-test]')
+
+    expect(panel?.getAttribute('data-can-test')).toBe('true')
+    expect(panel?.getAttribute('data-can-discover')).toBe('true')
+  })
+
+  it('retries the overview query from its error state', () => {
+    const refetch = vi.fn()
+    vi.mocked(useQuery).mockReturnValue({
+      data: undefined,
+      isError: true,
+      isFetching: false,
+      refetch,
+    } as never)
+
+    const container = render(<ComputeOverviewPage />)
+    const retry = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="重试加载计算资源总览"]',
+    )
+
+    expect(retry).toBeDefined()
+    act(() => retry?.click())
+    expect(refetch).toHaveBeenCalledTimes(1)
   })
 
   it('keeps available sections visible when another section is omitted or degraded', () => {

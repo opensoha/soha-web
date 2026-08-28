@@ -75,33 +75,9 @@ export interface BuildTemplateInput {
   enabled?: boolean
 }
 
-export interface WorkflowTriggerInput {
-  applicationId: string
-  workflowName: string
-  clusterId?: string
-  namespace?: string
-  deploymentName?: string
-  triggerBuild: boolean
-  triggerRelease: boolean
-}
-
 export interface WorkflowDecisionInput {
   comment: string
   id: string
-}
-
-export interface ReleaseTriggerInput {
-  applicationId: string
-  applicationEnvironmentId?: string
-  clusterId: string
-  namespace: string
-  deploymentName: string
-  containerName?: string
-  image?: string
-  imageTag?: string
-  releaseName?: string
-  actionKind?: string
-  valuesContent?: string
 }
 
 export type RegistryRecord = RegistryConnection
@@ -165,10 +141,18 @@ export interface DeliveryDraftInput {
 }
 
 export type DeliveryRuntimeKind =
-  'build' | 'workflow' | 'release' | 'release_bundle' | 'execution_task'
+  | 'build'
+  | 'workflow'
+  | 'release'
+  | 'release_bundle'
+  | 'execution_task'
 
 export type DeliveryRuntimeRecord =
-  BuildRecord | WorkflowRun | ReleaseRecord | ReleaseBundle | ExecutionTask
+  | BuildRecord
+  | WorkflowRun
+  | ReleaseRecord
+  | ReleaseBundle
+  | ExecutionTask
 
 export type DeliveryRuntimeDetail = RuntimeObjectDetail<DeliveryRuntimeRecord>
 export type RuntimeKind = DeliveryRuntimeKind

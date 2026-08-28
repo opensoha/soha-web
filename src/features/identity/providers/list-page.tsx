@@ -11,6 +11,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
+  ManagementDensityButton,
   ManagementIconButton,
   ManagementKeywordField,
   ManagementQueryActions,
@@ -184,6 +185,7 @@ export function IdentityProvidersPage() {
     type: '',
   })
   const [modalOpen, setModalOpen] = useState(false)
+  const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const [editing, setEditing] = useState<IdentityProvider | null>(null)
   const [createdSecret, setCreatedSecret] = useState<IdentityOIDCSecretReveal | null>(null)
   const [formProviderType, setFormProviderType] = useState<IdentityRuntimeProviderType>('oidc')
@@ -498,6 +500,14 @@ export function IdentityProvidersPage() {
               >
                 {t('identity.providers.create', '新建 Provider')}
               </Button>
+              <ManagementDensityButton
+                aria-label={t('common.tableDensity', '切换表格密度')}
+                title={t('common.tableDensity', '切换表格密度')}
+                tooltip={t('common.tableDensity', '切换表格密度')}
+                onClick={() =>
+                  setTableSize((current) => (current === 'small' ? 'middle' : 'small'))
+                }
+              />
               <ManagementRefreshButton
                 aria-label={t('common.refresh', '刷新')}
                 loading={providersQuery.isFetching}
@@ -507,6 +517,7 @@ export function IdentityProvidersPage() {
               />
             </ManagementTableToolbar>
           ),
+          tableSize,
         }}
       />
 

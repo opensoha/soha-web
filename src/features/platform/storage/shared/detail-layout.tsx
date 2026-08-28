@@ -1,16 +1,29 @@
 import type { ReactNode } from 'react'
 import { Tabs } from 'antd'
 import type { TabsProps } from 'antd'
+import { useAIPageContext } from '@/features/copilot'
 import { PlatformResourceOverview } from '@/features/platform/shared/resource-overview'
+import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import '../styles.css'
 
 export function StorageDetailShell({
   children,
+  kind,
+  name,
 }: {
   children: ReactNode
   kind: string
   name: string
 }) {
+  const { clusterId, namespace } = usePlatformScopeStore()
+  useAIPageContext({
+    sourceWorkbench: 'platform',
+    sourceTitle: kind,
+    entityKind: kind,
+    entityName: name,
+    clusterId: clusterId || undefined,
+    namespace: kind === 'PersistentVolumeClaim' ? namespace || undefined : undefined,
+  })
   return <div className="soha-page soha-workload-detail-page">{children}</div>
 }
 

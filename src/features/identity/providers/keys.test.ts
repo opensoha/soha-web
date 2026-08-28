@@ -52,12 +52,12 @@ describe('identity provider query keys', () => {
       'mutation',
       'create',
     ])
-    expect(identityProviderMutationKeys.createOIDCClient).toEqual([
+    expect(identityProviderMutationKeys.updateOIDCClient).toEqual([
       'identity',
       'providers',
       'mutation',
       'oidc-client',
-      'create',
+      'update',
     ])
   })
 })

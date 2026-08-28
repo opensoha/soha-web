@@ -67,12 +67,14 @@ vi.mock('@/components/admin-table', () => ({
     dataSource,
     empty,
     headerExtra,
+    onRow,
     paginationSummary,
   }: {
     columns: Array<Record<string, any>>
     dataSource: Array<Record<string, any>>
     empty?: ReactNode
     headerExtra?: ReactNode
+    onRow?: (record: Record<string, any>) => Record<string, string>
     paginationSummary?: ReactNode
   }) => (
     <div data-testid="admin-table">
@@ -84,7 +86,11 @@ vi.mock('@/components/admin-table', () => ({
       <div data-testid="row-count">{dataSource.length}</div>
       {dataSource.length === 0 ? <div>{empty}</div> : null}
       {dataSource.map((record, rowIndex) => (
-        <div key={`${record.namespace}/${record.name}`} data-testid={`row-${rowIndex}`}>
+        <div
+          key={`${record.namespace}/${record.name}`}
+          data-testid={`row-${rowIndex}`}
+          {...onRow?.(record)}
+        >
           {columns.map((column, columnIndex) => {
             const value =
               typeof column.dataIndex === 'string' ? record[column.dataIndex] : undefined
@@ -208,6 +214,7 @@ describe('configuration leaf pages', () => {
         immutable: false,
         ageSeconds: 60,
         allowedActions: ['delete'],
+        data: { password: 'must-not-enter-ai-context' },
       },
     ]
 
@@ -227,6 +234,17 @@ describe('configuration leaf pages', () => {
     const secrets = await renderPage(<ConfigurationSecretsPage />, '/configuration/secrets')
     expect(secrets.textContent).toContain('registry-secret')
     expect(secrets.querySelector('[data-testid="column-keys"]')?.textContent).toContain('__actions')
+    const secretContext = JSON.parse(
+      secrets.querySelector('[data-testid="row-0"]')?.getAttribute('data-ai-context') ?? '{}',
+    )
+    expect(secretContext).toMatchObject({
+      clusterId: 'cluster-a',
+      entityKind: 'Secret',
+      entityName: 'registry-secret',
+      namespace: 'team-a',
+      sourceWorkbench: 'platform',
+    })
+    expect(JSON.stringify(secretContext)).not.toContain('must-not-enter-ai-context')
     expect(apiGetMock).toHaveBeenCalledWith(
       '/clusters/cluster-a/configuration/secrets?namespace=team-a',
     )

@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Button, Drawer, Space, Tabs, Typography } from 'antd'
+import { useEffect, useState } from 'react'
+import { Button, Descriptions, Drawer, Space, Table, Tabs, Typography } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { CodeOutlined, ExportOutlined } from '@ant-design/icons'
-import { useQuery } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
@@ -13,7 +13,12 @@ import {
   ManagementTableToolbar,
 } from '@/components/management-list'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
-import { manifestQueries, type ManifestPackage } from '@/features/delivery'
+import {
+  manifestQueries,
+  type ManifestDeployment,
+  type ManifestPackage,
+  type ManifestResourceInventory,
+} from '@/features/delivery'
 import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { useI18n } from '@/i18n'
@@ -22,11 +27,45 @@ import './styles.css'
 
 const { Text } = Typography
 
+type ManifestRuntimeRow = ManifestPackage['bindings'][number] & {
+  manifest: ManifestPackage
+  deployment?: ManifestDeployment
+}
+
+interface ManifestDiffRow {
+  key: string
+  resource: string
+  path: string
+  desiredValue: unknown
+  observedValue: unknown
+}
+
+function runtimeRowKey(item: ManifestRuntimeRow) {
+  return `${item.manifest.id}:${item.id || item.applicationEnvironmentId}`
+}
+
+function manifestDiffRows(deployment?: ManifestDeployment): ManifestDiffRow[] {
+  return (deployment?.status.drift?.resources ?? []).flatMap((resource) =>
+    resource.fields.map((field) => ({
+      key: `${resource.apiVersion}:${resource.kind}:${resource.namespace}:${resource.name}:${field.path}`,
+      resource: `${resource.kind}/${resource.name}`,
+      path: field.path,
+      desiredValue: field.desiredValue,
+      observedValue: field.observedValue,
+    })),
+  )
+}
+
+function formatManifestValue(value: unknown) {
+  if (typeof value === 'string') return value
+  return JSON.stringify(value) ?? '-'
+}
+
 export function PlatformManifestsPage() {
   const { localeCode, t } = useI18n()
   const navigate = useNavigate()
   const { clusterId, namespace } = usePlatformScopeStore()
-  const [selected, setSelected] = useState<ManifestPackage | null>(null)
+  const [selectedKey, setSelectedKey] = useState('')
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const [pagination, setPagination] = useState({ page: 1, pageSize: K8S_TABLE_PAGE_SIZE })
 
@@ -45,18 +84,27 @@ export function PlatformManifestsPage() {
     ),
   )
 
-  const scopedBindings = useMemo(
-    () =>
-      (manifestsQuery.data?.items ?? []).flatMap((item) =>
-        item.bindings
-          .filter((binding) => !clusterId || binding.clusterId === clusterId)
-          .filter((binding) => !namespace || binding.namespace === namespace)
-          .map((binding) => ({ ...binding, manifest: item })),
-      ),
-    [clusterId, manifestsQuery.data?.items, namespace],
+  const manifestItems = manifestsQuery.data?.items ?? []
+  const deploymentQueries = useQueries({
+    queries: manifestItems.map((item) => manifestQueries.deployments(item.id, Boolean(clusterId))),
+  })
+  const deploymentsByBinding = new Map(
+    deploymentQueries.flatMap((query) => query.data ?? []).map((item) => [item.bindingId, item]),
   )
+  const scopedBindings: ManifestRuntimeRow[] = manifestItems.flatMap((item) =>
+    item.bindings
+      .filter((binding) => !clusterId || binding.clusterId === clusterId)
+      .filter((binding) => !namespace || binding.namespace === namespace)
+      .map((binding) => ({
+        ...binding,
+        manifest: item,
+        deployment: binding.id ? deploymentsByBinding.get(binding.id) : undefined,
+      })),
+  )
+  const selected = scopedBindings.find((item) => runtimeRowKey(item) === selectedKey)
+  const selectedDiff = manifestDiffRows(selected?.deployment)
 
-  const columns: TableColumnsType<(typeof scopedBindings)[number]> = [
+  const columns: TableColumnsType<ManifestRuntimeRow> = [
     {
       title: t('common.manifest', '应用清单'),
       dataIndex: ['manifest', 'name'],
@@ -64,13 +112,24 @@ export function PlatformManifestsPage() {
         <Button
           type="link"
           className="soha-platform-manifest-link"
-          onClick={() => setSelected(item.manifest)}
+          onClick={() => setSelectedKey(runtimeRowKey(item))}
         >
           {item.manifest.name}
         </Button>
       ),
     },
-    { title: t('common.applicationId', '应用 ID'), dataIndex: ['manifest', 'applicationId'] },
+    {
+      title: t('common.source', '来源'),
+      key: 'source',
+      render: (_value, item) => (
+        <Space size={4} wrap>
+          <Text>{item.manifest.applicationId}</Text>
+          <MetadataTag
+            label={item.manifest.serviceId ? `服务 ${item.manifest.serviceId}` : '应用级'}
+          />
+        </Space>
+      ),
+    },
     {
       title: t('common.environment', '环境'),
       dataIndex: 'environmentKey',
@@ -81,15 +140,31 @@ export function PlatformManifestsPage() {
     { title: t('common.namespace', '命名空间'), dataIndex: 'namespace' },
     {
       title: t('common.version', '版本'),
-      dataIndex: ['manifest', 'currentRevision'],
-      width: 90,
-      render: (value: number) => (value > 0 ? `v${value}` : '-'),
+      key: 'revision',
+      width: 150,
+      render: (_value, item) => (
+        <Space size={8}>
+          <Text>{`期望 v${item.deployment?.spec.desiredRevision ?? item.manifest.currentRevision}`}</Text>
+          <Text type="secondary">{`实际 ${item.deployment?.status.appliedRevision ? `v${item.deployment.status.appliedRevision}` : '-'}`}</Text>
+        </Space>
+      ),
     },
     {
       title: t('common.runtimeStatus', '运行状态'),
-      dataIndex: 'status',
+      key: 'status',
       width: 120,
-      render: (value: string) => <StatusTag value={value || 'not_deployed'} />,
+      render: (_value, item) => (
+        <StatusTag value={item.deployment?.status.phase || item.status || 'not_deployed'} />
+      ),
+    },
+    {
+      title: t('common.diff', '差异'),
+      key: 'diff',
+      width: 100,
+      render: (_value, item) => {
+        const resources = item.deployment?.status.drift?.resources.length ?? 0
+        return <Text type={resources > 0 ? 'warning' : 'secondary'}>{`${resources} 个资源`}</Text>
+      },
     },
     {
       title: t('common.updatedAt', '更新时间'),
@@ -107,15 +182,15 @@ export function PlatformManifestsPage() {
             aria-label={t('common.viewYaml', '查看 YAML')}
             icon={<CodeOutlined />}
             tooltip={t('common.viewYaml', '查看 YAML')}
-            onClick={() => setSelected(item.manifest)}
+            onClick={() => setSelectedKey(runtimeRowKey(item))}
           />
           <ManagementIconButton
-            aria-label={t('common.openManifestLibrary', '打开应用清单库')}
+            aria-label={t('common.openManifestLibrary', '查看扩展资源')}
             icon={<ExportOutlined />}
-            tooltip={t('common.openManifestLibrary', '打开应用清单库')}
+            tooltip={t('common.openManifestLibrary', '查看扩展资源')}
             onClick={() =>
               navigate(
-                `/delivery/manifests?applicationId=${encodeURIComponent(item.manifest.applicationId)}`,
+                `/applications/${encodeURIComponent(item.manifest.applicationId)}?tab=services&section=resources`,
               )
             }
           />
@@ -132,9 +207,6 @@ export function PlatformManifestsPage() {
           title: <Text strong>{t('common.manifest', '应用清单')}</Text>,
           headerExtra: (
             <ManagementTableToolbar>
-              <Button icon={<ExportOutlined />} onClick={() => navigate('/delivery/manifests')}>
-                {t('common.openManifestLibrary', '打开应用清单库')}
-              </Button>
               <ManagementDensityButton
                 aria-label={localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'}
                 tooltip={
@@ -153,9 +225,14 @@ export function PlatformManifestsPage() {
               <ManagementRefreshButton
                 aria-label={localeCode === 'zh_CN' ? '刷新清单' : 'Refresh manifests'}
                 disabled={!clusterId}
-                loading={manifestsQuery.isFetching}
+                loading={
+                  manifestsQuery.isFetching || deploymentQueries.some((query) => query.isFetching)
+                }
                 tooltip={t('common.refresh', '刷新')}
-                onClick={() => void manifestsQuery.refetch()}
+                onClick={() => {
+                  void manifestsQuery.refetch()
+                  deploymentQueries.forEach((query) => void query.refetch())
+                }}
               />
             </ManagementTableToolbar>
           ),
@@ -163,8 +240,8 @@ export function PlatformManifestsPage() {
           columnSettingPlacement: 'header',
           columns,
           dataSource: scopedBindings,
-          loading: manifestsQuery.isLoading,
-          rowKey: (item) => `${item.manifest.id}:${item.id || item.applicationEnvironmentId}`,
+          loading: manifestsQuery.isLoading || deploymentQueries.some((query) => query.isLoading),
+          rowKey: runtimeRowKey,
           tableSize,
           pageSize: pagination.pageSize,
           pagination: {
@@ -209,19 +286,114 @@ export function PlatformManifestsPage() {
       <Drawer
         open={Boolean(selected)}
         size={760}
-        title={selected?.name}
-        onClose={() => setSelected(null)}
+        title={selected?.manifest.name}
+        onClose={() => setSelectedKey('')}
       >
-        <Tabs
-          className="soha-resource-tabs"
-          items={(selected?.files ?? []).map((file) => ({
-            key: file.path,
-            label: file.path,
-            children: <pre className="soha-platform-manifest-yaml">{file.content}</pre>,
-          }))}
-        />
-        {selected && selected.files.length === 0 ? (
-          <Text type="secondary">该清单包没有文件</Text>
+        {selected ? (
+          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <Descriptions
+              size="small"
+              column={2}
+              items={[
+                { key: 'application', label: '应用', children: selected.manifest.applicationId },
+                {
+                  key: 'service',
+                  label: '服务',
+                  children: selected.manifest.serviceId || '应用级扩展资源',
+                },
+                { key: 'environment', label: '环境', children: selected.environmentKey },
+                {
+                  key: 'target',
+                  label: '目标',
+                  children: `${selected.clusterId} / ${selected.namespace}`,
+                },
+                {
+                  key: 'desired',
+                  label: '期望版本',
+                  children: `v${selected.deployment?.spec.desiredRevision ?? selected.manifest.currentRevision}`,
+                },
+                {
+                  key: 'applied',
+                  label: '实际版本',
+                  children: selected.deployment?.status.appliedRevision
+                    ? `v${selected.deployment.status.appliedRevision}`
+                    : '-',
+                },
+              ]}
+            />
+            <Tabs
+              className="soha-resource-tabs"
+              items={[
+                {
+                  key: 'desired',
+                  label: '期望清单',
+                  children:
+                    selected.manifest.files.length > 0 ? (
+                      <Tabs
+                        items={selected.manifest.files.map((file) => ({
+                          key: file.path,
+                          label: file.path,
+                          children: (
+                            <pre className="soha-platform-manifest-yaml">{file.content}</pre>
+                          ),
+                        }))}
+                      />
+                    ) : (
+                      <Text type="secondary">该清单包没有文件</Text>
+                    ),
+                },
+                {
+                  key: 'actual',
+                  label: `实际资源 (${selected.deployment?.status.inventory?.length ?? 0})`,
+                  children: (
+                    <Table<ManifestResourceInventory>
+                      size="small"
+                      pagination={false}
+                      rowKey={(item) =>
+                        `${item.apiVersion}:${item.kind}:${item.namespace}:${item.name}`
+                      }
+                      dataSource={selected.deployment?.status.inventory ?? []}
+                      columns={[
+                        { title: '资源', render: (_value, item) => `${item.kind}/${item.name}` },
+                        { title: '命名空间', dataIndex: 'namespace' },
+                        {
+                          title: '健康状态',
+                          dataIndex: 'health',
+                          render: (value: string) => <StatusTag value={value || 'unknown'} />,
+                        },
+                      ]}
+                    />
+                  ),
+                },
+                {
+                  key: 'diff',
+                  label: `差异 (${selectedDiff.length})`,
+                  children: (
+                    <Table<ManifestDiffRow>
+                      size="small"
+                      pagination={false}
+                      rowKey="key"
+                      dataSource={selectedDiff}
+                      columns={[
+                        { title: '资源', dataIndex: 'resource' },
+                        { title: '字段', dataIndex: 'path' },
+                        {
+                          title: '期望值',
+                          dataIndex: 'desiredValue',
+                          render: formatManifestValue,
+                        },
+                        {
+                          title: '实际值',
+                          dataIndex: 'observedValue',
+                          render: formatManifestValue,
+                        },
+                      ]}
+                    />
+                  ),
+                },
+              ]}
+            />
+          </Space>
         ) : null}
       </Drawer>
     </>

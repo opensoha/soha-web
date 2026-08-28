@@ -107,7 +107,7 @@ export function ImportDashboardModal({
       }}
       onOk={submit}
     >
-      <Space className="soha-dashboard-import-fields" direction="vertical" size={16}>
+      <Space className="soha-dashboard-import-fields" orientation="vertical" size={16}>
         <Segmented
           block
           options={[
@@ -121,7 +121,7 @@ export function ImportDashboardModal({
           <Alert
             showIcon
             type="warning"
-            message="没有可用的 Prometheus 数据源"
+            title="没有可用的 Prometheus 数据源"
             action={
               <Button
                 size="small"
@@ -137,7 +137,7 @@ export function ImportDashboardModal({
             }
           />
         ) : null}
-        <Space className="soha-dashboard-import-field" direction="vertical" size={6}>
+        <Space className="soha-dashboard-import-field" orientation="vertical" size={6}>
           <Typography.Text strong>Prometheus 数据源</Typography.Text>
           <Select
             allowClear
@@ -150,7 +150,7 @@ export function ImportDashboardModal({
           />
         </Space>
         {sourceMode === 'template' ? (
-          <Space className="soha-dashboard-import-field" direction="vertical" size={6}>
+          <Space className="soha-dashboard-import-field" orientation="vertical" size={6}>
             <Typography.Text strong>模板</Typography.Text>
             <Select
               className="soha-dashboard-import-control"
@@ -168,7 +168,7 @@ export function ImportDashboardModal({
             </Typography.Text>
           </Space>
         ) : (
-          <Space className="soha-dashboard-import-field" direction="vertical" size={6}>
+          <Space className="soha-dashboard-import-field" orientation="vertical" size={6}>
             <Typography.Text strong>Grafana JSON</Typography.Text>
             <Upload
               accept="application/json,.json"

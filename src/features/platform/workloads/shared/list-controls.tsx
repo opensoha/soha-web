@@ -8,10 +8,66 @@ import {
   ManagementRefreshButton,
   ManagementState,
 } from '@/components/management-list'
+import { encodeAIContextForElement, useAIPageContext } from '@/features/copilot'
+import type { WorkloadKind } from './types'
 
 const { Link } = Typography
 
 export type WorkloadLocaleCode = 'zh_CN' | 'en_US'
+
+const WORKLOAD_ENTITY_KINDS: Record<WorkloadKind, string> = {
+  deployments: 'Deployment',
+  pods: 'Pod',
+  replicasets: 'ReplicaSet',
+  replicationcontrollers: 'ReplicationController',
+  statefulsets: 'StatefulSet',
+  daemonsets: 'DaemonSet',
+  jobs: 'Job',
+  cronjobs: 'CronJob',
+}
+
+export function useWorkloadListAIContext({
+  clusterId,
+  itemCount,
+  kind,
+  label,
+  namespace,
+  searchKeyword,
+}: {
+  clusterId?: string | null
+  itemCount: number
+  kind: WorkloadKind
+  label: string
+  namespace?: string | null
+  searchKeyword: string
+}) {
+  useAIPageContext({
+    sourceWorkbench: 'platform',
+    sourceTitle: label,
+    entityKind: WORKLOAD_ENTITY_KINDS[kind],
+    clusterId: clusterId || undefined,
+    namespace: namespace || undefined,
+    visibleFilters: { keyword: searchKeyword || undefined },
+    pinnedData: { itemCount },
+  })
+}
+
+export function workloadRowAIContext(
+  kind: WorkloadKind,
+  record: { name: string; namespace: string },
+  clusterId?: string | null,
+) {
+  return {
+    'data-ai-context': encodeAIContextForElement({
+      sourceWorkbench: 'platform',
+      entityKind: WORKLOAD_ENTITY_KINDS[kind],
+      entityName: record.name,
+      clusterId: clusterId || undefined,
+      namespace: record.namespace || undefined,
+      workload: record.name,
+    }),
+  }
+}
 
 export function WorkloadRefreshButton({
   disabled,

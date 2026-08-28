@@ -1,20 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
-import {
-  Alert,
-  App,
-  Button,
-  Card,
-  Descriptions,
-  Modal,
-  Popconfirm,
-  Space,
-  Tag,
-  Typography,
-} from 'antd'
-import { FileTextOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
+import { useMemo } from 'react'
+import { Alert, App, Button, Popconfirm, Space, Tag, Typography } from 'antd'
+import { ArrowRightOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ManagementIconButton } from '@/components/management-list'
+import { OverviewMetricCard, type OverviewMetricItem } from '@/components/overview-visuals'
 import { StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { DeliveryTable } from '@/features/delivery/delivery-table'
@@ -36,6 +26,7 @@ const { Text } = Typography
 export function ExecutionTasksPage() {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const focusedExecutionTaskId = searchParams.get('executionTaskId')?.trim() ?? ''
   const focusedReleaseBundleId = searchParams.get('releaseBundleId')?.trim() ?? ''
@@ -43,14 +34,7 @@ export function ExecutionTasksPage() {
   const permissionSnapshot = permissionSnapshotQuery.data?.data
   const canCancel = hasPermission(permissionSnapshot, 'delivery.execution-tasks.cancel')
   const canRetry = hasPermission(permissionSnapshot, 'delivery.execution-tasks.retry')
-  const [selectedTask, setSelectedTask] = useState<ExecutionTask | null>(null)
   const tasksQuery = useQuery(deliveryQueries.executionTasks.list({ refetchInterval: 5000 }))
-  const logsQuery = useQuery(
-    deliveryQueries.executionTasks.logs(selectedTask?.id ?? '', {
-      enabled: !!selectedTask?.id,
-      refetchInterval: selectedTask?.id ? 5000 : false,
-    }),
-  )
   const cancelMutation = useMutation(deliveryMutations.executionTasks.cancel(queryClient))
   const retryMutation = useMutation(deliveryMutations.executionTasks.retry(queryClient))
   const executionTasks = tasksQuery.data ?? []
@@ -61,15 +45,37 @@ export function ExecutionTasksPage() {
     () => summarizeExecutionTaskStatus(executionTasks),
     [executionTasks],
   )
-
-  useEffect(() => {
-    if (!focusedTask || selectedTask?.id === focusedTask.id) return
-    setSelectedTask(focusedTask)
-  }, [focusedTask, selectedTask?.id])
+  const summaryMetrics: OverviewMetricItem[] = [
+    {
+      key: 'total',
+      label: '任务总数',
+      value: executionSummary.total,
+      helper: `${executionSummary.active} 个执行中`,
+    },
+    {
+      key: 'blocked',
+      label: '阻塞任务',
+      value: executionSummary.blocked,
+      helper: `${executionSummary.retryable} 个可重试`,
+      tone: executionSummary.blocked > 0 ? 'danger' : 'success',
+    },
+    {
+      key: 'artifacts',
+      label: '交付物线索',
+      value: executionSummary.artifacts,
+      helper: '来自任务结果',
+    },
+    {
+      key: 'callbacks',
+      label: '回调可用',
+      value: executionSummary.callbackReady,
+      helper: 'agent / callback token',
+      tone: 'success',
+    },
+  ]
 
   function refreshTaskEvidence() {
     void tasksQuery.refetch()
-    if (selectedTask?.id) void logsQuery.refetch()
   }
 
   function handleCancel(task: ExecutionTask) {
@@ -113,27 +119,10 @@ export function ExecutionTasksPage() {
           type={focusedTask || tasksQuery.isLoading ? 'info' : 'warning'}
         />
       ) : null}
-      <div className="soha-execution-task-summary">
-        <Card className="soha-management-panel-card" size="small">
-          <Text type="secondary">任务总数</Text>
-          <strong>{executionSummary.total}</strong>
-          <Text type="secondary">{executionSummary.active} 个执行中</Text>
-        </Card>
-        <Card className="soha-management-panel-card" size="small">
-          <Text type="secondary">阻塞任务</Text>
-          <strong>{executionSummary.blocked}</strong>
-          <Text type="secondary">{executionSummary.retryable} 个可重试</Text>
-        </Card>
-        <Card className="soha-management-panel-card" size="small">
-          <Text type="secondary">交付物线索</Text>
-          <strong>{executionSummary.artifacts}</strong>
-          <Text type="secondary">来自任务结果</Text>
-        </Card>
-        <Card className="soha-management-panel-card" size="small">
-          <Text type="secondary">回调可用</Text>
-          <strong>{executionSummary.callbackReady}</strong>
-          <Text type="secondary">agent / callback token</Text>
-        </Card>
+      <div className="soha-overview-metric-grid">
+        {summaryMetrics.map(({ key, ...item }) => (
+          <OverviewMetricCard key={key} {...item} />
+        ))}
       </div>
       <DeliveryTable
         rowKey="id"
@@ -170,7 +159,19 @@ export function ExecutionTasksPage() {
           {
             title: 'Bundle',
             dataIndex: 'releaseBundleId',
-            render: (value: string) => value || '-',
+            render: (value: string) =>
+              value ? (
+                <Button
+                  type="link"
+                  size="small"
+                  aria-label={`查看版本包 ${value}`}
+                  onClick={() => navigate(`/delivery/release-bundles/${value}`)}
+                >
+                  {value}
+                </Button>
+              ) : (
+                '-'
+              ),
           },
           {
             title: 'Artifacts',
@@ -231,11 +232,11 @@ export function ExecutionTasksPage() {
             render: (_: unknown, record: ExecutionTask) => (
               <Space className="soha-row-action-icons" size={2}>
                 <ManagementIconButton
-                  aria-label="查看执行日志"
-                  icon={<FileTextOutlined />}
+                  aria-label="查看执行详情"
+                  icon={<ArrowRightOutlined />}
                   size="small"
-                  tooltip="日志"
-                  onClick={() => setSelectedTask(record)}
+                  tooltip="查看详情"
+                  onClick={() => navigate(`/delivery/execution-tasks/${record.id}`)}
                 />
                 {canCancel && canCancelExecutionTask(record) ? (
                   <Popconfirm title="确认取消该任务？" onConfirm={() => handleCancel(record)}>
@@ -262,83 +263,6 @@ export function ExecutionTasksPage() {
           },
         ]}
       />
-      <Modal
-        title={selectedTask ? `任务日志 · ${selectedTask.id}` : '任务日志'}
-        open={!!selectedTask}
-        onCancel={() => setSelectedTask(null)}
-        footer={null}
-        width={920}
-        destroyOnHidden
-      >
-        <Descriptions
-          items={
-            selectedTask
-              ? [
-                  { key: 'provider', label: 'Provider', children: selectedTask.providerKind },
-                  {
-                    key: 'status',
-                    label: 'Status',
-                    children: <StatusTag value={selectedTask.status} />,
-                  },
-                  {
-                    key: 'bundle',
-                    label: 'Bundle',
-                    children: selectedTask.releaseBundleId || '-',
-                  },
-                  {
-                    key: 'heartbeat',
-                    label: 'Last Heartbeat',
-                    children: selectedTask.lastHeartbeatAt
-                      ? formatDateTime(selectedTask.lastHeartbeatAt)
-                      : '-',
-                  },
-                ]
-              : []
-          }
-        />
-        {(canCancel || canRetry) && selectedTask ? (
-          <Space style={{ marginBottom: 12 }}>
-            {canCancel && canCancelExecutionTask(selectedTask) ? (
-              <Button
-                danger
-                icon={<StopOutlined />}
-                loading={cancelMutation.isPending}
-                onClick={() => handleCancel(selectedTask)}
-                size="small"
-              >
-                取消任务
-              </Button>
-            ) : null}
-            {canRetry && canRetryExecutionTask(selectedTask) ? (
-              <Button
-                icon={<ReloadOutlined />}
-                loading={retryMutation.isPending}
-                onClick={() => handleRetry(selectedTask)}
-                size="small"
-              >
-                重新入队
-              </Button>
-            ) : null}
-          </Space>
-        ) : null}
-        <Card className="soha-management-panel-card" size="small" title="Execution Logs">
-          <pre className="soha-json-block">
-            {logsQuery.data
-              ?.map((item) => `[${item.createdAt}] ${item.logLevel.toUpperCase()} ${item.message}`)
-              .join('\n') || 'No logs'}
-          </pre>
-        </Card>
-        <Card className="soha-management-panel-card" size="small" title="Artifacts">
-          <pre className="soha-json-block">
-            {JSON.stringify(selectedTask?.artifacts ?? [], null, 2)}
-          </pre>
-        </Card>
-        <Card className="soha-management-panel-card" size="small" title="Result">
-          <pre className="soha-json-block">
-            {JSON.stringify(selectedTask?.result ?? {}, null, 2)}
-          </pre>
-        </Card>
-      </Modal>
     </div>
   )
 }

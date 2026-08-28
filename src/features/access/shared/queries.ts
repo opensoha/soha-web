@@ -1,6 +1,7 @@
 import { queryOptions } from '@tanstack/react-query'
 import { accessApi } from './api'
 import { accessKeys } from './keys'
+import type { AccessScopeGrantSubject } from './types'
 
 export const accessQueries = {
   permissionCatalog: (enabled = true) =>
@@ -33,10 +34,10 @@ export const accessQueries = {
       queryFn: accessApi.policies.list,
       enabled,
     }),
-  scopeGrants: (enabled = true) =>
+  scopeGrants: (subject: AccessScopeGrantSubject, enabled = true) =>
     queryOptions({
-      queryKey: accessKeys.scopeGrantList(),
-      queryFn: accessApi.scopeGrants.list,
+      queryKey: accessKeys.scopeGrantList(subject),
+      queryFn: () => accessApi.scopeGrants.list(subject),
       enabled,
     }),
   applicationOptions: (enabled = true) =>

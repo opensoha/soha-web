@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { act, type ReactNode } from 'react'
+import { act, type ComponentProps } from 'react'
 import { App as AntdApp } from 'antd'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -11,6 +11,9 @@ import { ApplicationFormModal } from './application-form-modal'
 const testState = vi.hoisted(() => ({
   enabled: {} as Record<string, boolean | undefined>,
   permissionKeys: [] as string[],
+  subjectControlled: false,
+  subjectModes: {} as Record<string, string | undefined>,
+  subjectTypeDisabled: undefined as boolean | undefined,
 }))
 
 vi.mock('@tanstack/react-query', async (importOriginal) => {
@@ -43,11 +46,20 @@ vi.mock('@/features/auth', () => ({
 
 vi.mock('antd', async (importOriginal) => {
   const actual = await importOriginal<typeof import('antd')>()
+  const ActualSelect = actual.Select
   return {
     ...actual,
-    AutoComplete: ({ options = [] }: { options?: Array<{ label: ReactNode }> }) => (
-      <div data-testid="assignment-options">{options.map((option) => option.label).join(',')}</div>
-    ),
+    Select: (props: ComponentProps<typeof ActualSelect>) => {
+      if (typeof props.placeholder === 'string' && props.placeholder.includes('（可多选）')) {
+        testState.subjectControlled =
+          Array.isArray(props.value) && typeof props.onChange === 'function'
+        testState.subjectModes[props.placeholder] = props.mode
+      }
+      if (props['aria-label'] === '主体类型') {
+        testState.subjectTypeDisabled = props.disabled
+      }
+      return <ActualSelect {...props} />
+    },
   }
 })
 
@@ -69,17 +81,30 @@ const application: IdentityApplication = {
 let container: HTMLDivElement
 let root: ReturnType<typeof createRoot>
 
-async function renderModal() {
+async function renderModal(
+  subjectType: 'role' | 'tag' = 'role',
+  subjectId = subjectType === 'tag' ? 'production' : 'role-1',
+) {
   await act(async () => {
     root.render(
       <I18nProvider>
         <AntdApp>
           <ApplicationFormModal
-            application={application}
+            application={{
+              ...application,
+              assignments: [
+                {
+                  subjectType,
+                  subjectId,
+                  effect: 'allow',
+                },
+              ],
+            }}
             open
             providerOptions={[]}
             providerOptionsLoading={false}
             saving={false}
+            stepUpAvailable
             tagOptions={[]}
             onCancel={() => undefined}
             onSubmit={() => undefined}
@@ -124,6 +149,9 @@ describe('ApplicationFormModal permissions', () => {
   beforeEach(() => {
     testState.enabled = {}
     testState.permissionKeys = []
+    testState.subjectControlled = false
+    testState.subjectModes = {}
+    testState.subjectTypeDisabled = undefined
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -147,5 +175,42 @@ describe('ApplicationFormModal permissions', () => {
     await renderModal()
 
     expect(testState.enabled).toEqual({ users: false, roles: false, teams: true })
+  })
+
+  it('only allows free text for tag assignments', async () => {
+    await renderModal()
+    await renderModal('tag')
+
+    expect(testState.subjectModes).toMatchObject({
+      '选择角色（可多选）': 'multiple',
+      '输入标签（可多选）': 'tags',
+    })
+    expect(testState.subjectControlled).toBe(true)
+  })
+
+  it('locks the subject type after selecting an object and unlocks it when empty', async () => {
+    await renderModal('role', '')
+    expect(testState.subjectTypeDisabled).toBe(false)
+
+    await renderModal()
+    expect(testState.subjectTypeDisabled).toBe(true)
+  })
+
+  it('keeps publishing controls before an unboxed access control section', async () => {
+    await renderModal()
+
+    const modal = document.body.querySelector('.ant-modal')
+    const content = modal?.textContent ?? ''
+    expect(modal?.querySelector('.ant-card')).toBeNull()
+    expect(modal?.querySelectorAll('.soha-identity-publish-controls .ant-switch')).toHaveLength(3)
+    expect(modal?.querySelector('.soha-identity-publish-controls .ant-input-number')).toBeNull()
+    expect(modal?.querySelectorAll('.soha-identity-policy-time-window .ant-picker')).toHaveLength(2)
+    expect(modal?.querySelector('input[type="time"]')).toBeNull()
+    expect(content.indexOf('门户可见')).toBeLessThan(content.indexOf('访问控制'))
+    expect(content.indexOf('推荐应用')).toBeLessThan(content.indexOf('访问控制'))
+    expect(modal?.querySelector('[aria-label="访问控制说明"]')).not.toBeNull()
+    expect(modal?.querySelector('[aria-label="访问条件说明"]')).not.toBeNull()
+    expect(content).not.toContain('每行只配置一种主体类型')
+    expect(content).not.toContain('通过访问对象校验后')
   })
 })

@@ -4,6 +4,7 @@ import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AuditLog, OnlineUser } from '@/features/system'
+import type { SystemIntegrationCategory } from '@/features/settings'
 import type { IdentityApplication } from '../shared/types'
 import type { IdentityOutpost } from '../outposts'
 import type { IdentityProvider } from '../providers'
@@ -23,6 +24,10 @@ vi.mock('@ant-design/icons', () => {
     ApiOutlined: Icon,
     AppstoreOutlined: Icon,
     AuditOutlined: Icon,
+    CheckCircleOutlined: Icon,
+    CloudServerOutlined: Icon,
+    DatabaseOutlined: Icon,
+    FileOutlined: Icon,
     KeyOutlined: Icon,
     LinkOutlined: Icon,
     SafetyCertificateOutlined: Icon,
@@ -273,12 +278,35 @@ beforeEach(() => {
     outposts,
     sessions,
     audits,
+    softwareStorage: {
+      backend: 's3',
+      objectCount: 3,
+      totalBytes: 21 * 1024,
+      items: [],
+    },
+    storageIntegrations: [
+      {
+        id: 'storage-1',
+        category: 'storage' as SystemIntegrationCategory,
+        providerType: 's3',
+        name: 'Local MinIO',
+        enabled: true,
+        configuration: [],
+        credentialKeys: [],
+        healthStatus: 'healthy',
+        version: 1,
+        createdAt: '2026-07-08T00:00:00Z',
+        updatedAt: '2026-07-09T00:00:00Z',
+      },
+    ],
+    softwareError: false,
     runtime: undefined,
     loading: {
       applications: false,
       providers: false,
       outposts: false,
       sessions: false,
+      software: false,
     },
     permissions: {
       applications: true,
@@ -286,6 +314,8 @@ beforeEach(() => {
       outposts: true,
       sessions: true,
       audit: true,
+      software: true,
+      storageIntegrations: true,
     },
     refreshAll,
   })
@@ -345,6 +375,18 @@ describe('IdentityOverviewPage', () => {
     expect(container.querySelector('[data-testid="chip-Proxy Provider"]')?.textContent).toContain(
       'Proxy Provider:1:未启用',
     )
+    expect(container.querySelector('[data-testid="chip-存储源"]')?.textContent).toContain(
+      '存储源:1:S3',
+    )
+    expect(container.querySelector('[data-testid="chip-已启用"]')?.textContent).toContain(
+      '已启用:1:1 个连接正常',
+    )
+    expect(container.querySelector('[data-testid="chip-文件数量"]')?.textContent).toContain(
+      '文件数量:3:全部存储合计',
+    )
+    expect(container.querySelector('[data-testid="chip-已用空间"]')?.textContent).toContain(
+      '已用空间:21 KiB:全部软件包占用',
+    )
     expect(container.textContent).toContain('action-0')
     expect(container.textContent).toContain('action-5')
     expect(container.textContent).not.toContain('action-6')
@@ -363,11 +405,12 @@ describe('IdentityOverviewPage', () => {
     expect(container.textContent).not.toContain('最近身份相关操作和协议访问记录')
   })
 
-  it('keeps the remaining provider and audit navigation canonical', async () => {
+  it('keeps the remaining provider, software, and audit navigation canonical', async () => {
     const container = await renderPage()
     const targets = [
       ['Provider', '/identity/providers'],
       ['管理 Provider', '/identity/providers'],
+      ['软件库', '/internal-workbench/software'],
       ['审计', '/system/audit'],
     ] as const
 
@@ -386,12 +429,16 @@ describe('IdentityOverviewPage', () => {
       outposts: [],
       sessions: [],
       audits: [],
+      softwareStorage: undefined,
+      storageIntegrations: [],
+      softwareError: false,
       runtime: undefined,
       loading: {
         applications: false,
         providers: false,
         outposts: false,
         sessions: false,
+        software: false,
       },
       permissions: {
         applications: false,
@@ -399,12 +446,15 @@ describe('IdentityOverviewPage', () => {
         outposts: false,
         sessions: false,
         audit: false,
+        software: false,
+        storageIntegrations: false,
       },
       refreshAll,
     })
     const container = await renderPage()
 
     expect(container.textContent).toContain('无 Provider 权限')
+    expect(container.textContent).toContain('无软件库权限')
     expect(container.textContent).toContain('无审计权限')
     expect(buttonByText(container, 'Provider').disabled).toBe(false)
     expect(buttonByText(container, '审计').disabled).toBe(false)
@@ -417,12 +467,21 @@ describe('IdentityOverviewPage', () => {
       outposts,
       sessions,
       audits: [],
+      softwareStorage: {
+        backend: 's3',
+        objectCount: 3,
+        totalBytes: 21 * 1024,
+        items: [],
+      },
+      storageIntegrations: [],
+      softwareError: false,
       runtime: undefined,
       loading: {
         applications: false,
         providers: false,
         outposts: false,
         sessions: false,
+        software: false,
       },
       permissions: {
         applications: true,
@@ -430,6 +489,8 @@ describe('IdentityOverviewPage', () => {
         outposts: true,
         sessions: true,
         audit: true,
+        software: true,
+        storageIntegrations: false,
       },
       refreshAll,
     })

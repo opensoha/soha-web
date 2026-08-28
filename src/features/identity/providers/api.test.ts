@@ -8,6 +8,7 @@ import {
   importSAMLLoginSourceMetadata,
   listIdentityOIDCClients,
   listIdentityProviders,
+  revealIdentityOIDCClientSecret,
   rotateIdentityProviderSAMLCertificate,
   rotateIdentityProviderSigningKey,
   rotateSAMLCertificate,
@@ -155,6 +156,18 @@ describe('identity providers api', () => {
       clientInput,
     )
     expect(apiMocks.put).toHaveBeenCalledWith('/identity/oidc-clients/client%2Fid', clientInput)
+  })
+
+  it('reveals an existing OIDC Client Secret through the no-cache action endpoint', async () => {
+    const revealed = {
+      clientId: 'generated-client-id',
+      clientSecret: 'revealable-client-secret',
+      revealedAt: '2026-08-24T08:00:00Z',
+    }
+    apiMocks.post.mockResolvedValueOnce({ data: revealed })
+
+    await expect(revealIdentityOIDCClientSecret(' client/id ')).resolves.toBe(revealed)
+    expect(apiMocks.post).toHaveBeenCalledWith('/identity/oidc-clients/client%2Fid/secret/reveal')
   })
 
   it('keeps provider and client delete transport results out of the domain', async () => {

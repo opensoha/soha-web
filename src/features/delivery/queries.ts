@@ -117,6 +117,14 @@ export const deliveryQueries = {
       })
     },
   },
+  environmentCatalog: {
+    list: (enabled = true) =>
+      queryOptions({
+        queryKey: deliveryKeys.environmentCatalog.list(),
+        queryFn: deliveryApi.environmentCatalog.list,
+        enabled,
+      }),
+  },
   environments: {
     list: (enabled = true) =>
       queryOptions({

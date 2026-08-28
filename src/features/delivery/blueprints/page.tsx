@@ -338,7 +338,7 @@ function createBlueprintDraftValues(
     environmentBindings: [createDefaultEnvironmentBinding()],
     files: [createDefaultFileTemplate()],
     executionHintsText: '{}',
-    postCreateActions: ['render_spec'],
+    postCreateActions: ['render_spec', 'create_manifest_package'],
   }
 }
 
@@ -880,7 +880,9 @@ export function DeliveryBlueprintsPage() {
       void message.warning('请先保存模板，再执行平台接入')
       return
     }
-    navigate(`/delivery/onboarding?templateId=${encodeURIComponent(selectedBlueprint.id)}`)
+    navigate(
+      `/applications?action=create&mode=manual&templateId=${encodeURIComponent(selectedBlueprint.id)}`,
+    )
   }
 
   const buildSourceOptions = normalizeObjectArray(formSnapshot.buildSources).map((item, index) => ({
@@ -960,6 +962,7 @@ export function DeliveryBlueprintsPage() {
                 { value: 'render_spec', label: '渲染规范' },
                 { value: 'bootstrap_application', label: '创建应用档案' },
                 { value: 'create_environment_bindings', label: '创建环境绑定' },
+                { value: 'create_manifest_package', label: '生成扩展资源包' },
               ]}
             />
           </Form.Item>

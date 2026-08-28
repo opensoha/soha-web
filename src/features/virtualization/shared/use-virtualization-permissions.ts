@@ -11,6 +11,7 @@ export function useVirtualizationPermissions() {
   const canPowerVMs = hasVirtualizationPermission('virtualization.vms.power')
   const canResizeVMs = hasVirtualizationPermission('virtualization.vms.resize')
   const canDeleteVMs = hasVirtualizationPermission('virtualization.vms.delete')
+  const canSync = hasVirtualizationPermission('virtualization.sync.sync')
 
   return {
     virtualizationModuleEnabled,
@@ -23,7 +24,7 @@ export function useVirtualizationPermissions() {
     canUpdateClusters: hasVirtualizationPermission('virtualization.clusters.update'),
     canDeleteClusters: hasVirtualizationPermission('virtualization.clusters.delete'),
     canTestClusters: hasVirtualizationPermission('virtualization.clusters.test'),
-    canSyncClusters: hasVirtualizationPermission('virtualization.clusters.sync'),
+    canSyncClusters: canSync,
     canCreateImages: hasVirtualizationPermission('virtualization.images.create'),
     canUpdateImages: hasVirtualizationPermission('virtualization.images.update'),
     canDeleteImages: hasVirtualizationPermission('virtualization.images.delete'),
@@ -35,7 +36,7 @@ export function useVirtualizationPermissions() {
       hasVirtualizationPermission('virtualization.sync.view'),
     canCancelOperations: hasVirtualizationPermission('virtualization.operations.cancel'),
     canRetryOperations: hasVirtualizationPermission('virtualization.operations.retry'),
-    canSync: hasVirtualizationPermission('virtualization.sync.sync'),
+    canSync,
     canViewMetrics: hasVirtualizationPermission('virtualization.vms.metrics'),
     canAccessConsole: hasVirtualizationPermission('virtualization.vms.console'),
   }

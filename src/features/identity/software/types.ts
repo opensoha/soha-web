@@ -1,5 +1,6 @@
 export interface SoftwarePackage {
   id: string
+  storageIntegrationId?: string
   softwareId: string
   name: string
   description?: string
@@ -12,8 +13,22 @@ export interface SoftwarePackage {
   sizeBytes: number
   sha256: string
   downloadPath: string
+  downloadCount?: number
   createdAt: string
   updatedAt: string
+}
+
+export interface SoftwarePackageDownloadRecord {
+  id: string
+  actorId: string
+  actorName?: string
+  downloadedAt: string
+  durationMs: number
+  sourceIp?: string
+}
+
+export interface SoftwarePackageDownloadRecordListEnvelope {
+  items: SoftwarePackageDownloadRecord[]
 }
 
 export interface SoftwarePackageListEnvelope {
@@ -24,9 +39,11 @@ export interface SoftwarePackageListEnvelope {
 export interface SoftwarePackageFilters {
   platform?: string
   arch?: string
+  storageIntegrationId?: string
 }
 
 export interface SoftwarePackageMetadataInput {
+  storageIntegrationId?: string
   softwareId: string
   name: string
   description?: string
@@ -52,6 +69,13 @@ export type SoftwarePackagePublishInput =
 
 export interface SoftwareStorage {
   backend: string
+  integrationId?: string
+  providerType?: string
+  endpoint?: string
+  bucket?: string
+  region?: string
+  healthStatus?: 'unknown' | 'healthy' | 'degraded' | 'unhealthy'
+  lastCheckedAt?: string
   objectCount: number
   totalBytes: number
   items: SoftwarePackage[]

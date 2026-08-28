@@ -21,7 +21,9 @@ import {
 } from '@/features/platform/workloads-model'
 import {
   renderWorkloadNameLink,
+  useWorkloadListAIContext,
   useWorkloadTableDensity,
+  workloadRowAIContext,
   WorkloadQueryPanel,
   WorkloadRefreshButton,
   WorkloadSearchInput,
@@ -86,6 +88,15 @@ export function WorkloadsDaemonSetsPage() {
       ),
     [daemonSets, searchKeyword],
   )
+
+  useWorkloadListAIContext({
+    clusterId,
+    itemCount: daemonSets.length,
+    kind: 'daemonsets',
+    label: 'DaemonSets',
+    namespace,
+    searchKeyword,
+  })
 
   const columns: TableColumnsType<DaemonSet> = [
     {
@@ -269,6 +280,7 @@ export function WorkloadsDaemonSetsPage() {
         columns={canShowActions ? columns : columns.filter((column) => column.key !== 'actions')}
         dataSource={filteredDaemonSets}
         rowKey={(record) => `${record.namespace}/${record.name}`}
+        onRow={(record: DaemonSet) => workloadRowAIContext('daemonsets', record, clusterId)}
         loading={daemonSetsQuery.isLoading}
         localSorting
         pageSize={K8S_TABLE_PAGE_SIZE}

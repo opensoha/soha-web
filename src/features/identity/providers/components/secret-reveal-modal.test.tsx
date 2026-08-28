@@ -38,7 +38,7 @@ afterEach(async () => {
 })
 
 describe('OIDC secret reveal modal', () => {
-  it('renders the returned secret only inside the one-time warning flow', async () => {
+  it('explains that the returned secret can be viewed again', async () => {
     const onClose = vi.fn()
     const container = document.createElement('div')
     document.body.appendChild(container)
@@ -56,15 +56,13 @@ describe('OIDC secret reveal modal', () => {
       )
     })
 
-    expect(document.body.textContent).toContain('Client secret 仅展示一次')
+    expect(document.body.textContent).toContain('稍后仍可再次查看')
     expect(document.body.textContent).toContain('grafana')
     expect(
       (document.querySelector('input[value="one-time-client-secret"]') as HTMLInputElement).value,
     ).toBe('one-time-client-secret')
 
-    const closeButton = Array.from(document.querySelectorAll('button')).find((button) =>
-      button.textContent?.includes('我已保存'),
-    ) as HTMLButtonElement
+    const closeButton = document.querySelector('button.ant-modal-close') as HTMLButtonElement
     await act(async () => closeButton.click())
     expect(onClose).toHaveBeenCalledOnce()
   })

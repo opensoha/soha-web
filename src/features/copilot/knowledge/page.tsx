@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { Children, useState } from 'react'
+import type { ReactNode } from 'react'
 import { DeleteOutlined, EyeOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -8,11 +9,11 @@ import {
   Drawer,
   Form,
   Input,
-  List,
   Modal,
   Popconfirm,
   Select,
   Space,
+  Spin,
   Tabs,
   Typography,
 } from 'antd'
@@ -36,6 +37,22 @@ import type {
 } from './types'
 
 const { Text } = Typography
+
+function KnowledgeList({
+  children,
+  emptyText,
+  loading,
+}: {
+  children: ReactNode
+  emptyText: string
+  loading?: boolean
+}) {
+  if (loading) return <Spin size="small" />
+  if (Children.count(children) === 0) {
+    return <ManagementState bordered={false} compact description={emptyText} />
+  }
+  return <ul className="soha-list-panel">{children}</ul>
+}
 
 export function KnowledgeCenterPage() {
   const queryClient = useQueryClient()
@@ -235,34 +252,34 @@ export function KnowledgeCenterPage() {
         />
       ) : null}
       {searchMutation.data?.data ? (
-        <List
-          bordered
-          size="small"
-          header={
-            <Space wrap>
-              <Text>命中 {searchMutation.data.data.hits?.length ?? 0} 条</Text>
-              <Text type="secondary">{searchMutation.data.data.timingMs ?? '-'} ms</Text>
-              {searchMutation.data.data.noAnswer ? (
-                <StatusTag value="warning" label="证据不足" />
-              ) : null}
-            </Space>
-          }
-          dataSource={searchMutation.data.data.hits ?? []}
-          renderItem={(hit) => (
-            <List.Item
-              extra={
-                typeof hit.score === 'number' ? (
-                  <Text type="secondary">{hit.score.toFixed(3)}</Text>
-                ) : null
-              }
-            >
-              <List.Item.Meta
-                title={hit.title || hit.documentId || '检索片段'}
-                description={hit.content || hit.source || '-'}
-              />
-            </List.Item>
-          )}
-        />
+        <div className="soha-list-panel">
+          <Space wrap>
+            <Text>命中 {searchMutation.data.data.hits?.length ?? 0} 条</Text>
+            <Text type="secondary">{searchMutation.data.data.timingMs ?? '-'} ms</Text>
+            {searchMutation.data.data.noAnswer ? (
+              <StatusTag value="warning" label="证据不足" />
+            ) : null}
+          </Space>
+          <KnowledgeList emptyText="暂无检索结果">
+            {(searchMutation.data.data.hits ?? []).map((hit, index) => (
+              <li key={`${hit.documentId}:${index}`} className="soha-list-row">
+                <div className="soha-list-row-meta">
+                  <div>
+                    <Text strong>{hit.title || hit.documentId || '检索片段'}</Text>
+                    <div>
+                      <Text type="secondary">{hit.content || hit.source || '-'}</Text>
+                    </div>
+                  </div>
+                </div>
+                {typeof hit.score === 'number' ? (
+                  <div className="soha-list-row-extra">
+                    <Text type="secondary">{hit.score.toFixed(3)}</Text>
+                  </div>
+                ) : null}
+              </li>
+            ))}
+          </KnowledgeList>
+        </div>
       ) : null}
       <Modal
         open={createOpen}
@@ -326,98 +343,116 @@ export function KnowledgeCenterPage() {
               key: 'sources',
               label: `来源 (${sourcesQuery.data?.data.length ?? 0})`,
               children: (
-                <List
+                <KnowledgeList
                   loading={sourcesQuery.isLoading}
-                  dataSource={sourcesQuery.data?.data ?? []}
-                  locale={{ emptyText: sourcesQuery.isError ? '来源加载失败' : '暂无来源' }}
-                  renderItem={(item) => (
-                    <List.Item
-                      extra={
-                        <Space>
-                          <StatusTag value={item.status} />
-                          {canOperateIngestion ? (
-                            <Button
-                              type="text"
-                              icon={<SyncOutlined />}
-                              aria-label={`同步来源 ${item.name}`}
-                              loading={
-                                syncSourceMutation.isPending &&
-                                syncSourceMutation.variables === item.id
-                              }
-                              onClick={() => syncSourceMutation.mutate(item.id)}
-                            />
-                          ) : null}
-                        </Space>
-                      }
-                    >
-                      <List.Item.Meta
-                        title={item.name}
-                        description={`${item.kind}${item.lastError ? ` · ${item.lastError}` : ''}`}
-                      />
-                    </List.Item>
-                  )}
-                />
+                  emptyText={sourcesQuery.isError ? '来源加载失败' : '暂无来源'}
+                >
+                  {(sourcesQuery.data?.data ?? []).map((item) => (
+                    <li key={item.id} className="soha-list-row">
+                      <div className="soha-list-row-meta">
+                        <div>
+                          <Text strong>{item.name}</Text>
+                          <div>
+                            <Text type="secondary">{`${item.kind}${item.lastError ? ` · ${item.lastError}` : ''}`}</Text>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="soha-list-row-extra">
+                        <StatusTag value={item.status} />
+                        {canOperateIngestion ? (
+                          <Button
+                            type="text"
+                            icon={<SyncOutlined />}
+                            aria-label={`同步来源 ${item.name}`}
+                            loading={
+                              syncSourceMutation.isPending &&
+                              syncSourceMutation.variables === item.id
+                            }
+                            onClick={() => syncSourceMutation.mutate(item.id)}
+                          />
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                </KnowledgeList>
               ),
             },
             {
               key: 'documents',
               label: `文档 (${documentsQuery.data?.data.length ?? 0})`,
               children: (
-                <List
+                <KnowledgeList
                   loading={documentsQuery.isLoading}
-                  dataSource={documentsQuery.data?.data ?? []}
-                  locale={{ emptyText: documentsQuery.isError ? '文档加载失败' : '暂无文档' }}
-                  renderItem={(item) => (
-                    <List.Item extra={<MetadataTag label={`${item.chunkCount ?? 0} chunks`} />}>
-                      <List.Item.Meta
-                        title={item.title}
-                        description={item.uri || item.version || '-'}
-                      />
-                    </List.Item>
-                  )}
-                />
+                  emptyText={documentsQuery.isError ? '文档加载失败' : '暂无文档'}
+                >
+                  {(documentsQuery.data?.data ?? []).map((item) => (
+                    <li key={item.id} className="soha-list-row">
+                      <div className="soha-list-row-meta">
+                        <div>
+                          <Text strong>{item.title}</Text>
+                          <div>
+                            <Text type="secondary">{item.uri || item.version || '-'}</Text>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="soha-list-row-extra">
+                        <MetadataTag label={`${item.chunkCount ?? 0} chunks`} />
+                      </div>
+                    </li>
+                  ))}
+                </KnowledgeList>
               ),
             },
             {
               key: 'sync-runs',
               label: `同步运行 (${syncRunsQuery.data?.data.length ?? 0})`,
               children: (
-                <List
+                <KnowledgeList
                   loading={syncRunsQuery.isLoading}
-                  dataSource={syncRunsQuery.data?.data ?? []}
-                  locale={{
-                    emptyText: syncRunsQuery.isError ? '同步记录加载失败' : '暂无同步记录',
-                  }}
-                  renderItem={(item) => (
-                    <List.Item extra={<StatusTag value={item.status} />}>
-                      <List.Item.Meta
-                        title={item.id}
-                        description={`${item.documentsStored ?? 0} documents · ${item.chunksStored ?? 0} chunks`}
-                      />
-                    </List.Item>
-                  )}
-                />
+                  emptyText={syncRunsQuery.isError ? '同步记录加载失败' : '暂无同步记录'}
+                >
+                  {(syncRunsQuery.data?.data ?? []).map((item) => (
+                    <li key={item.id} className="soha-list-row">
+                      <div className="soha-list-row-meta">
+                        <div>
+                          <Text strong>{item.id}</Text>
+                          <div>
+                            <Text type="secondary">{`${item.documentsStored ?? 0} documents · ${item.chunksStored ?? 0} chunks`}</Text>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="soha-list-row-extra">
+                        <StatusTag value={item.status} />
+                      </div>
+                    </li>
+                  ))}
+                </KnowledgeList>
               ),
             },
             {
               key: 'revisions',
               label: `索引版本 (${revisionsQuery.data?.data.length ?? 0})`,
               children: (
-                <List
+                <KnowledgeList
                   loading={revisionsQuery.isLoading}
-                  dataSource={revisionsQuery.data?.data ?? []}
-                  locale={{
-                    emptyText: revisionsQuery.isError ? '索引版本加载失败' : '暂无索引版本',
-                  }}
-                  renderItem={(item) => (
-                    <List.Item extra={<StatusTag value={item.status} />}>
-                      <List.Item.Meta
-                        title={`Revision ${item.revision}`}
-                        description={`${item.documentCount ?? 0} documents · ${item.chunkCount ?? 0} chunks`}
-                      />
-                    </List.Item>
-                  )}
-                />
+                  emptyText={revisionsQuery.isError ? '索引版本加载失败' : '暂无索引版本'}
+                >
+                  {(revisionsQuery.data?.data ?? []).map((item) => (
+                    <li key={item.id} className="soha-list-row">
+                      <div className="soha-list-row-meta">
+                        <div>
+                          <Text strong>{`Revision ${item.revision}`}</Text>
+                          <div>
+                            <Text type="secondary">{`${item.documentCount ?? 0} documents · ${item.chunkCount ?? 0} chunks`}</Text>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="soha-list-row-extra">
+                        <StatusTag value={item.status} />
+                      </div>
+                    </li>
+                  ))}
+                </KnowledgeList>
               ),
             },
           ]}

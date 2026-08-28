@@ -42,6 +42,22 @@ export const manifestMutations = {
       onSuccess: (_item: ManifestSource, variables) =>
         queryClient.invalidateQueries({ queryKey: manifestKeys.source(variables.id) }),
     }),
+  updateBinding: (queryClient: QueryClient) =>
+    mutationOptions({
+      mutationKey: [...manifestKeys.all, 'binding', 'update'],
+      mutationFn: ({
+        id,
+        input,
+      }: {
+        id: string
+        packageId: string
+        input: Parameters<typeof manifestApi.updateBinding>[1]
+      }) => manifestApi.updateBinding(id, input),
+      onSuccess: (_item, variables) => {
+        queryClient.invalidateQueries({ queryKey: manifestKeys.bindings(variables.packageId) })
+        queryClient.invalidateQueries({ queryKey: manifestKeys.deployments(variables.packageId) })
+      },
+    }),
   sync: (queryClient: QueryClient) =>
     mutationOptions({
       mutationKey: [...manifestKeys.all, 'sync'],

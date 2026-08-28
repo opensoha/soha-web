@@ -1,12 +1,8 @@
-import {
-  BugOutlined,
-  FileTextOutlined,
-  RocketOutlined,
-  SafetyCertificateOutlined,
-} from '@ant-design/icons'
+import { SafetyCertificateOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { Button, Card, Space, Steps, Tag, Typography, type TableColumnsType } from 'antd'
 import { useNavigate } from 'react-router-dom'
+import { OverviewMetricCard, type OverviewMetricItem } from '@/components/overview-visuals'
 import { StatusTag } from '@/components/status-tag'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
@@ -15,13 +11,11 @@ import { DeliveryTable } from '../delivery-table'
 import { deliveryQueries } from '../queries'
 import type { ExecutionTask } from '../types'
 import {
-  ActionCards,
   executionTaskUpdatedAt,
   isActiveStatus,
   isBlockedStatus,
   ManualModeAlert,
   sortByLatest,
-  StatCards,
   WorkbenchHeader,
 } from './shared'
 
@@ -47,22 +41,33 @@ export function DeliveryAnalysisPage() {
   )
   const failedTasks = tasks.filter((task) => isBlockedStatus(task.status))
   const recentTasks = sortByLatest(tasks, executionTaskUpdatedAt).slice(0, 10)
-  const analysisStats = [
+  const analysisStats: OverviewMetricItem[] = [
     {
+      key: 'failed',
       label: '失败任务',
       value: failedTasks.length,
-      hint: `${tasks.filter((item) => isActiveStatus(item.status)).length} 个仍在执行`,
+      helper: `${tasks.filter((item) => isActiveStatus(item.status)).length} 个仍在执行`,
+      tone: failedTasks.length > 0 ? 'danger' : 'success',
     },
-    { label: '阻塞环境', value: blockedBoard.length, hint: '来自发布看板状态聚合' },
     {
+      key: 'environments',
+      label: '阻塞环境',
+      value: blockedBoard.length,
+      helper: '来自发布看板状态聚合',
+      tone: blockedBoard.length > 0 ? 'danger' : 'success',
+    },
+    {
+      key: 'bundles',
       label: '阻塞版本',
       value: bundles.filter((item) => isBlockedStatus(item.status)).length,
-      hint: '来自版本包状态',
+      helper: '来自版本包状态',
+      tone: 'warning',
     },
     {
+      key: 'retryable',
       label: '可重试任务',
       value: failedTasks.filter((item) => item.attemptCount < item.maxRetries).length,
-      hint: '常规任务操作入口保留',
+      helper: '常规任务操作入口保留',
     },
   ]
   const loading = tasksQuery.isLoading || releaseBoardQuery.isLoading || bundlesQuery.isLoading
@@ -114,30 +119,11 @@ export function DeliveryAnalysisPage() {
         description="聚合失败任务、阻塞环境、日志入口和影响面，面向开发与测试先给出可操作的常规排查入口。"
       />
       <ManualModeAlert description="常规模式保留任务日志、发布看板、版本包和重试入口；AI 分析只是对这些证据做摘要、归因和修复建议。" />
-      <StatCards items={analysisStats} />
-      <ActionCards
-        items={[
-          {
-            label: '任务日志',
-            description: '进入执行任务查看日志、结果、制品和重试操作。',
-            icon: <BugOutlined />,
-            path: '/delivery/execution-tasks',
-            type: 'primary',
-          },
-          {
-            label: '发布态势',
-            description: '按应用环境查看构建、工作流、发布和审批状态。',
-            icon: <RocketOutlined />,
-            path: '/release-board',
-          },
-          {
-            label: '版本证据',
-            description: '核对版本包、artifact、digest 与生成来源。',
-            icon: <FileTextOutlined />,
-            path: '/delivery/release-bundles',
-          },
-        ]}
-      />
+      <div className="soha-overview-metric-grid">
+        {analysisStats.map(({ key, ...item }) => (
+          <OverviewMetricCard key={key} {...item} />
+        ))}
+      </div>
       <div className="soha-delivery-workbench-grid">
         <DeliveryGatewayReadinessPanel
           title="AI Gateway 故障分析"

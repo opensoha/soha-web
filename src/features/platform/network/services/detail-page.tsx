@@ -6,7 +6,6 @@ import { AdminTable } from '@/components/admin-table'
 import { ManagementState } from '@/components/management-list'
 import { ResourceEventsTimeline } from '@/components/resource-events-timeline'
 import { BooleanTag, StatusTag } from '@/components/status-tag'
-import { useAIPageContext } from '@/features/copilot'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
@@ -53,26 +52,6 @@ export function ServiceDetailPage() {
   const eventsQuery = useQuery({
     ...eventsOptions,
     enabled: Boolean(eventsOptions.enabled) && activeTabKey === 'events',
-  })
-
-  useAIPageContext({
-    sourceWorkbench: 'platform',
-    sourceTitle: `Service ${service?.name ?? serviceName}`,
-    entityKind: 'kubernetes.service',
-    entityName: service?.name ?? serviceName,
-    clusterId: clusterId ?? undefined,
-    namespace: detailNamespace || service?.namespace,
-    service: service?.name ?? serviceName,
-    timeRangeMinutes: metricsQuery.data?.rangeMinutes ?? 60,
-    pinnedData: {
-      type: service?.type,
-      clusterIp: service?.clusterIp,
-      ports: service?.ports,
-      portMappings: service?.portMappings,
-      selector: service?.selector,
-      activeTab: activeTabKey,
-    },
-    promptHint: `排查 Service ${service?.name ?? serviceName} 的访问异常、Endpoint/后端 Pod、事件、日志和指标。`,
   })
 
   const backendPodColumns: TableColumnsType<ServiceBackendPod> = [
@@ -204,6 +183,21 @@ export function ServiceDetailPage() {
     <NetworkDetailShell
       activeTabKey={activeTabKey}
       ageLabel="Age"
+      aiContext={{
+        timeRangeMinutes: metricsQuery.data?.rangeMinutes ?? 60,
+        pinnedData: {
+          type: service.type,
+          clusterIp: service.clusterIp,
+          ports: service.ports,
+          portMappings: service.portMappings,
+          selector: service.selector,
+          activeTab: activeTabKey,
+        },
+        promptHint:
+          localeCode === 'zh_CN'
+            ? `排查 Service ${service.name} 的访问异常、Endpoint/后端 Pod、事件、日志和指标。`
+            : `Troubleshoot Service ${service.name} connectivity, endpoints, backend pods, events, logs, and metrics.`,
+      }}
       detail={service}
       extraTabs={extraTabs}
       kind="services"

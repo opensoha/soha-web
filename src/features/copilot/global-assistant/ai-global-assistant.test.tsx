@@ -9,7 +9,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { api } from '@/services/api-client'
 import { usePreferencesStore } from '@/stores/preferences-store'
 import type { PermissionSnapshot } from '@/types'
-import { GlobalAIAssistantProvider } from './ai-global-assistant-provider'
+import { GlobalAIAssistantProvider, sourceWorkbenchFromPath } from './ai-global-assistant-provider'
 import { useAIGlobalAssistant, useAIPageContext } from './ai-context-provider'
 import {
   encodeAIContextForElement,
@@ -236,6 +236,27 @@ function mockSelection(anchorNode: Node, text: string) {
 }
 
 describe('global AI assistant utilities', () => {
+  it('classifies K8s route families as the platform workbench', () => {
+    for (const path of [
+      '/',
+      '/clusters/demo',
+      '/cluster-resources/nodes',
+      '/workloads/replicasets',
+      '/configuration/secrets',
+      '/network/services',
+      '/storage/persistentvolumes',
+      '/platform-access-control/roles',
+      '/resource-creation',
+      '/manifests',
+      '/extensions/apis/apps',
+      '/helm/releases',
+    ]) {
+      expect(sourceWorkbenchFromPath(path)).toBe('platform')
+    }
+    expect(sourceWorkbenchFromPath('/monitoring-workbench')).toBe('monitoring')
+    expect(sourceWorkbenchFromPath('/ai-workbench/overview')).toBe('ai')
+  })
+
   it('sanitizes selected text and maps page context into Workbench scope', () => {
     expect(sanitizeSelectionText('Authorization: Bearer abc\npassword=secret')).toContain(
       '[REDACTED]',

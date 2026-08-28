@@ -500,9 +500,17 @@ function RuntimeEvidenceCard({
           )}
           <Text strong>制品</Text>
           {renderArtifactTimeline(executionArtifacts, '该执行任务没有返回可展示的制品。')}
-          <Text type="secondary">
-            {task.releaseBundleId ? `releaseBundleId=${task.releaseBundleId}` : '没有关联版本包'}
-          </Text>
+          {task.releaseBundleId ? (
+            <Button
+              type="link"
+              size="small"
+              onClick={() => navigate?.(`/delivery/release-bundles/${task.releaseBundleId}`)}
+            >
+              {`版本包 ${task.releaseBundleId}`}
+            </Button>
+          ) : (
+            <Text type="secondary">没有关联版本包</Text>
+          )}
         </Space>
         {runtimeAssociationHints(kind, record, links, navigate)}
       </Card>

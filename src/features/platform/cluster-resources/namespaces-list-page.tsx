@@ -12,7 +12,9 @@ import { useNavigate } from 'react-router-dom'
 import type { TableColumnsType } from 'antd'
 import { AdminTable } from '@/components/admin-table'
 import {
+  ManagementDensityButton,
   ManagementIconButton,
+  ManagementRefreshButton,
   ManagementState,
   ManagementTableToolbar,
 } from '@/components/management-list'
@@ -39,6 +41,7 @@ export function ClusterNamespacesPage() {
   const scope = toClusterScope(clusterId)
   const [editingNamespace, setEditingNamespace] = useState<ClusterNamespace | null>(null)
   const [namespaceModalVisible, setNamespaceModalVisible] = useState(false)
+  const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const namespacesQuery = useQuery(namespaceQueries.list(scope))
   const permissionSnapshot = usePermissionSnapshot().data?.data
   const canCreate = hasPermission(permissionSnapshot, 'platform.namespaces.create')
@@ -185,17 +188,19 @@ export function ClusterNamespacesPage() {
           columns={columns}
           dataSource={namespacesQuery.data ?? []}
           rowKey="name"
-          loading={namespacesQuery.isLoading}
+          loading={namespacesQuery.isLoading || namespacesQuery.isFetching}
           localSorting
           pageSize={K8S_TABLE_PAGE_SIZE}
-          tableSize="small"
+          tableSize={tableSize}
           scroll={{ x: 'max-content' }}
           viewportScroll
           headerExtra={
             <ManagementTableToolbar>
               {canCreate ? (
                 <Button
+                  autoInsertSpace={false}
                   icon={<PlusOutlined />}
+                  size="small"
                   type="primary"
                   onClick={() => {
                     setEditingNamespace(null)
@@ -205,6 +210,21 @@ export function ClusterNamespacesPage() {
                   {t('common.create', 'Create')}
                 </Button>
               ) : null}
+              <ManagementDensityButton
+                aria-label={t('common.tableDensity', '切换表格密度')}
+                title={t('common.tableDensity', '切换表格密度')}
+                tooltip={t('common.tableDensity', '切换表格密度')}
+                onClick={() =>
+                  setTableSize((current) => (current === 'small' ? 'middle' : 'small'))
+                }
+              />
+              <ManagementRefreshButton
+                aria-label={t('common.refresh', '刷新')}
+                loading={namespacesQuery.isFetching}
+                title={t('common.refresh', '刷新')}
+                tooltip={t('common.refresh', '刷新')}
+                onClick={() => void namespacesQuery.refetch()}
+              />
             </ManagementTableToolbar>
           }
         />

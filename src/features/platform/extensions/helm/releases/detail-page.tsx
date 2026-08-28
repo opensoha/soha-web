@@ -19,6 +19,7 @@ import {
 } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
 import { hasAllowedAction, hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { useAIPageContext } from '@/features/copilot'
 import { useClusterCapability } from '@/features/platform/cluster-capabilities'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
@@ -82,6 +83,14 @@ export function HelmReleaseDetailPage() {
   const updateMutation = useMutation(helmMutations.updateValues(queryClient))
   const rollbackPlanMutation = useMutation({ mutationFn: planHelmReleaseRollback })
   const rollbackMutation = useMutation(helmMutations.rollbackRelease(queryClient))
+  useAIPageContext({
+    sourceWorkbench: 'platform',
+    sourceTitle: `Helm Release ${releaseName}`,
+    entityKind: 'HelmRelease',
+    entityName: releaseName,
+    clusterId: clusterId || undefined,
+    namespace: detailNamespace || undefined,
+  })
 
   useEffect(() => setActiveTab(requestedTab), [requestedTab])
   useEffect(() => setValuesDraft(valuesQuery.data?.content ?? ''), [valuesQuery.data?.content])

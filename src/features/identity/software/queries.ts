@@ -1,5 +1,5 @@
 import { queryOptions } from '@tanstack/react-query'
-import { getSoftwareStorage, listSoftwarePackages } from './api'
+import { getSoftwarePackageDownloadRecords, getSoftwareStorage, listSoftwarePackages } from './api'
 import { softwarePackageKeys, softwareStorageKeys } from './keys'
 import type { SoftwarePackageFilters } from './types'
 
@@ -9,9 +9,14 @@ export const softwarePackageQueries = {
       queryKey: softwarePackageKeys.list(filters),
       queryFn: () => listSoftwarePackages(filters),
     }),
-  storage: () =>
+  storage: (storageIntegrationId = '') =>
     queryOptions({
-      queryKey: softwareStorageKeys.detail(),
-      queryFn: getSoftwareStorage,
+      queryKey: softwareStorageKeys.detail(storageIntegrationId),
+      queryFn: () => getSoftwareStorage(storageIntegrationId),
+    }),
+  downloadRecords: (packageId: string) =>
+    queryOptions({
+      queryKey: softwarePackageKeys.downloadRecords(packageId),
+      queryFn: () => getSoftwarePackageDownloadRecords(packageId),
     }),
 }

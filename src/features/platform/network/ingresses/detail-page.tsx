@@ -5,7 +5,6 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementState } from '@/components/management-list'
 import { BooleanTag, StatusTag } from '@/components/status-tag'
-import { useAIPageContext } from '@/features/copilot'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
@@ -50,24 +49,6 @@ export function IngressDetailPage() {
   const [activeTabKey, setActiveTabKey] = useState('overview')
   const detailQuery = useQuery(ingressQueries.detail(scope, name))
   const ingress = detailQuery.data
-
-  useAIPageContext({
-    sourceWorkbench: 'platform',
-    sourceTitle: `Ingress ${ingress?.name ?? name}`,
-    entityKind: 'kubernetes.ingress',
-    entityName: ingress?.name ?? name,
-    clusterId: clusterId ?? undefined,
-    namespace: detailNamespace || ingress?.namespace,
-    timeRangeMinutes: 60,
-    pinnedData: {
-      className: ingress?.className,
-      hosts: ingress?.routes?.map((route) => route.host).filter(Boolean),
-      address: ingress?.address,
-      backendServices: ingress?.backendServices,
-      activeTab: activeTabKey,
-    },
-    promptHint: `排查 Ingress ${ingress?.name ?? name} 的域名、地址、IngressClass 和后端 Service。`,
-  })
 
   if (!clusterId || !detailNamespace) {
     return (
@@ -227,6 +208,20 @@ export function IngressDetailPage() {
   return (
     <NetworkDetailShell
       activeTabKey={activeTabKey}
+      aiContext={{
+        timeRangeMinutes: 60,
+        pinnedData: {
+          className: ingress.className,
+          hosts: ingress.routes?.map((route) => route.host).filter(Boolean),
+          address: ingress.address,
+          backendServices: ingress.backendServices,
+          activeTab: activeTabKey,
+        },
+        promptHint:
+          localeCode === 'zh_CN'
+            ? `排查 Ingress ${ingress.name} 的域名、地址、IngressClass 和后端 Service。`
+            : `Troubleshoot Ingress ${ingress.name} hosts, addresses, IngressClass, and backend services.`,
+      }}
       detail={ingress}
       kind="ingresses"
       label="Ingress"

@@ -21,6 +21,7 @@ export interface ManifestPackage {
   name: string
   description?: string
   applicationId: string
+  serviceId?: string
   businessLineId?: string
   renderer: ManifestRenderer
   status: ManifestStatus
@@ -37,6 +38,7 @@ export interface ManifestPackageInput {
   name: string
   description?: string
   applicationId: string
+  serviceId?: string
   businessLineId?: string
   renderer: ManifestRenderer
   files: ManifestFile[]
@@ -45,6 +47,7 @@ export interface ManifestPackageInput {
 
 export interface ManifestFilter {
   applicationId?: string
+  serviceId?: string
   clusterId?: string
   namespace?: string
   search?: string
@@ -108,12 +111,27 @@ export interface ManifestEnvironmentBinding {
   clusterId: string
   namespace: string
   overlay: Record<string, string>
+  rolloutStrategyId?: string
+  verificationPolicyId?: string
   driftPolicy: 'report' | 'repair' | 'adopt'
   deletionPolicy: 'orphan' | 'delete_managed'
   enabled: boolean
   version: number
   createdAt: string
   updatedAt: string
+}
+
+export interface ManifestEnvironmentBindingUpdateInput {
+  applicationEnvironmentId: string
+  clusterId: string
+  namespace: string
+  overlay: Record<string, string>
+  rolloutStrategyId?: string
+  verificationPolicyId?: string
+  driftPolicy: ManifestEnvironmentBinding['driftPolicy']
+  deletionPolicy: ManifestEnvironmentBinding['deletionPolicy']
+  enabled: boolean
+  expectedVersion: number
 }
 
 export interface ManifestRenderedDocument extends ManifestFile {
@@ -183,6 +201,21 @@ export interface ManifestDriftReport {
   }>
 }
 
+export interface ManifestResourceInventory {
+  deploymentId: string
+  generation: number
+  apiVersion: string
+  kind: string
+  namespace: string
+  name: string
+  uid?: string
+  resourceVersion?: string
+  desiredObjectDigest: string
+  observedObjectDigest: string
+  health: string
+  lastObservedAt: string
+}
+
 export interface ManifestDeployment {
   id: string
   packageId: string
@@ -198,10 +231,23 @@ export interface ManifestDeployment {
   status: {
     observedGeneration: number
     appliedRevision?: number
+    appliedDigest?: string
     lastKnownGoodRevision?: number
     phase: string
+    conditions: Array<{
+      type: string
+      status: 'true' | 'false' | 'unknown'
+      reason?: string
+      message?: string
+      observedGeneration?: number
+      lastTransitionAt?: string
+      evidenceRefs?: string[]
+    }>
+    inventory: ManifestResourceInventory[]
+    lastReconciledAt?: string
     lastExecutionTaskId?: string
     drift?: ManifestDriftReport
+    lastErrorCode?: string
     lastErrorMessage?: string
   }
   createdAt: string

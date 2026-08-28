@@ -5,7 +5,6 @@ import { identityProviderMutations } from './mutations'
 import type { IdentityOIDCClientInput, IdentityProviderInput } from './types'
 
 const apiMocks = vi.hoisted(() => ({
-  createIdentityOIDCClient: vi.fn(),
   createIdentityProvider: vi.fn(),
   deleteIdentityOIDCClient: vi.fn(),
   deleteIdentityProvider: vi.fn(),
@@ -56,23 +55,6 @@ describe('identity provider mutation options', () => {
     expect(invalidate).toHaveBeenCalledTimes(2)
     expect(invalidate).toHaveBeenCalledWith({ queryKey: identityProviderKeys.lists() })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: identityProviderKeys.detail(provider.id) })
-  })
-
-  it('preserves one-time client create results and invalidates only its client list', async () => {
-    const created = { client: { id: 'client-1' }, clientSecret: 'shown-once' }
-    apiMocks.createIdentityOIDCClient.mockResolvedValueOnce(created)
-    const { invalidate, queryClient } = queryClientWithInvalidationSpy()
-    const observer = new MutationObserver(
-      queryClient,
-      identityProviderMutations.createOIDCClient(queryClient),
-    )
-    const variables = { providerId: 'provider-1', input: clientInput }
-
-    await expect(observer.mutate(variables)).resolves.toBe(created)
-    expect(invalidate).toHaveBeenCalledOnce()
-    expect(invalidate).toHaveBeenCalledWith({
-      queryKey: identityProviderKeys.oidcClients('provider-1'),
-    })
   })
 
   it('uses explicit provider context for OIDC update and delete invalidation', async () => {

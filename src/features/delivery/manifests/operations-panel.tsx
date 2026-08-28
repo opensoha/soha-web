@@ -61,10 +61,35 @@ interface SourceFormValue {
   autoDeploy: boolean
 }
 
+interface BindingFormValue {
+  enabled: boolean
+  overlay: string
+}
+
+export function parseBindingOverlay(value?: string): Record<string, string> {
+  if (!value?.trim()) return {}
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(value)
+  } catch {
+    throw new Error('请输入有效的 JSON 对象')
+  }
+  if (
+    !parsed ||
+    Array.isArray(parsed) ||
+    typeof parsed !== 'object' ||
+    Object.values(parsed).some((item) => typeof item !== 'string')
+  ) {
+    throw new Error('覆盖值必须是键值均为字符串的 JSON 对象')
+  }
+  return parsed as Record<string, string>
+}
+
 export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const [sourceForm] = Form.useForm<SourceFormValue>()
+  const [bindingForm] = Form.useForm<BindingFormValue>()
   const [bindingId, setBindingId] = useState('')
   const [revision, setRevision] = useState(item.currentRevision || 1)
   const [rendered, setRendered] = useState<ManifestRenderResult | null>(null)
@@ -72,10 +97,7 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
   const canUpdateSource = hasPermission(snapshot, 'delivery.manifest-sources.update')
   const canSyncSource = hasPermission(snapshot, 'delivery.manifest-sources.sync')
   const canTriggerDeployment = hasPermission(snapshot, 'delivery.manifest-deployments.trigger')
-  const canPreflightDeployment = hasPermission(
-    snapshot,
-    'delivery.manifest-deployments.preflight',
-  )
+  const canPreflightDeployment = hasPermission(snapshot, 'delivery.manifest-deployments.preflight')
   const canUpdateDeployment = hasPermission(snapshot, 'delivery.manifest-deployments.update')
   const canRepair = hasPermission(snapshot, 'delivery.manifest-drift.repair')
   const canAdopt = hasPermission(snapshot, 'delivery.manifest-drift.adopt')
@@ -91,6 +113,7 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
     deliveryQueries.repositories.list({ applicationId: item.applicationId }),
   )
   const sourceMutation = useMutation(manifestMutations.updateSource(queryClient))
+  const bindingMutation = useMutation(manifestMutations.updateBinding(queryClient))
   const syncMutation = useMutation(manifestMutations.sync(queryClient))
   const preflightMutation = useMutation(manifestMutations.preflight())
   const desiredMutation = useMutation(manifestMutations.setDesiredRevision(queryClient))
@@ -121,6 +144,19 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
   useEffect(() => {
     if (!bindingId && bindingsQuery.data?.[0]?.id) setBindingId(bindingsQuery.data[0].id)
   }, [bindingId, bindingsQuery.data])
+
+  const selectedBinding = useMemo(
+    () => bindingsQuery.data?.find((binding) => binding.id === bindingId),
+    [bindingId, bindingsQuery.data],
+  )
+
+  useEffect(() => {
+    if (!selectedBinding) return
+    bindingForm.setFieldsValue({
+      enabled: selectedBinding.enabled,
+      overlay: JSON.stringify(selectedBinding.overlay ?? {}, null, 2),
+    })
+  }, [bindingForm, selectedBinding])
 
   const deploymentByBinding = useMemo(
     () =>
@@ -157,6 +193,28 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
   const runRender = async () => {
     if (!bindingId) return
     setRendered(await manifestApi.render(item.id, bindingId, revision))
+  }
+
+  const saveBinding = async () => {
+    if (!selectedBinding) return
+    const values = await bindingForm.validateFields()
+    await bindingMutation.mutateAsync({
+      id: selectedBinding.id,
+      packageId: item.id,
+      input: {
+        applicationEnvironmentId: selectedBinding.applicationEnvironmentId,
+        clusterId: selectedBinding.clusterId,
+        namespace: selectedBinding.namespace,
+        overlay: parseBindingOverlay(values.overlay),
+        rolloutStrategyId: selectedBinding.rolloutStrategyId,
+        verificationPolicyId: selectedBinding.verificationPolicyId,
+        driftPolicy: selectedBinding.driftPolicy,
+        deletionPolicy: selectedBinding.deletionPolicy,
+        enabled: values.enabled,
+        expectedVersion: selectedBinding.version,
+      },
+    })
+    message.success('环境配置已更新')
   }
 
   const runPreflight = async () => {
@@ -367,6 +425,76 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
     },
   ]
 
+  const environmentTab = (
+    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+      <Select
+        value={bindingId || undefined}
+        onChange={setBindingId}
+        placeholder="选择环境绑定"
+        loading={bindingsQuery.isLoading}
+        style={{ minWidth: 240, alignSelf: 'flex-start' }}
+        options={(bindingsQuery.data ?? []).map((binding) => ({
+          value: binding.id,
+          label: `${binding.environmentKey} / ${binding.namespace}${binding.enabled ? '' : '（已停用）'}`,
+        }))}
+      />
+      {selectedBinding ? (
+        <Form form={bindingForm} layout="vertical" requiredMark={false}>
+          <Descriptions
+            className="soha-manifest-runtime-summary"
+            size="small"
+            column={3}
+            items={[
+              { key: 'environment', label: '环境', children: selectedBinding.environmentKey },
+              { key: 'cluster', label: '集群', children: selectedBinding.clusterId },
+              { key: 'namespace', label: '命名空间', children: selectedBinding.namespace },
+            ]}
+          />
+          <div className="soha-manifest-form-grid">
+            <Form.Item label="部署到此环境" name="enabled" valuePropName="checked">
+              <Switch
+                disabled={!canUpdateDeployment}
+                checkedChildren="启用"
+                unCheckedChildren="停用"
+              />
+            </Form.Item>
+            <Form.Item
+              className="soha-manifest-form-wide"
+              label="环境覆盖参数"
+              name="overlay"
+              extra="填写键值均为字符串的 JSON；留空表示不覆盖。"
+              rules={[
+                {
+                  validator: (_rule, value) => {
+                    try {
+                      parseBindingOverlay(value)
+                      return Promise.resolve()
+                    } catch (error) {
+                      return Promise.reject(error)
+                    }
+                  },
+                },
+              ]}
+            >
+              <Input.TextArea
+                autoSize={{ minRows: 4, maxRows: 12 }}
+                readOnly={!canUpdateDeployment}
+                placeholder={'{\n  "replicas": "3"\n}'}
+              />
+            </Form.Item>
+          </div>
+          {canUpdateDeployment ? (
+            <Button type="primary" loading={bindingMutation.isPending} onClick={saveBinding}>
+              保存环境配置
+            </Button>
+          ) : null}
+        </Form>
+      ) : (
+        <Alert showIcon type="info" title="当前资源包尚未配置环境绑定" />
+      )}
+    </Space>
+  )
+
   const syncColumns: TableColumnsType<ManifestSyncRun> = [
     { title: '触发', dataIndex: 'trigger', width: 90 },
     {
@@ -439,6 +567,7 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
         size="small"
         items={[
           { key: 'source', label: '来源', children: sourceTab },
+          { key: 'environment', label: '环境配置', children: environmentTab },
           {
             key: 'delivery',
             label: '交付',
@@ -452,7 +581,7 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
                     style={{ minWidth: 220 }}
                     options={(bindingsQuery.data ?? []).map((binding) => ({
                       value: binding.id,
-                      label: `${binding.environmentKey} / ${binding.namespace}`,
+                      label: `${binding.environmentKey} / ${binding.namespace}${binding.enabled ? '' : '（已停用）'}`,
                     }))}
                   />
                   <InputNumber
@@ -478,7 +607,7 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
                     <Button
                       type="primary"
                       icon={<CloudSyncOutlined />}
-                      disabled={!bindingId || item.currentRevision < 1}
+                      disabled={!bindingId || !selectedBinding?.enabled || item.currentRevision < 1}
                       loading={desiredMutation.isPending}
                       onClick={setDesired}
                     >

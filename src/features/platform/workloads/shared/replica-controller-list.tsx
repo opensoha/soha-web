@@ -14,7 +14,9 @@ import { includesSearch, normalizeSearchKeyword } from '@/features/platform/work
 import { useClusterCapability } from '@/features/platform/cluster-capabilities'
 import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import {
+  useWorkloadListAIContext,
   useWorkloadTableDensity,
+  workloadRowAIContext,
   WorkloadQueryPanel,
   WorkloadRefreshButton,
   WorkloadSearchInput,
@@ -62,6 +64,14 @@ export function ReplicaControllerListPage<T extends ReplicaControllerRecord>({
   const canShowActions =
     !capability.disabled &&
     records.some((record) => hasAllowedAction(record.allowedActions, 'delete'))
+  useWorkloadListAIContext({
+    clusterId,
+    itemCount: records.length,
+    kind,
+    label,
+    namespace,
+    searchKeyword,
+  })
   const actionColumn: TableColumnsType<T>[number] = {
     fixed: 'right',
     title: '',
@@ -138,6 +148,7 @@ export function ReplicaControllerListPage<T extends ReplicaControllerRecord>({
         columns={canShowActions ? [...columns, actionColumn] : columns}
         dataSource={clusterId ? filteredRecords : []}
         rowKey={(record) => `${record.namespace}/${record.name}`}
+        onRow={(record: T) => workloadRowAIContext(kind, record, clusterId)}
         loading={listQuery.isLoading}
         localSorting
         empty={

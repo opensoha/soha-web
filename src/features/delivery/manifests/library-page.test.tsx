@@ -4,7 +4,7 @@ import { act, type ReactNode } from 'react'
 import { App as AntdApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot } from 'react-dom/client'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ManifestLibraryPage } from './library-page'
 
@@ -112,7 +112,10 @@ async function renderPage(route: string) {
       <MemoryRouter initialEntries={[route]}>
         <QueryClientProvider client={queryClient}>
           <AntdApp>
-            <ManifestLibraryPage />
+            <Routes>
+              <Route path="/delivery/manifests" element={<ManifestLibraryPage />} />
+              <Route path="/applications/:applicationId" element={<LocationProbe />} />
+            </Routes>
           </AntdApp>
         </QueryClientProvider>
       </MemoryRouter>,
@@ -124,18 +127,32 @@ async function renderPage(route: string) {
   })
 }
 
+function LocationProbe() {
+  const location = useLocation()
+  return <output data-testid="location">{`${location.pathname}${location.search}`}</output>
+}
+
 describe('ManifestLibraryPage', () => {
-  it('applies the deep-linked application filter and hides edit actions for read-only users', async () => {
+  it('redirects an application-scoped legacy URL to the canonical application resources tab', async () => {
     await renderPage('/delivery/manifests?applicationId=payments')
 
-    expect(
-      testState.apiGet.mock.calls.some(([path]) =>
-        String(path).includes(
-          '/delivery/manifest-packages?applicationId=payments&page=1&pageSize=20',
-        ),
-      ),
-    ).toBe(true)
+    expect(container.querySelector('[data-testid="location"]')?.textContent).toBe(
+      '/applications/payments?tab=services&section=resources',
+    )
+  })
+
+  it('keeps the unscoped legacy index read-only even for editors', async () => {
+    testState.permissions = [
+      'delivery.application.update',
+      'delivery.application.delete',
+      'delivery.releases.trigger',
+    ]
+    await renderPage('/delivery/manifests')
+
+    expect(container.textContent).not.toContain('新建清单包')
     expect(container.querySelector('[aria-label="编辑清单"]')).toBeNull()
+    expect(container.querySelector('[aria-label="发布版本"]')).toBeNull()
+    expect(container.querySelector('[aria-label="删除清单"]')).toBeNull()
     expect(container.querySelector('.soha-manifest-name')?.tagName).toBe('DIV')
   })
 })

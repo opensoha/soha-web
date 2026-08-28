@@ -1,15 +1,19 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
+import dayjs from 'dayjs'
 import {
+  Alert,
   App,
   Avatar,
-  AutoComplete,
   Button,
   Form,
   Input,
   InputNumber,
   Modal,
   Select,
+  Space,
   Switch,
+  TimePicker,
+  Tooltip,
   Typography,
 } from 'antd'
 import type { FormInstance } from 'antd'
@@ -18,6 +22,7 @@ import {
   DeleteOutlined,
   LinkOutlined,
   PlusOutlined,
+  QuestionCircleOutlined,
   UploadOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
@@ -30,11 +35,10 @@ import {
   buildIdentityApplicationInput,
   defaultIdentityApplicationFormValues,
   IDENTITY_APPLICATION_ICON_ACCEPT,
+  identityApplicationAssignmentEffectOptions,
   identityApplicationAssignmentSubjectOptions,
   identityApplicationFormValuesFor,
-  identityApplicationOIDCScopeOptions,
   identityApplicationProviderTypeOptions,
-  identityApplicationStatusOptions,
   readIdentityApplicationIconFile,
   type IdentityApplicationTagOption,
   type IdentityApplicationFormValues,
@@ -124,22 +128,36 @@ function ApplicationIconInput({ id, value = '', onChange }: ApplicationIconInput
 interface AssignmentSubjectSelectProps {
   fieldName: number
   form: FormInstance<IdentityApplicationFormValues>
+  onChange?: (value: string[]) => void
   options: Record<string, Array<{ label: string; value: string }>>
-  placeholder: string
+  value?: string[]
 }
 
 function AssignmentSubjectSelect({
   fieldName,
   form,
+  onChange,
   options,
-  placeholder,
+  value,
 }: AssignmentSubjectSelectProps) {
+  const { t } = useI18n()
   const subjectType = Form.useWatch(['assignments', fieldName, 'subjectType'], form) ?? 'role'
+  const placeholder = {
+    role: t('identity.applications.subjectPlaceholder.role', '选择角色（可多选）'),
+    tag: t('identity.applications.subjectPlaceholder.tag', '输入标签（可多选）'),
+    team: t('identity.applications.subjectPlaceholder.team', '选择团队（可多选）'),
+    user: t('identity.applications.subjectPlaceholder.user', '选择用户（可多选）'),
+  }[subjectType]
   return (
-    <AutoComplete
+    <Select
+      allowClear
+      mode={subjectType === 'tag' ? 'tags' : 'multiple'}
+      value={value}
+      onChange={onChange}
       options={options[subjectType] ?? []}
       placeholder={placeholder}
-      showSearch={{ filterOption: true }}
+      showSearch={{ optionFilterProp: ['label', 'value'] }}
+      tokenSeparators={subjectType === 'tag' ? [',', '，'] : undefined}
     />
   )
 }
@@ -151,6 +169,8 @@ interface ApplicationFormModalProps {
   providerOptionsLoading: boolean
   open: boolean
   saving: boolean
+  stepUpAvailable: boolean
+  stepUpReason?: string
   onCancel: () => void
   onSubmit: (input: IdentityApplicationInput) => void
 }
@@ -162,12 +182,24 @@ export function ApplicationFormModal({
   providerOptionsLoading,
   open,
   saving,
+  stepUpAvailable,
+  stepUpReason,
   onCancel,
   onSubmit,
 }: ApplicationFormModalProps) {
   const [form] = Form.useForm<IdentityApplicationFormValues>()
+  const { message } = App.useApp()
   const { t } = useI18n()
+  const assignmentHint = t(
+    'identity.applications.assignmentHint',
+    '每行只配置一种主体类型，中间可多选同类对象；如需其他类型，请添加新行。拒绝规则优先，留空表示所有已登录用户。',
+  )
+  const conditionHint = t(
+    'identity.applications.conditionHint',
+    '通过访问对象校验后，还必须同时满足已启用的 MFA、网络与 UTC 时段条件。',
+  )
   const providerType = Form.useWatch('providerType', form) ?? 'link'
+  const assignmentValues = Form.useWatch('assignments', form) ?? []
   const permissionSnapshotQuery = usePermissionSnapshot()
   const permissionSnapshot = permissionSnapshotQuery.data?.data
   const canViewUsers = hasPermission(permissionSnapshot, 'access.users.view')
@@ -212,6 +244,22 @@ export function ApplicationFormModal({
     )
   }, [application, form, open])
 
+  const submit = (values: IdentityApplicationFormValues) => {
+    if (Boolean(values.startTimeUtc?.trim()) !== Boolean(values.endTimeUtc?.trim())) {
+      void message.error(
+        t('identity.applications.timeWindowRequired', 'UTC 开始与结束时间必须同时填写'),
+      )
+      return
+    }
+    if (values.requireMfa && !stepUpAvailable) {
+      void message.error(
+        stepUpReason || t('identity.applications.mfaUnavailable', '当前运行环境无法启用 MFA 条件'),
+      )
+      return
+    }
+    onSubmit(buildIdentityApplicationInput(values, application))
+  }
+
   return (
     <Modal
       destroyOnHidden
@@ -230,7 +278,7 @@ export function ApplicationFormModal({
         className="soha-identity-app-form"
         initialValues={defaultIdentityApplicationFormValues()}
         layout="vertical"
-        onFinish={(values) => onSubmit(buildIdentityApplicationInput(values, application))}
+        onFinish={submit}
       >
         <div className="soha-identity-form-grid">
           <Form.Item
@@ -243,10 +291,10 @@ export function ApplicationFormModal({
               },
             ]}
           >
-            <Input placeholder="Grafana" />
+            <Input placeholder="Example App" />
           </Form.Item>
           <Form.Item label="Slug" name="slug">
-            <Input placeholder="grafana" />
+            <Input placeholder="example-app" />
           </Form.Item>
           <Form.Item
             label={t('identity.applications.providerType', 'Provider 类型')}
@@ -257,9 +305,64 @@ export function ApplicationFormModal({
               options={identityApplicationProviderTypeOptions}
             />
           </Form.Item>
-          <Form.Item label={t('identity.applications.status', '状态')} name="status">
-            <Select options={identityApplicationStatusOptions} />
+          <Form.Item
+            getValueProps={(value?: string) => ({ value: value || undefined })}
+            label={t('identity.applications.providerId', 'Provider ID')}
+            name="providerId"
+            tooltip={t(
+              'identity.applications.providerIdHint',
+              'Provider 归属具体应用：新建 OIDC/Proxy 应用时请先保存，随后进入 Provider 配置；编辑时可选择同类型 Provider。',
+            )}
+          >
+            <Select
+              allowClear
+              disabled={providerSelectDisabled}
+              loading={providerOptionsLoading}
+              options={providerSelectOptions}
+              placeholder={
+                providerType === 'link'
+                  ? t('identity.applications.providerIdLinkPlaceholder', 'Link 应用无需 Provider')
+                  : !application
+                    ? t(
+                        'identity.applications.providerIdCreatePlaceholder',
+                        '保存应用后配置 Provider',
+                      )
+                    : providerOptionsLoading
+                      ? t('identity.applications.providerIdLoading', '正在加载 Provider')
+                      : providerSelectOptions.length
+                        ? t('identity.applications.providerIdPlaceholder', '选择 Provider')
+                        : t('identity.applications.providerIdEmpty', '当前应用暂无匹配的 Provider')
+              }
+              showSearch={{ optionFilterProp: 'label' }}
+            />
           </Form.Item>
+          <div className="soha-identity-publish-controls">
+            <div className="soha-identity-inline-switch">
+              <Text>{t('identity.applications.column.enabled', '启用状态')}</Text>
+              <Form.Item
+                getValueFromEvent={(checked: boolean) => (checked ? 'enabled' : 'disabled')}
+                getValueProps={(status: IdentityApplicationFormValues['status']) => ({
+                  checked: status === 'enabled',
+                })}
+                name="status"
+                noStyle
+              >
+                <Switch aria-label={t('identity.applications.column.enabled', '启用状态')} />
+              </Form.Item>
+            </div>
+            <div className="soha-identity-inline-switch">
+              <Text>{t('identity.applications.portalVisible', '门户可见')}</Text>
+              <Form.Item name="portalVisible" noStyle valuePropName="checked">
+                <Switch aria-label={t('identity.applications.portalVisible', '门户可见')} />
+              </Form.Item>
+            </div>
+            <div className="soha-identity-inline-switch">
+              <Text>{t('identity.applications.featured', '推荐应用')}</Text>
+              <Form.Item name="featured" noStyle valuePropName="checked">
+                <Switch aria-label={t('identity.applications.featured', '推荐应用')} />
+              </Form.Item>
+            </div>
+          </div>
           <Form.Item label={t('identity.applications.sortOrder', '排序')} name="sortOrder">
             <InputNumber min={0} precision={0} style={{ width: '100%' }} />
           </Form.Item>
@@ -269,56 +372,9 @@ export function ApplicationFormModal({
           <Input.TextArea autoSize={{ minRows: 2, maxRows: 4 }} />
         </Form.Item>
 
-        <div className="soha-identity-form-grid">
-          <Form.Item label={t('identity.applications.launchUrl', '访问地址')} name="launchUrl">
-            <Input prefix={<LinkOutlined />} placeholder="https://grafana.example.com" />
-          </Form.Item>
-          <Form.Item label={t('identity.applications.providerId', 'Provider ID')} name="providerId">
-            <Select
-              allowClear
-              disabled={providerSelectDisabled}
-              loading={providerOptionsLoading}
-              options={providerSelectOptions}
-              placeholder={
-                providerType === 'link'
-                  ? t('identity.applications.providerIdLinkPlaceholder', 'Link 应用无需 Provider')
-                  : providerOptionsLoading
-                    ? t('identity.applications.providerIdLoading', '正在加载 Provider')
-                    : providerSelectOptions.length
-                      ? t('identity.applications.providerIdPlaceholder', '选择 Provider')
-                      : t('identity.applications.providerIdEmpty', '当前应用暂无匹配的 Provider')
-              }
-              showSearch={{ optionFilterProp: 'label' }}
-            />
-          </Form.Item>
-        </div>
-
-        {providerType === 'oidc' ? (
-          <div className="soha-identity-oidc-launch-editor">
-            <Text strong>{t('identity.applications.oidcLaunch', 'OIDC 启动配置')}</Text>
-            <div className="soha-identity-form-grid">
-              <Form.Item
-                label={t('identity.applications.clientIdOverride', '覆盖 Client ID')}
-                name="oidcClientId"
-              >
-                <Input placeholder="client-id" />
-              </Form.Item>
-              <Form.Item
-                label={t('identity.applications.redirectOverride', '覆盖 Redirect URI')}
-                name="oidcRedirectUri"
-              >
-                <Input placeholder="https://app.example.com/callback" />
-              </Form.Item>
-            </div>
-            <Form.Item label={t('identity.applications.scopes', 'Scopes')} name="oidcScopes">
-              <Select
-                mode="tags"
-                options={identityApplicationOIDCScopeOptions}
-                tokenSeparators={[',', ' ']}
-              />
-            </Form.Item>
-          </div>
-        ) : null}
+        <Form.Item label={t('identity.applications.launchUrl', '访问地址')} name="launchUrl">
+          <Input prefix={<LinkOutlined />} placeholder="https://app.example.com" />
+        </Form.Item>
 
         <div className="soha-identity-form-grid">
           <Form.Item
@@ -339,44 +395,44 @@ export function ApplicationFormModal({
           </Form.Item>
         </div>
 
-        <div className="soha-identity-switch-row">
-          <Form.Item
-            label={t('identity.applications.portalVisible', '门户可见')}
-            name="portalVisible"
-            valuePropName="checked"
-          >
-            <Switch />
-          </Form.Item>
-          <Form.Item
-            label={t('identity.applications.featured', '推荐应用')}
-            name="featured"
-            valuePropName="checked"
-          >
-            <Switch />
-          </Form.Item>
-        </div>
-
         <Form.List name="assignments">
           {(fields, { add, remove }) => (
-            <div className="soha-identity-assignment-editor">
-              <div className="soha-identity-assignment-header">
-                <Text strong>{t('identity.applications.assignments', '访问授权')}</Text>
+            <div className="soha-identity-access-control-section">
+              <div className="soha-identity-access-control-header">
+                <Space size={4}>
+                  <Text strong>{t('identity.applications.accessControl', '访问控制')}</Text>
+                  <Tooltip title={assignmentHint} trigger={['hover', 'focus']}>
+                    <QuestionCircleOutlined
+                      aria-label={t('identity.applications.assignmentHintLabel', '访问控制说明')}
+                      tabIndex={0}
+                    />
+                  </Tooltip>
+                </Space>
                 <Button
                   icon={<PlusOutlined />}
                   size="small"
-                  onClick={() => add({ effect: 'allow', subjectId: '', subjectType: 'role' })}
+                  onClick={() => add({ effect: 'allow', subjectIds: [], subjectType: 'role' })}
                 >
                   {t('common.add', '添加')}
                 </Button>
               </div>
-              {fields.length ? (
-                fields.map((field) => (
+              <div className="soha-identity-assignment-editor">
+                {fields.map((field) => (
                   <div className="soha-identity-assignment-row" key={field.key}>
                     <Form.Item name={[field.name, 'subjectType']} rules={[{ required: true }]}>
-                      <Select options={identityApplicationAssignmentSubjectOptions} />
+                      <Select
+                        aria-label={t('identity.applications.subjectType', '主体类型')}
+                        disabled={Boolean(
+                          assignmentValues[field.name]?.subjectIds?.some((id) => id.trim()),
+                        )}
+                        options={identityApplicationAssignmentSubjectOptions}
+                        onChange={() =>
+                          form.setFieldValue(['assignments', field.name, 'subjectIds'], [])
+                        }
+                      />
                     </Form.Item>
                     <Form.Item
-                      name={[field.name, 'subjectId']}
+                      name={[field.name, 'subjectIds']}
                       rules={[
                         {
                           required: true,
@@ -391,31 +447,89 @@ export function ApplicationFormModal({
                         fieldName={field.name}
                         form={form}
                         options={subjectOptions}
-                        placeholder={t(
-                          'identity.applications.subjectPlaceholder',
-                          '搜索或输入用户、角色、团队或标签',
-                        )}
                       />
                     </Form.Item>
                     <Form.Item name={[field.name, 'effect']}>
-                      <Select
-                        disabled
-                        options={[
-                          { label: t('identity.applications.allow', '允许'), value: 'allow' },
-                        ]}
+                      <Select options={identityApplicationAssignmentEffectOptions} />
+                    </Form.Item>
+                    <Button
+                      aria-label={t('identity.applications.removeAssignment', '删除访问授权')}
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={() => remove(field.name)}
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="soha-identity-policy-conditions-section">
+                <Space size={4}>
+                  <Text strong>{t('identity.applications.accessConditions', '访问条件')}</Text>
+                  <Tooltip title={conditionHint} trigger={['hover', 'focus']}>
+                    <QuestionCircleOutlined
+                      aria-label={t('identity.applications.conditionHintLabel', '访问条件说明')}
+                      tabIndex={0}
+                    />
+                  </Tooltip>
+                </Space>
+                <div className="soha-identity-policy-conditions">
+                  {!stepUpAvailable ? (
+                    <Alert
+                      showIcon
+                      title={t('identity.applications.mfaUnavailableTitle', 'MFA 升级验证不可用')}
+                      description={
+                        stepUpReason ||
+                        t('identity.applications.mfaUnavailable', '当前运行环境无法启用 MFA 条件。')
+                      }
+                      type="warning"
+                    />
+                  ) : null}
+                  <Form.Item
+                    label={t('identity.applications.requireMfa', '要求 MFA')}
+                    name="requireMfa"
+                    valuePropName="checked"
+                  >
+                    <Switch disabled={!stepUpAvailable} />
+                  </Form.Item>
+                  <Form.Item
+                    label={t('identity.applications.allowedCidrs', '允许的 CIDR')}
+                    name="allowedCidrs"
+                  >
+                    <Select mode="tags" placeholder="10.0.0.0/8" tokenSeparators={[',']} />
+                  </Form.Item>
+                  <div className="soha-identity-policy-time-window">
+                    <Form.Item
+                      getValueFromEvent={(_: unknown, value: string) => value}
+                      getValueProps={(value?: string) => ({
+                        value: value ? dayjs(`2000-01-01T${value}:00`) : null,
+                      })}
+                      label={t('identity.applications.startTimeUtc', 'UTC 开始时间')}
+                      name="startTimeUtc"
+                    >
+                      <TimePicker
+                        format="HH:mm"
+                        placeholder={t('identity.applications.timePlaceholder', '选择时间')}
+                        showNow={false}
+                        style={{ width: '100%' }}
                       />
                     </Form.Item>
-                    <Button danger icon={<DeleteOutlined />} onClick={() => remove(field.name)} />
+                    <Form.Item
+                      getValueFromEvent={(_: unknown, value: string) => value}
+                      getValueProps={(value?: string) => ({
+                        value: value ? dayjs(`2000-01-01T${value}:00`) : null,
+                      })}
+                      label={t('identity.applications.endTimeUtc', 'UTC 结束时间')}
+                      name="endTimeUtc"
+                    >
+                      <TimePicker
+                        format="HH:mm"
+                        placeholder={t('identity.applications.timePlaceholder', '选择时间')}
+                        showNow={false}
+                        style={{ width: '100%' }}
+                      />
+                    </Form.Item>
                   </div>
-                ))
-              ) : (
-                <Text type="secondary">
-                  {t(
-                    'identity.applications.assignmentEmpty',
-                    '未配置访问授权时，所有已登录用户都可访问该应用。',
-                  )}
-                </Text>
-              )}
+                </div>
+              </div>
             </div>
           )}
         </Form.List>

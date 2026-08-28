@@ -96,7 +96,7 @@
   margin-block-start: 20px;
 }
 
-.soha-topology-edge-list .ant-list-item {
+.soha-topology-edge-list .soha-list-row {
   padding-inline: 0;
 }
 

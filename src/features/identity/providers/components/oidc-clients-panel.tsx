@@ -4,6 +4,7 @@ import type { TableColumnsType } from 'antd'
 import {
   DeleteOutlined,
   EditOutlined,
+  EyeOutlined,
   KeyOutlined,
   PlusOutlined,
   ReloadOutlined,
@@ -21,6 +22,8 @@ import {
   identityOIDCClientStatusTag,
   identityProviderTagsSummary,
 } from '../presentation'
+import { createIdentityOIDCClient, revealIdentityOIDCClientSecret } from '../api'
+import { identityProviderKeys } from '../keys'
 import { identityProviderMutations } from '../mutations'
 import { identityProviderQueries } from '../queries'
 import type {
@@ -55,11 +58,12 @@ export function OIDCClientsPanel({
   const queryClient = useQueryClient()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<IdentityOIDCClient | null>(null)
+  const [creatingClient, setCreatingClient] = useState(false)
+  const [revealingClientId, setRevealingClientId] = useState('')
 
   const clientsQuery = useQuery(
     identityProviderQueries.oidcClients(provider.id, provider.type === 'oidc'),
   )
-  const createMutation = useMutation(identityProviderMutations.createOIDCClient(queryClient))
   const updateMutation = useMutation(identityProviderMutations.updateOIDCClient(queryClient))
   const deleteMutation = useMutation(identityProviderMutations.removeOIDCClient(queryClient))
   const rotateSigningKeyMutation = useMutation(
@@ -81,6 +85,40 @@ export function OIDCClientsPanel({
     setModalOpen(true)
   }
 
+  const revealSecret = async (client: IdentityOIDCClient) => {
+    setRevealingClientId(client.id)
+    try {
+      const secret = await revealIdentityOIDCClientSecret(client.id)
+      onSecretCreated({ clientId: secret.clientId, clientSecret: secret.clientSecret })
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : String(error))
+    } finally {
+      setRevealingClientId('')
+    }
+  }
+
+  const createClient = async (input: IdentityOIDCClientInput) => {
+    setCreatingClient(true)
+    try {
+      const result = await createIdentityOIDCClient({ providerId: provider.id, input })
+      await queryClient.invalidateQueries({
+        queryKey: identityProviderKeys.oidcClients(provider.id),
+      })
+      message.success(`已创建 OIDC client ${result.client.clientId}`)
+      closeModal()
+      if (result.clientSecret) {
+        onSecretCreated({
+          clientId: result.client.clientId,
+          clientSecret: result.clientSecret,
+        })
+      }
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : String(error))
+    } finally {
+      setCreatingClient(false)
+    }
+  }
+
   const submitForm = (input: IdentityOIDCClientInput) => {
     if (editing) {
       updateMutation.mutate(
@@ -95,22 +133,7 @@ export function OIDCClientsPanel({
       )
       return
     }
-    createMutation.mutate(
-      { providerId: provider.id, input },
-      {
-        onSuccess: (result) => {
-          message.success(`已创建 OIDC client ${result.client.clientId}`)
-          closeModal()
-          if (result.clientSecret) {
-            onSecretCreated({
-              clientId: result.client.clientId,
-              clientSecret: result.clientSecret,
-            })
-          }
-        },
-        onError: (error: Error) => message.error(error.message),
-      },
-    )
+    void createClient(input)
   }
 
   const columns = useMemo<TableColumnsType<IdentityOIDCClient>>(
@@ -196,6 +219,36 @@ export function OIDCClientsPanel({
         width: 128,
         render: (_, record) => (
           <Space size={4}>
+            <Popconfirm
+              cancelText="取消"
+              description="查看操作会记录到审计日志。"
+              disabled={
+                !canUpdate ||
+                record.clientType === 'public' ||
+                record.clientSecretAvailable === false
+              }
+              okButtonProps={{ loading: revealingClientId === record.id }}
+              okText="查看"
+              title={`查看 ${record.clientId} 的 Client Secret`}
+              onConfirm={() => void revealSecret(record)}
+            >
+              <ManagementIconButton
+                aria-label="查看 Client Secret"
+                disabled={
+                  !canUpdate ||
+                  record.clientType === 'public' ||
+                  record.clientSecretAvailable === false
+                }
+                icon={<EyeOutlined />}
+                tooltip={
+                  record.clientType === 'public'
+                    ? 'Public client 不使用 Secret'
+                    : record.clientSecretAvailable === false
+                      ? 'Secret 不可查看，请编辑并设置新 Secret'
+                      : '查看 Client Secret'
+                }
+              />
+            </Popconfirm>
             <ManagementIconButton
               disabled={!canUpdate}
               icon={<EditOutlined />}
@@ -224,7 +277,17 @@ export function OIDCClientsPanel({
         ),
       },
     ],
-    [canDelete, canUpdate, deleteMutation, message, provider.id],
+    [
+      canDelete,
+      canUpdate,
+      deleteMutation,
+      message,
+      onSecretCreated,
+      provider.id,
+      queryClient,
+      revealSecret,
+      revealingClientId,
+    ],
   )
 
   if (provider.type !== 'oidc') {
@@ -295,7 +358,7 @@ export function OIDCClientsPanel({
         onSubmit={submitForm}
         open={modalOpen}
         providerId={provider.id}
-        submitting={createMutation.isPending || updateMutation.isPending}
+        submitting={creatingClient || updateMutation.isPending}
       />
     </div>
   )

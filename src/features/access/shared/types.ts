@@ -140,3 +140,5 @@ export interface AccessScopeGrant {
   createdAt: string
   updatedAt: string
 }
+
+export type AccessScopeGrantSubject = Pick<AccessScopeGrant, 'subjectId' | 'subjectType'>

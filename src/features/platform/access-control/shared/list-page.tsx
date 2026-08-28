@@ -14,6 +14,7 @@ import {
 } from '@/components/management-list'
 import { TABLE_ACTIONS_COLUMN_CLASS_NAME } from '@/components/resource-actions'
 import { hasAllowedAction } from '@/features/auth'
+import { encodeAIContextForElement, useAIPageContext } from '@/features/copilot'
 import { useClusterCapability } from '@/features/platform/cluster-capabilities'
 import { CreateEntry } from '@/features/platform/resource-creation/components/create-entry'
 import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
@@ -25,6 +26,14 @@ import { accessControlQueries } from './queries'
 import { accessControlScopeFromSelection, accessControlTargetFromRecord } from './scope'
 import type { AccessControlKind, AccessControlResourceRecord } from './types'
 import '../styles.css'
+
+const ACCESS_CONTROL_ENTITY_KINDS: Record<AccessControlKind, string> = {
+  serviceaccounts: 'ServiceAccount',
+  roles: 'Role',
+  rolebindings: 'RoleBinding',
+  clusterroles: 'ClusterRole',
+  clusterrolebindings: 'ClusterRoleBinding',
+}
 
 function normalizeKeyword(value: string) {
   return value.trim().toLowerCase()
@@ -81,6 +90,16 @@ export function AccessControlResourceListPage<T extends AccessControlResourceRec
   const actionsAvailable = !yamlCapability.isLoading && !yamlCapability.disabled
   const shouldShowActions =
     actionsAvailable && rawItems.some((item) => hasAllowedAction(item.allowedActions, 'delete'))
+  const entityKind = ACCESS_CONTROL_ENTITY_KINDS[kind]
+  useAIPageContext({
+    sourceWorkbench: 'platform',
+    sourceTitle: label,
+    entityKind,
+    clusterId: clusterId || undefined,
+    namespace: scope.namespace || undefined,
+    visibleFilters: { keyword: searchKeyword || undefined },
+    pinnedData: { itemCount: rawItems.length },
+  })
   const effectiveEmptyDescription = !clusterId
     ? localeCode === 'zh_CN'
       ? '请选择集群查看 RBAC 资源。'
@@ -247,6 +266,15 @@ export function AccessControlResourceListPage<T extends AccessControlResourceRec
         localSorting: true,
         pageSize: K8S_TABLE_PAGE_SIZE,
         rowKey,
+        onRow: (record: T) => ({
+          'data-ai-context': encodeAIContextForElement({
+            sourceWorkbench: 'platform',
+            entityKind,
+            entityName: record.name,
+            clusterId: clusterId || undefined,
+            namespace: record.namespace || undefined,
+          }),
+        }),
         scroll: { x: 'max-content' },
         tableSize,
         viewportScroll: true,

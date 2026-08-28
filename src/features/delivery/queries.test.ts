@@ -40,6 +40,18 @@ describe('deliveryQueries', () => {
     expect(workflows).toHaveBeenCalledWith({ applicationId: 'app-1' })
   })
 
+  it('exposes a distinct platform environment catalog query', async () => {
+    const environments = [{ id: 'env-prod' }]
+    const list = vi
+      .spyOn(deliveryApi.environmentCatalog, 'list')
+      .mockResolvedValue(environments as never)
+    const options = deliveryQueries.environmentCatalog.list()
+
+    expect(options.queryKey).toEqual(deliveryKeys.environmentCatalog.list())
+    await expect(executeQuery(options)).resolves.toBe(environments)
+    expect(list).toHaveBeenCalledOnce()
+  })
+
   it('disables required identifier and workload queries until targets exist', () => {
     expect(deliveryQueries.applications.detail(' ').enabled).toBe(false)
     expect(

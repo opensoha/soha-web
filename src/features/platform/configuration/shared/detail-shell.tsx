@@ -4,6 +4,7 @@ import { App, Card, Spin, Table, Tabs, Tag } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementState } from '@/components/management-list'
 import { TableCellText } from '@/components/table-cell-content'
+import { useAIPageContext } from '@/features/copilot'
 import { PlatformResourceOverview } from '@/features/platform/shared/resource-overview'
 import { ResourceGitOpsStatus } from '@/features/platform/shared/resource-gitops-status'
 import { useI18n } from '@/i18n'
@@ -188,6 +189,14 @@ export function ConfigurationDetailShell<TDetail extends ConfigurationDetailBase
 }) {
   const { t, localeCode } = useI18n()
   const [activeTabKey, setActiveTabKey] = useState('overview')
+  useAIPageContext({
+    sourceWorkbench: 'platform',
+    sourceTitle: label,
+    entityKind: label,
+    entityName: detail.name,
+    clusterId: target.scope.clusterId || undefined,
+    namespace: detail.namespace || undefined,
+  })
   const items: NonNullable<TabsProps['items']> = [
     {
       key: 'overview',

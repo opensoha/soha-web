@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { systemIntegrationQueries, type SystemIntegrationCategory } from '@/features/settings'
 import { identityApplicationQueries } from '../applications'
 import { identityOutpostQueries } from '../outposts'
 import { identityProviderQueries } from '../providers'
 import { identityRuntimeQueries } from '../runtime'
+import { softwarePackageQueries } from '../software'
 import { identityOverviewQueries } from './queries'
 
 function hasAnyPermission(snapshot: Parameters<typeof hasPermission>[0], keys: string[]) {
@@ -18,6 +20,8 @@ export function useIdentityOverviewData() {
     outposts: hasPermission(snapshot, 'identity.outposts.view'),
     sessions: hasPermission(snapshot, 'system.online-users.view'),
     audit: hasAnyPermission(snapshot, ['identity.audit.view', 'system.audit.view']),
+    software: hasPermission(snapshot, 'software.package.view'),
+    storageIntegrations: hasPermission(snapshot, 'settings.system-integrations.view'),
   }
 
   const applicationsQuery = useQuery({
@@ -40,6 +44,16 @@ export function useIdentityOverviewData() {
     ...identityOverviewQueries.audit(),
     enabled: permissions.audit,
   })
+  const softwareStorageQuery = useQuery({
+    ...softwarePackageQueries.storage(),
+    enabled: permissions.software,
+  })
+  const storageIntegrationsQuery = useQuery(
+    systemIntegrationQueries.list(
+      { category: 'storage' as SystemIntegrationCategory },
+      permissions.software && permissions.storageIntegrations,
+    ),
+  )
   const runtimeQuery = useQuery(identityRuntimeQueries.capabilities())
 
   const refreshAll = () => {
@@ -48,6 +62,10 @@ export function useIdentityOverviewData() {
     if (permissions.outposts) void outpostsQuery.refetch()
     if (permissions.sessions) void sessionsQuery.refetch()
     if (permissions.audit) void auditQuery.refetch()
+    if (permissions.software) void softwareStorageQuery.refetch()
+    if (permissions.software && permissions.storageIntegrations) {
+      void storageIntegrationsQuery.refetch()
+    }
     void runtimeQuery.refetch()
   }
 
@@ -57,12 +75,20 @@ export function useIdentityOverviewData() {
     outposts: outpostsQuery.data ?? [],
     sessions: sessionsQuery.data ?? [],
     audits: auditQuery.data ?? [],
+    softwareStorage: softwareStorageQuery.data,
+    storageIntegrations: storageIntegrationsQuery.data ?? [],
+    softwareError:
+      softwareStorageQuery.isError ||
+      (permissions.storageIntegrations && storageIntegrationsQuery.isError),
     runtime: runtimeQuery.data,
     loading: {
       applications: applicationsQuery.isLoading,
       providers: providersQuery.isLoading,
       outposts: outpostsQuery.isLoading,
       sessions: sessionsQuery.isLoading,
+      software:
+        softwareStorageQuery.isLoading ||
+        (permissions.storageIntegrations && storageIntegrationsQuery.isLoading),
     },
     permissions,
     refreshAll,

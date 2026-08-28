@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react'
-import { App, Button, Form, Popconfirm, Select, Space, Typography } from 'antd'
+import { useCallback, useMemo, useState } from 'react'
+import { App, Button, Form, Popconfirm, Select, Space, Switch, Typography } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
+  ManagementDensityButton,
   ManagementIconButton,
   ManagementKeywordField,
   ManagementQueryActions,
@@ -13,7 +14,7 @@ import {
   ManagementState,
   ManagementTableToolbar,
 } from '@/components/management-list'
-import { BooleanTag, MetadataTag, StatusTag } from '@/components/status-tag'
+import { BooleanTag, MetadataTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useI18n } from '@/i18n'
 import type {
@@ -21,10 +22,27 @@ import type {
   IdentityApplicationInput,
   IdentityProviderType,
 } from '../shared/types'
-import { identityProviderQueries } from '../providers'
+import { identityRuntimeQueries } from '../runtime'
 import {
+  createIdentityOIDCClient,
+  identityProviderKeys,
+  identityProviderMutations,
+  identityProviderQueries,
+  OIDCClientFormModal,
+  ProviderFormModal,
+  SecretRevealModal,
+  type IdentityOIDCClientInput,
+  type IdentityOIDCSecretReveal,
+  type IdentityProvider,
+  type IdentityProviderInput,
+} from '../providers'
+import {
+  buildIdentityApplicationInput,
+  identityApplicationAccessPolicyFor,
+  identityApplicationFormValuesFor,
   identityApplicationStatusOptions,
   identityApplicationTagOptions,
+  type IdentityApplicationFormValues,
 } from './application-form-model'
 import { ApplicationFormModal } from './components/application-form-modal'
 import { identityApplicationMutations } from './mutations'
@@ -32,13 +50,18 @@ import {
   formatIdentityApplicationDateTime,
   IdentityApplicationNameCell,
   identityApplicationAssignmentsSummary,
-  identityApplicationStatusTag,
 } from './presentation'
 import { identityApplicationQueries } from './queries'
 import type { IdentityApplicationFilters } from './types'
 import './styles.css'
 
 const { Text } = Typography
+
+interface OIDCOnboardingState {
+  application: IdentityApplication
+  applicationInput: IdentityApplicationInput
+  provider: IdentityProvider | null
+}
 
 export function IdentityApplicationsPage() {
   const { message } = App.useApp()
@@ -50,11 +73,18 @@ export function IdentityApplicationsPage() {
     status: '',
   })
   const [modalOpen, setModalOpen] = useState(false)
+  const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const [editing, setEditing] = useState<IdentityApplication | null>(null)
+  const [oidcOnboarding, setOIDCOnboarding] = useState<OIDCOnboardingState | null>(null)
+  const [oidcOnboardingSecret, setOIDCOnboardingSecret] = useState<IdentityOIDCSecretReveal | null>(
+    null,
+  )
+  const [creatingOIDCClient, setCreatingOIDCClient] = useState(false)
   const snapshot = usePermissionSnapshot().data?.data
   const canCreate = hasPermission(snapshot, 'identity.applications.create')
   const canUpdate = hasPermission(snapshot, 'identity.applications.update')
   const canDelete = hasPermission(snapshot, 'identity.applications.delete')
+  const canCreateProvider = hasPermission(snapshot, 'identity.providers.create')
 
   const resetFilters = () => {
     queryForm.resetFields()
@@ -63,7 +93,7 @@ export function IdentityApplicationsPage() {
 
   const applicationsQuery = useQuery(identityApplicationQueries.list(filters))
   const allApplicationsQuery = useQuery(identityApplicationQueries.list({ query: '', status: '' }))
-  const providerCapabilitiesQuery = useQuery(identityApplicationQueries.providerCapabilities())
+  const runtimeQuery = useQuery(identityRuntimeQueries.capabilities())
   const providersQuery = useQuery({
     ...identityProviderQueries.list({ applicationId: editing?.id ?? '' }),
     enabled: modalOpen && Boolean(editing?.id),
@@ -71,6 +101,9 @@ export function IdentityApplicationsPage() {
   const createMutation = useMutation(identityApplicationMutations.create(queryClient))
   const updateMutation = useMutation(identityApplicationMutations.update(queryClient))
   const deleteMutation = useMutation(identityApplicationMutations.remove(queryClient))
+  const createProviderMutation = useMutation(identityProviderMutations.create(queryClient))
+  const keepOIDCProviderType = useCallback(() => undefined, [])
+  const stepUpCapability = runtimeQuery.data?.stepUp
 
   const closeModal = () => {
     setModalOpen(false)
@@ -104,9 +137,91 @@ export function IdentityApplicationsPage() {
       onSuccess: (application) => {
         message.success(t('identity.applications.created', `已创建 ${application.name}`))
         closeModal()
+        if (input.providerType === 'oidc' && canCreateProvider && canUpdate) {
+          setOIDCOnboarding({ application, applicationInput: input, provider: null })
+        } else if (input.providerType === 'oidc') {
+          message.warning('应用已创建，但当前账号缺少创建 Provider 或更新应用的权限。')
+        }
       },
     })
   }
+
+  const submitOIDCProvider = (input: IdentityProviderInput) => {
+    if (!oidcOnboarding) return
+    createProviderMutation.mutate(input, {
+      onSuccess: (provider) => {
+        const boundInput = { ...oidcOnboarding.applicationInput, providerId: provider.id }
+        updateMutation.mutate(
+          { applicationId: oidcOnboarding.application.id, input: boundInput },
+          {
+            onSuccess: (application) =>
+              setOIDCOnboarding((current) =>
+                current ? { application, applicationInput: boundInput, provider } : current,
+              ),
+            onError: (error: Error) => {
+              message.warning(`Provider 已创建，但应用绑定更新失败：${error.message}`)
+              setOIDCOnboarding(null)
+            },
+          },
+        )
+      },
+      onError: (error: Error) => message.error(error.message),
+    })
+  }
+
+  const submitOIDCClient = async (input: IdentityOIDCClientInput) => {
+    const provider = oidcOnboarding?.provider
+    if (!provider) return
+    setCreatingOIDCClient(true)
+    try {
+      const result = await createIdentityOIDCClient({ providerId: provider.id, input })
+      await queryClient.invalidateQueries({
+        queryKey: identityProviderKeys.oidcClients(provider.id),
+      })
+      message.success(`已创建 OIDC client ${result.client.clientId}`)
+      if (result.clientSecret) {
+        setOIDCOnboardingSecret({
+          clientId: result.client.clientId,
+          clientSecret: result.clientSecret,
+        })
+        return
+      }
+      setOIDCOnboarding(null)
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : String(error))
+    } finally {
+      setCreatingOIDCClient(false)
+    }
+  }
+
+  const cancelOIDCOnboarding = () => {
+    message.info('已保留创建成功的资源，可稍后继续配置。')
+    setOIDCOnboarding(null)
+    setOIDCOnboardingSecret(null)
+  }
+
+  const quickUpdate = useCallback(
+    (
+      application: IdentityApplication,
+      changes: Partial<IdentityApplicationFormValues>,
+      successMessage: string,
+    ) => {
+      updateMutation.mutate(
+        {
+          applicationId: application.id,
+          input: buildIdentityApplicationInput(
+            { ...identityApplicationFormValuesFor(application), ...changes },
+            application,
+          ),
+        },
+        {
+          onSuccess: () => void message.success(successMessage),
+          onError: (error: Error) => void message.error(error.message),
+        },
+      )
+    },
+    [message, updateMutation],
+  )
 
   const columns = useMemo<TableColumnsType<IdentityApplication>>(
     () => [
@@ -128,35 +243,96 @@ export function IdentityApplicationsPage() {
         ),
       },
       {
-        title: t('identity.applications.column.portal', '门户'),
-        dataIndex: 'portalVisible',
-        width: 150,
-        render: (portalVisible: boolean, record) => (
-          <Space orientation="vertical" size={2}>
-            {identityApplicationStatusTag(
-              record.status,
-              t(`identity.applications.status.${record.status}`, record.status),
-            )}
-            <BooleanTag
-              value={portalVisible}
-              trueLabel={t('identity.applications.visible', '可见')}
-              falseLabel={t('identity.applications.hidden', '隐藏')}
+        title: t('identity.applications.column.enabled', '启用状态'),
+        dataIndex: 'status',
+        width: 130,
+        render: (_, record) => (
+          <Space size={6}>
+            <Switch
+              aria-label={`${record.name} ${t('identity.applications.column.enabled', '启用状态')}`}
+              checked={record.status === 'enabled'}
+              disabled={!canUpdate}
+              loading={
+                updateMutation.isPending && updateMutation.variables?.applicationId === record.id
+              }
+              size="small"
+              onChange={(checked) =>
+                quickUpdate(
+                  record,
+                  { status: checked ? 'enabled' : 'disabled' },
+                  checked
+                    ? t('identity.applications.enabled', '应用已启用')
+                    : t('identity.applications.disabled', '应用已停用'),
+                )
+              }
             />
-            {record.featured ? (
-              <MetadataTag label={t('identity.applications.featured', '推荐')} tone="purple" />
+            {record.status === 'draft' || record.status === 'maintenance' ? (
+              <Text type="secondary">
+                {t(`identity.applications.status.${record.status}`, record.status)}
+              </Text>
             ) : null}
           </Space>
         ),
       },
       {
-        title: t('identity.applications.column.assignments', '访问授权'),
+        title: t('identity.applications.column.portalVisible', '门户可见'),
+        dataIndex: 'portalVisible',
+        width: 120,
+        render: (portalVisible: boolean, record) => (
+          <Switch
+            aria-label={`${record.name} ${t('identity.applications.column.portalVisible', '门户可见')}`}
+            checked={portalVisible}
+            disabled={!canUpdate}
+            loading={
+              updateMutation.isPending && updateMutation.variables?.applicationId === record.id
+            }
+            size="small"
+            onChange={(checked) =>
+              quickUpdate(
+                record,
+                { portalVisible: checked },
+                checked
+                  ? t('identity.applications.portalShown', '已在门户显示')
+                  : t('identity.applications.portalHidden', '已从门户隐藏'),
+              )
+            }
+          />
+        ),
+      },
+      {
+        title: t('identity.applications.column.featured', '推荐'),
+        dataIndex: 'featured',
+        width: 90,
+        render: (featured: boolean) => (
+          <BooleanTag
+            value={featured}
+            trueLabel={t('identity.applications.featured', '推荐')}
+            falseLabel={t('identity.applications.notFeatured', '普通')}
+          />
+        ),
+      },
+      {
+        title: t('identity.applications.column.accessControl', '访问范围'),
         key: 'assignments',
         width: 260,
-        render: (_, record) =>
-          identityApplicationAssignmentsSummary(
-            record,
-            t('identity.applications.allAuthenticatedUsers', '所有已登录用户'),
-          ),
+        render: (_, record) => {
+          const conditions = identityApplicationAccessPolicyFor(record)
+          return (
+            <Space className="soha-identity-access-scope" size={[4, 4]} wrap>
+              {identityApplicationAssignmentsSummary(
+                record,
+                t('identity.applications.allAuthenticatedUsers', '所有已登录用户'),
+              )}
+              {conditions.requireMfa ? <MetadataTag label="MFA" tone="blue" /> : null}
+              {conditions.allowedCidrs.length ? (
+                <MetadataTag label={`${conditions.allowedCidrs.length} CIDR`} />
+              ) : null}
+              {conditions.startTimeUtc && conditions.endTimeUtc ? (
+                <MetadataTag label={`${conditions.startTimeUtc}–${conditions.endTimeUtc} UTC`} />
+              ) : null}
+            </Space>
+          )
+        },
       },
       {
         title: t('identity.applications.column.launchUrl', '访问地址'),
@@ -164,9 +340,9 @@ export function IdentityApplicationsPage() {
         width: 280,
         render: (value: string | undefined, record) =>
           value ? (
-            <Text ellipsis title={value}>
+            <Typography.Link ellipsis href={value} rel="noreferrer" target="_blank" title={value}>
               {value}
-            </Text>
+            </Typography.Link>
           ) : record.providerType === 'oidc' ? (
             <MetadataTag
               label={t('identity.applications.generatedAuthorizeUrl', '自动生成授权地址')}
@@ -221,7 +397,7 @@ export function IdentityApplicationsPage() {
         ),
       },
     ],
-    [canDelete, canUpdate, deleteMutation, message, t],
+    [canDelete, canUpdate, deleteMutation, message, quickUpdate, t, updateMutation],
   )
 
   const saving = createMutation.isPending || updateMutation.isPending
@@ -231,32 +407,9 @@ export function IdentityApplicationsPage() {
     [allApplicationsQuery.data, applications],
   )
 
-  const capabilitySummary = (
-    <div className="soha-identity-capability-row">
-      {(providerCapabilitiesQuery.data ?? []).map((capability) => (
-        <div className="soha-identity-capability" key={capability.type}>
-          <div className="soha-identity-capability-title">
-            <MetadataTag label={capability.type.toUpperCase()} />
-            <StatusTag
-              label={t(
-                `identity.applications.capabilityStatus.${capability.status}`,
-                capability.status,
-              )}
-              value={capability.status}
-            />
-          </div>
-          <Text type="secondary">
-            {t(`identity.applications.capability.${capability.type}`, capability.description)}
-          </Text>
-        </div>
-      ))}
-    </div>
-  )
-
   return (
     <>
       <ManagementDataPage
-        beforeQuery={capabilitySummary}
         className="soha-identity-applications-page"
         query={{
           actions: (
@@ -321,6 +474,14 @@ export function IdentityApplicationsPage() {
               >
                 {t('identity.applications.create', '新建应用')}
               </Button>
+              <ManagementDensityButton
+                aria-label={t('common.tableDensity', '切换表格密度')}
+                title={t('common.tableDensity', '切换表格密度')}
+                tooltip={t('common.tableDensity', '切换表格密度')}
+                onClick={() =>
+                  setTableSize((current) => (current === 'small' ? 'middle' : 'small'))
+                }
+              />
               <ManagementRefreshButton
                 aria-label={t('common.refresh', '刷新')}
                 loading={applicationsQuery.isFetching}
@@ -333,6 +494,7 @@ export function IdentityApplicationsPage() {
           loading: applicationsQuery.isLoading || applicationsQuery.isFetching,
           rowKey: 'id',
           scroll: { x: 'max-content' },
+          tableSize,
         }}
       />
       <ApplicationFormModal
@@ -341,9 +503,53 @@ export function IdentityApplicationsPage() {
         providerOptions={providersQuery.data ?? []}
         providerOptionsLoading={providersQuery.isFetching}
         saving={saving}
+        stepUpAvailable={stepUpCapability?.available === true}
+        stepUpReason={stepUpCapability?.reason}
         tagOptions={applicationTagOptions}
         onCancel={closeModal}
         onSubmit={submitForm}
+      />
+      <ProviderFormModal
+        applicationOptions={
+          oidcOnboarding
+            ? [
+                {
+                  label: `${oidcOnboarding.application.name} (${oidcOnboarding.application.id})`,
+                  value: oidcOnboarding.application.id,
+                },
+              ]
+            : []
+        }
+        applicationsLoading={false}
+        editing={null}
+        initialApplicationId={oidcOnboarding?.application.id}
+        lockedType="oidc"
+        onCancel={cancelOIDCOnboarding}
+        onProviderTypeChange={keepOIDCProviderType}
+        onSubmit={submitOIDCProvider}
+        open={Boolean(oidcOnboarding && !oidcOnboarding.provider)}
+        outpostLoading={false}
+        outpostOptions={[]}
+        providerType="oidc"
+        samlAvailable={false}
+        submitting={createProviderMutation.isPending}
+        title="接入 OIDC 应用 · 2/3 配置 Provider"
+      />
+      <OIDCClientFormModal
+        editing={null}
+        onCancel={cancelOIDCOnboarding}
+        onSubmit={submitOIDCClient}
+        open={Boolean(oidcOnboarding?.provider && !oidcOnboardingSecret)}
+        providerId={oidcOnboarding?.provider?.id ?? ''}
+        submitting={creatingOIDCClient}
+        title="接入 OIDC 应用 · 3/3 配置 Client"
+      />
+      <SecretRevealModal
+        value={oidcOnboardingSecret}
+        onClose={() => {
+          setOIDCOnboardingSecret(null)
+          setOIDCOnboarding(null)
+        }}
       />
     </>
   )

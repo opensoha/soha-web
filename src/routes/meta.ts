@@ -59,7 +59,6 @@ const WORKBENCH_FALLBACK_PATHS: Partial<
 // Keep only the legacy tree attachment here. Route identity, path and
 // permissions stay owned by the route registry.
 const FRONTEND_MENU_COMPATIBILITY = [
-  ['internal-workbench-software-storage', 'identity'],
   ['ai-workbench-knowledge-pipelines', 'ai-workbench'],
   ['ai-workbench-evaluation-lifecycle', 'ai-workbench'],
   ['ai-workbench-memory', 'ai-workbench'],
@@ -531,41 +530,37 @@ function sortRuntimeMenuTree(items: RuntimeMenuNode[]): RuntimeMenuNode[] {
 }
 
 const APPLICATION_SECTION_ORDER: Record<string, number> = {
+  'delivery-overview': 0,
   builds: 10,
   applications: 10,
-  'delivery-overview': 15,
-  'delivery-onboarding': 20,
-  'release-board': 30,
-  'delivery-testing': 40,
-  'delivery-analysis': 50,
+  'release-board': 50,
+  'delivery-testing': 60,
+  'delivery-analysis': 70,
   'release-bundles': 10,
-  'execution-tasks': 20,
-  workflows: 30,
+  workflows: 20,
+  'execution-tasks': 30,
   releases: 40,
   'delivery-blueprints': 10,
   'build-templates': 20,
   'workflow-templates': 30,
-  'application-environments': 50,
-  registries: 70,
+  registries: 40,
 }
 
 const APPLICATION_MENU_SECTION_OVERRIDES: Record<string, string> = {
+  'delivery-overview': '',
   builds: 'delivery',
   applications: 'delivery',
-  'delivery-overview': 'delivery',
-  'delivery-onboarding': 'delivery',
   'release-board': 'delivery',
   'delivery-testing': 'delivery',
   'delivery-analysis': 'delivery',
   'release-bundles': 'delivery-records',
-  'execution-tasks': 'delivery-records',
   workflows: 'delivery-records',
+  'execution-tasks': 'delivery-records',
   releases: 'delivery-records',
   'delivery-blueprints': 'delivery-platform',
   'build-templates': 'delivery-platform',
   'workflow-templates': 'delivery-platform',
   registries: 'delivery-platform',
-  'application-environments': 'delivery-platform',
 }
 
 const AI_MENU_SECTION_OVERRIDES: Record<string, string> = {
@@ -607,7 +602,6 @@ const SYSTEM_ROOT_ORDER: Record<string, number> = {
   'identity-applications': 21,
   'identity-providers': 22,
   'identity-outposts': 23,
-  'identity-policies': 24,
   system: 30,
   settings: 40,
 }

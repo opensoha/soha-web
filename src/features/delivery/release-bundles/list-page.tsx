@@ -1,7 +1,10 @@
 import { useMemo } from 'react'
-import { Alert, Card, Space, Tag, Typography } from 'antd'
+import { Alert, Space, Tag, Typography } from 'antd'
+import { ArrowRightOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { ManagementIconButton } from '@/components/management-list'
+import { OverviewMetricCard, type OverviewMetricItem } from '@/components/overview-visuals'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { DeliveryTable } from '@/features/delivery/delivery-table'
 import {
@@ -17,6 +20,7 @@ import { summarizeDeliveryGovernance } from '../workbench/governance'
 const { Text } = Typography
 
 export function ReleaseBundlesPage() {
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const focusedReleaseBundleId = searchParams.get('releaseBundleId')?.trim() ?? ''
   const bundlesQuery = useQuery(deliveryQueries.releaseBundles.list())
@@ -26,6 +30,35 @@ export function ReleaseBundlesPage() {
     : undefined
   const bundleSummary = useMemo(() => summarizeReleaseBundleStatus(bundles), [bundles])
   const tasksQuery = useQuery(deliveryQueries.executionTasks.list())
+  const summaryMetrics: OverviewMetricItem[] = [
+    {
+      key: 'candidates',
+      label: '候选版本',
+      value: bundleSummary.total,
+      helper: `${bundleSummary.ready} 个可验证 / 可推广`,
+    },
+    {
+      key: 'blocked',
+      label: '阻塞版本',
+      value: bundleSummary.blocked,
+      helper: '构建或发布失败',
+      tone: bundleSummary.blocked > 0 ? 'danger' : 'success',
+    },
+    {
+      key: 'artifacts',
+      label: '交付物',
+      value: bundleSummary.artifacts,
+      helper: '镜像 / 包 / digest',
+      tone: 'success',
+    },
+    {
+      key: 'missing',
+      label: '缺少交付物',
+      value: bundleSummary.missingArtifacts,
+      helper: '需要回填 artifact',
+      tone: bundleSummary.missingArtifacts > 0 ? 'warning' : 'success',
+    },
+  ]
 
   return (
     <div className="soha-page">
@@ -37,27 +70,10 @@ export function ReleaseBundlesPage() {
           type={focusedBundle || bundlesQuery.isLoading ? 'info' : 'warning'}
         />
       ) : null}
-      <div className="soha-release-bundle-summary">
-        <Card className="soha-management-panel-card" size="small">
-          <Text type="secondary">候选版本</Text>
-          <strong>{bundleSummary.total}</strong>
-          <Text type="secondary">{bundleSummary.ready} 个可验证 / 可推广</Text>
-        </Card>
-        <Card className="soha-management-panel-card" size="small">
-          <Text type="secondary">阻塞版本</Text>
-          <strong>{bundleSummary.blocked}</strong>
-          <Text type="secondary">构建或发布失败</Text>
-        </Card>
-        <Card className="soha-management-panel-card" size="small">
-          <Text type="secondary">交付物</Text>
-          <strong>{bundleSummary.artifacts}</strong>
-          <Text type="secondary">镜像 / 包 / digest</Text>
-        </Card>
-        <Card className="soha-management-panel-card" size="small">
-          <Text type="secondary">缺少交付物</Text>
-          <strong>{bundleSummary.missingArtifacts}</strong>
-          <Text type="secondary">需要回填 artifact</Text>
-        </Card>
+      <div className="soha-overview-metric-grid">
+        {summaryMetrics.map(({ key, ...item }) => (
+          <OverviewMetricCard key={key} {...item} />
+        ))}
       </div>
       <DeliveryTable
         rowKey="id"
@@ -120,6 +136,20 @@ export function ReleaseBundlesPage() {
             title: 'Updated',
             dataIndex: 'updatedAt',
             render: (value: string) => formatDateTime(value),
+          },
+          {
+            ...tableColumnPresets.action,
+            title: '操作',
+            dataIndex: 'id',
+            render: (_: string, record: ReleaseBundle) => (
+              <ManagementIconButton
+                aria-label="查看版本包详情"
+                icon={<ArrowRightOutlined />}
+                size="small"
+                tooltip="查看详情"
+                onClick={() => navigate(`/delivery/release-bundles/${record.id}`)}
+              />
+            ),
           },
         ]}
       />

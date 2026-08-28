@@ -1,8 +1,5 @@
-import type { ReactNode } from 'react'
 import './styles.css'
-import { ArrowRightOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Typography } from 'antd'
-import { useNavigate } from 'react-router-dom'
+import { Alert, Typography } from 'antd'
 import type { ExecutionTask, ReleaseBoardEntry, ReleaseBundle } from '../types'
 
 const { Text } = Typography
@@ -41,20 +38,6 @@ export const VERIFY_TASK_KINDS = new Set([
   'check_http',
   'check_k8s_event',
 ])
-
-interface StatCardItem {
-  hint: string
-  label: string
-  value: string | number
-}
-
-interface ActionCardItem {
-  description: string
-  icon: ReactNode
-  label: string
-  path: string
-  type?: 'primary' | 'default'
-}
 
 function normalizeStatus(value?: string) {
   return String(value || '')
@@ -112,45 +95,6 @@ export function WorkbenchHeader({ description, title }: { description: string; t
         <h2 className="soha-delivery-workbench-header__title">{title}</h2>
         <Text type="secondary">{description}</Text>
       </div>
-    </div>
-  )
-}
-
-export function StatCards({ items }: { items: StatCardItem[] }) {
-  return (
-    <div className="soha-delivery-workbench-stats">
-      {items.map((item) => (
-        <Card key={item.label} className="soha-application-signal-card" size="small">
-          <span className="soha-application-signal-card__label">{item.label}</span>
-          <strong>{item.value}</strong>
-          <Text type="secondary">{item.hint}</Text>
-        </Card>
-      ))}
-    </div>
-  )
-}
-
-export function ActionCards({ items }: { items: ActionCardItem[] }) {
-  const navigate = useNavigate()
-
-  return (
-    <div className="soha-delivery-workbench-actions">
-      {items.map((item) => (
-        <Card key={item.label} className="soha-delivery-workbench-action-card" size="small">
-          <div className="soha-delivery-workbench-action-card__icon">{item.icon}</div>
-          <div className="soha-delivery-workbench-action-card__body">
-            <Text strong>{item.label}</Text>
-            <Text type="secondary">{item.description}</Text>
-          </div>
-          <Button
-            icon={<ArrowRightOutlined />}
-            type={item.type ?? 'default'}
-            onClick={() => navigate(item.path)}
-          >
-            打开
-          </Button>
-        </Card>
-      ))}
     </div>
   )
 }

@@ -20,6 +20,7 @@ import {
   ManagementTableToolbar,
 } from '@/components/management-list'
 import { hasAllowedAction } from '@/features/auth'
+import { encodeAIContextForElement, useAIPageContext } from '@/features/copilot'
 import { CreateEntry } from '@/features/platform/resource-creation/components/create-entry'
 import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import { useI18n } from '@/i18n'
@@ -81,6 +82,15 @@ export function StorageListPage<T extends { allowedActions?: string[]; name: str
     [normalizedKeyword, rawItems, searchValues],
   )
   const canShowActions = rawItems.some((item) => hasAllowedAction(item.allowedActions, 'delete'))
+  useAIPageContext({
+    sourceWorkbench: 'platform',
+    sourceTitle: resourceLabel,
+    entityKind: kind,
+    clusterId: clusterId || undefined,
+    namespace: clusterScoped ? undefined : namespace || undefined,
+    visibleFilters: { keyword: searchKeyword || undefined },
+    pinnedData: { itemCount: rawItems.length },
+  })
   const deleteLabel = localeCode === 'zh_CN' ? '删除' : 'Delete'
   const actionColumn: TableColumnsType<T>[number] = {
     fixed: 'right',
@@ -172,6 +182,15 @@ export function StorageListPage<T extends { allowedActions?: string[]; name: str
         columns: effectiveColumns,
         dataSource: clusterId ? filteredItems : [],
         rowKey,
+        onRow: (record: T) => ({
+          'data-ai-context': encodeAIContextForElement({
+            sourceWorkbench: 'platform',
+            entityKind: kind,
+            entityName: record.name,
+            clusterId: clusterId || undefined,
+            namespace: clusterScoped ? undefined : getRecordNamespace?.(record) || undefined,
+          }),
+        }),
         loading: query.isLoading,
         localSorting: true,
         pageSize: K8S_TABLE_PAGE_SIZE,

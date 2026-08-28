@@ -195,10 +195,18 @@ function TaskProgressBanner({
   onCancel,
   cancelling,
 }: TaskProgressBannerProps) {
+  const { localeCode } = useI18n()
   if (status === 'idle' || status === 'done') return null
   const isError = status === 'error'
   const description =
-    task?.message || (isError ? '与服务器的实时连接已断开' : '正在等待任务完成...')
+    task?.message ||
+    (isError
+      ? localeText(
+          localeCode,
+          '与服务器的实时连接已断开',
+          'The real-time connection to the server was interrupted',
+        )
+      : localeText(localeCode, '正在等待任务完成...', 'Waiting for the task to complete...'))
   const taskStatus = task?.status ? <StatusTag value={task.status} /> : null
   return (
     <Alert
@@ -216,7 +224,7 @@ function TaskProgressBanner({
       action={
         onCancel && task?.id ? (
           <Button size="small" danger onClick={onCancel} loading={cancelling}>
-            取消任务
+            {localeText(localeCode, '取消任务', 'Cancel task')}
           </Button>
         ) : null
       }
@@ -286,26 +294,38 @@ export function VirtualizationVmsPage() {
     if (streamStatus === 'done') {
       const success = streamedTask?.status === 'completed'
       message[success ? 'success' : 'error'](
-        success ? '虚拟机创建完成' : `虚拟机创建失败: ${streamedTask?.message ?? '未知错误'}`,
+        success
+          ? localeText(localeCode, '虚拟机创建完成', 'Virtual machine created')
+          : localeText(
+              localeCode,
+              `虚拟机创建失败: ${streamedTask?.message ?? '未知错误'}`,
+              `Virtual machine creation failed: ${streamedTask?.message ?? 'Unknown error'}`,
+            ),
       )
       setPendingTaskId(null)
       void invalidateVirtualizationQueries(queryClient, [virtualizationKeys.all])
     }
-  }, [streamStatus, streamedTask, message, queryClient])
+  }, [localeCode, message, queryClient, streamStatus, streamedTask])
   useEffect(() => {
     if (resizeStreamStatus !== 'done') return
     const success = streamedResizeTask?.status === 'completed'
     message[success ? 'success' : 'error'](
       success
-        ? '虚拟机规格调整完成'
-        : `虚拟机规格调整失败: ${streamedResizeTask?.message ?? '未知错误'}`,
+        ? localeText(localeCode, '虚拟机规格调整完成', 'Virtual machine resized')
+        : localeText(
+            localeCode,
+            `虚拟机规格调整失败: ${streamedResizeTask?.message ?? '未知错误'}`,
+            `Virtual machine resize failed: ${streamedResizeTask?.message ?? 'Unknown error'}`,
+          ),
     )
     setPendingResizeTaskId(null)
     void invalidateVirtualizationQueries(queryClient, [virtualizationKeys.all])
-  }, [message, queryClient, resizeStreamStatus, streamedResizeTask])
+  }, [localeCode, message, queryClient, resizeStreamStatus, streamedResizeTask])
   const cancelCreateMutation = useMutation(
     withVirtualizationMutationSuccess(virtualizationMutations.cancelOperation(queryClient), () =>
-      message.info('已请求取消创建任务'),
+      message.info(
+        localeText(localeCode, '已请求取消创建任务', 'Create task cancellation requested'),
+      ),
     ),
   )
   const vmsQuery = useQuery(virtualizationQueries.vms(filters, virtualizationModuleEnabled))
@@ -348,10 +368,18 @@ export function VirtualizationVmsPage() {
       (operation) => {
         const taskId = operation.id
         if (taskId) {
-          message.info('虚拟机创建任务已提交，正在跟踪进度...')
+          message.info(
+            localeText(
+              localeCode,
+              '虚拟机创建任务已提交，正在跟踪进度...',
+              'Virtual machine create task submitted; tracking progress...',
+            ),
+          )
           setPendingTaskId(taskId)
         } else {
-          message.success('虚拟机创建任务已提交')
+          message.success(
+            localeText(localeCode, '虚拟机创建任务已提交', 'Virtual machine create task submitted'),
+          )
         }
         setCreatePlan(null)
         setPendingCreate(null)
@@ -365,7 +393,13 @@ export function VirtualizationVmsPage() {
     mutationFn: ({ payload, idempotencyKey }: Extract<PendingCreate, { kind: 'runtime' }>) =>
       dockerApi.quickCreateHost(payload, idempotencyKey),
     onSuccess: () => {
-      message.success('虚拟机与运行时主机构建任务已提交')
+      message.success(
+        localeText(
+          localeCode,
+          '虚拟机与运行时主机构建任务已提交',
+          'Virtual machine and runtime host build task submitted',
+        ),
+      )
       setCreatePlan(null)
       setPendingCreate(null)
       setDrawerOpen(false)
@@ -377,7 +411,7 @@ export function VirtualizationVmsPage() {
   })
   const powerMutation = useMutation(
     withVirtualizationMutationSuccess(virtualizationMutations.powerVm(queryClient), () =>
-      message.success('电源操作已提交'),
+      message.success(localeText(localeCode, '电源操作已提交', 'Power operation submitted')),
     ),
   )
   const resizeMutation = useMutation(
@@ -385,10 +419,16 @@ export function VirtualizationVmsPage() {
       virtualizationMutations.resizeVm(queryClient),
       (operation) => {
         if (operation.id) {
-          message.info('调整规格任务已提交，正在跟踪进度...')
+          message.info(
+            localeText(
+              localeCode,
+              '调整规格任务已提交，正在跟踪进度...',
+              'Resize task submitted; tracking progress...',
+            ),
+          )
           setPendingResizeTaskId(operation.id)
         } else {
-          message.success('调整规格任务已提交')
+          message.success(localeText(localeCode, '调整规格任务已提交', 'Resize task submitted'))
         }
         setResizeTarget(null)
       },
@@ -574,7 +614,13 @@ export function VirtualizationVmsPage() {
     if (source.provider === 'pve' && pveVMSourceRef(source)) {
       openCloneModal(source)
     } else {
-      void message.warning('当前 Provider 暂不支持从虚拟机快捷克隆')
+      void message.warning(
+        localeText(
+          localeCode,
+          '当前 Provider 暂不支持从虚拟机快捷克隆',
+          'This provider does not support quick cloning from a virtual machine',
+        ),
+      )
     }
     const next = new URLSearchParams(searchParams)
     next.delete('clone')
@@ -582,6 +628,7 @@ export function VirtualizationVmsPage() {
   }, [
     cloneSourceId,
     cloneSourceQuery.data?.vm,
+    localeCode,
     message,
     openCloneModal,
     searchParams,
@@ -1258,8 +1305,22 @@ export function VirtualizationVmsPage() {
                             >
                               <Select
                                 options={[
-                                  { value: 'l26', label: 'Linux 2.6+ 内核' },
-                                  { value: 'l24', label: 'Linux 2.4 内核' },
+                                  {
+                                    value: 'l26',
+                                    label: localeText(
+                                      localeCode,
+                                      'Linux 2.6+ 内核',
+                                      'Linux 2.6+ kernel',
+                                    ),
+                                  },
+                                  {
+                                    value: 'l24',
+                                    label: localeText(
+                                      localeCode,
+                                      'Linux 2.4 内核',
+                                      'Linux 2.4 kernel',
+                                    ),
+                                  },
                                   { value: 'win11', label: 'Windows 11 / Server 2022' },
                                   { value: 'win10', label: 'Windows 10 / Server 2016-2019' },
                                   {
@@ -1412,7 +1473,10 @@ export function VirtualizationVmsPage() {
                                 />
                               </Form.Item>
                               <Form.Item name={[name, 'sizeGiB']} rules={[{ required: true }]}>
-                                <InputNumber min={1} addonAfter="GiB" />
+                                <Space.Compact block>
+                                  <InputNumber min={1} style={{ width: '100%' }} />
+                                  <Space.Addon>GiB</Space.Addon>
+                                </Space.Compact>
                               </Form.Item>
                               <ManagementIconButton
                                 aria-label={localeText(
@@ -1820,10 +1884,14 @@ export function VirtualizationVmsPage() {
         }
       />
       <Modal
-        title={`删除虚拟机：${deleteTarget?.name ?? ''}`}
+        title={localeText(
+          localeCode,
+          `删除虚拟机：${deleteTarget?.name ?? ''}`,
+          `Delete virtual machine: ${deleteTarget?.name ?? ''}`,
+        )}
         open={Boolean(deleteTarget)}
-        okText="确认删除"
-        cancelText="取消"
+        okText={localeText(localeCode, '确认删除', 'Delete')}
+        cancelText={localeText(localeCode, '取消', 'Cancel')}
         okButtonProps={{ danger: true, loading: powerMutation.isPending }}
         onCancel={() => setDeleteTarget(null)}
         onOk={() => {
@@ -1841,12 +1909,24 @@ export function VirtualizationVmsPage() {
         <Alert
           showIcon
           type="warning"
-          title="从 Provider 删除虚拟机"
-          description={`将删除 ${deleteTarget?.name ?? ''} 及其 Provider 资源。此操作不会删除虚拟化连接。`}
+          title={localeText(
+            localeCode,
+            '从 Provider 删除虚拟机',
+            'Delete the virtual machine from the provider',
+          )}
+          description={localeText(
+            localeCode,
+            `将删除 ${deleteTarget?.name ?? ''} 及其 Provider 资源。此操作不会删除虚拟化连接。`,
+            `This deletes ${deleteTarget?.name ?? ''} and its provider resources. The virtualization connection is not deleted.`,
+          )}
         />
       </Modal>
       <OperationalPlanModal
-        confirmText={pendingCreate?.kind === 'runtime' ? '确认创建并接入' : '确认创建'}
+        confirmText={
+          pendingCreate?.kind === 'runtime'
+            ? localeText(localeCode, '确认创建并接入', 'Create and connect')
+            : localeText(localeCode, '确认创建', 'Create')
+        }
         loading={createMutation.isPending || runtimeCreateMutation.isPending}
         onCancel={() => {
           setCreatePlan(null)
@@ -1865,10 +1945,22 @@ export function VirtualizationVmsPage() {
           })
         }}
         plan={createPlan}
-        title={pendingCreate?.kind === 'runtime' ? '虚拟机与运行时主机创建计划' : '虚拟机创建计划'}
+        title={
+          pendingCreate?.kind === 'runtime'
+            ? localeText(
+                localeCode,
+                '虚拟机与运行时主机创建计划',
+                'Virtual machine and runtime host creation plan',
+              )
+            : localeText(localeCode, '虚拟机创建计划', 'Virtual machine creation plan')
+        }
       />
       <StepFormModal
-        title={`调整规格：${resizeTarget?.name ?? ''}`}
+        title={localeText(
+          localeCode,
+          `调整规格：${resizeTarget?.name ?? ''}`,
+          `Resize: ${resizeTarget?.name ?? ''}`,
+        )}
         current={resizeStep}
         form={resizeForm}
         loading={resizeMutation.isPending}
@@ -1905,11 +1997,11 @@ export function VirtualizationVmsPage() {
             },
           })
         }}
-        submitText="提交调整"
+        submitText={localeText(localeCode, '提交调整', 'Submit resize')}
         width={760}
         steps={[
           {
-            title: '计算资源',
+            title: localeText(localeCode, '计算资源', 'Compute resources'),
             fieldNames: ['cpu', 'memoryMiB'],
             children: (
               <>
@@ -1917,10 +2009,18 @@ export function VirtualizationVmsPage() {
                   className="soha-vrt-form-alert"
                   type="info"
                   showIcon
-                  title="CPU 和内存可调高或调低，是否支持热变更由 Provider 决定。"
+                  title={localeText(
+                    localeCode,
+                    'CPU 和内存可调高或调低，是否支持热变更由 Provider 决定。',
+                    'CPU and memory can be increased or decreased. Hot resize support depends on the provider.',
+                  )}
                 />
                 <div className="soha-vrt-form-grid soha-vrt-form-grid--2">
-                  <Form.Item name="cpu" label="CPU 核数" rules={[{ required: true }]}>
+                  <Form.Item
+                    name="cpu"
+                    label={localeText(localeCode, 'CPU 核数', 'vCPUs')}
+                    rules={[{ required: true }]}
+                  >
                     <InputNumber
                       min={1}
                       precision={0}
@@ -1928,7 +2028,11 @@ export function VirtualizationVmsPage() {
                       disabled={!resizeTarget?.capabilities?.includes(VM_CAPABILITIES.cpu)}
                     />
                   </Form.Item>
-                  <Form.Item name="memoryMiB" label="内存 MiB" rules={[{ required: true }]}>
+                  <Form.Item
+                    name="memoryMiB"
+                    label={localeText(localeCode, '内存 MiB', 'Memory MiB')}
+                    rules={[{ required: true }]}
+                  >
                     <InputNumber
                       min={128}
                       step={128}
@@ -1942,21 +2046,34 @@ export function VirtualizationVmsPage() {
             ),
           },
           {
-            title: '磁盘',
+            title: localeText(localeCode, '磁盘', 'Disks'),
             children: (
               <>
                 <Form.Item
                   name="rootDiskId"
-                  label="系统盘设备"
+                  label={localeText(localeCode, '系统盘设备', 'Root disk device')}
                   rules={
                     resizeTarget?.capabilities?.includes(VM_CAPABILITIES.diskResize)
-                      ? [{ required: true, message: '请选择要扩容的系统盘设备' }]
+                      ? [
+                          {
+                            required: true,
+                            message: localeText(
+                              localeCode,
+                              '请选择要扩容的系统盘设备',
+                              'Select the root disk to expand',
+                            ),
+                          },
+                        ]
                       : []
                   }
                 >
                   <Select
                     loading={resizeDevicesQuery.isFetching}
-                    placeholder="选择实际启动盘设备"
+                    placeholder={localeText(
+                      localeCode,
+                      '选择实际启动盘设备',
+                      'Select the boot disk device',
+                    )}
                     options={discoveredDisks.map((item) => ({
                       value: item.id,
                       label: `${item.id}${item.sizeGiB ? ` (${item.sizeGiB} GiB)` : ''}`,
@@ -1970,7 +2087,10 @@ export function VirtualizationVmsPage() {
                     }}
                   />
                 </Form.Item>
-                <Form.Item name="rootDiskSizeGiB" label="系统盘目标容量 GiB">
+                <Form.Item
+                  name="rootDiskSizeGiB"
+                  label={localeText(localeCode, '系统盘目标容量 GiB', 'Target root disk size GiB')}
+                >
                   <InputNumber
                     min={selectedRootDisk?.sizeGiB ?? resizeTarget?.diskGiB ?? 1}
                     precision={0}
@@ -1989,15 +2109,25 @@ export function VirtualizationVmsPage() {
                           <Form.Item name={[name, 'add']} initialValue={true}>
                             <Select
                               options={[
-                                { value: true, label: '新增磁盘' },
-                                { value: false, label: '扩容磁盘' },
+                                {
+                                  value: true,
+                                  label: localeText(localeCode, '新增磁盘', 'Add disk'),
+                                },
+                                {
+                                  value: false,
+                                  label: localeText(localeCode, '扩容磁盘', 'Expand disk'),
+                                },
                               ]}
                             />
                           </Form.Item>
                           {resizeDisks[name]?.add === false ? (
                             <Form.Item name={[name, 'id']} rules={[{ required: true }]}>
                               <Select
-                                placeholder="选择已有磁盘"
+                                placeholder={localeText(
+                                  localeCode,
+                                  '选择已有磁盘',
+                                  'Select an existing disk',
+                                )}
                                 options={(resizeDevicesQuery.data ?? [])
                                   .filter((item) => item.kind === 'disk')
                                   .map((item) => ({
@@ -2007,43 +2137,75 @@ export function VirtualizationVmsPage() {
                               />
                             </Form.Item>
                           ) : (
-                            <div className="soha-vrt-form-row-hint">系统自动分配磁盘标识</div>
+                            <div className="soha-vrt-form-row-hint">
+                              {localeText(
+                                localeCode,
+                                '系统自动分配磁盘标识',
+                                'Disk ID assigned automatically',
+                              )}
+                            </div>
                           )}
                           <Form.Item
                             name={[name, 'storage']}
                             rules={
                               resizeDisks[name]?.add === false
                                 ? []
-                                : [{ required: true, message: '请选择虚拟化存储' }]
+                                : [
+                                    {
+                                      required: true,
+                                      message: localeText(
+                                        localeCode,
+                                        '请选择虚拟化存储',
+                                        'Select virtualization storage',
+                                      ),
+                                    },
+                                  ]
                             }
                           >
                             {resizeDisks[name]?.add === false ? (
-                              <div className="soha-vrt-form-row-hint">沿用原磁盘存储</div>
+                              <div className="soha-vrt-form-row-hint">
+                                {localeText(
+                                  localeCode,
+                                  '沿用原磁盘存储',
+                                  'Use the existing disk storage',
+                                )}
+                              </div>
                             ) : (
                               <Select
                                 showSearch
-                                placeholder="选择虚拟化存储"
+                                placeholder={localeText(
+                                  localeCode,
+                                  '选择虚拟化存储',
+                                  'Select virtualization storage',
+                                )}
                                 options={discoveredStorageOptions}
                                 loading={resizeDevicesQuery.isFetching}
                               />
                             )}
                           </Form.Item>
                           <Form.Item name={[name, 'sizeGiB']} rules={[{ required: true }]}>
-                            <InputNumber
-                              min={
-                                resizeDisks[name]?.add === false
-                                  ? (discoveredDisks.find(
-                                      (item) => item.id === resizeDisks[name]?.id,
-                                    )?.sizeGiB ?? 1)
-                                  : 1
-                              }
-                              precision={0}
-                              addonAfter="GiB"
-                            />
+                            <Space.Compact block>
+                              <InputNumber
+                                min={
+                                  resizeDisks[name]?.add === false
+                                    ? (discoveredDisks.find(
+                                        (item) => item.id === resizeDisks[name]?.id,
+                                      )?.sizeGiB ?? 1)
+                                    : 1
+                                }
+                                precision={0}
+                                style={{ width: '100%' }}
+                              />
+                              <Space.Addon>GiB</Space.Addon>
+                            </Space.Compact>
                           </Form.Item>
                           <ManagementIconButton
-                            aria-label="移除磁盘变更"
-                            tooltip="移除"
+                            aria-label={localeText(
+                              localeCode,
+                              '移除磁盘变更',
+                              'Remove disk change',
+                            )}
+                            tooltip={localeText(localeCode, '移除', 'Remove')}
                             icon={<DeleteOutlined />}
                             onClick={() => remove(name)}
                           />
@@ -2057,7 +2219,7 @@ export function VirtualizationVmsPage() {
                           !resizeTarget?.capabilities?.includes(VM_CAPABILITIES.diskResize)
                         }
                       >
-                        添加磁盘操作
+                        {localeText(localeCode, '添加磁盘操作', 'Add disk operation')}
                       </Button>
                     </Space>
                   )}
@@ -2066,28 +2228,44 @@ export function VirtualizationVmsPage() {
             ),
           },
           {
-            title: '网络',
+            title: localeText(localeCode, '网络', 'Network'),
             children: (
               <Form.List name="networks">
                 {(fields, { add, remove }) => (
                   <Space orientation="vertical" className="soha-vrt-fill">
                     {fields.map(({ key, name }) => (
                       <div key={key} className="soha-vrt-form-grid soha-vrt-form-grid--network-row">
-                        <div className="soha-vrt-form-row-hint">系统自动分配网卡标识</div>
+                        <div className="soha-vrt-form-row-hint">
+                          {localeText(
+                            localeCode,
+                            '系统自动分配网卡标识',
+                            'Network interface ID assigned automatically',
+                          )}
+                        </div>
                         <Form.Item name={[name, 'network']} rules={[{ required: true }]}>
                           <Select
                             showSearch
-                            placeholder="选择虚拟化网络"
+                            placeholder={localeText(
+                              localeCode,
+                              '选择虚拟化网络',
+                              'Select a virtualization network',
+                            )}
                             options={discoveredNetworkOptions}
                             loading={resizeDevicesQuery.isFetching}
                           />
                         </Form.Item>
                         <Form.Item name={[name, 'model']} initialValue="virtio">
-                          <Input placeholder="接口型号" />
+                          <Input
+                            placeholder={localeText(localeCode, '接口型号', 'Interface model')}
+                          />
                         </Form.Item>
                         <ManagementIconButton
-                          aria-label="移除网卡变更"
-                          tooltip="移除"
+                          aria-label={localeText(
+                            localeCode,
+                            '移除网卡变更',
+                            'Remove network interface change',
+                          )}
+                          tooltip={localeText(localeCode, '移除', 'Remove')}
                           icon={<DeleteOutlined />}
                           onClick={() => remove(name)}
                         />
@@ -2098,7 +2276,7 @@ export function VirtualizationVmsPage() {
                       onClick={() => add({ add: true, model: 'virtio' })}
                       disabled={!resizeTarget?.capabilities?.includes(VM_CAPABILITIES.networkAdd)}
                     >
-                      新增网卡
+                      {localeText(localeCode, '新增网卡', 'Add network interface')}
                     </Button>
                   </Space>
                 )}
@@ -2106,13 +2284,21 @@ export function VirtualizationVmsPage() {
             ),
           },
           {
-            title: '确认',
+            title: localeText(localeCode, '确认', 'Review'),
             children: (
               <Alert
                 showIcon
                 type="warning"
-                title="确认提交资源变更任务"
-                description="磁盘不可缩容。关机要求、热插拔能力和具体限制由 Provider Adapter 执行并返回。"
+                title={localeText(
+                  localeCode,
+                  '确认提交资源变更任务',
+                  'Confirm the resource change task',
+                )}
+                description={localeText(
+                  localeCode,
+                  '磁盘不可缩容。关机要求、热插拔能力和具体限制由 Provider Adapter 执行并返回。',
+                  'Disks cannot be shrunk. Shutdown requirements, hot-plug support, and other constraints are enforced and reported by the provider adapter.',
+                )}
               />
             ),
           },

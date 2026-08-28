@@ -480,6 +480,9 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .soha-list-row {
@@ -742,11 +745,7 @@
   );
   --soha-overview-current-color: var(--soha-warning);
   --soha-overview-rail-color: var(--soha-warning);
-  background: color-mix(
-    in srgb,
-    var(--soha-warning) 3%,
-    var(--soha-overview-card-warning-bg)
-  );
+  background: color-mix(in srgb, var(--soha-warning) 3%, var(--soha-overview-card-warning-bg));
 }
 
 .soha-overview-metric-card.is-danger.ant-card,
@@ -759,11 +758,7 @@
   );
   --soha-overview-current-color: var(--soha-danger);
   --soha-overview-rail-color: var(--soha-danger);
-  background: color-mix(
-    in srgb,
-    var(--soha-danger) 3%,
-    var(--soha-overview-card-danger-bg)
-  );
+  background: color-mix(in srgb, var(--soha-danger) 3%, var(--soha-overview-card-danger-bg));
 }
 
 .soha-overview-metric-card-head,
@@ -967,11 +962,7 @@
   );
   --soha-overview-current-color: var(--soha-warning);
   --soha-overview-rail-color: var(--soha-warning);
-  background: color-mix(
-    in srgb,
-    var(--soha-warning) 3%,
-    var(--soha-overview-card-warning-bg)
-  );
+  background: color-mix(in srgb, var(--soha-warning) 3%, var(--soha-overview-card-warning-bg));
 }
 
 .soha-overview-chip.is-danger {
@@ -983,11 +974,7 @@
   );
   --soha-overview-current-color: var(--soha-danger);
   --soha-overview-rail-color: var(--soha-danger);
-  background: color-mix(
-    in srgb,
-    var(--soha-danger) 3%,
-    var(--soha-overview-card-danger-bg)
-  );
+  background: color-mix(in srgb, var(--soha-danger) 3%, var(--soha-overview-card-danger-bg));
 }
 
 .soha-overview-chip-head {

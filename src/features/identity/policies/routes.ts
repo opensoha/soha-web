@@ -9,20 +9,14 @@ export const identityPolicyRoutes = defineRoutes([
       description: 'Provider Portal 访问策略兼容入口',
       icon: 'IconShield',
       group: 'identity',
-      workbenchId: 'security',
       requiresAuth: true,
       tabbar: false,
-      navVisible: true,
-      parentId: 'internal-workbench',
-      menuId: 'identity-policies',
-      permissionKey: 'identity.policies.view',
+      navVisible: false,
+      permissionKey: 'identity.applications.view',
       scopeMode: 'passive',
       workspace: 'system',
     },
     shell: 'app',
-    load: async () => {
-      const module = await import('./list-page')
-      return { default: module.IdentityPoliciesPage }
-    },
+    redirectTo: '/identity/applications',
   },
 ] as const)

@@ -16,6 +16,7 @@ import type {
   WorkbenchSendMessageStreamRequest,
 } from '@opensoha/contracts/gen/ts/sohaapi'
 import { hasPermission } from '@/features/auth'
+import { systemKeys } from '@/features/system'
 import { api } from '@/services/api-client'
 import { usePreferencesStore } from '@/stores/preferences-store'
 import type { ApiResponse, PermissionSnapshot } from '@/types'
@@ -114,8 +115,28 @@ function writeSharedSession(value: SharedAssistantSession | null) {
   }
 }
 
-function sourceWorkbenchFromPath(pathname: string): AIPageContext['sourceWorkbench'] {
-  if (pathname.startsWith('/platform')) return 'platform'
+const platformRoutePrefixes = [
+  '/clusters',
+  '/cluster-resources',
+  '/workloads',
+  '/configuration',
+  '/network',
+  '/storage',
+  '/platform-access-control',
+  '/resource-creation',
+  '/manifests',
+  '/extensions',
+  '/helm',
+] as const
+
+export function sourceWorkbenchFromPath(pathname: string): AIPageContext['sourceWorkbench'] {
+  if (
+    pathname === '/' ||
+    pathname.startsWith('/platform') ||
+    platformRoutePrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+  ) {
+    return 'platform'
+  }
   if (pathname.startsWith('/monitoring-workbench')) return 'monitoring'
   if (pathname.startsWith('/delivery') || pathname.startsWith('/applications')) return 'delivery'
   if (pathname.startsWith('/compute')) return 'compute'
@@ -426,6 +447,7 @@ export function GlobalAIAssistantProvider({
         })
         await queryClient.invalidateQueries({ queryKey: workbenchKeys.sessions.all() })
         await queryClient.invalidateQueries({ queryKey: workbenchKeys.agentRuns.all() })
+        await queryClient.invalidateQueries({ queryKey: systemKeys.audit.all })
       } catch (error) {
         const isAbort = error instanceof DOMException && error.name === 'AbortError'
         if (isAbort && createdSessionId) {

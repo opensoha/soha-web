@@ -16,10 +16,8 @@ import type {
   ExecutionTaskActionInput,
   KubernetesServiceImportInput,
   HelmReleaseImportInput,
-  ReleaseTriggerInput,
   RegistryInput,
   WorkflowDecisionInput,
-  WorkflowTriggerInput,
 } from './types'
 
 function uniqueKeys(keys: QueryKey[]) {
@@ -266,12 +264,6 @@ export const deliveryMutations = {
       }),
   },
   workflows: {
-    trigger: (queryClient: QueryClient) =>
-      mutationOptions({
-        mutationKey: deliveryMutationKeys.workflows('trigger'),
-        mutationFn: (payload: WorkflowTriggerInput) => deliveryApi.workflows.trigger(payload),
-        onSuccess: () => invalidateRuntimeQueries(queryClient),
-      }),
     approve: (queryClient: QueryClient) =>
       mutationOptions({
         mutationKey: deliveryMutationKeys.workflows('approve'),
@@ -282,14 +274,6 @@ export const deliveryMutations = {
       mutationOptions({
         mutationKey: deliveryMutationKeys.workflows('reject'),
         mutationFn: (payload: WorkflowDecisionInput) => deliveryApi.workflows.reject(payload),
-        onSuccess: () => invalidateRuntimeQueries(queryClient),
-      }),
-  },
-  releases: {
-    trigger: (queryClient: QueryClient) =>
-      mutationOptions({
-        mutationKey: deliveryMutationKeys.releases('trigger'),
-        mutationFn: (payload: ReleaseTriggerInput) => deliveryApi.releases.trigger(payload),
         onSuccess: () => invalidateRuntimeQueries(queryClient),
       }),
   },

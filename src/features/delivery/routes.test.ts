@@ -10,6 +10,7 @@ const routePages = vi.hoisted(() => ({
   workloadDetail: () => null,
   environments: () => null,
   environmentDetail: () => null,
+  environmentCatalog: () => null,
   buildTemplates: () => null,
   blueprints: () => null,
   onboarding: () => null,
@@ -44,6 +45,9 @@ vi.mock('./environments/list-page', () => ({
 vi.mock('./environments/detail-page', () => ({
   ApplicationEnvironmentDetailPage: routePages.environmentDetail,
 }))
+vi.mock('./environments/catalog-page', () => ({
+  EnvironmentCatalogPage: routePages.environmentCatalog,
+}))
 vi.mock('./build-templates/page', () => ({ BuildTemplatesPage: routePages.buildTemplates }))
 vi.mock('./blueprints/page', () => ({ DeliveryBlueprintsPage: routePages.blueprints }))
 vi.mock('./workbench/onboarding-page', () => ({
@@ -71,7 +75,7 @@ vi.mock('./builds/detail-page', () => ({ BuildDetailPage: routePages.buildDetail
 vi.mock('./registries/page', () => ({ RegistriesPage: routePages.registries }))
 
 describe('delivery route manifest', () => {
-  it('maps all 24 routes directly to distinct leaf modules', async () => {
+  it('maps all 25 routes directly to distinct leaf modules', async () => {
     const expectedPages = new Map([
       ['delivery-manifest-library', routePages.manifests],
       ['applications', routePages.applications],
@@ -80,6 +84,7 @@ describe('delivery route manifest', () => {
       ['application-workload-detail', routePages.workloadDetail],
       ['application-environments', routePages.environments],
       ['application-environment-detail', routePages.environmentDetail],
+      ['delivery-environments', routePages.environmentCatalog],
       ['build-templates', routePages.buildTemplates],
       ['delivery-blueprints', routePages.blueprints],
       ['delivery-onboarding', routePages.onboarding],
@@ -125,8 +130,8 @@ describe('delivery route manifest', () => {
     ).toEqual([
       {
         id: 'delivery-manifest-library',
-        menuId: 'delivery-manifest-library',
-        navVisible: true,
+        menuId: undefined,
+        navVisible: false,
         path: '/delivery/manifests',
         permissionKey: 'delivery.applications.view',
         permissionKeysAny: undefined,
@@ -171,8 +176,8 @@ describe('delivery route manifest', () => {
       },
       {
         id: 'application-environments',
-        menuId: 'application-environments',
-        navVisible: true,
+        menuId: undefined,
+        navVisible: false,
         path: '/application-environments',
         permissionKey: 'delivery.application-environments.view',
         permissionKeysAny: undefined,
@@ -183,6 +188,14 @@ describe('delivery route manifest', () => {
         navVisible: false,
         path: '/application-environments/:applicationEnvironmentId',
         permissionKey: undefined,
+        permissionKeysAny: undefined,
+      },
+      {
+        id: 'delivery-environments',
+        menuId: 'delivery-environment-directory',
+        navVisible: true,
+        path: '/delivery/environments',
+        permissionKey: 'delivery.application-environments.view',
         permissionKeysAny: undefined,
       },
       {
@@ -203,8 +216,8 @@ describe('delivery route manifest', () => {
       },
       {
         id: 'delivery-onboarding',
-        menuId: 'delivery-onboarding',
-        navVisible: true,
+        menuId: undefined,
+        navVisible: false,
         path: '/delivery/onboarding',
         permissionKey: 'delivery.applications.view',
         permissionKeysAny: undefined,
