@@ -286,7 +286,7 @@ function setDefaultResponses() {
       appTitle: 'Soha',
       sidebarTitle: 'Soha',
       slogan: 'Soha 是一种能力！',
-      loginLogoUrl: '',
+      loginLogoUrl: 'https://cdn.example.com/legacy-login.svg',
       expandedLogoUrl: 'https://cdn.example.com/logo.svg',
       collapsedLogoUrl: '',
       faviconUrl: '',
@@ -719,6 +719,24 @@ describe('settings ai page rendering', () => {
 
     expect(container.querySelector('img[src="https://cdn.example.com/logo.svg"]')).not.toBeNull()
     expect((container.querySelector('#slogan') as HTMLInputElement).value).toBe('Soha 是一种能力！')
+    expect(
+      Array.from(container.querySelectorAll('.soha-branding-upload-hint')).map(
+        (element) => element.textContent,
+      ),
+    ).toEqual([
+      '用于登录页左侧主视觉和展开侧边栏；支持 JPG、PNG、SVG、ICO、WebP；建议尺寸 200 × 60 px；单个文件不超过 2 MB',
+      '用于登录卡片和收起侧边栏；支持 JPG、PNG、SVG、ICO、WebP；建议尺寸 60 × 60 px；单个文件不超过 2 MB',
+      '支持 JPG、PNG、SVG、ICO、WebP；建议尺寸 16 × 16、32 × 32 或 64 × 64 px；单个文件不超过 2 MB',
+    ])
+    expect(
+      Array.from(container.querySelectorAll('button.soha-branding-upload-area')).map((button) =>
+        button.getAttribute('aria-label'),
+      ),
+    ).toEqual([
+      '替换登录页主视觉与展开侧边栏 Logo',
+      '上传登录卡片与收起侧边栏图标',
+      '上传Favicon 图标',
+    ])
 
     const saveButton = Array.from(container.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('保存设置'),
@@ -735,6 +753,7 @@ describe('settings ai page rendering', () => {
         appTitle: 'Soha',
         sidebarTitle: 'Soha',
         slogan: 'Soha 是一种能力！',
+        loginLogoUrl: 'https://cdn.example.com/legacy-login.svg',
       }),
     )
   })

@@ -33,10 +33,7 @@ import type {
 } from './domain-types'
 import type { Cluster, DeploymentDetail, Pod, ResourceMetrics } from '@/types/platform'
 import type { GatewayManifest, GatewayTool } from '@/features/copilot'
-import type {
-  RegistryConnection,
-  RegistryConnectionInput,
-} from '@opensoha/contracts/gen/ts/sohaapi'
+import type { RegistryConnection, RegistryConnectionInput } from '@opensoha/contracts/gen/ts/sohaapi'
 
 export type * from './domain-types'
 
@@ -61,6 +58,19 @@ export interface ApplicationServiceCreateInput {
 export interface ApplicationServiceDeleteInput {
   applicationId: string
   serviceId: string
+}
+
+export interface ApplicationWorkflowSaveInput {
+  applicationId: string
+  id: string
+  payload: ApplicationWorkflowInput
+}
+
+export interface ApplicationWorkflowInput {
+  name: string
+  description?: string
+  definition: object
+  enabled: boolean
 }
 
 export interface BuildTemplateInput {

@@ -61,7 +61,7 @@ describe('menu section schema helpers', () => {
       { value: 'ops', label: 'Observe' },
       { value: 'observe-signals', label: '探索' },
       { value: 'alerting', label: '告警与响应' },
-      { value: 'delivery', label: '应用交付' },
+      { value: 'delivery', label: '持续交付' },
       { value: 'control', label: 'control' },
     ])
   })

@@ -541,7 +541,7 @@ describe('app layout workspace navigation', () => {
     const container = await renderWithProviders('/applications')
 
     expect(container.querySelector('.soha-workbench-switcher__label')?.textContent).toBe(
-      '应用交付工作台',
+      '持续交付工作台',
     )
     expect(container.querySelector('[data-testid="platform-scope-trigger"]')).toBeNull()
     expect(container.textContent).toContain('应用中心')
@@ -1090,6 +1090,40 @@ describe('app layout workspace navigation', () => {
     expect(container.querySelector('.soha-workspace-switcher-shell')).toBeNull()
     expect(brandBar?.nextElementSibling).toBe(workbenchShell)
     expect(workbenchShell?.nextElementSibling).toBe(businessNav)
+  })
+
+  it('shows workbenches in the product order', async () => {
+    const container = await renderWithProviders('/', {
+      permissionKeys: [
+        'identity.portal.view',
+        'overview.view',
+        'delivery.applications.view',
+        'observe.monitoring.view',
+        'observe.ai.view',
+        'identity.applications.view',
+        'system.menus.view',
+      ],
+    })
+
+    await act(async () => {
+      ;(container.querySelector('.soha-workbench-switcher') as HTMLButtonElement).click()
+      await Promise.resolve()
+    })
+
+    expect(
+      Array.from(document.querySelectorAll('.soha-workspace-option__label')).map(
+        (item) => item.textContent,
+      ),
+    ).toEqual([
+      '门户',
+      'k8s工作台',
+      '持续交付工作台',
+      '可观测性工作台',
+      '计算资源工作台',
+      'AI工作台',
+      '内网工作台',
+      '设置中心',
+    ])
   })
 
   it('syncs the persisted workspace when navigating directly to resource pages', async () => {

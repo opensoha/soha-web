@@ -6,21 +6,38 @@ export const defaultBrandingSettings: BrandingSettings = {
   appTitle: 'Soha',
   sidebarTitle: 'Soha',
   slogan: 'Soha 是一种能力！',
-  loginLogoUrl: '',
-  expandedLogoUrl: '',
-  collapsedLogoUrl: '',
-  faviconUrl: '',
+  loginLogoUrl: '/logo.svg',
+  expandedLogoUrl: '/logo.svg',
+  collapsedLogoUrl: '/logo.svg',
+  faviconUrl: '/logo.svg',
 }
 
-export function normalizeBrandingSettings(value?: Partial<BrandingSettings> | null): BrandingSettings {
+export function normalizeBrandingSettings(
+  value?: Partial<BrandingSettings> | null,
+): BrandingSettings {
   return {
-    appTitle: String(value?.appTitle ?? defaultBrandingSettings.appTitle).trim() || defaultBrandingSettings.appTitle,
-    sidebarTitle: String(value?.sidebarTitle ?? value?.appTitle ?? defaultBrandingSettings.sidebarTitle).trim() || defaultBrandingSettings.sidebarTitle,
-    slogan: String(value?.slogan ?? defaultBrandingSettings.slogan).trim() || defaultBrandingSettings.slogan,
-    loginLogoUrl: String(value?.loginLogoUrl ?? '').trim(),
-    expandedLogoUrl: String(value?.expandedLogoUrl ?? '').trim(),
-    collapsedLogoUrl: String(value?.collapsedLogoUrl ?? '').trim(),
-    faviconUrl: String(value?.faviconUrl ?? '').trim(),
+    appTitle:
+      String(value?.appTitle ?? defaultBrandingSettings.appTitle).trim() ||
+      defaultBrandingSettings.appTitle,
+    sidebarTitle:
+      String(
+        value?.sidebarTitle ?? value?.appTitle ?? defaultBrandingSettings.sidebarTitle,
+      ).trim() || defaultBrandingSettings.sidebarTitle,
+    slogan:
+      String(value?.slogan ?? defaultBrandingSettings.slogan).trim() ||
+      defaultBrandingSettings.slogan,
+    loginLogoUrl:
+      String(value?.loginLogoUrl ?? defaultBrandingSettings.loginLogoUrl).trim() ||
+      defaultBrandingSettings.loginLogoUrl,
+    expandedLogoUrl:
+      String(value?.expandedLogoUrl ?? defaultBrandingSettings.expandedLogoUrl).trim() ||
+      defaultBrandingSettings.expandedLogoUrl,
+    collapsedLogoUrl:
+      String(value?.collapsedLogoUrl ?? defaultBrandingSettings.collapsedLogoUrl).trim() ||
+      defaultBrandingSettings.collapsedLogoUrl,
+    faviconUrl:
+      String(value?.faviconUrl ?? defaultBrandingSettings.faviconUrl).trim() ||
+      defaultBrandingSettings.faviconUrl,
   }
 }
 

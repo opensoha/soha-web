@@ -29,6 +29,7 @@ export default defineConfig(() => ({
     },
   },
   optimizeDeps: {
+    include: ['@visactor/react-vchart', '@visactor/vchart', '@xterm/addon-fit', '@xterm/xterm'],
     esbuildOptions: {
       target: 'esnext',
     },

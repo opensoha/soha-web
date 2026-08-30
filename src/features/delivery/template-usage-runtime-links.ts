@@ -39,8 +39,11 @@ export function runtimeEvidencePath(item: TemplateUsageRuntimeItem) {
       highlight: item.id,
     })
   }
-  if (item.applicationEnvironmentId) {
-    return `/application-environments/${encoded(item.applicationEnvironmentId)}`
+  if (item.applicationEnvironmentId && item.applicationId) {
+    return withParams(`/applications/${encoded(item.applicationId)}`, {
+      tab: 'services',
+      applicationEnvironmentId: item.applicationEnvironmentId,
+    })
   }
   if (item.applicationId) {
     return `/applications/${encoded(item.applicationId)}`

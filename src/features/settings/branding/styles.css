@@ -37,22 +37,32 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  width: min(240px, 100%);
+  height: 104px;
   overflow: hidden;
+  padding: 0;
   border: 1.5px dashed var(--soha-border-color);
   border-radius: var(--soha-radius);
   background: var(--soha-bg-surface);
+  color: inherit;
+  font: inherit;
   cursor: pointer;
   transition:
     border-color 0.2s,
     background 0.2s;
 }
 
-.soha-branding-upload-area:hover:not(.is-disabled) {
+.soha-branding-upload-area:hover:not(:disabled) {
   border-color: var(--soha-primary);
   background: var(--soha-primary-light-default);
 }
 
-.soha-branding-upload-area.is-disabled {
+.soha-branding-upload-area:focus-visible {
+  outline: 2px solid var(--soha-primary);
+  outline-offset: 2px;
+}
+
+.soha-branding-upload-area:disabled {
   cursor: not-allowed;
   opacity: 0.6;
 }

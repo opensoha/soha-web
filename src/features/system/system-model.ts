@@ -224,10 +224,10 @@ export interface MenuWorkbenchSummary {
 export const MENU_WORKBENCH_ORDER: MenuWorkbenchSurface[] = [
   'home',
   'platform',
-  'compute',
   'delivery',
-  'ai',
   'monitoring',
+  'compute',
+  'ai',
   'security',
   'settings',
   'system',
@@ -235,14 +235,14 @@ export const MENU_WORKBENCH_ORDER: MenuWorkbenchSurface[] = [
 ]
 
 export const MENU_WORKBENCH_LABELS: Record<MenuWorkbenchSurface, string> = {
-  home: '首页',
+  home: '门户',
   platform: 'k8s工作台',
   compute: '计算资源工作台',
   ai: 'AI工作台',
   monitoring: '可观测性工作台',
   security: '内网工作台',
   settings: '设置中心',
-  delivery: '应用交付工作台',
+  delivery: '持续交付工作台',
   system: '系统管理',
   unmapped: '未映射',
 }

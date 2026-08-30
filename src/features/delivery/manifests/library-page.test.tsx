@@ -4,7 +4,7 @@ import { act, type ReactNode } from 'react'
 import { App as AntdApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot } from 'react-dom/client'
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ManifestLibraryPage } from './library-page'
 
@@ -112,10 +112,7 @@ async function renderPage(route: string) {
       <MemoryRouter initialEntries={[route]}>
         <QueryClientProvider client={queryClient}>
           <AntdApp>
-            <Routes>
-              <Route path="/delivery/manifests" element={<ManifestLibraryPage />} />
-              <Route path="/applications/:applicationId" element={<LocationProbe />} />
-            </Routes>
+            <ManifestLibraryPage />
           </AntdApp>
         </QueryClientProvider>
       </MemoryRouter>,
@@ -127,21 +124,8 @@ async function renderPage(route: string) {
   })
 }
 
-function LocationProbe() {
-  const location = useLocation()
-  return <output data-testid="location">{`${location.pathname}${location.search}`}</output>
-}
-
 describe('ManifestLibraryPage', () => {
-  it('redirects an application-scoped legacy URL to the canonical application resources tab', async () => {
-    await renderPage('/delivery/manifests?applicationId=payments')
-
-    expect(container.querySelector('[data-testid="location"]')?.textContent).toBe(
-      '/applications/payments?tab=services&section=resources',
-    )
-  })
-
-  it('keeps the unscoped legacy index read-only even for editors', async () => {
+  it('keeps the manifest index read-only even for editors', async () => {
     testState.permissions = [
       'delivery.application.update',
       'delivery.application.delete',

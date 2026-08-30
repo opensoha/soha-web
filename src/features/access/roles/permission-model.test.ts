@@ -26,7 +26,7 @@ const resourceCreationPermission = {
 const workbenchPermissions = [
   ['ai', '访问 AI 工作台'],
   ['compute', '访问计算资源工作台'],
-  ['delivery', '访问应用交付工作台'],
+  ['delivery', '访问持续交付工作台'],
   ['home', '访问应用门户'],
   ['monitoring', '访问可观测与值班工作台'],
   ['platform', '访问 k8s工作台'],

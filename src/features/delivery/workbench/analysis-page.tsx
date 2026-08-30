@@ -16,7 +16,6 @@ import {
   isBlockedStatus,
   ManualModeAlert,
   sortByLatest,
-  WorkbenchHeader,
 } from './shared'
 
 const { Text } = Typography
@@ -114,10 +113,6 @@ export function DeliveryAnalysisPage() {
 
   return (
     <div className="soha-page soha-delivery-workbench-page">
-      <WorkbenchHeader
-        title="问题分析"
-        description="聚合失败任务、阻塞环境、日志入口和影响面，面向开发与测试先给出可操作的常规排查入口。"
-      />
       <ManualModeAlert description="常规模式保留任务日志、发布看板、版本包和重试入口；AI 分析只是对这些证据做摘要、归因和修复建议。" />
       <div className="soha-overview-metric-grid">
         {analysisStats.map(({ key, ...item }) => (

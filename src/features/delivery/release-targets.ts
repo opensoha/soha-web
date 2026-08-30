@@ -1,4 +1,4 @@
-import type { ReleaseTarget } from './domain-types'
+import type { DeliveryTargetCandidate, ReleaseTarget } from './domain-types'
 
 export const RELEASE_TARGET_KIND_OPTIONS = [
   { value: 'k8s_workload', label: 'YAML / Kubernetes workload' },
@@ -8,6 +8,47 @@ export const RELEASE_TARGET_KIND_OPTIONS = [
 ] as const
 
 type ReleaseTargetInput = Omit<ReleaseTarget, 'id'> & { id?: string }
+
+type ReleaseTargetIdentity = Pick<
+  ReleaseTarget,
+  'clusterId' | 'namespace' | 'workloadKind' | 'workloadName'
+>
+
+export function releaseTargetKey(target: ReleaseTargetIdentity) {
+  return JSON.stringify([
+    target.clusterId,
+    target.namespace,
+    target.workloadKind,
+    target.workloadName,
+  ])
+}
+
+export function releaseTargetsFromCandidates(
+  candidates: DeliveryTargetCandidate[],
+  selectedKeys: string[] = [],
+  existing: ReleaseTarget[] = [],
+): ReleaseTargetInput[] {
+  const targets = new Map<string, ReleaseTargetInput>(
+    candidates.map((candidate) => [
+      releaseTargetKey(candidate),
+      {
+        clusterId: candidate.clusterId,
+        namespace: candidate.namespace,
+        targetKind: 'k8s_workload',
+        executorKind: 'k8s_job_runner',
+        workloadKind: candidate.workloadKind,
+        workloadName: candidate.workloadName,
+        metadata: {},
+        enabled: true,
+      },
+    ]),
+  )
+  existing.forEach((target) => targets.set(releaseTargetKey(target), target))
+  return selectedKeys.flatMap((key) => {
+    const target = targets.get(key)
+    return target ? [target] : []
+  })
+}
 
 function requiredText(value: unknown, label: string, index: number) {
   const text = String(value ?? '').trim()

@@ -74,10 +74,6 @@
     flex-direction: column;
   }
 
-  .soha-application-container-row {
-    grid-template-columns: 1fr;
-  }
-
   .soha-application-card-grid {
     justify-content: stretch;
   }

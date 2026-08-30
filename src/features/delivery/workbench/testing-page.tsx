@@ -18,7 +18,6 @@ import {
   releaseBundleUpdatedAt,
   sortByLatest,
   VERIFY_TASK_KINDS,
-  WorkbenchHeader,
   workflowValidationCount,
 } from './shared'
 import { summarizeDeliveryGovernance } from './governance'
@@ -160,10 +159,6 @@ export function DeliveryTestingPage() {
 
   return (
     <div className="soha-page soha-delivery-workbench-page">
-      <WorkbenchHeader
-        title="测试验证"
-        description="面向测试人员聚合候选版本、验证任务、测试证据和晋级判断，AI 只在证据之上生成摘要和建议。"
-      />
       <ManualModeAlert description="常规模式可以直接查看版本包、执行任务和发布看板；AI 摘要必须回链到版本包、任务日志或分析 run ID。" />
       <div className="soha-overview-metric-grid">
         {testingStats.map(({ key, ...item }) => (

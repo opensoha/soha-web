@@ -6,28 +6,6 @@
   gap: 14px;
 }
 
-.soha-delivery-workbench-header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.soha-delivery-workbench-header__main {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.soha-delivery-workbench-header__title {
-  margin: 0;
-  color: var(--soha-text-primary);
-  font-size: 24px;
-  line-height: 1.2;
-  font-weight: 700;
-}
-
 .soha-delivery-workbench-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

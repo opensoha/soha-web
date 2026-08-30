@@ -74,6 +74,24 @@ describe('deliveryApi', () => {
     ])
   })
 
+  it('saves an application workflow through the atomic application-scoped endpoint', async () => {
+    const payload = {
+      name: 'Release workflow',
+      definition: { nodes: [] },
+      enabled: true,
+    }
+    apiMocks.put.mockResolvedValue({ data: { id: 'binding-1' } })
+
+    await expect(
+      deliveryApi.environments.saveWorkflow(' app/1 ', ' binding/1 ', payload),
+    ).resolves.toEqual({ id: 'binding-1' })
+
+    expect(apiMocks.put).toHaveBeenCalledWith(
+      '/applications/app%2F1/application-environments/binding%2F1/workflow',
+      payload,
+    )
+  })
+
   it('imports selected Kubernetes workloads in observe-only mode', async () => {
     const payload = {
       clusterId: 'cluster-a',

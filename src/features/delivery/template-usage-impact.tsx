@@ -1,6 +1,13 @@
 import { Alert, Button, Space, Tag, Typography } from 'antd'
 import { LinkOutlined } from '@ant-design/icons'
-import type { TemplateUsageApplication, TemplateUsageBinding, TemplateUsageBuildSource, TemplateUsageRiskLevel, TemplateUsageRuntimeItem, TemplateUsageSummary } from '@/types'
+import type {
+  TemplateUsageApplication,
+  TemplateUsageBinding,
+  TemplateUsageBuildSource,
+  TemplateUsageRiskLevel,
+  TemplateUsageRuntimeItem,
+  TemplateUsageSummary,
+} from '@/types'
 import { runtimeEvidencePath } from '@/features/delivery/template-usage-runtime-links'
 
 const { Text } = Typography
@@ -70,7 +77,12 @@ function uniqueApplications(usage: TemplateUsageSummary) {
 
 function bindingLabel(binding: TemplateUsageBinding) {
   const app = compactApplicationLabel(binding.application) || binding.applicationId || '-'
-  const env = binding.environment?.name || binding.environment?.key || binding.environmentKey || binding.environmentId || '-'
+  const env =
+    binding.environment?.name ||
+    binding.environment?.key ||
+    binding.environmentKey ||
+    binding.environmentId ||
+    '-'
   return `${app} / ${env}`
 }
 
@@ -108,13 +120,16 @@ function runtimeStateColor(state: string) {
 
 function runtimeItemLabel(item: TemplateUsageRuntimeItem, localeCode: LocaleCode) {
   const kind = item.kind.replace(/_/g, ' ')
-  const prefix = localeCode === 'en_US' ? kind : {
-    build: '构建',
-    workflow: '工作流',
-    release: '发布',
-    release_bundle: '版本包',
-    execution_task: '执行任务',
-  }[item.kind] ?? kind
+  const prefix =
+    localeCode === 'en_US'
+      ? kind
+      : ({
+          build: '构建',
+          workflow: '工作流',
+          release: '发布',
+          release_bundle: '版本包',
+          execution_task: '执行任务',
+        }[item.kind] ?? kind)
   const target = item.workflowName || item.version || item.sourceSystem || item.taskKind || item.id
   return `${prefix}: ${target}`
 }
@@ -123,25 +138,50 @@ function runtimeLinkForItem(item: TemplateUsageRuntimeItem) {
   return runtimeEvidencePath(item)
 }
 
-function runtimeEvidence(usage: TemplateUsageSummary, localeCode: LocaleCode, onNavigate?: NavigateFn) {
+function runtimeEvidence(
+  usage: TemplateUsageSummary,
+  localeCode: LocaleCode,
+  onNavigate?: NavigateFn,
+) {
   const summary = usage.lastExecutionSummary
   const stateCounts = summary?.stateCounts ?? {}
   const statusCounts = summary?.statusCounts ?? {}
   const items = summary?.items ?? []
   const latest = summary?.latest
-  const hasRuntimeEvidence = items.length > 0 || Object.values(stateCounts).some((count) => count > 0)
+  const hasRuntimeEvidence =
+    items.length > 0 || Object.values(stateCounts).some((count) => count > 0)
   if (!summary || (!hasRuntimeEvidence && !summary.note)) return null
   const latestPath = latest ? runtimeLinkForItem(latest) : ''
   return (
     <div className="soha-template-usage-impact__runtime">
       <Space wrap size={[8, 8]}>
-        <Tag color={runtimeStateColor('succeeded')}>{localeCode === 'en_US' ? `Succeeded ${stateCounts.succeeded ?? 0}` : `成功 ${stateCounts.succeeded ?? 0}`}</Tag>
-        <Tag color={runtimeStateColor('failed')}>{localeCode === 'en_US' ? `Failed ${stateCounts.failed ?? 0}` : `失败 ${stateCounts.failed ?? 0}`}</Tag>
-        <Tag color={runtimeStateColor('running')}>{localeCode === 'en_US' ? `Running ${stateCounts.running ?? 0}` : `运行中 ${stateCounts.running ?? 0}`}</Tag>
-        <Tag color={runtimeStateColor('pending')}>{localeCode === 'en_US' ? `Pending ${stateCounts.pending ?? 0}` : `等待 ${stateCounts.pending ?? 0}`}</Tag>
-        {Object.entries(statusCounts).slice(0, 4).map(([status, count]) => (
-          <Tag key={status}>{status} {count}</Tag>
-        ))}
+        <Tag color={runtimeStateColor('succeeded')}>
+          {localeCode === 'en_US'
+            ? `Succeeded ${stateCounts.succeeded ?? 0}`
+            : `成功 ${stateCounts.succeeded ?? 0}`}
+        </Tag>
+        <Tag color={runtimeStateColor('failed')}>
+          {localeCode === 'en_US'
+            ? `Failed ${stateCounts.failed ?? 0}`
+            : `失败 ${stateCounts.failed ?? 0}`}
+        </Tag>
+        <Tag color={runtimeStateColor('running')}>
+          {localeCode === 'en_US'
+            ? `Running ${stateCounts.running ?? 0}`
+            : `运行中 ${stateCounts.running ?? 0}`}
+        </Tag>
+        <Tag color={runtimeStateColor('pending')}>
+          {localeCode === 'en_US'
+            ? `Pending ${stateCounts.pending ?? 0}`
+            : `等待 ${stateCounts.pending ?? 0}`}
+        </Tag>
+        {Object.entries(statusCounts)
+          .slice(0, 4)
+          .map(([status, count]) => (
+            <Tag key={status}>
+              {status} {count}
+            </Tag>
+          ))}
       </Space>
       {latest ? (
         <Text className="soha-template-usage-impact__line">
@@ -181,13 +221,19 @@ function runtimeEvidence(usage: TemplateUsageSummary, localeCode: LocaleCode, on
           {items.length > 5 ? <Tag>+{items.length - 5}</Tag> : null}
         </Space>
       ) : summary.note ? (
-        <Text type="secondary" className="soha-template-usage-impact__line">{summary.note}</Text>
+        <Text type="secondary" className="soha-template-usage-impact__line">
+          {summary.note}
+        </Text>
       ) : null}
     </div>
   )
 }
 
-function staticJumpButtons(usage: TemplateUsageSummary, localeCode: LocaleCode, onNavigate?: NavigateFn) {
+function staticJumpButtons(
+  usage: TemplateUsageSummary,
+  localeCode: LocaleCode,
+  onNavigate?: NavigateFn,
+) {
   if (!onNavigate) return null
   const applications = uniqueApplications(usage)
   const bindings = usage.bindings ?? []
@@ -195,15 +241,28 @@ function staticJumpButtons(usage: TemplateUsageSummary, localeCode: LocaleCode, 
   const buttons: Array<{ key: string; label: string; path: string }> = []
   for (const app of applications.slice(0, 3)) {
     if (!app.id) continue
-    buttons.push({ key: `app:${app.id}`, label: compactApplicationLabel(app), path: `/applications/${encodeURIComponent(app.id)}` })
+    buttons.push({
+      key: `app:${app.id}`,
+      label: compactApplicationLabel(app),
+      path: `/applications/${encodeURIComponent(app.id)}`,
+    })
   }
   for (const binding of bindings.slice(0, 3)) {
-    if (!binding.id) continue
-    buttons.push({ key: `binding:${binding.id}`, label: bindingLabel(binding), path: `/application-environments/${encodeURIComponent(binding.id)}` })
+    const applicationId = binding.applicationId || binding.application?.id
+    if (!binding.id || !applicationId) continue
+    buttons.push({
+      key: `binding:${binding.id}`,
+      label: bindingLabel(binding),
+      path: `/applications/${encodeURIComponent(applicationId)}?tab=services&applicationEnvironmentId=${encodeURIComponent(binding.id)}`,
+    })
   }
   for (const source of buildSources.slice(0, 3)) {
     if (!source.applicationId) continue
-    buttons.push({ key: `source:${source.applicationId}:${source.buildSourceId}`, label: buildSourceLabel(source), path: `/applications/${encodeURIComponent(source.applicationId)}` })
+    buttons.push({
+      key: `source:${source.applicationId}:${source.buildSourceId}`,
+      label: buildSourceLabel(source),
+      path: `/applications/${encodeURIComponent(source.applicationId)}`,
+    })
   }
   if (usage.templateId) {
     const metadataKey = 'usageSnapshot.templateId'
@@ -224,7 +283,12 @@ function staticJumpButtons(usage: TemplateUsageSummary, localeCode: LocaleCode, 
     <Space wrap size={[6, 6]}>
       <Text type="secondary">{localeCode === 'en_US' ? 'Jump: ' : '跳转：'}</Text>
       {buttons.slice(0, 6).map((item) => (
-        <Button key={item.key} icon={<LinkOutlined />} size="small" onClick={() => onNavigate(item.path)}>
+        <Button
+          key={item.key}
+          icon={<LinkOutlined />}
+          size="small"
+          onClick={() => onNavigate(item.path)}
+        >
           {item.label}
         </Button>
       ))}
@@ -233,7 +297,11 @@ function staticJumpButtons(usage: TemplateUsageSummary, localeCode: LocaleCode, 
   )
 }
 
-function usageDescription(usage: TemplateUsageSummary, localeCode: LocaleCode, onNavigate?: NavigateFn) {
+function usageDescription(
+  usage: TemplateUsageSummary,
+  localeCode: LocaleCode,
+  onNavigate?: NavigateFn,
+) {
   const applications = uniqueApplications(usage)
   const bindings = usage.bindings ?? []
   const buildSources = usage.buildSources ?? []
@@ -242,12 +310,32 @@ function usageDescription(usage: TemplateUsageSummary, localeCode: LocaleCode, o
     <div className="soha-template-usage-impact">
       <Space wrap size={[8, 8]}>
         <Tag color={riskColor(usage.riskLevel)}>{riskText(usage.riskLevel, localeCode)}</Tag>
-        <Tag>{localeCode === 'en_US' ? `Usage ${usage.usageCount}` : `使用 ${usage.usageCount}`}</Tag>
-        <Tag>{localeCode === 'en_US' ? `Apps ${usage.applicationCount}` : `应用 ${usage.applicationCount}`}</Tag>
-        <Tag>{localeCode === 'en_US' ? `Envs ${usage.environmentCount}` : `环境 ${usage.environmentCount}`}</Tag>
-        <Tag color={usage.productionEnvironmentCount > 0 ? 'red' : 'default'}>{localeCode === 'en_US' ? `Prod ${usage.productionEnvironmentCount}` : `生产 ${usage.productionEnvironmentCount}`}</Tag>
-        <Tag color={usage.approvalBindingCount > 0 ? 'gold' : 'default'}>{localeCode === 'en_US' ? `Approvals ${usage.approvalBindingCount}` : `审批 ${usage.approvalBindingCount}`}</Tag>
-        <Tag>{localeCode === 'en_US' ? `Targets ${usage.targetCount}` : `目标 ${usage.targetCount}`}</Tag>
+        <Tag>
+          {localeCode === 'en_US' ? `Usage ${usage.usageCount}` : `使用 ${usage.usageCount}`}
+        </Tag>
+        <Tag>
+          {localeCode === 'en_US'
+            ? `Apps ${usage.applicationCount}`
+            : `应用 ${usage.applicationCount}`}
+        </Tag>
+        <Tag>
+          {localeCode === 'en_US'
+            ? `Envs ${usage.environmentCount}`
+            : `环境 ${usage.environmentCount}`}
+        </Tag>
+        <Tag color={usage.productionEnvironmentCount > 0 ? 'red' : 'default'}>
+          {localeCode === 'en_US'
+            ? `Prod ${usage.productionEnvironmentCount}`
+            : `生产 ${usage.productionEnvironmentCount}`}
+        </Tag>
+        <Tag color={usage.approvalBindingCount > 0 ? 'gold' : 'default'}>
+          {localeCode === 'en_US'
+            ? `Approvals ${usage.approvalBindingCount}`
+            : `审批 ${usage.approvalBindingCount}`}
+        </Tag>
+        <Tag>
+          {localeCode === 'en_US' ? `Targets ${usage.targetCount}` : `目标 ${usage.targetCount}`}
+        </Tag>
       </Space>
       {usage.riskReasons?.length ? (
         <Text type="secondary" className="soha-template-usage-impact__line">
@@ -287,7 +375,12 @@ function usageDescription(usage: TemplateUsageSummary, localeCode: LocaleCode, o
   )
 }
 
-export function TemplateUsageImpactPanel({ usage, loading, localeCode = 'zh_CN', onNavigate }: TemplateUsageImpactPanelProps) {
+export function TemplateUsageImpactPanel({
+  usage,
+  loading,
+  localeCode = 'zh_CN',
+  onNavigate,
+}: TemplateUsageImpactPanelProps) {
   if (loading) {
     return (
       <Alert
@@ -312,7 +405,11 @@ export function shouldConfirmTemplateUsageSave(usage?: TemplateUsageSummary) {
   return usage?.riskLevel === 'high' && usage.usageCount > 0
 }
 
-export function templateUsageConfirmText(templateName: string, usage?: TemplateUsageSummary, localeCode: LocaleCode = 'zh_CN') {
+export function templateUsageConfirmText(
+  templateName: string,
+  usage?: TemplateUsageSummary,
+  localeCode: LocaleCode = 'zh_CN',
+) {
   if (!usage) {
     return localeCode === 'en_US'
       ? `${templateName} has no usage summary yet. Continue saving this template directly?`

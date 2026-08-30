@@ -119,6 +119,10 @@ export function WorkflowTemplatesPage() {
   const { data, isFetching, isLoading, refetch } = useQuery(
     deliveryQueries.workflowTemplates.list(),
   )
+  const templates = useMemo(
+    () => (data ?? []).filter((template) => !template.category?.startsWith('application:')),
+    [data],
+  )
 
   const confirmDiscardChanges = useCallback(() => {
     if (!isDirty) return true
@@ -237,7 +241,7 @@ export function WorkflowTemplatesPage() {
         localeCode === 'zh_CN' ? 'DAG 发布流程模板已删除' : 'DAG release flow template deleted',
       )
       if (selectedTemplateId === deletedId) {
-        const nextTemplate = (data ?? []).find((item) => item.id !== deletedId)
+        const nextTemplate = templates.find((item) => item.id !== deletedId)
         if (nextTemplate) {
           loadTemplate(nextTemplate)
         } else {
@@ -252,7 +256,6 @@ export function WorkflowTemplatesPage() {
     onError: (err: Error) => message.error(err.message),
   })
 
-  const templates = data ?? []
   const selectedTemplate =
     selectedTemplateId && selectedTemplateId !== 'new'
       ? (templates.find((item) => item.id === selectedTemplateId) ?? null)
@@ -619,7 +622,9 @@ export function WorkflowTemplatesPage() {
               >
                 <Switch
                   checked={enabledValue}
-                  disabled={template.id === 'new' ? !canCreateWorkflowTemplate : !canUpdateWorkflowTemplate}
+                  disabled={
+                    template.id === 'new' ? !canCreateWorkflowTemplate : !canUpdateWorkflowTemplate
+                  }
                   size="small"
                   onChange={(checked) => handleTemplateEnabledChange(template, checked)}
                 />

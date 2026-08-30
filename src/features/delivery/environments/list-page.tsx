@@ -81,7 +81,11 @@ export function ApplicationEnvironmentsPage() {
           icon={<ArrowRightOutlined />}
           size="small"
           tooltip="进入应用环境"
-          onClick={() => navigate(`/applications/${record.applicationId}?tab=environments`)}
+          onClick={() =>
+            navigate(
+              `/applications/${encodeURIComponent(record.applicationId)}?tab=services&applicationEnvironmentId=${encodeURIComponent(record.id)}`,
+            )
+          }
         />
       ),
     },

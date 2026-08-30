@@ -11,9 +11,15 @@ import { BuildDetailPage } from './builds/detail-page'
 import { ExecutionTaskDetailPage } from './execution-tasks/detail-page'
 import { ReleaseDetailPage } from './releases/detail-page'
 import { ApplicationWorkloadDetailPage } from './runtime/workload-detail-page'
+import { I18nProvider } from '@/i18n'
+import { usePreferencesStore } from '@/stores/preferences-store'
 
 const testState = vi.hoisted(() => ({
   missingKind: '' as '' | 'build' | 'workflow' | 'release' | 'release_bundle' | 'execution_task',
+  workloadRuntimePending: false,
+  workloadRuntimeError: false,
+  workloadRuntimeNotFound: false,
+  workloadPodsEmpty: false,
   apiGet: vi.fn(async (path: string) => {
     const application = {
       id: 'app-1',
@@ -179,6 +185,13 @@ const testState = vi.hoisted(() => ({
       path ===
       '/applications/app-1/application-environments/binding-1/workloads/checkout-api/runtime'
     ) {
+      if (testState.workloadRuntimePending) await new Promise<never>(() => {})
+      if (testState.workloadRuntimeError) throw new Error('runtime unavailable')
+      if (testState.workloadRuntimeNotFound) {
+        const error = new Error('not found') as Error & { status: number }
+        error.status = 404
+        throw error
+      }
       return {
         data: {
           application,
@@ -205,12 +218,58 @@ const testState = vi.hoisted(() => ({
             observedGeneration: 3,
             strategy: 'RollingUpdate',
             labels: { app: 'checkout-api' },
+            containers: [
+              {
+                name: 'checkout-api',
+                image: 'registry.example.com/checkout/api:1.2.3',
+              },
+              {
+                name: 'telemetry-sidecar',
+                image: 'registry.example.com/observability/agent:2.0.0',
+                role: 'sidecar',
+              },
+            ],
           },
-          pods: [],
-          services: [],
-          ingresses: [],
+          pods: testState.workloadPodsEmpty
+            ? []
+            : [
+                {
+                  name: 'checkout-api-7d9f6b7c5f-x2k9m',
+                  namespace: 'checkout',
+                  phase: 'Running',
+                  nodeName: 'worker-01',
+                  podIp: '10.42.0.18',
+                  readyContainers: '2/2',
+                  restarts: 0,
+                  ageSeconds: 3600,
+                },
+              ],
+          services: [
+            {
+              name: 'checkout-api',
+              namespace: 'checkout',
+              type: 'ClusterIP',
+              clusterIp: '10.43.18.24',
+              ports: ['http:8080/TCP'],
+              ageSeconds: 3600,
+            },
+          ],
+          ingresses: [
+            {
+              name: 'checkout-public',
+              namespace: 'checkout',
+              className: 'nginx',
+              hosts: ['checkout.example.com'],
+              address: '10.0.0.20',
+              backendServices: ['checkout-api'],
+              ageSeconds: 3600,
+            },
+          ],
         },
       }
+    }
+    if (path.startsWith('/clusters/cluster-a/workloads/deployments/checkout-api/metrics?')) {
+      return { data: { cpu: [], memory: [] } }
     }
     throw new Error(`Unhandled GET ${path}`)
   }),
@@ -247,6 +306,33 @@ vi.mock('@/features/auth/permission-snapshot', () => ({
   hasPermission: () => true,
 }))
 
+vi.mock('@/components/pod-log-viewer', () => ({
+  PodLogViewer: ({ container, podName }: { container?: string; podName: string }) => (
+    <div data-testid="pod-log-viewer">{`${podName}:${container ?? ''}`}</div>
+  ),
+}))
+
+vi.mock('@/components/pod-terminal', () => ({
+  PodTerminal: ({
+    container,
+    podName,
+    toolbarContent,
+  }: {
+    container?: string
+    podName: string
+    toolbarContent?: ReactNode
+  }) => (
+    <div data-testid="pod-terminal">
+      {toolbarContent}
+      {`${podName}:${container ?? ''}`}
+    </div>
+  ),
+}))
+
+vi.mock('@/components/resource-metrics-panel', () => ({
+  ResourceMetricsPanel: () => <div data-testid="resource-metrics-panel">metrics</div>,
+}))
+
 let containers: HTMLDivElement[] = []
 let roots: Array<ReturnType<typeof createRoot>> = []
 
@@ -259,23 +345,25 @@ async function renderWithProviders(node: ReactNode, route: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   await act(async () => {
     root.render(
-      <AntApp>
-        <QueryClientProvider client={queryClient}>
-          <MemoryRouter initialEntries={[route]}>
-            <Routes>
-              <Route path="/builds/:buildId" element={node} />
-              <Route path="/workflows/:workflowId" element={node} />
-              <Route path="/releases/:releaseId" element={node} />
-              <Route path="/delivery/release-bundles/:releaseBundleId" element={node} />
-              <Route path="/delivery/execution-tasks/:executionTaskId" element={node} />
-              <Route
-                path="/applications/:applicationId/application-environments/:applicationEnvironmentId/workloads/:workloadName"
-                element={node}
-              />
-            </Routes>
-          </MemoryRouter>
-        </QueryClientProvider>
-      </AntApp>,
+      <I18nProvider>
+        <AntApp>
+          <QueryClientProvider client={queryClient}>
+            <MemoryRouter initialEntries={[route]}>
+              <Routes>
+                <Route path="/builds/:buildId" element={node} />
+                <Route path="/workflows/:workflowId" element={node} />
+                <Route path="/releases/:releaseId" element={node} />
+                <Route path="/delivery/release-bundles/:releaseBundleId" element={node} />
+                <Route path="/delivery/execution-tasks/:executionTaskId" element={node} />
+                <Route
+                  path="/applications/:applicationId/application-environments/:applicationEnvironmentId/workloads/:workloadName"
+                  element={node}
+                />
+              </Routes>
+            </MemoryRouter>
+          </QueryClientProvider>
+        </AntApp>
+      </I18nProvider>,
     )
   })
   await act(async () => {
@@ -288,7 +376,12 @@ async function renderWithProviders(node: ReactNode, route: string) {
 
 describe('delivery runtime detail pages', () => {
   beforeEach(() => {
+    usePreferencesStore.setState({ localeCode: 'zh_CN' })
     testState.apiGet.mockClear()
+    testState.workloadRuntimePending = false
+    testState.workloadRuntimeError = false
+    testState.workloadRuntimeNotFound = false
+    testState.workloadPodsEmpty = false
     class ResizeObserverMock {
       observe() {}
       unobserve() {}
@@ -357,21 +450,233 @@ describe('delivery runtime detail pages', () => {
     expect(container.textContent).toContain('Release')
   })
 
-  it('uses the global resource detail shell for application workloads', async () => {
+  it('keeps the application workspace visible around workload operations', async () => {
     const container = await renderWithProviders(
       <ApplicationWorkloadDetailPage />,
       '/applications/app-1/application-environments/binding-1/workloads/checkout-api',
     )
 
-    expect(container.querySelector('.soha-management-detail-header')).toBeNull()
+    expect(container.querySelector('.soha-management-detail-header')).not.toBeNull()
     expect(container.querySelector('.soha-page.soha-workload-detail-page')).not.toBeNull()
     expect(
-      container.querySelector('.soha-page > .soha-resource-tabs.soha-workload-detail-tabs'),
+      container.querySelector('.soha-page > .soha-resource-tabs.soha-application-context-tabs'),
     ).not.toBeNull()
+    expect(
+      container.querySelector('.soha-application-context-tabs .ant-tabs-tab-active')?.textContent,
+    ).toBe('服务')
+    const detailHeader = container.querySelector('.soha-management-detail-header')
+    const runtimeWorkspace = container.querySelector('.soha-workload-runtime-workspace')
+    const workloadTabs = container.querySelector('.soha-workload-detail-tabs')
+    expect(runtimeWorkspace).not.toBeNull()
+    expect(workloadTabs).not.toBeNull()
+    expect(detailHeader?.nextElementSibling).toBe(runtimeWorkspace)
+    expect(
+      runtimeWorkspace?.children[0]?.classList.contains('soha-management-searchable-list-pane'),
+    ).toBe(true)
+    expect(runtimeWorkspace?.children[1]).toBe(workloadTabs)
+    expect(container.querySelector('.soha-workload-detail-nav')).toBeNull()
+    expect(
+      container.querySelector('.soha-workload-detail-tabs .ant-tabs-tab-active')?.textContent,
+    ).toBe('Pods 1')
+    expect(
+      Array.from(container.querySelectorAll('.soha-workload-detail-tabs .ant-tabs-tab')).some(
+        (tab) => tab.textContent === '概览',
+      ),
+    ).toBe(false)
     expect(
       container.querySelectorAll('.soha-management-panel-card .soha-management-panel-card'),
     ).toHaveLength(0)
     expect(container.textContent).toContain('checkout-api')
-    expect(container.textContent).toContain('RollingUpdate')
+    expect(detailHeader?.textContent).toContain('命名空间 checkout')
+    expect(detailHeader?.textContent).not.toContain('Namespace checkout')
+  })
+
+  it('localizes workload operations in English', async () => {
+    usePreferencesStore.setState({ localeCode: 'en_US' })
+    const container = await renderWithProviders(
+      <ApplicationWorkloadDetailPage />,
+      '/applications/app-1/application-environments/binding-1/workloads/checkout-api',
+    )
+
+    expect(container.textContent).toContain('Back to services')
+    expect(container.textContent).toContain('View logs')
+    expect(container.textContent).toContain('Network 2')
+    expect(container.textContent).toContain('Containers')
+    expect(container.querySelector('.soha-management-detail-header')?.textContent).toContain(
+      'Namespace checkout',
+    )
+    expect(container.textContent).not.toContain('返回服务')
+
+    const networkContainer = await renderWithProviders(
+      <ApplicationWorkloadDetailPage />,
+      '/applications/app-1/application-environments/binding-1/workloads/checkout-api?tab=network',
+    )
+    const networkPane = networkContainer.querySelector(
+      '.soha-workload-detail-tabs .ant-tabs-tabpane-active',
+    )
+    expect(networkPane?.textContent).toContain('Services')
+    expect(networkPane?.textContent).toContain('Ingresses')
+    expect(networkPane?.textContent).toContain('Namespace')
+
+    const terminalContainer = await renderWithProviders(
+      <ApplicationWorkloadDetailPage />,
+      '/applications/app-1/application-environments/binding-1/workloads/checkout-api?tab=terminal',
+    )
+    expect(terminalContainer.querySelector('[data-testid="pod-terminal"]')?.textContent).toContain(
+      'Shell',
+    )
+  })
+
+  it('localizes workload network and terminal labels in Chinese', async () => {
+    const networkContainer = await renderWithProviders(
+      <ApplicationWorkloadDetailPage />,
+      '/applications/app-1/application-environments/binding-1/workloads/checkout-api?tab=network',
+    )
+    const networkPane = networkContainer.querySelector(
+      '.soha-workload-detail-tabs .ant-tabs-tabpane-active',
+    )
+    expect(networkPane?.textContent).toContain('服务')
+    expect(networkPane?.textContent).toContain('入口')
+    expect(networkPane?.textContent).toContain('命名空间')
+    expect(networkPane?.textContent).not.toContain('Services')
+    expect(networkPane?.textContent).not.toContain('Ingresses')
+
+    const terminalContainer = await renderWithProviders(
+      <ApplicationWorkloadDetailPage />,
+      '/applications/app-1/application-environments/binding-1/workloads/checkout-api?tab=terminal',
+    )
+    expect(terminalContainer.querySelector('[data-testid="pod-terminal"]')?.textContent).toContain(
+      '命令解释器',
+    )
+  })
+
+  it('keeps application context visible with English copy while runtime is pending', async () => {
+    usePreferencesStore.setState({ localeCode: 'en_US' })
+    testState.workloadRuntimePending = true
+
+    const container = await renderWithProviders(
+      <ApplicationWorkloadDetailPage />,
+      '/applications/app-1/application-environments/binding-1/workloads/checkout-api?tab=pods',
+    )
+
+    expect(
+      container.querySelector('.soha-page > .soha-resource-tabs.soha-application-context-tabs'),
+    ).not.toBeNull()
+    expect(container.textContent).toContain('checkout-api')
+    expect(container.textContent).toContain('Loading workload')
+    expect(container.textContent).toContain('Reading runtime detail')
+    expect(container.querySelector('.soha-management-state.is-loading')).not.toBeNull()
+  })
+
+  it('renders English workload runtime failures as errors instead of not-found', async () => {
+    usePreferencesStore.setState({ localeCode: 'en_US' })
+    testState.workloadRuntimeError = true
+
+    const container = await renderWithProviders(
+      <ApplicationWorkloadDetailPage />,
+      '/applications/app-1/application-environments/binding-1/workloads/checkout-api',
+    )
+
+    expect(container.textContent).toContain('Failed to load runtime detail')
+    expect(container.textContent).toContain('runtime unavailable')
+    expect(container.textContent).not.toContain('Runtime detail not found')
+  })
+
+  it('renders an English not-found state for a missing workload', async () => {
+    usePreferencesStore.setState({ localeCode: 'en_US' })
+    testState.workloadRuntimeNotFound = true
+
+    const container = await renderWithProviders(
+      <ApplicationWorkloadDetailPage />,
+      '/applications/app-1/application-environments/binding-1/workloads/checkout-api',
+    )
+
+    expect(container.textContent).toContain('Runtime detail not found')
+    expect(container.textContent).not.toContain('Failed to load runtime detail')
+  })
+
+  it('shows an empty state for log and terminal tabs when no Pod exists', async () => {
+    testState.workloadPodsEmpty = true
+
+    for (const tab of ['logs', 'terminal']) {
+      const container = await renderWithProviders(
+        <ApplicationWorkloadDetailPage />,
+        `/applications/app-1/application-environments/binding-1/workloads/checkout-api?tab=${tab}`,
+      )
+      const activePane = container.querySelector(
+        '.soha-workload-detail-tabs .ant-tabs-tabpane-active',
+      )
+      expect(activePane?.textContent).toContain('当前 Workload 暂无 Pod')
+      expect(activePane?.querySelector('.soha-management-state')).not.toBeNull()
+    }
+  })
+
+  it('opens the Pod layer requested by a service Workload card', async () => {
+    const container = await renderWithProviders(
+      <ApplicationWorkloadDetailPage />,
+      '/applications/app-1/application-environments/binding-1/workloads/checkout-api?tab=pods',
+    )
+
+    expect(
+      container.querySelector('.soha-workload-detail-tabs .ant-tabs-tab-active')?.textContent,
+    ).toBe('Pods 1')
+    expect(container.querySelector('.soha-workload-runtime-workspace')).not.toBeNull()
+    expect(container.querySelector('.soha-workload-runtime-workspace .ant-table')).toBeNull()
+    expect(container.textContent).toContain('checkout-api-7d9f6b7c5f-x2k9m')
+    expect(container.textContent).toContain('worker-01')
+    expect(container.textContent).toContain('2/2')
+    expect(container.textContent).toContain('checkout-api')
+    expect(container.textContent).toContain('telemetry-sidecar')
+    expect(container.querySelectorAll('.soha-workload-pod-container-item')).toHaveLength(2)
+  })
+
+  it('renders associated network resources as long cards', async () => {
+    const container = await renderWithProviders(
+      <ApplicationWorkloadDetailPage />,
+      '/applications/app-1/application-environments/binding-1/workloads/checkout-api?tab=network',
+    )
+
+    expect(
+      container.querySelector('.soha-workload-detail-tabs .ant-tabs-tab-active')?.textContent,
+    ).toBe('网络 2')
+    expect(container.querySelector('.soha-application-runtime-network .ant-table')).toBeNull()
+    expect(container.querySelectorAll('.soha-workload-network-card')).toHaveLength(2)
+    expect(container.textContent).toContain('checkout.example.com')
+    expect(container.textContent).toContain('http:8080/TCP')
+  })
+
+  it('reuses the Kubernetes Pod log viewer with the selected container', async () => {
+    const container = await renderWithProviders(
+      <ApplicationWorkloadDetailPage />,
+      '/applications/app-1/application-environments/binding-1/workloads/checkout-api?tab=logs',
+    )
+
+    expect(container.querySelector('[data-testid="pod-log-viewer"]')?.textContent).toBe(
+      'checkout-api-7d9f6b7c5f-x2k9m:checkout-api',
+    )
+  })
+
+  it('opens the Kubernetes Pod terminal inline with container controls', async () => {
+    const container = await renderWithProviders(
+      <ApplicationWorkloadDetailPage />,
+      '/applications/app-1/application-environments/binding-1/workloads/checkout-api?tab=terminal',
+    )
+
+    expect(container.querySelector('[data-testid="pod-terminal"]')?.textContent).toContain(
+      'checkout-api-7d9f6b7c5f-x2k9m:checkout-api',
+    )
+    expect(container.querySelectorAll('.soha-terminal-controls .ant-select')).toHaveLength(2)
+  })
+
+  it('loads the shared resource metrics panel', async () => {
+    const container = await renderWithProviders(
+      <ApplicationWorkloadDetailPage />,
+      '/applications/app-1/application-environments/binding-1/workloads/checkout-api?tab=metrics',
+    )
+
+    expect(container.querySelector('[data-testid="resource-metrics-panel"]')).not.toBeNull()
+    expect(testState.apiGet).toHaveBeenCalledWith(
+      '/clusters/cluster-a/workloads/deployments/checkout-api/metrics?namespace=checkout&rangeMinutes=60',
+    )
   })
 })

@@ -3,24 +3,14 @@ import { App, Button, Form, Input, Modal, Select, Switch } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { namespaceQueries } from '@/features/platform'
 import { deliveryMutations } from './mutations'
 import { deliveryQueries } from './queries'
-import { parseReleaseTargets } from './release-targets'
+import {
+  releaseTargetKey,
+  releaseTargetsFromCandidates,
+} from './release-targets'
 import type { ApplicationEnvironment, BuildSource, DeliveryApplication } from './types'
-
-function parseJSONObject(raw: unknown, field: string) {
-  const value = typeof raw === 'string' ? raw.trim() : ''
-  if (!value) return {}
-  try {
-    const parsed = JSON.parse(value)
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      throw new Error('invalid')
-    }
-    return parsed
-  } catch {
-    throw new Error(`${field} 需要是合法 JSON 对象`)
-  }
-}
 
 export function summarizeBuildSource(source?: BuildSource) {
   if (!source) return '-'
@@ -56,27 +46,17 @@ export function buildApplicationGroupOptions(apps: DeliveryApplication[] = []) {
   return Array.from(new Set(apps.flatMap((app) => splitApplicationGroups(app.group))))
 }
 
-function applicationEnvironmentLabel(
-  binding: Pick<ApplicationEnvironment, 'environmentKey' | 'environmentId'>,
-) {
-  return binding.environmentKey || binding.environmentId || '-'
-}
-
-function normalizeEnvironmentFormValue(value: unknown) {
-  if (Array.isArray(value)) {
-    return String(value[0] || '').trim()
-  }
-  return String(value || '').trim()
-}
-
-function initialEnvironmentFormValue(
-  binding: Pick<ApplicationEnvironment, 'environmentKey' | 'environmentId'>,
-) {
-  const label = applicationEnvironmentLabel(binding)
-  return label === '-' ? [] : [label]
-}
-
-export function useApplicationCenterState() {
+export function useApplicationCenterState({
+  currentApplication,
+  loadApplications = true,
+  loadWorkflowTemplates = true,
+  loadClusters = true,
+}: {
+  currentApplication?: DeliveryApplication
+  loadApplications?: boolean
+  loadWorkflowTemplates?: boolean
+  loadClusters?: boolean
+} = {}) {
   const { applicationId } = useParams()
   const navigate = useNavigate()
   const { message } = App.useApp()
@@ -92,13 +72,39 @@ export function useApplicationCenterState() {
   const [buildSources, setBuildSources] = useState<BuildSource[]>([])
   const [selectedApplicationId, setSelectedApplicationId] = useState<string>('')
 
-  const applicationsQuery = useQuery(deliveryQueries.applications.list())
+  const applicationsQuery = useQuery(deliveryQueries.applications.list(loadApplications))
   const bindingsQuery = useQuery(deliveryQueries.environments.list())
-  const workflowTemplatesQuery = useQuery(deliveryQueries.workflowTemplates.list())
-  const clustersQuery = useQuery(deliveryQueries.dependencies.clusters())
+  const workflowTemplatesQuery = useQuery(
+    deliveryQueries.workflowTemplates.list(loadWorkflowTemplates),
+  )
+  const clustersQuery = useQuery(
+    deliveryQueries.dependencies.clusters(loadClusters || bindingModalVisible),
+  )
+  const environmentCatalogQuery = useQuery(
+    deliveryQueries.environmentCatalog.list(bindingModalVisible),
+  )
+  const registriesQuery = useQuery(deliveryQueries.registries.list(bindingModalVisible))
+  const selectedClusterId = Form.useWatch('clusterId', bindingForm) as string | undefined
+  const selectedNamespace = Form.useWatch('namespace', bindingForm) as string | undefined
+  const namespacesQuery = useQuery(
+    namespaceQueries.list({
+      clusterId: bindingModalVisible ? selectedClusterId || null : null,
+      namespace: null,
+    }),
+  )
+  const targetCandidatesQuery = useQuery(
+    deliveryQueries.environments.targetCandidates(
+      {
+        clusterId: selectedClusterId || '',
+        namespace: selectedNamespace || '',
+        limit: 200,
+      },
+      bindingModalVisible,
+    ),
+  )
 
   useEffect(() => {
-    const appList = applicationsQuery.data ?? []
+    const appList = applicationsQuery.data ?? (currentApplication ? [currentApplication] : [])
     if (applicationId && appList.some((item) => item.id === applicationId)) {
       if (selectedApplicationId !== applicationId) {
         setSelectedApplicationId(applicationId)
@@ -108,11 +114,14 @@ export function useApplicationCenterState() {
     if (!selectedApplicationId && appList.length > 0) {
       setSelectedApplicationId(appList[0].id)
     }
-  }, [applicationId, applicationsQuery.data, selectedApplicationId])
+  }, [applicationId, applicationsQuery.data, currentApplication, selectedApplicationId])
 
   const selectedApplication = useMemo(
-    () => (applicationsQuery.data ?? []).find((item) => item.id === selectedApplicationId) ?? null,
-    [applicationsQuery.data, selectedApplicationId],
+    () =>
+      (applicationsQuery.data ?? (currentApplication ? [currentApplication] : [])).find(
+        (item) => item.id === selectedApplicationId,
+      ) ?? null,
+    [applicationsQuery.data, currentApplication, selectedApplicationId],
   )
   const filteredBindings = useMemo(
     () =>
@@ -126,28 +135,12 @@ export function useApplicationCenterState() {
     [workflowTemplatesQuery.data],
   )
   const applicationGroupOptions = useMemo(
-    () => buildApplicationGroupOptions(applicationsQuery.data ?? []),
-    [applicationsQuery.data],
+    () =>
+      buildApplicationGroupOptions(
+        applicationsQuery.data ?? (currentApplication ? [currentApplication] : []),
+      ),
+    [applicationsQuery.data, currentApplication],
   )
-  const applicationEnvironmentOptions = useMemo(() => {
-    return Array.from(
-      new Set(filteredBindings.map(applicationEnvironmentLabel).filter((item) => item !== '-')),
-    ).map((item) => ({ value: item, label: item }))
-  }, [filteredBindings])
-
-  const selectedClusterId = Form.useWatch('targetClusterId', bindingForm) as string | undefined
-  const selectedNamespace = Form.useWatch('targetNamespace', bindingForm) as string | undefined
-
-  const targetCandidatesQuery = useQuery(
-    deliveryQueries.environments.targetCandidates(
-      {
-        clusterId: selectedClusterId ?? '',
-        namespace: selectedNamespace ?? '',
-      },
-      Boolean(selectedClusterId && selectedNamespace && bindingModalVisible),
-    ),
-  )
-
   const canCreateApplication = hasPermission(permissionSnapshot, 'delivery.application.create')
   const canUpdateApplication = hasPermission(permissionSnapshot, 'delivery.application.update')
   const canDeleteApplication = hasPermission(permissionSnapshot, 'delivery.application.delete')
@@ -204,7 +197,7 @@ export function useApplicationCenterState() {
     ...createBindingOptions,
     onSuccess: (result, variables, onMutateResult, context) => {
       void createBindingOptions.onSuccess?.(result, variables, onMutateResult, context)
-      message.success('环境绑定创建成功')
+      message.success('环境创建成功')
       setBindingModalVisible(false)
     },
     onError: (err: Error) => message.error(err.message),
@@ -215,7 +208,7 @@ export function useApplicationCenterState() {
     ...updateBindingOptions,
     onSuccess: (result, variables, onMutateResult, context) => {
       void updateBindingOptions.onSuccess?.(result, variables, onMutateResult, context)
-      message.success('环境绑定更新成功')
+      message.success('环境更新成功')
       setBindingModalVisible(false)
       setEditingBinding(null)
     },
@@ -250,14 +243,18 @@ export function useApplicationCenterState() {
     bindingsQuery,
     workflowTemplatesQuery,
     clustersQuery,
+    environmentCatalogQuery,
+    registriesQuery,
+    namespacesQuery,
     targetCandidatesQuery,
+    selectedClusterId,
+    selectedNamespace,
     selectedApplicationId,
     setSelectedApplicationId,
     selectedApplication,
     filteredBindings,
     workflowTemplateMap,
     applicationGroupOptions,
-    applicationEnvironmentOptions,
     canCreateApplication,
     canUpdateApplication,
     canDeleteApplication,
@@ -370,11 +367,29 @@ export function ApplicationForm({
 }
 
 export function ApplicationCenterModals({ state }: { state: ApplicationCenterState }) {
-  const selectedTargetCandidate = (record: Record<string, unknown>) =>
-    (state.targetCandidatesQuery.data?.items ?? []).find(
-      (item) =>
-        `${item.clusterId}/${item.namespace}/${item.workloadName}` === record.targetWorkload,
-    )
+  const boundEnvironmentIds = new Set(
+    state.filteredBindings
+      .filter((item) => item.id !== state.editingBinding?.id)
+      .map((item) => item.environmentId),
+  )
+  const environmentOptions = (state.environmentCatalogQuery.data ?? [])
+    .filter((item) => item.enabled && !boundEnvironmentIds.has(item.id))
+    .map((item) => ({ value: item.id, label: `${item.name} · ${item.key}` }))
+  const existingTargets = state.editingBinding?.targets ?? []
+  const targetOptions = Array.from(
+    new Map(
+      [
+        ...existingTargets.map((target) => ({
+          value: releaseTargetKey(target),
+          label: `${target.workloadKind} / ${target.workloadName}`,
+        })),
+        ...(state.targetCandidatesQuery.data?.items ?? []).map((candidate) => ({
+          value: releaseTargetKey(candidate),
+          label: `${candidate.workloadKind} / ${candidate.workloadName} · ${candidate.readyReplicas}/${candidate.desiredReplicas} 就绪`,
+        })),
+      ].map((option) => [option.value, option]),
+    ).values(),
+  )
 
   return (
     <>
@@ -387,7 +402,7 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
         }}
         footer={null}
         destroyOnHidden
-        width={640}
+        width={720}
       >
         <ApplicationForm
           application={state.editingApp}
@@ -400,7 +415,7 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
       </Modal>
 
       <Modal
-        title={state.editingBinding ? '编辑环境绑定' : '新建环境绑定'}
+        title={state.editingBinding ? '编辑环境' : '新增环境'}
         open={state.bindingModalVisible}
         onCancel={() => {
           state.setBindingModalVisible(false)
@@ -408,7 +423,7 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
         }}
         footer={null}
         destroyOnHidden
-        width={760}
+        width={640}
       >
         <Form
           form={state.bindingForm}
@@ -417,96 +432,42 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
           initialValues={
             state.editingBinding
               ? {
-                  environmentId: initialEnvironmentFormValue(state.editingBinding),
-                  workflowTemplateId: state.editingBinding.workflowTemplateId,
-                  buildSourceId: state.editingBinding.buildPolicy?.sourceId,
-                  refType: state.editingBinding.buildPolicy?.refType || 'branch',
-                  refValue: state.editingBinding.buildPolicy?.refValue,
-                  imageTagTemplate: state.editingBinding.buildPolicy?.imageTagTemplate,
-                  buildVariablesText: JSON.stringify(
-                    state.editingBinding.buildPolicy?.variables ?? {},
-                    null,
-                    2,
-                  ),
-                  buildArgsText: JSON.stringify(
-                    state.editingBinding.buildPolicy?.buildArgs ?? {},
-                    null,
-                    2,
-                  ),
-                  targetsText: JSON.stringify(state.editingBinding.targets ?? [], null, 2),
-                  actionKind: state.editingBinding.releasePolicy?.actionKind || 'deploy',
-                  requiresApproval: state.editingBinding.releasePolicy?.requiresApproval,
-                  targetClusterId: state.editingBinding.targets?.[0]?.clusterId,
-                  targetNamespace: state.editingBinding.targets?.[0]?.namespace,
-                  targetWorkload: state.editingBinding.targets?.[0]
-                    ? `${state.editingBinding.targets[0].clusterId}/${state.editingBinding.targets[0].namespace}/${state.editingBinding.targets[0].workloadName}`
-                    : undefined,
-                  targetContainer: state.editingBinding.targets?.[0]?.containerName,
-                  resourceSelectorText: JSON.stringify(
-                    state.editingBinding.resourceSelector?.matchLabels ?? {},
-                    null,
-                    2,
-                  ),
+                  environmentId: state.editingBinding.environmentId,
+                  alias: state.editingBinding.alias || state.editingBinding.environmentKey,
+                  clusterId:
+                    state.editingBinding.clusterId || state.editingBinding.targets?.[0]?.clusterId,
+                  namespace:
+                    state.editingBinding.namespace || state.editingBinding.targets?.[0]?.namespace,
+                  registryId: state.editingBinding.registryId,
+                  targetKeys: state.editingBinding.targets?.map(releaseTargetKey),
                 }
-              : {
-                  actionKind: 'deploy',
-                  requiresApproval: false,
-                  refType: 'branch',
-                  buildVariablesText: '{}',
-                  buildArgsText: '{}',
-                  targetsText: '[]',
-                  resourceSelectorText: '{}',
-                }
+              : undefined
           }
           onFinish={(values) => {
             if (!state.selectedApplication) return
-            const target = selectedTargetCandidate(values)
-            const matchLabels = parseJSONObject(values.resourceSelectorText, '选择器标签')
-            const configuredTargets = parseReleaseTargets(values.targetsText)
+            const existing = state.editingBinding
             const payload: Record<string, unknown> = {
               applicationId: state.selectedApplication.id,
-              environmentId: normalizeEnvironmentFormValue(values.environmentId),
-              workflowTemplateId: values.workflowTemplateId,
-              buildPolicy: {
-                sourceId: values.buildSourceId,
-                refType: values.refType || 'branch',
-                refValue: values.refValue || '',
-                imageTagMode: 'input',
-                imageTagTemplate: values.imageTagTemplate || '',
-                variables: parseJSONObject(values.buildVariablesText, '构建变量'),
-                buildArgs: parseJSONObject(values.buildArgsText, '构建参数'),
-              },
-              releasePolicy: {
-                actionKind: values.actionKind || 'deploy',
-                requiresApproval: Boolean(values.requiresApproval),
-                approverRoles: [],
-                autoRollback: false,
-                rolloutTimeoutSeconds: 300,
-                verificationMode: 'workflow',
-              },
-              resourceSelector: {
-                matchLabels,
-              },
-              targets: configuredTargets.length
-                ? configuredTargets
-                : target
-                  ? [
-                      {
-                        clusterId: target.clusterId,
-                        namespace: target.namespace,
-                        targetKind: 'k8s_workload',
-                        executorKind: 'k8s_job_runner',
-                        workloadKind: target.workloadKind,
-                        workloadName: target.workloadName,
-                        containerName: String(values.targetContainer || ''),
-                        metadata: {},
-                        enabled: true,
-                      },
-                    ]
-                  : [],
+              environmentId: String(values.environmentId || '').trim(),
+              alias: String(values.alias || '').trim(),
+              clusterId: String(values.clusterId || '').trim(),
+              namespace: String(values.namespace || '').trim(),
+              registryId: String(values.registryId || '').trim(),
+              strategyProfileId: existing?.strategyProfileId,
+              promotionPolicyId: existing?.promotionPolicyId,
+              artifactPolicyId: existing?.artifactPolicyId,
+              workflowTemplateId: existing?.workflowTemplateId,
+              buildPolicy: existing?.buildPolicy,
+              releasePolicy: existing?.releasePolicy,
+              resourceSelector: existing?.resourceSelector,
+              targets: releaseTargetsFromCandidates(
+                state.targetCandidatesQuery.data?.items ?? [],
+                values.targetKeys as string[] | undefined,
+                existing?.targets,
+              ),
             }
-            if (state.editingBinding) {
-              state.updateBindingMutation.mutate({ id: state.editingBinding.id, payload })
+            if (existing) {
+              state.updateBindingMutation.mutate({ id: existing.id, payload })
             } else {
               state.createBindingMutation.mutate(payload)
             }
@@ -517,100 +478,109 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
           </Form.Item>
           <Form.Item
             name="environmentId"
-            label="环境"
+            label="环境目录"
             rules={[{ required: true, message: '请选择环境' }]}
           >
             <Select
               showSearch
-              mode="tags"
-              maxCount={1}
-              placeholder="dev / test / prod"
-              options={state.applicationEnvironmentOptions}
+              disabled={Boolean(state.editingBinding)}
+              loading={state.environmentCatalogQuery.isLoading}
+              optionFilterProp="label"
+              options={environmentOptions}
+              placeholder="选择平台环境"
+              onChange={(environmentId) => {
+                if (state.bindingForm.isFieldTouched('alias')) return
+                const environment = (state.environmentCatalogQuery.data ?? []).find(
+                  (item) => item.id === environmentId,
+                )
+                state.bindingForm.setFieldValue('alias', environment?.name)
+              }}
             />
           </Form.Item>
-          <Form.Item name="workflowTemplateId" label="发布流程模板">
+          <Form.Item
+            name="alias"
+            label="环境别名"
+            rules={[{ required: true, message: '请输入环境别名' }]}
+          >
+            <Input placeholder="例如：集成测试、华东生产" />
+          </Form.Item>
+          <Form.Item
+            name="clusterId"
+            label="集群"
+            rules={[{ required: true, message: '请选择集群' }]}
+          >
             <Select
-              allowClear
-              options={(state.workflowTemplatesQuery.data ?? []).map((item) => ({
-                value: item.id,
-                label: item.name,
-              }))}
-            />
-          </Form.Item>
-          <Form.Item name="buildSourceId" label="构建来源">
-            <Select
-              allowClear
-              options={(state.selectedApplication?.buildSources ?? []).map((item) => ({
-                value: item.id,
-                label: item.name || summarizeBuildSource(item),
-              }))}
-            />
-          </Form.Item>
-          <Form.Item name="refType" label="Ref 类型">
-            <Select
-              options={[
-                { value: 'branch', label: 'Branch' },
-                { value: 'tag', label: 'Tag' },
-                { value: 'commit', label: 'Commit' },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="refValue" label="环境默认 Ref">
-            <Input placeholder="main / v1.0.0 / commit SHA" />
-          </Form.Item>
-          <Form.Item name="imageTagTemplate" label="镜像 Tag 模板">
-            <Input placeholder="{{branch}}-{{sha}}" />
-          </Form.Item>
-          <Form.Item name="buildVariablesText" label="构建变量(JSON)">
-            <Input.TextArea rows={3} />
-          </Form.Item>
-          <Form.Item name="buildArgsText" label="Build Args(JSON)">
-            <Input.TextArea rows={3} />
-          </Form.Item>
-          <Form.Item name="actionKind" label="动作">
-            <Select
-              options={[
-                { value: 'deploy', label: 'deploy' },
-                { value: 'release', label: 'release' },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="requiresApproval" label="需要审批" valuePropName="checked">
-            <Switch />
-          </Form.Item>
-          <Form.Item name="targetClusterId" label="目标集群">
-            <Select
-              allowClear
+              showSearch
+              loading={state.clustersQuery.isLoading}
+              optionFilterProp="label"
+              placeholder="选择部署集群"
               options={(state.clustersQuery.data ?? []).map((item) => ({
                 value: item.id,
                 label: item.name,
               }))}
+              onChange={() =>
+                state.bindingForm.setFieldsValue({ namespace: undefined, targetKeys: [] })
+              }
             />
           </Form.Item>
-          <Form.Item name="targetNamespace" label="目标命名空间">
-            <Input />
-          </Form.Item>
-          <Form.Item name="targetWorkload" label="目标服务 / Deployment">
+          <Form.Item
+            name="namespace"
+            label="Namespace"
+            rules={[{ required: true, message: '请选择 Namespace' }]}
+          >
             <Select
-              allowClear
               showSearch
-              options={(state.targetCandidatesQuery.data?.items ?? []).map((item) => ({
-                value: `${item.clusterId}/${item.namespace}/${item.workloadName}`,
-                label: `${item.workloadName} · ${item.namespace}`,
+              disabled={!state.selectedClusterId}
+              loading={state.namespacesQuery.isLoading}
+              optionFilterProp="label"
+              placeholder="选择 Namespace"
+              options={(state.namespacesQuery.data ?? []).map((item) => ({
+                value: item.name,
+                label: item.name,
+              }))}
+              onChange={() => state.bindingForm.setFieldValue('targetKeys', [])}
+            />
+          </Form.Item>
+          <Form.Item
+            name="targetKeys"
+            label="发布目标"
+            rules={[{ required: true, type: 'array', min: 1, message: '请选择至少一个 Workload' }]}
+          >
+            <Select
+              mode="multiple"
+              disabled={!state.selectedClusterId || !state.selectedNamespace}
+              loading={state.targetCandidatesQuery.isFetching}
+              optionFilterProp="label"
+              options={targetOptions}
+              placeholder="选择该环境要交付的真实 Workload"
+              showSearch
+            />
+          </Form.Item>
+          <Form.Item
+            name="registryId"
+            label="镜像仓库"
+            rules={[{ required: true, message: '请选择镜像仓库' }]}
+          >
+            <Select
+              showSearch
+              loading={state.registriesQuery.isLoading}
+              optionFilterProp="label"
+              placeholder="选择该环境默认使用的镜像仓库"
+              options={(state.registriesQuery.data ?? []).map((item) => ({
+                value: item.id,
+                label: `${item.name} · ${item.endpoint}`,
               }))}
             />
           </Form.Item>
-          <Form.Item name="targetContainer" label="容器">
-            <Input />
-          </Form.Item>
-          <Form.Item name="targetsText" label="发布目标矩阵(JSON)">
-            <Input.TextArea rows={8} placeholder='[{"targetKind":"helm_release",...}]' />
-          </Form.Item>
-          <Form.Item name="resourceSelectorText" label="资源选择器标签(JSON)">
-            <Input.TextArea rows={4} placeholder={`{\n  "app": "erp-front"\n}`} />
-          </Form.Item>
           <div className="soha-form-actions">
-            <Button onClick={() => state.setBindingModalVisible(false)}>取消</Button>
+            <Button
+              onClick={() => {
+                state.setBindingModalVisible(false)
+                state.setEditingBinding(null)
+              }}
+            >
+              取消
+            </Button>
             <Button
               htmlType="submit"
               type="primary"

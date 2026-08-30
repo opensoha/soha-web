@@ -121,6 +121,27 @@ export const deliveryRoutes = defineRoutes([
   },
   {
     meta: {
+      id: 'application-workflow-designer',
+      path: '/applications/:applicationId/workflows/design',
+      title: '工作流设计',
+      description: '应用工作流 DAG 设计',
+      icon: 'IconFlow',
+      group: 'delivery',
+      requiresAuth: true,
+      tabbar: false,
+      navVisible: false,
+      parentId: 'application-detail',
+      permissionKey: 'delivery.application-environments.update',
+      scopeMode: 'passive',
+    },
+    shell: 'app',
+    load: async () => {
+      const module = await import('./applications/workflow-designer-page')
+      return { default: module.ApplicationWorkflowDesignerPage }
+    },
+  },
+  {
+    meta: {
       id: 'application-environments',
       path: '/application-environments',
       title: '应用环境绑定',
@@ -138,28 +159,6 @@ export const deliveryRoutes = defineRoutes([
     load: async () => {
       const module = await import('./environments/list-page')
       return { default: module.ApplicationEnvironmentsPage }
-    },
-  },
-  {
-    meta: {
-      id: 'application-environment-detail',
-      path: '/application-environments/:applicationEnvironmentId',
-      title: '环境详情',
-      description: '应用环境详情',
-      icon: 'IconAppCenter',
-      group: 'delivery',
-      requiresAuth: true,
-      tabbar: false,
-      navVisible: false,
-      parentId: 'application-environments',
-      scopeMode: 'passive',
-    },
-    shell: 'app',
-    permissionExemptReason:
-      'Environment detail authorization is enforced by the parent resource and backend.',
-    load: async () => {
-      const module = await import('./environments/detail-page')
-      return { default: module.ApplicationEnvironmentDetailPage }
     },
   },
   {

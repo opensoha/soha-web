@@ -6,6 +6,7 @@ import type {
   ApplicationRuntimeDetail,
   ApplicationServiceComponent,
   ApplicationWorkloadRuntimeDetail,
+  ApplicationWorkflowInput,
   BlueprintBootstrapResult,
   BuildRecord,
   BuildTemplate,
@@ -275,6 +276,13 @@ export const deliveryApi = {
       discard(api.post('/application-environments', payload)),
     update: (id: string, payload: DeliveryRecordInput) =>
       discard(api.put(`/application-environments/${segment(id)}`, payload)),
+    saveWorkflow: (applicationId: string, id: string, payload: ApplicationWorkflowInput) =>
+      unwrap(
+        api.put<ApiResponse<ApplicationEnvironment>>(
+          `/applications/${segment(applicationId)}/application-environments/${segment(id)}/workflow`,
+          payload,
+        ),
+      ),
     delete: (id: string) => discard(api.delete(`/application-environments/${segment(id)}`)),
   },
   buildTemplates: {

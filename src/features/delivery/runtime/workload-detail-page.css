@@ -1,0 +1,103 @@
+.soha-workload-detail-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.soha-workload-detail-page .soha-application-context-tabs {
+  margin-bottom: -4px;
+}
+
+.soha-workload-detail-tabs {
+  min-width: 0;
+}
+
+.soha-workload-runtime-workspace {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  align-items: stretch;
+  gap: 12px;
+}
+
+.soha-workload-runtime-workspace > .soha-management-searchable-list-pane {
+  min-height: 360px;
+  max-height: 560px;
+}
+
+.soha-workload-pod-list-item__header,
+.soha-workload-pod-list-item__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.soha-workload-pod-list-item__header .ant-typography {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.soha-workload-pod-list-item__meta {
+  font-size: 12px;
+}
+
+.soha-workload-pod-detail-card.ant-card {
+  min-height: 100%;
+}
+
+.soha-workload-pod-containers {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--soha-border-color);
+}
+
+.soha-workload-pod-containers__header {
+  margin-bottom: 8px;
+}
+
+.soha-workload-pod-container-list {
+  overflow: hidden;
+  border: 1px solid var(--soha-border-color);
+  border-radius: var(--soha-radius);
+}
+
+.soha-workload-pod-container-item {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.4fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.soha-workload-pod-container-item + .soha-workload-pod-container-item {
+  border-top: 1px solid var(--soha-border-color);
+}
+
+.soha-workload-pod-container-image {
+  overflow-wrap: anywhere;
+}
+
+.soha-application-runtime-network {
+  display: grid;
+  gap: 16px;
+}
+
+.soha-application-runtime-network__section {
+  display: grid;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .soha-workload-runtime-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .soha-workload-runtime-workspace > .soha-management-searchable-list-pane {
+    min-height: 280px;
+    max-height: 420px;
+  }
+
+  .soha-workload-pod-container-item {
+    grid-template-columns: 1fr;
+  }
+}

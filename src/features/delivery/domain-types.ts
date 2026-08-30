@@ -203,6 +203,25 @@ export interface DeliveryDraftConfirmResult {
   spec: RenderedDeliverySpec
 }
 
+export interface BuildRepositoryBinding {
+  repositoryId: string
+  checkoutPath?: string
+  defaultBranch?: string
+  allowCommitSelection?: boolean
+  submodules?: boolean
+}
+
+export interface BuildRepositoryRefInput {
+  repositoryId: string
+  refType: 'branch' | 'tag' | 'commit'
+  refName: string
+}
+
+export interface BuildSourceConfig extends Record<string, unknown> {
+  repositoryId?: string
+  repositoryBindings?: BuildRepositoryBinding[]
+}
+
 export interface BuildSource extends ContractBuildSource {
   id: string
   name: string
@@ -211,7 +230,7 @@ export interface BuildSource extends ContractBuildSource {
   isDefault: boolean
   buildImage?: string
   defaultTag?: string
-  config?: Record<string, unknown>
+  config?: BuildSourceConfig
 }
 
 export interface DeliveryRepository extends ContractRepository {
@@ -248,10 +267,7 @@ export interface GitCommit extends ContractGitCommit {
 }
 
 export type ApplicationServiceKind =
-  | 'kubernetes_workload'
-  | 'helm_release'
-  | 'external_service'
-  | 'job'
+  'kubernetes_workload' | 'helm_release' | 'external_service' | 'job'
 
 export interface ApplicationServiceContainer extends ContractApplicationServiceContainer {
   id: string
@@ -317,6 +333,10 @@ export interface ApplicationEnvironment {
   applicationGroup?: string
   environmentId: string
   environmentKey?: string
+  alias?: string
+  clusterId?: string
+  namespace?: string
+  registryId?: string
   strategyProfileId?: string
   promotionPolicyId?: string
   artifactPolicyId?: string
@@ -639,12 +659,7 @@ export interface DeliveryApplicationDetail {
 }
 
 export type ApplicationDeliveryActionKind =
-  | 'build'
-  | 'deploy'
-  | 'build_deploy'
-  | 'workflow'
-  | 'verify'
-  | 'rollback'
+  'build' | 'deploy' | 'build_deploy' | 'workflow' | 'verify' | 'rollback'
 
 export interface ApplicationDeliveryActionRequest extends ContractApplicationDeliveryActionRequest {
   action: ApplicationDeliveryActionKind
@@ -653,6 +668,7 @@ export interface ApplicationDeliveryActionRequest extends ContractApplicationDel
   buildSourceId?: string
   refType?: string
   refName?: string
+  repositoryRefs?: BuildRepositoryRefInput[]
   imageTag?: string
   releaseName?: string
   containerName?: string
@@ -750,6 +766,7 @@ export interface ApplicationRuntimeEnvironment {
   environmentId: string
   environmentName?: string
   environmentKey?: string
+  status?: 'available' | 'unavailable'
   actionKind?: string
   requiresApproval: boolean
   resourceSelector?: {

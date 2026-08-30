@@ -5,6 +5,7 @@ import type {
   ApplicationServiceCreateInput,
   ApplicationServiceDeleteInput,
   ApplicationServiceUpdateInput,
+  ApplicationWorkflowSaveInput,
   BuildTemplateInput,
   DeliveryDeploymentRollbackInput,
   DeliveryDraftInput,
@@ -164,6 +165,13 @@ export const deliveryMutations = {
         mutationKey: deliveryMutationKeys.environments('update'),
         mutationFn: ({ id, payload }: DeliveryUpdateInput<DeliveryRecordInput>) =>
           deliveryApi.environments.update(id, payload),
+        onSuccess: () => invalidateEnvironmentQueries(queryClient),
+      }),
+    saveWorkflow: (queryClient: QueryClient) =>
+      mutationOptions({
+        mutationKey: deliveryMutationKeys.environments('save-workflow'),
+        mutationFn: ({ applicationId, id, payload }: ApplicationWorkflowSaveInput) =>
+          deliveryApi.environments.saveWorkflow(applicationId, id, payload),
         onSuccess: () => invalidateEnvironmentQueries(queryClient),
       }),
     delete: (queryClient: QueryClient) =>

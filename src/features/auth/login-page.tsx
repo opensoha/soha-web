@@ -67,36 +67,36 @@ type StarToneVariable = (typeof STAR_TONES)[number]
 
 const CAPABILITY_QUESTIONS = [
   {
+    question: '门户',
+    answer: '统一入口、常用工作台与待办导航',
+  },
+  {
     question: 'k8s工作台',
     answer: '多集群、工作负载、网络、存储和 YAML 管理',
   },
   {
-    question: '计算资源工作台',
-    answer: '虚拟机、容器运行时、镜像模板与统一任务中心',
-  },
-  {
-    question: '应用交付',
-    answer: '应用接入、环境绑定、构建发布、测试与问题分析',
-  },
-  {
-    question: 'AI工作台',
-    answer: '对话分析、知识库、巡检自动化、Agent 运行与评测',
-  },
-  {
-    question: 'AI Gateway',
-    answer: '模型路由、客户端与 Token、能力治理和调用审计',
+    question: '持续交付工作台',
+    answer: '应用、服务、环境、工作流、测试与发布',
   },
   {
     question: '可观测性工作台',
-    answer: '指标、链路、日志、告警、通知、值班与自愈',
+    answer: '指标、链路、日志、告警、值班与自愈',
+  },
+  {
+    question: '计算资源工作台',
+    answer: '虚拟机、容器运行时、镜像模板与任务中心',
+  },
+  {
+    question: 'AI工作台',
+    answer: '对话、知识库、Agent、模型网关与评测',
   },
   {
     question: '内网工作台',
     answer: '应用目录、身份 Provider、Outpost 与访问策略',
   },
   {
-    question: '平台治理',
-    answer: '用户角色、组织策略、Secret Store、审计与运行配置',
+    question: '设置中心',
+    answer: '用户、角色、组织、系统集成、品牌与运行配置',
   },
 ]
 
@@ -309,15 +309,27 @@ function LoginConstellationBackground() {
   return <canvas ref={canvasRef} className="soha-auth-background" aria-hidden="true" />
 }
 
-function LoginCapabilityFlow({ slogan }: { slogan: string }) {
+function LoginCapabilityFlow({
+  brandName,
+  loginLogoUrl,
+  slogan,
+}: {
+  brandName: string
+  loginLogoUrl: string
+  slogan: string
+}) {
   return (
     <section className="soha-auth-flow" aria-label="Soha 支持的能力">
       <div className="soha-auth-flow-copy">
-        <div>
+        {loginLogoUrl ? (
+          <div className="soha-auth-hero-logo">
+            <img src={loginLogoUrl} alt={brandName} className="soha-auth-hero-logo-img" />
+          </div>
+        ) : (
           <Title level={1} className="soha-auth-flow-title">
             {slogan}
           </Title>
-        </div>
+        )}
       </div>
 
       <div className="soha-auth-flow-map">
@@ -643,20 +655,20 @@ export function LoginPage() {
       />
 
       <div className="soha-auth-layout soha-auth-layout--floating">
-        <LoginCapabilityFlow slogan={branding.slogan || 'Soha 是一种能力！'} />
+        <LoginCapabilityFlow
+          brandName={appTitle}
+          loginLogoUrl={branding.expandedLogoUrl || branding.loginLogoUrl}
+          slogan={branding.slogan || 'Soha 是一种能力！'}
+        />
 
         <Card className="soha-auth-panel soha-auth-panel--floating" variant="borderless">
           <div className="soha-auth-panel-inner">
             <div className="soha-auth-brand">
-              {branding.expandedLogoUrl ? (
-                <img
-                  src={branding.expandedLogoUrl}
-                  alt={branding.sidebarTitle || 'Logo'}
-                  className="soha-auth-brand-logo-img"
-                />
-              ) : (
-                <div className="soha-auth-mark">SOHA</div>
-              )}
+              <img
+                src={branding.collapsedLogoUrl || '/logo.svg'}
+                alt=""
+                className="soha-auth-brand-logo-img"
+              />
               <div className="soha-auth-brand-copy">
                 <Title level={4} style={{ margin: 0 }}>
                   {appTitle}

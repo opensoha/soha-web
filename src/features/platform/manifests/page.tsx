@@ -190,7 +190,7 @@ export function PlatformManifestsPage() {
             tooltip={t('common.openManifestLibrary', '查看扩展资源')}
             onClick={() =>
               navigate(
-                `/applications/${encodeURIComponent(item.manifest.applicationId)}?tab=services&section=resources`,
+                `/applications/${encodeURIComponent(item.manifest.applicationId)}?tab=resources`,
               )
             }
           />

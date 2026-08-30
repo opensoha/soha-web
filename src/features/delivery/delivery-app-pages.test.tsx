@@ -19,7 +19,6 @@ import { ReleasesPage } from './releases/list-page'
 import { WorkflowsPage } from './workflows/list-page'
 import { runtimeEvidencePath } from './template-usage-runtime-links'
 import { ApplicationEnvironmentsPage } from './environments/list-page'
-import { ApplicationEnvironmentDetailPage } from './environments/detail-page'
 import { EnvironmentCatalogPage } from './environments/catalog-page'
 import { ReleaseBoardPage } from './release-board/page'
 import { WorkflowTemplatesPage } from './workflow-templates/page'
@@ -368,19 +367,6 @@ const testState = vi.hoisted(() => ({
             updatedAt: '2026-05-08T12:00:00Z',
           },
         ],
-      }
-    }
-    if (path === '/application-environments/binding-1/detail') {
-      return {
-        data: {
-          binding: {
-            id: 'binding-1',
-            applicationId: 'app-1',
-            environmentId: 'env-test',
-            environmentKey: 'test',
-            targets: [],
-          },
-        },
       }
     }
     if (path === '/workflow-templates') {
@@ -1419,7 +1405,7 @@ describe('ApplicationsPage workspace layout', () => {
     ).toBe(true)
   })
 
-  it('keeps the legacy application environment index read-only and enters the owning app', async () => {
+  it('keeps the application environment index read-only and enters the owning app', async () => {
     const container = await renderWithProviders(
       <Routes>
         <Route path="/application-environments" element={<ApplicationEnvironmentsPage />} />
@@ -1441,7 +1427,7 @@ describe('ApplicationsPage workspace layout', () => {
 
     await clickButton(container.querySelector<HTMLButtonElement>('[aria-label="进入应用环境"]')!)
     expect(container.querySelector('[data-testid="location-probe"]')?.textContent).toBe(
-      '/applications/app-1?tab=environments',
+      '/applications/app-1?tab=services&applicationEnvironmentId=binding-1',
     )
   })
 
@@ -1461,26 +1447,6 @@ describe('ApplicationsPage workspace layout', () => {
     expect(hasButtonText(container, '新建环境')).toBe(false)
     expect(container.querySelector('[aria-label="编辑环境"]')).toBeNull()
     expect(container.querySelector('[aria-label="删除环境"]')).toBeNull()
-  })
-
-  it('preserves context when adapting a legacy application environment detail URL', async () => {
-    const container = await renderWithProviders(
-      <Routes>
-        <Route
-          path="/application-environments/:applicationEnvironmentId"
-          element={<ApplicationEnvironmentDetailPage />}
-        />
-        <Route path="/applications/:applicationId" element={<LocationProbe />} />
-      </Routes>,
-      '/application-environments/binding-1?releaseId=release-1',
-    )
-
-    expect(testState.apiGet).toHaveBeenCalledWith('/application-environments/binding-1/detail')
-    const location = container.querySelector('[data-testid="location-probe"]')?.textContent ?? ''
-    expect(location).toContain('/applications/app-1?')
-    expect(location).toContain('tab=environments')
-    expect(location).toContain('applicationEnvironmentId=binding-1')
-    expect(location).toContain('releaseId=release-1')
   })
 
   it('renders workflow template DAG preview, impact summary, and JSON panel', async () => {
@@ -1648,6 +1614,12 @@ describe('ApplicationsPage workspace layout', () => {
       '/ai-gateway/capabilities?source=delivery-workbench&skillId=delivery-developer',
     )
     expect(container.textContent).toContain('AI Gateway 构建发布辅助')
+    expect(container.textContent).not.toContain('用于读取应用环境、版本包、执行任务和 diff')
+    expect(
+      container
+        .querySelector('[aria-label="AI Gateway 构建发布辅助说明"]')
+        ?.getAttribute('tabindex'),
+    ).toBe('0')
     expect(container.textContent).toContain('需要审批')
     expect(container.textContent).toContain('AI Gateway 可用，调用需要审批')
     expect(container.textContent).toContain('delivery.actions.trigger / 审批')
@@ -1762,6 +1734,14 @@ describe('ApplicationsPage workspace layout', () => {
     expect(runtimeEvidencePath({ kind: 'execution_task', id: 'task-running' } as any)).toBe(
       '/delivery/execution-tasks/task-running?highlight=task-running',
     )
+    expect(
+      runtimeEvidencePath({
+        kind: 'environment',
+        id: 'binding-1',
+        applicationId: 'app-1',
+        applicationEnvironmentId: 'binding-1',
+      } as any),
+    ).toBe('/applications/app-1?tab=services&applicationEnvironmentId=binding-1')
   })
 
   it('opens manual onboarding from the application center query', async () => {
@@ -1881,17 +1861,21 @@ describe('ApplicationsPage workspace layout', () => {
     expect(testState.apiGet).toHaveBeenCalledWith('/delivery/release-bundles')
     expect(testState.apiGet).toHaveBeenCalledWith('/delivery/execution-tasks')
     expect(testState.apiGet).toHaveBeenCalledWith('/delivery/release-board')
-    expect(container.textContent).toContain('测试验证')
+    expect(container.querySelector('.soha-delivery-workbench-header')).toBeNull()
     expect(container.textContent).toContain('候选版本')
     expect(container.textContent).toContain('验证任务')
     expect(container.textContent).toContain('AI Gateway 验证辅助')
+    expect(container.textContent).not.toContain('可以汇总版本、任务日志、diff 和验证证据')
+    expect(
+      container.querySelector('[aria-label="AI Gateway 验证辅助说明"]')?.getAttribute('tabindex'),
+    ).toBe('0')
     expect(testState.apiGet).toHaveBeenCalledWith(
       '/ai-gateway/capabilities?source=delivery-workbench&skillId=delivery-tester',
     )
     expect(container.textContent).toContain('需要审批')
     expect(container.textContent).toContain('常规模式保持完整可用')
     expect(container.textContent).toContain('1.2.3')
-    expect(container.textContent).toContain('可晋级')
+    expect(container.textContent).toContain('禁止晋级')
     expect(container.querySelectorAll('.soha-delivery-workbench-action-card')).toHaveLength(0)
     expect(container.querySelectorAll('.soha-overview-metric-card')).toHaveLength(5)
     expect(container.querySelector('.soha-application-signal-card')).toBeNull()
@@ -1903,9 +1887,13 @@ describe('ApplicationsPage workspace layout', () => {
     expect(testState.apiGet).toHaveBeenCalledWith('/delivery/execution-tasks')
     expect(testState.apiGet).toHaveBeenCalledWith('/delivery/release-board')
     expect(testState.apiGet).toHaveBeenCalledWith('/delivery/release-bundles')
-    expect(container.textContent).toContain('问题分析')
+    expect(container.querySelector('.soha-delivery-workbench-header')).toBeNull()
     expect(container.textContent).toContain('失败任务')
     expect(container.textContent).toContain('AI Gateway 故障分析')
+    expect(container.textContent).not.toContain('可在常规证据基础上汇总失败原因')
+    expect(
+      container.querySelector('[aria-label="AI Gateway 故障分析说明"]')?.getAttribute('tabindex'),
+    ).toBe('0')
     expect(testState.apiGet).toHaveBeenCalledWith(
       '/ai-gateway/capabilities?source=delivery-workbench&skillId=delivery-tester',
     )

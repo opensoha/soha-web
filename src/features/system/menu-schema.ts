@@ -43,7 +43,7 @@ const MENU_SECTION_LABELS: Record<MenuSectionKey, { zh: string; en: string }> = 
   'ai-engineering': { zh: 'AI 工程', en: 'AI Engineering' },
   'ai-model-access': { zh: '模型与接入', en: 'Models & Access' },
   'ai-governance': { zh: '治理与可观测', en: 'Governance & Observability' },
-  delivery: { zh: '应用交付', en: 'Delivery' },
+  delivery: { zh: '持续交付', en: 'Delivery' },
   'delivery-records': { zh: '交付记录', en: 'Delivery Records' },
   'delivery-platform': { zh: '平台配置', en: 'Platform Configuration' },
   catalog: { zh: 'Catalog', en: 'Catalog' },

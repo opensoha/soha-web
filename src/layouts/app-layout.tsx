@@ -352,7 +352,7 @@ function buildWorkbenchOptions(localeCode: 'zh_CN' | 'en_US'): WorkbenchOption[]
     return [
       {
         key: 'home',
-        label: 'Home',
+        label: 'Portal',
         description: 'Application portal and unified workspace entry',
         icon: <HomeOutlined />,
       },
@@ -364,28 +364,28 @@ function buildWorkbenchOptions(localeCode: 'zh_CN' | 'en_US'): WorkbenchOption[]
         icon: <AppstoreOutlined />,
       },
       {
-        key: 'compute',
-        label: 'Compute Resources',
-        description: 'Virtualization, runtime hosts, containers, and operation tasks',
-        icon: <SlidersOutlined />,
-      },
-      {
         key: 'delivery',
-        label: 'Delivery Workbench',
-        description: 'Applications, build sources, bindings, and release orchestration',
+        label: 'Continuous Delivery Workbench',
+        description: 'Build, test, and release applications',
         icon: <CloudServerOutlined />,
-      },
-      {
-        key: 'ai',
-        label: 'AI Workbench',
-        description: 'Investigation, automation, tools, and skills',
-        icon: <RobotOutlined />,
       },
       {
         key: 'monitoring',
         label: 'Observability Workbench',
         description: 'Logs, alerts, routes, notifications, and on-call flows',
         icon: <AlertOutlined />,
+      },
+      {
+        key: 'compute',
+        label: 'Compute Resources',
+        description: 'Virtualization, runtime hosts, containers, and operation tasks',
+        icon: <SlidersOutlined />,
+      },
+      {
+        key: 'ai',
+        label: 'AI Workbench',
+        description: 'Investigation, automation, tools, and skills',
+        icon: <RobotOutlined />,
       },
       {
         key: 'security',
@@ -404,7 +404,7 @@ function buildWorkbenchOptions(localeCode: 'zh_CN' | 'en_US'): WorkbenchOption[]
   return [
     {
       key: 'home',
-      label: '首页',
+      label: '门户',
       description: '应用门户与统一工作台入口',
       icon: <HomeOutlined />,
     },
@@ -415,28 +415,28 @@ function buildWorkbenchOptions(localeCode: 'zh_CN' | 'en_US'): WorkbenchOption[]
       icon: <AppstoreOutlined />,
     },
     {
-      key: 'compute',
-      label: '计算资源工作台',
-      description: '虚拟化、运行时主机、容器管理与任务追踪',
-      icon: <SlidersOutlined />,
-    },
-    {
       key: 'delivery',
-      label: '应用交付工作台',
-      description: '应用、构建来源、环境绑定与发布编排',
+      label: '持续交付工作台',
+      description: '应用构建、测试与发布',
       icon: <CloudServerOutlined />,
-    },
-    {
-      key: 'ai',
-      label: 'AI工作台',
-      description: '调查、自动化、工具与技能',
-      icon: <RobotOutlined />,
     },
     {
       key: 'monitoring',
       label: '可观测性工作台',
       description: '日志、告警、路由、通知和值班协同',
       icon: <AlertOutlined />,
+    },
+    {
+      key: 'compute',
+      label: '计算资源工作台',
+      description: '虚拟化、运行时主机、容器管理与任务追踪',
+      icon: <SlidersOutlined />,
+    },
+    {
+      key: 'ai',
+      label: 'AI工作台',
+      description: '调查、自动化、工具与技能',
+      icon: <RobotOutlined />,
     },
     {
       key: 'security',

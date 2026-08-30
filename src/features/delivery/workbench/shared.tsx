@@ -1,8 +1,6 @@
 import './styles.css'
-import { Alert, Typography } from 'antd'
+import { Alert } from 'antd'
 import type { ExecutionTask, ReleaseBoardEntry, ReleaseBundle } from '../types'
-
-const { Text } = Typography
 
 const BLOCKED_STATUSES = new Set([
   'failed',
@@ -85,17 +83,6 @@ export function sortByLatest<T>(items: T[], timeSelector: (item: T) => string | 
   return [...items].sort(
     (left, right) =>
       new Date(timeSelector(right) || 0).getTime() - new Date(timeSelector(left) || 0).getTime(),
-  )
-}
-
-export function WorkbenchHeader({ description, title }: { description: string; title: string }) {
-  return (
-    <div className="soha-delivery-workbench-header">
-      <div className="soha-delivery-workbench-header__main">
-        <h2 className="soha-delivery-workbench-header__title">{title}</h2>
-        <Text type="secondary">{description}</Text>
-      </div>
-    </div>
   )
 }
 

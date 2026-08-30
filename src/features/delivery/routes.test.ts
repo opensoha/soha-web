@@ -8,8 +8,8 @@ const routePages = vi.hoisted(() => ({
   overview: () => null,
   applicationDetail: () => null,
   workloadDetail: () => null,
+  workflowDesigner: () => null,
   environments: () => null,
-  environmentDetail: () => null,
   environmentCatalog: () => null,
   buildTemplates: () => null,
   blueprints: () => null,
@@ -39,11 +39,11 @@ vi.mock('./applications/detail-page', () => ({
 vi.mock('./runtime/workload-detail-page', () => ({
   ApplicationWorkloadDetailPage: routePages.workloadDetail,
 }))
+vi.mock('./applications/workflow-designer-page', () => ({
+  ApplicationWorkflowDesignerPage: routePages.workflowDesigner,
+}))
 vi.mock('./environments/list-page', () => ({
   ApplicationEnvironmentsPage: routePages.environments,
-}))
-vi.mock('./environments/detail-page', () => ({
-  ApplicationEnvironmentDetailPage: routePages.environmentDetail,
 }))
 vi.mock('./environments/catalog-page', () => ({
   EnvironmentCatalogPage: routePages.environmentCatalog,
@@ -75,15 +75,15 @@ vi.mock('./builds/detail-page', () => ({ BuildDetailPage: routePages.buildDetail
 vi.mock('./registries/page', () => ({ RegistriesPage: routePages.registries }))
 
 describe('delivery route manifest', () => {
-  it('maps all 25 routes directly to distinct leaf modules', async () => {
+  it('maps all 26 routes directly to distinct leaf modules', async () => {
     const expectedPages = new Map([
       ['delivery-manifest-library', routePages.manifests],
       ['applications', routePages.applications],
       ['delivery-overview', routePages.overview],
       ['application-detail', routePages.applicationDetail],
       ['application-workload-detail', routePages.workloadDetail],
+      ['application-workflow-designer', routePages.workflowDesigner],
       ['application-environments', routePages.environments],
-      ['application-environment-detail', routePages.environmentDetail],
       ['delivery-environments', routePages.environmentCatalog],
       ['build-templates', routePages.buildTemplates],
       ['delivery-blueprints', routePages.blueprints],
@@ -116,7 +116,7 @@ describe('delivery route manifest', () => {
     expect(new Set(loadedPages).size).toBe(expectedPages.size)
   })
 
-  it('preserves legacy paths, permissions, and navigation metadata', () => {
+  it('preserves paths, permissions, and navigation metadata', () => {
     expect(
       deliveryRoutes.map((route) => ({
         id: route.meta.id,
@@ -175,19 +175,19 @@ describe('delivery route manifest', () => {
         permissionKeysAny: undefined,
       },
       {
+        id: 'application-workflow-designer',
+        menuId: undefined,
+        navVisible: false,
+        path: '/applications/:applicationId/workflows/design',
+        permissionKey: 'delivery.application-environments.update',
+        permissionKeysAny: undefined,
+      },
+      {
         id: 'application-environments',
         menuId: undefined,
         navVisible: false,
         path: '/application-environments',
         permissionKey: 'delivery.application-environments.view',
-        permissionKeysAny: undefined,
-      },
-      {
-        id: 'application-environment-detail',
-        menuId: undefined,
-        navVisible: false,
-        path: '/application-environments/:applicationEnvironmentId',
-        permissionKey: undefined,
         permissionKeysAny: undefined,
       },
       {

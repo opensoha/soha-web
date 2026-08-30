@@ -44,6 +44,30 @@ describe('deliveryMutations', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: deliveryKeys.releaseBoard.all })
   })
 
+  it('saves application workflows atomically and refreshes application state', async () => {
+    vi.spyOn(deliveryApi.environments, 'saveWorkflow').mockResolvedValue({ id: 'binding-1' } as never)
+    const { invalidateQueries, queryClient } = queryClientWithInvalidationSpy()
+    const observer = new MutationObserver(
+      queryClient,
+      deliveryMutations.environments.saveWorkflow(queryClient),
+    )
+    const payload = { name: 'Release workflow', definition: { nodes: [] }, enabled: true }
+
+    await observer.mutate({ applicationId: 'app-1', id: 'binding-1', payload })
+
+    expect(observer.options.mutationKey).toEqual(
+      deliveryMutationKeys.environments('save-workflow'),
+    )
+    expect(deliveryApi.environments.saveWorkflow).toHaveBeenCalledWith(
+      'app-1',
+      'binding-1',
+      payload,
+    )
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: deliveryKeys.applications.all })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: deliveryKeys.environments.all })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: deliveryKeys.releaseBoard.all })
+  })
+
   it('invalidates all runtime consumers after workflow actions', async () => {
     vi.spyOn(deliveryApi.workflows, 'approve').mockResolvedValue(undefined)
     const { invalidateQueries, queryClient } = queryClientWithInvalidationSpy()

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { parseReleaseTargets, summarizeReleaseTargets } from './release-targets'
+import {
+  parseReleaseTargets,
+  releaseTargetKey,
+  releaseTargetsFromCandidates,
+  summarizeReleaseTargets,
+} from './release-targets'
 
 describe('release target matrix', () => {
   it('accepts typed YAML, Helm and Kustomize targets', () => {
@@ -23,5 +28,45 @@ describe('release target matrix', () => {
         JSON.stringify([{ clusterId: 'c1', namespace: 'app', targetKind: 'helm_release', workloadKind: 'Release', workloadName: 'web' }]),
       ),
     ).toThrow('metadata.chartRef')
+  })
+
+  it('turns selected workload candidates into executable release targets', () => {
+    const existing = {
+      id: 'target-1',
+      clusterId: 'c1',
+      namespace: 'app',
+      workloadKind: 'Deployment',
+      workloadName: 'api',
+      enabled: true,
+    }
+    const worker = {
+      clusterId: 'c1',
+      namespace: 'app',
+      workloadKind: 'StatefulSet',
+      workloadName: 'worker',
+      desiredReplicas: 1,
+      readyReplicas: 1,
+      relatedResources: [],
+    }
+
+    expect(
+      releaseTargetsFromCandidates(
+        [worker],
+        [releaseTargetKey(existing), releaseTargetKey(worker)],
+        [existing],
+      ),
+    ).toEqual([
+      existing,
+      {
+        clusterId: 'c1',
+        namespace: 'app',
+        targetKind: 'k8s_workload',
+        executorKind: 'k8s_job_runner',
+        workloadKind: 'StatefulSet',
+        workloadName: 'worker',
+        metadata: {},
+        enabled: true,
+      },
+    ])
   })
 })

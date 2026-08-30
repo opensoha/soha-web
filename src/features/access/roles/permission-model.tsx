@@ -6,7 +6,7 @@ import { toStringArray } from '../shared/utils'
 
 const ROLE_PERMISSION_WORKBENCH_LABELS: Record<string, string> = {
   platform: 'k8s工作台',
-  delivery: '应用交付',
+  delivery: '持续交付',
   monitoring: '可观测与值班',
   home: '应用门户',
   ai: 'AI 工作台',

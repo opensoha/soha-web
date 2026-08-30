@@ -93,27 +93,22 @@ export function BrandingSettingsPage({ embedded = false }: SettingsPageProps = {
         </Form.Item>
 
         <div className="soha-branding-section-title">企业 Logo</div>
+        <Form.Item name="loginLogoUrl" hidden>
+          <Input />
+        </Form.Item>
         <div className="soha-branding-upload-grid">
           <BrandingUploadField
-            field="loginLogoUrl"
-            label="登录页面使用的图标（浅色）"
-            hint="格式: JPG/PNG/SVG，推荐大小: 200px * 60px"
-            previewWidth={200}
-            previewHeight={60}
-            disabled={!canManageBrandingSettings}
-          />
-          <BrandingUploadField
             field="expandedLogoUrl"
-            label="登录页左上角使用的图标（深色）以及侧边栏展开后左上角使用的图标（深色）"
-            hint="格式: JPG/PNG/SVG，推荐大小: 200px * 60px"
+            label="登录页主视觉与展开侧边栏 Logo"
+            hint="用于登录页左侧主视觉和展开侧边栏；支持 JPG、PNG、SVG、ICO、WebP；建议尺寸 200 × 60 px；单个文件不超过 2 MB"
             previewWidth={200}
             previewHeight={60}
             disabled={!canManageBrandingSettings}
           />
           <BrandingUploadField
             field="collapsedLogoUrl"
-            label="侧边栏收缩后左上角使用的图标"
-            hint="格式: JPG/PNG/SVG，推荐大小: 60px * 60px"
+            label="登录卡片与收起侧边栏图标"
+            hint="用于登录卡片和收起侧边栏；支持 JPG、PNG、SVG、ICO、WebP；建议尺寸 60 × 60 px；单个文件不超过 2 MB"
             previewWidth={60}
             previewHeight={60}
             disabled={!canManageBrandingSettings}
@@ -121,7 +116,7 @@ export function BrandingSettingsPage({ embedded = false }: SettingsPageProps = {
           <BrandingUploadField
             field="faviconUrl"
             label="Favicon 图标"
-            hint="格式: JPG/PNG/SVG/ICO，推荐大小: 16px*16px、32px*32px、64px*64px"
+            hint="支持 JPG、PNG、SVG、ICO、WebP；建议尺寸 16 × 16、32 × 32 或 64 × 64 px；单个文件不超过 2 MB"
             previewWidth={64}
             previewHeight={64}
             disabled={!canManageBrandingSettings}
@@ -221,12 +216,11 @@ function BrandingUploadField({
         <Input />
       </Form.Item>
       <div className="soha-branding-upload-area-wrap">
-        <div
-          className={`soha-branding-upload-area ${disabled ? 'is-disabled' : ''}`}
-          style={{
-            width: Math.max(previewWidth + 40, 160),
-            height: Math.max(previewHeight + 40, 100),
-          }}
+        <button
+          type="button"
+          className="soha-branding-upload-area"
+          aria-label={`${currentValue ? '替换' : '上传'}${label}`}
+          disabled={disabled || uploading}
           onClick={handleUploadClick}
         >
           {currentValue ? (
@@ -245,7 +239,7 @@ function BrandingUploadField({
               )}
             </div>
           )}
-        </div>
+        </button>
         {currentValue && !disabled ? (
           <Button
             size="small"

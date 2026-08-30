@@ -24,7 +24,7 @@ import {
   RocketOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Navigate, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementDensityButton,
@@ -79,16 +79,6 @@ function emptyInput(applicationId = '', serviceId?: string): ManifestPackageInpu
 }
 
 export function ManifestLibraryPage() {
-  const [searchParams] = useSearchParams()
-  const applicationId = searchParams.get('applicationId')?.trim()
-  if (applicationId) {
-    return (
-      <Navigate
-        replace
-        to={`/applications/${encodeURIComponent(applicationId)}?tab=services&section=resources`}
-      />
-    )
-  }
   return <ManifestLibraryWorkspace readOnly />
 }
 

@@ -1,6 +1,11 @@
 import type { ReactNode } from 'react'
-import { Alert, Button, Card, Space, Tag, Typography } from 'antd'
-import { ArrowRightOutlined, RobotOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
+import { Alert, Button, Card, Space, Tag, Tooltip, Typography } from 'antd'
+import {
+  ArrowRightOutlined,
+  QuestionCircleOutlined,
+  RobotOutlined,
+  SafetyCertificateOutlined,
+} from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { isApiError } from '@/services/api-error'
@@ -162,6 +167,9 @@ export function DeliveryGatewayReadinessPanel({
         <Space className="soha-delivery-gateway-readiness" orientation="vertical" size={10}>
           <Space size={8} wrap>
             <Text strong>{title}</Text>
+            <Tooltip title={description} trigger={['hover', 'focus']}>
+              <QuestionCircleOutlined aria-label={`${title}说明`} tabIndex={0} />
+            </Tooltip>
             <Tag
               color={
                 state === 'available'
@@ -177,7 +185,6 @@ export function DeliveryGatewayReadinessPanel({
             </Tag>
             {manifestQuery.isFetching ? <Tag>刷新中</Tag> : null}
           </Space>
-          <Text type="secondary">{description}</Text>
           <Alert
             showIcon
             type={tone.alertType}

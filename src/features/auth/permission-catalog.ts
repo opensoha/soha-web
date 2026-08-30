@@ -20,7 +20,7 @@ export interface PermissionCatalogGroup {
 const GROUP_LABELS: Record<string, string> = {
   access: '访问控制',
   ai: 'AI 运维',
-  delivery: '应用交付',
+  delivery: '持续交付',
   docker: '容器运行时',
   identity: '身份门户',
   observe: '运维智能',

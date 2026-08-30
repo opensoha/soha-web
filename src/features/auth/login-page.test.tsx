@@ -220,9 +220,22 @@ describe('login page', () => {
     expect(container.querySelector('.soha-auth-flow-title')?.textContent).toBe('让平台协作更简单')
     expect(container.querySelector('.soha-auth-flow-subtitle')).toBeNull()
     expect(container.textContent).not.toContain('统一到一个可协同、可治理的工作平台')
-    expect(container.textContent).toContain('计算资源工作台')
-    expect(container.textContent).toContain('内网工作台')
-    expect(container.textContent).toContain('用户角色、组织策略、Secret Store、审计与运行配置')
+    expect(
+      Array.from(container.querySelectorAll('.soha-auth-flow-node__question')).map(
+        (node) => node.textContent,
+      ),
+    ).toEqual([
+      '门户',
+      'k8s工作台',
+      '持续交付工作台',
+      '可观测性工作台',
+      '计算资源工作台',
+      'AI工作台',
+      '内网工作台',
+      '设置中心',
+    ])
+    expect(container.textContent).toContain('对话、知识库、Agent、模型网关与评测')
+    expect(container.textContent).not.toContain('AI Gateway')
     expect(container.textContent).not.toContain('虚拟化资源')
   })
 
@@ -230,10 +243,10 @@ describe('login page', () => {
     vi.mocked(fetchLoginOptions).mockResolvedValue({
       branding: {
         appTitle: 'shanchui',
-        collapsedLogoUrl: '',
-        expandedLogoUrl: '',
+        collapsedLogoUrl: 'https://cdn.example.com/icon.svg',
+        expandedLogoUrl: 'https://cdn.example.com/sidebar-logo.svg',
         faviconUrl: '',
-        loginLogoUrl: '',
+        loginLogoUrl: 'https://cdn.example.com/login-logo.svg',
         sidebarTitle: 'shanchui',
         slogan: 'shanshui',
       },
@@ -243,7 +256,16 @@ describe('login page', () => {
     const container = await renderLoginPage({ prefetchLoginOptions: true })
 
     expect(fetchLoginOptions).toHaveBeenCalledOnce()
-    expect(container.querySelector('.soha-auth-flow-title')?.textContent).toBe('shanshui')
+    expect(container.querySelector('.soha-auth-flow-title')).toBeNull()
+    expect(container.querySelector<HTMLImageElement>('.soha-auth-hero-logo-img')).toMatchObject({
+      alt: 'shanchui',
+      src: 'https://cdn.example.com/sidebar-logo.svg',
+    })
+    expect(container.querySelector<HTMLImageElement>('.soha-auth-brand-logo-img')).toMatchObject({
+      alt: '',
+      src: 'https://cdn.example.com/icon.svg',
+    })
+    expect(container.querySelector('img[src="https://cdn.example.com/login-logo.svg"]')).toBeNull()
   })
 
   it('restores an existing browser session from the login page', async () => {
