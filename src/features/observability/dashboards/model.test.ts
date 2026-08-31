@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   dashboardPanelAlertRulePath,
-  dashboardPanelExplorePath,
   dashboardPanelQueryInput,
   dashboardPlaybackParams,
   dashboardVariableValues,
@@ -37,7 +36,7 @@ describe('dashboard playback model', () => {
     )
   })
 
-  it('steps one fixed window and carries the same context into Explore', () => {
+  it('steps one fixed window and validates panel query input', () => {
     const window = {
       from: '2026-08-08T00:00:00.000Z',
       rangeMinutes: 60,
@@ -48,16 +47,6 @@ describe('dashboard playback model', () => {
       rangeMinutes: 60,
       to: '2026-08-08T02:00:00.000Z',
     })
-    const path = dashboardPanelExplorePath('dashboard:1', 'panel/1', {
-      timeFrom: window.from,
-      timeTo: window.to,
-      stepSeconds: 60,
-      variables: { namespace: 'production' },
-    })
-    expect(path).toContain('dashboardId=dashboard%3A1')
-    expect(path).toContain('panelId=panel%2F1')
-    expect(path).toContain('stepSeconds=60')
-    expect(path).toContain('var-namespace=production')
     expect(dashboardPanelQueryInput(window, {}, 30).stepSeconds).toBe(30)
     expect(dashboardPanelQueryInput(window, {}, 0).stepSeconds).toBe(60)
   })

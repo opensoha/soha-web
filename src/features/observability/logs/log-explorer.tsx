@@ -171,6 +171,7 @@ function logEntryContext(entry: LogEntry) {
 
 function initialFilters(preset?: LogExplorerPreset): RuntimeLogFilters {
   return {
+    dataSourceId: preset?.dataSourceId ?? undefined,
     workloadKind: preset?.workloadKind,
     workloadName: preset?.workloadName,
     podNames: preset?.podNames,
@@ -330,6 +331,7 @@ export function LogExplorer({
   function syncSearch(filters: RuntimeLogFilters) {
     if (!syncURL) return
     const path = buildLogExplorerPath({
+      dataSourceId: filters.dataSourceId,
       source:
         resolvedTarget.kind === 'docker'
           ? 'docker'
@@ -340,8 +342,11 @@ export function LogExplorer({
       namespace: resolvedTarget.kind === 'docker' ? undefined : resolvedTarget.namespace,
       dockerProjectId: resolvedTarget.kind === 'docker' ? resolvedTarget.projectId : undefined,
       dockerService: resolvedTarget.kind === 'docker' ? resolvedTarget.serviceName : undefined,
-      applicationId: resolvedTarget.kind === 'delivery' ? resolvedTarget.applicationId : undefined,
-      environmentId: resolvedTarget.kind === 'delivery' ? resolvedTarget.environmentId : undefined,
+      applicationId:
+        resolvedTarget.kind === 'delivery' ? resolvedTarget.applicationId : preset?.applicationId,
+      environmentId:
+        resolvedTarget.kind === 'delivery' ? resolvedTarget.environmentId : preset?.environmentId,
+      service: preset?.service,
       workloadKind: filters.workloadKind,
       workloadName: filters.workloadName,
       podNames: filters.podNames,
@@ -357,9 +362,37 @@ export function LogExplorer({
       allContainers: filters.allContainers,
       previous: filters.previous,
     })
-    const next = new URLSearchParams(path.split('?')[1] ?? '')
-    const signal = searchParams.get('signal')
-    if (signal) next.set('signal', signal)
+    const next = new URLSearchParams(searchParams)
+    if (filters.dataSourceId) next.delete('dataSourceId')
+    for (const key of [
+      'source',
+      'cluster',
+      'namespace',
+      'dockerProject',
+      'dockerService',
+      'application',
+      'environment',
+      'service',
+      'workloadKind',
+      'workload',
+      'pod',
+      'container',
+      'labelSelector',
+      'text',
+      'traceId',
+      'spanId',
+      'from',
+      'to',
+      'range',
+      'tail',
+      'allContainers',
+      'previous',
+    ]) {
+      next.delete(key)
+    }
+    for (const [key, value] of new URLSearchParams(path.split('?')[1] ?? '')) {
+      next.append(key, value)
+    }
     setSearchParams(next, { replace: true })
   }
 
@@ -392,11 +425,12 @@ export function LogExplorer({
   }
 
   function handleSubmit(filters: RuntimeLogFilters) {
-    let resolvedFilters = filters
+    let resolvedFilters = { ...defaults, ...filters }
     if (!embedded && queryEditorMode === 'query') {
       try {
         resolvedFilters = {
           ...parseSohaQLExpression(queryExpression),
+          dataSourceId: defaults.dataSourceId,
           traceId: filters.traceId,
           spanId: filters.spanId,
           sinceSeconds: filters.sinceSeconds,
@@ -995,17 +1029,27 @@ export function LogExplorer({
       >
         <Flex className="soha-log-results-toolbar" align="center" gap={8} wrap>
           {!showQueryControls ? scopeControl : null}
-          <StatusTag
-            value={
-              mode === 'history'
-                ? snapshotQuery.isFetching
-                  ? 'querying'
-                  : submitted
-                    ? 'ready'
-                    : 'idle'
-                : streamState
-            }
-          />
+          <span
+            aria-atomic="true"
+            aria-live="polite"
+            className="soha-log-connection-status"
+            role="status"
+          >
+            <StatusTag
+              value={
+                mode === 'history'
+                  ? snapshotQuery.isFetching
+                    ? 'querying'
+                    : submitted
+                      ? 'ready'
+                      : 'idle'
+                  : streamState
+              }
+            />
+            {mode === 'live' && streamMessage ? (
+              <span className="soha-log-status-announcement">{streamMessage}</span>
+            ) : null}
+          </span>
           <MetadataTag label={`${entries.length} 行`} tone="blue" />
           {page?.coverage ? (
             <MetadataTag
@@ -1168,11 +1212,15 @@ export function LogExplorer({
                               icon={<LinkOutlined />}
                               size="small"
                               type="link"
-                              onClick={() =>
-                                navigate(
-                                  `/monitoring-workbench/traces?traceId=${encodeURIComponent(entry.traceId ?? '')}`,
-                                )
-                              }
+                              onClick={() => {
+                                const next = new URLSearchParams(searchParams)
+                                next.delete('signal')
+                                next.delete('compare')
+                                next.set('traceId', entry.traceId ?? '')
+                                if (entry.spanId) next.set('spanId', entry.spanId)
+                                else next.delete('spanId')
+                                navigate(`/monitoring-workbench/traces?${next.toString()}`)
+                              }}
                             >
                               查看关联链路
                             </Button>

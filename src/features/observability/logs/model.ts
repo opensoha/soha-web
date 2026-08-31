@@ -1,6 +1,7 @@
 import type { LogEntry, LogQuery } from '@opensoha/contracts/gen/ts/sohaapi'
 
 export interface LogExplorerPreset {
+  dataSourceId?: string | null
   source?: 'kubernetes' | 'docker' | 'delivery'
   clusterId?: string | null
   namespace?: string | null
@@ -8,6 +9,8 @@ export interface LogExplorerPreset {
   dockerService?: string | null
   applicationId?: string | null
   environmentId?: string | null
+  /** Correlation context only; durable log selectors still use workload/trace fields. */
+  service?: string | null
   workloadKind?: string
   workloadName?: string
   podNames?: string[]
@@ -25,6 +28,7 @@ export interface LogExplorerPreset {
 }
 
 export interface RuntimeLogFilters {
+  dataSourceId?: string
   workloadKind?: string
   workloadName?: string
   podNames?: string[]
@@ -132,7 +136,7 @@ export function buildRuntimeLogQuery(namespace: string, filters: RuntimeLogFilte
   return {
     sourceMode: 'runtime',
     selector: {
-      namespace: namespace.trim(),
+      namespace: clean(namespace),
       workloadKind,
       workloadName,
       podNames: cleanList(filters.podNames),
@@ -187,8 +191,9 @@ export function buildDurableLogQuery(
   const rangeSeconds = filters.sinceSeconds && filters.sinceSeconds > 0 ? filters.sinceSeconds : 900
   return {
     sourceMode: 'durable',
+    dataSourceId: clean(filters.dataSourceId),
     selector: {
-      namespace: namespace.trim(),
+      namespace: clean(namespace),
       workloadKind,
       workloadName,
       podNames,
@@ -212,6 +217,7 @@ export function readLogExplorerPreset(params: URLSearchParams): LogExplorerPrese
   const containers = cleanList(params.getAll('container'))
   const range = absoluteRange(params.get('from'), params.get('to'))
   return {
+    dataSourceId: clean(params.get('dataSourceId')),
     source:
       params.get('source') === 'docker'
         ? 'docker'
@@ -224,6 +230,7 @@ export function readLogExplorerPreset(params: URLSearchParams): LogExplorerPrese
     dockerService: clean(params.get('dockerService')),
     applicationId: clean(params.get('application')),
     environmentId: clean(params.get('environment')),
+    service: clean(params.get('service')),
     workloadKind: clean(params.get('workloadKind')),
     workloadName: clean(params.get('workload')),
     podNames,
@@ -246,6 +253,7 @@ export function buildLogExplorerPath(preset: LogExplorerPreset) {
   const params = new URLSearchParams()
   const range = absoluteRange(preset.from, preset.to)
   const values: Array<[string, string | null | undefined]> = [
+    ['dataSourceId', preset.dataSourceId],
     ['source', preset.source && preset.source !== 'kubernetes' ? preset.source : undefined],
     ['cluster', preset.clusterId],
     ['namespace', preset.namespace],
@@ -253,6 +261,7 @@ export function buildLogExplorerPath(preset: LogExplorerPreset) {
     ['dockerService', preset.dockerService],
     ['application', preset.applicationId],
     ['environment', preset.environmentId],
+    ['service', preset.service],
     ['workloadKind', preset.workloadKind],
     ['workload', preset.workloadName],
     ['labelSelector', preset.labelSelector],

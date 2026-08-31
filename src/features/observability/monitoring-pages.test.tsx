@@ -53,6 +53,9 @@ const testState = vi.hoisted(() => ({
 const apiGetMock = vi.hoisted(() =>
   vi.fn((path: string) => Promise.resolve({ data: testState.responses[path] ?? [] })),
 )
+const apiGetEnvelopeMock = vi.hoisted(() =>
+  vi.fn((path: string) => Promise.resolve({ items: testState.responses[path] ?? [] })),
+)
 const apiPostMock = vi.hoisted(() => vi.fn(() => Promise.resolve({ data: {} })))
 
 vi.mock('@/features/auth/permission-snapshot', async () => {
@@ -71,6 +74,7 @@ vi.mock('@/features/auth/permission-snapshot', async () => {
 vi.mock('@/services/api-client', () => ({
   api: {
     get: apiGetMock,
+    getEnvelope: apiGetEnvelopeMock,
     post: apiPostMock,
     put: vi.fn(),
     delete: vi.fn(),
@@ -617,7 +621,7 @@ describe('observability monitoring pages', () => {
     expect(document.body.textContent).toContain('投递日志')
     expect(apiGetMock).toHaveBeenCalledWith('/alert-events/evt-1')
     expect(apiGetMock).toHaveBeenCalledWith('/alert-rules/rule-1')
-    expect(apiGetMock).toHaveBeenCalledWith('/alert-rule-runs?ruleId=rule-1')
+    expect(apiGetEnvelopeMock).toHaveBeenCalledWith('/alert-rule-runs?ruleId=rule-1')
     expect(apiGetMock).toHaveBeenCalledWith('/healing-runs?eventId=evt-1')
     expect(apiGetMock).toHaveBeenCalledWith('/notification-policies/policy-1/preview?eventId=evt-1')
     expect(apiGetMock).toHaveBeenCalledWith('/alert-delivery-logs?alertId=evt-1')

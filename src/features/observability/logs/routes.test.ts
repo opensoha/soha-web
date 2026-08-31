@@ -12,10 +12,11 @@ describe('observability log route manifest', () => {
     expect(route.meta).toMatchObject({
       id: 'monitoring-workbench-logs',
       path: '/monitoring-workbench/logs',
-      menuId: 'monitoring-workbench',
+      menuId: 'monitoring-workbench-logs',
       permissionKey: 'observe.monitoring.view',
       scopeMode: 'passive',
-      navVisible: false,
+      navVisible: true,
+      tabbar: true,
     })
     await expect(route.load()).resolves.toEqual({ default: routePage })
     expect(dataSourcesRoute.meta).toMatchObject({

@@ -9,7 +9,6 @@ import {
   PauseCircleOutlined,
   PlayCircleOutlined,
   RightOutlined,
-  SearchOutlined,
 } from '@ant-design/icons'
 import { LineChart } from '@visactor/react-vchart'
 import { useQuery } from '@tanstack/react-query'
@@ -26,9 +25,10 @@ import {
 } from '@/components/resource-metrics-panel'
 import { MetadataTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { useAIPageContext } from '@/features/copilot'
+import { formatDateTime } from '@/utils/time'
 import {
   dashboardPanelAlertRulePath,
-  dashboardPanelExplorePath,
   dashboardPanelQueryInput,
   dashboardPlaybackParams,
   dashboardVariableValues,
@@ -73,6 +73,26 @@ export function ObservabilityDashboardDetailPage() {
     () => dashboardPanelQueryInput(playback, variables),
     [playback, variables],
   )
+  useAIPageContext({
+    sourceWorkbench: 'monitoring',
+    sourceTitle: '仪表盘调查',
+    entityKind: 'monitoring.dashboard',
+    entityName: dashboardQuery.data?.name || dashboardId || '仪表盘',
+    timeRangeMinutes: playback.rangeMinutes,
+    visibleFilters: {
+      timeFrom: playback.from,
+      timeTo: playback.to,
+      ...variables,
+    },
+    pinnedData: dashboardQuery.data
+      ? {
+          dashboardId: dashboardQuery.data.id,
+          dataSourceId: dashboardQuery.data.dataSourceId,
+          panelCount: dashboardQuery.data.panels.length,
+        }
+      : { dashboardId },
+    promptHint: '分析当前仪表盘时间窗、变量和面板趋势，并给出可打开的查询证据。',
+  })
   const updatePlayback = useCallback(
     (next: DashboardPlaybackWindow, nextVariables = variables) => {
       setSearchParams(dashboardPlaybackParams(searchParams, next, nextVariables), {
@@ -168,6 +188,7 @@ export function ObservabilityDashboardDetailPage() {
               />
               <ManagementIconButton
                 aria-label={playing ? '暂停播放' : '播放时间窗'}
+                aria-pressed={playing}
                 icon={playing ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
                 tooltip={playing ? '暂停' : '播放'}
                 onClick={() => setPlaying((value) => !value)}
@@ -179,6 +200,9 @@ export function ObservabilityDashboardDetailPage() {
                 onClick={() => updatePlayback(shiftDashboardPlayback(playback, 1))}
               />
             </Flex>
+            <Text aria-atomic="true" aria-live="polite" role="status" type="secondary">
+              自动播放：{playing ? '进行中' : '已暂停'}
+            </Text>
           </Space>
         ),
       }}
@@ -253,27 +277,16 @@ function DashboardPanel({
       style={style}
       title={panel.title}
       extra={
-        panel.queryable ? (
-          <Flex gap={2}>
-            <ManagementIconButton
-              aria-label={`在 Explore 打开 ${panel.title}`}
-              icon={<SearchOutlined />}
-              size="small"
-              tooltip="在 Explore 打开"
-              onClick={() => onNavigate(dashboardPanelExplorePath(dashboardId, panel.id, input))}
-            />
-            {canManageRules ? (
-              <ManagementIconButton
-                aria-label={`基于 ${panel.title} 创建告警`}
-                icon={<AlertOutlined />}
-                size="small"
-                tooltip="创建告警"
-                onClick={() =>
-                  onNavigate(dashboardPanelAlertRulePath(dashboardName, dataSourceId, panel, input))
-                }
-              />
-            ) : null}
-          </Flex>
+        panel.queryable && canManageRules ? (
+          <ManagementIconButton
+            aria-label={`基于 ${panel.title} 创建告警`}
+            icon={<AlertOutlined />}
+            size="small"
+            tooltip="创建告警"
+            onClick={() =>
+              onNavigate(dashboardPanelAlertRulePath(dashboardName, dataSourceId, panel, input))
+            }
+          />
         ) : undefined
       }
     >
@@ -332,6 +345,7 @@ export function DashboardMetricSeries({
   panelType: ObservabilityDashboardPanel['type']
   series: ObservabilityMetricSeries[]
 }) {
+  const [dataVisible, setDataVisible] = useState(false)
   if (panelType === 'table') {
     return (
       <Table
@@ -365,9 +379,41 @@ export function DashboardMetricSeries({
   }
   const lines = metricLines(series)
   return (
-    <div className="soha-dashboard-chart">
-      <LineChart spec={buildCompactChartSpec(lines, series[0]?.unit ?? '', 'zh_CN')} />
-    </div>
+    <>
+      <div aria-hidden="true" className="soha-dashboard-chart">
+        <LineChart spec={buildCompactChartSpec(lines, series[0]?.unit ?? '', 'zh_CN')} />
+      </div>
+      <details
+        className="soha-dashboard-data-details"
+        onToggle={(event) => event.currentTarget.open && setDataVisible(true)}
+      >
+        <summary>查看数据表</summary>
+        {dataVisible ? (
+          <div aria-label="仪表盘指标数据表" className="soha-dashboard-data-region" role="region">
+            <table className="soha-dashboard-data-table">
+              <thead>
+                <tr>
+                  <th scope="col">序列</th>
+                  <th scope="col">时间</th>
+                  <th scope="col">数值</th>
+                </tr>
+              </thead>
+              <tbody>
+                {series.map((item) =>
+                  item.points.map((point, index) => (
+                    <tr key={`${item.key}:${point.timestamp}:${index}`}>
+                      <th scope="row">{item.label}</th>
+                      <td>{formatDateTime(point.timestamp)}</td>
+                      <td>{formatMetricValue(point.value, item.unit ?? '')}</td>
+                    </tr>
+                  )),
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </details>
+    </>
   )
 }
 

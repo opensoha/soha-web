@@ -13,6 +13,7 @@ import {
 } from '@/components/management-list'
 import { MetadataTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { useAIPageContext } from '@/features/copilot'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { formatDateTime } from '@/utils/time'
 import { ImportDashboardModal } from './import-modal'
@@ -35,6 +36,19 @@ export function ObservabilityDashboardsPage() {
     () => new Map((dataSourcesQuery.data ?? []).map((item) => [item.id, item.name])),
     [dataSourcesQuery.data],
   )
+  useAIPageContext({
+    sourceWorkbench: 'monitoring',
+    sourceTitle: '仪表盘',
+    entityKind: 'monitoring.dashboard.list',
+    entityName: '仪表盘',
+    pinnedData: dashboardsQuery.data
+      ? {
+          dashboardCount: dashboardsQuery.data.length,
+          dataSourceCount: dataSourcesQuery.data?.length ?? 0,
+        }
+      : undefined,
+    promptHint: '分析当前仪表盘覆盖范围、数据源绑定和可调查入口。',
+  })
   const deleteMutation = useMutation({
     ...observabilityDashboardMutations.delete(queryClient),
     onError: (error) => message.error(error.message),

@@ -13,6 +13,33 @@ import type {
 
 const simpleOperators = new Set(['gt', 'gte', 'lt', 'lte', 'eq'])
 const simpleReducers = new Set(['latest', 'average', 'max', 'min', 'sum', 'count'])
+const metricLabels: Record<string, string> = {
+  cpu_usage: 'CPU 使用率',
+  memory_usage: '内存使用率',
+  restart_rate: '重启次数',
+  error_rate: '错误率',
+  latency_p95: 'P95 延迟',
+}
+const reducerLabels: Record<string, string> = {
+  latest: '最新值',
+  average: '平均值',
+  max: '最大值',
+  min: '最小值',
+  sum: '总和',
+  count: '样本数',
+}
+const operatorLabels: Record<string, string> = {
+  gt: '大于',
+  gte: '大于等于',
+  lt: '小于',
+  lte: '小于等于',
+  eq: '等于',
+}
+const severityLabels: Record<string, string> = {
+  critical: '严重',
+  warning: '警告',
+  info: '提示',
+}
 
 function payloadMapFromField(value: unknown) {
   if (typeof value === 'string') return parseObservabilityJson(value, emptyPayloadMap())
@@ -36,6 +63,29 @@ function stringListFromField(value: unknown) {
 export function prettyObservabilityJson(value: unknown) {
   if (value == null) return ''
   return JSON.stringify(value, null, 2)
+}
+
+export function alertRuleConditionSummary(values: Partial<AlertRuleFormValues>) {
+  const metricKey = toText(values.metricKey || 'cpu_usage')
+  const reducer = toText(values.reducer || 'latest')
+  const operator = toText(values.operator || 'gt')
+  const severity = toText(values.severity || 'warning')
+  const threshold = Number(values.thresholdValue ?? 80)
+  const windowMinutes = Number(values.windowMinutes ?? 60)
+  const forSeconds = Number(values.forSeconds ?? 60)
+  const scope = [
+    ['集群', values.clusterId],
+    ['命名空间', values.namespace],
+    ['工作负载', values.workload],
+  ]
+    .map(([label, value]) => [label, toText(value).trim()] as const)
+    .filter(([, value]) => value)
+    .map(([label, value]) => `${label} ${value}`)
+  const duration = Number.isFinite(forSeconds) && forSeconds > 0
+    ? `条件持续 ${forSeconds} 秒后`
+    : '条件成立后立即'
+  const summary = `最近 ${Number.isFinite(windowMinutes) ? windowMinutes : 60} 分钟内，${metricLabels[metricKey] || metricKey || '指标'}的${reducerLabels[reducer] || reducer || '取值'}${operatorLabels[operator] || operator || '满足条件'} ${Number.isFinite(threshold) ? threshold : 80}；${duration}触发${severityLabels[severity] || severity || '警告'}告警。`
+  return scope.length > 0 ? `${summary}范围：${scope.join('、')}。` : summary
 }
 
 export function alertRuleDashboardDraft(params: URLSearchParams): AlertRuleFormValues | null {

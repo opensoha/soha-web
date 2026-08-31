@@ -58,4 +58,49 @@ describe('useAIPageContext', () => {
 
     await act(async () => root.unmount())
   })
+
+  it('does not register a disabled embedded page context', async () => {
+    const registerPageContext = vi.fn(() => () => undefined)
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    containers.push(container)
+    const root = createRoot(container)
+
+    function Harness() {
+      useAIPageContext(
+        {
+          sourceWorkbench: 'monitoring',
+          sourceTitle: 'Embedded metrics',
+        },
+        false,
+      )
+      return null
+    }
+
+    await act(async () => {
+      root.render(
+        <MemoryRouter>
+          <AIPageContextRegistry.Provider
+            value={{
+              currentContext: {
+                sourceWorkbench: 'ai',
+                sourceRoute: '/',
+                sourceTitle: 'Soha',
+              },
+              launchAssistant: vi.fn(),
+              openAssistant: vi.fn(),
+              openWorkbench: vi.fn(),
+              registerPageContext,
+            }}
+          >
+            <Harness />
+          </AIPageContextRegistry.Provider>
+        </MemoryRouter>,
+      )
+    })
+
+    expect(registerPageContext).not.toHaveBeenCalled()
+
+    await act(async () => root.unmount())
+  })
 })

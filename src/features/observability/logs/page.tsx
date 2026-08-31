@@ -1,6 +1,7 @@
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { PlatformScopeToolbar } from '@/components/platform-scope-toolbar'
+import { useAIPageContext } from '@/features/copilot'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { LogExplorer } from './log-explorer'
 import type { LogTarget } from './api'
@@ -9,7 +10,7 @@ import { readLogExplorerPreset } from './model'
 export function LogsPage() {
   const [searchParams] = useSearchParams()
   const preset = useMemo(() => readLogExplorerPreset(searchParams), [searchParams])
-  const { clusterId, namespace, setClusterId, setNamespace } = usePlatformScopeStore()
+  const { clusterId, namespace } = usePlatformScopeStore()
   const target = useMemo<LogTarget | undefined>(() => {
     if (preset.source === 'docker') {
       return {
@@ -28,17 +29,33 @@ export function LogsPage() {
     }
     return undefined
   }, [preset])
-
-  useEffect(() => {
-    if (preset.clusterId && preset.clusterId !== clusterId) setClusterId(preset.clusterId)
-    if (preset.namespace && preset.namespace !== namespace) setNamespace(preset.namespace)
-  }, [clusterId, namespace, preset.clusterId, preset.namespace, setClusterId, setNamespace])
+  useAIPageContext({
+    sourceWorkbench: 'monitoring',
+    sourceTitle: '日志调查',
+    entityKind:
+      preset.source === 'docker'
+        ? 'monitoring.logs.docker'
+        : preset.source === 'delivery'
+          ? 'monitoring.logs.delivery'
+          : 'monitoring.logs',
+    entityName:
+      preset.workloadName || preset.dockerService || preset.applicationId || clusterId || '日志',
+    clusterId: preset.clusterId || clusterId || undefined,
+    namespace: preset.namespace || namespace || undefined,
+    workload: preset.workloadName,
+    service: preset.service || preset.dockerService || undefined,
+    applicationId: preset.applicationId || undefined,
+    timeRangeMinutes: preset.sinceSeconds ? Math.ceil(preset.sinceSeconds / 60) : undefined,
+    visibleFilters: { ...preset },
+    pinnedData: { source: preset.source, targetKind: target?.kind ?? 'cluster' },
+    promptHint: '分析当前日志范围的错误模式、时间关联、Trace 线索和影响对象，并给出可打开的证据。',
+  })
 
   return (
     <div className="soha-page">
       <LogExplorer
-        clusterId={clusterId}
-        namespace={namespace}
+        clusterId={preset.clusterId || clusterId}
+        namespace={preset.namespace || namespace}
         preset={preset}
         scopeControl={
           <PlatformScopeToolbar

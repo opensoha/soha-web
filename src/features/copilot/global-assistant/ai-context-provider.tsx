@@ -21,7 +21,7 @@ export type AIPageContextInput = Omit<AIPageContext, 'sourceRoute'> & {
   sourceRoute?: string
 }
 
-export function useAIPageContext(context: AIPageContextInput) {
+export function useAIPageContext(context: AIPageContextInput, enabled = true) {
   const registry = useContext(AIPageContextRegistry)
   const location = useLocation()
   const registerPageContext = registry?.registerPageContext
@@ -35,9 +35,9 @@ export function useAIPageContext(context: AIPageContextInput) {
   contextRef.current = resolvedContext
 
   useEffect(() => {
-    if (!registerPageContext) return undefined
+    if (!enabled || !registerPageContext) return undefined
     return registerPageContext(idRef.current, contextRef.current, key)
-  }, [key, registerPageContext])
+  }, [enabled, key, registerPageContext])
 }
 
 export function useAIGlobalAssistant() {

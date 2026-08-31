@@ -3,13 +3,14 @@ import { FileSearchOutlined } from '@ant-design/icons'
 import { useMutation } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
 import { Form, Input, InputNumber, Typography } from 'antd'
+import { useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementIconButton, ManagementState } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
+import { useAIPageContext } from '@/features/copilot'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { formatDateTime } from '@/utils/time'
-import { buildLogExplorerPath } from '../logs/model'
 import { queryTraces } from './api'
 import { signalSearchParams, traceWaterfallRows } from './model'
 import { SignalQueryForm, SignalState, traceInput, type SignalFilters } from './shared'
@@ -19,9 +20,15 @@ const { Text } = Typography
 function TraceWaterfall({ spans, traceId }: { spans: ObservabilityTraceSpan[]; traceId: string }) {
   const rows = traceWaterfallRows(spans, traceId)
   return (
-    <div className="soha-trace-waterfall">
+    <div aria-label={`Trace ${traceId} Span 瀑布`} className="soha-trace-waterfall" role="list">
       {rows.map(({ leftPercent, span, widthPercent }) => (
-        <div className="soha-trace-waterfall-row" key={span.spanId}>
+        <div
+          aria-label={`${span.service} ${span.operation} ${span.durationMs.toFixed(1)} ms${span.error ? ' 错误' : ' 正常'}`}
+          className="soha-trace-waterfall-row"
+          key={span.spanId}
+          role="listitem"
+          tabIndex={0}
+        >
           <div className="soha-trace-waterfall-label" title={`${span.service} / ${span.operation}`}>
             <Text strong>{span.service}</Text>
             <Text type="secondary">{span.operation}</Text>
@@ -50,6 +57,8 @@ export function ObservabilityTracesPage({ embedded = false }: { embedded?: boole
   const requestedNamespace = searchParams.get('namespace') || namespace
   const [form] = Form.useForm<SignalFilters>()
   const traces = useMutation({ mutationFn: queryTraces })
+  const runTraces = traces.mutate
+  const autoQueryStarted = useRef(false)
   const columns: TableColumnsType<ObservabilityTraceSpan> = [
     {
       title: '开始时间',
@@ -82,28 +91,70 @@ export function ObservabilityTracesPage({ embedded = false }: { embedded?: boole
         <ManagementIconButton
           icon={<FileSearchOutlined />}
           tooltip="查看关联日志"
-          onClick={() =>
-            navigate(
-              buildLogExplorerPath({
-                clusterId: requestedClusterId,
-                namespace: requestedNamespace,
-                source: 'kubernetes',
-                traceId: span.traceId,
-                spanId: span.spanId,
-                sinceSeconds: form.getFieldValue('rangeMinutes') * 60,
-              }),
-            )
-          }
+          onClick={() => {
+            const next = signalSearchParams(searchParams, {
+              signal: undefined,
+              compare: undefined,
+              dataSourceId: undefined,
+              metricKey: undefined,
+              minDurationMs: undefined,
+              limit: undefined,
+              traceId: span.traceId,
+              spanId: span.spanId,
+            })
+            navigate(`/monitoring-workbench/logs?${next.toString()}`)
+          }}
         />
       ),
     },
   ]
+  useAIPageContext(
+    {
+      sourceWorkbench: 'monitoring',
+      sourceTitle: '链路调查',
+      entityKind: 'monitoring.signal.traces',
+      entityName: searchParams.get('traceId') || searchParams.get('service') || '链路',
+      clusterId: requestedClusterId || undefined,
+      namespace: requestedNamespace || undefined,
+      service: searchParams.get('service') || undefined,
+      workload: searchParams.get('workload') || undefined,
+      visibleFilters: {
+        dataSourceId: searchParams.get('dataSourceId') || undefined,
+        traceId: searchParams.get('traceId') || undefined,
+        minDurationMs: searchParams.get('minDurationMs') || undefined,
+        limit: searchParams.get('limit') || undefined,
+        timeFrom: searchParams.get('from') || undefined,
+        timeTo: searchParams.get('to') || undefined,
+      },
+      pinnedData: traces.data
+        ? { serviceCount: traces.data.services.length, spanCount: traces.data.spans.length }
+        : undefined,
+      promptHint: '分析当前 Trace 的慢 Span、错误路径和关联日志，并给出可打开的证据。',
+    },
+    !embedded,
+  )
+
+  useEffect(() => {
+    const from = Date.parse(searchParams.get('from') ?? '')
+    const to = Date.parse(searchParams.get('to') ?? '')
+    if (
+      autoQueryStarted.current ||
+      !searchParams.get('traceId') ||
+      !Number.isFinite(from) ||
+      !Number.isFinite(to) ||
+      from >= to
+    )
+      return
+    autoQueryStarted.current = true
+    runTraces(traceInput(form.getFieldsValue(true), requestedClusterId, requestedNamespace))
+  }, [form, requestedClusterId, requestedNamespace, runTraces, searchParams])
 
   return (
     <div className={`${embedded ? '' : 'soha-page '}soha-signal-page`}>
       <SignalQueryForm
         form={form}
         initialValues={{
+          dataSourceId: searchParams.get('dataSourceId') ?? undefined,
           service: searchParams.get('service') ?? undefined,
           traceId: searchParams.get('traceId') ?? undefined,
           workload: searchParams.get('workload') ?? undefined,
@@ -116,6 +167,7 @@ export function ObservabilityTracesPage({ embedded = false }: { embedded?: boole
           const input = traceInput(values, requestedClusterId, requestedNamespace)
           setSearchParams(
             signalSearchParams(searchParams, {
+              dataSourceId: input.dataSourceId,
               cluster: requestedClusterId,
               namespace: requestedNamespace,
               service: values.service,
@@ -126,7 +178,7 @@ export function ObservabilityTracesPage({ embedded = false }: { embedded?: boole
             }),
             { replace: true },
           )
-          traces.mutate(input)
+          runTraces(input)
         }}
       >
         <Form.Item label="Trace ID" name="traceId">

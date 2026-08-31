@@ -23,8 +23,10 @@ export function alertDiagnosticPaths(event: AlertEvent, snapshot?: Observability
   for (const [key, value] of [
     ['cluster', scope?.clusterId || event.clusterId],
     ['namespace', scope?.namespace || event.namespace],
+    ['environment', scope?.environment],
     ['service', service],
     ['workload', workload],
+    ['dataSourceId', snapshot?.dataSourceId],
     ['from', range?.from || event.startsAt],
     ['to', range?.to || event.lastSeenAt],
     ['metricKey', snapshot?.metricKey],
@@ -41,6 +43,8 @@ export function alertDiagnosticPaths(event: AlertEvent, snapshot?: Observability
     logs: buildLogExplorerPath({
       clusterId: scope?.clusterId || event.clusterId,
       namespace: scope?.namespace || event.namespace,
+      environmentId: scope?.environment,
+      service,
       workloadName: workload,
       text: filter?.text,
       traceId,

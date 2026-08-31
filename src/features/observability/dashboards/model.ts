@@ -107,25 +107,6 @@ export function dashboardPanelQueryInput(
   }
 }
 
-export function dashboardPanelExplorePath(
-  dashboardId: string,
-  panelId: string,
-  input: ObservabilityDashboardPanelQueryInput,
-) {
-  const params = new URLSearchParams({
-    dashboardId,
-    from: input.timeFrom,
-    panelId,
-    signal: 'metrics',
-    stepSeconds: String(input.stepSeconds ?? 60),
-    to: input.timeTo,
-  })
-  for (const [name, value] of Object.entries(input.variables ?? {})) {
-    params.set(`var-${name}`, value)
-  }
-  return `/monitoring-workbench/explore?${params.toString()}`
-}
-
 export function dashboardPanelAlertRulePath(
   dashboardName: string,
   dataSourceId: string,

@@ -39,7 +39,7 @@ export function MonitoringPage() {
   const providers = providersQuery.data ?? []
   const recentEvents = (eventsQuery.data ?? []).slice(0, 8)
   const configuredProviders = providers.filter((item) => item.configured)
-  const healthyProviders = providers.filter((item) => item.runtimeStatus === 'healthy')
+  const healthyProviders = configuredProviders.filter((item) => item.runtimeStatus === 'healthy')
   const unhealthyProviders = configuredProviders.filter((item) => item.runtimeStatus !== 'healthy')
 
   const overviewStats = [
@@ -47,31 +47,33 @@ export function MonitoringPage() {
       key: 'firing',
       label: '活跃告警',
       helper: '当前仍需处理的告警事件',
-      value: summary?.firingCount ?? 0,
+      value: summaryQuery.isError ? '不可用' : (summary?.firingCount ?? 0),
       icon: <AlertOutlined />,
-      tone: (summary?.firingCount ?? 0) > 0 ? 'warning' : 'default',
+      tone:
+        !summaryQuery.isError && (summary?.firingCount ?? 0) > 0 ? 'warning' : 'default',
     },
     {
       key: 'critical',
       label: '严重告警',
       helper: 'Critical 优先级信号',
-      value: summary?.criticalCount ?? 0,
+      value: summaryQuery.isError ? '不可用' : (summary?.criticalCount ?? 0),
       icon: <FireOutlined />,
-      tone: (summary?.criticalCount ?? 0) > 0 ? 'danger' : 'default',
+      tone:
+        !summaryQuery.isError && (summary?.criticalCount ?? 0) > 0 ? 'danger' : 'default',
     },
     {
-      key: 'healthy-sources',
-      label: '健康数据源',
+      key: 'healthy-providers',
+      label: '健康 Provider',
       helper: `已配置 ${configuredProviders.length} 个 Provider`,
-      value: healthyProviders.length,
+      value: providersQuery.isError ? '不可用' : healthyProviders.length,
       icon: <CheckCircleOutlined />,
       tone: 'default',
     },
     {
-      key: 'unhealthy-sources',
-      label: '异常数据源',
+      key: 'unhealthy-providers',
+      label: '异常 Provider',
       helper: '已配置但未通过运行态校验',
-      value: unhealthyProviders.length,
+      value: providersQuery.isError ? '不可用' : unhealthyProviders.length,
       icon: <WarningOutlined />,
       tone: unhealthyProviders.length > 0 ? 'warning' : 'default',
     },
@@ -144,7 +146,11 @@ export function MonitoringPage() {
             helper={item.helper}
             icon={item.icon}
             tone={item.tone}
-            loading={summaryQuery.isLoading}
+            loading={
+              item.key.endsWith('-providers')
+                ? providersQuery.isLoading
+                : summaryQuery.isLoading
+            }
           />
         ))}
       </div>
@@ -153,13 +159,21 @@ export function MonitoringPage() {
         <Card
           className="soha-overview-panel-card"
           title="告警态势"
-          extra={
+          extra={summary?.lastReceivedAt ? (
             <Text type="secondary" className="text-xs">
               最近接收: {formatDateTime(summary?.lastReceivedAt)}
             </Text>
-          }
+          ) : null}
         >
-          {summary ? (
+          {summaryQuery.isError ? (
+            <ManagementState
+              bordered={false}
+              compact
+              kind="error"
+              title="告警摘要加载失败"
+              description={summaryQuery.error.message}
+            />
+          ) : summary ? (
             <div className="soha-overview-alert-stack">
               <OverviewSectionBar
                 title="告警分布"
@@ -196,25 +210,37 @@ export function MonitoringPage() {
 
         <Card
           className="soha-overview-panel-card"
-          title="数据源运行态"
+          title="Provider 运行态"
           extra={
             <Button type="text" onClick={() => navigate('/monitoring-workbench/providers')}>
-              配置数据源
+              查看 Provider
             </Button>
           }
         >
-          <div className="soha-monitoring-operation-grid">
-            {sourceStats.map((item) => (
-              <OverviewChip
-                key={item.key}
-                label={item.label}
-                value={item.value}
-                helper={item.helper}
-                icon={item.icon}
-                tone={item.tone}
-              />
-            ))}
-          </div>
+          {providersQuery.isLoading ? (
+            <ManagementState bordered={false} compact kind="loading" title="正在加载 Provider" />
+          ) : providersQuery.isError ? (
+            <ManagementState
+              bordered={false}
+              compact
+              kind="error"
+              title="Provider 状态加载失败"
+              description={providersQuery.error.message}
+            />
+          ) : (
+            <div className="soha-monitoring-operation-grid">
+              {sourceStats.map((item) => (
+                <OverviewChip
+                  key={item.key}
+                  label={item.label}
+                  value={item.value}
+                  helper={item.helper}
+                  icon={item.icon}
+                  tone={item.tone}
+                />
+              ))}
+            </div>
+          )}
         </Card>
       </div>
 
@@ -237,6 +263,14 @@ export function MonitoringPage() {
               <Card key={item} loading size="small" />
             ))}
           </div>
+        ) : alertsQuery.isError ? (
+          <ManagementState
+            bordered={false}
+            compact
+            kind="error"
+            title="最近告警加载失败"
+            description={alertsQuery.error.message}
+          />
         ) : recentAlerts.length === 0 ? (
           <ManagementState bordered={false} compact description="暂无最近告警" />
         ) : (
@@ -282,6 +316,14 @@ export function MonitoringPage() {
       >
         {eventsQuery.isLoading ? (
           <ManagementState bordered={false} compact kind="loading" title="正在加载事件" />
+        ) : eventsQuery.isError ? (
+          <ManagementState
+            bordered={false}
+            compact
+            kind="error"
+            title="近期事件加载失败"
+            description={eventsQuery.error.message}
+          />
         ) : recentEvents.length === 0 ? (
           <ManagementState bordered={false} compact description="暂无近期事件" />
         ) : (

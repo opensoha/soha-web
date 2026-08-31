@@ -33,9 +33,45 @@
   height: 260px;
 }
 
-.soha-explore-switcher {
-  align-self: flex-start;
-  min-width: 280px;
+.soha-signal-metric-summary {
+  display: block;
+  margin-block-end: 8px;
+}
+
+.soha-signal-data-details {
+  margin-block-start: 8px;
+}
+
+.soha-signal-data-details > summary {
+  color: var(--ant-color-link);
+  cursor: pointer;
+}
+
+.soha-signal-data-table-wrap {
+  overflow-x: auto;
+}
+
+.soha-signal-data-table-wrap table {
+  width: 100%;
+  margin-block-start: 8px;
+  border-collapse: collapse;
+}
+
+.soha-signal-data-table-wrap th,
+.soha-signal-data-table-wrap td {
+  padding: 6px 8px;
+  border-block-end: 1px solid var(--ant-color-border-secondary);
+  text-align: start;
+}
+
+.soha-signal-data-table-wrap th {
+  background: var(--ant-color-fill-quaternary);
+}
+
+.soha-signal-data-table-wrap th:last-child,
+.soha-signal-data-table-wrap td:last-child {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
 }
 
 .soha-trace-expanded {
@@ -57,6 +93,12 @@
   align-items: center;
   gap: 10px;
   min-height: 28px;
+}
+
+.soha-trace-waterfall-row:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--ant-color-primary);
+  outline-offset: 2px;
 }
 
 .soha-trace-waterfall-label {

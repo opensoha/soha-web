@@ -3,6 +3,8 @@ import type {
   ObservabilityTraceSpan,
 } from '@opensoha/contracts/gen/ts/sohaapi'
 
+export type ExploreSignal = 'logs' | 'metrics' | 'traces'
+
 export function observabilityScope(
   clusterId: string | null,
   namespace: string | null,

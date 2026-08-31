@@ -57,6 +57,7 @@ describe('log explorer model', () => {
       buildDurableLogQuery(
         'apps',
         {
+          dataSourceId: ' loki-main ',
           podNames: ['api-0'],
           containers: ['api', 'sidecar'],
           sinceSeconds: 3600,
@@ -69,6 +70,7 @@ describe('log explorer model', () => {
       ),
     ).toEqual({
       sourceMode: 'durable',
+      dataSourceId: 'loki-main',
       selector: {
         namespace: 'apps',
         workloadKind: undefined,
@@ -102,6 +104,7 @@ describe('log explorer model', () => {
 
   it('round-trips shareable scope and filter parameters', () => {
     const path = buildLogExplorerPath({
+      dataSourceId: 'loki-main',
       clusterId: 'cluster-a',
       namespace: 'apps',
       workloadKind: 'Deployment',
@@ -117,6 +120,7 @@ describe('log explorer model', () => {
     })
     const preset = readLogExplorerPreset(new URL(path, 'http://soha.local').searchParams)
     expect(preset).toMatchObject({
+      dataSourceId: 'loki-main',
       clusterId: 'cluster-a',
       namespace: 'apps',
       workloadKind: 'Deployment',

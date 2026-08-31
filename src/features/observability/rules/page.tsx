@@ -25,6 +25,7 @@ import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { formatDateTime } from '@/utils/time'
 import '../observability-pages.css'
 import {
+  alertRuleConditionSummary,
   alertRuleDashboardDraft,
   alertRuleFormValues,
   buildAlertRulePayload,
@@ -366,6 +367,16 @@ export function AlertRulesPage() {
                   <Input />
                 </Form.Item>
               </Space>
+              <Form.Item noStyle shouldUpdate>
+                {({ getFieldsValue }) => (
+                  <Alert
+                    description={alertRuleConditionSummary(getFieldsValue(true))}
+                    showIcon
+                    title="条件说明"
+                    type="info"
+                  />
+                )}
+              </Form.Item>
             </>
           ) : (
             <>
@@ -473,15 +484,21 @@ export function AlertRulesPage() {
               </Space>
             }
           />
-          {['errors', 'dataSources', 'samples', 'notificationPreview', 'querySnapshot'].map(
-            (key) => (
+          {(
+            [
+              ['errors', testResult?.errors],
+              ['dataSources', testResult?.dataSources],
+              ['samples', testResult?.samples],
+              ['notificationPreview', testResult?.notificationPreview],
+              ['querySnapshot', testResult?.querySnapshot],
+            ] as const
+          ).map(([key, value]) => (
               <Card size="small" title={key} key={key}>
                 <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
-                  {JSON.stringify(testResult?.[key] ?? (key === 'matched' ? false : '-'), null, 2)}
+                  {JSON.stringify(value ?? '-', null, 2)}
                 </pre>
               </Card>
-            ),
-          )}
+            ))}
         </Space>
       </Modal>
 

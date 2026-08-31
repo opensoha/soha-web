@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { alertRuleDashboardDraft, alertRuleFormValues, buildAlertRulePayload } from './model'
+import {
+  alertRuleConditionSummary,
+  alertRuleDashboardDraft,
+  alertRuleFormValues,
+  buildAlertRulePayload,
+} from './model'
 
 describe('alert rule model', () => {
   it('parses JSON form fields and comma-separated group labels', () => {
@@ -53,6 +58,25 @@ describe('alert rule model', () => {
       labels: { severity: 'critical' },
       forSeconds: 120,
     })
+  })
+
+  it('explains a guided rule in plain language without changing its payload', () => {
+    expect(
+      alertRuleConditionSummary({
+        metricKey: 'error_rate',
+        reducer: 'average',
+        operator: 'gte',
+        thresholdValue: 5,
+        windowMinutes: 10,
+        clusterId: 'prod-a',
+        namespace: 'checkout',
+        workload: 'api',
+        severity: 'critical',
+        forSeconds: 120,
+      }),
+    ).toBe(
+      '最近 10 分钟内，错误率的平均值大于等于 5；条件持续 120 秒后触发严重告警。范围：集群 prod-a、命名空间 checkout、工作负载 api。',
+    )
   })
 
   it('keeps complex rules in advanced mode', () => {

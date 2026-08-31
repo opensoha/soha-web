@@ -180,6 +180,27 @@ export const observabilityCompatibilityRoutes = defineRoutes([
     shell: 'app',
     redirectTo: '/monitoring-workbench/events',
   },
+  {
+    meta: {
+      id: 'monitoring-workbench-explore-compat',
+      path: '/monitoring-workbench/explore',
+      title: '旧 Explore 入口',
+      description: '兼容旧信号探索链接',
+      icon: 'IconPulse',
+      group: 'observe',
+      requiresAuth: true,
+      tabbar: false,
+      navVisible: false,
+      parentId: 'monitoring-workbench',
+      permissionKey: 'observe.monitoring.view',
+      scopeMode: 'passive',
+    },
+    shell: 'app',
+    load: async () => {
+      const module = await import('./signals/explore-redirect')
+      return { default: module.ObservabilityExploreRedirect }
+    },
+  },
 ] as const)
 
 export const observabilityRouteManifests = [

@@ -1,43 +1,18 @@
-import type { ObservabilityQuerySnapshot } from '@opensoha/contracts/gen/ts/sohaapi'
+import type {
+  AlertRule as ContractAlertRule,
+  AlertRuleRun as ContractAlertRuleRun,
+  AlertRuleStringMap,
+  AlertRuleTestResult as ContractAlertRuleTestResult,
+} from '@opensoha/contracts/gen/ts/sohaapi'
 import type { ObservabilityPayloadMap } from '../shared/types'
 
 export type AlertRuleDatasourceSelector = ObservabilityPayloadMap
 export type AlertRuleQuerySpec = ObservabilityPayloadMap
 export type AlertRuleThresholdSpec = ObservabilityPayloadMap
-export type AlertRuleTestResult = ObservabilityPayloadMap
-
-export interface AlertRuleTextMap {
-  [key: string]: string
-}
-
-export interface AlertRule {
-  id: string
-  name: string
-  ruleType: string
-  datasourceSelector?: AlertRuleDatasourceSelector
-  querySpec?: AlertRuleQuerySpec
-  thresholdSpec?: AlertRuleThresholdSpec
-  forSeconds: number
-  groupBy?: string[]
-  labels?: AlertRuleTextMap
-  annotations?: AlertRuleTextMap
-  notificationPolicyId?: string
-  healingPolicyIds?: string[]
-  enabled: boolean
-  createdAt: string
-  updatedAt: string
-}
-
-export interface AlertRuleRun {
-  id: string
-  status: string
-  matched: boolean
-  summary?: string
-  durationMs: number
-  error?: string
-  querySnapshot?: ObservabilityQuerySnapshot
-  createdAt: string
-}
+export type AlertRuleTestResult = ContractAlertRuleTestResult
+export type AlertRuleTextMap = AlertRuleStringMap
+export type AlertRule = ContractAlertRule
+export type AlertRuleRun = ContractAlertRuleRun
 
 export interface AlertRuleFormValues {
   id?: string

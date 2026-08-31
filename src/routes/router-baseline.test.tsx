@@ -2,7 +2,7 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { AppRouter } from './index'
 
@@ -36,6 +36,7 @@ vi.mock('@/features/auth/oidc-callback-page', mockRoutePage('OIDCCallbackPage'))
 vi.mock('@/features/auth/browser-handoff-page', mockRoutePage('BrowserHandoffPage'))
 vi.mock('@/features/auth/user-profile-page', mockRoutePage('UserProfilePage'))
 vi.mock('@/features/platform/overview-page', mockRoutePage('OverviewPage'))
+vi.mock('@/features/observability/overview/page', mockRoutePage('MonitoringPage'))
 vi.mock(
   '@/features/provider-portal/application-detail/page',
   mockRoutePage('PortalApplicationDetailPage'),
@@ -152,8 +153,22 @@ vi.mock('@/features/platform/workloads/jobs/detail-page', mockRoutePage('JobDeta
 vi.mock('@/features/platform/workloads/cronjobs/list-page', mockRoutePage('WorkloadsCronJobsPage'))
 vi.mock('@/features/platform/workloads/cronjobs/detail-page', mockRoutePage('CronJobDetailPage'))
 vi.mock('@/features/observability/alerts/detail-page', mockRoutePage('AlertEventDetailPage'))
+vi.mock('@/features/observability/signals/metrics-page', mockRoutePage('ObservabilityMetricsPage'))
+vi.mock('@/features/observability/signals/traces-page', mockRoutePage('ObservabilityTracesPage'))
+vi.mock('@/features/observability/logs/page', mockRoutePage('LogsPage'))
 
 const mountedRoots: Root[] = []
+
+function LocationProbe() {
+  const location = useLocation()
+  return (
+    <output data-route-location>
+      {location.pathname}
+      {location.search}
+      {location.hash}
+    </output>
+  )
+}
 
 beforeAll(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
@@ -169,6 +184,7 @@ async function renderRoute(path: string) {
     root.render(
       <MemoryRouter initialEntries={[path]}>
         <AppRouter />
+        <LocationProbe />
       </MemoryRouter>,
     )
   })
@@ -187,6 +203,17 @@ async function waitForRoutePage(container: HTMLElement, page: string) {
   return container.querySelector(selector)
 }
 
+async function waitForLocation(container: HTMLElement, expected: string) {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const location = container.querySelector('[data-route-location]')?.textContent
+    if (location === expected) return location
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+  }
+  return container.querySelector('[data-route-location]')?.textContent
+}
+
 afterEach(async () => {
   await act(async () => {
     for (const root of mountedRoots.splice(0)) root.unmount()
@@ -195,6 +222,32 @@ afterEach(async () => {
 })
 
 describe('router deep-link baseline', () => {
+  it.each([
+    [
+      '/observability/monitoring?cluster=prod&from=2026-08-30T00%3A00%3A00Z&dataSourceId=prom-main#evidence',
+      '/monitoring-workbench/overview?cluster=prod&from=2026-08-30T00%3A00%3A00Z&dataSourceId=prom-main#evidence',
+    ],
+    [
+      '/observability?cluster=prod&filter=error&to=2026-08-30T01%3A00%3A00Z#evidence',
+      '/monitoring-workbench/overview?cluster=prod&filter=error&to=2026-08-30T01%3A00%3A00Z#evidence',
+    ],
+    [
+      '/monitoring-workbench/explore?signal=logs&cluster=prod&namespace=payments&traceId=trace-1#evidence',
+      '/monitoring-workbench/logs?signal=logs&cluster=prod&namespace=payments&traceId=trace-1#evidence',
+    ],
+    [
+      '/monitoring-workbench/explore?signal=traces&service=checkout&from=2026-08-30T00%3A00%3A00Z#span',
+      '/monitoring-workbench/traces?signal=traces&service=checkout&from=2026-08-30T00%3A00%3A00Z#span',
+    ],
+    [
+      '/monitoring-workbench/explore?cluster=prod&metricKey=cpu_usage#chart',
+      '/monitoring-workbench/metrics?cluster=prod&metricKey=cpu_usage#chart',
+    ],
+  ])('preserves context while redirecting %s', async (path, expected) => {
+    const container = await renderRoute(path)
+    expect(await waitForLocation(container, expected)).toBe(expected)
+  })
+
   it.each([
     ['/', 'OverviewPage'],
     ['/login', 'LoginPage'],

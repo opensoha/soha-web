@@ -562,7 +562,9 @@ describe('app layout workspace navigation', () => {
       visibleMenuIds: [
         'monitoring-workbench',
         'monitoring-workbench-overview',
-        'monitoring-workbench-explore',
+        'monitoring-workbench-metrics',
+        'monitoring-workbench-traces',
+        'monitoring-workbench-logs',
         'monitoring-workbench-log-data-sources',
         'monitoring-workbench-dashboards',
         'monitoring-workbench-rules',
@@ -591,14 +593,36 @@ describe('app layout workspace navigation', () => {
           enabled: true,
         },
         {
-          id: 'monitoring-workbench-explore',
+          id: 'monitoring-workbench-metrics',
           parentId: 'monitoring-workbench',
-          path: '/monitoring-workbench/explore',
-          labelZh: 'Explore',
-          labelEn: 'Explore',
-          iconKey: 'history',
+          path: '/monitoring-workbench/metrics',
+          labelZh: '指标',
+          labelEn: 'Metrics',
+          iconKey: 'activity',
           section: 'observe-signals',
           sortOrder: 62,
+          enabled: true,
+        },
+        {
+          id: 'monitoring-workbench-traces',
+          parentId: 'monitoring-workbench',
+          path: '/monitoring-workbench/traces',
+          labelZh: '链路',
+          labelEn: 'Traces',
+          iconKey: 'link',
+          section: 'observe-signals',
+          sortOrder: 63,
+          enabled: true,
+        },
+        {
+          id: 'monitoring-workbench-logs',
+          parentId: 'monitoring-workbench',
+          path: '/monitoring-workbench/logs',
+          labelZh: '日志',
+          labelEn: 'Logs',
+          iconKey: 'file-clock',
+          section: 'observe-signals',
+          sortOrder: 64,
           enabled: true,
         },
         {
@@ -657,9 +681,14 @@ describe('app layout workspace navigation', () => {
       ),
     ).toEqual(['探索', '数据与集成', '仪表盘', '告警与响应'])
     expect(container.textContent).toContain('总览')
+    expect(container.textContent).toContain('指标')
+    expect(container.textContent).toContain('链路')
+    expect(container.textContent).toContain('日志')
+    expect(container.textContent).not.toContain('Explore')
     expect(container.textContent).toContain('日志数据源')
     expect(container.textContent).toContain('告警规则')
     expect(container.textContent).toContain('值班协同')
+    expect(container.querySelector('.ant-menu-item-selected')?.textContent).toContain('日志')
     expect(container.querySelector('[data-testid="platform-scope-trigger"]')).toBeNull()
   })
 

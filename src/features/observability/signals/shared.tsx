@@ -1,4 +1,5 @@
 import type {
+  ObservabilityMetricQueryInput,
   ObservabilityMetricKey,
   ObservabilityTraceQueryInput,
 } from '@opensoha/contracts/gen/ts/sohaapi'
@@ -11,6 +12,7 @@ import { observabilityScope } from './model'
 import './styles.css'
 
 export interface SignalFilters {
+  dataSourceId?: string
   limit: number
   metricKey: ObservabilityMetricKey
   minDurationMs: number
@@ -77,6 +79,9 @@ export function SignalQueryForm({
         <Form.Item hidden name="timeTo">
           <Input />
         </Form.Item>
+        <Form.Item hidden name="dataSourceId">
+          <Input />
+        </Form.Item>
         <Flex align="center" className="soha-signal-scope-row" gap={8} justify="space-between" wrap>
           <PlatformScopeToolbar embedded showLabel={false} />
           <Form.Item name="rangeMinutes" noStyle>
@@ -136,9 +141,24 @@ export function traceInput(
 ): ObservabilityTraceQueryInput {
   return {
     ...queryTimes(values.rangeMinutes, values.timeFrom, values.timeTo),
+    dataSourceId: values.dataSourceId?.trim() || undefined,
     limit: values.limit,
     minDurationMs: values.minDurationMs,
     traceId: values.traceId?.trim() || undefined,
     scope: observabilityScope(clusterId, namespace, values.service, values.workload),
+  }
+}
+
+export function metricInput(
+  values: SignalFilters,
+  clusterId: string | null,
+  namespace: string | null,
+): ObservabilityMetricQueryInput {
+  return {
+    ...queryTimes(values.rangeMinutes, values.timeFrom, values.timeTo),
+    dataSourceId: values.dataSourceId?.trim() || undefined,
+    metricKey: values.metricKey,
+    scope: observabilityScope(clusterId, namespace, values.service, values.workload),
+    stepSeconds: values.rangeMinutes <= 60 ? 60 : 300,
   }
 }

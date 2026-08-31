@@ -8,6 +8,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementIconButton, ManagementState } from '@/components/management-list'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { useAIPageContext } from '@/features/copilot'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import type { ObservabilityServiceQuery } from './api'
 import { signalSearchParams } from './model'
@@ -63,17 +64,42 @@ export function ObservabilityServicesPage() {
   const topology = useQuery(
     observabilitySignalQueries.topology(selectedServiceId, selectedServiceId ? request : undefined),
   )
+  useAIPageContext({
+    sourceWorkbench: 'monitoring',
+    sourceTitle: '服务调查',
+    entityKind: 'monitoring.signal.services',
+    entityName:
+      service.data?.data.displayName || service.data?.data.name || request.service || '服务',
+    clusterId: request.clusterId,
+    namespace: request.namespace,
+    service: service.data?.data.name || request.service,
+    visibleFilters: {
+      dataSourceId: request.dataSourceId,
+      service: request.service,
+      timeFrom: searchParams.get('from') || request.timeFrom,
+      timeTo: searchParams.get('to') || request.timeTo,
+    },
+    pinnedData: services.data
+      ? {
+          serviceCount: services.data.items.length,
+          selectedServiceId: selectedServiceId || undefined,
+          topologyEdgeCount: topology.data?.data.edges.length,
+        }
+      : undefined,
+    promptHint: '分析当前服务范围的 RED 指标、依赖关系、异常影响面，并给出关联证据。',
+  })
 
-  function explorePath(signal: 'metrics' | 'traces', serviceName: string) {
+  function signalPath(signal: 'metrics' | 'traces', serviceName: string) {
     const params = signalSearchParams(new URLSearchParams(), {
       signal,
+      dataSourceId: request.dataSourceId,
       cluster: request.clusterId,
       namespace: request.namespace,
       service: serviceName,
       from: request.timeFrom,
       to: request.timeTo,
     })
-    return `/monitoring-workbench/explore?${params.toString()}`
+    return `/monitoring-workbench/${signal}?${params.toString()}`
   }
 
   const columns: TableColumnsType<ObservabilityService> = [
@@ -121,19 +147,22 @@ export function ObservabilityServicesPage() {
       render: (_, item) => (
         <Space size={0}>
           <ManagementIconButton
+            aria-label="查看服务详情"
             icon={<EyeOutlined />}
             tooltip="查看服务详情"
             onClick={() => setSelectedServiceId(item.id)}
           />
           <ManagementIconButton
+            aria-label="查看服务指标"
             icon={<LineChartOutlined />}
             tooltip="查看服务指标"
-            onClick={() => navigate(explorePath('metrics', item.name))}
+            onClick={() => navigate(signalPath('metrics', item.name))}
           />
           <ManagementIconButton
+            aria-label="查看服务链路"
             icon={<ShareAltOutlined />}
             tooltip="查看服务链路"
-            onClick={() => navigate(explorePath('traces', item.name))}
+            onClick={() => navigate(signalPath('traces', item.name))}
           />
         </Space>
       ),
@@ -145,6 +174,7 @@ export function ObservabilityServicesPage() {
       <SignalQueryForm
         form={form}
         initialValues={{
+          dataSourceId: searchParams.get('dataSourceId') ?? undefined,
           rangeMinutes: 60,
           service: searchParams.get('service') ?? undefined,
           timeFrom: searchParams.get('from') ?? undefined,
@@ -163,6 +193,7 @@ export function ObservabilityServicesPage() {
           setRequest(next)
           setSearchParams(
             signalSearchParams(searchParams, {
+              dataSourceId: next.dataSourceId,
               cluster: next.clusterId,
               namespace: next.namespace,
               service: next.service,
@@ -268,18 +299,50 @@ export function ObservabilityServicesPage() {
                   description={topology.error.message}
                 />
               ) : (topology.data?.data.edges ?? []).length ? (
-                <ul className="soha-list-panel soha-topology-edge-list">
-                  {(topology.data?.data.edges ?? []).map((edge) => (
-                    <li
-                      key={`${edge.sourceServiceId}:${edge.targetServiceId}`}
-                      className="soha-list-row"
-                    >
-                      <Text code>{edge.sourceServiceId}</Text>
-                      <Text type="secondary">→</Text>
-                      <Text code>{edge.targetServiceId}</Text>
-                    </li>
-                  ))}
-                </ul>
+                <div className="soha-signal-data-table-wrap">
+                  <table aria-label="服务依赖数据表">
+                    <thead>
+                      <tr>
+                        <th scope="col">来源</th>
+                        <th scope="col">目标</th>
+                        <th scope="col">状态</th>
+                        <th scope="col">请求率</th>
+                        <th scope="col">错误率</th>
+                        <th scope="col">P95</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(topology.data?.data.edges ?? []).map((edge) => (
+                        <tr key={`${edge.sourceServiceId}:${edge.targetServiceId}`}>
+                          <td>
+                            <Text code>{edge.sourceServiceId}</Text>
+                          </td>
+                          <td>
+                            <Text code>{edge.targetServiceId}</Text>
+                          </td>
+                          <td>
+                            <StatusTag label={statusLabel(edge.status)} value={edge.status} />
+                          </td>
+                          <td>
+                            {edge.requestRate === undefined
+                              ? '-'
+                              : `${edge.requestRate.toFixed(2)}/s`}
+                          </td>
+                          <td>
+                            {edge.errorRate === undefined
+                              ? '-'
+                              : `${(edge.errorRate * 100).toFixed(2)}%`}
+                          </td>
+                          <td>
+                            {edge.latencyP95Ms === undefined
+                              ? '-'
+                              : `${edge.latencyP95Ms.toFixed(1)} ms`}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               ) : (
                 <ManagementState bordered={false} compact description="当前范围暂无服务依赖" />
               )}

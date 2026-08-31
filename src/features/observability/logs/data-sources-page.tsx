@@ -298,9 +298,16 @@ export function LogDataSourcesPage() {
       key: 'status',
       width: 190,
       render: (_, item) => (
-        <Space size={4} wrap>
-          <StatusTag value={item.validationStatus} />
-          <BooleanTag value={item.enabled} trueLabel="启用" falseLabel="停用" />
+        <Space orientation="vertical" size={2}>
+          <Space size={4} wrap>
+            <StatusTag value={item.validationStatus} />
+            <BooleanTag value={item.enabled} trueLabel="启用" falseLabel="停用" />
+          </Space>
+          {item.validationStatus !== 'healthy' && item.validationMessage ? (
+            <Text className="text-xs" type="secondary">
+              {item.validationMessage}
+            </Text>
+          ) : null}
         </Space>
       ),
     },

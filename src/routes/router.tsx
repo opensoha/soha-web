@@ -1,10 +1,15 @@
 import { lazy, Suspense, type ComponentType } from 'react'
-import { Navigate, Route } from 'react-router-dom'
+import { Navigate, Route, useLocation } from 'react-router-dom'
 import { Spin } from 'antd'
 import { getRegisteredRoutesByShell } from './registry'
 import type { AppRouteShell, ResolvedAppRouteDefinition } from './route-types'
 
 const lazyComponents = new Map<string, ComponentType>()
+
+function RouteRedirect({ to }: { to: string }) {
+  const { search, hash } = useLocation()
+  return <Navigate to={{ pathname: to, search, hash }} replace />
+}
 
 function getLazyRouteComponent(definition: ResolvedAppRouteDefinition) {
   const cached = lazyComponents.get(definition.meta.id)
@@ -16,7 +21,7 @@ function getLazyRouteComponent(definition: ResolvedAppRouteDefinition) {
 }
 
 function renderRouteElement(definition: ResolvedAppRouteDefinition) {
-  if (definition.redirectTo) return <Navigate to={definition.redirectTo} replace />
+  if (definition.redirectTo) return <RouteRedirect to={definition.redirectTo} />
   const Component = getLazyRouteComponent(definition)
   if (!Component) return null
   return (

@@ -1,5 +1,11 @@
+import type {
+  AlertRuleEnvelope,
+  AlertRuleListEnvelope,
+  AlertRuleRunListEnvelope,
+  AlertRuleTestResultEnvelope,
+} from '@opensoha/contracts/gen/ts/sohaapi'
 import { api } from '@/services/api-client'
-import type { ApiResponse } from '@/types'
+import type { ApiItemsResponse, ApiResponse } from '@/types'
 import type {
   AlertRule,
   AlertRulePayload,
@@ -11,9 +17,9 @@ import type {
   UpdateAlertRuleInput,
 } from './types'
 
-async function unwrapList<T>(request: Promise<ApiResponse<T[]>>): Promise<T[]> {
+async function unwrapItems<T>(request: Promise<ApiItemsResponse<T>>): Promise<T[]> {
   const response = await request
-  return response.data ?? []
+  return response.items ?? []
 }
 
 async function unwrapItem<T>(request: Promise<ApiResponse<T>>): Promise<T> {
@@ -22,26 +28,29 @@ async function unwrapItem<T>(request: Promise<ApiResponse<T>>): Promise<T> {
 }
 
 export const observabilityRuleApi = {
-  list: () => unwrapList(api.get<ApiResponse<AlertRule[]>>('/alert-rules')),
+  list: () => unwrapItems<AlertRule>(api.getEnvelope<AlertRuleListEnvelope>('/alert-rules')),
   detail: (ruleId: string) =>
-    unwrapItem(api.get<ApiResponse<AlertRule>>(`/alert-rules/${encodeURIComponent(ruleId)}`)),
+    unwrapItem<AlertRule>(api.get<AlertRuleEnvelope>(`/alert-rules/${encodeURIComponent(ruleId)}`)),
   runs: (ruleId: string) =>
-    unwrapList(
-      api.get<ApiResponse<AlertRuleRun[]>>(`/alert-rule-runs?ruleId=${encodeURIComponent(ruleId)}`),
+    unwrapItems<AlertRuleRun>(
+      api.getEnvelope<AlertRuleRunListEnvelope>(
+        `/alert-rule-runs?ruleId=${encodeURIComponent(ruleId)}`,
+      ),
     ),
   notificationPolicies: () =>
-    unwrapList(api.get<ApiResponse<NotificationPolicyOption[]>>('/notification-policies')),
+    unwrapItems(
+      api.getEnvelope<ApiItemsResponse<NotificationPolicyOption>>('/notification-policies'),
+    ),
   healingPolicies: () =>
-    unwrapList(api.get<ApiResponse<HealingPolicyOption[]>>('/healing-policies')),
+    unwrapItems(api.getEnvelope<ApiItemsResponse<HealingPolicyOption>>('/healing-policies')),
   create: (payload: AlertRulePayload) =>
-    unwrapItem(api.post<ApiResponse<AlertRule>>('/alert-rules', payload)),
+    unwrapItem<AlertRule>(api.post<AlertRuleEnvelope>('/alert-rules', payload)),
   update: ({ id, payload }: UpdateAlertRuleInput) =>
-    unwrapItem(api.put<ApiResponse<AlertRule>>(`/alert-rules/${encodeURIComponent(id)}`, payload)),
+    unwrapItem<AlertRule>(
+      api.put<AlertRuleEnvelope>(`/alert-rules/${encodeURIComponent(id)}`, payload),
+    ),
   test: ({ id, payload }: TestAlertRuleInput) =>
-    unwrapItem(
-      api.post<ApiResponse<AlertRuleTestResult>>(
-        `/alert-rules/${encodeURIComponent(id)}/test`,
-        payload,
-      ),
+    unwrapItem<AlertRuleTestResult>(
+      api.post<AlertRuleTestResultEnvelope>(`/alert-rules/${encodeURIComponent(id)}/test`, payload),
     ),
 }

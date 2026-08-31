@@ -12,7 +12,10 @@ describe('observability route manifests', () => {
     expect(paths).toContain('/monitoring-workbench/dashboards')
     expect(paths).toContain('/monitoring-workbench/dashboards/:dashboardId')
     expect(
-      observabilityCompatibilityRoutes.map((route) => [route.meta.path, route.redirectTo]),
+      observabilityCompatibilityRoutes.map((route) => [
+        route.meta.path,
+        'redirectTo' in route ? route.redirectTo : undefined,
+      ]),
     ).toEqual([
       ['/observability', '/monitoring-workbench'],
       ['/observability/monitoring', '/monitoring-workbench/overview'],
@@ -22,6 +25,7 @@ describe('observability route manifests', () => {
       ['/observability/healing', '/monitoring-workbench/healing'],
       ['/observability/oncall', '/monitoring-workbench/oncall'],
       ['/observability/events', '/monitoring-workbench/events'],
+      ['/monitoring-workbench/explore', undefined],
     ])
     const detail = routes.find((route) => route.meta.id === 'alert-event-detail')
     const compatibilityDetail = routes.find(

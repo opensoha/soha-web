@@ -109,7 +109,7 @@ afterEach(async () => {
   document.body.innerHTML = ''
 })
 
-async function renderExplorer(element: React.ReactNode) {
+async function renderExplorer(element: React.ReactNode, initialEntry = '/') {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
@@ -119,7 +119,7 @@ async function renderExplorer(element: React.ReactNode) {
     root.render(
       <AntdApp>
         <QueryClientProvider client={client}>
-          <MemoryRouter>
+          <MemoryRouter initialEntries={[initialEntry]}>
             {element}
             <LocationProbe />
           </MemoryRouter>
@@ -158,6 +158,8 @@ describe('LogExplorer', () => {
     expect(container.querySelector('.soha-log-results-explorer')).toBeNull()
     expect(container.querySelector('.soha-log-explorer.is-embedded')).not.toBeNull()
     expect(container.querySelector('.soha-log-results-card .ant-card-head')).toBeNull()
+    const connectionStatus = container.querySelector('[role="status"][aria-live="polite"]')
+    expect(connectionStatus).not.toBeNull()
 
     await act(async () => {
       WebSocketMock.instances[0]?.onopen?.()
@@ -180,6 +182,7 @@ describe('LogExplorer', () => {
     expect(stop).not.toBeNull()
     await act(async () => stop?.click())
     expect(container.textContent).toContain('实时会话已手动停止')
+    expect(connectionStatus?.textContent).toContain('实时会话已手动停止')
   })
 
   it('queries durable history without opening a live stream', async () => {
@@ -238,7 +241,12 @@ describe('LogExplorer', () => {
       <LogExplorer
         clusterId="cluster-a"
         namespace="apps"
-        preset={{ podNames: ['api-0'], containers: ['api'], text: 'timeout' }}
+        preset={{
+          dataSourceId: 'loki-main',
+          podNames: ['api-0'],
+          containers: ['api'],
+          text: 'timeout',
+        }}
       />,
     )
     expect(container.textContent).not.toContain('Live')
@@ -300,6 +308,7 @@ describe('LogExplorer', () => {
     expect(container.querySelector('.soha-log-result-header .is-source')).toBeNull()
     expect(apiMocks.queryLogs).toHaveBeenCalledOnce()
     expect(apiMocks.queryLogs.mock.calls[0]?.[1]).toMatchObject({
+      dataSourceId: 'loki-main',
       sourceMode: 'durable',
       selector: { namespace: 'apps', podNames: ['api-0'], containers: ['api'] },
       direction: 'backward',
@@ -446,6 +455,120 @@ describe('LogExplorer', () => {
     expect(apiMocks.queryLogs.mock.calls[0]?.[1].selector.containers).toBeUndefined()
   })
 
+  it('preserves unrelated query context when syncing log filters', async () => {
+    const container = await renderExplorer(
+      <LogExplorer
+        clusterId="cluster-a"
+        namespace="apps"
+        preset={{ text: 'request-42' }}
+        syncURL
+      />,
+      '/monitoring-workbench/logs?signal=logs&compare=metrics&dashboardId=dash-1&panelId=panel-1&stepSeconds=30&var-region=cn-north&dataSourceId=prometheus&metricKey=http.requests&text=stale',
+    )
+    const form = container.querySelector<HTMLFormElement>('form')
+
+    await act(async () => {
+      form?.requestSubmit()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(apiMocks.queryLogs).toHaveBeenCalledOnce()
+    const location = new URL(
+      container.querySelector('[data-testid="location"]')?.textContent ?? '',
+      'https://soha.local',
+    )
+    expect(location.pathname).toBe('/monitoring-workbench/logs')
+    expect(Object.fromEntries(location.searchParams)).toMatchObject({
+      signal: 'logs',
+      compare: 'metrics',
+      dashboardId: 'dash-1',
+      panelId: 'panel-1',
+      stepSeconds: '30',
+      'var-region': 'cn-north',
+      dataSourceId: 'prometheus',
+      metricKey: 'http.requests',
+      cluster: 'cluster-a',
+      namespace: 'apps',
+      text: 'request-42',
+    })
+  })
+
+  it('opens a correlated Trace without dropping the log scope or absolute window', async () => {
+    apiMocks.queryLogs.mockResolvedValueOnce({
+      entries: [
+        {
+          timestamp: '2026-08-30T00:05:00Z',
+          message: 'checkout failed',
+          source: { domain: 'kubernetes', podName: 'api-0', containerName: 'api' },
+          sourceMode: 'durable',
+          traceId: 'trace-1',
+          spanId: 'span-1',
+        },
+      ],
+      partial: false,
+      truncated: false,
+      scopeRestricted: false,
+      coverage: { resolvedSources: 1, successfulSources: 1, failedSources: 0 },
+    })
+    const from = '2026-08-30T00:00:00Z'
+    const to = '2026-08-30T00:15:00Z'
+    const container = await renderExplorer(
+      <LogExplorer
+        clusterId="cluster-a"
+        namespace="apps"
+        preset={{
+          applicationId: 'shop',
+          environmentId: 'prod',
+          from,
+          service: 'checkout',
+          to,
+          workloadKind: 'Deployment',
+          workloadName: 'api',
+        }}
+        syncURL
+      />,
+      `/monitoring-workbench/logs?cluster=cluster-a&namespace=apps&application=shop&environment=prod&service=checkout&workloadKind=Deployment&workload=api&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    )
+
+    await act(async () => {
+      container.querySelector<HTMLFormElement>('form')?.requestSubmit()
+    })
+    for (
+      let attempt = 0;
+      attempt < 20 && !container.textContent?.includes('checkout failed');
+      attempt += 1
+    ) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+    }
+    const relatedTrace = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('查看关联链路'),
+    )
+    expect(relatedTrace).not.toBeUndefined()
+    await act(async () => {
+      relatedTrace?.click()
+    })
+
+    const location = new URL(
+      container.querySelector('[data-testid="location"]')?.textContent ?? '',
+      'https://soha.local',
+    )
+    expect(location.pathname).toBe('/monitoring-workbench/traces')
+    expect(Object.fromEntries(location.searchParams)).toMatchObject({
+      cluster: 'cluster-a',
+      namespace: 'apps',
+      application: 'shop',
+      environment: 'prod',
+      service: 'checkout',
+      workload: 'api',
+      traceId: 'trace-1',
+      spanId: 'span-1',
+      from: '2026-08-30T00:00:00.000Z',
+      to: '2026-08-30T00:15:00.000Z',
+    })
+  })
+
   it('queries durable history across all namespaces when no namespace is selected', async () => {
     apiMocks.queryLogs.mockResolvedValueOnce({
       entries: [],
@@ -469,7 +592,7 @@ describe('LogExplorer', () => {
       { kind: 'cluster', clusterId: 'cluster-a', namespace: '' },
       expect.objectContaining({
         sourceMode: 'durable',
-        selector: expect.objectContaining({ namespace: '' }),
+        selector: expect.not.objectContaining({ namespace: expect.anything() }),
       }),
       expect.any(AbortSignal),
     )
@@ -645,7 +768,7 @@ describe('LogExplorer', () => {
       target,
       expect.objectContaining({
         sourceMode: 'durable',
-        selector: expect.objectContaining({ namespace: '' }),
+        selector: expect.not.objectContaining({ namespace: expect.anything() }),
       }),
       expect.any(AbortSignal),
     )

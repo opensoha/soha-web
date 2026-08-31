@@ -5,7 +5,7 @@ import { App as AntdApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MonitoringPage } from './page'
 
 const responses = vi.hoisted(() => ({
@@ -56,6 +56,18 @@ const responses = vi.hoisted(() => ({
       status: 'supported',
       configured: true,
       runtimeStatus: 'failed',
+    },
+    {
+      providerKey: 'loki',
+      displayName: 'Loki',
+      protocolVersion: 'v1',
+      signals: ['logs'],
+      capabilities: ['logs.query'],
+      runtimeMode: 'builtin',
+      builtIn: true,
+      status: 'supported',
+      configured: false,
+      runtimeStatus: 'healthy',
     },
   ],
   '/events': [
@@ -118,7 +130,18 @@ vi.mock('@/components/management-list', () => ({
   ManagementIconButton: ({ 'aria-label': label }: { 'aria-label': string }) => (
     <button aria-label={label} />
   ),
-  ManagementState: ({ description }: { description?: ReactNode }) => <div>{description}</div>,
+  ManagementState: ({
+    description,
+    title,
+  }: {
+    description?: ReactNode
+    title?: ReactNode
+  }) => (
+    <div>
+      {title}
+      {description}
+    </div>
+  ),
 }))
 vi.mock('@/components/status-tag', () => ({
   StatusTag: ({ value }: { value?: string }) => <span>{value}</span>,
@@ -139,6 +162,12 @@ beforeAll(() => {
   })
 })
 
+beforeEach(() => {
+  apiMocks.get.mockImplementation((path: keyof typeof responses) =>
+    Promise.resolve({ data: responses[path] ?? [] }),
+  )
+})
+
 afterEach(async () => {
   await act(async () => {
     for (const root of roots.splice(0)) root.unmount()
@@ -147,38 +176,58 @@ afterEach(async () => {
   vi.clearAllMocks()
 })
 
+async function renderMonitoringPage() {
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  containers.push(container)
+  const root = createRoot(container)
+  roots.push(root)
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+
+  await act(async () => {
+    root.render(
+      <AntdApp>
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter>
+            <MonitoringPage />
+          </MemoryRouter>
+        </QueryClientProvider>
+      </AntdApp>,
+    )
+  })
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    if (container.textContent?.includes('High CPU') && queryClient.isFetching() === 0) break
+  }
+  return container
+}
+
 describe('MonitoringPage', () => {
   it('renders the bounded overview from canonical capability queries', async () => {
-    const container = document.createElement('div')
-    document.body.appendChild(container)
-    containers.push(container)
-    const root = createRoot(container)
-    roots.push(root)
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-
-    await act(async () => {
-      root.render(
-        <AntdApp>
-          <QueryClientProvider client={queryClient}>
-            <MemoryRouter>
-              <MonitoringPage />
-            </MemoryRouter>
-          </QueryClientProvider>
-        </AntdApp>,
-      )
-    })
-    for (let attempt = 0; attempt < 30; attempt += 1) {
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0))
-      })
-      if (container.textContent?.includes('High CPU') && queryClient.isFetching() === 0) break
-    }
+    const container = await renderMonitoringPage()
 
     expect(container.textContent).toContain('活跃告警: 1')
     expect(container.textContent).toContain('High CPU')
-    expect(container.textContent).toContain('健康数据源: 1')
-    expect(container.textContent).toContain('异常数据源: 1')
+    expect(container.textContent).toContain('健康 Provider: 1')
+    expect(container.textContent).toContain('异常 Provider: 1')
     expect(container.textContent).toContain('CPU pressure detected')
     expect(apiMocks.get).toHaveBeenCalledWith('/alert-events?limit=8')
+  })
+
+  it('shows Provider query failure instead of a zero-value data-source claim', async () => {
+    apiMocks.get.mockImplementation((path: keyof typeof responses) =>
+      path === '/observability/providers'
+        ? Promise.reject(new Error('provider offline'))
+        : Promise.resolve({ data: responses[path] ?? [] }),
+    )
+
+    const container = await renderMonitoringPage()
+
+    expect(container.textContent).toContain('Provider 状态加载失败')
+    expect(container.textContent).toContain('provider offline')
+    expect(container.textContent).toContain('健康 Provider: 不可用')
+    expect(container.textContent).not.toContain('健康 Provider: 0')
   })
 })

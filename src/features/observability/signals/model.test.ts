@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { observabilityScope, signalSearchParams, traceWaterfallRows } from './model'
+import {
+  observabilityScope,
+  signalSearchParams,
+  traceWaterfallRows,
+} from './model'
 
 describe('observability signal model', () => {
   it('normalizes optional scope and preserves shared query context', () => {
@@ -52,4 +56,5 @@ describe('observability signal model', () => {
     expect(rows[1]?.leftPercent).toBeCloseTo(41.67, 1)
     expect(rows[1]?.span.parentSpanId).toBe('span-1')
   })
+
 })
