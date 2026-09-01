@@ -9,6 +9,7 @@ export const portalProviderLabels: Record<IdentityProviderType, string> = {
   link: 'Link',
   oidc: 'OIDC',
   proxy: 'Proxy',
+  saml: 'SAML',
 }
 
 export const portalStatusLabels: Record<

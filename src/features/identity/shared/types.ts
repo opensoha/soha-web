@@ -1,4 +1,4 @@
-export type IdentityProviderType = 'link' | 'oidc' | 'proxy'
+export type IdentityProviderType = 'link' | 'oidc' | 'proxy' | 'saml'
 export type IdentityApplicationStatus = 'draft' | 'enabled' | 'disabled' | 'maintenance'
 export type IdentityAssignmentSubjectType = 'user' | 'role' | 'team' | 'tag'
 export type IdentityAssignmentEffect = 'allow' | 'deny'
@@ -30,6 +30,7 @@ export interface IdentityApplication {
   name: string
   description?: string
   iconUrl?: string
+  category?: string
   tags: string[]
   launchUrl?: string
   providerId?: string

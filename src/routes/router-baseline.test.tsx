@@ -33,6 +33,7 @@ const mockRoutePage = vi.hoisted(() => (exportName: string) => async () => {
 
 vi.mock('@/features/provider-portal/catalog/page', mockRoutePage('SohaProviderPortalPage'))
 vi.mock('@/features/auth/oidc-callback-page', mockRoutePage('OIDCCallbackPage'))
+vi.mock('@/features/auth/browser-handoff-page', mockRoutePage('BrowserHandoffPage'))
 vi.mock('@/features/auth/user-profile-page', mockRoutePage('UserProfilePage'))
 vi.mock('@/features/platform/overview-page', mockRoutePage('OverviewPage'))
 vi.mock(
@@ -198,6 +199,7 @@ describe('router deep-link baseline', () => {
     ['/', 'OverviewPage'],
     ['/login', 'LoginPage'],
     ['/auth/oidc/callback', 'OIDCCallbackPage'],
+    ['/auth/browser-handoff/handoff-1', 'BrowserHandoffPage'],
     ['/login/callback', 'OIDCCallbackPage'],
     ['/account/profile', 'UserProfilePage'],
     ['/account/settings', 'UserProfilePage'],

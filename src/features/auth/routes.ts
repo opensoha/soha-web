@@ -20,6 +20,25 @@ export const authRoutes = defineRoutes([
       return { default: module.LoginPage }
     },
   },
+  {
+    meta: {
+      id: 'browser-handoff',
+      path: '/auth/browser-handoff/:handoffId',
+      title: '浏览器登录确认',
+      description: '确认来自 Soha App 的一次性浏览器登录交接',
+      icon: 'IconLock',
+      group: 'auth',
+      requiresAuth: false,
+      tabbar: false,
+      navVisible: false,
+      scopeMode: 'hidden',
+    },
+    shell: 'public',
+    load: async () => {
+      const module = await import('./browser-handoff-page')
+      return { default: module.BrowserHandoffPage }
+    },
+  },
 ] as const)
 
 export const authUtilityRoutes = defineRoutes([

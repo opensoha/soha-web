@@ -4,42 +4,78 @@ import { providerPortalApi } from './api'
 const apiMocks = vi.hoisted(() => ({
   delete: vi.fn(),
   get: vi.fn(),
+  getEnvelope: vi.fn(),
   post: vi.fn(),
 }))
 
 vi.mock('@/services/api-client', () => ({ api: apiMocks }))
 
 describe('providerPortalApi', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => vi.resetAllMocks())
 
   it('unwraps bootstrap, application lists, and application detail responses', async () => {
-    const bootstrap = { applications: [] }
-    const applications = [{ id: 'app-1', name: 'Console' }]
-    const application = { id: 'app/1', name: 'Console' }
-    apiMocks.get
-      .mockResolvedValueOnce({ data: bootstrap })
-      .mockResolvedValueOnce({ data: applications })
-      .mockResolvedValueOnce({ data: application })
+    const application = {
+      id: 'app/1',
+      name: 'Console',
+      slug: 'console',
+      status: 'enabled',
+      createdAt: '2026-08-31T01:00:00Z',
+      updatedAt: '2026-08-31T01:00:00Z',
+    }
+    const applications = [{ ...application, id: 'app-1' }]
+    const bootstrap = {
+      applications: [],
+      categories: [],
+      favorites: [],
+      principal: {
+        userId: 'user-1',
+        userName: 'OpenSoha',
+        email: 'opensoha@soha.local',
+        roles: [],
+        teams: [],
+        projects: [],
+        tags: [],
+      },
+      recent: [],
+      security: { activeSession: 1, linkedSources: [], mfaEnabled: false },
+    }
+    apiMocks.get.mockResolvedValueOnce({ data: bootstrap }).mockResolvedValueOnce({
+      data: application,
+    })
+    apiMocks.getEnvelope.mockResolvedValueOnce({ items: applications })
 
-    await expect(providerPortalApi.bootstrap()).resolves.toBe(bootstrap)
-    await expect(providerPortalApi.applications()).resolves.toBe(applications)
-    await expect(providerPortalApi.application('app/1')).resolves.toBe(application)
+    await expect(providerPortalApi.bootstrap()).resolves.toMatchObject(bootstrap)
+    await expect(providerPortalApi.applications()).resolves.toMatchObject(applications)
+    await expect(providerPortalApi.application('app/1')).resolves.toMatchObject(application)
 
     expect(apiMocks.get).toHaveBeenNthCalledWith(1, '/portal/bootstrap')
-    expect(apiMocks.get).toHaveBeenNthCalledWith(2, '/portal/applications')
-    expect(apiMocks.get).toHaveBeenNthCalledWith(3, '/portal/applications/app%2F1')
+    expect(apiMocks.getEnvelope).toHaveBeenCalledWith('/portal/applications')
+    expect(apiMocks.get).toHaveBeenNthCalledWith(2, '/portal/applications/app%2F1')
   })
 
   it('unwraps launch and favorite responses while returning void for unfavorite', async () => {
-    const decision = { launchUrl: 'https://console.example.test' }
-    const favorite = { id: 'app/1', favorite: true }
+    const application = {
+      id: 'app/1',
+      name: 'Console',
+      slug: 'console',
+      status: 'enabled',
+      createdAt: '2026-08-31T01:00:00Z',
+      updatedAt: '2026-08-31T01:00:00Z',
+    }
+    const decision = {
+      application,
+      decision: 'allow',
+      launchUrl: 'https://console.example.test',
+      providerType: 'link',
+    }
+    const favorite = { ...application, favorite: true }
     apiMocks.post
       .mockResolvedValueOnce({ data: decision })
       .mockResolvedValueOnce({ data: favorite })
     apiMocks.delete.mockResolvedValueOnce({ data: { status: 'ok' } })
 
-    await expect(providerPortalApi.launch('app/1')).resolves.toBe(decision)
-    await expect(providerPortalApi.favorite('app/1')).resolves.toBe(favorite)
+    await expect(providerPortalApi.launch('app/1')).resolves.toMatchObject(decision)
+    await expect(providerPortalApi.favorite('app/1')).resolves.toMatchObject(favorite)
     await expect(providerPortalApi.unfavorite('app/1')).resolves.toBeUndefined()
 
     expect(apiMocks.post).toHaveBeenNthCalledWith(1, '/portal/applications/app%2F1/launch')
@@ -49,13 +85,14 @@ describe('providerPortalApi', () => {
 
   it('preserves recent and security wire paths and normalizes missing lists', async () => {
     const security = { activeSession: 2 }
-    apiMocks.get.mockResolvedValueOnce({}).mockResolvedValueOnce({ data: security })
+    apiMocks.getEnvelope.mockResolvedValueOnce({ items: [] })
+    apiMocks.get.mockResolvedValueOnce({ data: security })
 
     await expect(providerPortalApi.recent(6)).resolves.toEqual([])
     await expect(providerPortalApi.security()).resolves.toBe(security)
 
-    expect(apiMocks.get).toHaveBeenNthCalledWith(1, '/portal/recent?limit=6')
-    expect(apiMocks.get).toHaveBeenNthCalledWith(2, '/portal/security')
+    expect(apiMocks.getEnvelope).toHaveBeenCalledWith('/portal/recent?limit=6')
+    expect(apiMocks.get).toHaveBeenCalledWith('/portal/security')
   })
 
   it('keeps MFA enrollment and recovery secrets in direct mutation responses', async () => {
