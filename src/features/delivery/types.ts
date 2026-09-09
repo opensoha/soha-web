@@ -95,6 +95,7 @@ export type RegistryInput = RegistryConnectionInput
 
 export interface DeliveryListParams {
   applicationId?: string
+  limit?: number
 }
 
 export interface RepositoryListParams {

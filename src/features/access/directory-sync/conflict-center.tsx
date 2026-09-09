@@ -1,4 +1,5 @@
-import { Button, Space, Table } from 'antd'
+import { Button, Space } from 'antd'
+import { AdminTable } from '@/components/admin-table'
 import type { TableColumnsType } from 'antd'
 import { ManagementState } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
@@ -63,9 +64,11 @@ export function DirectoryConflictCenter({
     )
   }
   return (
-    <Table
+    <AdminTable
+      enableColumnSelection={false}
+      pageSize={10}
       rowKey="id"
-      size="small"
+      tableSize="small"
       loading={loading}
       columns={columns}
       dataSource={conflicts}

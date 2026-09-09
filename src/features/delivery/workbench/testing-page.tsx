@@ -3,7 +3,9 @@ import { useQuery } from '@tanstack/react-query'
 import { Button, Card, Space, Steps, Typography, type TableColumnsType } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { OverviewMetricCard, type OverviewMetricItem } from '@/components/overview-visuals'
+import { ManagementState } from '@/components/management-list'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { DeliveryGatewayReadinessPanel } from '../delivery-gateway-readiness'
@@ -14,7 +16,6 @@ import {
   isActiveStatus,
   isBlockedStatus,
   isReadyStatus,
-  ManualModeAlert,
   releaseBundleUpdatedAt,
   sortByLatest,
   VERIFY_TASK_KINDS,
@@ -27,9 +28,17 @@ type ColumnProps<T> = TableColumnsType<T>[number]
 
 export function DeliveryTestingPage() {
   const navigate = useNavigate()
-  const bundlesQuery = useQuery(deliveryQueries.releaseBundles.list())
-  const tasksQuery = useQuery(deliveryQueries.executionTasks.list())
-  const releaseBoardQuery = useQuery(deliveryQueries.releaseBoard.list())
+  const permissionSnapshot = usePermissionSnapshot().data?.data
+  const canViewBundles = hasPermission(permissionSnapshot, 'delivery.release-bundles.view')
+  const canViewTasks = hasPermission(permissionSnapshot, 'delivery.execution-tasks.view')
+  const canViewReleaseBoard = hasPermission(permissionSnapshot, 'delivery.release-board.view')
+  const bundlesQuery = useQuery(
+    deliveryQueries.releaseBundles.list({ enabled: canViewBundles }),
+  )
+  const tasksQuery = useQuery(deliveryQueries.executionTasks.list({ enabled: canViewTasks }))
+  const releaseBoardQuery = useQuery(
+    deliveryQueries.releaseBoard.list({ enabled: canViewReleaseBoard }),
+  )
 
   const bundles = bundlesQuery.data ?? []
   const tasks = tasksQuery.data ?? []
@@ -55,39 +64,40 @@ export function DeliveryTestingPage() {
     {
       key: 'candidates',
       label: '候选版本',
-      value: candidateBundles.length,
-      helper: `${bundles.filter((item) => isReadyStatus(item.status)).length} 个已就绪`,
+      value: canViewBundles && !bundlesQuery.isError ? candidateBundles.length : '-',
+      helper: canViewBundles
+        ? `${bundles.filter((item) => isReadyStatus(item.status)).length} 个已就绪 · ${governance.filter((item) => item.decision === 'passed').length} 个通过门禁`
+        : '无版本包查看权限',
     },
     {
       key: 'verification',
       label: '验证任务',
-      value: verifyTasks.length,
-      helper: `${verifyTasks.filter((item) => isActiveStatus(item.status)).length} 个执行中`,
+      value: canViewTasks && !tasksQuery.isError ? verifyTasks.length : '-',
+      helper: canViewTasks
+        ? `${verifyTasks.filter((item) => isActiveStatus(item.status)).length} 个执行中`
+        : '无执行任务查看权限',
     },
     {
       key: 'blocked',
       label: '阻塞证据',
       value:
-        bundles.filter((item) => isBlockedStatus(item.status)).length +
-        verifyTasks.filter((item) => isBlockedStatus(item.status)).length,
-      helper: '来自版本包和验证任务',
+        (canViewBundles || canViewTasks) && !bundlesQuery.isError && !tasksQuery.isError
+          ? bundles.filter((item) => isBlockedStatus(item.status)).length +
+            verifyTasks.filter((item) => isBlockedStatus(item.status)).length
+          : '-',
+      helper: canViewBundles || canViewTasks ? '基于当前可见记录' : '无相关记录查看权限',
       tone: 'danger',
     },
     {
       key: 'dag',
       label: 'DAG 验证节点',
-      value: board.reduce((sum, item) => sum + workflowValidationCount(item), 0),
-      helper: '来自工作流节点执行记录',
-    },
-    {
-      key: 'promotion',
-      label: '晋级门禁',
-      value: governance.filter((item) => item.decision === 'passed').length,
-      helper: `${governance.filter((item) => item.decision === 'blocked').length} 个禁止晋级`,
-      tone: 'success',
+      value:
+        canViewReleaseBoard && !releaseBoardQuery.isError
+          ? board.reduce((sum, item) => sum + workflowValidationCount(item), 0)
+          : '-',
+      helper: canViewReleaseBoard ? '来自工作流节点执行记录' : '无发布看板查看权限',
     },
   ]
-  const loading = bundlesQuery.isLoading || tasksQuery.isLoading || releaseBoardQuery.isLoading
 
   const columns: ColumnProps<ReleaseBundle>[] = [
     {
@@ -159,7 +169,6 @@ export function DeliveryTestingPage() {
 
   return (
     <div className="soha-page soha-delivery-workbench-page">
-      <ManualModeAlert description="常规模式可以直接查看版本包、执行任务和发布看板；AI 摘要必须回链到版本包、任务日志或分析 run ID。" />
       <div className="soha-overview-metric-grid">
         {testingStats.map(({ key, ...item }) => (
           <OverviewMetricCard key={key} {...item} />
@@ -196,7 +205,15 @@ export function DeliveryTestingPage() {
         title="候选版本与验证判断"
         rowKey="id"
         dataSource={latestBundles}
-        loading={loading}
+        empty={
+          canViewBundles ? undefined : (
+            <ManagementState bordered={false} compact kind="no-permission" title="无版本包查看权限" />
+          )
+        }
+        isError={canViewBundles && bundlesQuery.isError}
+        errorDescription="暂时无法读取候选版本。"
+        onRetry={() => void bundlesQuery.refetch()}
+        loading={canViewBundles && bundlesQuery.isLoading}
         refreshing={
           bundlesQuery.isFetching || tasksQuery.isFetching || releaseBoardQuery.isFetching
         }
@@ -206,14 +223,14 @@ export function DeliveryTestingPage() {
           void releaseBoardQuery.refetch()
         }}
         columns={columns}
-        actions={
+        actions={canViewTasks ? (
           <Button
             icon={<ExperimentOutlined />}
             onClick={() => navigate('/delivery/execution-tasks')}
           >
             查看验证任务
           </Button>
-        }
+        ) : undefined}
       />
     </div>
   )

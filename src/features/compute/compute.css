@@ -1,14 +1,13 @@
 .soha-compute-page {
   display: grid;
+}
+
+.soha-compute-page:not(.soha-overview-page) {
   gap: 16px;
 }
 
 .soha-compute-task-actions-column {
   --soha-table-actions-column-width: 96px;
-}
-
-.soha-compute-chip-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .soha-compute-provider-instance-list {
@@ -110,10 +109,6 @@
 }
 
 @media (max-width: 768px) {
-  .soha-compute-chip-grid {
-    grid-template-columns: 1fr;
-  }
-
   .soha-compute-overview-page .soha-overview-panel-card .ant-card-extra {
     margin-inline-end: 44px;
   }

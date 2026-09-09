@@ -200,7 +200,7 @@ describe('directory sync page', () => {
     expect(modalTitle?.style.position).toBe('absolute')
 
     const runtimePanel = document.body.querySelector<HTMLElement>(
-      '.ant-modal .ant-tabs-tabpane-active > .ant-space',
+      '.ant-modal [role="tabpanel"][aria-hidden="false"] > .ant-space',
     )
     expect(runtimePanel?.style.minWidth).toBe('0')
     expect(

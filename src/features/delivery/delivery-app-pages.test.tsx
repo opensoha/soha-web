@@ -16,7 +16,6 @@ import { ApplicationsPage } from './applications/list-page'
 import { ExecutionTasksPage } from './execution-tasks/list-page'
 import { ReleaseBundlesPage } from './release-bundles/list-page'
 import { ReleasesPage } from './releases/list-page'
-import { WorkflowsPage } from './workflows/list-page'
 import { runtimeEvidencePath } from './template-usage-runtime-links'
 import { ApplicationEnvironmentsPage } from './environments/list-page'
 import { EnvironmentCatalogPage } from './environments/catalog-page'
@@ -88,6 +87,9 @@ const defaultPermissionKeys = [
   'delivery.registries.update',
   'delivery.registries.delete',
   'delivery.release-board.view',
+  'delivery.release-bundles.view',
+  'delivery.execution-tasks.view',
+  'delivery.workflows.view',
   'platform.clusters.view',
   'platform.namespaces.view',
   'platform.deployment.view',
@@ -105,6 +107,9 @@ const readonlyPermissionKeys = [
   'delivery.workflow-templates.view',
   'delivery.registries.view',
   'delivery.release-board.view',
+  'delivery.release-bundles.view',
+  'delivery.execution-tasks.view',
+  'delivery.workflows.view',
 ]
 
 const testState = vi.hoisted(() => ({
@@ -128,6 +133,9 @@ const testState = vi.hoisted(() => ({
       'delivery.registries.update',
       'delivery.registries.delete',
       'delivery.release-board.view',
+      'delivery.release-bundles.view',
+      'delivery.execution-tasks.view',
+      'delivery.workflows.view',
       'platform.clusters.view',
       'platform.namespaces.view',
       'platform.deployment.view',
@@ -143,6 +151,8 @@ const testState = vi.hoisted(() => ({
   forceHighBuildTemplateUsage: false,
   applicationsListError: false,
   releaseBoardError: false,
+  workflowsEmpty: false,
+  workflowsError: false,
   gatewayManifestMode: 'approval' as 'approval' | 'restricted' | 'unavailable',
   apiGet: vi.fn(async (path: string) => {
     if (path.startsWith('/ai-gateway/capabilities')) {
@@ -786,9 +796,36 @@ const testState = vi.hoisted(() => ({
     ) {
       return { data: [] }
     }
-    if (path === '/workflows') {
+    if (path === '/workflows' || path === '/workflows?limit=200') {
+      if (testState.workflowsError) {
+        throw new Error('workflows unavailable')
+      }
+      if (testState.workflowsEmpty) {
+        return { data: [] }
+      }
       return {
         data: [
+          {
+            id: 'workflow-running',
+            applicationId: 'app-1',
+            workflowName: 'build-release-main',
+            clusterId: 'cluster-a',
+            namespace: 'test',
+            deploymentName: 'erp-front',
+            status: 'running',
+            steps: [],
+            nodeRuns: [
+              { nodeId: 'checkout', name: '检出代码', type: 'checkout', status: 'completed' },
+              { nodeId: 'build', name: '构建镜像', type: 'build_image', status: 'running' },
+              { nodeId: 'release', name: '发布应用', type: 'deploy', status: 'pending' },
+            ],
+            metadata: {
+              applicationName: 'ERP Front Main',
+              bindingId: 'binding-1',
+            },
+            createdAt: '2026-05-08T11:40:00Z',
+            updatedAt: '2026-05-08T12:00:00Z',
+          },
           {
             id: 'workflow-1',
             applicationId: 'app-1',
@@ -809,12 +846,48 @@ const testState = vi.hoisted(() => ({
               },
             ],
             metadata: {
+              applicationName: 'ERP Front Main',
+              bindingId: 'binding-prod',
               aiGatewayApprovalRequestId: 'approval-1',
               aiGatewayToolName: 'delivery.actions.trigger',
               aiGatewayApprovalPolicyRef: 'policy-prod',
             },
             createdAt: '2026-05-08T11:00:00Z',
             updatedAt: '2026-05-08T11:30:00Z',
+          },
+          {
+            id: 'workflow-completed',
+            applicationId: 'app-2',
+            workflowName: 'mall-api-release',
+            clusterId: 'cluster-b',
+            namespace: 'staging',
+            deploymentName: 'mall-api',
+            status: 'completed',
+            steps: [],
+            nodeRuns: [
+              { nodeId: 'build', name: '构建镜像', type: 'build_image', status: 'completed' },
+              { nodeId: 'release', name: '发布应用', type: 'deploy', status: 'completed' },
+            ],
+            metadata: { applicationName: 'Mall API', bindingId: 'binding-2' },
+            createdAt: '2026-05-08T10:00:00Z',
+            updatedAt: '2026-05-08T10:30:00Z',
+          },
+          {
+            id: 'workflow-failed',
+            applicationId: 'app-3',
+            workflowName: 'billing-worker-release',
+            clusterId: 'cluster-c',
+            namespace: 'prod',
+            deploymentName: 'billing-worker',
+            status: 'failed',
+            steps: [],
+            nodeRuns: [
+              { nodeId: 'build', name: '构建镜像', type: 'build_image', status: 'completed' },
+              { nodeId: 'release', name: '发布应用', type: 'deploy', status: 'failed' },
+            ],
+            metadata: { applicationName: 'Billing Worker', bindingId: 'binding-3' },
+            createdAt: '2026-05-08T09:00:00Z',
+            updatedAt: '2026-05-08T09:20:00Z',
           },
         ],
       }
@@ -968,6 +1041,12 @@ const testState = vi.hoisted(() => ({
         },
       }
     }
+    if (path === '/workflows/workflow-1/approve') {
+      return { data: body }
+    }
+    if (path === '/workflows/workflow-1/reject') {
+      return { data: body }
+    }
     throw new Error(`Unhandled POST ${path}`)
   }),
 }))
@@ -1065,11 +1144,16 @@ function LocationProbe() {
 }
 
 function findButton(container: ParentNode, text: string) {
+  const normalizedText = text.replace(/\s/g, '')
   const button = Array.from(container.querySelectorAll('button')).find((item) =>
-    item.textContent?.includes(text),
+    item.textContent?.replace(/\s/g, '').includes(normalizedText),
   ) as HTMLButtonElement | undefined
   if (!button) {
-    throw new Error(`button not found: ${text}`)
+    const available = Array.from(container.querySelectorAll('button'))
+      .map((item) => item.textContent?.trim())
+      .filter(Boolean)
+      .join(', ')
+    throw new Error(`button not found: ${text}; available: ${available}`)
   }
   return button
 }
@@ -1136,6 +1220,8 @@ describe('ApplicationsPage workspace layout', () => {
     testState.forceHighBuildTemplateUsage = false
     testState.applicationsListError = false
     testState.releaseBoardError = false
+    testState.workflowsEmpty = false
+    testState.workflowsError = false
     testState.gatewayManifestMode = 'approval'
     testState.permissionSnapshot.permissionKeys = [...defaultPermissionKeys]
     class ResizeObserverMock {
@@ -1268,23 +1354,29 @@ describe('ApplicationsPage workspace layout', () => {
     expect(container.querySelectorAll('.soha-application-card')).toHaveLength(0)
   })
 
-  it.each(['applications', 'release board'] as const)(
-    'shows a retryable error state when %s fails',
-    async (source) => {
-      testState.applicationsListError = source === 'applications'
-      testState.releaseBoardError = source === 'release board'
-      const container = await renderWithProviders(<ApplicationsPage />)
+  it('shows a retryable error state when applications fail', async () => {
+    testState.applicationsListError = true
+    const container = await renderWithProviders(<ApplicationsPage />)
 
-      expect(container.textContent).toContain('应用加载失败')
-      expect(container.textContent).not.toContain('暂无应用')
+    expect(container.textContent).toContain('应用加载失败')
+    expect(container.textContent).not.toContain('暂无应用')
 
-      testState.applicationsListError = false
-      testState.releaseBoardError = false
-      await clickButton(container.querySelector('[aria-label="重试"]') as HTMLButtonElement)
+    testState.applicationsListError = false
+    await clickButton(container.querySelector('[aria-label="重试"]') as HTMLButtonElement)
+    expect(container.textContent).toContain('ERP Front Main')
+  })
 
-      expect(container.textContent).toContain('ERP Front Main')
-    },
-  )
+  it('keeps applications usable when release status fails', async () => {
+    testState.releaseBoardError = true
+    const container = await renderWithProviders(<ApplicationsPage />)
+
+    expect(container.textContent).toContain('发布状态加载失败')
+    expect(container.textContent).toContain('ERP Front Main')
+
+    testState.releaseBoardError = false
+    await clickButton(findButton(document, '重试'))
+    expect(container.textContent).not.toContain('发布状态加载失败')
+  })
 
   it('builds typed build template payloads without form-only text fields', () => {
     const values = {
@@ -1456,7 +1548,7 @@ describe('ApplicationsPage workspace layout', () => {
     expect(testState.apiGet).toHaveBeenCalledWith('/workflow-templates/wf-template-1/usage')
     expect(container.textContent).toContain('Release DAG')
     expect(container.textContent).toContain('release-dag')
-    expect(container.textContent).toContain('3 nodes')
+    expect(container.textContent).toContain('3 个节点')
     expect(container.querySelector('[data-testid="release-flow-dag-editor"]')).not.toBeNull()
 
     await clickButton(findToolbarButton(container, '.soha-workflow-template-toolbar', 'JSON'))
@@ -1537,39 +1629,6 @@ describe('ApplicationsPage workspace layout', () => {
     })
   })
 
-  it('shows Gateway approval drilldown context on workflow list', async () => {
-    testState.permissionSnapshot.permissionKeys = [
-      ...defaultPermissionKeys,
-      'delivery.workflows.trigger',
-    ]
-    const container = await renderWithProviders(
-      <>
-        <WorkflowsPage />
-        <LocationProbe />
-      </>,
-      '/workflows?workflowRunId=workflow-1&gatewayApprovalRequestId=approval-1',
-    )
-
-    expect(testState.apiGet).toHaveBeenCalledWith('/workflows')
-    expect(container.textContent).toContain('已定位工作流 workflow-1')
-    expect(container.textContent).toContain('gatewayApprovalRequestId=approval-1')
-    expect(container.textContent).toContain('approval-1')
-    expect(container.textContent).toContain('delivery.actions.trigger')
-    expect(container.textContent).toContain('已定位')
-    expect(container.textContent).toContain('Manual approval detail')
-    expect(container.textContent).toContain('Workflow node timeline')
-    expect(container.textContent).toContain('Raw trace')
-    expect(container.textContent).toContain('approve')
-    expect(container.textContent).toContain('Waiting for production approver')
-    expect(container.querySelector('[aria-label="触发工作流"]')).toBeNull()
-    expect(container.querySelector('[aria-label="批准工作流"]')).not.toBeNull()
-    expect(container.querySelector('[aria-label="拒绝工作流"]')).not.toBeNull()
-    await clickButton(container.querySelector('[aria-label="查看工作流详情"]') as HTMLButtonElement)
-    expect(container.querySelector('[data-testid="location-probe"]')?.textContent).toBe(
-      '/workflows/workflow-1',
-    )
-  })
-
   it('keeps release history read only and links to its detail', async () => {
     testState.permissionSnapshot.permissionKeys = [
       ...defaultPermissionKeys,
@@ -1592,42 +1651,113 @@ describe('ApplicationsPage workspace layout', () => {
     )
   })
 
-  it('renders unified release board workbench signals', async () => {
+  it('renders permission-scoped workflow runs as a release card board', async () => {
+    testState.permissionSnapshot.permissionKeys = [
+      ...defaultPermissionKeys,
+      'delivery.application-environments.approve',
+    ]
+    const container = await renderWithProviders(
+      <>
+        <ReleaseBoardPage />
+        <LocationProbe />
+      </>,
+      '/release-board',
+    )
+
+    expect(testState.apiGet).toHaveBeenCalledWith('/workflows?limit=200')
+    expect(testState.apiGet).not.toHaveBeenCalledWith('/delivery/release-board')
+    expect(container.textContent).toContain('工作流执行')
+    expect(container.textContent).toContain('最近 200 条')
+    expect(container.textContent).not.toContain('正在进行')
+    expect(container.textContent).not.toContain('执行历史')
+    expect(container.textContent).toContain('build-release-main')
+    expect(container.textContent).toContain('ERP Front Main')
+    expect(container.textContent).toContain('Mall API')
+    expect(container.textContent).toContain('Billing Worker')
+    expect(container.textContent).toContain('2/3 节点')
+    expect(container.textContent).toContain('当前节点：构建镜像')
+    expect(container.querySelectorAll('.soha-release-run-card')).toHaveLength(4)
+    expect(container.querySelectorAll('.soha-overview-metric-card')).toHaveLength(4)
+    expect(container.textContent).not.toContain('环境绑定')
+    expect(container.textContent).not.toContain('候选版本')
+    expect(container.querySelector('table')).toBeNull()
+
+    const runsPanel = container.querySelector('.soha-release-board__runs') as HTMLElement
+    expect(runsPanel).not.toBeNull()
+    expect(runsPanel.textContent).toContain('当前 1-4 / 4 条')
+    expect(runsPanel.querySelector('[aria-label="按状态筛选工作流"]')).not.toBeNull()
+    expect(runsPanel.querySelector('[aria-label="批准工作流 deploy-prod"]')).not.toBeNull()
+    expect(runsPanel.querySelector('[aria-label="拒绝工作流 deploy-prod"]')).not.toBeNull()
+
+    await clickButton(
+      runsPanel.querySelector('[aria-label="批准工作流 deploy-prod"]') as HTMLButtonElement,
+    )
+    expect(testState.apiPost).not.toHaveBeenCalledWith('/workflows/workflow-1/approve', {
+      comment: 'Approved from release board',
+    })
+    await clickButton(
+      document.querySelector('.ant-popconfirm-buttons .ant-btn-primary') as HTMLButtonElement,
+    )
+    expect(testState.apiPost).toHaveBeenCalledWith('/workflows/workflow-1/approve', {
+      comment: 'Approved from release board',
+    })
+
+    await clickButton(
+      container.querySelector('[aria-label="查看工作流 build-release-main"]') as HTMLButtonElement,
+    )
+    expect(container.querySelector('[data-testid="location-probe"]')?.textContent).toBe(
+      '/workflows/workflow-running',
+    )
+
+    await setInputValue(
+      runsPanel.querySelector('[aria-label="搜索工作流执行"]') as HTMLInputElement,
+      'billing',
+    )
+    expect(runsPanel.querySelectorAll('.soha-release-run-card')).toHaveLength(1)
+    expect(runsPanel.textContent).toContain('Billing Worker')
+    expect(runsPanel.textContent).not.toContain('Mall API')
+
+    await setInputValue(
+      runsPanel.querySelector('[aria-label="搜索工作流执行"]') as HTMLInputElement,
+      '',
+    )
+    const failedFilter = Array.from(
+      runsPanel.querySelectorAll<HTMLElement>('.ant-segmented-item'),
+    ).find((item) => item.textContent === '失败') as HTMLElement
+    await act(async () => {
+      failedFilter.click()
+    })
+    expect(runsPanel.querySelectorAll('.soha-release-run-card')).toHaveLength(1)
+    expect(runsPanel.textContent).toContain('billing-worker-release')
+    expect(runsPanel.textContent).not.toContain('build-release-main')
+  })
+
+  it('shows workflow board loading failures and empty results distinctly', async () => {
+    testState.workflowsError = true
+    const failed = await renderWithProviders(<ReleaseBoardPage />, '/release-board')
+
+    expect(failed.textContent).toContain('工作流加载失败')
+    expect(failed.textContent).not.toContain('暂无工作流执行')
+
+    testState.workflowsError = false
+    await clickButton(failed.querySelector('[aria-label="重试工作流"]') as HTMLButtonElement)
+    expect(failed.textContent).toContain('build-release-main')
+
+    testState.workflowsEmpty = true
+    const empty = await renderWithProviders(<ReleaseBoardPage />, '/release-board')
+    expect(empty.textContent).toContain('暂无工作流执行记录')
+    expect(empty.textContent).not.toContain('正在进行')
+    expect(empty.textContent).not.toContain('执行历史')
+  })
+
+  it('does not request workflow records without workflow view permission', async () => {
+    testState.permissionSnapshot.permissionKeys = defaultPermissionKeys.filter(
+      (permission) => permission !== 'delivery.workflows.view',
+    )
     const container = await renderWithProviders(<ReleaseBoardPage />, '/release-board')
 
-    expect(testState.apiGet).toHaveBeenCalledWith('/delivery/release-board')
-    for (const scope of ['开发', '测试']) {
-      expect(container.textContent).not.toContain(`${scope}视角`)
-    }
-    expect(container.textContent).toContain('环境绑定')
-    expect(container.textContent).toContain('2 个发布目标')
-    expect(container.textContent).toContain('ERP Front Main')
-    expect(container.textContent).toContain('Repo Dockerfile')
-    expect(container.textContent).toContain('候选版本')
-    expect(container.textContent).toContain('交付态势')
-    expect(container.textContent).toContain('交付物')
-    expect(container.textContent).toContain('1.2.3')
-    expect(container.textContent).toContain('执行中')
-    expect(container.textContent).toContain('阻塞')
-    expect(container.textContent).toContain('Task')
-    expect(testState.apiGet).toHaveBeenCalledWith(
-      '/ai-gateway/capabilities?source=delivery-workbench&skillId=delivery-developer',
-    )
-    expect(container.textContent).toContain('AI Gateway 构建发布辅助')
-    expect(container.textContent).not.toContain('用于读取应用环境、版本包、执行任务和 diff')
-    expect(
-      container
-        .querySelector('[aria-label="AI Gateway 构建发布辅助说明"]')
-        ?.getAttribute('tabindex'),
-    ).toBe('0')
-    expect(container.textContent).toContain('需要审批')
-    expect(container.textContent).toContain('AI Gateway 可用，调用需要审批')
-    expect(container.textContent).toContain('delivery.actions.trigger / 审批')
-    expect(container.textContent).toContain('应用中心')
-    expect(container.textContent).not.toContain('手工配置')
-    expect(container.textContent).not.toContain('手工触发入口')
-    expect(container.querySelectorAll('.soha-overview-metric-card')).toHaveLength(4)
-    expect(container.querySelector('.soha-application-signal-card')).toBeNull()
+    expect(testState.apiGet).not.toHaveBeenCalledWith('/workflows')
+    expect(container.textContent).toContain('无权查看工作流')
   })
 
   it('renders execution task summary for delivery triage', async () => {
@@ -1873,11 +2003,11 @@ describe('ApplicationsPage workspace layout', () => {
       '/ai-gateway/capabilities?source=delivery-workbench&skillId=delivery-tester',
     )
     expect(container.textContent).toContain('需要审批')
-    expect(container.textContent).toContain('常规模式保持完整可用')
+    expect(container.textContent).not.toContain('常规模式保持完整可用')
     expect(container.textContent).toContain('1.2.3')
     expect(container.textContent).toContain('禁止晋级')
     expect(container.querySelectorAll('.soha-delivery-workbench-action-card')).toHaveLength(0)
-    expect(container.querySelectorAll('.soha-overview-metric-card')).toHaveLength(5)
+    expect(container.querySelectorAll('.soha-overview-metric-card')).toHaveLength(4)
     expect(container.querySelector('.soha-application-signal-card')).toBeNull()
   })
 

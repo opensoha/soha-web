@@ -20,6 +20,7 @@ import {
   Table,
   Tabs,
   Tag,
+  Tooltip,
   Typography,
 } from 'antd'
 import type { DescriptionsProps, TableColumnsType, TabsProps } from 'antd'
@@ -33,6 +34,7 @@ import {
   MailOutlined,
   PhoneOutlined,
   PlusOutlined,
+  QuestionCircleOutlined,
   ReloadOutlined,
   SafetyCertificateOutlined,
   StopOutlined,
@@ -998,11 +1000,15 @@ export function UserProfilePage() {
           >
             <div className="soha-profile-gateway-overview">
               <div>
-                <Text strong>面向当前用户的 Soha Gateway 登录凭证</Text>
-                <Paragraph type="secondary">
-                  用于 soha-cli、MCP 客户端或外部 AI Client 以你的用户身份调用 Soha AI
-                  Gateway。明文只在生成或轮换后展示一次。
-                </Paragraph>
+                <Space size={4}>
+                  <Text strong>面向当前用户的 Soha Gateway 登录凭证</Text>
+                  <Tooltip
+                    title="用于 soha-cli、MCP 客户端或外部 AI Client 以你的用户身份调用 Soha AI Gateway。明文只在生成或轮换后展示一次。"
+                    trigger={['hover', 'focus']}
+                  >
+                    <QuestionCircleOutlined aria-label="AI Gateway Login Key 说明" tabIndex={0} />
+                  </Tooltip>
+                </Space>
               </div>
               <Space size={6} wrap>
                 <Tag color="success">active {gatewayTokenSummary.activeCount}</Tag>

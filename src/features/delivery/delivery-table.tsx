@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import type { ComponentProps, ReactNode } from 'react'
+import { Button } from 'antd'
 import { AdminTable } from '@/components/admin-table'
 import {
   ManagementDensityButton,
   ManagementRefreshButton,
+  ManagementState,
   ManagementTableToolbar,
 } from '@/components/management-list'
 import './styles/shared.css'
@@ -22,6 +24,9 @@ type DeliveryTableProps = Omit<
 > & {
   actions?: ReactNode
   enableDensity?: boolean
+  errorDescription?: ReactNode
+  isError?: boolean
+  onRetry?: () => void
   paginationSummary?: AdminTableProps['paginationSummary']
   refreshing?: boolean
   showColumnSettings?: boolean
@@ -46,6 +51,9 @@ export function DeliveryTable({
   actions,
   enableColumnSelection,
   enableDensity = true,
+  errorDescription,
+  isError = false,
+  onRetry,
   pagination,
   paginationSummary,
   refreshing,
@@ -87,6 +95,26 @@ export function DeliveryTable({
       columnSettingIconOnly
       columnSettingPlacement={showColumnSettings ? (hasTitle ? 'header' : 'toolbar') : 'hidden'}
       enableColumnSelection={showColumnSettings && enableColumnSelection !== false}
+      empty={
+        isError ? (
+          <ManagementState
+            bordered={false}
+            compact
+            actions={
+              onRetry ? (
+                <Button size="small" onClick={onRetry}>
+                  重试
+                </Button>
+              ) : undefined
+            }
+            description={errorDescription}
+            kind="error"
+            title="加载失败"
+          />
+        ) : (
+          tableProps.empty
+        )
+      }
       headerExtra={hasTitle ? utilityToolbar : undefined}
       pagination={pagination}
       paginationSummary={

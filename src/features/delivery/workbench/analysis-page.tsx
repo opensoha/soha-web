@@ -1,9 +1,11 @@
 import { SafetyCertificateOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { Button, Card, Space, Steps, Tag, Typography, type TableColumnsType } from 'antd'
+import { Button, Card, Space, Steps, Typography, type TableColumnsType } from 'antd'
 import { useNavigate } from 'react-router-dom'
+import { ManagementState } from '@/components/management-list'
 import { OverviewMetricCard, type OverviewMetricItem } from '@/components/overview-visuals'
 import { StatusTag } from '@/components/status-tag'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { DeliveryGatewayReadinessPanel } from '../delivery-gateway-readiness'
@@ -14,7 +16,6 @@ import {
   executionTaskUpdatedAt,
   isActiveStatus,
   isBlockedStatus,
-  ManualModeAlert,
   sortByLatest,
 } from './shared'
 
@@ -23,9 +24,19 @@ type ColumnProps<T> = TableColumnsType<T>[number]
 
 export function DeliveryAnalysisPage() {
   const navigate = useNavigate()
-  const tasksQuery = useQuery(deliveryQueries.executionTasks.list({ refetchInterval: 5000 }))
-  const releaseBoardQuery = useQuery(deliveryQueries.releaseBoard.list({ refetchInterval: 5000 }))
-  const bundlesQuery = useQuery(deliveryQueries.releaseBundles.list())
+  const permissionSnapshot = usePermissionSnapshot().data?.data
+  const canViewTasks = hasPermission(permissionSnapshot, 'delivery.execution-tasks.view')
+  const canViewReleaseBoard = hasPermission(permissionSnapshot, 'delivery.release-board.view')
+  const canViewBundles = hasPermission(permissionSnapshot, 'delivery.release-bundles.view')
+  const tasksQuery = useQuery(
+    deliveryQueries.executionTasks.list({ enabled: canViewTasks, refetchInterval: 5000 }),
+  )
+  const releaseBoardQuery = useQuery(
+    deliveryQueries.releaseBoard.list({ enabled: canViewReleaseBoard, refetchInterval: 5000 }),
+  )
+  const bundlesQuery = useQuery(
+    deliveryQueries.releaseBundles.list({ enabled: canViewBundles }),
+  )
 
   const tasks = tasksQuery.data ?? []
   const board = releaseBoardQuery.data ?? []
@@ -44,33 +55,39 @@ export function DeliveryAnalysisPage() {
     {
       key: 'failed',
       label: '失败任务',
-      value: failedTasks.length,
-      helper: `${tasks.filter((item) => isActiveStatus(item.status)).length} 个仍在执行`,
+      value: canViewTasks && !tasksQuery.isError ? failedTasks.length : '-',
+      helper: canViewTasks
+        ? `${tasks.filter((item) => isActiveStatus(item.status)).length} 个仍在执行`
+        : '无执行任务查看权限',
       tone: failedTasks.length > 0 ? 'danger' : 'success',
     },
     {
       key: 'environments',
       label: '阻塞环境',
-      value: blockedBoard.length,
-      helper: '来自发布看板状态聚合',
+      value: canViewReleaseBoard && !releaseBoardQuery.isError ? blockedBoard.length : '-',
+      helper: canViewReleaseBoard ? '来自发布看板状态聚合' : '无发布看板查看权限',
       tone: blockedBoard.length > 0 ? 'danger' : 'success',
     },
     {
       key: 'bundles',
       label: '阻塞版本',
-      value: bundles.filter((item) => isBlockedStatus(item.status)).length,
-      helper: '来自版本包状态',
+      value:
+        canViewBundles && !bundlesQuery.isError
+          ? bundles.filter((item) => isBlockedStatus(item.status)).length
+          : '-',
+      helper: canViewBundles ? '来自版本包状态' : '无版本包查看权限',
       tone: 'warning',
     },
     {
       key: 'retryable',
       label: '可重试任务',
-      value: failedTasks.filter((item) => item.attemptCount < item.maxRetries).length,
-      helper: '常规任务操作入口保留',
+      value:
+        canViewTasks && !tasksQuery.isError
+          ? failedTasks.filter((item) => item.attemptCount < item.maxRetries).length
+          : '-',
+      helper: canViewTasks ? '常规任务操作入口保留' : '无执行任务查看权限',
     },
   ]
-  const loading = tasksQuery.isLoading || releaseBoardQuery.isLoading || bundlesQuery.isLoading
-
   const columns: ColumnProps<ExecutionTask>[] = [
     {
       title: '任务',
@@ -79,7 +96,7 @@ export function DeliveryAnalysisPage() {
         <Space orientation="vertical" size={0}>
           <Space size={6} wrap>
             <Text strong>{value}</Text>
-            {isBlockedStatus(record.status) ? <Tag color="error">需处理</Tag> : null}
+            {isBlockedStatus(record.status) ? <StatusTag value="failed" label="需处理" /> : null}
           </Space>
           <Text type="secondary">{record.id}</Text>
         </Space>
@@ -113,7 +130,6 @@ export function DeliveryAnalysisPage() {
 
   return (
     <div className="soha-page soha-delivery-workbench-page">
-      <ManualModeAlert description="常规模式保留任务日志、发布看板、版本包和重试入口；AI 分析只是对这些证据做摘要、归因和修复建议。" />
       <div className="soha-overview-metric-grid">
         {analysisStats.map(({ key, ...item }) => (
           <OverviewMetricCard key={key} {...item} />
@@ -159,7 +175,15 @@ export function DeliveryAnalysisPage() {
         title="最近任务与故障线索"
         rowKey="id"
         dataSource={recentTasks}
-        loading={loading}
+        empty={
+          canViewTasks ? undefined : (
+            <ManagementState bordered={false} compact kind="no-permission" title="无执行任务查看权限" />
+          )
+        }
+        isError={canViewTasks && tasksQuery.isError}
+        errorDescription="暂时无法读取最近任务。"
+        onRetry={() => void tasksQuery.refetch()}
+        loading={canViewTasks && tasksQuery.isLoading}
         refreshing={
           tasksQuery.isFetching || releaseBoardQuery.isFetching || bundlesQuery.isFetching
         }
@@ -169,11 +193,11 @@ export function DeliveryAnalysisPage() {
           void bundlesQuery.refetch()
         }}
         columns={columns}
-        actions={
+        actions={canViewReleaseBoard ? (
           <Button icon={<SafetyCertificateOutlined />} onClick={() => navigate('/release-board')}>
             查看影响面
           </Button>
-        }
+        ) : undefined}
       />
     </div>
   )

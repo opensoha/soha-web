@@ -1,5 +1,7 @@
 import { api } from '@/services/api-client'
 import type {
+  AnnouncementReceiptPage,
+  AnnouncementReceiptState,
   PlatformAuditSummary,
   PlatformOperationSummary,
 } from '@opensoha/contracts/gen/ts/sohaapi'
@@ -34,6 +36,13 @@ export interface AuditLogFilters extends LogFilters {
 
 export interface OperationLogFilters extends LogFilters {
   operationType?: string
+}
+
+export interface AnnouncementReceiptFilters {
+  keyword?: string
+  page?: number
+  pageSize?: number
+  state?: AnnouncementReceiptState
 }
 
 interface SessionWireRecord {
@@ -107,6 +116,17 @@ export const systemApi = {
   },
   announcements: {
     list: () => unwrap(api.get<ApiResponse<Announcement[]>>('/announcements')),
+    receipts: (id: string, filters: AnnouncementReceiptFilters = {}) =>
+      unwrap(
+        api.get<ApiResponse<AnnouncementReceiptPage>>(
+          withQuery(`/announcements/${encodeURIComponent(id)}/receipts`, {
+            keyword: filters.keyword,
+            state: filters.state,
+            page: filters.page == null ? undefined : String(filters.page),
+            pageSize: filters.pageSize == null ? undefined : String(filters.pageSize),
+          }),
+        ),
+      ),
     create: (values: Record<string, unknown>) =>
       unwrap(api.post<ApiResponse<Announcement>>('/announcements', values)),
     update: ({ id, values }: UpdateRecordVariables) =>

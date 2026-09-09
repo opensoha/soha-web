@@ -94,7 +94,7 @@ function runtimeListPath(kind: RuntimeKind) {
     case 'build':
       return '/applications'
     case 'workflow':
-      return '/workflows'
+      return '/release-board'
     case 'release':
       return '/releases'
     case 'release_bundle':
@@ -645,11 +645,7 @@ export function RuntimeDetailPage({ kind }: { kind: RuntimeKind }) {
               children: formatDateTime(
                 (
                   record as
-                    | BuildRecord
-                    | ReleaseRecord
-                    | ReleaseBundle
-                    | ExecutionTask
-                    | WorkflowRun
+                    BuildRecord | ReleaseRecord | ReleaseBundle | ExecutionTask | WorkflowRun
                 ).createdAt,
               ),
             },

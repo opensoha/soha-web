@@ -44,6 +44,7 @@ const statusLabels: Record<string, { en: string; zh: string }> = {
   pending: { zh: '等待中', en: 'Pending' },
   polling: { zh: '降级轮询', en: 'Polling Fallback' },
   processing: { zh: '处理中', en: 'Processing' },
+  published: { zh: '已发布', en: 'Published' },
   provisioning: { zh: '配置中', en: 'Provisioning' },
   provisionedwaitingagent: { zh: '等待 Agent 注册', en: 'Waiting for Agent' },
   queued: { zh: '已排队', en: 'Queued' },

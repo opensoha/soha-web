@@ -8,6 +8,44 @@
   margin-bottom: -4px;
 }
 
+.soha-workload-detail-header .soha-management-detail-header-main,
+.soha-workload-detail-header__meta,
+.soha-workload-access-overview {
+  width: 100%;
+}
+
+.soha-workload-detail-header .soha-management-detail-header-main {
+  flex: 1 1 auto;
+}
+
+.soha-workload-detail-header__meta {
+  display: grid;
+  gap: 8px;
+}
+
+.soha-workload-access-overview {
+  padding-top: 8px;
+  border-top: 1px solid var(--soha-border-color);
+}
+
+.soha-workload-access-overview__values {
+  display: grid;
+  gap: 4px;
+}
+
+.soha-workload-access-overview__value {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.soha-workload-access-overview__value .ant-typography {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .soha-workload-detail-tabs {
   min-width: 0;
 }
@@ -77,16 +115,6 @@
   overflow-wrap: anywhere;
 }
 
-.soha-application-runtime-network {
-  display: grid;
-  gap: 16px;
-}
-
-.soha-application-runtime-network__section {
-  display: grid;
-  gap: 8px;
-}
-
 @media (max-width: 640px) {
   .soha-workload-runtime-workspace {
     grid-template-columns: 1fr;
@@ -99,5 +127,10 @@
 
   .soha-workload-pod-container-item {
     grid-template-columns: 1fr;
+  }
+
+  .soha-workload-access-overview__value {
+    grid-template-columns: 1fr;
+    gap: 2px;
   }
 }

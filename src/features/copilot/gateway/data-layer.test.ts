@@ -7,6 +7,7 @@ import {
   buildGatewayToolInvocation,
   invokeGatewayTool,
   rotateGatewayToken,
+  testGatewayUpstreamDraft,
   upsertGatewayResource,
 } from './mutations'
 import { gatewayQueries } from './queries'
@@ -129,6 +130,33 @@ describe('gateway data layer', () => {
 
     expect(apiMocks.get).toHaveBeenNthCalledWith(1, '/ai-gateway/personal-access-tokens?scope=all')
     expect(apiMocks.get).toHaveBeenNthCalledWith(2, '/ai-gateway/personal-access-tokens')
+  })
+
+  it('tests an unsaved upstream without taking ownership of its ID', async () => {
+    const values = {
+      id: 'client-supplied-id',
+      name: 'OpenAI',
+      providerKind: 'openai',
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'sk-test',
+      supportedModels: [],
+    }
+
+    await testGatewayUpstreamDraft(values)
+    await upsertGatewayResource({ kind: 'relay-upstream' }, values)
+
+    expect(apiMocks.post).toHaveBeenNthCalledWith(
+      1,
+      '/ai-gateway/relay/upstreams/test',
+      expect.objectContaining({ name: 'OpenAI', providerKind: 'openai' }),
+    )
+    expect(apiMocks.post).toHaveBeenNthCalledWith(
+      2,
+      '/ai-gateway/relay/upstreams',
+      expect.objectContaining({ name: 'OpenAI', providerKind: 'openai' }),
+    )
+    expect(apiMocks.post.mock.calls[0]?.[1]).not.toHaveProperty('id')
+    expect(apiMocks.post.mock.calls[1]?.[1]).not.toHaveProperty('id')
   })
 
   it('keeps secret references at the canonical invocation boundary', async () => {

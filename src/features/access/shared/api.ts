@@ -76,6 +76,7 @@ export const accessApi = {
     delete: (id: string) => discard(api.delete(resourcePath('access/policies', id))),
   },
   scopeGrants: {
+    listAll: () => unwrap(api.get<ApiResponse<AccessScopeGrant[]>>('/access/scope-grants')),
     list: (subject: AccessScopeGrantSubject) =>
       unwrap(api.get<ApiResponse<AccessScopeGrant[]>>(scopeGrantPath(subject))),
     create: ({ values, ...subject }: AccessScopeGrantSubject & { values: AccessMutationValues }) =>

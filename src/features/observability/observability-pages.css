@@ -100,10 +100,6 @@
   margin-block-start: 16px;
 }
 
-.soha-monitoring-chip-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
 .soha-monitoring-operation-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -55,6 +55,8 @@ const testState = vi.hoisted(() => ({
       'delivery.builds.trigger',
       'delivery.workflows.trigger',
       'delivery.releases.trigger',
+      'access.scope-grants.view',
+      'access.users.view',
     ],
     visibleMenuIds: [],
     visibleMenus: [],
@@ -115,6 +117,58 @@ const testState = vi.hoisted(() => ({
                 },
               },
             ],
+            createdAt: '2026-05-01T00:00:00Z',
+            updatedAt: '2026-05-10T00:00:00Z',
+          },
+        ],
+      }
+    }
+    if (path === '/users') {
+      return {
+        data: [
+          {
+            id: 'user-1',
+            username: 'release-owner',
+            displayName: 'Release Owner',
+            roles: [],
+            teams: [],
+            projects: [],
+            tags: [],
+            loginSources: [],
+          },
+        ],
+      }
+    }
+    if (path === '/access/users') {
+      return {
+        data: [
+          {
+            id: 'user-1',
+            username: 'release-owner',
+            displayName: 'Release Owner',
+            roles: [],
+            teams: [],
+            projects: [],
+            tags: [],
+            loginSources: [],
+          },
+        ],
+      }
+    }
+    if (path === '/access/scope-grants') {
+      return {
+        data: [
+          {
+            id: 'grant-1',
+            subjectType: 'user',
+            subjectId: 'user-1',
+            businessLineId: 'commerce',
+            environmentIds: [],
+            applicationIds: ['app-1'],
+            scopeType: 'delivery',
+            role: 'release-manager',
+            effect: 'allow',
+            enabled: true,
             createdAt: '2026-05-01T00:00:00Z',
             updatedAt: '2026-05-10T00:00:00Z',
           },
@@ -373,6 +427,17 @@ const testState = vi.hoisted(() => ({
                   readyReplicas: 2,
                   updatedReplicas: 2,
                   availableReplicas: 2,
+                  latestBundle: {
+                    id: 'bundle-1',
+                    applicationId: 'app-1',
+                    applicationEnvironmentId: 'binding-test',
+                    version: '1.2.3',
+                    sourceType: 'build',
+                    status: 'completed',
+                    artifactRef: 'registry.example.com/checkout/api:1.2.3',
+                    createdAt: '2026-05-10T00:00:00Z',
+                    updatedAt: '2026-05-10T00:00:00Z',
+                  },
                 },
               ],
             },
@@ -911,6 +976,8 @@ const defaultPermissionKeys = [
   'delivery.builds.trigger',
   'delivery.workflows.trigger',
   'delivery.releases.trigger',
+  'access.scope-grants.view',
+  'access.users.view',
 ]
 
 const readonlyPermissionKeys = [
@@ -1197,7 +1264,7 @@ describe('ApplicationDetailPage workbench', () => {
     expect(container.textContent).not.toContain('返回应用中心')
     const page = container.querySelector('.soha-page')
     const tabs = container.querySelector('.soha-page > .ant-tabs')
-    const overviewPane = container.querySelector('.ant-tabs-tabpane-active')
+    const overviewPane = container.querySelector('[role="tabpanel"][aria-hidden="false"]')
     expect(page?.firstElementChild).toBe(tabs)
     expect(tabs?.classList.contains('soha-resource-tabs')).toBe(true)
     expect(
@@ -1227,7 +1294,6 @@ describe('ApplicationDetailPage workbench', () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
     expect(container.textContent).not.toContain('服务 Workload')
-    expect(container.querySelector('.ant-tabs-tabpane-active > .ant-card')).toBeNull()
     expect(container.textContent).not.toContain('新建服务')
     expect(container.querySelector('.soha-application-service-environment-grid')).not.toBeNull()
     expect(container.querySelector('.soha-application-service-environment-tabs')).toBeNull()
@@ -1238,14 +1304,21 @@ describe('ApplicationDetailPage workbench', () => {
     expect(container.textContent).toContain('Deployment')
     expect(container.textContent).toContain('checkout-api')
     expect(container.textContent).toContain('运行正常')
-    expect(container.textContent).toContain('副本全部就绪')
     expect(container.textContent).toContain('Pod 就绪')
+    expect(container.textContent).toContain('镜像 / 版本')
+    expect(container.textContent).toContain('1.2.3')
+    expect(container.textContent).toContain('checkout-dev')
+    expect(container.textContent).toContain('部署位置')
+    expect(container.querySelector('.soha-application-service-workload-summary')).toBeNull()
+    expect(container.querySelector('.soha-application-service-workload-list')).toBeNull()
     expect(
-      container.querySelector('.soha-application-service-workload-list .is-success'),
+      container.querySelector('.soha-application-service-runtime-panel.ant-card'),
     ).not.toBeNull()
-    expect(container.querySelector('.soha-application-service-workload-list')).not.toBeNull()
-    expect(container.querySelector('.soha-application-service-workload-list .ant-table')).toBeNull()
-    expect(container.querySelector('[aria-label="查看 checkout-api Pods"]')).not.toBeNull()
+    expect(container.querySelector('ul.soha-application-service-runtime-list')).not.toBeNull()
+    expect(container.querySelector('.soha-application-service-runtime-list .ant-list')).toBeNull()
+    expect(container.querySelector('.soha-application-service-runtime-list .ant-table')).toBeNull()
+    expect(container.querySelector('.soha-application-service-runtime-item')).not.toBeNull()
+    expect(container.querySelector('[aria-label="查看 checkout-api Pod 与诊断"]')).not.toBeNull()
 
     act(() => {
       container
@@ -1292,7 +1365,7 @@ describe('ApplicationDetailPage workbench', () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
     expect(
-      container.querySelector('.ant-tabs-tabpane-active .soha-application-overview'),
+      container.querySelector('[role="tabpanel"][aria-hidden="false"] .soha-application-overview'),
     ).not.toBeNull()
     clickTab(container, '服务配置')
     await act(async () => {
@@ -1320,7 +1393,16 @@ describe('ApplicationDetailPage workbench', () => {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
-    expect(container.textContent).toContain('应用与环境权限键')
+    expect(container.textContent).toContain('应用环境授权')
+    expect(testState.apiGet).toHaveBeenCalledWith('/access/scope-grants')
+    expect(container.textContent).toContain('授权主体')
+    expect(container.textContent).toContain('Release Owner')
+    expect(container.textContent).toContain('应用默认')
+    expect(container.textContent).toContain('release-manager')
+    expect(container.textContent).toContain('允许')
+    expect(container.textContent).toContain('当前操作者权限')
+    expect(container.textContent).not.toContain('选择用户')
+    expect(container.textContent).not.toContain('管理授权')
     expect(container.textContent).toContain('权限快照')
     expect(container.textContent).toContain('构建: 允许')
     expect(container.textContent).toContain('环境授权上下文')
@@ -1469,13 +1551,10 @@ describe('ApplicationDetailPage workbench', () => {
     expect(container.textContent).not.toContain('项目工作流设计')
   })
 
-  it('keeps application navigation visible while runtime query is pending', async () => {
+  it('renders the application workspace while runtime query is pending', async () => {
     testState.runtimePending = true
 
-    const container = await renderWithProviders(
-      <ApplicationDetailPage />,
-      '/applications/app-1?tab=services',
-    )
+    const container = await renderWithProviders(<ApplicationDetailPage />)
 
     expect(container.querySelector('.soha-page > .soha-resource-tabs')).not.toBeNull()
     expect(
@@ -1483,8 +1562,20 @@ describe('ApplicationDetailPage workbench', () => {
         (tab) => tab.textContent,
       ),
     ).toEqual(['概览', '工作流', '服务', '测试', '扩展资源', '服务配置', '权限', '交付能力'])
-    expect(container.querySelector('.ant-tabs-tab-active')?.textContent).toBe('服务')
-    expect(container.querySelector('.soha-management-state.is-loading')).not.toBeNull()
+    expect(container.querySelector('.ant-tabs-tab-active')?.textContent).toBe('概览')
+    expect(container.querySelector('.soha-application-overview')).not.toBeNull()
+    expect(container.textContent).toContain('正在加载运行态')
+    expect(container.textContent).toContain('Release DAG')
+    expect(container.textContent).not.toContain('正在加载应用')
+    expect(container.querySelector('.soha-page > .soha-management-state')).toBeNull()
+
+    clickTab(container, '服务')
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(container.textContent).toContain('Checkout API')
+    expect(container.textContent).toContain('读取中')
+    expect(container.textContent).not.toContain('未部署')
   })
 
   it('filters services by the selected environment', async () => {
@@ -1494,7 +1585,7 @@ describe('ApplicationDetailPage workbench', () => {
       '/applications/app-1?tab=services',
     )
 
-    expect(container.querySelector('[aria-label="查看 checkout-api Pods"]')).not.toBeNull()
+    expect(container.querySelector('[aria-label="查看 checkout-api Pod 与诊断"]')).not.toBeNull()
     expect(container.textContent).not.toContain('payments-worker')
 
     const environmentSwitcher = container.querySelector(
@@ -1513,7 +1604,7 @@ describe('ApplicationDetailPage workbench', () => {
     })
 
     expect(container.textContent).toContain('payments-worker')
-    expect(container.querySelector('[aria-label="查看 checkout-api Pods"]')).toBeNull()
+    expect(container.querySelector('[aria-label="查看 checkout-api Pod 与诊断"]')).toBeNull()
     expect(container.querySelector('[data-testid="location"]')?.textContent).toContain(
       'applicationEnvironmentId=binding-production',
     )
@@ -1800,20 +1891,18 @@ describe('ApplicationDetailPage workbench', () => {
     expect(location.textContent).toContain('tab=delivery')
   })
 
-  it.each([
-    ['not-found', '应用不存在', '应用不存在或已被删除'],
-    ['error', '应用加载失败', '暂时无法读取应用运行态，请重试。'],
-  ] as const)(
-    'renders %s runtime failures explicitly',
-    async (runtimeStatus, title, description) => {
+  it.each(['not-found', 'error'] as const)(
+    'keeps the application workspace available for %s runtime failures',
+    async (runtimeStatus) => {
       testState.runtimeStatus = runtimeStatus
       const container = await renderWithProviders(<ApplicationDetailPage />)
 
-      expect(container.textContent).toContain(title)
-      expect(container.textContent).toContain(description)
-      if (runtimeStatus === 'error') {
-        expect(container.querySelector('[aria-label="重试"]')).not.toBeNull()
-      }
+      expect(container.querySelector('.soha-application-overview')).not.toBeNull()
+      expect(container.textContent).toContain('运行态加载失败')
+      expect(container.textContent).toContain('应用基础信息仍可使用')
+      expect(findButton(container, '重试运行态')).not.toBeNull()
+      expect(container.textContent).not.toContain('应用不存在')
+      expect(container.textContent).not.toContain('应用加载失败')
     },
   )
 

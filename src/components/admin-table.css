@@ -151,9 +151,7 @@
 }
 
 .soha-admin-table .ant-table-thead > tr > th {
-  background: var(--soha-bg-surface-muted);
-  color: var(--soha-text-secondary);
-  border-bottom-color: var(--soha-border-color) !important;
+  font-weight: 600;
 }
 
 .soha-admin-table-shell.is-panel .soha-admin-table .ant-table-container,

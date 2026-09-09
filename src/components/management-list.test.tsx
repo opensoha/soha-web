@@ -7,6 +7,7 @@ import {
   ManagementQueryField,
   ManagementQueryGrid,
   ManagementQueryScope,
+  ManagementSearchableListPane,
 } from './management-list'
 
 describe('ManagementQueryScope', () => {
@@ -99,6 +100,47 @@ describe('ManagementQueryScope', () => {
     ).toBe('52px')
 
     rectSpy.mockRestore()
+    await act(async () => root.unmount())
+  })
+
+  it('keeps list selection and row actions as separate buttons', async () => {
+    const onItemSelect = vi.fn()
+    const onEdit = vi.fn()
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <ManagementSearchableListPane
+          activeKey="template-1"
+          getItemKey={(item) => item.id}
+          items={[{ id: 'template-1', name: '标准模板' }]}
+          searchValue=""
+          onItemSelect={onItemSelect}
+          onSearchChange={() => undefined}
+          renderItem={(item) => item.name}
+          renderItemActions={() => (
+            <button type="button" onClick={onEdit}>
+              编辑
+            </button>
+          )}
+        />,
+      )
+    })
+
+    expect(container.querySelector('button button')).toBeNull()
+    const selectButton = container.querySelector<HTMLButtonElement>(
+      '.soha-management-searchable-list-pane__item-select',
+    )
+    const editButton = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.textContent === '编辑',
+    )
+    await act(async () => selectButton?.click())
+    await act(async () => editButton?.click())
+    expect(onItemSelect).toHaveBeenCalledOnce()
+    expect(onEdit).toHaveBeenCalledOnce()
+
     await act(async () => root.unmount())
   })
 })

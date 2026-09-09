@@ -3,7 +3,6 @@
 .soha-application-center-results {
   display: flex;
   width: 100%;
-  max-width: 1120px;
   flex-direction: column;
   gap: 12px;
 }
@@ -281,29 +280,60 @@
   gap: 16px;
 }
 
-.soha-application-service-environment-bar {
-  border-color: color-mix(in srgb, var(--soha-primary) 22%, var(--soha-border-color));
-  background: color-mix(in srgb, var(--soha-primary) 4%, var(--soha-bg-surface));
+.soha-application-service-list-title {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.soha-application-service-list-title .ant-typography {
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.soha-application-service-runtime-panel > .ant-card-body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.soha-application-service-toolbar,
+.soha-application-service-toolbar__switcher {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.soha-application-service-toolbar {
+  width: 100%;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--soha-border-color);
 }
 
 .soha-application-service-environment-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 10px;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .soha-application-service-environment-option {
   --soha-environment-status: var(--soha-text-tertiary);
 
-  display: flex;
+  display: inline-flex;
   min-width: 0;
-  min-height: 108px;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 14px;
+  min-height: 32px;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 9px;
   border: 1px solid var(--soha-border-color);
-  border-radius: var(--soha-radius-panel);
+  border-radius: var(--soha-radius-control);
   background: var(--soha-bg-surface);
   color: var(--soha-text-primary);
   cursor: pointer;
@@ -311,14 +341,11 @@
   text-align: left;
   transition:
     border-color 0.16s ease,
-    background-color 0.16s ease,
-    box-shadow 0.16s ease,
-    transform 0.16s ease;
+    background-color 0.16s ease;
 }
 
 .soha-application-service-environment-option:hover {
   border-color: color-mix(in srgb, var(--soha-primary) 48%, var(--soha-border-color));
-  transform: translateY(-1px);
 }
 
 .soha-application-service-environment-option:focus-visible {
@@ -329,7 +356,6 @@
 .soha-application-service-environment-option.is-active {
   border-color: var(--soha-primary);
   background: color-mix(in srgb, var(--soha-primary) 7%, var(--soha-bg-surface));
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--soha-primary) 14%, transparent);
 }
 
 .soha-application-service-environment-option.is-success {
@@ -340,77 +366,140 @@
   --soha-environment-status: var(--soha-warning);
 }
 
-.soha-application-service-environment-option__head,
-.soha-application-service-environment-option__identity,
-.soha-application-service-environment-option__meta {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-}
-
-.soha-application-service-environment-option__head {
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.soha-application-service-environment-option__identity {
-  gap: 9px;
-}
-
-.soha-application-service-environment-option__identity > span:last-child,
-.soha-application-service-environment-option__count {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-}
-
-.soha-application-service-environment-option__identity strong,
-.soha-application-service-environment-option__identity small,
-.soha-application-service-environment-option__meta span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.soha-application-service-environment-option__identity small,
-.soha-application-service-environment-option__count small {
-  color: var(--soha-text-secondary);
-  font-size: 12px;
+.soha-application-service-environment-option.is-danger {
+  --soha-environment-status: var(--soha-danger);
 }
 
 .soha-application-service-environment-option__status {
-  width: 9px;
-  height: 9px;
+  width: 7px;
+  height: 7px;
   flex: 0 0 auto;
   border-radius: 50%;
   background: var(--soha-environment-status);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--soha-environment-status) 12%, transparent);
 }
 
 .soha-application-service-environment-option__count {
-  align-items: flex-end;
-}
-
-.soha-application-service-environment-option__count strong {
-  font-size: 20px;
+  color: var(--soha-text-secondary);
   font-variant-numeric: tabular-nums;
 }
 
-.soha-application-service-environment-option__meta {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+.soha-application-service-environment-option small {
   color: var(--soha-text-secondary);
   font-size: 12px;
 }
 
-.soha-application-service-environment-option__meta span:last-child {
+.soha-application-service-environment-option.is-danger small,
+.soha-application-service-environment-option.is-warning small {
   color: var(--soha-environment-status);
-  text-align: right;
 }
 
-@media (max-width: 768px) {
-  .soha-application-service-environment-grid {
+.soha-application-service-runtime-list {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.soha-application-service-runtime-item {
+  padding: 12px 14px;
+  border: 1px solid var(--soha-border-color);
+  border-radius: var(--soha-radius-control);
+  background: color-mix(in srgb, var(--soha-fill-weak) 48%, var(--soha-bg-surface));
+}
+
+.soha-application-service-runtime-item__content {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(440px, 2fr) auto;
+  align-items: center;
+  gap: 20px;
+}
+
+.soha-application-service-runtime-item__identity,
+.soha-application-service-runtime-item__facts > div,
+.soha-application-service-runtime-item__facts dd {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.soha-application-service-runtime-item__heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.soha-application-service-runtime-item__heading > .ant-typography {
+  min-width: 0;
+  margin: 0;
+}
+
+.soha-application-service-runtime-item__facts {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0;
+}
+
+.soha-application-service-runtime-item__facts dt {
+  color: var(--soha-text-secondary);
+  font-size: 12px;
+}
+
+.soha-application-service-runtime-item__facts dd {
+  margin: 0;
+}
+
+.soha-application-service-runtime-item__facts dd > .ant-typography {
+  min-width: 0;
+  margin: 0;
+}
+
+.soha-application-service-runtime-item__actions {
+  justify-self: end;
+}
+
+@media (max-width: 1100px) {
+  .soha-application-service-runtime-item__content {
+    grid-template-columns: minmax(180px, 0.7fr) minmax(0, 1.5fr);
+  }
+
+  .soha-application-service-runtime-item__actions {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 767px) {
+  .soha-application-service-list-title {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .soha-application-service-runtime-item__content {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .soha-application-service-runtime-item__facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .soha-application-service-runtime-item__actions {
+    grid-column: auto;
+    justify-self: start;
+  }
+}
+
+@media (max-width: 520px) {
+  .soha-application-service-runtime-item__facts {
     grid-template-columns: 1fr;
   }
 }
@@ -576,46 +665,10 @@
   gap: 8px;
 }
 
-.soha-application-service-workload-summary {
-  margin-bottom: 12px;
-}
-
 .soha-application-long-card.ant-card {
   border-color: var(--soha-border-color);
   border-radius: var(--soha-radius);
   box-shadow: none;
-}
-
-.soha-application-service-workload-list .soha-application-long-card {
-  --soha-workload-status-color: var(--soha-text-tertiary);
-
-  border-color: color-mix(
-    in srgb,
-    var(--soha-workload-status-color) 34%,
-    var(--soha-border-color) 66%
-  );
-  background: color-mix(in srgb, var(--soha-workload-status-color) 4%, var(--soha-bg-surface) 96%);
-}
-
-.soha-application-service-workload-list .soha-application-long-card.is-success {
-  --soha-workload-status-color: var(--soha-success);
-}
-
-.soha-application-service-workload-list .soha-application-long-card.is-warning {
-  --soha-workload-status-color: var(--soha-warning);
-}
-
-.soha-application-service-workload-list .soha-application-long-card.is-danger {
-  --soha-workload-status-color: var(--soha-danger);
-}
-
-.soha-application-service-workload-list .soha-application-long-card .ant-card-head {
-  background: color-mix(in srgb, var(--soha-workload-status-color) 8%, var(--soha-bg-surface) 92%);
-}
-
-.soha-application-service-workload-ready {
-  color: var(--soha-workload-status-color);
-  font-variant-numeric: tabular-nums;
 }
 
 .soha-application-long-card .ant-card-head-title {

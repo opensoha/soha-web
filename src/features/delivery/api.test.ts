@@ -46,7 +46,7 @@ describe('deliveryApi', () => {
         limit: 200,
       }),
     ).resolves.toEqual({ items: [], truncated: false })
-    await deliveryApi.workflows.list({ applicationId: 'app/a' })
+    await deliveryApi.workflows.list({ applicationId: 'app/a', limit: 200 })
     await deliveryApi.workloads.metrics({
       clusterId: 'cluster/a',
       namespace: 'team dev',
@@ -56,7 +56,7 @@ describe('deliveryApi', () => {
 
     expect(apiMocks.get.mock.calls.map(([path]) => path)).toEqual([
       '/application-environments/target-candidates?clusterId=cluster%2Fa&namespace=team+dev&search=api&limit=200',
-      '/workflows?applicationId=app%2Fa',
+      '/workflows?applicationId=app%2Fa&limit=200',
       '/clusters/cluster%2Fa/workloads/deployments/api%2Fweb/metrics?namespace=team+dev&rangeMinutes=60',
       '/ai-gateway/capabilities?source=delivery-workbench&skillId=delivery%2Fonboarding',
     ])

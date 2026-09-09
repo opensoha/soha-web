@@ -365,7 +365,7 @@ export function ComputeOverviewPage() {
           {overviewQuery.isLoading ? (
             <ManagementState bordered={false} compact kind="loading" />
           ) : virtualization || agents || runtimes ? (
-            <div className="soha-overview-chip-grid soha-compute-chip-grid">
+            <div className="soha-overview-chip-grid">
               {visibleAccessStats.map(({ key, path, ...item }) => (
                 <Link
                   aria-label={localeText(
@@ -404,7 +404,7 @@ export function ComputeOverviewPage() {
             {overviewQuery.isLoading ? (
               <ManagementState bordered={false} compact kind="loading" />
             ) : tasks ? (
-              <div className="soha-overview-chip-grid soha-compute-chip-grid">
+              <div className="soha-overview-chip-grid">
                 {taskStats.map(({ key, path, ...item }) => (
                   <Link
                     aria-label={localeText(

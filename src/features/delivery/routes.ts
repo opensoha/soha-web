@@ -353,14 +353,13 @@ export const deliveryRoutes = defineRoutes([
     meta: {
       id: 'execution-tasks',
       path: '/delivery/execution-tasks',
-      title: '执行任务',
-      description: '执行平面任务与日志',
+      title: '执行队列',
+      description: '底层执行任务、日志与重试',
       icon: 'IconFlow',
       group: 'delivery',
       requiresAuth: true,
-      tabbar: true,
-      navVisible: true,
-      menuId: 'execution-tasks',
+      tabbar: false,
+      navVisible: false,
       permissionKey: 'delivery.execution-tasks.view',
       scopeMode: 'passive',
       workspace: 'application',
@@ -420,14 +419,14 @@ export const deliveryRoutes = defineRoutes([
       id: 'release-board',
       path: '/release-board',
       title: '构建发布',
-      description: '应用环境构建、发布与候选版本态势',
+      description: '运行中的交付工作流与最近执行结果',
       icon: 'IconSend',
       group: 'delivery',
       requiresAuth: true,
       tabbar: true,
       navVisible: true,
       menuId: 'release-board',
-      permissionKey: 'delivery.release-board.view',
+      permissionKey: 'delivery.workflows.view',
       scopeMode: 'passive',
       workspace: 'application',
     },
@@ -435,28 +434,6 @@ export const deliveryRoutes = defineRoutes([
     load: async () => {
       const module = await import('./release-board/page')
       return { default: module.ReleaseBoardPage }
-    },
-  },
-  {
-    meta: {
-      id: 'workflows',
-      path: '/workflows',
-      title: '工作流',
-      description: '工作流管理',
-      icon: 'IconFlow',
-      group: 'delivery',
-      requiresAuth: true,
-      tabbar: true,
-      navVisible: true,
-      menuId: 'workflows',
-      permissionKey: 'delivery.workflows.view',
-      scopeMode: 'passive',
-      workspace: 'application',
-    },
-    shell: 'app',
-    load: async () => {
-      const module = await import('./workflows/list-page')
-      return { default: module.WorkflowsPage }
     },
   },
   {
@@ -470,7 +447,7 @@ export const deliveryRoutes = defineRoutes([
       requiresAuth: true,
       tabbar: false,
       navVisible: false,
-      parentId: 'workflows',
+      parentId: 'release-board',
       permissionKey: 'delivery.workflows.view',
       scopeMode: 'passive',
       workspace: 'application',

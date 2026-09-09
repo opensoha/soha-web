@@ -356,6 +356,11 @@ async function clickButton(container: HTMLElement, label: string) {
 describe('IdentityOverviewPage', () => {
   it('renders the existing metrics and only the first six audit events', async () => {
     const container = await renderPage()
+    const metricGrid = container.querySelector('.soha-overview-metric-grid')
+    const summaryGrid = container.querySelector('.soha-overview-summary-grid')
+
+    expect(metricGrid?.nextElementSibling).toBe(summaryGrid)
+    expect(summaryGrid?.nextElementSibling?.textContent).toContain('软件库')
 
     expect(container.querySelector('[data-testid="metric-应用目录"]')?.textContent).toContain(
       '应用目录:2:1 个已启用',

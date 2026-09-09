@@ -25,18 +25,12 @@ import type {
 } from '@opensoha/contracts/gen/ts/sohaapi'
 
 export type GatewayTimeRangeValue =
-  | readonly [{ toISOString: () => string } | null, { toISOString: () => string } | null]
-  | null
+  readonly [{ toISOString: () => string } | null, { toISOString: () => string } | null] | null
 
 export type RiskLevel = ContractRiskLevel
 export type GatewayEffect = 'allow' | 'deny'
 export type GatewaySectionKey =
-  | 'relay'
-  | 'manifest'
-  | 'clients'
-  | 'tokens'
-  | 'governance'
-  | 'call-logs'
+  'relay' | 'manifest' | 'clients' | 'tokens' | 'governance' | 'call-logs'
 export type GatewayTabKey =
   | 'relay'
   | 'upstreams'
@@ -53,12 +47,7 @@ export type GatewayTabKey =
   | 'model-calls'
   | 'audit'
 export type ApprovalStrategy =
-  | 'none'
-  | 'allow'
-  | 'deny'
-  | 'require_approval'
-  | 'require_human_confirm'
-  | 'dry_run_only'
+  'none' | 'allow' | 'deny' | 'require_approval' | 'require_human_confirm' | 'dry_run_only'
 export type ApprovalRoutingMode = 'all' | 'any'
 
 export interface GatewayResourceScopes {
@@ -660,6 +649,18 @@ export interface LLMUpstream {
   createdBy?: string
   createdAt?: string
   updatedAt?: string
+}
+
+export interface LLMUpstreamTestResult {
+  upstreamId?: string
+  providerKind: string
+  status: 'success' | 'failure'
+  httpStatus?: number
+  durationMs: number
+  modelCount?: number
+  models?: string[]
+  errorMessage?: string
+  checkedAt?: string
 }
 
 export interface LLMModelRoute {
@@ -2222,8 +2223,10 @@ export function approvalTrace(record: ApprovalRequest) {
 }
 
 export function workflowTracePath(trace: ReturnType<typeof approvalTrace>) {
-  return `/workflows${queryString({
-    workflowRunId: trace.workflowRunId,
+  const path = trace.workflowRunId
+    ? `/workflows/${encodeURIComponent(trace.workflowRunId)}`
+    : '/release-board'
+  return `${path}${queryString({
     gatewayApprovalRequestId: trace.approvalRequestId,
   })}`
 }

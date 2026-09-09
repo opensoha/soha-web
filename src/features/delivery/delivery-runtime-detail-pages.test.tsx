@@ -20,6 +20,7 @@ const testState = vi.hoisted(() => ({
   workloadRuntimeError: false,
   workloadRuntimeNotFound: false,
   workloadPodsEmpty: false,
+  workloadAccessEmpty: false,
   apiGet: vi.fn(async (path: string) => {
     const application = {
       id: 'app-1',
@@ -218,6 +219,36 @@ const testState = vi.hoisted(() => ({
             observedGeneration: 3,
             strategy: 'RollingUpdate',
             labels: { app: 'checkout-api' },
+            relatedResources: [
+              {
+                kind: 'ConfigMap',
+                name: 'checkout-config',
+                namespace: 'checkout',
+                relation: 'config',
+              },
+              {
+                kind: 'Secret',
+                name: 'checkout-secret',
+                namespace: 'checkout',
+                relation: 'secret',
+              },
+              {
+                kind: 'PersistentVolumeClaim',
+                name: 'checkout-data',
+                namespace: 'checkout',
+                relation: 'volume',
+              },
+              ...(testState.workloadAccessEmpty
+                ? []
+                : [
+                    {
+                      kind: 'HTTPRoute',
+                      name: 'checkout-route',
+                      namespace: 'checkout',
+                      relation: 'routes-service',
+                    },
+                  ]),
+            ],
             containers: [
               {
                 name: 'checkout-api',
@@ -244,27 +275,31 @@ const testState = vi.hoisted(() => ({
                   ageSeconds: 3600,
                 },
               ],
-          services: [
-            {
-              name: 'checkout-api',
-              namespace: 'checkout',
-              type: 'ClusterIP',
-              clusterIp: '10.43.18.24',
-              ports: ['http:8080/TCP'],
-              ageSeconds: 3600,
-            },
-          ],
-          ingresses: [
-            {
-              name: 'checkout-public',
-              namespace: 'checkout',
-              className: 'nginx',
-              hosts: ['checkout.example.com'],
-              address: '10.0.0.20',
-              backendServices: ['checkout-api'],
-              ageSeconds: 3600,
-            },
-          ],
+          services: testState.workloadAccessEmpty
+            ? []
+            : [
+                {
+                  name: 'checkout-api',
+                  namespace: 'checkout',
+                  type: 'ClusterIP',
+                  clusterIp: '10.43.18.24',
+                  ports: ['http:8080/TCP'],
+                  ageSeconds: 3600,
+                },
+              ],
+          ingresses: testState.workloadAccessEmpty
+            ? []
+            : [
+                {
+                  name: 'checkout-public',
+                  namespace: 'checkout',
+                  className: 'nginx',
+                  hosts: ['checkout.example.com'],
+                  address: '10.0.0.20',
+                  backendServices: ['checkout-api'],
+                  ageSeconds: 3600,
+                },
+              ],
         },
       }
     }
@@ -382,6 +417,7 @@ describe('delivery runtime detail pages', () => {
     testState.workloadRuntimeError = false
     testState.workloadRuntimeNotFound = false
     testState.workloadPodsEmpty = false
+    testState.workloadAccessEmpty = false
     class ResizeObserverMock {
       observe() {}
       unobserve() {}
@@ -484,10 +520,26 @@ describe('delivery runtime detail pages', () => {
       ),
     ).toBe(false)
     expect(
+      Array.from(container.querySelectorAll('.soha-workload-detail-tabs .ant-tabs-tab')).some(
+        (tab) => tab.textContent?.startsWith('访问 '),
+      ),
+    ).toBe(false)
+    expect(
       container.querySelectorAll('.soha-management-panel-card .soha-management-panel-card'),
     ).toHaveLength(0)
     expect(container.textContent).toContain('checkout-api')
     expect(detailHeader?.textContent).toContain('命名空间 checkout')
+    expect(detailHeader?.querySelector('.soha-workload-access-overview__title')).toBeNull()
+    expect(detailHeader?.textContent).toContain('Service')
+    expect(detailHeader?.textContent).toContain('同命名空间checkout-api')
+    expect(detailHeader?.textContent).toContain('跨命名空间checkout-api.checkout')
+    expect(detailHeader?.textContent).toContain('Cluster IP10.43.18.24')
+    expect(detailHeader?.textContent).toContain('端口http:8080/TCP')
+    expect(detailHeader?.textContent).toContain('Ingress')
+    expect(detailHeader?.textContent).toContain('访问域名checkout.example.com')
+    expect(detailHeader?.textContent).toContain('地址10.0.0.20')
+    expect(detailHeader?.textContent).toContain('HTTPRoute')
+    expect(detailHeader?.textContent).toContain('未返回 Gateway 监听地址')
     expect(detailHeader?.textContent).not.toContain('Namespace checkout')
   })
 
@@ -500,23 +552,14 @@ describe('delivery runtime detail pages', () => {
 
     expect(container.textContent).toContain('Back to services')
     expect(container.textContent).toContain('View logs')
-    expect(container.textContent).toContain('Network 2')
+    expect(container.textContent).toContain('Related resources 3')
     expect(container.textContent).toContain('Containers')
-    expect(container.querySelector('.soha-management-detail-header')?.textContent).toContain(
-      'Namespace checkout',
-    )
+    const detailHeader = container.querySelector('.soha-management-detail-header')
+    expect(detailHeader?.textContent).toContain('Namespace checkout')
+    expect(detailHeader?.textContent).toContain('Same namespacecheckout-api')
+    expect(detailHeader?.textContent).toContain('Cross namespacecheckout-api.checkout')
+    expect(detailHeader?.textContent).toContain('Gateway listener address was not returned')
     expect(container.textContent).not.toContain('返回服务')
-
-    const networkContainer = await renderWithProviders(
-      <ApplicationWorkloadDetailPage />,
-      '/applications/app-1/application-environments/binding-1/workloads/checkout-api?tab=network',
-    )
-    const networkPane = networkContainer.querySelector(
-      '.soha-workload-detail-tabs .ant-tabs-tabpane-active',
-    )
-    expect(networkPane?.textContent).toContain('Services')
-    expect(networkPane?.textContent).toContain('Ingresses')
-    expect(networkPane?.textContent).toContain('Namespace')
 
     const terminalContainer = await renderWithProviders(
       <ApplicationWorkloadDetailPage />,
@@ -527,20 +570,7 @@ describe('delivery runtime detail pages', () => {
     )
   })
 
-  it('localizes workload network and terminal labels in Chinese', async () => {
-    const networkContainer = await renderWithProviders(
-      <ApplicationWorkloadDetailPage />,
-      '/applications/app-1/application-environments/binding-1/workloads/checkout-api?tab=network',
-    )
-    const networkPane = networkContainer.querySelector(
-      '.soha-workload-detail-tabs .ant-tabs-tabpane-active',
-    )
-    expect(networkPane?.textContent).toContain('服务')
-    expect(networkPane?.textContent).toContain('入口')
-    expect(networkPane?.textContent).toContain('命名空间')
-    expect(networkPane?.textContent).not.toContain('Services')
-    expect(networkPane?.textContent).not.toContain('Ingresses')
-
+  it('localizes workload terminal labels in Chinese', async () => {
     const terminalContainer = await renderWithProviders(
       <ApplicationWorkloadDetailPage />,
       '/applications/app-1/application-environments/binding-1/workloads/checkout-api?tab=terminal',
@@ -604,7 +634,7 @@ describe('delivery runtime detail pages', () => {
         `/applications/app-1/application-environments/binding-1/workloads/checkout-api?tab=${tab}`,
       )
       const activePane = container.querySelector(
-        '.soha-workload-detail-tabs .ant-tabs-tabpane-active',
+        '.soha-workload-detail-tabs [role="tabpanel"][aria-hidden="false"]',
       )
       expect(activePane?.textContent).toContain('当前 Workload 暂无 Pod')
       expect(activePane?.querySelector('.soha-management-state')).not.toBeNull()
@@ -630,19 +660,36 @@ describe('delivery runtime detail pages', () => {
     expect(container.querySelectorAll('.soha-workload-pod-container-item')).toHaveLength(2)
   })
 
-  it('renders associated network resources as long cards', async () => {
+  it('keeps empty access categories visible in the workload header', async () => {
+    testState.workloadAccessEmpty = true
     const container = await renderWithProviders(
       <ApplicationWorkloadDetailPage />,
-      '/applications/app-1/application-environments/binding-1/workloads/checkout-api?tab=network',
+      '/applications/app-1/application-environments/binding-1/workloads/checkout-api',
+    )
+
+    const detailHeader = container.querySelector('.soha-management-detail-header')
+    expect(detailHeader?.textContent).toContain('Service')
+    expect(detailHeader?.textContent).toContain('Ingress')
+    expect(detailHeader?.textContent).toContain('Gateway API')
+    expect(detailHeader?.textContent).toContain('暂无关联 Service')
+    expect(detailHeader?.textContent).toContain('暂无关联 Ingress')
+    expect(detailHeader?.textContent).toContain('暂无关联 Gateway API Route')
+  })
+
+  it('renders mounted configuration and storage relations without a table', async () => {
+    const container = await renderWithProviders(
+      <ApplicationWorkloadDetailPage />,
+      '/applications/app-1/application-environments/binding-1/workloads/checkout-api?tab=related-resources',
     )
 
     expect(
       container.querySelector('.soha-workload-detail-tabs .ant-tabs-tab-active')?.textContent,
-    ).toBe('网络 2')
-    expect(container.querySelector('.soha-application-runtime-network .ant-table')).toBeNull()
-    expect(container.querySelectorAll('.soha-workload-network-card')).toHaveLength(2)
-    expect(container.textContent).toContain('checkout.example.com')
-    expect(container.textContent).toContain('http:8080/TCP')
+    ).toBe('关联资源 3')
+    expect(container.querySelector('.soha-workload-detail-tabs .ant-table')).toBeNull()
+    expect(container.querySelectorAll('.soha-workload-related-resource-card')).toHaveLength(3)
+    expect(container.textContent).toContain('checkout-config')
+    expect(container.textContent).toContain('checkout-secret')
+    expect(container.textContent).toContain('checkout-data')
   })
 
   it('reuses the Kubernetes Pod log viewer with the selected container', async () => {

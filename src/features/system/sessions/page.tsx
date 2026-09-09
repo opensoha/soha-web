@@ -18,13 +18,14 @@ import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { formatDateTime, formatRelativeTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
+import { loginProviderLabel, loginProviderTagColor } from '@/utils/login-provider'
 import { systemMutations } from '../mutations'
 import { systemQueries } from '../queries'
 import type { OnlineUser } from '../system-model'
 
 function SourceTag({ value }: { value?: string }) {
   const label = (value || '').trim()
-  return label ? <MetadataTag label={label.toUpperCase()} /> : <>-</>
+  return label ? <MetadataTag label={label.toUpperCase()} tone="blue" /> : <>-</>
 }
 
 export function OnlineUsersPage() {
@@ -40,9 +41,7 @@ export function OnlineUsersPage() {
     'system.online-users.revoke',
   )
 
-  const { data: sessions = [], isFetching, isLoading, refetch } = useQuery(
-    systemQueries.sessions(),
-  )
+  const { data: sessions = [], isFetching, isLoading, refetch } = useQuery(systemQueries.sessions())
   const revokeMutation = useMutation(systemMutations.sessions.revoke(queryClient))
   const batchRevokeMutation = useMutation(systemMutations.sessions.revokeMany(queryClient))
   const providerOptions = useMemo(
@@ -82,7 +81,17 @@ export function OnlineUsersPage() {
     { title: '用户 ID', dataIndex: 'userId', width: 180, ellipsis: true },
     { title: '用户名', dataIndex: 'userName', width: 140 },
     { title: '邮箱', dataIndex: 'email', width: 240, ellipsis: true },
-    { title: '登录方式', dataIndex: 'providerType', width: 120 },
+    {
+      title: '登录方式',
+      dataIndex: 'providerType',
+      width: 120,
+      render: (value: string) =>
+        value ? (
+          <MetadataTag label={loginProviderLabel(value)} tone={loginProviderTagColor(value)} />
+        ) : (
+          '-'
+        ),
+    },
     {
       title: '来源',
       dataIndex: 'source',

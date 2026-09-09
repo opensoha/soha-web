@@ -162,6 +162,7 @@ describe('frontend access authorization splits', () => {
   })
 
   beforeEach(() => {
+    vi.useFakeTimers()
     setSnapshot([])
     setDefaultResponses()
   })
@@ -177,6 +178,7 @@ describe('frontend access authorization splits', () => {
       container.remove()
     }
     containers = []
+    vi.useRealTimers()
     vi.clearAllMocks()
   })
 

@@ -21,10 +21,24 @@ import {
   rateLimitModeOptions,
   relayEndpointOptions,
   valuesToResourceScopes,
+  workflowTracePath,
   type GatewayAccessPolicyConditionFormValues,
   type GatewayApprovalPolicyFormValues,
   type GatewayResourceScopeFormValues,
 } from './types'
+
+it('links Gateway approval traces to the surviving workflow detail route', () => {
+  expect(
+    workflowTracePath({
+      approvalRequestId: 'approval-1',
+      workflowRunId: 'workflow-1',
+      executionTaskId: '',
+      releaseBundleId: '',
+      applicationId: '',
+      applicationEnvironmentId: '',
+    }),
+  ).toBe('/workflows/workflow-1?gatewayApprovalRequestId=approval-1')
+})
 
 describe('AI Gateway policy condition helpers', () => {
   it('builds backend-supported approval routing from Console policy fields', () => {

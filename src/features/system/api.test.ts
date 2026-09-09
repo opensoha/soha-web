@@ -105,4 +105,28 @@ describe('systemApi', () => {
     expect(apiMocks.put).toHaveBeenCalledWith('/menus/menu%2Fa', { labelZh: '菜单 A' })
     expect(apiMocks.delete).toHaveBeenCalledWith('/menus/menu%2Fa')
   })
+
+  it('lists announcement receipts with encoded filters', async () => {
+    const page = {
+      items: [],
+      total: 2,
+      page: 1,
+      pageSize: 15,
+      readCount: 1,
+      unreadCount: 1,
+    }
+    apiMocks.get.mockResolvedValue({ data: page })
+
+    await expect(
+      systemApi.announcements.receipts('announcement/a', {
+        keyword: ' Ada ',
+        state: 'unread',
+        page: 2,
+        pageSize: 15,
+      }),
+    ).resolves.toBe(page)
+    expect(apiMocks.get).toHaveBeenCalledWith(
+      '/announcements/announcement%2Fa/receipts?keyword=Ada&state=unread&page=2&pageSize=15',
+    )
+  })
 })

@@ -16,7 +16,6 @@ import {
 import { accessQueries } from '@/features/access'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { systemQueries } from '@/features/system'
-import './styles.css'
 
 export function SettingsOverviewPage() {
   const permissionQuery = usePermissionSnapshot()
@@ -74,7 +73,7 @@ export function SettingsOverviewPage() {
           ? '加载失败'
           : `${roles.filter((item) => item.userCount > 0).length} 个角色已分配用户`,
       icon: <SafetyCertificateOutlined />,
-      tone: rolesQuery.isError ? 'danger' : 'success',
+      tone: rolesQuery.isError ? 'danger' : 'default',
     },
     {
       key: 'teams',
@@ -98,7 +97,7 @@ export function SettingsOverviewPage() {
           ? '加载失败'
           : `允许 ${policies.filter((item) => item.effect === 'allow').length} · 拒绝 ${policies.filter((item) => item.effect === 'deny').length}`,
       icon: <FileProtectOutlined />,
-      tone: policiesQuery.isError ? 'danger' : 'warning',
+      tone: policiesQuery.isError ? 'danger' : 'default',
     },
   ] satisfies OverviewMetricItem[]
 
@@ -236,7 +235,7 @@ export function SettingsOverviewPage() {
           loading={permissionLoading || (canViewUsers && usersQuery.isLoading)}
         >
           {canViewUsers && !usersQuery.isError ? (
-            <div className="soha-settings-overview-chip-grid">
+            <div className="soha-overview-chip-grid">
               {userStatus.map(({ key, ...item }) => (
                 <OverviewChip key={key} {...item} />
               ))}
@@ -278,7 +277,7 @@ export function SettingsOverviewPage() {
             />
           ) : null}
           {systemActivity.length ? (
-            <div className="soha-settings-overview-chip-grid">
+            <div className="soha-overview-chip-grid">
               {systemActivity.map(({ key, ...item }) => (
                 <OverviewChip key={key} {...item} />
               ))}

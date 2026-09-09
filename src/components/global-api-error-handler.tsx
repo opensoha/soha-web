@@ -42,7 +42,7 @@ export function GlobalApiErrorHandler() {
       if (error.kind === 'auth') {
         notification.warning({
           key: 'api-auth-expired',
-          message: '登录状态已失效',
+          title: '登录状态已失效',
           description: requestDescription(error, '请重新登录后继续操作。'),
         })
         if (!location.pathname.startsWith('/login')) {
@@ -54,7 +54,7 @@ export function GlobalApiErrorHandler() {
       if (error.kind === 'forbidden') {
         notification.warning({
           key,
-          message: '没有权限访问该资源',
+          title: '没有权限访问该资源',
           description: requestDescription(error, `${requestLabel(error)} 被服务端拒绝。`),
         })
         return
@@ -63,7 +63,7 @@ export function GlobalApiErrorHandler() {
       if (error.kind === 'server') {
         notification.error({
           key,
-          message: '服务端处理失败',
+          title: '服务端处理失败',
           description: requestDescription(
             error,
             `${requestLabel(error)} 返回 ${error.status}: ${error.message}`,
@@ -75,7 +75,7 @@ export function GlobalApiErrorHandler() {
       if (error.kind === 'network') {
         notification.error({
           key,
-          message: '无法连接 API 服务',
+          title: '无法连接 API 服务',
           description: `${requestLabel(error)} 请求未到达服务端: ${error.message}`,
         })
       }

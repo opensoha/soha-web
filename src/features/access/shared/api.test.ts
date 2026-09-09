@@ -33,12 +33,14 @@ describe('access api', () => {
   })
 
   it('uses the selected user or organization scope for grants', async () => {
-    apiMock.get.mockResolvedValueOnce({ data: [] })
+    apiMock.get.mockResolvedValue({ data: [] })
     apiMock.delete.mockResolvedValueOnce({ data: {} })
 
+    await accessApi.scopeGrants.listAll()
     await accessApi.scopeGrants.list({ subjectType: 'user', subjectId: 'user/1' })
     await accessApi.scopeGrants.delete({ subjectType: 'team', subjectId: 'team/1', id: 'grant/1' })
 
+    expect(apiMock.get).toHaveBeenCalledWith('/access/scope-grants')
     expect(apiMock.get).toHaveBeenCalledWith('/access/users/user%2F1/scope-grants')
     expect(apiMock.delete).toHaveBeenCalledWith(
       '/access/teams/team%2F1/scope-grants/grant%2F1',

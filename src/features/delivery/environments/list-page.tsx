@@ -96,6 +96,10 @@ export function ApplicationEnvironmentsPage() {
       <DeliveryTable
         refreshing={bindingsQuery.isFetching}
         onRefresh={() => void bindingsQuery.refetch()}
+        isError={bindingsQuery.isError}
+        errorDescription="暂时无法读取应用环境。"
+        onRetry={() => void bindingsQuery.refetch()}
+        localSorting
         columns={columns}
         dataSource={bindingsQuery.data ?? []}
         rowKey="id"

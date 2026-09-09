@@ -1,4 +1,5 @@
-import { Button, Table, Typography } from 'antd'
+import { Button, Typography } from 'antd'
+import { AdminTable } from '@/components/admin-table'
 import type { TableColumnsType } from 'antd'
 import { StopOutlined } from '@ant-design/icons'
 import { ManagementState } from '@/components/management-list'
@@ -65,9 +66,10 @@ export function DirectoryRunHistory({
           取消当前同步
         </Button>
       ) : null}
-      <Table
+      <AdminTable
+        enableColumnSelection={false}
         rowKey="id"
-        size="small"
+        tableSize="small"
         loading={loading}
         columns={columns}
         dataSource={runs}

@@ -10,6 +10,7 @@ export type ScopeGrantFormValues = {
   applicationIds?: string[]
   businessLineId?: string
   clusterIds?: string[]
+  effect: 'allow' | 'deny'
   enabled: boolean
   environmentIds?: string[]
   role?: string
@@ -20,6 +21,7 @@ export type ScopeGrantFormValues = {
 
 interface ScopeGrantEditorProps {
   editing: AccessScopeGrant | null
+  fixedApplication?: { businessLineId: string; id: string; name?: string }
   fixedSubject?: { id: string; type: 'team' | 'user' }
   onCancel: () => void
   onSubmit: (values: AccessMutationValues) => void
@@ -48,7 +50,9 @@ export function buildScopeGrantPayload(
   values: ScopeGrantFormValues,
   editing: AccessScopeGrant | null,
   fixedSubject?: { id: string; type: 'team' | 'user' },
+  fixedApplication?: { businessLineId: string; id: string },
 ): AccessMutationValues {
+  const scopeType = fixedApplication ? 'delivery' : values.scopeType
   const preservedRestrictions = editing
     ? {
         applicationIds: editing.applicationIds ?? [],
@@ -63,15 +67,15 @@ export function buildScopeGrantPayload(
     : {}
   const common = {
     ...preservedRestrictions,
-    effect: editing?.effect ?? 'allow',
+    effect: values.effect ?? editing?.effect ?? 'allow',
     enabled: values.enabled,
     role: values.role,
-    scopeType: values.scopeType,
+    scopeType,
     subjectId: fixedSubject?.id ?? values.subjectId,
     subjectType: fixedSubject?.type ?? values.subjectType,
   }
 
-  return values.scopeType === 'platform'
+  return scopeType === 'platform'
     ? {
         ...common,
         businessLineId: '',
@@ -79,14 +83,15 @@ export function buildScopeGrantPayload(
       }
     : {
         ...common,
-        applicationIds: values.applicationIds ?? [],
-        businessLineId: values.businessLineId?.trim() ?? '',
+        applicationIds: fixedApplication ? [fixedApplication.id] : (values.applicationIds ?? []),
+        businessLineId: fixedApplication?.businessLineId ?? values.businessLineId?.trim() ?? '',
         environmentIds: values.environmentIds ?? [],
       }
 }
 
 export function ScopeGrantEditor({
   editing,
+  fixedApplication,
   fixedSubject,
   onCancel,
   onSubmit,
@@ -117,8 +122,8 @@ export function ScopeGrantEditor({
   )
   const clustersQuery = useQuery(accessQueries.clusterOptions(open && canViewClusters))
 
-  const defaultScopeType = canViewDelivery ? 'delivery' : 'platform'
-  const initialScopeType = editing?.scopeType ?? defaultScopeType
+  const defaultScopeType = fixedApplication || canViewDelivery ? 'delivery' : 'platform'
+  const initialScopeType = fixedApplication ? 'delivery' : (editing?.scopeType ?? defaultScopeType)
   const scopeType = Form.useWatch('scopeType', form) ?? initialScopeType
   const subjectType =
     Form.useWatch('subjectType', form) ?? editing?.subjectType ?? defaultSubjectType
@@ -131,19 +136,24 @@ export function ScopeGrantEditor({
     form.setFieldsValue(
       editing
         ? {
-            applicationIds: editing.applicationIds ?? [],
-            businessLineId: editing.businessLineId,
+            applicationIds: fixedApplication
+              ? [fixedApplication.id]
+              : (editing.applicationIds ?? []),
+            businessLineId: fixedApplication?.businessLineId ?? editing.businessLineId,
             clusterIds: editing.clusterIds ?? [],
+            effect: editing.effect,
             enabled: editing.enabled,
             environmentIds: editing.environmentIds ?? [],
             role: editing.role,
-            scopeType: editing.scopeType,
+            scopeType: fixedApplication ? 'delivery' : editing.scopeType,
             subjectId: fixedSubject?.id ?? editing.subjectId,
             subjectType: fixedSubject?.type ?? editing.subjectType,
           }
         : {
-            applicationIds: [],
+            applicationIds: fixedApplication ? [fixedApplication.id] : [],
+            businessLineId: fixedApplication?.businessLineId,
             clusterIds: [],
+            effect: 'allow',
             enabled: true,
             environmentIds: [],
             scopeType: defaultScopeType,
@@ -155,6 +165,8 @@ export function ScopeGrantEditor({
     defaultScopeType,
     defaultSubjectType,
     editing,
+    fixedApplication?.businessLineId,
+    fixedApplication?.id,
     fixedSubject?.id,
     fixedSubject?.type,
     form,
@@ -195,27 +207,33 @@ export function ScopeGrantEditor({
     )
       .sort()
       .map((value) => ({ label: value, value })),
-    editing?.businessLineId ? [editing.businessLineId] : [],
+    fixedApplication?.businessLineId
+      ? [fixedApplication.businessLineId]
+      : editing?.businessLineId
+        ? [editing.businessLineId]
+        : [],
   )
   const applicationOptions = withFallback(
     (applicationsQuery.data ?? [])
       .filter(
         (application) =>
-          !businessLineId ||
-          application.businessLineId === businessLineId ||
-          application.group === businessLineId ||
-          bindings.some(
-            (binding) =>
-              binding.applicationId === application.id &&
-              (binding.businessLineId === businessLineId ||
-                binding.applicationGroup === businessLineId),
-          ),
+          fixedApplication?.id === application.id ||
+          (!fixedApplication &&
+            (!businessLineId ||
+              application.businessLineId === businessLineId ||
+              application.group === businessLineId ||
+              bindings.some(
+                (binding) =>
+                  binding.applicationId === application.id &&
+                  (binding.businessLineId === businessLineId ||
+                    binding.applicationGroup === businessLineId),
+              ))),
       )
       .map((application) => ({
         label: optionLabel(application.name, application.id),
         value: application.id,
       })),
-    editing?.applicationIds,
+    fixedApplication ? [fixedApplication.id] : editing?.applicationIds,
   )
   const environmentOptions = withFallback(
     Array.from(
@@ -271,7 +289,7 @@ export function ScopeGrantEditor({
   const submit = async () => {
     try {
       const values = await form.validateFields()
-      onSubmit(buildScopeGrantPayload(values, editing, fixedSubject))
+      onSubmit(buildScopeGrantPayload(values, editing, fixedSubject, fixedApplication))
     } catch {
       return
     }
@@ -324,7 +342,7 @@ export function ScopeGrantEditor({
           <Segmented
             block
             className="soha-form-segmented"
-            disabled={Boolean(editing)}
+            disabled={Boolean(editing || fixedApplication)}
             options={scopeOptions}
             onChange={() =>
               form.setFieldsValue({
@@ -360,16 +378,19 @@ export function ScopeGrantEditor({
               rules={[{ required: true, message: '请选择业务范围' }]}
             >
               <Select
-                disabled={Boolean(editing) && !canViewDelivery}
+                disabled={Boolean(fixedApplication) || (Boolean(editing) && !canViewDelivery)}
                 showSearch={{ optionFilterProp: 'label' }}
                 options={businessLineOptions}
                 loading={applicationsQuery.isLoading || applicationEnvironmentsQuery.isLoading}
                 onChange={() => form.setFieldsValue({ applicationIds: [], environmentIds: [] })}
               />
             </Form.Item>
-            <Form.Item name="applicationIds" label="应用（留空为全部）">
+            <Form.Item
+              name="applicationIds"
+              label={fixedApplication ? '应用' : '应用（留空为全部）'}
+            >
               <Select
-                disabled={Boolean(editing) && !canViewDelivery}
+                disabled={Boolean(fixedApplication) || (Boolean(editing) && !canViewDelivery)}
                 mode="multiple"
                 maxTagCount="responsive"
                 showSearch={{ optionFilterProp: 'label' }}
@@ -378,7 +399,10 @@ export function ScopeGrantEditor({
                 onChange={() => form.setFieldValue('environmentIds', [])}
               />
             </Form.Item>
-            <Form.Item name="environmentIds" label="环境（留空为全部）">
+            <Form.Item
+              name="environmentIds"
+              label={fixedApplication ? '环境覆盖（留空为应用默认）' : '环境（留空为全部）'}
+            >
               <Select
                 disabled={Boolean(editing) && !canViewDelivery}
                 mode="multiple"
@@ -401,6 +425,19 @@ export function ScopeGrantEditor({
             showSearch={{ optionFilterProp: 'label' }}
             options={roleOptions}
             loading={rolesQuery.isLoading}
+          />
+        </Form.Item>
+        <Form.Item
+          name="effect"
+          label="授权效果"
+          rules={[{ required: true, message: '请选择授权效果' }]}
+        >
+          <Segmented
+            block
+            options={[
+              { label: '允许', value: 'allow' },
+              { label: '拒绝', value: 'deny' },
+            ]}
           />
         </Form.Item>
         <Form.Item name="enabled" label="启用" valuePropName="checked">

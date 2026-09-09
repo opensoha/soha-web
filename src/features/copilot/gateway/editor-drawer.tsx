@@ -275,6 +275,9 @@ function renderDrawerFields(
   clients: AIClient[],
   manifest?: GatewayManifest,
   upstreams: LLMUpstream[] = [],
+  canTestUpstream = false,
+  testingUpstream = false,
+  onTestUpstream?: () => void,
 ) {
   const clientOptions = clients.map((item) => ({
     label: `${item.name} (${item.id})`,
@@ -316,9 +319,6 @@ function renderDrawerFields(
     case 'relay-upstream':
       return (
         <>
-          <Form.Item name="id" label="上游 ID">
-            <Input disabled={!!drawer.record} placeholder="留空由后端生成" />
-          </Form.Item>
           <Form.Item name="name" label="名称" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
@@ -359,7 +359,22 @@ function renderDrawerFields(
           <Form.Item name="maxConcurrency" label="最大并发">
             <InputNumber min={0} precision={0} style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="supportedModels" label="支持模型">
+          <Form.Item
+            name="supportedModels"
+            label="支持模型"
+            extra={
+              <Button
+                type="link"
+                size="small"
+                disabled={!canTestUpstream}
+                loading={testingUpstream}
+                style={{ paddingInline: 0 }}
+                onClick={onTestUpstream}
+              >
+                测试连接并获取模型
+              </Button>
+            }
+          >
             <Select mode="tags" tokenSeparators={[',', ' ']} />
           </Form.Item>
           <Form.Item name="defaultHeadersJson" label="Default headers">
@@ -674,8 +689,11 @@ export interface GatewayEditorDrawerProps {
   manifest?: GatewayManifest
   upstreams: LLMUpstream[]
   saving: boolean
+  canTestUpstream: boolean
+  testingUpstream: boolean
   onClose: () => void
   onSubmit: (values: GatewayDrawerFormValues) => void
+  onTestUpstream: () => void
 }
 
 export function GatewayEditorDrawer({
@@ -686,8 +704,11 @@ export function GatewayEditorDrawer({
   manifest,
   upstreams,
   saving,
+  canTestUpstream,
+  testingUpstream,
   onClose,
   onSubmit,
+  onTestUpstream,
 }: GatewayEditorDrawerProps) {
   useEffect(() => {
     form.resetFields()
@@ -710,7 +731,15 @@ export function GatewayEditorDrawer({
       }
     >
       <Form form={form} layout="vertical" onFinish={onSubmit} initialValues={initialValues}>
-        {renderDrawerFields(drawer, clients, manifest, upstreams)}
+        {renderDrawerFields(
+          drawer,
+          clients,
+          manifest,
+          upstreams,
+          canTestUpstream,
+          testingUpstream,
+          onTestUpstream,
+        )}
       </Form>
     </Drawer>
   )

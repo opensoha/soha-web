@@ -1,5 +1,12 @@
 import type { components as SohaAPIComponents } from '@opensoha/contracts/gen/ts/sohaapi'
-import type { Ingress, Pod, Service, WorkloadCondition, WorkloadContainer } from '@/types/platform'
+import type {
+  Ingress,
+  Pod,
+  Service,
+  WorkloadCondition,
+  WorkloadContainer,
+  WorkloadRelation,
+} from '@/types/platform'
 
 type SohaAPISchemas = SohaAPIComponents['schemas']
 type ContractWorkflowNodeRun = SohaAPISchemas['WorkflowNodeRun']
@@ -267,7 +274,10 @@ export interface GitCommit extends ContractGitCommit {
 }
 
 export type ApplicationServiceKind =
-  'kubernetes_workload' | 'helm_release' | 'external_service' | 'job'
+  | 'kubernetes_workload'
+  | 'helm_release'
+  | 'external_service'
+  | 'job'
 
 export interface ApplicationServiceContainer extends ContractApplicationServiceContainer {
   id: string
@@ -659,7 +669,12 @@ export interface DeliveryApplicationDetail {
 }
 
 export type ApplicationDeliveryActionKind =
-  'build' | 'deploy' | 'build_deploy' | 'workflow' | 'verify' | 'rollback'
+  | 'build'
+  | 'deploy'
+  | 'build_deploy'
+  | 'workflow'
+  | 'verify'
+  | 'rollback'
 
 export interface ApplicationDeliveryActionRequest extends ContractApplicationDeliveryActionRequest {
   action: ApplicationDeliveryActionKind
@@ -810,6 +825,7 @@ export interface ApplicationWorkloadRuntimeDetail {
     selector?: Record<string, string>
     containers?: WorkloadContainer[]
     conditions?: WorkloadCondition[]
+    relatedResources?: WorkloadRelation[]
     allowedActions?: string[]
   }
   pods?: Pod[]

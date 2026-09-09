@@ -72,18 +72,22 @@ export function ReleaseBundlesPage() {
       ) : null}
       <div className="soha-overview-metric-grid">
         {summaryMetrics.map(({ key, ...item }) => (
-          <OverviewMetricCard key={key} {...item} />
+          <OverviewMetricCard key={key} {...item} loading={bundlesQuery.isLoading} />
         ))}
       </div>
       <DeliveryTable
         rowKey="id"
         refreshing={bundlesQuery.isFetching}
         onRefresh={() => void bundlesQuery.refetch()}
+        isError={bundlesQuery.isError}
+        errorDescription="暂时无法读取版本包记录。"
+        onRetry={() => void bundlesQuery.refetch()}
+        localSorting
         loading={bundlesQuery.isLoading}
         dataSource={bundles}
         columns={[
           {
-            title: 'Version',
+            title: '版本',
             dataIndex: 'version',
             render: (value: string, record: ReleaseBundle) => (
               <Space orientation="vertical" size={0}>
@@ -95,21 +99,21 @@ export function ReleaseBundlesPage() {
               </Space>
             ),
           },
-          { title: 'Application', dataIndex: 'applicationId' },
+          { title: '应用', dataIndex: 'applicationId' },
           {
-            title: 'Environment Binding',
+            title: '环境绑定',
             dataIndex: 'applicationEnvironmentId',
             render: (value: string) => value || '-',
           },
-          { title: 'Source', dataIndex: 'sourceType' },
+          { title: '来源', dataIndex: 'sourceType' },
           {
-            title: 'Artifact',
+            title: '交付物',
             dataIndex: 'artifactRef',
             render: (_: unknown, record: ReleaseBundle) => summarizeReleaseBundleArtifact(record),
           },
-          { title: 'Digest', dataIndex: 'artifactDigest', render: (value: string) => value || '-' },
+          { title: '摘要', dataIndex: 'artifactDigest', render: (value: string) => value || '-' },
           {
-            title: 'Status',
+            title: '状态',
             dataIndex: 'status',
             render: (value: string) => <StatusTag value={value} />,
           },
@@ -133,7 +137,7 @@ export function ReleaseBundlesPage() {
           },
           {
             ...tableColumnPresets.datetime,
-            title: 'Updated',
+            title: '更新时间',
             dataIndex: 'updatedAt',
             render: (value: string) => formatDateTime(value),
           },

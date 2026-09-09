@@ -30,14 +30,16 @@ describe('deliveryQueries', () => {
   it('uses the same normalized list filters in keys and API calls', async () => {
     const workflows = vi.spyOn(deliveryApi.workflows, 'list').mockResolvedValue([])
     const options = deliveryQueries.workflows.list(
-      { applicationId: ' app-1 ' },
+      { applicationId: ' app-1 ', limit: 200 },
       { refetchInterval: 5000 },
     )
 
-    expect(options.queryKey).toEqual(deliveryKeys.workflows.list({ applicationId: 'app-1' }))
+    expect(options.queryKey).toEqual(
+      deliveryKeys.workflows.list({ applicationId: 'app-1', limit: 200 }),
+    )
     expect(options.refetchInterval).toBe(5000)
     await executeQuery(options)
-    expect(workflows).toHaveBeenCalledWith({ applicationId: 'app-1' })
+    expect(workflows).toHaveBeenCalledWith({ applicationId: 'app-1', limit: 200 })
   })
 
   it('exposes a distinct platform environment catalog query', async () => {

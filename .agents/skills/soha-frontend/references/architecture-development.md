@@ -162,9 +162,6 @@ Co-locate tests with their ownership:
 - `page.test.tsx`: visible behavior, permission/scope states, actions, loading/empty/error states;
 - runtime boundary tests: verify a heavy module loads only after the relevant action or tab.
 
-Test names from removed aggregate files may remain temporarily when they describe a broad
-compatibility contract, but production aggregate route modules must not return.
-
 ## 7. CSS And Theme Ownership
 
 - Import capability CSS from its page or capability entry.
@@ -208,7 +205,7 @@ Do not weaken the checker or rewrite its baseline to conceal new debt.
 
 The Soha Web graph lives in `graphify-out/` relative to the `soha-web` repository.
 
-- Query the graph before broad architecture work.
+- Use the existing graph when it helps cross-module analysis; ordinary lookup does not require it.
 - Refresh the graph only for broad structural or dependency changes after source edits are
   stable and the worktree contents are understood.
 - Use `graphify update . --force` after intentional deletions or large moves so stale nodes are
@@ -232,9 +229,9 @@ npm test
 npm run test:coverage
 npm run check:routes
 npm run check:frontend-boundaries
-npm run check:bundle-budget
 npm run check:release-workflow
 npm run build
+npm run check:bundle-budget
 antd lint src --format json
 git diff --check
 ```

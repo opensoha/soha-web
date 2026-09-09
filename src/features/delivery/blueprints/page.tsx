@@ -1659,41 +1659,41 @@ export function DeliveryBlueprintsPage() {
       emptyDescription="新建模板后，可在右侧维护应用档案、构建源、发布计划和文件模板。"
       emptyTitle="暂无接入模板"
       getItemKey={(item) => item.id}
+      isError={blueprintsQuery.isError}
       isLoading={blueprintsQuery.isLoading}
       itemClassName="soha-delivery-blueprint-list__item"
       items={visibleListItems}
       searchPlaceholder="搜索接入模板"
       searchValue={searchText}
       onItemSelect={handleSelectListItem}
+      onRetry={() => void blueprintsQuery.refetch()}
       onSearchChange={setSearchText}
+      renderItemActions={(item) => (
+        <span className="soha-delivery-blueprint-list__item-actions">
+          <Switch
+            checked={item.enabled}
+            disabled={!canManage}
+            size="small"
+            onChange={(checked) => handleBlueprintEnabledChange(item, checked)}
+          />
+          <ManagementIconButton
+            aria-label="编辑模板"
+            icon={<EditOutlined />}
+            size="small"
+            tooltip="编辑"
+            onClick={() => {
+              handleSelectListItem(item)
+              setActiveTabKey('basic')
+            }}
+          />
+        </span>
+      )}
       renderItem={(item) => (
         <>
           <span className="soha-delivery-blueprint-list__item-head">
             <span className="soha-delivery-blueprint-list__item-main">
               <strong>{item.name}</strong>
               <Text type="secondary">{item.key}</Text>
-            </span>
-            <span
-              className="soha-delivery-blueprint-list__item-actions"
-              onClick={(event) => event.stopPropagation()}
-              onKeyDown={(event) => event.stopPropagation()}
-            >
-              <Switch
-                checked={item.enabled}
-                disabled={!canManage}
-                size="small"
-                onChange={(checked) => handleBlueprintEnabledChange(item, checked)}
-              />
-              <ManagementIconButton
-                aria-label="编辑模板"
-                icon={<EditOutlined />}
-                size="small"
-                tooltip="编辑"
-                onClick={() => {
-                  handleSelectListItem(item)
-                  setActiveTabKey('basic')
-                }}
-              />
             </span>
           </span>
           <span className="soha-delivery-blueprint-list__item-meta">

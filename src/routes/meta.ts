@@ -43,7 +43,7 @@ const WORKBENCH_DEFAULT_PATHS = {
   home: '/portal',
   platform: '/',
   compute: '/compute',
-  delivery: '/applications',
+  delivery: '/delivery/overview',
   ai: '/ai-workbench/overview',
   monitoring: '/monitoring-workbench',
   settings: '/settings/overview',
@@ -518,15 +518,11 @@ function sortRuntimeMenuTree(items: RuntimeMenuNode[]): RuntimeMenuNode[] {
       if (left.sortOrder !== right.sortOrder) return left.sortOrder - right.sortOrder
       return left.path.localeCompare(right.path)
     })
-    .map(
-      (item): RuntimeMenuNode => ({
-        ...item,
-        children:
-          item.children && item.children.length > 0
-            ? sortRuntimeMenuTree(item.children)
-            : undefined,
-      }),
-    )
+    .map((item): RuntimeMenuNode => ({
+      ...item,
+      children:
+        item.children && item.children.length > 0 ? sortRuntimeMenuTree(item.children) : undefined,
+    }))
 }
 
 const APPLICATION_SECTION_ORDER: Record<string, number> = {
@@ -537,8 +533,6 @@ const APPLICATION_SECTION_ORDER: Record<string, number> = {
   'delivery-testing': 60,
   'delivery-analysis': 70,
   'release-bundles': 10,
-  workflows: 20,
-  'execution-tasks': 30,
   releases: 40,
   'delivery-blueprints': 10,
   'build-templates': 20,
@@ -554,8 +548,6 @@ const APPLICATION_MENU_SECTION_OVERRIDES: Record<string, string> = {
   'delivery-testing': 'delivery',
   'delivery-analysis': 'delivery',
   'release-bundles': 'delivery-records',
-  workflows: 'delivery-records',
-  'execution-tasks': 'delivery-records',
   releases: 'delivery-records',
   'delivery-blueprints': 'delivery-platform',
   'build-templates': 'delivery-platform',

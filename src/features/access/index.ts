@@ -10,4 +10,5 @@ export {
   invalidateAccessUsers,
 } from './shared/mutations'
 export { accessQueries } from './shared/queries'
+export { ScopeGrantManager } from './shared/scope-grant-manager'
 export type * from './shared/types'

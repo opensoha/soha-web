@@ -41,7 +41,36 @@ describe('renderCompactMappedTags', () => {
     expect(container.textContent).toContain('+3')
     expect(container.querySelector('[aria-label="查看 5 个动作"]')).not.toBeNull()
     expect(container.textContent).not.toContain('watch')
+    expect(container.querySelector('.soha-metadata-tag.ant-tag-processing')).not.toBeNull()
+    expect(container.querySelector('.soha-access-compact-tag-more.ant-tag-default')).not.toBeNull()
 
+    await act(async () => root.unmount())
+  })
+
+  it('keeps role and organization colors in both summaries and expanded collections', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    for (const [tone, label] of [
+      ['purple', '角色'],
+      ['cyan', '组织'],
+    ] as const) {
+      await act(async () => {
+        root.render(renderCompactMappedTags(['a', 'b'], { a: '显示名称' }, '-', 1, label, tone))
+      })
+      expect(container.querySelector(`.soha-metadata-tag.ant-tag-${tone}`)?.textContent).toBe(
+        '显示名称',
+      )
+      await act(async () => {
+        container.querySelector<HTMLButtonElement>('button')?.click()
+      })
+      expect(
+        document.querySelectorAll(`.soha-access-permission-popover-tag.ant-tag-${tone}`),
+      ).toHaveLength(2)
+      await act(async () => {
+        root.render(null)
+      })
+    }
     await act(async () => root.unmount())
   })
 

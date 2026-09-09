@@ -1,14 +1,4 @@
 @import './styles/base.css';
-@import './styles/responsive.css';
-
-.soha-platform-overview-page {
-  gap: 12px;
-}
-
-.soha-platform-overview-page .soha-overview-summary-grid {
-  grid-template-columns: minmax(0, 1.18fr) minmax(300px, 0.82fr);
-  align-items: start;
-}
 
 .soha-platform-overview-page .soha-overview-panel-card {
   min-width: 0;
@@ -193,10 +183,6 @@
   color: var(--soha-text-primary);
 }
 
-.soha-platform-operations-grid {
-  grid-template-columns: minmax(0, 1.18fr) minmax(340px, 0.82fr) !important;
-}
-
 .soha-platform-ops-split {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -366,16 +352,6 @@
   color: var(--soha-text-tertiary);
 }
 
-@media (max-width: 960px) {
-  .soha-platform-overview-page .soha-overview-summary-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .soha-platform-overview-page .soha-platform-operations-grid {
-    grid-template-columns: minmax(0, 1fr) !important;
-  }
-}
-
 @media (max-width: 768px) {
   .soha-platform-ops-split {
     grid-template-columns: minmax(0, 1fr);
@@ -435,7 +411,6 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .soha-platform-operations-grid,
   .soha-platform-ops-split,
   .soha-platform-resource-searchbar {
     grid-template-columns: minmax(0, 1fr) !important;

@@ -1,6 +1,7 @@
 import { queryOptions } from '@tanstack/react-query'
 import {
   systemApi,
+  type AnnouncementReceiptFilters,
   type AuditLogFilters,
   type OperationLogFilters,
   type SystemEndpointScope,
@@ -19,6 +20,16 @@ export const systemQueries = {
     queryOptions({
       queryKey: systemKeys.announcements.list(),
       queryFn: systemApi.announcements.list,
+    }),
+  announcementReceipts: (
+    announcementId: string,
+    filters: AnnouncementReceiptFilters = {},
+    enabled = true,
+  ) =>
+    queryOptions({
+      queryKey: systemKeys.announcements.receipts(announcementId, filters),
+      queryFn: () => systemApi.announcements.receipts(announcementId, filters),
+      enabled,
     }),
   menus: () =>
     queryOptions({

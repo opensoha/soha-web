@@ -6,6 +6,7 @@ import { computeRoutes } from '@/features/compute/routes'
 import { deliveryRoutes } from '@/features/delivery/routes'
 import { identityRouteManifests } from '@/features/identity/routes'
 import { observabilityRouteManifests } from '@/features/observability/routes'
+import { networkAccessRoutes } from '@/features/network-access/routes'
 import { platformRouteManifests, platformShellRoutes } from '@/features/platform/routes'
 import { pluginRoutes } from '@/features/plugins/routes'
 import { providerPortalRoutes } from '@/features/provider-portal/routes'
@@ -24,6 +25,7 @@ export const featureRouteManifests = [
   ...platformRouteManifests,
   computeRoutes,
   deliveryRoutes,
+  networkAccessRoutes,
   ...observabilityRouteManifests,
   providerPortalRoutes,
   pluginRoutes,

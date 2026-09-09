@@ -48,6 +48,7 @@ export interface AdminTableProps {
   rowSelection?: any
   shellClassName?: string
   tableSize?: 'large' | 'middle' | 'small'
+  tableLayout?: 'auto' | 'fixed'
   columnSettingPlacement?: 'toolbar' | 'header' | 'outside' | 'hidden'
   columnSettingIconOnly?: boolean
   scroll?: {
@@ -348,6 +349,7 @@ export function AdminTable({
             ((total: number, range: [number, number]) =>
               DEFAULT_PAGINATION_SUMMARY(localeCode, total, range))),
         onChange: (nextPage: number, nextPageSize: number) => {
+          inheritedPagination?.onChange?.(nextPage, nextPageSize)
           if (nextPageSize !== currentPageSize) {
             setCurrentPage(nextPage)
             setCurrentPageSize(nextPageSize)

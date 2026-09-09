@@ -9,6 +9,7 @@ describe('formatStatusLabel', () => {
     expect(formatStatusLabel('unavailable', 'zh_CN')).toBe('不可用')
     expect(formatStatusLabel('agent_registered', 'zh_CN')).toBe('Agent 已注册')
     expect(formatStatusLabel('queued', 'zh_CN')).toBe('已排队')
+    expect(formatStatusLabel('published', 'zh_CN')).toBe('已发布')
     expect(formatStatusLabel('attention', 'zh_CN')).toBe('需关注')
     expect(formatStatusLabel('normal', 'en_US')).toBe('Normal')
     expect(formatStatusLabel('reserved', 'zh_CN')).toBe('已预留')

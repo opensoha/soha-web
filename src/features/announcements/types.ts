@@ -1,7 +1,6 @@
 export interface AnnouncementInboxItem {
   id: string
   title: string
-  summary: string
   content: string
   level: string
   status: string

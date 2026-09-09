@@ -178,12 +178,21 @@ export function StatusTag({ label, value }: { label?: ReactNode; value?: null | 
 export function MetadataTag({
   label,
   tone = 'default',
+  className,
+  title,
 }: {
   label: ReactNode
   tone?: MetadataTagTone
+  className?: string
+  title?: string
 }) {
   return (
-    <Tag className="soha-metadata-tag" color={resolveAntdTagColor(tone)} variant="filled">
+    <Tag
+      className={['soha-metadata-tag', className].filter(Boolean).join(' ')}
+      title={title}
+      color={resolveAntdTagColor(tone)}
+      variant="filled"
+    >
       {label}
     </Tag>
   )

@@ -81,7 +81,6 @@ function AnnouncementList({
               {levelTag(item.level, localeCode)}
             </Space>
             <Space orientation="vertical" size={4} style={{ width: '100%' }}>
-              {item.summary ? <Text>{item.summary}</Text> : null}
               <Paragraph
                 style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}
                 ellipsis={{
@@ -269,7 +268,6 @@ export function AnnouncementBell() {
               {levelTag(modalItem.level, localeCode)}
               <Text type="secondary">{formatAnnouncementTime(modalItem)}</Text>
             </Space>
-            {modalItem.summary ? <Text>{modalItem.summary}</Text> : null}
             <Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>
               {modalItem.content}
             </Paragraph>

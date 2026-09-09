@@ -482,10 +482,9 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
             rules={[{ required: true, message: '请选择环境' }]}
           >
             <Select
-              showSearch
+              showSearch={{ optionFilterProp: 'label' }}
               disabled={Boolean(state.editingBinding)}
               loading={state.environmentCatalogQuery.isLoading}
-              optionFilterProp="label"
               options={environmentOptions}
               placeholder="选择平台环境"
               onChange={(environmentId) => {
@@ -510,9 +509,8 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
             rules={[{ required: true, message: '请选择集群' }]}
           >
             <Select
-              showSearch
+              showSearch={{ optionFilterProp: 'label' }}
               loading={state.clustersQuery.isLoading}
-              optionFilterProp="label"
               placeholder="选择部署集群"
               options={(state.clustersQuery.data ?? []).map((item) => ({
                 value: item.id,
@@ -529,10 +527,9 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
             rules={[{ required: true, message: '请选择 Namespace' }]}
           >
             <Select
-              showSearch
+              showSearch={{ optionFilterProp: 'label' }}
               disabled={!state.selectedClusterId}
               loading={state.namespacesQuery.isLoading}
-              optionFilterProp="label"
               placeholder="选择 Namespace"
               options={(state.namespacesQuery.data ?? []).map((item) => ({
                 value: item.name,
@@ -550,10 +547,9 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
               mode="multiple"
               disabled={!state.selectedClusterId || !state.selectedNamespace}
               loading={state.targetCandidatesQuery.isFetching}
-              optionFilterProp="label"
               options={targetOptions}
               placeholder="选择该环境要交付的真实 Workload"
-              showSearch
+              showSearch={{ optionFilterProp: 'label' }}
             />
           </Form.Item>
           <Form.Item
@@ -562,9 +558,8 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
             rules={[{ required: true, message: '请选择镜像仓库' }]}
           >
             <Select
-              showSearch
+              showSearch={{ optionFilterProp: 'label' }}
               loading={state.registriesQuery.isLoading}
-              optionFilterProp="label"
               placeholder="选择该环境默认使用的镜像仓库"
               options={(state.registriesQuery.data ?? []).map((item) => ({
                 value: item.id,

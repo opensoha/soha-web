@@ -561,6 +561,13 @@ describe('settings ai page rendering', () => {
     expect(container.textContent).toContain('失败 1')
     expect(container.textContent).toContain('审计记录12')
     expect(container.textContent).toContain('保留 90 天')
+    expect(container.querySelectorAll('.soha-overview-section-bar')).toHaveLength(0)
+    expect(
+      container.querySelectorAll('.soha-overview-panel-card > .ant-card-head'),
+    ).toHaveLength(2)
+    expect(container.querySelectorAll('.soha-overview-chip-grid')).toHaveLength(2)
+    expect(container.querySelectorAll('.soha-overview-metric-card.is-default')).toHaveLength(4)
+    expect(container.querySelector('.soha-settings-overview-chip-grid')).toBeNull()
     expect(container.textContent).not.toContain('常用入口')
     expect(container.textContent).not.toContain('品牌配置')
     expect(container.textContent).not.toContain('认证与品牌')

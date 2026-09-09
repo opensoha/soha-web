@@ -1,7 +1,3 @@
-.soha-identity-overview-chip-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
 .soha-identity-overview-page .soha-overview-summary-grid {
   align-items: stretch;
 }
@@ -23,10 +19,4 @@
   position: absolute;
   inset: 14px;
   overflow-y: auto;
-}
-
-@media (max-width: 760px) {
-  .soha-identity-overview-chip-grid {
-    grid-template-columns: 1fr;
-  }
 }

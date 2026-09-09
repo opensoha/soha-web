@@ -831,41 +831,41 @@ export function BuildTemplatesPage() {
       emptyDescription="新建模板后，可在右侧维护 Dockerfile、命令和变量。"
       emptyTitle="暂无构建模板"
       getItemKey={(item) => item.id}
+      isError={templatesQuery.isError}
       isLoading={templatesQuery.isLoading}
       itemClassName="soha-build-template-list__item"
       items={visibleListItems}
       searchPlaceholder="搜索构建模板"
       searchValue={searchText}
       onItemSelect={handleSelectListItem}
+      onRetry={() => void templatesQuery.refetch()}
       onSearchChange={setSearchText}
+      renderItemActions={(item) => (
+        <span className="soha-build-template-list__item-actions">
+          <Switch
+            checked={item.enabled}
+            disabled={item.isDraft ? !canCreate : !canUpdate}
+            size="small"
+            onChange={(checked) => handleTemplateEnabledChange(item, checked)}
+          />
+          <ManagementIconButton
+            aria-label="编辑构建模板"
+            icon={<EditOutlined />}
+            size="small"
+            tooltip="编辑"
+            onClick={() => {
+              handleSelectListItem(item)
+              setActiveTabKey('basic')
+            }}
+          />
+        </span>
+      )}
       renderItem={(item) => (
         <>
           <span className="soha-build-template-list__item-head">
             <span className="soha-build-template-list__item-main">
               <strong>{item.name}</strong>
               <Text type="secondary">{item.key}</Text>
-            </span>
-            <span
-              className="soha-build-template-list__item-actions"
-              onClick={(event) => event.stopPropagation()}
-              onKeyDown={(event) => event.stopPropagation()}
-            >
-              <Switch
-                checked={item.enabled}
-                disabled={item.isDraft ? !canCreate : !canUpdate}
-                size="small"
-                onChange={(checked) => handleTemplateEnabledChange(item, checked)}
-              />
-              <ManagementIconButton
-                aria-label="编辑构建模板"
-                icon={<EditOutlined />}
-                size="small"
-                tooltip="编辑"
-                onClick={() => {
-                  handleSelectListItem(item)
-                  setActiveTabKey('basic')
-                }}
-              />
             </span>
           </span>
           <span className="soha-build-template-list__item-meta">

@@ -132,6 +132,10 @@ vi.mock('@/features/system/menu-schema', async () => {
       if (key === 'observe-data') return '数据与集成'
       if (key === 'dashboards') return '仪表盘'
       if (key === 'alerting') return '告警与响应'
+      if (key === 'endpoint') return '终端'
+      if (key === 'network') return '网络准入'
+      if (key === 'vpn') return '零信任网络与 VPN'
+      if (key === 'proxy') return '代理'
       return key
     },
   }
@@ -690,6 +694,159 @@ describe('app layout workspace navigation', () => {
     expect(container.textContent).toContain('值班协同')
     expect(container.querySelector('.ant-menu-item-selected')?.textContent).toContain('日志')
     expect(container.querySelector('[data-testid="platform-scope-trigger"]')).toBeNull()
+  })
+
+  it('keeps admission settings as one page and groups shared access under zero trust and VPN', async () => {
+    const container = await renderWithProviders('/network-access/gateways', {
+      permissionKeys: [
+        'network_access.endpoint_devices.view',
+        'network_access.sites.view',
+        'network_access.enrollments.view',
+        'network_access.gateways.view',
+        'network_access.telemetry.view',
+        'network_access.mihomo_profiles.view',
+      ],
+      visibleMenuIds: [
+        'identity',
+        'network-access-devices',
+        'network-access-user-admission',
+        'network-access-settings',
+        'network-access-sites',
+        'network-access-site-profile-bindings',
+        'network-access-sessions',
+        'network-access-telemetry',
+        'network-access-gateways',
+        'network-access-mihomo-profiles',
+      ],
+      visibleMenus: [
+        {
+          id: 'identity',
+          path: '/internal-workbench',
+          labelZh: '内网工作台',
+          labelEn: 'Internal Workbench',
+          iconKey: 'shield',
+          section: 'admin',
+          sortOrder: 220,
+          enabled: true,
+        },
+        {
+          id: 'network-access-devices',
+          parentId: 'identity',
+          path: '/network-access/devices',
+          labelZh: '终端资产',
+          labelEn: 'Endpoint Assets',
+          iconKey: 'desktop',
+          section: 'endpoint',
+          sortOrder: 10,
+          enabled: true,
+        },
+        {
+          id: 'network-access-user-admission',
+          parentId: 'identity',
+          path: '/network-access/user-admission',
+          labelZh: '用户入网',
+          labelEn: 'User Admission',
+          iconKey: 'user',
+          section: 'network',
+          sortOrder: 10,
+          enabled: true,
+        },
+        {
+          id: 'network-access-settings',
+          parentId: 'identity',
+          path: '/network-access/settings',
+          labelZh: '入网设置',
+          labelEn: 'Admission Settings',
+          iconKey: 'settings',
+          section: 'network',
+          sortOrder: 20,
+          enabled: true,
+        },
+        {
+          id: 'network-access-sites',
+          parentId: 'identity',
+          path: '/network-access/sites',
+          labelZh: '站点',
+          labelEn: 'Sites',
+          iconKey: 'globe',
+          section: 'vpn',
+          sortOrder: 10,
+          enabled: true,
+        },
+        {
+          id: 'network-access-site-profile-bindings',
+          parentId: 'identity',
+          path: '/network-access/site-profile-bindings',
+          labelZh: '接入等级',
+          labelEn: 'Access Levels',
+          iconKey: 'shield',
+          section: 'vpn',
+          sortOrder: 50,
+          enabled: true,
+        },
+        {
+          id: 'network-access-sessions',
+          parentId: 'identity',
+          path: '/network-access/sessions',
+          labelZh: '会话',
+          labelEn: 'Sessions',
+          iconKey: 'activity',
+          section: 'vpn',
+          sortOrder: 80,
+          enabled: true,
+        },
+        {
+          id: 'network-access-telemetry',
+          parentId: 'identity',
+          path: '/network-access/telemetry',
+          labelZh: '遥测',
+          labelEn: 'Telemetry',
+          iconKey: 'gauge',
+          section: 'vpn',
+          sortOrder: 100,
+          enabled: true,
+        },
+        {
+          id: 'network-access-gateways',
+          parentId: 'identity',
+          path: '/network-access/gateways',
+          labelZh: '网关',
+          labelEn: 'Gateways',
+          iconKey: 'network',
+          section: 'vpn',
+          sortOrder: 40,
+          enabled: true,
+        },
+        {
+          id: 'network-access-mihomo-profiles',
+          parentId: 'identity',
+          path: '/network-access/mihomo-profiles',
+          labelZh: '代理隧道',
+          labelEn: 'Proxy Tunnels',
+          iconKey: 'link',
+          section: 'proxy',
+          sortOrder: 10,
+          enabled: true,
+        },
+      ],
+    })
+
+    expect(
+      Array.from(container.querySelectorAll('.ant-menu-item-group-title')).map((item) =>
+        item.textContent?.trim(),
+      ),
+    ).toEqual(['终端', '网络准入', '零信任网络与 VPN', '代理'])
+    expect(container.querySelector('.ant-menu-item-selected')?.textContent).toContain('网关')
+    expect(container.textContent).toContain('终端资产')
+    expect(container.textContent).toContain('用户入网')
+    expect(container.querySelector('.ant-menu-submenu-title')).toBeNull()
+    expect(container.textContent).toContain('入网设置')
+    expect(container.textContent).toContain('站点')
+    expect(container.textContent).toContain('接入等级')
+    expect(container.textContent).toContain('会话')
+    expect(container.textContent).toContain('遥测')
+    expect(container.textContent).not.toContain('RADIUS 服务')
+    expect(container.textContent).toContain('代理隧道')
   })
 
   it('switches the left nav into system workspace mode while visiting system pages', async () => {

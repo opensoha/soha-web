@@ -107,12 +107,15 @@ interface ManagementSearchableListPaneProps<T> {
   emptyDescription?: ReactNode
   emptyTitle?: ReactNode
   getItemKey: (item: T) => string
+  isError?: boolean
   isLoading?: boolean
   itemClassName?: string
   items: T[]
   onItemSelect: (item: T) => void
+  onRetry?: () => void
   onSearchChange: (value: string) => void
   renderItem: (item: T, state: { active: boolean }) => ReactNode
+  renderItemActions?: (item: T, state: { active: boolean }) => ReactNode
   searchPlaceholder?: string
   searchValue: string
 }
@@ -614,12 +617,15 @@ export function ManagementSearchableListPane<T>({
   emptyDescription,
   emptyTitle,
   getItemKey,
+  isError = false,
   isLoading = false,
   itemClassName,
   items,
   onItemSelect,
+  onRetry,
   onSearchChange,
   renderItem,
+  renderItemActions,
   searchPlaceholder,
   searchValue,
 }: ManagementSearchableListPaneProps<T>) {
@@ -638,7 +644,22 @@ export function ManagementSearchableListPane<T>({
       />
       <div className="soha-management-searchable-list-pane__items">
         {isLoading ? <ManagementState bordered={false} compact kind="loading" /> : null}
-        {!isLoading && items.length === 0 ? (
+        {!isLoading && isError ? (
+          <ManagementState
+            bordered={false}
+            compact
+            actions={
+              onRetry ? (
+                <Button size="small" onClick={onRetry}>
+                  {localeText(localeCode, '重试', 'Retry')}
+                </Button>
+              ) : undefined
+            }
+            kind="error"
+            title={localeText(localeCode, '加载失败', 'Failed to load')}
+          />
+        ) : null}
+        {!isLoading && !isError && items.length === 0 ? (
           <ManagementState
             bordered={false}
             compact
@@ -647,7 +668,7 @@ export function ManagementSearchableListPane<T>({
             title={resolvedEmptyTitle}
           />
         ) : null}
-        {!isLoading
+        {!isLoading && !isError
           ? items.map((item) => {
               const itemKey = getItemKey(item)
               const active = itemKey === activeKey
@@ -656,20 +677,24 @@ export function ManagementSearchableListPane<T>({
                   className={classNames(
                     'soha-management-searchable-list-pane__item',
                     itemClassName,
+                    renderItemActions && 'has-actions',
                     active && 'is-active',
                   )}
                   key={itemKey}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => onItemSelect(item)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault()
-                      onItemSelect(item)
-                    }
-                  }}
                 >
-                  {renderItem(item, { active })}
+                  <button
+                    aria-pressed={active}
+                    className="soha-management-searchable-list-pane__item-select"
+                    type="button"
+                    onClick={() => onItemSelect(item)}
+                  >
+                    {renderItem(item, { active })}
+                  </button>
+                  {renderItemActions ? (
+                    <span className="soha-management-searchable-list-pane__item-actions">
+                      {renderItemActions(item, { active })}
+                    </span>
+                  ) : null}
                 </div>
               )
             })

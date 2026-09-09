@@ -496,17 +496,42 @@
 }
 
 .soha-management-searchable-list-pane__item {
+  position: relative;
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  border: 1px solid var(--soha-border-color);
+  border-radius: var(--soha-radius-control, 6px);
+  background: var(--soha-fill-weak);
+  color: var(--soha-text-primary);
+}
+
+.soha-management-searchable-list-pane__item-select {
   display: flex;
   width: 100%;
   flex-direction: column;
   gap: 8px;
   padding: 12px;
-  border: 1px solid var(--soha-border-color);
-  border-radius: var(--soha-radius-control, 6px);
-  background: var(--soha-fill-weak);
-  color: var(--soha-text-primary);
+  border: 0;
+  background: transparent;
+  color: inherit;
   cursor: pointer;
+  font: inherit;
   text-align: left;
+}
+
+.soha-management-searchable-list-pane__item.has-actions
+  .soha-management-searchable-list-pane__item-select {
+  padding-inline-end: 84px;
+}
+
+.soha-management-searchable-list-pane__item-actions {
+  position: absolute;
+  inset-block-start: 12px;
+  inset-inline-end: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .soha-management-searchable-list-pane__item:hover {
@@ -519,9 +544,9 @@
   background: var(--soha-list-item-active-bg);
 }
 
-.soha-management-searchable-list-pane__item:focus-visible {
+.soha-management-searchable-list-pane__item-select:focus-visible {
   outline: 2px solid var(--soha-focus-ring);
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
 
 .soha-template-designer-shell {
@@ -552,12 +577,6 @@
   background: var(--soha-data-panel-bg);
 }
 
-.soha-management-table-shell .soha-admin-table .ant-table-thead > tr > th,
-.soha-management-table-shell .soha-admin-table .ant-table-tbody > tr > td {
-  padding-top: 7px;
-  padding-bottom: 7px;
-}
-
 .soha-cluster-detail-page .soha-management-detail-header {
   padding-block: 8px;
 }
@@ -574,22 +593,6 @@
 .soha-workloads-overview-page .soha-management-table-shell .soha-admin-table .ant-table-pagination {
   min-height: 30px;
   padding: 4px 0;
-}
-
-.soha-workloads-overview-page
-  .soha-management-table-shell
-  .soha-admin-table
-  .ant-table-thead
-  > tr
-  > th,
-.soha-workloads-overview-page
-  .soha-management-table-shell
-  .soha-admin-table
-  .ant-table-tbody
-  > tr
-  > td {
-  padding-top: 6px;
-  padding-bottom: 6px;
 }
 
 @media (max-width: 640px) {

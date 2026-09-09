@@ -629,7 +629,6 @@
   white-space: nowrap;
 }
 
-.soha-provider-portal-home .soha-portal-announcement-summary.ant-typography,
 .soha-provider-portal-home .soha-portal-announcement-content.ant-typography {
   margin: 0;
   color: var(--soha-text-secondary);

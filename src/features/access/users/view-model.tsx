@@ -1,4 +1,5 @@
-import { Space, Tag } from 'antd'
+import { Space } from 'antd'
+import { MetadataTag } from '@/components/status-tag'
 import type { DataNode } from 'antd/es/tree'
 import type { AccessTeam, AccessUser } from '../shared/types'
 import { getOrganizationLabel, getOrganizationPathLabel } from '../shared/utils'
@@ -51,7 +52,7 @@ export function buildOrganizationTree(
       title: (
         <Space size={6} className="soha-org-tree-title">
           <span>{getOrganizationLabel(item)}</span>
-          <Tag>{userCountByOrg.get(item.id) ?? item.userCount ?? 0}</Tag>
+          <MetadataTag label={userCountByOrg.get(item.id) ?? item.userCount ?? 0} />
         </Space>
       ),
       children: [],
@@ -81,9 +82,7 @@ export function buildOrganizationTree(
       title: (
         <Space size={6} className="soha-org-tree-title">
           <span>全部组织</span>
-          <Tag>
-            {userCountByOrg.get(ORG_ALL_KEY) ?? 0}
-          </Tag>
+          <MetadataTag label={userCountByOrg.get(ORG_ALL_KEY) ?? 0} />
         </Space>
       ),
       children: roots.map(trimEmptyChildren),
@@ -98,19 +97,4 @@ export function organizationMatchesSelection(
 ) {
   if (!selectedOrgId || selectedOrgId === ORG_ALL_KEY) return true
   return user.teams?.some((teamID) => scopedOrganizationIds.has(teamID)) ?? false
-}
-
-export function renderMappedTags(
-  values: string[],
-  labelMap: Record<string, string>,
-  emptyText = '-',
-) {
-  if (!values?.length) return emptyText
-  return (
-    <Space wrap size={4}>
-      {values.map((value) => (
-        <Tag key={value}>{labelMap[value] || value}</Tag>
-      ))}
-    </Space>
-  )
 }

@@ -46,6 +46,25 @@ export interface GatewayToolInvocationValues {
   secretRefs?: Array<{ alias?: string; ref?: string }>
 }
 
+function relayUpstreamPayload(values: GatewayDrawerFormValues) {
+  return {
+    name: values.name,
+    providerKind: values.providerKind,
+    baseUrl: values.baseUrl,
+    apiKey: values.apiKey || undefined,
+    status: values.status,
+    priority: firstNumber(values, 'priority') ?? 100,
+    weight: firstNumber(values, 'weight') ?? 100,
+    timeoutSeconds: firstNumber(values, 'timeoutSeconds') ?? 120,
+    streamTimeoutSeconds: firstNumber(values, 'streamTimeoutSeconds') ?? 300,
+    maxConcurrency: firstNumber(values, 'maxConcurrency') ?? 0,
+    supportedModels: values.supportedModels ?? [],
+    defaultHeaders: parseJsonObjectField(values.defaultHeadersJson, 'Default headers'),
+    proxyUrl: values.proxyUrl || undefined,
+    metadata: parseJsonObjectField(values.metadataJson, 'Metadata'),
+  }
+}
+
 export function buildGatewayToolInvocation(
   toolName: string,
   values: GatewayToolInvocationValues,
@@ -95,23 +114,7 @@ export async function upsertGatewayResource(drawer: DrawerState, values: Gateway
       return id ? gatewayApi.clients.update(id, payload) : gatewayApi.clients.create(payload)
     }
     case 'relay-upstream': {
-      const payload = {
-        id: values.id,
-        name: values.name,
-        providerKind: values.providerKind,
-        baseUrl: values.baseUrl,
-        apiKey: values.apiKey || undefined,
-        status: values.status,
-        priority: firstNumber(values, 'priority') ?? 100,
-        weight: firstNumber(values, 'weight') ?? 100,
-        timeoutSeconds: firstNumber(values, 'timeoutSeconds') ?? 120,
-        streamTimeoutSeconds: firstNumber(values, 'streamTimeoutSeconds') ?? 300,
-        maxConcurrency: firstNumber(values, 'maxConcurrency') ?? 0,
-        supportedModels: values.supportedModels ?? [],
-        defaultHeaders: parseJsonObjectField(values.defaultHeadersJson, 'Default headers'),
-        proxyUrl: values.proxyUrl || undefined,
-        metadata: parseJsonObjectField(values.metadataJson, 'Metadata'),
-      }
+      const payload = relayUpstreamPayload(values)
       return id
         ? gatewayApi.relay.updateUpstream(id, payload)
         : gatewayApi.relay.createUpstream(payload)
@@ -259,6 +262,9 @@ export function disableGatewayUpstream(record: LLMUpstream) {
 }
 
 export const testGatewayUpstream = (record: LLMUpstream) => gatewayApi.relay.testUpstream(record.id)
+
+export const testGatewayUpstreamDraft = (values: GatewayDrawerFormValues) =>
+  gatewayApi.relay.testUpstreamDraft(relayUpstreamPayload(values))
 
 export function decideGatewayApproval(input: {
   action: 'approve' | 'reject' | 'cancel'

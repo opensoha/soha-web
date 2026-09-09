@@ -210,7 +210,7 @@ export function PlatformOperationsPanel({
   }
 
   return (
-    <div className="soha-overview-summary-grid soha-platform-operations-grid">
+    <div className="soha-overview-summary-grid">
       <Card
         className="soha-overview-panel-card"
         title={localeCode === 'zh_CN' ? '容量与治理门禁' : 'Capacity & Governance'}

@@ -80,7 +80,7 @@
 .soha-delivery-workbench-ai-card.ant-card {
   height: 100%;
   border-color: var(--soha-border-color);
-  border-radius: 8px;
+  border-radius: var(--soha-radius-panel);
   box-shadow: none;
 }
 

@@ -1,7 +1,8 @@
-import { HistoryOutlined, LinkOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import { PlusOutlined } from '@ant-design/icons'
 import type { TableColumnsType } from 'antd'
 import { Button, DatePicker, Descriptions, Input, Select, Space, Tabs } from 'antd'
 import { AdminTable } from '@/components/admin-table'
+import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementQueryField,
   ManagementQueryPanel,
@@ -45,7 +46,6 @@ export interface GatewayRelaySectionProps {
   rankingColumns: TableColumnsType<{ key: string; count: number }>
   ranking: Array<{ key: string; count: number }>
   metricsLoading: boolean
-  metricsFetching: boolean
   recentErrors: LLMCallLog[]
   modelCallColumns: TableColumnsType<LLMCallLog>
   modelCalls: LLMCallLog[]
@@ -79,7 +79,6 @@ export interface GatewayRelaySectionProps {
   onModelRouteUpstreamFilterChange: (value: string) => void
   onRefreshModelRoutes: () => void
   onCreateModelRoute: () => void
-  onRefreshAll: () => void
   onRefreshModelCalls: () => void
   expandedErrorRowRender: (record: LLMCallLog) => React.ReactNode
   expandedModelCallRowRender: (record: LLMCallLog) => React.ReactNode
@@ -118,40 +117,6 @@ export function GatewayRelaySection(props: GatewayRelaySectionProps) {
                   { key: 'cache', label: 'Cache', children: props.metrics.cache },
                 ]}
               />
-              <Space wrap>
-                <Button
-                  size="small"
-                  icon={<LinkOutlined />}
-                  onClick={() => props.onTabChange('upstreams')}
-                >
-                  上游管理
-                </Button>
-                <Button
-                  size="small"
-                  icon={<LinkOutlined />}
-                  onClick={() => props.onTabChange('model-routes')}
-                >
-                  模型路由
-                </Button>
-                <Button
-                  size="small"
-                  icon={<HistoryOutlined />}
-                  disabled={!props.canRelayView}
-                  onClick={() => props.onTabChange('model-calls')}
-                >
-                  Model Calls
-                </Button>
-                <Button
-                  size="small"
-                  icon={<ReloadOutlined />}
-                  loading={
-                    props.metricsFetching || props.upstreamsFetching || props.modelRoutesFetching
-                  }
-                  onClick={props.onRefreshAll}
-                >
-                  刷新
-                </Button>
-              </Space>
               <div className="grid gap-3 lg:grid-cols-2">
                 <AdminTable
                   shellClassName="soha-management-table-shell"
@@ -187,50 +152,54 @@ export function GatewayRelaySection(props: GatewayRelaySectionProps) {
           key: 'upstreams',
           label: '上游管理',
           children: (
-            <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-              <ManagementQueryPanel
-                collapsible={false}
-                actions={
-                  <ManagementRefreshButton
-                    aria-label="刷新上游"
-                    tooltip="刷新"
-                    loading={props.upstreamsFetching}
-                    onClick={props.onRefreshUpstreams}
-                  />
-                }
-              >
-                <ManagementQueryField label="Provider" width={190}>
-                  <Select
-                    allowClear
-                    placeholder="全部 Provider"
-                    options={relayProviderKindOptions}
-                    value={props.upstreamProviderFilter || undefined}
-                    onChange={(value) => props.onUpstreamProviderFilterChange(value ?? '')}
-                  />
-                </ManagementQueryField>
-                <ManagementQueryField label="状态" width={160}>
-                  <Select
-                    allowClear
-                    placeholder="全部状态"
-                    options={relayUpstreamStatusOptions}
-                    value={props.upstreamStatusFilter || undefined}
-                    onChange={(value) => props.onUpstreamStatusFilterChange(value ?? '')}
-                  />
-                </ManagementQueryField>
-              </ManagementQueryPanel>
-              <AdminTable
-                shellClassName="soha-management-table-shell"
-                columnSettingIconOnly
-                columnSettingPlacement="header"
-                rowKey="id"
-                tableSize="small"
-                columns={props.upstreamColumns}
-                dataSource={props.upstreams}
-                loading={props.upstreamsLoading}
-                scroll={{ x: 1540 }}
-                title="上游管理"
-                headerExtra={
+            <ManagementDataPage
+              query={{
+                collapsible: false,
+                actions: null,
+                children: (
+                  <>
+                    <ManagementQueryField label="Provider" width={190}>
+                      <Select
+                        allowClear
+                        placeholder="全部 Provider"
+                        options={relayProviderKindOptions}
+                        value={props.upstreamProviderFilter || undefined}
+                        onChange={(value) => props.onUpstreamProviderFilterChange(value ?? '')}
+                      />
+                    </ManagementQueryField>
+                    <ManagementQueryField label="状态" width={160}>
+                      <Select
+                        allowClear
+                        placeholder="全部状态"
+                        options={relayUpstreamStatusOptions}
+                        value={props.upstreamStatusFilter || undefined}
+                        onChange={(value) => props.onUpstreamStatusFilterChange(value ?? '')}
+                      />
+                    </ManagementQueryField>
+                  </>
+                ),
+              }}
+              table={{
+                columnSettingIconOnly: true,
+                rowKey: 'id',
+                tableSize: 'small',
+                columns: props.upstreamColumns,
+                dataSource: props.upstreams,
+                loading: props.upstreamsLoading,
+                scroll: { x: 1540 },
+                toolbar: (
                   <ManagementTableToolbar>
+                    <ManagementToolbarSearch
+                      placeholder="过滤上游 / 模型"
+                      value={props.upstreamFilter}
+                      onChange={props.onUpstreamFilterChange}
+                    />
+                    <ManagementRefreshButton
+                      aria-label="刷新上游"
+                      tooltip="刷新"
+                      loading={props.upstreamsFetching}
+                      onClick={props.onRefreshUpstreams}
+                    />
                     <Button
                       type="primary"
                       size="small"
@@ -240,66 +209,65 @@ export function GatewayRelaySection(props: GatewayRelaySectionProps) {
                     >
                       新增上游
                     </Button>
-                    <ManagementToolbarSearch
-                      placeholder="过滤上游 / 模型"
-                      value={props.upstreamFilter}
-                      onChange={props.onUpstreamFilterChange}
-                    />
                   </ManagementTableToolbar>
-                }
-              />
-            </Space>
+                ),
+              }}
+            />
           ),
         },
         {
           key: 'model-routes',
           label: '模型路由',
           children: (
-            <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-              <ManagementQueryPanel
-                collapsible={false}
-                actions={
-                  <ManagementRefreshButton
-                    aria-label="刷新模型路由"
-                    tooltip="刷新"
-                    loading={props.modelRoutesFetching}
-                    onClick={props.onRefreshModelRoutes}
-                  />
-                }
-              >
-                <ManagementQueryField label="Provider" width={190}>
-                  <Select
-                    allowClear
-                    placeholder="全部 Provider"
-                    options={relayProviderKindOptions}
-                    value={props.modelRouteProviderFilter || undefined}
-                    onChange={(value) => props.onModelRouteProviderFilterChange(value ?? '')}
-                  />
-                </ManagementQueryField>
-                <ManagementQueryField label="上游" width={260}>
-                  <Select
-                    allowClear
-                    showSearch
-                    placeholder="全部上游"
-                    options={upstreamOptions}
-                    value={props.modelRouteUpstreamFilter || undefined}
-                    onChange={(value) => props.onModelRouteUpstreamFilterChange(value ?? '')}
-                  />
-                </ManagementQueryField>
-              </ManagementQueryPanel>
-              <AdminTable
-                shellClassName="soha-management-table-shell"
-                columnSettingIconOnly
-                columnSettingPlacement="header"
-                rowKey="id"
-                tableSize="small"
-                columns={props.modelRouteColumns}
-                dataSource={props.modelRoutes}
-                loading={props.modelRoutesLoading}
-                scroll={{ x: 1380 }}
-                title="模型路由"
-                headerExtra={
+            <ManagementDataPage
+              query={{
+                collapsible: false,
+                actions: null,
+                children: (
+                  <>
+                    <ManagementQueryField label="Provider" width={190}>
+                      <Select
+                        allowClear
+                        placeholder="全部 Provider"
+                        options={relayProviderKindOptions}
+                        value={props.modelRouteProviderFilter || undefined}
+                        onChange={(value) => props.onModelRouteProviderFilterChange(value ?? '')}
+                      />
+                    </ManagementQueryField>
+                    <ManagementQueryField label="上游" width={260}>
+                      <Select
+                        allowClear
+                        showSearch={{ optionFilterProp: 'label' }}
+                        placeholder="全部上游"
+                        options={upstreamOptions}
+                        value={props.modelRouteUpstreamFilter || undefined}
+                        onChange={(value) => props.onModelRouteUpstreamFilterChange(value ?? '')}
+                      />
+                    </ManagementQueryField>
+                  </>
+                ),
+              }}
+              table={{
+                columnSettingIconOnly: true,
+                rowKey: 'id',
+                tableSize: 'small',
+                columns: props.modelRouteColumns,
+                dataSource: props.modelRoutes,
+                loading: props.modelRoutesLoading,
+                scroll: { x: 1380 },
+                toolbar: (
                   <ManagementTableToolbar>
+                    <ManagementToolbarSearch
+                      placeholder="过滤 public/upstream model"
+                      value={props.modelRouteFilter}
+                      onChange={props.onModelRouteFilterChange}
+                    />
+                    <ManagementRefreshButton
+                      aria-label="刷新模型路由"
+                      tooltip="刷新"
+                      loading={props.modelRoutesFetching}
+                      onClick={props.onRefreshModelRoutes}
+                    />
                     <Button
                       type="primary"
                       size="small"
@@ -309,15 +277,10 @@ export function GatewayRelaySection(props: GatewayRelaySectionProps) {
                     >
                       新增路由
                     </Button>
-                    <ManagementToolbarSearch
-                      placeholder="过滤 public/upstream model"
-                      value={props.modelRouteFilter}
-                      onChange={props.onModelRouteFilterChange}
-                    />
                   </ManagementTableToolbar>
-                }
-              />
-            </Space>
+                ),
+              }}
+            />
           ),
         },
         {

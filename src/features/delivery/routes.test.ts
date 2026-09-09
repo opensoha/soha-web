@@ -22,7 +22,6 @@ const routePages = vi.hoisted(() => ({
   executionTaskDetail: () => null,
   workflowTemplates: () => null,
   releaseBoard: () => null,
-  workflows: () => null,
   workflowDetail: () => null,
   releases: () => null,
   releaseDetail: () => null,
@@ -67,7 +66,6 @@ vi.mock('./workflow-templates/page', () => ({
   WorkflowTemplatesPage: routePages.workflowTemplates,
 }))
 vi.mock('./release-board/page', () => ({ ReleaseBoardPage: routePages.releaseBoard }))
-vi.mock('./workflows/list-page', () => ({ WorkflowsPage: routePages.workflows }))
 vi.mock('./workflows/detail-page', () => ({ WorkflowDetailPage: routePages.workflowDetail }))
 vi.mock('./releases/list-page', () => ({ ReleasesPage: routePages.releases }))
 vi.mock('./releases/detail-page', () => ({ ReleaseDetailPage: routePages.releaseDetail }))
@@ -75,7 +73,7 @@ vi.mock('./builds/detail-page', () => ({ BuildDetailPage: routePages.buildDetail
 vi.mock('./registries/page', () => ({ RegistriesPage: routePages.registries }))
 
 describe('delivery route manifest', () => {
-  it('maps all 26 routes directly to distinct leaf modules', async () => {
+  it('maps routes directly to distinct leaf modules', async () => {
     const expectedPages = new Map([
       ['delivery-manifest-library', routePages.manifests],
       ['applications', routePages.applications],
@@ -96,7 +94,6 @@ describe('delivery route manifest', () => {
       ['execution-tasks-detail', routePages.executionTaskDetail],
       ['workflow-templates', routePages.workflowTemplates],
       ['release-board', routePages.releaseBoard],
-      ['workflows', routePages.workflows],
       ['workflows-detail', routePages.workflowDetail],
       ['releases', routePages.releases],
       ['releases-detail', routePages.releaseDetail],
@@ -264,8 +261,8 @@ describe('delivery route manifest', () => {
       },
       {
         id: 'execution-tasks',
-        menuId: 'execution-tasks',
-        navVisible: true,
+        menuId: undefined,
+        navVisible: false,
         path: '/delivery/execution-tasks',
         permissionKey: 'delivery.execution-tasks.view',
         permissionKeysAny: undefined,
@@ -291,14 +288,6 @@ describe('delivery route manifest', () => {
         menuId: 'release-board',
         navVisible: true,
         path: '/release-board',
-        permissionKey: 'delivery.release-board.view',
-        permissionKeysAny: undefined,
-      },
-      {
-        id: 'workflows',
-        menuId: 'workflows',
-        navVisible: true,
-        path: '/workflows',
         permissionKey: 'delivery.workflows.view',
         permissionKeysAny: undefined,
       },
@@ -343,6 +332,18 @@ describe('delivery route manifest', () => {
         permissionKeysAny: undefined,
       },
     ])
+
+    expect(deliveryRoutes.find((route) => route.meta.id === 'execution-tasks')?.meta.title).toBe(
+      '执行队列',
+    )
+    const workflowDetailRoute = deliveryRoutes.find(
+      (route) => route.meta.id === 'workflows-detail',
+    )
+    expect(
+      workflowDetailRoute && 'parentId' in workflowDetailRoute.meta
+        ? workflowDetailRoute.meta.parentId
+        : undefined,
+    ).toBe('release-board')
   })
 
   it('passes standalone route-definition validation', () => {

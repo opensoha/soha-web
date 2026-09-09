@@ -17,6 +17,8 @@ import {
   ManagementTableToolbar,
   ManagementToolbarSearch,
 } from '@/components/management-list'
+import { StatusTag } from '@/components/status-tag'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import {
   ApplicationCenterModals,
   splitApplicationGroups,
@@ -30,7 +32,7 @@ const { Text } = Typography
 
 type ApplicationListRow = {
   app: DeliveryApplication
-  activeTargets: number
+  activeTargets: number | null
   environmentCount: number
 }
 
@@ -42,6 +44,7 @@ type ApplicationListFilters = {
 export function ApplicationsPage() {
   const { modal } = App.useApp()
   const managementState = useApplicationCenterState()
+  const permissionSnapshotQuery = usePermissionSnapshot()
   const [searchParams, setSearchParams] = useSearchParams()
   const [filters, setFilters] = useState<ApplicationListFilters>({ group: 'all', search: '' })
   const requestedMode = searchParams.get('mode')
@@ -50,7 +53,13 @@ export function ApplicationsPage() {
   const entryOpen = searchParams.get('action') === 'create'
 
   const applicationsQuery = useQuery(deliveryQueries.applications.list())
-  const releaseBoardQuery = useQuery(deliveryQueries.releaseBoard.list())
+  const canViewReleaseBoard = hasPermission(
+    permissionSnapshotQuery.data?.data,
+    'delivery.release-board.view',
+  )
+  const releaseBoardQuery = useQuery(
+    deliveryQueries.releaseBoard.list({ enabled: canViewReleaseBoard }),
+  )
 
   const boardByApp = useMemo(() => {
     return (releaseBoardQuery.data ?? []).reduce<Record<string, ReleaseBoardEntry[]>>(
@@ -66,13 +75,16 @@ export function ApplicationsPage() {
     () =>
       (applicationsQuery.data ?? []).map((app) => {
         const bindings = boardByApp[app.id] ?? []
+        const hasBoardData = canViewReleaseBoard && releaseBoardQuery.data !== undefined
         return {
           app,
-          activeTargets: bindings.reduce((sum, item) => sum + (item.targets?.length ?? 0), 0),
-          environmentCount: bindings.length || app.environmentCount || 0,
+          activeTargets: hasBoardData
+            ? bindings.reduce((sum, item) => sum + (item.targets?.length ?? 0), 0)
+            : null,
+          environmentCount: (hasBoardData ? bindings.length : 0) || app.environmentCount || 0,
         }
       }),
-    [applicationsQuery.data, boardByApp],
+    [applicationsQuery.data, boardByApp, canViewReleaseBoard, releaseBoardQuery.data],
   )
 
   const visibleRows = useMemo(() => {
@@ -164,22 +176,33 @@ export function ApplicationsPage() {
               </div>
             </div>
 
-            {applicationsQuery.isLoading || releaseBoardQuery.isLoading ? (
+            {canViewReleaseBoard && releaseBoardQuery.isError ? (
+              <ManagementState
+                compact
+                kind="error"
+                title="发布状态加载失败"
+                description="应用仍可使用；发布目标暂时无法读取。"
+                actions={
+                  <Button size="small" onClick={() => void releaseBoardQuery.refetch()}>
+                    重试
+                  </Button>
+                }
+              />
+            ) : null}
+
+            {applicationsQuery.isLoading ? (
               <ManagementState compact kind="loading" title="正在加载应用" />
-            ) : applicationsQuery.isError || releaseBoardQuery.isError ? (
+            ) : applicationsQuery.isError ? (
               <ManagementState
                 compact
                 kind="error"
                 title="应用加载失败"
-                description="暂时无法读取应用或发布目标，请重试。"
+                description="暂时无法读取应用，请重试。"
                 actions={
                   <Button
                     aria-label="重试"
                     size="small"
-                    onClick={() => {
-                      if (applicationsQuery.isError) void applicationsQuery.refetch()
-                      if (releaseBoardQuery.isError) void releaseBoardQuery.refetch()
-                    }}
+                    onClick={() => void applicationsQuery.refetch()}
                   >
                     重试
                   </Button>
@@ -216,6 +239,7 @@ export function ApplicationsPage() {
                             <Text type="secondary" ellipsis title={row.app.key}>
                               {row.app.key}
                             </Text>
+                            <StatusTag value={row.app.enabled ? 'enabled' : 'disabled'} />
                           </span>
                         </Link>
                         {managementState.canUpdateApplication ||
@@ -272,7 +296,8 @@ export function ApplicationsPage() {
                             : groups[0] || '未分组'}
                         </Text>
                         <Text type="secondary">
-                          {row.environmentCount} 环境 · {row.activeTargets} 服务
+                          {row.environmentCount} 环境
+                          {row.activeTargets === null ? '' : ` · ${row.activeTargets} 服务`}
                         </Text>
                       </div>
                     </Card>

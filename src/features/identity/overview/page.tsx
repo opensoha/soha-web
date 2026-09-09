@@ -218,51 +218,6 @@ export function IdentityOverviewPage() {
         ))}
       </div>
 
-      <Card
-        className="soha-overview-panel-card"
-        title="软件库"
-        extra={
-          <Button
-            size="small"
-            icon={<AppstoreOutlined />}
-            onClick={() => navigate('/internal-workbench/software')}
-          >
-            软件库
-          </Button>
-        }
-      >
-        {!permissions.software ? (
-          <ManagementState compact bordered={false} kind="no-permission" title="无软件库权限" />
-        ) : softwareError ? (
-          <ManagementState
-            compact
-            bordered={false}
-            kind="error"
-            title="软件库摘要加载失败"
-            actions={
-              <Button size="small" onClick={refreshAll}>
-                重试
-              </Button>
-            }
-          />
-        ) : loading.software ? (
-          <ManagementState compact bordered={false} kind="loading" />
-        ) : (
-          <div className="soha-overview-chip-grid">
-            {softwareStatus.map((item) => (
-              <OverviewChip
-                key={item.key}
-                label={item.label}
-                value={item.value}
-                helper={item.helper}
-                icon={item.icon}
-                tone={item.tone}
-              />
-            ))}
-          </div>
-        )}
-      </Card>
-
       <div className="soha-overview-summary-grid">
         <Card
           className="soha-overview-panel-card"
@@ -292,7 +247,7 @@ export function IdentityOverviewPage() {
                   </Button>
                 }
               />
-              <div className="soha-overview-chip-grid soha-identity-overview-chip-grid">
+              <div className="soha-overview-chip-grid">
                 {protocolStatus.map((item) => (
                   <OverviewChip
                     key={item.key}
@@ -351,6 +306,51 @@ export function IdentityOverviewPage() {
           )}
         </Card>
       </div>
+
+      <Card
+        className="soha-overview-panel-card"
+        title="软件库"
+        extra={
+          <Button
+            size="small"
+            icon={<AppstoreOutlined />}
+            onClick={() => navigate('/internal-workbench/software')}
+          >
+            软件库
+          </Button>
+        }
+      >
+        {!permissions.software ? (
+          <ManagementState compact bordered={false} kind="no-permission" title="无软件库权限" />
+        ) : softwareError ? (
+          <ManagementState
+            compact
+            bordered={false}
+            kind="error"
+            title="软件库摘要加载失败"
+            actions={
+              <Button size="small" onClick={refreshAll}>
+                重试
+              </Button>
+            }
+          />
+        ) : loading.software ? (
+          <ManagementState compact bordered={false} kind="loading" />
+        ) : (
+          <div className="soha-overview-chip-grid">
+            {softwareStatus.map((item) => (
+              <OverviewChip
+                key={item.key}
+                label={item.label}
+                value={item.value}
+                helper={item.helper}
+                icon={item.icon}
+                tone={item.tone}
+              />
+            ))}
+          </div>
+        )}
+      </Card>
     </div>
   )
 }

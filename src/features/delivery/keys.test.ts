@@ -17,11 +17,11 @@ describe('deliveryKeys', () => {
       'app-1',
       'runtime',
     ])
-    expect(deliveryKeys.workflows.list({ applicationId: ' app-1 ' })).toEqual([
+    expect(deliveryKeys.workflows.list({ applicationId: ' app-1 ', limit: 200 })).toEqual([
       'delivery',
       'workflows',
       'list',
-      { applicationId: 'app-1' },
+      { applicationId: 'app-1', limit: 200 },
     ])
     expect(deliveryKeys.releases.list({ applicationId: ' ' })).toEqual([
       'delivery',

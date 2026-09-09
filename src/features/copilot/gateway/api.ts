@@ -20,6 +20,7 @@ import type {
   LLMModelRoute,
   LLMRelayMetrics,
   LLMUpstream,
+  LLMUpstreamTestResult,
   ModelCallFilterState,
   PersonalAccessToken,
   ServiceAccount,
@@ -147,7 +148,9 @@ export const gatewayApi = {
     updateUpstream: (id: string, payload: GatewayPayload) =>
       api.put<ApiResponse<LLMUpstream>>(`/ai-gateway/relay/upstreams/${id}`, payload),
     testUpstream: (id: string) =>
-      api.post<ApiResponse<{ status: string }>>(`/ai-gateway/relay/upstreams/${id}/test`),
+      api.post<ApiResponse<LLMUpstreamTestResult>>(`/ai-gateway/relay/upstreams/${id}/test`),
+    testUpstreamDraft: (payload: GatewayPayload) =>
+      api.post<ApiResponse<LLMUpstreamTestResult>>('/ai-gateway/relay/upstreams/test', payload),
     modelRoutes: (filters: { providerKind: string; upstreamId: string }) =>
       api.get<ApiResponse<LLMModelRoute[]>>(
         `/ai-gateway/relay/model-routes${queryString({

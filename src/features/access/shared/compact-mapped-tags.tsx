@@ -1,4 +1,5 @@
-import { Button, Popover, Space, Tag } from 'antd'
+import { Button, Popover, Space } from 'antd'
+import { MetadataTag, type MetadataTagTone } from '@/components/status-tag'
 import { useI18n } from '@/i18n'
 
 interface CompactMappedTagsProps {
@@ -7,6 +8,7 @@ interface CompactMappedTagsProps {
   labelMap: Record<string, string>
   values: string[]
   visibleCount: number
+  tone: MetadataTagTone
 }
 
 function CompactMappedTags({
@@ -15,6 +17,7 @@ function CompactMappedTags({
   labelMap,
   values,
   visibleCount,
+  tone,
 }: CompactMappedTagsProps) {
   const { localeCode } = useI18n()
   if (!values?.length) return emptyText
@@ -24,9 +27,13 @@ function CompactMappedTags({
   const renderTag = (value: string, className = 'soha-access-compact-tag') => {
     const label = labelMap[value] || value
     return (
-      <Tag key={value} className={className} title={label}>
-        <span className="soha-access-compact-tag-text">{label}</span>
-      </Tag>
+      <MetadataTag
+        key={value}
+        className={className}
+        title={label}
+        tone={tone}
+        label={<span className="soha-access-compact-tag-text">{label}</span>}
+      />
     )
   }
   if (hiddenCount === 0) {
@@ -67,7 +74,7 @@ function CompactMappedTags({
       >
         <Space wrap={false} size={4} className="soha-access-compact-tags">
           {visibleValues.map((value) => renderTag(value))}
-          <Tag className="soha-access-compact-tag-more">{`+${hiddenCount}`}</Tag>
+          <MetadataTag className="soha-access-compact-tag-more" label={`+${hiddenCount}`} />
         </Space>
       </Button>
     </Popover>
@@ -80,6 +87,7 @@ export function renderCompactMappedTags(
   emptyText = '-',
   visibleCount = 2,
   itemLabel = '权限项',
+  tone: MetadataTagTone = 'blue',
 ) {
   return (
     <CompactMappedTags
@@ -88,6 +96,7 @@ export function renderCompactMappedTags(
       labelMap={labelMap}
       values={values}
       visibleCount={visibleCount}
+      tone={tone}
     />
   )
 }

@@ -40,7 +40,14 @@ export function normalizeDeliveryId(id: string) {
 
 export function normalizeDeliveryListParams(params: DeliveryListParams = {}): DeliveryListParams {
   const applicationId = params.applicationId?.trim()
-  return applicationId ? { applicationId } : {}
+  const limit =
+    typeof params.limit === 'number' && Number.isFinite(params.limit) && params.limit > 0
+      ? Math.floor(params.limit)
+      : undefined
+  return {
+    ...(applicationId ? { applicationId } : {}),
+    ...(limit ? { limit } : {}),
+  }
 }
 
 export function normalizeRepositoryListParams(params: RepositoryListParams = {}) {

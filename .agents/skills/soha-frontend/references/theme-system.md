@@ -36,16 +36,34 @@ This reference is the concise operating standard for `soha-web` theme, layout, m
 - Query inputs and toolbar searches should read as white surfaces in light mode.
 - Ordinary management buttons in query areas should stay neutral; only the core submit action should use the theme color.
 
+## Navigation Icons
+
+- Runtime sidebar icons come from the server menu `iconKey` and resolve through
+  `src/features/system/menu-icons.tsx`; change built-in defaults in the backend menu seed and
+  idempotent upgrader, not in route-local icon metadata.
+- Choose icons for the primary operator task. Within one sibling group, avoid reusing the same
+  rendered glyph for unrelated actions when a clearer registered icon exists; reuse the shared
+  registry and installed icon set before adding assets or dependencies.
+- Preserve administrator customization: a default migration may replace the prior default icon
+  key, but must not overwrite an arbitrary persisted icon key.
+
 ## Workbench Overviews
 
+- Support two overview templates only. Standard management overviews use summary metrics, the
+  shared summary grid, then runtime or operational detail. The AI compact overview uses summary
+  metrics followed directly by the shared chip grid. The portal application launcher is a
+  separate scene, not an overview template.
 - Use `OverviewMetricCard` and `OverviewChip` inside the shared overview grids. The grids assign a
   stable blue, cyan, violet, and teal category sequence; feature pages must not add their own
   card palettes or use status tones as decoration.
-- Order the page as summary metrics, then scoped operational detail. Use `OverviewSectionBar` for
-  compact section identity and shared neutral panel classes for grouped detail; do not repeat the
-  route title in a page header when the breadcrumb already identifies the overview.
-- Shared overview CSS owns four/three/two/one-column responsiveness. Feature CSS may position a
-  domain scene, but must not redefine overview card columns, spacing, radii, or accent sequences.
+- Give every top-level standard-overview panel one native Ant Design `Card` `title` and optional
+  `extra`. Use `OverviewSectionBar` only to divide content inside an already titled card; never
+  replace or duplicate the card title with it.
+- Shared overview CSS owns the page gap, summary ratio, metric/chip/pod columns, responsive
+  breakpoints, radii, and accent sequence. Feature CSS may constrain or scroll domain content,
+  but must not override that macro geometry.
+- Do not repeat the route title in a page header when the breadcrumb already identifies the
+  overview.
 - Keep category color restrained: a light token-derived surface plus colored icon and 2 px bottom
   rail. Ordinary overview panels and tables remain neutral surfaces.
 - `tone="success"` changes only the bottom rail so healthy cards retain their category identity.
@@ -67,21 +85,59 @@ This reference is the concise operating standard for `soha-web` theme, layout, m
   evidence. Use success, warning, and danger only for lifecycle meaning; release, rollback, retry,
   and approval commands remain explicit and confirmation-gated.
 
-## Tags And Pagination
+## Management Tables
 
-- Use `StatusTag` for stateful values and `MetadataTag` for categorical labels. Both use compact
-  Ant Design `filled` tags with semantic colors; ordinary management pages must not add outlined
-  tag variants or local color maps.
-- In scan-heavy tables, keep the primary identity as text or a link, then use a small number of
-  colored tags for provider, location, address, and specification metadata. Limit each color to a
-  stable meaning and summarize overflowing values instead of widening rows indefinitely.
+- `ManagementDataPage` is the query/page shell, `AdminTable` is the shared table, and Ant Design
+  `Table` is its implementation, not three competing designs. New management tables use this
+  stack; migrate existing raw tables without introducing another wrapper.
+- Embedded tables use `AdminTable` directly, with `pagination={false}` and
+  `enableColumnSelection={false}` when those controls are unnecessary. Preserve expansion,
+  row keys, fixed columns, and callbacks; do not add a page query shell to an embedded list.
+- Top-level lists retain the pagination footer and total/range summary. Cursor APIs must retain
+  their real navigation semantics: do not invent totals or replace the footer with toolbar arrows.
+- Table tokens in `src/theme/app-theme.ts` own header text (`colorText`), header background
+  (`colorBgMuted`), and header split (`colorBorder`). Shared table CSS sets header weight to 600.
+  Field separation means vertical short separators between column headers, not stronger
+  horizontal row borders or a full bordered grid. Do not add page-local divider overrides.
+- Expose compact (`small`, 8 px vertical padding) and comfortable (`middle`, 12 px) density;
+  both use 12 px horizontal padding. Keep padding in shared tokens, not per-page CSS.
+- Reuse `src/utils/table-columns.ts` presets for status, time, and actions. Names stay text/links;
+  metadata is secondary and actions stay predictably placed. Long identifiers remain accessible
+  through wrapping, copying, or a tooltip rather than irreversible clipping.
+- Fill available content width; use deliberate horizontal scrolling for wide datasets instead of
+  page-local fixed maximum widths. List/Card remains appropriate for browse-and-open tasks;
+  unification does not mean every list must become a table.
+
+## Tag Semantics
+
+- `src/components/status-tag.tsx` owns the compact `filled` treatment: `StatusTag` for
+  lifecycle/health/result/severity, `MetadataTag` for categories, `BooleanTag` for boolean labels.
+  Do not add page-local palettes, outlined variants, or global `.ant-tag` color overrides.
+- Resolve status color from canonical values, not translated text: success/healthy green,
+  failure/denial red, warning/approval orange, processing blue, unknown/inactive neutral. Check
+  the shared map before adding values. A healthy running workload is not a running task;
+  do not recolor every `running` value as processing.
+- Metadata colors are stable by field meaning, never random by value or index:
+
+  | Meaning | Tone |
+  | --- | --- |
+  | Role | `purple` |
+  | Organization | `cyan` |
+  | Login/mapping/session source; permission/action category | `blue` |
+  | Counts, overflow `+N`, ordinary IDs, absent metadata | `default` |
+
+- A source/provider is not a success result. Reuse `src/utils/login-provider.ts` for login
+  labels/tones. Permission names are metadata; actual allow/deny decisions are statuses.
+  Unknown status values remain neutral with their text preserved.
+- Keep primary identities as text/links. Routine addresses, versions, and specifications do not
+  automatically need colored tags; category color must help scanning.
 - Do not repeat information with decorative row icons, provider-colored side borders, or accent
   rails when the same provider or resource type is already visible as text or a tag.
-- Wrap groups of tags at the collection level while keeping each tag on one line. Large value
-  sets need an overflow or summary treatment instead of unbounded table-row growth.
-- Top-level `AdminTable` lists keep the shared pagination footer and summary, including when the
-  backend uses cursors. Toolbar previous/next buttons do not replace the footer. Disable
-  pagination only for intentional embedded tables.
+- Keep each tag single-line. Small groups may wrap at the container; large table collections
+  need a compact summary and keyboard-accessible expansion. Access tables reuse
+  `src/features/access/shared/compact-mapped-tags.tsx`: default two visible values, neutral `+N`,
+  and the same tone in summary and expansion. Do not deep-import this feature-private helper
+  elsewhere; promote it only when cross-feature reuse is actually needed.
 
 ## Management Table Toolbars
 
@@ -135,9 +191,6 @@ This reference is the concise operating standard for `soha-web` theme, layout, m
   truncate its Segmented options. Use a Select for longer, dynamic, or larger option sets.
 - Label quick filters by their meaning, such as `业务域`, `日志范围`, or `快捷范围`. Reserve
   `视图` for changes in presentation such as list, tree, timeline, or saved query layouts.
-- Let the shared grid decide whether the row wraps.
-- If everything fits in one row, do not show expand/collapse.
-- If the fields wrap to a second row, show the expand button.
 - Resetting a query should return the grid to the collapsed baseline when collapse is available.
 
 ## Exceptions

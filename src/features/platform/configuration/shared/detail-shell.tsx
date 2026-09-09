@@ -1,6 +1,8 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { App, Card, Spin, Table, Tabs, Tag } from 'antd'
+import { App, Card, Spin, Tabs } from 'antd'
+import { AdminTable } from '@/components/admin-table'
+import { MetadataTag } from '@/components/status-tag'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementState } from '@/components/management-list'
 import { TableCellText } from '@/components/table-cell-content'
@@ -61,7 +63,7 @@ function ConfigurationReferencesTab({
       title: localeCode === 'zh_CN' ? '资源类型' : 'Kind',
       dataIndex: 'kind',
       width: 150,
-      render: (value: string) => <Tag>{value}</Tag>,
+      render: (value: string) => <MetadataTag label={value} tone="blue" />,
     },
     {
       title: localeCode === 'zh_CN' ? '名称' : 'Name',
@@ -83,23 +85,23 @@ function ConfigurationReferencesTab({
   ]
   return (
     <Card className="soha-detail-card">
-      <Table<ConfigurationReference>
+      <AdminTable
+        enableColumnSelection={false}
+        scroll={{ x: '100%' }}
         className="soha-platform-table soha-config-reference-table"
         columns={columns}
         dataSource={referencesQuery.data ?? []}
         loading={referencesQuery.isLoading}
-        locale={{
-          emptyText: (
-            <ManagementState
-              bordered={false}
-              compact
-              description={localeCode === 'zh_CN' ? '暂无关联资源' : 'No referencing resources'}
-            />
-          ),
-        }}
+        empty={
+          <ManagementState
+            bordered={false}
+            compact
+            description={localeCode === 'zh_CN' ? '暂无关联资源' : 'No referencing resources'}
+          />
+        }
         pagination={false}
         rowKey={(record) => `${record.kind}/${record.namespace}/${record.name}/${record.path}`}
-        size="small"
+        tableSize="small"
         tableLayout="fixed"
       />
     </Card>

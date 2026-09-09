@@ -669,6 +669,7 @@ describe('access route authorization', () => {
         'delivery.applications.view',
         'delivery.application-environments.view',
         'delivery.release-board.view',
+        'delivery.workflows.view',
       ],
       visibleMenuIds: ['release-board', 'application-environments', 'builds', 'delivery-overview'],
       visibleMenus: [
@@ -726,6 +727,7 @@ describe('access route authorization', () => {
       'release-board',
     ])
     expect(deliveryNav.map((item) => item.section)).toEqual(['', 'delivery', 'delivery'])
+    expect(findFirstAccessiblePathForWorkbench('delivery', snapshot)).toBe('/delivery/overview')
   })
 
   it('groups delivery workbench menus by user task while accepting legacy backend sections', () => {
@@ -828,8 +830,6 @@ describe('access route authorization', () => {
       'delivery-testing:delivery',
       'delivery-analysis:delivery',
       'release-bundles:delivery-records',
-      'workflows:delivery-records',
-      'execution-tasks:delivery-records',
       'releases:delivery-records',
       'delivery-blueprints:delivery-platform',
       'build-templates:delivery-platform',
@@ -920,6 +920,7 @@ describe('access route authorization', () => {
         'delivery.applications.view',
         'delivery.application-environments.view',
         'delivery.release-board.view',
+        'delivery.workflows.view',
         'delivery.build-templates.view',
         'delivery.workflow-templates.view',
         'delivery.registries.view',
@@ -975,7 +976,6 @@ describe('access route authorization', () => {
       'delivery-testing',
       'delivery-analysis',
       'release-bundles',
-      'execution-tasks',
     ])
     expect(canAccessRoute(getRoute('release-board'), testerSnapshot)).toBe(false)
     expect(canAccessRoute(getRoute('delivery-onboarding'), testerSnapshot)).toBe(true)
@@ -986,8 +986,6 @@ describe('access route authorization', () => {
       'delivery-testing',
       'delivery-analysis',
       'release-bundles',
-      'workflows',
-      'execution-tasks',
       'releases',
     ])
     expect(canAccessRoute(getRoute('release-board'), readonlySnapshot)).toBe(true)

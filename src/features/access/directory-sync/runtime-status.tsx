@@ -1,4 +1,5 @@
-import { Alert, Button, Descriptions, Space, Table, Typography } from 'antd'
+import { Alert, Button, Descriptions, Space, Typography } from 'antd'
+import { AdminTable } from '@/components/admin-table'
 import type { TableColumnsType } from 'antd'
 import { RedoOutlined } from '@ant-design/icons'
 import { ManagementState } from '@/components/management-list'
@@ -205,9 +206,10 @@ export function DirectoryRuntimePanel({
           description="收到目录变更后会显示在这里。"
         />
       ) : (
-        <Table
+        <AdminTable
+          enableColumnSelection={false}
           rowKey="id"
-          size="small"
+          tableSize="small"
           loading={statusLoading || eventsLoading}
           columns={columns}
           dataSource={events}

@@ -13,6 +13,7 @@ export const accessKeys = {
   policies: () => [...accessKeys.all, 'policies'] as const,
   policyList: () => [...accessKeys.policies(), 'list'] as const,
   scopeGrants: () => [...accessKeys.all, 'scope-grants'] as const,
+  scopeGrantListAll: () => [...accessKeys.scopeGrants(), 'list'] as const,
   scopeGrantList: (subject: AccessScopeGrantSubject) =>
     [...accessKeys.scopeGrants(), subject.subjectType, subject.subjectId, 'list'] as const,
   dependencies: () => [...accessKeys.all, 'dependencies'] as const,

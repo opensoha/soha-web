@@ -111,7 +111,7 @@ function applicationListPath(
   base: '/builds' | '/releases' | '/workflows',
   params: DeliveryListParams,
 ) {
-  return withQuery(base, { applicationId: params.applicationId?.trim() })
+  return withQuery(base, { applicationId: params.applicationId?.trim(), limit: params.limit })
 }
 
 function workloadRuntimePath(ref: DeliveryWorkloadRef) {

@@ -155,6 +155,10 @@ export function RegistriesPage() {
         }
         refreshing={registriesQuery.isFetching}
         onRefresh={() => void registriesQuery.refetch()}
+        isError={registriesQuery.isError}
+        errorDescription="暂时无法读取镜像仓库。"
+        onRetry={() => void registriesQuery.refetch()}
+        localSorting
         columns={columns}
         dataSource={registriesQuery.data ?? []}
         rowKey="id"

@@ -21,7 +21,7 @@ export function ReleasesPage() {
     { title: '应用', dataIndex: 'applicationId' },
     { title: '集群', dataIndex: 'clusterId' },
     { title: '命名空间', dataIndex: 'namespace' },
-    { title: 'Deployment', dataIndex: 'deploymentName' },
+    { title: '部署目标', dataIndex: 'deploymentName' },
     {
       ...tableColumnPresets.status,
       title: '状态',
@@ -55,6 +55,10 @@ export function ReleasesPage() {
       <DeliveryTable
         refreshing={releasesQuery.isFetching}
         onRefresh={() => void releasesQuery.refetch()}
+        isError={releasesQuery.isError}
+        errorDescription="暂时无法读取发布记录。"
+        onRetry={() => void releasesQuery.refetch()}
+        localSorting
         columns={columns}
         dataSource={releasesQuery.data ?? []}
         rowKey="id"

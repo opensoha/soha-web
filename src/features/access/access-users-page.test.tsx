@@ -266,7 +266,7 @@ describe('access users page columns', () => {
     expect(usernameCell?.textContent).toContain('admin')
     expect(displayNameCell?.textContent).toContain('Admin')
     expect(container.textContent).toContain('飞书')
-    expect(container.querySelector('.ant-tag-success')?.textContent).toBe('飞书')
+    expect(container.querySelector('.soha-metadata-tag.ant-tag-processing')?.textContent).toBe('飞书')
   })
 
   it('does not load role or organization catalogs without their read permissions', async () => {

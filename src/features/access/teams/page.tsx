@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Button, Col, Form, Input, Modal, Popconfirm, Row, Select, Space, Tag, Typography } from 'antd'
+import { Button, Col, Form, Input, Modal, Popconfirm, Row, Select, Space, Typography } from 'antd'
+import { MetadataTag } from '@/components/status-tag'
 import { DeleteOutlined, EditOutlined, FolderOpenOutlined, PlusOutlined } from '@ant-design/icons'
 import type { TableColumnsType } from 'antd'
 import { useQuery } from '@tanstack/react-query'
@@ -109,15 +110,13 @@ export function AccessTeamsPage() {
       render: (value: string, record: AccessTeam) => {
         const providerType = String(record.metadata?.directoryProviderType ?? '').trim()
         const sourceLabel = providerType
-          ? directoryProviderLabels[providerType] ?? providerType
+          ? (directoryProviderLabels[providerType] ?? providerType)
           : organizationSourceLabel(value, organizationSourceLabelMap)
         const directoryName = String(record.metadata?.directoryConnectionName ?? '').trim()
-        const technicalDetails = [directoryName, value, record.externalId].filter(Boolean).join(' · ')
-        return (
-          <Tag color={value?.startsWith('directory:') ? 'blue' : undefined} title={technicalDetails}>
-            {sourceLabel}
-          </Tag>
-        )
+        const technicalDetails = [directoryName, value, record.externalId]
+          .filter(Boolean)
+          .join(' · ')
+        return <MetadataTag tone="blue" title={technicalDetails} label={sourceLabel} />
       },
     },
     {

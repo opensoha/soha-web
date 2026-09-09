@@ -154,7 +154,6 @@ export interface OnlineUser {
 export interface Announcement {
   id: string
   title: string
-  summary: string
   content: string
   level: string
   status: string
@@ -167,6 +166,22 @@ export interface Announcement {
   updatedBy?: string
   createdAt: string
   updatedAt: string
+}
+
+export type AnnouncementDurationPreset =
+  'one-day' | 'three-days' | 'one-week' | 'one-month' | 'forever'
+
+export type AnnouncementDateRange = [dayjs.Dayjs | null, dayjs.Dayjs | null]
+
+export function buildAnnouncementDateRange(
+  preset: AnnouncementDurationPreset,
+  start = dayjs(),
+): AnnouncementDateRange {
+  if (preset === 'forever') return [null, null]
+  if (preset === 'one-month') return [start, start.add(1, 'month')]
+
+  const days = preset === 'one-day' ? 1 : preset === 'three-days' ? 3 : 7
+  return [start, start.add(days, 'day')]
 }
 
 export function buildAnnouncementLifecycle(record: Announcement) {

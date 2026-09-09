@@ -34,6 +34,12 @@ export const accessQueries = {
       queryFn: accessApi.policies.list,
       enabled,
     }),
+  scopeGrantsAll: (enabled = true) =>
+    queryOptions({
+      queryKey: accessKeys.scopeGrantListAll(),
+      queryFn: accessApi.scopeGrants.listAll,
+      enabled,
+    }),
   scopeGrants: (subject: AccessScopeGrantSubject, enabled = true) =>
     queryOptions({
       queryKey: accessKeys.scopeGrantList(subject),

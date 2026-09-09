@@ -13,7 +13,6 @@ import {
   Select,
   Space,
   Switch,
-  Tag,
   Tree,
   Typography,
 } from 'antd'
@@ -38,7 +37,8 @@ import {
   ManagementRefreshButton,
   ManagementTableToolbar,
 } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { renderCompactMappedTags } from '../shared/compact-mapped-tags'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { formatDateTime } from '@/utils/time'
 import { loginProviderLabel, loginProviderTagColor } from '@/utils/login-provider'
@@ -58,7 +58,6 @@ import {
   buildOrganizationUserCounts,
   ORG_ALL_KEY,
   organizationMatchesSelection,
-  renderMappedTags,
 } from './view-model'
 import '../shared/styles.css'
 
@@ -258,12 +257,11 @@ export function AccessUsersPage() {
         sources?.length ? (
           <Space size={[4, 4]} wrap>
             {sources.map((source) => (
-              <Tag
+              <MetadataTag
                 key={`${source.type}:${source.providerId || ''}`}
-                color={loginProviderTagColor(source.type)}
-              >
-                {loginProviderLabel(source.type)}
-              </Tag>
+                tone={loginProviderTagColor(source.type)}
+                label={loginProviderLabel(source.type)}
+              />
             ))}
           </Space>
         ) : (
@@ -274,13 +272,15 @@ export function AccessUsersPage() {
       title: '角色',
       dataIndex: 'roles',
       width: 180,
-      render: (roles: string[]) => renderMappedTags(roles, roleMap, '未绑定'),
+      render: (roles: string[]) =>
+        renderCompactMappedTags(roles, roleMap, '未绑定', 2, '角色', 'purple'),
     },
     {
       title: '组织',
       dataIndex: 'teams',
       width: 160,
-      render: (teams: string[]) => renderMappedTags(teams, teamMap, '未绑定'),
+      render: (teams: string[]) =>
+        renderCompactMappedTags(teams, teamMap, '未绑定', 2, '组织', 'cyan'),
     },
     {
       ...tableColumnPresets.status,
@@ -385,7 +385,7 @@ export function AccessUsersPage() {
               <ApartmentOutlined />
               <Text strong>公司组织</Text>
             </Space>
-            <Tag>{usersQuery.data?.length ?? 0}</Tag>
+            <MetadataTag label={usersQuery.data?.length ?? 0} />
           </div>
           <Tree
             blockNode

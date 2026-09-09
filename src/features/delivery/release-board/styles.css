@@ -1,0 +1,156 @@
+.soha-release-board {
+  gap: 16px;
+}
+
+.soha-release-board__runs-title,
+.soha-release-run-card__identity,
+.soha-release-run-card__details > div,
+.soha-release-run-card__progress {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.soha-release-board__runs-title {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.soha-release-board__runs-title .ant-typography:last-child {
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.soha-release-board__runs.ant-card {
+  min-width: 0;
+  border-radius: var(--soha-radius-panel);
+}
+
+.soha-release-board__runs.ant-card > .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.soha-release-board__filters {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.soha-release-board__filters .soha-management-toolbar-search {
+  margin-left: auto;
+}
+
+.soha-release-board__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  align-items: stretch;
+  gap: 12px;
+}
+
+.soha-release-run-card.ant-card {
+  height: 100%;
+  border-color: var(--soha-border-color);
+  border-radius: var(--soha-radius-panel);
+  box-shadow: none;
+}
+
+.soha-release-run-card.ant-card:hover {
+  border-color: var(--soha-border-color-strong);
+}
+
+.soha-release-run-card.ant-card .ant-card-body {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px;
+}
+
+.soha-release-run-card__header,
+.soha-release-run-card__progress-label,
+.soha-release-run-card__footer {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.soha-release-run-card__identity {
+  flex: 1 1 auto;
+  gap: 2px;
+}
+
+.soha-release-run-card__link {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+}
+
+.soha-release-run-card__link .ant-typography {
+  min-width: 0;
+}
+
+.soha-release-run-card__link:focus-visible {
+  border-radius: var(--soha-radius-control);
+  outline: 2px solid var(--soha-primary);
+  outline-offset: 2px;
+}
+
+.soha-release-run-card__details {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.soha-release-run-card__details > div {
+  gap: 2px;
+}
+
+.soha-release-run-card__progress {
+  gap: 6px;
+}
+
+.soha-release-run-card__footer {
+  align-items: center;
+  margin-top: auto;
+  font-size: 12px;
+}
+
+.soha-release-run-card__footer .ant-typography:first-child {
+  min-width: 0;
+}
+
+.soha-release-run-card__footer .ant-typography:last-child {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.soha-release-board__pagination {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 767px) {
+  .soha-release-board__grid,
+  .soha-release-run-card__details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .soha-release-board__filters .soha-management-toolbar-search {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .soha-release-board__pagination {
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
+}

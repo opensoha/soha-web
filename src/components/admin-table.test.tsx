@@ -84,6 +84,21 @@ async function renderNode(node: ReactNode) {
 }
 
 describe('AdminTable', () => {
+  it('forwards native pagination events when migrating an embedded table', async () => {
+    const onChange = vi.fn()
+    await renderNode(
+      <AdminTable
+        columns={[{ title: '名称', dataIndex: 'name' }]}
+        dataSource={[]}
+        rowKey="id"
+        pagination={{ current: 2, pageSize: 10, total: 50, onChange }}
+      />,
+    )
+    await act(async () => captured.tableProps.pagination.onChange(3, 10))
+    expect(onChange).toHaveBeenCalledWith(3, 10)
+    await act(async () => captured.tableProps.pagination.onChange(1, 20))
+    expect(onChange).toHaveBeenCalledWith(1, 20)
+  })
   beforeAll(() => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   })

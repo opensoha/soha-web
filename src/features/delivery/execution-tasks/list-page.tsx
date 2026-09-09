@@ -121,18 +121,22 @@ export function ExecutionTasksPage() {
       ) : null}
       <div className="soha-overview-metric-grid">
         {summaryMetrics.map(({ key, ...item }) => (
-          <OverviewMetricCard key={key} {...item} />
+          <OverviewMetricCard key={key} {...item} loading={tasksQuery.isLoading} />
         ))}
       </div>
       <DeliveryTable
         rowKey="id"
         refreshing={tasksQuery.isFetching}
         onRefresh={() => void tasksQuery.refetch()}
+        isError={tasksQuery.isError}
+        errorDescription="暂时无法读取执行任务。"
+        onRetry={() => void tasksQuery.refetch()}
+        localSorting
         loading={tasksQuery.isLoading}
         dataSource={executionTasks}
         columns={[
           {
-            title: 'Task',
+            title: '任务',
             dataIndex: 'taskKind',
             render: (value: string, record: ExecutionTask) => (
               <Space orientation="vertical" size={0}>
@@ -144,10 +148,10 @@ export function ExecutionTasksPage() {
               </Space>
             ),
           },
-          { title: 'Provider', dataIndex: 'providerKind' },
-          { title: 'Target', dataIndex: 'targetKind' },
+          { title: '执行器', dataIndex: 'providerKind' },
+          { title: '目标类型', dataIndex: 'targetKind' },
           {
-            title: 'Application',
+            title: '应用',
             dataIndex: 'applicationId',
             render: (value: string, record: ExecutionTask) => (
               <Space orientation="vertical" size={0}>
@@ -157,7 +161,7 @@ export function ExecutionTasksPage() {
             ),
           },
           {
-            title: 'Bundle',
+            title: '版本包',
             dataIndex: 'releaseBundleId',
             render: (value: string) =>
               value ? (
@@ -174,12 +178,12 @@ export function ExecutionTasksPage() {
               ),
           },
           {
-            title: 'Artifacts',
+            title: '交付物',
             dataIndex: 'artifacts',
             render: (value?: ExecutionArtifact[]) => summarizeExecutionTaskArtifacts(value),
           },
           {
-            title: 'Status',
+            title: '状态',
             dataIndex: 'status',
             render: (value: string) => <StatusTag value={value} />,
           },
@@ -208,20 +212,20 @@ export function ExecutionTasksPage() {
             },
           },
           {
-            title: 'Retries',
+            title: '重试',
             dataIndex: 'attemptCount',
             render: (value: number, record: ExecutionTask) => `${value}/${record.maxRetries}`,
           },
-          { title: 'Timeout(s)', dataIndex: 'timeoutSeconds' },
+          { title: '超时（秒）', dataIndex: 'timeoutSeconds' },
           {
             ...tableColumnPresets.datetime,
-            title: 'Heartbeat',
+            title: '心跳',
             dataIndex: 'lastHeartbeatAt',
             render: (value?: string) => (value ? formatDateTime(value) : '-'),
           },
           {
             ...tableColumnPresets.datetime,
-            title: 'Updated',
+            title: '更新时间',
             dataIndex: 'updatedAt',
             render: (value: string) => formatDateTime(value),
           },

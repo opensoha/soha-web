@@ -53,6 +53,7 @@ vi.mock('@/i18n', () => ({
 }))
 
 vi.mock('@/components/status-tag', () => ({
+  MetadataTag: ({ label }: { label: ReactNode }) => <span>{label}</span>,
   BooleanTag: ({ value }: { value: boolean }) => <span>{String(value)}</span>,
   StatusTag: ({ value }: { value: string }) => <span>{value}</span>,
 }))
@@ -61,48 +62,60 @@ vi.mock('@/components/k8s-yaml-editor', () => ({
   K8sYamlEditor: () => <div data-testid="yaml-editor">yaml-editor</div>,
 }))
 
-vi.mock('@/components/admin-table', () => ({
-  AdminTable: ({
-    columns,
-    dataSource,
-    empty,
-    headerExtra,
-    onRow,
-    paginationSummary,
-  }: {
-    columns: Array<Record<string, any>>
-    dataSource: Array<Record<string, any>>
-    empty?: ReactNode
-    headerExtra?: ReactNode
-    onRow?: (record: Record<string, any>) => Record<string, string>
-    paginationSummary?: ReactNode
-  }) => (
-    <div data-testid="admin-table">
-      {headerExtra ? <div data-testid="header-extra">{headerExtra}</div> : null}
-      {paginationSummary ? <div data-testid="pagination-summary">{paginationSummary}</div> : null}
-      <div data-testid="column-keys">
-        {columns.map((column) => String(column.key ?? column.dataIndex ?? '')).join(',')}
-      </div>
-      <div data-testid="row-count">{dataSource.length}</div>
-      {dataSource.length === 0 ? <div>{empty}</div> : null}
-      {dataSource.map((record, rowIndex) => (
-        <div
-          key={`${record.namespace}/${record.name}`}
-          data-testid={`row-${rowIndex}`}
-          {...onRow?.(record)}
-        >
-          {columns.map((column, columnIndex) => {
-            const value =
-              typeof column.dataIndex === 'string' ? record[column.dataIndex] : undefined
-            const content =
-              typeof column.render === 'function' ? column.render(value, record, rowIndex) : value
-            return <div key={columnIndex}>{content == null ? '' : content}</div>
-          })}
+vi.mock('@/components/admin-table', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/components/admin-table')>()
+  return {
+    AdminTable: ({
+      columns,
+      dataSource,
+      empty,
+      headerExtra,
+      onRow,
+      paginationSummary,
+      ...rest
+    }: {
+      columns: Array<Record<string, any>>
+      dataSource: Array<Record<string, any>>
+      empty?: ReactNode
+      headerExtra?: ReactNode
+      onRow?: (record: Record<string, any>) => Record<string, string>
+      paginationSummary?: ReactNode
+      expandable?: unknown
+    }) =>
+      rest.expandable ? (
+        <actual.AdminTable columns={columns} dataSource={dataSource} rowKey="key" {...rest} />
+      ) : (
+        <div data-testid="admin-table">
+          {headerExtra ? <div data-testid="header-extra">{headerExtra}</div> : null}
+          {paginationSummary ? (
+            <div data-testid="pagination-summary">{paginationSummary}</div>
+          ) : null}
+          <div data-testid="column-keys">
+            {columns.map((column) => String(column.key ?? column.dataIndex ?? '')).join(',')}
+          </div>
+          <div data-testid="row-count">{dataSource.length}</div>
+          {dataSource.length === 0 ? <div>{empty}</div> : null}
+          {dataSource.map((record, rowIndex) => (
+            <div
+              key={`${record.namespace}/${record.name}`}
+              data-testid={`row-${rowIndex}`}
+              {...onRow?.(record)}
+            >
+              {columns.map((column, columnIndex) => {
+                const value =
+                  typeof column.dataIndex === 'string' ? record[column.dataIndex] : undefined
+                const content =
+                  typeof column.render === 'function'
+                    ? column.render(value, record, rowIndex)
+                    : value
+                return <div key={columnIndex}>{content == null ? '' : content}</div>
+              })}
+            </div>
+          ))}
         </div>
-      ))}
-    </div>
-  ),
-}))
+      ),
+  }
+})
 
 const mountedRoots: Root[] = []
 

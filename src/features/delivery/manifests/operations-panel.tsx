@@ -8,6 +8,7 @@ import {
   Input,
   InputNumber,
   Modal,
+  Popconfirm,
   Select,
   Space,
   Switch,
@@ -426,7 +427,7 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
   ]
 
   const environmentTab = (
-    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+    <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
       <Select
         value={bindingId || undefined}
         onChange={setBindingId}
@@ -544,16 +545,20 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
             >
               接受
             </Button>
-            <Button
-              size="small"
-              danger
-              icon={<StopOutlined />}
-              onClick={() =>
+            <Popconfirm
+              title="确认拒绝该交付意图？"
+              description="拒绝后该意图不能继续用于交付。"
+              okText="拒绝"
+              cancelText="取消"
+              okButtonProps={{ danger: true }}
+              onConfirm={() =>
                 void decideIntent(value, 'reject', item, intentMutation, message.success)
               }
             >
-              拒绝
-            </Button>
+              <Button size="small" danger icon={<StopOutlined />}>
+                拒绝
+              </Button>
+            </Popconfirm>
           </Space>
         ) : (
           '-'

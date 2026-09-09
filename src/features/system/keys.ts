@@ -1,4 +1,9 @@
-import type { AuditLogFilters, OperationLogFilters, SystemEndpointScope } from './api'
+import type {
+  AnnouncementReceiptFilters,
+  AuditLogFilters,
+  OperationLogFilters,
+  SystemEndpointScope,
+} from './api'
 
 function normalizeFilters<T extends object>(filters: T) {
   return Object.fromEntries(
@@ -17,6 +22,8 @@ export const systemKeys = {
     all: ['announcements'] as const,
     list: () => ['announcements', 'admin'] as const,
     inbox: () => ['announcements', 'inbox'] as const,
+    receipts: (announcementId: string, filters: AnnouncementReceiptFilters = {}) =>
+      ['announcements', 'receipts', announcementId, normalizeFilters(filters)] as const,
   },
   menus: {
     all: ['menus'] as const,

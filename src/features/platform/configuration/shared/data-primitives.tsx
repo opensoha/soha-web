@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { App, Button, Input, Modal, Table, Typography } from 'antd'
+import { App, Button, Input, Modal, Typography } from 'antd'
+import { AdminTable } from '@/components/admin-table'
 import { ArrowsAltOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { ManagementState } from '@/components/management-list'
 import { useI18n } from '@/i18n'
@@ -223,12 +224,14 @@ export function ConfigurationDataTable({
   const { localeCode } = useI18n()
 
   return (
-    <Table<ConfigurationDataRow>
+    <AdminTable
+      enableColumnSelection={false}
+      scroll={{ x: '100%' }}
       className="soha-platform-table soha-config-data-table"
       columns={columns}
       dataSource={rows}
       expandable={{
-        expandedRowRender: (record) => {
+        expandedRowRender: (record: ConfigurationDataRow) => {
           const hasDecodedValue = record.decoded !== undefined
           const encodedLabel = localeCode === 'zh_CN' ? 'Base64 编码值' : 'Base64 encoded value'
           const decodedLabel = localeCode === 'zh_CN' ? '解码后内容' : 'Decoded content'
@@ -250,14 +253,12 @@ export function ConfigurationDataTable({
             </div>
           )
         },
-        rowExpandable: (record) => Boolean(record.value || record.decoded),
+        rowExpandable: (record: ConfigurationDataRow) => Boolean(record.value || record.decoded),
       }}
-      locale={{
-        emptyText: <ManagementState bordered={false} compact description={emptyDescription} />,
-      }}
+      empty={<ManagementState bordered={false} compact description={emptyDescription} />}
       pagination={false}
       rowKey="key"
-      size="small"
+      tableSize="small"
       tableLayout="fixed"
     />
   )

@@ -420,9 +420,6 @@ function PortalAnnouncementPanel({
                   </Text>
                 </div>
                 <Text strong>{item.title}</Text>
-                {item.summary ? (
-                  <Paragraph className="soha-portal-announcement-summary">{item.summary}</Paragraph>
-                ) : null}
                 {item.content ? (
                   <Paragraph className="soha-portal-announcement-content">{item.content}</Paragraph>
                 ) : null}

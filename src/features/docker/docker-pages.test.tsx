@@ -1135,7 +1135,7 @@ describe('docker pages', () => {
     expect(container.textContent).toContain('Docker 主机')
     expect(container.textContent).toContain('容器 1')
     expect(
-      container.querySelector('.ant-tabs-tabpane-active .soha-admin-table-shell'),
+      container.querySelector('[role="tabpanel"][aria-hidden="false"] .soha-admin-table-shell'),
     ).not.toBeNull()
     expect(testState.apiGet).toHaveBeenCalledWith(
       '/docker/services?page=1&pageSize=5&projectId=project-1',
@@ -1181,9 +1181,11 @@ describe('docker pages', () => {
       '/docker/projects/project-1',
     )
 
-    expect(container.querySelector('.ant-tabs-tabpane-active .soha-vrt-query')).toBeNull()
     expect(
-      container.querySelector('.ant-tabs-tabpane-active .soha-admin-table-shell'),
+      container.querySelector('[role="tabpanel"][aria-hidden="false"] .soha-vrt-query'),
+    ).toBeNull()
+    expect(
+      container.querySelector('[role="tabpanel"][aria-hidden="false"] .soha-admin-table-shell'),
     ).not.toBeNull()
 
     const portTab = Array.from(container.querySelectorAll<HTMLElement>('.ant-tabs-tab-btn')).find(
@@ -1191,9 +1193,11 @@ describe('docker pages', () => {
     )
     expect(portTab).toBeDefined()
     await act(async () => portTab?.click())
-    expect(container.querySelector('.ant-tabs-tabpane-active .soha-vrt-query')).toBeNull()
     expect(
-      container.querySelector('.ant-tabs-tabpane-active .soha-admin-table-shell'),
+      container.querySelector('[role="tabpanel"][aria-hidden="false"] .soha-vrt-query'),
+    ).toBeNull()
+    expect(
+      container.querySelector('[role="tabpanel"][aria-hidden="false"] .soha-admin-table-shell'),
     ).not.toBeNull()
 
     expect(container.textContent).toContain('新增映射')

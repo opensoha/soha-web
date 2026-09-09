@@ -33,6 +33,7 @@ import {
 import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useAuthStore } from '@/stores/auth-store'
+import { tableColumnPresets } from '@/utils/table-columns'
 import {
   accessPolicyFormValuesFromRecord,
   approvalTrace,
@@ -102,6 +103,7 @@ import {
   disableGatewayUpstream,
   rotateGatewayToken,
   testGatewayUpstream,
+  testGatewayUpstreamDraft,
   upsertGatewayResource,
 } from './mutations'
 import { gatewayQueries } from './queries'
@@ -976,13 +978,48 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
   })
 
   const testUpstreamMutation = useMutation({
-    mutationFn: testGatewayUpstream,
-    onSuccess: () => {
-      void refreshAll()
-      message.success('已提交测试')
+    mutationFn: (
+      target:
+        | { record: LLMUpstream; importModels?: boolean }
+        | { values: GatewayDrawerFormValues; importModels: true },
+    ) =>
+      'record' in target
+        ? testGatewayUpstream(target.record)
+        : testGatewayUpstreamDraft(target.values),
+    onSuccess: (response, target) => {
+      const result = response.data
+      if (result.status !== 'success') {
+        message.error(
+          result.errorMessage ||
+            `连接失败${result.httpStatus ? `（HTTP ${result.httpStatus}）` : ''}`,
+        )
+        return
+      }
+      if (target.importModels && result.models?.length) {
+        form.setFieldValue('supportedModels', result.models)
+      }
+      message.success(`连接成功，发现 ${result.modelCount ?? result.models?.length ?? 0} 个模型`)
     },
     onError: (error: Error) => message.error(error.message),
   })
+
+  const testUpstreamFromForm = () => {
+    const fields = drawer?.record
+      ? ['name', 'providerKind', 'baseUrl']
+      : ['name', 'providerKind', 'baseUrl', 'apiKey']
+    void form.validateFields(fields).then(
+      () => {
+        const values = form.getFieldsValue(true)
+        const record = drawer?.record as LLMUpstream | undefined
+        testUpstreamMutation.mutate(
+          record && !values.apiKey
+            ? { record, importModels: true }
+            : { values, importModels: true },
+        )
+      },
+      () => undefined,
+    )
+  }
 
   const decisionMutation = useMutation({
     mutationFn: decideGatewayApproval,
@@ -1074,7 +1111,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
       title: 'Provider',
       dataIndex: 'providerKind',
       width: 150,
-      render: (value) => <MetadataTag label={value} />,
+      render: (value) => <MetadataTag label={value} tone="blue" />,
     },
     {
       title: 'Base URL',
@@ -1118,20 +1155,26 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
     { title: '并发', dataIndex: 'maxConcurrency', width: 100, render: (value) => value || '-' },
     { title: '更新时间', dataIndex: 'updatedAt', width: 140, render: formatDateTime },
     {
+      ...tableColumnPresets.action,
       title: '',
       key: 'actions',
-      fixed: 'right',
       width: 150,
       render: (_, record) => (
         <Space className="soha-row-action-icons">
           <ManagementIconButton
             size="small"
-            tooltip="测试"
-            aria-label="测试上游"
+            tooltip="测试连接"
+            aria-label="测试上游连接"
             icon={<CheckOutlined />}
             disabled={!canRelayTest || record.status === 'disabled'}
-            loading={testUpstreamMutation.isPending}
-            onClick={() => testUpstreamMutation.mutate(record)}
+            loading={
+              testUpstreamMutation.isPending &&
+              !!testUpstreamMutation.variables &&
+              'record' in testUpstreamMutation.variables &&
+              !testUpstreamMutation.variables.importModels &&
+              testUpstreamMutation.variables.record.id === record.id
+            }
+            onClick={() => testUpstreamMutation.mutate({ record })}
           />
           <ManagementIconButton
             size="small"
@@ -1179,7 +1222,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
       dataIndex: 'providerKind',
       width: 150,
       render: (value) =>
-        value ? <MetadataTag label={value} /> : <Text type="secondary">any</Text>,
+        value ? <MetadataTag label={value} tone="blue" /> : <Text type="secondary">any</Text>,
     },
     {
       title: '上游',
@@ -1220,9 +1263,9 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
     },
     { title: '更新时间', dataIndex: 'updatedAt', width: 140, render: formatDateTime },
     {
+      ...tableColumnPresets.action,
       title: '',
       key: 'actions',
-      fixed: 'right',
       width: 130,
       render: (_, record) => (
         <Space className="soha-row-action-icons">
@@ -2287,7 +2330,6 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             rankingColumns={relayRankingColumns}
             ranking={relayModelRanking(relayMetrics)}
             metricsLoading={relayMetricsQuery.isLoading}
-            metricsFetching={relayMetricsQuery.isFetching}
             recentErrors={(
               relayMetrics?.recentErrors ??
               modelCalls.filter((item) => item.status && item.status !== 'success')
@@ -2324,7 +2366,6 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             onModelRouteUpstreamFilterChange={setModelRouteUpstreamFilter}
             onRefreshModelRoutes={() => void modelRoutesQuery.refetch()}
             onCreateModelRoute={() => setDrawer({ kind: 'relay-route' })}
-            onRefreshAll={() => void refreshAll()}
             onRefreshModelCalls={() => void modelCallsQuery.refetch()}
             expandedErrorRowRender={(record) => (
               <JsonBlock
@@ -2498,8 +2539,13 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             manifest={manifest}
             upstreams={upstreams}
             saving={upsertMutation.isPending}
+            canTestUpstream={canRelayTest}
+            testingUpstream={
+              testUpstreamMutation.isPending && !!testUpstreamMutation.variables?.importModels
+            }
             onClose={() => setDrawer(null)}
             onSubmit={(values) => upsertMutation.mutate(values)}
+            onTestUpstream={testUpstreamFromForm}
           />
         </Suspense>
       ) : null}

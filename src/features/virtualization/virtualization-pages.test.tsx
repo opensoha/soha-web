@@ -1156,7 +1156,9 @@ describe('virtualization pages', () => {
     expect(container.textContent).not.toContain('Console 能力摘要')
     expect(container.textContent).not.toContain('Metrics 能力摘要')
     expect(container.querySelector('.soha-management-detail-header')).toBeNull()
-    expect(container.querySelector('.ant-tabs-tabpane-active > .soha-detail-stack')).not.toBeNull()
+    expect(
+      container.querySelector('[role="tabpanel"][aria-hidden="false"] > .soha-detail-stack'),
+    ).not.toBeNull()
     expect(container.textContent).not.toContain('返回列表')
     expect(container.querySelector('.ant-tabs-tab-active')?.textContent).toContain('概览')
     const tabTexts = Array.from(container.querySelectorAll('.ant-tabs-tab-btn')).map((node) =>

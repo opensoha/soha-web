@@ -94,7 +94,6 @@ describe('AnnouncementBell i18n', () => {
       {
         id: 'notice-1',
         title: 'Maintenance window',
-        summary: 'Control plane maintenance',
         content: 'Expected duration: 30 minutes',
         level: 'critical',
         sticky: true,
@@ -131,6 +130,7 @@ describe('AnnouncementBell i18n', () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
     expect(document.body.textContent).toContain('View')
+    expect(document.body.textContent).toContain('Expected duration: 30 minutes')
 
     await act(async () => root.unmount())
   })

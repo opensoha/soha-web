@@ -192,7 +192,7 @@ export function MonitoringPage() {
                   </Button>
                 }
               />
-              <div className="soha-overview-chip-grid soha-monitoring-chip-grid">
+              <div className="soha-overview-chip-grid">
                 {alertChips.map((item) => (
                   <OverviewChip
                     key={item.key}

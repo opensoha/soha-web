@@ -44,6 +44,17 @@ function podSearchValues(pod: Pod) {
   return [pod.name, pod.phase, pod.nodeName, pod.podIp]
 }
 
+function WorkloadAccessValue({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="soha-workload-access-overview__value">
+      <Text type="secondary">{label}</Text>
+      <Text code copyable={{ text: value }}>
+        {value}
+      </Text>
+    </div>
+  )
+}
+
 function deploymentHealth(
   deployment: DeploymentDetail,
   t: (key: string, fallback?: string) => string,
@@ -83,7 +94,9 @@ export function ApplicationWorkloadDetailPage() {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const requestedTab = searchParams.get('tab')
-  const activeTab = ['pods', 'network', 'logs', 'terminal', 'metrics'].includes(requestedTab ?? '')
+  const activeTab = ['pods', 'related-resources', 'logs', 'terminal', 'metrics'].includes(
+    requestedTab ?? '',
+  )
     ? requestedTab!
     : 'pods'
   const [podSearch, setPodSearch] = useState('')
@@ -114,6 +127,123 @@ export function ApplicationWorkloadDetailPage() {
   const serviceList = detail?.services ?? []
   const ingressList = detail?.ingresses ?? []
   const deployment = detail?.deployment
+  const relatedResources = deployment?.relatedResources ?? []
+  const gatewayRoutes = relatedResources.filter(({ kind }) =>
+    ['HTTPRoute', 'GRPCRoute'].includes(kind),
+  )
+  const mountedResources = relatedResources.filter(({ kind }) =>
+    ['ConfigMap', 'Secret', 'PersistentVolumeClaim'].includes(kind),
+  )
+  const accessOverviewItems = [
+    ...(serviceList.length === 0
+      ? [
+          {
+            key: 'service:empty',
+            label: <MetadataTag label="Service" tone="blue" />,
+            children: (
+              <Text type="secondary">
+                {t('page.applicationWorkload.noService', '暂无关联 Service')}
+              </Text>
+            ),
+          },
+        ]
+      : []),
+    ...serviceList.map((service) => ({
+      key: `service:${service.namespace}:${service.name}`,
+      label: (
+        <Space size={6} wrap>
+          <MetadataTag label="Service" tone="blue" />
+          <Text>{service.name}</Text>
+        </Space>
+      ),
+      children: (
+        <div className="soha-workload-access-overview__values">
+          <WorkloadAccessValue
+            label={t('page.applicationWorkload.sameNamespaceAccess', '同命名空间')}
+            value={service.name}
+          />
+          <WorkloadAccessValue
+            label={t('page.applicationWorkload.crossNamespaceAccess', '跨命名空间')}
+            value={`${service.name}.${service.namespace}`}
+          />
+          {service.clusterIp ? (
+            <WorkloadAccessValue label="Cluster IP" value={service.clusterIp} />
+          ) : null}
+          {(service.ports ?? []).length > 0 ? (
+            <WorkloadAccessValue
+              label={t('common.ports', '端口')}
+              value={(service.ports ?? []).join(', ')}
+            />
+          ) : null}
+        </div>
+      ),
+    })),
+    ...(ingressList.length === 0
+      ? [
+          {
+            key: 'ingress:empty',
+            label: <MetadataTag label="Ingress" tone="cyan" />,
+            children: (
+              <Text type="secondary">
+                {t('page.applicationWorkload.noIngress', '暂无关联 Ingress')}
+              </Text>
+            ),
+          },
+        ]
+      : []),
+    ...ingressList.map((ingress) => ({
+      key: `ingress:${ingress.namespace}:${ingress.name}`,
+      label: (
+        <Space size={6} wrap>
+          <MetadataTag label="Ingress" tone="cyan" />
+          <Text>{ingress.name}</Text>
+        </Space>
+      ),
+      children: (
+        <div className="soha-workload-access-overview__values">
+          {(ingress.hosts ?? []).length > 0 ? (
+            <WorkloadAccessValue
+              label={t('page.applicationWorkload.hosts', '访问域名')}
+              value={(ingress.hosts ?? []).join(', ')}
+            />
+          ) : null}
+          {ingress.address ? (
+            <WorkloadAccessValue label={t('common.address', '地址')} value={ingress.address} />
+          ) : null}
+          {(ingress.hosts ?? []).length === 0 && !ingress.address ? (
+            <Text type="secondary">-</Text>
+          ) : null}
+        </div>
+      ),
+    })),
+    ...(gatewayRoutes.length === 0
+      ? [
+          {
+            key: 'gateway:empty',
+            label: <MetadataTag label="Gateway API" tone="purple" />,
+            children: (
+              <Text type="secondary">
+                {t('page.applicationWorkload.noGatewayRoute', '暂无关联 Gateway API Route')}
+              </Text>
+            ),
+          },
+        ]
+      : []),
+    ...gatewayRoutes.map((route) => ({
+      key: `${route.kind}:${route.namespace ?? ''}:${route.name}`,
+      label: (
+        <Space size={6} wrap>
+          <MetadataTag label={route.kind} tone="purple" />
+          <Text>{route.name}</Text>
+        </Space>
+      ),
+      children: (
+        <Text type="secondary">
+          {t('page.applicationWorkload.gatewayAddressHint', '未返回 Gateway 监听地址')}
+        </Text>
+      ),
+    })),
+  ]
   const workloadContainers = deployment?.containers ?? []
   const containerOptions = workloadContainers.map((container) => ({
     label: container.name,
@@ -356,121 +486,61 @@ export function ApplicationWorkloadDetailPage() {
       ),
     },
     {
-      key: 'network',
-      label: `${t('page.applicationWorkload.network', '网络')} ${serviceList.length + ingressList.length}`,
-      children: (
-        <div className="soha-application-runtime-network">
-          <section className="soha-application-runtime-network__section">
-            <Space size={6}>
-              <Text strong>{t('page.applicationWorkload.services', '服务')}</Text>
-              <Text type="secondary">{serviceList.length}</Text>
-            </Space>
-            {serviceList.length > 0 ? (
-              <div className="soha-application-long-card-list" role="list">
-                {serviceList.map((service) => (
-                  <Card
-                    key={service.name}
-                    size="small"
-                    role="listitem"
-                    className="soha-application-long-card soha-workload-network-card"
-                    title={
-                      <Space size={6} wrap>
-                        <Text strong>{service.name}</Text>
-                        <MetadataTag label={service.type} tone="blue" />
-                      </Space>
-                    }
-                  >
-                    <Descriptions
-                      size="small"
-                      column={{ xs: 1, sm: 2, md: 3 }}
-                      items={[
-                        {
-                          key: 'namespace',
-                          label: t('common.namespace', '命名空间'),
-                          children: service.namespace,
-                        },
-                        {
-                          key: 'clusterIp',
-                          label: 'Cluster IP',
-                          children: service.clusterIp || '-',
-                        },
-                        {
-                          key: 'ports',
-                          label: t('common.ports', '端口'),
-                          children: (service.ports ?? []).join(', ') || '-',
-                        },
-                      ]}
+      key: 'related-resources',
+      label: `${t('page.applicationWorkload.relatedResources', '关联资源')} ${mountedResources.length}`,
+      children:
+        mountedResources.length > 0 ? (
+          <div className="soha-application-long-card-list" role="list">
+            {mountedResources.map((resource) => (
+              <Card
+                key={`${resource.kind}:${resource.namespace ?? ''}:${resource.name}`}
+                size="small"
+                role="listitem"
+                className="soha-application-long-card soha-workload-related-resource-card"
+                title={
+                  <Space size={6} wrap>
+                    <Text strong>{resource.name}</Text>
+                    <MetadataTag
+                      label={resource.kind === 'PersistentVolumeClaim' ? 'PVC' : resource.kind}
+                      tone="blue"
                     />
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <ManagementState
-                compact
-                kind="empty"
-                description={t('page.applicationWorkload.noService', '暂无关联 Service')}
-              />
+                  </Space>
+                }
+              >
+                <Descriptions
+                  size="small"
+                  column={{ xs: 1, sm: 2 }}
+                  items={[
+                    {
+                      key: 'namespace',
+                      label: t('common.namespace', '命名空间'),
+                      children: resource.namespace || '-',
+                    },
+                    {
+                      key: 'relation',
+                      label: t('page.applicationWorkload.relation', '关联方式'),
+                      children:
+                        resource.kind === 'ConfigMap'
+                          ? t('page.applicationWorkload.configReference', '配置引用')
+                          : resource.kind === 'Secret'
+                            ? t('page.applicationWorkload.secretReference', '密钥引用')
+                            : t('page.applicationWorkload.volumeMount', '卷挂载'),
+                    },
+                  ]}
+                />
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <ManagementState
+            compact
+            kind="empty"
+            description={t(
+              'page.applicationWorkload.noRelatedResources',
+              '暂无关联 ConfigMap、Secret 或 PVC',
             )}
-          </section>
-          <section className="soha-application-runtime-network__section">
-            <Space size={6}>
-              <Text strong>{t('page.applicationWorkload.ingresses', '入口')}</Text>
-              <Text type="secondary">{ingressList.length}</Text>
-            </Space>
-            {ingressList.length > 0 ? (
-              <div className="soha-application-long-card-list" role="list">
-                {ingressList.map((ingress) => (
-                  <Card
-                    key={ingress.name}
-                    size="small"
-                    role="listitem"
-                    className="soha-application-long-card soha-workload-network-card"
-                    title={
-                      <Space size={6} wrap>
-                        <Text strong>{ingress.name}</Text>
-                        <MetadataTag label={ingress.className || 'Ingress'} tone="blue" />
-                      </Space>
-                    }
-                  >
-                    <Descriptions
-                      size="small"
-                      column={{ xs: 1, sm: 2, md: 4 }}
-                      items={[
-                        {
-                          key: 'namespace',
-                          label: t('common.namespace', '命名空间'),
-                          children: ingress.namespace,
-                        },
-                        {
-                          key: 'hosts',
-                          label: t('page.applicationWorkload.hosts', '主机'),
-                          children: (ingress.hosts ?? []).join(', ') || '-',
-                        },
-                        {
-                          key: 'address',
-                          label: t('common.address', '地址'),
-                          children: ingress.address || '-',
-                        },
-                        {
-                          key: 'backends',
-                          label: t('page.applicationWorkload.backends', '后端'),
-                          children: (ingress.backendServices ?? []).join(', ') || '-',
-                        },
-                      ]}
-                    />
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <ManagementState
-                compact
-                kind="empty"
-                description={t('page.applicationWorkload.noIngress', '暂无关联 Ingress')}
-              />
-            )}
-          </section>
-        </div>
-      ),
+          />
+        ),
     },
     ...(canViewPodLogs
       ? [
@@ -601,16 +671,31 @@ export function ApplicationWorkloadDetailPage() {
         onChange={(tab) => navigate(`${applicationPath}?tab=${tab}`)}
       />
       <ManagementDetailHeader
+        className="soha-workload-detail-header"
         title={detail.workload.workloadName}
         description={`${detail.application.name} · ${detail.environment?.name || detail.binding.environmentKey}`}
         meta={
-          <Space size={[6, 6]} wrap>
-            <MetadataTag label={detail.workload.workloadKind} tone="blue" />
-            <StatusTag value={health.value} label={health.label} />
-            <MetadataTag
-              label={`${t('common.namespace', '命名空间')} ${detail.workload.namespace}`}
-            />
-          </Space>
+          <div className="soha-workload-detail-header__meta">
+            <Space size={[6, 6]} wrap>
+              <MetadataTag label={detail.workload.workloadKind} tone="blue" />
+              <StatusTag value={health.value} label={health.label} />
+              <MetadataTag
+                label={`${t('common.namespace', '命名空间')} ${detail.workload.namespace}`}
+              />
+            </Space>
+            <section
+              aria-label={t('page.applicationWorkload.accessAddresses', '访问地址')}
+              className="soha-workload-access-overview"
+            >
+              <Descriptions
+                colon={false}
+                column={{ xs: 1, sm: 2, md: 3 }}
+                items={accessOverviewItems}
+                layout="vertical"
+                size="small"
+              />
+            </section>
+          </div>
         }
         actions={
           <Space wrap>

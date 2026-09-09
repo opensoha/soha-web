@@ -1,4 +1,6 @@
-import { Card, Table } from 'antd'
+import { Card } from 'antd'
+import type { TableProps } from 'antd'
+import { AdminTable } from '@/components/admin-table'
 import { Link } from 'react-router-dom'
 import { StatusTag } from '@/components/status-tag'
 import { useI18n } from '@/i18n'
@@ -37,20 +39,22 @@ function DetailTable<T extends object>({
   rowKey,
   title,
 }: {
-  columns: Parameters<typeof Table<T>>[0]['columns']
+  columns: NonNullable<TableProps<T>['columns']>
   data?: T[]
-  rowKey: Parameters<typeof Table<T>>[0]['rowKey']
+  rowKey: string | ((record: T) => string)
   title: string
 }) {
   if (!data?.length) return null
   return (
     <Card className="soha-detail-card" title={title}>
-      <Table<T>
+      <AdminTable
+        enableColumnSelection={false}
+        scroll={{ x: '100%' }}
         columns={columns}
         dataSource={data}
         pagination={false}
         rowKey={rowKey}
-        size="small"
+        tableSize="small"
       />
     </Card>
   )

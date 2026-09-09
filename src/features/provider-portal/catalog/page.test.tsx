@@ -288,7 +288,6 @@ describe('Provider Portal catalog page', () => {
           items: Array.from({ length: 5 }, (_, index) => ({
             id: `notice-${index + 1}`,
             title: `Notice ${index + 1}`,
-            summary: `Announcement ${index + 1} summary`,
             content: `Announcement ${index + 1} content`,
             level: 'info',
             status: 'published',

@@ -18,7 +18,5 @@ export function loginProviderTagColor(value?: string) {
   const normalized = String(value || '')
     .trim()
     .toLowerCase()
-  if (normalized === 'password') return 'default'
-  if (normalized === 'oidc') return 'processing'
-  return 'success'
+  return normalized ? 'blue' : 'default'
 }
