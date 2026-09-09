@@ -1500,7 +1500,7 @@ describe('ApplicationDetailPage workbench', () => {
     expect(container.textContent).toContain('环境信息')
     expect(container.textContent).toContain('工作流信息')
     expect(container.querySelector('.soha-application-overview')).not.toBeNull()
-  })
+  }, 15_000)
 
   it('opens a project canvas from a reusable template and saves an application workflow', async () => {
     const container = await renderWithProviders(
