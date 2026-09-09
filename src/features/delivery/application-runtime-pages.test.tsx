@@ -1396,7 +1396,7 @@ describe('ApplicationDetailPage workbench', () => {
     expect(container.textContent).toContain('应用环境授权')
     expect(testState.apiGet).toHaveBeenCalledWith('/access/scope-grants')
     expect(container.textContent).toContain('授权主体')
-    expect(container.textContent).toContain('Release Owner')
+    await vi.waitFor(() => expect(container.textContent).toContain('Release Owner'))
     expect(container.textContent).toContain('应用默认')
     expect(container.textContent).toContain('release-manager')
     expect(container.textContent).toContain('允许')
