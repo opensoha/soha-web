@@ -20,6 +20,8 @@ export const crdQueries = {
       queryKey: crdKeys.resources(clusterId ?? '', crd, namespace),
       queryFn: () => listCustomResources(clusterId!, crd, namespace),
       enabled: Boolean(clusterId) && capabilityEnabled,
+      refetchInterval: (query) =>
+        query.state.data?.some((item) => item.deletingAt) ? 3000 : false,
     }),
   yaml: (target: CustomResourceTarget | null, enabled: boolean) =>
     queryOptions({

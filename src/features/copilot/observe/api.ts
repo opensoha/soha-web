@@ -5,6 +5,7 @@ import type {
   AutomationPolicy,
   Insight,
   InspectionRun,
+  InspectionExecutionInput,
   InspectionRunSummary,
   InspectionTask,
   PatchSessionInput,
@@ -25,6 +26,12 @@ export const observeApi = {
       unwrap(api.get<ApiResponse<InspectionRunSummary[]>>('/copilot/inspection-runs')),
   },
   operations: {
+    task: (taskId: string) =>
+      unwrap(
+        api.get<ApiResponse<InspectionTask>>(
+          `/copilot/inspection-tasks/${encodeURIComponent(taskId)}`,
+        ),
+      ),
     tasks: () => unwrap(api.get<ApiResponse<InspectionTask[]>>('/copilot/inspection-tasks')),
     runs: () => unwrap(api.get<ApiResponse<InspectionRun[]>>('/copilot/inspection-runs')),
     policies: () =>
@@ -44,7 +51,16 @@ export const observeApi = {
         api.put<ApiResponse<AutomationPolicy>>(`/copilot/automation-policies/${policyId}`, values),
       ),
     deletePolicy: (policyId: string) => api.delete(`/copilot/automation-policies/${policyId}`),
-    executeTask: (taskId: string) => api.post(`/copilot/inspection-tasks/${taskId}/execute`),
+    executeTask: (input: string | InspectionExecutionInput) => {
+      const taskId = typeof input === 'string' ? input : input.taskId
+      const query =
+        typeof input === 'string'
+          ? ''
+          : `?${new URLSearchParams({ idempotencyKey: input.idempotencyKey, expectedRevision: String(input.expectedRevision) })}`
+      return api.post<ApiResponse<InspectionRun>>(
+        `/copilot/inspection-tasks/${encodeURIComponent(taskId)}/execute${query}`,
+      )
+    },
   },
   tools: {
     catalog: () => unwrap(api.get<ApiResponse<WorkbenchCatalog>>('/copilot/workbench/catalog')),

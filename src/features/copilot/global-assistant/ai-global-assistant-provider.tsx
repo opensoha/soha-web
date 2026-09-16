@@ -1,3 +1,11 @@
+import { workbenchApi } from '../workbench/api'
+import { workbenchQueries } from '../workbench/queries'
+import { preferredExternalAgent } from '../workbench/agent-selection'
+import {
+  sortedAgentRunReplayEvents,
+  isRunningExternalAgentRun,
+} from '../workbench/agent-run-replay'
+import { watchAgentRun } from '../workbench/watch-agent-run'
 import {
   lazy,
   Suspense,
@@ -298,6 +306,7 @@ export function GlobalAIAssistantProvider({
   const [selectionToolbar, setSelectionToolbar] = useState<AISelectionToolbarState | null>(null)
   const [contextMenu, setContextMenu] = useState<AIContextMenuState | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const externalRunRef = useRef<{ sessionId: string; runId?: string } | null>(null)
   const selectionTimerRef = useRef<number | null>(null)
 
   const activeContext = useMemo(() => mergeAIPageContext(pageContext), [pageContext])
@@ -333,11 +342,17 @@ export function GlobalAIAssistantProvider({
         return { session: currentSession, created: false }
       }
 
+      const mode =
+        action.startsWith('troubleshoot') || action === 'analyze-page' ? 'root_cause' : 'general'
+      const catalog = await queryClient.fetchQuery(workbenchQueries.catalog())
+      const provider = preferredExternalAgent(catalog.data.agentProviders ?? [], mode)
+      if (!provider) throw new Error('没有支持当前任务的就绪助手，请先配置 Agent 插件。')
       const response = await api.postWithSignal<ApiResponse<WorkbenchSession>>(
         '/copilot/sessions',
         {
           title: buildGlobalAssistantTitle(action, context),
-          mode: 'root_cause',
+          mode,
+          agentProviderId: provider.id,
           scope: workbenchScopeFromAIContext(context),
           pinnedContext: pinnedContextFromAIContext(context),
           source: 'global-assistant',
@@ -396,12 +411,19 @@ export function GlobalAIAssistantProvider({
       try {
         const ensured = await ensureSession(context, action, controller.signal)
         const session = ensured.session
+        externalRunRef.current = { sessionId: session.id }
         createdSessionId = ensured.created ? session.id : null
         let nextStreamState = createWorkbenchStreamState()
         const seenEvents = new Set<string>()
         const request: WorkbenchSendMessageStreamRequest = {
           content: prompt,
-          mode: 'root_cause',
+          mode:
+            action === 'freeform'
+              ? session.metadata?.mode || 'general'
+              : action.startsWith('troubleshoot') || action === 'analyze-page'
+                ? 'root_cause'
+                : 'general',
+          agentProviderId: session.metadata?.agentProviderId,
           scopeOverrides: workbenchScopeFromAIContext(context),
           source: 'global-assistant',
           launchContext: context,
@@ -413,6 +435,14 @@ export function GlobalAIAssistantProvider({
           `/copilot/sessions/${session.id}/messages/stream`,
           request,
           (event) => {
+            if (
+              event.type === 'agent.status' &&
+              event.status === 'queued' &&
+              event.runId &&
+              event.providerId !== 'internal'
+            ) {
+              externalRunRef.current = { sessionId: session.id, runId: event.runId }
+            }
             const eventKey = workbenchStreamEventKey(event)
             if (seenEvents.has(eventKey)) return
             seenEvents.add(eventKey)
@@ -423,10 +453,7 @@ export function GlobalAIAssistantProvider({
                 if (item.id !== assistantMessageId) return item
                 return {
                   ...item,
-                  id:
-                    nextStreamState.message.done && nextStreamState.message.id
-                      ? nextStreamState.message.id
-                      : item.id,
+                  id: item.id,
                   content: streamContent(nextStreamState, item.content),
                   status: streamMessageStatus(nextStreamState),
                 }
@@ -439,6 +466,60 @@ export function GlobalAIAssistantProvider({
           controller.signal,
         )
 
+        if (externalRunRef.current?.runId) {
+          nextStreamState = createWorkbenchStreamState()
+          const run = await watchAgentRun(
+            session.id,
+            externalRunRef.current.runId,
+            controller.signal,
+            (snapshot) => {
+              for (const event of sortedAgentRunReplayEvents(snapshot, session.id)) {
+                const key = workbenchStreamEventKey(event)
+                if (seenEvents.has(key)) continue
+                seenEvents.add(key)
+                nextStreamState = reduceWorkbenchStreamState(nextStreamState, event)
+              }
+              setStreamState(nextStreamState)
+              setMessages((items) =>
+                items.map((item) =>
+                  item.id === assistantMessageId
+                    ? {
+                        ...item,
+                        content: nextStreamState.message.content || '助手正在处理当前请求。',
+                        status: isRunningExternalAgentRun(snapshot) ? 'loading' : 'success',
+                      }
+                    : item,
+                ),
+              )
+            },
+          )
+          if (run.status !== 'completed' && run.status !== 'succeeded')
+            throw new Error(
+              run.status === 'canceled' || run.status === 'cancelled'
+                ? '已取消本次回复。'
+                : '助手运行失败，请查看运行记录。',
+            )
+          const content =
+            typeof run.output?.summary === 'string'
+              ? run.output.summary
+              : nextStreamState.message.content
+          setMessages((items) =>
+            items.map((item) =>
+              item.id === assistantMessageId ? { ...item, content, status: 'success' } : item,
+            ),
+          )
+        }
+        setCurrentSession((current) =>
+          current?.id === session.id
+            ? {
+                ...current,
+                metadata: {
+                  ...current.metadata,
+                  mode: request.mode as NonNullable<WorkbenchSession['metadata']>['mode'],
+                },
+              }
+            : current,
+        )
         await queryClient.invalidateQueries({
           queryKey: workbenchKeys.sessions.messages(session.id),
         })
@@ -450,7 +531,7 @@ export function GlobalAIAssistantProvider({
         await queryClient.invalidateQueries({ queryKey: systemKeys.audit.all })
       } catch (error) {
         const isAbort = error instanceof DOMException && error.name === 'AbortError'
-        if (isAbort && createdSessionId) {
+        if (isAbort && createdSessionId && !externalRunRef.current?.runId) {
           const sessionId = createdSessionId
           setCurrentSession((current) => (current?.id === sessionId ? null : current))
           setCurrentSessionContextKey(null)
@@ -478,6 +559,7 @@ export function GlobalAIAssistantProvider({
         }
       } finally {
         abortRef.current = null
+        externalRunRef.current = null
         setRunning(false)
       }
     },
@@ -516,12 +598,28 @@ export function GlobalAIAssistantProvider({
     )
     if (currentSession?.id) params.set('session', currentSession.id)
     recordGlobalAssistantEvent('open-workbench', activeContext, currentSession?.id)
-    navigate(getAIWorkbenchPathForMode('root_cause', params))
-  }, [activeContext, currentSession?.id, navigate])
+    navigate(getAIWorkbenchPathForMode(currentSession?.metadata?.mode || 'general', params))
+  }, [activeContext, currentSession?.id, currentSession?.metadata?.mode, navigate])
 
   const cancelStream = useCallback(() => {
+    const active = externalRunRef.current
+    if (active) {
+      void workbenchApi.agentRuns
+        .session(active.sessionId)
+        .then((response) =>
+          Promise.all(
+            response.data
+              .filter(
+                (run) =>
+                  isRunningExternalAgentRun(run) && (!active.runId || run.id === active.runId),
+              )
+              .map((run) => workbenchApi.agentRuns.cancel(run.id)),
+          ),
+        )
+        .catch((error: Error) => void message.error(error.message))
+    }
     abortRef.current?.abort()
-  }, [])
+  }, [message])
 
   const closeAssistant = useCallback(() => {
     abortRef.current?.abort()

@@ -613,6 +613,7 @@ export function PodLogViewer({
         ) : null}
         {containerOptions && containerOptions.length > 0 ? (
           <Select
+            aria-label={localeCode === 'zh_CN' ? '选择容器' : 'Select container'}
             size="small"
             value={container || undefined}
             onChange={(value) => onContainerChange?.(String(value ?? ''))}

@@ -76,6 +76,13 @@ type Editor =
   | { kind: 'gateway'; record?: NetworkGateway }
 
 interface EditorValues {
+ region?: string
+ providerCode?: string
+ providerName?: string
+ selectionPriority?: number
+ acceptNewConnections?: boolean
+ maxSessions?: number
+ probeURL?: string
   administrativeStatus?: NetworkGatewayAdministrativeStatus
   advertisedCidrsText?: string
   cidrsText?: string
@@ -243,6 +250,7 @@ export function NetworkAccessPage() {
         next.record
           ? {
               name: next.record.name,
+ region: next.record.region, providerCode: next.record.providerCode, providerName: next.record.providerName, selectionPriority: next.record.selectionPriority ?? 100, acceptNewConnections: next.record.acceptNewConnections ?? true, maxSessions: next.record.maxSessions ?? 0, probeURL: next.record.probeURL,
               runtimeId: next.record.runtimeId,
               siteId: next.record.siteId,
               administrativeStatus: next.record.administrativeStatus,
@@ -258,6 +266,7 @@ export function NetworkAccessPage() {
             }
           : {
               name: '',
+ selectionPriority: 100, acceptNewConnections: true, maxSessions: 0,
               administrativeStatus: 'active',
               advertisedCidrsText: '',
               dnsServersText: '',
@@ -335,6 +344,7 @@ export function NetworkAccessPage() {
       else await resourceCreate.mutateAsync(input)
     } else {
       const input: NetworkGatewayInput = {
+ region: values.region?.trim() || "", providerCode: values.providerCode?.trim() || "", providerName: values.providerName?.trim() || "", selectionPriority: values.selectionPriority ?? 100, acceptNewConnections: values.acceptNewConnections ?? true, maxSessions: values.maxSessions ?? 0, probeURL: values.probeURL?.trim() || "",
         runtimeId: values.runtimeId!.trim(),
         siteId: values.siteId!.trim(),
         name: values.name.trim(),
@@ -595,6 +605,11 @@ export function NetworkAccessPage() {
   ]
 
   const gatewayColumns: TableColumnsType<NetworkGateway> = [
+    {title: t('networkAccess.gateway.provider','供应商'), dataIndex:'providerName'},
+    {title: t('networkAccess.gateway.region','地区'), dataIndex:'region'},
+    {title: t('networkAccess.gateway.priority','优先级'), dataIndex:'selectionPriority'},
+    {title: t('networkAccess.gateway.accepting','接受新连接'), dataIndex:'acceptNewConnections', render:(value:boolean)=>statusTag(value?'enabled':'disabled')},
+    {title: t('networkAccess.gateway.maxSessions','会话上限'), dataIndex:'maxSessions',render:(value:number)=>value||t('networkAccess.gateway.unlimited','不限')},
     { title: t('networkAccess.name', '名称'), dataIndex: 'name', width: 180 },
     { title: t('networkAccess.siteId', '站点 ID'), dataIndex: 'siteId', width: 220 },
     {
@@ -1246,6 +1261,13 @@ export function NetworkAccessPage() {
           ) : null}
           {editor?.kind === 'gateway' ? (
             <>
+ <Form.Item name="region" label={t("networkAccess.gateway.region","地区")}><Input maxLength={128}/></Form.Item>
+ <Form.Item name="providerCode" label={t("networkAccess.gateway.providerCode","供应商编码")}><Input maxLength={64}/></Form.Item>
+ <Form.Item name="providerName" label={t("networkAccess.gateway.providerName","供应商名称")}><Input maxLength={128}/></Form.Item>
+ <Form.Item name="probeURL" label={t("networkAccess.gateway.probeURL","HTTPS 探测地址")}><Input maxLength={2048}/></Form.Item>
+ <Form.Item name="selectionPriority" label={t('networkAccess.gateway.priority','优先级（越小越优先）')}><InputNumber min={0} max={10000} precision={0}/></Form.Item>
+ <Form.Item name="maxSessions" label={t('networkAccess.gateway.maxSessions','会话上限（0 表示不限）')}><InputNumber min={0} max={1000000} precision={0}/></Form.Item>
+ <Form.Item name="acceptNewConnections" label={t('networkAccess.gateway.accepting','接受新连接')} valuePropName="checked"><Switch/></Form.Item>
               <Form.Item
                 name="runtimeId"
                 label={t('networkAccess.runtimeId', '运行时 ID')}

@@ -47,6 +47,17 @@ describe('observeApi', () => {
     ])
   })
 
+  it('pins manual capability executions to the original revision and key', async () => {
+    await observeApi.operations.executeTask({
+      taskId: 'inspection/1',
+      idempotencyKey: 'same key&1',
+      expectedRevision: 7,
+    })
+    expect(apiMocks.post).toHaveBeenCalledWith(
+      '/copilot/inspection-tasks/inspection%2F1/execute?idempotencyKey=same+key%261&expectedRevision=7',
+    )
+  })
+
   it('preserves operation and tool mutation wire shapes', async () => {
     await observeApi.operations.createSession('run-1')
     await observeApi.operations.createTask({ title: '巡检' })

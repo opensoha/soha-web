@@ -7,21 +7,21 @@ import {
   EyeOutlined,
   KeyOutlined,
   PlusOutlined,
-  ReloadOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
 import {
   ManagementIconButton,
+  ManagementDensityButton,
+  ManagementRefreshButton,
   ManagementState,
   ManagementTableToolbar,
 } from '@/components/management-list'
-import { MetadataTag } from '@/components/status-tag'
-import {
-  formatIdentityProviderDateTime,
-  identityOIDCClientStatusTag,
-  identityProviderTagsSummary,
-} from '../presentation'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { useI18n } from '@/i18n'
+import { isApiError } from '@/services/api-error'
+import { tableColumnPresets } from '@/utils/table-columns'
+import { formatIdentityProviderDateTime, identityProviderTagsSummary } from '../presentation'
 import { createIdentityOIDCClient, revealIdentityOIDCClientSecret } from '../api'
 import { identityProviderKeys } from '../keys'
 import { identityProviderMutations } from '../mutations'
@@ -55,11 +55,13 @@ export function OIDCClientsPanel({
   provider,
 }: OIDCClientsPanelProps) {
   const { message } = App.useApp()
+  const { t } = useI18n()
   const queryClient = useQueryClient()
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState<IdentityOIDCClient | null>(null)
   const [creatingClient, setCreatingClient] = useState(false)
   const [revealingClientId, setRevealingClientId] = useState('')
+  const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
 
   const clientsQuery = useQuery(
     identityProviderQueries.oidcClients(provider.id, provider.type === 'oidc'),
@@ -139,7 +141,7 @@ export function OIDCClientsPanel({
   const columns = useMemo<TableColumnsType<IdentityOIDCClient>>(
     () => [
       {
-        title: 'Client',
+        title: t('identity.providers.client.id'),
         dataIndex: 'clientId',
         width: 240,
         render: (value: string, record) => (
@@ -154,7 +156,7 @@ export function OIDCClientsPanel({
         ),
       },
       {
-        title: 'Redirect URIs',
+        title: t('identity.providers.client.redirectUris'),
         key: 'redirectUris',
         width: 320,
         render: (_, record) =>
@@ -164,25 +166,25 @@ export function OIDCClientsPanel({
           ]),
       },
       {
-        title: 'Client Type',
+        title: t('identity.providers.client.type'),
         dataIndex: 'clientType',
         width: 120,
         render: (value: string) => <MetadataTag label={value || 'confidential'} />,
       },
       {
-        title: 'Scopes',
+        title: t('identity.providers.client.scopes'),
         dataIndex: 'allowedScopes',
         width: 220,
         render: (values: string[]) => identityProviderTagsSummary(values),
       },
       {
-        title: 'Grant Types',
+        title: t('identity.providers.client.grantTypes'),
         dataIndex: 'allowedGrantTypes',
         width: 180,
         render: (values: string[]) => identityProviderTagsSummary(values),
       },
       {
-        title: 'TTL',
+        title: t('identity.providers.client.ttl'),
         key: 'ttl',
         width: 170,
         render: (_, record) => (
@@ -193,12 +195,12 @@ export function OIDCClientsPanel({
         ),
       },
       {
-        title: 'Status',
+        ...tableColumnPresets.status,
+        title: t('identity.providers.client.status'),
         dataIndex: 'status',
-        width: 130,
         render: (value: IdentityOIDCClientStatus, record) => (
           <Space orientation="vertical" size={2}>
-            {identityOIDCClientStatusTag(value)}
+            <StatusTag value={value} />
             <MetadataTag
               label={record.requirePkce ? 'PKCE' : 'No PKCE'}
               tone={record.requirePkce ? 'blue' : 'default'}
@@ -207,16 +209,14 @@ export function OIDCClientsPanel({
         ),
       },
       {
-        title: 'Updated',
+        ...tableColumnPresets.datetime,
+        title: t('identity.providers.client.updated'),
         dataIndex: 'updatedAt',
-        width: 140,
         render: formatIdentityProviderDateTime,
       },
       {
-        title: 'Actions',
+        ...tableColumnPresets.action,
         key: 'actions',
-        fixed: 'right',
-        width: 128,
         render: (_, record) => (
           <Space size={4}>
             <Popconfirm
@@ -287,6 +287,7 @@ export function OIDCClientsPanel({
       queryClient,
       revealSecret,
       revealingClientId,
+      t,
     ],
   )
 
@@ -301,9 +302,28 @@ export function OIDCClientsPanel({
     )
   }
 
+  if (clientsQuery.isError) {
+    return (
+      <ManagementState
+        kind={
+          isApiError(clientsQuery.error) && clientsQuery.error.status === 403
+            ? 'no-permission'
+            : 'error'
+        }
+        title={t('identity.providers.client.loadError')}
+        description={clientsQuery.error.message}
+        actions={<Button onClick={() => void clientsQuery.refetch()}>{t('common.retry')}</Button>}
+      />
+    )
+  }
+
   return (
     <div className="soha-identity-oidc-panel">
       <AdminTable
+        shellClassName="soha-management-table-shell"
+        columnSettingPlacement="header"
+        columnSettingIconOnly
+        tableSize={tableSize}
         rowKey="id"
         columns={columns}
         dataSource={clientsQuery.data ?? []}
@@ -315,8 +335,7 @@ export function OIDCClientsPanel({
           />
         }
         loading={clientsQuery.isLoading || clientsQuery.isFetching}
-        title="OIDC Clients"
-        toolbar={
+        headerExtra={
           <ManagementTableToolbar>
             <Popconfirm
               cancelText="取消"
@@ -332,9 +351,12 @@ export function OIDCClientsPanel({
               }
               title="轮换 OIDC 签名密钥"
             >
-              <Button disabled={!canRotate} icon={<KeyOutlined />} size="small">
-                轮换签名密钥
-              </Button>
+              <ManagementIconButton
+                aria-label="轮换签名密钥"
+                disabled={!canRotate}
+                icon={<KeyOutlined />}
+                tooltip="轮换签名密钥"
+              />
             </Popconfirm>
             <Button
               disabled={!canCreate}
@@ -345,9 +367,17 @@ export function OIDCClientsPanel({
             >
               新建 client
             </Button>
-            <Button icon={<ReloadOutlined />} onClick={() => clientsQuery.refetch()} size="small">
-              刷新
-            </Button>
+            <ManagementDensityButton
+              aria-label={t('table.density')}
+              tooltip={t('table.density')}
+              onClick={() => setTableSize((size) => (size === 'small' ? 'middle' : 'small'))}
+            />
+            <ManagementRefreshButton
+              aria-label={t('common.refresh')}
+              tooltip={t('common.refresh')}
+              loading={clientsQuery.isFetching}
+              onClick={() => void clientsQuery.refetch()}
+            />
           </ManagementTableToolbar>
         }
       />

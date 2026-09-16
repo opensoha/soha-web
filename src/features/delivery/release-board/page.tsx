@@ -1,17 +1,15 @@
-import { useMemo, useState } from 'react'
-import { App, Button, Card, Pagination, Popconfirm, Progress, Space, Typography } from 'antd'
+import { useEffect } from 'react'
+import { App, Button, Card, Popconfirm, Progress, Space, Typography } from 'antd'
 import { ReloadOutlined, RightOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import {
   ManagementIconButton,
   ManagementQueryScope,
   ManagementState,
   ManagementToolbarSearch,
-  useManagementTextFilter,
 } from '@/components/management-list'
-import { OverviewMetricCard, type OverviewMetricItem } from '@/components/overview-visuals'
-import { StatusTag } from '@/components/status-tag'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useI18n } from '@/i18n'
 import { formatDateTime } from '@/utils/time'
@@ -23,16 +21,18 @@ import {
 } from '../delivery-status'
 import { deliveryMutations } from '../mutations'
 import { deliveryQueries } from '../queries'
-import type { WorkflowRun } from '../types'
+import type {
+  BuildRecord,
+  DeliveryBatch,
+  DeliveryExecutionHistoryParams,
+  WorkflowRun,
+} from '../types'
+import { deliveryStatusLabels } from '../batches/model'
+import { HistoryScopeFilters } from './history-scope-filters'
+import { durationLabel, executionDuration } from './execution-trend-model'
 import './styles.css'
 
 const { Text } = Typography
-const WORKFLOW_REFRESH_INTERVAL_MS = 5_000
-// ponytail: the legacy endpoint has no cursor; replace this window with server pagination when 200 runs is insufficient.
-const WORKFLOW_HISTORY_LIMIT = 200
-const WORKFLOW_PAGE_SIZE = 12
-type WorkflowStatusFilter = 'all' | 'running' | 'approval' | 'succeeded' | 'failed'
-
 function workflowMetadataText(run: WorkflowRun, key: string) {
   const value = run.metadata?.[key]
   return typeof value === 'string' && value.trim() ? value.trim() : ''
@@ -44,31 +44,6 @@ function workflowApplicationName(run: WorkflowRun) {
 
 function workflowTarget(run: WorkflowRun) {
   return [run.clusterId, run.namespace, run.deploymentName].filter(Boolean).join(' / ')
-}
-
-function workflowSearchValues(run: WorkflowRun) {
-  return [
-    run.workflowName,
-    run.id,
-    workflowApplicationName(run),
-    run.applicationId,
-    run.clusterId,
-    run.namespace,
-    run.deploymentName,
-    run.status,
-  ]
-}
-
-function isWorkflowApproval(run: WorkflowRun) {
-  return normalizeDeliveryStatus(run.status).includes('approval')
-}
-
-function workflowMatchesStatus(run: WorkflowRun, filter: WorkflowStatusFilter) {
-  if (filter === 'running') return isDeliveryActiveStatus(run.status) && !isWorkflowApproval(run)
-  if (filter === 'approval') return isWorkflowApproval(run)
-  if (filter === 'succeeded') return isDeliveryReadyStatus(run.status)
-  if (filter === 'failed') return isDeliveryFailureStatus(run.status)
-  return true
 }
 
 function workflowNodes(run: WorkflowRun) {
@@ -93,19 +68,6 @@ function workflowCurrentNode(run: WorkflowRun) {
     nodes.find((node) => isDeliveryActiveStatus(node.status)) ??
     nodes.find((node) => isDeliveryFailureStatus(node.status)) ??
     nodes[nodes.length - 1]
-  )
-}
-
-function summarizeWorkflowRuns(runs: WorkflowRun[]) {
-  return runs.reduce(
-    (summary, run) => {
-      if (isWorkflowApproval(run)) summary.approval += 1
-      else if (isDeliveryActiveStatus(run.status)) summary.running += 1
-      if (isDeliveryReadyStatus(run.status)) summary.succeeded += 1
-      if (isDeliveryFailureStatus(run.status)) summary.failed += 1
-      return summary
-    },
-    { approval: 0, failed: 0, running: 0, succeeded: 0 },
   )
 }
 
@@ -145,7 +107,11 @@ function WorkflowRunCard({
           <Link
             aria-label={`${localeCode === 'zh_CN' ? '查看工作流' : 'View workflow'} ${run.workflowName}`}
             className="soha-release-run-card__link"
-            to={`/workflows/${run.id}`}
+            to={
+              run.deliveryBatchId
+                ? `/delivery/batches/${encodeURIComponent(run.deliveryBatchId)}`
+                : `/workflows/${encodeURIComponent(run.id)}`
+            }
           >
             <Text strong ellipsis title={run.workflowName}>
               {run.workflowName}
@@ -244,308 +210,354 @@ function WorkflowRunCard({
   )
 }
 
-export function ReleaseBoardPage() {
+function BatchRunCard({ batch }: { batch: DeliveryBatch }) {
   const { localeCode } = useI18n()
+  const english = localeCode === 'en_US'
+  const completed = batch.nodes.filter((node) => isDeliveryReadyStatus(node.status)).length
+  return (
+    <Card className="soha-release-run-card" role="listitem" size="small">
+      <div className="soha-release-run-card__header">
+        <div className="soha-release-run-card__identity">
+          <Link
+            className="soha-release-run-card__link"
+            to={`/delivery/batches/${encodeURIComponent(batch.id)}`}
+          >
+            <Text strong ellipsis title={batch.definition.name}>
+              {batch.definition.name}
+            </Text>
+            <RightOutlined aria-hidden="true" />
+          </Link>
+          <Text type="secondary" ellipsis title={batch.id}>
+            {batch.id}
+          </Text>
+        </div>
+        <StatusTag
+          value={batch.status === 'partially_completed' ? 'warning' : batch.status}
+          label={english ? batch.status : deliveryStatusLabels[batch.status]}
+        />
+      </div>
+      <div className="soha-release-run-card__summary">
+        {batch.partialView ? (
+          <MetadataTag label={english ? 'Accessible targets only' : '仅显示可见目标'} />
+        ) : null}
+        <Text>
+          {Array.from(
+            new Set(
+              batch.targets.map((target) => `${target.applicationName} / ${target.serviceName}`),
+            ),
+          ).join(' · ')}
+        </Text>
+        <Text type="secondary">
+          {english
+            ? `${batch.serviceCount} services · ${batch.targetCount} targets · ${batch.buildCount} builds`
+            : `${batch.serviceCount} 个服务 · ${batch.targetCount} 个环境目标 · ${batch.buildCount} 次构建`}
+        </Text>
+      </div>
+      <div className="soha-release-run-card__progress">
+        <div className="soha-release-run-card__progress-label">
+          <Text type="secondary">{english ? 'Completed nodes' : '已完成节点'}</Text>
+          <Text>
+            {completed}/{batch.nodes.length}
+          </Text>
+        </div>
+        <Progress
+          percent={batch.nodes.length ? Math.round((completed / batch.nodes.length) * 100) : 0}
+          showInfo={false}
+          size="small"
+          status={batch.status === 'failed' ? 'exception' : undefined}
+        />
+        {batch.stopSummary ? <Text type="danger">{batch.stopSummary}</Text> : null}
+      </div>
+      <div className="soha-release-run-card__footer">
+        <Text type="secondary" ellipsis title={batch.createdBy}>
+          {batch.createdBy}
+        </Text>
+        <Text type="secondary">{formatDateTime(batch.updatedAt)}</Text>
+      </div>
+    </Card>
+  )
+}
+
+function BuildRunCard({ build }: { build: BuildRecord }) {
+  const english = useI18n().localeCode === 'en_US'
+  const label = (key: string) =>
+    typeof build.metadata?.[key] === 'string' ? String(build.metadata[key]) : ''
+  return (
+    <Card className="soha-release-run-card" role="listitem" size="small">
+      <div className="soha-release-run-card__header">
+        <div className="soha-release-run-card__identity">
+          <Link
+            className="soha-release-run-card__link"
+            to={`/builds/${encodeURIComponent(build.id)}`}
+          >
+            <Text strong>
+              {label('buildSourceName') ||
+                label('applicationName') ||
+                (english ? 'Build execution' : '构建执行')}
+            </Text>
+            <RightOutlined aria-hidden="true" />
+          </Link>
+          <Text type="secondary" ellipsis title={build.id}>
+            {build.id}
+          </Text>
+        </div>
+        <StatusTag value={build.status} />
+      </div>
+      <div className="soha-release-run-card__summary">
+        <Text>
+          {[label('applicationName') || build.applicationId, label('serviceName')]
+            .filter(Boolean)
+            .join(' / ')}
+        </Text>
+        <Space wrap>
+          <MetadataTag label={english ? 'Build only' : '仅构建'} />
+          <Text type="secondary">{label('refName') || build.sourceSystem}</Text>
+        </Space>
+        {label('imageTag') ? (
+          <Text ellipsis title={label('imageTag')}>
+            {label('imageTag')}
+          </Text>
+        ) : null}
+      </div>
+      <div className="soha-release-run-card__footer">
+        <Text type="secondary">{durationLabel(executionDuration(build, Date.now()), english)}</Text>
+        <Text type="secondary">{formatDateTime(build.createdAt)}</Text>
+      </div>
+    </Card>
+  )
+}
+
+export function ExecutionHistoryPage() {
+  const { localeCode } = useI18n()
+  const english = localeCode === 'en_US'
   const { message } = App.useApp()
   const queryClient = useQueryClient()
-  const [workflowSearch, setWorkflowSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<WorkflowStatusFilter>('all')
-  const [page, setPage] = useState(1)
-  const permissionSnapshotQuery = usePermissionSnapshot()
-  const canViewWorkflows = hasPermission(
-    permissionSnapshotQuery.data?.data,
-    'delivery.workflows.view',
-  )
-  const canReviewWorkflows = hasPermission(
-    permissionSnapshotQuery.data?.data,
-    'delivery.application-environments.approve',
-  )
-  const workflowsQuery = useQuery(
-    deliveryQueries.workflows.list(
-      { limit: WORKFLOW_HISTORY_LIMIT },
-      { enabled: canViewWorkflows, refetchInterval: WORKFLOW_REFRESH_INTERVAL_MS },
-    ),
-  )
-  const approveMutation = useMutation(deliveryMutations.workflows.approve(queryClient))
-  const rejectMutation = useMutation(deliveryMutations.workflows.reject(queryClient))
-  const runs = useMemo(
-    () =>
-      [...(workflowsQuery.data ?? [])].sort(
-        (left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt),
-      ),
-    [workflowsQuery.data],
-  )
-  const statusRuns = useMemo(
-    () => runs.filter((run) => workflowMatchesStatus(run, statusFilter)),
-    [runs, statusFilter],
-  )
-  const filteredRuns = useManagementTextFilter(statusRuns, workflowSearch, workflowSearchValues)
-  const pageCount = Math.max(1, Math.ceil(filteredRuns.length / WORKFLOW_PAGE_SIZE))
-  const currentPage = Math.min(page, pageCount)
-  const pageStart = (currentPage - 1) * WORKFLOW_PAGE_SIZE
-  const visibleRuns = filteredRuns.slice(pageStart, pageStart + WORKFLOW_PAGE_SIZE)
-  const summary = useMemo(() => summarizeWorkflowRuns(runs), [runs])
-  const summaryMetrics: OverviewMetricItem[] = [
-    {
-      key: 'running',
-      label: localeCode === 'zh_CN' ? '运行中' : 'Running',
-      value: summary.running,
-      helper:
-        localeCode === 'zh_CN'
-          ? `${summary.running} 个工作流正在执行`
-          : `${summary.running} workflows in progress`,
-      tone: summary.running ? 'warning' : undefined,
-    },
-    {
-      key: 'approval',
-      label: localeCode === 'zh_CN' ? '待审批' : 'Awaiting approval',
-      value: summary.approval,
-      helper:
-        localeCode === 'zh_CN'
-          ? `${summary.approval} 个工作流等待处理`
-          : `${summary.approval} workflows need review`,
-      tone: summary.approval ? 'warning' : undefined,
-    },
-    {
-      key: 'succeeded',
-      label: localeCode === 'zh_CN' ? '最近成功' : 'Recently succeeded',
-      value: summary.succeeded,
-      helper:
-        localeCode === 'zh_CN'
-          ? `${summary.succeeded} 个成功结果`
-          : `${summary.succeeded} successful results`,
-      tone: summary.succeeded ? 'success' : undefined,
-    },
-    {
-      key: 'failed',
-      label: localeCode === 'zh_CN' ? '最近失败' : 'Recently failed',
-      value: summary.failed,
-      helper:
-        localeCode === 'zh_CN'
-          ? `${summary.failed} 个需要关注`
-          : `${summary.failed} need attention`,
-      tone: summary.failed ? 'danger' : undefined,
-    },
-  ]
-
-  if (permissionSnapshotQuery.isLoading) {
-    return (
-      <div className="soha-page soha-release-board">
-        <ManagementState
-          kind="loading"
-          title={localeCode === 'zh_CN' ? '正在加载权限' : 'Loading permissions'}
-        />
-      </div>
-    )
+  const permissionQuery = usePermissionSnapshot()
+  const permissions = permissionQuery.data?.data
+  const canView =
+    hasPermission(permissions, 'delivery.workflows.view') ||
+    hasPermission(permissions, 'delivery.applications.view')
+  const canReview = hasPermission(permissions, 'delivery.application-environments.approve')
+  const [search, setSearch] = useSearchParams()
+  const location = useLocation()
+  const params: DeliveryExecutionHistoryParams = {
+    applicationId: search.get('applicationId') || undefined,
+    serviceId: search.get('serviceId') || undefined,
+    workflowId: search.get('workflowId') || undefined,
+    applicationEnvironmentId: search.get('applicationEnvironmentId') || undefined,
+    buildSourceId: search.get('buildSourceId') || undefined,
+    status: (search.get('status') || 'all') as DeliveryExecutionHistoryParams['status'],
+    search: search.get('search') || undefined,
+    cursor: search.get('cursor') || undefined,
+    limit: 12,
   }
-
-  if (permissionSnapshotQuery.isError) {
-    return (
-      <div className="soha-page soha-release-board">
-        <ManagementState
-          actions={
-            <Button onClick={() => void permissionSnapshotQuery.refetch()}>
-              {localeCode === 'zh_CN' ? '重试' : 'Retry'}
-            </Button>
-          }
-          kind="error"
-          title={localeCode === 'zh_CN' ? '权限加载失败' : 'Failed to load permissions'}
-        />
-      </div>
+  const history = useQuery(deliveryQueries.executionHistory(params, canView))
+  const approve = useMutation(deliveryMutations.workflows.approve(queryClient))
+  const reject = useMutation(deliveryMutations.workflows.reject(queryClient))
+  const previousCursors: string[] = Array.isArray(location.state?.historyCursors)
+    ? location.state.historyCursors
+    : []
+  useEffect(() => {
+    if (!search.has('tab')) return
+    setSearch(
+      (current) => {
+        const next = new URLSearchParams(current)
+        next.delete('tab')
+        return next
+      },
+      { replace: true, state: location.state },
     )
-  }
-
-  if (!canViewWorkflows) {
-    return (
-      <div className="soha-page soha-release-board">
-        <ManagementState
-          kind="no-permission"
-          title={localeCode === 'zh_CN' ? '无权查看工作流' : 'No workflow access'}
-        />
-      </div>
+  }, [search, setSearch, location.state])
+  const updateFilter = (key: string, value: string) =>
+    setSearch(
+      (current) => {
+        const next = new URLSearchParams(current)
+        next.delete('cursor')
+        if (value && value !== 'all') next.set(key, value)
+        else next.delete(key)
+        return next
+      },
+      { replace: true, state: null },
     )
-  }
-
+  const movePage = (cursor: string | undefined, cursors: string[]) =>
+    setSearch(
+      (current) => {
+        const next = new URLSearchParams(current)
+        if (cursor) next.set('cursor', cursor)
+        else next.delete('cursor')
+        return next
+      },
+      { state: { historyCursors: cursors } },
+    )
+  const decide = (id: string, action: 'approve' | 'reject') =>
+    (action === 'approve' ? approve : reject).mutate(
+      {
+        id,
+        comment:
+          action === 'approve'
+            ? 'Approved from execution history'
+            : 'Rejected from execution history',
+      },
+      {
+        onSuccess: () => {
+          void message.success(english ? 'Decision saved' : '审批结果已保存')
+          void history.refetch()
+        },
+        onError: (error) => void message.error(error.message),
+      },
+    )
+  if (permissionQuery.isLoading) return <ManagementState kind="loading" />
+  if (permissionQuery.isError)
+    return (
+      <ManagementState
+        kind="error"
+        title={english ? 'Permissions unavailable' : '权限加载失败'}
+        actions={
+          <Button onClick={() => void permissionQuery.refetch()}>
+            {english ? 'Retry' : '重试'}
+          </Button>
+        }
+      />
+    )
+  if (!canView)
+    return (
+      <ManagementState
+        kind="no-permission"
+        title={english ? 'No execution history access' : '无权查看执行记录'}
+      />
+    )
   return (
     <div className="soha-page soha-release-board">
-      <div className="soha-overview-metric-grid">
-        {summaryMetrics.map(({ key, ...item }) => (
-          <OverviewMetricCard key={key} {...item} loading={workflowsQuery.isLoading} />
-        ))}
-      </div>
-
-      <Card
+      <section
         className="soha-release-board__runs"
-        title={
-          <div className="soha-release-board__runs-title">
-            <Text strong>{localeCode === 'zh_CN' ? '工作流执行' : 'Workflow runs'}</Text>
-            <Text type="secondary">
-              {localeCode === 'zh_CN'
-                ? `最近 ${WORKFLOW_HISTORY_LIMIT} 条`
-                : `Latest ${WORKFLOW_HISTORY_LIMIT}`}
-            </Text>
-          </div>
-        }
-        extra={
-          <ManagementIconButton
-            aria-label={localeCode === 'zh_CN' ? '刷新工作流' : 'Refresh workflows'}
-            icon={<ReloadOutlined />}
-            loading={workflowsQuery.isFetching}
-            size="small"
-            tooltip={localeCode === 'zh_CN' ? '刷新' : 'Refresh'}
-            onClick={() => void workflowsQuery.refetch()}
-          />
-        }
+        aria-label={english ? 'Execution history' : '执行记录'}
       >
-        {workflowsQuery.isError ? (
-          <ManagementState
-            actions={
-              <Button
-                aria-label={localeCode === 'zh_CN' ? '重试工作流' : 'Retry workflows'}
-                onClick={() => void workflowsQuery.refetch()}
-              >
-                {localeCode === 'zh_CN' ? '重试' : 'Retry'}
-              </Button>
+        <div className="soha-release-board__filters">
+          <HistoryScopeFilters />
+          <ManagementIconButton
+            className="soha-release-board__refresh"
+            aria-label={english ? 'Refresh executions' : '刷新执行记录'}
+            icon={<ReloadOutlined />}
+            loading={history.isFetching}
+            size="small"
+            tooltip={english ? 'Refresh' : '刷新'}
+            onClick={() => void history.refetch()}
+          />
+        </div>
+        <div className="soha-release-board__filters">
+          <ManagementQueryScope
+            aria-label={english ? 'Filter executions by status' : '按状态筛选执行记录'}
+            label={english ? 'Status' : '状态'}
+            value={params.status || 'all'}
+            options={[
+              { value: 'all', label: english ? 'All' : '全部' },
+              { value: 'running', label: english ? 'Running' : '运行中' },
+              { value: 'approval', label: english ? 'Approval' : '待审批' },
+              { value: 'succeeded', label: english ? 'Succeeded' : '成功' },
+              { value: 'failed', label: english ? 'Failed' : '失败' },
+              { value: 'canceled', label: english ? 'Canceled' : '已取消' },
+            ]}
+            onChange={(value) => updateFilter('status', String(value))}
+          />
+          <ManagementToolbarSearch
+            aria-label={english ? 'Search executions' : '搜索执行记录'}
+            placeholder={
+              english
+                ? 'Search application, service, workflow or build'
+                : '搜索应用、服务、工作流或构建'
             }
+            value={params.search || ''}
+            onChange={(value) => updateFilter('search', value)}
+          />
+        </div>
+        {history.isError ? (
+          <ManagementState
             bordered={false}
             kind="error"
-            title={localeCode === 'zh_CN' ? '工作流加载失败' : 'Failed to load workflows'}
+            title={english ? 'Failed to load execution history' : '执行记录加载失败'}
+            description={history.error.message}
+            actions={
+              <Button
+                aria-label={english ? 'Retry execution history' : '重试执行记录'}
+                onClick={() => void history.refetch()}
+              >
+                {english ? 'Retry' : '重试'}
+              </Button>
+            }
           />
-        ) : workflowsQuery.isLoading ? (
+        ) : null}
+        {history.isPending ? (
           <ManagementState
             bordered={false}
             kind="loading"
-            title={localeCode === 'zh_CN' ? '正在加载工作流' : 'Loading workflows'}
+            title={english ? 'Loading executions' : '正在加载执行记录'}
           />
-        ) : (
-          <>
-            <div className="soha-release-board__filters">
-              <ManagementQueryScope
-                aria-label={
-                  localeCode === 'zh_CN' ? '按状态筛选工作流' : 'Filter workflows by status'
-                }
-                label={localeCode === 'zh_CN' ? '状态' : 'Status'}
-                options={[
-                  { value: 'all', label: localeCode === 'zh_CN' ? '全部' : 'All' },
-                  { value: 'running', label: localeCode === 'zh_CN' ? '运行中' : 'Running' },
-                  { value: 'approval', label: localeCode === 'zh_CN' ? '待审批' : 'Approval' },
-                  { value: 'succeeded', label: localeCode === 'zh_CN' ? '成功' : 'Succeeded' },
-                  { value: 'failed', label: localeCode === 'zh_CN' ? '失败' : 'Failed' },
-                ]}
-                value={statusFilter}
-                onChange={(value) => {
-                  setStatusFilter(value as WorkflowStatusFilter)
-                  setPage(1)
-                }}
-              />
-              <ManagementToolbarSearch
-                aria-label={localeCode === 'zh_CN' ? '搜索工作流执行' : 'Search workflow runs'}
-                placeholder={
-                  localeCode === 'zh_CN'
-                    ? '搜索应用、服务或工作流'
-                    : 'Search application, service, or workflow'
-                }
-                value={workflowSearch}
-                onChange={(value) => {
-                  setWorkflowSearch(value)
-                  setPage(1)
-                }}
-              />
-            </div>
-
-            {visibleRuns.length ? (
-              <>
-                <div className="soha-release-board__grid" role="list">
-                  {visibleRuns.map((run) => (
-                    <WorkflowRunCard
-                      key={run.id}
-                      run={run}
-                      pendingDecision={
-                        approveMutation.isPending
-                          ? 'approve'
-                          : rejectMutation.isPending
-                            ? 'reject'
-                            : undefined
-                      }
-                      onApprove={
-                        canReviewWorkflows && run.status === 'waiting_approval'
-                          ? () =>
-                              approveMutation.mutate(
-                                { id: run.id, comment: 'Approved from release board' },
-                                {
-                                  onSuccess: () =>
-                                    message.success(
-                                      localeCode === 'zh_CN' ? '工作流已批准' : 'Workflow approved',
-                                    ),
-                                  onError: (error) => message.error(error.message),
-                                },
-                              )
-                          : undefined
-                      }
-                      onReject={
-                        canReviewWorkflows && run.status === 'waiting_approval'
-                          ? () =>
-                              rejectMutation.mutate(
-                                { id: run.id, comment: 'Rejected from release board' },
-                                {
-                                  onSuccess: () =>
-                                    message.success(
-                                      localeCode === 'zh_CN' ? '工作流已拒绝' : 'Workflow rejected',
-                                    ),
-                                  onError: (error) => message.error(error.message),
-                                },
-                              )
-                          : undefined
-                      }
-                    />
-                  ))}
-                </div>
-                <nav
-                  aria-label={localeCode === 'zh_CN' ? '工作流执行分页' : 'Workflow run pagination'}
-                  className="soha-release-board__pagination"
+        ) : history.data?.items.length ? (
+          <div className="soha-release-board__list" role="list">
+            {history.data.items.map((entry) => {
+              if (entry.kind === 'batch' && entry.batch)
+                return <BatchRunCard key={`batch/${entry.id}`} batch={entry.batch} />
+              if (entry.kind === 'build' && entry.build)
+                return <BuildRunCard key={`build/${entry.id}`} build={entry.build} />
+              if (entry.kind !== 'application' || !entry.application) return null
+              const run = entry.application
+              const reviewable =
+                canReview && run.scope !== 'delivery_batch' && run.status === 'waiting_approval'
+              return (
+                <WorkflowRunCard
+                  key={`application/${entry.id}`}
+                  run={run}
+                  pendingDecision={
+                    approve.isPending ? 'approve' : reject.isPending ? 'reject' : undefined
+                  }
+                  onApprove={reviewable ? () => decide(run.id, 'approve') : undefined}
+                  onReject={reviewable ? () => decide(run.id, 'reject') : undefined}
+                />
+              )
+            })}
+          </div>
+        ) : !history.isError ? (
+          <ManagementState
+            bordered={false}
+            compact
+            title={english ? 'No matching executions' : '暂无匹配的执行记录'}
+          />
+        ) : null}
+        {params.cursor || history.data?.nextCursor ? (
+          <nav
+            className="soha-release-board__pagination"
+            aria-label={english ? 'Execution pagination' : '执行记录分页'}
+          >
+            <Space wrap>
+              {params.cursor ? (
+                <Button onClick={() => movePage(undefined, [])}>
+                  {english ? 'Latest executions' : '最新记录'}
+                </Button>
+              ) : null}
+              {previousCursors.length ? (
+                <Button
+                  onClick={() =>
+                    movePage(
+                      previousCursors[previousCursors.length - 1],
+                      previousCursors.slice(0, -1),
+                    )
+                  }
                 >
-                  <Pagination
-                    current={currentPage}
-                    pageSize={WORKFLOW_PAGE_SIZE}
-                    responsive
-                    showSizeChanger={false}
-                    showTotal={(total, [start, end]) =>
-                      localeCode === 'zh_CN'
-                        ? `当前 ${start}-${end} / ${total} 条`
-                        : `Showing ${start}-${end} of ${total}`
-                    }
-                    size="small"
-                    total={filteredRuns.length}
-                    onChange={setPage}
-                  />
-                </nav>
-              </>
-            ) : (
-              <ManagementState
-                bordered={false}
-                compact
-                title={
-                  workflowSearch.trim()
-                    ? localeCode === 'zh_CN'
-                      ? '没有匹配的工作流'
-                      : 'No matching workflows'
-                    : statusFilter === 'running'
-                      ? localeCode === 'zh_CN'
-                        ? '当前没有运行中的工作流'
-                        : 'No workflows in progress'
-                      : statusFilter === 'all'
-                        ? localeCode === 'zh_CN'
-                          ? '暂无工作流执行记录'
-                          : 'No workflow run records'
-                        : localeCode === 'zh_CN'
-                          ? '当前状态下没有工作流'
-                          : 'No workflows with this status'
+                  {english ? 'Previous' : '上一页'}
+                </Button>
+              ) : null}
+              <Button
+                disabled={!history.data?.nextCursor || history.isFetching || history.isError}
+                onClick={() =>
+                  movePage(history.data?.nextCursor, [...previousCursors, params.cursor || ''])
                 }
-              />
-            )}
-          </>
-        )}
-      </Card>
+              >
+                {english ? 'Next' : '下一页'}
+              </Button>
+            </Space>
+          </nav>
+        ) : null}
+      </section>
     </div>
   )
 }

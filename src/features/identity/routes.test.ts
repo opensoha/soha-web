@@ -26,6 +26,7 @@ describe('Identity route manifests', () => {
       'identity-applications',
       'identity-providers',
       'identity-outposts',
+      'identity-login-records',
       'identity-policies',
     ])
   })

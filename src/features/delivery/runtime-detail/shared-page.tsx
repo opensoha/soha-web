@@ -1,12 +1,24 @@
-import { Button, Card, Descriptions, Space, Tag, Timeline, Typography } from 'antd'
+import {
+  Alert,
+  Button,
+  Card,
+  Collapse,
+  Descriptions,
+  Drawer,
+  Space,
+  Tag,
+  Timeline,
+  Typography,
+} from 'antd'
 import { LinkOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ManagementDetailHeader, ManagementState } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
 import { isApiError } from '@/services/api-error'
 import { formatDateTime } from '@/utils/time'
 import { runtimeDetailQueries } from '../queries'
+import { ExecutionRolloutPanel } from './rollout-panel'
 import type {
   ApplicationEnvironment,
   BuildRecord,
@@ -19,7 +31,6 @@ import type {
   ReleaseBundle,
   ReleaseRecord,
   RuntimeObjectDetail,
-  RuntimeObjectLinks,
   RuntimeObjectPermissions,
   WorkflowRun,
   DeliveryApplicationDetail,
@@ -89,12 +100,54 @@ function renderMetadata(value?: Record<string, unknown>) {
   )
 }
 
+function renderExternalPipeline(value?: Record<string, unknown>) {
+  const source = value?.externalPipeline
+  if (!source || typeof source !== 'object' || Array.isArray(source)) return null
+  const run = source as Record<string, unknown>
+  const url = typeof run.url === 'string' && /^https?:\/\//i.test(run.url) ? run.url : undefined
+  return (
+    <Space orientation="vertical" size={12}>
+      <Text strong>GitLab CI</Text>
+      <Descriptions
+        column={1}
+        size="small"
+        items={[
+          {
+            key: 'run',
+            label: '外部运行',
+            children: url ? (
+              <a href={url} target="_blank" rel="noopener noreferrer">
+                {String(run.runId || '查看流水线')}
+              </a>
+            ) : (
+              String(run.runId || '正在对账，运行 ID 尚未确认')
+            ),
+          },
+          { key: 'status', label: '流水线状态', children: String(run.status || 'unknown') },
+          {
+            key: 'stop',
+            label: '停止确认',
+            children: run.stopConfirmed === true ? '已确认全部停止' : '尚未确认停止',
+          },
+          { key: 'commit', label: 'CI 定义提交', children: String(run.pipelineCommit || '-') },
+          { key: 'job', label: '产物任务 ID', children: String(run.artifactJobId || '-') },
+          { key: 'report', label: '产物报告摘要', children: String(run.artifactDigest || '-') },
+          { key: 'image', label: '镜像摘要', children: String(value?.imageDigest || '-') },
+        ]}
+      />
+      {typeof value?.externalPipelineError === 'string' ? (
+        <Alert type="warning" showIcon title={value.externalPipelineError} />
+      ) : null}
+    </Space>
+  )
+}
+
 function runtimeListPath(kind: RuntimeKind) {
   switch (kind) {
     case 'build':
-      return '/applications'
+      return '/execution-history'
     case 'workflow':
-      return '/release-board'
+      return '/execution-history'
     case 'release':
       return '/releases'
     case 'release_bundle':
@@ -319,50 +372,6 @@ function buildTimelineItems(
   })
 }
 
-function runtimeAssociationHints(
-  kind: RuntimeKind,
-  record: RuntimeRecord | undefined,
-  links?: RuntimeObjectLinks,
-  navigate?: (path: string) => void,
-) {
-  if (!record) return null
-  const applicationPath =
-    links?.application ||
-    (kind === 'build'
-      ? runtimeApplicationPath(record.applicationId, { buildId: record.id })
-      : kind === 'workflow'
-        ? runtimeApplicationPath(record.applicationId, { workflowRunId: record.id })
-        : kind === 'release'
-          ? runtimeApplicationPath(record.applicationId, { releaseId: record.id })
-          : kind === 'release_bundle'
-            ? runtimeApplicationPath(record.applicationId, { releaseBundleId: record.id })
-            : runtimeApplicationPath(record.applicationId, { executionTaskId: record.id }))
-  return (
-    <Space wrap size={[8, 8]}>
-      <Button icon={<LinkOutlined />} onClick={() => navigate?.(applicationPath)}>
-        打开应用运行态
-      </Button>
-      <Button
-        icon={<LinkOutlined />}
-        onClick={() => navigate?.(links?.audit || runtimeAuditPath(kind, record.id))}
-      >
-        审计日志
-      </Button>
-      <Button
-        icon={<LinkOutlined />}
-        onClick={() => navigate?.(links?.operations || runtimeOperationPath(kind, record.id))}
-      >
-        操作日志
-      </Button>
-      {links?.artifacts ? (
-        <Button icon={<LinkOutlined />} onClick={() => navigate?.(links.artifacts!)}>
-          Artifacts
-        </Button>
-      ) : null}
-    </Space>
-  )
-}
-
 function RuntimeHeader({
   kind,
   record,
@@ -419,18 +428,18 @@ function renderArtifactTimeline(
 function RuntimeEvidenceCard({
   kind,
   record,
-  navigate,
-  links,
   bundleArtifacts,
   executionArtifacts,
   executionLogs,
+  onEvidence,
+  navigate,
 }: {
   kind: RuntimeKind
   record?: RuntimeRecord
-  links?: RuntimeObjectLinks
   bundleArtifacts?: ExecutionArtifact[]
   executionArtifacts?: ExecutionArtifact[]
   executionLogs?: ExecutionLogItem[]
+  onEvidence?: (kind: RuntimeKind, id: string) => void
   navigate?: (path: string) => void
 }) {
   if (!record) return null
@@ -446,7 +455,50 @@ function RuntimeEvidenceCard({
     )
     return (
       <Card title="关键证据" className="soha-detail-card" size="small">
-        <Timeline items={timelineItems} />
+        <Timeline
+          items={timelineItems.map((item, index) => {
+            const node = workflow.nodeRuns?.[index]
+            return {
+              ...item,
+              content: (
+                <>
+                  {item.content}
+                  {node ? (
+                    <Space wrap>
+                      {node.executionTaskId ? (
+                        <Button
+                          size="small"
+                          type="link"
+                          onClick={() => onEvidence?.('execution_task', node.executionTaskId!)}
+                        >
+                          任务日志与结果
+                        </Button>
+                      ) : null}
+                      {node.buildRecordId ? (
+                        <Button
+                          size="small"
+                          type="link"
+                          onClick={() => onEvidence?.('build', node.buildRecordId!)}
+                        >
+                          构建明细
+                        </Button>
+                      ) : null}
+                      {node.releaseBundleId ? (
+                        <Button
+                          size="small"
+                          type="link"
+                          onClick={() => onEvidence?.('release_bundle', node.releaseBundleId!)}
+                        >
+                          产物
+                        </Button>
+                      ) : null}
+                    </Space>
+                  ) : null}
+                </>
+              ),
+            }
+          })}
+        />
         <Paragraph className="soha-detail-card__paragraph" type="secondary">
           {workflow.clusterId || workflow.namespace || workflow.deploymentName
             ? `${workflow.clusterId || '-'} / ${workflow.namespace || '-'} / ${workflow.deploymentName || '-'}`
@@ -454,7 +506,6 @@ function RuntimeEvidenceCard({
         </Paragraph>
         <Text strong>制品</Text>
         {renderArtifactTimeline(executionArtifacts, '该工作流没有返回 artifact store 明细。')}
-        {runtimeAssociationHints(kind, record, links, navigate)}
       </Card>
     )
   }
@@ -468,7 +519,6 @@ function RuntimeEvidenceCard({
           <Text type="secondary">Digest: {bundle.artifactDigest || '-'}</Text>
           {renderArtifactTimeline(bundleArtifacts, '该版本包没有单独的制品明细。')}
         </Space>
-        {runtimeAssociationHints(kind, record, links, navigate)}
       </Card>
     )
   }
@@ -477,6 +527,7 @@ function RuntimeEvidenceCard({
     return (
       <Card title="关键证据" className="soha-detail-card" size="small">
         <Space orientation="vertical" size={8}>
+          {renderExternalPipeline(task.result)}
           <Text strong>日志</Text>
           {executionLogs?.length ? (
             <Timeline
@@ -512,21 +563,55 @@ function RuntimeEvidenceCard({
             <Text type="secondary">没有关联版本包</Text>
           )}
         </Space>
-        {runtimeAssociationHints(kind, record, links, navigate)}
       </Card>
     )
   }
   return (
     <Card title="关键证据" className="soha-detail-card" size="small">
-      {renderMetadata((record as BuildRecord | ReleaseRecord).metadata)}
-      {runtimeAssociationHints(kind, record, links, navigate)}
+      {renderExternalPipeline((record as BuildRecord | ReleaseRecord).metadata)}
+      {(record as BuildRecord | ReleaseRecord).metadata?.externalPipeline ? (
+        <Collapse
+          items={[
+            {
+              key: 'metadata',
+              label: '完整构建证据',
+              children: renderMetadata((record as BuildRecord | ReleaseRecord).metadata),
+            },
+          ]}
+        />
+      ) : (
+        renderMetadata((record as BuildRecord | ReleaseRecord).metadata)
+      )}
     </Card>
   )
 }
 
 export function RuntimeDetailPage({ kind }: { kind: RuntimeKind }) {
-  const navigate = useNavigate()
   const params = useParams()
+  const [search, setSearch] = useSearchParams()
+  const evidenceKind = search.get('evidenceKind')
+  const evidenceId = search.get('evidenceId') || ''
+  const selectedKind =
+    evidenceKind === 'build' ||
+    evidenceKind === 'execution_task' ||
+    evidenceKind === 'release_bundle'
+      ? evidenceKind
+      : undefined
+  const openEvidence = (kind?: RuntimeKind, id?: string) =>
+    setSearch(
+      (current) => {
+        const next = new URLSearchParams(current)
+        if (kind && id) {
+          next.set('evidenceKind', kind)
+          next.set('evidenceId', id)
+        } else {
+          next.delete('evidenceKind')
+          next.delete('evidenceId')
+        }
+        return next
+      },
+      { replace: true },
+    )
   const recordId = String(
     params[
       kind === 'build'
@@ -541,6 +626,36 @@ export function RuntimeDetailPage({ kind }: { kind: RuntimeKind }) {
     ] || '',
   ).trim()
 
+  return (
+    <>
+      <RuntimeDetailContent kind={kind} recordId={recordId} onEvidence={openEvidence} />
+      <Drawer
+        title="执行证据"
+        open={kind === 'workflow' && !!selectedKind && !!evidenceId}
+        size={880}
+        onClose={() => openEvidence()}
+        destroyOnHidden
+      >
+        {selectedKind && evidenceId ? (
+          <RuntimeDetailContent kind={selectedKind} recordId={evidenceId} embedded />
+        ) : null}
+      </Drawer>
+    </>
+  )
+}
+
+export function RuntimeDetailContent({
+  kind,
+  recordId,
+  embedded = false,
+  onEvidence,
+}: {
+  kind: RuntimeKind
+  recordId: string
+  embedded?: boolean
+  onEvidence?: (kind: RuntimeKind, id: string) => void
+}) {
+  const navigate = useNavigate()
   const runtimeDetailQuery = useQuery(runtimeDetailQueries.detail(kind, recordId))
 
   if (!recordId) {
@@ -575,6 +690,11 @@ export function RuntimeDetailPage({ kind }: { kind: RuntimeKind }) {
       <div className="soha-page">
         <ManagementState
           kind="error"
+          actions={
+            <Button aria-label="重试执行证据" onClick={() => void runtimeDetailQuery.refetch()}>
+              重试
+            </Button>
+          }
           description={
             runtimeDetailQuery.error instanceof Error
               ? runtimeDetailQuery.error.message
@@ -611,15 +731,30 @@ export function RuntimeDetailPage({ kind }: { kind: RuntimeKind }) {
 
   return (
     <div className="soha-page">
-      <ManagementDetailHeader
-        title={`${runtimeKindTitle(kind)} · ${record.id}`}
-        description="直达运行态对象详情，展示关联应用、环境、模板和关键证据。"
-        meta={<RuntimeHeader kind={kind} record={record} detail={applicationDetail} />}
-        actions={<Button onClick={() => navigate(runtimeListPath(kind))}>返回列表</Button>}
-      />
-      <Card className="soha-detail-card" title="基础信息" size="small">
+      {!embedded ? (
+        <ManagementDetailHeader
+          title={`${runtimeKindTitle(kind)} · ${record.id}`}
+          description="直达运行态对象详情，展示关联应用、环境、模板和关键证据。"
+          meta={<RuntimeHeader kind={kind} record={record} detail={applicationDetail} />}
+          actions={<Button onClick={() => navigate(runtimeListPath(kind))}>返回列表</Button>}
+        />
+      ) : null}
+      <Card
+        className="soha-detail-card"
+        title="基础信息"
+        size="small"
+        extra={
+          <Button
+            size="small"
+            loading={runtimeDetailQuery.isFetching}
+            onClick={() => void runtimeDetailQuery.refetch()}
+          >
+            刷新证据
+          </Button>
+        }
+      >
         <Descriptions
-          column={2}
+          column={{ xs: 1, sm: 2 }}
           items={[
             { key: 'id', label: '对象 ID', children: record.id },
             { key: 'kind', label: '类型', children: runtimeKindLabel(kind) },
@@ -645,7 +780,11 @@ export function RuntimeDetailPage({ kind }: { kind: RuntimeKind }) {
               children: formatDateTime(
                 (
                   record as
-                    BuildRecord | ReleaseRecord | ReleaseBundle | ExecutionTask | WorkflowRun
+                    | BuildRecord
+                    | ReleaseRecord
+                    | ReleaseBundle
+                    | ExecutionTask
+                    | WorkflowRun
                 ).createdAt,
               ),
             },
@@ -665,7 +804,7 @@ export function RuntimeDetailPage({ kind }: { kind: RuntimeKind }) {
       </Card>
       <Card className="soha-detail-card" title="关联信息" size="small">
         <Descriptions
-          column={2}
+          column={{ xs: 1, sm: 2 }}
           items={runtimeSummaryItems(kind, record, applicationDetail, runtimeDetail).map(
             (item) => ({
               key: item.key,
@@ -720,42 +859,16 @@ export function RuntimeDetailPage({ kind }: { kind: RuntimeKind }) {
           </Button>
         </Space>
       </Card>
-      {kind === 'workflow' || kind === 'release_bundle' || kind === 'execution_task' ? (
-        <RuntimeEvidenceCard
-          kind={kind}
-          record={record}
-          links={links}
-          bundleArtifacts={bundleArtifacts}
-          executionArtifacts={executionArtifacts}
-          executionLogs={executionLogs}
-          navigate={navigate}
-        />
-      ) : (
-        <Card className="soha-detail-card" title="关键证据" size="small">
-          {renderMetadata((record as BuildRecord | ReleaseRecord).metadata)}
-          {runtimeAssociationHints(kind, record, links, navigate)}
-        </Card>
-      )}
-      {kind === 'workflow' ? (
-        <Card className="soha-detail-card" title="流程节点" size="small">
-          <Timeline
-            items={
-              (record as WorkflowRun).nodeRuns?.map((node) => ({
-                key: node.nodeId,
-                content: (
-                  <Space orientation="vertical" size={0}>
-                    <Text strong>{node.name}</Text>
-                    <Text type="secondary">
-                      {node.status}
-                      {node.summary ? ` · ${node.summary}` : ''}
-                    </Text>
-                  </Space>
-                ),
-              })) ?? []
-            }
-          />
-        </Card>
-      ) : null}
+      {kind === 'execution_task' ? <ExecutionRolloutPanel task={record as ExecutionTask} /> : null}
+      <RuntimeEvidenceCard
+        kind={kind}
+        record={record}
+        bundleArtifacts={bundleArtifacts}
+        executionArtifacts={executionArtifacts}
+        executionLogs={executionLogs}
+        onEvidence={onEvidence}
+        navigate={navigate}
+      />
     </div>
   )
 }

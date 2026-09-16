@@ -13,6 +13,10 @@ export type IdentityRuntimeProviderStatus = 'enabled' | 'disabled'
 export type IdentityOIDCClientStatus = 'enabled' | 'disabled'
 export type IdentityOIDCClientType = 'public' | 'confidential'
 export type IdentityOIDCRedirectMatchMode = 'strict' | 'regex'
+export type {
+  IdentityProviderSetup,
+  IdentityProviderUserMetadata,
+} from '@opensoha/contracts/gen/ts/sohaapi'
 
 export interface IdentityProvider {
   id: string
@@ -35,7 +39,7 @@ export interface IdentityProviderInput {
   type: IdentityRuntimeProviderType
   enabled: boolean
   config: Record<string, unknown>
-  secretRefs?: Record<string, unknown>
+  secretRefs?: Record<string, string>
   status: IdentityRuntimeProviderStatus
 }
 
@@ -76,7 +80,7 @@ export interface IdentityOIDCClientInput {
   redirectUriRegexes?: string[]
   postLogoutRedirectUris: string[]
   allowedScopes: string[]
-  allowedGrantTypes: string[]
+  allowedGrantTypes: Array<'authorization_code' | 'refresh_token'>
   requirePkce: boolean
   accessTokenTtlSeconds: number
   idTokenTtlSeconds: number

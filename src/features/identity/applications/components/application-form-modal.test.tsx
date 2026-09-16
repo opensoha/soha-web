@@ -10,6 +10,8 @@ import { ApplicationFormModal } from './application-form-modal'
 
 const testState = vi.hoisted(() => ({
   enabled: {} as Record<string, boolean | undefined>,
+  message: { error: vi.fn(), info: vi.fn() },
+  selectChange: {} as Record<string, (value: unknown) => void>,
   permissionKeys: [] as string[],
   subjectControlled: false,
   subjectModes: {} as Record<string, string | undefined>,
@@ -49,7 +51,11 @@ vi.mock('antd', async (importOriginal) => {
   const ActualSelect = actual.Select
   return {
     ...actual,
+    App: Object.assign(actual.App, { useApp: () => ({ message: testState.message }) }),
     Select: (props: ComponentProps<typeof ActualSelect>) => {
+      const selectId = props.id || props['aria-label']
+      if (selectId && props.onChange)
+        testState.selectChange[selectId] = props.onChange as (value: unknown) => void
       if (typeof props.placeholder === 'string' && props.placeholder.includes('（可多选）')) {
         testState.subjectControlled =
           Array.isArray(props.value) && typeof props.onChange === 'function'
@@ -148,6 +154,7 @@ describe('ApplicationFormModal permissions', () => {
 
   beforeEach(() => {
     testState.enabled = {}
+    testState.selectChange = {}
     testState.permissionKeys = []
     testState.subjectControlled = false
     testState.subjectModes = {}
@@ -158,14 +165,18 @@ describe('ApplicationFormModal permissions', () => {
   })
 
   afterEach(async () => {
-    await act(async () => root.unmount())
+    await act(async () => {
+      root.unmount()
+      // Ant Design defers clearing field errors by 10 ms without cancelling on unmount.
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
     container.remove()
   })
 
   it('disables and masks assignment lookups without their exact view permissions', async () => {
     await renderModal()
 
-    expect(testState.enabled).toEqual({ users: false, roles: false, teams: false })
+    expect(testState.enabled).toEqual({ outposts: false, users: false, roles: false, teams: false })
     expect(document.body.textContent).not.toContain('Cached Role')
   })
 
@@ -174,7 +185,7 @@ describe('ApplicationFormModal permissions', () => {
 
     await renderModal()
 
-    expect(testState.enabled).toEqual({ users: false, roles: false, teams: true })
+    expect(testState.enabled).toEqual({ outposts: false, users: false, roles: false, teams: true })
   })
 
   it('only allows free text for tag assignments', async () => {
@@ -212,5 +223,132 @@ describe('ApplicationFormModal permissions', () => {
     expect(modal?.querySelector('[aria-label="访问条件说明"]')).not.toBeNull()
     expect(content).not.toContain('每行只配置一种主体类型')
     expect(content).not.toContain('通过访问对象校验后')
+  })
+  async function renderWizard(canConfigureProvider = true) {
+    const onOnboard = vi.fn()
+    const onCancel = vi.fn()
+    await act(async () =>
+      root.render(
+        <I18nProvider>
+          <AntdApp>
+            <ApplicationFormModal
+              application={null}
+              open
+              providerOptions={[]}
+              providerOptionsLoading={false}
+              saving={false}
+              stepUpAvailable
+              tagOptions={[]}
+              onCancel={onCancel}
+              onSubmit={vi.fn()}
+              onOnboard={onOnboard}
+              canConfigureProvider={canConfigureProvider}
+              samlAvailable
+            />
+          </AntdApp>
+        </I18nProvider>,
+      ),
+    )
+    return { onOnboard, onCancel }
+  }
+
+  async function input(id: string, value: string) {
+    const node = document.getElementById(id)
+    if (!(node instanceof HTMLInputElement)) throw new Error('Input not found: ' + id)
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(node, value)
+      node.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+  }
+
+  async function select(id: string, value: unknown) {
+    if (!testState.selectChange[id]) throw new Error('Select not found: ' + id)
+    await act(async () => testState.selectChange[id](value))
+  }
+
+  async function click(label: string) {
+    const button = Array.from(document.querySelectorAll('button')).find(
+      (node) => node.textContent?.replace(/\s/g, '') === label,
+    )
+    if (!button)
+      throw new Error(
+        'Button not found: ' +
+          label +
+          '; errors: ' +
+          Array.from(
+            document.querySelectorAll(
+              '.ant-form-item-explain-error, .ant-message-notice-content, .ant-steps-item-active',
+            ),
+          )
+            .map((item) => item.textContent)
+            .join('; '),
+      )
+    await act(async () => {
+      button.click()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+  }
+
+  it.each(['link', 'oidc', 'saml', 'proxy'])(
+    'collects %s in the real form and submits once with explicit scope and disabled status',
+    async (type) => {
+      const { onOnboard } = await renderWizard()
+      await input('name', 'Example App')
+      await input('slug', 'example-app')
+      await select('providerType', type)
+      await click('下一步')
+      if (type === 'oidc') await input('redirectRules_0_value', 'https://app.example.com/callback')
+      if (type === 'saml') {
+        await input('samlEntityId', 'https://app.example.com/saml')
+        await select('samlAcsUrls', ['https://app.example.com/acs'])
+      }
+      if (type === 'proxy') await select('proxyExternalHosts', ['app.example.com'])
+      if (type !== 'link') await click('下一步')
+      await click('下一步')
+      expect(onOnboard).not.toHaveBeenCalled()
+      await select('访问范围', 'all_authenticated')
+      await click('下一步')
+      expect(onOnboard).not.toHaveBeenCalled()
+      await click('保存并查看接入说明')
+      expect(onOnboard).toHaveBeenCalledTimes(1)
+      const payload = onOnboard.mock.calls[0][0]
+      expect(payload).toMatchObject({
+        accessMode: 'all_authenticated',
+        application: {
+          name: 'Example App',
+          slug: 'example-app',
+          providerType: type,
+          status: 'disabled',
+          assignments: [],
+        },
+      })
+      if (type === 'link') expect(payload.provider).toBeUndefined()
+      else expect(payload.provider).toMatchObject({ applicationId: '', type })
+      if (type === 'oidc')
+        expect(payload.oidcClient).toMatchObject({
+          providerId: '',
+          redirectUris: ['https://app.example.com/callback'],
+          requirePkce: true,
+        })
+    },
+  )
+
+  it('cancels collected data without submitting and allows a draft without provider permission', async () => {
+    const { onOnboard, onCancel } = await renderWizard(false)
+    await input('name', 'Later')
+    await input('slug', 'later')
+    await select('providerType', 'proxy')
+    await click('下一步')
+    expect(document.body.textContent).toContain('缺少创建认证接入的权限')
+    expect(testState.enabled.outposts).toBe(false)
+    await click('取消')
+    expect(onCancel).toHaveBeenCalledTimes(1)
+    expect(onOnboard).not.toHaveBeenCalled()
+    await click('下一步')
+    await select('访问范围', 'all_authenticated')
+    await click('下一步')
+    await click('保存并查看接入说明')
+    expect(onOnboard.mock.calls[0][0].provider).toBeUndefined()
+    expect(onOnboard.mock.calls[0][0].application.status).toBe('disabled')
   })
 })

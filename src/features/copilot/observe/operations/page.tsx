@@ -32,7 +32,12 @@ import { AISettingsPage } from '@/features/settings'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { getAIWorkbenchPathForMode, getAIWorkbenchPathForSession } from '../../workbench/navigation'
 import { observeKeys } from '../keys'
-import { observeMutations, policyFormValuesFromRecord } from '../mutations'
+import { capabilityTaskMutations } from '../../capability-tasks/mutations'
+import { createUUID } from '@/utils/uuid'
+import { useAuthStore } from '@/stores/auth-store'
+import { ApiError } from '@/services/api-error'
+import { observeApi } from '../api'
+import { observeMutations, policyFormValuesFromRecord, inspectionTaskPayload } from '../mutations'
 import { observeQueries } from '../queries'
 import type {
   AnalysisProfile,
@@ -40,6 +45,7 @@ import type {
   AutomationPolicyFormValues,
   InspectionTask,
   InspectionTaskFormValues,
+  InspectionRun,
 } from '../types'
 import '../../copilot-pages.css'
 
@@ -81,6 +87,10 @@ const AUTOMATION_STATUS_OPTIONS = [
 
 function defaultInspectionTaskValues(): InspectionTaskFormValues {
   return {
+    id: createUUID(),
+    mode: 'legacy',
+    triggerKind: 'schedule',
+    planJSON: JSON.stringify({ goal: '', steps: [], verificationSteps: [] }, null, 2),
     title: '',
     scopeType: 'platform',
     clusterId: '',
@@ -115,12 +125,18 @@ function defaultAutomationPolicyValues(): AutomationPolicyFormValues {
 }
 
 export function AIOperationsPage() {
+  const userId = useAuthStore((state) => state.user?.userId ?? '')
+  return <AIOperationsContent key={userId} userId={userId} />
+}
+
+function AIOperationsContent({ userId }: { userId: string }) {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [taskForm] = Form.useForm<InspectionTaskFormValues>()
   const [policyForm] = Form.useForm<AutomationPolicyFormValues>()
+  const planValidation = useMutation(capabilityTaskMutations.validate())
   const permissionSnapshotQuery = usePermissionSnapshot()
   const canViewAI = hasPermission(permissionSnapshotQuery.data?.data, 'observe.ai.view')
   const canUseChat = hasPermission(permissionSnapshotQuery.data?.data, 'observe.ai.chat')
@@ -226,7 +242,7 @@ export function AIOperationsPage() {
   const executeMutation = useMutation({
     ...observeMutations.operations.executeTask(),
     onSuccess: () => {
-      void message.success('巡检已执行')
+      void message.success('巡检请求已接收；请查看运行记录及目标证据')
       void queryClient.invalidateQueries({ queryKey: observeKeys.operations.runs() })
       void queryClient.invalidateQueries({ queryKey: observeKeys.operations.tasks() })
     },
@@ -248,6 +264,48 @@ export function AIOperationsPage() {
       label: `${item.name}${item.supportsAsync ? ' / async' : ' / inline'}`,
     }))
   const watchedScopeType = Form.useWatch('scopeType', taskForm)
+  const watchedInspectionMode = Form.useWatch('mode', taskForm)
+  const watchedTriggerKind = Form.useWatch('triggerKind', taskForm)
+  async function executeInspection(task: InspectionTask) {
+    if (executeMutation.isPending || !canRunInspection) return
+    if (!task.capabilityPlan) {
+      executeMutation.mutate(task.id)
+      return
+    }
+    const storageKey = `soha:inspection:${userId}:${task.id}`
+    try {
+      if (!userId || !task.revision) throw new Error('缺少用户或注册版本，请刷新后重试')
+      const saved = localStorage.getItem(storageKey)
+      const request = saved
+        ? (JSON.parse(saved) as { idempotencyKey: string; expectedRevision: number })
+        : { idempotencyKey: createUUID(), expectedRevision: task.revision }
+      if (
+        typeof request.idempotencyKey !== 'string' ||
+        !request.idempotencyKey ||
+        !Number.isSafeInteger(request.expectedRevision) ||
+        request.expectedRevision < 1
+      )
+        throw new Error('原请求无法读取，请先核对巡检运行记录')
+      localStorage.setItem(storageKey, JSON.stringify(request))
+      await executeMutation.mutateAsync({ taskId: task.id, ...request })
+      localStorage.removeItem(storageKey)
+      setActiveView('runs')
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : '无法执行巡检')
+    }
+  }
+  async function validateInspectionPlan(values: InspectionTaskFormValues) {
+    const input = inspectionTaskPayload(values)
+    if (!input.capabilityPlan) throw new Error('需要能力计划')
+    const validation = await planValidation.mutateAsync({
+      idempotencyKey: 'inspection-registration',
+      plan: input.capabilityPlan,
+      aiClientId: input.aiClientId,
+      skillId: input.skillId,
+    })
+    if (!validation.data.valid)
+      throw new Error(validation.data.issues.map((issue) => issue.message).join('；'))
+  }
   const taskSaving = createTaskMutation.isPending || updateTaskMutation.isPending
   const policySaving = createPolicyMutation.isPending || updatePolicyMutation.isPending
 
@@ -265,14 +323,53 @@ export function AIOperationsPage() {
     }
   }, [requestedInspectionRunId, requestedView])
 
-  const openCreateTask = () => {
-    setEditingTask(null)
-    taskForm.setFieldsValue(defaultInspectionTaskValues())
-    setTaskModalOpen(true)
+  const openCreateTask = async () => {
+    try {
+      if (!userId) throw new Error('缺少当前用户，请重新登录')
+      const pendingKey = `soha:inspection-create:${userId}`
+      const pendingID = localStorage.getItem(pendingKey)
+      if (pendingID) {
+        try {
+          const original = await observeApi.operations.task(pendingID)
+          openEditTask(original)
+          localStorage.removeItem(pendingKey)
+          void message.info('已找回上次创建的巡检任务，请核对配置')
+          return
+        } catch (error) {
+          if (!(error instanceof ApiError && error.status === 404)) throw error
+        }
+      }
+      setEditingTask(null)
+      planValidation.reset()
+      taskForm.resetFields()
+      taskForm.setFieldsValue({
+        ...defaultInspectionTaskValues(),
+        ...(pendingID ? { id: pendingID } : {}),
+      })
+      setTaskModalOpen(true)
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : '无法核对原巡检任务')
+    }
   }
   const openEditTask = (task: InspectionTask) => {
     setEditingTask(task)
+    planValidation.reset()
+    taskForm.resetFields()
     taskForm.setFieldsValue({
+      id: task.id,
+      expectedRevision: task.revision,
+      mode: task.capabilityPlan ? 'capability' : 'legacy',
+      planJSON: JSON.stringify(
+        task.capabilityPlan ?? { goal: '', steps: [], verificationSteps: [] },
+        null,
+        2,
+      ),
+      triggerKind: task.trigger?.kind ?? 'schedule',
+      alertRuleId: task.trigger?.alertRuleId,
+      maxEventAgeSeconds: task.trigger?.maxEventAgeSeconds ?? 3600,
+      aiClientId: task.aiClientId,
+      skillId: task.skillId,
+      metadata: task.metadata,
       title: task.title,
       scopeType: task.scopeType || 'platform',
       clusterId: task.clusterId || '',
@@ -290,11 +387,26 @@ export function AIOperationsPage() {
     taskForm.resetFields()
   }
   const submitTaskForm = async () => {
-    const values = await taskForm.validateFields()
-    if (editingTask) {
-      updateTaskMutation.mutate({ taskId: editingTask.id, values })
-    } else {
-      createTaskMutation.mutate(values)
+    try {
+      const values = await taskForm.validateFields()
+      const payload = {
+        ...values,
+        id: editingTask?.id ?? taskForm.getFieldValue('id'),
+        expectedRevision: editingTask?.revision,
+        metadata: editingTask?.metadata,
+      }
+      if (values.mode === 'capability' && !(editingTask?.capabilityPlan && !values.enabled))
+        await validateInspectionPlan(values)
+      if (editingTask) updateTaskMutation.mutate({ taskId: editingTask.id, values: payload })
+      else {
+        if (!userId || !payload.id) throw new Error('缺少用户或任务标识，请刷新后重试')
+        const pendingKey = `soha:inspection-create:${userId}`
+        localStorage.setItem(pendingKey, payload.id)
+        await createTaskMutation.mutateAsync(payload)
+        localStorage.removeItem(pendingKey)
+      }
+    } catch (error) {
+      if (error instanceof Error) void message.error(error.message)
     }
   }
   const openCreatePolicy = () => {
@@ -371,8 +483,13 @@ export function AIOperationsPage() {
             {
               title: '检查项',
               dataIndex: 'checks',
-              render: (value: string[]) => (
+              render: (value: string[], record: InspectionTask) => (
                 <Space wrap>
+                  {record.capabilityPlan && (
+                    <MetadataTag
+                      label={`${record.trigger?.kind === 'alert' ? '告警' : '定时'} · r${record.revision}`}
+                    />
+                  )}
                   {(value ?? []).map((item) => (
                     <MetadataTag key={item} label={item} />
                   ))}
@@ -412,13 +529,17 @@ export function AIOperationsPage() {
                     tooltip="立即执行"
                     icon={<PlayCircleOutlined />}
                     loading={executeMutation.isPending}
-                    onClick={() => executeMutation.mutate(record.id)}
+                    onClick={() => void executeInspection(record)}
                     disabled={!canRunInspection}
                     title={canRunInspection ? undefined : '缺少 observe.ai.inspection.run 权限'}
                   />
                   <Popconfirm
                     title="确认删除巡检任务？"
-                    description="关联巡检运行记录会一并删除。"
+                    description={
+                      record.capabilityPlan
+                        ? '有执行历史的能力注册应停用并保留。'
+                        : '关联巡检运行记录会一并删除。'
+                    }
                     onConfirm={() => deleteTaskMutation.mutate(record.id)}
                     okButtonProps={{ danger: true, loading: deleteTaskMutation.isPending }}
                   >
@@ -455,6 +576,28 @@ export function AIOperationsPage() {
         width={640}
       >
         <Form form={taskForm} layout="vertical" preserve={false}>
+          <Form.Item name="id" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name="mode" label="巡检方式">
+            <Select
+              options={[
+                { value: 'legacy', label: '内置检查项' },
+                { value: 'capability', label: '注册能力计划' },
+              ]}
+              onChange={(mode) => {
+                planValidation.reset()
+                if (mode === 'capability')
+                  taskForm.setFieldsValue({
+                    enabled: false,
+                    triggerKind: taskForm.getFieldValue('triggerKind') ?? 'schedule',
+                    planJSON:
+                      taskForm.getFieldValue('planJSON') ||
+                      JSON.stringify({ goal: '', steps: [], verificationSteps: [] }, null, 2),
+                  })
+              }}
+            />
+          </Form.Item>
           <Form.Item
             name="title"
             label="任务名称"
@@ -493,30 +636,111 @@ export function AIOperationsPage() {
               <Input placeholder="default" />
             </Form.Item>
           ) : null}
-          <Form.Item
-            name="checks"
-            label="检查项"
-            rules={[{ required: true, message: '请选择检查项' }]}
-          >
-            <Select mode="multiple" options={INSPECTION_CHECK_OPTIONS} />
-          </Form.Item>
-          <Form.Item name="analysisProfileId" label="巡检模板">
-            <Select
-              showSearch={{ optionFilterProp: 'label' }}
-              allowClear
-              loading={catalogQuery.isLoading}
-              placeholder="可选：按分析模板覆盖巡检 playbooks"
-              options={profiles
-                .filter((item) => item.mode === 'inspection' && item.enabled)
-                .map((item) => ({ value: item.id, label: `${item.name} (${item.id})` }))}
-            />
-          </Form.Item>
+          {watchedInspectionMode === 'capability' ? (
+            <>
+              <Alert
+                type="info"
+                title="启用后按注册触发；每轮使用独立幂等键，写入仍遵守当前权限和审批。停用只停止后续触发。"
+              />
+              <Form.Item name="triggerKind" label="触发方式" rules={[{ required: true }]}>
+                <Select
+                  options={[
+                    { value: 'schedule', label: '定时' },
+                    { value: 'alert', label: '内部告警规则的新告警' },
+                  ]}
+                />
+              </Form.Item>
+              {watchedTriggerKind === 'alert' && (
+                <>
+                  <Form.Item
+                    name="alertRuleId"
+                    label="告警规则 ID"
+                    rules={[{ required: true, whitespace: true }]}
+                  >
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name="maxEventAgeSeconds" label="告警有效期（秒）">
+                    <InputNumber min={60} max={86400} />
+                  </Form.Item>
+                </>
+              )}
+              <Form.Item name="aiClientId" label="AI 客户端 ID（可选）">
+                <Input />
+              </Form.Item>
+              <Form.Item name="skillId" label="Skill ID（可选）">
+                <Input />
+              </Form.Item>
+              <Form.Item
+                name="planJSON"
+                label="版本固定的能力计划 JSON"
+                rules={[{ required: true }]}
+              >
+                <Input.TextArea
+                  rows={12}
+                  spellCheck={false}
+                  onChange={() => planValidation.reset()}
+                />
+              </Form.Item>
+              <Button
+                loading={planValidation.isPending}
+                onClick={() =>
+                  void validateInspectionPlan(taskForm.getFieldsValue()).catch((error: unknown) =>
+                    message.error(error instanceof Error ? error.message : '计划无效'),
+                  )
+                }
+              >
+                校验计划
+              </Button>
+              {planValidation.data && (
+                <Alert
+                  type={planValidation.data.data.valid ? 'success' : 'error'}
+                  title={
+                    planValidation.data.data.valid
+                      ? '计划校验通过；提交时会再次校验'
+                      : '计划需要调整'
+                  }
+                  description={planValidation.data.data.issues
+                    .map((issue) => issue.message)
+                    .join('；')}
+                />
+              )}
+            </>
+          ) : (
+            <>
+              <Form.Item
+                name="checks"
+                label="检查项"
+                rules={[{ required: true, message: '请选择检查项' }]}
+              >
+                <Select mode="multiple" options={INSPECTION_CHECK_OPTIONS} />
+              </Form.Item>
+              <Form.Item name="analysisProfileId" label="巡检模板">
+                <Select
+                  showSearch={{ optionFilterProp: 'label' }}
+                  allowClear
+                  loading={catalogQuery.isLoading}
+                  placeholder="可选：按分析模板覆盖巡检 playbooks"
+                  options={profiles
+                    .filter((item) => item.mode === 'inspection' && item.enabled)
+                    .map((item) => ({ value: item.id, label: `${item.name} (${item.id})` }))}
+                />
+              </Form.Item>
+            </>
+          )}
           <Form.Item
             name="intervalMinutes"
-            label="执行间隔(分钟)"
+            label={
+              watchedTriggerKind === 'alert' && watchedInspectionMode === 'capability'
+                ? '冷却时间（分钟）'
+                : '执行间隔(分钟)'
+            }
             rules={[{ required: true, message: '请输入执行间隔' }]}
           >
-            <InputNumber min={5} style={{ width: '100%' }} />
+            <InputNumber
+              min={watchedInspectionMode === 'capability' ? 1 : 5}
+              max={525600}
+              style={{ width: '100%' }}
+            />
           </Form.Item>
           <Form.Item name="enabled" label="启用" valuePropName="checked">
             <Switch />
@@ -592,6 +816,25 @@ export function AIOperationsPage() {
                 render: (value: Array<{ id: string }>) => value?.length ?? 0,
               },
               { title: '摘要', dataIndex: 'summary' },
+              {
+                title: '能力任务',
+                key: 'capabilityTask',
+                render: (_: unknown, record: InspectionRun) =>
+                  typeof record.report?.capabilityTaskId === 'string' ? (
+                    <Button
+                      type="link"
+                      onClick={() =>
+                        navigate(
+                          `/ai-workbench/tasks?taskId=${encodeURIComponent(String(record.report?.capabilityTaskId))}`,
+                        )
+                      }
+                    >
+                      查看目标与证据
+                    </Button>
+                  ) : (
+                    '—'
+                  ),
+              },
               {
                 ...tableColumnPresets.action,
                 title: '联动',

@@ -12,9 +12,27 @@ export function useVirtualizationPermissions() {
   const canResizeVMs = hasVirtualizationPermission('virtualization.vms.resize')
   const canDeleteVMs = hasVirtualizationPermission('virtualization.vms.delete')
   const canSync = hasVirtualizationPermission('virtualization.sync.sync')
+  const canViewWorkerPools =
+    hasVirtualizationPermission('virtualization.clusters.view') &&
+    hasVirtualizationPermission('platform.clusters.view') &&
+    hasVirtualizationPermission('platform.nodes.view')
+  const canSupplyWorkers =
+    canViewWorkerPools &&
+    hasVirtualizationPermission('platform.nodes.create') &&
+    hasVirtualizationPermission('virtualization.images.view')
 
   return {
     virtualizationModuleEnabled,
+    canViewWorkerPools,
+    canCreateWorkers: canSupplyWorkers && canCreateVMs,
+    canCreateWorkerPools:
+      canSupplyWorkers && hasVirtualizationPermission('virtualization.clusters.create'),
+    canUpdateWorkerPools:
+      canSupplyWorkers && hasVirtualizationPermission('virtualization.clusters.update'),
+    canDeleteWorkerPools:
+      canViewWorkerPools &&
+      hasVirtualizationPermission('platform.nodes.create') &&
+      hasVirtualizationPermission('virtualization.clusters.delete'),
     canCreateVMs,
     canPowerVMs,
     canResizeVMs,

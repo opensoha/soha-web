@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const mode = process.argv.includes('--write') ? '--write' : '--check'
 const supportedExtension = /\.(?:css|html|js|json|md|mjs|ts|tsx|ya?ml)$/i
-const ignoredPrefixes = ['.codex-tmp/', 'dist/', 'node_modules/']
+const ignoredPrefixes = ['.codex-tmp/', '.tmp/', 'dist/', 'node_modules/']
 
 function gitPaths(args) {
   const output = execFileSync('git', args, { cwd: root, encoding: 'buffer' })

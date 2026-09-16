@@ -61,10 +61,17 @@ describe('deliveryKeys', () => {
 
   it('normalizes repository and GitLab reference keys', () => {
     expect(deliveryKeys.repositories.list({ applicationId: ' app-1 ', search: ' api ' })).toEqual([
-      'delivery', 'repositories', 'list', { applicationId: 'app-1', search: 'api', limit: undefined },
+      'delivery',
+      'repositories',
+      'list',
+      { applicationId: 'app-1', search: 'api', limit: undefined },
     ])
     expect(deliveryKeys.repositories.gitBranches({ projectId: ' project-1 ' })).toEqual([
-      'delivery', 'repositories', 'gitlab', 'branches', { projectId: 'project-1', search: undefined, limit: undefined },
+      'delivery',
+      'repositories',
+      'gitlab',
+      'branches',
+      { projectId: 'project-1', search: undefined, limit: undefined },
     ])
   })
 
@@ -76,4 +83,15 @@ describe('deliveryKeys', () => {
       'confirm',
     ])
   })
+})
+
+it('separates deployment templates, build templates, batch and application workflow caches', () => {
+  expect(deliveryKeys.deploymentTemplates.list()).not.toEqual(deliveryKeys.buildTemplates.list())
+  expect(deliveryKeys.batches.list()).not.toEqual(deliveryKeys.workflows.list())
+  expect(deliveryKeys.batches.list({ applicationId: ' a ', serviceId: ' svc ' })).toEqual([
+    'delivery',
+    'batches',
+    'list',
+    { applicationId: 'a', serviceId: 'svc' },
+  ])
 })

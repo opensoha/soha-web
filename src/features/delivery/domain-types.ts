@@ -1,4 +1,7 @@
-import type { components as SohaAPIComponents } from '@opensoha/contracts/gen/ts/sohaapi'
+import type {
+  components as SohaAPIComponents,
+  operations as SohaAPIOperations,
+} from '@opensoha/contracts/gen/ts/sohaapi'
 import type {
   Ingress,
   Pod,
@@ -9,6 +12,37 @@ import type {
 } from '@/types/platform'
 
 type SohaAPISchemas = SohaAPIComponents['schemas']
+export type DeliveryDocument = SohaAPISchemas['DeliveryDocument']
+export type DeliveryDocumentKind = SohaAPISchemas['DeliveryDocumentKind']
+export type DeliveryDocumentFile = SohaAPISchemas['DeliveryDocumentFile']
+export type DeliveryDocumentPreviewInput = SohaAPISchemas['DeliveryDocumentPreviewInput']
+export type DeliveryDocumentPreview = SohaAPISchemas['DeliveryDocumentPreview']
+export type DeliveryDocumentDiagnostic = SohaAPISchemas['DeliveryDocumentDiagnostic']
+export type DeliveryDocumentApplyInput = SohaAPISchemas['DeliveryDocumentApplyInput']
+export type DeliveryDocumentImport = SohaAPISchemas['DeliveryDocumentImport']
+export type DeliveryDocumentExport = SohaAPISchemas['DeliveryDocumentExport']
+export type DeliveryDocumentSourceInfo = SohaAPISchemas['DeliveryDocumentSourceInfo']
+export type DeliveryTrigger = SohaAPISchemas['DeliveryTrigger']
+export type DeliveryTriggerInput = SohaAPISchemas['DeliveryTriggerInput']
+export type DeliveryTriggerEvent = SohaAPISchemas['DeliveryTriggerEvent']
+export type DeliveryTriggerWebhook = SohaAPISchemas['DeliveryTriggerWebhook']
+export type DeliveryTemplateSource = SohaAPISchemas['DeliveryTemplateSource']
+export type DeliveryTemplateSourceInput = SohaAPISchemas['DeliveryTemplateSourceInput']
+export type DeliveryTemplateSourceAssociation = SohaAPISchemas['DeliveryTemplateSourceAssociation']
+export type DeliveryTemplateSourceRemoveInput = SohaAPISchemas['DeliveryTemplateSourceRemoveInput']
+export type DeliveryTemplateSyncInput = SohaAPISchemas['DeliveryTemplateSyncInput']
+export type DeliveryTemplateSyncRun = SohaAPISchemas['DeliveryTemplateSyncRun']
+export type DeliveryTemplateSyncApplyInput = SohaAPISchemas['DeliveryTemplateSyncApplyInput']
+export type WorkflowCatalogEntry = SohaAPISchemas['WorkflowCatalogEntry']
+export type WorkflowCatalogPage = SohaAPISchemas['WorkflowCatalogPage']
+export type DeliveryExecutionHistoryPage = SohaAPISchemas['DeliveryExecutionHistoryPage']
+export type DeliveryExecutionHistoryEntry = SohaAPISchemas['DeliveryExecutionHistoryEntry']
+export type DeliveryExecutionHistoryParams = NonNullable<
+  SohaAPIOperations['listDeliveryExecutionHistory']['parameters']['query']
+>
+export type WorkflowCatalogParams = NonNullable<
+  SohaAPIOperations['listWorkflowCatalog']['parameters']['query']
+>
 type ContractWorkflowNodeRun = SohaAPISchemas['WorkflowNodeRun']
 type ContractReleaseTarget = SohaAPISchemas['ReleaseTarget']
 type ContractBuildSource = SohaAPISchemas['BuildSource']
@@ -83,6 +117,7 @@ export interface BlueprintFileTemplate {
 }
 
 export interface BlueprintApplicationDraft {
+  expectedVersion?: number
   id?: string
   name: string
   key: string
@@ -119,41 +154,11 @@ export interface BlueprintEnvironmentBindingTemplate {
   targets?: ReleaseTarget[]
 }
 
-export interface DeliveryBlueprint {
-  id: string
-  key: string
-  name: string
-  description?: string
-  applicationDraft: BlueprintApplicationDraft
-  services?: DeliveryDraftServiceInput[]
+export interface DeliveryBlueprint extends Omit<
+  SohaAPISchemas['DeliveryBlueprint'],
+  'buildSources'
+> {
   buildSources?: BuildSource[]
-  environmentBindings?: BlueprintEnvironmentBindingTemplate[]
-  files?: BlueprintFileTemplate[]
-  executionHints?: Record<string, unknown>
-  postCreateActions?: string[]
-  enabled: boolean
-  createdAt: string
-  updatedAt: string
-}
-
-export type DeliveryDraftSource = 'manual' | 'ai' | 'blueprint'
-export type DeliveryDraftStatus = 'draft' | 'confirming' | 'confirmed'
-
-export interface DeliveryDraftServiceInput {
-  id?: string
-  key: string
-  name: string
-  description?: string
-  serviceKind: ApplicationServiceKind
-  ownerTeam?: string
-  repositoryProvider?: string
-  repositoryProjectId?: string
-  repositoryPath?: string
-  defaultBranch?: string
-  buildSourceId?: string
-  enabled: boolean
-  metadata?: Record<string, unknown>
-  containers?: ApplicationServiceContainerInput[]
 }
 
 export interface ApplicationServiceContainerInput {
@@ -170,44 +175,14 @@ export interface ApplicationServiceContainerInput {
   metadata?: Record<string, unknown>
 }
 
-export interface DeliveryDraft {
-  id: string
-  source: DeliveryDraftSource
-  status: DeliveryDraftStatus
-  applicationDraft: BlueprintApplicationDraft
-  services?: DeliveryDraftServiceInput[]
-  buildSources?: BuildSource[]
-  environmentBindings?: BlueprintEnvironmentBindingTemplate[]
-  files?: BlueprintFileTemplate[]
-  executionHints?: Record<string, unknown>
-  postCreateActions?: string[]
-  createdBy?: string
-  confirmedAt?: string
-  createdAt: string
-  updatedAt: string
-}
-
 export interface RenderedDeliverySpec {
   applicationDraft: BlueprintApplicationDraft
-  services?: DeliveryDraftServiceInput[]
+  services?: SohaAPISchemas['DeliveryDraftService'][]
   buildSources?: BuildSource[]
   environmentBindings?: BlueprintEnvironmentBindingTemplate[]
   files?: BlueprintFileTemplate[]
   executionHints?: Record<string, unknown>
   postCreateActions?: string[]
-}
-
-export interface BlueprintBootstrapResult {
-  draft: DeliveryDraft
-  spec: RenderedDeliverySpec
-}
-
-export interface DeliveryDraftConfirmResult {
-  draft: DeliveryDraft
-  application: DeliveryApplication
-  services?: ApplicationServiceComponent[]
-  environmentBindings?: ApplicationEnvironment[]
-  spec: RenderedDeliverySpec
 }
 
 export interface BuildRepositoryBinding {
@@ -227,12 +202,14 @@ export interface BuildRepositoryRefInput {
 export interface BuildSourceConfig extends Record<string, unknown> {
   repositoryId?: string
   repositoryBindings?: BuildRepositoryBinding[]
+  buildpacks?: SohaAPISchemas['BuildpacksConfiguration']
+  secretRefs?: SohaAPISchemas['SecretReferenceMap']
 }
 
 export interface BuildSource extends ContractBuildSource {
   id: string
   name: string
-  type: 'repo_dockerfile' | 'platform_build_template' | 'external_pipeline'
+  type: ContractBuildSource['type']
   enabled: boolean
   isDefault: boolean
   buildImage?: string
@@ -351,6 +328,7 @@ export interface ApplicationEnvironment {
   promotionPolicyId?: string
   artifactPolicyId?: string
   workflowTemplateId?: string
+  workflowTemplateVersion?: number
   workflowTemplate?: WorkflowTemplate
   buildPolicy?: BuildPolicy
   releasePolicy?: ReleasePolicy
@@ -693,6 +671,7 @@ export interface ApplicationDeliveryActionRequest extends ContractApplicationDel
 }
 
 export interface ApplicationDeliveryActionResponse {
+  manifestDeployments?: SohaAPISchemas['ManifestDeployment'][]
   action: ApplicationDeliveryActionKind
   applicationId: string
   applicationEnvironmentId: string
@@ -711,6 +690,7 @@ export type DeliveryPlanSource = 'manual' | 'ai'
 export type DeliveryPlanStatus = 'draft' | 'waiting_approval' | 'confirming' | 'confirmed'
 
 export interface DeliveryPlanRequest extends ApplicationDeliveryActionRequest {
+  manifestRevision?: number
   id?: string
   source?: DeliveryPlanSource
   applicationId: string
@@ -719,7 +699,7 @@ export interface DeliveryPlanRequest extends ApplicationDeliveryActionRequest {
 
 export interface DeliveryPlan extends ContractDeliveryPlan {
   id: string
-  source: DeliveryPlanSource
+  source: ContractDeliveryPlan['source']
   status: DeliveryPlanStatus
   applicationId: string
   applicationName?: string
@@ -789,6 +769,7 @@ export interface ApplicationRuntimeEnvironment {
   }
   targets?: ReleaseTarget[]
   workloads?: ApplicationRuntimeWorkload[]
+  manifestDeployments?: SohaAPISchemas['ManifestDeployment'][]
 }
 
 export interface ApplicationRuntimeDetail {

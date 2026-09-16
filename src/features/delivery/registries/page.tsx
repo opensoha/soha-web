@@ -185,6 +185,11 @@ export function RegistriesPage() {
                   namespace: editing.namespace,
                   username: editing.username,
                   insecure: editing.insecure,
+                  metadata: {
+                    allowedCIDRs: editing.metadata.allowedCIDRs,
+                    caCertificate: editing.metadata.caCertificate,
+                    authEndpoint: editing.metadata.authEndpoint,
+                  },
                 }
               : { insecure: false }
           }
@@ -225,6 +230,29 @@ export function RegistriesPage() {
           </Form.Item>
           <Form.Item name="insecure" label="跳过 TLS 证书校验" valuePropName="checked">
             <Switch />
+          </Form.Item>
+          <Form.Item
+            name={['metadata', 'allowedCIDRs']}
+            label="允许访问的内网 CIDR"
+            extra="镜像核验访问内网时必须明确配置，多个范围用逗号分隔。"
+            rules={[{ max: 2048 }]}
+          >
+            <Input placeholder="10.20.0.0/16" />
+          </Form.Item>
+          <Form.Item
+            name={['metadata', 'caCertificate']}
+            label="镜像核验 CA 证书"
+            rules={[{ max: 65536 }]}
+          >
+            <Input.TextArea rows={3} placeholder="PEM CA 证书；镜像核验始终校验证书" />
+          </Form.Item>
+          <Form.Item
+            name={['metadata', 'authEndpoint']}
+            label="独立认证服务地址"
+            extra="仅在 registry 使用独立 token 服务时填写其 HTTP(S) origin。"
+            rules={[{ max: 2048 }]}
+          >
+            <Input placeholder="https://auth.example.com" />
           </Form.Item>
           <div className="soha-form-actions">
             <Button onClick={closeModal}>取消</Button>

@@ -22,6 +22,37 @@ import {
 
 const workbenchEntryPermissions = Object.values(WORKBENCH_ENTRY_PERMISSION_KEYS)
 
+it('keeps application login records in the internal workbench and requires audit permission', () => {
+  const route = getRoute('identity-login-records')
+  expect(getRouteWorkbenchId(route)).toBe('security')
+  for (const permission of ['identity.audit.view', 'system.audit.view']) {
+    expect(canAccessRoute(route, buildSnapshot({ permissionKeys: [permission] }))).toBe(true)
+    expect(canAccessRoute(route, buildSnapshot({ permissionKeys: [permission] }, false))).toBe(
+      false,
+    )
+  }
+  expect(
+    canAccessRoute(route, buildSnapshot({ permissionKeys: ['identity.applications.view'] })),
+  ).toBe(false)
+  const snapshot = buildSnapshot({
+    permissionKeys: ['identity.audit.view'],
+    visibleMenuIds: ['identity-login-records'],
+    visibleMenus: [
+      {
+        id: 'identity-login-records',
+        path: route.path,
+        labelZh: '登录记录',
+        section: 'provider',
+        sortOrder: 40,
+      },
+    ],
+  })
+  expect(filterSidebarNavByWorkbench(getAccessibleSidebarNav(snapshot), 'security')).toEqual([
+    expect.objectContaining({ id: 'identity-login-records', section: 'provider', sortOrder: 40 }),
+  ])
+  expect(getAccessibleSidebarNav({ ...snapshot, visibleMenus: [], visibleMenuIds: [] })).toEqual([])
+})
+
 function buildSnapshot(
   overrides?: Partial<PermissionSnapshot>,
   includeWorkbenchEntries = true,
@@ -742,6 +773,7 @@ describe('access route authorization', () => {
         'delivery.workflows.view',
         'delivery.releases.view',
         'delivery.build-templates.view',
+        'delivery.deployment-templates.view',
         'delivery.workflow-templates.view',
         'delivery.registries.view',
       ],
@@ -760,6 +792,7 @@ describe('access route authorization', () => {
         'releases',
         'delivery-blueprints',
         'build-templates',
+        'deployment-templates',
         'workflow-templates',
         'registries',
       ],
@@ -807,6 +840,12 @@ describe('access route authorization', () => {
           sortOrder: 12,
         },
         { id: 'build-templates', path: '/build-templates', section: 'deliver', sortOrder: 13 },
+        {
+          id: 'deployment-templates',
+          path: '/deployment-templates',
+          section: 'delivery-platform',
+          sortOrder: 25,
+        },
         { id: 'registries', path: '/registries', section: 'deliver', sortOrder: 14 },
         {
           id: 'delivery-overview',
@@ -833,6 +872,7 @@ describe('access route authorization', () => {
       'releases:delivery-records',
       'delivery-blueprints:delivery-platform',
       'build-templates:delivery-platform',
+      'deployment-templates:delivery-platform',
       'workflow-templates:delivery-platform',
       'registries:delivery-platform',
     ])
@@ -977,7 +1017,7 @@ describe('access route authorization', () => {
       'delivery-analysis',
       'release-bundles',
     ])
-    expect(canAccessRoute(getRoute('release-board'), testerSnapshot)).toBe(false)
+    expect(canAccessRoute(getRoute('release-board'), testerSnapshot)).toBe(true)
     expect(canAccessRoute(getRoute('delivery-onboarding'), testerSnapshot)).toBe(true)
     expect(canAccessRoute(getRoute('build-templates'), testerSnapshot)).toBe(false)
 

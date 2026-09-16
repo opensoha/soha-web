@@ -122,6 +122,7 @@ async function request<T>(
   path: string,
   options: RequestInit = {},
   normalizeBody = true,
+  responseFormat: 'json' | 'text' = 'json',
 ): Promise<T> {
   const accessToken = getStoredAccessToken()
   const method = getRequestMethod(options)
@@ -143,11 +144,13 @@ async function request<T>(
   }
 
   if (res.status === 204) return undefined as T
+  if (responseFormat === 'text') return (await res.text()) as T
   const body = await parseJsonStrictly<unknown>(res, path, method)
   return normalizeBody ? normalizeResponseBody<T>(body) : (body as T)
 }
 
 export const api = {
+  getText: (path: string) => request<string>(path, {}, false, 'text'),
   get: <T>(path: string) => request<T>(path),
   getEnvelope: <T>(path: string) => request<T>(path, {}, false),
   post: <T>(path: string, body?: unknown) =>
@@ -177,7 +180,11 @@ export const api = {
       method: 'PATCH',
       body: body === undefined ? undefined : JSON.stringify(body),
     }),
-  delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  delete: <T>(path: string, body?: unknown) =>
+    request<T>(path, {
+      method: 'DELETE',
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }),
   upload: async <T>(path: string, formData: FormData) => {
     const { accessToken } = useAuthStore.getState()
     const options: RequestInit = {

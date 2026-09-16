@@ -1,20 +1,14 @@
 import { useEffect } from 'react'
-import { App, Form, Input, Modal, Select, Space } from 'antd'
-import { identityOutpostModeOptions, identityOutpostStatusOptions } from '../options'
-import type {
-  IdentityOutpost,
-  IdentityOutpostInput,
-  IdentityOutpostMode,
-  IdentityOutpostStatus,
-} from '../types'
+import { App, Collapse, Form, Input, Modal, Select } from 'antd'
+import { identityOutpostModeOptions } from '../options'
+import type { IdentityOutpost, IdentityOutpostInput, IdentityOutpostMode } from '../types'
 
 export interface IdentityOutpostFormValues {
   endpoint?: string
+  forwardAuthUrl?: string
   metadataJson?: string
   mode: IdentityOutpostMode
   name: string
-  status: IdentityOutpostStatus
-  version?: string
 }
 
 interface IdentityOutpostFormModalProps {
@@ -39,22 +33,21 @@ function parseMetadata(value?: string) {
 function formValues(outpost?: IdentityOutpost | null): IdentityOutpostFormValues {
   return {
     endpoint: outpost?.endpoint ?? '',
+    forwardAuthUrl: outpost?.forwardAuthUrl ?? '',
     metadataJson: JSON.stringify(outpost?.metadata ?? {}, null, 2),
     mode: outpost?.mode ?? 'embedded',
     name: outpost?.name ?? '',
-    status: outpost?.status ?? 'offline',
-    version: outpost?.version ?? '',
   }
 }
 
 export function buildIdentityOutpostInput(values: IdentityOutpostFormValues): IdentityOutpostInput {
   return {
     endpoint: values.endpoint?.trim(),
+    forwardAuthUrl: values.forwardAuthUrl?.trim(),
     metadata: parseMetadata(values.metadataJson),
     mode: values.mode,
     name: values.name.trim(),
-    status: values.status,
-    version: values.version?.trim(),
+    status: 'offline',
   }
 }
 
@@ -68,6 +61,7 @@ export function IdentityOutpostFormModal({
 }: IdentityOutpostFormModalProps) {
   const { message } = App.useApp()
   const [form] = Form.useForm<IdentityOutpostFormValues>()
+  const mode = Form.useWatch('mode', form)
 
   useEffect(() => {
     if (open) form.setFieldsValue(formValues(editing))
@@ -96,38 +90,50 @@ export function IdentityOutpostFormModal({
       <Form form={form} layout="vertical" preserve={false}>
         <Form.Item
           name="name"
-          label="Name"
-          rules={[{ required: true, message: '请输入 Outpost 名称' }]}
+          label="名称"
+          rules={[
+            { required: true, whitespace: true, max: 200, message: '请输入 1–200 字符的名称' },
+          ]}
         >
           <Input placeholder="edge-grafana" />
         </Form.Item>
-        <Space.Compact block>
-          <Form.Item name="mode" label="Mode" style={{ width: '50%' }} rules={[{ required: true }]}>
-            <Select
-              options={identityOutpostModeOptions.map((option) => ({
-                ...option,
-                disabled: !allowedModes.includes(option.value) && editing?.mode !== option.value,
-              }))}
-            />
-          </Form.Item>
+        <Form.Item name="mode" label="部署方式" rules={[{ required: true }]}>
+          <Select
+            options={identityOutpostModeOptions.map((option) => ({
+              ...option,
+              disabled: !allowedModes.includes(option.value) && editing?.mode !== option.value,
+            }))}
+          />
+        </Form.Item>
+        {mode !== 'embedded' && (
           <Form.Item
-            name="status"
-            label="Status"
-            style={{ width: '50%' }}
-            rules={[{ required: true }]}
+            name="forwardAuthUrl"
+            label="鉴权地址"
+            extra="边缘代理调用此地址；包含 Agent 的完整 forward-auth 路径。"
+            rules={[{ max: 2048 }]}
           >
-            <Select options={identityOutpostStatusOptions} />
+            <Input placeholder="https://outpost.example.com/api/v1/outpost/forward-auth" />
           </Form.Item>
-        </Space.Compact>
-        <Form.Item name="endpoint" label="Endpoint">
-          <Input placeholder="https://outpost.example.com" />
-        </Form.Item>
-        <Form.Item name="version" label="Version">
-          <Input placeholder="0.1.0" />
-        </Form.Item>
-        <Form.Item name="metadataJson" label="Metadata JSON">
-          <Input.TextArea autoSize={{ minRows: 4, maxRows: 10 }} spellCheck={false} />
-        </Form.Item>
+        )}
+        <Collapse
+          items={[
+            {
+              key: 'advanced',
+              label: '高级配置',
+              forceRender: true,
+              children: (
+                <>
+                  <Form.Item name="endpoint" label="管理地址（兼容字段）">
+                    <Input placeholder="https://outpost.example.com" />
+                  </Form.Item>
+                  <Form.Item name="metadataJson" label="Metadata JSON">
+                    <Input.TextArea autoSize={{ minRows: 4, maxRows: 10 }} spellCheck={false} />
+                  </Form.Item>
+                </>
+              ),
+            },
+          ]}
+        />
       </Form>
     </Modal>
   )

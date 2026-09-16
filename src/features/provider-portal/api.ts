@@ -35,7 +35,12 @@ function applicationView(application: ContractIdentityApplication): IdentityAppl
     portalVisible: application.portalVisible ?? false,
     providerType: application.providerType ?? 'link',
     sortOrder: application.sortOrder ?? 0,
-    status: application.status === 'active' ? 'enabled' : application.status,
+    status:
+      application.status === 'active' || application.status === 'enabled'
+        ? 'enabled'
+        : application.status === 'draft' || application.status === 'maintenance'
+          ? application.status
+          : 'disabled',
     tags: application.tags ?? [],
   }
 }
@@ -105,9 +110,7 @@ export const providerPortalApi = {
       ),
     ),
   beginRecoveryChallenge: () =>
-    unwrap(
-      api.post<ApiResponse<MFARecoveryChallenge>>('/identity/mfa/recovery-codes/challenge'),
-    ),
+    unwrap(api.post<ApiResponse<MFARecoveryChallenge>>('/identity/mfa/recovery-codes/challenge')),
   beginWebAuthnEnrollment: () =>
     unwrap(api.post<ApiResponse<MFAWebAuthnCreationOptions>>('/identity/mfa/webauthn/enroll')),
   beginWebAuthnAuthentication: (input: MFAWebAuthnAuthenticationRequest) =>

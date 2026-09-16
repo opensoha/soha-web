@@ -1,3 +1,7 @@
+import type {
+  IdentityApplicationOnboardingInput,
+  IdentityApplicationOnboarding,
+} from '@opensoha/contracts/gen/ts/sohaapi'
 import { api } from '@/services/api-client'
 import type { ApiResponse } from '@/types'
 import type {
@@ -54,4 +58,22 @@ export async function listIdentityProviderCapabilities(): Promise<IdentityProvid
     '/identity/provider-capabilities',
   )
   return response.data ?? []
+}
+
+export async function onboardIdentityApplication(
+  input: IdentityApplicationOnboardingInput,
+): Promise<IdentityApplicationOnboarding> {
+  return (
+    await api.post<ApiResponse<IdentityApplicationOnboarding>>(
+      '/identity/applications/onboard',
+      input,
+    )
+  ).data
+}
+export async function getIdentityApplication(id: string): Promise<IdentityApplication> {
+  return (
+    await api.get<ApiResponse<IdentityApplication>>(
+      '/identity/applications/' + encodeURIComponent(id),
+    )
+  ).data
 }

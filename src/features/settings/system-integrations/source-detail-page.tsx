@@ -306,6 +306,55 @@ export function SourceConnectionDetailPage() {
               <Form.Item name="description" label="说明">
                 <Input.TextArea maxLength={1000} rows={3} />
               </Form.Item>
+              <details className="soha-system-integration-oauth-alert">
+                <summary>Git 同步安全与 SSH</summary>
+                <Form.Item
+                  name="gitAllowedEndpoints"
+                  label="额外允许的克隆端点"
+                  extra="默认允许 API 同源 HTTPS 和同主机 SSH 22 端口；其他主机或端口需填写完整来源，如 ssh://git.example.com:2222。"
+                >
+                  <Input.TextArea
+                    rows={2}
+                    maxLength={8192}
+                    placeholder="每行一个 HTTPS 或 SSH 来源，不含仓库路径"
+                  />
+                </Form.Item>
+                <Form.Item
+                  name="gitAllowedCidrs"
+                  label="允许访问的内网 CIDR"
+                  extra="公网默认可用；私网需显式授权。回环地址仅接受单地址 /32 或 /128，链路本地地址始终拒绝。"
+                >
+                  <Input.TextArea rows={2} maxLength={8192} placeholder="10.20.0.0/16" />
+                </Form.Item>
+                <Form.Item
+                  name="gitCaCertificate"
+                  label="私有 CA 证书（PEM）"
+                  extra="留空时使用系统信任根；始终校验证书与主机名。"
+                >
+                  <Input.TextArea rows={3} maxLength={8192} spellCheck={false} />
+                </Form.Item>
+                <Form.Item
+                  name="privateKey"
+                  label={
+                    detailQuery.data?.credentialKeys.includes('private_key')
+                      ? 'SSH 私钥（已配置，留空保持不变）'
+                      : 'SSH 私钥'
+                  }
+                >
+                  <Input.TextArea rows={3} autoComplete="off" spellCheck={false} />
+                </Form.Item>
+                <Form.Item
+                  name="knownHosts"
+                  label={
+                    detailQuery.data?.credentialKeys.includes('known_hosts')
+                      ? 'SSH known_hosts（已配置，留空保持不变）'
+                      : 'SSH known_hosts'
+                  }
+                  extra="SSH 克隆必须提供经管理员核实的主机公钥；不会自动接受新主机密钥。"
+                >
+                  <Input.TextArea rows={3} autoComplete="off" spellCheck={false} />
+                </Form.Item>
+              </details>
             </div>
           ) : null}
         </>

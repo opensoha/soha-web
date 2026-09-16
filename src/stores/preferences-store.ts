@@ -4,7 +4,15 @@ import type { BusinessWorkspaceType } from '@/types'
 import type { AppThemeId, ThemeMode } from '@/theme/app-theme'
 import { DEFAULT_APP_THEME_ID, DEFAULT_THEME_MODE } from '@/theme/app-theme'
 
+export interface ApplicationListFilters {
+  group?: string
+  search?: string
+  scope?: 'all' | 'favorites' | 'recent'
+}
+
 interface PreferencesState {
+  applicationListFilters: Record<string, ApplicationListFilters>
+  setApplicationListFilters: (userId: string, filters: ApplicationListFilters) => void
   sidebarCollapsed: boolean
   currentWorkspace: BusinessWorkspaceType | null
   themeId: AppThemeId
@@ -13,6 +21,9 @@ interface PreferencesState {
   companionMode: 'companion' | 'icon'
   companionBubbleEnabled: boolean
   selectedCompanionPluginId: string
+  applicationShortcuts: Record<string, { favorites: string[]; recent: string[] }>
+  toggleFavoriteApplication: (userId: string, applicationId: string) => void
+  visitApplication: (userId: string, applicationId: string) => void
   toggleSidebar: () => void
   setSidebarCollapsed: (collapsed: boolean) => void
   setCurrentWorkspace: (workspace: BusinessWorkspaceType | null) => void
@@ -35,6 +46,44 @@ export const usePreferencesStore = create<PreferencesState>()(
       companionMode: 'companion',
       companionBubbleEnabled: true,
       selectedCompanionPluginId: 'builtin.soha-companion',
+      applicationShortcuts: {},
+      applicationListFilters: {},
+      setApplicationListFilters: (userId, filters) =>
+        set((state) => ({
+          applicationListFilters: { ...state.applicationListFilters, [userId]: filters },
+        })),
+      toggleFavoriteApplication: (userId, applicationId) =>
+        set((state) => {
+          const current = state.applicationShortcuts[userId] ?? { favorites: [], recent: [] }
+          return {
+            applicationShortcuts: {
+              ...state.applicationShortcuts,
+              [userId]: {
+                ...current,
+                favorites: current.favorites.includes(applicationId)
+                  ? current.favorites.filter((id) => id !== applicationId)
+                  : [...current.favorites, applicationId],
+              },
+            },
+          }
+        }),
+      visitApplication: (userId, applicationId) =>
+        set((state) => {
+          const current = state.applicationShortcuts[userId] ?? { favorites: [], recent: [] }
+          if (current.recent[0] === applicationId) return state
+          return {
+            applicationShortcuts: {
+              ...state.applicationShortcuts,
+              [userId]: {
+                ...current,
+                recent: [
+                  applicationId,
+                  ...current.recent.filter((id) => id !== applicationId),
+                ].slice(0, 12),
+              },
+            },
+          }
+        }),
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
       setCurrentWorkspace: (currentWorkspace) => set({ currentWorkspace }),

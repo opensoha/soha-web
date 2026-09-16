@@ -105,6 +105,8 @@ describe('deliveryMutations', () => {
 
     await invalidateRuntimeQueries(queryClient)
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(8)
+    expect(invalidateQueries).toHaveBeenCalledTimes(10)
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: deliveryKeys.batches.all })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: deliveryKeys.plans.all })
   })
 })

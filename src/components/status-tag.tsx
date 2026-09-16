@@ -152,6 +152,8 @@ function pickStatusColor(value?: null | string): TagColor {
       'agent_bootstrapping',
       'running_task',
       'syncing',
+      'deleting',
+      'progressing',
       'vm_ready',
     ].includes(normalized)
   ) {

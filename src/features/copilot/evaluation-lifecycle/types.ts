@@ -31,6 +31,8 @@ export interface CreateGatePolicyInput {
   threshold: number
 }
 export interface CreateFeedbackInput {
+  sessionId?: string
+  messageId?: string
   id: string
   traceRef: string
   disposition: string

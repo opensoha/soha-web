@@ -56,37 +56,5 @@ export default defineConfig(() => ({
     manifest: true,
     sourcemap: false,
     chunkSizeWarningLimit: 800,
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (!id.includes('/node_modules/')) {
-            return
-          }
-          if (
-            id.includes('monaco-editor') ||
-            id.includes('monaco-yaml') ||
-            id.includes('@monaco-editor')
-          ) {
-            return 'monaco'
-          }
-          if (id.includes('@xterm')) {
-            return 'xterm'
-          }
-          if (id.includes('echarts')) {
-            return 'charts'
-          }
-          if (id.includes('/node_modules/react-router-dom/')) {
-            return 'router'
-          }
-          if (
-            id.includes('/node_modules/react/') ||
-            id.includes('/node_modules/react-dom/') ||
-            id.includes('/node_modules/scheduler/')
-          ) {
-            return 'react-vendor'
-          }
-        },
-      },
-    },
   },
 }))

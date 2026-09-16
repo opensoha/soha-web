@@ -24,8 +24,15 @@ export function isExternalAgentRun(run: WorkbenchAgentRun) {
   return providerKind !== 'internal' && providerId !== 'internal'
 }
 
+export function isAwaitingAgentCancellation(run: WorkbenchAgentRun) {
+  return run.status === 'canceled' && run.output?.cancellationPending === true
+}
+
 export function isRunningExternalAgentRun(run: WorkbenchAgentRun) {
-  return isExternalAgentRun(run) && isRunningWorkbenchAgentStatus(run.status)
+  return (
+    isExternalAgentRun(run) &&
+    (isRunningWorkbenchAgentStatus(run.status) || isAwaitingAgentCancellation(run))
+  )
 }
 
 export function isExternalAgentRunReplayMessage(item: ConversationMessage) {
@@ -98,7 +105,9 @@ function agentRunStatusReplayEvent(
   run: WorkbenchAgentRun,
   sessionId: string,
 ): WorkbenchStreamEvent {
-  const status = canonicalWorkbenchAgentStatus(run.status)
+  const status = isAwaitingAgentCancellation(run)
+    ? 'running'
+    : canonicalWorkbenchAgentStatus(run.status)
   return {
     id: `evt:${sessionId}:${run.id}:status:${status}`,
     type: 'agent.status',
@@ -131,7 +140,9 @@ function agentRunStatusSnapshot(run: WorkbenchAgentRun, state: WorkbenchStreamSt
   return {
     providerId: state.agentStatus?.providerId || run.providerId,
     providerKind: state.agentStatus?.providerKind || run.providerKind,
-    status: canonicalWorkbenchAgentStatus(state.agentStatus?.status || run.status),
+    status: isAwaitingAgentCancellation(run)
+      ? 'running'
+      : canonicalWorkbenchAgentStatus(state.agentStatus?.status || run.status),
     runId: run.rootCauseRunId || run.id,
     agentRunId: run.id,
     externalRunId: run.externalRunId,
@@ -164,12 +175,15 @@ function agentRunReplayMetadata(run: WorkbenchAgentRun, state: WorkbenchStreamSt
     agentRunId: run.id,
     externalRunId: run.externalRunId,
     agentProviderId: run.providerId,
-    agentStatus: metadataAgentStatus(metadata) ?? agentRunStatusSnapshot(run, state),
+    agentStatus: isAwaitingAgentCancellation(run)
+      ? agentRunStatusSnapshot(run, state)
+      : (metadataAgentStatus(metadata) ?? agentRunStatusSnapshot(run, state)),
     analysisArtifacts: agentRunReplayArtifacts(metadata, run),
   }
 }
 
 function agentRunReplayContent(run: WorkbenchAgentRun, state: WorkbenchStreamState) {
+  if (isAwaitingAgentCancellation(run)) return '正在等待执行端确认停止…'
   if (state.message.content) return state.message.content
   if (state.error) return state.error.message
   if (state.thinking?.summary) return state.thinking.summary
@@ -177,7 +191,7 @@ function agentRunReplayContent(run: WorkbenchAgentRun, state: WorkbenchStreamSta
     case 'queued':
       return '外部 Agent 已排队，等待 runner 接收。'
     case 'running':
-      return '外部 Agent 正在分析当前会话。'
+      return '助手正在处理当前请求。'
     default:
       return '正在思考...'
   }

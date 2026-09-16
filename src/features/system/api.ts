@@ -32,6 +32,9 @@ export interface LogFilters {
 
 export interface AuditLogFilters extends LogFilters {
   action?: string
+  actionPrefixes?: string
+  from?: string
+  to?: string
 }
 
 export interface OperationLogFilters extends LogFilters {
@@ -158,6 +161,9 @@ export const systemApi = {
         api.get<ApiResponse<AuditLog[]>>(
           withQuery(auditEventsPath(scope), {
             action: filters.action,
+            actionPrefixes: filters.actionPrefixes,
+            from: filters.from,
+            to: filters.to,
             clusterId: filters.clusterId,
             limit: filters.limit == null ? undefined : String(filters.limit),
             namespace: filters.namespace,

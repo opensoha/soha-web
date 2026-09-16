@@ -1,3 +1,4 @@
+import type { CapabilityPlan, WorkbenchInspectionTrigger } from '@opensoha/contracts/gen/ts/sohaapi'
 export interface Insight {
   title: string
   description: string
@@ -22,6 +23,11 @@ export interface InspectionRunSummary {
 }
 
 export interface InspectionTask {
+  revision?: number
+  capabilityPlan?: CapabilityPlan
+  trigger?: WorkbenchInspectionTrigger
+  aiClientId?: string
+  skillId?: string
   id: string
   title: string
   scopeType: string
@@ -35,6 +41,16 @@ export interface InspectionTask {
 }
 
 export interface InspectionTaskFormValues {
+  id?: string
+  expectedRevision?: number
+  mode?: 'legacy' | 'capability'
+  planJSON?: string
+  triggerKind?: 'schedule' | 'alert'
+  alertRuleId?: string
+  maxEventAgeSeconds?: number
+  aiClientId?: string
+  skillId?: string
+  metadata?: Record<string, unknown>
   title?: string
   scopeType?: string
   clusterId?: string
@@ -69,6 +85,7 @@ export interface AutomationPolicy {
 }
 
 export interface InspectionRun {
+  report?: Record<string, unknown>
   id: string
   taskId: string
   status: string
@@ -112,4 +129,10 @@ export interface AutomationPolicyMutationInput {
 export interface PatchSessionInput {
   sessionId: string
   body: Record<string, unknown>
+}
+
+export interface InspectionExecutionInput {
+  taskId: string
+  idempotencyKey: string
+  expectedRevision: number
 }

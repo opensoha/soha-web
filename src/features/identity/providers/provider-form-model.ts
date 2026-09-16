@@ -117,6 +117,20 @@ export const defaultProxyHeaders = {
   teams: 'X-Soha-Teams',
   user: 'X-Soha-User',
   userId: 'X-Soha-User-ID',
+  projects: 'X-Soha-Projects',
+  tags: 'X-Soha-Tags',
+}
+
+export function proxyHeaderNamesFor(provider: IdentityProvider) {
+  const mappings = configStringMap(provider.config, 'headerMappings', 'header_mappings')
+  return [
+    ...new Set([
+      ...Object.values(defaultProxyHeaders),
+      ...Object.entries(defaultProxyHeaders).map(
+        ([claim, fallback]) => mappings[claim] || fallback,
+      ),
+    ]),
+  ]
 }
 
 const knownProxyConfigKeys = [
@@ -360,6 +374,15 @@ export function providerValuesFor(item: IdentityProvider): ProviderFormValues {
   }
 }
 
+function parseSecretRefs(value: string): Record<string, string> {
+  const result: Record<string, string> = {}
+  for (const [alias, reference] of Object.entries(parseRecordJSON(value, 'Secret refs'))) {
+    if (typeof reference !== 'string') throw new Error('Secret refs 的值必须是密钥引用字符串')
+    result[alias] = reference
+  }
+  return result
+}
+
 export function providerInputFromValues(values: ProviderFormValues): IdentityProviderInput {
   const advancedConfig = parseRecordJSON(values.configJson, 'Config')
   let config = advancedConfig
@@ -384,7 +407,7 @@ export function providerInputFromValues(values: ProviderFormValues): IdentityPro
     enabled: Boolean(values.enabled),
     name: values.name.trim(),
     secretRefs: String(values.secretRefsJson ?? '').trim()
-      ? parseRecordJSON(values.secretRefsJson, 'Secret refs')
+      ? parseSecretRefs(values.secretRefsJson)
       : undefined,
     status: values.status || 'disabled',
     type: values.type || 'oidc',
@@ -439,7 +462,11 @@ export function oidcClientInputFromValues(
   const redirectRules = values.redirectRules ?? []
   return {
     accessTokenTtlSeconds: Number(values.accessTokenTtlSeconds || 3600),
-    allowedGrantTypes: compactStrings(values.allowedGrantTypes),
+    allowedGrantTypes: compactStrings(values.allowedGrantTypes).map((value) => {
+      if (value !== 'authorization_code' && value !== 'refresh_token')
+        throw new Error('不支持的授权类型')
+      return value
+    }),
     allowedScopes: compactStrings(values.allowedScopes),
     ...(clientId ? { clientId } : {}),
     clientSecret: clientSecret || undefined,

@@ -89,6 +89,26 @@ describe('systemApi', () => {
     expect(apiMocks.get).toHaveBeenNthCalledWith(2, '/operations/summary')
   })
 
+  it('scopes application authentication audits before applying the server limit', async () => {
+    apiMocks.get.mockResolvedValue({ data: [] })
+    await systemApi.audit.list('identity', {
+      actionPrefixes: 'oidc.authorize,identity.saml.sso,proxy.deny',
+      resourceKind: 'IdentityProvider',
+      limit: 500,
+      from: '2026-09-01T00:00:00.000Z',
+      to: '2026-09-14T23:59:59.999Z',
+    })
+    const url = new URL(apiMocks.get.mock.calls[0][0], 'https://soha.test')
+    expect(url.pathname).toBe('/identity/audit/events')
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      actionPrefixes: 'oidc.authorize,identity.saml.sso,proxy.deny',
+      resourceKind: 'IdentityProvider',
+      limit: '500',
+      from: '2026-09-01T00:00:00.000Z',
+      to: '2026-09-14T23:59:59.999Z',
+    })
+  })
+
   it('unwraps menu CRUD and encodes record identifiers', async () => {
     const menu = { id: 'menu/a', labelZh: '菜单 A' }
     apiMocks.post.mockResolvedValue({ data: menu })

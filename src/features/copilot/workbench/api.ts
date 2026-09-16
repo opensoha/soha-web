@@ -10,6 +10,7 @@ import type {
 } from './types'
 
 export interface CreateWorkbenchSessionInput {
+  pinnedContext?: Record<string, unknown>
   title: string
   mode: NonNullable<NonNullable<WorkbenchSession['metadata']>['mode']>
   agentProviderId: string
@@ -53,6 +54,11 @@ export const workbenchApi = {
   },
   catalog: () => api.get<ApiResponse<WorkbenchCatalog>>('/copilot/workbench/catalog'),
   agentRuns: {
+    cancel: (runId: string) =>
+      api.post<ApiResponse<WorkbenchAgentRun>>(
+        `/copilot/agent-runs/${encodeURIComponent(runId)}/cancel`,
+        {},
+      ),
     all: () => api.get<ApiResponse<WorkbenchAgentRun[]>>('/copilot/agent-runs'),
     session: (sessionId: string) =>
       api.get<ApiResponse<WorkbenchAgentRun[]>>(

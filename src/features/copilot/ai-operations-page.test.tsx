@@ -9,8 +9,10 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { AIOperationsPage } from './observe/operations/page'
 import { AIToolsPage } from './observe/tools/page'
 import type { PermissionSnapshot } from '@/types'
+import { ApiError } from '@/services/api-error'
 
 const testState = vi.hoisted(() => ({
+  capability: false,
   snapshot: {
     permissionKeys: [
       'observe.ai.view',
@@ -34,6 +36,19 @@ const apiGetMock = vi.hoisted(() =>
         data: [
           {
             id: 'task-1',
+            ...(testState.capability
+              ? {
+                  revision: 3,
+                  capabilityPlan: {
+                    goal: 'Check current delivery',
+                    steps: [],
+                    verificationSteps: [],
+                  },
+                  trigger: { kind: 'alert', alertRuleId: 'rule-1', maxEventAgeSeconds: 120 },
+                  aiClientId: 'client',
+                  skillId: 'skill',
+                }
+              : {}),
             title: '支付命名空间巡检',
             scopeType: 'namespace',
             clusterId: 'local-k3s',
@@ -51,6 +66,7 @@ const apiGetMock = vi.hoisted(() =>
         data: [
           {
             id: 'run-1',
+            ...(testState.capability ? { report: { capabilityTaskId: 'original-goal' } } : {}),
             taskId: 'task-1',
             status: 'completed',
             severity: 'warning',
@@ -129,6 +145,17 @@ const apiGetMock = vi.hoisted(() =>
   }),
 )
 
+const apiPostMock = vi.hoisted(() =>
+  vi.fn(async (_path?: string, _body?: unknown) => ({ data: {} })),
+)
+const apiPutMock = vi.hoisted(() =>
+  vi.fn(async (_path?: string, _body?: unknown) => ({ data: {} })),
+)
+vi.mock('@/stores/auth-store', () => ({
+  useAuthStore: (select: (state: unknown) => unknown) =>
+    select({ user: { userId: 'inspection-user' } }),
+}))
+
 const apiDeleteMock = vi.hoisted(() => vi.fn(async () => undefined))
 
 vi.mock('@/features/auth/permission-snapshot', async () => {
@@ -147,8 +174,8 @@ vi.mock('@/features/auth/permission-snapshot', async () => {
 vi.mock('@/services/api-client', () => ({
   api: {
     get: apiGetMock,
-    post: vi.fn(async () => ({ data: {} })),
-    put: vi.fn(async () => ({ data: {} })),
+    post: apiPostMock,
+    put: apiPutMock,
     patch: vi.fn(async () => ({ data: {} })),
     delete: apiDeleteMock,
   },
@@ -278,6 +305,10 @@ describe('AIOperationsPage delete actions', () => {
   })
 
   beforeEach(() => {
+    testState.capability = false
+    localStorage.clear()
+    apiPostMock.mockReset().mockResolvedValue({ data: {} })
+    apiPutMock.mockClear()
     apiGetMock.mockClear()
     apiDeleteMock.mockClear()
   })
@@ -294,6 +325,85 @@ describe('AIOperationsPage delete actions', () => {
     }
     containers = []
     vi.clearAllMocks()
+  })
+
+  it('resumes a lost manual inspection response with the original key and links its goal', async () => {
+    testState.capability = true
+    apiPostMock.mockRejectedValueOnce(new Error('reply lost')).mockResolvedValueOnce({ data: {} })
+    const container = await renderOperationsPage()
+    const runButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="立即执行巡检"]',
+    )
+    expect(runButton).toBeTruthy()
+    await act(async () => runButton!.click())
+    await flush()
+    const originalPath = apiPostMock.mock.calls[0][0]
+    expect(originalPath).toContain('expectedRevision=3')
+    expect(localStorage.getItem('soha:inspection:inspection-user:task-1')).toBeTruthy()
+    await act(async () => runButton!.click())
+    await flush()
+    expect(apiPostMock.mock.calls[1][0]).toBe(originalPath)
+    expect(localStorage.getItem('soha:inspection:inspection-user:task-1')).toBeNull()
+    expect(container.textContent).toContain('查看目标与证据')
+  })
+
+  it('retains the capability plan and registration version when editing', async () => {
+    testState.capability = true
+    const container = await renderOperationsPage()
+    const edit = container.querySelector<HTMLButtonElement>('button[aria-label="编辑巡检任务"]')
+    await act(async () => edit!.click())
+    await flush()
+    const dialog = document.body.querySelector('[role="dialog"]')!
+    expect(dialog.textContent).toContain('版本固定的能力计划 JSON')
+    expect(dialog.querySelector('textarea')?.value).toContain('Check current delivery')
+    expect([...dialog.querySelectorAll('input')].some((input) => input.value === 'rule-1')).toBe(
+      true,
+    )
+  })
+
+  it('recovers a previously created registration before allowing another create', async () => {
+    localStorage.setItem('soha:inspection-create:inspection-user', 'original-registration')
+    const container = await renderOperationsPage()
+    apiGetMock.mockResolvedValueOnce({
+      data: {
+        id: 'original-registration',
+        revision: 1,
+        title: 'Recovered registration',
+        scopeType: 'platform',
+        enabled: false,
+        intervalMinutes: 30,
+      },
+    } as never)
+    const create = [...container.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('新建任务'),
+    )!
+    await act(async () => create.click())
+    await flush()
+    expect(apiGetMock).toHaveBeenCalledWith('/copilot/inspection-tasks/original-registration')
+    expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain('编辑巡检任务')
+    expect(localStorage.getItem('soha:inspection-create:inspection-user')).toBeNull()
+    expect(apiPostMock).not.toHaveBeenCalled()
+  })
+
+  it('retains the original registration ID when a lost create is still absent', async () => {
+    localStorage.setItem('soha:inspection-create:inspection-user', 'original-registration')
+    const container = await renderOperationsPage()
+    apiGetMock.mockRejectedValueOnce(new ApiError(404, 'Not found'))
+    const create = [...container.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('新建任务'),
+    )!
+    await act(async () => create.click())
+    await flush()
+    const dialog = document.body.querySelector('[role="dialog"]')!
+    expect(
+      [...dialog.querySelectorAll('input')].some(
+        (input) => input.value === 'original-registration',
+      ),
+    ).toBe(true)
+    expect(localStorage.getItem('soha:inspection-create:inspection-user')).toBe(
+      'original-registration',
+    )
+    expect(apiPostMock).not.toHaveBeenCalled()
   })
 
   it('deletes inspection tasks and automation policies through the AI workbench operations page', async () => {

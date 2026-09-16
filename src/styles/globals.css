@@ -1016,10 +1016,6 @@ a {
     flex-wrap: wrap;
   }
 
-  .soha-header-main {
-    flex: 0 0 100%;
-  }
-
   .soha-header-context {
     flex: 0 0 auto;
     justify-content: flex-start;

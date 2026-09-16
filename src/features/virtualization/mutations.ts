@@ -8,6 +8,10 @@ import { computeKeys } from '@/features/compute'
 import { virtualizationApi } from './virtualization-api'
 import { virtualizationKeys, virtualizationMutationKeys } from './keys'
 import type {
+  VirtualizationWorkerPoolInput,
+  VirtualizationWorkerCreateInput,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+import type {
   CreateVirtualMachineInput,
   VirtualMachinePowerAction,
   VirtualMachineResizeInput,
@@ -110,6 +114,34 @@ function invalidateOperationCaches(queryClient: QueryClient, operations: Operati
 }
 
 export const virtualizationMutations = {
+  saveWorkerPool: (queryClient: QueryClient) =>
+    mutationOptions({
+      mutationKey: virtualizationMutationKeys.cluster('save-worker-pool'),
+      mutationFn: ({ id, input }: { id: string; input: VirtualizationWorkerPoolInput }) =>
+        virtualizationApi.saveWorkerPool(id, input),
+      onSuccess: (_response, { input }) =>
+        invalidateVirtualizationQueries(queryClient, [
+          virtualizationKeys.workerPools(input.spec.connectionId),
+        ]),
+    }),
+  deleteWorkerPool: (queryClient: QueryClient) =>
+    mutationOptions({
+      mutationKey: virtualizationMutationKeys.cluster('delete-worker-pool'),
+      mutationFn: ({ id, revision }: { id: string; revision: number; connectionId: string }) =>
+        virtualizationApi.deleteWorkerPool(id, revision),
+      onSuccess: (_response, { connectionId }) =>
+        invalidateVirtualizationQueries(queryClient, [
+          virtualizationKeys.workerPools(connectionId),
+        ]),
+    }),
+  createWorker: (queryClient: QueryClient) =>
+    mutationOptions({
+      mutationKey: virtualizationMutationKeys.vm('create-worker'),
+      mutationFn: ({ id, input }: { id: string; input: VirtualizationWorkerCreateInput }) =>
+        virtualizationApi.createWorker(id, input),
+      onSuccess: (operation) =>
+        invalidateVirtualizationQueries(queryClient, invalidationKeys.vmChanged(operation.vmId)),
+    }),
   planCreateVm: () =>
     mutationOptions({
       mutationKey: virtualizationMutationKeys.vm('create-plan'),

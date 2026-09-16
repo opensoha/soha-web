@@ -1,12 +1,14 @@
-import { useEffect, useMemo } from 'react'
-import Editor, { DiffEditor, useMonaco } from '@monaco-editor/react'
+import { lazy, Suspense, useEffect, useMemo } from 'react'
+import Editor, { DiffEditor, loader, useMonaco } from '@monaco-editor/react'
 import { CloudUploadOutlined, ReloadOutlined } from '@ant-design/icons'
-import { Button, Card, Space, Tag, Typography } from 'antd'
+import { Button, Card, Space, Tag, Typography, theme } from 'antd'
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import YamlWorker from 'monaco-yaml/yaml.worker?worker'
 import './resource-operation-panels.css'
 import { useI18n } from '@/i18n'
 import { ensureYamlLanguage } from './monaco-yaml-language'
+import { usePreferencesStore } from '@/stores/preferences-store'
+import { resolveThemeMode } from '@/theme/app-theme'
 
 const { Text } = Typography
 
@@ -34,6 +36,13 @@ function ensureMonacoWorkers() {
   }
 }
 
+if (typeof window !== 'undefined') ensureMonacoWorkers()
+
+const LocalYamlDraftDiffEditor = lazy(async () => {
+  loader.config({ monaco: await import('monaco-editor') })
+  return { default: YamlDraftDiffEditorContent }
+})
+
 interface YamlDraftDiffEditorProps {
   description?: string
   editable?: boolean
@@ -51,7 +60,16 @@ interface YamlDraftDiffEditorProps {
   title: string
 }
 
-export function YamlDraftDiffEditor({
+export function YamlDraftDiffEditor(props: YamlDraftDiffEditorProps) {
+  const { t } = useI18n()
+  return (
+    <Suspense fallback={<div role="status">{t('common.loading', 'Loading...')}</div>}>
+      <LocalYamlDraftDiffEditor {...props} />
+    </Suspense>
+  )
+}
+
+function YamlDraftDiffEditorContent({
   description,
   editable = true,
   applyDisabled,
@@ -69,6 +87,9 @@ export function YamlDraftDiffEditor({
 }: YamlDraftDiffEditorProps) {
   const { t } = useI18n()
   const monaco = useMonaco()
+  const { token } = theme.useToken()
+  const preference = usePreferencesStore((state) => state.themeMode)
+  const editorTheme = resolveThemeMode(preference) === 'dark' ? 'vs-dark' : 'vs'
 
   useEffect(() => {
     if (!monaco) return
@@ -77,25 +98,45 @@ export function YamlDraftDiffEditor({
   }, [monaco])
 
   const editorPath = useMemo(() => 'file:///helm-values-draft.yaml', [])
-  const diffPaths = useMemo(() => ({
-    modified: 'file:///helm-values-runtime.yaml',
-    original: 'file:///helm-values-draft-for-diff.yaml',
-  }), [])
+  const diffPaths = useMemo(
+    () => ({
+      modified: 'file:///helm-values-runtime.yaml',
+      original: 'file:///helm-values-draft-for-diff.yaml',
+    }),
+    [],
+  )
   const changed = modified !== original
 
   return (
-    <Card className="soha-detail-card soha-yaml-card" style={{ marginTop: 0 }}>
+    <Card
+      className="soha-detail-card soha-yaml-card"
+      style={{ marginTop: 0, color: token.colorText }}
+    >
       <div className="soha-terminal-toolbar soha-yaml-toolbar">
         <Space className="soha-yaml-toolbar-meta" orientation="vertical" size={2}>
           <Text strong>{title}</Text>
-          {description ? <Text type="secondary" style={{ fontSize: 12 }}>{description}</Text> : null}
+          {description ? (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {description}
+            </Text>
+          ) : null}
         </Space>
         <Space className="soha-yaml-toolbar-actions" wrap>
           <Tag color={changed ? 'blue' : 'default'}>
-            {changed ? t('yamlDiffEditor.changedLabel', 'Changed') : t('yamlDiffEditor.unchangedLabel', 'No changes')}
+            {changed
+              ? t('yamlDiffEditor.changedLabel', 'Changed')
+              : t('yamlDiffEditor.unchangedLabel', 'No changes')}
           </Tag>
-          {onReset ? <Button icon={<ReloadOutlined />} onClick={onReset}>{t('common.reset', 'Reset')}</Button> : null}
-          {onSave ? <Button onClick={onSave} disabled={saveDisabled}>{t('yamlEditor.saveDraft', 'Save Draft')}</Button> : null}
+          {onReset ? (
+            <Button icon={<ReloadOutlined />} onClick={onReset}>
+              {t('common.reset', 'Reset')}
+            </Button>
+          ) : null}
+          {onSave ? (
+            <Button onClick={onSave} disabled={saveDisabled}>
+              {t('yamlEditor.saveDraft', 'Save Draft')}
+            </Button>
+          ) : null}
           {onApply ? (
             <Button
               type="primary"
@@ -116,12 +157,15 @@ export function YamlDraftDiffEditor({
             <Space className="soha-yaml-pane-title" size={6} wrap>
               <Text strong>{leftLabel || t('yamlDiffEditor.draftLabel', 'Values draft')}</Text>
               <Tag color={editable ? 'processing' : 'default'}>
-                {editable ? t('yamlDiffEditor.editableLabel', 'Editable') : t('yamlDiffEditor.readOnlyLabel', 'Read-only')}
+                {editable
+                  ? t('yamlDiffEditor.editableLabel', 'Editable')
+                  : t('yamlDiffEditor.readOnlyLabel', 'Read-only')}
               </Tag>
             </Space>
           </div>
           <div className="soha-yaml-pane-body">
             <Editor
+              theme={editorTheme}
               height="100%"
               language="yaml"
               path={editorPath}
@@ -146,12 +190,15 @@ export function YamlDraftDiffEditor({
         <section className="soha-yaml-pane">
           <div className="soha-yaml-pane-header">
             <Space className="soha-yaml-pane-title" size={6} wrap>
-              <Text strong>{rightLabel || t('yamlDiffEditor.runtimeLabel', 'Helm runtime values')}</Text>
+              <Text strong>
+                {rightLabel || t('yamlDiffEditor.runtimeLabel', 'Helm runtime values')}
+              </Text>
               <Tag color="default">{t('yamlDiffEditor.autoDiffLabel', 'Auto diff')}</Tag>
             </Space>
           </div>
           <div className="soha-yaml-pane-body">
             <DiffEditor
+              theme={editorTheme}
               height="100%"
               language="yaml"
               original={modified}

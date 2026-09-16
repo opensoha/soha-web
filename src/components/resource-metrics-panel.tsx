@@ -1,3 +1,5 @@
+import { formatMetricValue } from './resource-metrics-format'
+export { formatBytes, formatMetricValue } from './resource-metrics-format'
 import { Button, Card, Descriptions, Select, Space, Tabs, Typography } from 'antd'
 import { LineChart } from '@visactor/react-vchart'
 import { AdminTable } from '@/components/admin-table'
@@ -69,34 +71,6 @@ export const compactMetricColors: Record<string, string> = {
 
 function resolveCompactChartColor(color: string) {
   return resolveThemeColorReference(color, '#1677ff')
-}
-
-export function formatBytes(value: number) {
-  if (!Number.isFinite(value)) return '-'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let current = value
-  let index = 0
-  while (current >= 1024 && index < units.length - 1) {
-    current /= 1024
-    index += 1
-  }
-  return `${current >= 10 ? current.toFixed(0) : current.toFixed(1)} ${units[index]}`
-}
-
-export function formatMetricValue(value: number, unit: string) {
-  if (!Number.isFinite(value)) return '-'
-  switch (unit) {
-    case 'bytes':
-      return formatBytes(value)
-    case 'bytes/s':
-      return `${formatBytes(value)}/s`
-    case 'cores':
-      return value >= 1 ? `${value.toFixed(2)} cores` : `${(value * 1000).toFixed(0)} mCPU`
-    case 'count':
-      return `${value.toFixed(0)}`
-    default:
-      return `${value.toFixed(2)} ${unit}`.trim()
-  }
 }
 
 function summarizeSeries(series: MetricSeries) {
@@ -683,6 +657,24 @@ export function ResourceMetricsPanel({
     )
   }
 
+  if (data.configured === false) {
+    return (
+      <Card className="soha-detail-card" title={title}>
+        <ManagementState
+          bordered={false}
+          compact
+          kind="not-configured"
+          title={localeCode === 'zh_CN' ? '尚未接入监控' : 'Monitoring is not configured'}
+          description={
+            localeCode === 'zh_CN'
+              ? '请联系平台管理员配置当前集群的监控数据源。接入后即可查看资源指标。'
+              : 'Ask a platform administrator to configure the monitoring source for this cluster.'
+          }
+        />
+      </Card>
+    )
+  }
+
   const series = data.series ?? []
   const stats = series.map((item) => ({
     label: item.label,
@@ -729,7 +721,21 @@ export function ResourceMetricsPanel({
       return (
         <div className="soha-page-section">
           <Card className="soha-detail-card" title={title} extra={headerExtraContent}>
-            <ManagementState bordered={false} compact title={emptyDescription} />
+            <ManagementState
+              bordered={false}
+              compact
+              kind={metricsHint ? 'error' : 'empty'}
+              title={
+                metricsHint
+                  ? localeCode === 'zh_CN'
+                    ? '监控数据源不可用'
+                    : 'Monitoring source unavailable'
+                  : localeCode === 'zh_CN'
+                    ? '暂无指标数据'
+                    : 'No metrics data'
+              }
+              description={emptyDescription}
+            />
           </Card>
         </div>
       )
@@ -928,7 +934,21 @@ export function ResourceMetricsPanel({
         </>
       ) : (
         <Card className="soha-detail-card">
-          <ManagementState bordered={false} compact title={emptyDescription} />
+          <ManagementState
+            bordered={false}
+            compact
+            kind={metricsHint ? 'error' : 'empty'}
+            title={
+              metricsHint
+                ? localeCode === 'zh_CN'
+                  ? '监控数据源不可用'
+                  : 'Monitoring source unavailable'
+                : localeCode === 'zh_CN'
+                  ? '暂无指标数据'
+                  : 'No metrics data'
+            }
+            description={emptyDescription}
+          />
         </Card>
       )}
     </div>

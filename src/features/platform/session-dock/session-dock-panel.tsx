@@ -19,6 +19,9 @@ import {
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { Button, Select, Spin, Tabs, Tooltip, Typography } from 'antd'
+import { ManagementState } from '@/components/management-list'
+import { hasAllowedAction, hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { useClusterCapabilityForCluster } from '../cluster-capabilities'
 import { useI18n } from '@/i18n'
 import { podQueries } from '../workloads/pods/queries'
 import type { RealtimeSession, RealtimeSessionInput } from './types'
@@ -37,6 +40,7 @@ const PodTerminal = lazy(async () => {
 })
 
 interface RealtimeSessionDockPanelProps {
+  groupByCluster: boolean
   activeClusterId: string | null
   activeSessionKeys: Record<string, string>
   maximized: boolean
@@ -185,13 +189,72 @@ function TerminalSessionContent({
   )
 }
 
-function SessionContent({
+function AuthorizedSessionContent({
   onReplaceSession,
   session,
 }: {
   onReplaceSession: RealtimeSessionDockPanelProps['onReplaceSession']
   session: RealtimeSession
 }) {
+  const { localeCode } = useI18n()
+  const permissions = usePermissionSnapshot()
+  const permitted =
+    hasPermission(
+      permissions.data?.data,
+      session.kind === 'logs' ? 'platform.pods.logs' : 'platform.pods.exec',
+    ) && !permissions.isError
+  const capability = useClusterCapabilityForCluster(
+    session.kind === 'logs' ? 'pod.logs' : 'pod.exec',
+    localeCode,
+    permitted ? session.clusterId : null,
+  )
+  const options = podQueries.detail(
+    { clusterId: session.clusterId, namespace: session.namespace },
+    session.podName,
+  )
+  const detail = useQuery({ ...options, enabled: options.enabled && permitted })
+  const containers = detail.data?.containers ?? []
+  const defaultContainer =
+    containers.find(({ role }) => role === 'main')?.name ??
+    containers.find(({ role }) => !role || role === 'sidecar')?.name
+  useEffect(() => {
+    if (permitted && !detail.isError && !session.container && defaultContainer) {
+      onReplaceSession(session.id, { ...session, container: defaultContainer })
+    }
+  }, [defaultContainer, detail.isError, onReplaceSession, permitted, session])
+  if (!permitted)
+    return <ManagementState compact kind={permissions.isLoading ? 'loading' : 'no-permission'} />
+  if (detail.isError)
+    return (
+      <ManagementState
+        compact
+        kind="error"
+        actions={
+          <Button onClick={() => void detail.refetch()}>
+            {localeCode === 'zh_CN' ? '重试' : 'Retry'}
+          </Button>
+        }
+      />
+    )
+  if (detail.isPending || capability.isLoading) return <ManagementState compact kind="loading" />
+  if (!hasAllowedAction(detail.data?.allowedActions, session.kind === 'logs' ? 'logs' : 'exec'))
+    return <ManagementState compact kind="no-permission" />
+  if (capability.disabled || (session.kind === 'terminal' && capability.status === 'partial'))
+    return <ManagementState compact kind="unsupported" description={capability.reason} />
+  if (!session.container)
+    return (
+      <ManagementState
+        compact
+        kind={defaultContainer ? 'loading' : 'empty'}
+        title={
+          defaultContainer
+            ? undefined
+            : localeCode === 'zh_CN'
+              ? '暂无可用的主容器'
+              : 'No main container available'
+        }
+      />
+    )
   return (
     <div className="soha-realtime-session-pane">
       <Suspense
@@ -208,7 +271,13 @@ function SessionContent({
             namespace={session.namespace}
             podName={session.podName}
             container={session.container}
-            streamingDisabledReason={session.streamingDisabledReason}
+            containerOptions={containers.map(({ name }) => ({ value: name, label: name }))}
+            onContainerChange={(container) =>
+              onReplaceSession(session.id, { ...session, container: container || undefined })
+            }
+            streamingDisabledReason={
+              capability.status === 'partial' ? capability.reason : undefined
+            }
           />
         ) : (
           <TerminalSessionContent session={session} onReplaceSession={onReplaceSession} />
@@ -218,7 +287,26 @@ function SessionContent({
   )
 }
 
+function SessionContent({
+  active,
+  session,
+  onReplaceSession,
+}: {
+  active: boolean
+  session: RealtimeSession
+  onReplaceSession: RealtimeSessionDockPanelProps['onReplaceSession']
+}) {
+  const [started, setStarted] = useState(false)
+  useEffect(() => {
+    if (active) setStarted(true)
+  }, [active])
+  return started ? (
+    <AuthorizedSessionContent session={session} onReplaceSession={onReplaceSession} />
+  ) : null
+}
+
 export function RealtimeSessionDockPanel({
+  groupByCluster,
   activeClusterId,
   activeSessionKeys,
   maximized,
@@ -234,15 +322,16 @@ export function RealtimeSessionDockPanel({
   const dockRef = useRef<HTMLElement>(null)
   const resizeRef = useRef<DockResizeState | null>(null)
   const [dockHeight, setDockHeight] = useState<number>()
-  const clusterGroups = useMemo(() => {
+  const clusterGroups = useMemo<[string, RealtimeSession[]][]>(() => {
+    if (!groupByCluster) return sessions.length ? [['application', sessions]] : []
     const groups = new Map<string, RealtimeSession[]>()
     sessions.forEach((session) => {
       groups.set(session.clusterId, [...(groups.get(session.clusterId) ?? []), session])
     })
     return Array.from(groups.entries())
-  }, [sessions])
+  }, [groupByCluster, sessions])
   const activeClusterHasSessions = Boolean(
-    activeClusterId && clusterGroups.some(([clusterId]) => clusterId === activeClusterId),
+    sessions.some((session) => !groupByCluster || session.clusterId === activeClusterId),
   )
   const title = localeCode === 'zh_CN' ? '实时会话' : 'Live sessions'
   const resizeLabel = localeCode === 'zh_CN' ? '调整实时会话高度' : 'Resize live sessions'
@@ -352,10 +441,10 @@ export function RealtimeSessionDockPanel({
         <div className="soha-realtime-session-dock__identity">
           <CodeOutlined />
           <strong>{title}</strong>
-          {activeClusterId ? (
-            <span className="soha-realtime-session-dock__scope" title={activeClusterId}>
+          {groupByCluster && activeClusterId ? (
+            <Text ellipsis title={activeClusterId} style={{ maxWidth: '36vw' }}>
               {activeClusterId}
-            </span>
+            </Text>
           ) : null}
         </div>
         <div className="soha-realtime-session-dock__actions">
@@ -398,87 +487,102 @@ export function RealtimeSessionDockPanel({
         </div>
       </div>
       <div className="soha-realtime-session-dock__body">
-        {clusterGroups
-          .filter(([clusterId]) => clusterId === activeClusterId)
-          .map(([clusterId, clusterSessions]) => {
-            const requestedActiveKey = activeSessionKeys[clusterId]
-            const activeKey = clusterSessions.some((session) => session.id === requestedActiveKey)
-              ? requestedActiveKey
-              : clusterSessions[clusterSessions.length - 1]?.id
-            return (
-              <div
-                key={clusterId}
-                className="soha-realtime-session-cluster"
-                data-cluster-id={clusterId}
-                hidden={clusterId !== activeClusterId}
-              >
-                <Tabs
-                  activeKey={activeKey}
-                  animated={false}
-                  destroyOnHidden
-                  hideAdd
-                  items={clusterSessions.map((session) => {
-                    const kindLabel =
-                      session.kind === 'logs'
-                        ? localeCode === 'zh_CN'
-                          ? '日志'
-                          : 'Logs'
-                        : localeCode === 'zh_CN'
-                          ? '终端'
-                          : 'Terminal'
-                    const fullLabel = [
-                      kindLabel,
-                      session.clusterId,
-                      session.namespace,
-                      session.podName,
-                      session.container,
-                    ]
-                      .filter(Boolean)
-                      .join(' / ')
-                    return {
-                      key: session.id,
-                      label: (
-                        <span className="soha-realtime-session-tab-label" title={fullLabel}>
-                          {session.kind === 'logs' ? <FileTextOutlined /> : <CodeOutlined />}
-                          <span>{kindLabel}</span>
-                          <span className="soha-realtime-session-tab-label__pod">
-                            {session.podName}
-                          </span>
-                          {session.container ? (
-                            <span className="soha-realtime-session-tab-label__container">
-                              / {session.container}
-                            </span>
-                          ) : null}
+        {clusterGroups.map(([clusterId, clusterSessions]) => {
+          const requestedActiveKey =
+            activeSessionKeys[groupByCluster ? clusterId : activeClusterId || '']
+          const activeKey = clusterSessions.some((session) => session.id === requestedActiveKey)
+            ? requestedActiveKey
+            : clusterSessions[clusterSessions.length - 1]?.id
+          return (
+            <div
+              key={clusterId}
+              className="soha-realtime-session-cluster"
+              data-cluster-id={clusterId}
+              hidden={groupByCluster && clusterId !== activeClusterId}
+            >
+              <Tabs
+                activeKey={activeKey}
+                animated={false}
+                destroyOnHidden={false}
+                hideAdd
+                items={clusterSessions.map((session) => {
+                  const kindLabel =
+                    session.kind === 'logs'
+                      ? localeCode === 'zh_CN'
+                        ? '日志'
+                        : 'Logs'
+                      : localeCode === 'zh_CN'
+                        ? '终端'
+                        : 'Terminal'
+                  const fullLabel = [
+                    kindLabel,
+                    session.clusterId,
+                    session.namespace,
+                    session.podName,
+                    session.container,
+                  ]
+                    .filter(Boolean)
+                    .join(' / ')
+                  return {
+                    key: session.id,
+                    label: (
+                      <span className="soha-realtime-session-tab-label" title={fullLabel}>
+                        {session.kind === 'logs' ? <FileTextOutlined /> : <CodeOutlined />}
+                        <span>{kindLabel}</span>
+                        <span className="soha-realtime-session-tab-label__pod">
+                          {session.podName}
                         </span>
-                      ),
-                      children: (
-                        <SessionContent session={session} onReplaceSession={onReplaceSession} />
-                      ),
-                    }
-                  })}
-                  size="small"
-                  type="editable-card"
-                  onChange={(sessionId) => onActiveSessionChange(clusterId, sessionId)}
-                  onEdit={(targetKey, action) => {
-                    if (action === 'remove' && typeof targetKey === 'string') {
-                      onCloseSession(targetKey)
-                    }
-                  }}
-                />
-              </div>
-            )
-          })}
+                        {session.container ? (
+                          <span className="soha-realtime-session-tab-label__container">
+                            / {session.container}
+                          </span>
+                        ) : null}
+                      </span>
+                    ),
+                    forceRender: true,
+                    children: (
+                      <SessionContent
+                        active={
+                          visible &&
+                          (!groupByCluster || clusterId === activeClusterId) &&
+                          session.id === activeKey
+                        }
+                        session={session}
+                        onReplaceSession={onReplaceSession}
+                      />
+                    ),
+                  }
+                })}
+                size="small"
+                type="editable-card"
+                onChange={(sessionId) => {
+                  const session = clusterSessions.find((item) => item.id === sessionId)
+                  if (session) onActiveSessionChange(session.clusterId, sessionId)
+                }}
+                onEdit={(targetKey, action) => {
+                  if (action === 'remove' && typeof targetKey === 'string') {
+                    onCloseSession(targetKey)
+                  }
+                }}
+              />
+            </div>
+          )
+        })}
         {!activeClusterHasSessions ? (
           <div className="soha-realtime-session-empty" role="status">
             <CodeOutlined />
             <span>
-              {activeClusterId
+              {!groupByCluster
                 ? localeCode === 'zh_CN'
-                  ? '当前集群暂无实时会话'
-                  : 'No live sessions in the current cluster'
-                : localeCode === 'zh_CN'
-                  ? '尚未选择集群'
-                  : 'No cluster selected'}
+                  ? '暂无实时会话'
+                  : 'No live sessions'
+                : activeClusterId
+                  ? localeCode === 'zh_CN'
+                    ? '当前集群暂无实时会话'
+                    : 'No live sessions in the current cluster'
+                  : localeCode === 'zh_CN'
+                    ? '尚未选择集群'
+                    : 'No cluster selected'}
             </span>
           </div>
         ) : null}

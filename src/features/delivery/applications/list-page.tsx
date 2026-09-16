@@ -1,14 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import './styles.css'
-import { App, Button, Card, Dropdown, Select, Typography } from 'antd'
+import { App, Button, Card, Dropdown, Modal, Select, Typography } from 'antd'
 import {
   AppstoreOutlined,
   DeleteOutlined,
   EditOutlined,
   MoreOutlined,
   PlusOutlined,
+  StarFilled,
+  StarOutlined,
 } from '@ant-design/icons'
-import { useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
@@ -17,79 +18,42 @@ import {
   ManagementTableToolbar,
   ManagementToolbarSearch,
 } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { useAuthStore } from '@/stores/auth-store'
+import { usePreferencesStore } from '@/stores/preferences-store'
+import { scrollableModalBodyStyle, viewportModalStyle } from '@/components/modal-styles'
 import {
   ApplicationCenterModals,
+  ApplicationForm,
   splitApplicationGroups,
   useApplicationCenterState,
 } from '../application-center-model'
-import { deliveryQueries } from '../queries'
-import type { DeliveryApplication, ReleaseBoardEntry } from '../types'
-import { ApplicationEntryModal, type ApplicationEntryMode } from '../workbench/onboarding-page'
+import type { DeliveryApplication } from '../types'
 
 const { Text } = Typography
 
-type ApplicationListRow = {
-  app: DeliveryApplication
-  activeTargets: number | null
-  environmentCount: number
-}
-
-type ApplicationListFilters = {
-  group?: string
-  search?: string
-}
-
 export function ApplicationsPage() {
   const { modal } = App.useApp()
-  const managementState = useApplicationCenterState()
-  const permissionSnapshotQuery = usePermissionSnapshot()
+  const managementState = useApplicationCenterState({
+    loadWorkflowTemplates: false,
+    loadClusters: false,
+  })
+  const userId = useAuthStore((state) => state.user?.userId ?? '')
+  const shortcuts = usePreferencesStore((state) => state.applicationShortcuts[userId])
+  const toggleFavorite = usePreferencesStore((state) => state.toggleFavoriteApplication)
+  const favorites = shortcuts?.favorites ?? []
   const [searchParams, setSearchParams] = useSearchParams()
-  const [filters, setFilters] = useState<ApplicationListFilters>({ group: 'all', search: '' })
-  const requestedMode = searchParams.get('mode')
-  const entryMode: ApplicationEntryMode =
-    requestedMode === 'manual' || requestedMode === 'ai' ? requestedMode : 'quick'
+  const filters = usePreferencesStore((state) => state.applicationListFilters[userId]) ?? {
+    group: 'all',
+    search: '',
+  }
+  const setFilters = usePreferencesStore((state) => state.setApplicationListFilters)
   const entryOpen = searchParams.get('action') === 'create'
 
-  const applicationsQuery = useQuery(deliveryQueries.applications.list())
-  const canViewReleaseBoard = hasPermission(
-    permissionSnapshotQuery.data?.data,
-    'delivery.release-board.view',
-  )
-  const releaseBoardQuery = useQuery(
-    deliveryQueries.releaseBoard.list({ enabled: canViewReleaseBoard }),
-  )
-
-  const boardByApp = useMemo(() => {
-    return (releaseBoardQuery.data ?? []).reduce<Record<string, ReleaseBoardEntry[]>>(
-      (acc, item) => {
-        acc[item.applicationId] = [...(acc[item.applicationId] ?? []), item]
-        return acc
-      },
-      {},
-    )
-  }, [releaseBoardQuery.data])
-
-  const applicationRows = useMemo<ApplicationListRow[]>(
-    () =>
-      (applicationsQuery.data ?? []).map((app) => {
-        const bindings = boardByApp[app.id] ?? []
-        const hasBoardData = canViewReleaseBoard && releaseBoardQuery.data !== undefined
-        return {
-          app,
-          activeTargets: hasBoardData
-            ? bindings.reduce((sum, item) => sum + (item.targets?.length ?? 0), 0)
-            : null,
-          environmentCount: (hasBoardData ? bindings.length : 0) || app.environmentCount || 0,
-        }
-      }),
-    [applicationsQuery.data, boardByApp, canViewReleaseBoard, releaseBoardQuery.data],
-  )
+  const applicationsQuery = managementState.applicationsQuery
 
   const visibleRows = useMemo(() => {
     const keyword = filters.search?.trim().toLowerCase() ?? ''
-    return applicationRows.filter(({ app }) => {
+    const rows = (applicationsQuery.data ?? []).filter((app) => {
       const groups = splitApplicationGroups(app.group)
       const matchesGroup =
         !filters.group ||
@@ -97,15 +61,29 @@ export function ApplicationsPage() {
         (filters.group === 'unassigned' ? groups.length === 0 : groups.includes(filters.group))
       const matchesKeyword =
         !keyword ||
-        [app.name, app.key, ...groups].some((value) => value.toLowerCase().includes(keyword))
-      return matchesGroup && matchesKeyword
+        [app.name, app.key, app.description || '', ...groups].some((value) =>
+          value.toLowerCase().includes(keyword),
+        )
+      const matchesScope =
+        filters.scope === 'favorites'
+          ? shortcuts?.favorites.includes(app.id)
+          : filters.scope === 'recent'
+            ? shortcuts?.recent.includes(app.id)
+            : true
+      return matchesGroup && matchesKeyword && matchesScope
     })
-  }, [applicationRows, filters])
+    return filters.scope === 'recent'
+      ? rows.sort(
+          (a, b) => (shortcuts?.recent.indexOf(a.id) ?? 0) - (shortcuts?.recent.indexOf(b.id) ?? 0),
+        )
+      : rows
+  }, [applicationsQuery.data, filters, shortcuts])
 
   const openCreateApplication = () => {
     const next = new URLSearchParams(searchParams)
     next.set('action', 'create')
-    next.set('mode', managementState.canCreateApplication ? 'quick' : 'manual')
+    next.delete('mode')
+    next.delete('templateId')
     setSearchParams(next, { replace: true })
   }
 
@@ -114,13 +92,6 @@ export function ApplicationsPage() {
     next.delete('action')
     next.delete('mode')
     next.delete('templateId')
-    setSearchParams(next, { replace: true })
-  }
-
-  const changeApplicationEntryMode = (mode: ApplicationEntryMode) => {
-    const next = new URLSearchParams(searchParams)
-    next.set('action', 'create')
-    next.set('mode', mode)
     setSearchParams(next, { replace: true })
   }
 
@@ -135,6 +106,24 @@ export function ApplicationsPage() {
       <ManagementDataPage
         tableNode={
           <section className="soha-application-center-results">
+            <nav className="soha-application-center-scopes" aria-label="应用范围">
+              {(
+                [
+                  { key: 'all', label: '全部应用' },
+                  { key: 'favorites', label: '我的收藏' },
+                  { key: 'recent', label: '最近访问' },
+                ] as const
+              ).map(({ key, label }) => (
+                <button
+                  type="button"
+                  key={key}
+                  aria-pressed={(filters.scope || 'all') === key}
+                  onClick={() => setFilters(userId, { ...filters, scope: key })}
+                >
+                  {label}
+                </button>
+              ))}
+            </nav>
             <div className="soha-application-center-toolbar">
               <div className="soha-application-center-toolbar__groups">
                 <ManagementTableToolbar>
@@ -150,7 +139,7 @@ export function ApplicationsPage() {
                         value: group,
                       })),
                     ]}
-                    onChange={(group) => setFilters((current) => ({ ...current, group }))}
+                    onChange={(group) => setFilters(userId, { ...filters, group })}
                   />
                 </ManagementTableToolbar>
               </div>
@@ -159,36 +148,16 @@ export function ApplicationsPage() {
                   <ManagementToolbarSearch
                     placeholder="搜索应用"
                     value={filters.search ?? ''}
-                    onChange={(search) => setFilters((current) => ({ ...current, search }))}
+                    onChange={(search) => setFilters(userId, { ...filters, search })}
                   />
-                  <Button
-                    type="primary"
-                    icon={<PlusOutlined />}
-                    disabled={
-                      !managementState.canCreateApplication &&
-                      !managementState.canUpdateApplication
-                    }
-                    onClick={openCreateApplication}
-                  >
-                    创建 / 接入应用
-                  </Button>
+                  {managementState.canCreateApplication ? (
+                    <Button type="primary" icon={<PlusOutlined />} onClick={openCreateApplication}>
+                      创建应用
+                    </Button>
+                  ) : null}
                 </ManagementTableToolbar>
               </div>
             </div>
-
-            {canViewReleaseBoard && releaseBoardQuery.isError ? (
-              <ManagementState
-                compact
-                kind="error"
-                title="发布状态加载失败"
-                description="应用仍可使用；发布目标暂时无法读取。"
-                actions={
-                  <Button size="small" onClick={() => void releaseBoardQuery.refetch()}>
-                    重试
-                  </Button>
-                }
-              />
-            ) : null}
 
             {applicationsQuery.isLoading ? (
               <ManagementState compact kind="loading" title="正在加载应用" />
@@ -211,37 +180,57 @@ export function ApplicationsPage() {
             ) : visibleRows.length === 0 ? (
               <ManagementState
                 compact
-                title={filters.group === 'all' && !filters.search ? '暂无应用' : '没有匹配的应用'}
+                title={
+                  filters.scope === 'favorites'
+                    ? '还没有收藏的应用'
+                    : filters.scope === 'recent'
+                      ? '还没有最近访问的应用'
+                      : filters.group === 'all' && !filters.search
+                        ? '暂无应用'
+                        : '没有匹配的应用'
+                }
+                description={
+                  filters.scope === 'favorites'
+                    ? '点击应用卡片上的星标，方便下次快速进入。'
+                    : filters.scope === 'recent'
+                      ? '打开应用后，它会出现在这里。最近访问仅保存在当前浏览器。'
+                      : undefined
+                }
               />
             ) : (
               <div className="soha-application-card-grid" role="list">
-                {visibleRows.map((row) => {
-                  const groups = splitApplicationGroups(row.app.group)
+                {visibleRows.map((app) => {
+                  const groups = splitApplicationGroups(app.group)
                   return (
                     <Card
                       className="soha-application-card"
-                      key={row.app.id}
+                      key={app.id}
                       role="listitem"
                       size="small"
                     >
                       <div className="soha-application-card__header">
                         <Link
                           className="soha-application-card__link"
-                          to={`/applications/${row.app.id}`}
+                          to={`/applications/${encodeURIComponent(app.id)}`}
                         >
                           <span className="soha-application-card__icon" aria-hidden="true">
                             <AppstoreOutlined />
                           </span>
                           <span className="soha-application-card__identity">
-                            <Text strong ellipsis title={row.app.name}>
-                              {row.app.name}
+                            <Text strong ellipsis title={app.name}>
+                              {app.name}
                             </Text>
-                            <Text type="secondary" ellipsis title={row.app.key}>
-                              {row.app.key}
-                            </Text>
-                            <StatusTag value={row.app.enabled ? 'enabled' : 'disabled'} />
                           </span>
                         </Link>
+                        {userId ? (
+                          <ManagementIconButton
+                            aria-label={`${favorites.includes(app.id) ? '取消收藏' : '收藏'} ${app.name}`}
+                            aria-pressed={favorites.includes(app.id)}
+                            icon={favorites.includes(app.id) ? <StarFilled /> : <StarOutlined />}
+                            tooltip={favorites.includes(app.id) ? '取消收藏' : '收藏到当前浏览器'}
+                            onClick={() => toggleFavorite(userId, app.id)}
+                          />
+                        ) : null}
                         {managementState.canUpdateApplication ||
                         managementState.canDeleteApplication ? (
                           <Dropdown
@@ -264,42 +253,42 @@ export function ApplicationsPage() {
                               ],
                               onClick: ({ key }) => {
                                 if (key === 'edit') {
-                                  openEditApplication(row.app)
+                                  openEditApplication(app)
                                   return
                                 }
                                 modal.confirm({
                                   title: '确认删除应用？',
-                                  content: `删除 ${row.app.name} 后不可恢复。`,
+                                  content: `删除 ${app.name} 后不可恢复。`,
                                   okText: '删除',
                                   cancelText: '取消',
                                   okButtonProps: { danger: true },
-                                  onOk: () =>
-                                    managementState.deleteAppMutation.mutateAsync(row.app.id),
+                                  onOk: () => managementState.deleteAppMutation.mutateAsync(app.id),
                                 })
                               },
                             }}
                           >
                             <ManagementIconButton
                               className="soha-application-card__more"
-                              aria-label={`管理 ${row.app.name}`}
+                              aria-label={`管理 ${app.name}`}
                               icon={<MoreOutlined />}
                               tooltip="更多操作"
                             />
                           </Dropdown>
                         ) : null}
                       </div>
-
-                      <div className="soha-application-card__footer">
-                        <Text type="secondary" ellipsis title={groups.join(' / ') || '未分组'}>
-                          {groups.length > 1
-                            ? `${groups[0]} +${groups.length - 1}`
-                            : groups[0] || '未分组'}
-                        </Text>
-                        <Text type="secondary">
-                          {row.environmentCount} 环境
-                          {row.activeTargets === null ? '' : ` · ${row.activeTargets} 服务`}
-                        </Text>
-                      </div>
+                      <Text
+                        className="soha-application-card__description"
+                        type="secondary"
+                        ellipsis
+                        title={app.description}
+                      >
+                        {app.description || '暂无备注'}
+                      </Text>
+                      <Text type="secondary" ellipsis title={groups.join(' / ') || '未分组'}>
+                        {groups.length > 1
+                          ? `${groups[0]} +${groups.length - 1}`
+                          : groups[0] || '未分组'}
+                      </Text>
                     </Card>
                   )
                 })}
@@ -309,14 +298,30 @@ export function ApplicationsPage() {
         }
       />
       <ApplicationCenterModals state={managementState} />
-      <ApplicationEntryModal
-        mode={entryMode}
+      <Modal
+        title="创建应用"
         open={entryOpen}
-        state={managementState}
-        templateId={searchParams.get('templateId')}
         onCancel={closeApplicationEntry}
-        onModeChange={changeApplicationEntryMode}
-      />
+        footer={null}
+        destroyOnHidden
+        width={560}
+        style={viewportModalStyle}
+        styles={{ body: scrollableModalBodyStyle }}
+      >
+        {managementState.canCreateApplication ? (
+          <ApplicationForm
+            application={null}
+            state={managementState}
+            onCancel={closeApplicationEntry}
+            onCreated={(application) => {
+              closeApplicationEntry()
+              managementState.navigate(`/applications/${encodeURIComponent(application.id)}`)
+            }}
+          />
+        ) : (
+          <ManagementState compact kind="no-permission" title="无权创建应用" />
+        )}
+      </Modal>
     </>
   )
 }

@@ -19,6 +19,7 @@ const statusLabels: Record<string, { en: string; zh: string }> = {
   connecting: { zh: '连接中', en: 'Connecting' },
   degraded: { zh: '已降级', en: 'Degraded' },
   deny: { zh: '拒绝', en: 'Denied' },
+  deployed: { zh: '已部署', en: 'Deployed' },
   disabled: { zh: '已停用', en: 'Disabled' },
   detected: { zh: '已检测', en: 'Detected' },
   defined: { zh: '已定义', en: 'Defined' },

@@ -5,6 +5,7 @@ describe('formatStatusLabel', () => {
   it('localizes canonical lifecycle values and preserves unknown provider states', () => {
     expect(formatStatusLabel('Running', 'zh_CN')).toBe('运行中')
     expect(formatStatusLabel('not_deployed', 'zh_CN')).toBe('未部署')
+    expect(formatStatusLabel('deployed', 'zh_CN')).toBe('已部署')
     expect(formatStatusLabel('NotReady', 'en_US')).toBe('Not Ready')
     expect(formatStatusLabel('unavailable', 'zh_CN')).toBe('不可用')
     expect(formatStatusLabel('agent_registered', 'zh_CN')).toBe('Agent 已注册')

@@ -481,7 +481,16 @@
   background: var(--soha-data-panel-bg);
 }
 
+.soha-management-searchable-list-pane__header {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
 .soha-management-searchable-list-pane__search.ant-input-affix-wrapper {
+  flex: 1;
+  min-width: 0;
   border-radius: var(--soha-radius-control, 6px);
   background: var(--soha-bg-surface);
 }

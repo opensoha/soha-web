@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Alert, App, Button, Form, Input, Modal, Select, Switch } from 'antd'
+import { Alert, App, Button, Collapse, Form, Input, Modal, Select, Switch } from 'antd'
 import { useI18n } from '@/i18n'
 import {
   defaultProviderValues,
@@ -278,7 +278,7 @@ export function ProviderFormModal({
           </Form.Item>
           <Form.Item label={zh ? '类型' : 'Type'} name="type">
             <Select
-              disabled={!editing && Boolean(lockedType)}
+              disabled={Boolean(editing) || Boolean(lockedType)}
               options={providerTypeOptions.map((option) => ({
                 ...option,
                 disabled: option.value === 'saml' && !samlAvailable && editing?.type !== 'saml',
@@ -290,43 +290,18 @@ export function ProviderFormModal({
           </Form.Item>
         </div>
 
-        <Form.Item label={zh ? '启用运行时' : 'Enabled'} name="enabled" valuePropName="checked">
+        <Form.Item label={zh ? '启用认证' : 'Enabled'} name="enabled" valuePropName="checked">
           <Switch />
         </Form.Item>
 
-        {providerType === 'proxy' ? (
-          <ProxyConfigFields outpostLoading={outpostLoading} outpostOptions={outpostOptions} />
-        ) : null}
-
-        {providerType === 'saml' ? (
-          <>
-            {!samlAvailable ? (
-              <Alert
-                showIcon
-                title="SAML runtime unavailable"
-                description={samlUnavailableReason || 'The server has not enabled SAML providers.'}
-                type="warning"
-              />
-            ) : null}
-            <SAMLConfigFields />
-          </>
-        ) : null}
-
-        <div className="soha-identity-provider-json-grid">
-          <Form.Item
-            label={providerType === 'oidc' ? 'Config JSON' : 'Advanced config JSON'}
-            name="configJson"
-          >
-            <Input.TextArea autoSize={{ minRows: 5, maxRows: 10 }} />
-          </Form.Item>
-          <Form.Item
-            label="Secret refs JSON"
-            name="secretRefsJson"
-            tooltip={editing ? 'Leave blank to keep configured references' : undefined}
-          >
-            <Input.TextArea autoSize={{ minRows: 5, maxRows: 10 }} />
-          </Form.Item>
-        </div>
+        <ProviderConfigFields
+          providerType={providerType}
+          outpostLoading={outpostLoading}
+          outpostOptions={outpostOptions}
+          samlAvailable={samlAvailable}
+          samlUnavailableReason={samlUnavailableReason}
+          editing={Boolean(editing)}
+        />
 
         <div className="soha-identity-provider-form-actions">
           <Button onClick={onCancel}>{zh ? '取消' : 'Cancel'}</Button>
@@ -341,5 +316,66 @@ export function ProviderFormModal({
         </div>
       </Form>
     </Modal>
+  )
+}
+
+export function ProviderConfigFields({
+  providerType,
+  outpostLoading,
+  outpostOptions,
+  samlAvailable,
+  samlUnavailableReason,
+  editing = false,
+}: Pick<
+  ProviderFormModalProps,
+  'providerType' | 'outpostLoading' | 'outpostOptions' | 'samlAvailable' | 'samlUnavailableReason'
+> & { editing?: boolean }) {
+  return (
+    <>
+      {providerType === 'proxy' ? (
+        <ProxyConfigFields outpostLoading={outpostLoading} outpostOptions={outpostOptions} />
+      ) : null}
+
+      {providerType === 'saml' ? (
+        <>
+          {!samlAvailable ? (
+            <Alert
+              showIcon
+              title="SAML runtime unavailable"
+              description={samlUnavailableReason || 'The server has not enabled SAML providers.'}
+              type="warning"
+            />
+          ) : null}
+          <SAMLConfigFields />
+        </>
+      ) : null}
+
+      <Collapse
+        items={[
+          {
+            key: 'advanced',
+            label: '高级配置',
+            forceRender: true,
+            children: (
+              <div className="soha-identity-provider-json-grid">
+                <Form.Item
+                  label={providerType === 'oidc' ? 'Config JSON' : 'Advanced config JSON'}
+                  name="configJson"
+                >
+                  <Input.TextArea autoSize={{ minRows: 5, maxRows: 10 }} />
+                </Form.Item>
+                <Form.Item
+                  label="Secret refs JSON"
+                  name="secretRefsJson"
+                  tooltip={editing ? 'Leave blank to keep configured references' : undefined}
+                >
+                  <Input.TextArea autoSize={{ minRows: 5, maxRows: 10 }} />
+                </Form.Item>
+              </div>
+            ),
+          },
+        ]}
+      />
+    </>
   )
 }

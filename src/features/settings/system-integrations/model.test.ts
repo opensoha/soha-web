@@ -89,4 +89,37 @@ describe('system integration model', () => {
       credentials: [{ key: 'client_secret', value: 'app-secret' }],
     })
   })
+
+  it('roundtrips Git network policy and keeps blank SSH credentials write-only', () => {
+    const configured = {
+      ...integration,
+      credentialKeys: ['token', 'private_key', 'known_hosts'],
+      configuration: [
+        ...integration.configuration,
+        { key: 'git_allowed_endpoints', value: 'ssh://git.example.com:2222' },
+        { key: 'git_allowed_cidrs', value: '10.20.0.0/16' },
+        { key: 'git_ca_certificate', value: 'certificate' },
+      ],
+    }
+    const values = gitLabFormValues(configured)
+    expect(values).toMatchObject({
+      privateKey: '',
+      knownHosts: '',
+      gitAllowedCidrs: '10.20.0.0/16',
+    })
+    const update = updateGitLabIntegration(configured, values)
+    expect(update.configuration).toEqual(expect.arrayContaining(configured.configuration))
+    expect(update.credentials).toBeUndefined()
+    expect(update.clearCredentialKeys).not.toContain('private_key')
+    expect(
+      updateGitLabIntegration(configured, {
+        ...values,
+        privateKey: ' new-key ',
+        knownHosts: ' verified-host ',
+      }).credentials,
+    ).toEqual([
+      { key: 'private_key', value: 'new-key' },
+      { key: 'known_hosts', value: 'verified-host' },
+    ])
+  })
 })

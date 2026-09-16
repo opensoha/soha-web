@@ -1,4 +1,5 @@
 import type { DeliveryTargetCandidate, ReleaseTarget } from './domain-types'
+import type { ManifestPackage } from './manifests/types'
 
 export const RELEASE_TARGET_KIND_OPTIONS = [
   { value: 'k8s_workload', label: 'YAML / Kubernetes workload' },
@@ -12,21 +13,59 @@ type ReleaseTargetInput = Omit<ReleaseTarget, 'id'> & { id?: string }
 type ReleaseTargetIdentity = Pick<
   ReleaseTarget,
   'clusterId' | 'namespace' | 'workloadKind' | 'workloadName'
->
+> &
+  Partial<Pick<ReleaseTarget, 'targetKind' | 'helm' | 'docker'>>
 
 export function releaseTargetKey(target: ReleaseTargetIdentity) {
+  if (target.docker)
+    return JSON.stringify(['docker_compose', target.docker.hostId, target.docker.projectId])
   return JSON.stringify([
     target.clusterId,
     target.namespace,
-    target.workloadKind,
-    target.workloadName,
+    target.targetKind || 'k8s_workload',
+    target.helm ? 'HelmRelease' : target.workloadKind,
+    target.helm?.releaseName || target.workloadName,
   ])
+}
+
+export function manifestReleaseTargets(
+  packages: ManifestPackage[],
+  environmentId: string,
+  clusterId?: string,
+  namespace?: string,
+): ReleaseTargetInput[] {
+  return packages.flatMap((item) =>
+    item.bindings.flatMap((binding) =>
+      binding.id &&
+      binding.applicationEnvironmentId === environmentId &&
+      binding.clusterId === clusterId &&
+      binding.namespace === namespace
+        ? [
+            {
+              clusterId: binding.clusterId,
+              namespace: binding.namespace,
+              targetKind: item.renderer === 'kustomize' ? 'kustomize_overlay' : 'k8s_workload',
+              executorKind: 'manifest_ssa',
+              configRef: binding.id,
+              workloadKind: 'ManifestPackage',
+              workloadName: item.id,
+              metadata: {
+                manifestPackageName: item.name,
+                ...(item.serviceId ? { serviceId: item.serviceId } : {}),
+              },
+              enabled: true,
+            },
+          ]
+        : [],
+    ),
+  )
 }
 
 export function releaseTargetsFromCandidates(
   candidates: DeliveryTargetCandidate[],
   selectedKeys: string[] = [],
   existing: ReleaseTarget[] = [],
+  manifests: ReleaseTargetInput[] = [],
 ): ReleaseTargetInput[] {
   const targets = new Map<string, ReleaseTargetInput>(
     candidates.map((candidate) => [
@@ -43,6 +82,7 @@ export function releaseTargetsFromCandidates(
       },
     ]),
   )
+  manifests.forEach((target) => targets.set(releaseTargetKey(target), target))
   existing.forEach((target) => targets.set(releaseTargetKey(target), target))
   return selectedKeys.flatMap((key) => {
     const target = targets.get(key)
@@ -80,9 +120,58 @@ export function parseReleaseTargets(raw: unknown, field = '发布目标'): Relea
       target.metadata && typeof target.metadata === 'object' && !Array.isArray(target.metadata)
         ? (target.metadata as Record<string, unknown>)
         : {}
-    if (targetKind === 'helm_release') requiredText(metadata.chartRef, 'metadata.chartRef', index)
-    if (targetKind === 'kustomize_overlay') {
-      requiredText(metadata.overlayPath || target.configRef, 'metadata.overlayPath 或 configRef', index)
+    if (target.executorKind === 'docker_compose') {
+      if (targetKind !== 'host_service' || target.clusterId || target.namespace || target.helm)
+        throw new Error(`发布目标 ${index + 1} 的 Docker 配置不能包含 Kubernetes 或 Helm 目标`)
+      const docker = target.docker as Record<string, unknown> | undefined
+      if (!docker || typeof docker !== 'object' || Array.isArray(docker))
+        throw new Error(`发布目标 ${index + 1} 缺少 docker 配置`)
+      const mappings = docker.imageMappings
+      if (
+        !mappings ||
+        typeof mappings !== 'object' ||
+        Array.isArray(mappings) ||
+        !Object.keys(mappings).length ||
+        Object.entries(mappings).some(
+          ([key, value]) => !key.trim() || typeof value !== 'string' || !value.trim(),
+        )
+      )
+        throw new Error(`发布目标 ${index + 1} 需要 Compose 服务到产物容器的镜像映射`)
+      return {
+        ...target,
+        targetKind,
+        executorKind: 'docker_compose',
+        clusterId: '',
+        namespace: '',
+        workloadKind: 'ComposeProject',
+        workloadName: requiredText(target.workloadName, 'workloadName', index),
+        docker: {
+          hostId: requiredText(docker.hostId, 'docker.hostId', index),
+          projectId: requiredText(docker.projectId, 'docker.projectId', index),
+          imageMappings: mappings,
+        },
+        metadata,
+        enabled: target.enabled !== false,
+      } as ReleaseTargetInput
+    }
+    if (targetKind === 'helm_release') {
+      if (target.helm && typeof target.helm === 'object' && !Array.isArray(target.helm)) {
+        const helm = target.helm as Record<string, unknown>
+        requiredText(helm.releaseName, 'helm.releaseName', index)
+        if (!helm.source || typeof helm.source !== 'object' || Array.isArray(helm.source))
+          throw new Error(`发布目标 ${index + 1} 缺少 helm.source`)
+        for (const key of ['repositoryUrl', 'chart', 'version'])
+          requiredText((helm.source as Record<string, unknown>)[key], `helm.source.${key}`, index)
+      } else requiredText(metadata.chartRef, 'metadata.chartRef', index)
+    }
+    if (target.executorKind === 'manifest_ssa') {
+      requiredText(target.configRef, 'configRef（Manifest 环境绑定）', index)
+    } else if (targetKind === 'kustomize_overlay') {
+      requiredText(
+        metadata.overlayPath || target.configRef,
+        'metadata.overlayPath 或 configRef',
+        index,
+      )
     }
     return {
       ...target,

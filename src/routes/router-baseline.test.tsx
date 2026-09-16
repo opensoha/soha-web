@@ -15,7 +15,9 @@ vi.mock('@/features/auth/auth-guard', async () => {
 vi.mock('@/layouts/app-layout', async () => {
   const { createElement } = await import('react')
   const { Outlet } = await import('react-router-dom')
-  return { AppLayout: () => createElement(Outlet) }
+  return {
+    AppLayout: () => createElement('div', { 'data-app-shell': true }, createElement(Outlet)),
+  }
 })
 
 vi.mock('@/features/auth/login-page', async () => {
@@ -47,6 +49,7 @@ vi.mock('@/features/identity/applications/list-page', mockRoutePage('IdentityApp
 vi.mock('@/features/identity/overview/page', mockRoutePage('IdentityOverviewPage'))
 vi.mock('@/features/identity/software/page', mockRoutePage('SoftwareLibraryPage'))
 vi.mock('@/features/identity/providers/list-page', mockRoutePage('IdentityProvidersPage'))
+vi.mock('@/features/identity/login-records/page', mockRoutePage('IdentityLoginRecordsPage'))
 vi.mock('@/features/access/users/page', mockRoutePage('AccessUsersPage'))
 vi.mock('@/features/access/roles/page', mockRoutePage('AccessRolesPage'))
 vi.mock('@/features/access/teams/page', mockRoutePage('AccessTeamsPage'))
@@ -61,6 +64,14 @@ vi.mock('@/features/settings/identity/page', mockRoutePage('LoginSettingsPage'))
 vi.mock('@/features/settings/branding/page', mockRoutePage('BrandingSettingsPage'))
 vi.mock('@/features/auth/about-page', mockRoutePage('AboutPage'))
 vi.mock('@/features/copilot/workbench/pages/chat-page', mockRoutePage('AIWorkbenchChatPage'))
+vi.mock(
+  '@/features/copilot/workbench/pages/root-cause-page',
+  mockRoutePage('AIWorkbenchRootCausePage'),
+)
+vi.mock(
+  '@/features/copilot/workbench/pages/performance-page',
+  mockRoutePage('AIWorkbenchPerformancePage'),
+)
 vi.mock('@/features/copilot/observe/operations/page', mockRoutePage('AIOperationsPage'))
 vi.mock('@/features/copilot/observe/mcp/page', mockRoutePage('AIMCPPage'))
 vi.mock('@/features/copilot/observe/data-sources/page', mockRoutePage('AIDataSourcesPage'))
@@ -223,6 +234,24 @@ afterEach(async () => {
 
 describe('router deep-link baseline', () => {
   it.each([
+    ['/ai-workbench/chat', 'AIWorkbenchChatPage'],
+    ['/ai-workbench/root-cause', 'AIWorkbenchRootCausePage'],
+    ['/ai-workbench/performance', 'AIWorkbenchPerformancePage'],
+  ])('opens %s without the management shell and preserves context', async (path, page) => {
+    const target = `${path}?session=session-1&clusterId=prod#evidence`
+    const container = await renderRoute(target)
+    expect(await waitForRoutePage(container, page)).not.toBeNull()
+    expect(container.querySelector('[data-app-shell]')).toBeNull()
+    expect(await waitForLocation(container, target)).toBe(target)
+  })
+
+  it('keeps the management shell for AI settings', async () => {
+    const container = await renderRoute('/ai-workbench/model-settings')
+    expect(await waitForRoutePage(container, 'AIModelSettingsPage')).not.toBeNull()
+    expect(container.querySelector('[data-app-shell]')).not.toBeNull()
+  })
+
+  it.each([
     [
       '/observability/monitoring?cluster=prod&from=2026-08-30T00%3A00%3A00Z&dataSourceId=prom-main#evidence',
       '/monitoring-workbench/overview?cluster=prod&from=2026-08-30T00%3A00%3A00Z&dataSourceId=prom-main#evidence',
@@ -265,6 +294,7 @@ describe('router deep-link baseline', () => {
     ['/internal-workbench/software', 'SoftwareLibraryPage'],
     ['/identity/applications', 'IdentityApplicationsPage'],
     ['/identity/providers', 'IdentityProvidersPage'],
+    ['/identity/login-records', 'IdentityLoginRecordsPage'],
     ['/identity/outposts', 'IdentityOutpostsPage'],
     ['/identity/policies', 'IdentityApplicationsPage'],
     ['/identity/audit', 'AuditLogsPage'],

@@ -47,13 +47,30 @@ vi.mock('../context/page', () => ({ ContextInspectorPage: routePages.context }))
 vi.mock('../agent-runs/page', () => ({ AgentRunsPage: routePages.agentRuns }))
 vi.mock('../agent-providers/page', () => ({ AgentProvidersPage: routePages.agentProviders }))
 vi.mock('../evaluation/page', () => ({ EvaluationStudioPage: routePages.evaluation }))
-vi.mock('../knowledge-production/page', () => ({ KnowledgeProductionPage: routePages.knowledgePipelines }))
+vi.mock('../knowledge-production/page', () => ({
+  KnowledgeProductionPage: routePages.knowledgePipelines,
+}))
 vi.mock('../environments/page', () => ({ EnvironmentsPage: routePages.environments }))
 vi.mock('../provider-fleet/page', () => ({ ProviderFleetPage: routePages.providerFleet }))
-vi.mock('../evaluation-lifecycle/page', () => ({ EvaluationLifecyclePage: routePages.evaluationLifecycle }))
+vi.mock('../evaluation-lifecycle/page', () => ({
+  EvaluationLifecyclePage: routePages.evaluationLifecycle,
+}))
 vi.mock('../memory/page', () => ({ MemoryPoliciesPage: routePages.memory }))
-vi.mock('../production-operations/page', () => ({ AIProductionOperationsPage: routePages.productionOperations }))
+vi.mock('../production-operations/page', () => ({
+  AIProductionOperationsPage: routePages.productionOperations,
+}))
 describe('Copilot Observe route manifests', () => {
+  it('uses an authenticated focus shell only for conversation routes', () => {
+    const focused = copilotObserveRoutes.filter((route) => route.shell === 'focus')
+    expect(focused.map((route) => route.meta.path)).toEqual([
+      '/ai-workbench/chat',
+      '/ai-workbench/root-cause',
+      '/ai-workbench/performance',
+    ])
+    for (const route of focused) {
+      expect(route.meta).toMatchObject({ requiresAuth: true, permissionKey: 'observe.ai.chat' })
+    }
+  })
   it('loads each canonical UI from its leaf module', async () => {
     const loaded = new Map<string, unknown>()
     for (const route of copilotObserveRoutes) {
@@ -86,7 +103,7 @@ describe('Copilot Observe route manifests', () => {
 
   it('has unique, valid route definitions', () => {
     const routes = copilotObserveRouteManifests.flatMap((manifest) => [...manifest])
-    expect(routes).toHaveLength(22)
+    expect(routes).toHaveLength(23)
     expect(validateRouteDefinitions(routes)).toEqual([])
   })
 })

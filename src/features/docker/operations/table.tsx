@@ -130,7 +130,7 @@ export function OperationsTable({
   const cancelMutation = useMutation({
     mutationFn: dockerApi.cancelOperation,
     onSuccess: () => {
-      message.success(localeText(localeCode, '任务已取消', 'Task canceled'))
+      message.success(localeText(localeCode, '已请求取消任务', 'Task cancellation requested'))
       refreshDocker(queryClient)
     },
   })

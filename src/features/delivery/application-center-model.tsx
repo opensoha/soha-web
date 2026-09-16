@@ -1,15 +1,19 @@
-import { useEffect, useMemo, useState } from 'react'
-import { App, Button, Form, Input, Modal, Select, Switch } from 'antd'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Alert, App, Button, Form, Input, Modal, Select, Switch } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { namespaceQueries } from '@/features/platform'
+import { isApiError } from '@/services/api-error'
+import { deliveryApi } from './api'
 import { deliveryMutations } from './mutations'
 import { deliveryQueries } from './queries'
 import {
   releaseTargetKey,
   releaseTargetsFromCandidates,
+  manifestReleaseTargets,
 } from './release-targets'
+import { manifestQueries } from './manifests/queries'
 import type { ApplicationEnvironment, BuildSource, DeliveryApplication } from './types'
 
 export function summarizeBuildSource(source?: BuildSource) {
@@ -17,6 +21,8 @@ export function summarizeBuildSource(source?: BuildSource) {
   switch (source.type) {
     case 'repo_dockerfile':
       return 'Repo Dockerfile'
+    case 'repo_buildpacks':
+      return 'Buildpacks'
     case 'platform_build_template':
       return 'Platform Template'
     case 'external_pipeline':
@@ -42,6 +48,15 @@ export function joinApplicationGroups(value?: string | string[] | null) {
   return splitApplicationGroups(value ?? []).join(', ')
 }
 
+export function applicationKeyFromName(value: unknown) {
+  return String(value ?? '')
+    .normalize('NFKC')
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}_-]+/gu, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
 export function buildApplicationGroupOptions(apps: DeliveryApplication[] = []) {
   return Array.from(new Set(apps.flatMap((app) => splitApplicationGroups(app.group))))
 }
@@ -63,7 +78,6 @@ export function useApplicationCenterState({
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const permissionSnapshot = permissionSnapshotQuery.data?.data
-  const [appForm] = Form.useForm<Record<string, unknown>>()
   const [bindingForm] = Form.useForm<Record<string, unknown>>()
   const [appModalVisible, setAppModalVisible] = useState(false)
   const [bindingModalVisible, setBindingModalVisible] = useState(false)
@@ -178,7 +192,9 @@ export function useApplicationCenterState({
       setAppModalVisible(false)
       setEditingApp(null)
     },
-    onError: (err: Error) => message.error(err.message),
+    onError: (err: Error) => {
+      message.error(err.message)
+    },
   })
 
   const deleteAppOptions = deliveryMutations.applications.delete(queryClient)
@@ -227,7 +243,6 @@ export function useApplicationCenterState({
 
   return {
     navigate,
-    appForm,
     bindingForm,
     appModalVisible,
     setAppModalVisible,
@@ -283,28 +298,56 @@ export function ApplicationForm({
   onCreated?: (application: DeliveryApplication) => void
   state: ApplicationCenterState
 }) {
+  const { message } = App.useApp()
+  const [form] = Form.useForm<Record<string, unknown>>()
+  const keyEdited = useRef(false)
+  const reload = useMutation({
+    mutationFn: async () => (await deliveryApi.applications.detail(application!.id)).application,
+    onSuccess: (latest) => {
+      form.resetFields()
+      form.setFieldsValue({
+        ...latest,
+        description: latest.description ?? '',
+        group: splitApplicationGroups(latest.group),
+      })
+      state.setEditingApp(latest)
+      state.setBuildSources(latest.buildSources ?? [])
+      state.updateAppMutation.reset()
+    },
+    onError: (error: Error) => message.error(error.message),
+  })
+  const conflicted =
+    isApiError(state.updateAppMutation.error) && state.updateAppMutation.error.status === 409
   return (
     <Form
-      form={state.appForm}
-      key={application?.id ?? 'application-center-app'}
+      form={form}
       layout="vertical"
       initialValues={
         application
           ? {
               ...application,
+              description: application.description ?? '',
               group: splitApplicationGroups(application.group),
               enabled: application.enabled,
             }
-          : { group: [] }
+          : { group: [], description: '' }
       }
+      onValuesChange={(changed) => {
+        if ('key' in changed) keyEdited.current = true
+        if (!application && 'name' in changed && !keyEdited.current) {
+          form.setFieldValue('key', applicationKeyFromName(changed.name))
+        }
+      }}
       onFinish={(values) => {
         if (application) {
           state.updateAppMutation.mutate({
             id: application.id,
             payload: {
+              ...application,
+              ...form.getFieldsValue(true),
               ...values,
+              expectedVersion: form.getFieldValue('version'),
               group: joinApplicationGroups(values.group as string[] | string),
-              language: application.language,
               buildSources: state.buildSources,
             },
           })
@@ -314,6 +357,7 @@ export function ApplicationForm({
           .mutateAsync({
             name: values.name,
             key: values.key,
+            description: values.description,
             group: joinApplicationGroups(values.group as string[] | string),
             enabled: true,
           })
@@ -321,6 +365,18 @@ export function ApplicationForm({
           .catch(() => undefined)
       }}
     >
+      {application && conflicted ? (
+        <Alert
+          type="warning"
+          title="应用配置已被其他人更新"
+          description="当前草稿已保留。重新加载会放弃本次修改并载入最新配置。"
+          action={
+            <Button loading={reload.isPending} onClick={() => reload.mutate()}>
+              重新加载配置
+            </Button>
+          }
+        />
+      ) : null}
       <Form.Item
         name="name"
         label="应用名称"
@@ -334,6 +390,9 @@ export function ApplicationForm({
         rules={[{ required: true, message: '请输入应用 Key' }]}
       >
         <Input />
+      </Form.Item>
+      <Form.Item name="description" label="备注">
+        <Input.TextArea rows={3} placeholder="描述应用的用途" />
       </Form.Item>
       <Form.Item name="group" label="应用分组">
         <Select
@@ -359,7 +418,7 @@ export function ApplicationForm({
           type="primary"
           loading={state.createAppMutation.isPending || state.updateAppMutation.isPending}
         >
-          保存
+          {application ? '保存' : '创建应用'}
         </Button>
       </div>
     </Form>
@@ -367,6 +426,18 @@ export function ApplicationForm({
 }
 
 export function ApplicationCenterModals({ state }: { state: ApplicationCenterState }) {
+  const packagesQuery = useQuery(
+    manifestQueries.applicationPackages(
+      state.selectedApplicationId,
+      state.bindingModalVisible && Boolean(state.editingBinding),
+    ),
+  )
+  const manifestTargets = manifestReleaseTargets(
+    packagesQuery.data ?? [],
+    state.editingBinding?.id ?? '',
+    state.selectedClusterId,
+    state.selectedNamespace,
+  )
   const boundEnvironmentIds = new Set(
     state.filteredBindings
       .filter((item) => item.id !== state.editingBinding?.id)
@@ -379,9 +450,16 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
   const targetOptions = Array.from(
     new Map(
       [
+        ...manifestTargets.map((target) => ({
+          value: releaseTargetKey(target),
+          label: `${target.metadata?.manifestPackageName} · 资源包`,
+        })),
         ...existingTargets.map((target) => ({
           value: releaseTargetKey(target),
-          label: `${target.workloadKind} / ${target.workloadName}`,
+          label:
+            target.executorKind === 'manifest_ssa'
+              ? `${target.metadata?.manifestPackageName || target.workloadName} · 资源包`
+              : `${target.workloadKind} / ${target.workloadName}`,
         })),
         ...(state.targetCandidatesQuery.data?.items ?? []).map((candidate) => ({
           value: releaseTargetKey(candidate),
@@ -405,6 +483,7 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
         width={720}
       >
         <ApplicationForm
+          key={state.editingApp?.id ?? 'new'}
           application={state.editingApp}
           state={state}
           onCancel={() => {
@@ -447,6 +526,7 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
             if (!state.selectedApplication) return
             const existing = state.editingBinding
             const payload: Record<string, unknown> = {
+              expectedUpdatedAt: existing?.updatedAt,
               applicationId: state.selectedApplication.id,
               environmentId: String(values.environmentId || '').trim(),
               alias: String(values.alias || '').trim(),
@@ -457,6 +537,7 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
               promotionPolicyId: existing?.promotionPolicyId,
               artifactPolicyId: existing?.artifactPolicyId,
               workflowTemplateId: existing?.workflowTemplateId,
+              workflowTemplateVersion: existing?.workflowTemplateVersion,
               buildPolicy: existing?.buildPolicy,
               releasePolicy: existing?.releasePolicy,
               resourceSelector: existing?.resourceSelector,
@@ -464,6 +545,7 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
                 state.targetCandidatesQuery.data?.items ?? [],
                 values.targetKeys as string[] | undefined,
                 existing?.targets,
+                manifestTargets,
               ),
             }
             if (existing) {
@@ -541,14 +623,14 @@ export function ApplicationCenterModals({ state }: { state: ApplicationCenterSta
           <Form.Item
             name="targetKeys"
             label="发布目标"
-            rules={[{ required: true, type: 'array', min: 1, message: '请选择至少一个 Workload' }]}
+            tooltip="可选择已有 Workload 或绑定到此环境的资源包；新环境可先保存，再关联资源包。"
           >
             <Select
               mode="multiple"
               disabled={!state.selectedClusterId || !state.selectedNamespace}
-              loading={state.targetCandidatesQuery.isFetching}
+              loading={state.targetCandidatesQuery.isFetching || packagesQuery.isFetching}
               options={targetOptions}
-              placeholder="选择该环境要交付的真实 Workload"
+              placeholder="选择 Workload 或资源包"
               showSearch={{ optionFilterProp: 'label' }}
             />
           </Form.Item>

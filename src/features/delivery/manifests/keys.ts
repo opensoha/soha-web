@@ -17,6 +17,8 @@ export function normalizeManifestFilter(filter: ManifestFilter = {}): ManifestFi
 
 export const manifestKeys = {
   all: ROOT,
+  applicationPackages: (applicationId: string) =>
+    [...ROOT, 'application-packages', applicationId] as const,
   lists: [...ROOT, 'list'] as const,
   list: (filter: ManifestFilter = {}) =>
     [...ROOT, 'list', normalizeManifestFilter(filter)] as const,

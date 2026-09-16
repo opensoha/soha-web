@@ -1,24 +1,18 @@
 import { useMemo, useState } from 'react'
-import { Alert, App, Button, Descriptions, Form, Popconfirm, Select, Space, Typography } from 'antd'
-import type { TableColumnsType } from 'antd'
-import {
-  ApiOutlined,
-  DeleteOutlined,
-  EditOutlined,
-  PlusOutlined,
-  SafetyCertificateOutlined,
-} from '@ant-design/icons'
+import { Link, useSearchParams } from 'react-router-dom'
+import { isApiError } from '@/services/api-error'
+import { App, Button, Form, Pagination, Popconfirm, Select, Space, Typography } from 'antd'
+import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
-  ManagementDensityButton,
   ManagementIconButton,
-  ManagementKeywordField,
   ManagementQueryActions,
   ManagementQueryField,
   ManagementState,
   ManagementRefreshButton,
   ManagementTableToolbar,
+  ManagementSearchableListPane,
 } from '@/components/management-list'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
@@ -27,19 +21,16 @@ import { identityApplicationQueries } from '../applications'
 import type { IdentityApplication } from '../shared/types'
 import { identityOutpostQueries } from '../outposts'
 import { identityRuntimeQueries } from '../runtime'
-import { OIDCClientsPanel } from './components/oidc-clients-panel'
+import { ProviderDetailContent } from './components/provider-detail-content'
+import { ProviderConfigurationStatus } from './components/provider-setup-panel'
 import { ProviderFormModal } from './components/provider-form-modal'
-import { ProxySetupPanel } from './components/proxy-setup-panel'
-import { SecretRevealModal, type IdentityOIDCSecretReveal } from './components/secret-reveal-modal'
 import { identityProviderMutations } from './mutations'
-import { formatIdentityProviderDateTime, identityProviderStatusTag } from './presentation'
 import { providerStatusOptions, providerTypeOptions } from './provider-form-model'
 import { identityProviderQueries } from './queries'
 import type {
   IdentityProvider,
   IdentityProviderFilters,
   IdentityProviderInput,
-  IdentityRuntimeProviderStatus,
   IdentityRuntimeProviderType,
 } from './types'
 import './styles.css'
@@ -48,130 +39,6 @@ const { Text } = Typography
 
 interface IdentityProviderPageFilters extends IdentityProviderFilters {
   query: string
-}
-
-function ProviderNameCell({ provider }: { provider: IdentityProvider }) {
-  return (
-    <div className="soha-identity-provider-name-cell">
-      <div className="soha-identity-provider-icon">
-        <ApiOutlined />
-      </div>
-      <div className="soha-identity-provider-copy">
-        <Text strong ellipsis title={provider.name}>
-          {provider.name}
-        </Text>
-        <Text type="secondary" ellipsis title={provider.id}>
-          {provider.id}
-        </Text>
-      </div>
-    </div>
-  )
-}
-
-function SAMLProviderPanel({
-  canRotate,
-  provider,
-}: {
-  canRotate: boolean
-  provider: IdentityProvider
-}) {
-  const { message } = App.useApp()
-  const { t } = useI18n()
-  const queryClient = useQueryClient()
-  const [overlapSeconds, setOverlapSeconds] = useState(604800)
-  const rotateMutation = useMutation(identityProviderMutations.rotateSAMLCertificate(queryClient))
-  const config = provider.config ?? {}
-  const stringValue = (key: string) => (typeof config[key] === 'string' ? config[key] : '-')
-  const listValue = (key: string) =>
-    Array.isArray(config[key]) ? (config[key] as unknown[]).join(', ') || '-' : '-'
-  return (
-    <Descriptions
-      bordered
-      column={{ xs: 1, md: 2 }}
-      items={[
-        { key: 'entityId', label: 'Entity ID', children: stringValue('entityId') },
-        { key: 'nameId', label: 'NameID', children: stringValue('nameIdFormat') },
-        {
-          key: 'acs',
-          label: 'ACS URLs',
-          children: listValue('acsUrls'),
-          span: { xs: 1, md: 2 },
-        },
-        { key: 'audience', label: 'Audience', children: stringValue('audience') },
-        { key: 'recipient', label: 'Recipient', children: stringValue('recipient') },
-        {
-          key: 'metadata',
-          label: 'IdP metadata',
-          children: (
-            <a
-              href={`/api/v1/saml2/idp/${encodeURIComponent(provider.id)}/metadata`}
-              rel="noreferrer"
-              target="_blank"
-            >
-              Download metadata
-            </a>
-          ),
-          span: { xs: 1, md: 2 },
-        },
-        {
-          key: 'certificate',
-          label: t('identity.providers.samlCertificate', 'SAML 证书'),
-          children: (
-            <Space wrap>
-              <Select
-                aria-label={t('identity.providers.samlOverlap', '证书重叠期')}
-                onChange={setOverlapSeconds}
-                options={[
-                  { label: t('identity.providers.samlOverlapNone', '不重叠'), value: 0 },
-                  { label: t('identity.providers.samlOverlapOneDay', '1 天'), value: 86400 },
-                  { label: t('identity.providers.samlOverlapSevenDays', '7 天'), value: 604800 },
-                  {
-                    label: t('identity.providers.samlOverlapThirtyDays', '30 天'),
-                    value: 2592000,
-                  },
-                ]}
-                style={{ width: 120 }}
-                value={overlapSeconds}
-              />
-              <Popconfirm
-                cancelText={t('common.cancel', '取消')}
-                disabled={!canRotate}
-                okButtonProps={{ loading: rotateMutation.isPending }}
-                okText={t('common.confirm', '确认')}
-                onConfirm={() =>
-                  rotateMutation.mutate(
-                    { providerId: provider.id, input: { overlapSeconds } },
-                    {
-                      onSuccess: () =>
-                        message.success(
-                          t('identity.providers.samlCertificateRotated', 'SAML 证书已轮换'),
-                        ),
-                      onError: (error: Error) => message.error(error.message),
-                    },
-                  )
-                }
-                title={t(
-                  'identity.providers.samlCertificateRotateConfirm',
-                  '确认轮换 SAML 签名证书？',
-                )}
-              >
-                <Button
-                  disabled={!canRotate}
-                  icon={<SafetyCertificateOutlined />}
-                  loading={rotateMutation.isPending}
-                  size="small"
-                >
-                  {t('identity.providers.samlCertificateRotate', '轮换证书')}
-                </Button>
-              </Popconfirm>
-            </Space>
-          ),
-          span: { xs: 1, md: 2 },
-        },
-      ]}
-      size="small"
-    />
-  )
 }
 
 export function IdentityProvidersPage() {
@@ -185,23 +52,39 @@ export function IdentityProvidersPage() {
     type: '',
   })
   const [modalOpen, setModalOpen] = useState(false)
-  const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 15 })
   const [editing, setEditing] = useState<IdentityProvider | null>(null)
-  const [createdSecret, setCreatedSecret] = useState<IdentityOIDCSecretReveal | null>(null)
+  const [params, setParams] = useSearchParams()
+  const clearSelection = () =>
+    setParams((current) => {
+      const next = new URLSearchParams(current)
+      next.delete('provider')
+      return next
+    })
+  const selectProvider = (id: string) =>
+    setParams((current) => {
+      const next = new URLSearchParams(current)
+      next.set('provider', id)
+      return next
+    })
   const [formProviderType, setFormProviderType] = useState<IdentityRuntimeProviderType>('oidc')
   const snapshot = usePermissionSnapshot().data?.data
   const canCreate = hasPermission(snapshot, 'identity.providers.create')
   const canUpdate = hasPermission(snapshot, 'identity.providers.update')
   const canDelete = hasPermission(snapshot, 'identity.providers.delete')
-  const canRotate = hasPermission(snapshot, 'identity.providers.rotate')
+  const canViewApplications = hasPermission(snapshot, 'identity.applications.view')
+  const canViewOutposts = hasPermission(snapshot, 'identity.outposts.view')
 
   const providersQuery = useQuery(
     identityProviderQueries.list({ status: filters.status, type: filters.type }),
   )
-  const applicationsQuery = useQuery(identityApplicationQueries.list({}))
+  const applicationsQuery = useQuery({
+    ...identityApplicationQueries.list({}),
+    enabled: canViewApplications,
+  })
   const outpostsQuery = useQuery({
     ...identityOutpostQueries.list(),
-    enabled: modalOpen && formProviderType === 'proxy',
+    enabled: modalOpen && formProviderType === 'proxy' && canViewOutposts,
   })
   const runtimeQuery = useQuery(identityRuntimeQueries.capabilities())
   const samlCapability = runtimeQuery.data?.samlApplicationProvider
@@ -210,7 +93,7 @@ export function IdentityProvidersPage() {
   const updateMutation = useMutation(identityProviderMutations.update(queryClient))
   const deleteMutation = useMutation(identityProviderMutations.remove(queryClient))
 
-  const applications = applicationsQuery.data ?? []
+  const applications = canViewApplications ? (applicationsQuery.data ?? []) : []
   const applicationById = useMemo(() => {
     const result = new Map<string, IdentityApplication>()
     applications.forEach((application) => result.set(application.id, application))
@@ -226,11 +109,11 @@ export function IdentityProvidersPage() {
   )
   const outpostOptions = useMemo(
     () =>
-      (outpostsQuery.data ?? []).map((outpost) => ({
+      (canViewOutposts ? (outpostsQuery.data ?? []) : []).map((outpost) => ({
         label: `${outpost.name} (${outpost.mode})`,
         value: outpost.id,
       })),
-    [outpostsQuery.data],
+    [canViewOutposts, outpostsQuery.data],
   )
 
   const closeModal = () => {
@@ -268,6 +151,7 @@ export function IdentityProvidersPage() {
       onSuccess: (provider) => {
         message.success(t('identity.providers.created', `已创建 ${provider.name}`))
         closeModal()
+        selectProvider(provider.id)
       },
       onError: (error: Error) => message.error(error.message),
     })
@@ -293,112 +177,87 @@ export function IdentityProvidersPage() {
     })
   }, [applicationById, filters.query, providersQuery.data])
 
-  const columns = useMemo<TableColumnsType<IdentityProvider>>(
-    () => [
-      {
-        title: t('identity.providers.column.provider', 'Provider'),
-        dataIndex: 'name',
-        width: 300,
-        render: (_, record) => <ProviderNameCell provider={record} />,
-      },
-      {
-        title: t('identity.providers.column.type', '类型'),
-        dataIndex: 'type',
-        width: 140,
-        render: (value: IdentityRuntimeProviderType) => (
-          <MetadataTag
-            label={value.toUpperCase()}
-            tone={value === 'oidc' ? 'blue' : value === 'saml' ? 'cyan' : 'gold'}
-          />
-        ),
-      },
-      {
-        title: t('identity.providers.column.application', '应用'),
-        dataIndex: 'applicationId',
-        width: 260,
-        render: (value: string) => {
-          const application = applicationById.get(value)
-          return (
-            <Space orientation="vertical" size={2}>
-              <Text ellipsis title={application?.name ?? value}>
-                {application?.name ?? value}
-              </Text>
-              {application?.slug ? <Text type="secondary">{application.slug}</Text> : null}
-            </Space>
-          )
-        },
-      },
-      {
-        title: t('identity.providers.column.status', '状态'),
-        dataIndex: 'status',
-        width: 150,
-        render: (value: IdentityRuntimeProviderStatus, record) => (
-          <Space orientation="vertical" size={2}>
-            {identityProviderStatusTag(value)}
-            <StatusTag
-              label={
-                record.enabled
-                  ? t('identity.providers.runtimeOn', '运行中')
-                  : t('identity.providers.runtimeOff', '已停止')
-              }
-              value={record.enabled ? 'running' : 'disabled'}
-            />
-          </Space>
-        ),
-      },
-      {
-        title: t('identity.providers.column.updated', '更新时间'),
-        dataIndex: 'updatedAt',
-        width: 140,
-        render: formatIdentityProviderDateTime,
-      },
-      {
-        title: t('identity.providers.column.actions', '操作'),
-        key: 'actions',
-        fixed: 'right',
-        width: 128,
-        render: (_, record) => (
-          <Space size={4}>
-            <ManagementIconButton
-              aria-label={t('common.edit', '编辑')}
-              disabled={!canUpdate}
-              icon={<EditOutlined />}
-              onClick={() => openEdit(record)}
-              tooltip={t('common.edit', '编辑')}
-            />
-            <Popconfirm
-              cancelText={t('common.cancel', '取消')}
-              disabled={!canDelete}
-              okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
-              okText={t('common.delete', '删除')}
-              onConfirm={() =>
-                deleteMutation.mutate(record.id, {
-                  onSuccess: () =>
-                    message.success(t('identity.providers.deleted', 'Provider 已删除')),
-                  onError: (error: Error) => message.error(error.message),
-                })
-              }
-              title={t('identity.providers.deleteConfirm', `删除 ${record.name}`)}
-            >
-              <ManagementIconButton
-                aria-label={t('common.delete', '删除')}
-                danger
-                disabled={!canDelete}
-                icon={<DeleteOutlined />}
-                tooltip={t('common.delete', '删除')}
-              />
-            </Popconfirm>
-          </Space>
-        ),
-      },
-    ],
-    [applicationById, canDelete, canUpdate, deleteMutation, message, t],
+  const requestedIndex = filteredProviders.findIndex(
+    (provider) => provider.id === params.get('provider'),
+  )
+  const currentPage =
+    requestedIndex >= 0
+      ? Math.floor(requestedIndex / pagination.pageSize) + 1
+      : Math.min(
+          pagination.current,
+          Math.max(1, Math.ceil(filteredProviders.length / pagination.pageSize)),
+        )
+  const visibleProviders = filteredProviders.slice(
+    (currentPage - 1) * pagination.pageSize,
+    currentPage * pagination.pageSize,
+  )
+  const selectedId = params.get('provider') ?? visibleProviders[0]?.id ?? ''
+  const detailQuery = useQuery(identityProviderQueries.detail(selectedId))
+  const selectedProvider = detailQuery.data
+  const selectedApplication =
+    selectedProvider && applicationById.get(selectedProvider.applicationId)
+
+  const providerActions = (provider: IdentityProvider) => (
+    <Space size={4}>
+      <ManagementIconButton
+        aria-label={t('common.edit', '编辑')}
+        disabled={!canUpdate}
+        icon={<EditOutlined />}
+        onClick={() => openEdit(provider)}
+        tooltip={t('common.edit', '编辑')}
+      />
+      <Popconfirm
+        cancelText={t('common.cancel', '取消')}
+        disabled={!canDelete}
+        okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
+        okText={t('common.delete', '删除')}
+        title={t('identity.providers.deleteConfirm', `删除 ${provider.name}`)}
+        onConfirm={() =>
+          deleteMutation.mutate(provider.id, {
+            onSuccess: () => {
+              message.success(t('identity.providers.deleted', 'Provider 已删除'))
+              if (selectedId === provider.id) clearSelection()
+            },
+            onError: (error: Error) => message.error(error.message),
+          })
+        }
+      >
+        <ManagementIconButton
+          aria-label={t('common.delete', '删除')}
+          danger
+          disabled={!canDelete}
+          icon={<DeleteOutlined />}
+          tooltip={t('common.delete', '删除')}
+        />
+      </Popconfirm>
+    </Space>
   )
 
   return (
     <>
       <ManagementDataPage
         className="soha-identity-providers-page"
+        beforeQuery={
+          providersQuery.isError ? (
+            <ManagementState
+              kind={
+                isApiError(providersQuery.error) && providersQuery.error.status === 403
+                  ? 'no-permission'
+                  : 'error'
+              }
+              title="认证接入加载失败"
+              description={providersQuery.error.message}
+              actions={<Button onClick={() => void providersQuery.refetch()}>重试</Button>}
+            />
+          ) : canViewApplications && applicationsQuery.isError ? (
+            <ManagementState
+              kind="error"
+              title="应用信息加载失败"
+              description={applicationsQuery.error.message}
+              actions={<Button onClick={() => void applicationsQuery.refetch()}>重试</Button>}
+            />
+          ) : null
+        }
         query={{
           actions: (
             <ManagementQueryActions
@@ -407,16 +266,13 @@ export function IdentityProvidersPage() {
               onReset={() => {
                 queryForm.resetFields()
                 setFilters({ query: '', status: '', type: '' })
+                setPagination((current) => ({ ...current, current: 1 }))
+                clearSelection()
               }}
             />
           ),
           children: (
             <>
-              <ManagementKeywordField
-                label={t('identity.providers.keyword', '关键词')}
-                name="query"
-                placeholder={t('identity.providers.search', '搜索 Provider 或应用')}
-              />
               <ManagementQueryField
                 label={t('identity.providers.type', '类型')}
                 name="type"
@@ -443,82 +299,167 @@ export function IdentityProvidersPage() {
           ),
           form: queryForm,
           initialValues: { query: '', status: '', type: '' },
-          onFinish: (values) =>
-            setFilters({
-              query: String(values.query ?? '').trim(),
+          onFinish: (values) => {
+            setFilters((current) => ({
+              ...current,
               status: values.status ?? '',
               type: values.type ?? '',
-            }),
-        }}
-        table={{
-          rowKey: 'id',
-          columns,
-          dataSource: filteredProviders,
-          empty: (
-            <ManagementState
-              description={t(
-                'identity.providers.emptyDescription',
-                '创建 Provider 后可为下游应用提供统一登录。',
-              )}
-              kind="empty"
-              title={t('identity.providers.empty', '暂无 Provider')}
-            />
-          ),
-          expandable: {
-            expandedRowRender: (record: IdentityProvider) =>
-              record.type === 'oidc' ? (
-                <OIDCClientsPanel
-                  canCreate={canCreate}
-                  canUpdate={canUpdate}
-                  canDelete={canDelete}
-                  canRotate={canRotate}
-                  onSecretCreated={setCreatedSecret}
-                  provider={record}
-                />
-              ) : record.type === 'proxy' ? (
-                <ProxySetupPanel provider={record} />
-              ) : record.type === 'saml' ? (
-                <SAMLProviderPanel canRotate={canRotate} provider={record} />
-              ) : (
-                <Alert showIcon title="Unknown provider type" type="warning" />
-              ),
-            rowExpandable: () => true,
+            }))
+            setPagination((current) => ({ ...current, current: 1 }))
+            clearSelection()
           },
-          loading: providersQuery.isLoading || providersQuery.isFetching,
-          scroll: { x: 'max-content' },
-          columnSettingIconOnly: true,
-          columnSettingPlacement: 'header',
-          headerExtra: (
-            <ManagementTableToolbar>
-              <Button
-                autoInsertSpace={false}
-                disabled={!canCreate}
-                icon={<PlusOutlined />}
-                onClick={openCreate}
-                size="small"
-                type="primary"
-              >
-                {t('identity.providers.create', '新建 Provider')}
-              </Button>
-              <ManagementDensityButton
-                aria-label={t('common.tableDensity', '切换表格密度')}
-                title={t('common.tableDensity', '切换表格密度')}
-                tooltip={t('common.tableDensity', '切换表格密度')}
-                onClick={() =>
-                  setTableSize((current) => (current === 'small' ? 'middle' : 'small'))
-                }
-              />
-              <ManagementRefreshButton
-                aria-label={t('common.refresh', '刷新')}
-                loading={providersQuery.isFetching}
-                onClick={() => void providersQuery.refetch()}
-                title={t('common.refresh', '刷新')}
-                tooltip={t('common.refresh', '刷新')}
-              />
-            </ManagementTableToolbar>
-          ),
-          tableSize,
         }}
+        tableNode={
+          <section className="soha-identity-provider-workbench" aria-label="认证接入配置工作区">
+            <div className="soha-identity-provider-workspace">
+              <div className="soha-identity-provider-picker">
+                <ManagementSearchableListPane
+                  activeKey={selectedId}
+                  items={visibleProviders}
+                  getItemKey={(provider) => provider.id}
+                  isLoading={providersQuery.isLoading}
+                  isError={providersQuery.isError}
+                  onRetry={() => void providersQuery.refetch()}
+                  searchActions={
+                    <ManagementTableToolbar>
+                      <ManagementIconButton
+                        aria-label={t('identity.providers.create', '新建 Provider')}
+                        color="primary"
+                        disabled={!canCreate}
+                        icon={<PlusOutlined />}
+                        onClick={openCreate}
+                        tooltip={t('identity.providers.create', '新建 Provider')}
+                        variant="solid"
+                      />
+                      <ManagementRefreshButton
+                        aria-label={t('common.refresh', '刷新')}
+                        loading={providersQuery.isFetching || detailQuery.isFetching}
+                        onClick={() => {
+                          void providersQuery.refetch()
+                          if (selectedId) void detailQuery.refetch()
+                        }}
+                        tooltip={t('common.refresh', '刷新')}
+                      />
+                    </ManagementTableToolbar>
+                  }
+                  searchPlaceholder={t('identity.providers.search', '搜索 Provider 或应用')}
+                  searchValue={filters.query}
+                  onSearchChange={(query) => {
+                    setFilters((current) => ({ ...current, query }))
+                    setPagination((current) => ({ ...current, current: 1 }))
+                    clearSelection()
+                  }}
+                  onItemSelect={(provider) => selectProvider(provider.id)}
+                  emptyTitle={t('identity.providers.empty', '暂无 Provider')}
+                  emptyDescription={
+                    filters.query || filters.status || filters.type
+                      ? '没有符合条件的认证接入，请调整筛选条件。'
+                      : '创建认证接入，为应用配置统一登录。'
+                  }
+                  renderItem={(provider) => (
+                    <>
+                      <span className="soha-identity-provider-list-heading">
+                        <Text strong>{provider.name}</Text>
+                        <MetadataTag label={provider.type.toUpperCase()} />
+                      </span>
+                      {applicationById.get(provider.applicationId)?.name ? (
+                        <Text type="secondary">
+                          {applicationById.get(provider.applicationId)?.name}
+                        </Text>
+                      ) : null}
+                      <span className="soha-identity-provider-list-state">
+                        <StatusTag
+                          value={
+                            provider.enabled && provider.status === 'enabled'
+                              ? 'enabled'
+                              : 'disabled'
+                          }
+                          label={
+                            provider.enabled && provider.status === 'enabled'
+                              ? t('identity.providers.enabled', '已启用')
+                              : t('identity.providers.disabled', '已停用')
+                          }
+                        />
+                        <ProviderConfigurationStatus providerId={provider.id} />
+                      </span>
+                    </>
+                  )}
+                />
+                {!providersQuery.isError &&
+                  !providersQuery.isLoading &&
+                  filteredProviders.length > 0 && (
+                    <Pagination
+                      className="soha-identity-provider-pagination"
+                      current={currentPage}
+                      pageSize={pagination.pageSize}
+                      total={filteredProviders.length}
+                      size="small"
+                      simple={{ readOnly: true }}
+                      showSizeChanger={false}
+                      showTotal={(total) => `共 ${total} 条`}
+                      onChange={(current, pageSize) => {
+                        setPagination({ current, pageSize })
+                        clearSelection()
+                      }}
+                    />
+                  )}
+              </div>
+              <section
+                className="soha-identity-provider-detail"
+                aria-label="认证接入详情"
+                aria-busy={detailQuery.isFetching}
+              >
+                {selectedId ? (
+                  detailQuery.isError ? (
+                    <ManagementState
+                      kind={
+                        isApiError(detailQuery.error) && detailQuery.error.status === 403
+                          ? 'no-permission'
+                          : 'error'
+                      }
+                      title="认证接入加载失败"
+                      description={detailQuery.error.message}
+                      actions={<Button onClick={() => void detailQuery.refetch()}>重试</Button>}
+                    />
+                  ) : selectedProvider ? (
+                    <>
+                      <div className="soha-identity-provider-detail-heading">
+                        <div>
+                          <Text strong>{selectedProvider.name}</Text>
+                          {selectedApplication ? (
+                            <div>
+                              <Link
+                                to={
+                                  '/identity/applications?application=' +
+                                  encodeURIComponent(selectedApplication.id)
+                                }
+                              >
+                                {selectedApplication.name}
+                              </Link>
+                            </div>
+                          ) : null}
+                        </div>
+                        {providerActions(selectedProvider)}
+                      </div>
+                      <ProviderDetailContent
+                        key={selectedProvider.id}
+                        provider={selectedProvider}
+                      />
+                    </>
+                  ) : (
+                    <ManagementState kind="loading" title="正在读取认证接入" />
+                  )
+                ) : (
+                  <ManagementState
+                    kind={providersQuery.isLoading ? 'loading' : 'select-scope'}
+                    title={providersQuery.isLoading ? '正在读取认证接入' : '选择认证接入'}
+                    description="选择左侧应用的认证接入，查看资料并继续配置。"
+                  />
+                )}
+              </section>
+            </div>
+          </section>
+        }
       />
 
       <ProviderFormModal
@@ -536,8 +477,6 @@ export function IdentityProvidersPage() {
         samlUnavailableReason={samlCapability?.reason}
         submitting={createMutation.isPending || updateMutation.isPending}
       />
-
-      <SecretRevealModal onClose={() => setCreatedSecret(null)} value={createdSecret} />
     </>
   )
 }

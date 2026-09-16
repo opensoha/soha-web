@@ -20,6 +20,11 @@ export interface GitLabFormValues {
   clientId?: string
   clientSecret?: string
   oauthRedirectUri?: string
+  gitAllowedEndpoints?: string
+  gitAllowedCidrs?: string
+  gitCaCertificate?: string
+  privateKey?: string
+  knownHosts?: string
 }
 
 function configurationValue(item: SystemIntegration, key: string) {
@@ -38,6 +43,11 @@ export function gitLabFormValues(item?: SystemIntegration): GitLabFormValues {
     timeout: item ? configurationValue(item, 'timeout') || '15s' : '15s',
     authMode: authMode === 'oauth' ? 'oauth' : 'access_token',
     token: '',
+    privateKey: '',
+    knownHosts: '',
+    gitAllowedEndpoints: item ? configurationValue(item, 'git_allowed_endpoints') : '',
+    gitAllowedCidrs: item ? configurationValue(item, 'git_allowed_cidrs') : '',
+    gitCaCertificate: item ? configurationValue(item, 'git_ca_certificate') : '',
     clientId: item ? configurationValue(item, 'client_id') : '',
     clientSecret: '',
     oauthRedirectUri: item
@@ -65,16 +75,22 @@ function gitLabConfiguration(values: GitLabFormValues) {
     { key: 'client_id', value: values.clientId?.trim() ?? '' },
     { key: 'oauth_redirect_uri', value: values.oauthRedirectUri?.trim() ?? '' },
     { key: 'oauth_return_uri', value: gitLabOAuthReturnURL() },
+    { key: 'git_allowed_endpoints', value: values.gitAllowedEndpoints?.trim() ?? '' },
+    { key: 'git_allowed_cidrs', value: values.gitAllowedCidrs?.trim() ?? '' },
+    { key: 'git_ca_certificate', value: values.gitCaCertificate?.trim() ?? '' },
   ]
 }
 
 function gitLabCredentials(values: GitLabFormValues) {
-  if (values.authMode === 'oauth') {
-    return values.clientSecret?.trim()
-      ? [{ key: 'client_secret', value: values.clientSecret.trim() }]
-      : undefined
-  }
-  return values.token?.trim() ? [{ key: 'token', value: values.token.trim() }] : undefined
+  const entries = [
+    {
+      key: values.authMode === 'oauth' ? 'client_secret' : 'token',
+      value: (values.authMode === 'oauth' ? values.clientSecret : values.token)?.trim() ?? '',
+    },
+    { key: 'private_key', value: values.privateKey?.trim() ?? '' },
+    { key: 'known_hosts', value: values.knownHosts?.trim() ?? '' },
+  ].filter((entry) => entry.value)
+  return entries.length ? entries : undefined
 }
 
 export function createGitLabIntegration(values: GitLabFormValues): SystemIntegrationCreateRequest {

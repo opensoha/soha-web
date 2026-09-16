@@ -19,6 +19,19 @@ function hasId(id: string) {
 }
 
 export const virtualizationQueries = {
+  workerPools: (connectionId: string, enabled = true) =>
+    queryOptions({
+      queryKey: virtualizationKeys.workerPools(connectionId),
+      queryFn: () => virtualizationApi.workerPools(connectionId.trim()),
+      enabled: enabled && hasId(connectionId),
+    }),
+  workerReadiness: (operationId: string, enabled = true) =>
+    queryOptions({
+      queryKey: virtualizationKeys.workerReadiness(operationId),
+      queryFn: () => virtualizationApi.workerReadiness(operationId.trim()),
+      enabled: enabled && hasId(operationId),
+      refetchInterval: 15_000,
+    }),
   vms: (params: VirtualizationListParams = {}, enabled = true) => {
     const normalized = normalizeVirtualizationListParams(params)
     return queryOptions({

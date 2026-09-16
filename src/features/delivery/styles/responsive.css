@@ -1,7 +1,5 @@
 @media (max-width: 1200px) {
-  .soha-delivery-workbench-page .soha-delivery-workbench-grid,
-  .soha-delivery-onboarding-modal .soha-delivery-onboarding-form-grid,
-  .soha-delivery-draft-preview-modal .soha-delivery-draft-preview {
+  .soha-delivery-workbench-page .soha-delivery-workbench-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -19,13 +17,7 @@
 }
 
 @media (max-width: 768px) {
-  .soha-delivery-onboarding-entry .soha-overview-section-extra .ant-btn {
-    min-height: 44px;
-  }
-
-  .soha-delivery-workbench-page .soha-delivery-workbench-grid,
-  .soha-delivery-onboarding-modal .soha-delivery-onboarding-form-grid,
-  .soha-delivery-draft-preview-modal .soha-delivery-draft-preview {
+  .soha-delivery-workbench-page .soha-delivery-workbench-grid {
     grid-template-columns: 1fr;
   }
 

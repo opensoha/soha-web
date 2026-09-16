@@ -78,6 +78,7 @@ export const identityApplicationProviderTypeOptions: Array<{
 }> = [
   { label: 'Link', value: 'link' },
   { label: 'OIDC', value: 'oidc' },
+  { label: 'SAML', value: 'saml' },
   { label: 'Proxy', value: 'proxy' },
 ]
 

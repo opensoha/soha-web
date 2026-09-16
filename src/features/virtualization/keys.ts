@@ -70,6 +70,10 @@ function normalizeId(id: string) {
 
 export const virtualizationKeys = {
   all: ['virtualization'] as const,
+  workerPools: (connectionId: string) =>
+    [...virtualizationKeys.all, 'worker-pools', normalizeId(connectionId)] as const,
+  workerReadiness: (operationId: string) =>
+    [...virtualizationKeys.operationDetail(operationId), 'worker-readiness'] as const,
   vms: () => [...virtualizationKeys.all, 'vms'] as const,
   vmLists: () => [...virtualizationKeys.vms(), 'list'] as const,
   vmList: (params: VirtualizationListParams = {}) =>

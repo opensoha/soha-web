@@ -12,6 +12,7 @@
       "src/features/copilot/routes.ts",
       "src/features/delivery/routes.ts",
       "src/features/identity/applications/routes.ts",
+      "src/features/identity/login-records/routes.ts",
       "src/features/identity/outposts/routes.ts",
       "src/features/identity/overview/routes.ts",
       "src/features/identity/policies/routes.ts",
@@ -52,14 +53,14 @@
     ]
   },
   "summary": {
-    "runtimePaths": 271,
-    "metadataPaths": 271,
-    "overlappingPaths": 271,
+    "runtimePaths": 281,
+    "metadataPaths": 281,
+    "overlappingPaths": 281,
     "runtimeOnlyPaths": 0,
     "metadataOnlyPaths": 0,
     "inlineJsxPaths": 0,
-    "lazyRouteLoads": 212,
-    "lazySourceModules": 209
+    "lazyRouteLoads": 222,
+    "lazySourceModules": 218
   },
   "paths": {
     "runtime": [
@@ -101,6 +102,7 @@
       "/ai-workbench/provider-fleet",
       "/ai-workbench/root-cause",
       "/ai-workbench/skills",
+      "/ai-workbench/tasks",
       "/ai-workbench/tool-settings",
       "/application-environments",
       "/applications",
@@ -157,6 +159,8 @@
       "/configuration/validatingwebhookconfigurations",
       "/configuration/validatingwebhookconfigurations/:name",
       "/delivery/analysis",
+      "/delivery/batches",
+      "/delivery/batches/:batchId",
       "/delivery/blueprints",
       "/delivery/environments",
       "/delivery/execution-tasks",
@@ -167,6 +171,9 @@
       "/delivery/release-bundles",
       "/delivery/release-bundles/:releaseBundleId",
       "/delivery/testing",
+      "/delivery/workflows",
+      "/deployment-templates",
+      "/execution-history",
       "/extensions",
       "/extensions/apis/:groupName",
       "/helm",
@@ -176,6 +183,7 @@
       "/identity",
       "/identity/applications",
       "/identity/audit",
+      "/identity/login-records",
       "/identity/outposts",
       "/identity/policies",
       "/identity/providers",
@@ -227,6 +235,9 @@
       "/network-access/ssids",
       "/network-access/telemetry",
       "/network-access/user-admission",
+      "/network-access/vpn/dashboard",
+      "/network-access/vpn/profiles",
+      "/network-access/vpn/selection-policies",
       "/network-access/wifi",
       "/network-access/wired",
       "/network/endpointslices",
@@ -374,6 +385,7 @@
       "/ai-workbench/provider-fleet",
       "/ai-workbench/root-cause",
       "/ai-workbench/skills",
+      "/ai-workbench/tasks",
       "/ai-workbench/tool-settings",
       "/application-environments",
       "/applications",
@@ -430,6 +442,8 @@
       "/configuration/validatingwebhookconfigurations",
       "/configuration/validatingwebhookconfigurations/:name",
       "/delivery/analysis",
+      "/delivery/batches",
+      "/delivery/batches/:batchId",
       "/delivery/blueprints",
       "/delivery/environments",
       "/delivery/execution-tasks",
@@ -440,6 +454,9 @@
       "/delivery/release-bundles",
       "/delivery/release-bundles/:releaseBundleId",
       "/delivery/testing",
+      "/delivery/workflows",
+      "/deployment-templates",
+      "/execution-history",
       "/extensions",
       "/extensions/apis/:groupName",
       "/helm",
@@ -449,6 +466,7 @@
       "/identity",
       "/identity/applications",
       "/identity/audit",
+      "/identity/login-records",
       "/identity/outposts",
       "/identity/policies",
       "/identity/providers",
@@ -500,6 +518,9 @@
       "/network-access/ssids",
       "/network-access/telemetry",
       "/network-access/user-admission",
+      "/network-access/vpn/dashboard",
+      "/network-access/vpn/profiles",
+      "/network-access/vpn/selection-policies",
       "/network-access/wifi",
       "/network-access/wired",
       "/network/endpointslices",
@@ -647,6 +668,7 @@
       "/ai-workbench/provider-fleet",
       "/ai-workbench/root-cause",
       "/ai-workbench/skills",
+      "/ai-workbench/tasks",
       "/ai-workbench/tool-settings",
       "/application-environments",
       "/applications",
@@ -703,6 +725,8 @@
       "/configuration/validatingwebhookconfigurations",
       "/configuration/validatingwebhookconfigurations/:name",
       "/delivery/analysis",
+      "/delivery/batches",
+      "/delivery/batches/:batchId",
       "/delivery/blueprints",
       "/delivery/environments",
       "/delivery/execution-tasks",
@@ -713,6 +737,9 @@
       "/delivery/release-bundles",
       "/delivery/release-bundles/:releaseBundleId",
       "/delivery/testing",
+      "/delivery/workflows",
+      "/deployment-templates",
+      "/execution-history",
       "/extensions",
       "/extensions/apis/:groupName",
       "/helm",
@@ -722,6 +749,7 @@
       "/identity",
       "/identity/applications",
       "/identity/audit",
+      "/identity/login-records",
       "/identity/outposts",
       "/identity/policies",
       "/identity/providers",
@@ -773,6 +801,9 @@
       "/network-access/ssids",
       "/network-access/telemetry",
       "/network-access/user-admission",
+      "/network-access/vpn/dashboard",
+      "/network-access/vpn/profiles",
+      "/network-access/vpn/selection-policies",
       "/network-access/wifi",
       "/network-access/wired",
       "/network/endpointslices",
@@ -1088,6 +1119,11 @@
         "source": "@/features/delivery/build-templates/page"
       },
       {
+        "exportName": "CapabilityTasksPage",
+        "moduleExport": "CapabilityTasksPage",
+        "source": "@/features/copilot/capability-tasks/page"
+      },
+      {
         "exportName": "ClusterDetailPage",
         "moduleExport": "ClusterDetailPage",
         "source": "@/features/platform/clusters/detail-page"
@@ -1258,6 +1294,16 @@
         "source": "@/features/delivery/workbench/analysis-page"
       },
       {
+        "exportName": "DeliveryBatchDetailPage",
+        "moduleExport": "DeliveryBatchDetailPage",
+        "source": "@/features/delivery/batches/detail-page"
+      },
+      {
+        "exportName": "DeliveryBatchesPage",
+        "moduleExport": "DeliveryBatchesPage",
+        "source": "@/features/delivery/batches/list-page"
+      },
+      {
         "exportName": "DeliveryBlueprintsPage",
         "moduleExport": "DeliveryBlueprintsPage",
         "source": "@/features/delivery/blueprints/page"
@@ -1278,9 +1324,19 @@
         "source": "@/features/delivery/workbench/testing-page"
       },
       {
+        "exportName": "DeliveryWorkflowsPage",
+        "moduleExport": "DeliveryWorkflowsPage",
+        "source": "@/features/delivery/workflows/list-page"
+      },
+      {
         "exportName": "DeploymentDetailPage",
         "moduleExport": "DeploymentDetailPage",
         "source": "@/features/platform/workloads/deployments/detail-page"
+      },
+      {
+        "exportName": "DeploymentTemplatesPage",
+        "moduleExport": "DeploymentTemplatesPage",
+        "source": "@/features/delivery/deployment-templates/page"
       },
       {
         "exportName": "DirectorySyncPage",
@@ -1343,6 +1399,11 @@
         "source": "@/features/observability/events/page"
       },
       {
+        "exportName": "ExecutionHistoryPage",
+        "moduleExport": "ExecutionHistoryPage",
+        "source": "@/features/delivery/release-board/page"
+      },
+      {
         "exportName": "ExecutionTaskDetailPage",
         "moduleExport": "ExecutionTaskDetailPage",
         "source": "@/features/delivery/execution-tasks/detail-page"
@@ -1396,6 +1457,11 @@
         "exportName": "IdentityApplicationsPage",
         "moduleExport": "IdentityApplicationsPage",
         "source": "@/features/identity/applications/list-page"
+      },
+      {
+        "exportName": "IdentityLoginRecordsPage",
+        "moduleExport": "IdentityLoginRecordsPage",
+        "source": "@/features/identity/login-records/page"
       },
       {
         "exportName": "IdentityOutpostsPage",
@@ -1486,6 +1552,21 @@
         "exportName": "MonitoringPage",
         "moduleExport": "MonitoringPage",
         "source": "@/features/observability/overview/page"
+      },
+      {
+        "exportName": "network-access-vpn-dashboard:default",
+        "moduleExport": "default",
+        "source": "@/features/network-access/vpn-dashboard-page"
+      },
+      {
+        "exportName": "network-access-vpn-profiles:default",
+        "moduleExport": "default",
+        "source": "@/features/network-access/vpn-documents-page"
+      },
+      {
+        "exportName": "network-access-vpn-selection-policies:default",
+        "moduleExport": "default",
+        "source": "@/features/network-access/vpn-documents-page"
       },
       {
         "exportName": "NetworkBackendTLSPoliciesPage",
@@ -1733,11 +1814,6 @@
         "source": "@/features/delivery/registries/page"
       },
       {
-        "exportName": "ReleaseBoardPage",
-        "moduleExport": "ReleaseBoardPage",
-        "source": "@/features/delivery/release-board/page"
-      },
-      {
         "exportName": "ReleaseBundleDetailPage",
         "moduleExport": "ReleaseBundleDetailPage",
         "source": "@/features/delivery/release-bundles/detail-page"
@@ -1893,6 +1969,11 @@
         "source": "@/features/virtualization/virtual-machines/list-page"
       },
       {
+        "exportName": "WorkflowCatalog",
+        "moduleExport": "WorkflowCatalog",
+        "source": "@/features/delivery/release-board/workflow-catalog"
+      },
+      {
         "exportName": "WorkflowDetailPage",
         "moduleExport": "WorkflowDetailPage",
         "source": "@/features/delivery/workflows/detail-page"
@@ -1967,6 +2048,7 @@
       "@/features/compute/tasks/sync-page",
       "@/features/copilot/agent-providers/page",
       "@/features/copilot/agent-runs/page",
+      "@/features/copilot/capability-tasks/page",
       "@/features/copilot/context/page",
       "@/features/copilot/environments/page",
       "@/features/copilot/evaluation-lifecycle/page",
@@ -1995,9 +2077,12 @@
       "@/features/delivery/applications/detail-page",
       "@/features/delivery/applications/list-page",
       "@/features/delivery/applications/workflow-designer-page",
+      "@/features/delivery/batches/detail-page",
+      "@/features/delivery/batches/list-page",
       "@/features/delivery/blueprints/page",
       "@/features/delivery/build-templates/page",
       "@/features/delivery/builds/detail-page",
+      "@/features/delivery/deployment-templates/page",
       "@/features/delivery/environments/catalog-page",
       "@/features/delivery/environments/list-page",
       "@/features/delivery/execution-tasks/detail-page",
@@ -2005,6 +2090,7 @@
       "@/features/delivery/manifests/library-page",
       "@/features/delivery/registries/page",
       "@/features/delivery/release-board/page",
+      "@/features/delivery/release-board/workflow-catalog",
       "@/features/delivery/release-bundles/detail-page",
       "@/features/delivery/release-bundles/list-page",
       "@/features/delivery/releases/detail-page",
@@ -2016,16 +2102,20 @@
       "@/features/delivery/workbench/testing-page",
       "@/features/delivery/workflow-templates/page",
       "@/features/delivery/workflows/detail-page",
+      "@/features/delivery/workflows/list-page",
       "@/features/docker",
       "@/features/docker/hosts/page",
       "@/features/docker/projects/detail-page",
       "@/features/docker/projects/list-page",
       "@/features/docker/templates/page",
       "@/features/identity/applications/list-page",
+      "@/features/identity/login-records/page",
       "@/features/identity/outposts/list-page",
       "@/features/identity/overview/page",
       "@/features/identity/providers/list-page",
       "@/features/identity/software/page",
+      "@/features/network-access/vpn-dashboard-page",
+      "@/features/network-access/vpn-documents-page",
       "@/features/observability/alerts/detail-page",
       "@/features/observability/alerts/page",
       "@/features/observability/dashboards/detail-page",
@@ -2178,6 +2268,7 @@
       "@/features/compute/tasks/sync-page": ["ComputeSyncTasksPage"],
       "@/features/copilot/agent-providers/page": ["AgentProvidersPage"],
       "@/features/copilot/agent-runs/page": ["AgentRunsPage"],
+      "@/features/copilot/capability-tasks/page": ["CapabilityTasksPage"],
       "@/features/copilot/context/page": ["ContextInspectorPage"],
       "@/features/copilot/environments/page": ["EnvironmentsPage"],
       "@/features/copilot/evaluation-lifecycle/page": ["EvaluationLifecyclePage"],
@@ -2208,16 +2299,20 @@
       "@/features/delivery/applications/workflow-designer-page": [
         "ApplicationWorkflowDesignerPage"
       ],
+      "@/features/delivery/batches/detail-page": ["DeliveryBatchDetailPage"],
+      "@/features/delivery/batches/list-page": ["DeliveryBatchesPage"],
       "@/features/delivery/blueprints/page": ["DeliveryBlueprintsPage"],
       "@/features/delivery/build-templates/page": ["BuildTemplatesPage"],
       "@/features/delivery/builds/detail-page": ["BuildDetailPage"],
+      "@/features/delivery/deployment-templates/page": ["DeploymentTemplatesPage"],
       "@/features/delivery/environments/catalog-page": ["EnvironmentCatalogPage"],
       "@/features/delivery/environments/list-page": ["ApplicationEnvironmentsPage"],
       "@/features/delivery/execution-tasks/detail-page": ["ExecutionTaskDetailPage"],
       "@/features/delivery/execution-tasks/list-page": ["ExecutionTasksPage"],
       "@/features/delivery/manifests/library-page": ["ManifestLibraryPage"],
       "@/features/delivery/registries/page": ["RegistriesPage"],
-      "@/features/delivery/release-board/page": ["ReleaseBoardPage"],
+      "@/features/delivery/release-board/page": ["ExecutionHistoryPage"],
+      "@/features/delivery/release-board/workflow-catalog": ["WorkflowCatalog"],
       "@/features/delivery/release-bundles/detail-page": ["ReleaseBundleDetailPage"],
       "@/features/delivery/release-bundles/list-page": ["ReleaseBundlesPage"],
       "@/features/delivery/releases/detail-page": ["ReleaseDetailPage"],
@@ -2229,16 +2324,23 @@
       "@/features/delivery/workbench/testing-page": ["DeliveryTestingPage"],
       "@/features/delivery/workflow-templates/page": ["WorkflowTemplatesPage"],
       "@/features/delivery/workflows/detail-page": ["WorkflowDetailPage"],
+      "@/features/delivery/workflows/list-page": ["DeliveryWorkflowsPage"],
       "@/features/docker": ["DockerHostDetailPage"],
       "@/features/docker/hosts/page": ["DockerHostsPage"],
       "@/features/docker/projects/detail-page": ["DockerProjectDetailPage"],
       "@/features/docker/projects/list-page": ["DockerProjectsPage"],
       "@/features/docker/templates/page": ["DockerTemplatesPage"],
       "@/features/identity/applications/list-page": ["IdentityApplicationsPage"],
+      "@/features/identity/login-records/page": ["IdentityLoginRecordsPage"],
       "@/features/identity/outposts/list-page": ["IdentityOutpostsPage"],
       "@/features/identity/overview/page": ["IdentityOverviewPage"],
       "@/features/identity/providers/list-page": ["IdentityProvidersPage"],
       "@/features/identity/software/page": ["SoftwareLibraryPage"],
+      "@/features/network-access/vpn-dashboard-page": ["network-access-vpn-dashboard:default"],
+      "@/features/network-access/vpn-documents-page": [
+        "network-access-vpn-profiles:default",
+        "network-access-vpn-selection-policies:default"
+      ],
       "@/features/observability/alerts/detail-page": [
         "AlertEventDetailPage",
         "AlertEventDetailPage"
@@ -2445,5 +2547,5 @@
       "@/features/virtualization/virtual-machines/list-page": ["VirtualizationVmsPage"]
     }
   },
-  "generatedAt": "2026-09-04T09:17:00.280Z"
+  "generatedAt": "2026-09-15T09:23:04.424Z"
 }

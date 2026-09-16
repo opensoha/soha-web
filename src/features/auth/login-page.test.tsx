@@ -177,6 +177,7 @@ describe('login page', () => {
   })
 
   beforeEach(() => {
+    vi.useFakeTimers()
     document.documentElement.dataset.themeMode = 'light'
     vi.mocked(fetchLoginOptions).mockResolvedValue({
       verification: { sliderEnabled: false },
@@ -201,6 +202,7 @@ describe('login page', () => {
       container.remove()
     }
     containers = []
+    vi.clearAllTimers()
     vi.useRealTimers()
     vi.clearAllMocks()
     useAuthStore.getState().clearAuth()
@@ -269,7 +271,6 @@ describe('login page', () => {
   })
 
   it('restores an existing browser session from the login page', async () => {
-    vi.useFakeTimers()
     vi.mocked(restoreAuthSession)
       .mockResolvedValueOnce('unavailable')
       .mockImplementationOnce(async () => {

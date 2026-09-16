@@ -1,5 +1,6 @@
 import { defineRoutes } from '@/routes/definitions'
 import { identityApplicationRoutes } from './applications/routes'
+import { identityLoginRecordRoutes } from './login-records/routes'
 import { identityOutpostRoutes } from './outposts/routes'
 import { internalWorkbenchOverviewRoutes } from './overview/routes'
 import { identityPolicyRoutes } from './policies/routes'
@@ -36,5 +37,6 @@ export const identityRouteManifests = [
   identityApplicationRoutes,
   identityProviderRoutes,
   identityOutpostRoutes,
+  identityLoginRecordRoutes,
   identityPolicyRoutes,
 ] as const

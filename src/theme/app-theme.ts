@@ -106,7 +106,8 @@ export const themeModeOptions: Array<{ value: ThemeMode; label: string }> = [
   { value: 'system', label: '跟随系统' },
 ]
 
-const APP_FONT_FAMILY = "'Inter', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif"
+const APP_FONT_FAMILY =
+  "'Inter', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif"
 const APP_FONT_SIZE = 12
 const APP_LINE_HEIGHT = 20 / APP_FONT_SIZE
 const GLASS_BLUR = '16px'
@@ -164,15 +165,19 @@ const THEME_PALETTES: Record<ResolvedThemeMode, ThemePalette> = {
     accentTeal: '#52c41a',
     accentTealRgb: '82, 196, 26',
     gradientPrimary: 'linear-gradient(135deg, #1677ff 0%, #13c2c2 56%, #52c41a 100%)',
-    gradientSubtle: 'linear-gradient(135deg, rgba(22, 119, 255, 0.10) 0%, rgba(19, 194, 194, 0.08) 54%, rgba(82, 196, 26, 0.06) 100%)',
-    gradientPanel: 'linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(249, 249, 251, 0.94) 100%)',
+    gradientSubtle:
+      'linear-gradient(135deg, rgba(22, 119, 255, 0.10) 0%, rgba(19, 194, 194, 0.08) 54%, rgba(82, 196, 26, 0.06) 100%)',
+    gradientPanel:
+      'linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(249, 249, 251, 0.94) 100%)',
     glassBg: 'rgba(255, 255, 255, 0.72)',
     glassBgStrong: 'rgba(255, 255, 255, 0.88)',
     glassBorder: 'rgba(22, 119, 255, 0.24)',
     glassShadow: '0 18px 48px rgba(22, 119, 255, 0.10)',
-    workflowCanvasBg: 'linear-gradient(180deg, rgba(249, 249, 251, 0.98) 0%, rgba(230, 244, 255, 0.72) 100%)',
+    workflowCanvasBg:
+      'linear-gradient(180deg, rgba(249, 249, 251, 0.98) 0%, rgba(230, 244, 255, 0.72) 100%)',
     workflowCanvasGrid: 'rgba(22, 119, 255, 0.14)',
-    workflowCanvasGlow: 'radial-gradient(circle at top left, rgba(19, 194, 194, 0.16), transparent 36%)',
+    workflowCanvasGlow:
+      'radial-gradient(circle at top left, rgba(19, 194, 194, 0.16), transparent 36%)',
     workflowNodeBg: 'rgba(255, 255, 255, 0.90)',
     workflowNodeBorder: 'rgba(22, 119, 255, 0.28)',
     workflowNodeSelectedBorder: '#1677ff',
@@ -248,15 +253,19 @@ const THEME_PALETTES: Record<ResolvedThemeMode, ThemePalette> = {
     accentTeal: '#73d13d',
     accentTealRgb: '115, 209, 61',
     gradientPrimary: 'linear-gradient(135deg, #4096ff 0%, #36cfc9 56%, #73d13d 100%)',
-    gradientSubtle: 'linear-gradient(135deg, rgba(64, 150, 255, 0.18) 0%, rgba(54, 207, 201, 0.14) 54%, rgba(115, 209, 61, 0.12) 100%)',
-    gradientPanel: 'linear-gradient(180deg, rgba(16, 28, 45, 0.92) 0%, rgba(13, 23, 38, 0.88) 100%)',
+    gradientSubtle:
+      'linear-gradient(135deg, rgba(64, 150, 255, 0.18) 0%, rgba(54, 207, 201, 0.14) 54%, rgba(115, 209, 61, 0.12) 100%)',
+    gradientPanel:
+      'linear-gradient(180deg, rgba(16, 28, 45, 0.92) 0%, rgba(13, 23, 38, 0.88) 100%)',
     glassBg: 'rgba(13, 23, 38, 0.72)',
     glassBgStrong: 'rgba(16, 28, 45, 0.88)',
     glassBorder: 'rgba(64, 150, 255, 0.24)',
     glassShadow: '0 20px 56px rgba(0, 0, 0, 0.36)',
-    workflowCanvasBg: 'linear-gradient(180deg, rgba(7, 17, 31, 0.98) 0%, rgba(13, 23, 38, 0.94) 100%)',
+    workflowCanvasBg:
+      'linear-gradient(180deg, rgba(7, 17, 31, 0.98) 0%, rgba(13, 23, 38, 0.94) 100%)',
     workflowCanvasGrid: 'rgba(64, 150, 255, 0.18)',
-    workflowCanvasGlow: 'radial-gradient(circle at top left, rgba(54, 207, 201, 0.16), transparent 38%)',
+    workflowCanvasGlow:
+      'radial-gradient(circle at top left, rgba(54, 207, 201, 0.16), transparent 38%)',
     workflowNodeBg: 'rgba(16, 28, 45, 0.90)',
     workflowNodeBorder: 'rgba(64, 150, 255, 0.28)',
     workflowNodeSelectedBorder: '#4096ff',
@@ -313,9 +322,10 @@ export function resolveThemeColorReference(value: string, fallback?: string): st
 }
 
 export function readTerminalThemeColors() {
-  const mode = typeof document !== 'undefined' && document.documentElement.dataset.themeMode === 'dark'
-    ? 'dark'
-    : 'light'
+  const mode =
+    typeof document !== 'undefined' && document.documentElement.dataset.themeMode === 'dark'
+      ? 'dark'
+      : 'light'
   const palette = getThemePalette(mode)
 
   return {
@@ -350,7 +360,8 @@ export function getAntdTheme(themeMode: ThemeMode | ResolvedThemeMode): ThemeCon
       colorBgContainer: palette.colorBgContainer,
       colorBgElevated: palette.colorBgElevated,
       colorBgLayout: palette.colorBgLayout,
-      colorBgSpotlight: resolvedMode === 'dark' ? 'rgba(13, 23, 38, 0.94)' : 'rgba(15, 23, 42, 0.86)',
+      colorBgSpotlight:
+        resolvedMode === 'dark' ? 'rgba(13, 23, 38, 0.94)' : 'rgba(15, 23, 42, 0.86)',
       colorBgMask: resolvedMode === 'dark' ? 'rgba(7, 17, 31, 0.72)' : 'rgba(15, 23, 42, 0.42)',
       colorPrimaryBg: palette.colorPrimaryBg,
       colorPrimaryBgHover: palette.colorPrimaryBgHover,
@@ -501,7 +512,8 @@ export function getAntdTheme(themeMode: ThemeMode | ResolvedThemeMode): ThemeCon
         footerBg: palette.colorBgMuted,
         footerColor: palette.colorTextSecondary,
         fixedHeaderSortActiveBg: palette.colorFillQuaternary,
-        stickyScrollBarBg: resolvedMode === 'dark' ? 'rgba(113, 113, 122, 0.32)' : 'rgba(161, 161, 170, 0.24)',
+        stickyScrollBarBg:
+          resolvedMode === 'dark' ? 'rgba(113, 113, 122, 0.32)' : 'rgba(161, 161, 170, 0.24)',
       },
       Card: {
         headerBg: 'transparent',
@@ -555,6 +567,9 @@ export function getAntdTheme(themeMode: ThemeMode | ResolvedThemeMode): ThemeCon
       },
       Alert: {
         borderRadiusLG: 8,
+      },
+      Drawer: {
+        colorBgElevated: palette.colorBgContainer,
       },
       Modal: {
         borderRadiusLG: 12,

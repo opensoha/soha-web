@@ -36,6 +36,17 @@ function listPath(filter: ManifestFilter = {}) {
 }
 
 export const manifestApi = {
+  applicationPackages: async (applicationId: string) => {
+    const items: ManifestPackage[] = []
+    let page = 1
+    let result: ManifestPage
+    do {
+      result = await manifestApi.list({ applicationId, page, pageSize: 100 })
+      items.push(...result.items)
+      page += 1
+    } while (result.items.length > 0 && items.length < result.total)
+    return items
+  },
   list: (filter: ManifestFilter = {}) =>
     unwrap(api.get<ApiResponse<ManifestPage>>(listPath(filter))),
   get: (id: string) => unwrap(api.get<ApiResponse<ManifestPackage>>(`${ROOT}/${segment(id)}`)),
@@ -48,6 +59,12 @@ export const manifestApi = {
   },
   publish: (id: string, note: string) =>
     unwrap(api.post<ApiResponse<ManifestPackage>>(`${ROOT}/${segment(id)}/publish`, { note })),
+  saveRevision: (id: string, expectedUpdatedAt: string) =>
+    unwrap(
+      api.post<ApiResponse<ManifestPackage>>(`${ROOT}/${segment(id)}/revisions`, {
+        expectedUpdatedAt,
+      }),
+    ),
   revisions: (id: string) =>
     unwrap(api.get<ApiResponse<ManifestRevision[]>>(`${ROOT}/${segment(id)}/revisions`)),
   source: (id: string) =>

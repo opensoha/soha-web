@@ -1,5 +1,4 @@
 import './styles.css'
-import { Alert } from 'antd'
 import type { ExecutionTask, ReleaseBoardEntry, ReleaseBundle } from '../types'
 
 const BLOCKED_STATUSES = new Set([
@@ -84,8 +83,4 @@ export function sortByLatest<T>(items: T[], timeSelector: (item: T) => string | 
     (left, right) =>
       new Date(timeSelector(right) || 0).getTime() - new Date(timeSelector(left) || 0).getTime(),
   )
-}
-
-export function ManualModeAlert({ description }: { description: string }) {
-  return <Alert showIcon type="info" title="常规模式保持完整可用" description={description} />
 }

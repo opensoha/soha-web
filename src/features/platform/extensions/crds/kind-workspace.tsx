@@ -1,15 +1,5 @@
 import { lazy, Suspense, useDeferredValue, useMemo, useState } from 'react'
-import {
-  Alert,
-  App,
-  Button,
-  Card,
-  Descriptions,
-  Popconfirm,
-  Space,
-  Spin,
-  Tag,
-} from 'antd'
+import { Alert, App, Button, Card, Descriptions, Popconfirm, Space, Spin, Tag } from 'antd'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
@@ -115,7 +105,7 @@ export function CRDKindWorkspace({ crd }: { crd: CRD }) {
       title: '名称',
       dataIndex: 'name',
       render: (value: string, record) =>
-        hasAllowedAction(record.allowedActions, 'update') ? (
+        !record.deletingAt && hasAllowedAction(record.allowedActions, 'update') ? (
           <Button
             type="link"
             style={{ paddingInline: 0 }}
@@ -139,7 +129,19 @@ export function CRDKindWorkspace({ crd }: { crd: CRD }) {
       ...tableColumnPresets.status,
       title: '状态',
       dataIndex: 'status',
-      render: (value?: string) => (value ? <StatusTag value={value} /> : '-'),
+      render: (value: string | undefined, record) =>
+        record.deletingAt ? (
+          <StatusTag value="deleting" label={localeCode === 'zh_CN' ? '删除中' : 'Deleting'} />
+        ) : value ? (
+          <StatusTag value={value} />
+        ) : (
+          '-'
+        ),
+    },
+    {
+      title: localeCode === 'zh_CN' ? '清理等待项' : 'Finalizers',
+      dataIndex: 'finalizers',
+      render: (value?: string[]) => value?.join(', ') || '-',
     },
     { title: '摘要', dataIndex: 'summary', render: formatSummary },
     {
@@ -162,8 +164,8 @@ export function CRDKindWorkspace({ crd }: { crd: CRD }) {
       width: 76,
       render: (_value, record) => {
         const resourceKey = `${record.namespace || ''}/${record.name}`
-        const canUpdate = hasAllowedAction(record.allowedActions, 'update')
-        const canDelete = hasAllowedAction(record.allowedActions, 'delete')
+        const canUpdate = !record.deletingAt && hasAllowedAction(record.allowedActions, 'update')
+        const canDelete = !record.deletingAt && hasAllowedAction(record.allowedActions, 'delete')
         return (
           <Space size={2} className="soha-row-action-icons">
             {canUpdate ? (
@@ -193,10 +195,15 @@ export function CRDKindWorkspace({ crd }: { crd: CRD }) {
                       crd,
                       namespace: record.namespace ?? namespace,
                       resourceName: record.name,
+                      expectedUid: record.uid,
                     },
                     {
                       onSuccess: () =>
-                        void message.success(t('common.deleteSuccess', 'Deleted successfully')),
+                        void message.success(
+                          localeCode === 'zh_CN'
+                            ? '删除请求已接受，等待资源清理'
+                            : 'Deletion accepted; waiting for cleanup',
+                        ),
                       onError: (error) => void message.error(error.message),
                       onSettled: () => setDeletingKey(null),
                     },

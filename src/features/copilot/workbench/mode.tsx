@@ -52,7 +52,7 @@ export function modeDescription(mode?: string) {
     case 'inspection_review':
       return '把巡检发现整理成后续动作和交接结论。'
     default:
-      return '用于日常问答、知识查询和任务协作；需要时沉淀证据与下一步动作。'
+      return '用于日常问答、资料整理和任务协作。'
   }
 }
 
@@ -130,8 +130,8 @@ export function buildPromptItems(mode: WorkbenchMode) {
     ]
   }
   return [
-    { key: 'summary', icon: <ThunderboltOutlined />, label: '帮我梳理当前问题' },
-    { key: 'context', icon: <ToolOutlined />, label: '整理相关上下文和证据' },
-    { key: 'next', icon: <RobotOutlined />, label: '生成下一步行动建议' },
+    { key: 'summary', icon: <ThunderboltOutlined />, label: '帮我解释一个问题' },
+    { key: 'context', icon: <ToolOutlined />, label: '帮我整理一份资料' },
+    { key: 'next', icon: <RobotOutlined />, label: '一起讨论实现方案' },
   ]
 }

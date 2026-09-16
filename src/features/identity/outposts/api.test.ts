@@ -24,6 +24,8 @@ const outpost: IdentityOutpost = {
   mode: 'embedded',
   token: 'shown-once',
   status: 'offline',
+  runtimeStatus: 'available',
+  configurationVersion: 0,
   metadata: { region: 'cn-east' },
   createdAt: '2026-07-10T00:00:00Z',
   updatedAt: '2026-07-10T00:00:00Z',

@@ -4,6 +4,7 @@ import { act, type ReactNode } from 'react'
 import { App as AntdApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot, type Root } from 'react-dom/client'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { IdentityApplicationsPage } from './list-page'
 
@@ -15,6 +16,7 @@ const testState = vi.hoisted(() => ({
     'identity.applications.update',
     'identity.applications.delete',
     'identity.providers.create',
+    'identity.providers.view',
   ],
   apiGet: vi.fn(),
   apiDelete: vi.fn(),
@@ -50,45 +52,6 @@ vi.mock('@/services/api-client', () => ({
   },
 }))
 
-interface MockColumn {
-  dataIndex?: string
-  key?: string
-  render?: (value: unknown, record: Record<string, unknown>) => ReactNode
-}
-
-vi.mock('@/components/admin-table', () => ({
-  AdminTable: ({
-    columns,
-    dataSource,
-    headerExtra,
-    tableSize,
-    toolbar,
-  }: {
-    columns: MockColumn[]
-    dataSource: Array<Record<string, unknown>>
-    headerExtra?: ReactNode
-    tableSize?: string
-    toolbar?: ReactNode
-  }) => (
-    <div data-table-size={tableSize}>
-      {headerExtra}
-      {toolbar}
-      {dataSource.map((record) => (
-        <div data-testid={`row-${String(record.id)}`} key={String(record.id)}>
-          {columns.map((column, columnIndex) => {
-            const value = record[column.dataIndex ?? '']
-            return (
-              <span key={column.key ?? `${String(column.dataIndex)}-${columnIndex}`}>
-                {column.render ? column.render(value, record) : String(value ?? '')}
-              </span>
-            )
-          })}
-        </div>
-      ))}
-    </div>
-  ),
-}))
-
 vi.mock('@/components/management-list', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/components/management-list')>()),
   ManagementIconButton: ({
@@ -117,12 +80,14 @@ vi.mock('./components/application-form-modal', () => ({
   ApplicationFormModal: ({
     application,
     onSubmit,
+    onOnboard,
     open,
     providerOptions,
     tagOptions,
   }: {
     application: { id: string } | null
     onSubmit: (input: Record<string, unknown>) => void
+    onOnboard: (input: Record<string, unknown>) => void
     open: boolean
     providerOptions: Array<{ id: string; name: string; type: string }>
     tagOptions: Array<{ label: string; value: string }>
@@ -146,7 +111,31 @@ vi.mock('./components/application-form-modal', () => ({
         </div>
         <button
           onClick={() =>
-            onSubmit({
+            (application
+              ? onSubmit
+              : (input: Record<string, unknown>) =>
+                  onOnboard({
+                    application: input,
+                    accessMode: 'all_authenticated',
+                    ...(testState.applicationProviderType === 'oidc'
+                      ? {
+                          provider: {
+                            applicationId: '',
+                            name: 'Grafana',
+                            type: 'oidc',
+                            enabled: true,
+                            status: 'enabled',
+                            config: {},
+                          },
+                          oidcClient: {
+                            providerId: '',
+                            clientType: 'confidential',
+                            redirectUris: ['https://grafana.example.com/callback'],
+                            requirePkce: true,
+                          },
+                        }
+                      : {}),
+                  }))({
               assignments: [],
               description: 'Dashboards',
               featured: false,
@@ -170,67 +159,16 @@ vi.mock('./components/application-form-modal', () => ({
     ) : null,
 }))
 
-vi.mock('../providers', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../providers')>()
-  return {
-    ...actual,
-    ProviderFormModal: ({
-      onSubmit,
-      open,
-    }: {
-      onSubmit: (input: unknown) => void
-      open: boolean
-    }) =>
-      open ? (
-        <button
-          onClick={() =>
-            onSubmit({
-              applicationId: 'grafana',
-              config: {},
-              enabled: true,
-              name: 'Example OIDC',
-              status: 'enabled',
-              type: 'oidc',
-            })
-          }
-        >
-          提交 Provider
-        </button>
-      ) : null,
-    OIDCClientFormModal: ({
-      onSubmit,
-      open,
-      providerId,
-    }: {
-      onSubmit: (input: unknown) => void
-      open: boolean
-      providerId: string
-    }) =>
-      open ? (
-        <button
-          onClick={() =>
-            onSubmit({
-              providerId,
-              clientType: 'confidential',
-              redirectUris: ['https://app.example.com/oauth/callback'],
-              postLogoutRedirectUris: [],
-              allowedScopes: ['openid'],
-              allowedGrantTypes: ['authorization_code'],
-              requirePkce: true,
-              accessTokenTtlSeconds: 3600,
-              idTokenTtlSeconds: 300,
-              refreshTokenTtlSeconds: 0,
-              status: 'enabled',
-            })
-          }
-        >
-          提交 Client
-        </button>
-      ) : null,
-    SecretRevealModal: ({ value }: { value: { clientSecret: string } | null }) =>
-      value ? <div data-testid="onboarding-secret">{value.clientSecret}</div> : null,
-  }
-})
+vi.mock('../providers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../providers')>()),
+  SecretRevealModal: ({ value }: { value: { clientSecret: string } | null }) =>
+    value ? <div data-testid="onboarding-secret">{value.clientSecret}</div> : null,
+}))
+
+vi.mock('./components/application-detail-drawer', () => ({
+  ApplicationDetailDrawer: ({ id }: { id: string }) =>
+    id ? <div data-testid="application-detail">{id}</div> : null,
+}))
 
 const application = {
   id: 'grafana',
@@ -293,25 +231,41 @@ beforeEach(() => {
     'identity.applications.update',
     'identity.applications.delete',
     'identity.providers.create',
+    'identity.providers.view',
   ]
   testState.applicationProviderType = 'link'
   testState.apiGet.mockImplementation(async (path: string) => {
     if (path.startsWith('/identity/applications')) return { data: [application] }
     if (path.startsWith('/identity/providers')) return { data: [provider] }
-    if (path === '/identity/capabilities') return { data: { stepUp: { available: true } } }
+    if (path === '/identity/capabilities')
+      return { data: { stepUp: { available: true }, samlApplicationProvider: { available: true } } }
     return { data: [] }
   })
   testState.apiPost.mockImplementation(async (path: string) => {
-    if (path === '/identity/providers') return { data: provider }
-    if (path === '/identity/providers/provider-1/oidc-clients') {
+    if (path === '/identity/applications/onboard')
       return {
         data: {
-          client: { id: 'client-1', providerId: provider.id, clientId: 'generated-client-id' },
-          clientSecret: 'revealable-client-secret',
+          application: {
+            ...application,
+            providerType: testState.applicationProviderType,
+            status: 'disabled',
+          },
+          ...(testState.applicationProviderType === 'oidc'
+            ? {
+                provider,
+                oidcClient: {
+                  client: {
+                    id: 'client-1',
+                    providerId: provider.id,
+                    clientId: 'generated-client-id',
+                  },
+                  clientSecret: 'revealable-client-secret',
+                },
+              }
+            : {}),
         },
       }
-    }
-    return { data: { ...application, providerType: testState.applicationProviderType } }
+    throw new Error('Unexpected POST ' + path)
   })
   testState.apiPut.mockImplementation(async (_path: string, input: Record<string, unknown>) => ({
     data: { ...application, ...input },
@@ -353,7 +307,9 @@ async function renderPage() {
     root.render(
       <AntdApp>
         <QueryClientProvider client={queryClient}>
-          <IdentityApplicationsPage />
+          <MemoryRouter>
+            <IdentityApplicationsPage />
+          </MemoryRouter>
         </QueryClientProvider>
       </AntdApp>,
     )
@@ -385,14 +341,23 @@ async function clickButtonByLabel(container: HTMLElement, label: string) {
 }
 
 describe('identity applications page behavior', () => {
-  it('loads applications without the provider summary cards and applies search filters', async () => {
+  it('renders application cards with management controls and applies search filters', async () => {
     const { container, queryClient } = await renderPage()
 
+    const toolbar = container.querySelector('.soha-identity-catalog-toolbar')
+    expect(toolbar?.querySelector('form[aria-label="应用筛选"]')).not.toBeNull()
+    expect(
+      Array.from(
+        toolbar?.querySelectorAll(':scope > button') ?? [],
+        (button) => button.textContent,
+      ),
+    ).toEqual(['刷新', '接入应用', '查询', '重置'])
+    expect(container.querySelector('.soha-management-query-card')).toBeNull()
     expect(testState.apiGet).toHaveBeenCalledWith('/identity/applications')
     expect(testState.apiGet).not.toHaveBeenCalledWith('/identity/provider-capabilities')
-    expect(container.querySelector('[data-testid="row-grafana"]')).not.toBeNull()
+    expect(container.querySelector('[role="article"][aria-label="Grafana"]')).not.toBeNull()
     expect(container.textContent).not.toContain('OIDC provider ready')
-    const applicationRow = container.querySelector('[data-testid="row-grafana"]')
+    const applicationRow = container.querySelector('[role="article"][aria-label="Grafana"]')
     expect(
       applicationRow
         ?.querySelector('button[aria-label="Grafana 启用状态"]')
@@ -410,11 +375,10 @@ describe('identity applications page behavior', () => {
         ?.querySelector('.soha-identity-access-scope')
         ?.classList.contains('ant-space-vertical'),
     ).toBe(false)
-    expect(
-      applicationRow
-        ?.querySelector('a[href="https://grafana.example.com"]')
-        ?.getAttribute('target'),
-    ).toBe('_blank')
+    expect(applicationRow?.textContent).toContain('Grafana')
+    expect(applicationRow?.querySelector('a')?.getAttribute('href')).toContain(
+      '?application=grafana',
+    )
 
     const search = container.querySelector('.soha-management-query-field input')
     if (!(search instanceof HTMLInputElement)) throw new Error('Application search input not found')
@@ -423,6 +387,10 @@ describe('identity applications page behavior', () => {
     await settle(queryClient)
 
     expect(testState.apiGet).toHaveBeenCalledWith('/identity/applications?q=harbor')
+    await clickButton(container, '重置')
+    await settle(queryClient)
+    expect((container.querySelector('input#query') as HTMLInputElement).value).toBe('')
+    expect(testState.apiGet).toHaveBeenLastCalledWith('/identity/applications')
   })
 
   it('updates enabled and portal visibility from independent switches', async () => {
@@ -445,12 +413,40 @@ describe('identity applications page behavior', () => {
     )
   })
 
-  it('switches table density from the shared table toolbar', async () => {
-    const { container } = await renderPage()
-
-    expect(container.querySelector('[data-table-size="small"]')).not.toBeNull()
-    await clickButtonByLabel(container, '切换表格密度')
-    expect(container.querySelector('[data-table-size="middle"]')).not.toBeNull()
+  it('paginates cards and resets to the first page after filtering', async () => {
+    const get = testState.apiGet.getMockImplementation()
+    const applications = Array.from({ length: 16 }, (_, index) => ({
+      ...application,
+      id: `app-${index}`,
+      name: `Application ${index}`,
+      slug: `app-${index}`,
+    }))
+    testState.apiGet.mockImplementation(async (path: string) => {
+      if (path.startsWith('/identity/applications'))
+        return { data: path.includes('?q=') ? [applications[0]] : applications }
+      return get?.(path)
+    })
+    const { container, queryClient } = await renderPage()
+    expect(container.querySelectorAll('[role="article"]')).toHaveLength(15)
+    const next = container.querySelector('.ant-pagination-next button')
+    if (!(next instanceof HTMLButtonElement)) throw new Error('Next page button missing')
+    await act(async () => next.click())
+    expect(container.querySelectorAll('[role="article"]')).toHaveLength(1)
+    expect(container.querySelector('[role="article"]')?.getAttribute('aria-label')).toBe(
+      'Application 15',
+    )
+    const search = container.querySelector('.soha-management-query-field input')
+    if (!(search instanceof HTMLInputElement)) throw new Error('Application search missing')
+    await act(async () => setInputValue(search, 'Application 0'))
+    await clickButton(container, '查询')
+    await settle(queryClient)
+    expect(container.querySelector('[role="article"]')?.getAttribute('aria-label')).toBe(
+      'Application 0',
+    )
+    const name = container.querySelector('[role="article"] a')
+    if (!(name instanceof HTMLAnchorElement)) throw new Error('Application detail link missing')
+    await act(async () => name.click())
+    expect(container.querySelector('[data-testid="application-detail"]')?.textContent).toBe('app-0')
   })
 
   it('keeps application management controls permission-gated', async () => {
@@ -458,7 +454,7 @@ describe('identity applications page behavior', () => {
     const { container } = await renderPage()
 
     const create = Array.from(container.querySelectorAll('button')).find((button) =>
-      button.textContent?.includes('新建应用'),
+      button.textContent?.includes('接入应用'),
     )
     expect(create?.disabled).toBe(true)
     expect(
@@ -473,15 +469,18 @@ describe('identity applications page behavior', () => {
   it('wires create and update forms through application mutations', async () => {
     const { container, queryClient } = await renderPage()
 
-    await clickButton(container, '新建应用')
+    await clickButton(container, '接入应用')
     expect(container.textContent).toContain('creating')
     expect(container.querySelector('[data-testid="application-tag-option-metrics"]')).not.toBeNull()
     await clickButton(container, '提交应用')
     await settle(queryClient)
 
     expect(testState.apiPost).toHaveBeenCalledWith(
-      '/identity/applications',
-      expect.objectContaining({ name: 'Grafana', providerId: '' }),
+      '/identity/applications/onboard',
+      expect.objectContaining({
+        application: expect.objectContaining({ name: 'Grafana', providerId: '' }),
+        accessMode: 'all_authenticated',
+      }),
     )
 
     await clickButton(container, '编辑')
@@ -509,32 +508,38 @@ describe('identity applications page behavior', () => {
     expect(testState.apiDelete).toHaveBeenCalledWith('/identity/applications/grafana')
   })
 
-  it('guides OIDC creation through Application, Provider, binding, and first Client', async () => {
+  it('submits one atomic onboarding request and reveals only the newly returned secret', async () => {
     testState.applicationProviderType = 'oidc'
     const { container, queryClient } = await renderPage()
-
-    await clickButton(container, '新建应用')
+    await clickButton(container, '接入应用')
     await clickButton(container, '提交应用')
     await settle(queryClient)
-    await clickButton(container, '提交 Provider')
-    await settle(queryClient)
-    await clickButton(container, '提交 Client')
-    await settle(queryClient)
 
+    expect(testState.apiPost).toHaveBeenCalledTimes(1)
     expect(testState.apiPost).toHaveBeenCalledWith(
-      '/identity/providers',
-      expect.objectContaining({ applicationId: 'grafana', type: 'oidc' }),
+      '/identity/applications/onboard',
+      expect.objectContaining({
+        application: expect.objectContaining({ providerType: 'oidc' }),
+        provider: expect.objectContaining({ applicationId: '', type: 'oidc' }),
+        oidcClient: expect.objectContaining({ providerId: '', requirePkce: true }),
+        accessMode: 'all_authenticated',
+      }),
     )
-    expect(testState.apiPut).toHaveBeenCalledWith(
-      '/identity/applications/grafana',
-      expect.objectContaining({ providerId: 'provider-1', providerType: 'oidc' }),
-    )
-    expect(testState.apiPost).toHaveBeenCalledWith(
-      '/identity/providers/provider-1/oidc-clients',
-      expect.objectContaining({ providerId: 'provider-1' }),
-    )
+    expect(testState.apiPut).not.toHaveBeenCalled()
     expect(container.querySelector('[data-testid="onboarding-secret"]')?.textContent).toBe(
       'revealable-client-secret',
     )
+    expect(container.querySelector('[data-testid="application-detail"]')?.textContent).toBe(
+      'grafana',
+    )
+    expect(
+      queryClient
+        .getMutationCache()
+        .getAll()
+        .every(
+          (mutation) =>
+            !String(JSON.stringify(mutation.state.data)).includes('revealable-client-secret'),
+        ),
+    ).toBe(true)
   })
 })

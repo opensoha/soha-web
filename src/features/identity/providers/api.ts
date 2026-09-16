@@ -10,6 +10,8 @@ import type {
   IdentityProvider,
   IdentityProviderFilters,
   IdentityProviderInput,
+  IdentityProviderSetup,
+  IdentityProviderUserMetadata,
   IdentitySigningKey,
   RotateIdentityProviderSAMLCertificateVariables,
   SAMLCertificateRotation,
@@ -34,6 +36,34 @@ function queryString(filters: IdentityProviderFilters) {
   return suffix ? `?${suffix}` : ''
 }
 
+export async function getIdentityProviderProtocolMetadata(
+  provider: Pick<IdentityProvider, 'id' | 'type'>,
+): Promise<string> {
+  if (provider.type === 'oidc') {
+    const metadata = await api.get<unknown>('/provider/oidc/.well-known/openid-configuration')
+    return JSON.stringify(metadata, null, 2)
+  }
+  return api.getText('/saml2/idp/' + encodeURIComponent(provider.id) + '/metadata')
+}
+
+export async function getIdentityProviderUserMetadata(
+  providerId: string,
+  userId: string,
+  clientId?: string,
+): Promise<IdentityProviderUserMetadata> {
+  const params = new URLSearchParams()
+  if (clientId) params.set('clientId', clientId)
+  const response = await api.get<ApiResponse<IdentityProviderUserMetadata>>(
+    '/identity/providers/' +
+      encodeURIComponent(providerId) +
+      '/users/' +
+      encodeURIComponent(userId) +
+      '/metadata' +
+      (params.size ? '?' + params : ''),
+  )
+  return response.data
+}
+
 export async function listIdentityProviders(
   filters: IdentityProviderFilters = {},
 ): Promise<IdentityProvider[]> {
@@ -46,6 +76,13 @@ export async function listIdentityProviders(
 export async function getIdentityProvider(providerId: string): Promise<IdentityProvider> {
   const response = await api.get<ApiResponse<IdentityProvider>>(
     `/identity/providers/${encodeURIComponent(providerId.trim())}`,
+  )
+  return response.data
+}
+
+export async function getIdentityProviderSetup(providerId: string): Promise<IdentityProviderSetup> {
+  const response = await api.get<ApiResponse<IdentityProviderSetup>>(
+    `/identity/providers/${encodeURIComponent(providerId.trim())}/setup`,
   )
   return response.data
 }

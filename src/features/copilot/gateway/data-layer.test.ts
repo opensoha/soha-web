@@ -162,6 +162,7 @@ describe('gateway data layer', () => {
   it('keeps secret references at the canonical invocation boundary', async () => {
     await invokeGatewayTool({
       toolName: 'docker.projects.deploy.plan',
+      capabilityVersion: '1',
       aiClientId: 'web-console',
       skillId: 'docker-runtime-operator',
       values: {
@@ -174,6 +175,7 @@ describe('gateway data layer', () => {
       '/ai-gateway/tools/docker.projects.deploy.plan/invoke',
       {
         toolName: 'docker.projects.deploy.plan',
+        capabilityVersion: '1',
         input: { projectId: 'demo' },
         aiClientId: 'web-console',
         skillId: 'docker-runtime-operator',

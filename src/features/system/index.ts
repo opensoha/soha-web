@@ -14,6 +14,7 @@ export {
   filterMenuTree,
   getMenuDerivedPermissionKeys,
   MENU_WORKBENCH_LABELS,
+  MENU_WORKBENCH_ORDER,
   summarizeMenuVisibility,
 } from './system-model'
 export type * from './system-model'

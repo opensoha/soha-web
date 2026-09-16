@@ -7,6 +7,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { IdentityProvider } from '../types'
 import { OIDCClientsPanel } from './oidc-clients-panel'
+import { I18nProvider } from '@/i18n'
 
 const testState = vi.hoisted(() => ({
   apiDelete: vi.fn(),
@@ -57,14 +58,14 @@ vi.mock('@/components/admin-table', () => ({
   AdminTable: ({
     columns,
     dataSource,
-    toolbar,
+    headerExtra,
   }: {
     columns: MockColumn[]
     dataSource: Array<Record<string, unknown>>
-    toolbar?: ReactNode
+    headerExtra?: ReactNode
   }) => (
     <div>
-      {toolbar}
+      {headerExtra}
       {dataSource.map((record) => (
         <div data-testid={`client-${String(record.id)}`} key={String(record.id)}>
           {columns.map((column, columnIndex) => {
@@ -81,7 +82,8 @@ vi.mock('@/components/admin-table', () => ({
   ),
 }))
 
-vi.mock('@/components/management-list', () => ({
+vi.mock('@/components/management-list', async (original) => ({
+  ...(await original<typeof import('@/components/management-list')>()),
   ManagementIconButton: ({
     disabled,
     onClick,
@@ -95,7 +97,12 @@ vi.mock('@/components/management-list', () => ({
       {tooltip}
     </button>
   ),
-  ManagementState: ({ title }: { title: ReactNode }) => <div>{title}</div>,
+  ManagementState: ({ title, actions }: { title: ReactNode; actions?: ReactNode }) => (
+    <div>
+      {title}
+      {actions}
+    </div>
+  ),
   ManagementTableToolbar: ({ children }: { children?: ReactNode }) => <>{children}</>,
 }))
 
@@ -240,14 +247,16 @@ async function renderPanel(canManage: boolean, onSecretCreated = vi.fn()) {
     root.render(
       <AntdApp>
         <QueryClientProvider client={queryClient}>
-          <OIDCClientsPanel
-            canCreate={canManage}
-            canDelete={canManage}
-            canRotate={canManage}
-            canUpdate={canManage}
-            onSecretCreated={onSecretCreated}
-            provider={provider}
-          />
+          <I18nProvider>
+            <OIDCClientsPanel
+              canCreate={canManage}
+              canDelete={canManage}
+              canRotate={canManage}
+              canUpdate={canManage}
+              onSecretCreated={onSecretCreated}
+              provider={provider}
+            />
+          </I18nProvider>
         </QueryClientProvider>
       </AntdApp>,
     )
@@ -268,6 +277,13 @@ async function clickButton(text: string) {
 }
 
 describe('OIDC clients panel behavior', () => {
+  it('shows a query failure with retry instead of an empty client table', async () => {
+    testState.apiGet.mockRejectedValue(new Error('clients unavailable'))
+    const { container } = await renderPanel(false)
+    expect(container.textContent).toContain('客户端加载失败')
+    expect(container.textContent?.replace(/\s/g, '')).toContain('重试')
+    expect(container.querySelector('[data-testid="client-client/id"]')).toBeNull()
+  })
   it('loads clients and keeps every mutation action permission-gated', async () => {
     const { container } = await renderPanel(false)
 

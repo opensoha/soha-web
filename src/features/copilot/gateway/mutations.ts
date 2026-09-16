@@ -68,7 +68,7 @@ function relayUpstreamPayload(values: GatewayDrawerFormValues) {
 export function buildGatewayToolInvocation(
   toolName: string,
   values: GatewayToolInvocationValues,
-  context: { aiClientId?: string; skillId?: string } = {},
+  context: { aiClientId?: string; skillId?: string; capabilityVersion?: string } = {},
 ): ToolInvocationRequest {
   const secretRefs: Record<string, string> = {}
   for (const item of values.secretRefs ?? []) {
@@ -82,6 +82,7 @@ export function buildGatewayToolInvocation(
   }
   return {
     toolName,
+    capabilityVersion: context.capabilityVersion || undefined,
     input: parseJsonObjectField(values.inputJson, 'Input'),
     aiClientId: context.aiClientId || undefined,
     skillId: context.skillId || undefined,
@@ -91,6 +92,7 @@ export function buildGatewayToolInvocation(
 
 export function invokeGatewayTool(input: {
   toolName: string
+  capabilityVersion?: string
   values: GatewayToolInvocationValues
   aiClientId?: string
   skillId?: string

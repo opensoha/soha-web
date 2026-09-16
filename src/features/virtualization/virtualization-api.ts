@@ -1,6 +1,12 @@
 import { api } from '@/services/api-client'
 import type { ApiResponse, Cluster } from '@/types'
-import type { OperationalPlan } from '@opensoha/contracts/gen/ts/sohaapi'
+import type {
+  OperationalPlan,
+  VirtualizationWorkerPool,
+  VirtualizationWorkerPoolInput,
+  VirtualizationWorkerCreateInput,
+  CapabilityAssessment,
+} from '@opensoha/contracts/gen/ts/sohaapi'
 import type {
   CreateVirtualMachineInput,
   VirtualMachine,
@@ -37,6 +43,39 @@ function withQuery(path: string, params: Array<[string, string | number | undefi
 }
 
 export const virtualizationApi = {
+  workerPools: async (connectionId: string) => {
+    const response = await api.get<ApiResponse<VirtualizationWorkerPool[]>>(
+      withQuery(`${BASE}/worker-pools`, [['connectionId', connectionId]]),
+    )
+    return response.data ?? []
+  },
+  saveWorkerPool: async (id: string, input: VirtualizationWorkerPoolInput) => {
+    const response = await api.put<ApiResponse<VirtualizationWorkerPool>>(
+      `${BASE}/worker-pools/${encodeURIComponent(id)}`,
+      input,
+    )
+    return response.data
+  },
+  deleteWorkerPool: async (id: string, expectedRevision: number) => {
+    await api.delete(
+      withQuery(`${BASE}/worker-pools/${encodeURIComponent(id)}`, [
+        ['expectedRevision', expectedRevision],
+      ]),
+    )
+  },
+  createWorker: async (id: string, input: VirtualizationWorkerCreateInput) => {
+    const response = await api.post<ApiResponse<VirtualizationOperation>>(
+      `${BASE}/worker-pools/${encodeURIComponent(id)}/nodes`,
+      input,
+    )
+    return response.data
+  },
+  workerReadiness: async (id: string) => {
+    const response = await api.get<ApiResponse<CapabilityAssessment>>(
+      `${BASE}/operations/${encodeURIComponent(id)}/worker-readiness`,
+    )
+    return response.data
+  },
   platformClusters: async () => {
     const response = await api.get<ApiResponse<Cluster[]>>('/clusters')
     return response.data ?? []

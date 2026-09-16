@@ -55,6 +55,7 @@ function ApplicationWorkflowCanvas({
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const [name, setName] = useState(initialName)
+  const [expectedRevision] = useState(boundTemplate?.revision)
   const [initialDefinition] = useState<ReleaseDagDefinition>(
     sourceTemplate ? normalizeReleaseDagDefinition(sourceTemplate.definition) : EMPTY_WORKFLOW,
   )
@@ -104,6 +105,7 @@ function ApplicationWorkflowCanvas({
         applicationId,
         id: binding.id,
         payload: {
+          expectedRevision,
           name: trimmedName,
           description:
             boundTemplate?.description ||
@@ -203,8 +205,23 @@ export function ApplicationWorkflowDesignerPage() {
   const applicationsQuery = useQuery(deliveryQueries.applications.list(Boolean(applicationId)))
   const bindingsQuery = useQuery(deliveryQueries.environments.list(Boolean(applicationId)))
   const templatesQuery = useQuery(deliveryQueries.workflowTemplates.list(Boolean(applicationId)))
+  const requestedTemplate = templatesQuery.data?.find((item) => item.id === requestedTemplateId)
+  const requestedVersion =
+    Number(searchParams.get('templateVersion')) || requestedTemplate?.publishedVersion || 0
+  const sourceTemplateQuery = useQuery(
+    deliveryQueries.workflowTemplates.version(
+      requestedTemplateId,
+      requestedVersion,
+      source === 'template' && Boolean(requestedTemplateId),
+    ),
+  )
 
-  if (applicationsQuery.isLoading || bindingsQuery.isLoading || templatesQuery.isLoading) {
+  if (
+    applicationsQuery.isLoading ||
+    bindingsQuery.isLoading ||
+    templatesQuery.isLoading ||
+    sourceTemplateQuery.isLoading
+  ) {
     return (
       <ManagementState
         kind="loading"
@@ -212,7 +229,12 @@ export function ApplicationWorkflowDesignerPage() {
       />
     )
   }
-  if (applicationsQuery.isError || bindingsQuery.isError || templatesQuery.isError) {
+  if (
+    applicationsQuery.isError ||
+    bindingsQuery.isError ||
+    templatesQuery.isError ||
+    sourceTemplateQuery.isError
+  ) {
     return (
       <ManagementState
         kind="error"
@@ -234,14 +256,21 @@ export function ApplicationWorkflowDesignerPage() {
     )
   }
 
-  const templates = (templatesQuery.data ?? []).filter(
-    (item) => !item.category?.toLowerCase().startsWith('application:'),
-  )
   const boundTemplate = binding.workflowTemplate
+  if (source === 'template' && !sourceTemplateQuery.data) {
+    return (
+      <ManagementState
+        kind="not-found"
+        title={t('page.applicationWorkflowDesigner.templateNotFound', '未找到所选工作流模板版本')}
+      />
+    )
+  }
   const sourceTemplate =
     source === 'blank'
       ? undefined
-      : templates.find((item) => item.id === requestedTemplateId) || boundTemplate
+      : source === 'template'
+        ? sourceTemplateQuery.data
+        : boundTemplate
   const initialName =
     searchParams.get('name')?.trim() ||
     boundTemplate?.name ||
@@ -249,7 +278,7 @@ export function ApplicationWorkflowDesignerPage() {
 
   return (
     <ApplicationWorkflowCanvas
-      key={`${binding.id}:${source || 'edit'}:${sourceTemplate?.id || 'blank'}`}
+      key={`${binding.id}:${source || 'edit'}:${sourceTemplate?.id || 'blank'}:${sourceTemplate?.publishedVersion || 0}`}
       applicationId={applicationId}
       binding={binding}
       boundTemplate={boundTemplate}

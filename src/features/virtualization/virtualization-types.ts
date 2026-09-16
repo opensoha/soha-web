@@ -323,6 +323,8 @@ export interface VirtualizationFlavorInput {
 }
 
 export interface VirtualizationOperation {
+  payload?: VirtualizationOperationPayload
+  result?: VirtualizationOperationPayload
   id: string
   type?: string
   operationType?: string

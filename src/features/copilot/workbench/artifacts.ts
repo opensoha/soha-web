@@ -52,7 +52,22 @@ export function artifactTitle(entry: WorkbenchArtifactEntry) {
 }
 
 export function artifactMeta(entry: WorkbenchArtifactEntry) {
-  return `${entry.artifact.kind} · ${formatArtifactTimestamp(entry.message.createdAt)}`
+  return `${staticArtifactLabel(entry.artifact.kind) || entry.artifact.kind} · ${formatArtifactTimestamp(entry.message.createdAt)}`
+}
+
+export function staticArtifactLabel(kind: string) {
+  return (
+    { report: '报告', configuration_preview: '配置预览', resource_table: '资源表' } as Record<
+      string,
+      string
+    >
+  )[kind]
+}
+
+export function isStaticArtifact(artifact: WorkbenchArtifact) {
+  return (
+    !!staticArtifactLabel(artifact.kind) && typeof artifact.dataSourceSnapshot?.content === 'string'
+  )
 }
 
 export function artifactSnapshotText(

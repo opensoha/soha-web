@@ -23,7 +23,13 @@ export function GatewayToolInvokeDrawer({
   const [form] = Form.useForm<GatewayToolInvocationValues>()
   const mutation = useMutation({
     mutationFn: (values: GatewayToolInvocationValues) =>
-      invokeGatewayTool({ toolName: tool?.name ?? '', values, aiClientId, skillId }),
+      invokeGatewayTool({
+        toolName: tool?.name ?? '',
+        capabilityVersion: tool?.version,
+        values,
+        aiClientId,
+        skillId,
+      }),
     onSuccess: (response) => message.success(response.data.result),
     onError: (error: Error) => message.error(error.message),
   })

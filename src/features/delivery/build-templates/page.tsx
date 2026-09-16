@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './styles.css'
 import {
   App,
@@ -31,14 +31,25 @@ import {
 import { BooleanTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { formatDateTime } from '@/utils/time'
-import {
-  TemplateUsageImpactPanel,
-  shouldConfirmTemplateUsageSave,
-  templateUsageConfirmText,
-} from '../template-usage-impact'
+import { TemplateUsageImpactPanel } from '../template-usage-impact'
+import { TemplatePublicationStatus, TemplateVersionHistory } from '../template-versions'
 import { deliveryMutations } from '../mutations'
 import { deliveryQueries } from '../queries'
 import type { BuildTemplate } from '../types'
+import { buildTemplateDocument } from '../documents/model'
+import { TemplateSourcesButton } from '../template-sources/entry'
+import { DocumentSourcePanel } from '../template-sources/source-panel'
+
+const SourceEditor = lazy(() =>
+  import('../documents/source-editor').then((module) => ({
+    default: module.DeliveryDocumentSourceEditor,
+  })),
+)
+const ImportDialog = lazy(() =>
+  import('../documents/import-dialog').then((module) => ({
+    default: module.DeliveryDocumentImportDialog,
+  })),
+)
 
 const { Text } = Typography
 
@@ -51,6 +62,7 @@ export interface BuildTemplateFormValues {
   builderKind?: string
   dockerfileTemplate?: string
   buildCommandsText?: string
+  originalBuildCommands?: string[]
   variableSchemaText?: string
   defaultVariablesText?: string
   variables?: BuildTemplateVariableFormValue[]
@@ -117,12 +129,17 @@ function trimFormString(raw: unknown) {
   return String(raw ?? '').trim()
 }
 
-function buildTemplateVariableSchema(variables: BuildTemplateVariableFormValue[] | undefined) {
+function buildTemplateVariableSchema(
+  variables: BuildTemplateVariableFormValue[] | undefined,
+  original: JsonObject,
+) {
   const schema: JsonObject = {}
   for (const item of variables ?? []) {
     const key = trimFormString(item.key)
     if (!key) continue
+    const previous = original[key]
     schema[key] = {
+      ...(previous && typeof previous === 'object' && !Array.isArray(previous) ? previous : {}),
       type: item.type || 'string',
       title: trimFormString(item.label) || key,
       description: trimFormString(item.description),
@@ -132,19 +149,32 @@ function buildTemplateVariableSchema(variables: BuildTemplateVariableFormValue[]
   return schema
 }
 
-function buildTemplateDefaultVariables(variables: BuildTemplateVariableFormValue[] | undefined) {
-  const defaults: JsonObject = {}
+function buildTemplateDefaultVariables(
+  variables: BuildTemplateVariableFormValue[] | undefined,
+  original: JsonObject,
+  originalSchema: JsonObject,
+) {
+  const defaults: JsonObject = Object.fromEntries(
+    Object.entries(original).filter(([key]) => !(key in originalSchema)),
+  )
   for (const item of variables ?? []) {
     const key = trimFormString(item.key)
     if (!key) continue
     const raw = item.defaultValue
-    if (raw === undefined || raw === '') continue
-    if (item.type === 'number') {
+    if (raw === undefined || (raw === '' && original[key] !== '')) continue
+    if (item.type === 'number' || item.type === 'integer') {
       const parsed = Number(raw)
-      defaults[key] = Number.isFinite(parsed) ? parsed : raw
+      if (
+        !raw.trim() ||
+        !Number.isFinite(parsed) ||
+        (item.type === 'integer' && !Number.isSafeInteger(parsed))
+      )
+        throw new Error(`${key} 默认值必须是有效${item.type === 'integer' ? '整数' : '数字'}`)
+      defaults[key] = parsed
       continue
     }
     if (item.type === 'boolean') {
+      if (raw !== 'true' && raw !== 'false') throw new Error(`${key} 默认值必须是 true 或 false`)
       defaults[key] = raw === 'true'
       continue
     }
@@ -204,7 +234,9 @@ function defaultBuildTemplateValues(
   }
 }
 
-function buildTemplateToFormValues(template: BuildTemplate): BuildTemplateFormValues {
+function buildTemplateToFormValues(
+  template: Omit<BuildTemplate, 'id' | 'createdAt' | 'updatedAt'>,
+): BuildTemplateFormValues {
   return {
     key: template.key,
     name: template.name,
@@ -212,6 +244,7 @@ function buildTemplateToFormValues(template: BuildTemplate): BuildTemplateFormVa
     builderKind: template.builderKind ?? 'docker',
     dockerfileTemplate: template.dockerfileTemplate ?? '',
     buildCommandsText: (template.buildCommands ?? []).join('\n'),
+    originalBuildCommands: template.buildCommands,
     variableSchemaText: JSON.stringify(template.variableSchema ?? {}, null, 2),
     defaultVariablesText: JSON.stringify(template.defaultVariables ?? {}, null, 2),
     variables: extractBuildTemplateVariables(template),
@@ -219,23 +252,34 @@ function buildTemplateToFormValues(template: BuildTemplate): BuildTemplateFormVa
   }
 }
 
-function buildBuildTemplatePayloadFromDesigner(
+export function buildBuildTemplatePayloadFromDesigner(
   values: BuildTemplateFormValues,
 ): BuildTemplatePayload {
   const variables = values.variables ?? []
-  const hasStructuredVariables = variables.some((item) => trimFormString(item.key))
+  const hasStructuredVariables = values.variables !== undefined
   return {
     key: values.key,
     name: values.name,
     description: values.description,
     builderKind: values.builderKind,
     dockerfileTemplate: values.dockerfileTemplate,
-    buildCommands: splitLines(values.buildCommandsText),
+    buildCommands:
+      values.originalBuildCommands &&
+      values.buildCommandsText === values.originalBuildCommands.join('\n')
+        ? values.originalBuildCommands
+        : splitLines(values.buildCommandsText),
     variableSchema: hasStructuredVariables
-      ? buildTemplateVariableSchema(variables)
+      ? buildTemplateVariableSchema(
+          variables,
+          parseJSONObject(values.variableSchemaText, '变量 Schema'),
+        )
       : parseJSONObject(values.variableSchemaText, '变量 Schema'),
     defaultVariables: hasStructuredVariables
-      ? buildTemplateDefaultVariables(variables)
+      ? buildTemplateDefaultVariables(
+          variables,
+          parseJSONObject(values.defaultVariablesText, '默认变量'),
+          parseJSONObject(values.variableSchemaText, '变量 Schema'),
+        )
       : parseJSONObject(values.defaultVariablesText, '默认变量'),
     enabled: values.enabled,
   }
@@ -270,8 +314,13 @@ export function BuildTemplatesPage() {
   const [searchText, setSearchText] = useState('')
   const [activeTabKey, setActiveTabKey] = useState('basic')
   const [isDirty, setIsDirty] = useState(false)
+  const [sourceDirty, setSourceDirty] = useState(false)
+  const [sourceGeneration, setSourceGeneration] = useState(0)
+  const [importing, setImporting] = useState(false)
   const [formSnapshot, setFormSnapshot] = useState<BuildTemplateFormValues>({})
-  const suppressFormChangeRef = useRef(false)
+  const copiedFromRef = useRef<{ id: string; revision: number }>()
+  const loadedRevisionRef = useRef<number>()
+  const loadedQueryIdRef = useRef<string | null>()
 
   const templatesQuery = useQuery(deliveryQueries.buildTemplates.list())
   const templates = templatesQuery.data ?? []
@@ -284,8 +333,14 @@ export function BuildTemplatesPage() {
   )
   const selectedTemplateUsage = selectedTemplateUsageQuery.data
   const isNewDraft = selectedTemplateId === 'new'
+  const source = useQuery(
+    deliveryQueries.documents.source('BuildTemplate', selectedTemplate?.id ?? ''),
+  )
+  const sourceWritable = source.isSuccess && !source.data.association
   const hasSelection = isNewDraft || !!selectedTemplate
-  const canSave = isNewDraft ? canCreate : canUpdate
+  const canSave =
+    (isNewDraft ? canCreate : canUpdate && sourceWritable) &&
+    selectedTemplate?.publicationState !== 'deprecated'
 
   const createOptions = deliveryMutations.buildTemplates.create(queryClient)
   const createMutation = useMutation({
@@ -294,7 +349,9 @@ export function BuildTemplatesPage() {
       void createOptions.onSuccess?.(result, variables, onMutateResult, context)
       message.success('构建模板创建成功')
     },
-    onError: (err: Error) => message.error(err.message),
+    onError: (err: Error) => {
+      message.error(err.message)
+    },
   })
   const updateOptions = deliveryMutations.buildTemplates.update(queryClient)
   const updateMutation = useMutation({
@@ -303,14 +360,28 @@ export function BuildTemplatesPage() {
       void updateOptions.onSuccess?.(result, variables, onMutateResult, context)
       message.success('构建模板更新成功')
     },
-    onError: (err: Error) => message.error(err.message),
+    onError: (err: Error) => {
+      message.error(err.message)
+    },
+  })
+  const publishOptions = deliveryMutations.buildTemplates.publish(queryClient)
+  const publishMutation = useMutation({
+    ...publishOptions,
+    onSuccess: (result, variables, onMutateResult, context) => {
+      void publishOptions.onSuccess?.(result, variables, onMutateResult, context)
+      loadTemplate(result)
+      message.success(`已发布 v${result.publishedVersion}`)
+    },
+    onError: (err: Error) => {
+      message.error(err.message)
+    },
   })
   const deleteOptions = deliveryMutations.buildTemplates.delete(queryClient)
   const deleteMutation = useMutation({
     ...deleteOptions,
     onSuccess: (result, deletedId, onMutateResult, context) => {
       void deleteOptions.onSuccess?.(result, deletedId, onMutateResult, context)
-      message.success('构建模板已删除')
+      message.success('构建模板已废弃，已发布版本继续保留')
       if (selectedTemplateId === deletedId) {
         const nextTemplate = templates.find((item) => item.id !== deletedId)
         if (nextTemplate) {
@@ -324,7 +395,9 @@ export function BuildTemplatesPage() {
         }
       }
     },
-    onError: (err: Error) => message.error(err.message),
+    onError: (err: Error) => {
+      message.error(err.message)
+    },
   })
 
   const updateTemplateSearchParam = useCallback(
@@ -346,19 +419,17 @@ export function BuildTemplatesPage() {
   )
 
   const confirmDiscardChanges = useCallback(() => {
-    if (!isDirty) return true
+    if (!isDirty && !sourceDirty) return true
     return window.confirm('当前构建模板有未保存更改，确认放弃？')
-  }, [isDirty])
+  }, [isDirty, sourceDirty])
 
   const applyFormValues = useCallback(
     (values: BuildTemplateFormValues, dirtyAfterApply: boolean) => {
-      suppressFormChangeRef.current = true
       setFormSnapshot(values)
       form.setFieldsValue(values)
-      window.setTimeout(() => {
-        suppressFormChangeRef.current = false
-        setIsDirty(dirtyAfterApply)
-      }, 0)
+      setIsDirty(dirtyAfterApply)
+      setSourceDirty(false)
+      setSourceGeneration((current) => current + 1)
     },
     [form],
   )
@@ -376,6 +447,8 @@ export function BuildTemplatesPage() {
         ...buildTemplateToFormValues(template),
         ...options?.formOverrides,
       }
+      copiedFromRef.current = undefined
+      loadedRevisionRef.current = template.revision
       setSelectedTemplateId(template.id)
       setActiveTabKey(options?.tabKey ?? 'basic')
       applyFormValues(values, Boolean(options?.dirtyAfterLoad))
@@ -385,29 +458,32 @@ export function BuildTemplatesPage() {
   )
 
   useEffect(() => {
-    if (!templates.length) return
+    if (!templates.length || isDirty || sourceDirty) return
     const queryTemplateId = searchParams.get('templateId')
+    // Router transitions can leave the old URL visible after a local selection.
+    const queryChanged = queryTemplateId !== loadedQueryIdRef.current
+    loadedQueryIdRef.current = queryTemplateId
     const queryTemplate = queryTemplateId
       ? templates.find((item) => item.id === queryTemplateId)
       : undefined
-    if (queryTemplate && queryTemplate.id !== selectedTemplateId && !isDirty) {
+    if (queryChanged && queryTemplate && queryTemplate.id !== selectedTemplateId) {
       loadTemplate(queryTemplate)
       return
     }
     if (!selectedTemplateId) {
       loadTemplate(queryTemplate ?? templates[0])
     }
-  }, [isDirty, loadTemplate, searchParams, selectedTemplateId, templates])
+  }, [isDirty, sourceDirty, loadTemplate, searchParams, selectedTemplateId, templates])
 
   useEffect(() => {
-    if (!isDirty) return undefined
+    if (!isDirty && !sourceDirty) return undefined
     const beforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault()
       event.returnValue = ''
     }
     window.addEventListener('beforeunload', beforeUnload)
     return () => window.removeEventListener('beforeunload', beforeUnload)
-  }, [isDirty])
+  }, [isDirty, sourceDirty])
 
   const listItems = useMemo<BuildTemplateListItem[]>(() => {
     const fromValues = (
@@ -468,7 +544,11 @@ export function BuildTemplatesPage() {
     try {
       return {
         error: '',
-        json: JSON.stringify(buildBuildTemplatePayloadFromDesigner(formSnapshot), null, 2),
+        json: JSON.stringify(
+          buildTemplateDocument(buildBuildTemplatePayloadFromDesigner(formSnapshot)),
+          null,
+          2,
+        ),
       }
     } catch (error) {
       return {
@@ -480,6 +560,7 @@ export function BuildTemplatesPage() {
 
   const handleNewTemplate = () => {
     if (!confirmDiscardChanges()) return
+    copiedFromRef.current = undefined
     const values = defaultBuildTemplateValues()
     setSelectedTemplateId('new')
     setActiveTabKey('basic')
@@ -517,27 +598,30 @@ export function BuildTemplatesPage() {
   }
 
   const handleSave = async () => {
+    if (sourceDirty || !canSave) return
     try {
-      const values = await form.validateFields()
+      const values = { ...formSnapshot, ...(await form.validateFields()) }
       const payload = buildBuildTemplatePayloadFromDesigner(values)
       if (selectedTemplate) {
-        const usageForSave =
-          selectedTemplateUsage ?? (await selectedTemplateUsageQuery.refetch()).data
-        if (
-          shouldConfirmTemplateUsageSave(usageForSave) &&
-          !window.confirm(templateUsageConfirmText(selectedTemplate.name, usageForSave))
-        ) {
-          return
-        }
-        await updateMutation.mutateAsync({ id: selectedTemplate.id, payload })
+        const updated = await updateMutation.mutateAsync({
+          id: selectedTemplate.id,
+          payload: { ...payload, publish: false, expectedRevision: loadedRevisionRef.current },
+        })
+        loadedRevisionRef.current = updated.revision
         setFormSnapshot(values)
         setIsDirty(false)
         return
       }
-      const createdTemplate = await createMutation.mutateAsync(payload)
+      const createdTemplate = await createMutation.mutateAsync({
+        ...payload,
+        publish: false,
+        copiedFrom: copiedFromRef.current,
+      })
+      copiedFromRef.current = undefined
       setFormSnapshot(values)
       setIsDirty(false)
       if (createdTemplate?.id) {
+        loadedRevisionRef.current = createdTemplate.revision
         setSelectedTemplateId(createdTemplate.id)
         updateTemplateSearchParam(createdTemplate.id)
       }
@@ -549,6 +633,7 @@ export function BuildTemplatesPage() {
   }
 
   const handleTemplateEnabledChange = (item: BuildTemplateListItem, enabled: boolean) => {
+    if (!item.isDraft && (item.id !== selectedTemplateId || !sourceWritable)) return
     if (item.id !== selectedTemplateId) {
       if (!confirmDiscardChanges()) return
       if (item.template) {
@@ -566,6 +651,11 @@ export function BuildTemplatesPage() {
   }
 
   const designerTabs = [
+    {
+      key: 'origin',
+      label: '来源',
+      children: <DocumentSourcePanel kind="BuildTemplate" id={selectedTemplate?.id ?? ''} />,
+    },
     {
       key: 'basic',
       label: '基础信息',
@@ -619,7 +709,8 @@ export function BuildTemplatesPage() {
       children: (
         <div className="soha-build-template-editor-pane">
           <Text type="secondary">
-            维护平台推荐的 Dockerfile 草稿，应用接入时可按规范生成或落盘。
+            构建时生成独立 Dockerfile；命令留空时按构建执行器构建并推送镜像。使用 {'{{变量名}}'}{' '}
+            引用简单值。
           </Text>
           <Form.Item name="dockerfileTemplate" label="Dockerfile 模板">
             <Input.TextArea
@@ -657,7 +748,8 @@ export function BuildTemplatesPage() {
             <div className="soha-build-template-variable-list">
               <div className="soha-build-template-variable-list__toolbar">
                 <Text type="secondary">
-                  用结构化字段维护构建参数，保存时自动生成 variableSchema 和默认变量。
+                  服务可覆盖默认值。命令中的自由文本使用带引号的
+                  "$SOHA_BUILD_变量名"；凭据使用密钥租约。
                 </Text>
                 <Button
                   icon={<PlusOutlined />}
@@ -681,7 +773,7 @@ export function BuildTemplatesPage() {
                   compact
                   kind="empty"
                   title="暂无变量"
-                  description="没有变量时，模板会使用高级预览里的兼容 JSON 配置。"
+                  description="可添加构建参数，或在 YAML / JSON 中编辑参数约束。"
                 />
               ) : null}
               {fields.map((field, index) => (
@@ -713,6 +805,7 @@ export function BuildTemplatesPage() {
                         options={[
                           { value: 'string', label: 'string' },
                           { value: 'number', label: 'number' },
+                          { value: 'integer', label: 'integer' },
                           { value: 'boolean', label: 'boolean' },
                         ]}
                       />
@@ -745,29 +838,42 @@ export function BuildTemplatesPage() {
     },
     {
       key: 'advanced',
-      label: '高级预览',
+      label: 'YAML / JSON',
       children: (
         <div className="soha-build-template-advanced">
-          <div className="soha-build-template-form-grid">
-            <Form.Item
-              className="soha-build-template-form-grid__wide"
-              name="variableSchemaText"
-              label="兼容变量 Schema(JSON)"
-            >
-              <Input.TextArea rows={5} spellCheck={false} />
-            </Form.Item>
-            <Form.Item
-              className="soha-build-template-form-grid__wide"
-              name="defaultVariablesText"
-              label="兼容默认变量(JSON)"
-            >
-              <Input.TextArea rows={5} spellCheck={false} />
-            </Form.Item>
-          </div>
+          <Form.Item name="variableSchemaText" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name="defaultVariablesText" hidden>
+            <Input />
+          </Form.Item>
           {previewState.error ? <Text type="danger">{previewState.error}</Text> : null}
-          <pre className="soha-json-block soha-build-template-json-preview">
-            {previewState.error ? '请修正变量 JSON 后再查看完整 payload。' : previewState.json}
-          </pre>
+          {previewState.json ? (
+            <Suspense fallback={<ManagementState kind="loading" />}>
+              <SourceEditor
+                key={sourceGeneration}
+                kind="BuildTemplate"
+                value={JSON.parse(previewState.json)}
+                targetId={selectedTemplate?.id}
+                expectedRevision={loadedRevisionRef.current}
+                disabled={!canSave || createMutation.isPending || updateMutation.isPending}
+                onDirtyChange={setSourceDirty}
+                onValidated={(document) => {
+                  if (document.kind !== 'BuildTemplate') return
+                  applyFormValues(
+                    buildTemplateToFormValues({
+                      ...document.spec,
+                      key: document.metadata.name,
+                      name: document.metadata.displayName || document.metadata.name,
+                      description: document.metadata.description,
+                      enabled: document.spec.enabled ?? true,
+                    }),
+                    true,
+                  )
+                }}
+              />
+            </Suspense>
+          ) : null}
         </div>
       ),
     },
@@ -776,6 +882,15 @@ export function BuildTemplatesPage() {
   const templateToolbar = (
     <>
       <Space wrap>
+        <TemplateSourcesButton />
+        <Button
+          disabled={!canCreate && !canUpdate}
+          onClick={() => {
+            if (confirmDiscardChanges()) setImporting(true)
+          }}
+        >
+          导入文件
+        </Button>
         <Button
           icon={<PlusOutlined />}
           type="primary"
@@ -785,37 +900,105 @@ export function BuildTemplatesPage() {
           新建模板
         </Button>
         <Button
+          disabled={!selectedTemplate || !canCreate}
+          onClick={() => {
+            if (!selectedTemplate || !confirmDiscardChanges()) return
+            const values = buildTemplateToFormValues(selectedTemplate)
+            copiedFromRef.current = {
+              id: selectedTemplate.id,
+              revision: selectedTemplate.revision!,
+            }
+            setSelectedTemplateId('new')
+            setActiveTabKey('basic')
+            applyFormValues(
+              {
+                ...values,
+                key: `${selectedTemplate.key}-copy`,
+                name: `${selectedTemplate.name} 副本`,
+              },
+              true,
+            )
+            updateTemplateSearchParam()
+          }}
+        >
+          复制模板
+        </Button>
+        <Button
           icon={<SaveOutlined />}
-          disabled={!hasSelection || !canSave}
+          disabled={
+            !hasSelection ||
+            !canSave ||
+            sourceDirty ||
+            selectedTemplate?.publicationState === 'deprecated' ||
+            publishMutation.isPending
+          }
           loading={createMutation.isPending || updateMutation.isPending}
           onClick={() => void handleSave()}
         >
-          保存
+          保存草稿
         </Button>
-        <Button disabled={!hasSelection || !isDirty} onClick={handleCancelChanges}>
+        <Popconfirm
+          title="发布当前草稿为新版本？"
+          description="已有服务继续使用固定版本；新版本需显式选择。"
+          onConfirm={() =>
+            selectedTemplate &&
+            loadedRevisionRef.current &&
+            publishMutation.mutate({
+              id: selectedTemplate.id,
+              expectedRevision: loadedRevisionRef.current,
+            })
+          }
+        >
+          <Button
+            disabled={
+              !selectedTemplate ||
+              !canUpdate ||
+              isDirty ||
+              sourceDirty ||
+              selectedTemplate.publicationState !== 'draft' ||
+              !loadedRevisionRef.current ||
+              createMutation.isPending ||
+              updateMutation.isPending
+            }
+            loading={publishMutation.isPending}
+          >
+            发布版本
+          </Button>
+        </Popconfirm>
+        <TemplateVersionHistory kind="build" templateId={selectedTemplate?.id ?? ''} />
+        <Button
+          disabled={!hasSelection || (!isDirty && !sourceDirty)}
+          onClick={handleCancelChanges}
+        >
           取消更改
         </Button>
         <Popconfirm
-          title="确认删除当前构建模板？"
+          title="废弃当前构建模板？已有服务与历史版本将保留。"
           onConfirm={() => selectedTemplate && deleteMutation.mutate(selectedTemplate.id)}
         >
           <Button
             danger
             icon={<DeleteOutlined />}
-            disabled={!selectedTemplate || !canDelete}
+            disabled={
+              !selectedTemplate || !canDelete || selectedTemplate.publicationState === 'deprecated'
+            }
             loading={deleteMutation.isPending}
           >
-            删除
+            废弃
           </Button>
         </Popconfirm>
       </Space>
       <Space wrap>
-        {isDirty ? <Tag color="gold">未保存</Tag> : <Tag>已同步</Tag>}
+        {isDirty || sourceDirty ? <Tag color="gold">未保存</Tag> : <Tag>已保存</Tag>}
         <Button
           icon={<ReloadOutlined />}
           loading={templatesQuery.isFetching}
           onClick={() => {
-            if (confirmDiscardChanges()) void templatesQuery.refetch()
+            if (confirmDiscardChanges())
+              void templatesQuery.refetch().then(({ data }) => {
+                const fresh = data?.find((item) => item.id === selectedTemplateId)
+                if (fresh) loadTemplate(fresh)
+              })
           }}
         >
           刷新
@@ -844,7 +1027,11 @@ export function BuildTemplatesPage() {
         <span className="soha-build-template-list__item-actions">
           <Switch
             checked={item.enabled}
-            disabled={item.isDraft ? !canCreate : !canUpdate}
+            disabled={
+              (item.isDraft ? !canCreate : !canUpdate) ||
+              (!item.isDraft && (item.id !== selectedTemplateId || !sourceWritable)) ||
+              item.template?.publicationState === 'deprecated'
+            }
             size="small"
             onChange={(checked) => handleTemplateEnabledChange(item, checked)}
           />
@@ -873,7 +1060,7 @@ export function BuildTemplatesPage() {
             <Tag>{`命令 ${item.commandCount}`}</Tag>
             <Tag>{`变量 ${item.variableCount}`}</Tag>
             <BooleanTag value={item.enabled} />
-            {item.isDraft ? <Tag color="gold">草稿</Tag> : null}
+            <TemplatePublicationStatus template={item.template} />
           </span>
           <Text type="secondary" className="text-xs">
             {item.updatedAt ? formatDateTime(item.updatedAt) : '尚未保存'}
@@ -890,8 +1077,7 @@ export function BuildTemplatesPage() {
       form={form}
       layout="vertical"
       onValuesChange={(_changedValues, allValues) => {
-        if (suppressFormChangeRef.current) return
-        setFormSnapshot(allValues)
+        setFormSnapshot((current) => ({ ...current, ...allValues }))
         setIsDirty(true)
       }}
     >
@@ -905,7 +1091,10 @@ export function BuildTemplatesPage() {
         className="soha-build-template-tabs"
         destroyOnHidden={false}
         items={designerTabs}
-        onChange={setActiveTabKey}
+        onChange={(next) => {
+          if (!sourceDirty || next === 'advanced') setActiveTabKey(next)
+          else message.info('请先校验并同步源码，或还原源码。')
+        }}
       />
     </Form>
   ) : (
@@ -918,14 +1107,31 @@ export function BuildTemplatesPage() {
   )
 
   return (
-    <TemplateDesignerShell
-      className="soha-page soha-build-template-page"
-      designer={templateDesigner}
-      designerClassName="soha-build-template-designer"
-      list={templateList}
-      toolbar={templateToolbar}
-      toolbarClassName="soha-build-template-toolbar"
-      workspaceClassName="soha-build-template-workspace"
-    />
+    <>
+      <TemplateDesignerShell
+        className="soha-page soha-build-template-page"
+        designer={templateDesigner}
+        designerClassName="soha-build-template-designer"
+        list={templateList}
+        toolbar={templateToolbar}
+        toolbarClassName="soha-build-template-toolbar"
+        workspaceClassName="soha-build-template-workspace"
+      />
+      {importing ? (
+        <Suspense fallback={<ManagementState kind="loading" />}>
+          <ImportDialog
+            onClose={() => setImporting(false)}
+            onImported={() => {
+              setSourceDirty(false)
+              setIsDirty(false)
+              void templatesQuery.refetch().then(({ data }) => {
+                const current = data?.find((item) => item.id === selectedTemplateId)
+                if (current) loadTemplate(current)
+              })
+            }}
+          />
+        </Suspense>
+      ) : null}
+    </>
   )
 }

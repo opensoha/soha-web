@@ -1,24 +1,34 @@
 /* Styles moved from web/src/styles/globals.css; keep scoped to this component or feature owner. */
 
 .soha-ai-workbench-page {
-  height: calc(100vh - var(--soha-app-chrome-height) - 48px);
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
   min-height: 0;
+  overflow: hidden;
+  background: var(--soha-bg-surface);
+}
+
+.soha-ai-workbench__toolbar,
+.soha-ai-workbench__conversation-card,
+.soha-ai-workbench-sidebar {
+  box-sizing: border-box;
 }
 
 .soha-ai-workbench {
   display: flex;
   min-height: 0;
-  height: 100%;
+  flex: 1;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
 }
 
 .soha-ai-workbench__workspace {
   display: grid;
   flex: 1 1 auto;
   min-height: 0;
-  grid-template-columns: minmax(196px, 220px) minmax(0, 1fr) minmax(214px, 252px);
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
   align-items: stretch;
 }
 
@@ -78,8 +88,7 @@
 }
 
 .soha-ai-workbench__conversations .ant-conversations-item {
-  height: 40px;
-  min-height: 40px;
+  min-height: 60px;
   align-items: center;
   padding: 0 8px;
   border-radius: var(--soha-radius-control);
@@ -178,8 +187,9 @@
   display: flex;
   flex: 1 1 auto;
   min-width: 0;
-  align-items: center;
-  gap: 6px;
+  align-items: stretch;
+  flex-direction: column;
+  gap: 3px;
 }
 
 .soha-ai-workbench__conversation-label-title,
@@ -210,7 +220,7 @@
 
 .soha-ai-workbench__conversation-label-meta {
   flex: 0 0 auto;
-  max-width: 86px;
+  max-width: 100%;
 }
 
 .soha-ai-workbench__conversation-label-actions {
@@ -289,7 +299,7 @@
 .soha-ai-workbench__empty-state {
   display: flex;
   flex: 1 1 auto;
-  min-height: 420px;
+  min-height: 0;
   align-items: center;
   justify-content: center;
   padding: 28px;
@@ -302,8 +312,12 @@
   min-height: 0;
   flex: 1 1 auto;
   flex-direction: column;
-  padding: 16px;
-  border: 1px solid var(--soha-border-color);
+  width: 100%;
+  max-width: 960px;
+  align-self: center;
+  padding: 16px 28px 20px;
+  border: 0;
+  border-radius: 0;
   background: var(--soha-bg-surface);
 }
 
@@ -395,7 +409,7 @@
 
 .soha-ai-workbench__conversation-scroll {
   display: flex;
-  min-height: 260px;
+  min-height: 0;
   flex: 1 1 auto;
   overflow: auto;
   padding: 18px 4px 12px 0;
@@ -427,7 +441,7 @@
 
 .soha-ai-workbench__graph-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 360px);
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   min-height: 420px;
 }
@@ -698,66 +712,159 @@
   gap: 2px;
 }
 
-@media (max-width: 1200px) {
-  .soha-ai-workbench__workspace {
-    grid-template-columns: 1fr;
-  }
-
-  .soha-ai-workbench-page {
-    height: auto;
-  }
-
-  .soha-ai-workbench-sidebar,
-  .soha-ai-workbench__tools-pane {
-    display: grid;
-    grid-column: 1 / -1;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-content: start;
-  }
-
-  .soha-ai-workbench__tools-header,
-  .soha-ai-workbench__tool-section {
-    grid-column: 1 / -1;
-  }
+/* The chat subtree stays mounted while navigation and detail panels change. */
+.soha-ai-workbench__workspace.has-sidebar {
+  grid-template-columns: 264px minmax(0, 1fr);
 }
 
-@media (max-width: 768px) {
-  .soha-ai-workbench__workspace {
-    grid-template-columns: 1fr;
-  }
+.soha-ai-workbench__workspace.has-detail {
+  grid-template-columns: minmax(0, 1fr) minmax(400px, 40%);
+}
 
-  .soha-ai-workbench-page {
-    min-height: 0;
-  }
+.soha-ai-workbench__workspace.has-sidebar.has-detail {
+  grid-template-columns: 264px minmax(0, 1fr) minmax(400px, 32%);
+}
 
-  .soha-ai-workbench-sidebar,
-  .soha-ai-workbench__tools-pane {
-    max-height: none;
-  }
+.soha-ai-workbench__session-slot {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  border-right: 1px solid var(--soha-border-color);
+  background: var(--soha-bg-layout);
+}
 
-  .soha-ai-workbench__graph-layout {
-    grid-template-columns: 1fr;
-  }
+.soha-ai-workbench__session-slot[hidden] {
+  display: none;
+}
 
-  .soha-ai-workbench__focus-grid,
-  .soha-ai-workbench__assembly-grid {
-    grid-template-columns: 1fr;
-  }
+.soha-ai-workbench-sidebar {
+  flex: 1;
+  border: 0;
+  border-radius: 0;
+  padding: 16px;
+  background: var(--soha-bg-layout);
+}
+
+.soha-ai-workbench__tools-pane {
+  padding: 0;
+  border: 0;
+}
+
+.soha-ai-workbench__toolbar {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 16px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--soha-border-color);
+}
+
+.soha-ai-workbench__back {
+  padding: 16px;
+  flex: 0 0 auto;
+  border-top: 1px solid var(--soha-border-color);
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--soha-text-secondary);
+}
+
+.soha-ai-workbench__toolbar {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.soha-ai-workbench__session-heading {
+  display: flex;
+  flex: 1;
+  min-width: 120px;
+  flex-direction: column;
+}
+
+.soha-ai-workbench__session-heading > * {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.soha-ai-workbench__toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.soha-ai-workbench__detail {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid var(--soha-border-color);
+  background: var(--soha-bg-surface);
+}
+
+.soha-ai-workbench__detail-header,
+.soha-ai-workbench__detail-footer {
+  flex: 0 0 auto;
+  padding: 12px 16px;
+}
+
+.soha-ai-workbench__detail-header {
+  border-bottom: 1px solid var(--soha-border-color);
+}
+
+.soha-ai-workbench__detail-footer {
+  border-top: 1px solid var(--soha-border-color);
+}
+
+.soha-ai-workbench__detail-title,
+.soha-ai-workbench__run-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.soha-ai-workbench__detail-title h2 {
+  font-size: 16px;
+  margin: 0;
+}
+
+.soha-ai-workbench__detail-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  padding: 16px;
+}
+
+.soha-ai-workbench__detail-header .ant-segmented {
+  margin-top: 8px;
+  max-width: 100%;
+}
+
+.soha-ai-workbench__run-summary {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--soha-border-color);
+  padding-top: 8px;
+}
+
+.soha-ai-workbench__mobile-detail .ant-drawer-header {
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 @media (max-width: 640px) {
+  .soha-ai-workbench__toolbar,
   .soha-ai-workbench__conversation-card {
     padding: 12px;
   }
 
-  .soha-ai-workbench-sidebar,
-  .soha-ai-workbench__tools-pane {
-    padding: 12px;
-  }
-
-  .soha-ai-workbench-sidebar,
-  .soha-ai-workbench__tools-pane {
-    grid-template-columns: 1fr;
+  .soha-ai-workbench__toolbar .ant-btn,
+  .soha-ai-workbench__detail-title .ant-btn {
+    min-height: 44px;
+    min-width: 44px;
   }
 }
 
@@ -847,4 +954,199 @@
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.soha-ai-workbench__message-results:empty {
+  display: none;
+}
+
+.soha-ai-workbench__message-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.soha-ai-workbench__message-result {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding-block: 8px;
+}
+
+.soha-ai-workbench__advanced > summary {
+  cursor: pointer;
+  padding-block: 12px;
+  color: var(--soha-text-secondary);
+}
+
+.soha-ai-workbench__advanced > .soha-ai-workbench__session-mode {
+  margin-bottom: 12px;
+}
+
+.soha-ai-workbench__welcome {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: min(100%, 720px);
+  margin: auto;
+  padding-block: 24px;
+}
+
+.soha-ai-workbench__brand-logo {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+}
+
+.soha-ai-workbench__welcome-logo {
+  width: 44px;
+  height: 44px;
+}
+
+.soha-ai-workbench__composer {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.soha-ai-workbench__conversations .ant-conversations-icon {
+  font-size: 16px;
+}
+
+.soha-ai-workbench__welcome .soha-ai-workbench__welcome-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.soha-ai-workbench__welcome .soha-ai-workbench__welcome-item {
+  min-width: 0;
+}
+
+.soha-ai-workbench__starter-icon {
+  font-size: 20px;
+  color: var(--soha-primary);
+}
+
+@media (max-width: 640px) {
+  .soha-ai-workbench__welcome .soha-ai-workbench__welcome-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.soha-ai-workbench__reference-preview {
+  max-height: 45vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 12px;
+  border: 1px solid var(--soha-border-color);
+  border-radius: var(--soha-radius-control);
+  background: var(--soha-bg-surface-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.soha-ai-workbench__toolbar-actions {
+  align-items: center;
+  gap: 12px;
+}
+
+/* The sender surface owns focus, so the nested textarea does not draw a second ring. */
+.soha-ai-workbench__composer .ant-sender textarea:focus,
+.soha-ai-workbench__composer .ant-sender textarea:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.soha-ai-workbench__composer .ant-sender:focus-within {
+  border-color: color-mix(in srgb, var(--soha-primary) 35%, var(--soha-border-color));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--soha-primary) 10%, transparent);
+}
+
+.soha-ai-workbench__composer-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.soha-ai-workbench__model-select {
+  max-width: min(280px, 45vw);
+}
+.soha-ai-workbench__context-popover {
+  width: min(320px, 75vw);
+}
+.soha-ai-workbench__context-popover dl {
+  margin: 8px 0;
+}
+.soha-ai-workbench__context-popover dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 10px 0;
+}
+.soha-ai-workbench__context-popover dt {
+  color: var(--soha-text-secondary);
+  flex-shrink: 0;
+}
+.soha-ai-workbench__context-popover dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+.soha-ai-workbench__context-popover p {
+  color: var(--soha-text-secondary);
+  font-size: 12px;
+}
+
+.soha-ai-markdown {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.75;
+}
+.soha-ai-markdown pre,
+.soha-ai-static-content {
+  max-width: 100%;
+  overflow: auto;
+  white-space: pre;
+}
+.soha-ai-citation {
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--soha-text-primary);
+  background: var(--light-bg);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.soha-ai-citation:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.soha-ai-tool-activity {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-left: 2px solid var(--soha-border-color);
+  font-size: 12px;
+}
+.soha-ai-tool-activity summary {
+  cursor: pointer;
+  padding: 4px 0;
+}
+.soha-ai-tool-activity > details {
+  margin: 8px 0;
+}
+.soha-ai-static-artifact .soha-yaml-compare-shell {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  height: 720px;
+  min-height: 0;
+}
+.soha-ai-static-artifact .soha-yaml-pane {
+  min-height: 0;
+  height: auto;
+}
+.soha-ai-static-artifact .soha-yaml-pane + .soha-yaml-pane {
+  border-top: 1px solid var(--soha-border-color);
+  border-left: 0;
 }

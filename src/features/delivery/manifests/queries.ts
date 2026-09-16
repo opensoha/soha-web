@@ -4,6 +4,12 @@ import { manifestKeys, normalizeManifestFilter } from './keys'
 import type { ManifestFilter } from './types'
 
 export const manifestQueries = {
+  applicationPackages: (applicationId: string, enabled = true) =>
+    queryOptions({
+      queryKey: manifestKeys.applicationPackages(applicationId),
+      queryFn: () => manifestApi.applicationPackages(applicationId),
+      enabled: enabled && Boolean(applicationId),
+    }),
   list: (filter: ManifestFilter = {}, enabled = true) => {
     const normalized = normalizeManifestFilter(filter)
     return queryOptions({

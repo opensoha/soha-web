@@ -1,7 +1,7 @@
 import { App, Button, Input, Tabs, Tag, Typography } from 'antd'
 import { CopyOutlined } from '@ant-design/icons'
 import { useI18n } from '@/i18n'
-import type { IdentityProvider } from '../types'
+import type { IdentityProvider, IdentityProviderSetup } from '../types'
 import {
   proxySetupContext,
   proxySetupSnippet,
@@ -21,12 +21,18 @@ const targetLabels: Record<ProxySetupTarget, string> = {
   'caddy-standalone': 'Caddy (Standalone)',
 }
 
-export function ProxySetupPanel({ provider }: { provider: IdentityProvider }) {
+export function ProxySetupPanel({
+  provider,
+  setup,
+}: {
+  provider: IdentityProvider
+  setup: IdentityProviderSetup
+}) {
   const { message } = App.useApp()
   const { t } = useI18n()
-  const context = proxySetupContext(provider, window.location.origin)
-  const reverseProxy = provider.config?.mode === 'reverse_proxy'
-  const endpoint = reverseProxy ? context.reverseProxyURL : context.authURL
+  const context = proxySetupContext(provider, setup)
+  if (!context) return null
+  const endpoint = context.authURL
 
   const copy = async (value: string) => {
     await navigator.clipboard.writeText(value)
@@ -39,32 +45,29 @@ export function ProxySetupPanel({ provider }: { provider: IdentityProvider }) {
         <div>
           <Text strong>{t('identity.proxySetup.title', '接入配置')}</Text>
           <Paragraph type="secondary">
-            {reverseProxy
-              ? t(
-                  'identity.proxySetup.reverseDescription',
-                  '通过此地址访问应用，Soha 会在完成身份验证和授权后将请求转发到已配置的上游。',
-                )
-              : t(
-                  'identity.proxySetup.description',
-                  '选择运行环境并复制配置。所有方式都使用同一个 Soha forward-auth 端点。',
-                )}
+            {t(
+              'identity.proxySetup.edgeDescription',
+              '边缘代理转发业务流量，并向下列地址鉴权。请替换模板中的业务上游，并按部署环境配置 TLS。',
+            )}
+            {setup.requiresOutpostToken ? (
+              <Text>
+                远程节点需要独立的 Agent HTTP token；请在代理端注入凭据占位符。它与节点向 Soha
+                注册的 token 不同。共享登录需配置受信任的 cookie 域和回跳地址。
+              </Text>
+            ) : null}
           </Paragraph>
         </div>
-        <Tag color="blue">{reverseProxy ? 'reverse-proxy' : 'forward-auth'}</Tag>
+        <Tag color="blue">forward-auth</Tag>
       </div>
       <div className="soha-proxy-endpoint-row">
         <Input readOnly value={endpoint} />
         <Button
-          aria-label={
-            reverseProxy
-              ? t('identity.proxySetup.copyReverseEndpoint', '复制代理地址')
-              : t('identity.proxySetup.copyEndpoint', '复制认证地址')
-          }
+          aria-label={t('identity.proxySetup.copyEndpoint', '复制认证地址')}
           icon={<CopyOutlined />}
           onClick={() => copy(endpoint)}
         />
       </div>
-      {reverseProxy ? null : (
+      {
         <Tabs
           items={proxySetupTargets.map((target) => {
             const snippet = proxySetupSnippet(target, context)
@@ -88,7 +91,7 @@ export function ProxySetupPanel({ provider }: { provider: IdentityProvider }) {
           })}
           size="small"
         />
-      )}
+      }
     </div>
   )
 }

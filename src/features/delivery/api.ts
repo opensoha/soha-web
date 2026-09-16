@@ -1,16 +1,56 @@
 import { api } from '@/services/api-client'
 import type { ApiResponse } from '@/types'
-import type { RegistryConnectionListEnvelope } from '@opensoha/contracts/gen/ts/sohaapi'
 import type {
+  HelmChartInspection,
+  HelmChartInspectionInput,
+  BuildpacksCapability,
+  BuildTriggerRequest,
+  RepositoryAnalysis,
+  RepositoryAnalysisInput,
+  RegistryConnectionListEnvelope,
+  ProgressiveRolloutStatus,
+  ProgressiveRolloutControlInput,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+import type {
+  DeliveryDocumentSourceInfo,
+  DeliveryTrigger,
+  DeliveryTriggerInput,
+  DeliveryTriggerEvent,
+  DeliveryTemplateSource,
+  DeliveryTemplateSourceInput,
+  DeliveryTemplateSourceAssociation,
+  DeliveryTemplateSourceRemoveInput,
+  DeliveryTemplateSyncInput,
+  DeliveryTemplateSyncRun,
+  DeliveryTemplateSyncApplyInput,
+  DeliveryDocumentKind,
+  DeliveryDocumentPreviewInput,
+  DeliveryDocumentPreview,
+  DeliveryDocumentApplyInput,
+  DeliveryDocumentImport,
+  DeliveryDocumentExport,
+  DeliveryBatch,
+  WorkflowCatalogParams,
+  DeliveryExecutionHistoryParams,
+  DeliveryExecutionHistoryPage,
+  WorkflowCatalogPage,
+  DeliveryBatchInput,
+  DeliveryBatchListParams,
+  DeliveryBatchActionInput,
+  DeliveryWorkflow,
+  DeliveryWorkflowInput,
   ApplicationEnvironment,
   ApplicationRuntimeDetail,
   ApplicationServiceComponent,
   ApplicationWorkloadRuntimeDetail,
   ApplicationWorkflowInput,
-  BlueprintBootstrapResult,
   BuildRecord,
   BuildTemplate,
   BuildTemplateInput,
+  ServiceDeploymentTemplate,
+  ServiceDeploymentTemplateInput,
+  DeploymentTemplatePreview,
+  DeploymentTemplatePreviewInput,
   DeliveryApplication,
   DeliveryApplicationDetail,
   DeliveryApplicationEnvironmentDetail,
@@ -18,9 +58,6 @@ import type {
   DeliveryClusterList,
   DeliveryDeploymentRef,
   DeliveryDeploymentRollbackInput,
-  DeliveryDraft,
-  DeliveryDraftConfirmResult,
-  DeliveryDraftInput,
   DeliveryEnvironment,
   DeliveryExecutionLog,
   DeliveryGatewayManifest,
@@ -111,7 +148,14 @@ function applicationListPath(
   base: '/builds' | '/releases' | '/workflows',
   params: DeliveryListParams,
 ) {
-  return withQuery(base, { applicationId: params.applicationId?.trim(), limit: params.limit })
+  return withQuery(base, {
+    applicationId: params.applicationId?.trim(),
+    ...(base === '/builds' ? { buildSourceId: params.buildSourceId?.trim() } : {}),
+    ...(base === '/workflows'
+      ? { applicationEnvironmentId: params.applicationEnvironmentId?.trim() }
+      : {}),
+    limit: params.limit,
+  })
 }
 
 function workloadRuntimePath(ref: DeliveryWorkloadRef) {
@@ -143,6 +187,147 @@ function gatewayReadinessPath(params: DeliveryGatewayReadinessParams) {
 }
 
 export const deliveryApi = {
+  documents: {
+    source: (kind: DeliveryDocumentKind, id: string, version?: number) =>
+      unwrap(
+        api.get<ApiResponse<DeliveryDocumentSourceInfo>>(
+          withQuery(`/delivery/documents/${segment(kind)}/${segment(id)}/source`, { version }),
+        ),
+      ),
+    preview: (input: DeliveryDocumentPreviewInput) =>
+      unwrap(api.post<ApiResponse<DeliveryDocumentPreview>>('/delivery/documents/preview', input)),
+    apply: (previewId: string, input: DeliveryDocumentApplyInput) =>
+      unwrap(
+        api.post<ApiResponse<DeliveryDocumentImport>>(
+          `/delivery/documents/imports/${segment(previewId)}/apply`,
+          input,
+        ),
+      ),
+    export: (kind: DeliveryDocumentKind, id: string, format: 'yaml' | 'json', version?: number) =>
+      unwrap(
+        api.get<ApiResponse<DeliveryDocumentExport>>(
+          withQuery(`/delivery/documents/${segment(kind)}/${segment(id)}/export`, {
+            format,
+            version,
+          }),
+        ),
+      ),
+  },
+  triggers: {
+    list: (targetKind: string, targetId: string, offset = 0) =>
+      unwrap(
+        api.get<ApiResponse<DeliveryTrigger[]>>(
+          withQuery('/delivery/triggers', { targetKind, targetId, offset, limit: 50 }),
+        ),
+      ),
+    create: (input: DeliveryTriggerInput) =>
+      unwrap(api.post<ApiResponse<DeliveryTrigger>>('/delivery/triggers', input)),
+    update: (id: string, input: DeliveryTriggerInput) =>
+      unwrap(api.put<ApiResponse<DeliveryTrigger>>(`/delivery/triggers/${segment(id)}`, input)),
+    events: (id: string, offset = 0) =>
+      unwrap(
+        api.get<ApiResponse<DeliveryTriggerEvent[]>>(
+          withQuery(`/delivery/triggers/${segment(id)}/events`, { offset, limit: 50 }),
+        ),
+      ),
+  },
+  templateSources: {
+    list: (offset = 0, limit = 50) =>
+      unwrap(
+        api.get<ApiResponse<DeliveryTemplateSource[]>>(
+          withQuery('/delivery/template-sources', { offset, limit }),
+        ),
+      ),
+    detail: (id: string) =>
+      unwrap(
+        api.get<ApiResponse<DeliveryTemplateSource>>(`/delivery/template-sources/${segment(id)}`),
+      ),
+    create: (input: DeliveryTemplateSourceInput) =>
+      unwrap(api.post<ApiResponse<DeliveryTemplateSource>>('/delivery/template-sources', input)),
+    update: (id: string, input: DeliveryTemplateSourceInput) =>
+      unwrap(
+        api.put<ApiResponse<DeliveryTemplateSource>>(
+          `/delivery/template-sources/${segment(id)}`,
+          input,
+        ),
+      ),
+    remove: (id: string, input: DeliveryTemplateSourceRemoveInput) =>
+      discard(api.delete(`/delivery/template-sources/${segment(id)}`, input)),
+    objects: (id: string, offset = 0, limit = 50) =>
+      unwrap(
+        api.get<ApiResponse<DeliveryTemplateSourceAssociation[]>>(
+          withQuery(`/delivery/template-sources/${segment(id)}/objects`, { offset, limit }),
+        ),
+      ),
+    sync: (id: string, input: DeliveryTemplateSyncInput) =>
+      unwrap(
+        api.post<ApiResponse<DeliveryTemplateSyncRun>>(
+          `/delivery/template-sources/${segment(id)}/sync`,
+          input,
+        ),
+      ),
+    runs: (id: string, offset = 0, limit = 50) =>
+      unwrap(
+        api.get<ApiResponse<DeliveryTemplateSyncRun[]>>(
+          withQuery(`/delivery/template-sources/${segment(id)}/sync-runs`, { offset, limit }),
+        ),
+      ),
+    run: (id: string, runId: string) =>
+      unwrap(
+        api.get<ApiResponse<DeliveryTemplateSyncRun>>(
+          `/delivery/template-sources/${segment(id)}/sync-runs/${segment(runId)}`,
+        ),
+      ),
+    apply: (id: string, runId: string, input: DeliveryTemplateSyncApplyInput) =>
+      unwrap(
+        api.post<ApiResponse<DeliveryTemplateSyncRun>>(
+          `/delivery/template-sources/${segment(id)}/sync-runs/${segment(runId)}/apply`,
+          input,
+        ),
+      ),
+    detach: (
+      id: string,
+      kind: DeliveryDocumentKind,
+      objectId: string,
+      input: DeliveryTemplateSourceRemoveInput,
+    ) =>
+      discard(
+        api.post(
+          `/delivery/template-sources/${segment(id)}/objects/${segment(kind)}/${segment(objectId)}/detach`,
+          input,
+        ),
+      ),
+  },
+  deliveryWorkflows: {
+    list: () => unwrap(api.get<ApiResponse<DeliveryWorkflow[]>>('/delivery-workflows')),
+    detail: (id: string) =>
+      unwrap(api.get<ApiResponse<DeliveryWorkflow>>(`/delivery-workflows/${segment(id)}`)),
+    create: (input: DeliveryWorkflowInput) =>
+      unwrap(api.post<ApiResponse<DeliveryWorkflow>>('/delivery-workflows', input)),
+    update: (id: string, input: DeliveryWorkflowInput) =>
+      unwrap(api.put<ApiResponse<DeliveryWorkflow>>(`/delivery-workflows/${segment(id)}`, input)),
+  },
+  batches: {
+    list: (params: DeliveryBatchListParams = {}) =>
+      unwrap(
+        api.get<ApiResponse<DeliveryBatch[]>>(
+          withQuery('/delivery-batches', {
+            applicationId: params.applicationId?.trim(),
+            serviceId: params.serviceId?.trim(),
+            workflowId: params.workflowId?.trim(),
+            limit: params.limit,
+          }),
+        ),
+      ),
+    detail: (id: string) =>
+      unwrap(api.get<ApiResponse<DeliveryBatch>>(`/delivery-batches/${segment(id)}`)),
+    create: (input: DeliveryBatchInput) =>
+      unwrap(api.post<ApiResponse<DeliveryBatch>>('/delivery-batches', input)),
+    cancel: (id: string, input: DeliveryBatchActionInput = {}) =>
+      unwrap(
+        api.post<ApiResponse<DeliveryBatch>>(`/delivery-batches/${segment(id)}/cancel`, input),
+      ),
+  },
   repositories: {
     list: (params: RepositoryListParams = {}) =>
       unwrap(
@@ -201,6 +386,26 @@ export const deliveryApi = {
       ),
   },
   applications: {
+    inspectHelmChart: (applicationId: string, payload: HelmChartInspectionInput) =>
+      unwrap(
+        api.post<ApiResponse<HelmChartInspection>>(
+          `/applications/${segment(applicationId)}/helm-chart`,
+          payload,
+        ),
+      ),
+    buildpacksCapability: (applicationId: string) =>
+      unwrap(
+        api.get<ApiResponse<BuildpacksCapability>>(
+          `/applications/${segment(applicationId)}/buildpacks-capability`,
+        ),
+      ),
+    analyzeRepository: (applicationId: string, input: RepositoryAnalysisInput) =>
+      unwrap(
+        api.post<ApiResponse<RepositoryAnalysis>>(
+          `/applications/${segment(applicationId)}/repository-analysis`,
+          input,
+        ),
+      ),
     list: () => unwrap(api.get<ApiResponse<DeliveryApplication[]>>('/applications')),
     detail: (id: string) =>
       unwrap(
@@ -212,8 +417,23 @@ export const deliveryApi = {
       ),
     create: (payload: DeliveryRecordInput) =>
       unwrap(api.post<ApiResponse<DeliveryApplication>>('/applications', payload)),
-    update: (id: string, payload: DeliveryRecordInput) =>
-      discard(api.put(`/applications/${segment(id)}`, payload)),
+    update: (id: string, payload: DeliveryRecordInput) => {
+      const {
+        version,
+        createdAt: _createdAt,
+        updatedAt: _updatedAt,
+        environmentCount: _environmentCount,
+        ...input
+      } = payload
+      const expectedVersion = input.expectedVersion ?? version
+      if (
+        typeof expectedVersion !== 'number' ||
+        !Number.isSafeInteger(expectedVersion) ||
+        expectedVersion < 1
+      )
+        return Promise.reject(new Error('应用配置缺少有效版本，请重新加载后保存。'))
+      return discard(api.put(`/applications/${segment(id)}`, { ...input, expectedVersion }))
+    },
     delete: (id: string) => discard(api.delete(`/applications/${segment(id)}`)),
     services: (applicationId: string) =>
       unwrap(
@@ -222,7 +442,12 @@ export const deliveryApi = {
         ),
       ),
     createService: (applicationId: string, payload: DeliveryRecordInput) =>
-      discard(api.post(`/applications/${segment(applicationId)}/services`, payload)),
+      unwrap(
+        api.post<ApiResponse<ApplicationServiceComponent>>(
+          `/applications/${segment(applicationId)}/services`,
+          payload,
+        ),
+      ),
     updateService: (applicationId: string, serviceId: string, payload: DeliveryRecordInput) =>
       discard(
         api.put(`/applications/${segment(applicationId)}/services/${segment(serviceId)}`, payload),
@@ -285,7 +510,66 @@ export const deliveryApi = {
       ),
     delete: (id: string) => discard(api.delete(`/application-environments/${segment(id)}`)),
   },
+  deploymentTemplates: {
+    detail: (id: string) =>
+      unwrap(
+        api.get<ApiResponse<ServiceDeploymentTemplate>>(`/deployment-templates/${segment(id)}`),
+      ),
+    versions: (id: string) =>
+      unwrap(
+        api.get<ApiResponse<ServiceDeploymentTemplate[]>>(
+          `/deployment-templates/${segment(id)}/versions`,
+        ),
+      ),
+    version: (id: string, version: number) =>
+      unwrap(
+        api.get<ApiResponse<ServiceDeploymentTemplate>>(
+          `/deployment-templates/${segment(id)}/versions/${version}`,
+        ),
+      ),
+    publish: (id: string, expectedRevision: number) =>
+      unwrap(
+        api.post<ApiResponse<ServiceDeploymentTemplate>>(
+          `/deployment-templates/${segment(id)}/publish`,
+          {
+            expectedRevision,
+          },
+        ),
+      ),
+    list: () => unwrap(api.get<ApiResponse<ServiceDeploymentTemplate[]>>('/deployment-templates')),
+    create: (payload: ServiceDeploymentTemplateInput) =>
+      unwrap(api.post<ApiResponse<ServiceDeploymentTemplate>>('/deployment-templates', payload)),
+    update: (id: string, payload: ServiceDeploymentTemplateInput) =>
+      unwrap(
+        api.put<ApiResponse<ServiceDeploymentTemplate>>(
+          `/deployment-templates/${segment(id)}`,
+          payload,
+        ),
+      ),
+    delete: (id: string) => discard(api.delete(`/deployment-templates/${segment(id)}`)),
+    preview: (applicationId: string, payload: DeploymentTemplatePreviewInput) =>
+      unwrap(
+        api.post<ApiResponse<DeploymentTemplatePreview>>(
+          `/applications/${segment(applicationId)}/deployment-template-preview`,
+          payload,
+        ),
+      ),
+  },
   buildTemplates: {
+    detail: (id: string) =>
+      unwrap(api.get<ApiResponse<BuildTemplate>>(`/build-templates/${segment(id)}`)),
+    versions: (id: string) =>
+      unwrap(api.get<ApiResponse<BuildTemplate[]>>(`/build-templates/${segment(id)}/versions`)),
+    version: (id: string, version: number) =>
+      unwrap(
+        api.get<ApiResponse<BuildTemplate>>(`/build-templates/${segment(id)}/versions/${version}`),
+      ),
+    publish: (id: string, expectedRevision: number) =>
+      unwrap(
+        api.post<ApiResponse<BuildTemplate>>(`/build-templates/${segment(id)}/publish`, {
+          expectedRevision,
+        }),
+      ),
     list: () => unwrap(api.get<ApiResponse<BuildTemplate[]>>('/build-templates')),
     usage: (id: string) =>
       unwrap(api.get<ApiResponse<TemplateUsageSummary>>(`/build-templates/${segment(id)}/usage`)),
@@ -296,6 +580,24 @@ export const deliveryApi = {
     delete: (id: string) => discard(api.delete(`/build-templates/${segment(id)}`)),
   },
   workflowTemplates: {
+    detail: (id: string) =>
+      unwrap(api.get<ApiResponse<WorkflowTemplate>>(`/workflow-templates/${segment(id)}`)),
+    versions: (id: string) =>
+      unwrap(
+        api.get<ApiResponse<WorkflowTemplate[]>>(`/workflow-templates/${segment(id)}/versions`),
+      ),
+    version: (id: string, version: number) =>
+      unwrap(
+        api.get<ApiResponse<WorkflowTemplate>>(
+          `/workflow-templates/${segment(id)}/versions/${version}`,
+        ),
+      ),
+    publish: (id: string, expectedRevision: number) =>
+      unwrap(
+        api.post<ApiResponse<WorkflowTemplate>>(`/workflow-templates/${segment(id)}/publish`, {
+          expectedRevision,
+        }),
+      ),
     list: () => unwrap(api.get<ApiResponse<WorkflowTemplate[]>>('/workflow-templates')),
     usage: (id: string) =>
       unwrap(
@@ -326,15 +628,10 @@ export const deliveryApi = {
           {},
         ),
       ),
-    bootstrapApplication: (id: string) =>
-      unwrap(
-        api.post<ApiResponse<BlueprintBootstrapResult>>(
-          `/delivery/blueprints/${segment(id)}/bootstrap-application`,
-          {},
-        ),
-      ),
   },
   builds: {
+    trigger: (payload: BuildTriggerRequest) =>
+      unwrap(api.post<ApiResponse<BuildRecord>>('/builds/trigger', payload)),
     list: (params: DeliveryListParams = {}) =>
       unwrap(api.get<ApiResponse<BuildRecord[]>>(applicationListPath('/builds', params))),
   },
@@ -360,6 +657,20 @@ export const deliveryApi = {
   releaseBoard: {
     list: () => unwrap(api.get<ApiResponse<ReleaseBoardEntry[]>>('/delivery/release-board')),
   },
+  executionHistory: {
+    list: (params: DeliveryExecutionHistoryParams = {}) =>
+      unwrap(
+        api.get<ApiResponse<DeliveryExecutionHistoryPage>>(
+          withQuery('/delivery/execution-history', params),
+        ),
+      ),
+  },
+  workflowCatalog: {
+    list: (params: WorkflowCatalogParams = {}) =>
+      unwrap(
+        api.get<ApiResponse<WorkflowCatalogPage>>(withQuery('/delivery/workflow-catalog', params)),
+      ),
+  },
   releaseBundles: {
     list: () => unwrap(api.get<ApiResponse<ReleaseBundle[]>>('/delivery/release-bundles')),
     artifacts: (id: string) =>
@@ -370,6 +681,21 @@ export const deliveryApi = {
       ),
   },
   executionTasks: {
+    rollout: (id: string) =>
+      unwrap(
+        api.get<ApiResponse<ProgressiveRolloutStatus>>(
+          `/delivery/execution-tasks/${segment(id)}/rollout`,
+        ),
+      ),
+    controlRollout: (id: string, input: ProgressiveRolloutControlInput) =>
+      unwrap(
+        api.post<ApiResponse<ProgressiveRolloutStatus>>(
+          `/delivery/execution-tasks/${segment(id)}/rollout`,
+          input,
+        ),
+      ),
+    get: (id: string) =>
+      unwrap(api.get<ApiResponse<ExecutionTask>>(`/delivery/execution-tasks/${segment(id)}`)),
     list: () => unwrap(api.get<ApiResponse<ExecutionTask[]>>('/delivery/execution-tasks')),
     logs: (id: string) =>
       unwrap(
@@ -423,18 +749,9 @@ export const deliveryApi = {
     readiness: (params: DeliveryGatewayReadinessParams) =>
       unwrap(api.get<ApiResponse<DeliveryGatewayManifest>>(gatewayReadinessPath(params))),
   },
-  drafts: {
-    create: (payload: DeliveryDraftInput) =>
-      unwrap(api.post<ApiResponse<DeliveryDraft>>('/delivery/drafts', payload)),
-    confirm: (id: string) =>
-      unwrap(
-        api.post<ApiResponse<DeliveryDraftConfirmResult>>(
-          `/delivery/drafts/${segment(id)}/confirm`,
-          {},
-        ),
-      ),
-  },
   plans: {
+    detail: (id: string) =>
+      unwrap(api.get<ApiResponse<DeliveryPlan>>(`/delivery/plans/${segment(id)}`)),
     create: (payload: DeliveryPlanRequest) =>
       unwrap(api.post<ApiResponse<DeliveryPlan>>('/delivery/plans', payload)),
     confirm: (id: string) =>

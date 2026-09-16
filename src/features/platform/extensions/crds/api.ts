@@ -74,12 +74,14 @@ export async function applyCustomResource(
 }
 
 export async function deleteCustomResource(target: CustomResourceTarget): Promise<void> {
-  await api.delete(
-    buildCustomResourceItemPath(
-      target.clusterId,
-      target.crd,
-      target.resourceName,
-      target.namespace,
-    ),
+  const path = buildCustomResourceItemPath(
+    target.clusterId,
+    target.crd,
+    target.resourceName,
+    target.namespace,
   )
+  const identity = target.expectedUid
+    ? `${path.includes('?') ? '&' : '?'}${new URLSearchParams({ expectedUid: target.expectedUid })}`
+    : ''
+  await api.delete(`${path}${identity}`)
 }

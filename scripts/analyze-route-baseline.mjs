@@ -3,6 +3,7 @@
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, posix, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { format, resolveConfig } from 'prettier'
 import ts from 'typescript'
 
 const VERSION = 3
@@ -339,7 +340,10 @@ try {
   if (options.writeBaseline) {
     writeFileSync(
       options.writeBaseline,
-      `${JSON.stringify({ ...analysis, generatedAt: new Date().toISOString() }, null, 2)}\n`,
+      await format(JSON.stringify({ ...analysis, generatedAt: new Date().toISOString() }), {
+        ...(await resolveConfig(defaultBaseline)),
+        filepath: options.writeBaseline,
+      }),
       'utf8',
     )
   }

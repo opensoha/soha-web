@@ -1,4 +1,5 @@
 export type RealtimeSessionKind = 'logs' | 'terminal'
+export type RealtimeSessionWorkbench = 'platform' | 'delivery'
 
 export interface RealtimeSessionInput {
   clusterId: string

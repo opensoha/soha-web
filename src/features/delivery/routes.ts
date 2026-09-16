@@ -3,6 +3,66 @@ import { defineRoutes } from '@/routes/definitions'
 export const deliveryRoutes = defineRoutes([
   {
     meta: {
+      id: 'delivery-workflows',
+      path: '/delivery/workflows',
+      title: '发布工作流',
+      description: '跨应用服务编排与发布',
+      icon: 'IconFlow',
+      group: 'delivery',
+      workbenchId: 'delivery',
+      requiresAuth: true,
+      tabbar: false,
+      navVisible: false,
+      permissionKey: 'delivery.workflows.view',
+      scopeMode: 'passive',
+      workspace: 'application',
+    },
+    shell: 'app',
+    load: async () => ({ default: (await import('./workflows/list-page')).DeliveryWorkflowsPage }),
+  },
+  {
+    meta: {
+      id: 'delivery-batches',
+      path: '/delivery/batches',
+      title: '交付记录',
+      description: '统一交付进度与历史',
+      icon: 'IconHistory',
+      group: 'delivery',
+      workbenchId: 'delivery',
+      requiresAuth: true,
+      tabbar: false,
+      navVisible: false,
+      permissionKey: 'delivery.workflows.view',
+      scopeMode: 'passive',
+      workspace: 'application',
+    },
+    shell: 'app',
+    load: async () => ({ default: (await import('./batches/list-page')).DeliveryBatchesPage }),
+  },
+  {
+    meta: {
+      id: 'delivery-batch-detail',
+      path: '/delivery/batches/:batchId',
+      title: '交付详情',
+      description: '目标阶段、计划、日志与产物',
+      icon: 'IconHistory',
+      group: 'delivery',
+      workbenchId: 'delivery',
+      requiresAuth: true,
+      tabbar: false,
+      navVisible: false,
+      parentId: 'execution-history',
+      permissionKey: 'delivery.workflows.view',
+      scopeMode: 'passive',
+      workspace: 'application',
+    },
+    shell: 'app',
+    load: async () => ({
+      default: (await import('./batches/detail-page')).DeliveryBatchDetailPage,
+    }),
+  },
+  {
+    meta: {
       id: 'delivery-manifest-library',
       path: '/delivery/manifests',
       title: '应用清单库',
@@ -186,6 +246,28 @@ export const deliveryRoutes = defineRoutes([
   },
   {
     meta: {
+      id: 'deployment-templates',
+      path: '/deployment-templates',
+      title: '部署模板',
+      description: '平台部署模板',
+      icon: 'IconCode',
+      group: 'delivery',
+      requiresAuth: true,
+      tabbar: true,
+      navVisible: true,
+      menuId: 'deployment-templates',
+      permissionKey: 'delivery.deployment-templates.view',
+      scopeMode: 'passive',
+      workspace: 'application',
+    },
+    shell: 'app',
+    load: async () => {
+      const module = await import('./deployment-templates/page')
+      return { default: module.DeploymentTemplatesPage }
+    },
+  },
+  {
+    meta: {
       id: 'build-templates',
       path: '/build-templates',
       title: '构建模板',
@@ -233,8 +315,8 @@ export const deliveryRoutes = defineRoutes([
     meta: {
       id: 'delivery-onboarding',
       path: '/delivery/onboarding',
-      title: '应用接入',
-      description: '新应用接入、模板消费、规范草稿与环境绑定入口',
+      title: '创建应用',
+      description: '旧接入地址转到应用创建入口',
       icon: 'IconCode',
       group: 'delivery',
       workbenchId: 'delivery',
@@ -247,8 +329,8 @@ export const deliveryRoutes = defineRoutes([
     },
     shell: 'app',
     load: async () => {
-      const module = await import('./workbench/onboarding-page')
-      return { default: module.DeliveryOnboardingPage }
+      const module = await import('./applications/legacy-redirect')
+      return { default: module.ApplicationCreateRedirect }
     },
   },
   {
@@ -418,23 +500,42 @@ export const deliveryRoutes = defineRoutes([
     meta: {
       id: 'release-board',
       path: '/release-board',
-      title: '构建发布',
-      description: '运行中的交付工作流与最近执行结果',
+      title: '工作流中心',
+      description: '管理工作流、配置构建发布步骤、查看最近执行',
       icon: 'IconSend',
       group: 'delivery',
       requiresAuth: true,
       tabbar: true,
       navVisible: true,
       menuId: 'release-board',
-      permissionKey: 'delivery.workflows.view',
+      permissionKeysAny: ['delivery.workflows.view', 'delivery.applications.view'],
       scopeMode: 'passive',
       workspace: 'application',
     },
     shell: 'app',
     load: async () => {
-      const module = await import('./release-board/page')
-      return { default: module.ReleaseBoardPage }
+      const module = await import('./release-board/workflow-catalog')
+      return { default: module.WorkflowCatalog }
     },
+  },
+  {
+    meta: {
+      id: 'execution-history',
+      path: '/execution-history',
+      title: '执行记录',
+      description: '工作流执行与构建历史',
+      icon: 'IconHistory',
+      group: 'delivery',
+      requiresAuth: true,
+      tabbar: true,
+      navVisible: true,
+      menuId: 'execution-history',
+      permissionKeysAny: ['delivery.workflows.view', 'delivery.applications.view'],
+      scopeMode: 'passive',
+      workspace: 'application',
+    },
+    shell: 'app',
+    load: async () => ({ default: (await import('./release-board/page')).ExecutionHistoryPage }),
   },
   {
     meta: {
@@ -447,7 +548,7 @@ export const deliveryRoutes = defineRoutes([
       requiresAuth: true,
       tabbar: false,
       navVisible: false,
-      parentId: 'release-board',
+      parentId: 'execution-history',
       permissionKey: 'delivery.workflows.view',
       scopeMode: 'passive',
       workspace: 'application',
@@ -513,7 +614,7 @@ export const deliveryRoutes = defineRoutes([
       requiresAuth: true,
       tabbar: false,
       navVisible: false,
-      parentId: 'applications',
+      parentId: 'execution-history',
       permissionKey: 'delivery.applications.view',
       scopeMode: 'passive',
       workspace: 'application',

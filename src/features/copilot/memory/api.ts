@@ -3,6 +3,8 @@ import type { ApiResponse } from '@/types'
 import type { CreateMemoryPolicyInput, MemoryPolicy, MemoryRecord } from './types'
 export const memoryApi = {
   records: {
+    put: (input: { record: MemoryRecord; policyId: string; policyVersion: string }) =>
+      api.post<ApiResponse<MemoryRecord>>('/ai/memory', input),
     list: () => api.get<ApiResponse<MemoryRecord[]>>('/ai/memory'),
     delete: (id: string) => api.delete<void>(`/ai/memory/${encodeURIComponent(id)}`),
   },

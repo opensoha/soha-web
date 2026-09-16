@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react'
 import type { RouteMeta } from '@/types'
 
-export type AppRouteShell = 'public' | 'portal' | 'app'
+export type AppRouteShell = 'public' | 'portal' | 'app' | 'focus'
 
 export interface AppRouteModule {
   default: ComponentType

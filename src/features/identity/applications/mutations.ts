@@ -1,7 +1,9 @@
 import { mutationOptions, type QueryClient } from '@tanstack/react-query'
 import { providerPortalKeys } from '@/features/provider-portal'
+import { identityProviderKeys } from '@/features/identity/providers'
 import {
   createIdentityApplication,
+  onboardIdentityApplication,
   deleteIdentityApplication,
   updateIdentityApplication,
 } from './api'
@@ -15,6 +17,16 @@ async function invalidateApplicationCaches(queryClient: QueryClient) {
 }
 
 export const identityApplicationMutations = {
+  onboard: (queryClient: QueryClient) =>
+    mutationOptions({
+      mutationKey: identityApplicationMutationKeys.onboard,
+      mutationFn: onboardIdentityApplication,
+      gcTime: 0,
+      onSuccess: async () => {
+        await invalidateApplicationCaches(queryClient)
+        await queryClient.invalidateQueries({ queryKey: identityProviderKeys.all })
+      },
+    }),
   create: (queryClient: QueryClient) =>
     mutationOptions({
       mutationKey: identityApplicationMutationKeys.create,

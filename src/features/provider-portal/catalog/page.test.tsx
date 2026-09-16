@@ -61,6 +61,7 @@ const permissionMocks = vi.hoisted(() => ({
     ],
   },
 }))
+const defaultPermissionSnapshot = structuredClone(permissionMocks.snapshot)
 
 vi.mock('@/services/api-client', () => ({ api: apiMocks }))
 vi.mock('@/features/announcements', () => ({
@@ -170,14 +171,7 @@ beforeEach(() => {
       tags: [],
     },
   })
-  permissionMocks.snapshot.permissionKeys = [
-    'identity.applications.view',
-    'identity.portal.view',
-    'observe.monitoring.view',
-    'workbench.home.view',
-    'workbench.monitoring.view',
-    'workspace.resource.view',
-  ]
+  Object.assign(permissionMocks.snapshot, structuredClone(defaultPermissionSnapshot))
   usePreferencesStore.setState({ localeCode: 'en_US' })
   apiMocks.get.mockResolvedValue({ data: bootstrap })
   announcementMocks.useAnnouncementInbox.mockReturnValue({
@@ -226,6 +220,16 @@ async function renderPage() {
   return container
 }
 
+async function openApplicationMenu(container: HTMLElement, name = application.name) {
+  const button = container.querySelector<HTMLButtonElement>(`button[aria-label="Actions ${name}"]`)
+  expect(button).not.toBeNull()
+  await act(async () => button?.click())
+  await flushAsyncWork()
+  const menu = document.querySelector('.ant-dropdown:not(.ant-dropdown-hidden) [role="menu"]')!
+  expect(menu).not.toBeNull()
+  return menu
+}
+
 describe('Provider Portal catalog page', () => {
   it('renders the application workspace without legacy portal chrome', async () => {
     const container = await renderPage()
@@ -233,7 +237,11 @@ describe('Provider Portal catalog page', () => {
     expect(apiMocks.get).toHaveBeenCalledWith('/portal/bootstrap')
     expect(announcementMocks.useAnnouncementInbox).toHaveBeenCalledWith(10, true)
     expect(container.textContent).toContain('Operations Console')
-    expect(container.textContent).toContain('Available')
+    const cards = container.querySelector('.soha-portal-app-grid')
+    expect(cards?.textContent).not.toContain('Available')
+    expect(cards?.textContent).not.toContain('Link')
+    expect(cards?.querySelector('.soha-portal-app-tags')).toBeNull()
+    expect(cards?.textContent).toContain('Featured')
     expect(container.querySelector('.soha-portal-header')).toBeNull()
     expect(container.querySelector('.soha-portal-shortcuts')).toBeNull()
     expect(container.querySelector('.soha-portal-toolbar')).toBeNull()
@@ -257,11 +265,11 @@ describe('Provider Portal catalog page', () => {
         .querySelector('.soha-portal-principal .soha-portal-user-avatar')
         ?.getAttribute('style'),
     ).toContain('--soha-avatar-fit: contain')
-    expect(container.querySelectorAll('.soha-portal-side-panel')).toHaveLength(3)
+    expect(container.querySelectorAll('.soha-portal-side-panel')).toHaveLength(2)
     expect(container.querySelector('button[aria-label="Collapse sidebar"]')).not.toBeNull()
   })
 
-  it('renders accessible workbench links between the user and recent side panels', async () => {
+  it('renders accessible workbench links below the user panel', async () => {
     const container = await renderPage()
 
     await vi.waitFor(() => {
@@ -274,11 +282,73 @@ describe('Provider Portal catalog page', () => {
     )
 
     expect(workbenches).not.toBeNull()
-    expect(sidePanels).toHaveLength(3)
+    expect(container.querySelector('.soha-portal-recent-list')).toBeNull()
+    expect(container.textContent).not.toContain('No recent launches')
+    expect(sidePanels).toHaveLength(2)
     expect(sidePanels[1]).toBe(workbenches)
     expect(observabilityLink?.getAttribute('href')).toBe('/monitoring-workbench/overview')
     expect(container.textContent).not.toContain('Settings Center')
   })
+
+  it('uses the admin workbench order instead of individual menu sort orders', async () => {
+    permissionMocks.snapshot.permissionKeys.push(
+      'workbench.compute.view',
+      'workbench.settings.view',
+      'settings.identity.view',
+    )
+    permissionMocks.snapshot.visibleMenus.push(
+      {
+        id: 'settings',
+        path: '/settings',
+        labelEn: 'Settings Center',
+        labelZh: '设置中心',
+        iconKey: 'settings',
+        sortOrder: 1,
+      },
+      {
+        id: 'compute-workbench',
+        path: '/compute',
+        labelEn: 'Compute Resources',
+        labelZh: '计算资源工作台',
+        iconKey: 'server',
+        sortOrder: 2,
+      },
+      {
+        id: 'identity',
+        path: '/internal-workbench',
+        labelEn: 'Internal Workbench',
+        labelZh: '内网工作台',
+        iconKey: 'shield',
+        sortOrder: 3,
+      },
+    )
+    permissionMocks.snapshot.visibleMenuIds = permissionMocks.snapshot.visibleMenus.map(
+      (menu) => menu.id,
+    )
+    const container = await renderPage()
+
+    expect(
+      [...container.querySelectorAll('.soha-portal-workbench-link')].map((link) => ({
+        label: link.textContent,
+        path: link.getAttribute('href'),
+      })),
+    ).toEqual([
+      { label: 'Observability Workbench', path: '/monitoring-workbench/overview' },
+      { label: 'Compute Resources', path: '/compute/overview' },
+      { label: 'Settings Center', path: '/settings/overview' },
+    ])
+  })
+
+  it.each(['workbench.monitoring.view', 'observe.monitoring.view'])(
+    'hides the workbench panel without %s despite a visible menu',
+    async (permission) => {
+      permissionMocks.snapshot.permissionKeys = permissionMocks.snapshot.permissionKeys.filter(
+        (key) => key !== permission,
+      )
+      const container = await renderPage()
+      expect(container.querySelector('.soha-portal-workbenches')).toBeNull()
+    },
+  )
 
   it('renders autoplay announcements and a horizontally collapsible sidebar', async () => {
     const intervalSpy = vi.spyOn(window, 'setInterval')
@@ -341,7 +411,7 @@ describe('Provider Portal catalog page', () => {
       'is-side-collapsed',
     )
     expect(container.querySelector('.soha-portal-side')).not.toBeNull()
-    expect(container.querySelectorAll('.soha-portal-side-panel')).toHaveLength(3)
+    expect(container.querySelectorAll('.soha-portal-side-panel')).toHaveLength(2)
   })
 
   it('switches application card density and filters by tag', async () => {
@@ -354,14 +424,8 @@ describe('Provider Portal catalog page', () => {
     await act(async () => densityButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     expect(container.querySelector('.soha-portal-app-grid')?.className).toContain('is-small')
     expect(container.querySelectorAll('.soha-portal-app-card.is-small')).toHaveLength(2)
-    expect(
-      container.querySelectorAll('.soha-portal-app-card.is-small .soha-portal-app-compact-body'),
-    ).toHaveLength(0)
-    expect(
-      container.querySelectorAll(
-        '.soha-portal-app-card.is-small .ant-card-extra button[aria-label^="Open "]',
-      ),
-    ).toHaveLength(0)
+    expect(container.querySelector('.soha-portal-app-description')).toBeNull()
+    expect(container.querySelectorAll('.soha-portal-app-launch')).toHaveLength(2)
     await act(async () => densityButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     expect(container.querySelector('.soha-portal-app-grid')?.className).toContain('is-medium')
     expect(container.querySelector('.soha-portal-app-grid')?.className).not.toContain('is-large')
@@ -376,6 +440,86 @@ describe('Provider Portal catalog page', () => {
     expect(visibleCards).toHaveLength(1)
     expect(visibleCards[0]?.textContent).toContain('Build Dashboard')
     expect(visibleCards[0]?.textContent).not.toContain('Operations Console')
+  })
+
+  it('filters favorites and refreshes the empty state after unfavoriting', async () => {
+    const container = await renderPage()
+    const selectGroup = async (label: string) => {
+      const item = [...container.querySelectorAll('.soha-portal-group-menu .ant-menu-item')].find(
+        (entry) => entry.textContent?.trim() === label,
+      )
+      expect(item).toBeDefined()
+      await act(async () => item?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    }
+    await selectGroup('internal')
+    await selectGroup('Favorites')
+    expect(container.querySelectorAll('.soha-portal-app-card')).toHaveLength(1)
+    expect(container.querySelector('.soha-portal-app-grid')?.textContent).toContain(
+      'Operations Console',
+    )
+    expect(container.querySelector('.ant-menu-item-selected')?.textContent).toContain('Favorites')
+
+    apiMocks.delete.mockResolvedValue({ data: {} })
+    apiMocks.get.mockResolvedValue({
+      data: {
+        ...bootstrap,
+        applications: [{ ...application, favorite: false }, secondaryApplication],
+        favorites: [],
+      },
+    })
+    const menu = await openApplicationMenu(container)
+    const unfavorite = [...menu.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (item) => item.textContent?.trim() === 'Unfavorite',
+    )
+    expect(unfavorite).toBeDefined()
+    expect(menu.textContent).toContain('Details')
+    expect(apiMocks.post).not.toHaveBeenCalled()
+    await act(async () => unfavorite?.click())
+    await vi.waitFor(async () => {
+      await flushAsyncWork()
+      expect(container.querySelectorAll('.soha-portal-app-card')).toHaveLength(0)
+    })
+    expect(apiMocks.delete).toHaveBeenCalledWith('/portal/applications/app-1/favorite')
+    expect(container.textContent).toContain('No favorite applications')
+    expect(apiMocks.post).not.toHaveBeenCalled()
+
+    await selectGroup('All')
+    expect(container.querySelectorAll('.soha-portal-app-card')).toHaveLength(2)
+  })
+
+  it('searches within favorites and keeps unavailable status visible', async () => {
+    apiMocks.get.mockResolvedValue({
+      data: {
+        ...bootstrap,
+        applications: [{ ...application, status: 'maintenance' }, secondaryApplication],
+      },
+    })
+    const container = await renderPage()
+    const favorites = [
+      ...container.querySelectorAll('.soha-portal-group-menu .ant-menu-item'),
+    ].find((item) => item.textContent?.trim() === 'Favorites')
+    await act(async () => favorites?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(container.querySelector('.soha-portal-app-grid')?.textContent).toContain('Maintenance')
+    expect(container.querySelector<HTMLButtonElement>('.soha-portal-app-launch')?.disabled).toBe(
+      true,
+    )
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('.soha-portal-app-launch')?.click(),
+    )
+    expect(apiMocks.post).not.toHaveBeenCalled()
+
+    const input = container.querySelector<HTMLInputElement>(
+      '.soha-portal-app-search input, input.soha-portal-app-search',
+    )!
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+        input,
+        'Build',
+      )
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(container.querySelectorAll('.soha-portal-app-card')).toHaveLength(0)
+    expect(container.textContent).toContain('No matching applications')
   })
 
   it('restores portal layout preferences for the same user without sharing them', async () => {
@@ -492,14 +636,25 @@ describe('Provider Portal catalog page', () => {
     )
 
     expect(apiMocks.post).toHaveBeenCalledWith('/portal/applications/app-1/launch')
+    await flushAsyncWork()
+    expect(container.querySelector('.soha-portal-app-launch')?.getAttribute('aria-busy')).toBe(
+      'true',
+    )
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('.soha-portal-app-launch')?.click(),
+    )
+    expect(apiMocks.post).toHaveBeenCalledTimes(1)
   })
 
   it('hides application details without the identity application permission', async () => {
     permissionMocks.snapshot.permissionKeys = []
     const container = await renderPage()
 
-    expect(container.textContent).not.toContain('Details')
-    expect(container.querySelectorAll('.soha-portal-app-actions button')).toHaveLength(2)
+    const menu = await openApplicationMenu(container)
+    expect(menu.textContent).not.toContain('Details')
+    expect(menu.textContent).toContain('Unfavorite')
+    expect(container.querySelectorAll('.soha-portal-app-launch')).toHaveLength(2)
+    expect(apiMocks.post).not.toHaveBeenCalled()
   })
 
   it('renders the portal home from the global Chinese dictionary', async () => {

@@ -29,7 +29,7 @@ describe('ResourceMetricsPanel', () => {
 
   afterEach(() => document.body.replaceChildren())
 
-  it('shows the backend reason instead of generic empty cards in compact mode', async () => {
+  it('distinguishes unconfigured monitoring from an empty query result', async () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
     const root = createRoot(container)
@@ -56,7 +56,10 @@ describe('ResourceMetricsPanel', () => {
       )
     })
 
-    expect(container.textContent).toContain('prometheus is not configured')
+    expect(container.textContent).toContain('尚未接入监控')
+    expect(container.textContent).toContain('平台管理员')
+    expect(container.textContent).not.toContain('当前筛选条件')
+    expect(container.querySelector('.is-not-configured')).not.toBeNull()
     expect(container.querySelectorAll('.soha-management-state')).toHaveLength(1)
     await act(async () => root.unmount())
   })

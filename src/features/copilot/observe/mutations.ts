@@ -1,3 +1,4 @@
+import type { CapabilityPlan } from '@opensoha/contracts/gen/ts/sohaapi'
 import { mutationOptions } from '@tanstack/react-query'
 import { observeApi } from './api'
 import { observeMutationKeys } from './keys'
@@ -19,15 +20,39 @@ const AUTOMATION_ANALYSIS_KINDS = new Set([
 
 export function inspectionTaskPayload(values: InspectionTaskFormValues) {
   const analysisProfileId = String(values.analysisProfileId ?? '').trim()
+  const metadata = { ...values.metadata }
+  delete metadata.analysisProfileId
+  if (analysisProfileId) metadata.analysisProfileId = analysisProfileId
+  const capability = values.mode === 'capability'
+  const capabilityPlan = capability
+    ? (JSON.parse(values.planJSON || '{}') as CapabilityPlan)
+    : undefined
   return {
+    ...(values.id ? { id: values.id } : {}),
+    ...(values.expectedRevision ? { expectedRevision: values.expectedRevision } : {}),
+    ...(capability
+      ? {
+          capabilityPlan,
+          aiClientId: values.aiClientId || undefined,
+          skillId: values.skillId || undefined,
+          trigger:
+            values.triggerKind === 'alert'
+              ? {
+                  kind: 'alert' as const,
+                  alertRuleId: values.alertRuleId,
+                  maxEventAgeSeconds: values.maxEventAgeSeconds || 3600,
+                }
+              : { kind: 'schedule' as const },
+        }
+      : {}),
     title: String(values.title ?? '').trim(),
     scopeType: String(values.scopeType || 'platform'),
     clusterId: String(values.clusterId ?? '').trim(),
     namespace: String(values.namespace ?? '').trim(),
-    checks: Array.isArray(values.checks) ? values.checks : [],
+    checks: capability ? [] : Array.isArray(values.checks) ? values.checks : [],
     enabled: Boolean(values.enabled),
-    intervalMinutes: Math.max(Number(values.intervalMinutes || 30), 5),
-    metadata: analysisProfileId ? { analysisProfileId } : {},
+    intervalMinutes: Math.max(Number(values.intervalMinutes || 30), capability ? 1 : 5),
+    metadata,
   }
 }
 

@@ -23,6 +23,7 @@ import {
   EditOutlined,
   PlusOutlined,
   ThunderboltOutlined,
+  ClusterOutlined,
 } from '@ant-design/icons'
 import { formatDateTime } from '@/utils/time'
 import { computeQueries, latestTaskForResource, ResourceTaskActions } from '@/features/compute'
@@ -57,6 +58,7 @@ import {
 } from '@/features/virtualization/virtualization-model'
 import type { EnabledFilter, ProviderFilter } from '@/features/virtualization/virtualization-model'
 import { VirtualizationConnectionStepModal } from './create-page'
+import { WorkerPoolsDrawer } from './worker-pools'
 import '@/features/virtualization/virtualization-workbench.css'
 import type {
   VirtualizationCluster,
@@ -164,6 +166,9 @@ function ConnectionDeletePreview({
 
 export function VirtualizationClustersPage() {
   const navigate = useNavigate()
+  const [workerPoolConnection, setWorkerPoolConnection] = useState<VirtualizationCluster | null>(
+    null,
+  )
   const [editing, setEditing] = useState<VirtualizationCluster | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
   const [showOnlyAbnormal, setShowOnlyAbnormal] = useState(false)
@@ -185,6 +190,7 @@ export function VirtualizationClustersPage() {
     canTestClusters,
     canSyncClusters,
     canViewTasks,
+    canViewWorkerPools,
   } = useVirtualizationPermissions()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
@@ -351,6 +357,15 @@ export function VirtualizationClustersPage() {
       width: 168,
       render: (_value, record) => (
         <Space className="soha-row-action-icons">
+          {canViewWorkerPools && record.provider === 'pve' ? (
+            <ManagementIconButton
+              size="small"
+              aria-label={localeText(localeCode, '节点池', 'Worker pools')}
+              tooltip={localeText(localeCode, '节点池', 'Worker pools')}
+              icon={<ClusterOutlined />}
+              onClick={() => setWorkerPoolConnection(record)}
+            />
+          ) : null}
           {canTestClusters ? (
             <ManagementIconButton
               aria-label={localeText(localeCode, '测试连接', 'Test connection')}
@@ -403,6 +418,13 @@ export function VirtualizationClustersPage() {
 
   return (
     <div className="soha-page soha-virtualization-page">
+      {workerPoolConnection && (
+        <WorkerPoolsDrawer
+          key={workerPoolConnection.id}
+          connection={workerPoolConnection}
+          onClose={() => setWorkerPoolConnection(null)}
+        />
+      )}
       <div className="soha-vrt-query">
         <ManagementQueryPanel
           collapsible

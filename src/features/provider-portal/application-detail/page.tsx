@@ -21,6 +21,7 @@ import {
 } from 'antd'
 import { useNavigate, useParams } from 'react-router-dom'
 import type { IdentityApplication } from '@/features/identity'
+import { useI18n } from '@/i18n'
 import { providerPortalMutations } from '../mutations'
 import { providerPortalQueries } from '../queries'
 import {
@@ -35,6 +36,7 @@ import '../provider-portal-pages.css'
 const { Paragraph, Text, Title } = Typography
 
 export function PortalApplicationDetailPage() {
+  const { t, localeCode } = useI18n()
   const navigate = useNavigate()
   const { applicationId = '' } = useParams()
   const { message } = App.useApp()
@@ -48,7 +50,12 @@ export function PortalApplicationDetailPage() {
     launchMutation.mutate(application, {
       onSuccess: (decision) => {
         if (!decision.launchUrl) {
-          message.warning('Application launch URL is not configured')
+          message.warning(
+            t(
+              'providerPortal.home.launchUrlNotConfigured',
+              'Application launch URL is not configured',
+            ),
+          )
           return
         }
         window.location.assign(decision.launchUrl)
@@ -60,9 +67,19 @@ export function PortalApplicationDetailPage() {
   const status = application
     ? (portalStatusLabels[application.status] ?? portalStatusLabels.draft)
     : portalStatusLabels.draft
+  const statusLabel = t(
+    `providerPortal.application.status.${application?.status ?? 'draft'}`,
+    status.label,
+  )
   const providerLabel = application
-    ? (portalProviderLabels[application.providerType] ?? application.providerType)
+    ? t(
+        `providerPortal.application.provider.${application.providerType}`,
+        portalProviderLabels[application.providerType] ?? application.providerType,
+      )
     : '-'
+  const favoriteLabel = application?.favorite
+    ? t('providerPortal.home.unfavorite', 'Unfavorite')
+    : t('providerPortal.home.favorite', 'Favorite')
   const metadataEntries = Object.entries(application?.metadata ?? {}).slice(0, 8)
 
   if (applicationQuery.isLoading) {
@@ -79,15 +96,18 @@ export function PortalApplicationDetailPage() {
         <main className="soha-portal-main">
           <Result
             status="403"
-            title="Application not available"
-            subTitle="The application is disabled, hidden, or not assigned to your identity."
+            title={t('providerPortal.detail.unavailable', 'Application not available')}
+            subTitle={t(
+              'providerPortal.detail.unavailableDescription',
+              'The application is disabled, hidden, or not assigned to your identity.',
+            )}
             extra={
               <Button
                 icon={<ArrowLeftOutlined />}
                 type="primary"
                 onClick={() => navigate('/portal')}
               >
-                Back to Portal
+                {t('providerPortal.detail.backToPortal', 'Back to Portal')}
               </Button>
             }
           />
@@ -107,15 +127,18 @@ export function PortalApplicationDetailPage() {
         </div>
         <Space wrap>
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/portal')}>
-            Portal
+            {t('providerPortal.detail.backToPortal', 'Back to Portal')}
           </Button>
-          <Tooltip title={application.favorite ? '取消收藏' : '收藏'}>
+          <Tooltip title={favoriteLabel}>
             <Button
               icon={application.favorite ? <StarFilled /> : <StarOutlined />}
               loading={favoriteMutation.isPending}
+              aria-label={favoriteLabel}
               onClick={() => favoriteMutation.mutate(application)}
             >
-              {application.favorite ? 'Favorited' : 'Favorite'}
+              {application.favorite
+                ? t('providerPortal.detail.favorited', 'Favorited')
+                : favoriteLabel}
             </Button>
           </Tooltip>
           <Button
@@ -125,7 +148,7 @@ export function PortalApplicationDetailPage() {
             type="primary"
             onClick={() => launchApplication(application)}
           >
-            Open
+            {t('providerPortal.home.open', 'Open')}
           </Button>
         </Space>
       </header>
@@ -136,15 +159,18 @@ export function PortalApplicationDetailPage() {
             <section className="soha-portal-side-panel">
               <div className="soha-portal-detail-heading">
                 <div>
-                  <Title level={4}>Application</Title>
+                  <Title level={4}>{t('providerPortal.detail.application', 'Application')}</Title>
                   <Paragraph type="secondary">
-                    {application.description || 'No description'}
+                    {application.description ||
+                      t('providerPortal.home.noDescription', 'No description')}
                   </Paragraph>
                 </div>
                 <Space size={[4, 4]} wrap>
-                  <Tag color={status.color}>{status.label}</Tag>
+                  <Tag color={status.color}>{statusLabel}</Tag>
                   <Tag>{providerLabel}</Tag>
-                  {application.featured ? <Tag color="blue">Featured</Tag> : null}
+                  {application.featured ? (
+                    <Tag color="blue">{t('providerPortal.home.featured', 'Featured')}</Tag>
+                  ) : null}
                 </Space>
               </div>
               <Descriptions
@@ -152,28 +178,36 @@ export function PortalApplicationDetailPage() {
                 column={{ xs: 1, sm: 1, md: 2 }}
                 size="small"
                 items={[
-                  { key: 'slug', label: 'Slug', children: application.slug },
-                  { key: 'providerType', label: 'Provider type', children: providerLabel },
+                  {
+                    key: 'slug',
+                    label: t('providerPortal.detail.slug', 'Slug'),
+                    children: application.slug,
+                  },
+                  {
+                    key: 'providerType',
+                    label: t('identity.applications.providerType', 'Provider type'),
+                    children: providerLabel,
+                  },
                   {
                     key: 'providerId',
-                    label: 'Provider ID',
+                    label: t('identity.applications.providerId', 'Provider ID'),
                     children: application.providerId || '-',
                   },
-                  { key: 'status', label: 'Status', children: status.label },
+                  { key: 'status', label: t('common.status', 'Status'), children: statusLabel },
                   {
                     key: 'lastLaunchedAt',
-                    label: 'Last launch',
-                    children: formatPortalDateTime(application.lastLaunchedAt),
+                    label: t('providerPortal.detail.lastLaunch', 'Last launch'),
+                    children: formatPortalDateTime(application.lastLaunchedAt, localeCode),
                   },
                   {
                     key: 'createdAt',
-                    label: 'Created',
-                    children: formatPortalDateTime(application.createdAt),
+                    label: t('common.createdAt', 'Created At'),
+                    children: formatPortalDateTime(application.createdAt, localeCode),
                   },
                   {
                     key: 'updatedAt',
-                    label: 'Updated',
-                    children: formatPortalDateTime(application.updatedAt),
+                    label: t('common.updatedAt', 'Updated At'),
+                    children: formatPortalDateTime(application.updatedAt, localeCode),
                   },
                 ]}
               />
@@ -182,14 +216,21 @@ export function PortalApplicationDetailPage() {
             <section className="soha-portal-side-panel">
               <div className="soha-portal-side-title">
                 <LinkOutlined />
-                <span>Launch target</span>
+                <span>{t('identity.applications.launchUrl', 'Launch URL')}</span>
               </div>
               {application.launchUrl ? (
                 <Text className="soha-portal-url" copyable>
                   {application.launchUrl}
                 </Text>
               ) : (
-                <Alert showIcon type="warning" title="Launch URL is not configured" />
+                <Alert
+                  showIcon
+                  type="warning"
+                  title={t(
+                    'providerPortal.home.launchUrlNotConfigured',
+                    'Application launch URL is not configured',
+                  )}
+                />
               )}
             </section>
           </div>
@@ -198,7 +239,7 @@ export function PortalApplicationDetailPage() {
             <section className="soha-portal-side-panel">
               <div className="soha-portal-side-title">
                 <InfoCircleOutlined />
-                <span>Tags</span>
+                <span>{t('providerPortal.home.tags', 'Tags')}</span>
               </div>
               <div className="soha-portal-app-tags">
                 <PortalTagsOrEmpty values={application.tags} />
@@ -208,7 +249,7 @@ export function PortalApplicationDetailPage() {
             <section className="soha-portal-side-panel">
               <div className="soha-portal-side-title">
                 <KeyOutlined />
-                <span>Metadata</span>
+                <span>{t('providerPortal.detail.metadata', 'Metadata')}</span>
               </div>
               {metadataEntries.length ? (
                 <div className="soha-portal-metadata-list">
@@ -220,7 +261,7 @@ export function PortalApplicationDetailPage() {
                   ))}
                 </div>
               ) : (
-                <Text type="secondary">No metadata</Text>
+                <Text type="secondary">{t('providerPortal.detail.noMetadata', 'No metadata')}</Text>
               )}
             </section>
           </aside>

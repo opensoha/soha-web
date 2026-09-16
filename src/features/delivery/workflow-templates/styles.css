@@ -35,9 +35,22 @@
 }
 
 .soha-workflow-template-json-panel {
-  max-height: 220px;
+  max-height: 65vh;
   margin: 0 0 8px;
   overflow: auto;
+}
+
+.soha-workflow-template-browser {
+  width: 100%;
+  min-width: 0;
+  overflow: auto;
+}
+
+.soha-workflow-template-node-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 12px;
+  width: 100%;
 }
 
 .soha-workflow-template-settings-form {

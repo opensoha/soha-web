@@ -1,7 +1,12 @@
+import { lazy, Suspense } from 'react'
 import { Route, Routes } from 'react-router-dom'
+import { Spin } from 'antd'
 import { AuthGuard } from '@/features/auth/auth-guard'
-import { AppLayout } from '@/layouts/app-layout'
 import { renderRegisteredRoutes } from './router'
+
+const AppLayout = lazy(() =>
+  import('@/layouts/app-layout').then((module) => ({ default: module.AppLayout })),
+)
 
 export function AppRouter() {
   return (
@@ -9,7 +14,16 @@ export function AppRouter() {
       {renderRegisteredRoutes('public')}
       <Route element={<AuthGuard />}>
         {renderRegisteredRoutes('portal')}
-        <Route element={<AppLayout />}>{renderRegisteredRoutes('app')}</Route>
+        {renderRegisteredRoutes('focus')}
+        <Route
+          element={
+            <Suspense fallback={<Spin size="large" fullscreen />}>
+              <AppLayout />
+            </Suspense>
+          }
+        >
+          {renderRegisteredRoutes('app')}
+        </Route>
       </Route>
     </Routes>
   )

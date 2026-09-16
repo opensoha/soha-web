@@ -1,15 +1,8 @@
-import type { IdentityProvider } from './types'
+import { stringify } from 'yaml'
+import type { IdentityProvider, IdentityProviderSetup } from './types'
+import { proxyHeaderNamesFor } from './provider-form-model.ts'
 
-export type ProxySetupTarget =
-  | 'nginx-ingress'
-  | 'nginx-proxy-manager'
-  | 'nginx-standalone'
-  | 'traefik-ingress'
-  | 'traefik-compose'
-  | 'traefik-standalone'
-  | 'caddy-standalone'
-
-export const proxySetupTargets: ProxySetupTarget[] = [
+export const proxySetupTargets = [
   'nginx-ingress',
   'nginx-proxy-manager',
   'nginx-standalone',
@@ -17,161 +10,266 @@ export const proxySetupTargets: ProxySetupTarget[] = [
   'traefik-compose',
   'traefik-standalone',
   'caddy-standalone',
-]
-
-function configString(provider: IdentityProvider, key: string) {
-  const value = provider.config?.[key]
-  return typeof value === 'string' ? value.trim() : ''
-}
-
-function externalHost(provider: IdentityProvider) {
-  const value = provider.config?.externalHosts
-  if (Array.isArray(value)) {
-    const first = value.find((item) => typeof item === 'string' && item.trim())
-    if (typeof first === 'string') return first.trim()
-  }
-  return 'app.example.com'
-}
+] as const
+export type ProxySetupTarget = (typeof proxySetupTargets)[number]
+const tokenPlaceholder = 'REPLACE_WITH_AGENT_HTTP_TOKEN'
 
 export interface ProxySetupContext {
   authURL: string
+  loginURL: string
   host: string
-  providerID: string
-  reverseProxyURL: string
   upstreamURL: string
+  requiresOutpostToken: boolean
+  identityHeaders: string[]
 }
 
 export function proxySetupContext(
   provider: IdentityProvider,
-  apiOrigin: string,
-): ProxySetupContext {
-  const origin = apiOrigin.replace(/\/$/, '')
+  setup: IdentityProviderSetup,
+): ProxySetupContext | undefined {
+  if (
+    setup.providerId !== provider.id ||
+    setup.configurationStatus !== 'complete' ||
+    !setup.endpoints.forwardAuthUrl ||
+    !setup.endpoints.loginUrl
+  )
+    return undefined
+  const hosts = provider.config?.externalHosts
+  const host = Array.isArray(hosts) ? hosts.find((value) => typeof value === 'string') : undefined
+  if (typeof host !== 'string' || !/^[a-zA-Z0-9.*:_-]+$/.test(host)) return undefined
+  const upstream = provider.config?.upstreamUrl
+  const identityHeaders = proxyHeaderNamesFor(provider)
+  if (identityHeaders.some((header) => !/^[a-zA-Z0-9_-]+$/.test(header))) return undefined
   return {
-    authURL: `${origin}/api/v1/provider/proxy/auth?provider_id=${encodeURIComponent(provider.id)}`,
-    host: externalHost(provider),
-    providerID: provider.id,
-    reverseProxyURL: `${origin}/api/v1/provider/proxy/reverse/${encodeURIComponent(provider.id)}`,
-    upstreamURL: configString(provider, 'upstreamUrl') || 'http://upstream:8080',
+    identityHeaders,
+    authURL: setup.endpoints.forwardAuthUrl,
+    loginURL: setup.endpoints.loginUrl,
+    host,
+    upstreamURL: typeof upstream === 'string' && upstream ? upstream : 'http://upstream:8080',
+    requiresOutpostToken: setup.requiresOutpostToken,
   }
 }
 
+function authURL(context: ProxySetupContext, nginx: boolean) {
+  const url = new URL(context.authURL)
+  if (nginx && context.requiresOutpostToken) url.searchParams.set('mode', 'nginx')
+  if (!nginx && !context.requiresOutpostToken) url.searchParams.set('redirect', 'true')
+  return url.toString()
+}
+function nginxQuote(value: string) {
+  return JSON.stringify(value).replace(/\$/g, '\\$')
+}
+function nginxLocations(context: ProxySetupContext) {
+  const identity = context.identityHeaders
+    .map(
+      (
+        header,
+        index,
+      ) => `    auth_request_set $soha_identity_${index} $upstream_http_${header.toLowerCase().replace(/-/g, '_')};
+    proxy_set_header ${header} $soha_identity_${index};`,
+    )
+    .join('\n')
+  return `  location / {
+    auth_request /_soha_auth;
+    auth_request_set $soha_login $upstream_http_x_soha_login_url;
+    error_page 401 = @soha_signin;
+${identity}
+    proxy_set_header X-Soha-Outpost-Token "";
+    proxy_set_header X-Soha-Session-Token "";
+    proxy_set_header Host $host;
+    proxy_pass ${nginxQuote(context.upstreamURL)};
+  }
+  location = /_soha_auth {
+    internal;
+    proxy_pass ${nginxQuote(authURL(context, true))};
+    proxy_pass_request_body off;
+    proxy_set_header Content-Length "";
+    proxy_set_header Cookie $http_cookie;
+    proxy_set_header X-Forwarded-Host $http_host;
+    proxy_set_header X-Forwarded-Uri $request_uri;
+    proxy_set_header X-Original-URL $scheme://$http_host$request_uri;
+    proxy_set_header X-Forwarded-Method $request_method;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Soha-Session-Token "";
+    proxy_set_header X-Soha-Outpost-Token ${context.requiresOutpostToken ? nginxQuote(tokenPlaceholder) : '""'};
+  }
+  location @soha_signin {
+    return 302 $soha_login;
+  }`
+}
+function traefikHeaders(context: ProxySetupContext) {
+  return Object.fromEntries([
+    ...context.identityHeaders.map((header) => [header, '']),
+    ['X-Soha-Session-Token', ''],
+    ['X-Soha-Outpost-Token', context.requiresOutpostToken ? tokenPlaceholder : ''],
+  ])
+}
+function traefikForwardAuth(context: ProxySetupContext) {
+  return {
+    address: authURL(context, false),
+    trustForwardHeader: false,
+    authRequestHeaders: [
+      'Cookie',
+      'X-Forwarded-Host',
+      'X-Forwarded-Uri',
+      'X-Forwarded-Method',
+      'X-Forwarded-Proto',
+      'X-Forwarded-For',
+      'X-Soha-Outpost-Token',
+    ],
+    authResponseHeaders: context.identityHeaders,
+  }
+}
 export function proxySetupSnippet(target: ProxySetupTarget, context: ProxySetupContext) {
-  const { authURL, host, upstreamURL } = context
-  const redirectAuthURL = `${authURL}&redirect=true`
+  const { host, upstreamURL, identityHeaders } = context
+  const forwardAuth = traefikForwardAuth(context)
+  const clearToken = { 'X-Soha-Outpost-Token': '', 'X-Soha-Session-Token': '' }
   switch (target) {
     case 'nginx-ingress':
-      return `apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: protected-application
-  annotations:
-    nginx.ingress.kubernetes.io/auth-url: "${authURL}"
-    nginx.ingress.kubernetes.io/auth-signin: "${authURL.replace('/auth?', '/start?')}&return_to=$scheme://$host$escaped_request_uri"
-    nginx.ingress.kubernetes.io/auth-response-headers: "X-Soha-User,X-Soha-User-ID,X-Soha-Email,X-Soha-Roles,X-Soha-Teams,X-Soha-Groups"
-spec:
-  rules:
-    - host: ${host}
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: protected-application
-                port:
-                  number: 80`
+      return (
+        stringify({
+          apiVersion: 'v1',
+          kind: 'ConfigMap',
+          metadata: { name: 'soha-outpost-auth', namespace: 'default' },
+          data: {
+            'X-Soha-Outpost-Token': context.requiresOutpostToken ? tokenPlaceholder : '',
+            'X-Soha-Session-Token': '',
+          },
+        }) +
+        '---\n' +
+        stringify({
+          apiVersion: 'networking.k8s.io/v1',
+          kind: 'Ingress',
+          metadata: {
+            name: 'protected-application',
+            namespace: 'default',
+            annotations: {
+              'nginx.ingress.kubernetes.io/auth-url': authURL(context, true),
+              'nginx.ingress.kubernetes.io/auth-signin': `${context.loginURL}&return_to=$scheme://$host$escaped_request_uri`,
+              // Empty auth response values also remove client-supplied internal tokens.
+              'nginx.ingress.kubernetes.io/auth-response-headers': [
+                ...identityHeaders,
+                'X-Soha-Outpost-Token',
+                'X-Soha-Session-Token',
+              ].join(','),
+              'nginx.ingress.kubernetes.io/auth-proxy-set-headers': 'default/soha-outpost-auth',
+            },
+          },
+          spec: {
+            rules: [
+              {
+                host,
+                http: {
+                  paths: [
+                    {
+                      path: '/',
+                      pathType: 'Prefix',
+                      backend: { service: { name: 'protected-application', port: { number: 80 } } },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        })
+      )
     case 'nginx-proxy-manager':
-      return `# Proxy Host > Advanced
-auth_request ${authURL};
-error_page 401 = @soha_signin;
-
-auth_request_set $soha_user $upstream_http_x_soha_user;
-auth_request_set $soha_email $upstream_http_x_soha_email;
-proxy_set_header X-Soha-User $soha_user;
-proxy_set_header X-Soha-Email $soha_email;
-
-location @soha_signin {
-  return 302 ${authURL.replace('/auth?', '/start?')}&return_to=$scheme://$http_host$request_uri;
-}`
+      return `# Paste this entire block into Proxy Host > Advanced. Do not add another / in Custom locations.
+# Keep the Proxy Host TLS settings; set the actual upstream below.
+${nginxLocations(context)}`
     case 'nginx-standalone':
-      return `server {
+      return `# Add your deployment's TLS listener/certificate settings.
+server {
+  listen 80;
   server_name ${host};
-
-  location / {
-    auth_request ${authURL};
-    error_page 401 = @soha_signin;
-    auth_request_set $soha_user $upstream_http_x_soha_user;
-    auth_request_set $soha_email $upstream_http_x_soha_email;
-    proxy_set_header X-Soha-User $soha_user;
-    proxy_set_header X-Soha-Email $soha_email;
-    proxy_pass ${upstreamURL};
-  }
-
-  location @soha_signin {
-    return 302 ${authURL.replace('/auth?', '/start?')}&return_to=$scheme://$http_host$request_uri;
-  }
+${nginxLocations(context)}
 }`
     case 'traefik-ingress':
-      return `apiVersion: traefik.io/v1alpha1
-kind: Middleware
-metadata:
-  name: soha-forward-auth
-spec:
-  forwardAuth:
-    address: "${redirectAuthURL}"
-    trustForwardHeader: true
-    authResponseHeaders:
-      - X-Soha-User
-      - X-Soha-User-ID
-      - X-Soha-Email
-      - X-Soha-Roles
-      - X-Soha-Teams
-      - X-Soha-Groups
----
-# Add to the protected Ingress:
-# metadata.annotations.traefik.ingress.kubernetes.io/router.middlewares: default-soha-forward-auth@kubernetescrd`
-    case 'traefik-compose':
-      return `services:
-  protected-application:
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.protected.rule=Host(\`${host}\`)
-      - traefik.http.routers.protected.middlewares=soha-auth
-      - traefik.http.middlewares.soha-auth.forwardauth.address=${redirectAuthURL}
-      - traefik.http.middlewares.soha-auth.forwardauth.trustForwardHeader=true
-      - traefik.http.middlewares.soha-auth.forwardauth.authResponseHeaders=X-Soha-User,X-Soha-User-ID,X-Soha-Email,X-Soha-Roles,X-Soha-Teams,X-Soha-Groups`
+      return (
+        [
+          {
+            name: 'soha-auth-input',
+            spec: { headers: { customRequestHeaders: traefikHeaders(context) } },
+          },
+          { name: 'soha-forward-auth', spec: { forwardAuth } },
+          { name: 'soha-auth-cleanup', spec: { headers: { customRequestHeaders: clearToken } } },
+        ]
+          .map(({ name, spec }) =>
+            stringify({
+              apiVersion: 'traefik.io/v1alpha1',
+              kind: 'Middleware',
+              metadata: { name, namespace: 'default' },
+              spec,
+            }),
+          )
+          .join('---\n') +
+        '# Protected Ingress annotation:\n# traefik.ingress.kubernetes.io/router.middlewares: default-soha-auth-input@kubernetescrd,default-soha-forward-auth@kubernetescrd,default-soha-auth-cleanup@kubernetescrd'
+      )
+    case 'traefik-compose': {
+      const labels = {
+        'traefik.enable': 'true',
+        'traefik.http.routers.protected.rule': `Host(\`${host}\`)`,
+        'traefik.http.routers.protected.middlewares': 'soha-auth-input,soha-auth,soha-auth-cleanup',
+        ...Object.fromEntries(
+          Object.entries(traefikHeaders(context)).map(([key, value]) => [
+            `traefik.http.middlewares.soha-auth-input.headers.customrequestheaders.${key}`,
+            value,
+          ]),
+        ),
+        ...Object.fromEntries(
+          Object.entries(forwardAuth).map(([key, value]) => [
+            `traefik.http.middlewares.soha-auth.forwardauth.${key}`,
+            Array.isArray(value) ? value.join(',') : String(value),
+          ]),
+        ),
+        ...Object.fromEntries(
+          Object.entries(clearToken).map(([key, value]) => [
+            `traefik.http.middlewares.soha-auth-cleanup.headers.customrequestheaders.${key}`,
+            value,
+          ]),
+        ),
+      }
+      return (
+        '# Merge into the protected service; configure its image, port and network.\n' +
+        stringify({ services: { 'protected-application': { labels } } })
+      )
+    }
     case 'traefik-standalone':
-      return `http:
-  middlewares:
-    soha-auth:
-      forwardAuth:
-        address: "${redirectAuthURL}"
-        trustForwardHeader: true
-        authResponseHeaders:
-          - X-Soha-User
-          - X-Soha-User-ID
-          - X-Soha-Email
-          - X-Soha-Roles
-          - X-Soha-Teams
-          - X-Soha-Groups
-  routers:
-    protected:
-      rule: "Host(\`${host}\`)"
-      middlewares:
-        - soha-auth
-      service: protected
-  services:
-    protected:
-      loadBalancer:
-        servers:
-          - url: "${upstreamURL}"`
-    case 'caddy-standalone':
+      return stringify({
+        http: {
+          middlewares: {
+            'soha-auth-input': { headers: { customRequestHeaders: traefikHeaders(context) } },
+            'soha-auth': { forwardAuth },
+            'soha-auth-cleanup': { headers: { customRequestHeaders: clearToken } },
+          },
+          routers: {
+            protected: {
+              rule: `Host(\`${host}\`)`,
+              middlewares: ['soha-auth-input', 'soha-auth', 'soha-auth-cleanup'],
+              service: 'protected',
+            },
+          },
+          services: { protected: { loadBalancer: { servers: [{ url: upstreamURL }] } } },
+        },
+      })
+    case 'caddy-standalone': {
+      const url = new URL(authURL(context, false))
       return `${host} {
-  forward_auth ${new URL(authURL).origin} {
-    uri /api/v1/provider/proxy/auth?provider_id=${encodeURIComponent(context.providerID)}&redirect=true
-    copy_headers X-Soha-User X-Soha-User-ID X-Soha-Email X-Soha-Roles X-Soha-Teams X-Soha-Groups
+  route {
+${[...identityHeaders, 'X-Soha-Outpost-Token', 'X-Soha-Session-Token'].map((header) => `    request_header -${header}`).join('\n')}
+    forward_auth ${url.origin} {
+      uri ${url.pathname}${url.search}
+      header_up X-Forwarded-Host {http.request.hostport}
+      header_up X-Forwarded-Uri {http.request.uri}
+      header_up X-Original-URL {http.request.scheme}://{http.request.hostport}{http.request.uri}
+      header_up X-Forwarded-Method {http.request.method}
+      header_up Cookie {http.request.header.Cookie}${context.requiresOutpostToken ? `\n      header_up X-Soha-Outpost-Token ${tokenPlaceholder}` : ''}
+      copy_headers ${identityHeaders.join(' ')}
+    }
+    reverse_proxy ${upstreamURL}
   }
-  reverse_proxy ${upstreamURL}
 }`
+    }
   }
 }

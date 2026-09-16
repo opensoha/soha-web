@@ -1,3 +1,4 @@
+import { WorkerReadiness } from '../clusters/worker-pools'
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -564,6 +565,11 @@ export function OperationsTable({
             {formatDateTime(selectedOperation?.completedAt)}
           </Descriptions.Item>
         </Descriptions>
+        {selectedOperation?.payload?.workerPoolId && (
+          <div className="mt-4">
+            <WorkerReadiness operationId={selectedOperation.id} />
+          </div>
+        )}
         {selectedOperation?.message ? (
           <Alert
             className="mt-4"

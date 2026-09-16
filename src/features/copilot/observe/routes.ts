@@ -102,7 +102,7 @@ export const copilotObserveRoutes = defineRoutes([
       permissionKey: 'observe.ai.chat',
       scopeMode: 'passive',
     },
-    shell: 'app',
+    shell: 'focus',
     load: async () => {
       const module = await import('../workbench/pages/chat-page')
       return { default: module.AIWorkbenchChatPage }
@@ -125,7 +125,7 @@ export const copilotObserveRoutes = defineRoutes([
       permissionKey: 'observe.ai.chat',
       scopeMode: 'passive',
     },
-    shell: 'app',
+    shell: 'focus',
     load: async () => {
       const module = await import('../workbench/pages/root-cause-page')
       return { default: module.AIWorkbenchRootCausePage }
@@ -148,7 +148,7 @@ export const copilotObserveRoutes = defineRoutes([
       permissionKey: 'observe.ai.chat',
       scopeMode: 'passive',
     },
-    shell: 'app',
+    shell: 'focus',
     load: async () => {
       const module = await import('../workbench/pages/performance-page')
       return { default: module.AIWorkbenchPerformancePage }
@@ -175,6 +175,29 @@ export const copilotObserveRoutes = defineRoutes([
     load: async () => {
       const module = await import('./operations/page')
       return { default: module.AIOperationsPage }
+    },
+  },
+  {
+    meta: {
+      id: 'ai-workbench-tasks',
+      path: '/ai-workbench/tasks',
+      title: '目标任务',
+      description: '跨工作台目标、计划、执行证据与续接',
+      icon: 'IconHistory',
+      group: 'observe',
+      workbenchId: 'ai',
+      requiresAuth: true,
+      tabbar: true,
+      navVisible: true,
+      parentId: 'ai-workbench',
+      menuId: 'ai-workbench-tasks',
+      permissionKey: 'ai.gateway.invoke',
+      scopeMode: 'passive',
+    },
+    shell: 'app',
+    load: async () => {
+      const module = await import('../capability-tasks/page')
+      return { default: module.CapabilityTasksPage }
     },
   },
   {

@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { act, type ReactNode } from 'react'
-import { App as AntdApp, Form } from 'antd'
+import { App as AntdApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
@@ -11,6 +11,7 @@ import {
   type IdentityOutpostFormValues,
 } from './components/outpost-form-modal'
 import { IdentityOutpostsPage } from './list-page'
+import { identityProviderQueries } from '../providers'
 
 const testState = vi.hoisted(() => ({
   permissionKeys: [
@@ -40,66 +41,6 @@ vi.mock('@/services/api-client', () => ({
     post: (path: string, body?: unknown) => testState.apiPost(path, body),
     put: vi.fn(async () => ({ data: {} })),
   },
-}))
-
-interface MockColumn {
-  dataIndex?: string | string[]
-  key?: string
-  render?: (value: unknown, record: Record<string, unknown>) => ReactNode
-}
-
-vi.mock('@/components/management-data-page', () => ({
-  ManagementDataPage: ({
-    query,
-    table,
-  }: {
-    query?: {
-      actions?: ReactNode
-      children?: ReactNode
-      form?: ReturnType<typeof Form.useForm>[0]
-      initialValues?: Record<string, unknown>
-      onFinish?: (values: Record<string, unknown>) => void
-    }
-    table: {
-      columns: MockColumn[]
-      dataSource: Array<Record<string, unknown>>
-      headerExtra?: ReactNode
-      toolbar?: ReactNode
-    }
-  }) => (
-    <div>
-      <Form<unknown>
-        form={query?.form}
-        initialValues={query?.initialValues}
-        onFinish={(values) => query?.onFinish?.(values as Record<string, unknown>)}
-      >
-        {query?.children}
-        {query?.actions}
-      </Form>
-      {table.toolbar}
-      {table.headerExtra}
-      {table.dataSource.map((record) => (
-        <div data-testid={`row-${String(record.id)}`} key={String(record.id)}>
-          {table.columns.map((column, columnIndex) => {
-            const value = Array.isArray(column.dataIndex)
-              ? column.dataIndex.reduce<unknown>(
-                  (current, key) =>
-                    current && typeof current === 'object'
-                      ? (current as Record<string, unknown>)[key]
-                      : undefined,
-                  record,
-                )
-              : record[column.dataIndex ?? '']
-            return (
-              <span key={column.key ?? `${String(column.dataIndex)}-${columnIndex}`}>
-                {column.render ? column.render(value, record) : String(value ?? '')}
-              </span>
-            )
-          })}
-        </div>
-      ))}
-    </div>
-  ),
 }))
 
 vi.mock('@/components/management-list', async (importOriginal) => ({
@@ -182,6 +123,21 @@ beforeEach(() => {
   testState.apiGet.mockReset()
   testState.apiPost.mockReset()
   testState.apiGet.mockImplementation(async (path: string) => {
+    if (/^\/identity\/outposts\/[^/]+$/.test(path)) {
+      const list = await testState.apiGet('/identity/outposts')
+      return {
+        data: list.data.find((item: { id: string }) => item.id === path.split('/').pop()) ?? {
+          id: 'edge-new',
+          name: 'Edge New',
+          mode: 'embedded',
+          status: 'offline',
+          runtimeStatus: 'available',
+          configurationVersion: 0,
+          createdAt: '',
+          updatedAt: '',
+        },
+      }
+    }
     if (path === '/identity/capabilities') {
       return {
         data: {
@@ -208,6 +164,9 @@ beforeEach(() => {
           name: 'Edge Grafana',
           mode: 'embedded',
           status: 'online',
+          runtimeStatus: 'available',
+          runtimeReason: 'embedded_runtime',
+          configurationVersion: 0,
           endpoint: 'https://grafana.example.com',
           createdAt: '2026-07-10T00:00:00Z',
           updatedAt: '2026-07-10T00:00:00Z',
@@ -217,6 +176,9 @@ beforeEach(() => {
           name: 'Edge Harbor',
           mode: 'agent',
           status: 'offline',
+          runtimeStatus: 'unavailable',
+          runtimeReason: 'awaiting_registration',
+          configurationVersion: 0,
           endpoint: 'https://harbor.example.com',
           createdAt: '2026-07-10T00:00:00Z',
           updatedAt: '2026-07-10T00:00:00Z',
@@ -256,7 +218,7 @@ async function settle(queryClient: QueryClient) {
   }
 }
 
-async function renderPage() {
+async function renderPage(configureClient?: (client: QueryClient) => void) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   containers.push(container)
@@ -268,6 +230,7 @@ async function renderPage() {
       queries: { retry: false },
     },
   })
+  configureClient?.(queryClient)
 
   await act(async () => {
     root.render(
@@ -304,13 +267,16 @@ async function clickButton(text: string) {
 }
 
 describe('identity outposts page behavior', () => {
-  it('loads canonical list data and filters rows locally', async () => {
+  it('renders the shared table and filters nodes locally', async () => {
     const { container } = await renderPage()
 
     expect(testState.apiGet).toHaveBeenCalledWith('/identity/outposts')
-    expect(container.querySelector('[data-testid="row-edge-grafana"]')).not.toBeNull()
-    expect(container.querySelector('[data-testid="row-edge-harbor"]')).not.toBeNull()
-    expect(container.querySelector('.soha-status-tag')?.textContent).toBe('Online')
+    expect(container.querySelector('tr[data-row-key="edge-grafana"]')).not.toBeNull()
+    expect(container.querySelector('tr[data-row-key="edge-harbor"]')).not.toBeNull()
+    expect(container.querySelector('.soha-status-tag')?.textContent).toBe('可用')
+    expect(container.textContent).not.toContain('Online')
+    expect(container.querySelector('.soha-management-table-shell')).not.toBeNull()
+    expect(container.textContent).toContain('不可用')
     expect(container.querySelector('.soha-metadata-tag')?.textContent).toBe('embedded')
 
     const search = container.querySelector(
@@ -319,8 +285,24 @@ describe('identity outposts page behavior', () => {
     await act(async () => setInputValue(search, 'harbor'))
     await clickButton('查询')
 
-    expect(container.querySelector('[data-testid="row-edge-grafana"]')).toBeNull()
-    expect(container.querySelector('[data-testid="row-edge-harbor"]')).not.toBeNull()
+    expect(container.querySelector('tr[data-row-key="edge-grafana"]')).toBeNull()
+    expect(container.querySelector('tr[data-row-key="edge-harbor"]')).not.toBeNull()
+  })
+
+  it('keeps embedded runtime semantics and opens remote deployment directly', async () => {
+    const { container, queryClient } = await renderPage()
+    const embedded = container.querySelector('tr[data-row-key="edge-grafana"]')
+    const remote = container.querySelector('tr[data-row-key="edge-harbor"]')
+    expect(embedded?.textContent).toContain('本机生效')
+    expect(embedded?.textContent).not.toContain('由 Soha 本机提供鉴权')
+    expect(embedded?.textContent).not.toContain('无需独立部署')
+    expect(embedded?.textContent).not.toContain('最近心跳')
+    expect(embedded?.querySelector('a')?.getAttribute('href')).toBe('/?outpost=edge-grafana')
+    expect(remote?.textContent).toContain('尚未收到')
+    await clickButton('查看部署')
+    await settle(queryClient)
+    expect(document.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('部署')
+    expect(document.body.textContent).toContain('部署资料不完整')
   })
 
   it('keeps management actions permission-gated', async () => {
@@ -335,6 +317,27 @@ describe('identity outposts page behavior', () => {
         button.textContent?.includes('新建 Outpost'),
       )?.disabled,
     ).toBe(true)
+  })
+
+  it('withholds cached application counts without provider view permission', async () => {
+    const { container } = await renderPage((client) => {
+      client.setQueryData(identityProviderQueries.list({ type: 'proxy' }).queryKey, [
+        {
+          id: 'restricted-provider',
+          applicationId: 'restricted-app',
+          name: 'Restricted provider',
+          type: 'proxy',
+          enabled: true,
+          status: 'enabled',
+          createdAt: '',
+          updatedAt: '',
+          config: { outpostId: 'edge-grafana' },
+        },
+      ])
+    })
+    expect(container.textContent).toContain('无查看权限')
+    expect(container.textContent).not.toContain('1 个应用')
+    expect(testState.apiGet).not.toHaveBeenCalledWith('/identity/providers?type=proxy')
   })
 
   it('shows a create token exactly through the one-time warning flow', async () => {
@@ -365,18 +368,17 @@ describe('identity outposts page behavior', () => {
     const values: IdentityOutpostFormValues = {
       name: ' Edge New ',
       mode: 'external',
-      status: 'degraded',
       endpoint: ' https://edge.example.com ',
-      version: ' 1.2.3 ',
+      forwardAuthUrl: ' https://edge.example.com/api/v1/outpost/forward-auth ',
       metadataJson: '{"region":"cn-east"}',
     }
 
     expect(buildIdentityOutpostInput(values)).toEqual({
       name: 'Edge New',
       mode: 'external',
-      status: 'degraded',
+      status: 'offline',
       endpoint: 'https://edge.example.com',
-      version: '1.2.3',
+      forwardAuthUrl: 'https://edge.example.com/api/v1/outpost/forward-auth',
       metadata: { region: 'cn-east' },
     })
     expect(() => buildIdentityOutpostInput({ ...values, metadataJson: '[]' })).toThrow(

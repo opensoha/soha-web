@@ -134,76 +134,118 @@
 
 .soha-portal-app-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(238px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
   gap: 12px;
+  padding-top: 12px;
 }
 
-.soha-portal-app-card.ant-card {
+.soha-portal-app-card {
+  position: relative;
   min-width: 0;
-  border-radius: 8px;
+  border-radius: var(--soha-radius-panel);
 }
 
-.soha-portal-app-card .ant-card-head {
-  min-height: 70px;
-  padding: 0 12px;
+.soha-portal-app-card:hover,
+.soha-portal-app-card:focus-within {
+  background: var(--soha-fill-weak);
 }
 
-.soha-portal-app-card .ant-card-body {
-  padding: 12px;
-}
-
-.soha-portal-app-title {
+.soha-portal-app-launch {
   display: flex;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
   align-items: center;
-  min-width: 0;
-  gap: 10px;
+  padding: 36px 12px 24px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: var(--soha-text-primary);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+.soha-portal-app-launch:focus-visible {
+  outline: 2px solid var(--soha-primary);
+  outline-offset: -2px;
+}
+
+.soha-portal-app-launch:disabled {
+  cursor: not-allowed;
+}
+
+.soha-portal-app-icon {
+  position: relative;
+  margin-bottom: 18px;
 }
 
 .soha-portal-app-avatar {
   flex: 0 0 auto;
   border: 1px solid var(--soha-border-color);
   background: var(--soha-fill-weak);
+  color: var(--soha-text-primary);
 }
 
-.soha-portal-app-title-copy,
+.soha-portal-app-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--soha-radius-control);
+  background: var(--soha-bg-surface);
+  color: var(--soha-primary);
+}
+
+.soha-portal-app-title {
+  display: block;
+  width: 100%;
+  height: 22px;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.soha-portal-app-description {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  overflow: hidden;
+  color: var(--soha-text-secondary);
+  font-size: 12px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.soha-portal-app-meta {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  display: flex;
+  max-width: calc(100% - 48px);
+  gap: 4px;
+  pointer-events: none;
+}
+
+.soha-portal-app-card .soha-portal-app-more {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 28px;
+  height: 28px;
+  color: var(--soha-text-secondary);
+}
+
 .soha-portal-principal-copy {
   display: flex;
   flex-direction: column;
   min-width: 0;
   gap: 2px;
-}
-
-.soha-portal-app-card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-height: 176px;
-}
-
-.soha-portal-app-description.ant-typography {
-  min-height: 44px;
-  margin: 0;
-  color: var(--soha-text-secondary);
-}
-
-.soha-portal-app-meta,
-.soha-portal-app-tags {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
-  min-height: 24px;
-}
-
-.soha-portal-app-actions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 8px;
-  margin-top: auto;
-}
-
-.soha-portal-app-actions .ant-btn {
-  min-width: 0;
 }
 
 .soha-portal-empty {
@@ -271,12 +313,6 @@
   word-break: break-word;
 }
 
-.soha-portal-recent-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
 .soha-portal-recent-item {
   display: flex;
   align-items: center;
@@ -296,34 +332,6 @@
 .soha-portal-recent-item:hover:not(:disabled) {
   border-color: var(--soha-border-color);
   background: var(--soha-bg-surface);
-}
-
-.soha-portal-recent-item:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.soha-portal-recent-main {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  gap: 2px;
-}
-
-.soha-portal-recent-name,
-.soha-portal-recent-time {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.soha-portal-recent-name {
-  font-weight: 500;
-}
-
-.soha-portal-recent-time {
-  color: var(--soha-text-secondary);
-  font-size: 12px;
 }
 
 .soha-portal-detail-layout {
@@ -401,7 +409,6 @@
   padding: 12px 0 32px;
 }
 
-.soha-provider-portal-home .soha-portal-apps,
 .soha-provider-portal-home .soha-portal-side-panel {
   border-color: var(--soha-border-color);
   border-radius: var(--soha-radius-panel, 8px);
@@ -461,7 +468,6 @@
   max-height: calc(100vh - 56px);
   overflow-y: auto;
   padding: 14px;
-  border: 1px solid var(--soha-border-color);
   scrollbar-gutter: stable;
 }
 
@@ -476,8 +482,7 @@
   gap: 12px;
   min-height: 42px;
   padding-bottom: 10px;
-  border-bottom: 1px solid var(--soha-border-color-secondary, var(--soha-border-color));
-  background: var(--soha-bg-surface);
+  background: var(--soha-bg-layout);
 }
 
 .soha-provider-portal-home .soha-portal-view-actions {
@@ -643,104 +648,29 @@
   min-height: 48px;
 }
 
-.soha-provider-portal-home .soha-portal-app-grid {
-  grid-template-columns: repeat(auto-fill, minmax(224px, 248px));
-  gap: 12px;
-  padding-top: 12px;
-  align-items: stretch;
-}
-
 .soha-provider-portal-home .soha-portal-app-grid.is-small {
-  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
-  gap: 8px;
-  padding-top: 8px;
-}
-
-.soha-provider-portal-home .soha-portal-app-grid.is-medium {
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 10px;
-  padding-top: 10px;
-}
-
-.soha-provider-portal-home .soha-portal-app-card.ant-card {
-  height: 100%;
-  border-color: var(--soha-border-color);
-  box-shadow: none;
-}
-
-.soha-provider-portal-home .soha-portal-app-card.is-launchable {
-  cursor: pointer;
-}
-
-.soha-provider-portal-home .soha-portal-app-card-extra {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.soha-provider-portal-home .soha-portal-app-card .ant-card-head {
-  min-height: 58px;
-}
-
-.soha-provider-portal-home .soha-portal-app-card-body {
-  min-height: 154px;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
   gap: 8px;
 }
 
-.soha-provider-portal-home .soha-portal-app-card.is-medium .ant-card-head {
-  min-height: 56px;
-  padding-inline: 10px;
+.soha-portal-app-card.is-small .soha-portal-app-launch {
+  padding: 32px 10px 16px;
 }
 
-.soha-provider-portal-home .soha-portal-app-card.is-medium .ant-card-body {
-  padding: 10px;
+.soha-portal-app-card.is-small .soha-portal-app-icon {
+  margin-bottom: 12px;
 }
 
-.soha-provider-portal-home .soha-portal-app-card.is-medium .soha-portal-app-card-body {
-  min-height: 126px;
-  gap: 6px;
-}
-
-.soha-provider-portal-home .soha-portal-app-card.is-medium .soha-portal-app-description {
-  min-height: 22px;
-}
-
-.soha-provider-portal-home .soha-portal-app-card.is-medium .soha-portal-app-meta,
-.soha-provider-portal-home .soha-portal-app-card.is-medium .soha-portal-app-tags {
-  min-height: 20px;
-  flex-wrap: nowrap;
-  overflow: hidden;
-}
-
-.soha-provider-portal-home .soha-portal-app-card.is-small .ant-card-head {
-  min-height: 54px;
-  padding-inline: 10px;
-}
-
-.soha-provider-portal-home .soha-portal-app-card.is-small .ant-card-body {
-  display: none;
-}
-
-.soha-provider-portal-home .soha-portal-app-card.is-small .soha-portal-app-title {
-  gap: 8px;
-}
-
-.soha-provider-portal-home .soha-portal-app-card.is-small .soha-portal-app-avatar {
-  width: 32px;
-  height: 32px;
-  line-height: 32px;
+.soha-portal-app-card.is-small .soha-portal-app-avatar {
+  width: 36px;
+  height: 36px;
+  line-height: 36px;
 }
 
 .soha-provider-portal-home .soha-portal-side-body {
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-
-.soha-provider-portal-home .soha-portal-app-avatar {
-  width: 36px;
-  height: 36px;
-  line-height: 36px;
 }
 
 @media (max-width: 1024px) {
@@ -818,11 +748,13 @@
     width: calc(100% - 24px);
   }
 
-  .soha-provider-portal-home .soha-portal-workspace,
-  .soha-provider-portal-home .soha-portal-app-grid,
-  .soha-provider-portal-home .soha-portal-app-grid.is-small,
-  .soha-provider-portal-home .soha-portal-app-grid.is-medium {
+  .soha-provider-portal-home .soha-portal-workspace {
     grid-template-columns: 1fr;
+  }
+
+  .soha-provider-portal-home .soha-portal-app-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px;
   }
 
   .soha-provider-portal-home .soha-portal-app-toolbar {

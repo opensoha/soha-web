@@ -1,7 +1,8 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Outlet, useLocation, useMatch, useNavigate } from 'react-router-dom'
 import { Avatar, Breadcrumb, Button, Dropdown, Layout, Menu, Spin } from 'antd'
+import { useQuery } from '@tanstack/react-query'
 import type { MenuProps } from 'antd'
 import {
   AlertOutlined,
@@ -30,6 +31,7 @@ import { AnnouncementBell } from '@/features/announcements/announcement-center'
 import { logoutAuthSession } from '@/features/auth/auth-api'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
 import { AssistantCompanionOverlay } from '@/features/companion'
+import { deliveryQueries } from '@/features/delivery/queries'
 import {
   isComputeWorkbenchMenuGroup,
   normalizeComputeWorkbenchNav,
@@ -42,6 +44,7 @@ import {
   useModuleStatuses,
 } from '@/features/modules'
 import { resolveMenuIcon } from '@/features/system/menu-icons'
+import { MENU_WORKBENCH_ORDER } from '@/features/system'
 import { resolveMenuSectionLabel } from '@/features/system/menu-schema'
 import {
   RealtimeSessionDockProvider,
@@ -73,6 +76,14 @@ import type { BusinessWorkspaceType, RuntimeMenuNode } from '@/types'
 const { Sider, Header, Content } = Layout
 const SIDEBAR_WIDTH = 200
 const SIDEBAR_COLLAPSED_WIDTH = 55
+const ApplicationNavigation = lazy(async () => {
+  const module = await import('@/features/delivery/navigation')
+  return { default: module.ApplicationNavigation }
+})
+const ApplicationIdentity = lazy(async () => {
+  const module = await import('@/features/delivery/navigation')
+  return { default: module.ApplicationIdentity }
+})
 const GlobalResourceCreateModal = lazy(async () => {
   const module =
     await import('@/features/platform/resource-creation/components/global-create-modal')
@@ -112,10 +123,10 @@ const RUNTIME_MENU_LABEL_OVERRIDES: Record<
     legacyEn: ['Delivery Blueprints'],
   },
   'release-board': {
-    zh: '构建发布',
-    en: 'Build & Release',
-    legacyZh: ['发布看板'],
-    legacyEn: ['Release Board'],
+    zh: '工作流中心',
+    en: 'Workflow Center',
+    legacyZh: ['发布看板', '构建发布', '工作流与构建'],
+    legacyEn: ['Release Board', 'Build & Release', 'Workflows & Builds'],
   },
   releases: {
     zh: '发布记录',
@@ -546,9 +557,13 @@ export function AppLayout() {
   const accessibleWorkbenchIds = useMemo(() => getAccessibleWorkbenchIds(snapshot), [snapshot])
   const workbenchOptions = useMemo(
     () =>
-      buildWorkbenchOptions(localeCode).filter(
-        (item) => item.key !== 'account' && accessibleWorkbenchIds.includes(item.key),
-      ),
+      buildWorkbenchOptions(localeCode)
+        .filter((item) => item.key !== 'account' && accessibleWorkbenchIds.includes(item.key))
+        .sort(
+          (left, right) =>
+            MENU_WORKBENCH_ORDER.findIndex((key) => key === left.key) -
+            MENU_WORKBENCH_ORDER.findIndex((key) => key === right.key),
+        ),
     [accessibleWorkbenchIds, localeCode],
   )
   const accountWorkbenchOption = useMemo<WorkbenchOption>(
@@ -577,6 +592,43 @@ export function AppLayout() {
     [snapshot, currentWorkspace, user?.roles],
   )
   const currentMeta = getRouteMeta(location.pathname)
+  const isApplicationWorkspace = [
+    'application-detail',
+    'application-workload-detail',
+    'application-workflow-designer',
+  ].includes(currentMeta.id)
+  const applicationMatch = useMatch('/applications/:applicationId/*')
+  const workloadMatch = useMatch(
+    '/applications/:applicationId/application-environments/:applicationEnvironmentId/workloads/:workloadName',
+  )
+  const applicationSearch = new URLSearchParams(location.search)
+  const sessionEnvironmentId =
+    workloadMatch?.params.applicationEnvironmentId ||
+    applicationSearch.get('applicationEnvironmentId') ||
+    (currentMeta.id === 'application-workflow-designer' ? applicationSearch.get('bindingId') : '')
+  const canReadApplicationSessions =
+    isApplicationWorkspace && hasPermission(snapshot, 'delivery.applications.view')
+  const sessionRuntime = useQuery(
+    deliveryQueries.applications.runtime(
+      applicationMatch?.params.applicationId || '',
+      canReadApplicationSessions,
+    ),
+  )
+  const sessionEnvironment = sessionEnvironmentId
+    ? sessionRuntime.data?.environments?.find(
+        (environment) => environment.applicationEnvironmentId === sessionEnvironmentId,
+      )
+    : sessionRuntime.data?.environments?.[0]
+  const deliverySessionScope =
+    canReadApplicationSessions &&
+    !sessionRuntime.isError &&
+    applicationMatch?.params.applicationId &&
+    sessionEnvironment
+      ? JSON.stringify([
+          applicationMatch.params.applicationId,
+          sessionEnvironment.applicationEnvironmentId,
+        ])
+      : undefined
   const isAccountUtilityRoute = currentMeta.group === 'account'
   const currentWorkbenchId = getRouteWorkbenchId(currentMeta)
   const currentScopeMode = getRouteScopeMode(currentMeta)
@@ -929,7 +981,8 @@ export function AppLayout() {
   const showResourceCreateAction =
     currentWorkbenchId === 'platform' && hasPermission(snapshot, 'platform.resource-creation.use')
   const showRealtimeSessionsAction =
-    currentWorkbenchId === 'platform' &&
+    (currentWorkbenchId === 'platform' ||
+      (currentWorkbenchId === 'delivery' && Boolean(deliverySessionScope))) &&
     (hasPermission(snapshot, 'platform.pods.logs') || hasPermission(snapshot, 'platform.pods.exec'))
   const globalAssistantEnabled = getWorkbenchModuleFeature(
     moduleStatusesQuery.data,
@@ -964,148 +1017,192 @@ export function AppLayout() {
         )
       }
     >
-      <RealtimeSessionDockProvider visible={currentWorkbenchId === 'platform'}>
-        <Layout className="soha-shell" hasSider>
-          <Sider
-            breakpoint="md"
-            className="soha-sider"
-            collapsible
-            collapsed={sidebarCollapsed}
-            collapsedWidth={SIDEBAR_COLLAPSED_WIDTH}
-            onCollapse={(collapsed) => setSidebarCollapsed(collapsed)}
-            style={{ backgroundColor: 'transparent' }}
-            trigger={null}
-            width={SIDEBAR_WIDTH}
-          >
-            <div className="soha-nav" style={{ height: '100%' }}>
-              <div className="soha-sider-topbar">
-                <button
-                  type="button"
-                  className="soha-sider-brand"
-                  aria-label={localeCode === 'zh_CN' ? '返回首页' : 'Go to overview'}
-                  onClick={() => navigate(homePath ?? '/')}
-                >
-                  {activeLogo ? (
-                    <img className="soha-brand-logo" src={activeLogo} alt={branding.sidebarTitle} />
-                  ) : (
-                    <div className="soha-brand-mark">SOHA</div>
-                  )}
-                </button>
-              </div>
+      <RealtimeSessionDockProvider
+        ownerKey={user?.userId}
+        workbench={currentWorkbenchId === 'delivery' ? 'delivery' : 'platform'}
+        scopeKey={currentWorkbenchId === 'delivery' ? deliverySessionScope : undefined}
+        visible={currentWorkbenchId === 'platform' || currentWorkbenchId === 'delivery'}
+      >
+        <Layout className="soha-shell" hasSider={!isApplicationWorkspace}>
+          {!isApplicationWorkspace && (
+            <Sider
+              breakpoint="md"
+              className="soha-sider"
+              collapsible
+              collapsed={sidebarCollapsed}
+              collapsedWidth={SIDEBAR_COLLAPSED_WIDTH}
+              onCollapse={(collapsed) => setSidebarCollapsed(collapsed)}
+              style={{ backgroundColor: 'transparent' }}
+              trigger={null}
+              width={SIDEBAR_WIDTH}
+            >
+              <div className="soha-nav" style={{ height: '100%' }}>
+                <div className="soha-sider-topbar">
+                  <button
+                    type="button"
+                    className="soha-sider-brand"
+                    aria-label={localeCode === 'zh_CN' ? '返回首页' : 'Go to overview'}
+                    onClick={() => navigate(homePath ?? '/')}
+                  >
+                    {activeLogo ? (
+                      <img
+                        className="soha-brand-logo"
+                        src={activeLogo}
+                        alt={branding.sidebarTitle}
+                      />
+                    ) : (
+                      <div className="soha-brand-mark">SOHA</div>
+                    )}
+                  </button>
+                </div>
 
-              {isAccountUtilityRoute ? (
-                <>
-                  <div className="soha-workbench-switcher-shell">
-                    <WorkbenchSwitcher
-                      collapsed={sidebarCollapsed}
-                      current={accountWorkbenchOption}
-                      options={[...workbenchOptions, accountWorkbenchOption]}
-                      onSelect={(workbench) => {
-                        if (workbench === 'account') {
-                          navigate('/account/profile')
-                          return
-                        }
-                        const targetPath = findFirstAccessiblePathForWorkbench(workbench, snapshot)
-                        if (targetPath) navigate(targetPath)
-                      }}
-                    />
-                  </div>
-                  <div className="soha-nav-business">
-                    <Menu
-                      className="soha-nav-menu"
-                      mode="inline"
-                      items={accountSidebarItems}
-                      selectedKeys={[location.pathname]}
-                      onClick={({ key }) => navigate(String(key))}
-                      inlineIndent={8}
-                      inlineCollapsed={sidebarCollapsed}
-                      theme={resolvedThemeMode}
-                    />
-                  </div>
-                </>
-              ) : (
-                <>
-                  {workbenchOptions.length > 0 && currentWorkbenchOption ? (
+                {isAccountUtilityRoute ? (
+                  <>
                     <div className="soha-workbench-switcher-shell">
                       <WorkbenchSwitcher
                         collapsed={sidebarCollapsed}
-                        current={currentWorkbenchOption}
-                        options={workbenchOptions}
+                        current={accountWorkbenchOption}
+                        options={[...workbenchOptions, accountWorkbenchOption]}
                         onSelect={(workbench) => {
-                          if (workbench === 'account') return
+                          if (workbench === 'account') {
+                            navigate('/account/profile')
+                            return
+                          }
                           const targetPath = findFirstAccessiblePathForWorkbench(
                             workbench,
                             snapshot,
                           )
-                          if (!targetPath) {
-                            return
-                          }
-                          navigate(targetPath)
+                          if (targetPath) navigate(targetPath)
                         }}
                       />
                     </div>
-                  ) : null}
-                  <div className="soha-nav-business">
-                    <Menu
-                      className="soha-nav-menu"
-                      mode="inline"
-                      items={primaryMenuItems}
-                      selectedKeys={primarySelectedKeys}
-                      openKeys={sidebarCollapsed ? [] : primaryOpenKeys}
-                      onOpenChange={(keys) => {
-                        if (isSystemWorkspaceRoute) {
-                          setSystemOpenKeys(keys as string[])
-                          return
-                        }
-                        setBusinessOpenKeys(keys as string[])
-                      }}
-                      onClick={({ key }) => {
-                        const path = primaryItemKeyToPath[String(key)]
-                        if (path) navigate(path)
-                      }}
-                      inlineIndent={8}
-                      inlineCollapsed={sidebarCollapsed}
-                      theme={resolvedThemeMode}
-                    />
-                  </div>
-                </>
-              )}
-            </div>
-          </Sider>
+                    <div className="soha-nav-business">
+                      <Menu
+                        className="soha-nav-menu"
+                        mode="inline"
+                        items={accountSidebarItems}
+                        selectedKeys={[location.pathname]}
+                        onClick={({ key }) => navigate(String(key))}
+                        inlineIndent={8}
+                        inlineCollapsed={sidebarCollapsed}
+                        theme={resolvedThemeMode}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {workbenchOptions.length > 0 && currentWorkbenchOption ? (
+                      <div className="soha-workbench-switcher-shell">
+                        <WorkbenchSwitcher
+                          collapsed={sidebarCollapsed}
+                          current={currentWorkbenchOption}
+                          options={workbenchOptions}
+                          onSelect={(workbench) => {
+                            if (workbench === 'account') return
+                            const targetPath = findFirstAccessiblePathForWorkbench(
+                              workbench,
+                              snapshot,
+                            )
+                            if (!targetPath) {
+                              return
+                            }
+                            navigate(targetPath)
+                          }}
+                        />
+                      </div>
+                    ) : null}
+                    <div className="soha-nav-business">
+                      <Menu
+                        className="soha-nav-menu"
+                        mode="inline"
+                        items={primaryMenuItems}
+                        selectedKeys={primarySelectedKeys}
+                        openKeys={sidebarCollapsed ? [] : primaryOpenKeys}
+                        onOpenChange={(keys) => {
+                          if (isSystemWorkspaceRoute) {
+                            setSystemOpenKeys(keys as string[])
+                            return
+                          }
+                          setBusinessOpenKeys(keys as string[])
+                        }}
+                        onClick={({ key }) => {
+                          const path = primaryItemKeyToPath[String(key)]
+                          if (path) navigate(path)
+                        }}
+                        inlineIndent={8}
+                        inlineCollapsed={sidebarCollapsed}
+                        theme={resolvedThemeMode}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            </Sider>
+          )}
 
-          <Layout className="soha-main">
+          <Layout
+            className="soha-main"
+            style={isApplicationWorkspace ? { width: '100%' } : undefined}
+          >
             <Header className="soha-header">
               <div className="soha-header-top-row">
                 <div className="soha-header-main">
                   <div className="soha-header-breadcrumb-row">
-                    <Button
-                      aria-label={
-                        sidebarCollapsed
-                          ? t('layout.expand', 'Expand sidebar')
-                          : t('layout.collapse', 'Collapse sidebar')
-                      }
-                      className="soha-header-action soha-header-sider-toggle"
-                      type="text"
-                      icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-                      onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                    />
-                    <Breadcrumb
-                      items={breadcrumbRoutes.map((route) => ({
-                        title: route.path ? (
-                          <a
-                            href={route.path}
-                            onClick={(event) => {
-                              event.preventDefault()
-                              navigate(route.path!)
-                            }}
-                          >
-                            {route.name}
-                          </a>
+                    {isApplicationWorkspace && (
+                      <button
+                        type="button"
+                        className="soha-sider-brand soha-application-brand"
+                        aria-label={localeCode === 'zh_CN' ? '返回首页' : 'Go to overview'}
+                        onClick={() => navigate(homePath ?? '/')}
+                      >
+                        {activeLogo ? (
+                          <img
+                            className="soha-brand-logo"
+                            src={activeLogo}
+                            alt={branding.sidebarTitle}
+                          />
                         ) : (
-                          route.name
-                        ),
-                      }))}
-                    />
+                          <div className="soha-brand-mark">SOHA</div>
+                        )}
+                      </button>
+                    )}
+                    {!isApplicationWorkspace && (
+                      <Button
+                        aria-label={
+                          sidebarCollapsed
+                            ? t('layout.expand', 'Expand sidebar')
+                            : t('layout.collapse', 'Collapse sidebar')
+                        }
+                        className="soha-header-action soha-header-sider-toggle"
+                        type="text"
+                        icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                        onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                      />
+                    )}
+                    {isApplicationWorkspace ? (
+                      <Suspense fallback={null}>
+                        <ApplicationNavigation />
+                        <ApplicationIdentity />
+                      </Suspense>
+                    ) : (
+                      <Breadcrumb
+                        items={breadcrumbRoutes.map((route) => ({
+                          title: route.path ? (
+                            <a
+                              href={route.path}
+                              onClick={(event) => {
+                                event.preventDefault()
+                                navigate(route.path!)
+                              }}
+                            >
+                              {route.name}
+                            </a>
+                          ) : (
+                            route.name
+                          ),
+                        }))}
+                      />
+                    )}
                   </div>
                 </div>
                 {resourceHeaderScopeMode !== 'hidden' && !isAccountUtilityRoute ? (
@@ -1222,7 +1319,6 @@ export function AppLayout() {
                 </div>
               </div>
             </Header>
-
             <Content className="soha-content">
               <div className="soha-content-inner soha-pro-content-host">
                 <Outlet />

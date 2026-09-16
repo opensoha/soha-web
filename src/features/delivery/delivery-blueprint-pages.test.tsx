@@ -15,6 +15,7 @@ const testState = vi.hoisted(() => ({
     visibleMenuIds: [],
     visibleMenus: [],
   },
+  apiPut: vi.fn(async () => ({ data: {} })),
   apiGet: vi.fn(async (path: string) => {
     if (path === '/delivery/blueprints') {
       return {
@@ -144,8 +145,11 @@ vi.mock('@/features/auth/permission-snapshot', () => ({
 vi.mock('@/services/api-client', () => ({
   api: {
     get: (path: string) => testState.apiGet(path),
+    getEnvelope: async () => ({
+      items: [{ id: 'registry-a', name: 'Private', endpoint: 'registry.example' }],
+    }),
     post: vi.fn(),
-    put: vi.fn(),
+    put: testState.apiPut,
     delete: vi.fn(),
   },
 }))
@@ -242,7 +246,7 @@ describe('DeliveryBlueprintsPage', () => {
     expect(container.textContent).toContain('新建模板')
     expect(container.textContent).toContain('保存')
     expect(container.textContent).toContain('渲染规范')
-    expect(container.textContent).toContain('平台接入')
+    expect(container.textContent).not.toContain('平台接入')
     expect(container.textContent).toContain('Node Service')
     expect(container.textContent).toContain('node-service')
     expect(container.textContent).toContain('构建 1')
@@ -276,5 +280,67 @@ describe('DeliveryBlueprintsPage', () => {
     )
     expect(container.textContent).toContain('Helm Values 模板')
     expect(container.textContent).toContain('文件模板')
+  })
+
+  it('saves typed external CI configuration after changing a Dockerfile source', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const container = await renderWithProviders(
+      <DeliveryBlueprintsPage />,
+      '/delivery/blueprints?tab=build',
+    )
+    const select = async (id: string, label: string) => {
+      await act(async () => {
+        container
+          .querySelector(`#${id}`)!
+          .dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      })
+      await act(async () => {
+        const option = Array.from(
+          document.querySelectorAll('.ant-select-item-option-content'),
+        ).find((element) => element.textContent === label)!
+        expect(option).toBeDefined()
+        option.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      })
+    }
+    await select('buildSources_0_type', 'GitLab CI')
+    await waitForText(container, '产物镜像仓库')
+    for (const [name, value] of [
+      ['pipelineTag', 'soha-v1'],
+      ['artifactJob', 'publish'],
+    ]) {
+      await act(async () => {
+        const input = container.querySelector(`#buildSources_0_externalPipeline_${name}`)!
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+          input,
+          value,
+        )
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    }
+    await select('buildSources_0_externalPipeline_registryId', 'Private · registry.example')
+    await act(async () => {
+      Array.from(container.querySelectorAll('button'))
+        .find((button) => button.textContent === '保存')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(testState.apiPut).toHaveBeenCalledWith(
+      '/delivery/blueprints/blueprint-1',
+      expect.objectContaining({
+        buildSources: [
+          expect.objectContaining({
+            type: 'external_pipeline',
+            config: {
+              externalPipeline: {
+                provider: 'gitlab',
+                pipelineTag: 'soha-v1',
+                artifactJob: 'publish',
+                registryId: 'registry-a',
+              },
+            },
+          }),
+        ],
+      }),
+    )
   })
 })

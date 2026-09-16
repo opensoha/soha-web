@@ -137,6 +137,9 @@ describe('network access routes', () => {
         'network-access-proxy-connections',
         'network_access.telemetry.view',
       ],
+      ['network-access-vpn-profiles','/network-access/vpn/profiles','network-access-vpn-profiles','network_access.vpn_profiles.view'],
+      ['network-access-vpn-selection-policies','/network-access/vpn/selection-policies','network-access-vpn-selection-policies','network_access.vpn_selection_policies.view'],
+      ['network-access-vpn-dashboard','/network-access/vpn/dashboard','network-access-vpn-dashboard','network_access.vpn_dashboard.view'],
     ])
     expect(routes.find(({ meta }) => meta.id === 'network-access-wifi')?.redirectTo).toBe(
       '/network-access/user-admission',

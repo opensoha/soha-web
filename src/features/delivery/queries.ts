@@ -2,6 +2,7 @@ import { queryOptions } from '@tanstack/react-query'
 import { deliveryApi } from './api'
 import {
   deliveryKeys,
+  normalizeBatchListParams,
   normalizeDeliveryId,
   normalizeDeliveryListParams,
   normalizeDeploymentRef,
@@ -14,9 +15,13 @@ import {
   normalizeGitCommitParams,
 } from './keys'
 import type {
+  DeliveryDocumentKind,
+  WorkflowCatalogParams,
+  DeliveryExecutionHistoryParams,
   DeliveryDeploymentRef,
   DeliveryGatewayReadinessParams,
   DeliveryListParams,
+  DeliveryBatchListParams,
   DeliveryRuntimeKind,
   DeliveryTargetCandidateParams,
   DeliveryWorkloadMetricsRef,
@@ -43,6 +48,121 @@ function pollingOptions(options: DeliveryQueryOptions) {
 }
 
 export const deliveryQueries = {
+  documents: {
+    source: (kind: DeliveryDocumentKind, id: string, version?: number) =>
+      queryOptions({
+        queryKey: deliveryKeys.documents.source(kind, id, version),
+        queryFn: () => deliveryApi.documents.source(kind, id, version),
+        enabled: Boolean(id),
+      }),
+  },
+  triggers: {
+    list: (kind: string, id: string, offset = 0, enabled = true) =>
+      queryOptions({
+        queryKey: deliveryKeys.triggers.list(kind, id, offset),
+        queryFn: () => deliveryApi.triggers.list(kind, id, offset),
+        enabled: enabled && hasValue(id),
+        refetchInterval: 10000,
+      }),
+    events: (id: string, offset = 0, enabled = true) =>
+      queryOptions({
+        queryKey: deliveryKeys.triggers.events(id, offset),
+        queryFn: () => deliveryApi.triggers.events(id, offset),
+        enabled: enabled && hasValue(id),
+        refetchInterval: 5000,
+      }),
+  },
+  templateSources: {
+    list: (offset = 0, enabled = true) =>
+      queryOptions({
+        queryKey: deliveryKeys.templateSources.list(offset),
+        queryFn: () => deliveryApi.templateSources.list(offset),
+        enabled,
+      }),
+    detail: (id: string, enabled = true) =>
+      queryOptions({
+        queryKey: deliveryKeys.templateSources.detail(id),
+        queryFn: () => deliveryApi.templateSources.detail(id),
+        enabled: enabled && Boolean(id),
+      }),
+    objects: (id: string, offset = 0) =>
+      queryOptions({
+        queryKey: deliveryKeys.templateSources.objects(id, offset),
+        queryFn: () => deliveryApi.templateSources.objects(id, offset),
+        enabled: Boolean(id),
+      }),
+    runs: (id: string, offset = 0) =>
+      queryOptions({
+        queryKey: deliveryKeys.templateSources.runs(id, offset),
+        queryFn: () => deliveryApi.templateSources.runs(id, offset),
+        enabled: Boolean(id),
+      }),
+    run: (id: string, runId: string) =>
+      queryOptions({
+        queryKey: deliveryKeys.templateSources.run(id, runId),
+        queryFn: () => deliveryApi.templateSources.run(id, runId),
+        enabled: Boolean(id && runId),
+        refetchInterval: (query) => (query.state.data?.status === 'running' ? 3000 : false),
+      }),
+  },
+  executionHistory: (params: DeliveryExecutionHistoryParams = {}, enabled = true) =>
+    queryOptions({
+      queryKey: deliveryKeys.executionHistory(params),
+      queryFn: () => deliveryApi.executionHistory.list(params),
+      enabled,
+      refetchInterval: 5000,
+    }),
+  workflowCatalog: (params: WorkflowCatalogParams = {}, enabled = true) =>
+    queryOptions({
+      queryKey: deliveryKeys.workflowCatalog(params),
+      queryFn: () => deliveryApi.workflowCatalog.list(params),
+      enabled,
+    }),
+  plans: {
+    detail: (id: string, enabled = true) =>
+      queryOptions({
+        queryKey: deliveryKeys.plans.detail(id),
+        queryFn: () => deliveryApi.plans.detail(id),
+        enabled: enabled && hasValue(id),
+        refetchInterval: (query) => (query.state.data?.status === 'confirmed' ? false : 2000),
+      }),
+  },
+  deliveryWorkflows: {
+    list: (enabled = true) =>
+      queryOptions({
+        queryKey: deliveryKeys.deliveryWorkflows.list(),
+        queryFn: deliveryApi.deliveryWorkflows.list,
+        enabled,
+      }),
+    detail: (id: string, enabled = true) =>
+      queryOptions({
+        queryKey: deliveryKeys.deliveryWorkflows.detail(id),
+        queryFn: () => deliveryApi.deliveryWorkflows.detail(id),
+        enabled: enabled && hasValue(id),
+      }),
+  },
+  batches: {
+    list: (params: DeliveryBatchListParams = {}, options: DeliveryQueryOptions = {}) => {
+      const normalized = normalizeBatchListParams(params)
+      return queryOptions({
+        queryKey: deliveryKeys.batches.list(normalized),
+        queryFn: () => deliveryApi.batches.list(normalized),
+        ...pollingOptions(options),
+      })
+    },
+    detail: (id: string, enabled = true) =>
+      queryOptions({
+        queryKey: deliveryKeys.batches.detail(id),
+        queryFn: () => deliveryApi.batches.detail(id),
+        enabled: enabled && hasValue(id),
+        refetchInterval: (query) =>
+          ['completed', 'partially_completed', 'failed', 'canceled'].includes(
+            query.state.data?.status ?? '',
+          )
+            ? false
+            : 2000,
+      }),
+  },
   repositories: {
     list: (params: RepositoryListParams = {}, enabled = true) => {
       const normalized = normalizeRepositoryListParams(params)
@@ -86,25 +206,35 @@ export const deliveryQueries = {
     },
   },
   applications: {
+    buildpacksCapability: (id: string) => {
+      const applicationId = normalizeDeliveryId(id)
+      return queryOptions({
+        queryKey: deliveryKeys.applications.buildpacksCapability(applicationId),
+        queryFn: () => deliveryApi.applications.buildpacksCapability(applicationId),
+        enabled: hasValue(applicationId),
+      })
+    },
     list: (enabled = true) =>
       queryOptions({
         queryKey: deliveryKeys.applications.list(),
         queryFn: deliveryApi.applications.list,
         enabled,
       }),
-    detail: (id: string, enabled = true) => {
+    detail: (id: string, enabled = true, refetchInterval: number | false = false) => {
       const applicationId = normalizeDeliveryId(id)
       return queryOptions({
         queryKey: deliveryKeys.applications.detail(applicationId),
         queryFn: () => deliveryApi.applications.detail(applicationId),
+        refetchInterval,
         enabled: enabled && hasValue(applicationId),
       })
     },
-    runtime: (id: string, enabled = true) => {
+    runtime: (id: string, enabled = true, refetchInterval: number | false = false) => {
       const applicationId = normalizeDeliveryId(id)
       return queryOptions({
         queryKey: deliveryKeys.applications.runtime(applicationId),
         queryFn: () => deliveryApi.applications.runtime(applicationId),
+        refetchInterval,
         enabled: enabled && hasValue(applicationId),
       })
     },
@@ -159,7 +289,45 @@ export const deliveryQueries = {
       })
     },
   },
+  deploymentTemplates: {
+    versions: (id: string, enabled = true) =>
+      queryOptions({
+        queryKey: deliveryKeys.deploymentTemplates.versions(id),
+        queryFn: () => deliveryApi.deploymentTemplates.versions(id),
+        enabled: enabled && hasValue(id),
+      }),
+    version: (id: string, version: number, enabled = true) =>
+      queryOptions({
+        queryKey: deliveryKeys.deploymentTemplates.version(id, version),
+        queryFn: () => deliveryApi.deploymentTemplates.version(id, version),
+        enabled: enabled && hasValue(id) && version > 0,
+      }),
+    list: (enabled = true) =>
+      queryOptions({
+        queryKey: deliveryKeys.deploymentTemplates.list(),
+        queryFn: deliveryApi.deploymentTemplates.list,
+        enabled,
+      }),
+    detail: (id: string, enabled = true) =>
+      queryOptions({
+        queryKey: deliveryKeys.deploymentTemplates.detail(id),
+        queryFn: () => deliveryApi.deploymentTemplates.detail(id),
+        enabled: enabled && hasValue(id),
+      }),
+  },
   buildTemplates: {
+    versions: (id: string, enabled = true) =>
+      queryOptions({
+        queryKey: deliveryKeys.buildTemplates.versions(id),
+        queryFn: () => deliveryApi.buildTemplates.versions(id),
+        enabled: enabled && hasValue(id),
+      }),
+    version: (id: string, version: number, enabled = true) =>
+      queryOptions({
+        queryKey: deliveryKeys.buildTemplates.version(id, version),
+        queryFn: () => deliveryApi.buildTemplates.version(id, version),
+        enabled: enabled && hasValue(id) && version > 0,
+      }),
     list: (enabled = true) =>
       queryOptions({
         queryKey: deliveryKeys.buildTemplates.list(),
@@ -176,6 +344,24 @@ export const deliveryQueries = {
     },
   },
   workflowTemplates: {
+    detail: (id: string, enabled = true) =>
+      queryOptions({
+        queryKey: deliveryKeys.workflowTemplates.detail(id),
+        queryFn: () => deliveryApi.workflowTemplates.detail(id),
+        enabled: enabled && hasValue(id),
+      }),
+    versions: (id: string, enabled = true) =>
+      queryOptions({
+        queryKey: deliveryKeys.workflowTemplates.versions(id),
+        queryFn: () => deliveryApi.workflowTemplates.versions(id),
+        enabled: enabled && hasValue(id),
+      }),
+    version: (id: string, version: number, enabled = true) =>
+      queryOptions({
+        queryKey: deliveryKeys.workflowTemplates.version(id, version),
+        queryFn: () => deliveryApi.workflowTemplates.version(id, version),
+        enabled: enabled && hasValue(id) && version > 0,
+      }),
     list: (enabled = true) =>
       queryOptions({
         queryKey: deliveryKeys.workflowTemplates.list(),
@@ -270,6 +456,24 @@ export const deliveryQueries = {
     },
   },
   executionTasks: {
+    rollout: (id: string, enabled: boolean) =>
+      queryOptions({
+        queryKey: deliveryKeys.executionTasks.rollout(id),
+        queryFn: () => deliveryApi.executionTasks.rollout(id),
+        enabled: enabled && hasValue(id),
+        refetchInterval: enabled ? 3000 : false,
+        retry: false,
+      }),
+    detail: (id: string, enabled = true) =>
+      queryOptions({
+        queryKey: deliveryKeys.executionTasks.detail(id),
+        queryFn: () => deliveryApi.executionTasks.get(id),
+        enabled: enabled && hasValue(id),
+        refetchInterval: (query) =>
+          ['completed', 'failed', 'canceled', 'cancelled'].includes(query.state.data?.status ?? '')
+            ? false
+            : 3000,
+      }),
     list: (options: DeliveryQueryOptions = {}) =>
       queryOptions({
         queryKey: deliveryKeys.executionTasks.list(),
@@ -303,15 +507,25 @@ export const deliveryQueries = {
         queryKey: deliveryKeys.runtime.detail(kind, recordId),
         queryFn: () => deliveryApi.runtime.detail(kind, recordId),
         enabled: enabled && hasValue(recordId),
+        refetchInterval: (query) =>
+          kind === 'execution_task' &&
+          ['queued', 'dispatching', 'running'].includes(query.state.data?.object?.status ?? '')
+            ? 3000
+            : false,
       })
     },
   },
   workloads: {
-    runtime: (ref: DeliveryWorkloadRef, enabled = true) => {
+    runtime: (
+      ref: DeliveryWorkloadRef,
+      enabled = true,
+      refetchInterval: number | false = false,
+    ) => {
       const normalized = normalizeWorkloadRef(ref)
       return queryOptions({
         queryKey: deliveryKeys.workloads.runtime(normalized),
         queryFn: () => deliveryApi.workloads.runtime(normalized),
+        refetchInterval,
         enabled:
           enabled &&
           hasValue(normalized.applicationId) &&

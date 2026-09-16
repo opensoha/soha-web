@@ -3,6 +3,10 @@ import { validateRouteDefinitions } from '@/routes/definitions'
 import { deliveryRoutes } from './routes'
 
 const routePages = vi.hoisted(() => ({
+  deliveryWorkflows: () => null,
+  deliveryBatches: () => null,
+  deliveryBatchDetail: () => null,
+  deploymentTemplates: () => null,
   manifests: () => null,
   applications: () => null,
   overview: () => null,
@@ -13,7 +17,7 @@ const routePages = vi.hoisted(() => ({
   environmentCatalog: () => null,
   buildTemplates: () => null,
   blueprints: () => null,
-  onboarding: () => null,
+  applicationCreateRedirect: () => null,
   testing: () => null,
   analysis: () => null,
   releaseBundles: () => null,
@@ -22,6 +26,7 @@ const routePages = vi.hoisted(() => ({
   executionTaskDetail: () => null,
   workflowTemplates: () => null,
   releaseBoard: () => null,
+  executionHistory: () => null,
   workflowDetail: () => null,
   releases: () => null,
   releaseDetail: () => null,
@@ -30,6 +35,14 @@ const routePages = vi.hoisted(() => ({
 }))
 
 vi.mock('./manifests/library-page', () => ({ ManifestLibraryPage: routePages.manifests }))
+vi.mock('./workflows/list-page', () => ({ DeliveryWorkflowsPage: routePages.deliveryWorkflows }))
+vi.mock('./batches/list-page', () => ({ DeliveryBatchesPage: routePages.deliveryBatches }))
+vi.mock('./batches/detail-page', () => ({
+  DeliveryBatchDetailPage: routePages.deliveryBatchDetail,
+}))
+vi.mock('./deployment-templates/page', () => ({
+  DeploymentTemplatesPage: routePages.deploymentTemplates,
+}))
 vi.mock('./applications/list-page', () => ({ ApplicationsPage: routePages.applications }))
 vi.mock('./workbench/overview-page', () => ({ DeliveryOverviewPage: routePages.overview }))
 vi.mock('./applications/detail-page', () => ({
@@ -49,8 +62,8 @@ vi.mock('./environments/catalog-page', () => ({
 }))
 vi.mock('./build-templates/page', () => ({ BuildTemplatesPage: routePages.buildTemplates }))
 vi.mock('./blueprints/page', () => ({ DeliveryBlueprintsPage: routePages.blueprints }))
-vi.mock('./workbench/onboarding-page', () => ({
-  DeliveryOnboardingPage: routePages.onboarding,
+vi.mock('./applications/legacy-redirect', () => ({
+  ApplicationCreateRedirect: routePages.applicationCreateRedirect,
 }))
 vi.mock('./workbench/testing-page', () => ({ DeliveryTestingPage: routePages.testing }))
 vi.mock('./workbench/analysis-page', () => ({ DeliveryAnalysisPage: routePages.analysis }))
@@ -65,7 +78,8 @@ vi.mock('./execution-tasks/detail-page', () => ({
 vi.mock('./workflow-templates/page', () => ({
   WorkflowTemplatesPage: routePages.workflowTemplates,
 }))
-vi.mock('./release-board/page', () => ({ ReleaseBoardPage: routePages.releaseBoard }))
+vi.mock('./release-board/page', () => ({ ExecutionHistoryPage: routePages.executionHistory }))
+vi.mock('./release-board/workflow-catalog', () => ({ WorkflowCatalog: routePages.releaseBoard }))
 vi.mock('./workflows/detail-page', () => ({ WorkflowDetailPage: routePages.workflowDetail }))
 vi.mock('./releases/list-page', () => ({ ReleasesPage: routePages.releases }))
 vi.mock('./releases/detail-page', () => ({ ReleaseDetailPage: routePages.releaseDetail }))
@@ -75,6 +89,10 @@ vi.mock('./registries/page', () => ({ RegistriesPage: routePages.registries }))
 describe('delivery route manifest', () => {
   it('maps routes directly to distinct leaf modules', async () => {
     const expectedPages = new Map([
+      ['delivery-workflows', routePages.deliveryWorkflows],
+      ['delivery-batches', routePages.deliveryBatches],
+      ['delivery-batch-detail', routePages.deliveryBatchDetail],
+      ['deployment-templates', routePages.deploymentTemplates],
       ['delivery-manifest-library', routePages.manifests],
       ['applications', routePages.applications],
       ['delivery-overview', routePages.overview],
@@ -85,7 +103,7 @@ describe('delivery route manifest', () => {
       ['delivery-environments', routePages.environmentCatalog],
       ['build-templates', routePages.buildTemplates],
       ['delivery-blueprints', routePages.blueprints],
-      ['delivery-onboarding', routePages.onboarding],
+      ['delivery-onboarding', routePages.applicationCreateRedirect],
       ['delivery-testing', routePages.testing],
       ['delivery-analysis', routePages.analysis],
       ['release-bundles', routePages.releaseBundles],
@@ -94,6 +112,7 @@ describe('delivery route manifest', () => {
       ['execution-tasks-detail', routePages.executionTaskDetail],
       ['workflow-templates', routePages.workflowTemplates],
       ['release-board', routePages.releaseBoard],
+      ['execution-history', routePages.executionHistory],
       ['workflows-detail', routePages.workflowDetail],
       ['releases', routePages.releases],
       ['releases-detail', routePages.releaseDetail],
@@ -125,6 +144,30 @@ describe('delivery route manifest', () => {
           'permissionKeysAny' in route.meta ? route.meta.permissionKeysAny : undefined,
       })),
     ).toEqual([
+      {
+        id: 'delivery-workflows',
+        menuId: undefined,
+        navVisible: false,
+        path: '/delivery/workflows',
+        permissionKey: 'delivery.workflows.view',
+        permissionKeysAny: undefined,
+      },
+      {
+        id: 'delivery-batches',
+        menuId: undefined,
+        navVisible: false,
+        path: '/delivery/batches',
+        permissionKey: 'delivery.workflows.view',
+        permissionKeysAny: undefined,
+      },
+      {
+        id: 'delivery-batch-detail',
+        menuId: undefined,
+        navVisible: false,
+        path: '/delivery/batches/:batchId',
+        permissionKey: 'delivery.workflows.view',
+        permissionKeysAny: undefined,
+      },
       {
         id: 'delivery-manifest-library',
         menuId: undefined,
@@ -193,6 +236,14 @@ describe('delivery route manifest', () => {
         navVisible: true,
         path: '/delivery/environments',
         permissionKey: 'delivery.application-environments.view',
+        permissionKeysAny: undefined,
+      },
+      {
+        id: 'deployment-templates',
+        menuId: 'deployment-templates',
+        navVisible: true,
+        path: '/deployment-templates',
+        permissionKey: 'delivery.deployment-templates.view',
         permissionKeysAny: undefined,
       },
       {
@@ -288,8 +339,16 @@ describe('delivery route manifest', () => {
         menuId: 'release-board',
         navVisible: true,
         path: '/release-board',
-        permissionKey: 'delivery.workflows.view',
-        permissionKeysAny: undefined,
+        permissionKey: undefined,
+        permissionKeysAny: ['delivery.workflows.view', 'delivery.applications.view'],
+      },
+      {
+        id: 'execution-history',
+        menuId: 'execution-history',
+        navVisible: true,
+        path: '/execution-history',
+        permissionKey: undefined,
+        permissionKeysAny: ['delivery.workflows.view', 'delivery.applications.view'],
       },
       {
         id: 'workflows-detail',
@@ -336,14 +395,12 @@ describe('delivery route manifest', () => {
     expect(deliveryRoutes.find((route) => route.meta.id === 'execution-tasks')?.meta.title).toBe(
       '执行队列',
     )
-    const workflowDetailRoute = deliveryRoutes.find(
-      (route) => route.meta.id === 'workflows-detail',
-    )
+    const workflowDetailRoute = deliveryRoutes.find((route) => route.meta.id === 'workflows-detail')
     expect(
       workflowDetailRoute && 'parentId' in workflowDetailRoute.meta
         ? workflowDetailRoute.meta.parentId
         : undefined,
-    ).toBe('release-board')
+    ).toBe('execution-history')
   })
 
   it('passes standalone route-definition validation', () => {

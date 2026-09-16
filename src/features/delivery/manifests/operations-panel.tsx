@@ -19,6 +19,7 @@ import {
 import type { TableColumnsType } from 'antd'
 import {
   CheckOutlined,
+  PlusOutlined,
   CloudSyncOutlined,
   ImportOutlined,
   PlayCircleOutlined,
@@ -30,6 +31,8 @@ import {
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { StatusTag } from '@/components/status-tag'
+import { AdminTable } from '@/components/admin-table'
+import { ManifestResourceInventoryTable } from './resource-inventory'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { deliveryQueries } from '../queries'
 import { formatDateTime } from '@/utils/time'
@@ -41,6 +44,7 @@ import type {
   ManifestDeployment,
   ManifestExecutionTask,
   ManifestPackage,
+  ManifestKustomizeOptions,
   ManifestRenderResult,
   ManifestSource,
   ManifestSyncRun,
@@ -65,6 +69,7 @@ interface SourceFormValue {
 interface BindingFormValue {
   enabled: boolean
   overlay: string
+  kustomize?: ManifestKustomizeOptions
 }
 
 export function parseBindingOverlay(value?: string): Record<string, string> {
@@ -156,6 +161,7 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
     bindingForm.setFieldsValue({
       enabled: selectedBinding.enabled,
       overlay: JSON.stringify(selectedBinding.overlay ?? {}, null, 2),
+      kustomize: selectedBinding.kustomize ?? { entryPath: '', images: [] },
     })
   }, [bindingForm, selectedBinding])
 
@@ -198,7 +204,8 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
 
   const saveBinding = async () => {
     if (!selectedBinding) return
-    const values = await bindingForm.validateFields()
+    const values = await bindingForm.validateFields().catch(() => undefined)
+    if (!values) return
     await bindingMutation.mutateAsync({
       id: selectedBinding.id,
       packageId: item.id,
@@ -207,6 +214,7 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
         clusterId: selectedBinding.clusterId,
         namespace: selectedBinding.namespace,
         overlay: parseBindingOverlay(values.overlay),
+        kustomize: item.renderer === 'kustomize' ? values.kustomize : undefined,
         rolloutStrategyId: selectedBinding.rolloutStrategyId,
         verificationPolicyId: selectedBinding.verificationPolicyId,
         driftPolicy: selectedBinding.driftPolicy,
@@ -273,7 +281,12 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
             <Form.Item label="引用" name="refValue" rules={[{ required: true }]}>
               <Input />
             </Form.Item>
-            <Form.Item label="仓库路径" name="path" rules={[{ required: true }]}>
+            <Form.Item
+              label="同步包根"
+              name="path"
+              rules={[{ required: true }]}
+              tooltip="相对仓库根的目录，必须包含 base、overlays 和依赖文件；环境入口在环境配置中选择。"
+            >
               <Input placeholder="deploy/manifests" />
             </Form.Item>
             <Form.Item label="同步策略" name="syncPolicy" rules={[{ required: true }]}>
@@ -291,7 +304,13 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
               </Form.Item>
             ) : null}
             <Form.Item className="soha-manifest-form-wide" label="包含规则" name="includePatterns">
-              <Input placeholder="**/*.yaml, **/*.yml" />
+              <Input
+                placeholder={
+                  item.renderer === 'kustomize'
+                    ? '留空同步包根内全部文本文件'
+                    : '**/*.yaml, **/*.yml'
+                }
+              />
             </Form.Item>
             <Form.Item className="soha-manifest-form-wide" label="排除规则" name="excludePatterns">
               <Input placeholder="**/examples/**" />
@@ -377,7 +396,7 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
       width: 240,
       render: (_, value) => (
         <Space size={4} wrap>
-          {canTriggerDeployment ? (
+          {canTriggerDeployment && !value.spec.deliverySnapshot ? (
             <Button
               size="small"
               icon={<ReloadOutlined />}
@@ -388,7 +407,7 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
               协调
             </Button>
           ) : null}
-          {canRepair ? (
+          {canRepair && !value.spec.deliverySnapshot ? (
             <Button
               size="small"
               icon={<ToolOutlined />}
@@ -399,7 +418,7 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
               修复
             </Button>
           ) : null}
-          {canAdopt ? (
+          {canAdopt && !value.spec.deliverySnapshot ? (
             <Button
               size="small"
               icon={<ImportOutlined />}
@@ -410,7 +429,9 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
               采纳
             </Button>
           ) : null}
-          {canTriggerDeployment && value.status.lastKnownGoodRevision ? (
+          {canTriggerDeployment &&
+          value.status.lastKnownGoodRevision &&
+          !value.spec.deliverySnapshot ? (
             <Button
               size="small"
               icon={<RollbackOutlined />}
@@ -421,6 +442,7 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
               回滚
             </Button>
           ) : null}
+          {value.spec.deliverySnapshot ? <Text type="secondary">通过应用交付计划更新</Text> : null}
         </Space>
       ),
     },
@@ -459,6 +481,86 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
                 unCheckedChildren="停用"
               />
             </Form.Item>
+            {item.renderer === 'kustomize' ? (
+              <div className="soha-manifest-form-wide">
+                <Form.Item
+                  label="环境入口"
+                  name={['kustomize', 'entryPath']}
+                  tooltip="相对同步包根的目录，内含 kustomization.yaml、kustomization.yml 或 Kustomization；留空使用包根。"
+                  rules={[
+                    {
+                      pattern:
+                        /^(\.|\.?[A-Za-z0-9_-][A-Za-z0-9_.-]*(\/\.?[A-Za-z0-9_-][A-Za-z0-9_.-]*)*)?$/,
+                      message: '请输入包根内的相对目录，如 overlays/prod',
+                    },
+                  ]}
+                >
+                  <Input placeholder="overlays/prod" readOnly={!canUpdateDeployment} />
+                </Form.Item>
+                <Form.List name={['kustomize', 'images']}>
+                  {(fields, { add, remove }) => (
+                    <>
+                      {fields.map(({ key, name, ...field }) => (
+                        <div className="soha-manifest-form-grid" key={key}>
+                          <Form.Item
+                            {...field}
+                            label="原镜像名称"
+                            name={[name, 'name']}
+                            rules={[
+                              {
+                                required: true,
+                                whitespace: true,
+                                message: '请输入要替换的镜像名称',
+                              },
+                            ]}
+                          >
+                            <Input placeholder="nginx" readOnly={!canUpdateDeployment} />
+                          </Form.Item>
+                          <Form.Item
+                            {...field}
+                            label="目标镜像仓库"
+                            name={[name, 'newName']}
+                            tooltip="留空保留原仓库；不含 Tag 或 digest。"
+                          >
+                            <Input
+                              placeholder="registry.example.com/team/api"
+                              readOnly={!canUpdateDeployment}
+                            />
+                          </Form.Item>
+                          <Form.Item
+                            {...field}
+                            className="soha-manifest-form-wide"
+                            label="镜像 digest"
+                            name={[name, 'digest']}
+                            rules={[
+                              {
+                                required: true,
+                                pattern: /^sha256:[a-f0-9]{64}$/,
+                                message: '请输入 sha256: 加 64 位小写十六进制摘要',
+                              },
+                            ]}
+                          >
+                            <Input placeholder="sha256:…" readOnly={!canUpdateDeployment} />
+                          </Form.Item>
+                          {canUpdateDeployment ? (
+                            <Button onClick={() => remove(name)}>移除镜像映射 {name + 1}</Button>
+                          ) : null}
+                        </div>
+                      ))}
+                      {canUpdateDeployment ? (
+                        <Button
+                          icon={<PlusOutlined />}
+                          disabled={fields.length >= 50}
+                          onClick={() => add()}
+                        >
+                          添加镜像映射
+                        </Button>
+                      ) : null}
+                    </>
+                  )}
+                </Form.List>
+              </div>
+            ) : null}
             <Form.Item
               className="soha-manifest-form-wide"
               label="环境覆盖参数"
@@ -612,7 +714,12 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
                     <Button
                       type="primary"
                       icon={<CloudSyncOutlined />}
-                      disabled={!bindingId || !selectedBinding?.enabled || item.currentRevision < 1}
+                      disabled={
+                        !bindingId ||
+                        !selectedBinding?.enabled ||
+                        item.currentRevision < 1 ||
+                        Boolean(deploymentByBinding.get(bindingId)?.spec.deliverySnapshot)
+                      }
                       loading={desiredMutation.isPending}
                       onClick={setDesired}
                     >
@@ -620,13 +727,16 @@ export function ManifestOperationsPanel({ item }: { item: ManifestPackage }) {
                     </Button>
                   ) : null}
                 </Space>
-                <Table
+                <AdminTable
                   rowKey="id"
-                  size="small"
+                  tableSize="small"
                   pagination={false}
                   loading={deploymentsQuery.isLoading}
                   columns={deploymentColumns}
                   dataSource={deploymentsQuery.data ?? []}
+                  expandedRowRender={(deployment: ManifestDeployment) => (
+                    <ManifestResourceInventoryTable items={deployment.status.inventory ?? []} />
+                  )}
                 />
               </>
             ),

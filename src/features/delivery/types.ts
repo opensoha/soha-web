@@ -3,7 +3,6 @@ import type {
   ApplicationRuntimeDetail,
   ApplicationServiceComponent,
   ApplicationWorkloadRuntimeDetail,
-  BlueprintBootstrapResult,
   BuildRecord,
   BuildTemplate,
   DeliveryApplication,
@@ -11,8 +10,6 @@ import type {
   DeliveryApplicationEnvironmentDetail,
   DeliveryApplicationDetail,
   DeliveryBlueprint,
-  DeliveryDraft,
-  DeliveryDraftConfirmResult,
   DeliveryPlan,
   DeliveryPlanConfirmResult,
   DeliveryPlanRequest,
@@ -33,7 +30,10 @@ import type {
 } from './domain-types'
 import type { Cluster, DeploymentDetail, Pod, ResourceMetrics } from '@/types/platform'
 import type { GatewayManifest, GatewayTool } from '@/features/copilot'
-import type { RegistryConnection, RegistryConnectionInput } from '@opensoha/contracts/gen/ts/sohaapi'
+import type {
+  RegistryConnection,
+  RegistryConnectionInput,
+} from '@opensoha/contracts/gen/ts/sohaapi'
 
 export type * from './domain-types'
 
@@ -67,6 +67,7 @@ export interface ApplicationWorkflowSaveInput {
 }
 
 export interface ApplicationWorkflowInput {
+  expectedRevision?: number
   name: string
   description?: string
   definition: object
@@ -74,6 +75,9 @@ export interface ApplicationWorkflowInput {
 }
 
 export interface BuildTemplateInput {
+  copiedFrom?: { id: string; revision: number; version?: number }
+  expectedRevision?: number
+  publish?: boolean
   key?: string
   name?: string
   description?: string
@@ -94,6 +98,8 @@ export type RegistryRecord = RegistryConnection
 export type RegistryInput = RegistryConnectionInput
 
 export interface DeliveryListParams {
+  buildSourceId?: string
+  applicationEnvironmentId?: string
   applicationId?: string
   limit?: number
 }
@@ -137,18 +143,6 @@ export interface ExecutionCallbackInput {
 export interface ExecutionTaskActionInput {
   id: string
   reason: string
-}
-
-export interface DeliveryDraftInput {
-  source: DeliveryDraft['source']
-  blueprintId?: string
-  applicationDraft: DeliveryDraft['applicationDraft']
-  services?: DeliveryDraft['services']
-  buildSources?: DeliveryDraft['buildSources']
-  environmentBindings?: DeliveryDraft['environmentBindings']
-  files?: DeliveryDraft['files']
-  executionHints?: DeliveryDraft['executionHints']
-  postCreateActions?: DeliveryDraft['postCreateActions']
 }
 
 export type DeliveryRuntimeKind =
@@ -229,7 +223,6 @@ export type {
   ApplicationRuntimeDetail,
   ApplicationServiceComponent,
   ApplicationWorkloadRuntimeDetail,
-  BlueprintBootstrapResult,
   BuildRecord,
   BuildTemplate,
   Cluster,
@@ -239,8 +232,6 @@ export type {
   DeliveryApplicationDetail,
   DeliveryBlueprint,
   DeploymentDetail,
-  DeliveryDraft,
-  DeliveryDraftConfirmResult,
   DeliveryPlan,
   DeliveryPlanConfirmResult,
   DeliveryPlanRequest,
@@ -259,4 +250,31 @@ export type {
   GitProject,
   GitReference,
   GitCommit,
+}
+
+export type {
+  ServiceDeploymentTemplate,
+  ServiceDeploymentTemplateInput,
+  ServiceDeploymentTemplateBinding,
+  DeploymentTemplatePreview,
+  DeploymentTemplatePreviewInput,
+  TemplateParameterSchema,
+  TemplateParameterValues,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+
+export type {
+  DeliveryBatch,
+  DeliveryBatchInput,
+  DeliveryBatchActionInput,
+  DeliveryTargetInput,
+  DeliveryTargetSnapshot,
+  DeliveryWorkflow,
+  DeliveryWorkflowInput,
+  DeliveryWorkflowDefinition,
+  DeliveryBatchTemplateDefinition,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+
+export interface DeliveryBatchListParams extends DeliveryListParams {
+  workflowId?: string
+  serviceId?: string
 }

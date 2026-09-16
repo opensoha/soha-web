@@ -14,6 +14,54 @@ vi.mock('@/services/api-client', () => ({ api: apiMocks }))
 describe('deliveryApi', () => {
   beforeEach(() => vi.clearAllMocks())
 
+  it('sends exact definition filters for recent executions', async () => {
+    apiMocks.get.mockResolvedValue({ data: [] })
+    await deliveryApi.builds.list({ applicationId: 'app', buildSourceId: ' source/a ', limit: 10 })
+    await deliveryApi.workflows.list({
+      applicationId: 'app',
+      applicationEnvironmentId: ' env/a ',
+      limit: 10,
+    })
+    await deliveryApi.batches.list({ workflowId: ' workflow/a ', limit: 10 })
+    expect(apiMocks.get.mock.calls.map(([path]) => path)).toEqual([
+      '/builds?applicationId=app&buildSourceId=source%2Fa&limit=10',
+      '/workflows?applicationId=app&applicationEnvironmentId=env%2Fa&limit=10',
+      '/delivery-batches?workflowId=workflow%2Fa&limit=10',
+    ])
+  })
+
+  it('keeps Git source versions, candidate identities and explicit removal disposition', async () => {
+    apiMocks.get.mockResolvedValue({ data: [] })
+    apiMocks.post.mockResolvedValue({ data: { id: 'run-1' } })
+    apiMocks.delete.mockResolvedValue(undefined)
+    await deliveryApi.templateSources.runs('source/a', 50, 50)
+    await deliveryApi.documents.source('BuildTemplate', 'template/a', 3)
+    const input = {
+      expectedGeneration: 7,
+      candidateDigest: 'sha256:fixed',
+      idempotencyKey: 'stable-key',
+    }
+    await deliveryApi.templateSources.apply('source/a', 'run/a', input)
+    const removal = { expectedGeneration: 7, disposition: 'keep' as const }
+    await deliveryApi.templateSources.remove('source/a', removal)
+    await deliveryApi.templateSources.detach('source/a', 'Workflow', 'workflow/a', removal)
+    expect(apiMocks.get).toHaveBeenCalledWith(
+      '/delivery/template-sources/source%2Fa/sync-runs?offset=50&limit=50',
+    )
+    expect(apiMocks.get).toHaveBeenCalledWith(
+      '/delivery/documents/BuildTemplate/template%2Fa/source?version=3',
+    )
+    expect(apiMocks.post).toHaveBeenCalledWith(
+      '/delivery/template-sources/source%2Fa/sync-runs/run%2Fa/apply',
+      input,
+    )
+    expect(apiMocks.delete).toHaveBeenCalledWith('/delivery/template-sources/source%2Fa', removal)
+    expect(apiMocks.post).toHaveBeenCalledWith(
+      '/delivery/template-sources/source%2Fa/objects/Workflow/workflow%2Fa/detach',
+      removal,
+    )
+  })
+
   it('unwraps application list/detail/runtime values and encodes identifiers', async () => {
     apiMocks.get
       .mockResolvedValueOnce({ data: [{ id: 'app-1' }] })
@@ -211,16 +259,14 @@ describe('deliveryApi', () => {
     ])
   })
 
-  it('keeps template, execution, draft, plan, and rollback mutation payloads intact', async () => {
+  it('keeps template, execution, plan, and rollback mutation payloads intact', async () => {
     apiMocks.post
       .mockResolvedValueOnce({ data: { applicationDraft: {} } })
-      .mockResolvedValueOnce({ data: { id: 'draft-1' } })
       .mockResolvedValueOnce({ data: { id: 'plan-1' } })
       .mockResolvedValueOnce({ data: { plan: { id: 'plan-1' } } })
       .mockResolvedValue(undefined)
 
     await deliveryApi.blueprints.renderSpec('blueprint/1')
-    await deliveryApi.drafts.confirm('draft/1')
     await deliveryApi.plans.create({ applicationId: 'app-1' } as never)
     await deliveryApi.plans.confirm('plan/1')
     await deliveryApi.executionTasks.cancel({ id: 'task/1', reason: 'manual cancel' })
@@ -236,14 +282,60 @@ describe('deliveryApi', () => {
       '/delivery/blueprints/blueprint%2F1/render-spec',
       {},
     )
-    expect(apiMocks.post).toHaveBeenNthCalledWith(2, '/delivery/drafts/draft%2F1/confirm', {})
-    expect(apiMocks.post).toHaveBeenNthCalledWith(5, '/delivery/execution-tasks/task%2F1/cancel', {
+    expect(apiMocks.post).toHaveBeenNthCalledWith(4, '/delivery/execution-tasks/task%2F1/cancel', {
       reason: 'manual cancel',
     })
     expect(apiMocks.post).toHaveBeenNthCalledWith(
-      6,
+      5,
       '/clusters/cluster%2F1/workloads/deployments/rollback',
       { namespace: 'default', name: 'api', revision: '2' },
     )
+  })
+  it('requires the edited application version and sends only input fields', async () => {
+    vi.mocked(apiMocks.put).mockResolvedValue({})
+    await deliveryApi.applications.update('app-1', {
+      name: 'API',
+      key: 'api',
+      enabled: true,
+      version: 4,
+      createdAt: 'old',
+      updatedAt: 'old',
+      environmentCount: 2,
+    })
+    expect(apiMocks.put).toHaveBeenLastCalledWith('/applications/app-1', {
+      name: 'API',
+      key: 'api',
+      enabled: true,
+      expectedVersion: 4,
+    })
+    await expect(
+      deliveryApi.applications.update('app-1', { name: 'Missing version' }),
+    ).rejects.toThrow('缺少有效版本')
+  })
+})
+
+it('preserves batch idempotency and workflow versions through dedicated endpoints', async () => {
+  apiMocks.get.mockResolvedValue({ data: [] })
+  apiMocks.post.mockResolvedValue({ data: { id: 'batch-1' } })
+  apiMocks.put.mockResolvedValue({ data: { id: 'workflow-1' } })
+  const definition = {
+    name: 'Release',
+    targets: [{ id: 'api', applicationId: 'app', serviceId: 'service', action: 'build' as const }],
+  }
+  const input = { idempotencyKey: 'stable-request-id', definition }
+  await deliveryApi.batches.list({ applicationId: ' app/a ', serviceId: ' service/1 ', limit: 20 })
+  await deliveryApi.batches.create(input)
+  await deliveryApi.batches.cancel(' batch/1 ', { reason: 'user stopped' })
+  await deliveryApi.deliveryWorkflows.update(' workflow/1 ', { expectedVersion: 3, definition })
+  expect(apiMocks.get).toHaveBeenCalledWith(
+    '/delivery-batches?applicationId=app%2Fa&serviceId=service%2F1&limit=20',
+  )
+  expect(apiMocks.post).toHaveBeenCalledWith('/delivery-batches', input)
+  expect(apiMocks.post).toHaveBeenCalledWith('/delivery-batches/batch%2F1/cancel', {
+    reason: 'user stopped',
+  })
+  expect(apiMocks.put).toHaveBeenCalledWith('/delivery-workflows/workflow%2F1', {
+    expectedVersion: 3,
+    definition,
   })
 })

@@ -10,6 +10,17 @@ import { WORKBENCH_ENTRY_PERMISSION_KEYS } from '@/routes/meta'
 import type { PermissionSnapshot } from '@/types'
 
 const workbenchEntryPermissions = Object.values(WORKBENCH_ENTRY_PERMISSION_KEYS)
+const { sessionRuntimeMock } = vi.hoisted(() => ({ sessionRuntimeMock: vi.fn() }))
+vi.mock('@/features/delivery/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/delivery/api')>()
+  return {
+    ...actual,
+    deliveryApi: {
+      ...actual.deliveryApi,
+      applications: { ...actual.deliveryApi.applications, runtime: sessionRuntimeMock },
+    },
+  }
+})
 
 const testState = vi.hoisted(() => ({
   auth: {
@@ -226,6 +237,34 @@ async function renderWithProviders(route: string, snapshotOverrides?: Partial<Pe
 }
 
 describe('app layout workspace navigation', () => {
+  beforeEach(() => {
+    sessionRuntimeMock.mockReset().mockResolvedValue({
+      environments: [
+        {
+          applicationEnvironmentId: 'binding-test',
+          environmentId: 'test',
+          requiresApproval: false,
+        },
+      ],
+    })
+  })
+  it.each([
+    ['/applications/demo?applicationEnvironmentId=binding-test', true],
+    ['/applications/demo?applicationEnvironmentId=removed', false],
+    ['/applications/demo', true],
+    ['/applications', false],
+  ] as const)(
+    'binds delivery sessions to a verified application environment at %s',
+    async (route, visible) => {
+      const container = await renderWithProviders(route, {
+        permissionKeys: ['delivery.applications.view', 'platform.pods.logs'],
+      })
+      await vi.waitFor(() =>
+        expect(Boolean(container.querySelector('.soha-header-realtime-sessions'))).toBe(visible),
+      )
+    },
+  )
+
   beforeAll(() => {
     class ResizeObserverMock {
       observe() {}
@@ -864,6 +903,31 @@ describe('app layout workspace navigation', () => {
     expect(container.querySelector('.soha-sider-topbar > button.soha-sider-brand')).not.toBeNull()
     expect(container.querySelector('button[aria-label="系统设置"]')).toBeNull()
     expect(testState.prefs.setCurrentWorkspace).not.toHaveBeenCalled()
+  })
+
+  it('uses top navigation only inside an application workspace', async () => {
+    const container = await renderWithProviders(
+      '/applications/app-1?tab=services&applicationEnvironmentId=env-1',
+    )
+    await act(async () => {
+      await vi.dynamicImportSettled()
+    })
+    expect(container.querySelector('.soha-sider')).toBeNull()
+    expect(container.querySelector('.soha-header-sider-toggle')).toBeNull()
+    expect(container.querySelector<HTMLElement>('.soha-main')?.style.width).toBe('100%')
+    expect(container.querySelector('.soha-header .soha-application-identity')).not.toBeNull()
+    expect(container.querySelector('.soha-header-main [aria-label="应用导航"]')).not.toBeNull()
+    expect(container.querySelector('.soha-header-main [aria-label="切换应用"]')).not.toBeNull()
+    expect(container.querySelector('.soha-header-main [aria-label="应用环境"]')).not.toBeNull()
+    expect(container.querySelector('.soha-header [aria-label="应用设置"]')).toBeNull()
+    expect(container.querySelector('.soha-application-back')?.getAttribute('href')).toBe(
+      '/applications',
+    )
+    expect(container.querySelector('.soha-header-right .soha-application-identity')).toBeNull()
+    expect(container.querySelector('.soha-application-navigation')).toBeNull()
+    const center = await renderWithProviders('/applications')
+    expect(center.querySelector('.soha-sider')).not.toBeNull()
+    expect(center.querySelector('.soha-application-navigation')).toBeNull()
   })
 
   it('renders account utilities in a dedicated personal settings workbench', async () => {

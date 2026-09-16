@@ -1,3 +1,8 @@
+import type { components } from '@opensoha/contracts/gen/ts/sohaapi'
+
+export type ManifestKustomizeOptions = components['schemas']['ManifestKustomizeOptions']
+export type ManifestDeliverySnapshot = components['schemas']['ManifestDeliverySnapshot']
+
 export type ManifestRenderer = 'raw_yaml' | 'kustomize'
 export type ManifestStatus = 'draft' | 'published'
 
@@ -7,12 +12,14 @@ export interface ManifestFile {
 }
 
 export interface ManifestBinding {
+  templateParameters?: components['schemas']['TemplateParameterValues']
   id?: string
   applicationEnvironmentId: string
   environmentKey: string
   clusterId: string
   namespace: string
   overlay?: Record<string, string>
+  kustomize?: ManifestKustomizeOptions
   status?: string
 }
 
@@ -35,6 +42,7 @@ export interface ManifestPackage {
 }
 
 export interface ManifestPackageInput {
+  expectedUpdatedAt?: string
   name: string
   description?: string
   applicationId: string
@@ -104,6 +112,7 @@ export interface ManifestSource {
 }
 
 export interface ManifestEnvironmentBinding {
+  templateParameters?: components['schemas']['TemplateParameterValues']
   id: string
   packageId: string
   applicationEnvironmentId: string
@@ -111,6 +120,7 @@ export interface ManifestEnvironmentBinding {
   clusterId: string
   namespace: string
   overlay: Record<string, string>
+  kustomize?: ManifestKustomizeOptions
   rolloutStrategyId?: string
   verificationPolicyId?: string
   driftPolicy: 'report' | 'repair' | 'adopt'
@@ -122,10 +132,12 @@ export interface ManifestEnvironmentBinding {
 }
 
 export interface ManifestEnvironmentBindingUpdateInput {
+  templateParameters?: components['schemas']['TemplateParameterValues']
   applicationEnvironmentId: string
   clusterId: string
   namespace: string
   overlay: Record<string, string>
+  kustomize?: ManifestKustomizeOptions
   rolloutStrategyId?: string
   verificationPolicyId?: string
   driftPolicy: ManifestEnvironmentBinding['driftPolicy']
@@ -149,6 +161,8 @@ export interface ManifestRenderResult {
   revision: number
   renderer: ManifestRenderer
   renderedDigest: string
+  inputDigest?: string
+  rendererVersion?: string
   documents: ManifestRenderedDocument[]
   diagnostics: ManifestDiagnostic[]
 }
@@ -201,20 +215,7 @@ export interface ManifestDriftReport {
   }>
 }
 
-export interface ManifestResourceInventory {
-  deploymentId: string
-  generation: number
-  apiVersion: string
-  kind: string
-  namespace: string
-  name: string
-  uid?: string
-  resourceVersion?: string
-  desiredObjectDigest: string
-  observedObjectDigest: string
-  health: string
-  lastObservedAt: string
-}
+export type ManifestResourceInventory = components['schemas']['ManifestResourceInventory']
 
 export interface ManifestDeployment {
   id: string
@@ -222,6 +223,7 @@ export interface ManifestDeployment {
   bindingId: string
   generation: number
   spec: {
+    deliverySnapshot?: ManifestDeliverySnapshot
     desiredRevision: number
     desiredDigest: string
     reconcilePolicy: 'manual' | 'continuous'

@@ -5,6 +5,8 @@ import {
   deleteIdentityOIDCClient,
   deleteIdentityProvider,
   getIdentityProvider,
+  getIdentityProviderProtocolMetadata,
+  getIdentityProviderUserMetadata,
   importSAMLLoginSourceMetadata,
   listIdentityOIDCClients,
   listIdentityProviders,
@@ -26,6 +28,7 @@ import type {
 const apiMocks = vi.hoisted(() => ({
   delete: vi.fn(),
   get: vi.fn(),
+  getText: vi.fn(),
   post: vi.fn(),
   put: vi.fn(),
 }))
@@ -79,7 +82,7 @@ const clientInput: IdentityOIDCClientInput = {
   redirectUriRegexes: client.redirectUriRegexes,
   postLogoutRedirectUris: client.postLogoutRedirectUris,
   allowedScopes: client.allowedScopes,
-  allowedGrantTypes: client.allowedGrantTypes,
+  allowedGrantTypes: ['authorization_code'],
   requirePkce: client.requirePkce,
   accessTokenTtlSeconds: client.accessTokenTtlSeconds,
   idTokenTtlSeconds: client.idTokenTtlSeconds,
@@ -88,6 +91,17 @@ const clientInput: IdentityOIDCClientInput = {
 }
 
 describe('identity providers api', () => {
+  it('loads protocol documents through the shared transport and encodes identifiers', async () => {
+    apiMocks.get.mockResolvedValueOnce({ issuer: 'https://soha.example' })
+    expect(await getIdentityProviderProtocolMetadata(provider)).toContain('https://soha.example')
+    expect(apiMocks.get).toHaveBeenCalledWith('/provider/oidc/.well-known/openid-configuration')
+    apiMocks.getText.mockResolvedValueOnce('<EntityDescriptor />')
+    expect(await getIdentityProviderProtocolMetadata({ ...provider, type: 'saml' })).toBe('<EntityDescriptor />')
+    expect(apiMocks.getText).toHaveBeenCalledWith('/saml2/idp/provider%2Fid/metadata')
+    apiMocks.get.mockResolvedValueOnce({ data: { attributes: { sub: ['user/id'] } } })
+    await getIdentityProviderUserMetadata(provider.id, 'user/id', 'client/id')
+    expect(apiMocks.get).toHaveBeenCalledWith('/identity/providers/provider%2Fid/users/user%2Fid/metadata?clientId=client%2Fid')
+  })
   beforeEach(() => vi.clearAllMocks())
 
   it('normalizes every backend list filter and unwraps provider data', async () => {

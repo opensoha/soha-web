@@ -59,23 +59,9 @@ function isWorkbenchArtifact(value: unknown): value is WorkbenchArtifact {
 }
 
 function streamStateArtifacts(state: WorkbenchStreamState): WorkbenchArtifact[] {
-  const artifacts = state.artifacts.filter(isWorkbenchArtifact)
-  const toolExecutions = state.toolCalls.map(streamToolCallToWorkbenchToolCall)
-  if (toolExecutions.length === 0) return artifacts
-  if (artifacts.some((artifact) => (artifact.toolExecutions ?? []).length > 0)) return artifacts
-  if (artifacts.length > 0) {
-    const [first, ...rest] = artifacts
-    return [{ ...first, toolExecutions }, ...rest]
-  }
-  return [
-    {
-      kind: 'stream',
-      runId: state.message.id || 'stream',
-      title: '实时分析链路',
-      summary: state.thinking?.summary || '正在分析当前会话。',
-      toolExecutions,
-    },
-  ]
+  return state.artifacts
+    .filter(isWorkbenchArtifact)
+    .filter((artifact) => artifact.kind !== 'stream')
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -141,7 +127,17 @@ export function metadataToolExecutions(metadata: Record<string, unknown> | undef
 }
 
 export function metadataSources(metadata: Record<string, unknown> | undefined) {
-  return metadataArray(metadata, 'sources', isWorkbenchSource)
+  const sources = metadataArray(metadata, 'sources', isWorkbenchSource)
+  if (sources.length) return sources
+  const snapshot = metadata?.contextSnapshot
+  if (!isRecord(snapshot) || !Array.isArray(snapshot.citations)) return sources
+  return snapshot.citations
+    .filter(isRecord)
+    .flatMap((citation): WorkbenchSource[] =>
+      typeof citation.id === 'string' && typeof citation.documentTitle === 'string'
+        ? [{ id: citation.id, kind: 'document', title: citation.documentTitle }]
+        : [],
+    )
 }
 
 export function metadataThinkingSummary(metadata: Record<string, unknown> | undefined) {
@@ -161,25 +157,15 @@ export function metadataArtifacts(metadata: Record<string, unknown> | undefined)
 }
 
 export function replayArtifactsForMessage(message: ConversationMessage): WorkbenchArtifact[] {
-  const artifacts = metadataArtifacts(message.metadata)
-  const toolExecutions = metadataToolExecutions(message.metadata)
-  if (artifacts.length > 0) {
-    if (toolExecutions.length === 0) return artifacts
-    const [first, ...rest] = artifacts
-    return [{ ...first, toolExecutions }, ...rest]
-  }
-  const thinkingSummary = metadataThinkingSummary(message.metadata)
-  const sources = metadataSources(message.metadata)
-  if (toolExecutions.length === 0 && sources.length === 0 && !thinkingSummary) return []
-  return [
-    {
-      kind: 'stream',
-      runId: message.id,
-      title: '实时分析链路',
-      summary: thinkingSummary || message.content || '已完成 Workbench 分析。',
-      toolExecutions,
-    },
-  ]
+  const artifacts = metadataArtifacts(message.metadata).filter(
+    (artifact) =>
+      artifact.kind !== 'stream' &&
+      !(message.metadata?.mode === 'general' && artifact.kind === 'general'),
+  )
+  const tools = metadataToolExecutions(message.metadata)
+  return artifacts.map((artifact, index) =>
+    index === 0 && tools.length ? { ...artifact, toolExecutions: tools } : artifact,
+  )
 }
 
 export function streamMessageMetadata(
@@ -292,8 +278,11 @@ export function thoughtChainStatus(status: string) {
     case 'running':
       return 'loading' as const
     case 'success':
+    case 'completed':
+    case 'succeeded':
       return 'success' as const
     case 'error':
+    case 'failed':
       return 'error' as const
     default:
       return 'abort' as const
@@ -306,7 +295,9 @@ export function agentStatusLabel(status?: NonNullable<WorkbenchStreamState['agen
 }
 
 export function toolCallSummaryText(toolCalls: WorkbenchToolCall[]) {
-  const successCount = toolCalls.filter((item) => item.status === 'success').length
-  const failedCount = toolCalls.filter((item) => item.status === 'error').length
+  const successCount = toolCalls.filter(
+    (item) => thoughtChainStatus(item.status) === 'success',
+  ).length
+  const failedCount = toolCalls.filter((item) => thoughtChainStatus(item.status) === 'error').length
   return `${toolCalls.length} 个工具调用，${successCount} 成功，${failedCount} 失败`
 }

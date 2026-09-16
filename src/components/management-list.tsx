@@ -116,6 +116,7 @@ interface ManagementSearchableListPaneProps<T> {
   onSearchChange: (value: string) => void
   renderItem: (item: T, state: { active: boolean }) => ReactNode
   renderItemActions?: (item: T, state: { active: boolean }) => ReactNode
+  searchActions?: ReactNode
   searchPlaceholder?: string
   searchValue: string
 }
@@ -626,6 +627,7 @@ export function ManagementSearchableListPane<T>({
   onSearchChange,
   renderItem,
   renderItemActions,
+  searchActions,
   searchPlaceholder,
   searchValue,
 }: ManagementSearchableListPaneProps<T>) {
@@ -634,14 +636,17 @@ export function ManagementSearchableListPane<T>({
   const resolvedSearchPlaceholder = searchPlaceholder ?? localeText(localeCode, '搜索', 'Search')
   return (
     <aside className={classNames('soha-management-searchable-list-pane', className)}>
-      <Input
-        allowClear
-        className="soha-management-searchable-list-pane__search"
-        prefix={<SearchOutlined />}
-        placeholder={resolvedSearchPlaceholder}
-        value={searchValue}
-        onChange={(event) => onSearchChange(event.target.value)}
-      />
+      <div className="soha-management-searchable-list-pane__header">
+        <Input
+          allowClear
+          className="soha-management-searchable-list-pane__search"
+          prefix={<SearchOutlined />}
+          placeholder={resolvedSearchPlaceholder}
+          value={searchValue}
+          onChange={(event) => onSearchChange(event.target.value)}
+        />
+        {searchActions}
+      </div>
       <div className="soha-management-searchable-list-pane__items">
         {isLoading ? <ManagementState bordered={false} compact kind="loading" /> : null}
         {!isLoading && isError ? (

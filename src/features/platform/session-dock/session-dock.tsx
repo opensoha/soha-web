@@ -8,12 +8,19 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { useStore } from 'zustand'
+import { createSessionDockStore } from './store'
 import { Badge } from 'antd'
 import { CodeOutlined } from '@ant-design/icons'
 import { HeaderActionButton } from '@/components/header-action-button'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
-import { normalizeRealtimeSession, type RealtimeSession, type RealtimeSessionInput } from './types'
+import {
+  normalizeRealtimeSession,
+  type RealtimeSession,
+  type RealtimeSessionInput,
+  type RealtimeSessionWorkbench,
+} from './types'
 
 const RealtimeSessionDockPanel = lazy(async () => {
   const module = await import('./session-dock-panel')
@@ -21,6 +28,7 @@ const RealtimeSessionDockPanel = lazy(async () => {
 })
 
 interface RealtimeSessionDockContextValue {
+  workbench: RealtimeSessionWorkbench
   activeClusterId: string | null
   activeSessionKeys: Record<string, string>
   closeSession: (sessionId: string) => void
@@ -47,47 +55,108 @@ export function useRealtimeSessionDock() {
 export function RealtimeSessionDockProvider({
   children,
   visible,
+  ownerKey,
+  workbench,
+  scopeKey,
 }: {
   children: ReactNode
   visible: boolean
+  ownerKey?: string
+  workbench: RealtimeSessionWorkbench
+  scopeKey?: string
 }) {
-  const activeClusterId = usePlatformScopeStore((state) => state.clusterId)
-  const [sessions, setSessions] = useState<RealtimeSession[]>([])
-  const [activeSessionKeys, setActiveSessionKeys] = useState<Record<string, string>>({})
-  const [dockOpen, setDockOpen] = useState(false)
+  return (
+    <SessionDockOwner
+      key={ownerKey || 'anonymous'}
+      ownerKey={ownerKey}
+      visible={visible}
+      workbench={workbench}
+      scopeKey={scopeKey}
+    >
+      {children}
+    </SessionDockOwner>
+  )
+}
+
+function SessionDockOwner({
+  children,
+  visible,
+  ownerKey,
+  workbench,
+  scopeKey,
+}: {
+  children: ReactNode
+  visible: boolean
+  ownerKey?: string
+  workbench: RealtimeSessionWorkbench
+  scopeKey?: string
+}) {
+  const platformClusterId = usePlatformScopeStore((state) => state.clusterId)
+  const store = useMemo(
+    () => createSessionDockStore(workbench, ownerKey, scopeKey),
+    [workbench, ownerKey, scopeKey],
+  )
+  const { sessions, activeSessionKeys, selectedClusterId } = useStore(store)
+  const activeClusterId = workbench === 'platform' ? platformClusterId : selectedClusterId
+  const setSessions = useCallback(
+    (value: RealtimeSession[] | ((current: RealtimeSession[]) => RealtimeSession[])) => {
+      store.setState((state) => ({
+        sessions: typeof value === 'function' ? value(state.sessions) : value,
+      }))
+    },
+    [store],
+  )
+  const setActiveSessionKeys = useCallback(
+    (value: (current: Record<string, string>) => Record<string, string>) => {
+      store.setState((state) => ({ activeSessionKeys: value(state.activeSessionKeys) }))
+    },
+    [store],
+  )
+  const [openedScope, setOpenedScope] = useState<string | undefined>()
+  const [isOpen, setIsOpen] = useState(false)
+  const dockOpen = isOpen && openedScope === scopeKey
   const [maximized, setMaximized] = useState(false)
 
-  const openSession = useCallback((input: RealtimeSessionInput) => {
-    const session = normalizeRealtimeSession(input)
-    if (!session) return
+  const openSession = useCallback(
+    (input: RealtimeSessionInput) => {
+      const session = normalizeRealtimeSession(input)
+      if (workbench === 'delivery' && !scopeKey) return
+      if (!session || (workbench === 'platform' && session.clusterId !== platformClusterId)) return
 
-    setSessions((current) => {
-      const existing = current.findIndex((item) => item.id === session.id)
-      if (existing < 0) return [...current, session]
-      return current.map((item, index) => (index === existing ? session : item))
-    })
-    setActiveSessionKeys((current) => ({ ...current, [session.clusterId]: session.id }))
-    setDockOpen(true)
-  }, [])
+      setSessions((current) => {
+        const existing = current.findIndex((item) => item.id === session.id)
+        if (existing < 0) return [...current, session]
+        return current.map((item, index) => (index === existing ? session : item))
+      })
+      setActiveSessionKeys((current) => ({ ...current, [session.clusterId]: session.id }))
+      if (workbench === 'delivery') store.setState({ selectedClusterId: session.clusterId })
+      setOpenedScope(scopeKey)
+      setIsOpen(true)
+    },
+    [setSessions, setActiveSessionKeys, store, workbench, platformClusterId, scopeKey],
+  )
 
-  const replaceSession = useCallback((sessionId: string, input: RealtimeSessionInput) => {
-    const replacement = normalizeRealtimeSession(input)
-    if (!replacement) return
+  const replaceSession = useCallback(
+    (sessionId: string, input: RealtimeSessionInput) => {
+      const replacement = normalizeRealtimeSession(input)
+      if (!replacement) return
 
-    setSessions((current) => {
-      const index = current.findIndex((session) => session.id === sessionId)
-      if (index < 0) return current
-      const next = current.filter(
-        (session) => session.id !== sessionId && session.id !== replacement.id,
-      )
-      next.splice(Math.min(index, next.length), 0, replacement)
-      return next
-    })
-    setActiveSessionKeys((current) => ({
-      ...current,
-      [replacement.clusterId]: replacement.id,
-    }))
-  }, [])
+      setSessions((current) => {
+        const index = current.findIndex((session) => session.id === sessionId)
+        if (index < 0) return current
+        const next = current.filter(
+          (session) => session.id !== sessionId && session.id !== replacement.id,
+        )
+        next.splice(Math.min(index, next.length), 0, replacement)
+        return next
+      })
+      setActiveSessionKeys((current) => ({
+        ...current,
+        [replacement.clusterId]: replacement.id,
+      }))
+    },
+    [setSessions, setActiveSessionKeys],
+  )
 
   const closeSession = useCallback(
     (sessionId: string) => {
@@ -106,35 +175,53 @@ export function RealtimeSessionDockProvider({
         else delete next[closing.clusterId]
         return next
       })
+      if (
+        workbench === 'delivery' &&
+        activeClusterId === closing.clusterId &&
+        !remaining.some((session) => session.clusterId === closing.clusterId)
+      ) {
+        store.setState({ selectedClusterId: remaining[remaining.length - 1]?.clusterId ?? null })
+      }
       if (remaining.length === 0) {
-        setDockOpen(false)
+        setIsOpen(false)
         setMaximized(false)
       }
     },
-    [sessions],
+    [sessions, setSessions, setActiveSessionKeys, activeClusterId, store, workbench],
   )
 
-  const setActiveSession = useCallback((clusterId: string, sessionId: string) => {
-    setActiveSessionKeys((current) => ({ ...current, [clusterId]: sessionId }))
-  }, [])
+  const setActiveSession = useCallback(
+    (clusterId: string, sessionId: string) => {
+      if (workbench === 'platform' && clusterId !== platformClusterId) return
+      if (!sessions.some((session) => session.clusterId === clusterId && session.id === sessionId))
+        return
+      if (workbench === 'delivery') store.setState({ selectedClusterId: clusterId })
+      setActiveSessionKeys((current) => ({ ...current, [clusterId]: sessionId }))
+    },
+    [setActiveSessionKeys, store, workbench, platformClusterId, sessions],
+  )
 
   const toggleDock = useCallback(() => {
+    if (workbench === 'delivery' && !scopeKey) return
     if (dockOpen) setMaximized(false)
-    setDockOpen(!dockOpen)
-  }, [dockOpen])
+    setOpenedScope(scopeKey)
+    setIsOpen(!dockOpen)
+  }, [dockOpen, scopeKey, workbench])
 
   const minimizeDock = useCallback(() => {
-    setDockOpen(false)
+    setIsOpen(false)
     setMaximized(false)
   }, [])
 
   const maximizeDock = useCallback(() => {
-    setDockOpen(true)
+    setOpenedScope(scopeKey)
+    setIsOpen(true)
     setMaximized((current) => !current)
-  }, [])
+  }, [scopeKey])
 
   const contextValue = useMemo<RealtimeSessionDockContextValue>(
     () => ({
+      workbench,
       activeClusterId,
       activeSessionKeys,
       closeSession,
@@ -148,6 +235,7 @@ export function RealtimeSessionDockProvider({
       toggleDock,
     }),
     [
+      workbench,
       activeClusterId,
       activeSessionKeys,
       closeSession,
@@ -165,9 +253,11 @@ export function RealtimeSessionDockProvider({
   return (
     <RealtimeSessionDockContext.Provider value={contextValue}>
       {children}
-      {visible && dockOpen ? (
+      {sessions.length > 0 || dockOpen ? (
         <Suspense fallback={null}>
           <RealtimeSessionDockPanel
+            key={JSON.stringify([workbench, scopeKey])}
+            groupByCluster={workbench === 'platform'}
             activeClusterId={activeClusterId}
             activeSessionKeys={activeSessionKeys}
             maximized={maximized}
@@ -187,10 +277,11 @@ export function RealtimeSessionDockProvider({
 
 export function RealtimeSessionDockTrigger() {
   const { localeCode } = useI18n()
-  const { activeClusterId, dockOpen, sessions, toggleDock } = useRealtimeSessionDock()
-  const sessionCount = activeClusterId
-    ? sessions.filter((session) => session.clusterId === activeClusterId).length
-    : 0
+  const { activeClusterId, dockOpen, sessions, toggleDock, workbench } = useRealtimeSessionDock()
+  const sessionCount =
+    workbench === 'platform'
+      ? sessions.filter((session) => session.clusterId === activeClusterId).length
+      : sessions.length
   const label = localeCode === 'zh_CN' ? '实时会话' : 'Live sessions'
   const ariaLabel = sessionCount > 0 ? `${label} (${sessionCount})` : label
 

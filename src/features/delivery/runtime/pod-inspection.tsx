@@ -1,0 +1,303 @@
+import { useMemo } from 'react'
+import { Button, Collapse, Descriptions, Typography } from 'antd'
+import { useQuery } from '@tanstack/react-query'
+import { parseDocument } from 'yaml'
+import { z } from 'zod'
+import { MetadataTag } from '@/components/status-tag'
+import { ManagementState } from '@/components/management-list'
+import { ResourceEventsTimeline } from '@/components/resource-events-timeline'
+import { podQueries, workloadQueries } from '@/features/platform'
+import { localeText, useI18n } from '@/i18n'
+import { toScopeKey } from '@/types'
+import { formatDateTime } from '@/utils/time'
+
+const { Text } = Typography
+const port = z.union([z.number(), z.string()])
+const probeSchema = z.object({
+  httpGet: z
+    .object({
+      path: z.string().optional(),
+      port,
+      host: z.string().optional(),
+      scheme: z.string().optional(),
+    })
+    .optional(),
+  tcpSocket: z.object({ port, host: z.string().optional() }).optional(),
+  grpc: z.object({ port: z.number(), service: z.string().optional() }).optional(),
+  exec: z.object({ command: z.array(z.string()) }).optional(),
+  initialDelaySeconds: z.number().optional(),
+  periodSeconds: z.number().optional(),
+  timeoutSeconds: z.number().optional(),
+  failureThreshold: z.number().optional(),
+  successThreshold: z.number().optional(),
+})
+const containerSchema = z.object({
+  name: z.string(),
+  image: z.string().optional(),
+  ports: z.array(z.object({ name: z.string().optional(), containerPort: z.number() })).optional(),
+  livenessProbe: probeSchema.optional(),
+  startupProbe: probeSchema.optional(),
+  readinessProbe: probeSchema.optional(),
+})
+const terminationSchema = z.object({
+  reason: z.string().optional(),
+  message: z.string().optional(),
+  exitCode: z.number().optional(),
+  signal: z.number().optional(),
+  finishedAt: z.string().optional(),
+})
+const containerStatusSchema = z.object({
+  name: z.string(),
+  restartCount: z.number().optional(),
+  lastState: z.object({ terminated: terminationSchema.optional() }).optional(),
+})
+const podSchema = z.object({
+  // The typed Kubernetes GET may omit TypeMeta; identity is checked against the requested Pod.
+  kind: z.literal('Pod').optional(),
+  metadata: z.object({ name: z.string(), namespace: z.string().optional() }),
+  spec: z.object({
+    containers: z.array(containerSchema),
+    initContainers: z.array(containerSchema).optional(),
+    ephemeralContainers: z.array(containerSchema).optional(),
+  }),
+  status: z
+    .object({
+      podIP: z.string().optional(),
+      containerStatuses: z.array(containerStatusSchema).optional(),
+      initContainerStatuses: z.array(containerStatusSchema).optional(),
+      ephemeralContainerStatuses: z.array(containerStatusSchema).optional(),
+    })
+    .optional(),
+})
+
+export function parsePodInspection(content: string) {
+  const document = parseDocument(content)
+  if (document.errors.length) throw document.errors[0]
+  return podSchema.parse(document.toJS({ maxAliasCount: 50 }))
+}
+
+export function probeEndpoint(
+  probe: z.infer<typeof probeSchema>,
+  container: z.infer<typeof containerSchema>,
+  podIP?: string,
+) {
+  const resolvePort = (value: string | number) =>
+    typeof value === 'number'
+      ? value
+      : (container.ports?.find((item) => item.name === value)?.containerPort ?? value)
+  const host = (value?: string) => {
+    const address = value || podIP || '<Pod IP>'
+    return address.includes(':') ? `[${address}]` : address
+  }
+  if (probe.httpGet)
+    return `${probe.httpGet.scheme || 'HTTP'}://${host(probe.httpGet.host)}:${resolvePort(probe.httpGet.port)}${probe.httpGet.path || '/'}`
+  if (probe.tcpSocket)
+    return `TCP ${host(probe.tcpSocket.host)}:${resolvePort(probe.tcpSocket.port)}`
+  if (probe.grpc)
+    return `gRPC ${host()}:${probe.grpc.port}${probe.grpc.service ? ` · ${probe.grpc.service}` : ''}`
+  if (probe.exec) return `exec ${probe.exec.command.map((arg) => JSON.stringify(arg)).join(' ')}`
+  return '-'
+}
+
+export function PodInspection({
+  clusterId,
+  namespace,
+  podName,
+  mode,
+}: {
+  clusterId: string
+  namespace: string
+  podName: string
+  mode: 'details' | 'events' | 'yaml'
+}) {
+  const { localeCode } = useI18n()
+  const text = (zh: string, en: string) => localeText(localeCode, zh, en)
+  const scope = toScopeKey(clusterId, namespace)
+  const yamlOptions = workloadQueries.yaml('pods', scope, podName)
+  const yamlQuery = useQuery({ ...yamlOptions, enabled: yamlOptions.enabled && mode !== 'events' })
+  const eventOptions = podQueries.events(scope, podName)
+  const eventsQuery = useQuery({
+    ...eventOptions,
+    enabled: eventOptions.enabled && mode === 'events',
+  })
+  const parsed = useMemo(() => {
+    if (mode !== 'details' || !yamlQuery.data?.content) return null
+    try {
+      const pod = parsePodInspection(yamlQuery.data.content)
+      if (pod.metadata.name !== podName || pod.metadata.namespace !== namespace)
+        throw new Error('Pod identity mismatch')
+      return { pod }
+    } catch {
+      return { error: true }
+    }
+  }, [mode, yamlQuery.data?.content, podName, namespace])
+  const query = mode === 'events' ? eventsQuery : yamlQuery
+  if (query.isError)
+    return (
+      <ManagementState
+        compact
+        kind="error"
+        title={text('Pod 数据读取失败', 'Could not load Pod data')}
+        actions={<Button onClick={() => void query.refetch()}>{text('重试', 'Retry')}</Button>}
+      />
+    )
+  if (query.isPending) return <ManagementState compact kind="loading" />
+  if (mode === 'events')
+    return (
+      <ResourceEventsTimeline
+        title={text('Pod 事件 · 最近优先', 'Pod events · newest first')}
+        events={[...(eventsQuery.data ?? [])].sort((a, b) => a.ageSeconds - b.ageSeconds)}
+        emptyDescription={text(
+          '当前返回的最近 100 条命名空间事件中，没有此 Pod 的事件。',
+          'No events for this Pod in the latest 100 namespace events returned.',
+        )}
+      />
+    )
+  if (mode === 'yaml')
+    return (
+      <div className="soha-pod-yaml">
+        <Text copyable={{ text: yamlQuery.data?.content || '' }}>
+          {text('Pod YAML · 只读', 'Pod YAML · read only')}
+        </Text>
+        <pre className="soha-json-block" tabIndex={0} aria-label="Pod YAML">
+          {yamlQuery.data?.content || text('未返回 YAML', 'No YAML returned')}
+        </pre>
+      </div>
+    )
+  if (!parsed?.pod)
+    return (
+      <ManagementState
+        compact
+        kind="error"
+        title={text('无法解析当前 Pod 配置', 'Could not parse Pod configuration')}
+        description={text(
+          '可切换到 YAML 查看原始内容。',
+          'Open YAML to inspect the original content.',
+        )}
+      />
+    )
+  const pod = parsed.pod
+  const statuses = [
+    ...(pod.status?.containerStatuses ?? []),
+    ...(pod.status?.initContainerStatuses ?? []),
+    ...(pod.status?.ephemeralContainerStatuses ?? []),
+  ]
+  const containers = [
+    ...(pod.spec.initContainers ?? []).map((container) => ({ ...container, category: 'Init' })),
+    ...pod.spec.containers.map((container) => ({
+      ...container,
+      category: text('普通', 'Regular'),
+    })),
+    ...(pod.spec.ephemeralContainers ?? []).map((container) => ({
+      ...container,
+      category: text('临时', 'Ephemeral'),
+    })),
+  ]
+  return (
+    <div className="soha-pod-inspection">
+      <Collapse
+        ghost
+        defaultActiveKey={containers.map((container) => container.name)}
+        items={containers.map((container) => {
+          const status = statuses.find((item) => item.name === container.name)
+          const terminated = status?.lastState?.terminated
+          return {
+            key: container.name,
+            label: (
+              <div className="soha-pod-container-heading">
+                <Text strong>{container.name}</Text>
+                <MetadataTag label={container.category} />
+                <Text type="secondary">{container.image}</Text>
+              </div>
+            ),
+            children: (
+              <>
+                <Descriptions
+                  size="small"
+                  column={{ xs: 1, sm: 2, md: 3 }}
+                  items={[
+                    {
+                      key: 'restarts',
+                      label: text('重启次数', 'Restarts'),
+                      children: status?.restartCount ?? '-',
+                    },
+                    {
+                      key: 'reason',
+                      label: text('上次终止原因', 'Last termination reason'),
+                      children: terminated?.reason || text('未记录', 'Not recorded'),
+                    },
+                    {
+                      key: 'exit',
+                      label: text('退出码', 'Exit code'),
+                      children: terminated?.exitCode ?? '-',
+                    },
+                    ...(terminated?.signal
+                      ? [
+                          {
+                            key: 'signal',
+                            label: text('信号', 'Signal'),
+                            children: terminated.signal,
+                          },
+                        ]
+                      : []),
+                    ...(terminated?.finishedAt
+                      ? [
+                          {
+                            key: 'finished',
+                            label: text('终止时间', 'Finished at'),
+                            children: formatDateTime(terminated.finishedAt),
+                          },
+                        ]
+                      : []),
+                    ...(terminated?.message
+                      ? [
+                          {
+                            key: 'message',
+                            label: text('终止信息', 'Termination message'),
+                            span: 3,
+                            children: terminated.message,
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+                <div className="soha-pod-probes">
+                  {(['livenessProbe', 'startupProbe', 'readinessProbe'] as const).map((key) => {
+                    const probe = container[key]
+                    const label = {
+                      livenessProbe: 'Liveness',
+                      startupProbe: 'Startup',
+                      readinessProbe: 'Readiness',
+                    }[key]
+                    return (
+                      <div key={key} className="soha-pod-probe">
+                        <Text strong>{label}</Text>
+                        {probe ? (
+                          <>
+                            <Text code>{probeEndpoint(probe, container, pod.status?.podIP)}</Text>
+                            <Text type="secondary">
+                              {text('延迟', 'Delay')} {probe.initialDelaySeconds ?? 0}s ·{' '}
+                              {text('周期', 'Period')} {probe.periodSeconds ?? 10}s ·{' '}
+                              {text('超时', 'Timeout')} {probe.timeoutSeconds ?? 1}s
+                            </Text>
+                            <Text type="secondary">
+                              {text('成功阈值', 'Success threshold')} {probe.successThreshold ?? 1}{' '}
+                              · {text('失败阈值', 'Failure threshold')}{' '}
+                              {probe.failureThreshold ?? 3}
+                            </Text>
+                          </>
+                        ) : (
+                          <Text type="secondary">{text('未配置', 'Not configured')}</Text>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            ),
+          }
+        })}
+      />
+    </div>
+  )
+}

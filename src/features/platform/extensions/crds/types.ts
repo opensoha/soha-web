@@ -11,6 +11,10 @@ export interface CRD {
 }
 
 export interface CRDResourceInstance {
+  uid?: string
+  generation?: number
+  deletingAt?: string
+  finalizers?: string[]
   allowedActions?: string[]
   apiVersion?: string
   createdAt?: string
@@ -35,6 +39,7 @@ export interface CRDApiGroupSummary {
 }
 
 export interface CustomResourceTarget {
+  expectedUid?: string
   clusterId: string
   crd: CRD
   namespace?: string | null

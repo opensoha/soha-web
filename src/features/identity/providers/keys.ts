@@ -35,6 +35,11 @@ export const identityProviderKeys = {
   details: () => [...identityProviderKeys.all, 'detail'] as const,
   detail: (providerId: string) =>
     [...identityProviderKeys.details(), normalizeId(providerId)] as const,
+  setup: (providerId: string) => [...identityProviderKeys.detail(providerId), 'setup'] as const,
+  protocolMetadata: (providerId: string) =>
+    [...identityProviderKeys.detail(providerId), 'protocol-metadata'] as const,
+  userMetadata: (providerId: string, userId: string, clientId?: string) =>
+    [...identityProviderKeys.detail(providerId), 'user-metadata', userId, clientId] as const,
   oidcClients: (providerId: string) =>
     [...identityProviderKeys.detail(providerId), 'oidc-clients', 'list'] as const,
 }

@@ -50,6 +50,23 @@ describe('api client error handling', () => {
     vi.clearAllMocks()
   })
 
+  it('reads XML as text while retaining shared authentication and errors', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response('<EntityDescriptor />', {
+          status: 200,
+          headers: { 'content-type': 'application/samlmetadata+xml' },
+        }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(api.getText('/saml2/idp/provider/metadata')).resolves.toBe('<EntityDescriptor />')
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: { code: 'access_denied', message: 'denied' } }, { status: 403 }),
+    )
+    await expect(api.getText('/saml2/idp/provider/metadata')).rejects.toMatchObject({ status: 403 })
+    expect(clearAuthSession).not.toHaveBeenCalled()
+  })
+
   it('preserves contract envelopes for exact SDK consumers', async () => {
     vi.stubGlobal(
       'fetch',
@@ -62,6 +79,21 @@ describe('api client error handling', () => {
       items: [{ id: 'task-1' }],
       nextCursor: 'next',
     })
+  })
+
+  it('sends a guarded DELETE body and preserves bodyless calls', async () => {
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(null, { status: 204 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const input = { expectedGeneration: 3, disposition: 'keep' }
+    await api.delete('/delivery/template-sources/source-1', input)
+    await api.delete('/clusters/cluster-1')
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({
+      method: 'DELETE',
+      body: JSON.stringify(input),
+    })
+    expect(fetchMock.mock.calls[1][1]?.body).toBeUndefined()
   })
 
   it('normalizes list envelopes for ordinary API consumers', async () => {

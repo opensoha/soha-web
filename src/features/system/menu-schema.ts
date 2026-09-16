@@ -32,7 +32,7 @@ export type MenuSectionKey = (typeof MENU_SECTION_ORDER)[number]
 const MENU_SECTION_LABELS: Record<MenuSectionKey, { zh: string; en: string }> = {
   account: { zh: '基础', en: 'Basics' },
   software: { zh: '软件', en: 'Software' },
-  provider: { zh: '提供商', en: 'Providers' },
+  provider: { zh: '应用接入', en: 'Application Access' },
   integrations: { zh: '系统集成', en: 'System Integrations' },
   endpoint: { zh: '终端', en: 'Endpoints' },
   network: { zh: '网络准入', en: 'Network Admission' },

@@ -26,6 +26,9 @@ export const networkAccessRoutes = defineRoutes([
         'network_access.enrollments.view',
         'network_access.access_grants.view',
         'network_access.policy.view',
+        'network_access.vpn_profiles.view',
+        'network_access.vpn_selection_policies.view',
+        'network_access.vpn_dashboard.view',
       ],
       scopeMode: 'passive',
       workspace: 'system',
@@ -306,4 +309,7 @@ export const networkAccessRoutes = defineRoutes([
     inheritMetaFrom: 'network-access',
     load: loadNetworkAccessPage,
   },
+  { meta: { id: 'network-access-vpn-profiles', path: '/network-access/vpn/profiles', title: 'VPN 连接方案', navVisible: true, menuId: 'network-access-vpn-profiles', permissionKey: 'network_access.vpn_profiles.view' }, shell: 'app', inheritMetaFrom: 'network-access', load: () => import('./vpn-documents-page') },
+  { meta: { id: 'network-access-vpn-selection-policies', path: '/network-access/vpn/selection-policies', title: 'VPN Auto 策略', navVisible: true, menuId: 'network-access-vpn-selection-policies', permissionKey: 'network_access.vpn_selection_policies.view' }, shell: 'app', inheritMetaFrom: 'network-access', load: () => import('./vpn-documents-page') },
+  { meta: { id: 'network-access-vpn-dashboard', path: '/network-access/vpn/dashboard', title: 'VPN Dashboard', navVisible: true, menuId: 'network-access-vpn-dashboard', permissionKey: 'network_access.vpn_dashboard.view' }, shell: 'app', inheritMetaFrom: 'network-access', load: () => import('./vpn-dashboard-page') },
 ] as const)

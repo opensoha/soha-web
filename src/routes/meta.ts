@@ -21,9 +21,12 @@ const DEFAULT_WORKSPACE_PATHS: Record<BusinessWorkspaceType, string> = {
 
 const RESOURCE_DEFAULT_ROLES = new Set(['admin', 'ops', 'readonly', 'auditor'])
 const APPLICATION_PATH_PREFIXES = [
+  '/delivery/workflows',
+  '/delivery/batches',
   '/applications',
   '/application-environments',
   '/build-templates',
+  '/deployment-templates',
   '/delivery/overview',
   '/delivery/onboarding',
   '/delivery/testing',
@@ -34,6 +37,7 @@ const APPLICATION_PATH_PREFIXES = [
   '/delivery/execution-tasks',
   '/workflow-templates',
   '/release-board',
+  '/execution-history',
   '/workflows',
   '/releases',
   '/registries',
@@ -341,12 +345,14 @@ export function getRouteScopeMode(route: RouteMeta): NonNullable<RouteMeta['scop
     pathname.startsWith('/applications') ||
     pathname.startsWith('/application-environments') ||
     pathname.startsWith('/build-templates') ||
+    pathname.startsWith('/deployment-templates') ||
     pathname.startsWith('/delivery/blueprints') ||
     pathname.startsWith('/builds') ||
     pathname.startsWith('/delivery/release-bundles') ||
     pathname.startsWith('/delivery/execution-tasks') ||
     pathname.startsWith('/workflow-templates') ||
     pathname.startsWith('/release-board') ||
+    pathname.startsWith('/execution-history') ||
     pathname.startsWith('/releases') ||
     pathname.startsWith('/registries') ||
     pathname.startsWith('/monitoring-workbench') ||
@@ -518,11 +524,15 @@ function sortRuntimeMenuTree(items: RuntimeMenuNode[]): RuntimeMenuNode[] {
       if (left.sortOrder !== right.sortOrder) return left.sortOrder - right.sortOrder
       return left.path.localeCompare(right.path)
     })
-    .map((item): RuntimeMenuNode => ({
-      ...item,
-      children:
-        item.children && item.children.length > 0 ? sortRuntimeMenuTree(item.children) : undefined,
-    }))
+    .map(
+      (item): RuntimeMenuNode => ({
+        ...item,
+        children:
+          item.children && item.children.length > 0
+            ? sortRuntimeMenuTree(item.children)
+            : undefined,
+      }),
+    )
 }
 
 const APPLICATION_SECTION_ORDER: Record<string, number> = {
@@ -530,12 +540,14 @@ const APPLICATION_SECTION_ORDER: Record<string, number> = {
   builds: 10,
   applications: 10,
   'release-board': 50,
+  'execution-history': 5,
   'delivery-testing': 60,
   'delivery-analysis': 70,
   'release-bundles': 10,
   releases: 40,
   'delivery-blueprints': 10,
   'build-templates': 20,
+  'deployment-templates': 25,
   'workflow-templates': 30,
   registries: 40,
 }
@@ -545,12 +557,14 @@ const APPLICATION_MENU_SECTION_OVERRIDES: Record<string, string> = {
   builds: 'delivery',
   applications: 'delivery',
   'release-board': 'delivery',
+  'execution-history': 'delivery-records',
   'delivery-testing': 'delivery',
   'delivery-analysis': 'delivery',
   'release-bundles': 'delivery-records',
   releases: 'delivery-records',
   'delivery-blueprints': 'delivery-platform',
   'build-templates': 'delivery-platform',
+  'deployment-templates': 'delivery-platform',
   'workflow-templates': 'delivery-platform',
   registries: 'delivery-platform',
 }

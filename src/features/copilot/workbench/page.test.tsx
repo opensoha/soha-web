@@ -18,6 +18,7 @@ import type {
 
 type TestWorkbenchMode = NonNullable<NonNullable<WorkbenchSession['metadata']>['mode']>
 type MessageScenario =
+  | 'plain'
   | 'default'
   | 'tool-artifact'
   | 'legacy-platform'
@@ -56,6 +57,8 @@ const testState = vi.hoisted(() => ({
     {
       id: 'hermes',
       kind: 'hermes',
+      capabilities: ['general', 'root_cause', 'performance', 'inspection_review'],
+      runtimeStatus: { state: 'ready', queuedRuns: 0, runningRuns: 0, recentFailures: 0 },
       name: 'Hermes Agent',
       description: '通过外部 Hermes runner 异步执行。',
       enabled: true,
@@ -68,6 +71,20 @@ const testState = vi.hoisted(() => ({
 
 const apiGetMock = vi.hoisted(() =>
   vi.fn(async (path: string) => {
+    if (path === '/copilot/sessions/source-2')
+      return { data: { id: 'source-2', title: '源会话', updatedAt: '' } }
+    if (path === '/copilot/sessions/source-2/messages')
+      return {
+        data: [
+          {
+            id: 'source-message',
+            sessionId: 'source-2',
+            role: 'assistant',
+            content: '源会话已经确认使用 PostgreSQL。',
+            createdAt: '2026-09-10T00:00:00Z',
+          },
+        ],
+      }
     if (path === '/copilot/sessions') {
       return {
         data: [
@@ -131,6 +148,26 @@ const apiGetMock = vi.hoisted(() =>
       }
     }
     if (path === '/copilot/sessions/session-1/messages') {
+      if (testState.messageScenario === 'plain')
+        return {
+          data: [
+            {
+              id: 'plain-user',
+              sessionId: 'session-1',
+              role: 'user',
+              content: '解释一下这个概念',
+              createdAt: '2026-05-12T10:01:00Z',
+            },
+            {
+              id: 'plain-answer',
+              sessionId: 'session-1',
+              role: 'assistant',
+              content: '我们可以从一个简单例子开始。',
+              createdAt: '2026-05-12T10:02:00Z',
+            },
+          ],
+        }
+
       const baseMessages: WorkbenchMessage[] = [
         {
           id: 'msg-0',
@@ -437,6 +474,10 @@ const apiGetMock = vi.hoisted(() =>
     if (path === '/copilot/workbench/catalog') {
       return {
         data: {
+          defaultPublicModel: 'reasoning-model',
+          modelOptions: [
+            { publicModel: 'reasoning-model', reasoningEfforts: ['low', 'medium', 'high'] },
+          ],
           adapters: [
             {
               id: 'metrics.v1',
@@ -479,6 +520,8 @@ const apiGetMock = vi.hoisted(() =>
 
 const apiPostMock = vi.hoisted(() =>
   vi.fn(async (path: string, body?: Record<string, unknown>) => {
+    if (path === '/copilot/sessions')
+      return { data: { id: 'session-1', metadata: { mode: body?.mode } } }
     if (path === '/copilot/sessions/session-1/messages') {
       if (testState.sendMessageGate) {
         await testState.sendMessageGate
@@ -739,15 +782,51 @@ async function flushAsyncWork() {
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
+function messageAction(container: HTMLElement, label: string) {
+  return Array.from(
+    container.querySelectorAll<HTMLButtonElement>(
+      '.soha-ai-workbench__message-results button, .soha-ai-workbench__message-activity button',
+    ),
+  )
+    .reverse()
+    .find((item) => item.textContent?.replace(/\s/g, '').includes(label.replace(/\s/g, '')))
+}
+
+async function openWorkbenchPanel(container: HTMLElement, label: string) {
+  const button =
+    label === '会话设置'
+      ? Array.from(
+          container.querySelectorAll<HTMLButtonElement>(
+            '.soha-ai-workbench__toolbar-actions button',
+          ),
+        ).find((item) => item.textContent?.includes('会话设置'))
+      : messageAction(container, label)
+  expect(button).toBeTruthy()
+  await act(async () => {
+    button?.focus()
+    button?.click()
+    await flushAsyncWork()
+  })
+}
+
+async function waitForWorkbenchText(container: HTMLElement, text: string) {
+  for (let i = 0; i < 20 && !container.textContent?.includes(text); i += 1) {
+    await act(async () => {
+      await flushAsyncWork()
+    })
+  }
+  expect(container.textContent).toContain(text)
+}
+
 function senderInput(container: HTMLElement) {
   return container.querySelector(
-    'textarea[placeholder="输入问题、分析目标或进一步追问"]',
+    'textarea[placeholder="提问，或输入 / 选择功能"]',
   ) as HTMLTextAreaElement | null
 }
 
 async function typeSenderMessage(container: HTMLElement, value: string) {
   const input = container.querySelector(
-    'textarea[placeholder="输入问题、分析目标或进一步追问"]',
+    'textarea[placeholder="提问，或输入 / 选择功能"]',
   ) as HTMLTextAreaElement | null
   expect(input).toBeTruthy()
 
@@ -774,6 +853,8 @@ async function pressSenderEnter(container: HTMLElement) {
         cancelable: true,
         key: 'Enter',
         code: 'Enter',
+        keyCode: 13,
+        which: 13,
       }),
     )
     await flushAsyncWork()
@@ -794,6 +875,10 @@ function expectedStreamBody(
     content,
     mode,
     agentProviderId,
+    ...(mode === 'general'
+      ? { contextSelection: {}, knowledgeContext: { enabled: false, knowledgeBaseIds: [] } }
+      : {}),
+    ...(mode === 'general' && agentProviderId === 'internal' ? { modelPreferences: {} } : {}),
     toolset: {
       enabledAdapterIds: ['metrics.v1'],
       enabledSkillIds: ['root-cause-skill'],
@@ -845,8 +930,8 @@ describe('AIWorkbenchPage', () => {
 
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
-      value: vi.fn().mockImplementation(() => ({
-        matches: false,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query.includes('min-width'),
         media: '',
         onchange: null,
         addListener: vi.fn(),
@@ -922,15 +1007,250 @@ describe('AIWorkbenchPage', () => {
     expect(container.textContent).not.toContain('当前对话类型')
     expect(container.textContent).toContain('支付告警调查')
     expect(container.textContent).toContain('巡检')
-    expect(container.textContent).toContain('分析工件历史')
+    expect(container.querySelector('.soha-ai-workbench__detail')).toBeNull()
+    expect(container.querySelector('.soha-ai-workbench__tools-pane')).toBeNull()
+    expect(container.querySelector('[data-testid="workbench-graph-view"]')).toBeNull()
+    await openWorkbenchPanel(container, '查看结果')
+    expect(container.textContent).toContain('会话结果')
     expect(container.textContent).toContain('分析工件图谱')
     expect(container.textContent).toContain('根因分析')
     expect(container.textContent).toContain('巡检复盘')
     expect(container.textContent).toContain('数据库连接数')
   })
 
+  it('sends model preferences and opens the context summary from the composer', async () => {
+    testState.sessionMode = 'general'
+    const container = await renderPage('/ai-workbench/chat?session=session-1')
+    expect(container.querySelector('[aria-label="选择模型"]')?.getAttribute('disabled')).toBeNull()
+    expect(container.querySelector('[aria-label="思考强度"]')?.getAttribute('disabled')).toBeNull()
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="上下文背景信息"]')?.click()
+    })
+    await flushAsyncWork()
+    expect(document.body.textContent).toContain('上下文背景')
+    expect(document.body.textContent).toContain('历史消息')
+    await submitSenderMessage(container, '你好')
+    expect(streamWorkbenchMessageMock.mock.calls[0]?.[1]).toMatchObject({ modelPreferences: {} })
+  })
+
+  it('preserves the chat and draft while switching one detail panel at a time', async () => {
+    const container = await renderPage('/ai-workbench/chat?session=session-1')
+    const chat = container.querySelector('.soha-ai-workbench__canvas')
+    const input = senderInput(container)
+    await typeSenderMessage(container, '还未发送的排查补充')
+
+    expect(
+      container.querySelector('.soha-ai-workbench__workspace')?.classList.contains('has-sidebar'),
+    ).toBe(true)
+    for (const label of ['来源', '查看结果', '会话设置']) {
+      await openWorkbenchPanel(container, label)
+      expect(container.querySelectorAll('.soha-ai-workbench__detail')).toHaveLength(1)
+      expect(container.querySelector('.soha-ai-workbench__canvas')).toBe(chat)
+      expect(senderInput(container)).toBe(input)
+      expect(input?.value).toBe('还未发送的排查补充')
+    }
+
+    await act(async () => {
+      container
+        .querySelector('.soha-ai-workbench__detail')
+        ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+    expect(container.querySelector('.soha-ai-workbench__detail')).toBeNull()
+    expect(document.activeElement?.textContent).toContain('会话设置')
+    expect(senderInput(container)?.value).toBe('还未发送的排查补充')
+    expect(latestRoute).toBe('/ai-workbench/chat?session=session-1')
+    expect(streamWorkbenchMessageMock).not.toHaveBeenCalled()
+    expect(apiPatchMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps plain chat free of result and OPS controls', async () => {
+    testState.sessionMode = 'general'
+    testState.messageScenario = 'plain'
+    const container = await renderPage('/ai-workbench/chat?session=session-1')
+    expect(container.textContent).toContain('我们可以从一个简单例子开始。')
+    expect(container.querySelector('.soha-ai-workbench__toolbar-actions')?.textContent).toContain(
+      '会话设置',
+    )
+    expect(container.querySelector('.soha-ai-workbench__message-result')).toBeNull()
+    for (const label of ['根因分析', '假设', '巡检', '分析链路', '证据']) {
+      expect(container.textContent).not.toContain(label)
+    }
+  })
+
+  it('starts a general conversation without inheriting the previous investigation scope', async () => {
+    const container = await renderPage('/ai-workbench/chat?session=session-1')
+    const createButton = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(
+      (item) => item.textContent?.includes('新建会话'),
+    )
+    await act(async () => {
+      createButton?.click()
+      await flushAsyncWork()
+    })
+    expect(apiPostMock).toHaveBeenCalledWith(
+      '/copilot/sessions',
+      expect.objectContaining({ mode: 'general', scope: {} }),
+    )
+    expect(apiPatchMock).not.toHaveBeenCalled()
+  })
+
+  it('opens evidence from the clicked message rather than the latest artifact', async () => {
+    const container = await renderPage('/ai-workbench/chat?session=session-1')
+    const olderReply = container.querySelector<HTMLElement>('[data-message-id="msg-0"]')!
+    await act(async () => {
+      messageAction(olderReply, '来源')?.click()
+      await flushAsyncWork()
+    })
+    const panel = container.querySelector('.soha-ai-workbench__detail')
+    expect(panel?.textContent).toContain('巡检发现')
+    expect(panel?.textContent).not.toContain('连接数升高')
+    const latestReply = container.querySelector<HTMLElement>('[data-message-id="msg-2"]')!
+    await act(async () => {
+      messageAction(latestReply, '来源')?.click()
+      await flushAsyncWork()
+    })
+    expect(container.querySelector('.soha-ai-workbench__detail')?.textContent).toContain(
+      '连接数升高',
+    )
+    expect(streamWorkbenchMessageMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps the composer free of auxiliary buttons and removes session mode labels', async () => {
+    const container = await renderPage()
+    const composer = container.querySelector('.soha-ai-workbench__composer')!
+    expect(composer.querySelector('[aria-label="输入辅助功能"]')).toBeNull()
+    expect(composer.querySelector('[aria-label="上下文背景信息"]')).not.toBeNull()
+    expect(
+      container.querySelector('.soha-ai-workbench__conversation-label-meta')?.textContent,
+    ).not.toMatch(/根因分析|通用聊天/)
+    expect(container.querySelector('.soha-ai-workbench__brand-logo')?.getAttribute('src')).toBe(
+      '/logo.svg',
+    )
+  })
+
+  it('selects a slash prompt with Enter without submitting a chat request', async () => {
+    testState.sessionMode = 'general'
+    const container = await renderPage('/ai-workbench/chat?session=session-1')
+    await typeSenderMessage(container, '/pla')
+    expect(document.body.textContent).toContain('/plan')
+    await pressSenderEnter(container)
+    expect(senderInput(container)?.value).toContain('先不要执行操作')
+    expect(streamWorkbenchMessageMock).not.toHaveBeenCalled()
+  })
+
+  it('uses arrow keys to open context while preserving the draft', async () => {
+    const container = await renderPage()
+    await typeSenderMessage(container, '保留草稿 /')
+    await act(async () => {
+      senderInput(container)?.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }),
+      )
+      await flushAsyncWork()
+    })
+    await pressSenderEnter(container)
+    expect(container.querySelector('.soha-ai-workbench__detail')?.textContent).toContain(
+      '上下文范围',
+    )
+    expect(senderInput(container)?.value).toBe('保留草稿 ')
+    expect(streamWorkbenchMessageMock).not.toHaveBeenCalled()
+  })
+
+  it('dismisses suggestions with Escape and does not select during IME composition', async () => {
+    const container = await renderPage()
+    await typeSenderMessage(container, '/pla')
+    await act(async () => {
+      senderInput(container)?.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true }),
+      )
+      await flushAsyncWork()
+    })
+    expect(senderInput(container)?.value).toBe('/pla')
+    await act(async () => {
+      senderInput(container)?.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+      )
+      await flushAsyncWork()
+    })
+    expect(container.querySelector('.ant-cascader-open')).toBeNull()
+    expect(senderInput(container)?.value).toBe('/pla')
+    expect(streamWorkbenchMessageMock).not.toHaveBeenCalled()
+  })
+
+  it('reads another session and sends a removable reference without replacing the draft', async () => {
+    testState.sessionMode = 'general'
+    const container = await renderPage('/ai-workbench/chat?session=session-1')
+    await submitSenderMessage(container, '/session source-2 根据来源继续讨论')
+    await waitForWorkbenchText(container, '源会话已经确认使用 PostgreSQL。')
+    expect(apiGetMock).toHaveBeenCalledWith('/copilot/sessions/source-2')
+    expect(apiGetMock).toHaveBeenCalledWith('/copilot/sessions/source-2/messages')
+    expect(container.querySelector('.soha-ai-workbench__detail')?.textContent).toContain(
+      '源会话已经确认使用 PostgreSQL。',
+    )
+    expect(streamWorkbenchMessageMock).not.toHaveBeenCalled()
+    const insert = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(
+      (item) => item.textContent?.includes('插入会话引用'),
+    )
+    expect(insert).toBeTruthy()
+    await act(async () => {
+      insert?.click()
+      await flushAsyncWork()
+    })
+    expect(senderInput(container)?.value).toContain('根据来源继续讨论')
+    expect(senderInput(container)?.value).not.toContain('源会话已经确认使用 PostgreSQL。')
+    expect(container.querySelector('.ant-tag')?.textContent).toContain('session')
+    expect(streamWorkbenchMessageMock).not.toHaveBeenCalled()
+    await pressSenderEnter(container)
+    expect(streamWorkbenchMessageMock.mock.calls[0][1].content).toBe('根据来源继续讨论')
+    expect(streamWorkbenchMessageMock.mock.calls[0][1]).toMatchObject({
+      contextSelection: { references: [{ kind: 'session', sessionId: 'source-2' }] },
+    })
+  })
+
+  it('does not quote inaccessible sessions or send session commands to the model', async () => {
+    const container = await renderPage()
+    await submitSenderMessage(container, '/session inaccessible')
+    await waitForWorkbenchText(container, '无法读取此会话')
+    expect(container.textContent).toContain('无法读取此会话')
+    expect(container.textContent).not.toContain('插入会话引用')
+    expect(streamWorkbenchMessageMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects malformed session IDs before making a read request', async () => {
+    const container = await renderPage()
+    await submitSenderMessage(container, '/session ../admin')
+    expect(container.textContent).toContain('请输入有效的会话 ID')
+    expect(apiGetMock).not.toHaveBeenCalledWith('/copilot/sessions/../admin')
+    expect(streamWorkbenchMessageMock).not.toHaveBeenCalled()
+  })
+
+  it('copies the exact session ID and exposes manual copy when clipboard access fails', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    const original = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    try {
+      const container = await renderPage()
+      const copy = container.querySelector<HTMLButtonElement>('[aria-label="复制会话 ID"]')!
+      await act(async () => {
+        copy.click()
+        await flushAsyncWork()
+      })
+      expect(writeText).toHaveBeenCalledWith('session-1')
+      writeText.mockRejectedValueOnce(new Error('NotAllowedError'))
+      await act(async () => {
+        copy.click()
+        await flushAsyncWork()
+      })
+      expect(container.querySelector('.soha-ai-workbench__detail')?.textContent).toContain(
+        '会话 ID：session-1',
+      )
+    } finally {
+      if (original) Object.defineProperty(navigator, 'clipboard', original)
+      else Reflect.deleteProperty(navigator, 'clipboard')
+    }
+  })
+
   it('lets explicit performance routes override and persist the selected session mode', async () => {
     const container = await renderPage('/ai-workbench/performance?session=session-1')
+    await openWorkbenchPanel(container, '会话设置')
 
     expect(container.querySelector('.soha-ai-workbench__session-mode')?.textContent).toContain(
       '性能分析',
@@ -942,6 +1262,7 @@ describe('AIWorkbenchPage', () => {
 
   it('keeps legacy investigation mode redirects authoritative for the selected session', async () => {
     const container = await renderPage('/ai-workbench/chat?session=session-1&mode=trace')
+    await openWorkbenchPanel(container, '会话设置')
 
     expect(container.querySelector('.soha-ai-workbench__session-mode')?.textContent).toContain(
       '链路分析',
@@ -951,6 +1272,7 @@ describe('AIWorkbenchPage', () => {
 
   it('switches graph context between session artifact history items', async () => {
     const container = await renderPage()
+    await openWorkbenchPanel(container, '查看结果')
 
     expect(container.textContent).toContain('数据库连接数')
     expect(container.textContent).toContain('关联入口')
@@ -973,6 +1295,7 @@ describe('AIWorkbenchPage', () => {
 
   it('opens artifact context links from the active artifact graph', async () => {
     const container = await renderPage()
+    await openWorkbenchPanel(container, '查看结果')
 
     const rootCauseLink = Array.from(container.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('根因运行: run-1'),
@@ -986,6 +1309,7 @@ describe('AIWorkbenchPage', () => {
     expect(latestRoute).toContain('/ai-workbench/root-cause')
     expect(latestRoute).toContain('session=session-1')
     expect(latestRoute).toContain('rootCauseRunId=run-1')
+    await openWorkbenchPanel(container, '查看结果')
 
     const inspectionArtifactButton = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent?.includes('巡检复盘'),
@@ -1012,6 +1336,7 @@ describe('AIWorkbenchPage', () => {
 
   it('opens the session toolset drawer with canonical execution policy details', async () => {
     const container = await renderPage()
+    await openWorkbenchPanel(container, '会话设置')
 
     const toolsetButtons = Array.from(container.querySelectorAll('button')).filter((button) =>
       button.textContent?.includes('工具装配'),
@@ -1036,9 +1361,9 @@ describe('AIWorkbenchPage', () => {
     }
     const container = await renderPage('/ai-workbench/chat?session=session-1')
 
-    expect(container.querySelector('.soha-ai-workbench__session-mode')?.textContent).toContain(
-      '通用聊天',
-    )
+    expect(
+      container.querySelector('.soha-ai-workbench-sidebar .soha-ai-workbench__session-mode'),
+    ).toBeNull()
 
     await submitSenderMessage(container, '只是问个普通问题')
 
@@ -1057,8 +1382,9 @@ describe('AIWorkbenchPage', () => {
     testState.messageScenario = 'legacy-platform'
 
     const container = await renderPage('/ai-workbench/chat?session=session-1')
+    await openWorkbenchPanel(container, '会话设置')
 
-    expect(container.textContent).toContain('聊天状态')
+    expect(container.textContent).toContain('模型与工具')
     expect(container.textContent).toContain('hi')
     expect(container.textContent).toContain('已隐藏旧版平台上下文回复')
     expect(container.textContent).not.toContain('当前平台上下文：平台可见 1 个集群')
@@ -1127,31 +1453,16 @@ describe('AIWorkbenchPage', () => {
     expect(container.textContent).toContain('我先按当前会话把问题拆成现象、上下文和下一步动作。')
   })
 
-  it('keeps the analysis chain action disabled when the active artifact has no tool steps', async () => {
+  it('does not show execution actions for messages without tool calls', async () => {
     const container = await renderPage()
-
-    const headerAction = container.querySelector(
-      'button[aria-label="分析链路"]',
-    ) as HTMLButtonElement | null
-    expect(headerAction).toBeTruthy()
-    expect(headerAction?.disabled).toBe(true)
-
-    const quickAction = Array.from(
-      container.querySelectorAll<HTMLButtonElement>('.soha-ai-workbench__quick-action'),
-    ).find((button) => button.textContent?.includes('分析链路'))
-    expect(quickAction).toBeTruthy()
-    expect(quickAction?.disabled).toBe(true)
-
-    await act(async () => {
-      headerAction?.click()
-      quickAction?.click()
-      await flushAsyncWork()
-    })
-
-    expect(document.body.textContent).not.toContain('暂无分析链路')
+    expect(messageAction(container, '执行记录')).toBeUndefined()
+    expect(container.querySelector('.soha-ai-workbench__toolbar-actions')?.textContent).toContain(
+      '会话设置',
+    )
+    expect(container.querySelector('.soha-ai-workbench__detail')).toBeNull()
   })
 
-  it('opens the analysis chain drawer when a sent message returns visible tool steps', async () => {
+  it('keeps tool steps available without interrupting the conversation with a panel', async () => {
     testState.sendMessageEnvelope = {
       messages: [],
       analysisArtifacts: [
@@ -1186,6 +1497,8 @@ describe('AIWorkbenchPage', () => {
       expect.any(Function),
       expect.any(AbortSignal),
     )
+    expect(container.querySelector('.soha-ai-workbench__detail')).toBeNull()
+    await openWorkbenchPanel(container, '执行记录')
     expect(document.body.textContent).toContain('metrics.anomaly_summary')
     expect(document.body.textContent).toContain('发现错误率突增。')
     expect(document.body.textContent).toContain('1 个工具调用，1 成功，0 失败')
@@ -1199,6 +1512,7 @@ describe('AIWorkbenchPage', () => {
     } as PermissionSnapshot
     testState.sendMessageGate = new Promise<void>(() => {})
     const container = await renderPage()
+    await openWorkbenchPanel(container, '会话设置')
 
     const explicitAnalysisButton = Array.from(container.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('显式分析'),
@@ -1237,6 +1551,14 @@ describe('AIWorkbenchPage', () => {
       await flushAsyncWork()
     })
 
+    expect(document.body.textContent).toContain('停止当前任务？')
+    expect(document.body.textContent).not.toContain('已取消本次回复。')
+    await act(async () => {
+      Array.from(document.body.querySelectorAll('button'))
+        .find((button) => button.textContent?.includes('停止任务'))
+        ?.click()
+      await flushAsyncWork()
+    })
     expect(document.body.textContent).toContain('已取消本次回复。')
   })
 
@@ -1323,6 +1645,7 @@ describe('AIWorkbenchPage', () => {
     const container = await renderPage()
 
     await submitSenderMessage(container, '请收集实时来源')
+    await openWorkbenchPanel(container, '查看结果')
 
     const streamArtifactButton = Array.from(container.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('stream source artifact'),
@@ -1335,8 +1658,12 @@ describe('AIWorkbenchPage', () => {
     })
 
     const evidenceButton = Array.from(
-      container.querySelectorAll<HTMLButtonElement>('.soha-ai-workbench__focus-tile'),
-    ).find((button) => button.textContent?.includes('证据'))
+      container.querySelectorAll<HTMLButtonElement>(
+        '.soha-ai-workbench__message-results button, .soha-ai-workbench__message-activity button',
+      ),
+    )
+      .reverse()
+      .find((button) => button.textContent?.replace(/\s/g, '').includes('来源'))
     expect(evidenceButton).toBeTruthy()
 
     await act(async () => {
@@ -1348,12 +1675,11 @@ describe('AIWorkbenchPage', () => {
   })
 
   it('replays final message metadata for tools, sources, thinking, and agent status', async () => {
+    testState.sessionMode = 'general'
     testState.messageScenario = 'metadata-sources'
     const container = await renderPage()
 
-    const chainButton = container.querySelector(
-      'button[aria-label="分析链路"]',
-    ) as HTMLButtonElement | null
+    const chainButton = messageAction(container, '执行记录')
     expect(chainButton).toBeTruthy()
     expect(chainButton?.disabled).toBe(false)
 
@@ -1368,8 +1694,12 @@ describe('AIWorkbenchPage', () => {
     expect(document.body.textContent).toContain('docs.lookup')
 
     const evidenceButton = Array.from(
-      container.querySelectorAll<HTMLButtonElement>('.soha-ai-workbench__focus-tile'),
-    ).find((button) => button.textContent?.includes('证据'))
+      container.querySelectorAll<HTMLButtonElement>(
+        '.soha-ai-workbench__message-results button, .soha-ai-workbench__message-activity button',
+      ),
+    )
+      .reverse()
+      .find((button) => button.textContent?.replace(/\s/g, '').includes('来源'))
     expect(evidenceButton).toBeTruthy()
 
     await act(async () => {
@@ -1433,22 +1763,14 @@ describe('AIWorkbenchPage', () => {
 
     expect(apiGetMock).toHaveBeenCalledWith('/copilot/agent-runs?sessionId=session-1')
     expect(container.textContent).toContain('Checking live run.')
-    expect(container.textContent).toContain('实时分析链路')
+    expect(container.querySelector('.soha-ai-workbench__detail')).toBeNull()
+    expect(container.textContent).toContain('执行记录 1')
 
-    const chainButton = container.querySelector(
-      'button[aria-label="分析链路"]',
-    ) as HTMLButtonElement | null
-    expect(chainButton).toBeTruthy()
-    expect(chainButton?.disabled).toBe(false)
-
-    await act(async () => {
-      chainButton?.click()
-      await flushAsyncWork()
-    })
-
-    expect(document.body.textContent).toContain('logs.query')
-    expect(document.body.textContent).toContain('发现连接池错误日志。')
-    expect(document.body.textContent).toContain('Agent: hermes / running')
+    const activity = container.querySelector('.soha-ai-tool-activity')
+    expect(activity).not.toBeNull()
+    expect(activity?.textContent).toContain('logs.query')
+    expect(activity?.textContent).toContain('发现连接池错误日志。')
+    expect(activity?.textContent).toContain('已完成')
   })
 
   it('does not duplicate running external run replay when polling returns the same events', async () => {
@@ -1491,17 +1813,10 @@ describe('AIWorkbenchPage', () => {
 
     expect(container.textContent?.match(/Checking live run\./g)?.length).toBe(1)
 
-    const chainButton = container.querySelector(
-      'button[aria-label="分析链路"]',
-    ) as HTMLButtonElement | null
-    expect(chainButton).toBeTruthy()
-
-    await act(async () => {
-      chainButton?.click()
-      await flushAsyncWork()
-    })
-
-    expect(document.body.textContent).toContain('logs.query')
+    const activity = container.querySelector('.soha-ai-tool-activity')
+    expect(activity).not.toBeNull()
+    expect(activity?.querySelectorAll(':scope > details')).toHaveLength(1)
+    expect(activity?.textContent).toContain('logs.query')
   })
 
   it('keeps final message metadata ahead of stale running external run replay', async () => {
@@ -1540,9 +1855,7 @@ describe('AIWorkbenchPage', () => {
     expect(container.textContent).toContain('最终 agent 结果已经落库。')
     expect(container.textContent).not.toContain('stale polling event')
 
-    const chainButton = container.querySelector(
-      'button[aria-label="分析链路"]',
-    ) as HTMLButtonElement | null
+    const chainButton = messageAction(container, '执行记录')
     expect(chainButton).toBeTruthy()
     expect(chainButton?.disabled).toBe(false)
 
@@ -1588,6 +1901,7 @@ describe('AIWorkbenchPage', () => {
   it('persists the session agent provider together with the toolset contract', async () => {
     testState.sessionAgentProviderId = 'hermes'
     const container = await renderPage()
+    await openWorkbenchPanel(container, '会话设置')
 
     const toolsetButton = Array.from(container.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('工具装配'),
@@ -1631,6 +1945,7 @@ describe('AIWorkbenchPage', () => {
       visibleMenus: [],
     } as PermissionSnapshot
     const container = await renderPage()
+    await openWorkbenchPanel(container, '会话设置')
 
     const explicitAnalysisButton = Array.from(container.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('显式分析'),
@@ -1687,6 +2002,7 @@ describe('AIWorkbenchPage', () => {
     } as PermissionSnapshot
     testState.sessionAgentProviderId = 'hermes'
     const container = await renderPage()
+    await openWorkbenchPanel(container, '会话设置')
 
     const explicitAnalysisButton = Array.from(container.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('显式分析'),
@@ -1730,6 +2046,7 @@ describe('AIWorkbenchPage', () => {
       visibleMenus: [],
     } as PermissionSnapshot
     const container = await renderPage()
+    await openWorkbenchPanel(container, '会话设置')
 
     const createInspectionButton = Array.from(container.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('生成巡检任务'),
@@ -1762,6 +2079,7 @@ describe('AIWorkbenchPage', () => {
       visibleMenus: [],
     } as PermissionSnapshot
     const container = await renderPage()
+    await openWorkbenchPanel(container, '会话设置')
 
     const createInspectionButton = Array.from(container.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('生成巡检任务'),

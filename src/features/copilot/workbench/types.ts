@@ -1,3 +1,8 @@
+import type {
+  WorkbenchModelPreferences,
+  WorkbenchModelOption,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+
 export type WorkbenchMode = NonNullable<NonNullable<WorkbenchSession['metadata']>['mode']>
 
 export interface WorkbenchSessionScope {
@@ -27,12 +32,14 @@ export interface WorkbenchRunRef {
 }
 
 export interface WorkbenchSession {
+  activity?: 'queued' | 'running' | 'waiting_approval'
   id: string
   title: string
   createdBy?: string
   updatedAt: string
   createdAt?: string
   metadata?: {
+    modelPreferences?: WorkbenchModelPreferences
     mode?: 'general' | 'root_cause' | 'performance' | 'trace' | 'inspection_review'
     status?: string
     agentProviderId?: string
@@ -152,6 +159,7 @@ export interface WorkbenchAgentSkillBinding {
 }
 
 export interface WorkbenchAgentRun {
+  parentRunId?: string
   id: string
   providerId: string
   providerKind: string
@@ -271,6 +279,9 @@ export interface WorkbenchAgentCapability {
 }
 
 export interface WorkbenchCatalog {
+  modelOptions?: WorkbenchModelOption[]
+  defaultPublicModel?: string
+  modelOptionsError?: string
   adapters: WorkbenchAdapter[]
   dataSources: WorkbenchDataSource[]
   analysisProfiles: WorkbenchAnalysisProfile[]

@@ -240,3 +240,12 @@ export const networkAccessMutationKeys = {
   sessionActionPlan: ['network-access', 'mutation', 'session-action-plan'] as const,
   sessionActionExecute: ['network-access', 'mutation', 'session-action-execute'] as const,
 }
+
+export const vpnKeys = {
+  all: ['network-access', 'vpn'] as const,
+  documents: (kind: 'profiles' | 'selection-policies') => ['network-access', 'vpn', kind] as const,
+  dashboard: (filters: Record<string, string>) => [...vpnKeys.all, 'dashboard', filters] as const,
+  decision: (id: string) => [...vpnKeys.all, 'decision', id] as const,
+  revisions: (kind: 'profiles' | 'selection-policies', id: string | undefined) =>
+    [...vpnKeys.documents(kind), 'revisions', id] as const,
+}

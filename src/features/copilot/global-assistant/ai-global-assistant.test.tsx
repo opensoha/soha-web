@@ -23,6 +23,7 @@ import { clampFloatPosition, snapFloatPosition } from './draggable-float-shell'
 
 vi.mock('@/services/api-client', () => ({
   api: {
+    get: vi.fn(),
     delete: vi.fn(),
     post: vi.fn(),
     postWithSignal: vi.fn(),
@@ -64,6 +65,18 @@ function Harness() {
         }}
       >
         ask
+      </button>
+      <button
+        type="button"
+        data-testid="explain"
+        onClick={() =>
+          void assistant?.launchAssistant({
+            action: 'explain-selection',
+            selection: { kind: 'plain', text: 'hello' },
+          })
+        }
+      >
+        explain
       </button>
       <div
         data-testid="row-context"
@@ -350,6 +363,28 @@ describe('GlobalAIAssistantProvider', () => {
   })
 
   beforeEach(() => {
+    vi.mocked(api.get).mockImplementation(async (path) => {
+      if (path === '/copilot/workbench/catalog')
+        return {
+          data: {
+            adapters: [],
+            dataSources: [],
+            analysisProfiles: [],
+            agentProviders: [
+              {
+                id: 'hermes',
+                kind: 'hermes',
+                name: 'Hermes',
+                enabled: true,
+                capabilities: ['general', 'root_cause'],
+                runtimeStatus: { state: 'ready', queuedRuns: 0, runningRuns: 0, recentFailures: 0 },
+              },
+            ],
+          },
+        } as never
+      return { data: [] } as never
+    })
+
     vi.clearAllMocks()
     usePreferencesStore.setState({ companionMode: 'icon' })
     vi.mocked(api.postWithSignal).mockResolvedValue({
@@ -402,6 +437,83 @@ describe('GlobalAIAssistantProvider', () => {
     await waitForText(container, '已完成当前服务分析。')
     expect(String(container.textContent)).toContain('已完成当前服务分析。')
   })
+
+  it('uses general chat for explaining a selection', async () => {
+    const container = await renderProvider()
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="explain"]')?.click()
+    })
+    await waitForText(container, '已完成当前服务分析。')
+    expect(api.postWithSignal).toHaveBeenCalledWith(
+      '/copilot/sessions',
+      expect.objectContaining({ mode: 'general', agentProviderId: 'hermes' }),
+      expect.any(AbortSignal),
+    )
+    const init = vi.mocked(window.fetch).mock.calls[0]?.[1]
+    expect(JSON.parse(String(init?.body)).mode).toBe('general')
+  })
+
+  it.each([false, true])(
+    'follows a queued external run and supports cancellation (%s)',
+    async (cancel) => {
+      const get = vi.mocked(api.get).getMockImplementation()!
+      vi.mocked(api.get).mockImplementation(async (path, ...args) => {
+        if (String(path).startsWith('/copilot/agent-runs?'))
+          return {
+            data: [
+              {
+                id: 'run-global',
+                providerId: 'hermes',
+                providerKind: 'hermes',
+                capabilityId: 'root_cause',
+                status: cancel ? 'running' : 'completed',
+                output: { summary: '真实外部助手回复' },
+              },
+            ],
+          } as never
+        return get(path, ...args)
+      })
+      vi.mocked(api.post).mockResolvedValue({ data: {} })
+      vi.mocked(window.fetch).mockResolvedValue(
+        new Response(
+          `data: ${JSON.stringify({
+            type: 'agent.status',
+            id: 'queued-1',
+            sessionId: 'session-global',
+            sequence: 1,
+            createdAt: '2026-07-06T00:00:00Z',
+            providerId: 'hermes',
+            status: 'queued',
+            runId: 'run-global',
+          })}\n\ndata: ${JSON.stringify({ type: 'message.done', id: 'queued-message', sessionId: 'session-global', sequence: 2, createdAt: '2026-07-06T00:00:00Z', messageId: 'run-global:queued', role: 'assistant', content: '已提交给助手。' })}\n\n`,
+          { status: 200 },
+        ),
+      )
+      const container = await renderProvider()
+      await act(async () => {
+        Array.from(container.querySelectorAll('button'))
+          .find((button) => button.textContent === 'ask')
+          ?.click()
+      })
+      if (cancel) {
+        await waitForText(container, '助手正在处理当前请求。')
+        const button = Array.from(container.querySelectorAll('button')).find((item) =>
+          item.textContent?.includes('Stop loading'),
+        )
+        expect(button).toBeTruthy()
+        await act(async () => {
+          button?.click()
+        })
+        await vi.waitFor(() =>
+          expect(api.post).toHaveBeenCalledWith('/copilot/agent-runs/run-global/cancel', {}),
+        )
+        expect(api.delete).not.toHaveBeenCalled()
+      } else {
+        await waitForText(container, '真实外部助手回复')
+        expect(api.get).toHaveBeenCalledWith('/copilot/agent-runs?sessionId=session-global')
+      }
+    },
+  )
 
   it('reuses the shared session in the native companion window', async () => {
     window.localStorage.setItem(

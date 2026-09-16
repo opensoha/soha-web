@@ -19,7 +19,6 @@ import {
   DeleteOutlined,
   EditOutlined,
   EyeOutlined,
-  PlayCircleOutlined,
   PlusOutlined,
   ReloadOutlined,
   SaveOutlined,
@@ -44,13 +43,14 @@ import { deliveryQueries } from '../queries'
 import type { DeliveryBlueprint, RenderedDeliverySpec } from '../types'
 import { formatDateTime } from '@/utils/time'
 import { parseReleaseTargets } from '../release-targets'
+import { ExternalPipelineFields } from '../external-pipeline-fields'
 
 const { Text } = Typography
 
 const BUILD_SOURCE_TYPE_OPTIONS = [
   { value: 'repo_dockerfile', label: '仓库 Dockerfile' },
   { value: 'platform_build_template', label: '平台构建模板' },
-  { value: 'external_pipeline', label: '外部流水线' },
+  { value: 'external_pipeline', label: 'GitLab CI' },
 ]
 
 const REPOSITORY_PROVIDER_OPTIONS = [
@@ -209,6 +209,14 @@ function parseJSONObject(raw: unknown, field: string) {
   return value as Record<string, unknown>
 }
 
+function parseJSONArray(raw: unknown, field: string) {
+  const value = JSON.parse(trimString(raw) || '[]')
+  const objects = normalizeObjectArray(value)
+  if (!Array.isArray(value) || value.length !== objects.length)
+    throw new Error(`${field} 需要是 JSON 对象数组`)
+  return objects
+}
+
 function createDefaultBuildSource(index = 0) {
   return {
     id: `source-${index + 1}`,
@@ -221,7 +229,7 @@ function createDefaultBuildSource(index = 0) {
     buildTemplateId: '',
     contextDir: '.',
     dockerfilePath: 'Dockerfile',
-    pipelineUrl: '',
+    externalPipeline: { provider: 'gitlab' },
     configText: '{\n  "contextDir": ".",\n  "dockerfilePath": "Dockerfile"\n}',
   }
 }
@@ -374,6 +382,10 @@ function blueprintToFormValues(blueprint: DeliveryBlueprint): BlueprintFormValue
       repositoryPath: service.repositoryPath ?? '',
       defaultBranch: service.defaultBranch ?? '',
       buildSourceId: service.buildSourceId ?? '',
+      deploymentTemplateText: service.deploymentTemplate
+        ? stringify(service.deploymentTemplate, '{}')
+        : '',
+      containersText: stringify(service.containers ?? [], '[]'),
       enabled: service.enabled,
       dockerfilePath: service.containers?.[0]?.dockerfilePath ?? 'Dockerfile',
       buildContextDir: service.containers?.[0]?.buildContextDir ?? '.',
@@ -391,7 +403,7 @@ function blueprintToFormValues(blueprint: DeliveryBlueprint): BlueprintFormValue
         buildTemplateId: String(config.buildTemplateId ?? ''),
         contextDir: String(config.contextDir ?? '.'),
         dockerfilePath: String(config.dockerfilePath ?? 'Dockerfile'),
-        pipelineUrl: String(config.pipelineUrl ?? ''),
+        externalPipeline: config.externalPipeline ?? { provider: 'gitlab' },
         configText: stringify(config, '{}'),
       }
     }),
@@ -442,16 +454,32 @@ function buildBlueprintPayload(values: BlueprintFormValues, id?: string) {
       repositoryPath: optionalString(service.repositoryPath),
       defaultBranch: optionalString(service.defaultBranch),
       buildSourceId: optionalString(service.buildSourceId),
+      deploymentTemplate: trimString(service.deploymentTemplateText)
+        ? parseJSONObject(service.deploymentTemplateText, `服务 ${index + 1} 部署模板`)
+        : undefined,
       enabled: service.enabled !== false,
       metadata: {},
-      containers: [
-        {
-          name: key,
-          dockerfilePath: trimString(service.dockerfilePath) || 'Dockerfile',
-          buildContextDir: trimString(service.buildContextDir) || '.',
-          metadata: {},
-        },
-      ],
+      containers:
+        trimString(service.containersText) && trimString(service.containersText) !== '[]'
+          ? parseJSONArray(service.containersText, `服务 ${index + 1} 容器`).map(
+              (container, containerIndex) => ({
+                ...container,
+                ...(containerIndex === 0
+                  ? {
+                      dockerfilePath: trimString(service.dockerfilePath) || 'Dockerfile',
+                      buildContextDir: trimString(service.buildContextDir) || '.',
+                    }
+                  : {}),
+              }),
+            )
+          : [
+              {
+                name: key,
+                dockerfilePath: trimString(service.dockerfilePath) || 'Dockerfile',
+                buildContextDir: trimString(service.buildContextDir) || '.',
+                metadata: {},
+              },
+            ],
     })
   })
   const buildSources = normalizeObjectArray(values.buildSources).map((source, index) =>
@@ -465,10 +493,15 @@ function buildBlueprintPayload(values: BlueprintFormValues, id?: string) {
       defaultTag: optionalString(source.defaultTag),
       config: compactRecord({
         ...parseJSONObject(source.configText, `构建源 ${index + 1} 配置`),
-        buildTemplateId: optionalString(source.buildTemplateId),
-        contextDir: optionalString(source.contextDir),
-        dockerfilePath: optionalString(source.dockerfilePath),
-        pipelineUrl: optionalString(source.pipelineUrl),
+        buildTemplateId:
+          source.type === 'platform_build_template'
+            ? optionalString(source.buildTemplateId)
+            : undefined,
+        contextDir:
+          source.type === 'external_pipeline' ? undefined : optionalString(source.contextDir),
+        dockerfilePath:
+          source.type === 'repo_dockerfile' ? optionalString(source.dockerfilePath) : undefined,
+        externalPipeline: source.type === 'external_pipeline' ? source.externalPipeline : undefined,
       }),
     }),
   )
@@ -594,8 +627,8 @@ function createListItemFromBlueprint(
 }
 
 export function DeliveryBlueprintsPage() {
-  const { message } = App.useApp()
   const navigate = useNavigate()
+  const { message } = App.useApp()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const canManage = hasPermission(permissionSnapshotQuery.data?.data, 'delivery.application.update')
@@ -875,16 +908,6 @@ export function DeliveryBlueprintsPage() {
     })
   }
 
-  const handleBootstrap = () => {
-    if (!selectedBlueprint) {
-      void message.warning('请先保存模板，再执行平台接入')
-      return
-    }
-    navigate(
-      `/applications?action=create&mode=manual&templateId=${encodeURIComponent(selectedBlueprint.id)}`,
-    )
-  }
-
   const buildSourceOptions = normalizeObjectArray(formSnapshot.buildSources).map((item, index) => ({
     value: trimString(item.id) || `source-${index + 1}`,
     label: trimString(item.name) || `构建源 ${index + 1}`,
@@ -1123,6 +1146,18 @@ export function DeliveryBlueprintsPage() {
                     <Form.Item name={[field.name, 'buildSourceId']} label="构建源">
                       <Select allowClear options={buildSourceOptions} />
                     </Form.Item>
+                    <Form.Item
+                      name={[field.name, 'deploymentTemplateText']}
+                      label="部署模板与参数 (JSON)"
+                    >
+                      <Input.TextArea
+                        rows={4}
+                        placeholder='{"templateId":"…","version":1,"parameters":{}}'
+                      />
+                    </Form.Item>
+                    <Form.Item name={[field.name, 'containersText']} label="容器配置 (JSON)">
+                      <Input.TextArea rows={4} placeholder='[{"name":"main"}]' />
+                    </Form.Item>
                     <Form.Item name={[field.name, 'dockerfilePath']} label="Dockerfile">
                       <Input placeholder="Dockerfile" />
                     </Form.Item>
@@ -1249,13 +1284,7 @@ export function DeliveryBlueprintsPage() {
                         }
                         if (sourceType === 'external_pipeline') {
                           return (
-                            <Form.Item
-                              className="soha-delivery-blueprint-form-grid__wide"
-                              name={[field.name, 'pipelineUrl']}
-                              label="外部流水线地址"
-                            >
-                              <Input placeholder="https://gitlab.example.com/group/project/-/pipelines" />
-                            </Form.Item>
+                            <ExternalPipelineFields prefix={[field.name, 'externalPipeline']} />
                           )
                         }
                         return (
@@ -1632,9 +1661,6 @@ export function DeliveryBlueprintsPage() {
           onClick={handleRenderSpec}
         >
           渲染规范
-        </Button>
-        <Button icon={<PlayCircleOutlined />} disabled={!hasSelection} onClick={handleBootstrap}>
-          平台接入
         </Button>
       </Space>
       <Space wrap>

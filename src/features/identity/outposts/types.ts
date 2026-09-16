@@ -1,35 +1,12 @@
-export type IdentityOutpostMode = 'embedded' | 'agent' | 'kubernetes' | 'external'
+import type {
+  IdentityOutpost as ContractOutpost,
+  IdentityOutpostInput as ContractOutpostInput,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+
+export type IdentityOutpost = ContractOutpost
+export type IdentityOutpostInput = ContractOutpostInput
+export type IdentityOutpostMode = IdentityOutpost['mode']
 export type IdentityOutpostStatus = 'online' | 'offline' | 'degraded'
-
-export interface IdentityOutpost {
-  id: string
-  name: string
-  mode: IdentityOutpostMode
-  endpoint?: string
-  token?: string
-  status: IdentityOutpostStatus
-  version?: string
-  lastSeenAt?: string
-  configurationVersion?: number
-  runtimeStatus?: 'available' | 'degraded' | 'unavailable'
-  runtimeReason?: string
-  claimedAgentId?: string
-  lastHeartbeatAt?: string
-  metadata?: Record<string, unknown>
-  createdBy?: string
-  updatedBy?: string
-  createdAt: string
-  updatedAt: string
-}
-
-export interface IdentityOutpostInput {
-  name: string
-  mode: IdentityOutpostMode
-  endpoint?: string
-  status: IdentityOutpostStatus
-  version?: string
-  metadata: Record<string, unknown>
-}
 
 export interface IdentityOutpostFilters {
   mode?: IdentityOutpostMode | ''
