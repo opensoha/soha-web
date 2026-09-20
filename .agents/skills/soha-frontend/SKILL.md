@@ -7,17 +7,31 @@ description: Implement or review soha-web React and Ant Design UI, shared tables
 
 ## Workflow
 
-1. Read the affected implementation, callers, tests, and styles. Preserve existing worktree edits.
-2. For feature ownership, routes, API/query/mutation, state, CSS ownership, or loading boundaries,
-   read [architecture-development.md](references/architecture-development.md).
-3. For UI, including tables, tags, queries, overviews, and tokens, read
-   [theme-system.md](references/theme-system.md). These are target conventions, not evidence that
-   every existing page has already migrated.
-4. Use the `antd` skill for component APIs; check the installed version in `package.json` and
-   query the CLI before writing component code. Do not pin a patch version in this skill.
-5. For cross-module questions, use the existing `graphify-out/graph.json` when it helps and verify
-   important findings against source. Ordinary lookup uses direct search; graph refresh is only
-   for requested graph maintenance or relevant structural changes, not styling edits.
+1. Read the user task and actual affected implementation, callers, tests, styles and worktree
+   state. Classify the work: maintenance (local fixes, copy or fields) stays scoped; explicitly
+   authorized product redesign may reorganize the shell, layout, hierarchy and composition.
+2. For UI work, read [product-experience.md](references/product-experience.md) for product choices
+   and review criteria, then [theme-system.md](references/theme-system.md) for tokens and styling.
+   Read [architecture-development.md](references/architecture-development.md) for route, data,
+   state, feature, CSS or loading boundaries. Rules are targets, not proof of current compliance.
+3. Describe the user task, object, important state, primary action and secondary information;
+   identify unsuitable old structures and behaviors to preserve. Choose information organization
+   before choosing Card/Table/Form. Compare against the effective, explicitly identified design
+   reference; an unapproved reference image is not an approved implementation baseline.
+4. Reuse or adjust mature controls for that composition. Maintenance must not grow into an
+   unsolicited redesign; authorized redesign must not shrink into color/radius/spacing changes
+   because an old management template exists. Follow the `antd` skill for APIs: check the installed
+   package version and query the CLI before writing component code. Do not pin a patch version here.
+5. Take the current scope and sample from the user and the selected plan, not a fixed business
+   domain. Foundation work can align rules, token ownership and conflicting CSS without starting
+   a demo or page redesign. For an authorized page sample, complete its real task/action/feedback
+   chain and review themes, long values, abnormal and interaction states. After user acceptance,
+   extract demonstrated reuse and roll out complete business chains, not controls in bulk.
+6. Verify behavior and visual outcome as well as applicable engineering gates. Keep actual
+   progress and evidence in the selected initiative's single plan; no new planning system.
+7. For cross-module questions, use existing `graphify-out/graph.json` when helpful and verify
+   important findings against source. Ordinary lookup uses direct search; refresh only for
+   requested graph maintenance or relevant structural changes, not styling or documentation.
 
 ## Boundaries
 
@@ -29,14 +43,19 @@ description: Implement or review soha-web React and Ant Design UI, shared tables
   keys, caching, and invalidation. Pages must not bypass them or deep-import another feature's
   private implementation. TanStack Query owns server state; Zustand owns persistent UI context.
 - Keep one app-level `ConfigProvider` in `src/main.tsx`; `src/theme/app-theme.ts` owns tokens.
-  Shared components own visual conventions, not page-local overrides.
-- Management tables follow `ManagementDataPage` (page shell) → `AdminTable` (shared table) →
-  Ant Design `Table` (implementation). Use `StatusTag` for states, `MetadataTag` for categories,
-  and `BooleanTag` for boolean labels. Follow the theme reference for exact presentation.
+  Shared components own reusable conventions. Explicitly scoped product pilots may compose their own layouts and select scene tokens from that same source.
+- Separate page composition, query behavior and table behavior. Reuse `AdminTable` over Ant Design
+  `Table`; choose `ManagementDataPage` only when its management-list composition fits the task.
+  Use `StatusTag` for states, `MetadataTag` for categories and `BooleanTag` for boolean labels;
+  ordinary specifications, addresses and IDs use text. Do not build another universal table API.
 - Preserve authorization, mutation confirmations, loading/error/no-permission states, keyboard
   access, and labels alongside color. Never put provider credentials in browser configuration.
-- Do not repeat identity or navigation already supplied by breadcrumbs. Delete redundant copy;
-  place non-obvious field guidance in a keyboard-accessible help tooltip.
+- Preserve API/DTO, Query/mutation ownership, business state, path/route ID/menuId/iconKey and
+  professional engine behavior. Hyphenated paths are not a visual defect. Keep React/Vite/TypeScript
+  and Antd; no dependency migration or engine replacement without separate authorization.
+- Navigation may already identify a collection: avoid repeating its large title/copy/icon in
+  content, while preserving a semantic accessible heading. A useful resource identity/action
+  region remains valid. Follow product-experience.md for the distinction and real branding.
 
 ## AI Workbench
 
@@ -45,14 +64,15 @@ description: Implement or review soha-web React and Ant Design UI, shared tables
 - XRequest is for AI streaming/provider requests, not CRUD. Browser provider requests go through
   the same-origin backend proxy.
 - Chat, DAG, topology, terminal, noVNC, and graphs may use scene-specific layouts, but still use
-  shared tokens. Management lists and overview summaries retain shared surfaces.
+  shared tokens and feedback semantics. Layout follows the task rather than a fixed overview template.
 
 ## Verification
 
 - Run targeted tests and lint; after antd changes, run
   `antd lint <changed-path> --format json` (one path per invocation).
-- Verify visual changes in light/dark themes and narrow/wide layouts, including long values,
-  overflow, empty states, and interactions. Report unavailable browser checks explicitly.
+- Verify actual visual changes against product-experience.md, including themes, viewports,
+  long values, zoom, keyboard/IME, data/console truthfulness and error/permission states.
+  Test/build success does not establish visual acceptance; report unavailable checks explicitly.
 - `package.json` and `.github/workflows/*.yml` are the executable gate source. Code completion
   includes lint, tests, and build; broad changes also require coverage and relevant route,
   boundary, and bundle gates from the architecture reference.

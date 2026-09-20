@@ -1,4 +1,4 @@
-import type { MouseEvent, ReactNode } from 'react'
+import type { CSSProperties, MouseEvent, ReactNode } from 'react'
 import { Button, Form, Steps } from 'antd'
 import type { FormInstance, FormProps } from 'antd'
 import { localeText, useI18n } from '@/i18n'
@@ -47,6 +47,10 @@ export function StepForm({
   const resolvedPreviousText = previousText ?? localeText(localeCode, '上一步', 'Previous')
   const resolvedSubmitText = submitText ?? localeText(localeCode, '保存', 'Save')
   const activeStep = steps[current]
+  const contentStyle = {
+    '--soha-step-form-content-max-width':
+      typeof contentMaxWidth === 'number' ? `${contentMaxWidth}px` : contentMaxWidth,
+  } as CSSProperties
 
   const stopFormSubmit = (event: MouseEvent<HTMLElement>) => {
     event.preventDefault()
@@ -91,14 +95,14 @@ export function StepForm({
         responsive={false}
         size="small"
       />
-      <div className="soha-step-form__content" style={{ maxWidth: contentMaxWidth }}>
+      <div className="soha-step-form__content" style={contentStyle}>
         {steps.map((step, index) => (
           <div key={index} hidden={index !== current}>
             {step.children}
           </div>
         ))}
       </div>
-      <div className="soha-step-form__actions" style={{ maxWidth: contentMaxWidth }}>
+      <div className="soha-step-form__actions" style={contentStyle}>
         {onCancel ? (
           <Button
             htmlType="button"

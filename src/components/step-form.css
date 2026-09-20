@@ -5,6 +5,7 @@
 
 .soha-step-form__content {
   width: 100%;
+  max-width: var(--soha-step-form-content-max-width, 640px);
   margin: 0 auto;
 }
 
@@ -13,10 +14,18 @@
   justify-content: flex-end;
   gap: 8px;
   width: 100%;
-  max-width: 640px;
+  max-width: var(--soha-step-form-content-max-width, 640px);
   margin-right: auto;
   margin-left: auto;
   margin-top: 24px;
+}
+
+.soha-step-form-modal__body :is(.soha-step-form__content, .soha-step-form__actions) {
+  max-width: none;
+}
+
+.soha-step-form-modal__body .soha-step-form__actions {
+  margin-top: 16px;
 }
 
 .soha-step-form-modal__body .soha-step-form__steps {
@@ -26,8 +35,7 @@
   box-sizing: border-box;
   width: 100%;
   max-width: none;
-  padding-right: max(0px, calc((100% - 520px) / 2));
-  padding-left: max(0px, calc((100% - 520px) / 2));
+  margin-bottom: 16px;
   padding-top: 4px;
   padding-bottom: 16px;
   background: var(--soha-bg-surface);

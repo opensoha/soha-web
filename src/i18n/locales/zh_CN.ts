@@ -21,6 +21,8 @@ export const zhCN: Dictionary = {
   'layout.logout': '退出登录',
   'layout.profile': '个人中心',
   'layout.about': '关于',
+  'layout.expand': '展开侧栏',
+  'layout.collapse': '收起侧栏',
   'layout.accountSettings': '个人设置',
   'layout.accountMenu': '账号菜单',
   'layout.accountCenterDescription': '个人中心与账号信息',

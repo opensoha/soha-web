@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { App } from 'antd'
 import {
   useMutation,
@@ -8,6 +8,7 @@ import {
   type UseMutationOptions,
   type UseQueryOptions,
 } from '@tanstack/react-query'
+import { isApiError } from '@/services/api-error'
 import type { AccessMutationValues, AccessUpdateVariables } from './types'
 
 interface AccessResourceCrudOptions<T extends { id: string }, TQueryKey extends QueryKey> {
@@ -29,6 +30,8 @@ export function useAccessResourceCrud<T extends { id: string }, TQueryKey extend
   const queryClient = useQueryClient()
   const [modalVisible, setModalVisible] = useState(false)
   const [editing, setEditing] = useState<T | null>(null)
+  const [saveError, setSaveError] = useState<Error | null>(null)
+  const saving = useRef(false)
   const query = useQuery(queryOptions)
 
   const createMutation = useMutation({
@@ -38,7 +41,10 @@ export function useAccessResourceCrud<T extends { id: string }, TQueryKey extend
       await invalidate(queryClient)
       setModalVisible(false)
     },
-    onError: (error) => message.error(error.message),
+    onError: setSaveError,
+    onSettled: () => {
+      saving.current = false
+    },
   })
   const updateMutation = useMutation({
     ...update,
@@ -48,7 +54,10 @@ export function useAccessResourceCrud<T extends { id: string }, TQueryKey extend
       setModalVisible(false)
       setEditing(null)
     },
-    onError: (error) => message.error(error.message),
+    onError: setSaveError,
+    onSettled: () => {
+      saving.current = false
+    },
   })
   const deleteMutation = useMutation({
     ...deleteOptions,
@@ -56,10 +65,16 @@ export function useAccessResourceCrud<T extends { id: string }, TQueryKey extend
       message.success('删除成功')
       await invalidate(queryClient)
     },
-    onError: (error) => message.error(error.message),
+    onError: (error) => {
+      // Auth, permission and infrastructure errors already have a global notification.
+      if (!isApiError(error) || error.kind === 'client') message.error(error.message)
+    },
   })
 
   const handleSubmit = (values: AccessMutationValues) => {
+    if (saving.current) return
+    saving.current = true
+    setSaveError(null)
     if (editing) {
       updateMutation.mutate({ id: editing.id, values })
       return
@@ -74,15 +89,22 @@ export function useAccessResourceCrud<T extends { id: string }, TQueryKey extend
     refetch: query.refetch,
     modalVisible,
     editing,
+    saveError,
     openCreate: () => {
+      if (saving.current) return
+      setSaveError(null)
       setEditing(null)
       setModalVisible(true)
     },
     openEdit: (record: T) => {
+      if (saving.current) return
+      setSaveError(null)
       setEditing(record)
       setModalVisible(true)
     },
     closeModal: () => {
+      if (saving.current) return
+      setSaveError(null)
       setModalVisible(false)
       setEditing(null)
     },

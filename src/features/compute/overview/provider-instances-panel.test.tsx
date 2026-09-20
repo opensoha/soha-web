@@ -2,7 +2,7 @@
 
 import { act, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { App } from 'antd'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useMutation, useQuery } from '@tanstack/react-query'
@@ -16,6 +16,16 @@ vi.mock('@tanstack/react-query', async (importOriginal) => ({
 }))
 
 const roots: Array<ReturnType<typeof createRoot>> = []
+
+function LocationProbe() {
+  const location = useLocation()
+  return (
+    <output>
+      {location.pathname}
+      {location.search}
+    </output>
+  )
+}
 
 function render(node: ReactNode) {
   const container = document.createElement('div')
@@ -102,4 +112,55 @@ describe('provider instances panel', () => {
     act(() => retry?.click())
     expect(refetch).toHaveBeenCalledTimes(1)
   })
+
+  it.each([
+    { action: 'health', label: '检查连接健康', input: { expectedGeneration: 1 } },
+    {
+      action: 'discover',
+      label: '发现并同步资源',
+      input: { expectedGeneration: 1, maxItems: 1000 },
+    },
+  ])(
+    'keeps the $action action bound to its instance and resulting task',
+    ({ action, label, input }) => {
+      const health = vi.fn()
+      const discover = vi.fn()
+      vi.mocked(useQuery).mockReturnValue(providerQuery() as never)
+      vi.mocked(useMutation).mockImplementation(
+        (options) =>
+          ({
+            isPending: false,
+            mutate: options.mutationKey?.includes('health') ? health : discover,
+          }) as never,
+      )
+      const container = render(
+        <>
+          <ProviderInstancesPanel canDiscover canTest enabled localeCode="zh_CN" />
+          <LocationProbe />
+        </>,
+      )
+
+      expect(container.querySelector('time')?.getAttribute('datetime')).toBe('2026-08-24T12:00:00Z')
+      act(() =>
+        container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)?.click(),
+      )
+      const mutation = action === 'health' ? health : discover
+      expect(mutation).toHaveBeenCalledWith(
+        {
+          domain: 'virtualization',
+          providerKey: 'pve',
+          instanceRef: 'connection-1',
+          input,
+        },
+        expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
+      )
+      expect(action === 'health' ? discover : health).not.toHaveBeenCalled()
+      act(() =>
+        mutation.mock.calls[0][1].onSuccess({ data: { domain: 'virtualization', id: 'task-1' } }),
+      )
+      expect(container.querySelector('output')?.textContent).toBe(
+        '/compute/tasks/operations?domain=virtualization&taskId=task-1&view=logs',
+      )
+    },
+  )
 })

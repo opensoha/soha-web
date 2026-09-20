@@ -17,6 +17,7 @@ import { accessMutations, invalidateAccessRoles } from '../shared/mutations'
 import { accessQueries } from '../shared/queries'
 import type { AccessRole } from '../shared/types'
 import { useAccessResourceCrud } from '../shared/use-resource-crud'
+import { AccessMutationFooter, accessMutationModalStyles } from '../shared/mutation-footer'
 import {
   localizePermissionDefinitions,
   normalizePermissionKeys,
@@ -46,7 +47,7 @@ export function AccessRolesPage() {
   )
   const [form] = Form.useForm<Record<string, unknown>>()
   const crud = useAccessResourceCrud({
-    query: accessQueries.roles(),
+    query: accessQueries.roles(canViewRoles),
     create: accessMutations.roles.create(),
     update: accessMutations.roles.update(),
     delete: accessMutations.roles.delete(),
@@ -177,14 +178,23 @@ export function AccessRolesPage() {
         okText={crud.editing ? t('common.update', '更新') : t('common.create', '创建')}
         cancelText={t('common.cancel', '取消')}
         confirmLoading={crud.isSaving}
-        centered
+        cancelButtonProps={{ disabled: crud.isSaving }}
+        closable={{ disabled: crud.isSaving }}
+        keyboard={!crud.isSaving}
+        styles={accessMutationModalStyles}
+        footer={(buttons) => (
+          <AccessMutationFooter error={crud.saveError} saving={crud.isSaving}>
+            {buttons}
+          </AccessMutationFooter>
+        )}
+        style={{ top: 32, marginTop: 0 }}
         width={1000}
-        styles={{ body: { maxHeight: 'calc(100vh - 160px)', overflowY: 'auto' } }}
         destroyOnHidden
         mask={{ closable: false }}
       >
         <Form
           form={form}
+          disabled={crud.isSaving}
           key={crud.editing?.id ?? 'create-role'}
           layout="vertical"
           initialValues={

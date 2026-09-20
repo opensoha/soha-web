@@ -319,3 +319,33 @@
     display: inline-flex;
   }
 }
+
+.soha-access-mutation-footer,
+.soha-access-mutation-error {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+
+.soha-access-mutation-error {
+  gap: 4px;
+}
+
+.soha-access-mutation-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.soha-access-mutation-status {
+  color: var(--soha-text-secondary);
+}
+
+.soha-access-mutation-buttons {
+  margin-inline-start: auto;
+  white-space: nowrap;
+}

@@ -37,6 +37,7 @@ import { ACCESS_ACTION_OPTIONS } from '../shared/options'
 import { accessQueries } from '../shared/queries'
 import type { AccessPolicy } from '../shared/types'
 import { useAccessResourceCrud } from '../shared/use-resource-crud'
+import { AccessMutationFooter, accessMutationModalStyles } from '../shared/mutation-footer'
 import { joinCSV, parseCSV, toStringArray } from '../shared/utils'
 import { buildPolicySubjectsSummary, buildPolicyTargetsSummary } from './view-model'
 import '../shared/styles.css'
@@ -282,13 +283,23 @@ export function AccessPoliciesPage() {
         okText={crud.editing ? '更新' : '创建'}
         cancelText="取消"
         confirmLoading={crud.isSaving}
+        cancelButtonProps={{ disabled: crud.isSaving }}
+        closable={{ disabled: crud.isSaving }}
+        keyboard={!crud.isSaving}
+        styles={accessMutationModalStyles}
+        style={{ top: 32, marginTop: 0 }}
+        footer={(buttons) => (
+          <AccessMutationFooter error={crud.saveError} saving={crud.isSaving}>
+            {buttons}
+          </AccessMutationFooter>
+        )}
         width={920}
         destroyOnHidden
         mask={{ closable: false }}
-        styles={{ body: { maxHeight: '72vh', overflow: 'auto' } }}
       >
         <Form
           form={form}
+          disabled={crud.isSaving}
           key={crud.editing?.id ?? 'create-policy'}
           layout="vertical"
           initialValues={

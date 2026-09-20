@@ -1,12 +1,7 @@
 import type { ReactNode } from 'react'
 import { Modal } from 'antd'
 import type { FormInstance, FormProps, ModalProps } from 'antd'
-import {
-  hiddenModalHeaderStyle,
-  scrollableModalBodyStyle,
-  viewportModalStyle,
-  visuallyHiddenModalTitleStyle,
-} from './modal-styles'
+import { scrollableModalBodyStyle } from './modal-styles'
 import { StepForm } from './step-form'
 import type { StepFormStep } from './step-form'
 
@@ -42,6 +37,7 @@ export function StepFormModal<Values>(props: StepFormModalProps<Values>) {
   const { bodyClassName, onClose, open, title, width = 720 } = props
   return (
     <Modal
+      style={{ top: 32, marginTop: 0 }}
       classNames={{
         body: ['soha-step-form-modal__body', bodyClassName].filter(Boolean).join(' '),
       }}
@@ -49,11 +45,16 @@ export function StepFormModal<Values>(props: StepFormModalProps<Values>) {
       footer={null}
       mask={{ closable: false }}
       open={open}
-      style={viewportModalStyle}
       styles={{
-        body: scrollableModalBodyStyle,
-        header: hiddenModalHeaderStyle,
-        title: visuallyHiddenModalTitleStyle,
+        body: { ...scrollableModalBodyStyle, maxHeight: 'calc(100dvh - 160px)' },
+        header: {
+          minHeight: 32,
+          display: 'flex',
+          alignItems: 'center',
+          marginBottom: 16,
+          paddingBottom: 0,
+          paddingInlineEnd: 32,
+        },
       }}
       title={title}
       width={width}

@@ -10,10 +10,6 @@ body,
 
 :root {
   color-scheme: light;
-  --soha-radius: 6px;
-  --soha-radius-control: 6px;
-  --soha-radius-panel: 8px;
-  --soha-radius-lg: 14px;
   --soha-management-query-field-default-width: 300px;
   --soha-management-toolbar-search-width: 300px;
   --soha-white: #ffffff;
@@ -133,8 +129,6 @@ body,
   );
   --soha-list-item-active-border: rgba(22, 119, 255, 0.42);
   --soha-app-chrome-height: 56px;
-  --soha-font-size: 12px;
-  --soha-line-height: 20px;
 }
 
 :root[data-theme-mode='dark'] {
@@ -143,9 +137,7 @@ body,
 
 body {
   margin: 0;
-  font-family:
-    'Inter', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue',
-    Arial, sans-serif;
+  font-family: var(--soha-font-family);
   font-size: var(--soha-font-size);
   line-height: var(--soha-line-height);
   font-variant-numeric: tabular-nums;
@@ -188,7 +180,7 @@ a {
   flex-shrink: 0 !important;
   height: 100vh;
   border-right: 1px solid transparent;
-  background: var(--soha-bg-layout) !important;
+  background: var(--soha-bg-base) !important;
   overflow: hidden;
 }
 
@@ -204,7 +196,7 @@ a {
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  background: var(--soha-bg-layout) !important;
+  background: var(--soha-bg-base) !important;
   overflow: hidden;
 }
 
@@ -403,13 +395,14 @@ a {
   margin: 0 !important;
 }
 
-.soha-nav-menu .ant-menu-item,
-.soha-nav-menu .ant-menu-submenu-title {
+/* Compact app navigation; standard menus outside the shell use Antd's Menu tokens. */
+.soha-nav-menu.ant-menu .ant-menu-item,
+.soha-nav-menu.ant-menu .ant-menu-submenu-title {
   display: flex;
   align-items: center;
-  height: 31px !important;
-  min-height: 31px;
-  line-height: 31px !important;
+  height: var(--soha-sidebar-item-height);
+  min-height: var(--soha-sidebar-item-height);
+  line-height: var(--soha-sidebar-item-height);
   width: 100% !important;
   margin-inline: 0 !important;
   margin-block: 2px !important;
@@ -437,8 +430,8 @@ a {
 
 .soha-nav-menu.ant-menu-inline-collapsed .ant-menu-item,
 .soha-nav-menu.ant-menu-inline-collapsed .ant-menu-submenu-title {
-  width: 31px !important;
-  min-width: 31px;
+  width: var(--soha-sidebar-item-height) !important;
+  min-width: var(--soha-sidebar-item-height);
   justify-content: center;
   padding-inline: 0 !important;
 }
@@ -446,9 +439,9 @@ a {
 .soha-nav-menu.ant-menu-inline-collapsed .ant-menu-item-icon,
 .soha-nav-menu.ant-menu-inline-collapsed .ant-menu-submenu-title .ant-menu-item-icon,
 .soha-nav-menu.ant-menu-inline-collapsed .ant-menu-submenu-title .anticon {
-  width: 31px;
-  min-width: 31px;
-  height: 31px;
+  width: var(--soha-sidebar-item-height);
+  min-width: var(--soha-sidebar-item-height);
+  height: var(--soha-sidebar-item-height);
   margin-inline-end: 0 !important;
 }
 

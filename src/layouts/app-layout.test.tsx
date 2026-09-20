@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppLayout } from './app-layout'
+import { I18nProvider } from '@/i18n'
 import { WORKBENCH_ENTRY_PERMISSION_KEYS } from '@/routes/meta'
 import type { PermissionSnapshot } from '@/types'
 
@@ -218,11 +219,13 @@ async function renderWithProviders(route: string, snapshotOverrides?: Partial<Pe
     root.render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={[route]}>
-          <Routes>
-            <Route element={<AppLayout />}>
-              <Route path="*" element={<LocationProbe />} />
-            </Route>
-          </Routes>
+          <I18nProvider>
+            <Routes>
+              <Route element={<AppLayout />}>
+                <Route path="*" element={<LocationProbe />} />
+              </Route>
+            </Routes>
+          </I18nProvider>
         </MemoryRouter>
       </QueryClientProvider>,
     )
@@ -296,6 +299,7 @@ describe('app layout workspace navigation', () => {
     testState.prefs.currentWorkspace = 'resource'
     testState.prefs.localeCode = 'zh_CN'
     testState.prefs.sidebarCollapsed = false
+    testState.prefs.setSidebarCollapsed.mockClear()
     testState.prefs.setCurrentWorkspace.mockClear()
     testState.snapshot = {
       permissionKeys: [
@@ -447,7 +451,7 @@ describe('app layout workspace navigation', () => {
     const createButton = headerActions?.querySelector<HTMLButtonElement>(
       '.soha-header-resource-create',
     )
-    const docsButton = headerActions?.querySelector<HTMLButtonElement>('button[title="Docs"]')
+    const docsButton = headerActions?.querySelector<HTMLButtonElement>('button[title="文档"]')
 
     expect(sessionButton?.textContent).toContain('实时会话')
     expect(sessionButton?.nextElementSibling).toBe(createButton)
@@ -1342,6 +1346,76 @@ describe('app layout workspace navigation', () => {
     expect(workbenchShell?.nextElementSibling).toBe(businessNav)
   })
 
+  it.each([
+    ['zh_CN', false, 'k8s工作台', '收起侧栏'],
+    ['zh_CN', true, 'k8s工作台', '展开侧栏'],
+    ['en_US', false, 'K8s Workbench', 'Collapse sidebar'],
+    ['en_US', true, 'K8s Workbench', 'Expand sidebar'],
+  ] as const)(
+    'keeps navigation named in %s with collapsed=%s',
+    async (locale, collapsed, name, toggleLabel) => {
+      testState.prefs.localeCode = locale
+      testState.prefs.sidebarCollapsed = collapsed
+      const container = await renderWithProviders('/')
+      const switcher = container.querySelector<HTMLButtonElement>('.soha-workbench-switcher')!
+      const toggle = container.querySelector<HTMLButtonElement>('.soha-header-sider-toggle')!
+
+      expect(switcher.getAttribute('aria-label')).toBe(name)
+      expect(switcher.getAttribute('title')).toBe(collapsed ? name : null)
+      expect(toggle.getAttribute('aria-label')).toBe(toggleLabel)
+      expect(toggle.getAttribute('aria-expanded')).toBe(String(!collapsed))
+      expect(testState.prefs.setSidebarCollapsed).not.toHaveBeenCalled()
+      await act(async () => {
+        toggle.click()
+      })
+      expect(testState.prefs.setSidebarCollapsed).toHaveBeenCalledWith(!collapsed)
+      await act(async () => {
+        switcher.click()
+      })
+      expect(document.querySelector('.ant-dropdown-menu-item-selected')?.textContent).toContain(
+        name,
+      )
+    },
+  )
+
+  it.each([false, true])(
+    'preserves desktop collapsed=%s while opening and closing narrow-screen navigation',
+    async (preferredCollapsed) => {
+      testState.prefs.sidebarCollapsed = preferredCollapsed
+      const originalMatchMedia = window.matchMedia
+      let changeBreakpoint!: (event: MediaQueryListEvent) => void
+      window.matchMedia = (query) => {
+        const media = originalMatchMedia(query)
+        if (query === 'screen and (max-width: 767.98px)') {
+          media.addEventListener = vi.fn((_event, listener) => {
+            changeBreakpoint = listener as (event: MediaQueryListEvent) => void
+          })
+        }
+        return media
+      }
+      try {
+        const container = await renderWithProviders('/')
+        const toggle = container.querySelector<HTMLButtonElement>('.soha-header-sider-toggle')!
+        expect(toggle.getAttribute('aria-expanded')).toBe(String(!preferredCollapsed))
+        await act(async () => {
+          changeBreakpoint({ matches: true } as MediaQueryListEvent)
+        })
+        expect(toggle.getAttribute('aria-expanded')).toBe('false')
+        await act(async () => toggle.click())
+        expect(toggle.getAttribute('aria-expanded')).toBe('true')
+        await act(async () => toggle.click())
+        expect(toggle.getAttribute('aria-expanded')).toBe('false')
+        await act(async () => {
+          changeBreakpoint({ matches: false } as MediaQueryListEvent)
+        })
+        expect(toggle.getAttribute('aria-expanded')).toBe(String(!preferredCollapsed))
+        expect(testState.prefs.setSidebarCollapsed).not.toHaveBeenCalled()
+      } finally {
+        window.matchMedia = originalMatchMedia
+      }
+    },
+  )
+
   it('shows workbenches in the product order', async () => {
     const container = await renderWithProviders('/', {
       permissionKeys: [
@@ -2030,6 +2104,39 @@ describe('app layout workspace navigation', () => {
       container.querySelector('.soha-header-main .ant-breadcrumb')?.textContent ?? ''
     expect(breadcrumbText).toContain('工作负载/Pods/alidns-webhook-f7645fd4b-lkvn8')
     expect(breadcrumbText).not.toContain('Pod Detail')
+
+    const listLink = container.querySelector<HTMLAnchorElement>(
+      '.soha-header-main .ant-breadcrumb a[href="/workloads/pods"]',
+    )!
+    expect(listLink).not.toBeNull()
+    for (const modifier of ['ctrlKey', 'metaKey', 'shiftKey', 'altKey']) {
+      const event = new MouseEvent('click', { bubbles: true, cancelable: true, [modifier]: true })
+      let preventedByRouter: boolean | undefined
+      document.addEventListener(
+        'click',
+        (nativeEvent) => {
+          preventedByRouter = nativeEvent.defaultPrevented
+          // React has handled the event; stop jsdom's unsupported native navigation.
+          nativeEvent.preventDefault()
+        },
+        { once: true },
+      )
+      await act(async () => {
+        listLink.dispatchEvent(event)
+      })
+      expect(preventedByRouter).toBe(false)
+      expect(container.querySelector('[data-testid="page"]')?.getAttribute('data-pathname')).toBe(
+        '/workloads/pods/alidns-webhook-f7645fd4b-lkvn8',
+      )
+    }
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true })
+    await act(async () => {
+      listLink.dispatchEvent(click)
+    })
+    expect(click.defaultPrevented).toBe(true)
+    expect(container.querySelector('[data-testid="page"]')?.getAttribute('data-pathname')).toBe(
+      '/workloads/pods',
+    )
   })
 
   it('keeps settings out of the header and routes system navigation through the main sidebar', async () => {

@@ -258,7 +258,7 @@ export function ApplicationsPage() {
                                 }
                                 modal.confirm({
                                   title: '确认删除应用？',
-                                  content: `删除 ${app.name} 后不可恢复。`,
+                                  content: `将删除 ${app.name} 及其环境、部署配置和历史记录，且不可恢复。集群中的实际工作负载不会卸载。`,
                                   okText: '删除',
                                   cancelText: '取消',
                                   okButtonProps: { danger: true },

@@ -21,6 +21,8 @@ export const enUS: Dictionary = {
   'layout.logout': 'Sign out',
   'layout.profile': 'Account Center',
   'layout.about': 'About',
+  'layout.expand': 'Expand sidebar',
+  'layout.collapse': 'Collapse sidebar',
   'layout.accountSettings': 'Personal Settings',
   'layout.accountMenu': 'Account menu',
   'layout.accountCenterDescription': 'Account profile and personal information',

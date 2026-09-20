@@ -17,6 +17,7 @@ import { accessQueries } from '../shared/queries'
 import { ScopeGrantManager } from '../shared/scope-grant-manager'
 import type { AccessTeam } from '../shared/types'
 import { useAccessResourceCrud } from '../shared/use-resource-crud'
+import { AccessMutationFooter, accessMutationModalStyles } from '../shared/mutation-footer'
 import {
   collectOrganizationDescendantIds,
   getGroupDescription,
@@ -235,12 +236,23 @@ export function AccessTeamsPage() {
         okText={crud.editing ? '更新' : '创建'}
         cancelText="取消"
         confirmLoading={crud.isSaving}
+        cancelButtonProps={{ disabled: crud.isSaving }}
+        closable={{ disabled: crud.isSaving }}
+        keyboard={!crud.isSaving}
+        styles={accessMutationModalStyles}
+        style={{ top: 32, marginTop: 0 }}
+        footer={(buttons) => (
+          <AccessMutationFooter error={crud.saveError} saving={crud.isSaving}>
+            {buttons}
+          </AccessMutationFooter>
+        )}
         width={720}
         destroyOnHidden
         mask={{ closable: false }}
       >
         <Form
           form={form}
+          disabled={crud.isSaving}
           key={crud.editing?.id ?? 'create-group'}
           layout="vertical"
           initialValues={

@@ -968,7 +968,9 @@ describe('docker pages', () => {
     expect(
       (dialog?.querySelector('.ant-modal-header') as HTMLElement | null)?.style.minHeight,
     ).toBe('32px')
-    expect((modalTitle as HTMLElement | null)?.style.position).toBe('absolute')
+    expect((modalTitle as HTMLElement | null)?.style.position).not.toBe('absolute')
+    expect(dialog?.closest('.ant-modal-wrap')?.classList.contains('ant-modal-centered')).toBe(false)
+    expect((dialog as HTMLElement | undefined)?.style.top).toBe('32px')
 
     const stepTitles = Array.from(
       document.querySelectorAll('.soha-step-form__steps .ant-steps-item-title'),

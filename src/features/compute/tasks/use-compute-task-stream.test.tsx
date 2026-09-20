@@ -29,8 +29,8 @@ class EventSourceMock {
   }
 }
 
-function Probe() {
-  const stream = useComputeTaskStream({ domain: 'virtualization', taskId: 'task/one' })
+function Probe({ enabled = true }: { enabled?: boolean }) {
+  const stream = useComputeTaskStream({ domain: 'virtualization', taskId: 'task/one', enabled })
   return <span>{stream.status}</span>
 }
 
@@ -53,6 +53,7 @@ describe('compute task stream', () => {
     await act(async () => root.unmount())
     queryClient.clear()
     container.remove()
+    vi.useRealTimers()
     vi.unstubAllGlobals()
   })
 
@@ -102,5 +103,53 @@ describe('compute task stream', () => {
         computeKeys.task('virtualization', 'task/one'),
       )?.data.normalizedStatus,
     ).toBe('succeeded')
+  })
+
+  it('falls back after repeated disconnects and closing the view stops subscriptions without canceling the task', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const render = (enabled: boolean) =>
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <Probe enabled={enabled} />
+        </QueryClientProvider>,
+      )
+    await act(async () => {
+      render(true)
+      await Promise.resolve()
+    })
+    await act(async () => EventSourceMock.instances[0].onerror?.())
+    expect(container.textContent).toBe('reconnecting')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000)
+    })
+    await act(async () => EventSourceMock.instances[1].onerror?.())
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4000)
+    })
+    await act(async () => EventSourceMock.instances[2].onerror?.())
+    expect(container.textContent).toBe('polling')
+    expect(EventSourceMock.instances.every((source) => source.closed)).toBe(true)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(9000)
+    })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: computeKeys.task('virtualization', 'task/one'),
+    })
+    const connections = EventSourceMock.instances.length
+    const refreshes = invalidate.mock.calls.length
+    await act(async () => {
+      render(false)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30000)
+    })
+    expect(container.textContent).toBe('idle')
+    expect(EventSourceMock.instances.every((source) => source.closed)).toBe(true)
+    expect(EventSourceMock.instances).toHaveLength(connections)
+    expect(invalidate).toHaveBeenCalledTimes(refreshes)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

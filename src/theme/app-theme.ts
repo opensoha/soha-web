@@ -108,8 +108,25 @@ export const themeModeOptions: Array<{ value: ThemeMode; label: string }> = [
 
 const APP_FONT_FAMILY =
   "'Inter', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif"
-const APP_FONT_SIZE = 12
-const APP_LINE_HEIGHT = 20 / APP_FONT_SIZE
+const APP_FONT_SIZE = 14
+const APP_LINE_HEIGHT_PX = 22
+const APP_LINE_HEIGHT = APP_LINE_HEIGHT_PX / APP_FONT_SIZE
+const APP_SUPPORTING_FONT_SIZE = 12
+const APP_SUPPORTING_LINE_HEIGHT_PX = 18
+const APP_CONTROL_FONT_SIZE = 13
+const APP_SECTION_FONT_SIZE = 16
+const APP_SECTION_LINE_HEIGHT_PX = 24
+const APP_METRIC_FONT_SIZE = 34
+const APP_SUMMARY_FONT_SIZE = 22
+const APP_CARD_PADDING = 20
+// Shared by the overview canvas and its CSS slot; not a global chart size.
+export const OVERVIEW_COMPACT_CHART_SIZE = 64
+const APP_CONTROL_HEIGHT = 32
+const APP_CONTROL_RADIUS = 6
+const APP_PANEL_RADIUS = 8
+const APP_LARGE_RADIUS = 14
+// The app sidebar is compact; other menus retain the component's standard height.
+const APP_SIDEBAR_ITEM_HEIGHT = 31
 const GLASS_BLUR = '16px'
 
 const THEME_PALETTES: Record<ResolvedThemeMode, ThemePalette> = {
@@ -128,7 +145,7 @@ const THEME_PALETTES: Record<ResolvedThemeMode, ThemePalette> = {
     colorInfo: '#0891b2',
     controlOutline: 'rgba(22, 119, 255, 0.16)',
     colorBgBase: '#ffffff',
-    colorBgLayout: '#ffffff',
+    colorBgLayout: '#f6f8fb',
     colorBgContainer: '#ffffff',
     colorBgElevated: 'rgba(255, 255, 255, 0.94)',
     colorBgMuted: '#f9f9fb',
@@ -420,19 +437,20 @@ export function getAntdTheme(themeMode: ThemeMode | ResolvedThemeMode): ThemeCon
       controlItemBgActive: palette.colorPrimaryBg,
       controlItemBgActiveHover: palette.colorPrimaryBgHover,
       controlOutline: palette.controlOutline,
+      controlHeight: APP_CONTROL_HEIGHT,
       fontFamily: APP_FONT_FAMILY,
       fontSize: APP_FONT_SIZE,
-      fontSizeSM: 11,
-      fontSizeLG: 14,
-      fontSizeXL: 16,
+      fontSizeSM: APP_SUPPORTING_FONT_SIZE,
+      fontSizeLG: APP_SECTION_FONT_SIZE,
+      fontSizeXL: 20,
       fontSizeHeading1: 30,
       fontSizeHeading2: 24,
       fontSizeHeading3: 20,
       fontSizeHeading4: 16,
       fontSizeHeading5: 14,
       lineHeight: APP_LINE_HEIGHT,
-      lineHeightSM: 18 / 11,
-      lineHeightLG: 22 / 14,
+      lineHeightSM: APP_SUPPORTING_LINE_HEIGHT_PX / APP_SUPPORTING_FONT_SIZE,
+      lineHeightLG: APP_SECTION_LINE_HEIGHT_PX / APP_SECTION_FONT_SIZE,
       lineHeightHeading1: 38 / 30,
       lineHeightHeading2: 32 / 24,
       lineHeightHeading3: 28 / 20,
@@ -440,8 +458,8 @@ export function getAntdTheme(themeMode: ThemeMode | ResolvedThemeMode): ThemeCon
       lineHeightHeading5: 22 / 14,
       borderRadius: 10,
       borderRadiusXS: 2,
-      borderRadiusSM: 6,
-      borderRadiusLG: 14,
+      borderRadiusSM: APP_CONTROL_RADIUS,
+      borderRadiusLG: APP_LARGE_RADIUS,
       padding: 16,
       paddingSM: 12,
       paddingLG: 24,
@@ -452,6 +470,10 @@ export function getAntdTheme(themeMode: ThemeMode | ResolvedThemeMode): ThemeCon
       boxShadowSecondary: palette.boxShadowSecondary,
     },
     components: {
+      Breadcrumb: {
+        fontSize: APP_SUPPORTING_FONT_SIZE,
+        lineHeight: 20 / APP_SUPPORTING_FONT_SIZE,
+      },
       Layout: {
         bodyBg: palette.colorBgLayout,
         headerBg: palette.colorBgContainer,
@@ -464,6 +486,8 @@ export function getAntdTheme(themeMode: ThemeMode | ResolvedThemeMode): ThemeCon
         lightTriggerColor: palette.colorTextSecondary,
       },
       Menu: {
+        fontSize: APP_SUPPORTING_FONT_SIZE,
+        lineHeight: 20 / APP_SUPPORTING_FONT_SIZE,
         itemBg: 'transparent',
         subMenuItemBg: 'transparent',
         popupBg: palette.colorBgElevated,
@@ -488,10 +512,14 @@ export function getAntdTheme(themeMode: ThemeMode | ResolvedThemeMode): ThemeCon
         subMenuItemBorderRadius: 10,
         itemMarginInline: 8,
         itemHeight: 38,
-        groupTitleFontSize: APP_FONT_SIZE,
+        groupTitleFontSize: APP_SUPPORTING_FONT_SIZE,
         groupTitleLineHeight: '20px',
       },
       Table: {
+        lineHeight: 20 / APP_SUPPORTING_FONT_SIZE,
+        cellFontSize: APP_FONT_SIZE,
+        cellFontSizeMD: APP_FONT_SIZE,
+        cellFontSizeSM: APP_SUPPORTING_FONT_SIZE,
         borderColor: palette.colorBorder,
         headerBg: palette.colorBgMuted,
         headerColor: palette.colorText,
@@ -516,14 +544,18 @@ export function getAntdTheme(themeMode: ThemeMode | ResolvedThemeMode): ThemeCon
           resolvedMode === 'dark' ? 'rgba(113, 113, 122, 0.32)' : 'rgba(161, 161, 170, 0.24)',
       },
       Card: {
+        headerFontSize: APP_SECTION_FONT_SIZE,
+        headerFontSizeSM: APP_FONT_SIZE,
         headerBg: 'transparent',
         actionsBg: palette.colorFillQuaternary,
         extraColor: palette.colorTextSecondary,
-        headerPadding: 20,
-        bodyPadding: 20,
+        headerPadding: APP_CARD_PADDING,
+        bodyPadding: APP_CARD_PADDING,
       },
       Button: {
-        primaryShadow: '0 8px 18px rgba(var(--soha-primary-rgb), 0.20)',
+        contentFontSize: APP_CONTROL_FONT_SIZE,
+        contentFontSizeSM: APP_SUPPORTING_FONT_SIZE,
+        primaryShadow: '0 1px 2px rgba(var(--soha-primary-rgb), 0.12)',
         defaultShadow: 'none',
         dangerShadow: 'none',
         defaultBorderColor: palette.colorBorder,
@@ -539,9 +571,11 @@ export function getAntdTheme(themeMode: ThemeMode | ResolvedThemeMode): ThemeCon
         solidTextColor: '#ffffff',
         dangerColor: '#ffffff',
         fontWeight: 500,
-        borderRadius: 6,
+        borderRadius: APP_CONTROL_RADIUS,
       },
       Input: {
+        inputFontSize: APP_CONTROL_FONT_SIZE,
+        inputFontSizeSM: APP_SUPPORTING_FONT_SIZE,
         activeBg: palette.colorBgContainer,
         hoverBg: palette.colorBgContainer,
         addonBg: palette.colorBgMuted,
@@ -550,9 +584,20 @@ export function getAntdTheme(themeMode: ThemeMode | ResolvedThemeMode): ThemeCon
         warningActiveShadow: 'none',
         hoverBorderColor: palette.colorPrimaryBorderHover,
         activeBorderColor: palette.primary,
-        borderRadius: 6,
+        borderRadius: APP_CONTROL_RADIUS,
+      },
+      InputNumber: {
+        inputFontSize: APP_CONTROL_FONT_SIZE,
+        inputFontSizeSM: APP_SUPPORTING_FONT_SIZE,
+      },
+      DatePicker: {
+        inputFontSize: APP_CONTROL_FONT_SIZE,
+        inputFontSizeSM: APP_SUPPORTING_FONT_SIZE,
       },
       Select: {
+        fontSize: APP_CONTROL_FONT_SIZE,
+        lineHeight: APP_LINE_HEIGHT_PX / APP_CONTROL_FONT_SIZE,
+        optionFontSize: APP_CONTROL_FONT_SIZE,
         selectorBg: palette.colorBgContainer,
         hoverBorderColor: palette.colorPrimaryBorderHover,
         activeBorderColor: palette.primary,
@@ -563,15 +608,27 @@ export function getAntdTheme(themeMode: ThemeMode | ResolvedThemeMode): ThemeCon
         optionSelectedFontWeight: 500,
         multipleItemBg: palette.colorFillQuaternary,
         multipleItemBorderColor: palette.colorBorder,
-        borderRadius: 6,
+        borderRadius: APP_CONTROL_RADIUS,
+      },
+      Form: {
+        labelFontSize: APP_CONTROL_FONT_SIZE,
+        itemMarginBottom: 20,
+      },
+      Tabs: {
+        titleFontSize: APP_FONT_SIZE,
+        titleFontSizeSM: APP_CONTROL_FONT_SIZE,
+        titleFontSizeLG: APP_SECTION_FONT_SIZE,
+        horizontalItemGutter: 24,
       },
       Alert: {
-        borderRadiusLG: 8,
+        borderRadiusLG: APP_PANEL_RADIUS,
       },
       Drawer: {
         colorBgElevated: palette.colorBgContainer,
       },
       Modal: {
+        titleFontSize: APP_SECTION_FONT_SIZE,
+        titleLineHeight: APP_SECTION_LINE_HEIGHT_PX / APP_SECTION_FONT_SIZE,
         borderRadiusLG: 12,
         headerBg: palette.colorBgContainer,
         contentBg: palette.colorBgContainer,
@@ -606,7 +663,7 @@ export function getAntdTheme(themeMode: ThemeMode | ResolvedThemeMode): ThemeCon
         railSize: 6,
       },
       ColorPicker: {
-        borderRadius: 6,
+        borderRadius: APP_CONTROL_RADIUS,
       },
     },
   }
@@ -719,10 +776,24 @@ export function applyAppTheme(_themeId: AppThemeId, themeMode: ThemeMode) {
   root.style.setProperty('--soha-data-row-selected-bg', palette.dataRowSelectedBg)
   root.style.setProperty('--soha-list-item-active-bg', palette.listItemActiveBg)
   root.style.setProperty('--soha-list-item-active-border', palette.listItemActiveBorder)
-  root.style.setProperty('--soha-radius', '6px')
-  root.style.setProperty('--soha-radius-control', '6px')
-  root.style.setProperty('--soha-radius-panel', '8px')
-  root.style.setProperty('--soha-radius-lg', '14px')
+  root.style.setProperty('--soha-font-family', APP_FONT_FAMILY)
+  root.style.setProperty('--soha-font-size', `${APP_FONT_SIZE}px`)
+  root.style.setProperty('--soha-line-height', `${APP_LINE_HEIGHT_PX}px`)
+  root.style.setProperty('--soha-font-size-supporting', `${APP_SUPPORTING_FONT_SIZE}px`)
+  root.style.setProperty('--soha-font-size-control', `${APP_CONTROL_FONT_SIZE}px`)
+  root.style.setProperty('--soha-font-size-section', `${APP_SECTION_FONT_SIZE}px`)
+  root.style.setProperty('--soha-line-height-supporting', `${APP_SUPPORTING_LINE_HEIGHT_PX}px`)
+  root.style.setProperty('--soha-line-height-section', `${APP_SECTION_LINE_HEIGHT_PX}px`)
+  root.style.setProperty('--soha-font-size-metric', `${APP_METRIC_FONT_SIZE}px`)
+  root.style.setProperty('--soha-font-size-summary', `${APP_SUMMARY_FONT_SIZE}px`)
+  root.style.setProperty('--soha-card-padding', `${APP_CARD_PADDING}px`)
+  root.style.setProperty('--soha-overview-chart-size', `${OVERVIEW_COMPACT_CHART_SIZE}px`)
+  root.style.setProperty('--soha-control-height', `${APP_CONTROL_HEIGHT}px`)
+  root.style.setProperty('--soha-sidebar-item-height', `${APP_SIDEBAR_ITEM_HEIGHT}px`)
+  root.style.setProperty('--soha-radius', `${APP_CONTROL_RADIUS}px`)
+  root.style.setProperty('--soha-radius-control', `${APP_CONTROL_RADIUS}px`)
+  root.style.setProperty('--soha-radius-panel', `${APP_PANEL_RADIUS}px`)
+  root.style.setProperty('--soha-radius-lg', `${APP_LARGE_RADIUS}px`)
   root.style.setProperty('--soha-management-query-field-default-width', '300px')
   root.style.setProperty('--soha-management-toolbar-search-width', '300px')
   root.style.setProperty('color-scheme', resolvedMode)

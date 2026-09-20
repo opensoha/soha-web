@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import { Outlet, useLocation, useMatch, useNavigate } from 'react-router-dom'
+import { Link, Outlet, useLocation, useMatch, useNavigate } from 'react-router-dom'
 import { Avatar, Breadcrumb, Button, Dropdown, Layout, Menu, Spin } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import type { MenuProps } from 'antd'
@@ -488,7 +488,12 @@ function WorkbenchSwitcher({
   }))
 
   const trigger = (
-    <Button className="soha-workbench-switcher" type="text">
+    <Button
+      aria-label={current.label}
+      title={collapsed ? current.label : undefined}
+      className="soha-workbench-switcher"
+      type="text"
+    >
       <span className="soha-workbench-switcher__icon">{current.icon}</span>
       {!collapsed ? (
         <span className="soha-workbench-switcher__copy">
@@ -533,8 +538,11 @@ export function AppLayout() {
   const setLocaleCode = usePreferencesStore((state) => state.setLocaleCode)
   const themeMode = usePreferencesStore((state) => state.themeMode)
   const setThemeMode = usePreferencesStore((state) => state.setThemeMode)
-  const sidebarCollapsed = usePreferencesStore((state) => state.sidebarCollapsed)
+  const preferredSidebarCollapsed = usePreferencesStore((state) => state.sidebarCollapsed)
   const setSidebarCollapsed = usePreferencesStore((state) => state.setSidebarCollapsed)
+  // Narrow-screen navigation is temporary; keep the user's desktop preference.
+  const [narrowSidebarCollapsed, setNarrowSidebarCollapsed] = useState<boolean>()
+  const sidebarCollapsed = narrowSidebarCollapsed ?? preferredSidebarCollapsed
   const currentWorkspace = usePreferencesStore((state) => state.currentWorkspace)
   const [resourceCreateOpenedByAction, setResourceCreateOpenedByAction] = useState(false)
   const resourceCreateRequested = useMemo(
@@ -1031,7 +1039,7 @@ export function AppLayout() {
               collapsible
               collapsed={sidebarCollapsed}
               collapsedWidth={SIDEBAR_COLLAPSED_WIDTH}
-              onCollapse={(collapsed) => setSidebarCollapsed(collapsed)}
+              onBreakpoint={(narrow) => setNarrowSidebarCollapsed(narrow ? true : undefined)}
               style={{ backgroundColor: 'transparent' }}
               trigger={null}
               width={SIDEBAR_WIDTH}
@@ -1173,10 +1181,17 @@ export function AppLayout() {
                             ? t('layout.expand', 'Expand sidebar')
                             : t('layout.collapse', 'Collapse sidebar')
                         }
+                        aria-expanded={!sidebarCollapsed}
                         className="soha-header-action soha-header-sider-toggle"
                         type="text"
                         icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-                        onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                        onClick={() => {
+                          if (narrowSidebarCollapsed !== undefined) {
+                            setNarrowSidebarCollapsed(!sidebarCollapsed)
+                          } else {
+                            setSidebarCollapsed(!sidebarCollapsed)
+                          }
+                        }}
                       />
                     )}
                     {isApplicationWorkspace ? (
@@ -1188,15 +1203,7 @@ export function AppLayout() {
                       <Breadcrumb
                         items={breadcrumbRoutes.map((route) => ({
                           title: route.path ? (
-                            <a
-                              href={route.path}
-                              onClick={(event) => {
-                                event.preventDefault()
-                                navigate(route.path!)
-                              }}
-                            >
-                              {route.name}
-                            </a>
+                            <Link to={route.path}>{route.name}</Link>
                           ) : (
                             route.name
                           ),

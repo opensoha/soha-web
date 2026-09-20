@@ -149,7 +149,9 @@ change. Test mutation keys, wire inputs, and invalidation behavior.
 ## 6. Pages, Components, And Tests
 
 A route page coordinates route parameters, query/mutation hooks, permission/scope states, and
-page-local interaction state. Move reusable presentation and complex pure logic into local
+page-local interaction state. Page composition follows [product-experience.md](product-experience.md);
+reusing a query control or AdminTable does not require its old outer page skeleton. Preserve
+these coordination boundaries when changing layout. Move reusable presentation and complex pure logic into local
 components/hooks/models, but do not hide the entire feature behind another aggregate page.
 
 Co-locate tests with their ownership:
@@ -170,7 +172,8 @@ Co-locate tests with their ownership:
 - Put shared structural surfaces in existing global/shared component styles.
 - Put business-specific states and scene layout in capability CSS.
 - Split large domain CSS when independent capabilities can load without it.
-- Use Soha tokens and Ant Design semantic APIs; read `theme-system.md` for visual rules.
+- Use Soha tokens and Ant Design semantic APIs; read [theme-system.md](theme-system.md) for
+  styling ownership and [product-experience.md](product-experience.md) for product composition.
 
 ## 8. Loading And Bundle Boundaries
 

@@ -2,12 +2,8 @@ import { App, Button, Card, Space, Typography } from 'antd'
 import { ReloadOutlined, SyncOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import {
-  ManagementIconButton,
-  ManagementRefreshButton,
-  ManagementState,
-} from '@/components/management-list'
-import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { ManagementRefreshButton, ManagementState } from '@/components/management-list'
+import { StatusTag } from '@/components/status-tag'
 import { formatDateTime } from '@/utils/time'
 import { computeMutations } from '../mutations'
 import { computeQueries } from '../queries'
@@ -41,8 +37,13 @@ export function ProviderInstancesPanel({
 
   return (
     <Card
+      classNames={{ header: 'soha-compute-panel-header', body: 'soha-compute-panel-body' }}
       className="soha-overview-panel-card soha-compute-provider-instances"
-      title={localeCode === 'zh_CN' ? '提供方实例' : 'Provider instances'}
+      title={
+        <h2 className="soha-compute-section-heading">
+          {localeCode === 'zh_CN' ? '提供方实例' : 'Provider instances'}
+        </h2>
+      }
       extra={
         <ManagementRefreshButton
           aria-label={localeCode === 'zh_CN' ? '刷新提供方实例' : 'Refresh provider instances'}
@@ -98,38 +99,36 @@ export function ProviderInstancesPanel({
                   <Space size={6} wrap>
                     <Text strong>{instance.displayName}</Text>
                     <StatusTag value={instance.health.status} />
-                    <MetadataTag
-                      label={
-                        instance.accessMode === 'agent_proxy'
-                          ? localeCode === 'zh_CN'
-                            ? 'Agent 代理'
-                            : 'Agent proxy'
-                          : localeCode === 'zh_CN'
-                            ? '直连'
-                            : 'Direct'
-                      }
-                      tone={instance.accessMode === 'agent_proxy' ? 'cyan' : 'blue'}
-                    />
                   </Space>
-                  <Text type="secondary">
+                  <Text type="secondary" className="soha-compute-provider-instance-meta">
                     {instance.snapshot.providerKey} ·{' '}
-                    {localeCode === 'zh_CN' ? '最近观测' : 'Last observed'}{' '}
-                    {formatDateTime(instance.lastObservedAt)}
+                    {instance.accessMode === 'agent_proxy'
+                      ? localeCode === 'zh_CN'
+                        ? 'Agent 代理'
+                        : 'Agent proxy'
+                      : localeCode === 'zh_CN'
+                        ? '直连'
+                        : 'Direct'}
                   </Text>
                 </div>
+                <div className="soha-compute-provider-observed">
+                  <span>{localeCode === 'zh_CN' ? '最近观测' : 'Last observed'}</span>
+                  <time dateTime={instance.lastObservedAt || undefined}>
+                    {formatDateTime(instance.lastObservedAt)}
+                  </time>
+                </div>
+
                 {canInspect && (canTest || canDiscover) ? (
-                  <Space size={4}>
+                  <Space size={8} wrap className="soha-compute-provider-actions">
                     {canTest ? (
-                      <ManagementIconButton
+                      <Button
+                        type="text"
                         aria-label={
                           localeCode === 'zh_CN' ? '检查连接健康' : 'Check connection health'
                         }
                         icon={<ReloadOutlined />}
                         loading={busy}
                         size="small"
-                        tooltip={
-                          localeCode === 'zh_CN' ? '检查连接健康' : 'Check connection health'
-                        }
                         onClick={() =>
                           healthMutation.mutate(
                             {
@@ -144,17 +143,19 @@ export function ProviderInstancesPanel({
                             },
                           )
                         }
-                      />
+                      >
+                        {localeCode === 'zh_CN' ? '检查' : 'Check'}
+                      </Button>
                     ) : null}
                     {canDiscover ? (
-                      <ManagementIconButton
+                      <Button
+                        type="text"
                         aria-label={
                           localeCode === 'zh_CN' ? '发现并同步资源' : 'Discover resources'
                         }
                         icon={<SyncOutlined />}
                         loading={busy}
                         size="small"
-                        tooltip={localeCode === 'zh_CN' ? '发现并同步资源' : 'Discover resources'}
                         onClick={() =>
                           discoveryMutation.mutate(
                             {
@@ -172,7 +173,9 @@ export function ProviderInstancesPanel({
                             },
                           )
                         }
-                      />
+                      >
+                        {localeCode === 'zh_CN' ? '同步' : 'Sync'}
+                      </Button>
                     ) : null}
                   </Space>
                 ) : null}
