@@ -1,0 +1,29 @@
+name: table-boundaries
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  table-ownership:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Test table guard positive and negative fixtures
+        run: node --test scripts/check-table-boundaries.test.mjs
+      - name: Prevent new table ownership violations
+        env:
+          TABLE_BOUNDARY_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: node scripts/check-table-boundaries.mjs

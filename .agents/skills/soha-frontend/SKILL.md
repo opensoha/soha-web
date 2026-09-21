@@ -57,6 +57,31 @@ description: Implement or review soha-web React and Ant Design UI, shared tables
   content, while preserving a semantic accessible heading. A useful resource identity/action
   region remains valid. Follow product-experience.md for the distinction and real branding.
 
+## Table Change Contract
+
+- Identify top-level or embedded usage, real pagination mode, sort/filter ownership,
+  stable row keys, selection scope, permissions, mutations and failure states before editing.
+  A current-page count is not a server total; a local sorter must not imply global sorting.
+- Read the current AdminTable, query/toolbar and column APIs. Reuse an explicitly identified,
+  applicable reference without copying its business rules or forcing its whole-page layout.
+- Standard table geometry stays with shared tokens/components. Preserve current query/form
+  composition during maintenance. Shared changes require representative consumer tests;
+  a local visual request does not authorize changing global defaults or public contracts.
+- Run `node --test scripts/check-table-boundaries.test.mjs` when changing the guard, and
+  `node scripts/check-table-boundaries.mjs --base <reviewed-base-sha>` for table/import changes.
+  The dedicated workflow supplies the PR base or pre-push commit with full Git history.
+- The AST guard covers production `.ts`/`.tsx` under `src`, including shared components.
+  Only `src/components/admin-table.tsx` owns new raw Antd Table imports. Use named Antd
+  runtime imports; namespace/default/dynamic root imports and barrel re-exports obscure
+  ownership and are rejected when new. Legitimate type-only imports remain allowed.
+- Existing violations are compared by path/origin/rule and count, not line number. Missing
+  history, an invalid base or comparison against HEAD is a configuration failure, not a pass.
+  Do not edit the guard or choose a newer baseline to hide debt. A necessary exception needs
+  a narrow, justified ownership change and tests, not a blanket feature-directory allowance.
+- This guard checks import ownership, not every possible transitive/runtime path or visual
+  quality. Continue page interaction, state and browser checks; do not claim that importing
+  AdminTable alone proves a table meets the product standard.
+
 ## AI Workbench
 
 - Reuse Ant Design X primitives (`Conversations`, `Welcome`, `Prompts`, `Bubble.List`, `Sender`,
