@@ -74,7 +74,7 @@ export function scanTableImports(file, source) {
       ts.isCallExpression(node) &&
       (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
         (ts.isIdentifier(node.expression) && node.expression.text === 'require')) &&
-      node.arguments.length === 1 &&
+      node.arguments.length >= 1 &&
       ts.isStringLiteralLike(node.arguments[0])
     ) {
       const specifier = node.arguments[0].text
