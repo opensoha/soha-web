@@ -57,30 +57,29 @@ description: Implement or review soha-web React and Ant Design UI, shared tables
   content, while preserving a semantic accessible heading. A useful resource identity/action
   region remains valid. Follow product-experience.md for the distinction and real branding.
 
-## Table Change Contract
+## Table task contract
 
-- Identify top-level or embedded usage, real pagination mode, sort/filter ownership,
-  stable row keys, selection scope, permissions, mutations and failure states before editing.
+- Identify top-level versus embedded use, offset versus cursor navigation, server versus complete
+  local sorting/filtering, total-count source, stable row keys and selection scope before editing.
+  Reuse query, toolbar and column capabilities without changing those behaviors for visual reasons.
   A current-page count is not a server total; a local sorter must not imply global sorting.
-- Read the current AdminTable, query/toolbar and column APIs. Reuse an explicitly identified,
-  applicable reference without copying its business rules or forcing its whole-page layout.
-- Standard table geometry stays with shared tokens/components. Preserve current query/form
-  composition during maintenance. Shared changes require representative consumer tests;
-  a local visual request does not authorize changing global defaults or public contracts.
-- Run `npm test -- scripts/check-table-boundaries.test.mjs` when changing the guard, and
-  `node scripts/check-table-boundaries.mjs --base <reviewed-base-sha>` for table/import changes.
-  The dedicated workflow supplies the PR base or pre-push commit with full Git history.
-- The AST guard covers production `.ts`/`.tsx` under `src`, including shared components.
-  Only `src/components/admin-table.tsx` owns new raw Antd Table imports. Use named Antd
-  runtime imports; namespace/default/dynamic root imports and barrel re-exports obscure
-  ownership and are rejected when new. Legitimate type-only imports remain allowed.
-- Existing violations are compared by path/origin/rule and count, not line number. Missing
-  history, an invalid base or comparison against HEAD is a configuration failure, not a pass.
-  Do not edit the guard or choose a newer baseline to hide debt. A necessary exception needs
-  a narrow, justified ownership change and tests, not a blanket feature-directory allowance.
-- This guard checks import ownership, not every possible transitive/runtime path or visual
-  quality. Continue page interaction, state and browser checks; do not claim that importing
-  AdminTable alone proves a table meets the product standard.
+- Select a real reference file and name the relevant behavior or visual region. Existing code is
+  not automatically compliant; a rejected composition or historical screenshot is not a baseline.
+- Check shared table and column APIs, then verify the actual page integration: permission gates,
+  query reset, pagination/sort requests, actions, loading, empty and persistent error feedback.
+  Shared theme tests do not establish that a new page is wired correctly.
+- `scripts/check-table-boundaries.mjs` inventories production table imports and rejects additions.
+  `--base <reviewed-ref>` or `TABLE_BOUNDARY_BASE_REF` identifies the base before HEAD; CI supplies the PR
+  base or pre-push commit. Missing history fails instead of silently comparing against HEAD.
+- The guard blocks new raw Table imports/re-exports, deep table entries and opaque whole-Antd
+  namespace/dynamic imports. Import other controls by name; type-only imports remain valid.
+  Only `src/components/admin-table.tsx` is the shared implementation exemption. Historical
+  occurrences are counted at the Git baseline, not silently rewritten or blanket-exempted.
+- Run `npm test -- scripts/check-table-boundaries.test.mjs` when changing this guard, and include
+  negative cases. A necessary new exception needs an explicitly reviewed scope, reason and test;
+  do not evade the rule with another wrapper or reset the baseline to make CI green.
+- This import guard does not prove CSS, accessibility, pagination or visual compliance. Keep
+  targeted component/page tests and actual visual review; preserve current accepted layouts.
 
 ## AI Workbench
 

@@ -23,6 +23,8 @@ for (const source of [
   "import Antd from 'antd'",
   "export * from 'antd'",
   "const library = await import('antd')",
+  "const library = await import('antd', {})",
+  "export * from 'antd/lib'",
   "const library = require('antd/lib/table')",
   "import Antd = require('antd')",
 ]) {
