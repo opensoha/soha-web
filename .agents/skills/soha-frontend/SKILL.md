@@ -57,6 +57,30 @@ description: Implement or review soha-web React and Ant Design UI, shared tables
   content, while preserving a semantic accessible heading. A useful resource identity/action
   region remains valid. Follow product-experience.md for the distinction and real branding.
 
+## Table task contract
+
+- Identify top-level versus embedded use, offset versus cursor navigation, server versus complete
+  local sorting/filtering, total-count source, stable row keys and selection scope before editing.
+  Reuse query, toolbar and column capabilities without changing those behaviors for visual reasons.
+  A current-page count is not a server total; a local sorter must not imply global sorting.
+- Select a real reference file and name the relevant behavior or visual region. Existing code is
+  not automatically compliant; a rejected composition or historical screenshot is not a baseline.
+- Check shared table and column APIs, then verify the actual page integration: permission gates,
+  query reset, pagination/sort requests, actions, loading, empty and persistent error feedback.
+  Shared theme tests do not establish that a new page is wired correctly.
+- `scripts/check-table-boundaries.mjs` inventories production table imports and rejects additions.
+  `--base <reviewed-ref>` or `TABLE_BOUNDARY_BASE_REF` identifies the base before HEAD; CI supplies the PR
+  base or pre-push commit. Missing history fails instead of silently comparing against HEAD.
+- The guard blocks new raw Table imports/re-exports, deep table entries and opaque whole-Antd
+  namespace/dynamic imports. Import other controls by name; type-only imports remain valid.
+  Only `src/components/admin-table.tsx` is the shared implementation exemption. Historical
+  occurrences are counted at the Git baseline, not silently rewritten or blanket-exempted.
+- Run `npm test -- scripts/check-table-boundaries.test.mjs` when changing this guard, and include
+  negative cases. A necessary new exception needs an explicitly reviewed scope, reason and test;
+  do not evade the rule with another wrapper or reset the baseline to make CI green.
+- This import guard does not prove CSS, accessibility, pagination or visual compliance. Keep
+  targeted component/page tests and actual visual review; preserve current accepted layouts.
+
 ## AI Workbench
 
 - Reuse Ant Design X primitives (`Conversations`, `Welcome`, `Prompts`, `Bubble.List`, `Sender`,
