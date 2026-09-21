@@ -14,6 +14,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           path: soha-web
+          fetch-depth: 0
       - name: Checkout contracts
         uses: actions/checkout@v7
         with:
@@ -36,7 +37,14 @@ jobs:
         run: npm run check:routes
       - name: Frontend boundary guard
         working-directory: soha-web
+        env:
+          FRONTEND_BOUNDARY_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: npm run check:frontend-boundaries
+      - name: Shared table import guard
+        working-directory: soha-web
+        env:
+          TABLE_BOUNDARY_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: node scripts/check-table-boundaries.mjs --enforce
       - name: Lint
         working-directory: soha-web
         run: npm run lint
