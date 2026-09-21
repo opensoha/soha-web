@@ -16,6 +16,8 @@ for (const [name, source] of Object.entries({
   namespaceExport: "export * as Antd from 'antd'",
   deepExport: "export { default as Grid } from 'antd/es/table'",
   dynamic: "const module = import('antd')",
+  dynamicOptions: "const module = import('antd', {})",
+  deepDynamicOptions: "const module = import('antd/es/table', {})",
   require: "const { Table } = require('antd')",
   importEquals: "import Antd = require('antd')",
 })) {
