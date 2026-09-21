@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import test from 'node:test'
+import { test } from 'vitest'
 import { checkRepository, newViolations, scanTableImports } from './check-table-boundaries.mjs'
 
 const page = 'src/features/example/list-page.tsx'
@@ -70,7 +70,8 @@ test('real git comparison detects new, including untracked, source and rejects i
     git('config', 'user.name', 'Boundary Test')
     git('config', 'user.email', 'boundary-test@example.invalid')
     write(page, "import { Table } from 'antd'\n")
-    git('add', '.'); git('commit', '-m', 'reviewed baseline')
+    git('add', '.')
+    git('commit', '-m', 'reviewed baseline')
     const base = git('rev-parse', 'HEAD')
     git('commit', '--allow-empty', '-m', 'candidate')
     assert.equal(checkRepository(root, base).newViolations.length, 0)

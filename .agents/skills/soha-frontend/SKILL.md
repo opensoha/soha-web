@@ -67,7 +67,7 @@ description: Implement or review soha-web React and Ant Design UI, shared tables
 - Standard table geometry stays with shared tokens/components. Preserve current query/form
   composition during maintenance. Shared changes require representative consumer tests;
   a local visual request does not authorize changing global defaults or public contracts.
-- Run `node --test scripts/check-table-boundaries.test.mjs` when changing the guard, and
+- Run `npm test -- scripts/check-table-boundaries.test.mjs` when changing the guard, and
   `node scripts/check-table-boundaries.mjs --base <reviewed-base-sha>` for table/import changes.
   The dedicated workflow supplies the PR base or pre-push commit with full Git history.
 - The AST guard covers production `.ts`/`.tsx` under `src`, including shared components.

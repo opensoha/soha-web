@@ -22,7 +22,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Test table guard positive and negative fixtures
-        run: node --test scripts/check-table-boundaries.test.mjs
+        run: npm test -- scripts/check-table-boundaries.test.mjs
       - name: Prevent new table ownership violations
         env:
           TABLE_BOUNDARY_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
