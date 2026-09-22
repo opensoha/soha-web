@@ -208,7 +208,7 @@ export const virtualizationMutations = {
   testClusters: (queryClient: QueryClient) =>
     mutationOptions({
       mutationKey: virtualizationMutationKeys.cluster('test-many'),
-      mutationFn: (ids: string[]) => Promise.all(ids.map(virtualizationApi.testCluster)),
+      mutationFn: (ids: string[]) => Promise.allSettled(ids.map(virtualizationApi.testCluster)),
       onSuccess: () =>
         invalidateVirtualizationQueries(queryClient, invalidationKeys.clusterChanged()),
     }),

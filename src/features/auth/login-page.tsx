@@ -33,6 +33,7 @@ import {
   applyBrandingSettings,
   persistBrandingSettings,
   readStoredBrandingSettings,
+  resolveBrandingLogos,
 } from '@/utils/branding'
 import './login-page.css'
 
@@ -488,6 +489,7 @@ export function LoginPage() {
   )
   const appTitle = branding.sidebarTitle || branding.appTitle || 'Soha'
   const resolvedThemeMode = resolveThemeMode(themeMode)
+  const logos = resolveBrandingLogos(branding, resolvedThemeMode)
   const sliderVerificationEnabled = loginOptionsQuery.data?.verification?.sliderEnabled === true
   const localPasswordLoginEnabled = loginOptionsQuery.data?.localPasswordLoginEnabled !== false
   const toggleThemeMode = () => {
@@ -657,7 +659,7 @@ export function LoginPage() {
       <div className="soha-auth-layout soha-auth-layout--floating">
         <LoginCapabilityFlow
           brandName={appTitle}
-          loginLogoUrl={branding.expandedLogoUrl || branding.loginLogoUrl}
+          loginLogoUrl={logos.expandedLogoUrl}
           slogan={branding.slogan || 'Soha 是一种能力！'}
         />
 
@@ -665,7 +667,7 @@ export function LoginPage() {
           <div className="soha-auth-panel-inner">
             <div className="soha-auth-brand">
               <img
-                src={branding.collapsedLogoUrl || '/logo.svg'}
+                src={logos.collapsedLogoUrl || '/logo.svg'}
                 alt=""
                 className="soha-auth-brand-logo-img"
               />

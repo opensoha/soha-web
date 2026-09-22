@@ -28,10 +28,7 @@ import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
 import { useNavigate } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
-import {
-  ManagementIconButton,
-  ManagementState,
-} from '@/components/management-list'
+import { ManagementIconButton, ManagementState } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { formatDateTime } from '@/utils/time'
@@ -211,7 +208,15 @@ export function OnCallBoardPage() {
 
   return (
     <div className="soha-page">
-      {schedules.length === 0 ? (
+      {schedulesQuery.isLoading ? (
+        <ManagementState kind="loading" title="正在加载排班" />
+      ) : schedulesQuery.isError ? (
+        <ManagementState
+          kind="error"
+          description={schedulesQuery.error.message}
+          actions={<Button onClick={() => void schedulesQuery.refetch()}>重试</Button>}
+        />
+      ) : schedules.length === 0 ? (
         <Card>
           <ManagementState
             bordered={false}
@@ -351,6 +356,12 @@ export function OnCallBoardPage() {
                 <ManagementState bordered={false} compact description="暂无覆盖记录" />
               ) : (
                 <AdminTable
+                  enableDensity
+                  refreshing={rotationsQuery.isFetching}
+                  error={rotationsQuery.error}
+                  onRefresh={() => void rotationsQuery.refetch()}
+                  columnSettingPlacement="header"
+                  columnSettingIconOnly
                   shellClassName="soha-management-table-shell"
                   columns={[
                     { title: '日期', dataIndex: 'date' },
@@ -361,6 +372,7 @@ export function OnCallBoardPage() {
                     },
                     {
                       title: '操作',
+                      key: 'actions',
                       dataIndex: 'date',
                       render: (value: string) =>
                         canUpdateOnCall ? (
@@ -384,16 +396,21 @@ export function OnCallBoardPage() {
               )
             ) : null}
           </Card>
-          <Card title="待响应任务" className="soha-oncall-tasks-card">
-            <AdminTable
-              shellClassName="soha-management-table-shell"
-              columns={taskColumns}
-              dataSource={tasks}
-              rowKey="id"
-              loading={tasksQuery.isLoading}
-              pagination={{ pageSize: 10 }}
-            />
-          </Card>
+          <AdminTable
+            title="待响应任务"
+            enableDensity
+            error={tasksQuery.error}
+            refreshing={tasksQuery.isFetching}
+            onRefresh={() => void tasksQuery.refetch()}
+            columnSettingPlacement="header"
+            columnSettingIconOnly
+            shellClassName="soha-management-table-shell"
+            columns={taskColumns}
+            dataSource={tasks}
+            rowKey="id"
+            loading={tasksQuery.isLoading}
+            pagination={{ pageSize: 10 }}
+          />
         </>
       )}
 
@@ -453,10 +470,35 @@ export function OnCallBoardPage() {
       </Drawer>
 
       <Modal
+        className="soha-observability-modal"
+        style={{ top: 32 }}
+        classNames={{
+          body: 'soha-observability-modal-body',
+          header: 'soha-observability-modal-header',
+        }}
         title={overrideDate ? `${overrideDate.format(ONCALL_DATE_FORMAT)} 值班覆盖` : '值班覆盖'}
         open={overrideOpen}
         onCancel={() => setOverrideOpen(false)}
-        footer={null}
+        footer={
+          <Space>
+            <Button onClick={() => setOverrideOpen(false)}>取消</Button>
+            <Button
+              type="primary"
+              onClick={() => overrideForm.submit()}
+              loading={updateRotationOverride.isPending}
+            >
+              保存覆盖
+            </Button>
+            <Button
+              danger
+              disabled={!overrideDate || !overrides[overrideDate.format(ONCALL_DATE_FORMAT)]}
+              loading={updateRotationOverride.isPending}
+              onClick={() => updateOverride([])}
+            >
+              清除覆盖
+            </Button>
+          </Space>
+        }
         destroyOnHidden
       >
         <Form
@@ -473,20 +515,6 @@ export function OnCallBoardPage() {
               options={onCallUserOptions(usersQuery.data ?? [])}
             />
           </Form.Item>
-          <Space>
-            <Button type="primary" htmlType="submit" loading={updateRotationOverride.isPending}>
-              保存覆盖
-            </Button>
-            <Button onClick={() => setOverrideOpen(false)}>取消</Button>
-            <Button
-              danger
-              disabled={!overrideDate || !overrides[overrideDate.format(ONCALL_DATE_FORMAT)]}
-              loading={updateRotationOverride.isPending}
-              onClick={() => updateOverride([])}
-            >
-              清除覆盖
-            </Button>
-          </Space>
         </Form>
       </Modal>
     </div>

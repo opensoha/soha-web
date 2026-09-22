@@ -288,6 +288,8 @@ function setDefaultResponses() {
       slogan: 'Soha 是一种能力！',
       loginLogoUrl: 'https://cdn.example.com/legacy-login.svg',
       expandedLogoUrl: 'https://cdn.example.com/logo.svg',
+      darkExpandedLogoUrl: 'https://cdn.example.com/dark-logo.svg',
+      darkCollapsedLogoUrl: '',
       collapsedLogoUrl: '',
       faviconUrl: '',
     },
@@ -556,16 +558,21 @@ describe('settings ai page rendering', () => {
     expect(container.textContent).toContain('系统活动')
     expect(container.textContent).toContain('在线用户2')
     expect(container.textContent).toContain('3 个活跃会话')
-    expect(container.textContent).toContain('活跃会话3')
+    expect(container.textContent).toContain('账户与权限')
     expect(container.textContent).toContain('操作记录8')
     expect(container.textContent).toContain('失败 1')
     expect(container.textContent).toContain('审计记录12')
     expect(container.textContent).toContain('保留 90 天')
     expect(container.querySelectorAll('.soha-overview-section-bar')).toHaveLength(0)
-    expect(
-      container.querySelectorAll('.soha-overview-panel-card > .ant-card-head'),
-    ).toHaveLength(2)
-    expect(container.querySelectorAll('.soha-overview-chip-grid')).toHaveLength(2)
+    expect(container.querySelectorAll('.soha-overview-panel-card > .ant-card-head')).toHaveLength(2)
+    expect(container.querySelector('a[href="/access/users"]')?.textContent).toContain('查看用户')
+    expect(container.querySelector('a[href="/system/online-users"]')?.textContent).toContain(
+      '查看会话',
+    )
+    expect(container.querySelector('a[href="/system/operations"]')?.textContent).toContain(
+      '查看操作',
+    )
+    expect(container.querySelector('a[href="/system/audit"]')?.textContent).toContain('查看审计')
     expect(container.querySelectorAll('.soha-overview-metric-card.is-default')).toHaveLength(4)
     expect(container.querySelector('.soha-settings-overview-chip-grid')).toBeNull()
     expect(container.textContent).not.toContain('常用入口')
@@ -599,6 +606,9 @@ describe('settings ai page rendering', () => {
     expect(apiGetMock).not.toHaveBeenCalledWith('/auth/sessions')
     expect(apiGetMock).not.toHaveBeenCalledWith('/audit/summary')
     expect(apiGetMock).not.toHaveBeenCalledWith('/operations/summary')
+    expect(container.querySelector('a[href="/system/online-users"]')).toBeNull()
+    expect(container.querySelector('a[href="/system/operations"]')).toBeNull()
+    expect(container.querySelector('a[href="/system/audit"]')).toBeNull()
   })
 
   it('shows retryable errors instead of empty settings data', async () => {
@@ -734,6 +744,8 @@ describe('settings ai page rendering', () => {
       '用于登录页左侧主视觉和展开侧边栏；支持 JPG、PNG、SVG、ICO、WebP；建议尺寸 200 × 60 px；单个文件不超过 2 MB',
       '用于登录卡片和收起侧边栏；支持 JPG、PNG、SVG、ICO、WebP；建议尺寸 60 × 60 px；单个文件不超过 2 MB',
       '支持 JPG、PNG、SVG、ICO、WebP；建议尺寸 16 × 16、32 × 32 或 64 × 64 px；单个文件不超过 2 MB',
+      '用于暗色侧边栏和登录页主视觉；未上传时沿用原图。建议使用透明底 PNG、SVG 或 WebP，200 × 60 px，不超过 2 MB',
+      '用于暗色收起侧边栏和登录卡片；未上传时沿用原图。建议使用透明底 PNG、SVG 或 WebP，60 × 60 px，不超过 2 MB',
     ])
     expect(
       Array.from(container.querySelectorAll('button.soha-branding-upload-area')).map((button) =>
@@ -743,6 +755,8 @@ describe('settings ai page rendering', () => {
       '替换登录页主视觉与展开侧边栏 Logo',
       '上传登录卡片与收起侧边栏图标',
       '上传Favicon 图标',
+      '替换暗色展开 Logo',
+      '上传暗色收起图标',
     ])
 
     const saveButton = Array.from(container.querySelectorAll('button')).find((button) =>
@@ -761,6 +775,8 @@ describe('settings ai page rendering', () => {
         sidebarTitle: 'Soha',
         slogan: 'Soha 是一种能力！',
         loginLogoUrl: 'https://cdn.example.com/legacy-login.svg',
+        darkExpandedLogoUrl: 'https://cdn.example.com/dark-logo.svg',
+        darkCollapsedLogoUrl: '',
       }),
     )
   })

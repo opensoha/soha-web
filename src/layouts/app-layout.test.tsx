@@ -69,6 +69,8 @@ vi.mock('@/features/settings', () => ({
         loginLogoUrl: '',
         expandedLogoUrl: '',
         collapsedLogoUrl: '',
+        darkExpandedLogoUrl: '/dark-expanded.svg',
+        darkCollapsedLogoUrl: '/dark-compact.svg',
         faviconUrl: '',
       },
     },
@@ -79,6 +81,8 @@ vi.mock('@/features/settings', () => ({
     loginLogoUrl: value?.loginLogoUrl || '',
     expandedLogoUrl: value?.expandedLogoUrl || '',
     collapsedLogoUrl: value?.collapsedLogoUrl || '',
+    darkExpandedLogoUrl: value?.darkExpandedLogoUrl || '',
+    darkCollapsedLogoUrl: value?.darkCollapsedLogoUrl || '',
     faviconUrl: value?.faviconUrl || '',
   }),
 }))
@@ -299,6 +303,7 @@ describe('app layout workspace navigation', () => {
     testState.prefs.currentWorkspace = 'resource'
     testState.prefs.localeCode = 'zh_CN'
     testState.prefs.sidebarCollapsed = false
+    testState.prefs.themeMode = 'light'
     testState.prefs.setSidebarCollapsed.mockClear()
     testState.prefs.setCurrentWorkspace.mockClear()
     testState.snapshot = {
@@ -616,6 +621,7 @@ describe('app layout workspace navigation', () => {
         'monitoring-workbench-dashboards',
         'monitoring-workbench-rules',
         'monitoring-workbench-oncall',
+        'monitoring-workbench-oncall-settings',
       ],
       visibleMenus: [
         {
@@ -716,6 +722,17 @@ describe('app layout workspace navigation', () => {
           sortOrder: 69,
           enabled: true,
         },
+        {
+          id: 'monitoring-workbench-oncall-settings',
+          parentId: 'monitoring-workbench',
+          path: '/monitoring-workbench/oncall/settings',
+          labelZh: '值班设置',
+          labelEn: 'On-Call Settings',
+          iconKey: 'settings',
+          section: 'alerting',
+          sortOrder: 70,
+          enabled: true,
+        },
       ],
     })
 
@@ -735,6 +752,7 @@ describe('app layout workspace navigation', () => {
     expect(container.textContent).toContain('日志数据源')
     expect(container.textContent).toContain('告警规则')
     expect(container.textContent).toContain('值班协同')
+    expect(container.textContent).toContain('值班设置')
     expect(container.querySelector('.ant-menu-item-selected')?.textContent).toContain('日志')
     expect(container.querySelector('[data-testid="platform-scope-trigger"]')).toBeNull()
   })
@@ -1330,6 +1348,15 @@ describe('app layout workspace navigation', () => {
     expect(breadcrumbText).toContain('应用目录')
     expect(breadcrumbText).not.toContain('Identity')
     expect(breadcrumbText).not.toContain('Internal Workbench')
+  })
+
+  it.each([false, true])('uses the dark brand with collapsed=%s', async (collapsed) => {
+    testState.prefs.themeMode = 'dark'
+    testState.prefs.sidebarCollapsed = collapsed
+    const container = await renderWithProviders('/')
+    expect(container.querySelector('.soha-brand-logo')?.getAttribute('src')).toBe(
+      collapsed ? '/dark-compact.svg' : '/dark-expanded.svg',
+    )
   })
 
   it('renders the workbench switcher below the brand bar and above the business menu', async () => {

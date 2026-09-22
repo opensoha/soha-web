@@ -105,7 +105,6 @@ export function StatefulSetDetailPage() {
               }
             >
               <ResourceMetricsPanel
-                title={localeCode === 'zh_CN' ? 'StatefulSet 指标' : 'StatefulSet Metrics'}
                 data={metricsQuery.data}
                 loading={metricsQuery.isLoading}
               />
@@ -117,9 +116,6 @@ export function StatefulSetDetailPage() {
           label: localeCode === 'zh_CN' ? '事件' : 'Events',
           children: (
             <ResourceEventsTimeline
-              title={
-                localeCode === 'zh_CN' ? 'StatefulSet 事件时间线' : 'StatefulSet Event Timeline'
-              }
               events={eventsQuery.data ?? []}
               loading={eventsQuery.isLoading}
               emptyDescription={

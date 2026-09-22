@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       contracts_version:
-        description: '@opensoha/contracts npm version to consume'
-        required: true
-        default: '0.1.14'
+        description: 'Optional assertion of the contracts version locked in this release'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -18,7 +18,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     env:
-      CONTRACTS_VERSION: ${{ inputs.contracts_version || '0.1.14' }}
+      CONTRACTS_VERSION: ${{ inputs.contracts_version }}
     steps:
       - name: Checkout web
         uses: actions/checkout@v7
@@ -39,9 +39,8 @@ jobs:
         working-directory: soha-web
         run: |
           set -euo pipefail
-          npm pkg set "dependencies.@opensoha/contracts=${CONTRACTS_VERSION}"
-          npm install --no-audit --no-fund
-          node -e "const pkg=require('./package.json'); const lock=require('./package-lock.json'); const dep=pkg.dependencies['@opensoha/contracts']; const entry=lock.packages['node_modules/@opensoha/contracts']; if (dep !== process.env.CONTRACTS_VERSION) throw new Error('contracts dependency is not pinned to release version'); if (!entry || entry.version !== process.env.CONTRACTS_VERSION) throw new Error('contracts lock entry does not match release version'); if (String(entry.resolved || '').startsWith('file:')) throw new Error('contracts release dependency resolved from local file path');"
+          node -e "const pkg=require('./package.json'); const lock=require('./package-lock.json'); const dep=pkg.dependencies['@opensoha/contracts']; const entry=lock.packages['node_modules/@opensoha/contracts']; if (!/^\d+\.\d+\.\d+$/.test(dep)) throw new Error('contracts dependency must be an exact release version'); if (process.env.CONTRACTS_VERSION && dep !== process.env.CONTRACTS_VERSION) throw new Error('contracts input differs from the reviewed dependency'); if (!entry || entry.version !== dep || !entry.integrity) throw new Error('contracts lock entry does not match release version'); if (!String(entry.resolved || '').startsWith('https://registry.npmjs.org/')) throw new Error('contracts release dependency must resolve from npm');"
+          npm ci --no-audit --no-fund
       - name: Lint
         working-directory: soha-web
         run: npm run lint

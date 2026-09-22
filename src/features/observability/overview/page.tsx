@@ -49,8 +49,7 @@ export function MonitoringPage() {
       helper: '当前仍需处理的告警事件',
       value: summaryQuery.isError ? '不可用' : (summary?.firingCount ?? 0),
       icon: <AlertOutlined />,
-      tone:
-        !summaryQuery.isError && (summary?.firingCount ?? 0) > 0 ? 'warning' : 'default',
+      tone: !summaryQuery.isError && (summary?.firingCount ?? 0) > 0 ? 'warning' : 'default',
     },
     {
       key: 'critical',
@@ -58,16 +57,17 @@ export function MonitoringPage() {
       helper: 'Critical 优先级信号',
       value: summaryQuery.isError ? '不可用' : (summary?.criticalCount ?? 0),
       icon: <FireOutlined />,
-      tone:
-        !summaryQuery.isError && (summary?.criticalCount ?? 0) > 0 ? 'danger' : 'default',
+      tone: !summaryQuery.isError && (summary?.criticalCount ?? 0) > 0 ? 'danger' : 'default',
     },
     {
       key: 'healthy-providers',
       label: '健康 Provider',
-      helper: `已配置 ${configuredProviders.length} 个 Provider`,
+      helper: providersQuery.isError
+        ? 'Provider 状态暂不可用'
+        : `已配置 ${configuredProviders.length} 个 Provider`,
       value: providersQuery.isError ? '不可用' : healthyProviders.length,
       icon: <CheckCircleOutlined />,
-      tone: 'default',
+      tone: healthyProviders.length > 0 ? 'success' : 'default',
     },
     {
       key: 'unhealthy-providers',
@@ -137,6 +137,7 @@ export function MonitoringPage() {
 
   return (
     <div className="soha-page soha-overview-page soha-monitoring-overview-page">
+      <h1 className="soha-monitoring-overview-heading">可观测性总览</h1>
       <div className="soha-overview-metric-grid">
         {overviewStats.map((item) => (
           <OverviewMetricCard
@@ -147,9 +148,7 @@ export function MonitoringPage() {
             icon={item.icon}
             tone={item.tone}
             loading={
-              item.key.endsWith('-providers')
-                ? providersQuery.isLoading
-                : summaryQuery.isLoading
+              item.key.endsWith('-providers') ? providersQuery.isLoading : summaryQuery.isLoading
             }
           />
         ))}
@@ -159,19 +158,24 @@ export function MonitoringPage() {
         <Card
           className="soha-overview-panel-card"
           title="告警态势"
-          extra={summary?.lastReceivedAt ? (
-            <Text type="secondary" className="text-xs">
-              最近接收: {formatDateTime(summary?.lastReceivedAt)}
-            </Text>
-          ) : null}
+          extra={
+            summary?.lastReceivedAt ? (
+              <Text type="secondary" className="text-xs">
+                最近接收: {formatDateTime(summary?.lastReceivedAt)}
+              </Text>
+            ) : null
+          }
         >
-          {summaryQuery.isError ? (
+          {summaryQuery.isLoading ? (
+            <ManagementState bordered={false} compact kind="loading" title="正在加载告警摘要" />
+          ) : summaryQuery.isError ? (
             <ManagementState
               bordered={false}
               compact
               kind="error"
               title="告警摘要加载失败"
               description={summaryQuery.error.message}
+              actions={<Button onClick={() => void summaryQuery.refetch()}>重试</Button>}
             />
           ) : summary ? (
             <div className="soha-overview-alert-stack">
@@ -226,6 +230,7 @@ export function MonitoringPage() {
               kind="error"
               title="Provider 状态加载失败"
               description={providersQuery.error.message}
+              actions={<Button onClick={() => void providersQuery.refetch()}>重试</Button>}
             />
           ) : (
             <div className="soha-monitoring-operation-grid">
@@ -244,110 +249,121 @@ export function MonitoringPage() {
         </Card>
       </div>
 
-      <Card
-        className="soha-overview-runtime-card"
-        title="最近告警"
-        extra={
-          <ManagementIconButton
-            aria-label="进入告警处理"
-            icon={<EyeOutlined />}
-            size="small"
-            tooltip="进入告警处理"
-            onClick={() => navigate('/monitoring-workbench/alerts')}
-          />
-        }
-      >
-        {alertsQuery.isLoading ? (
-          <div className="soha-monitoring-alert-list">
-            {[0, 1, 2].map((item) => (
-              <Card key={item} loading size="small" />
-            ))}
-          </div>
-        ) : alertsQuery.isError ? (
-          <ManagementState
-            bordered={false}
-            compact
-            kind="error"
-            title="最近告警加载失败"
-            description={alertsQuery.error.message}
-          />
-        ) : recentAlerts.length === 0 ? (
-          <ManagementState bordered={false} compact description="暂无最近告警" />
-        ) : (
-          <div className="soha-monitoring-alert-list">
-            {recentAlerts.map((item) => (
-              <div key={item.id} className="soha-overview-attention-row">
-                <div className="soha-overview-attention-main">
-                  <div className="soha-monitoring-alert-title-row">
-                    <Text strong>{item.title || item.id}</Text>
-                    <StatusTag value={item.severity} />
-                    <StatusTag value={item.status} />
+      <div className="soha-monitoring-recent-grid">
+        <Card
+          className="soha-overview-runtime-card"
+          title="最近告警"
+          extra={
+            <ManagementIconButton
+              aria-label="进入告警处理"
+              icon={<EyeOutlined />}
+              size="small"
+              tooltip="进入告警处理"
+              onClick={() => navigate('/monitoring-workbench/alerts')}
+            />
+          }
+        >
+          {alertsQuery.isLoading ? (
+            <div className="soha-monitoring-alert-list">
+              {[0, 1, 2].map((item) => (
+                <Card key={item} loading size="small" />
+              ))}
+            </div>
+          ) : alertsQuery.isError ? (
+            <ManagementState
+              bordered={false}
+              compact
+              kind="error"
+              title="最近告警加载失败"
+              description={alertsQuery.error.message}
+              actions={<Button onClick={() => void alertsQuery.refetch()}>重试</Button>}
+            />
+          ) : recentAlerts.length === 0 ? (
+            <ManagementState bordered={false} compact description="暂无最近告警" />
+          ) : (
+            <div className="soha-monitoring-alert-list">
+              {recentAlerts.map((item) => (
+                <div
+                  key={item.id}
+                  className={`soha-overview-attention-row${item.status === 'firing' ? ' is-active' : ''}`}
+                >
+                  <div className="soha-overview-attention-main">
+                    <div className="soha-monitoring-alert-title-row">
+                      <Text strong>{item.title || item.id}</Text>
+                      <StatusTag value={item.severity} />
+                      <StatusTag value={item.status} />
+                    </div>
+                    <div className="soha-overview-inline-caption">{item.summary || '-'}</div>
                   </div>
-                  <div className="soha-overview-inline-caption">{item.summary || '-'}</div>
+                  <div className="soha-overview-attention-meta">
+                    <span>
+                      {[item.clusterId, item.namespace].filter(Boolean).join(' / ') || '-'}
+                    </span>
+                    <span>{formatDateTime(item.lastSeenAt || item.startsAt)}</span>
+                    <Button
+                      type="link"
+                      onClick={() => navigate(`/monitoring-workbench/alerts/${item.id}`)}
+                    >
+                      详情
+                    </Button>
+                  </div>
                 </div>
-                <div className="soha-overview-attention-meta">
-                  <span>{[item.clusterId, item.namespace].filter(Boolean).join(' / ') || '-'}</span>
-                  <span>{formatDateTime(item.lastSeenAt || item.startsAt)}</span>
-                  <Button
-                    size="small"
-                    onClick={() => navigate(`/monitoring-workbench/alerts/${item.id}`)}
-                  >
-                    详情
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
+              ))}
+            </div>
+          )}
+        </Card>
 
-      <Card
-        className="soha-overview-runtime-card"
-        title="近期事件"
-        extra={
-          <ManagementIconButton
-            aria-label="进入事件流"
-            icon={<EyeOutlined />}
-            size="small"
-            tooltip="进入事件流"
-            onClick={() => navigate('/monitoring-workbench/events')}
-          />
-        }
-      >
-        {eventsQuery.isLoading ? (
-          <ManagementState bordered={false} compact kind="loading" title="正在加载事件" />
-        ) : eventsQuery.isError ? (
-          <ManagementState
-            bordered={false}
-            compact
-            kind="error"
-            title="近期事件加载失败"
-            description={eventsQuery.error.message}
-          />
-        ) : recentEvents.length === 0 ? (
-          <ManagementState bordered={false} compact description="暂无近期事件" />
-        ) : (
-          <div className="soha-monitoring-alert-list">
-            {recentEvents.map((item) => (
-              <div key={item.id} className="soha-overview-attention-row">
-                <div className="soha-overview-attention-main">
-                  <div className="soha-monitoring-alert-title-row">
-                    <Text strong>{item.summary || item.id}</Text>
-                    {item.severity ? <StatusTag value={item.severity} /> : null}
+        <Card
+          className="soha-overview-runtime-card"
+          title="近期事件"
+          extra={
+            <ManagementIconButton
+              aria-label="进入事件流"
+              icon={<EyeOutlined />}
+              size="small"
+              tooltip="进入事件流"
+              onClick={() => navigate('/monitoring-workbench/events')}
+            />
+          }
+        >
+          {eventsQuery.isLoading ? (
+            <ManagementState bordered={false} compact kind="loading" title="正在加载事件" />
+          ) : eventsQuery.isError ? (
+            <ManagementState
+              bordered={false}
+              compact
+              kind="error"
+              title="近期事件加载失败"
+              description={eventsQuery.error.message}
+              actions={<Button onClick={() => void eventsQuery.refetch()}>重试</Button>}
+            />
+          ) : recentEvents.length === 0 ? (
+            <ManagementState bordered={false} compact description="暂无近期事件" />
+          ) : (
+            <div className="soha-monitoring-alert-list">
+              {recentEvents.map((item) => (
+                <div key={item.id} className="soha-overview-attention-row">
+                  <div className="soha-overview-attention-main">
+                    <div className="soha-monitoring-alert-title-row">
+                      <Text strong>{item.summary || item.id}</Text>
+                      {item.severity ? <StatusTag value={item.severity} /> : null}
+                    </div>
+                    <div className="soha-overview-inline-caption">
+                      {item.source} / {item.category}
+                    </div>
                   </div>
-                  <div className="soha-overview-inline-caption">
-                    {item.source} / {item.category}
+                  <div className="soha-overview-attention-meta">
+                    <span>
+                      {[item.clusterId, item.namespace].filter(Boolean).join(' / ') || '-'}
+                    </span>
+                    <span>{formatDateTime(item.occurredAt)}</span>
                   </div>
                 </div>
-                <div className="soha-overview-attention-meta">
-                  <span>{[item.clusterId, item.namespace].filter(Boolean).join(' / ') || '-'}</span>
-                  <span>{formatDateTime(item.occurredAt)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
     </div>
   )
 }

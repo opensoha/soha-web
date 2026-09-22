@@ -1,3 +1,4 @@
+import { StepForm } from '@/components/step-form'
 import { useEffect, useRef, useState } from 'react'
 import { EditOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import {
@@ -18,6 +19,7 @@ import {
 import type { TableProps } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
+import { StepFormModal } from '@/components/step-form-modal'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementIconButton } from '@/components/management-list'
 import { BooleanTag, MetadataTag, StatusTag } from '@/components/status-tag'
@@ -52,6 +54,7 @@ export function AlertRulesPage() {
   const [searchParams] = useSearchParams()
   const dashboardDraftOpened = useRef(false)
   const [form] = Form.useForm<AlertRuleFormValues>()
+  const [step, setStep] = useState(0)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<AlertRule | null>(null)
   const [testOpen, setTestOpen] = useState(false)
@@ -87,11 +90,13 @@ export function AlertRulesPage() {
     if (!draft) return
     dashboardDraftOpened.current = true
     setEditing(null)
+    setStep(0)
     form.setFieldsValue(draft)
     setOpen(true)
   }, [canManageRule, form, searchParams])
 
   function openEditor(record: AlertRule | null) {
+    setStep(0)
     setEditing(record)
     setOpen(true)
     form.setFieldsValue(alertRuleFormValues(record))
@@ -182,6 +187,7 @@ export function AlertRulesPage() {
     { title: '更新时间', dataIndex: 'updatedAt', render: formatDateTime },
     {
       title: '操作',
+      key: 'actions',
       dataIndex: 'id',
       render: (_: string, record) => (
         <Space className="soha-row-action-icons" size={2}>
@@ -219,8 +225,14 @@ export function AlertRulesPage() {
 
   return (
     <div className="soha-page">
+      <h1 className="soha-observability-page-heading">告警规则</h1>
       <AdminTable
-        title="告警规则"
+        enableDensity
+        error={rulesQuery.error}
+        refreshing={rulesQuery.isFetching}
+        onRefresh={() => void rulesQuery.refetch()}
+        columnSettingPlacement="header"
+        columnSettingIconOnly
         headerExtra={
           canManageRule ? (
             <Button icon={<PlusOutlined />} type="primary" onClick={() => openEditor(null)}>
@@ -235,235 +247,255 @@ export function AlertRulesPage() {
         loading={rulesQuery.isLoading}
       />
 
-      <Modal
+      <StepFormModal
         title={editing ? '编辑告警规则' : '新建告警规则'}
         open={open}
-        onCancel={() => setOpen(false)}
-        footer={null}
+        onClose={() => setOpen(false)}
         width={920}
-        destroyOnHidden
       >
-        <Form
-          layout="vertical"
+        <StepForm
+          onCancel={() => setOpen(false)}
+          contentMaxWidth="100%"
           form={form}
+          current={step}
+          onCurrentChange={setStep}
           onFinish={submit}
-          initialValues={{ mode: 'simple', ruleType: 'metrics', forSeconds: 60, enabled: true }}
-        >
-          <Form.Item name="mode" label="配置模式">
-            <Segmented
-              block
-              className="soha-form-segmented"
-              options={[
-                { value: 'simple', label: '普通' },
-                { value: 'advanced', label: '高级' },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item
-            name="name"
-            label="名称"
-            rules={[{ required: true, message: '请输入规则名称' }]}
-          >
-            <Input />
-          </Form.Item>
-          {editorMode === 'simple' ? (
-            <>
-              <Space size={16} style={{ width: '100%' }} wrap>
-                <Form.Item
-                  name="metricKey"
-                  label="监控指标"
-                  rules={[{ required: true }]}
-                  style={{ flex: '1 1 220px' }}
-                >
-                  <Select
-                    options={[
-                      { value: 'cpu_usage', label: 'CPU 使用率' },
-                      { value: 'memory_usage', label: '内存使用率' },
-                      { value: 'restart_rate', label: '重启次数' },
-                      { value: 'error_rate', label: '错误率' },
-                      { value: 'latency_p95', label: 'P95 延迟' },
-                    ]}
-                  />
-                </Form.Item>
-                <Form.Item
-                  name="reducer"
-                  label="取值"
-                  rules={[{ required: true }]}
-                  style={{ flex: '1 1 160px' }}
-                >
-                  <Select
-                    options={[
-                      { value: 'latest', label: '最新值' },
-                      { value: 'average', label: '平均值' },
-                      { value: 'max', label: '最大值' },
-                      { value: 'min', label: '最小值' },
-                      { value: 'sum', label: '总和' },
-                      { value: 'count', label: '样本数' },
-                    ]}
-                  />
-                </Form.Item>
-              </Space>
-              <Space size={16} style={{ width: '100%' }} wrap>
-                <Form.Item
-                  name="operator"
-                  label="条件"
-                  rules={[{ required: true }]}
-                  style={{ flex: '1 1 180px' }}
-                >
-                  <Select
-                    options={[
-                      { value: 'gt', label: '大于' },
-                      { value: 'gte', label: '大于等于' },
-                      { value: 'lt', label: '小于' },
-                      { value: 'lte', label: '小于等于' },
-                      { value: 'eq', label: '等于' },
-                    ]}
-                  />
-                </Form.Item>
-                <Form.Item
-                  name="thresholdValue"
-                  label="阈值"
-                  rules={[{ required: true }]}
-                  style={{ flex: '1 1 180px' }}
-                >
-                  <InputNumber style={{ width: '100%' }} />
-                </Form.Item>
-                <Form.Item
-                  name="windowMinutes"
-                  label="查询窗口(分钟)"
-                  rules={[{ required: true }]}
-                  style={{ flex: '1 1 180px' }}
-                >
-                  <InputNumber min={1} max={1440} style={{ width: '100%' }} />
-                </Form.Item>
-              </Space>
-              <Space size={16} style={{ width: '100%' }} wrap>
-                <Form.Item name="clusterId" label="集群" style={{ flex: '1 1 220px' }}>
-                  <Input />
-                </Form.Item>
-                <Form.Item name="namespace" label="命名空间" style={{ flex: '1 1 220px' }}>
-                  <Input />
-                </Form.Item>
-                <Form.Item name="workload" label="工作负载" style={{ flex: '1 1 220px' }}>
-                  <Input />
-                </Form.Item>
-              </Space>
-              <Space size={16} style={{ width: '100%' }} wrap>
-                <Form.Item
-                  name="severity"
-                  label="严重级别"
-                  rules={[{ required: true }]}
-                  style={{ flex: '1 1 220px' }}
-                >
-                  <Select
-                    options={[
-                      { value: 'critical', label: '严重' },
-                      { value: 'warning', label: '警告' },
-                      { value: 'info', label: '提示' },
-                    ]}
-                  />
-                </Form.Item>
-                <Form.Item name="summary" label="告警摘要" style={{ flex: '2 1 360px' }}>
-                  <Input />
-                </Form.Item>
-              </Space>
-              <Form.Item noStyle shouldUpdate>
-                {({ getFieldsValue }) => (
-                  <Alert
-                    description={alertRuleConditionSummary(getFieldsValue(true))}
-                    showIcon
-                    title="条件说明"
-                    type="info"
-                  />
-                )}
-              </Form.Item>
-            </>
-          ) : (
-            <>
-              <Form.Item name="ruleType" label="规则类型" rules={[{ required: true }]}>
-                <Select
-                  options={[
-                    { value: 'metrics', label: 'Metrics' },
-                    { value: 'logs', label: 'Logs' },
-                    { value: 'traces', label: 'Traces' },
-                    { value: 'external_passthrough', label: 'External passthrough' },
-                  ]}
-                />
-              </Form.Item>
-              <Form.Item
-                name="datasourceSelector"
-                label="数据源选择器(JSON)"
-                rules={[{ required: true }]}
-              >
-                <Input.TextArea rows={3} />
-              </Form.Item>
-              <Form.Item name="querySpec" label="查询定义(JSON)" rules={[{ required: true }]}>
-                <Input.TextArea rows={4} />
-              </Form.Item>
-              <Form.Item name="thresholdSpec" label="阈值定义(JSON)" rules={[{ required: true }]}>
-                <Input.TextArea rows={3} />
-              </Form.Item>
-              <Form.Item name="groupBy" label="分组标签(逗号分隔)">
-                <Input />
-              </Form.Item>
-              <Form.Item name="labels" label="事件标签(JSON)" rules={[{ required: true }]}>
-                <Input.TextArea rows={3} />
-              </Form.Item>
-              <Form.Item name="annotations" label="事件注释(JSON)" rules={[{ required: true }]}>
-                <Input.TextArea rows={3} />
-              </Form.Item>
-            </>
-          )}
-          <Space size={16} style={{ width: '100%' }}>
-            <Form.Item name="forSeconds" label="持续时间(s)" style={{ flex: 1 }}>
-              <InputNumber min={0} style={{ width: '100%' }} />
-            </Form.Item>
-            <Form.Item name="notificationPolicyId" label="通知策略" style={{ flex: 1 }}>
-              <Select
-                allowClear
-                options={(notificationPoliciesQuery.data ?? []).map((item) => ({
-                  value: item.id,
-                  label: item.name,
-                }))}
-              />
-            </Form.Item>
-          </Space>
-          <Form.Item name="healingPolicyIds" label="自愈策略">
-            <Select
-              mode="multiple"
-              allowClear
-              options={(healingPoliciesQuery.data ?? []).map((item) => ({
-                value: item.id,
-                label: item.name,
-              }))}
-            />
-          </Form.Item>
-          <Form.Item name="enabled" label="启用" valuePropName="checked">
-            <Switch />
-          </Form.Item>
-          <Space>
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={createMutation.isPending || updateMutation.isPending}
-            >
-              保存
-            </Button>
-            <Button onClick={() => setOpen(false)}>取消</Button>
-            {canTestRule ? (
-              <Button
-                icon={<PlayCircleOutlined />}
-                loading={testMutation.isPending}
-                onClick={testEditor}
-              >
-                测试
-              </Button>
-            ) : null}
-          </Space>
-        </Form>
-      </Modal>
+          loading={createMutation.isPending || updateMutation.isPending}
+          steps={[
+            {
+              title: '规则与条件',
+              fieldNames:
+                editorMode === 'simple'
+                  ? [
+                      'name',
+                      'metricKey',
+                      'reducer',
+                      'operator',
+                      'thresholdValue',
+                      'windowMinutes',
+                      'severity',
+                    ]
+                  : [
+                      'name',
+                      'ruleType',
+                      'datasourceSelector',
+                      'querySpec',
+                      'thresholdSpec',
+                      'labels',
+                      'annotations',
+                    ],
+              children: (
+                <>
+                  {' '}
+                  <Form.Item name="mode" label="配置模式">
+                    <Segmented
+                      block
+                      className="soha-form-segmented"
+                      options={[
+                        { value: 'simple', label: '普通' },
+                        { value: 'advanced', label: '高级' },
+                      ]}
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    name="name"
+                    label="名称"
+                    rules={[{ required: true, message: '请输入规则名称' }]}
+                  >
+                    <Input />
+                  </Form.Item>
+                  {editorMode === 'simple' ? (
+                    <>
+                      <div className="soha-observability-form-grid">
+                        <Form.Item name="metricKey" label="监控指标" rules={[{ required: true }]}>
+                          <Select
+                            options={[
+                              { value: 'cpu_usage', label: 'CPU 使用率' },
+                              { value: 'memory_usage', label: '内存使用率' },
+                              { value: 'restart_rate', label: '重启次数' },
+                              { value: 'error_rate', label: '错误率' },
+                              { value: 'latency_p95', label: 'P95 延迟' },
+                            ]}
+                          />
+                        </Form.Item>
+                        <Form.Item name="reducer" label="取值" rules={[{ required: true }]}>
+                          <Select
+                            options={[
+                              { value: 'latest', label: '最新值' },
+                              { value: 'average', label: '平均值' },
+                              { value: 'max', label: '最大值' },
+                              { value: 'min', label: '最小值' },
+                              { value: 'sum', label: '总和' },
+                              { value: 'count', label: '样本数' },
+                            ]}
+                          />
+                        </Form.Item>
+                      </div>
+                      <div className="soha-observability-form-grid">
+                        <Form.Item name="operator" label="条件" rules={[{ required: true }]}>
+                          <Select
+                            options={[
+                              { value: 'gt', label: '大于' },
+                              { value: 'gte', label: '大于等于' },
+                              { value: 'lt', label: '小于' },
+                              { value: 'lte', label: '小于等于' },
+                              { value: 'eq', label: '等于' },
+                            ]}
+                          />
+                        </Form.Item>
+                        <Form.Item name="thresholdValue" label="阈值" rules={[{ required: true }]}>
+                          <InputNumber style={{ width: '100%' }} />
+                        </Form.Item>
+                        <Form.Item
+                          name="windowMinutes"
+                          label="查询窗口(分钟)"
+                          rules={[{ required: true }]}
+                        >
+                          <InputNumber min={1} max={1440} style={{ width: '100%' }} />
+                        </Form.Item>
+                      </div>
+                      <div className="soha-observability-form-grid">
+                        <Form.Item name="clusterId" label="集群">
+                          <Input />
+                        </Form.Item>
+                        <Form.Item name="namespace" label="命名空间">
+                          <Input />
+                        </Form.Item>
+                        <Form.Item name="workload" label="工作负载">
+                          <Input />
+                        </Form.Item>
+                      </div>
+                      <div className="soha-observability-form-grid">
+                        <Form.Item name="severity" label="严重级别" rules={[{ required: true }]}>
+                          <Select
+                            options={[
+                              { value: 'critical', label: '严重' },
+                              { value: 'warning', label: '警告' },
+                              { value: 'info', label: '提示' },
+                            ]}
+                          />
+                        </Form.Item>
+                        <Form.Item name="summary" label="告警摘要">
+                          <Input />
+                        </Form.Item>
+                      </div>
+                      <Form.Item noStyle shouldUpdate>
+                        {({ getFieldsValue }) => (
+                          <Alert
+                            description={alertRuleConditionSummary(getFieldsValue(true))}
+                            showIcon
+                            title="条件说明"
+                            type="info"
+                          />
+                        )}
+                      </Form.Item>
+                    </>
+                  ) : (
+                    <>
+                      <Form.Item name="ruleType" label="规则类型" rules={[{ required: true }]}>
+                        <Select
+                          options={[
+                            { value: 'metrics', label: 'Metrics' },
+                            { value: 'logs', label: 'Logs' },
+                            { value: 'traces', label: 'Traces' },
+                            { value: 'external_passthrough', label: 'External passthrough' },
+                          ]}
+                        />
+                      </Form.Item>
+                      <Form.Item
+                        name="datasourceSelector"
+                        label="数据源选择器(JSON)"
+                        rules={[{ required: true }]}
+                      >
+                        <Input.TextArea rows={3} />
+                      </Form.Item>
+                      <Form.Item
+                        name="querySpec"
+                        label="查询定义(JSON)"
+                        rules={[{ required: true }]}
+                      >
+                        <Input.TextArea rows={4} />
+                      </Form.Item>
+                      <Form.Item
+                        name="thresholdSpec"
+                        label="阈值定义(JSON)"
+                        rules={[{ required: true }]}
+                      >
+                        <Input.TextArea rows={3} />
+                      </Form.Item>
+                      <Form.Item name="groupBy" label="分组标签(逗号分隔)">
+                        <Input />
+                      </Form.Item>
+                      <Form.Item name="labels" label="事件标签(JSON)" rules={[{ required: true }]}>
+                        <Input.TextArea rows={3} />
+                      </Form.Item>
+                      <Form.Item
+                        name="annotations"
+                        label="事件注释(JSON)"
+                        rules={[{ required: true }]}
+                      >
+                        <Input.TextArea rows={3} />
+                      </Form.Item>
+                    </>
+                  )}
+                </>
+              ),
+            },
+            {
+              title: '通知与自愈',
+              children: (
+                <>
+                  <div className="soha-observability-form-grid">
+                    <Form.Item name="forSeconds" label="持续时间(s)">
+                      <InputNumber min={0} style={{ width: '100%' }} />
+                    </Form.Item>
+                    <Form.Item name="notificationPolicyId" label="通知策略">
+                      <Select
+                        allowClear
+                        options={(notificationPoliciesQuery.data ?? []).map((item) => ({
+                          value: item.id,
+                          label: item.name,
+                        }))}
+                      />
+                    </Form.Item>
+                  </div>
+                  <Form.Item name="healingPolicyIds" label="自愈策略">
+                    <Select
+                      mode="multiple"
+                      allowClear
+                      options={(healingPoliciesQuery.data ?? []).map((item) => ({
+                        value: item.id,
+                        label: item.name,
+                      }))}
+                    />
+                  </Form.Item>
+                  <Form.Item name="enabled" label="启用" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+
+                  {canTestRule ? (
+                    <Button
+                      icon={<PlayCircleOutlined />}
+                      loading={testMutation.isPending}
+                      onClick={testEditor}
+                    >
+                      测试规则
+                    </Button>
+                  ) : null}
+                </>
+              ),
+            },
+          ]}
+        />
+      </StepFormModal>
 
       <Modal
+        className="soha-observability-modal"
+        style={{ top: 32 }}
+        classNames={{
+          body: 'soha-observability-modal-body',
+          header: 'soha-observability-modal-header',
+        }}
         title="规则测试结果"
         open={testOpen}
         onCancel={() => setTestOpen(false)}
@@ -493,16 +525,22 @@ export function AlertRulesPage() {
               ['querySnapshot', testResult?.querySnapshot],
             ] as const
           ).map(([key, value]) => (
-              <Card size="small" title={key} key={key}>
-                <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
-                  {JSON.stringify(value ?? '-', null, 2)}
-                </pre>
-              </Card>
-            ))}
+            <Card size="small" title={key} key={key}>
+              <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+                {JSON.stringify(value ?? '-', null, 2)}
+              </pre>
+            </Card>
+          ))}
         </Space>
       </Modal>
 
       <Modal
+        className="soha-observability-modal"
+        style={{ top: 32 }}
+        classNames={{
+          body: 'soha-observability-modal-body',
+          header: 'soha-observability-modal-header',
+        }}
         title="最近运行记录"
         open={runsOpen}
         onCancel={() => setRunsOpen(false)}
@@ -511,6 +549,12 @@ export function AlertRulesPage() {
         destroyOnHidden
       >
         <AdminTable
+          enableDensity
+          error={ruleRunsQuery.error}
+          refreshing={ruleRunsQuery.isFetching}
+          onRefresh={() => void ruleRunsQuery.refetch()}
+          columnSettingPlacement="header"
+          columnSettingIconOnly
           columns={[
             { title: '运行ID', dataIndex: 'id' },
             {

@@ -44,7 +44,7 @@ export function StorageDetailTabs({
       items={items}
       onChange={onChange}
       size="small"
-      tabBarGutter={18}
+      tabBarGutter={32}
     />
   )
 }

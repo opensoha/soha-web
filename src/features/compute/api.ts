@@ -1,4 +1,5 @@
 import type {
+  ConnectionCheckResultEnvelope,
   ComputeDomain,
   ComputeOverviewEnvelope,
   ComputeProviderDiscoverRequest,
@@ -54,18 +55,25 @@ export const computeApi = {
       `/compute/provider-instances${queryString(filters)}`,
     ),
   providerInstance: (domain: ComputeProviderDomain, providerKey: string, instanceRef: string) =>
-    api.getEnvelope<ComputeProviderInstanceEnvelope>(providerInstancePath(domain, providerKey, instanceRef)),
-  checkProviderHealth: (
+    api.getEnvelope<ComputeProviderInstanceEnvelope>(
+      providerInstancePath(domain, providerKey, instanceRef),
+    ),
+  checkProviderHealth: async (
     domain: ComputeProviderDomain,
     providerKey: string,
     instanceRef: string,
     input: ComputeProviderReadRequest,
-  ) =>
-    postIdempotent<ComputeTaskEnvelope>(
+  ) => {
+    const response = await postIdempotent<ConnectionCheckResultEnvelope>(
       `${providerInstancePath(domain, providerKey, instanceRef)}/health-checks`,
       input,
       'provider-health',
-    ),
+    )
+    if (!response.data?.checkedAt || !response.data.status?.trim()) {
+      throw new Error('Connection checks require a server upgrade to return synchronous results.')
+    }
+    return response
+  },
   discoverProvider: (
     domain: ComputeProviderDomain,
     providerKey: string,
@@ -78,7 +86,9 @@ export const computeApi = {
       'provider-discovery',
     ),
   resourceRelations: (domain: ComputeDomain, kind: ComputeResourceKind, id: string) =>
-    api.getEnvelope<ComputeResourceRelationListEnvelope>(`${resourcePath(domain, kind, id)}/relations`),
+    api.getEnvelope<ComputeResourceRelationListEnvelope>(
+      `${resourcePath(domain, kind, id)}/relations`,
+    ),
   executeResourceAction: (
     domain: ComputeDomain,
     kind: ComputeResourceKind,

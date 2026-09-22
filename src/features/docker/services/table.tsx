@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { App, Form, Select, Space, Typography } from 'antd'
+import { App, Drawer, Form, Select, Space, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
   FileTextOutlined,
@@ -20,6 +20,7 @@ import { localeText, useI18n } from '@/i18n'
 import { formatStatusLabel } from '@/i18n/status'
 import { dockerApi } from '../docker-api'
 import { dockerQueries } from '../queries'
+import { DockerProjectLogsPanel } from '../runtime/logs-panel'
 import type { DockerService } from '../docker-types'
 import {
   DockerAdminTable,
@@ -50,6 +51,7 @@ export function ServicesTable({
     projectId: fixedProjectId,
   })
   const [filterForm] = Form.useForm<DockerFilterState>()
+  const [logService, setLogService] = useState<DockerService | null>(null)
   const {
     dockerModuleEnabled,
     canStartServices,
@@ -169,8 +171,7 @@ export function ServicesTable({
                 size="small"
                 tooltip={localeText(localeCode, '日志', 'Logs')}
                 icon={<FileTextOutlined />}
-                loading={actionMutation.isPending}
-                onClick={() => actionMutation.mutate({ id: record.id, action: 'logs' })}
+                onClick={() => setLogService(record)}
               />
             ) : null}
           </Space>
@@ -179,6 +180,28 @@ export function ServicesTable({
   ]
   return (
     <>
+      <Drawer
+        title={localeText(
+          localeCode,
+          `服务日志 · ${logService?.name ?? ''}`,
+          `Service logs · ${logService?.name ?? ''}`,
+        )}
+        open={logService !== null}
+        onClose={() => setLogService(null)}
+        size={960}
+        destroyOnHidden
+      >
+        {logService ? (
+          <DockerProjectLogsPanel
+            enabled={dockerModuleEnabled && canViewServiceLogs}
+            projectId={logService.projectId}
+            serviceName={logService.name}
+            serviceOptions={[{ label: logService.name, value: logService.name }]}
+            servicesLoading={false}
+            onServiceChange={() => {}}
+          />
+        ) : null}
+      </Drawer>
       {!embedded && !fixedProjectId ? (
         <div className="soha-vrt-query">
           <ManagementQueryPanel

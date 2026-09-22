@@ -14,16 +14,19 @@ import {
   Typography,
 } from 'antd'
 import {
+  CopyOutlined,
+  UndoOutlined,
+  UploadOutlined,
   DeleteOutlined,
   EditOutlined,
   PlusOutlined,
-  ReloadOutlined,
   SaveOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ManagementIconButton,
+  ManagementRefreshButton,
   ManagementSearchableListPane,
   ManagementState,
   TemplateDesignerShell,
@@ -880,26 +883,19 @@ export function BuildTemplatesPage() {
   ]
 
   const templateToolbar = (
-    <>
+    <header className="soha-build-template-toolbar" aria-label="当前构建模板操作">
+      {hasSelection ? (
+        isDirty || sourceDirty ? (
+          <Tag color="gold">未保存</Tag>
+        ) : (
+          <Tag>已保存</Tag>
+        )
+      ) : null}
       <Space wrap>
-        <TemplateSourcesButton />
-        <Button
-          disabled={!canCreate && !canUpdate}
-          onClick={() => {
-            if (confirmDiscardChanges()) setImporting(true)
-          }}
-        >
-          导入文件
-        </Button>
-        <Button
-          icon={<PlusOutlined />}
-          type="primary"
-          disabled={!canCreate}
-          onClick={handleNewTemplate}
-        >
-          新建模板
-        </Button>
-        <Button
+        <ManagementIconButton
+          icon={<CopyOutlined />}
+          aria-label="复制模板"
+          tooltip="复制模板"
           disabled={!selectedTemplate || !canCreate}
           onClick={() => {
             if (!selectedTemplate || !confirmDiscardChanges()) return
@@ -920,11 +916,10 @@ export function BuildTemplatesPage() {
             )
             updateTemplateSearchParam()
           }}
-        >
-          复制模板
-        </Button>
+        />
         <Button
           icon={<SaveOutlined />}
+          type="primary"
           disabled={
             !hasSelection ||
             !canSave ||
@@ -949,7 +944,10 @@ export function BuildTemplatesPage() {
             })
           }
         >
-          <Button
+          <ManagementIconButton
+            aria-label="发布版本"
+            tooltip="发布版本"
+            icon={<UploadOutlined />}
             disabled={
               !selectedTemplate ||
               !canUpdate ||
@@ -961,50 +959,33 @@ export function BuildTemplatesPage() {
               updateMutation.isPending
             }
             loading={publishMutation.isPending}
-          >
-            发布版本
-          </Button>
+          />
         </Popconfirm>
-        <TemplateVersionHistory kind="build" templateId={selectedTemplate?.id ?? ''} />
-        <Button
+        <TemplateVersionHistory kind="build" templateId={selectedTemplate?.id ?? ''} iconOnly />
+        <ManagementIconButton
+          icon={<UndoOutlined />}
+          aria-label="取消更改"
+          tooltip="取消更改"
           disabled={!hasSelection || (!isDirty && !sourceDirty)}
           onClick={handleCancelChanges}
-        >
-          取消更改
-        </Button>
+        />
         <Popconfirm
           title="废弃当前构建模板？已有服务与历史版本将保留。"
           onConfirm={() => selectedTemplate && deleteMutation.mutate(selectedTemplate.id)}
         >
-          <Button
+          <ManagementIconButton
+            aria-label="废弃"
+            tooltip="废弃"
             danger
             icon={<DeleteOutlined />}
             disabled={
               !selectedTemplate || !canDelete || selectedTemplate.publicationState === 'deprecated'
             }
             loading={deleteMutation.isPending}
-          >
-            废弃
-          </Button>
+          />
         </Popconfirm>
       </Space>
-      <Space wrap>
-        {isDirty || sourceDirty ? <Tag color="gold">未保存</Tag> : <Tag>已保存</Tag>}
-        <Button
-          icon={<ReloadOutlined />}
-          loading={templatesQuery.isFetching}
-          onClick={() => {
-            if (confirmDiscardChanges())
-              void templatesQuery.refetch().then(({ data }) => {
-                const fresh = data?.find((item) => item.id === selectedTemplateId)
-                if (fresh) loadTemplate(fresh)
-              })
-          }}
-        >
-          刷新
-        </Button>
-      </Space>
-    </>
+    </header>
   )
 
   const templateList = (
@@ -1020,6 +1001,42 @@ export function BuildTemplatesPage() {
       items={visibleListItems}
       searchPlaceholder="搜索构建模板"
       searchValue={searchText}
+      searchActions={
+        <>
+          <ManagementIconButton
+            aria-label="新建模板"
+            tooltip="新建模板"
+            icon={<PlusOutlined />}
+            color="primary"
+            variant="solid"
+            disabled={!canCreate}
+            onClick={handleNewTemplate}
+          />
+          <ManagementIconButton
+            aria-label="导入文件"
+            tooltip="导入文件"
+            icon={<UploadOutlined />}
+            disabled={!canCreate && !canUpdate}
+            onClick={() => {
+              if (confirmDiscardChanges()) setImporting(true)
+            }}
+          />
+          <TemplateSourcesButton iconOnly />
+
+          <ManagementRefreshButton
+            tooltip="刷新"
+            aria-label="刷新"
+            loading={templatesQuery.isFetching}
+            onClick={() => {
+              if (confirmDiscardChanges())
+                void templatesQuery.refetch().then(({ data }) => {
+                  const fresh = data?.find((item) => item.id === selectedTemplateId)
+                  if (fresh) loadTemplate(fresh)
+                })
+            }}
+          />
+        </>
+      }
       onItemSelect={handleSelectListItem}
       onRetry={() => void templatesQuery.refetch()}
       onSearchChange={setSearchText}
@@ -1110,11 +1127,14 @@ export function BuildTemplatesPage() {
     <>
       <TemplateDesignerShell
         className="soha-page soha-build-template-page"
-        designer={templateDesigner}
+        designer={
+          <>
+            {templateToolbar}
+            {templateDesigner}
+          </>
+        }
         designerClassName="soha-build-template-designer"
         list={templateList}
-        toolbar={templateToolbar}
-        toolbarClassName="soha-build-template-toolbar"
         workspaceClassName="soha-build-template-workspace"
       />
       {importing ? (

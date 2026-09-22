@@ -127,7 +127,7 @@ interface TemplateDesignerShellProps {
   designer: ReactNode
   designerClassName?: string
   list: ReactNode
-  toolbar: ReactNode
+  toolbar?: ReactNode
   toolbarClassName?: string
   workspaceClassName?: string
 }
@@ -721,9 +721,11 @@ export function TemplateDesignerShell({
 }: TemplateDesignerShellProps) {
   return (
     <div className={classNames('soha-template-designer-shell', className)}>
-      <div className={classNames('soha-template-designer-shell__toolbar', toolbarClassName)}>
-        {toolbar}
-      </div>
+      {toolbar ? (
+        <div className={classNames('soha-template-designer-shell__toolbar', toolbarClassName)}>
+          {toolbar}
+        </div>
+      ) : null}
       {children}
       <div className={classNames('soha-template-designer-shell__workspace', workspaceClassName)}>
         {list}

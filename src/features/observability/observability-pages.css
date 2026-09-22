@@ -102,7 +102,7 @@
 
 .soha-monitoring-operation-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -120,15 +120,7 @@
   flex-wrap: wrap;
 }
 
-@media (max-width: 1200px) {
-
-  .soha-monitoring-operation-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 768px) {
-
   .soha-oncall-calendar-card.ant-card .ant-card-head-wrapper {
     align-items: stretch;
     flex-direction: column;
@@ -136,7 +128,7 @@
   }
 
   .soha-oncall-calendar-card.ant-card .ant-card-extra,
-.soha-oncall-calendar-card.ant-card .ant-card-extra .ant-select {
+  .soha-oncall-calendar-card.ant-card .ant-card-extra .ant-select {
     width: 100% !important;
   }
 
@@ -147,4 +139,96 @@
   .soha-monitoring-operation-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.soha-monitoring-overview-page {
+  gap: 12px;
+}
+
+.soha-monitoring-overview-page .soha-overview-chip-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.soha-monitoring-overview-heading,
+.soha-observability-page-heading {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.soha-monitoring-recent-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 12px;
+}
+
+.soha-monitoring-overview-page .soha-overview-attention-row {
+  flex-direction: column;
+  padding: 12px;
+  gap: 8px;
+  border-radius: var(--soha-radius-control);
+  box-shadow: none;
+}
+
+.soha-monitoring-overview-page .soha-overview-attention-row.is-active {
+  border-inline-start: 3px solid var(--soha-warning);
+}
+
+.soha-monitoring-overview-page .soha-overview-attention-meta {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 8px 12px;
+}
+
+.soha-monitoring-overview-page .soha-overview-attention-meta .ant-btn {
+  margin-inline-start: auto;
+}
+
+.soha-monitoring-overview-page .soha-overview-attention-main {
+  overflow-wrap: anywhere;
+}
+
+.soha-observability-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+  align-items: start;
+}
+
+.soha-observability-form-grid > .ant-form-item {
+  min-width: 0;
+}
+
+@media (max-width: 960px) {
+  .soha-monitoring-recent-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .soha-monitoring-overview-page .soha-overview-chip-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .soha-observability-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.soha-observability-modal .soha-observability-modal-header {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  padding-inline-end: 32px;
+  margin-bottom: 16px;
+}
+
+.soha-observability-modal .soha-observability-modal-body {
+  max-height: calc(100dvh - 200px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }

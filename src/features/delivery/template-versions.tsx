@@ -1,7 +1,8 @@
 import { lazy, Suspense, useState } from 'react'
 import { Button, Modal, Select, Space, Typography } from 'antd'
 import { useQuery } from '@tanstack/react-query'
-import { ManagementState } from '@/components/management-list'
+import { HistoryOutlined } from '@ant-design/icons'
+import { ManagementIconButton, ManagementState } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
 import { useI18n } from '@/i18n'
 import { deliveryApi } from './api'
@@ -38,9 +39,11 @@ export function TemplatePublicationStatus({
 export function TemplateVersionHistory({
   kind,
   templateId,
+  iconOnly = false,
 }: {
   kind: 'build' | 'workflow' | 'deployment'
   templateId: string
+  iconOnly?: boolean
 }) {
   const { localeCode } = useI18n()
   const [open, setOpen] = useState(false)
@@ -60,15 +63,29 @@ export function TemplateVersionHistory({
   const title = localeCode === 'zh_CN' ? '已发布版本' : 'Published versions'
   return (
     <>
-      <Button
-        disabled={!templateId}
-        onClick={() => {
-          setVersion(undefined)
-          setOpen(true)
-        }}
-      >
-        {title}
-      </Button>
+      {iconOnly ? (
+        <ManagementIconButton
+          aria-label={title}
+          tooltip={title}
+          icon={<HistoryOutlined />}
+          size="small"
+          disabled={!templateId}
+          onClick={() => {
+            setVersion(undefined)
+            setOpen(true)
+          }}
+        />
+      ) : (
+        <Button
+          disabled={!templateId}
+          onClick={() => {
+            setVersion(undefined)
+            setOpen(true)
+          }}
+        >
+          {title}
+        </Button>
+      )}
       <Modal title={title} open={open} footer={null} onCancel={() => setOpen(false)} width={800}>
         {query.isLoading ? (
           <ManagementState kind="loading" />

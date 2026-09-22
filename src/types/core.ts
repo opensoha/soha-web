@@ -1,3 +1,8 @@
+import type {
+  BrandingSettings as ContractBrandingSettings,
+  LoginOptions as ContractLoginOptions,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+
 export type {
   ApiItemsResponse,
   ApiResponse,
@@ -5,7 +10,6 @@ export type {
   AuthResult,
   AuthTokens,
   ErrorEnvelope,
-  LoginOptions,
   StreamTicket,
 } from '@opensoha/contracts/gen/ts/sohaapi'
 
@@ -141,14 +145,14 @@ export interface PermissionSnapshot {
   visibleMenus: VisibleMenu[]
 }
 
-export interface BrandingSettings {
-  appTitle: string
-  sidebarTitle: string
-  slogan?: string
-  loginLogoUrl: string
-  expandedLogoUrl: string
-  collapsedLogoUrl: string
-  faviconUrl: string
+// Optional additions also work with the currently published contracts package.
+export interface BrandingSettings extends ContractBrandingSettings {
+  darkExpandedLogoUrl?: string
+  darkCollapsedLogoUrl?: string
+}
+
+export type LoginOptions = Omit<ContractLoginOptions, 'branding'> & {
+  branding?: BrandingSettings
 }
 
 export interface PaginatedResponse<T = unknown> {

@@ -28,6 +28,7 @@ import { WorkflowTemplatesPage } from './workflow-templates/page'
 import { workflowTemplateDocument } from './documents/model'
 import { parse, stringify } from 'yaml'
 import { RegistriesPage } from './registries/page'
+import { DeploymentTemplatesPage } from './deployment-templates/page'
 import { DeliveryAnalysisPage } from './workbench/analysis-page'
 import { ApplicationCreateRedirect } from './applications/legacy-redirect'
 import { DeliveryTestingPage } from './workbench/testing-page'
@@ -160,6 +161,19 @@ const testState = vi.hoisted(() => ({
   workflowsError: false,
   gatewayManifestMode: 'approval' as 'approval' | 'restricted' | 'unavailable',
   apiGet: vi.fn(async (path: string) => {
+    if (path === '/deployment-templates')
+      return {
+        data: Array.from({ length: 18 }, (_, index) => ({
+          id: `deployment-${index + 1}`,
+          key: `deployment-${index + 1}`,
+          name: `部署模板 ${index + 1}`,
+          source: { renderer: 'raw_yaml', files: [] },
+          enabled: true,
+          revision: 1,
+          publicationState: 'draft',
+        })),
+      }
+
     const workflowFixtures = [
       {
         id: 'workflow-running',
@@ -1134,7 +1148,9 @@ function LocationProbe() {
 function findButton(container: ParentNode, text: string) {
   const normalizedText = text.replace(/\s/g, '')
   const button = Array.from(container.querySelectorAll('button')).find((item) =>
-    item.textContent?.replace(/\s/g, '').includes(normalizedText),
+    (item.getAttribute('aria-label') || item.textContent)
+      ?.replace(/\s/g, '')
+      .includes(normalizedText),
   ) as HTMLButtonElement | undefined
   if (!button) {
     const available = Array.from(container.querySelectorAll('button'))
@@ -1286,6 +1302,9 @@ describe('ApplicationsPage workspace layout', () => {
     expect(container.querySelector('.soha-management-query-card')).toBeNull()
     expect(container.querySelector('input[placeholder="搜索应用"]')).not.toBeNull()
     expect(container.querySelector('.soha-application-center-toolbar')).not.toBeNull()
+    const panel = container.querySelector('.soha-application-center-panel')!
+    expect(panel.querySelector('.soha-application-center-toolbar')).not.toBeNull()
+    expect(panel.querySelector('.soha-application-card-grid')).not.toBeNull()
     expect(container.querySelector('.soha-application-card-grid')).not.toBeNull()
     expect(container.querySelectorAll('.soha-application-card')).toHaveLength(2)
     expect(container.querySelectorAll('.soha-application-card__more')).toHaveLength(2)
@@ -1332,6 +1351,11 @@ describe('ApplicationsPage workspace layout', () => {
     await clickButton(findButton(container, '我的收藏'))
     expect(container.querySelectorAll('.soha-application-card')).toHaveLength(0)
     expect(container.textContent).toContain('还没有收藏的应用')
+    expect(
+      container.querySelector(
+        '.soha-application-center-panel .soha-management-state.is-borderless',
+      ),
+    ).not.toBeNull()
   })
 
   it('restores list filters after returning from an application', async () => {
@@ -1596,10 +1620,20 @@ describe('ApplicationsPage workspace layout', () => {
     expect(testState.apiGet).toHaveBeenCalledWith('/build-templates/tpl-1/usage')
     expect(container.querySelector('.soha-build-template-workspace')).not.toBeNull()
     expect(container.querySelector('.soha-build-template-list')).not.toBeNull()
-    expect(container.querySelector('.soha-build-template-designer')).not.toBeNull()
-    expect(container.textContent).toContain('新建模板')
+    const designer = container.querySelector('.soha-build-template-designer')!
+    const list = container.querySelector('.soha-build-template-list')!
+    expect(designer).not.toBeNull()
+    expect(container.querySelector('.soha-template-designer-shell__toolbar')).toBeNull()
+    expect(list.querySelector('[aria-label="导入文件"]')).not.toBeNull()
+    expect(list.querySelector('[aria-label="刷新"]')).not.toBeNull()
+    expect(findButton(designer, '保存草稿')).not.toBeNull()
+    expect(list.textContent).not.toContain('保存草稿')
+    expect(designer.querySelector('[aria-label="新建模板"]')).toBeNull()
+    expect(
+      container.querySelector('.soha-build-template-list [aria-label="新建模板"]'),
+    ).not.toBeNull()
     expect(container.textContent).toContain('保存')
-    expect(container.textContent).toContain('取消更改')
+    expect(container.querySelector('[aria-label="取消更改"]')).not.toBeNull()
     expect(container.textContent).toContain('Node Docker')
     expect(container.textContent).toContain('docker-node')
     expect(container.textContent).toContain('命令 2')
@@ -1624,7 +1658,7 @@ describe('ApplicationsPage workspace layout', () => {
   it('covers build template edit, variable, enable switch, and JSON preview interactions', async () => {
     const container = await renderWithProviders(<BuildTemplatesPage />, '/build-templates')
 
-    expect(findToolbarButton(container, '.soha-build-template-toolbar', '新建模板').disabled).toBe(
+    expect(findToolbarButton(container, '.soha-build-template-list', '新建模板').disabled).toBe(
       false,
     )
     expect(findToolbarButton(container, '.soha-build-template-toolbar', '保存草稿').disabled).toBe(
@@ -1640,7 +1674,7 @@ describe('ApplicationsPage workspace layout', () => {
     expect(enabledSwitch).not.toBeNull()
     expect(enabledSwitch?.disabled).toBe(false)
 
-    await clickButton(findToolbarButton(container, '.soha-build-template-toolbar', '新建模板'))
+    await clickButton(findToolbarButton(container, '.soha-build-template-list', '新建模板'))
     expect(container.textContent).toContain('未保存')
 
     await clickTab(container, '变量')
@@ -1731,7 +1765,7 @@ describe('ApplicationsPage workspace layout', () => {
     testState.permissionSnapshot.permissionKeys = [...readonlyPermissionKeys]
     const container = await renderWithProviders(<BuildTemplatesPage />, '/build-templates')
 
-    expect(findToolbarButton(container, '.soha-build-template-toolbar', '新建模板').disabled).toBe(
+    expect(findToolbarButton(container, '.soha-build-template-list', '新建模板').disabled).toBe(
       true,
     )
     expect(findToolbarButton(container, '.soha-build-template-toolbar', '保存草稿').disabled).toBe(
@@ -1821,6 +1855,15 @@ describe('ApplicationsPage workspace layout', () => {
         ),
       ).toBe(true),
     )
+    const list = container.querySelector('.soha-workflow-template-list')!
+    const designer = container.querySelector('.soha-workflow-template-designer')!
+    expect(list.querySelector('[aria-label="新建模板"]')).not.toBeNull()
+    expect(list.querySelector('[aria-label="导入文件"]')).not.toBeNull()
+    expect(list.querySelector('[aria-label="刷新"]')).not.toBeNull()
+    expect(findButton(designer, '编辑草稿')).not.toBeNull()
+    expect(designer.querySelector('[aria-label="新建模板"]')).toBeNull()
+    expect(list.textContent).not.toContain('编辑草稿')
+    expect(container.querySelector('.soha-template-designer-shell__toolbar')).toBeNull()
     expect(testState.apiGet).toHaveBeenCalledWith('/workflow-templates/wf-template-1/versions/1')
     expect(testState.apiGet).not.toHaveBeenCalledWith('/workflow-templates/wf-template-1/usage')
     expect(container.textContent).toContain('Release DAG')
@@ -1941,7 +1984,11 @@ describe('ApplicationsPage workspace layout', () => {
         ),
       ).toBe(true),
     )
-    for (const label of ['新建模板', '编辑草稿', '复制模板', '废弃'])
+    for (const label of ['新建模板', '导入文件'])
+      expect(findToolbarButton(container, '.soha-workflow-template-list', label).disabled).toBe(
+        true,
+      )
+    for (const label of ['编辑草稿', '复制模板', '废弃'])
       expect(findToolbarButton(container, '.soha-workflow-template-toolbar', label).disabled).toBe(
         true,
       )
@@ -1958,6 +2005,58 @@ describe('ApplicationsPage workspace layout', () => {
       'kind: WorkflowTemplate',
     )
     expect(container.querySelector('[data-testid="release-flow-dag-editor"]')).toBeNull()
+  })
+
+  it('aligns deployment template tools and resets local pagination when searching', async () => {
+    testState.permissionSnapshot.permissionKeys = ['delivery.deployment-templates.view']
+    const container = await renderWithProviders(<DeploymentTemplatesPage />)
+    const header = container.querySelector('.soha-admin-table-header')!
+    expect(header.querySelector('[aria-label="切换表格密度"]')).not.toBeNull()
+    expect(header.querySelector('[aria-label="刷新列表"]')).not.toBeNull()
+    expect(header.querySelector('[aria-label="列设置"]')).not.toBeNull()
+    expect(header.textContent).not.toContain('新建模板')
+    expect(container.querySelector('.soha-admin-table-toolbar')).toBeNull()
+    const nextPage = container.querySelector('.ant-pagination-item-2') as HTMLElement
+    await act(async () => {
+      nextPage.click()
+    })
+    expect(container.querySelector('tbody')?.textContent).toContain('部署模板 18')
+    expect(container.querySelector('tbody')?.textContent).not.toContain('部署模板 2')
+    await setInputValue(
+      container.querySelector('[aria-label="搜索部署模板"]') as HTMLInputElement,
+      '部署模板 2',
+    )
+    expect(container.querySelector('tbody')?.textContent).not.toContain('部署模板 2')
+    expect(container.querySelector('.ant-pagination-item-active')?.textContent).toBe('2')
+    await clickButton(findButton(container, '查询'))
+    expect(container.querySelector('tbody')?.textContent).toContain('部署模板 2')
+    expect(container.querySelector('.ant-pagination-item-active')?.textContent).toBe('1')
+    await clickButton(findButton(container, '重置'))
+    expect(container.querySelectorAll('tbody tr[data-row-key]')).toHaveLength(15)
+    const count = testState.apiGet.mock.calls.filter(
+      ([path]) => path === '/deployment-templates',
+    ).length
+    await clickButton(header.querySelector('[aria-label="刷新列表"]') as HTMLButtonElement)
+    expect(
+      testState.apiGet.mock.calls.filter(([path]) => path === '/deployment-templates'),
+    ).toHaveLength(count + 1)
+    await clickButton(header.querySelector('[aria-label="切换表格密度"]') as HTMLButtonElement)
+    expect(container.querySelector('.ant-table-medium')).not.toBeNull()
+  })
+
+  it('keeps the shared delivery table controls together and functional', async () => {
+    const container = await renderWithProviders(<RegistriesPage />, '/registries')
+    const header = container.querySelector('.soha-admin-table-header')!
+    expect(header.textContent).toContain('添加仓库')
+    expect(container.querySelector('.soha-admin-table-toolbar')).toBeNull()
+    expect(header.querySelector('[aria-label="列设置"]')).not.toBeNull()
+    const count = testState.apiGet.mock.calls.filter(([path]) => path === '/registries').length
+    await clickButton(header.querySelector('[aria-label="刷新"]') as HTMLButtonElement)
+    expect(testState.apiGet.mock.calls.filter(([path]) => path === '/registries')).toHaveLength(
+      count + 1,
+    )
+    await clickButton(header.querySelector('[aria-label="切换表格密度"]') as HTMLButtonElement)
+    expect(container.querySelector('.ant-table-medium')).not.toBeNull()
   })
 
   it('hides registry save actions for readonly users', async () => {
@@ -2038,6 +2137,7 @@ describe('ApplicationsPage workspace layout', () => {
     expect(testState.apiGet).toHaveBeenCalledWith('/delivery/workflow-catalog?offset=0&limit=12')
     expect(container.querySelector('section[aria-label="全部工作流"]')).not.toBeNull()
     expect(container.querySelector('.soha-workflow-catalog.ant-card')).toBeNull()
+    expect(container.querySelector('.soha-management-query-card')).toBeNull()
     expect(container.querySelector('[role="tablist"]')).toBeNull()
     expect(container.querySelector('[aria-label="筛选环境"]')?.hasAttribute('disabled')).toBe(false)
     expect(container.querySelector('.soha-release-board__runs')).toBeNull()
@@ -2064,6 +2164,10 @@ describe('ApplicationsPage workspace layout', () => {
     expect(testState.apiGet).not.toHaveBeenCalledWith('/delivery/release-board')
     expect(container.querySelector('section[aria-label="执行记录"]')).not.toBeNull()
     expect(container.querySelector('.soha-release-board__runs.ant-card')).toBeNull()
+    expect(container.querySelector('.soha-management-query-card')).toBeNull()
+    expect(
+      container.querySelector('.soha-management-query-form [aria-label="刷新执行记录"]'),
+    ).not.toBeNull()
     expect(container.textContent).not.toContain('最近 200 条')
     expect(container.textContent).not.toContain('正在进行')
     expect(container.textContent).not.toContain('执行历史')

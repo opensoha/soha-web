@@ -192,11 +192,15 @@ export function AlertsPage() {
 
   return (
     <div className="soha-page">
+      <h1 className="soha-observability-page-heading">活跃告警</h1>
       <AdminTable
+        enableDensity
+        error={alertsQuery.error}
+        refreshing={alertsQuery.isFetching}
+        onRefresh={() => void alertsQuery.refetch()}
         columnSettingIconOnly
         columnSettingPlacement="header"
         shellClassName="soha-management-table-shell"
-        title="活跃告警"
         columns={columns}
         dataSource={alerts}
         rowKey="id"
@@ -218,6 +222,12 @@ export function AlertsPage() {
         scroll={{ x: 'max-content' }}
       />
       <Modal
+        className="soha-observability-modal"
+        style={{ top: 32 }}
+        classNames={{
+          body: 'soha-observability-modal-body',
+          header: 'soha-observability-modal-header',
+        }}
         title="发起自愈"
         open={healOpen}
         onCancel={() => setHealOpen(false)}

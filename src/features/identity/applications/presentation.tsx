@@ -1,10 +1,8 @@
-import { Avatar, Space, Typography } from 'antd'
+import { Avatar, Space } from 'antd'
 import { AppstoreOutlined } from '@ant-design/icons'
 import { Link } from 'react-router-dom'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
 import type { IdentityApplication, IdentityApplicationStatus } from '../shared/types'
-
-const { Text } = Typography
 
 const statusLabels: Record<IdentityApplicationStatus, string> = {
   draft: 'Draft',
@@ -37,14 +35,13 @@ export function IdentityApplicationNameCell({ application }: { application: Iden
       >
         {application.name.slice(0, 1).toUpperCase()}
       </Avatar>
-      <div className="soha-identity-app-name-copy">
-        <Link to={'?application=' + encodeURIComponent(application.id)} title={application.name}>
-          <strong>{application.name}</strong>
-        </Link>
-        <Text type="secondary" ellipsis title={application.slug}>
-          {application.slug}
-        </Text>
-      </div>
+      <Link
+        className="soha-identity-app-name-copy"
+        to={'?application=' + encodeURIComponent(application.id)}
+        title={application.name}
+      >
+        <strong>{application.name}</strong>
+      </Link>
     </div>
   )
 }

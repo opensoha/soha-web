@@ -1,4 +1,4 @@
-@import '../styles/responsive.css';
+@import '../styles/shared.css';
 
 .soha-delivery-blueprint-list__item-head {
   display: flex;

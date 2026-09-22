@@ -162,7 +162,15 @@ export function ObservabilityDashboardsPage() {
     <>
       <ManagementDataPage
         table={{
-          title: '仪表盘',
+          columnSettingIconOnly: true,
+          columnSettingPlacement: 'header',
+          enableDensity: true,
+          error: dashboardsQuery.error,
+          refreshing: dashboardsQuery.isFetching,
+          onRefresh: () => {
+            void dashboardsQuery.refetch()
+            void dataSourcesQuery.refetch()
+          },
           headerExtra: canImport ? (
             <ManagementTableToolbar>
               <Button icon={<ImportOutlined />} type="primary" onClick={() => setImportOpen(true)}>

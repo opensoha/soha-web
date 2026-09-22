@@ -87,13 +87,12 @@ export function DeliveryTable({
       ) : null}
     </ManagementTableToolbar>
   ) : undefined
-  const hasTitle = Boolean(tableProps.title)
 
   return (
     <AdminTable
       {...tableProps}
       columnSettingIconOnly
-      columnSettingPlacement={showColumnSettings ? (hasTitle ? 'header' : 'toolbar') : 'hidden'}
+      columnSettingPlacement={showColumnSettings ? 'header' : 'hidden'}
       enableColumnSelection={showColumnSettings && enableColumnSelection !== false}
       empty={
         isError ? (
@@ -115,7 +114,7 @@ export function DeliveryTable({
           tableProps.empty
         )
       }
-      headerExtra={hasTitle ? utilityToolbar : undefined}
+      headerExtra={utilityToolbar}
       pagination={pagination}
       paginationSummary={
         pagination === false ? undefined : (paginationSummary ?? DEFAULT_PAGINATION_SUMMARY)
@@ -127,7 +126,6 @@ export function DeliveryTable({
         shellClassName,
       )}
       tableSize={tableSize}
-      toolbarExtra={hasTitle ? undefined : utilityToolbar}
     />
   )
 }

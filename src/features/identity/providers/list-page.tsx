@@ -1,14 +1,12 @@
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { isApiError } from '@/services/api-error'
-import { App, Button, Form, Pagination, Popconfirm, Select, Space, Typography } from 'antd'
+import { App, Button, Pagination, Popconfirm, Space, Typography } from 'antd'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementIconButton,
-  ManagementQueryActions,
-  ManagementQueryField,
   ManagementState,
   ManagementRefreshButton,
   ManagementTableToolbar,
@@ -25,32 +23,18 @@ import { ProviderDetailContent } from './components/provider-detail-content'
 import { ProviderConfigurationStatus } from './components/provider-setup-panel'
 import { ProviderFormModal } from './components/provider-form-modal'
 import { identityProviderMutations } from './mutations'
-import { providerStatusOptions, providerTypeOptions } from './provider-form-model'
 import { identityProviderQueries } from './queries'
-import type {
-  IdentityProvider,
-  IdentityProviderFilters,
-  IdentityProviderInput,
-  IdentityRuntimeProviderType,
-} from './types'
+import type { IdentityProvider, IdentityProviderInput, IdentityRuntimeProviderType } from './types'
+import '../shared/application-access.css'
 import './styles.css'
 
 const { Text } = Typography
-
-interface IdentityProviderPageFilters extends IdentityProviderFilters {
-  query: string
-}
 
 export function IdentityProvidersPage() {
   const { message } = App.useApp()
   const { t } = useI18n()
   const queryClient = useQueryClient()
-  const [queryForm] = Form.useForm<IdentityProviderPageFilters>()
-  const [filters, setFilters] = useState<IdentityProviderPageFilters>({
-    query: '',
-    status: '',
-    type: '',
-  })
+  const [searchText, setSearchText] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [pagination, setPagination] = useState({ current: 1, pageSize: 15 })
   const [editing, setEditing] = useState<IdentityProvider | null>(null)
@@ -75,9 +59,7 @@ export function IdentityProvidersPage() {
   const canViewApplications = hasPermission(snapshot, 'identity.applications.view')
   const canViewOutposts = hasPermission(snapshot, 'identity.outposts.view')
 
-  const providersQuery = useQuery(
-    identityProviderQueries.list({ status: filters.status, type: filters.type }),
-  )
+  const providersQuery = useQuery(identityProviderQueries.list({}))
   const applicationsQuery = useQuery({
     ...identityApplicationQueries.list({}),
     enabled: canViewApplications,
@@ -158,7 +140,7 @@ export function IdentityProvidersPage() {
   }
 
   const filteredProviders = useMemo(() => {
-    const query = filters.query.trim().toLowerCase()
+    const query = searchText.trim().toLowerCase()
     const providers = providersQuery.data ?? []
     if (!query) return providers
     return providers.filter((provider) => {
@@ -175,7 +157,7 @@ export function IdentityProvidersPage() {
           .includes(query),
       )
     })
-  }, [applicationById, filters.query, providersQuery.data])
+  }, [applicationById, searchText, providersQuery.data])
 
   const requestedIndex = filteredProviders.findIndex(
     (provider) => provider.id === params.get('provider'),
@@ -236,7 +218,7 @@ export function IdentityProvidersPage() {
   return (
     <>
       <ManagementDataPage
-        className="soha-identity-providers-page"
+        className="soha-identity-access-page soha-identity-providers-page"
         beforeQuery={
           providersQuery.isError ? (
             <ManagementState
@@ -258,57 +240,6 @@ export function IdentityProvidersPage() {
             />
           ) : null
         }
-        query={{
-          actions: (
-            <ManagementQueryActions
-              disabledReset={!filters.query && !filters.status && !filters.type}
-              loading={providersQuery.isFetching}
-              onReset={() => {
-                queryForm.resetFields()
-                setFilters({ query: '', status: '', type: '' })
-                setPagination((current) => ({ ...current, current: 1 }))
-                clearSelection()
-              }}
-            />
-          ),
-          children: (
-            <>
-              <ManagementQueryField
-                label={t('identity.providers.type', '类型')}
-                name="type"
-                width={160}
-              >
-                <Select
-                  allowClear
-                  options={providerTypeOptions}
-                  placeholder={t('identity.providers.type', '类型')}
-                />
-              </ManagementQueryField>
-              <ManagementQueryField
-                label={t('identity.providers.status', '状态')}
-                name="status"
-                width={160}
-              >
-                <Select
-                  allowClear
-                  options={providerStatusOptions}
-                  placeholder={t('identity.providers.status', '状态')}
-                />
-              </ManagementQueryField>
-            </>
-          ),
-          form: queryForm,
-          initialValues: { query: '', status: '', type: '' },
-          onFinish: (values) => {
-            setFilters((current) => ({
-              ...current,
-              status: values.status ?? '',
-              type: values.type ?? '',
-            }))
-            setPagination((current) => ({ ...current, current: 1 }))
-            clearSelection()
-          },
-        }}
         tableNode={
           <section className="soha-identity-provider-workbench" aria-label="认证接入配置工作区">
             <div className="soha-identity-provider-workspace">
@@ -343,16 +274,16 @@ export function IdentityProvidersPage() {
                     </ManagementTableToolbar>
                   }
                   searchPlaceholder={t('identity.providers.search', '搜索 Provider 或应用')}
-                  searchValue={filters.query}
+                  searchValue={searchText}
                   onSearchChange={(query) => {
-                    setFilters((current) => ({ ...current, query }))
+                    setSearchText(query)
                     setPagination((current) => ({ ...current, current: 1 }))
                     clearSelection()
                   }}
                   onItemSelect={(provider) => selectProvider(provider.id)}
                   emptyTitle={t('identity.providers.empty', '暂无 Provider')}
                   emptyDescription={
-                    filters.query || filters.status || filters.type
+                    searchText
                       ? '没有符合条件的认证接入，请调整筛选条件。'
                       : '创建认证接入，为应用配置统一登录。'
                   }

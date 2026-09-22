@@ -9,7 +9,6 @@ import {
   Modal,
   Popconfirm,
   Select,
-  Segmented,
   Space,
   Switch,
   Tag,
@@ -26,6 +25,7 @@ import {
   ManagementDensityButton,
   ManagementQueryActions,
   ManagementQueryField,
+  ManagementQueryScope,
   ManagementRefreshButton,
   ManagementTableToolbar,
 } from '@/components/management-list'
@@ -418,18 +418,16 @@ export function MenusPage() {
         ),
         children: (
           <>
-            <ManagementQueryField label="树视图" minWidth={300} width={340}>
-              <Segmented
-                size="small"
-                value={treeView}
-                onChange={(value) => setTreeView(value as 'workbench' | 'top' | 'all')}
-                options={[
-                  { value: 'workbench', label: '工作台视图' },
-                  { value: 'top', label: '默认看顶级' },
-                  { value: 'all', label: '看全部树' },
-                ]}
-              />
-            </ManagementQueryField>
+            <ManagementQueryScope
+              label="展示方式"
+              value={treeView}
+              onChange={(value) => setTreeView(value as 'workbench' | 'top' | 'all')}
+              options={[
+                { value: 'workbench', label: '按工作台' },
+                { value: 'top', label: '仅顶级' },
+                { value: 'all', label: '完整树' },
+              ]}
+            />
             <ManagementQueryField minWidth={180} width={220} label="分组">
               <Select
                 allowClear

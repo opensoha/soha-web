@@ -109,7 +109,6 @@ export function DaemonSetDetailPage() {
               }
             >
               <ResourceMetricsPanel
-                title={localeCode === 'zh_CN' ? 'DaemonSet 指标' : 'DaemonSet Metrics'}
                 data={metricsQuery.data}
                 loading={metricsQuery.isLoading}
               />
@@ -121,7 +120,6 @@ export function DaemonSetDetailPage() {
           label: localeCode === 'zh_CN' ? '事件' : 'Events',
           children: (
             <ResourceEventsTimeline
-              title={localeCode === 'zh_CN' ? 'DaemonSet 事件时间线' : 'DaemonSet Event Timeline'}
               events={eventsQuery.data ?? []}
               loading={eventsQuery.isLoading}
               emptyDescription={

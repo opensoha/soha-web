@@ -1,3 +1,4 @@
+import '../observability-pages.css'
 import type { ObservabilityProviderDefinition } from '@opensoha/contracts/gen/ts/sohaapi'
 import { useQuery } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
@@ -119,6 +120,7 @@ export function ObservabilityProvidersPage() {
 
   return (
     <div className="soha-page">
+      <h1 className="soha-observability-page-heading">Provider</h1>
       <Flex vertical gap={12}>
         <Alert
           showIcon
@@ -126,27 +128,22 @@ export function ObservabilityProvidersPage() {
           title="OTel 管线细分状态暂不可用"
           description="当前只展示 Provider 与已配置数据源的连接验证；instrumentation、receiver、processor、exporter、freshness 仍需 Collector 自监控证据，Collector 进程运行不代表端到端健康。"
         />
-        {providersQuery.isError ? (
-          <ManagementState
-            kind="error"
-            title="Provider 加载失败"
-            description={providersQuery.error.message}
-          />
-        ) : (
-          <AdminTable
-            title="可观测性 Provider"
-            columnSettingIconOnly
-            columnSettingPlacement="header"
-            columns={columns}
-            dataSource={providersQuery.data ?? []}
-            empty={<ManagementState bordered={false} compact description="暂无 Provider" />}
-            loading={providersQuery.isLoading}
-            pageSize={20}
-            rowKey="providerKey"
-            shellClassName="soha-management-table-shell"
-            scroll={{ x: 'max-content' }}
-          />
-        )}
+        <AdminTable
+          enableDensity
+          error={providersQuery.error}
+          refreshing={providersQuery.isFetching}
+          onRefresh={() => void providersQuery.refetch()}
+          columnSettingIconOnly
+          columnSettingPlacement="header"
+          columns={columns}
+          dataSource={providersQuery.data ?? []}
+          empty={<ManagementState bordered={false} compact description="暂无 Provider" />}
+          loading={providersQuery.isLoading}
+          pageSize={20}
+          rowKey="providerKey"
+          shellClassName="soha-management-table-shell"
+          scroll={{ x: 'max-content' }}
+        />
       </Flex>
     </div>
   )

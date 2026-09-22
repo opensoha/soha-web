@@ -65,6 +65,65 @@
   padding: 8px 16px;
 }
 
+/* Only list chrome is normalized: row actions and dialog forms keep their sizes. */
+:is(
+    [data-workbench='settings'],
+    [data-workbench='compute'],
+    [data-workbench='monitoring'],
+    [data-workbench='delivery']
+  )
+  .soha-admin-table-shell.is-panel
+  :is(.soha-admin-table-header, .soha-admin-table-toolbar) {
+  min-height: 48px;
+  padding: 8px 16px;
+  box-sizing: border-box;
+  align-items: center;
+}
+
+:is(
+    [data-workbench='settings'],
+    [data-workbench='compute'],
+    [data-workbench='monitoring'],
+    [data-workbench='delivery']
+  )
+  .soha-admin-table-header-main:empty {
+  display: none;
+}
+
+:is(
+    [data-workbench='settings'],
+    [data-workbench='compute'],
+    [data-workbench='monitoring'],
+    [data-workbench='delivery']
+  )
+  .soha-admin-table-header-extra {
+  margin-inline-start: auto;
+}
+
+:is(
+    [data-workbench='settings'],
+    [data-workbench='compute'],
+    [data-workbench='monitoring'],
+    [data-workbench='delivery']
+  )
+  :is(.soha-admin-table-header, .soha-admin-table-toolbar)
+  :is(.ant-btn, .ant-input-affix-wrapper, .ant-select, .ant-picker, .ant-segmented) {
+  height: 32px;
+  min-height: 32px;
+}
+
+:is(
+    [data-workbench='settings'],
+    [data-workbench='compute'],
+    [data-workbench='monitoring'],
+    [data-workbench='delivery']
+  )
+  :is(.soha-admin-table-header, .soha-admin-table-toolbar)
+  .ant-btn-icon-only {
+  width: 32px;
+  min-width: 32px;
+}
+
 .soha-admin-table-toolbar-main {
   display: flex;
   align-items: center;
@@ -382,6 +441,14 @@
 .soha-admin-table .ant-table-cell-fix-right-first .ant-space {
   width: 100%;
   justify-content: center;
+}
+
+/* Intrinsic icon width is used by AdminTable even with fixed table layout. */
+.soha-admin-table
+  .soha-table-actions-column
+  :is(.soha-row-action-icons.ant-space, .ant-space:has(.ant-btn-icon-only)) {
+  width: max-content;
+  flex-wrap: nowrap;
 }
 
 @media (max-width: 768px) {

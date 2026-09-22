@@ -1,3 +1,4 @@
+import type { ConnectionCheckResult } from '@opensoha/contracts/gen/ts/sohaapi'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -193,7 +194,7 @@ export function VirtualizationClustersPage() {
     canViewWorkerPools,
   } = useVirtualizationPermissions()
   const queryClient = useQueryClient()
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
   const { localeCode } = useI18n()
   const clustersQuery = useQuery(virtualizationQueries.clusters(virtualizationModuleEnabled))
   const clusterOperationsQuery = useQuery(
@@ -212,8 +213,9 @@ export function VirtualizationClustersPage() {
     onError: (error: Error) => void message.error(error.message),
   })
   const testMutation = useMutation(
-    withVirtualizationMutationSuccess(virtualizationMutations.testCluster(queryClient), () =>
-      message.success('测试任务已提交'),
+    withVirtualizationMutationSuccess(
+      virtualizationMutations.testCluster(queryClient),
+      (result, id) => showTestResults([{ status: 'fulfilled', value: result }], [id]),
     ),
   )
   const syncMutation = useMutation(
@@ -233,12 +235,48 @@ export function VirtualizationClustersPage() {
   const batchTestMutation = useMutation(
     withVirtualizationMutationSuccess(
       virtualizationMutations.testClusters(queryClient),
-      (_response, ids) => {
-        message.success(`已提交 ${ids.length} 个连接的测试任务`)
+      (results, ids) => {
+        showTestResults(results, ids)
         setSelectedClusterRowKeys([])
       },
     ),
   )
+  function showTestResults(results: PromiseSettledResult<ConnectionCheckResult>[], ids: string[]) {
+    modal.info({
+      title: localeText(localeCode, '连接测试结果', 'Connection test results'),
+      icon: null,
+      width: 560,
+      content: (
+        <Space
+          orientation="vertical"
+          style={{ width: '100%', maxHeight: '55vh', overflowY: 'auto' }}
+        >
+          {results.map((entry, index) => {
+            const result = entry.status === 'fulfilled' ? entry.value : undefined
+            const healthy = result?.healthy === true
+            const details = result
+              ? [result.message, result.reason, result.nextAction].filter(
+                  (value): value is string => typeof value === 'string' && value.length > 0,
+                )
+              : [
+                  entry.status === 'rejected' && entry.reason instanceof Error
+                    ? entry.reason.message
+                    : localeText(localeCode, '请求失败', 'Request failed'),
+                ]
+            return (
+              <Alert
+                key={ids[index]}
+                type={healthy ? 'success' : 'error'}
+                showIcon
+                title={`${clustersQuery.data?.find((item) => item.id === ids[index])?.name || ids[index]} · ${healthy ? localeText(localeCode, '连接正常', 'Connected') : localeText(localeCode, '连接异常', 'Connection failed')}`}
+                description={[...new Set(details)].join(' · ') || undefined}
+              />
+            )
+          })}
+        </Space>
+      ),
+    })
+  }
   function openEditor(record?: VirtualizationCluster) {
     setEditing(record ?? null)
     setEditorOpen(true)
@@ -372,6 +410,11 @@ export function VirtualizationClustersPage() {
               size="small"
               tooltip={localeText(localeCode, '测试', 'Test')}
               icon={<ThunderboltOutlined />}
+              loading={testMutation.isPending && testMutation.variables === record.id}
+              disabled={
+                batchTestMutation.isPending ||
+                (testMutation.isPending && testMutation.variables !== record.id)
+              }
               onClick={() => testMutation.mutate(record.id)}
             />
           ) : null}
@@ -539,7 +582,7 @@ export function VirtualizationClustersPage() {
                     )}
                     onConfirm={() => batchTestMutation.mutate(selectedClusterRowKeys.map(String))}
                   >
-                    <Button loading={batchTestMutation.isPending}>
+                    <Button loading={batchTestMutation.isPending} disabled={testMutation.isPending}>
                       {localeText(localeCode, '批量测试', 'Test selected')}
                     </Button>
                   </Popconfirm>

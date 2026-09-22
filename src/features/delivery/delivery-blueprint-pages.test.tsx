@@ -243,7 +243,14 @@ describe('DeliveryBlueprintsPage', () => {
     expect(container.querySelector('.soha-delivery-blueprint-workspace')).not.toBeNull()
     expect(container.querySelector('.soha-delivery-blueprint-list')).not.toBeNull()
     expect(container.querySelector('.soha-delivery-blueprint-designer')).not.toBeNull()
-    expect(container.textContent).toContain('新建模板')
+    const list = container.querySelector('.soha-delivery-blueprint-list')!
+    const designer = container.querySelector('.soha-delivery-blueprint-designer')!
+    expect(list.querySelector('[aria-label="新建模板"]')).not.toBeNull()
+    expect(list.querySelector('[aria-label="刷新"]')).not.toBeNull()
+    expect(designer.querySelector('.soha-delivery-blueprint-toolbar')).not.toBeNull()
+    expect(designer.querySelector('[aria-label="新建模板"]')).toBeNull()
+    expect(list.textContent).not.toContain('保存')
+    expect(container.querySelector('.soha-template-designer-shell__toolbar')).toBeNull()
     expect(container.textContent).toContain('保存')
     expect(container.textContent).toContain('渲染规范')
     expect(container.textContent).not.toContain('平台接入')
@@ -280,6 +287,33 @@ describe('DeliveryBlueprintsPage', () => {
     )
     expect(container.textContent).toContain('Helm Values 模板')
     expect(container.textContent).toContain('文件模板')
+  })
+
+  it('keeps a new draft selected when entering from an existing template URL', async () => {
+    const container = await renderWithProviders(
+      <DeliveryBlueprintsPage />,
+      '/delivery/blueprints?templateId=blueprint-1',
+    )
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="新建模板"]')!.click()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    await vi.waitFor(() => {
+      expect(container.querySelector('.soha-delivery-blueprint-toolbar')?.textContent).toContain(
+        '未保存',
+      )
+      expect(container.querySelector<HTMLInputElement>('#key')?.value).not.toBe('node-service')
+    })
+    const cancel = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('.soha-delivery-blueprint-toolbar button'),
+    ).find((button) => button.textContent === '取消更改')!
+    expect(cancel.disabled).toBe(false)
+    await act(async () => {
+      cancel.click()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(container.querySelector<HTMLInputElement>('#key')?.value).toBe('node-service')
+    expect(testState.apiPut).not.toHaveBeenCalled()
   })
 
   it('saves typed external CI configuration after changing a Dockerfile source', async () => {

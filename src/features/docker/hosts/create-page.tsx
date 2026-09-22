@@ -13,8 +13,7 @@ import {
   Typography,
 } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { StepFormModal } from '@/components/step-form-modal'
-import type { StepFormStep } from '@/components/step-form'
+import { scrollableModalBodyStyle } from '@/components/modal-styles'
 import { virtualizationQueries } from '@/features/virtualization'
 import { formatDateTime } from '@/utils/time'
 import { localeText, useI18n } from '@/i18n'
@@ -41,7 +40,7 @@ export function buildRuntimeHostPayload(values: RuntimeHostFormValues): DockerHo
   })
 }
 
-interface RuntimeHostStepModalProps {
+interface RuntimeHostModalProps {
   editing?: DockerHost | null
   onClose: () => void
   onSuccess?: () => void
@@ -67,13 +66,7 @@ function runtimeHostFormValues(record: DockerHost): RuntimeHostFormValues {
   }
 }
 
-export function RuntimeHostStepModal({
-  editing,
-  onClose,
-  onSuccess,
-  open,
-}: RuntimeHostStepModalProps) {
-  const [current, setCurrent] = useState(0)
+export function RuntimeHostModal({ editing, onClose, onSuccess, open }: RuntimeHostModalProps) {
   const [installation, setInstallation] = useState<DockerHostAgentInstallation | null>(null)
   const [form] = Form.useForm<RuntimeHostFormValues>()
   const connectionMode = Form.useWatch('connectionMode', form) ?? (editing ? 'manual' : 'quick')
@@ -148,7 +141,6 @@ export function RuntimeHostStepModal({
         )
       }
       form.resetFields()
-      setCurrent(0)
       onClose()
     },
     onError: (error) =>
@@ -166,13 +158,8 @@ export function RuntimeHostStepModal({
   const closeForm = () => {
     form.resetFields()
     saveMutation.reset()
-    setCurrent(0)
     onClose()
   }
-
-  useEffect(() => {
-    if (open) setCurrent(0)
-  }, [editing, open])
 
   useEffect(() => {
     if (agentReported) refreshDocker(queryClient)
@@ -187,15 +174,39 @@ export function RuntimeHostStepModal({
         availablePortEnd: 39999,
       }
 
-  const steps: StepFormStep[] = [
-    {
-      title: localeText(localeCode, 'Agent 连接', 'Agent connection'),
-      fieldNames:
-        connectionMode === 'manual'
-          ? ['connectionMode', 'name', 'endpoint']
-          : ['connectionMode', 'name'],
-      children: (
-        <>
+  return (
+    <>
+      <Modal
+        title={
+          editing
+            ? localeText(localeCode, '编辑运行时主机', 'Edit runtime host')
+            : localeText(localeCode, '接入运行时主机', 'Connect runtime host')
+        }
+        open={open}
+        onCancel={closeForm}
+        onOk={() => form.submit()}
+        confirmLoading={saveMutation.isPending}
+        okText={
+          editing
+            ? localeText(localeCode, '保存主机', 'Save host')
+            : connectionMode === 'manual'
+              ? localeText(localeCode, '接入主机', 'Connect host')
+              : localeText(localeCode, '生成安装命令', 'Generate install command')
+        }
+        cancelText={localeText(localeCode, '取消', 'Cancel')}
+        width={680}
+        destroyOnHidden
+        mask={{ closable: false }}
+        style={{ top: 32 }}
+        styles={{ body: { ...scrollableModalBodyStyle, maxHeight: 'calc(100dvh - 180px)' } }}
+      >
+        <Form<RuntimeHostFormValues>
+          form={form}
+          layout="vertical"
+          preserve={false}
+          onFinish={(values) => saveMutation.mutate(values)}
+          initialValues={initialValues}
+        >
           {!editing ? (
             <Form.Item
               name="connectionMode"
@@ -258,6 +269,7 @@ export function RuntimeHostStepModal({
             </Form.Item>
           ) : (
             <Alert
+              style={{ marginBottom: 16 }}
               showIcon
               type="info"
               title={localeText(
@@ -272,13 +284,7 @@ export function RuntimeHostStepModal({
               )}
             />
           )}
-        </>
-      ),
-    },
-    {
-      title: localeText(localeCode, '资源配置', 'Resources'),
-      children: (
-        <>
+
           <div className="soha-runtime-host-ownership-grid">
             <Form.Item name="environment" label={localeText(localeCode, '环境', 'Environment')}>
               <Input />
@@ -332,72 +338,29 @@ export function RuntimeHostStepModal({
           </Form.Item>
           <div className="soha-runtime-host-capacity-grid">
             <Form.Item name="cpuCoreCount" label={localeText(localeCode, 'CPU 核数', 'CPU cores')}>
-              <InputNumber min={1} precision={0} className="w-full" />
+              <InputNumber min={1} precision={0} style={{ width: '100%' }} />
             </Form.Item>
             <Form.Item name="memoryGiB" label={localeText(localeCode, '内存 GiB', 'Memory GiB')}>
-              <InputNumber min={1} precision={0} className="w-full" />
+              <InputNumber min={1} precision={0} style={{ width: '100%' }} />
             </Form.Item>
             <Form.Item name="diskGiB" label={localeText(localeCode, '磁盘 GiB', 'Disk GiB')}>
-              <InputNumber min={1} precision={0} className="w-full" />
+              <InputNumber min={1} precision={0} style={{ width: '100%' }} />
             </Form.Item>
             <Form.Item
               name="availablePortStart"
               label={localeText(localeCode, '端口池起始', 'Port pool start')}
             >
-              <InputNumber min={1} max={65535} className="w-full" />
+              <InputNumber min={1} max={65535} style={{ width: '100%' }} />
             </Form.Item>
             <Form.Item
               name="availablePortEnd"
               label={localeText(localeCode, '端口池结束', 'Port pool end')}
             >
-              <InputNumber min={1} max={65535} className="w-full" />
+              <InputNumber min={1} max={65535} style={{ width: '100%' }} />
             </Form.Item>
           </div>
-          <Descriptions
-            bordered
-            size="small"
-            column={{ xs: 1, sm: 2, md: 2, lg: 2, xl: 2, xxl: 2 }}
-          >
-            <Descriptions.Item label={localeText(localeCode, '接入方式', 'Connection mode')}>
-              {connectionMode === 'manual'
-                ? localeText(localeCode, '已有 Agent', 'Existing Agent')
-                : localeText(localeCode, '快速安装 Agent', 'Quick Agent install')}
-            </Descriptions.Item>
-            <Descriptions.Item label={localeText(localeCode, '提供方', 'Provider')}>
-              Docker
-            </Descriptions.Item>
-          </Descriptions>
-        </>
-      ),
-    },
-  ]
-
-  return (
-    <>
-      <StepFormModal
-        current={current}
-        form={form}
-        initialValues={initialValues}
-        loading={saveMutation.isPending}
-        onClose={closeForm}
-        onCurrentChange={setCurrent}
-        onFinish={(values) => saveMutation.mutate(values)}
-        open={open}
-        steps={steps}
-        submitText={
-          editing
-            ? localeText(localeCode, '保存主机', 'Save host')
-            : connectionMode === 'manual'
-              ? localeText(localeCode, '接入主机', 'Connect host')
-              : localeText(localeCode, '生成安装命令', 'Generate install command')
-        }
-        title={
-          editing
-            ? localeText(localeCode, '编辑运行时主机', 'Edit runtime host')
-            : localeText(localeCode, '接入运行时主机', 'Connect runtime host')
-        }
-        width={680}
-      />
+        </Form>
+      </Modal>
       <Modal
         destroyOnHidden
         footer={

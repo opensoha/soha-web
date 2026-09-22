@@ -1,3 +1,5 @@
+import type { OperationState } from '@opensoha/contracts/gen/ts/sohaapi'
+
 export type DockerPayloadPrimitive = string | number | boolean | null
 
 export type DockerPayloadValue =
@@ -392,6 +394,7 @@ export interface DockerTemplateInput {
 
 export interface DockerOperation {
   id: string
+  operationState?: Pick<OperationState, 'cancelable' | 'retryable'>
   hostId?: string
   projectId?: string
   serviceId?: string

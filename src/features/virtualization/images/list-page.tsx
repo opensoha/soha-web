@@ -7,6 +7,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Modal,
   Popconfirm,
   Select,
   Space,
@@ -18,7 +19,7 @@ import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { hasAllowedAction } from '@/features/auth'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
-import { StepFormModal } from '@/components/step-form-modal'
+import { scrollableModalBodyStyle } from '@/components/modal-styles'
 import { BooleanTag, MetadataTag, StatusTag } from '@/components/status-tag'
 import { ManagementDataPage } from '@/components/management-data-page'
 import { localeText, useI18n } from '@/i18n'
@@ -124,13 +125,29 @@ interface VirtualizationImagesPageProps {
   category?: VirtualizationImageCategory
 }
 
+function imageFormValues(record?: VirtualizationImage | null) {
+  return record
+    ? {
+        name: record.name,
+        provider: record.provider ?? 'kubevirt',
+        connectionId: record.connectionId,
+        namespace: record.namespace,
+        sourceKind: record.sourceKind ?? record.source,
+        sourceRef: record.sourceRef,
+        source: record.source,
+        osType: record.osType,
+        sizeGiB: record.sizeGiB,
+        description: record.description,
+      }
+    : { provider: 'kubevirt', sourceKind: 'datasource' }
+}
+
 export function VirtualizationImagesPage({
   category: imageCategory = 'catalog',
 }: VirtualizationImagesPageProps = {}) {
   const { localeCode } = useI18n()
   const [editing, setEditing] = useState<VirtualizationImage | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [currentStep, setCurrentStep] = useState(0)
   const [filters, setFilters] = useState<VirtualizationListParams>({ page: 1, pageSize: 15 })
   const [filterForm] = Form.useForm<VirtualizationListParams>()
   const [form] = Form.useForm<VirtualizationImageInput>()
@@ -168,24 +185,8 @@ export function VirtualizationImagesPage({
   const savePending = createMutation.isPending || updateMutation.isPending
   function openImageEditor(record?: VirtualizationImage) {
     setEditing(record ?? null)
-    setCurrentStep(0)
     form.resetFields()
-    form.setFieldsValue(
-      record
-        ? {
-            name: record.name,
-            provider: record.provider ?? 'kubevirt',
-            connectionId: record.connectionId,
-            namespace: record.namespace,
-            sourceKind: record.sourceKind ?? record.source,
-            sourceRef: record.sourceRef,
-            source: record.source,
-            osType: record.osType,
-            sizeGiB: record.sizeGiB,
-            description: record.description,
-          }
-        : { provider: 'kubevirt', sourceKind: 'datasource' },
-    )
+    form.setFieldsValue(imageFormValues(record))
     setDrawerOpen(true)
   }
   const columns: ColumnsType<VirtualizationImage> = [
@@ -427,137 +428,122 @@ export function VirtualizationImagesPage({
         />
       }
       afterTable={
-        <StepFormModal
+        <Modal
           title={
             editing
               ? localeText(localeCode, '编辑镜像入口', 'Edit image entry')
               : localeText(localeCode, '新增镜像入口', 'Add image entry')
           }
-          current={currentStep}
-          form={form}
-          loading={savePending}
           open={drawerOpen}
-          onClose={() => setDrawerOpen(false)}
-          onCurrentChange={setCurrentStep}
-          initialValues={{ provider: 'kubevirt', sourceKind: 'datasource' }}
-          onFinish={(values) => {
-            const payload = buildImagePayload(values)
-            if (editing) updateMutation.mutate({ id: editing.id, payload })
-            else createMutation.mutate(payload)
-          }}
-          steps={[
-            {
-              title: localeText(localeCode, '基本信息', 'Basic information'),
-              fieldNames: ['name', 'provider', 'connectionId'],
-              children: (
-                <>
-                  <Form.Item
-                    name="name"
-                    label={localeText(localeCode, '名称', 'Name')}
-                    rules={[{ required: true }]}
-                  >
-                    <Input />
-                  </Form.Item>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <Form.Item
-                      name="provider"
-                      label={localeText(localeCode, '提供方', 'Provider')}
-                      rules={[{ required: true }]}
-                    >
-                      <Select
-                        options={[
-                          { value: 'kubevirt', label: 'KubeVirt' },
-                          { value: 'pve', label: 'PVE' },
-                        ]}
-                      />
-                    </Form.Item>
-                    <Form.Item
-                      name="connectionId"
-                      label={localeText(localeCode, '连接', 'Connection')}
-                      rules={[{ required: true }]}
-                    >
-                      <Select
-                        showSearch={{ optionFilterProp: 'label' }}
-                        options={clusters
-                          .filter((item) => !imageProvider || item.provider === imageProvider)
-                          .map((item) => ({ value: item.id, label: item.name }))}
-                      />
-                    </Form.Item>
-                  </div>
-                </>
-              ),
-            },
-            {
-              title: localeText(localeCode, '来源配置', 'Source configuration'),
-              fieldNames: ['sourceKind', 'sourceRef'],
-              children: (
-                <>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <Form.Item
-                      name="sourceKind"
-                      label={localeText(localeCode, '来源类型', 'Source type')}
-                      rules={[{ required: true }]}
-                    >
-                      <Select
-                        options={
-                          imageProvider === 'pve'
-                            ? [
-                                { value: 'template', label: 'PVE template' },
-                                { value: 'iso', label: 'PVE ISO' },
-                              ]
-                            : [
-                                { value: 'datasource', label: 'KubeVirt DataSource' },
-                                { value: 'pvc', label: 'PVC' },
-                              ]
-                        }
-                      />
-                    </Form.Item>
-                    <Form.Item
-                      name="sourceRef"
-                      label={localeText(localeCode, '来源引用', 'Source reference')}
-                      rules={[{ required: true }]}
-                    >
-                      <Input
-                        placeholder={
-                          imageProvider === 'pve' ? 'VMID 或 storage:volume' : 'namespace/name'
-                        }
-                      />
-                    </Form.Item>
-                  </div>
-                  {imageProvider === 'kubevirt' ? (
-                    <Form.Item
-                      name="namespace"
-                      label={localeText(localeCode, '命名空间', 'Namespace')}
-                    >
-                      <Input />
-                    </Form.Item>
-                  ) : null}
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <Form.Item
-                      name="osType"
-                      label={localeText(localeCode, '操作系统', 'Operating system')}
-                    >
-                      <Input placeholder="alpine / ubuntu / windows" />
-                    </Form.Item>
-                    <Form.Item
-                      name="sizeGiB"
-                      label={localeText(localeCode, '大小 GiB', 'Size GiB')}
-                    >
-                      <InputNumber min={1} className="w-full" />
-                    </Form.Item>
-                  </div>
-                  <Form.Item
-                    name="description"
-                    label={localeText(localeCode, '描述', 'Description')}
-                  >
-                    <Input.TextArea rows={3} />
-                  </Form.Item>
-                </>
-              ),
-            },
-          ]}
-          submitText={localeText(localeCode, '保存', 'Save')}
-        />
+          onCancel={() => setDrawerOpen(false)}
+          onOk={() => form.submit()}
+          confirmLoading={savePending}
+          okText={localeText(localeCode, '保存', 'Save')}
+          cancelText={localeText(localeCode, '取消', 'Cancel')}
+          width={720}
+          destroyOnHidden
+          mask={{ closable: false }}
+          style={{ top: 32 }}
+          styles={{ body: { ...scrollableModalBodyStyle, maxHeight: 'calc(100dvh - 180px)' } }}
+        >
+          <Form<VirtualizationImageInput>
+            form={form}
+            layout="vertical"
+            preserve={false}
+            onFinish={(values) => {
+              const payload = buildImagePayload(values)
+              if (editing) updateMutation.mutate({ id: editing.id, payload })
+              else createMutation.mutate(payload)
+            }}
+            initialValues={imageFormValues(editing)}
+          >
+            <Form.Item
+              name="name"
+              label={localeText(localeCode, '名称', 'Name')}
+              rules={[{ required: true }]}
+            >
+              <Input />
+            </Form.Item>
+            <div className="soha-vrt-form-grid soha-vrt-form-grid--2">
+              <Form.Item
+                name="provider"
+                label={localeText(localeCode, '提供方', 'Provider')}
+                rules={[{ required: true }]}
+              >
+                <Select
+                  options={[
+                    { value: 'kubevirt', label: 'KubeVirt' },
+                    { value: 'pve', label: 'PVE' },
+                  ]}
+                />
+              </Form.Item>
+              <Form.Item
+                name="connectionId"
+                label={localeText(localeCode, '连接', 'Connection')}
+                rules={[{ required: true }]}
+              >
+                <Select
+                  showSearch={{ optionFilterProp: 'label' }}
+                  options={clusters
+                    .filter((item) => !imageProvider || item.provider === imageProvider)
+                    .map((item) => ({ value: item.id, label: item.name }))}
+                />
+              </Form.Item>
+            </div>
+
+            <div className="soha-vrt-form-grid soha-vrt-form-grid--2">
+              <Form.Item
+                name="sourceKind"
+                label={localeText(localeCode, '来源类型', 'Source type')}
+                rules={[{ required: true }]}
+              >
+                <Select
+                  options={
+                    imageProvider === 'pve'
+                      ? [
+                          { value: 'template', label: 'PVE template' },
+                          { value: 'iso', label: 'PVE ISO' },
+                        ]
+                      : [
+                          { value: 'datasource', label: 'KubeVirt DataSource' },
+                          { value: 'pvc', label: 'PVC' },
+                        ]
+                  }
+                />
+              </Form.Item>
+              <Form.Item
+                name="sourceRef"
+                label={localeText(localeCode, '来源引用', 'Source reference')}
+                rules={[{ required: true }]}
+              >
+                <Input
+                  placeholder={
+                    imageProvider === 'pve' ? 'VMID 或 storage:volume' : 'namespace/name'
+                  }
+                />
+              </Form.Item>
+            </div>
+            {imageProvider === 'kubevirt' ? (
+              <Form.Item name="namespace" label={localeText(localeCode, '命名空间', 'Namespace')}>
+                <Input />
+              </Form.Item>
+            ) : null}
+            <div className="soha-vrt-form-grid soha-vrt-form-grid--2">
+              <Form.Item
+                name="osType"
+                label={localeText(localeCode, '操作系统', 'Operating system')}
+              >
+                <Input placeholder="alpine / ubuntu / windows" />
+              </Form.Item>
+              <Form.Item name="sizeGiB" label={localeText(localeCode, '大小 GiB', 'Size GiB')}>
+                <InputNumber min={1} className="soha-vrt-fill" />
+              </Form.Item>
+            </div>
+            <Form.Item name="description" label={localeText(localeCode, '描述', 'Description')}>
+              <Input.TextArea rows={3} />
+            </Form.Item>
+          </Form>
+        </Modal>
       }
     />
   )

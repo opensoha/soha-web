@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import type { ReactNode } from 'react'
-import { act } from 'react'
+import { act, StrictMode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
@@ -1350,6 +1350,149 @@ describe('virtualization pages', () => {
     )
   })
 
+  it.each([
+    { status: 'healthy', healthy: true, label: '连接正常' },
+    { status: 'degraded', healthy: false, label: '连接异常' },
+    { status: 'unavailable', healthy: false, label: '连接异常' },
+  ])(
+    'shows the actual connection health result ($status/$healthy)',
+    async ({ status, healthy, label }) => {
+      testState.apiPost.mockResolvedValueOnce({
+        data: { status, healthy, message: 'probe details', checkedAt: '2026-09-22T00:00:00Z' },
+      } as never)
+      const container = await renderWithProviders(
+        <VirtualizationClustersPage />,
+        '/virtualization/clusters',
+      )
+      await clickButtonByLabel(container, '测试连接')
+      await waitForText('连接测试结果')
+      expect(document.body.textContent).toContain(label)
+      expect(document.body.textContent).toContain('probe details')
+      expect(document.body.textContent).not.toContain('测试任务已提交')
+      expect(testState.apiPost).toHaveBeenCalledWith(
+        '/virtualization/clusters/conn-pve/test',
+        undefined,
+      )
+    },
+  )
+
+  it('reports every batch connection result even when one request fails', async () => {
+    testState.apiPost.mockResolvedValueOnce({
+      data: { status: 'healthy', healthy: true, checkedAt: '2026-09-22T00:00:00Z' },
+    } as never)
+    testState.apiPost.mockRejectedValueOnce(new Error('连接已移除'))
+    const container = await renderWithProviders(
+      <VirtualizationClustersPage />,
+      '/virtualization/clusters',
+    )
+    await act(async () =>
+      container.querySelector<HTMLInputElement>('thead input[type="checkbox"]')?.click(),
+    )
+    await clickButtonByText(container, '批量测试')
+    const confirm = document.querySelector<HTMLButtonElement>(
+      '.ant-popconfirm-buttons .ant-btn-primary',
+    )
+    expect(confirm).not.toBeNull()
+    await act(async () => confirm?.click())
+    await waitForText('连接测试结果')
+    const result = document.querySelector('.ant-modal-confirm-content')
+    expect(result?.textContent).toContain('连接正常')
+    expect(result?.textContent).toContain('连接已移除')
+    expect(result?.textContent).toContain('pve-a')
+    expect(result?.textContent).toContain('kubevirt-a')
+  })
+
+  it('restores saved connection fields after closing and reopening the editor', async () => {
+    const container = await renderWithProviders(
+      <StrictMode>
+        <VirtualizationClustersPage />
+      </StrictMode>,
+      '/virtualization/clusters',
+    )
+    await clickButtonByLabel(container, '编辑连接')
+    expect(document.querySelector<HTMLInputElement>('#name')?.value).toBe('pve-a')
+    await act(async () => {
+      const name = document.querySelector<HTMLInputElement>('#name')!
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+        name,
+        'unsaved name',
+      )
+      name.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await clickButtonByText(document.body, '下一步')
+    expect(document.querySelector<HTMLInputElement>('#endpoint')?.value).toBe(
+      'https://pve.example:8006',
+    )
+    await act(async () => document.querySelector<HTMLButtonElement>('.ant-modal-close')!.click())
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 400)))
+    expect(document.querySelector('.ant-modal')).toBeNull()
+
+    await clickButtonByLabel(container, '编辑连接')
+    expect(document.querySelector<HTMLInputElement>('#name')?.value).toBe('pve-a')
+    await clickButtonByText(document.body, '下一步')
+    expect(document.querySelector<HTMLInputElement>('#endpoint')?.value).toBe(
+      'https://pve.example:8006',
+    )
+    expect(document.querySelector('#verifyTls')?.getAttribute('aria-checked')).toBe('true')
+    expect(document.querySelector('#password')).toBeNull()
+    await clickButtonByText(document.body, '上一步')
+    expect(document.querySelector<HTMLInputElement>('#name')?.value).toBe('pve-a')
+    await clickButtonByText(document.body, '下一步')
+    await clickButtonByText(document.body, '下一步')
+    const defaults = Array.from(
+      document.querySelectorAll<HTMLElement>('.ant-collapse-header'),
+    ).find((element) => element.textContent?.includes('PVE 资源默认值（可选）'))!
+    await act(async () => defaults.click())
+    expect(document.querySelector<HTMLInputElement>('#defaultNode')?.value).toBe('pve-1')
+    await clickButtonByText(document.body, '保存连接')
+    expect(testState.apiPut).toHaveBeenCalledWith(
+      '/virtualization/clusters/conn-pve',
+      expect.objectContaining({
+        name: 'pve-a',
+        provider: 'pve',
+        endpoint: 'https://pve.example:8006',
+        verifyTls: true,
+        config: expect.objectContaining({ defaultNode: 'pve-1' }),
+      }),
+    )
+    expect(
+      (testState.apiPut.mock.calls[0]?.[1] as VirtualizationClusterInput).credential,
+    ).toBeUndefined()
+  })
+
+  it('does not carry edited connection values into another connection or a new one', async () => {
+    const container = await renderWithProviders(
+      <StrictMode>
+        <VirtualizationClustersPage />
+      </StrictMode>,
+      '/virtualization/clusters',
+    )
+    await clickButtonByLabel(container, '编辑连接')
+    await act(async () => document.querySelector<HTMLButtonElement>('.ant-modal-close')!.click())
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 400)))
+
+    await act(async () => {
+      container.querySelectorAll<HTMLButtonElement>('button[aria-label="编辑连接"]')[1]!.click()
+    })
+    expect(document.querySelector<HTMLInputElement>('#name')?.value).toBe('kubevirt-a')
+    await clickButtonByText(document.body, '下一步')
+    expect(document.body.textContent).toContain('Kubernetes 集群')
+    expect(document.querySelector<HTMLInputElement>('#backendUrl')?.value).toBe(
+      'https://kube.example:6443',
+    )
+    expect(document.querySelector('#endpoint')).toBeNull()
+    await act(async () => document.querySelector<HTMLButtonElement>('.ant-modal-close')!.click())
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 400)))
+
+    await clickButtonByText(container, '新增连接')
+    expect(document.querySelector<HTMLInputElement>('#name')?.value).toBe('')
+    expect(document.querySelector<HTMLInputElement>('#backendUrl')?.value).toBe('')
+    expect(document.querySelector('#verifyTls')?.getAttribute('aria-checked')).toBe('true')
+    expect(document.querySelector('#enabled')?.getAttribute('aria-checked')).toBe('true')
+    expect(testState.apiPost).not.toHaveBeenCalled()
+    expect(testState.apiPut).not.toHaveBeenCalled()
+  })
+
   it('keeps optional PVE defaults collapsed while editing a connection', async () => {
     const container = await renderWithProviders(
       <VirtualizationClustersPage />,
@@ -1457,6 +1600,63 @@ describe('virtualization pages', () => {
 
     expect(document.body.textContent).toContain('KubeVirt DataSource')
     expect(document.body.textContent).toContain('来源类型')
+    expect(document.querySelector('.soha-step-form__steps')).toBeNull()
+    expect(document.querySelector('#sourceRef')?.closest('[hidden]')).toBeNull()
+  })
+
+  it('validates and saves all flavor fields in one form, resetting cancelled changes', async () => {
+    testState.permissionSnapshot.permissionKeys = [
+      'virtualization.flavors.view',
+      'virtualization.flavors.create',
+    ]
+    const container = await renderWithProviders(
+      <StrictMode>
+        <VirtualizationFlavorsPage />
+      </StrictMode>,
+    )
+    await clickButtonByText(container, '新增规格')
+    expect(document.querySelector('.soha-step-form__steps')).toBeNull()
+    expect(document.querySelector<HTMLInputElement>('#cpu')?.value).toBe('2')
+    expect(document.querySelector<HTMLInputElement>('#memoryMiB')?.value).toBe('4096')
+
+    const submit = async () => {
+      await act(async () => {
+        document
+          .querySelector('.ant-modal form')
+          ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+    }
+    const setName = async (value: string) => {
+      await act(async () => {
+        const input = document.querySelector<HTMLInputElement>('#name')
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+          input,
+          value,
+        )
+        input?.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    }
+    await submit()
+    expect(testState.apiPost).not.toHaveBeenCalled()
+    expect(document.querySelector('#name')?.getAttribute('aria-invalid')).toBe('true')
+    await setName('cancelled-flavor')
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('.ant-modal-close')?.click()
+    })
+    await clickButtonByText(container, '新增规格')
+    expect(document.querySelector<HTMLInputElement>('#name')?.value).toBe('')
+    await setName('small-flavor')
+    await submit()
+    await waitForPostCall('/virtualization/flavors')
+    expect(testState.apiPost).toHaveBeenCalledWith('/virtualization/flavors', {
+      name: 'small-flavor',
+      cpu: 2,
+      memoryMiB: 4096,
+      diskGiB: 40,
+      enabled: true,
+      description: undefined,
+    })
   })
 
   it('shows storage pools, VM disks, and CT volumes on the storage route', async () => {

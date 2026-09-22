@@ -22,10 +22,7 @@ import {
 import type { TableProps } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
-import {
-  ManagementIconButton,
-  ManagementTableToolbar,
-} from '@/components/management-list'
+import { ManagementIconButton } from '@/components/management-list'
 import { BooleanTag, MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { tableColumnPresets } from '@/utils/table-columns'
@@ -623,31 +620,30 @@ export function NotificationsPage() {
   return (
     <div className="soha-page">
       <Tabs
-        tabBarExtraContent={
-          canCreateNotification ? (
-            <ManagementTableToolbar>
-              <Button icon={<PlusOutlined />} onClick={() => openSilenceEditor(null)}>
-                新建静默
-              </Button>
-              <Button icon={<PlusOutlined />} onClick={() => openChannelEditor(null)}>
-                新建渠道
-              </Button>
-              <Button icon={<PlusOutlined />} onClick={() => openTemplateEditor(null)}>
-                新建模板
-              </Button>
-              <Button icon={<PlusOutlined />} type="primary" onClick={() => openPolicyEditor(null)}>
-                新建策略
-              </Button>
-            </ManagementTableToolbar>
-          ) : null
-        }
         items={[
           {
             key: 'policies',
             label: '通知策略',
             children: (
               <AdminTable
+                enableDensity
+                error={policiesQuery.error}
+                refreshing={policiesQuery.isFetching}
+                onRefresh={() => void policiesQuery.refetch()}
+                columnSettingPlacement="header"
+                columnSettingIconOnly
                 shellClassName="soha-management-table-shell"
+                headerExtra={
+                  canCreateNotification ? (
+                    <Button
+                      icon={<PlusOutlined />}
+                      type="primary"
+                      onClick={() => openPolicyEditor(null)}
+                    >
+                      新建策略
+                    </Button>
+                  ) : null
+                }
                 columns={policyColumns}
                 dataSource={policiesQuery.data ?? []}
                 rowKey="id"
@@ -660,7 +656,24 @@ export function NotificationsPage() {
             label: '通知模板',
             children: (
               <AdminTable
+                enableDensity
+                error={templatesQuery.error}
+                refreshing={templatesQuery.isFetching}
+                onRefresh={() => void templatesQuery.refetch()}
+                columnSettingPlacement="header"
+                columnSettingIconOnly
                 shellClassName="soha-management-table-shell"
+                headerExtra={
+                  canCreateNotification ? (
+                    <Button
+                      icon={<PlusOutlined />}
+                      type="primary"
+                      onClick={() => openTemplateEditor(null)}
+                    >
+                      新建模板
+                    </Button>
+                  ) : null
+                }
                 columns={templateColumns}
                 dataSource={templatesQuery.data ?? []}
                 rowKey="id"
@@ -673,7 +686,24 @@ export function NotificationsPage() {
             label: '通知渠道',
             children: (
               <AdminTable
+                enableDensity
+                error={channelsQuery.error}
+                refreshing={channelsQuery.isFetching}
+                onRefresh={() => void channelsQuery.refetch()}
+                columnSettingPlacement="header"
+                columnSettingIconOnly
                 shellClassName="soha-management-table-shell"
+                headerExtra={
+                  canCreateNotification ? (
+                    <Button
+                      icon={<PlusOutlined />}
+                      type="primary"
+                      onClick={() => openChannelEditor(null)}
+                    >
+                      新建渠道
+                    </Button>
+                  ) : null
+                }
                 columns={channelColumns}
                 dataSource={channelsQuery.data ?? []}
                 rowKey="id"
@@ -686,6 +716,12 @@ export function NotificationsPage() {
             label: '路由规则',
             children: (
               <AdminTable
+                enableDensity
+                error={routesQuery.error}
+                refreshing={routesQuery.isFetching}
+                onRefresh={() => void routesQuery.refetch()}
+                columnSettingPlacement="header"
+                columnSettingIconOnly
                 shellClassName="soha-management-table-shell"
                 columns={routeColumns}
                 dataSource={routesQuery.data ?? []}
@@ -698,7 +734,7 @@ export function NotificationsPage() {
                     </Text>
                     {canCreateNotification ? (
                       <Button
-                        size="small"
+                        type="primary"
                         icon={<PlusOutlined />}
                         onClick={() => openRouteEditor(null)}
                       >
@@ -715,7 +751,24 @@ export function NotificationsPage() {
             label: '静默规则',
             children: (
               <AdminTable
+                enableDensity
+                error={silencesQuery.error}
+                refreshing={silencesQuery.isFetching}
+                onRefresh={() => void silencesQuery.refetch()}
+                columnSettingPlacement="header"
+                columnSettingIconOnly
                 shellClassName="soha-management-table-shell"
+                headerExtra={
+                  canCreateNotification ? (
+                    <Button
+                      icon={<PlusOutlined />}
+                      type="primary"
+                      onClick={() => openSilenceEditor(null)}
+                    >
+                      新建静默
+                    </Button>
+                  ) : null
+                }
                 columns={silenceColumns}
                 dataSource={silencesQuery.data ?? []}
                 rowKey="id"
@@ -727,10 +780,23 @@ export function NotificationsPage() {
       />
 
       <Modal
+        className="soha-observability-modal"
+        style={{ top: 32 }}
+        classNames={{
+          body: 'soha-observability-modal-body',
+          header: 'soha-observability-modal-header',
+        }}
         title={editingPolicy ? '编辑通知策略' : '新建通知策略'}
         open={policyOpen}
         onCancel={() => setPolicyOpen(false)}
-        footer={null}
+        footer={
+          <Space>
+            <Button onClick={() => setPolicyOpen(false)}>取消</Button>
+            <Button type="primary" onClick={() => policyForm.submit()}>
+              保存
+            </Button>
+          </Space>
+        }
         destroyOnHidden
         width={760}
       >
@@ -770,20 +836,27 @@ export function NotificationsPage() {
           <Form.Item name="enabled" label="启用" valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Space>
-            <Button type="primary" htmlType="submit">
-              保存
-            </Button>
-            <Button onClick={() => setPolicyOpen(false)}>取消</Button>
-          </Space>
         </Form>
       </Modal>
 
       <Modal
+        className="soha-observability-modal"
+        style={{ top: 32 }}
+        classNames={{
+          body: 'soha-observability-modal-body',
+          header: 'soha-observability-modal-header',
+        }}
         title={editingTemplate ? '编辑通知模板' : '新建通知模板'}
         open={templateOpen}
         onCancel={() => setTemplateOpen(false)}
-        footer={null}
+        footer={
+          <Space>
+            <Button onClick={() => setTemplateOpen(false)}>取消</Button>
+            <Button type="primary" onClick={() => templateForm.submit()}>
+              保存
+            </Button>
+          </Space>
+        }
         destroyOnHidden
         width={860}
       >
@@ -800,8 +873,8 @@ export function NotificationsPage() {
           <Form.Item name="name" label="名称" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Space size={16} style={{ width: '100%' }}>
-            <Form.Item name="templateType" label="模板类型" style={{ flex: 1 }}>
+          <div className="soha-observability-form-grid">
+            <Form.Item name="templateType" label="模板类型">
               <Select
                 options={[
                   { value: 'generic_json', label: 'generic_json' },
@@ -810,10 +883,10 @@ export function NotificationsPage() {
                 ]}
               />
             </Form.Item>
-            <Form.Item name="contentType" label="Content-Type" style={{ flex: 1 }}>
+            <Form.Item name="contentType" label="Content-Type">
               <Input />
             </Form.Item>
-          </Space>
+          </div>
           <Form.Item name="bodyTemplate" label="Body 模板">
             <Input.TextArea rows={6} />
           </Form.Item>
@@ -829,20 +902,31 @@ export function NotificationsPage() {
           <Form.Item name="enabled" label="启用" valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Space>
-            <Button type="primary" htmlType="submit">
-              保存
-            </Button>
-            <Button onClick={() => setTemplateOpen(false)}>取消</Button>
-          </Space>
         </Form>
       </Modal>
 
       <Modal
+        className="soha-observability-modal"
+        style={{ top: 32 }}
+        classNames={{
+          body: 'soha-observability-modal-body',
+          header: 'soha-observability-modal-header',
+        }}
         title={editingChannel ? '编辑通知渠道' : '新建通知渠道'}
         open={channelOpen}
         onCancel={() => setChannelOpen(false)}
-        footer={null}
+        footer={
+          <Space>
+            <Button onClick={() => setChannelOpen(false)}>取消</Button>
+            <Button
+              type="primary"
+              onClick={() => channelForm.submit()}
+              loading={createChannel.isPending || updateChannel.isPending}
+            >
+              保存
+            </Button>
+          </Space>
+        }
         destroyOnHidden
         width={760}
       >
@@ -869,24 +953,31 @@ export function NotificationsPage() {
           <Form.Item name="enabled" label="启用" valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Space>
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={createChannel.isPending || updateChannel.isPending}
-            >
-              保存
-            </Button>
-            <Button onClick={() => setChannelOpen(false)}>取消</Button>
-          </Space>
         </Form>
       </Modal>
 
       <Modal
+        className="soha-observability-modal"
+        style={{ top: 32 }}
+        classNames={{
+          body: 'soha-observability-modal-body',
+          header: 'soha-observability-modal-header',
+        }}
         title={editingRoute ? '编辑路由规则' : '新建路由规则'}
         open={routeOpen}
         onCancel={() => setRouteOpen(false)}
-        footer={null}
+        footer={
+          <Space>
+            <Button onClick={() => setRouteOpen(false)}>取消</Button>
+            <Button
+              type="primary"
+              onClick={() => routeForm.submit()}
+              loading={createRoute.isPending || updateRoute.isPending}
+            >
+              保存
+            </Button>
+          </Space>
+        }
         destroyOnHidden
         width={760}
       >
@@ -908,24 +999,31 @@ export function NotificationsPage() {
           <Form.Item name="enabled" label="启用" valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Space>
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={createRoute.isPending || updateRoute.isPending}
-            >
-              保存
-            </Button>
-            <Button onClick={() => setRouteOpen(false)}>取消</Button>
-          </Space>
         </Form>
       </Modal>
 
       <Modal
+        className="soha-observability-modal"
+        style={{ top: 32 }}
+        classNames={{
+          body: 'soha-observability-modal-body',
+          header: 'soha-observability-modal-header',
+        }}
         title={editingSilence ? '编辑静默规则' : '新建静默规则'}
         open={silenceOpen}
         onCancel={() => setSilenceOpen(false)}
-        footer={null}
+        footer={
+          <Space>
+            <Button onClick={() => setSilenceOpen(false)}>取消</Button>
+            <Button
+              type="primary"
+              onClick={() => silenceForm.submit()}
+              loading={createSilence.isPending || updateSilence.isPending}
+            >
+              保存
+            </Button>
+          </Space>
+        }
         destroyOnHidden
         width={760}
       >
@@ -944,41 +1042,27 @@ export function NotificationsPage() {
           <Form.Item name="reason" label="静默原因">
             <Input.TextArea rows={3} />
           </Form.Item>
-          <Space size={16} style={{ width: '100%' }}>
-            <Form.Item
-              name="startsAt"
-              label="开始时间(ISO)"
-              rules={[{ required: true }]}
-              style={{ flex: 1 }}
-            >
+          <div className="soha-observability-form-grid">
+            <Form.Item name="startsAt" label="开始时间(ISO)" rules={[{ required: true }]}>
               <Input />
             </Form.Item>
-            <Form.Item
-              name="endsAt"
-              label="结束时间(ISO)"
-              rules={[{ required: true }]}
-              style={{ flex: 1 }}
-            >
+            <Form.Item name="endsAt" label="结束时间(ISO)" rules={[{ required: true }]}>
               <Input />
             </Form.Item>
-          </Space>
+          </div>
           <Form.Item name="enabled" label="启用" valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Space>
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={createSilence.isPending || updateSilence.isPending}
-            >
-              保存
-            </Button>
-            <Button onClick={() => setSilenceOpen(false)}>取消</Button>
-          </Space>
         </Form>
       </Modal>
 
       <Modal
+        className="soha-observability-modal"
+        style={{ top: 32 }}
+        classNames={{
+          body: 'soha-observability-modal-body',
+          header: 'soha-observability-modal-header',
+        }}
         title={previewPolicy ? `通知预览 · ${previewPolicy.name}` : '通知预览'}
         open={previewOpen}
         onCancel={() => setPreviewOpen(false)}
@@ -1002,6 +1086,8 @@ export function NotificationsPage() {
             }))}
           />
           <AdminTable
+            columnSettingPlacement="header"
+            columnSettingIconOnly
             columns={[
               { title: '渠道', dataIndex: 'channelId' },
               {

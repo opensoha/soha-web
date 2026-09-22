@@ -411,7 +411,7 @@ describe('menus page modal state', () => {
     ]
     await renderWithProviders(<MenusPage />, '/system/menus')
 
-    expect(document.body.textContent).toContain('工作台视图')
+    expect(document.body.textContent).toContain('按工作台')
     expect(document.body.textContent).toContain('未分组')
 
     await clickButton(getRowEditButton('configuration'))

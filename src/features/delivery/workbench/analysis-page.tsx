@@ -12,12 +12,7 @@ import { DeliveryGatewayReadinessPanel } from '../delivery-gateway-readiness'
 import { DeliveryTable } from '../delivery-table'
 import { deliveryQueries } from '../queries'
 import type { ExecutionTask } from '../types'
-import {
-  executionTaskUpdatedAt,
-  isActiveStatus,
-  isBlockedStatus,
-  sortByLatest,
-} from './shared'
+import { executionTaskUpdatedAt, isActiveStatus, isBlockedStatus, sortByLatest } from './shared'
 
 const { Text } = Typography
 type ColumnProps<T> = TableColumnsType<T>[number]
@@ -34,9 +29,7 @@ export function DeliveryAnalysisPage() {
   const releaseBoardQuery = useQuery(
     deliveryQueries.releaseBoard.list({ enabled: canViewReleaseBoard, refetchInterval: 5000 }),
   )
-  const bundlesQuery = useQuery(
-    deliveryQueries.releaseBundles.list({ enabled: canViewBundles }),
-  )
+  const bundlesQuery = useQuery(deliveryQueries.releaseBundles.list({ enabled: canViewBundles }))
 
   const tasks = tasksQuery.data ?? []
   const board = releaseBoardQuery.data ?? []
@@ -172,12 +165,17 @@ export function DeliveryAnalysisPage() {
         </Card>
       </div>
       <DeliveryTable
-        title="最近任务与故障线索"
+        aria-label="最近任务与故障线索"
         rowKey="id"
         dataSource={recentTasks}
         empty={
           canViewTasks ? undefined : (
-            <ManagementState bordered={false} compact kind="no-permission" title="无执行任务查看权限" />
+            <ManagementState
+              bordered={false}
+              compact
+              kind="no-permission"
+              title="无执行任务查看权限"
+            />
           )
         }
         isError={canViewTasks && tasksQuery.isError}
@@ -193,11 +191,13 @@ export function DeliveryAnalysisPage() {
           void bundlesQuery.refetch()
         }}
         columns={columns}
-        actions={canViewReleaseBoard ? (
-          <Button icon={<SafetyCertificateOutlined />} onClick={() => navigate('/release-board')}>
-            查看影响面
-          </Button>
-        ) : undefined}
+        actions={
+          canViewReleaseBoard ? (
+            <Button icon={<SafetyCertificateOutlined />} onClick={() => navigate('/release-board')}>
+              查看影响面
+            </Button>
+          ) : undefined
+        }
       />
     </div>
   )

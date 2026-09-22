@@ -512,12 +512,14 @@ export function ComputeOverviewPage() {
                 className={`soha-overview-metric-card ${item.className}`}
                 classNames={{ body: 'soha-compute-metric-body' }}
               >
-                <span className="soha-compute-metric-label">
-                  {item.icon}
-                  {item.label}
-                </span>
                 <div className="soha-compute-metric-content">
-                  <strong className="soha-compute-metric-value">{item.value}</strong>
+                  <div>
+                    <span className="soha-compute-metric-label">
+                      {item.icon}
+                      {item.label}
+                    </span>
+                    <strong className="soha-compute-metric-value">{item.value}</strong>
+                  </div>
                   <Suspense fallback={<div className="soha-compute-chart-placeholder" />}>
                     <SummaryChart {...item.visual} />
                   </Suspense>

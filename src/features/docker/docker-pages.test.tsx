@@ -1,13 +1,13 @@
 /** @vitest-environment jsdom */
 
 import type { ReactNode } from 'react'
-import { act } from 'react'
+import { act, StrictMode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from 'antd'
-import { RuntimeHostStepModal, buildRuntimeHostPayload } from './hosts/create-page'
+import { RuntimeHostModal, buildRuntimeHostPayload } from './hosts/create-page'
 import { DockerHostsPage, buildQuickHostPayload } from './hosts/page'
 import { DockerProjectDetailPage } from './projects/detail-page'
 import {
@@ -15,7 +15,10 @@ import {
   buildContainerStartPayload,
   buildProjectPayload,
 } from './projects/list-page'
-import { buildTemplatePayload } from './templates/page'
+import { DockerTemplatesPage, buildTemplatePayload } from './templates/page'
+import { PortsTable } from './ports/table'
+import { ServicesTable } from './services/table'
+import { OperationsTable } from './operations/table'
 import type {
   DockerContainerStartInput,
   DockerProjectInput,
@@ -33,7 +36,7 @@ const testState = vi.hoisted(() => ({
     visibleMenuIds: [],
     visibleMenus: [],
   },
-  apiGet: vi.fn(async (path: string) => {
+  apiGet: vi.fn(async (path: string): Promise<{ data: unknown }> => {
     if (path === '/modules') {
       return {
         data: [
@@ -53,6 +56,12 @@ const testState = vi.hoisted(() => ({
       }
     }
     if (path === '/docker/hosts?page=1&pageSize=15') {
+      return { data: { items: [], total: 0, page: 1, pageSize: 15 } }
+    }
+    if (
+      path === '/docker/templates?page=1&pageSize=15' ||
+      path === '/docker/ports?page=1&pageSize=15'
+    ) {
       return { data: { items: [], total: 0, page: 1, pageSize: 15 } }
     }
     if (path === '/docker/hosts?page=1&pageSize=200') {
@@ -322,6 +331,19 @@ const testState = vi.hoisted(() => ({
   apiPostWithHeaders: vi.fn(async (_path: string, _body?: unknown, _headers?: HeadersInit) => ({
     data: { id: 'operation-1' },
   })),
+  apiPostWithSignal: vi.fn(async (_path: string, _body: unknown, _signal: AbortSignal) => ({
+    data: {
+      entries: [
+        {
+          id: 'line-1',
+          timestamp: '2026-09-21T12:00:00Z',
+          message: 'service is ready',
+          source: { kind: 'docker', dockerProjectId: 'project-1', dockerService: 'web' },
+        },
+      ],
+      truncated: false,
+    },
+  })),
   apiPut: vi.fn(async (_path: string, _body?: unknown) => ({ data: { id: 'updated' } })),
   apiDelete: vi.fn(async (_path: string) => ({ data: undefined })),
 }))
@@ -339,6 +361,8 @@ vi.mock('@/services/api-client', () => ({
   api: {
     get: (path: string) => testState.apiGet(path),
     post: (path: string, body?: unknown) => testState.apiPost(path, body),
+    postWithSignal: (path: string, body: unknown, signal: AbortSignal) =>
+      testState.apiPostWithSignal(path, body, signal),
     postWithHeaders: (path: string, body: unknown, headers: HeadersInit) =>
       testState.apiPostWithHeaders(path, body, headers),
     put: (path: string, body?: unknown) => testState.apiPut(path, body),
@@ -421,6 +445,7 @@ describe('docker pages', () => {
     }
     testState.apiGet.mockClear()
     testState.apiPost.mockClear()
+    testState.apiPostWithSignal.mockClear()
     testState.apiPostWithHeaders.mockClear()
     testState.apiPut.mockClear()
     testState.apiDelete.mockClear()
@@ -464,6 +489,92 @@ describe('docker pages', () => {
     containers = []
     document.body.innerHTML = ''
     vi.unstubAllGlobals()
+  })
+
+  it('uses server retryability for historical direct operations', async () => {
+    testState.permissionSnapshot.permissionKeys = [
+      'docker.operations.view',
+      'docker.operations.retry',
+    ]
+    const items = [
+      {
+        id: 'old-log-read',
+        operationKind: 'service_action',
+        status: 'failed',
+        operationState: { retryable: false },
+      },
+      {
+        id: 'old-port-reserve',
+        operationKind: 'port_reserve',
+        status: 'failed',
+        operationState: { retryable: false },
+      },
+      {
+        id: 'service-restart',
+        operationKind: 'service_action',
+        status: 'failed',
+        operationState: { retryable: true },
+      },
+      { id: 'older-server-deploy', operationKind: 'project_deploy', status: 'failed' },
+    ]
+    const fallback = testState.apiGet.getMockImplementation()!
+    await testState.apiGet.withImplementation(
+      async (path: string) => {
+        if (path.startsWith('/docker/operations?')) {
+          return { data: { items, total: items.length, page: 1, pageSize: 15 } }
+        }
+        return fallback(path)
+      },
+      async () => {
+        const container = await renderWithProviders(<OperationsTable />)
+        for (const item of items) {
+          const row = container.querySelector(`tr[data-row-key="${item.id}"]`)
+          expect(row).not.toBeNull()
+          expect(row?.querySelector('button[aria-label="查看日志"]')).not.toBeNull()
+          expect(row?.querySelector('button[aria-label="重试任务"]') !== null).toBe(
+            item.operationState?.retryable ?? true,
+          )
+        }
+        expect(testState.apiPost).not.toHaveBeenCalled()
+      },
+    )
+  })
+
+  it('opens selected service logs directly without enqueueing an action', async () => {
+    testState.permissionSnapshot.permissionKeys = ['docker.services.view', 'docker.services.logs']
+    const originalGet = testState.apiGet.getMockImplementation()!
+    testState.apiGet.mockImplementation(async (path: string) => {
+      if (
+        path === '/docker/services?page=1&pageSize=5&projectId=project-1' ||
+        path === '/docker/services?projectId=project-1&page=1&pageSize=5'
+      ) {
+        return originalGet('/docker/services?projectId=project-1&page=1&pageSize=100')
+      }
+      return originalGet(path)
+    })
+    try {
+      const container = await renderWithProviders(
+        <ServicesTable embedded fixedProjectId="project-1" />,
+      )
+      await act(async () =>
+        container.querySelector<HTMLButtonElement>('button[aria-label="查看日志"]')?.click(),
+      )
+      for (let i = 0; i < 30 && !testState.apiPostWithSignal.mock.calls.length; i++) {
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0))
+        })
+      }
+      expect(testState.apiPostWithSignal).toHaveBeenCalledWith(
+        '/docker/projects/project-1/logs/query',
+        expect.objectContaining({ selector: expect.objectContaining({ dockerService: 'web' }) }),
+        expect.any(AbortSignal),
+      )
+      expect(document.body.textContent).toContain('服务日志 · web')
+      expect(testState.apiPost.mock.calls.some(([path]) => path.includes('/actions/'))).toBe(false)
+      await act(async () => document.querySelector<HTMLButtonElement>('.ant-drawer-close')?.click())
+    } finally {
+      testState.apiGet.mockImplementation(originalGet)
+    }
   })
 
   it('builds quick host payload with virtualization resource ids and GiB sizing', () => {
@@ -689,7 +800,7 @@ describe('docker pages', () => {
 
   it('defaults runtime-host onboarding to quick Agent installation', async () => {
     await renderWithProviders(
-      <RuntimeHostStepModal onClose={() => undefined} open />,
+      <RuntimeHostModal onClose={() => undefined} open />,
       '/compute/runtimes/hosts',
     )
 
@@ -713,13 +824,50 @@ describe('docker pages', () => {
     await act(async () => manualOption?.click())
     expect(document.body.textContent).toContain('Agent Endpoint')
 
-    const nextButton = Array.from(document.querySelectorAll('button')).find(
-      (button) => button.textContent === '下一步',
-    )
-    await act(async () => nextButton?.click())
+    expect(document.querySelector('.soha-step-form__steps')).toBeNull()
     expect(document.body.textContent).toContain('关联虚拟机')
+    expect(document.querySelector('#availablePortStart')).not.toBeNull()
     expect(testState.apiGet).toHaveBeenCalledWith('/virtualization/vms?page=1&pageSize=500')
   })
+
+  it.each([
+    ['templates', '新增模板', () => <DockerTemplatesPage />, 'composeContent', 'services:'],
+    ['ports', '新增映射', () => <PortsTable />, 'hostPort', ''],
+  ] as const)(
+    'opens %s with defaults and validates the single form',
+    async (resource, label, page, field, value) => {
+      testState.permissionSnapshot.permissionKeys = [
+        `docker.${resource}.view`,
+        `docker.${resource}.create`,
+      ]
+      await renderWithProviders(<StrictMode>{page()}</StrictMode>, `/compute/runtimes/${resource}`)
+      await clickButton(label)
+      expect(document.querySelector('.soha-step-form__steps')).toBeNull()
+      const input = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(`#${field}`)
+      expect(input).not.toBeNull()
+      expect(input?.value).toContain(value)
+      if (resource === 'templates') {
+        expect(document.querySelector('.ant-modal #enabled')?.getAttribute('aria-checked')).toBe(
+          'true',
+        )
+      } else {
+        expect(document.querySelector('.ant-modal')?.textContent).toContain('tcp')
+        expect(document.querySelector('.ant-modal')?.textContent).toContain('内部')
+      }
+      await act(async () => {
+        document
+          .querySelector('.ant-modal form')
+          ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+      expect(testState.apiPost).not.toHaveBeenCalled()
+      expect(document.querySelector('#name')?.getAttribute('aria-invalid')).toBe('true')
+      if (resource === 'ports') {
+        expect(document.querySelector('#hostPort')?.getAttribute('aria-invalid')).toBe('true')
+        expect(document.querySelector('#containerPort')?.getAttribute('aria-invalid')).toBe('true')
+      }
+    },
+  )
 
   it('removes the new host when Agent installation command generation fails', async () => {
     testState.apiPost.mockImplementation(async (path: string) => {
@@ -733,11 +881,10 @@ describe('docker pages', () => {
     })
 
     await renderWithProviders(
-      <RuntimeHostStepModal onClose={() => undefined} open />,
+      <RuntimeHostModal onClose={() => undefined} open />,
       '/compute/runtimes/hosts',
     )
     await changeInput(document.querySelector<HTMLInputElement>('#name'), 'runtime-a')
-    await clickButton('下一步')
     await clickButton('生成安装命令')
     await act(async () => {
       await Promise.resolve()

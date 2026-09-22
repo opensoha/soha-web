@@ -1,5 +1,55 @@
 /* Shared visual contract for Platform tables, resource detail shells, and metadata surfaces. */
 
+/* K8s list chrome owns the requested 48px rows / 32px controls. This scoped
+   exception also normalizes legacy size="small" controls; row actions, modal
+   forms and multiline inputs retain their own sizes. Rows may wrap on mobile. */
+[data-workbench='platform'] .soha-management-query-field .ant-form-item-label {
+  flex: 0 0 auto;
+  padding-inline-end: 8px;
+  text-align: left;
+  height: 32px;
+  line-height: 32px;
+}
+
+[data-workbench='platform'] .soha-management-query-card.ant-card {
+  border-width: 0;
+}
+
+[data-workbench='platform'] .soha-management-query-card .ant-card-body {
+  padding: 8px 17px;
+}
+
+[data-workbench='platform']
+  .soha-admin-table-shell.is-panel
+  :is(.soha-admin-table-header, .soha-admin-table-toolbar) {
+  min-height: 48px;
+  padding: 8px 16px;
+  box-sizing: border-box;
+  align-items: center;
+}
+
+[data-workbench='platform'] .soha-admin-table-header-main:empty {
+  display: none;
+}
+
+[data-workbench='platform'] .soha-admin-table-header-extra {
+  margin-inline-start: auto;
+}
+
+[data-workbench='platform']
+  :is(.soha-management-query-card, .soha-admin-table-header, .soha-admin-table-toolbar)
+  :is(.ant-btn, .ant-input-affix-wrapper, .ant-select) {
+  height: 32px;
+  min-height: 32px;
+}
+
+[data-workbench='platform']
+  :is(.soha-admin-table-header, .soha-admin-table-toolbar)
+  .ant-btn-icon-only {
+  width: 32px;
+  min-width: 32px;
+}
+
 .soha-platform-table .ant-table-thead > tr > th,
 .soha-platform-table .ant-table-tbody > tr > td {
   padding-left: 12px;

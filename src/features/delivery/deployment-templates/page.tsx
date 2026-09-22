@@ -12,10 +12,15 @@ import {
   Tabs,
   Typography,
 } from 'antd'
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import { CopyOutlined, PlusOutlined, StopOutlined, UploadOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementDataPage } from '@/components/management-data-page'
-import { ManagementState } from '@/components/management-list'
+import {
+  ManagementIconButton,
+  ManagementKeywordField,
+  ManagementQueryActions,
+  ManagementState,
+} from '@/components/management-list'
 import { TABLE_ACTIONS_COLUMN_CLASS_NAME } from '@/components/resource-actions'
 import { MetadataTag, BooleanTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
@@ -106,8 +111,7 @@ export function DeploymentTemplatesPage() {
   })
   const [form] = Form.useForm<{ definition: ServiceDeploymentTemplateInput }>()
   const definition = Form.useWatch('definition', { form, preserve: true }) as
-    | ServiceDeploymentTemplateInput
-    | undefined
+    ServiceDeploymentTemplateInput | undefined
   const [editorMode, setEditorMode] = useState('form')
   const [sourceDirty, setSourceDirty] = useState(false)
   const [sourceGeneration, setSourceGeneration] = useState(0)
@@ -122,6 +126,12 @@ export function DeploymentTemplatesPage() {
   )
   const sourceReadOnly = Boolean(editor?.item && (!source.isSuccess || source.data.association))
   const [search, setSearch] = useState('')
+  const [appliedSearch, setAppliedSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const applySearch = (value: string) => {
+    setAppliedSearch(value.trim())
+    setPage(1)
+  }
   useUnsavedDocument(Boolean(editor?.dirty || sourceDirty))
   const openEditor = (item?: ServiceDeploymentTemplate, copy = false, helm = false) => {
     const original = item ? deploymentTemplateInput(item) : emptyTemplate
@@ -185,6 +195,25 @@ export function DeploymentTemplatesPage() {
   return (
     <>
       <ManagementDataPage
+        query={{
+          onFinish: () => applySearch(search),
+          actions: (
+            <ManagementQueryActions
+              onReset={() => {
+                setSearch('')
+                applySearch('')
+              }}
+            />
+          ),
+          children: (
+            <ManagementKeywordField
+              inputProps={{ 'aria-label': '搜索部署模板' }}
+              placeholder="搜索名称或 Key"
+              value={search}
+              onChange={setSearch}
+            />
+          ),
+        }}
         beforeQuery={
           query.isError ? (
             <ManagementState
@@ -198,18 +227,15 @@ export function DeploymentTemplatesPage() {
           rowKey: 'id',
           loading: query.isLoading,
           dataSource: (query.data ?? []).filter((item) =>
-            `${item.name} ${item.key}`.toLowerCase().includes(search.toLowerCase()),
+            `${item.name} ${item.key}`.toLowerCase().includes(appliedSearch.toLowerCase()),
           ),
-          toolbar: (
-            <Input.Search
-              aria-label="搜索部署模板"
-              placeholder="搜索名称或 Key"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              allowClear
-            />
-          ),
-          toolbarExtra: (
+          enableDensity: true,
+          onRefresh: () => void query.refetch(),
+          refreshing: query.isFetching,
+          columnSettingPlacement: 'header',
+          columnSettingIconOnly: true,
+          pagination: { current: page, onPageChange: setPage, onPageSizeChange: () => setPage(1) },
+          headerExtra: (
             <Space>
               <TemplateSourcesButton />
               <Button
@@ -221,9 +247,6 @@ export function DeploymentTemplatesPage() {
               {allowed('create') ? (
                 <Button onClick={() => openEditor(undefined, false, true)}>新建 Helm 模板</Button>
               ) : null}
-              <Button icon={<ReloadOutlined />} onClick={() => void query.refetch()}>
-                刷新
-              </Button>
               {allowed('create') ? (
                 <Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor()}>
                   新建模板
@@ -272,13 +295,20 @@ export function DeploymentTemplatesPage() {
             {
               title: '操作',
               key: 'actions',
-              width: 340,
+              width: 144,
+              fixed: 'right',
               className: TABLE_ACTIONS_COLUMN_CLASS_NAME,
               render: (_: unknown, item: ServiceDeploymentTemplate) => (
-                <Space>
-                  <TemplateVersionHistory kind="deployment" templateId={item.id} />
+                <Space className="soha-row-action-icons" size={2}>
+                  <TemplateVersionHistory kind="deployment" templateId={item.id} iconOnly />
                   {allowed('create') ? (
-                    <Button onClick={() => openEditor(item, true)}>复制</Button>
+                    <ManagementIconButton
+                      aria-label="复制模板"
+                      tooltip="复制"
+                      size="small"
+                      icon={<CopyOutlined />}
+                      onClick={() => openEditor(item, true)}
+                    />
                   ) : null}
                   {allowed('update') && item.publicationState === 'draft' ? (
                     <Popconfirm
@@ -292,7 +322,13 @@ export function DeploymentTemplatesPage() {
                           })
                       }
                     >
-                      <Button loading={publish.isPending}>发布</Button>
+                      <ManagementIconButton
+                        aria-label="发布模板"
+                        tooltip="发布"
+                        size="small"
+                        icon={<UploadOutlined />}
+                        loading={publish.isPending}
+                      />
                     </Popconfirm>
                   ) : null}
                   {allowed('delete') && item.publicationState !== 'deprecated' ? (
@@ -301,9 +337,14 @@ export function DeploymentTemplatesPage() {
                       description="保留历史版本供已有服务使用。"
                       onConfirm={() => deprecate.mutateAsync(item.id)}
                     >
-                      <Button danger loading={deprecate.isPending}>
-                        废弃
-                      </Button>
+                      <ManagementIconButton
+                        aria-label="废弃模板"
+                        tooltip="废弃"
+                        size="small"
+                        icon={<StopOutlined />}
+                        danger
+                        loading={deprecate.isPending}
+                      />
                     </Popconfirm>
                   ) : null}
                 </Space>

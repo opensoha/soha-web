@@ -640,3 +640,35 @@
     gap: 2px;
   }
 }
+
+[data-workbench='monitoring']
+  .soha-log-explorer:not(.is-embedded)
+  .soha-log-query-card
+  > .ant-card-body {
+  padding: 8px 16px;
+}
+
+[data-workbench='monitoring'] .soha-log-query-mode-row {
+  min-height: 32px;
+  margin-bottom: 8px;
+}
+
+[data-workbench='monitoring']
+  .soha-log-query-card
+  :is(.ant-btn, .ant-select, .ant-input-affix-wrapper, .ant-picker, .ant-segmented) {
+  min-height: 32px;
+  height: 32px;
+}
+
+[data-workbench='monitoring'] .soha-log-query-card .ant-segmented {
+  padding: 2px;
+}
+
+[data-workbench='monitoring'] .soha-log-query-card .ant-segmented-group {
+  gap: 4px;
+}
+[data-workbench='monitoring'] .soha-log-query-card .ant-segmented-item-label {
+  min-height: 28px;
+  line-height: 28px;
+  padding-inline: 10px;
+}

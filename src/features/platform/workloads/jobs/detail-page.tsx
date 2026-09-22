@@ -86,7 +86,6 @@ function JobEventsTab({ detail, enabled }: { detail: JobDetail; enabled: boolean
 
   return (
     <ResourceEventsTimeline
-      title={localeCode === 'zh_CN' ? 'Job 事件时间线' : 'Job Event Timeline'}
       events={eventsQuery.data ?? []}
       loading={eventsQuery.isLoading}
       emptyDescription={localeCode === 'zh_CN' ? '当前 Job 暂无事件' : 'No Job events'}

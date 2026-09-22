@@ -40,15 +40,6 @@
     grid-template-columns: 1fr;
   }
 
-  .soha-application-center-toolbar {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .soha-application-center-toolbar .ant-btn {
-    width: 100%;
-  }
-
   .soha-application-delivery-actions__footer {
     align-items: flex-start;
     flex-direction: column;

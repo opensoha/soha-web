@@ -21,7 +21,7 @@ export function ProviderInstancesPanel({
   enabled: boolean
   localeCode: 'zh_CN' | 'en_US'
 }) {
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const instancesQuery = useQuery(computeQueries.providerInstances({ limit: 50 }, enabled))
@@ -138,7 +138,15 @@ export function ProviderInstancesPanel({
                               input: { expectedGeneration: instance.snapshot.generation },
                             },
                             {
-                              onSuccess: (result) => openTask(result.data.domain, result.data.id),
+                              onSuccess: ({ data }) => {
+                                const healthy = data.healthy
+                                modal[healthy ? 'success' : 'error']({
+                                  title: `${instance.displayName} · ${healthy ? (localeCode === 'zh_CN' ? '连接正常' : 'Connected') : localeCode === 'zh_CN' ? '连接异常' : 'Connection failed'}`,
+                                  content: [data.message, data.reason, data.nextAction]
+                                    .filter(Boolean)
+                                    .join(' · '),
+                                })
+                              },
                               onError: (error) => void message.error(error.message),
                             },
                           )

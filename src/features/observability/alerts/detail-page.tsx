@@ -211,6 +211,12 @@ function AlertEventDetailBody({
             label: '规则运行',
             children: (
               <AdminTable
+                enableDensity
+                error={detail.ruleRunsQuery.error}
+                refreshing={detail.ruleRunsQuery.isFetching}
+                onRefresh={() => void detail.ruleRunsQuery.refetch()}
+                columnSettingPlacement="header"
+                columnSettingIconOnly
                 shellClassName="soha-management-table-shell"
                 rowKey="id"
                 loading={detail.ruleRunsQuery.isLoading}
@@ -243,6 +249,12 @@ function AlertEventDetailBody({
             label: '自愈运行',
             children: (
               <AdminTable
+                enableDensity
+                error={detail.healingRunsQuery.error}
+                refreshing={detail.healingRunsQuery.isFetching}
+                onRefresh={() => void detail.healingRunsQuery.refetch()}
+                columnSettingPlacement="header"
+                columnSettingIconOnly
                 shellClassName="soha-management-table-shell"
                 rowKey="id"
                 loading={detail.healingRunsQuery.isLoading}
@@ -287,6 +299,12 @@ function AlertEventDetailBody({
             label: '通知预览',
             children: (
               <AdminTable
+                enableDensity
+                error={detail.previewQuery.error}
+                refreshing={detail.previewQuery.isFetching}
+                onRefresh={() => void detail.previewQuery.refetch()}
+                columnSettingPlacement="header"
+                columnSettingIconOnly
                 shellClassName="soha-management-table-shell"
                 rowKey={(record) =>
                   `${String(record.channelId || 'channel')}:${String(record.templateId || 'template')}:${String(record.url || 'url')}`
@@ -328,6 +346,12 @@ function AlertEventDetailBody({
             label: '投递日志',
             children: (
               <AdminTable
+                enableDensity
+                error={detail.deliveryLogsQuery.error}
+                refreshing={detail.deliveryLogsQuery.isFetching}
+                onRefresh={() => void detail.deliveryLogsQuery.refetch()}
+                columnSettingPlacement="header"
+                columnSettingIconOnly
                 shellClassName="soha-management-table-shell"
                 rowKey="id"
                 loading={detail.deliveryLogsQuery.isLoading}
@@ -382,6 +406,12 @@ function AlertEventDetailBody({
         ]}
       />
       <Modal
+        className="soha-observability-modal"
+        style={{ top: 32 }}
+        classNames={{
+          body: 'soha-observability-modal-body',
+          header: 'soha-observability-modal-header',
+        }}
         title="发起自愈"
         open={detail.healOpen}
         onCancel={() => detail.setHealOpen(false)}

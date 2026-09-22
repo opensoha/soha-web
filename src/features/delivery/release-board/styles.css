@@ -18,17 +18,25 @@
   gap: 16px;
 }
 
-.soha-release-board__filters {
+.soha-workflow-catalog__toolbar {
   display: flex;
   min-width: 0;
+  min-height: 48px;
+  box-sizing: border-box;
   align-items: center;
+  justify-content: flex-end;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
+  padding: 8px 0;
 }
 
-.soha-release-board__filters .soha-management-toolbar-search,
-.soha-release-board__refresh {
-  margin-left: auto;
+.soha-workflow-catalog__toolbar .ant-btn {
+  height: 32px;
+  min-height: 32px;
+}
+.soha-workflow-catalog__toolbar .ant-btn-icon-only {
+  width: 32px;
+  min-width: 32px;
 }
 
 .soha-release-board__list {
@@ -142,6 +150,16 @@
 }
 
 @media (max-width: 767px) {
+  .soha-release-board .soha-management-query-scope.ant-form-item {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .soha-release-board .soha-management-query-scope .ant-segmented {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
   .soha-release-run-card.ant-card .ant-card-body,
   .soha-release-run-card__details {
     grid-template-columns: minmax(0, 1fr);
@@ -155,30 +173,12 @@
     justify-content: flex-start;
   }
 
-  .soha-release-board__filters .soha-management-toolbar-search {
-    width: 100%;
-    margin-left: 0;
-  }
-
   .soha-release-board__pagination {
     justify-content: flex-start;
     overflow-x: auto;
   }
 }
 
-.soha-workflow-catalog__filters {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-.soha-workflow-catalog__filters > .ant-select {
-  min-width: 160px;
-}
-.soha-workflow-catalog__actions {
-  margin-inline-start: auto;
-}
 .soha-workflow-catalog__grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
@@ -204,9 +204,6 @@
   gap: 12px;
   flex-wrap: wrap;
   margin-top: 20px;
-}
-.soha-workflow-history__scope .ant-select {
-  min-width: 200px;
 }
 
 .soha-workflow-catalog__list {
@@ -319,4 +316,9 @@
   .soha-execution-trend__legend > :last-child {
     margin-left: 0;
   }
+}
+
+.soha-workflow-catalog > .soha-management-query-form,
+.soha-workflow-catalog > .soha-workflow-catalog__toolbar {
+  margin-bottom: 12px;
 }

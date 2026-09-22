@@ -71,6 +71,7 @@ import { getNormalizedBranding, useBrandingSettings } from '@/features/settings'
 import { useAuthStore } from '@/stores/auth-store'
 import { usePreferencesStore } from '@/stores/preferences-store'
 import { resolveThemeMode, watchSystemThemeMode } from '@/theme/app-theme'
+import { resolveBrandingLogos } from '@/utils/branding'
 import type { BusinessWorkspaceType, RuntimeMenuNode } from '@/types'
 
 const { Sider, Header, Content } = Layout
@@ -957,8 +958,9 @@ export function AppLayout() {
     user?.avatarFit === 'contain' || user?.avatarFit === 'fill' ? user.avatarFit : 'cover'
   const userAvatarStyle = { '--soha-avatar-fit': userAvatarFit } as CSSProperties
   const branding = getNormalizedBranding(brandingQuery.data?.data)
-  const expandedLogo = branding.expandedLogoUrl
-  const collapsedLogo = branding.collapsedLogoUrl || branding.expandedLogoUrl
+  const logos = resolveBrandingLogos(branding, resolvedThemeMode)
+  const expandedLogo = logos.expandedLogoUrl
+  const collapsedLogo = logos.collapsedLogoUrl || logos.expandedLogoUrl
   const activeLogo = sidebarCollapsed
     ? collapsedLogo || expandedLogo
     : expandedLogo || collapsedLogo
@@ -1326,7 +1328,7 @@ export function AppLayout() {
                 </div>
               </div>
             </Header>
-            <Content className="soha-content">
+            <Content className="soha-content" data-workbench={currentWorkbenchId}>
               <div className="soha-content-inner soha-pro-content-host">
                 <Outlet />
               </div>

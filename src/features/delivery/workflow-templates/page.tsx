@@ -11,10 +11,12 @@ import {
   Tabs,
   Typography,
 } from 'antd'
-import { CopyOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import { CopyOutlined, EditOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
+  ManagementIconButton,
+  ManagementRefreshButton,
   ManagementSearchableListPane,
   ManagementState,
   TemplateDesignerShell,
@@ -367,7 +369,6 @@ export function WorkflowTemplatesPage() {
       <TemplateDesignerShell
         className="soha-page soha-workflow-template-page"
         workspaceClassName="soha-workflow-template-workspace"
-        toolbarClassName="soha-workflow-template-toolbar"
         designerClassName="soha-workflow-template-designer"
         list={
           <ManagementSearchableListPane
@@ -386,6 +387,37 @@ export function WorkflowTemplatesPage() {
             emptyDescription="暂无模板"
             searchPlaceholder="搜索模板"
             searchValue={text}
+            searchActions={
+              <>
+                <ManagementIconButton
+                  aria-label="新建模板"
+                  tooltip="新建模板"
+                  color="primary"
+                  variant="solid"
+                  icon={<PlusOutlined />}
+                  disabled={!canCreate}
+                  onClick={() => setDraft({})}
+                />
+                <ManagementIconButton
+                  aria-label="导入文件"
+                  tooltip="导入文件"
+                  icon={<UploadOutlined />}
+                  disabled={!canCreate && !canUpdate}
+                  onClick={() => setImporting(true)}
+                />
+                <TemplateSourcesButton iconOnly />
+
+                <ManagementRefreshButton
+                  tooltip="刷新"
+                  aria-label="刷新"
+                  loading={templates.isFetching}
+                  onClick={() => {
+                    void templates.refetch()
+                    if (selectedVersion) void version.refetch()
+                  }}
+                />
+              </>
+            }
             onSearchChange={setText}
             onItemSelect={(item) => {
               updateSearch({ templateId: item.id, version: undefined })
@@ -405,104 +437,87 @@ export function WorkflowTemplatesPage() {
             )}
           />
         }
-        designer={content}
-        toolbar={
-          <Space wrap>
-            <TemplateSourcesButton />
-            <Button disabled={!canCreate && !canUpdate} onClick={() => setImporting(true)}>
-              导入文件
-            </Button>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              disabled={!canCreate}
-              onClick={() => setDraft({})}
-            >
-              新建模板
-            </Button>
-            <Button
-              icon={<EditOutlined />}
-              disabled={!selected || !canEdit || selected.publicationState === 'deprecated'}
-              onClick={() => setDraft({ template: selected })}
-            >
-              编辑草稿
-            </Button>
-            <Button
-              icon={<CopyOutlined />}
-              disabled={!shown || !canCreate}
-              onClick={() => {
-                if (shown)
-                  setDraft({
-                    copiedFrom: {
-                      id: shown.id,
-                      revision: shown.revision!,
-                      version: selectedVersion || undefined,
-                    },
-                    template: {
-                      ...shown,
-                      id: '',
-                      key: `${shown.key}-copy`,
-                      name: `${shown.name} Copy`,
-                      revision: undefined,
-                      publishedVersion: 0,
-                      publicationState: 'draft',
-                    },
-                  })
-              }}
-            >
-              复制模板
-            </Button>
-            <Popconfirm
-              title="发布当前草稿为新版本？"
-              description="已有服务继续使用固定版本。"
-              onConfirm={() => {
-                if (selected?.revision)
-                  publish.mutate(
-                    { id: selected.id, expectedRevision: selected.revision },
-                    {
-                      onSuccess: () => {
-                        updateSearch({ version: undefined })
-                        message.success('版本已发布')
-                      },
-                      onError: (error) => message.error(error.message),
-                    },
-                  )
-              }}
-            >
-              <Button
-                disabled={!selected || !canUpdate || selected.publicationState !== 'draft'}
-                loading={publish.isPending}
-              >
-                发布版本
-              </Button>
-            </Popconfirm>
-            <Popconfirm
-              title="废弃模板？已有绑定和历史版本将保留。"
-              onConfirm={() => {
-                if (selected)
-                  deprecate.mutate(selected.id, {
-                    onError: (error) => message.error(error.message),
-                  })
-              }}
-            >
-              <Button
-                danger
-                disabled={!selected || !canDelete || selected.publicationState === 'deprecated'}
-              >
-                废弃
-              </Button>
-            </Popconfirm>
-            <Button
-              icon={<ReloadOutlined />}
-              loading={templates.isFetching}
-              onClick={() => {
-                void templates.refetch()
-                if (selectedVersion) void version.refetch()
-              }}
-            >
-              刷新
-            </Button>
-          </Space>
+        designer={
+          <>
+            <header className="soha-workflow-template-toolbar" aria-label="当前流程模板操作">
+              <Space wrap>
+                <Button
+                  icon={<EditOutlined />}
+                  type="primary"
+                  disabled={!selected || !canEdit || selected.publicationState === 'deprecated'}
+                  onClick={() => setDraft({ template: selected })}
+                >
+                  编辑草稿
+                </Button>
+                <Button
+                  icon={<CopyOutlined />}
+                  disabled={!shown || !canCreate}
+                  onClick={() => {
+                    if (shown)
+                      setDraft({
+                        copiedFrom: {
+                          id: shown.id,
+                          revision: shown.revision!,
+                          version: selectedVersion || undefined,
+                        },
+                        template: {
+                          ...shown,
+                          id: '',
+                          key: `${shown.key}-copy`,
+                          name: `${shown.name} Copy`,
+                          revision: undefined,
+                          publishedVersion: 0,
+                          publicationState: 'draft',
+                        },
+                      })
+                  }}
+                >
+                  复制模板
+                </Button>
+                <Popconfirm
+                  title="发布当前草稿为新版本？"
+                  description="已有服务继续使用固定版本。"
+                  onConfirm={() => {
+                    if (selected?.revision)
+                      publish.mutate(
+                        { id: selected.id, expectedRevision: selected.revision },
+                        {
+                          onSuccess: () => {
+                            updateSearch({ version: undefined })
+                            message.success('版本已发布')
+                          },
+                          onError: (error) => message.error(error.message),
+                        },
+                      )
+                  }}
+                >
+                  <Button
+                    disabled={!selected || !canUpdate || selected.publicationState !== 'draft'}
+                    loading={publish.isPending}
+                  >
+                    发布版本
+                  </Button>
+                </Popconfirm>
+                <Popconfirm
+                  title="废弃模板？已有绑定和历史版本将保留。"
+                  onConfirm={() => {
+                    if (selected)
+                      deprecate.mutate(selected.id, {
+                        onError: (error) => message.error(error.message),
+                      })
+                  }}
+                >
+                  <Button
+                    danger
+                    disabled={!selected || !canDelete || selected.publicationState === 'deprecated'}
+                  >
+                    废弃
+                  </Button>
+                </Popconfirm>
+              </Space>
+            </header>
+            {content}
+          </>
         }
       />
       {importing ? (

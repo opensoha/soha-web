@@ -1,71 +1,60 @@
-.soha-identity-applications-page {
-  gap: 12px;
-}
-
-.soha-identity-applications-page .soha-identity-catalog-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.soha-identity-catalog-filters.ant-form {
-  flex: 1 1 0;
-  align-items: center;
-  gap: 8px;
+.soha-identity-application-catalog {
+  container-type: inline-size;
   min-width: 0;
+  padding: 0 16px 16px;
+  border: 1px solid var(--soha-border-color);
+  border-radius: var(--soha-radius-panel, 8px);
+  background: var(--soha-bg-surface);
 }
 
-.soha-identity-catalog-filters.ant-form .ant-form-item {
-  margin-inline-end: 0;
+.soha-identity-catalog-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  min-height: 48px;
+  padding-block: 8px;
+  box-sizing: border-box;
 }
 
-.soha-identity-catalog-toolbar > .soha-management-table-toolbar-actions {
-  margin-inline-start: auto;
-}
-
-.soha-identity-applications-page .soha-identity-application-grid {
+.soha-identity-application-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
-  gap: 16px;
-}
-
-.soha-identity-applications-page .soha-identity-application-card {
-  min-width: 0;
-}
-
-.soha-identity-applications-page .soha-identity-application-card .ant-card-body {
-  display: flex;
-  height: 100%;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.soha-identity-applications-page .soha-identity-application-card-heading,
-.soha-identity-applications-page .soha-identity-application-card-state,
-.soha-identity-applications-page .soha-identity-application-card-controls {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.soha-identity-applications-page .soha-identity-application-card-heading {
-  align-items: flex-start;
-}
-
-.soha-identity-applications-page .soha-identity-application-card-heading > .ant-space {
-  flex-shrink: 0;
-}
-
-.soha-identity-applications-page .soha-identity-application-card-access {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  align-items: start;
   gap: 8px;
+}
+
+.soha-identity-application-card {
   min-width: 0;
+}
+
+.soha-identity-application-card .soha-identity-application-card-body {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.5fr) minmax(0, 1fr) 52px 60px
+    minmax(0, 1fr) 96px 64px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+}
+
+.soha-identity-application-card-heading,
+.soha-identity-application-card-field,
+.soha-identity-application-card-access,
+.soha-identity-application-card-controls {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.soha-identity-application-card-field > .ant-tag {
+  justify-self: start;
+}
+
+.soha-identity-application-card-field > .ant-typography-secondary,
+.soha-identity-application-card-access > .ant-typography-secondary {
+  font-size: var(--soha-font-size-supporting);
+}
+
+.soha-identity-application-card-controls .soha-identity-inline-switch {
+  justify-content: space-between;
 }
 
 .soha-identity-application-card-access .ant-space-item,
@@ -79,14 +68,7 @@
   overflow-wrap: anywhere;
 }
 
-.soha-identity-applications-page .soha-identity-application-card-controls {
-  flex-wrap: wrap;
-  margin-top: auto;
-  padding-top: 12px;
-  border-top: 1px solid var(--soha-border-color);
-}
-
-.soha-identity-applications-page .soha-identity-catalog-pagination {
+.soha-identity-catalog-pagination {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -94,9 +76,30 @@
   margin-top: 16px;
 }
 
+.soha-identity-catalog-pagination .ant-pagination-total-text {
+  margin-inline-end: auto;
+}
+
+@container (max-width: 600px) {
+  .soha-identity-application-card .soha-identity-application-card-body {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .soha-identity-application-card-heading {
+    grid-column: 1 / -1;
+  }
+
+  .soha-identity-application-card-access,
+  .soha-identity-application-card-controls,
+  .soha-identity-application-card-actions {
+    grid-column: auto;
+    grid-row: auto;
+  }
+}
+
 .soha-identity-app-name-cell {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   min-width: 0;
   gap: 10px;
 }
@@ -109,10 +112,11 @@
 }
 
 .soha-identity-app-name-copy {
-  display: flex;
-  flex-direction: column;
+  display: -webkit-box;
   min-width: 0;
-  gap: 2px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow-wrap: anywhere;
 }
 
@@ -234,10 +238,6 @@
 }
 
 @media (max-width: 760px) {
-  .soha-identity-catalog-filters.ant-form {
-    flex-basis: 100%;
-  }
-
   .soha-identity-form-grid,
   .soha-identity-assignment-row,
   .soha-identity-policy-conditions,

@@ -127,7 +127,7 @@ export function CRDPage() {
     },
     {
       title: '',
-      key: 'action',
+      key: 'actions',
       width: 132,
       align: 'right',
       render: (_value, record) => (

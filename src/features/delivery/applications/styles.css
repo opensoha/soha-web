@@ -38,16 +38,60 @@
   gap: 16px;
 }
 
-.soha-application-center-toolbar {
+.soha-application-center-panel > .ant-card-body {
   display: flex;
-  min-height: 32px;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 12px;
+  padding: 0 16px 16px;
 }
 
-.soha-application-center-toolbar__groups .ant-select {
-  width: 180px;
+.soha-application-center-toolbar {
+  display: flex;
+  min-height: 48px;
+  padding: 8px 0;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.soha-application-center-filters {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.soha-application-center-filters > .ant-input-affix-wrapper {
+  width: 220px;
+}
+
+.soha-application-center-filters > .ant-select {
+  width: 160px;
+}
+
+.soha-application-center-toolbar__actions {
+  margin-inline-start: auto;
+}
+
+@media (max-width: 767px) {
+  .soha-application-center-filters {
+    flex-basis: 100%;
+  }
+  .soha-application-center-filters > .ant-input-affix-wrapper {
+    flex: 1 1 160px;
+  }
+}
+
+.soha-application-center-toolbar .ant-btn {
+  height: 32px;
+  min-height: 32px;
+}
+.soha-application-center-toolbar .ant-btn-icon-only {
+  width: 32px;
+  min-width: 32px;
 }
 
 .soha-application-card-grid {
@@ -122,37 +166,10 @@
 }
 
 @media (max-width: 767px) {
-  .soha-application-center-toolbar {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .soha-application-center-toolbar__groups .ant-select {
-    width: 100%;
-  }
-
-  .soha-application-center-toolbar__actions {
-    width: 100%;
-  }
-
-  .soha-application-center-toolbar__groups .soha-management-table-toolbar-actions,
-  .soha-application-center-toolbar__actions .soha-management-table-toolbar-actions {
-    width: 100%;
-  }
-
-  .soha-application-center-toolbar__actions .soha-management-toolbar-search {
-    flex: 1 1 auto;
-    width: auto !important;
-  }
-
-  .soha-application-center-toolbar__groups .ant-select,
-  .soha-application-center-toolbar__actions .ant-input-affix-wrapper,
-  .soha-application-center-toolbar__actions .ant-btn,
   .soha-application-card__link,
   .soha-application-card__more.ant-btn {
     min-height: 44px;
   }
-
   .soha-application-card__more.ant-btn {
     width: 44px;
   }

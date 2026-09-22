@@ -219,7 +219,11 @@ export function ObservabilityServicesPage() {
         />
       ) : (
         <AdminTable
-          columnSettingPlacement="hidden"
+          enableDensity
+          refreshing={services.isFetching}
+          onRefresh={() => void services.refetch()}
+          columnSettingIconOnly
+          columnSettingPlacement="header"
           columns={columns}
           dataSource={services.data?.items ?? []}
           empty={<ManagementState bordered={false} compact description="当前范围没有发现服务" />}

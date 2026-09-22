@@ -123,6 +123,28 @@ export function BrandingSettingsPage({ embedded = false }: SettingsPageProps = {
           />
         </div>
 
+        <div className="soha-branding-section-title">暗色主题 Logo（可选）</div>
+        <div className="soha-branding-upload-grid">
+          <BrandingUploadField
+            field="darkExpandedLogoUrl"
+            label="暗色展开 Logo"
+            hint="用于暗色侧边栏和登录页主视觉；未上传时沿用原图。建议使用透明底 PNG、SVG 或 WebP，200 × 60 px，不超过 2 MB"
+            previewWidth={200}
+            previewHeight={60}
+            darkPreview
+            disabled={!canManageBrandingSettings}
+          />
+          <BrandingUploadField
+            field="darkCollapsedLogoUrl"
+            label="暗色收起图标"
+            hint="用于暗色收起侧边栏和登录卡片；未上传时沿用原图。建议使用透明底 PNG、SVG 或 WebP，60 × 60 px，不超过 2 MB"
+            previewWidth={60}
+            previewHeight={60}
+            darkPreview
+            disabled={!canManageBrandingSettings}
+          />
+        </div>
+
         <div className="soha-form-actions">
           {canManageBrandingSettings ? (
             <Button htmlType="submit" type="primary" loading={saveMutation.isPending}>
@@ -159,6 +181,7 @@ interface BrandingUploadFieldProps {
   hint: string
   previewWidth: number
   previewHeight: number
+  darkPreview?: boolean
   disabled?: boolean
 }
 
@@ -168,6 +191,7 @@ function BrandingUploadField({
   hint,
   previewWidth,
   previewHeight,
+  darkPreview = false,
   disabled,
 }: BrandingUploadFieldProps) {
   const { message } = App.useApp()
@@ -218,7 +242,7 @@ function BrandingUploadField({
       <div className="soha-branding-upload-area-wrap">
         <button
           type="button"
-          className="soha-branding-upload-area"
+          className={`soha-branding-upload-area${darkPreview ? ' is-dark-preview' : ''}`}
           aria-label={`${currentValue ? '替换' : '上传'}${label}`}
           disabled={disabled || uploading}
           onClick={handleUploadClick}

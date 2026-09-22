@@ -22,7 +22,6 @@
 }
 
 .soha-access-table .ant-table-tbody > tr > td:last-child .ant-space {
-  width: 100%;
   justify-content: flex-end;
 }
 

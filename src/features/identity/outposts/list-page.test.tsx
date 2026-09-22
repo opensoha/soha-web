@@ -278,6 +278,10 @@ describe('identity outposts page behavior', () => {
     expect(container.querySelector('.soha-management-table-shell')).not.toBeNull()
     expect(container.textContent).toContain('不可用')
     expect(container.querySelector('.soha-metadata-tag')?.textContent).toBe('embedded')
+    expect(container.textContent).not.toContain('诊断')
+    for (const label of ['编辑 Outpost', '轮换 token', '删除 Outpost']) {
+      expect(container.querySelector(`button[aria-label="${label}"]`)).not.toBeNull()
+    }
 
     const search = container.querySelector(
       'input[placeholder="搜索名称、endpoint、版本"]',

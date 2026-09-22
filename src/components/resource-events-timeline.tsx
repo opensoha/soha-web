@@ -1,5 +1,6 @@
-import { Card, Descriptions, Timeline, Typography } from 'antd'
+import { Card, Timeline, Typography } from 'antd'
 import { ManagementState } from '@/components/management-list'
+import { StatusTag } from '@/components/status-tag'
 import './resource-events-timeline.css'
 import { useI18n } from '@/i18n'
 import { formatAgeSeconds, formatDateTime } from '@/utils/time'
@@ -18,12 +19,20 @@ interface ResourceEvent {
   ageSeconds: number
 }
 
-function resolveTimelineType(event: ResourceEvent): 'default' | 'ongoing' | 'success' | 'warning' | 'error' {
+function resolveTimelineType(
+  event: ResourceEvent,
+): 'default' | 'ongoing' | 'success' | 'warning' | 'error' {
   const normalizedType = (event.type || '').toLowerCase()
   const normalizedReason = (event.reason || '').toLowerCase()
   if (normalizedType === 'warning') return 'warning'
-  if (normalizedReason.includes('failed') || normalizedReason.includes('fail') || normalizedReason.includes('error')) return 'error'
-  if (normalizedReason.includes('success') || normalizedReason.includes('complete')) return 'success'
+  if (
+    normalizedReason.includes('failed') ||
+    normalizedReason.includes('fail') ||
+    normalizedReason.includes('error')
+  )
+    return 'error'
+  if (normalizedReason.includes('success') || normalizedReason.includes('complete'))
+    return 'success'
   return 'ongoing'
 }
 
@@ -47,7 +56,7 @@ export function ResourceEventsTimeline({
   loading,
   emptyDescription,
 }: {
-  title: string
+  title?: string
   events: ResourceEvent[]
   loading?: boolean
   emptyDescription?: string
@@ -57,53 +66,58 @@ export function ResourceEventsTimeline({
   return (
     <Card className="soha-detail-card" title={title} loading={loading}>
       {events.length === 0 ? (
-        <ManagementState bordered={false} compact title={emptyDescription || (localeCode === 'zh_CN' ? '暂无事件' : 'No events')} />
+        <ManagementState
+          bordered={false}
+          compact
+          title={emptyDescription || (localeCode === 'zh_CN' ? '暂无事件' : 'No events')}
+        />
       ) : (
         <div className="soha-events-timeline-shell">
           <Timeline
-            mode="left"
-            items={events.map((event) => ({
+            mode="start"
+            variant="filled"
+            titleSpan="var(--soha-event-time-width)"
+            classNames={{
+              item: 'soha-events-timeline-entry',
+              itemRail: 'soha-events-timeline-rail',
+            }}
+            items={events.map((event, index) => ({
+              key: `${event.namespace ?? ''}/${event.name}/${index}`,
               color: resolveTimelineColor(event),
-              children: (
-                <div className="soha-events-timeline-item">
+              title: (
+                <div className="soha-events-timeline-time">
+                  <time dateTime={new Date(Date.now() - event.ageSeconds * 1000).toISOString()}>
+                    {formatDateTime(new Date(Date.now() - event.ageSeconds * 1000).toISOString())}
+                  </time>
+                  <Text type="secondary">{formatAgeSeconds(event.ageSeconds)}</Text>
+                </div>
+              ),
+              content: (
+                <div className={`soha-events-timeline-item is-${resolveTimelineType(event)}`}>
                   <div className="soha-events-timeline-summary">
-                    <Text strong>{event.message || event.reason}</Text>
-                    <Text type="secondary" className="text-xs">{formatAgeSeconds(event.ageSeconds)}</Text>
+                    <StatusTag value={event.type} />
+                    <Text strong className="soha-events-timeline-reason">
+                      {event.reason || '-'}
+                    </Text>
+                    <Text type="secondary" className="soha-events-timeline-count">
+                      {event.count} {localeCode === 'zh_CN' ? '次' : 'occurrences'}
+                    </Text>
                   </div>
-                  <Descriptions
-                    className="soha-events-timeline-meta"
-                    colon={false}
-                    column={{ xs: 1, sm: 2, md: 2, lg: 2, xl: 2, xxl: 2 }}
-                    size="small"
-                    items={[
-                      {
-                        key: 'time',
-                        label: localeCode === 'zh_CN' ? '时间' : 'Time',
-                        children: formatDateTime(new Date(Date.now() - event.ageSeconds * 1000).toISOString()),
-                      },
-                      ...(event.namespace ? [{
-                        key: 'namespace',
-                        label: localeCode === 'zh_CN' ? '命名空间' : 'Namespace',
-                        children: event.namespace,
-                      }] : []),
-                      {
-                        key: 'reason',
-                        label: localeCode === 'zh_CN' ? '原因' : 'Reason',
-                        children: event.reason,
-                      },
-                      {
-                        key: 'count',
-                        label: localeCode === 'zh_CN' ? '次数' : 'Count',
-                        children: event.count,
-                      },
-                      ...(event.involvedKind || event.involvedName ? [{
-                        key: 'object',
-                        label: localeCode === 'zh_CN' ? '对象' : 'Object',
-                        children: `${event.involvedKind || '-'} / ${event.involvedName || '-'}`,
-                        span: 2,
-                      }] : []),
-                    ]}
-                  />
+                  <Text className="soha-events-timeline-message">
+                    {event.message || event.reason}
+                  </Text>
+                  <div className="soha-events-timeline-meta">
+                    {event.involvedKind || event.involvedName ? (
+                      <Text type="secondary">
+                        {event.involvedKind || '-'} / {event.involvedName || '-'}
+                      </Text>
+                    ) : null}
+                    {event.namespace ? (
+                      <Text type="secondary">
+                        {localeCode === 'zh_CN' ? '命名空间' : 'Namespace'}: {event.namespace}
+                      </Text>
+                    ) : null}
+                  </div>
                 </div>
               ),
             }))}

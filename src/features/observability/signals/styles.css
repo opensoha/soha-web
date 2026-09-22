@@ -4,23 +4,13 @@
   gap: 12px;
 }
 
-.soha-signal-query-card .ant-card-body {
-  padding: 14px 16px;
+.soha-signal-scope-field {
+  flex: 0 0 auto;
+  max-width: 100%;
 }
 
-.soha-signal-scope-row {
-  margin-block-end: 12px;
-}
-
-.soha-signal-query-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.soha-signal-query-grid .ant-form-item {
-  min-width: 0;
-  margin-block-end: 12px;
+.soha-signal-scope-field .soha-scopebar.is-embedded {
+  min-height: 32px;
 }
 
 .soha-signal-metric-grid {
@@ -143,7 +133,6 @@
 }
 
 @media (max-width: 960px) {
-  .soha-signal-query-grid,
   .soha-signal-metric-grid {
     grid-template-columns: 1fr;
   }
@@ -154,18 +143,18 @@
 }
 
 @media (max-width: 600px) {
-  .soha-signal-scope-row {
+  .soha-signal-scope-field {
     align-items: stretch;
   }
 
-  .soha-signal-scope-row > .soha-scopebar.is-embedded {
+  .soha-signal-scope-field > .soha-scopebar.is-embedded {
     flex: 1 1 100%;
     flex-direction: column;
     align-items: stretch;
     width: 100%;
   }
 
-  .soha-signal-scope-row .ant-select {
+  .soha-signal-scope-field .ant-select {
     width: 100% !important;
   }
 }

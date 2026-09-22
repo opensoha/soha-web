@@ -1,6 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { CloseOutlined } from '@ant-design/icons'
 import type { KubernetesResourceGraph } from '@opensoha/contracts/gen/ts/sohaapi'
-import { Alert, Empty, Space, Spin, Typography } from 'antd'
+import { Alert, Button, Empty, Space, Spin, Typography } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import {
   Background,
@@ -10,6 +11,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
+  useStore,
   type Edge,
   type Node,
 } from '@xyflow/react'
@@ -21,12 +23,13 @@ import { useI18n } from '@/i18n'
 import type { ScopeKey } from '@/types'
 import { resourceInsightQueries } from './queries'
 import '@xyflow/react/dist/style.css'
+import './resource-graph-panel.css'
 
-const NODE_WIDTH = 210
-const NODE_HEIGHT = 76
+const NODE_WIDTH = 240
+const NODE_HEIGHT = 112
 
 type ResourceGraphNode = Node<{
-  label: string
+  label: ReactNode
   resource: KubernetesResourceGraph['nodes'][number]['resource']
 }>
 
@@ -36,7 +39,7 @@ export function buildResourceGraphFlow(graph: KubernetesResourceGraph): {
 } {
   const layout = new dagre.graphlib.Graph()
   layout.setDefaultEdgeLabel(() => ({}))
-  layout.setGraph({ rankdir: 'LR', ranksep: 100, nodesep: 34 })
+  layout.setGraph({ rankdir: 'TB', ranksep: 64, nodesep: 34 })
 
   graph.nodes.forEach((node) => layout.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT }))
   graph.edges.forEach((edge) => layout.setEdge(edge.sourceId, edge.targetId))
@@ -49,23 +52,28 @@ export function buildResourceGraphFlow(graph: KubernetesResourceGraph): {
     const root = node.id === graph.rootId
     return {
       id: node.id,
+      ariaRole: 'button',
+      ariaLabel: `${node.resource.kind} ${namespace}${node.resource.name}${state ? ` ${state}` : ''}`,
       className: `soha-resource-graph-node${root ? ' is-root' : ''}`,
       data: {
-        label: `${node.resource.kind}\n${namespace}${node.resource.name}${state ? `\n${state}` : ''}`,
+        label: (
+          <span className="soha-resource-graph-label">
+            <span className="soha-resource-graph-kind">{node.resource.kind}</span>
+            <span className="soha-resource-graph-name" title={`${namespace}${node.resource.name}`}>
+              {namespace}
+              {node.resource.name}
+            </span>
+            {state ? <span className="soha-resource-graph-state">{state}</span> : null}
+          </span>
+        ),
         resource: node.resource,
       },
       position: { x: position.x - NODE_WIDTH / 2, y: position.y - NODE_HEIGHT / 2 },
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
+      sourcePosition: Position.Bottom,
+      targetPosition: Position.Top,
       style: {
-        background: root ? 'var(--ant-color-primary-bg)' : 'var(--ant-color-bg-container)',
-        border: `1px solid ${root ? 'var(--ant-color-primary)' : 'var(--ant-color-border)'}`,
-        borderRadius: 6,
-        color: 'var(--ant-color-text)',
-        fontSize: 12,
-        lineHeight: 1.45,
-        whiteSpace: 'pre-line',
         width: NODE_WIDTH,
+        height: NODE_HEIGHT,
       },
     }
   })
@@ -75,9 +83,10 @@ export function buildResourceGraphFlow(graph: KubernetesResourceGraph): {
     source: edge.sourceId,
     target: edge.targetId,
     label: edge.relation,
-    markerEnd: { type: MarkerType.ArrowClosed },
-    style: { stroke: 'var(--ant-color-text-tertiary)' },
-    labelStyle: { fill: 'var(--ant-color-text-secondary)', fontSize: 11 },
+    markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--soha-text-tertiary)' },
+    style: { stroke: 'var(--soha-text-tertiary)', strokeWidth: 1.5 },
+    labelStyle: { fill: 'var(--soha-text-secondary)', fontSize: 11 },
+    labelBgStyle: { fill: 'var(--soha-bg-surface)', fillOpacity: 1 },
   }))
 
   return { nodes, edges }
@@ -85,32 +94,151 @@ export function buildResourceGraphFlow(graph: KubernetesResourceGraph): {
 
 function ResourceGraphCanvas({ graph }: { graph: KubernetesResourceGraph }) {
   const navigate = useNavigate()
+  const { localeCode } = useI18n()
   const { fitView } = useReactFlow()
-  const flow = buildResourceGraphFlow(graph)
+  const canvasWidth = useStore((state) => state.width)
+  const canvasHeight = useStore((state) => state.height)
+  const canvasRef = useRef<HTMLDivElement>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const flow = useMemo(() => buildResourceGraphFlow(graph), [graph])
+  const selectedNode = graph.nodes.find((node) => node.id === selectedId)
+  const selectedPath = selectedNode ? buildKubernetesResourcePath(selectedNode.resource) : null
+  const relatedEdges = graph.edges.filter(
+    (edge) => edge.sourceId === selectedId || edge.targetId === selectedId,
+  )
+  const zh = localeCode === 'zh_CN'
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => fitView({ padding: 0.18, duration: 180 }))
     return () => cancelAnimationFrame(frame)
-  }, [fitView, graph.generatedAt])
+  }, [fitView, graph.generatedAt, canvasWidth, canvasHeight])
 
   return (
-    <div style={{ height: 460, minHeight: 360, width: '100%' }}>
-      <ReactFlow<ResourceGraphNode, Edge>
-        aria-label="Kubernetes resource relationships"
-        edges={flow.edges}
-        nodes={flow.nodes}
-        edgesFocusable={false}
-        nodesConnectable={false}
-        nodesDraggable={false}
-        proOptions={{ hideAttribution: true }}
-        onNodeClick={(_, node) => {
-          const path = buildKubernetesResourcePath(node.data.resource)
-          if (path) navigate(path)
-        }}
-      >
-        <Background gap={20} size={1} />
-        <Controls showInteractive={false} />
-      </ReactFlow>
+    <div className="soha-resource-graph-workspace">
+      <div className="soha-resource-graph-canvas" ref={canvasRef}>
+        <ReactFlow<ResourceGraphNode, Edge>
+          aria-label={
+            localeCode === 'zh_CN' ? 'Kubernetes 资源关系图' : 'Kubernetes resource relationships'
+          }
+          edges={flow.edges.map((edge) =>
+            edge.source === selectedId || edge.target === selectedId
+              ? {
+                  ...edge,
+                  style: { stroke: 'var(--soha-primary)', strokeWidth: 1.8 },
+                  markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--soha-primary)' },
+                }
+              : edge,
+          )}
+          nodes={flow.nodes.map((node) => ({
+            ...node,
+            selected: node.id === selectedNode?.id,
+            domAttributes: { 'aria-expanded': node.id === selectedNode?.id },
+          }))}
+          edgesFocusable={false}
+          nodesConnectable={false}
+          nodesDraggable={false}
+          deleteKeyCode={null}
+          multiSelectionKeyCode={null}
+          proOptions={{ hideAttribution: true }}
+          onNodeClick={(_, node) => setSelectedId(node.id)}
+          onNodesChange={(changes) => {
+            const selected = changes.find((change) => change.type === 'select' && change.selected)
+            if (selected?.type === 'select') setSelectedId(selected.id)
+            else if (
+              changes.some(
+                (change) =>
+                  change.type === 'select' && change.id === selectedId && !change.selected,
+              )
+            ) {
+              setSelectedId(null)
+            }
+          }}
+        >
+          <Background gap={20} size={1} color="var(--soha-border-color-strong)" />
+          <Controls showInteractive={false} />
+        </ReactFlow>
+      </div>
+      {selectedNode ? (
+        <aside
+          className="soha-resource-graph-details"
+          aria-label={zh ? '选中资源信息' : 'Selected resource information'}
+        >
+          <div className="soha-resource-graph-details-heading">
+            <Typography.Text type="secondary">{zh ? '已选中' : 'Selected'}</Typography.Text>
+            <Button
+              type="text"
+              icon={<CloseOutlined />}
+              aria-label={zh ? '关闭资源信息' : 'Close resource information'}
+              onClick={() => {
+                canvasRef.current?.querySelector<HTMLElement>('.react-flow__node.selected')?.focus()
+                setSelectedId(null)
+              }}
+            />
+          </div>
+          <Typography.Title level={5}>{selectedNode.resource.kind}</Typography.Title>
+          <Typography.Text className="soha-resource-graph-details-name">
+            {selectedNode.resource.name}
+          </Typography.Text>
+          <dl className="soha-resource-graph-facts">
+            <dt>{zh ? '集群' : 'Cluster'}</dt>
+            <dd>{selectedNode.resource.clusterId}</dd>
+            <dt>{zh ? '命名空间' : 'Namespace'}</dt>
+            <dd>{selectedNode.resource.namespace || (zh ? '集群级' : 'Cluster scoped')}</dd>
+            <dt>API</dt>
+            <dd>{selectedNode.resource.apiVersion}</dd>
+            <dt>{zh ? '状态' : 'Status'}</dt>
+            <dd>
+              <StatusTag value={selectedNode.health || selectedNode.status} />
+            </dd>
+          </dl>
+          <Typography.Text strong>{zh ? '直接关系' : 'Direct relationships'}</Typography.Text>
+          <ul className="soha-resource-graph-relations">
+            {relatedEdges.map((edge) => {
+              const outgoing = edge.sourceId === selectedId
+              const related = graph.nodes.find(
+                (node) => node.id === (outgoing ? edge.targetId : edge.sourceId),
+              )
+              if (!related) return null
+              return (
+                <li key={edge.id}>
+                  <Typography.Text type="secondary">
+                    {edge.relation} · {outgoing ? (zh ? '指向' : 'To') : zh ? '来自' : 'From'}{' '}
+                    {related.resource.kind}
+                  </Typography.Text>
+                  <button
+                    type="button"
+                    className="soha-resource-graph-related-resource"
+                    onClick={() => setSelectedId(related.id)}
+                  >
+                    {related.resource.name}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+          {relatedEdges.length === 0 ? (
+            <Typography.Text type="secondary">
+              {zh ? '暂无直接关系' : 'No direct relationships'}
+            </Typography.Text>
+          ) : null}
+          <div className="soha-resource-graph-details-action">
+            <Button
+              type="primary"
+              disabled={!selectedPath}
+              onClick={() => {
+                if (selectedPath) navigate(selectedPath)
+              }}
+            >
+              {zh ? '查看资源详情' : 'View resource details'}
+            </Button>
+            {!selectedPath ? (
+              <Typography.Text type="secondary">
+                {zh ? '该资源暂无详情入口' : 'No detail page for this resource'}
+              </Typography.Text>
+            ) : null}
+          </div>
+        </aside>
+      ) : null}
     </div>
   )
 }
@@ -165,7 +293,10 @@ export function ResourceGraphPanel({
         <Alert showIcon type="warning" title={graph.warnings.join(' ')} />
       ) : null}
       <ReactFlowProvider>
-        <ResourceGraphCanvas graph={graph} />
+        <ResourceGraphCanvas
+          key={`${graph.clusterId}/${graph.rootId ?? `${kind}/${name}`}`}
+          graph={graph}
+        />
       </ReactFlowProvider>
       {graph.evidence.length ? (
         <section aria-labelledby="resource-evidence-title">
