@@ -1,6 +1,7 @@
 import { api } from '@/services/api-client'
 import type { ApiResponse, Cluster } from '@/types'
 import type {
+  ConnectionCheckResult,
   OperationalPlan,
   VirtualizationWorkerPool,
   VirtualizationWorkerPoolInput,
@@ -151,9 +152,12 @@ export const virtualizationApi = {
     )
   },
   testCluster: async (id: string) => {
-    const response = await api.post<ApiResponse<VirtualizationOperation>>(
+    const response = await api.post<ApiResponse<ConnectionCheckResult>>(
       `${BASE}/clusters/${encodeURIComponent(id)}/test`,
     )
+    if (!response.data?.checkedAt || !response.data.status?.trim()) {
+      throw new Error('Connection checks require a server upgrade to return synchronous results.')
+    }
     return response.data
   },
   syncCluster: async (id: string) => {

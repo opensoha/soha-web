@@ -216,7 +216,8 @@ export function OperationsTable({
             icon={<FileTextOutlined />}
             onClick={() => setSelectedOperation(record)}
           />
-          {canCancelOperations && isPendingOperation(record.status) ? (
+          {canCancelOperations &&
+          (record.operationState?.cancelable ?? isPendingOperation(record.status)) ? (
             <ManagementIconButton
               aria-label={localeText(localeCode, '取消任务', 'Cancel task')}
               size="small"
@@ -227,7 +228,8 @@ export function OperationsTable({
               onClick={() => cancelMutation.mutate(record.id)}
             />
           ) : null}
-          {canRetryOperations && isAbnormalOperation(record.status) ? (
+          {canRetryOperations &&
+          (record.operationState?.retryable ?? isAbnormalOperation(record.status)) ? (
             <ManagementIconButton
               aria-label={localeText(localeCode, '重试任务', 'Retry task')}
               size="small"

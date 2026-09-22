@@ -155,7 +155,6 @@ export function ServiceDetailPage() {
             }
           >
             <ResourceMetricsPanel
-              title="Service Metrics"
               data={metricsQuery.data}
               loading={metricsQuery.isLoading}
             />
@@ -168,7 +167,6 @@ export function ServiceDetailPage() {
       children:
         activeTabKey === 'events' ? (
           <ResourceEventsTimeline
-            title="Service Event Timeline"
             events={eventsQuery.data ?? []}
             loading={eventsQuery.isLoading}
             emptyDescription={

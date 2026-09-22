@@ -1011,7 +1011,6 @@ export function LogExplorer({
                         : '搜索日志内容'
                     }
                     prefix={<SearchOutlined />}
-                    size="large"
                     onSearch={() => {
                       if (targetReady) form.submit()
                     }}

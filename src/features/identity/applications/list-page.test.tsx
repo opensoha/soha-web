@@ -345,14 +345,13 @@ describe('identity applications page behavior', () => {
     const { container, queryClient } = await renderPage()
 
     const toolbar = container.querySelector('.soha-identity-catalog-toolbar')
-    expect(toolbar?.querySelector('form[aria-label="应用筛选"]')).not.toBeNull()
     expect(
       Array.from(
         toolbar?.querySelectorAll(':scope > button') ?? [],
         (button) => button.textContent,
       ),
-    ).toEqual(['刷新', '接入应用', '查询', '重置'])
-    expect(container.querySelector('.soha-management-query-card')).toBeNull()
+    ).toEqual(['接入应用', '刷新'])
+    expect(container.querySelector('.soha-management-query-card form')).not.toBeNull()
     expect(testState.apiGet).toHaveBeenCalledWith('/identity/applications')
     expect(testState.apiGet).not.toHaveBeenCalledWith('/identity/provider-capabilities')
     expect(container.querySelector('[role="article"][aria-label="Grafana"]')).not.toBeNull()

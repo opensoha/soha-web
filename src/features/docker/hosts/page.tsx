@@ -21,7 +21,7 @@ import { formatStatusLabel } from '@/i18n/status'
 import { dockerApi } from '../docker-api'
 import { dockerQueries } from '../queries'
 import type { DockerHost, DockerQuickCreateHostInput } from '../docker-types'
-import { RuntimeHostStepModal } from './create-page'
+import { RuntimeHostModal } from './create-page'
 import {
   ARCHITECTURE_OPTIONS,
   DockerAdminTable,
@@ -313,7 +313,7 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
         showRefresh={!embedded}
         onRefresh={() => hostsQuery.refetch()}
       />
-      <RuntimeHostStepModal
+      <RuntimeHostModal
         editing={editing}
         open={editorOpen}
         onClose={() => {

@@ -547,7 +547,6 @@ export function PodDetailPage() {
       activeTabKey === 'metrics' ? (
         <Suspense fallback={<Spin size="large" />}>
           <ResourceMetricsPanel
-            title={localeCode === 'zh_CN' ? 'Pod 指标' : 'Pod Metrics'}
             data={podMetricsQuery.data}
             loading={podMetricsQuery.isLoading}
             rangeMinutes={metricsRangeMinutes}
@@ -568,7 +567,6 @@ export function PodDetailPage() {
     label: localeCode === 'zh_CN' ? '事件' : 'Events',
     children: (
       <ResourceEventsTimeline
-        title={localeCode === 'zh_CN' ? 'Pod 事件时间线' : 'Pod Event Timeline'}
         events={podTimelineEvents}
         loading={podEventsQuery.isLoading}
         emptyDescription={
@@ -586,7 +584,6 @@ export function PodDetailPage() {
     children: (
       <Card
         className="soha-detail-card"
-        title={localeCode === 'zh_CN' ? 'Pod 卷与挂载' : 'Pod Volumes & Mounts'}
       >
         <AdminTable
           className="soha-pod-volumes-table"
@@ -614,7 +611,6 @@ export function PodDetailPage() {
     children: (
       <Card
         className="soha-detail-card"
-        title={localeCode === 'zh_CN' ? 'Pod 关联资源' : 'Pod Related Resources'}
       >
         <AdminTable
           shellClassName="soha-management-table-shell"

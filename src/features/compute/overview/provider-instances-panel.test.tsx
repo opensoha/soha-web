@@ -113,6 +113,29 @@ describe('provider instances panel', () => {
     expect(refetch).toHaveBeenCalledTimes(1)
   })
 
+  it('shows unhealthy probe details without navigating to task history', () => {
+    const health = vi.fn()
+    vi.mocked(useQuery).mockReturnValue(providerQuery() as never)
+    vi.mocked(useMutation).mockReturnValue({ isPending: false, mutate: health } as never)
+    const container = render(
+      <>
+        <ProviderInstancesPanel canTest canDiscover={false} enabled localeCode="zh_CN" />
+        <LocationProbe />
+      </>,
+    )
+    act(() =>
+      container.querySelector<HTMLButtonElement>('button[aria-label="检查连接健康"]')?.click(),
+    )
+    act(() =>
+      health.mock.calls[0][1].onSuccess({
+        data: { healthy: false, status: 'degraded', message: 'KubeVirt CRD unavailable' },
+      }),
+    )
+    expect(document.body.textContent).toContain('连接异常')
+    expect(document.body.textContent).toContain('KubeVirt CRD unavailable')
+    expect(container.querySelector('output')?.textContent).toBe('/')
+  })
+
   it.each([
     { action: 'health', label: '检查连接健康', input: { expectedGeneration: 1 } },
     {
@@ -156,11 +179,27 @@ describe('provider instances panel', () => {
       )
       expect(action === 'health' ? discover : health).not.toHaveBeenCalled()
       act(() =>
-        mutation.mock.calls[0][1].onSuccess({ data: { domain: 'virtualization', id: 'task-1' } }),
+        mutation.mock.calls[0][1].onSuccess({
+          data:
+            action === 'health'
+              ? { healthy: true, status: 'healthy', message: 'Provider reachable' }
+              : {
+                  domain: 'virtualization',
+                  id: 'task-1',
+                  normalizedStatus: 'succeeded',
+                  result: { summary: 'Provider reachable' },
+                },
+        }),
       )
       expect(container.querySelector('output')?.textContent).toBe(
-        '/compute/tasks/operations?domain=virtualization&taskId=task-1&view=logs',
+        action === 'health'
+          ? '/'
+          : '/compute/tasks/operations?domain=virtualization&taskId=task-1&view=logs',
       )
+      if (action === 'health') {
+        expect(document.body.textContent).toContain('连接正常')
+        expect(document.body.textContent).toContain('Provider reachable')
+      }
     },
   )
 })

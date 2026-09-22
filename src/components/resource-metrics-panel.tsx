@@ -621,7 +621,7 @@ export function ResourceMetricsPanel({
   resourceLimits,
   compact = false,
 }: {
-  title: string
+  title?: string
   data?: MetricsSnapshot
   loading?: boolean
   rangeMinutes?: number

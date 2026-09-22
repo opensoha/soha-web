@@ -270,7 +270,6 @@ export function DeploymentDetailPage() {
         }
       >
         <ResourceMetricsPanel
-          title={localeCode === 'zh_CN' ? 'Deployment 指标' : 'Deployment Metrics'}
           data={metricsQuery.data}
           loading={metricsQuery.isLoading}
         />
@@ -283,7 +282,6 @@ export function DeploymentDetailPage() {
     label: localeCode === 'zh_CN' ? '事件' : 'Events',
     children: (
       <ResourceEventsTimeline
-        title={localeCode === 'zh_CN' ? 'Deployment 事件时间线' : 'Deployment Event Timeline'}
         events={deploymentTimelineEvents}
         loading={deploymentEventsQuery.isLoading}
         emptyDescription={

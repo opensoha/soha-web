@@ -1,3 +1,4 @@
+import { StepForm } from '@/components/step-form'
 import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
 import {
   CheckOutlined,
@@ -6,21 +7,11 @@ import {
   PlusOutlined,
   ReloadOutlined,
 } from '@ant-design/icons'
-import {
-  App,
-  Button,
-  Card,
-  Form,
-  Input,
-  InputNumber,
-  Modal,
-  Select,
-  Space,
-  Switch,
-} from 'antd'
+import { App, Button, Card, Form, Input, InputNumber, Select, Space, Switch, Tabs } from 'antd'
 import type { TableProps } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ReleaseDagDefinition } from '@/components/release-flow-dag-definition'
+import { StepFormModal } from '@/components/step-form-modal'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementIconButton } from '@/components/management-list'
 import { BooleanTag, MetadataTag, StatusTag } from '@/components/status-tag'
@@ -45,6 +36,7 @@ export function HealingPage() {
   const canRejectHealing = hasPermission(permissionSnapshot, 'observe.healing.reject')
   const canRetryHealing = hasPermission(permissionSnapshot, 'observe.healing.retry')
   const [form] = Form.useForm<HealingPolicyFormValues>()
+  const [step, setStep] = useState(0)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<HealingPolicy | null>(null)
   const [definition, setDefinition] = useState<ReleaseDagDefinition>()
@@ -73,6 +65,7 @@ export function HealingPage() {
   })
 
   function openEditor(record: HealingPolicy | null) {
+    setStep(0)
     setEditing(record)
     setOpen(true)
     const defaults = record ?? {
@@ -153,51 +146,52 @@ export function HealingPage() {
       { title: '创建时间', dataIndex: 'createdAt', render: formatDateTime },
       {
         title: '操作',
+        key: 'actions',
         dataIndex: 'id',
         render: (value: string, record) => (
           <Space>
             {canApproveHealing ? (
-                <Button
-                  size="small"
-                  icon={<CheckOutlined />}
-                  disabled={['completed', 'rejected'].includes(record.status)}
-                  onClick={() =>
-                    approveMutation.mutate(
-                      { id: value, comment: 'approved from console' },
-                      { onSuccess: () => message.success('已审批通过') },
-                    )
-                  }
-                >
-                  通过
-                </Button>
+              <Button
+                size="small"
+                icon={<CheckOutlined />}
+                disabled={['completed', 'rejected'].includes(record.status)}
+                onClick={() =>
+                  approveMutation.mutate(
+                    { id: value, comment: 'approved from console' },
+                    { onSuccess: () => message.success('已审批通过') },
+                  )
+                }
+              >
+                通过
+              </Button>
             ) : null}
             {canRejectHealing ? (
-                <Button
-                  size="small"
-                  icon={<CloseOutlined />}
-                  disabled={['completed', 'rejected'].includes(record.status)}
-                  onClick={() =>
-                    rejectMutation.mutate(
-                      { id: value, comment: 'rejected from console' },
-                      { onSuccess: () => message.success('已拒绝') },
-                    )
-                  }
-                >
-                  拒绝
-                </Button>
+              <Button
+                size="small"
+                icon={<CloseOutlined />}
+                disabled={['completed', 'rejected'].includes(record.status)}
+                onClick={() =>
+                  rejectMutation.mutate(
+                    { id: value, comment: 'rejected from console' },
+                    { onSuccess: () => message.success('已拒绝') },
+                  )
+                }
+              >
+                拒绝
+              </Button>
             ) : null}
             {canRetryHealing ? (
-                <Button
-                  size="small"
-                  icon={<ReloadOutlined />}
-                  onClick={() =>
-                    retryMutation.mutate(value, {
-                      onSuccess: () => message.success('已重试'),
-                    })
-                  }
-                >
-                  重试
-                </Button>
+              <Button
+                size="small"
+                icon={<ReloadOutlined />}
+                onClick={() =>
+                  retryMutation.mutate(value, {
+                    onSuccess: () => message.success('已重试'),
+                  })
+                }
+              >
+                重试
+              </Button>
             ) : null}
           </Space>
         ),
@@ -236,6 +230,7 @@ export function HealingPage() {
     },
     {
       title: '操作',
+      key: 'actions',
       dataIndex: 'id',
       render: (_: string, record) =>
         canUpdateHealing ? (
@@ -252,110 +247,149 @@ export function HealingPage() {
 
   return (
     <div className="soha-page">
-      <AdminTable
-        title="自愈策略"
-        headerExtra={
-          canCreateHealing ? (
-            <Button icon={<PlusOutlined />} type="primary" onClick={() => openEditor(null)}>
-              新建自愈策略
-            </Button>
-          ) : null
-        }
-        shellClassName="soha-management-table-shell"
-        columns={policyColumns}
-        dataSource={policiesQuery.data ?? []}
-        rowKey="id"
-        loading={policiesQuery.isLoading}
+      <h1 className="soha-observability-page-heading">自愈中心</h1>
+      <Tabs
+        className="soha-resource-tabs"
+        defaultActiveKey="policies"
+        items={[
+          {
+            key: 'policies',
+            label: '自愈策略',
+            children: (
+              <AdminTable
+                enableDensity
+                error={policiesQuery.error}
+                refreshing={policiesQuery.isFetching}
+                onRefresh={() => void policiesQuery.refetch()}
+                columnSettingPlacement="header"
+                columnSettingIconOnly
+                headerExtra={
+                  canCreateHealing ? (
+                    <Button icon={<PlusOutlined />} type="primary" onClick={() => openEditor(null)}>
+                      新建自愈策略
+                    </Button>
+                  ) : null
+                }
+                shellClassName="soha-management-table-shell"
+                columns={policyColumns}
+                dataSource={policiesQuery.data ?? []}
+                rowKey="id"
+                loading={policiesQuery.isLoading}
+              />
+            ),
+          },
+          {
+            key: 'runs',
+            label: '执行记录',
+            children: (
+              <AdminTable
+                enableDensity
+                error={runsQuery.error}
+                refreshing={runsQuery.isFetching}
+                onRefresh={() => void runsQuery.refetch()}
+                columnSettingPlacement="header"
+                columnSettingIconOnly
+                shellClassName="soha-management-table-shell"
+                columns={runColumns}
+                dataSource={runsQuery.data ?? []}
+                rowKey="id"
+                loading={runsQuery.isLoading}
+                pagination={{ pageSize: 10 }}
+              />
+            ),
+          },
+        ]}
       />
-      <Card className="soha-overview-panel-card" title="自愈运行">
-        <AdminTable
-          shellClassName="soha-management-table-shell"
-          columns={runColumns}
-          dataSource={runsQuery.data ?? []}
-          rowKey="id"
-          loading={runsQuery.isLoading}
-          pagination={{ pageSize: 10 }}
-        />
-      </Card>
 
-      <Modal
+      <StepFormModal
         title={editing ? '编辑自愈策略' : '新建自愈策略'}
         open={open}
-        onCancel={() => {
+        onClose={() => {
           setOpen(false)
           setEditing(null)
         }}
-        footer={null}
-        width={1180}
-        destroyOnHidden
+        width={step === 2 ? 1180 : 760}
       >
-        <Form
-          layout="vertical"
-          form={form}
-          onFinish={submit}
-          initialValues={{
-            triggerMode: 'approval_then_auto',
-            cooldownSeconds: 300,
-            safetyWindowSeconds: 600,
-            enabled: true,
+        <StepForm
+          onCancel={() => {
+            setOpen(false)
+            setEditing(null)
           }}
-        >
-          <Space size={16} style={{ width: '100%' }}>
-            <Form.Item name="name" label="名称" rules={[{ required: true }]} style={{ flex: 1 }}>
-              <Input />
-            </Form.Item>
-            <Form.Item name="triggerMode" label="触发模式" style={{ width: 240 }}>
-              <Select
-                options={[
-                  { value: 'approval_then_auto', label: '审批后自动' },
-                  { value: 'manual', label: '仅手动' },
-                ]}
-              />
-            </Form.Item>
-            <Form.Item
-              name="workflowTemplateId"
-              label="工作流模板 ID"
-              rules={[{ required: true }]}
-              style={{ flex: 1 }}
-            >
-              <Input />
-            </Form.Item>
-          </Space>
-          <Space size={16} style={{ width: '100%' }}>
-            <Form.Item name="approvalPolicyRef" label="审批策略引用" style={{ flex: 1 }}>
-              <Input />
-            </Form.Item>
-            <Form.Item name="concurrencyKey" label="并发键" style={{ flex: 1 }}>
-              <Input />
-            </Form.Item>
-            <Form.Item name="cooldownSeconds" label="冷却(s)" style={{ width: 180 }}>
-              <InputNumber min={0} style={{ width: '100%' }} />
-            </Form.Item>
-            <Form.Item name="safetyWindowSeconds" label="安全窗(s)" style={{ width: 180 }}>
-              <InputNumber min={0} style={{ width: '100%' }} />
-            </Form.Item>
-          </Space>
-          <Form.Item name="enabled" label="启用" valuePropName="checked">
-            <Switch />
-          </Form.Item>
-          <Card title="自愈 DAG" size="small">
-            <Suspense fallback={<Card loading variant="borderless" />}>
-              <HealingDagEditor initialDefinition={definition} onChange={updateDefinition} />
-            </Suspense>
-          </Card>
-          <Space style={{ marginTop: 16 }}>
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={createMutation.isPending || updateMutation.isPending}
-              disabled={!definition}
-            >
-              保存
-            </Button>
-            <Button onClick={() => setOpen(false)}>取消</Button>
-          </Space>
-        </Form>
-      </Modal>
+          contentMaxWidth="100%"
+          form={form}
+          current={step}
+          onCurrentChange={setStep}
+          onFinish={submit}
+          loading={createMutation.isPending || updateMutation.isPending}
+          steps={[
+            {
+              title: '基础与触发',
+              fieldNames: ['name', 'workflowTemplateId', 'triggerMode'],
+              children: (
+                <div className="soha-observability-form-grid">
+                  <Form.Item name="name" label="名称" rules={[{ required: true }]}>
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name="triggerMode" label="触发模式">
+                    <Select
+                      options={[
+                        { value: 'approval_then_auto', label: '审批后自动' },
+                        { value: 'manual', label: '仅手动' },
+                      ]}
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    name="workflowTemplateId"
+                    label="工作流模板 ID"
+                    rules={[{ required: true }]}
+                  >
+                    <Input />
+                  </Form.Item>
+                </div>
+              ),
+            },
+            {
+              title: '安全约束',
+              fieldNames: ['cooldownSeconds', 'safetyWindowSeconds'],
+              children: (
+                <>
+                  <div className="soha-observability-form-grid">
+                    <Form.Item name="approvalPolicyRef" label="审批策略引用">
+                      <Input />
+                    </Form.Item>
+                    <Form.Item name="concurrencyKey" label="并发键">
+                      <Input />
+                    </Form.Item>
+                    <Form.Item name="cooldownSeconds" label="冷却(s)">
+                      <InputNumber min={0} style={{ width: '100%' }} />
+                    </Form.Item>
+                    <Form.Item name="safetyWindowSeconds" label="安全窗(s)">
+                      <InputNumber min={0} style={{ width: '100%' }} />
+                    </Form.Item>
+                  </div>
+                  <Form.Item name="enabled" label="启用" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                </>
+              ),
+            },
+            {
+              title: '自愈 DAG',
+              children:
+                step === 2 ? (
+                  <>
+                    <Suspense fallback={<Card loading variant="borderless" />}>
+                      <HealingDagEditor
+                        initialDefinition={definition}
+                        onChange={updateDefinition}
+                      />
+                    </Suspense>
+                  </>
+                ) : null,
+            },
+          ]}
+        />
+      </StepFormModal>
     </div>
   )
 }

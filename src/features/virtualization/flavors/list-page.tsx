@@ -6,6 +6,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Modal,
   Popconfirm,
   Select,
   Space,
@@ -16,7 +17,7 @@ import type { ColumnsType } from 'antd/es/table'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { hasAllowedAction } from '@/features/auth'
 import { tableColumnPresets } from '@/utils/table-columns'
-import { StepFormModal } from '@/components/step-form-modal'
+import { scrollableModalBodyStyle } from '@/components/modal-styles'
 import { BooleanTag } from '@/components/status-tag'
 import { ManagementDataPage } from '@/components/management-data-page'
 import { localeText, useI18n } from '@/i18n'
@@ -64,7 +65,6 @@ function tableTooltipText(value: unknown) {
 export function VirtualizationFlavorsPage() {
   const [editing, setEditing] = useState<VirtualizationFlavor | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [currentStep, setCurrentStep] = useState(0)
   const [flavorFilters, setFlavorFilters] = useState<{ enabled?: EnabledFilter; search?: string }>({
     enabled: 'all',
   })
@@ -111,7 +111,6 @@ export function VirtualizationFlavorsPage() {
   const savePending = createMutation.isPending || updateMutation.isPending
   function openEditor(record?: VirtualizationFlavor) {
     setEditing(record ?? null)
-    setCurrentStep(0)
     form.resetFields()
     form.setFieldsValue(record ?? { enabled: true })
     setDrawerOpen(true)
@@ -258,83 +257,76 @@ export function VirtualizationFlavorsPage() {
         />
       }
       afterTable={
-        <StepFormModal
+        <Modal
           title={
             editing
               ? localeText(localeCode, '编辑规格', 'Edit flavor')
               : localeText(localeCode, '新增规格', 'Add flavor')
           }
-          current={currentStep}
-          form={form}
-          loading={savePending}
           open={drawerOpen}
-          onClose={() => setDrawerOpen(false)}
-          onCurrentChange={setCurrentStep}
-          onFinish={(values) =>
-            editing
-              ? updateMutation.mutate({ id: editing.id, payload: values })
-              : createMutation.mutate(values)
-          }
-          initialValues={{ cpu: 2, memoryMiB: 4096, diskGiB: 40, enabled: true }}
-          steps={[
-            {
-              title: localeText(localeCode, '基本信息', 'Basic information'),
-              fieldNames: ['name'],
-              children: (
-                <>
-                  <Form.Item
-                    name="name"
-                    label={localeText(localeCode, '名称', 'Name')}
-                    rules={[{ required: true }]}
-                  >
-                    <Input />
-                  </Form.Item>
-                  <Form.Item
-                    name="enabled"
-                    label={localeText(localeCode, '启用', 'Enabled')}
-                    valuePropName="checked"
-                  >
-                    <Switch />
-                  </Form.Item>
-                </>
-              ),
-            },
-            {
-              title: localeText(localeCode, '资源规格', 'Resources'),
-              fieldNames: ['cpu', 'memoryMiB', 'diskGiB'],
-              children: (
-                <>
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <Form.Item name="cpu" label="CPU" rules={[{ required: true }]}>
-                      <InputNumber min={1} className="w-full" />
-                    </Form.Item>
-                    <Form.Item
-                      name="memoryMiB"
-                      label={localeText(localeCode, '内存 MiB', 'Memory MiB')}
-                      rules={[{ required: true }]}
-                    >
-                      <InputNumber min={128} className="w-full" />
-                    </Form.Item>
-                    <Form.Item
-                      name="diskGiB"
-                      label={localeText(localeCode, '磁盘 GiB', 'Disk GiB')}
-                      rules={[{ required: true }]}
-                    >
-                      <InputNumber min={1} className="w-full" />
-                    </Form.Item>
-                  </div>
-                  <Form.Item
-                    name="description"
-                    label={localeText(localeCode, '描述', 'Description')}
-                  >
-                    <Input.TextArea rows={3} />
-                  </Form.Item>
-                </>
-              ),
-            },
-          ]}
-          submitText={localeText(localeCode, '保存', 'Save')}
-        />
+          onCancel={() => setDrawerOpen(false)}
+          onOk={() => form.submit()}
+          confirmLoading={savePending}
+          okText={localeText(localeCode, '保存', 'Save')}
+          cancelText={localeText(localeCode, '取消', 'Cancel')}
+          width={720}
+          destroyOnHidden
+          mask={{ closable: false }}
+          style={{ top: 32 }}
+          styles={{ body: { ...scrollableModalBodyStyle, maxHeight: 'calc(100dvh - 180px)' } }}
+        >
+          <Form<VirtualizationFlavorInput>
+            form={form}
+            layout="vertical"
+            preserve={false}
+            onFinish={(values) =>
+              editing
+                ? updateMutation.mutate({ id: editing.id, payload: values })
+                : createMutation.mutate(values)
+            }
+            initialValues={editing ?? { cpu: 2, memoryMiB: 4096, diskGiB: 40, enabled: true }}
+          >
+            <div className="soha-vrt-form-grid soha-vrt-form-grid--2">
+              <Form.Item
+                name="name"
+                label={localeText(localeCode, '名称', 'Name')}
+                rules={[{ required: true }]}
+              >
+                <Input />
+              </Form.Item>
+              <Form.Item
+                name="enabled"
+                label={localeText(localeCode, '启用', 'Enabled')}
+                valuePropName="checked"
+              >
+                <Switch />
+              </Form.Item>
+            </div>
+
+            <div className="soha-vrt-form-grid soha-vrt-form-grid--3">
+              <Form.Item name="cpu" label="CPU" rules={[{ required: true }]}>
+                <InputNumber min={1} className="soha-vrt-fill" />
+              </Form.Item>
+              <Form.Item
+                name="memoryMiB"
+                label={localeText(localeCode, '内存 MiB', 'Memory MiB')}
+                rules={[{ required: true }]}
+              >
+                <InputNumber min={128} className="soha-vrt-fill" />
+              </Form.Item>
+              <Form.Item
+                name="diskGiB"
+                label={localeText(localeCode, '磁盘 GiB', 'Disk GiB')}
+                rules={[{ required: true }]}
+              >
+                <InputNumber min={1} className="soha-vrt-fill" />
+              </Form.Item>
+            </div>
+            <Form.Item name="description" label={localeText(localeCode, '描述', 'Description')}>
+              <Input.TextArea rows={3} />
+            </Form.Item>
+          </Form>
+        </Modal>
       }
     />
   )

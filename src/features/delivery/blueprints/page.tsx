@@ -20,13 +20,13 @@ import {
   EditOutlined,
   EyeOutlined,
   PlusOutlined,
-  ReloadOutlined,
   SaveOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ManagementIconButton,
+  ManagementRefreshButton,
   ManagementSearchableListPane,
   ManagementState,
   TemplateDesignerShell,
@@ -108,11 +108,7 @@ const FILE_KIND_OPTIONS = [
 ]
 
 type FileTemplatePreset =
-  | 'dockerfile'
-  | 'yaml_manifest'
-  | 'helm_values'
-  | 'helm_chart'
-  | 'kustomization'
+  'dockerfile' | 'yaml_manifest' | 'helm_values' | 'helm_chart' | 'kustomization'
 
 interface FileTemplateDraft {
   path: string
@@ -644,6 +640,7 @@ export function DeliveryBlueprintsPage() {
   const [specModalVisible, setSpecModalVisible] = useState(false)
   const [renderedSpec, setRenderedSpec] = useState<RenderedDeliverySpec | null>(null)
   const suppressFormChangeRef = useRef(false)
+  const loadedQueryIdRef = useRef<string | null>(null)
 
   const blueprintsQuery = useQuery(deliveryQueries.blueprints.list())
   const environmentsQuery = useQuery(deliveryQueries.environments.list())
@@ -742,10 +739,13 @@ export function DeliveryBlueprintsPage() {
   useEffect(() => {
     if (!blueprints.length) return
     const queryBlueprintId = searchParams.get('templateId') || searchParams.get('blueprintId')
+    // Ignore the previous URL while a local template selection is navigating.
+    const queryChanged = queryBlueprintId !== loadedQueryIdRef.current
+    loadedQueryIdRef.current = queryBlueprintId
     const queryBlueprint = queryBlueprintId
       ? blueprints.find((item) => item.id === queryBlueprintId)
       : undefined
-    if (queryBlueprint && queryBlueprint.id !== selectedBlueprintId && !isDirty) {
+    if (queryChanged && queryBlueprint && queryBlueprint.id !== selectedBlueprintId && !isDirty) {
       loadBlueprint(queryBlueprint)
       return
     }
@@ -1633,18 +1633,12 @@ export function DeliveryBlueprintsPage() {
   ]
 
   const blueprintToolbar = (
-    <>
+    <header className="soha-delivery-blueprint-toolbar" aria-label="当前接入模板操作">
+      {hasSelection ? isDirty ? <Tag color="gold">未保存</Tag> : <Tag>已同步</Tag> : null}
       <Space wrap>
         <Button
-          icon={<PlusOutlined />}
-          type="primary"
-          disabled={!canManage}
-          onClick={handleNewBlueprint}
-        >
-          新建模板
-        </Button>
-        <Button
           icon={<SaveOutlined />}
+          type="primary"
           disabled={!hasSelection || !canManage}
           loading={createMutation.isPending || updateMutation.isPending}
           onClick={() => void handleSave()}
@@ -1663,19 +1657,7 @@ export function DeliveryBlueprintsPage() {
           渲染规范
         </Button>
       </Space>
-      <Space wrap>
-        {isDirty ? <Tag color="gold">未保存</Tag> : <Tag>已同步</Tag>}
-        <Button
-          icon={<ReloadOutlined />}
-          loading={blueprintsQuery.isFetching}
-          onClick={() => {
-            if (confirmDiscardChanges()) void blueprintsQuery.refetch()
-          }}
-        >
-          刷新
-        </Button>
-      </Space>
-    </>
+    </header>
   )
 
   const blueprintList = (
@@ -1691,6 +1673,28 @@ export function DeliveryBlueprintsPage() {
       items={visibleListItems}
       searchPlaceholder="搜索接入模板"
       searchValue={searchText}
+      searchActions={
+        <>
+          <ManagementIconButton
+            aria-label="新建模板"
+            tooltip="新建模板"
+            icon={<PlusOutlined />}
+            color="primary"
+            variant="solid"
+            disabled={!canManage}
+            onClick={handleNewBlueprint}
+          />
+
+          <ManagementRefreshButton
+            tooltip="刷新"
+            aria-label="刷新"
+            loading={blueprintsQuery.isFetching}
+            onClick={() => {
+              if (confirmDiscardChanges()) void blueprintsQuery.refetch()
+            }}
+          />
+        </>
+      }
       onItemSelect={handleSelectListItem}
       onRetry={() => void blueprintsQuery.refetch()}
       onSearchChange={setSearchText}
@@ -1787,11 +1791,14 @@ export function DeliveryBlueprintsPage() {
   return (
     <TemplateDesignerShell
       className="soha-page soha-delivery-blueprint-page"
-      designer={blueprintDesigner}
+      designer={
+        <>
+          {blueprintToolbar}
+          {blueprintDesigner}
+        </>
+      }
       designerClassName="soha-delivery-blueprint-designer"
       list={blueprintList}
-      toolbar={blueprintToolbar}
-      toolbarClassName="soha-delivery-blueprint-toolbar"
       workspaceClassName="soha-delivery-blueprint-workspace"
     >
       <Modal

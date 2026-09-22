@@ -20,6 +20,7 @@ import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementIconButton,
   ManagementKeywordField,
+  ManagementQueryActions,
   ManagementQueryField,
   ManagementRefreshButton,
   ManagementState,
@@ -27,7 +28,7 @@ import {
 } from '@/components/management-list'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { localeText, useI18n } from '@/i18n'
+import { useI18n } from '@/i18n'
 import type { IdentityApplication, IdentityApplicationInput } from '../shared/types'
 import { identityRuntimeQueries } from '../runtime'
 import {
@@ -51,13 +52,14 @@ import { identityApplicationMutations } from './mutations'
 import { IdentityApplicationNameCell, identityApplicationAssignmentsSummary } from './presentation'
 import { identityApplicationQueries } from './queries'
 import type { IdentityApplicationFilters } from './types'
+import '../shared/application-access.css'
 import './styles.css'
 
 const { Text } = Typography
 
 export function IdentityApplicationsPage() {
   const { message } = App.useApp()
-  const { localeCode, t } = useI18n()
+  const { t } = useI18n()
   const queryClient = useQueryClient()
   const [queryForm] = Form.useForm<IdentityApplicationFilters>()
   const [filters, setFilters] = useState<IdentityApplicationFilters>({
@@ -210,7 +212,7 @@ export function IdentityApplicationsPage() {
   return (
     <>
       <ManagementDataPage
-        className="soha-identity-applications-page"
+        className="soha-identity-access-page soha-identity-applications-page"
         beforeQuery={
           applicationsQuery.isError && (
             <ManagementState
@@ -225,6 +227,45 @@ export function IdentityApplicationsPage() {
             />
           )
         }
+        query={{
+          form: queryForm,
+          initialValues: { query: '', status: '' },
+          onFinish: (values) => {
+            setFilters({
+              query: String(values.query ?? '').trim(),
+              status: values.status ?? '',
+            })
+            setPagination((current) => ({ ...current, current: 1 }))
+          },
+          actions: (
+            <ManagementQueryActions
+              disabledReset={!filters.query && !filters.status}
+              loading={applicationsQuery.isFetching}
+              onReset={resetFilters}
+            />
+          ),
+          children: (
+            <>
+              <ManagementKeywordField
+                label={t('identity.applications.keyword', '关键词')}
+                name="query"
+                placeholder={t('identity.applications.search', '搜索名称、slug')}
+              />
+              <ManagementQueryField
+                label={t('identity.applications.status', '状态')}
+                name="status"
+                width={180}
+                minWidth={180}
+              >
+                <Select
+                  allowClear
+                  options={identityApplicationStatusOptions}
+                  placeholder={t('identity.applications.status', '状态')}
+                />
+              </ManagementQueryField>
+            </>
+          ),
+        }}
         tableNode={
           <section
             className="soha-identity-application-catalog"
@@ -232,40 +273,16 @@ export function IdentityApplicationsPage() {
             aria-busy={applicationsQuery.isFetching}
           >
             <div className="soha-identity-catalog-toolbar">
-              <Form<IdentityApplicationFilters>
-                id="identity-application-filters"
-                className="soha-identity-catalog-filters"
-                aria-label="应用筛选"
-                layout="inline"
-                form={queryForm}
-                initialValues={{ query: '', status: '' }}
-                onFinish={(values) => {
-                  setFilters({
-                    query: String(values.query ?? '').trim(),
-                    status: values.status ?? '',
-                  })
-                  setPagination((current) => ({ ...current, current: 1 }))
-                }}
-              >
-                <ManagementKeywordField
-                  label={t('identity.applications.keyword', '关键词')}
-                  name="query"
-                  placeholder={t('identity.applications.search', '搜索名称、slug')}
-                />
-                <ManagementQueryField
-                  label={t('identity.applications.status', '状态')}
-                  name="status"
-                  width={180}
-                  minWidth={180}
-                >
-                  <Select
-                    allowClear
-                    options={identityApplicationStatusOptions}
-                    placeholder={t('identity.applications.status', '状态')}
-                  />
-                </ManagementQueryField>
-              </Form>
               <ManagementTableToolbar>
+                <Button
+                  autoInsertSpace={false}
+                  disabled={!canCreate}
+                  icon={<PlusOutlined />}
+                  type="primary"
+                  onClick={openCreate}
+                >
+                  接入应用
+                </Button>
                 <ManagementRefreshButton
                   aria-label={t('common.refresh', '刷新')}
                   loading={applicationsQuery.isFetching}
@@ -273,39 +290,13 @@ export function IdentityApplicationsPage() {
                   tooltip={t('common.refresh', '刷新')}
                   onClick={() => void applicationsQuery.refetch()}
                 />
-                <Button
-                  autoInsertSpace={false}
-                  disabled={!canCreate}
-                  icon={<PlusOutlined />}
-                  size="small"
-                  type="primary"
-                  onClick={openCreate}
-                >
-                  接入应用
-                </Button>
-                <Button
-                  autoInsertSpace={false}
-                  form="identity-application-filters"
-                  htmlType="submit"
-                  loading={applicationsQuery.isFetching}
-                  type="primary"
-                >
-                  {localeText(localeCode, '查询', 'Query')}
-                </Button>
-                <Button
-                  autoInsertSpace={false}
-                  disabled={!filters.query && !filters.status}
-                  onClick={resetFilters}
-                >
-                  {t('common.reset', '重置')}
-                </Button>
               </ManagementTableToolbar>
             </div>
             {applicationsQuery.isError ? null : applicationsQuery.isLoading ? (
               <ManagementState kind="loading" title="正在读取应用目录" />
             ) : applications.length ? (
               <>
-                <div className="soha-identity-application-grid">
+                <div className="soha-identity-application-list">
                   {visibleApplications.map((application) => {
                     const conditions = identityApplicationAccessPolicyFor(application)
                     const updating =
@@ -316,46 +307,25 @@ export function IdentityApplicationsPage() {
                         key={application.id}
                         size="small"
                         className="soha-identity-application-card"
+                        classNames={{ body: 'soha-identity-application-card-body' }}
                         role="article"
                         aria-label={application.name}
                       >
                         <div className="soha-identity-application-card-heading">
                           <IdentityApplicationNameCell application={application} />
-                          <Space size={0}>
-                            <ManagementIconButton
-                              aria-label={t('common.edit', '编辑')}
-                              disabled={!canUpdate}
-                              icon={<EditOutlined />}
-                              tooltip={t('common.edit', '编辑')}
-                              onClick={() => openEdit(application)}
-                            />
-                            <Popconfirm
-                              cancelText={t('common.cancel', '取消')}
-                              disabled={!canDelete}
-                              okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
-                              okText={t('common.delete', '删除')}
-                              title={`删除 ${application.name}`}
-                              onConfirm={() =>
-                                deleteMutation.mutate(application.id, {
-                                  onSuccess: () =>
-                                    message.success(
-                                      t('identity.applications.deleted', '应用已删除'),
-                                    ),
-                                })
-                              }
-                            >
-                              <ManagementIconButton
-                                aria-label={t('common.delete', '删除')}
-                                danger
-                                disabled={!canDelete}
-                                icon={<DeleteOutlined />}
-                                tooltip={t('common.delete', '删除')}
-                              />
-                            </Popconfirm>
-                          </Space>
                         </div>
-                        <div className="soha-identity-application-card-state">
+                        <div className="soha-identity-application-card-field">
+                          <Text type="secondary">Slug</Text>
+                          <Text ellipsis title={application.slug}>
+                            {application.slug}
+                          </Text>
+                        </div>
+                        <div className="soha-identity-application-card-field">
+                          <Text type="secondary">{t('common.type', '类型')}</Text>
                           <MetadataTag label={application.providerType.toUpperCase()} />
+                        </div>
+                        <div className="soha-identity-application-card-field">
+                          <Text type="secondary">{t('identity.applications.status', '状态')}</Text>
                           <StatusTag value={application.status} />
                         </div>
                         <div className="soha-identity-application-card-access">
@@ -419,6 +389,40 @@ export function IdentityApplicationsPage() {
                               }
                             />
                           </label>
+                        </div>
+                        <div className="soha-identity-application-card-actions">
+                          <Space size={0}>
+                            <ManagementIconButton
+                              aria-label={t('common.edit', '编辑')}
+                              disabled={!canUpdate}
+                              icon={<EditOutlined />}
+                              tooltip={t('common.edit', '编辑')}
+                              onClick={() => openEdit(application)}
+                            />
+                            <Popconfirm
+                              cancelText={t('common.cancel', '取消')}
+                              disabled={!canDelete}
+                              okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
+                              okText={t('common.delete', '删除')}
+                              title={`删除 ${application.name}`}
+                              onConfirm={() =>
+                                deleteMutation.mutate(application.id, {
+                                  onSuccess: () =>
+                                    message.success(
+                                      t('identity.applications.deleted', '应用已删除'),
+                                    ),
+                                })
+                              }
+                            >
+                              <ManagementIconButton
+                                aria-label={t('common.delete', '删除')}
+                                danger
+                                disabled={!canDelete}
+                                icon={<DeleteOutlined />}
+                                tooltip={t('common.delete', '删除')}
+                              />
+                            </Popconfirm>
+                          </Space>
                         </div>
                       </Card>
                     )

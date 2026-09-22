@@ -52,6 +52,7 @@ import type {
   IdentityOutpostInput,
   IdentityOutpostMode,
 } from './types'
+import '../shared/application-access.css'
 import './styles.css'
 
 const { Text } = Typography
@@ -224,9 +225,6 @@ export function IdentityOutpostsPage() {
   )
   const nodeActions = (outpost: IdentityOutpost) => (
     <Space size={4}>
-      <Button size="small" onClick={() => showDetails(outpost.id, 'diagnostics')}>
-        诊断
-      </Button>
       <ManagementIconButton
         disabled={!canUpdate}
         icon={<EditOutlined />}
@@ -361,7 +359,6 @@ export function IdentityOutpostsPage() {
     {
       ...tableColumnPresets.action,
       key: 'actions',
-      width: 196,
       render: (_, outpost) => nodeActions(outpost),
     },
   ]
@@ -369,7 +366,7 @@ export function IdentityOutpostsPage() {
   return (
     <>
       <ManagementDataPage
-        className="soha-identity-outposts-page"
+        className="soha-identity-access-page soha-identity-outposts-page"
         query={{
           actions: (
             <ManagementQueryActions
@@ -392,7 +389,8 @@ export function IdentityOutpostsPage() {
               <ManagementQueryField
                 label={t('identity.outposts.mode', '模式')}
                 name="mode"
-                width={160}
+                width={180}
+                minWidth={180}
               >
                 <Select
                   allowClear
@@ -403,7 +401,8 @@ export function IdentityOutpostsPage() {
               <ManagementQueryField
                 label={t('identity.outposts.status', '状态')}
                 name="runtimeStatus"
-                width={160}
+                width={180}
+                minWidth={180}
               >
                 <Select
                   allowClear
@@ -479,7 +478,6 @@ export function IdentityOutpostsPage() {
                 icon={<PlusOutlined />}
                 onClick={openCreate}
                 type="primary"
-                size="small"
               >
                 {t('identity.outposts.create', '新建 Outpost')}
               </Button>

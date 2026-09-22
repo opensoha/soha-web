@@ -133,13 +133,16 @@ vi.mock('@/components/management-list', () => ({
   ManagementState: ({
     description,
     title,
+    actions,
   }: {
     description?: ReactNode
     title?: ReactNode
+    actions?: ReactNode
   }) => (
     <div>
       {title}
       {description}
+      {actions}
     </div>
   ),
 }))
@@ -205,6 +208,38 @@ async function renderMonitoringPage() {
 }
 
 describe('MonitoringPage', () => {
+  it('shows loading while the summary is pending', async () => {
+    apiMocks.get.mockImplementation((path: keyof typeof responses) =>
+      path === '/monitoring/summary'
+        ? new Promise(() => {})
+        : Promise.resolve({ data: responses[path] ?? [] }),
+    )
+    const container = await renderMonitoringPage()
+    expect(container.textContent).toContain('正在加载告警摘要')
+    expect(container.textContent).not.toContain('暂无告警摘要')
+  })
+
+  it('retries a failed Provider query from its panel', async () => {
+    apiMocks.get.mockImplementation((path: keyof typeof responses) =>
+      path === '/observability/providers'
+        ? Promise.reject(new Error('provider offline'))
+        : Promise.resolve({ data: responses[path] ?? [] }),
+    )
+    const container = await renderMonitoringPage()
+    apiMocks.get.mockImplementation((path: keyof typeof responses) =>
+      Promise.resolve({ data: responses[path] ?? [] }),
+    )
+    const retry = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent?.replace(/\s/g, '') === '重试',
+    )!
+    await act(async () => {
+      retry.click()
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+    expect(container.textContent).toContain('健康 Provider: 1')
+    expect(container.textContent).not.toContain('Provider 状态加载失败')
+  })
+
   it('renders the bounded overview from canonical capability queries', async () => {
     const container = await renderMonitoringPage()
 

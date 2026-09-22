@@ -1,22 +1,22 @@
 import { useMemo } from 'react'
 import './styles.css'
-import { App, Button, Card, Dropdown, Modal, Select, Typography } from 'antd'
+import { App, Button, Card, Dropdown, Input, Modal, Select, Typography } from 'antd'
 import {
   AppstoreOutlined,
   DeleteOutlined,
   EditOutlined,
   MoreOutlined,
   PlusOutlined,
+  SearchOutlined,
   StarFilled,
   StarOutlined,
 } from '@ant-design/icons'
 import { Link, useSearchParams } from 'react-router-dom'
-import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementIconButton,
   ManagementState,
   ManagementTableToolbar,
-  ManagementToolbarSearch,
+  ManagementRefreshButton,
 } from '@/components/management-list'
 import { useAuthStore } from '@/stores/auth-store'
 import { usePreferencesStore } from '@/stores/preferences-store'
@@ -50,6 +50,7 @@ export function ApplicationsPage() {
   const entryOpen = searchParams.get('action') === 'create'
 
   const applicationsQuery = managementState.applicationsQuery
+  const hasFilters = Boolean(filters.search || (filters.group && filters.group !== 'all'))
 
   const visibleRows = useMemo(() => {
     const keyword = filters.search?.trim().toLowerCase() ?? ''
@@ -103,36 +104,46 @@ export function ApplicationsPage() {
 
   return (
     <>
-      <ManagementDataPage
-        tableNode={
-          <section className="soha-application-center-results">
-            <nav className="soha-application-center-scopes" aria-label="应用范围">
-              {(
-                [
-                  { key: 'all', label: '全部应用' },
-                  { key: 'favorites', label: '我的收藏' },
-                  { key: 'recent', label: '最近访问' },
-                ] as const
-              ).map(({ key, label }) => (
-                <button
-                  type="button"
-                  key={key}
-                  aria-pressed={(filters.scope || 'all') === key}
-                  onClick={() => setFilters(userId, { ...filters, scope: key })}
-                >
-                  {label}
-                </button>
-              ))}
-            </nav>
+      <div className="soha-page">
+        <section className="soha-application-center-results">
+          <nav className="soha-application-center-scopes" aria-label="应用范围">
+            {(
+              [
+                { key: 'all', label: '全部应用' },
+                { key: 'favorites', label: '我的收藏' },
+                { key: 'recent', label: '最近访问' },
+              ] as const
+            ).map(({ key, label }) => (
+              <button
+                type="button"
+                key={key}
+                aria-pressed={(filters.scope || 'all') === key}
+                onClick={() => setFilters(userId, { ...filters, scope: key })}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+          <Card className="soha-application-center-panel" size="small">
             <div className="soha-application-center-toolbar">
-              <div className="soha-application-center-toolbar__groups">
-                <ManagementTableToolbar>
+              {(applicationsQuery.data?.length ?? 0) > 0 || hasFilters ? (
+                <div className="soha-application-center-filters">
+                  <Input
+                    aria-label="搜索应用"
+                    placeholder="搜索应用"
+                    prefix={<SearchOutlined />}
+                    allowClear
+                    value={filters.search ?? ''}
+                    onChange={(event) =>
+                      setFilters(userId, { ...filters, search: event.target.value })
+                    }
+                  />
                   <Select
                     aria-label="应用分组"
                     value={filters.group}
                     showSearch={{ optionFilterProp: 'label' }}
                     options={[
-                      { label: '全部', value: 'all' },
+                      { label: '全部分组', value: 'all' },
                       { label: '未分组', value: 'unassigned' },
                       ...managementState.applicationGroupOptions.map((group) => ({
                         label: group,
@@ -141,28 +152,38 @@ export function ApplicationsPage() {
                     ]}
                     onChange={(group) => setFilters(userId, { ...filters, group })}
                   />
-                </ManagementTableToolbar>
-              </div>
+                  {hasFilters ? (
+                    <Button
+                      type="text"
+                      onClick={() => setFilters(userId, { ...filters, group: 'all', search: '' })}
+                    >
+                      重置
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="soha-application-center-toolbar__actions">
                 <ManagementTableToolbar>
-                  <ManagementToolbarSearch
-                    placeholder="搜索应用"
-                    value={filters.search ?? ''}
-                    onChange={(search) => setFilters(userId, { ...filters, search })}
-                  />
                   {managementState.canCreateApplication ? (
                     <Button type="primary" icon={<PlusOutlined />} onClick={openCreateApplication}>
                       创建应用
                     </Button>
                   ) : null}
+                  <ManagementRefreshButton
+                    tooltip="刷新"
+                    aria-label="刷新应用"
+                    loading={applicationsQuery.isFetching}
+                    onClick={() => void applicationsQuery.refetch()}
+                  />
                 </ManagementTableToolbar>
               </div>
             </div>
 
             {applicationsQuery.isLoading ? (
-              <ManagementState compact kind="loading" title="正在加载应用" />
+              <ManagementState compact bordered={false} kind="loading" title="正在加载应用" />
             ) : applicationsQuery.isError ? (
               <ManagementState
+                bordered={false}
                 compact
                 kind="error"
                 title="应用加载失败"
@@ -179,6 +200,7 @@ export function ApplicationsPage() {
               />
             ) : visibleRows.length === 0 ? (
               <ManagementState
+                bordered={false}
                 compact
                 title={
                   filters.scope === 'favorites'
@@ -194,7 +216,11 @@ export function ApplicationsPage() {
                     ? '点击应用卡片上的星标，方便下次快速进入。'
                     : filters.scope === 'recent'
                       ? '打开应用后，它会出现在这里。最近访问仅保存在当前浏览器。'
-                      : undefined
+                      : hasFilters
+                        ? '请调整搜索关键词或分组。'
+                        : managementState.canCreateApplication
+                          ? '点击右上角“创建应用”，开始管理应用。'
+                          : '当前还没有可查看的应用。'
                 }
               />
             ) : (
@@ -294,9 +320,9 @@ export function ApplicationsPage() {
                 })}
               </div>
             )}
-          </section>
-        }
-      />
+          </Card>
+        </section>
+      </div>
       <ApplicationCenterModals state={managementState} />
       <Modal
         title="创建应用"

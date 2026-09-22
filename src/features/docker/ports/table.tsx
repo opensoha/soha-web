@@ -5,6 +5,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Modal,
   Popconfirm,
   Select,
   Space,
@@ -22,7 +23,7 @@ import {
   ManagementQueryField,
   ManagementQueryPanel,
 } from '@/components/management-list'
-import { StepFormModal } from '@/components/step-form-modal'
+import { scrollableModalBodyStyle } from '@/components/modal-styles'
 import { dockerApi } from '../docker-api'
 import { dockerQueries } from '../queries'
 import type { DockerPortMapping, DockerPortMappingInput } from '../docker-types'
@@ -76,7 +77,6 @@ export function PortsTable({
   const [filterForm] = Form.useForm<DockerFilterState>()
   const [form] = Form.useForm<DockerPortFormValues>()
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [currentStep, setCurrentStep] = useState(0)
   const [editing, setEditing] = useState<DockerPortMapping | null>(null)
   const { dockerModuleEnabled, canCreatePorts, canUpdatePorts, canDeletePorts, canViewServices } =
     useDockerPermissions()
@@ -225,7 +225,6 @@ export function PortsTable({
                 onClick={() => {
                   setEditing(record)
                   form.setFieldsValue(record)
-                  setCurrentStep(0)
                   setDrawerOpen(true)
                 }}
               />
@@ -358,7 +357,6 @@ export function PortsTable({
                     domainScheme: 'http',
                     domainTlsEnabled: false,
                   })
-                  setCurrentStep(0)
                   setDrawerOpen(true)
                 }}
               >
@@ -373,159 +371,150 @@ export function PortsTable({
         showRefresh={!embedded}
         onRefresh={() => portsQuery.refetch()}
       />
-      <StepFormModal
+      <Modal
         title={
           editing
             ? localeText(localeCode, '编辑端口映射', 'Edit port mapping')
             : localeText(localeCode, '新增端口映射', 'Add port mapping')
         }
-        current={currentStep}
-        form={form}
-        loading={saveMutation.isPending}
         open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        onCurrentChange={setCurrentStep}
-        onFinish={(values) => saveMutation.mutate(values)}
-        steps={[
-          {
-            title: localeText(localeCode, '端口配置', 'Port configuration'),
-            fieldNames: ['name', 'hostId', 'hostPort', 'containerPort'],
-            children: (
-              <>
-                <Form.Item
-                  name="name"
-                  label={localeText(localeCode, '名称', 'Name')}
-                  rules={[{ required: true }]}
-                >
-                  <Input />
-                </Form.Item>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <Form.Item
-                    name="hostId"
-                    label={localeText(localeCode, 'Docker 主机', 'Docker host')}
-                    rules={[{ required: true }]}
-                    hidden={Boolean(fixedHostId)}
-                  >
-                    <Select showSearch={{ optionFilterProp: 'label' }} options={hostOptions} />
-                  </Form.Item>
-                  <Form.Item name="hostIp" label={localeText(localeCode, '监听 IP', 'Listen IP')}>
-                    <Input placeholder="0.0.0.0" />
-                  </Form.Item>
-                  <Form.Item
-                    name="hostPort"
-                    label={localeText(localeCode, '主机端口', 'Host port')}
-                    rules={[{ required: true }]}
-                  >
-                    <InputNumber min={1} max={65535} className="w-full" />
-                  </Form.Item>
-                  <Form.Item
-                    name="containerPort"
-                    label={localeText(localeCode, '容器端口', 'Container port')}
-                    rules={[{ required: true }]}
-                  >
-                    <InputNumber min={1} max={65535} className="w-full" />
-                  </Form.Item>
-                  <Form.Item name="protocol" label={localeText(localeCode, '协议', 'Protocol')}>
-                    <Select
-                      options={[
-                        { value: 'tcp', label: 'tcp' },
-                        { value: 'udp', label: 'udp' },
-                      ]}
-                    />
-                  </Form.Item>
-                  <Form.Item
-                    name="exposureScope"
-                    label={localeText(localeCode, '暴露范围', 'Exposure')}
-                  >
-                    <Select
-                      options={['internal', 'vpn', 'public'].map((item) => ({
-                        value: item,
-                        label:
-                          item === 'internal'
-                            ? localeText(localeCode, '内部', 'Internal')
-                            : item === 'vpn'
-                              ? 'VPN'
-                              : localeText(localeCode, '公网', 'Public'),
-                      }))}
-                    />
-                  </Form.Item>
-                  <Form.Item name="status" label={localeText(localeCode, '状态', 'Status')}>
-                    <Select
-                      options={['active', 'reserved', 'released', 'expired'].map((item) => ({
-                        value: item,
-                        label: formatStatusLabel(item, localeCode),
-                      }))}
-                    />
-                  </Form.Item>
-                  <Form.Item name="owner" label={localeText(localeCode, '负责人', 'Owner')}>
-                    <Input />
-                  </Form.Item>
-                  <Form.Item
-                    name="projectId"
-                    label={localeText(localeCode, '项目', 'Project')}
-                    hidden={Boolean(fixedProjectId)}
-                  >
-                    <Select
-                      allowClear
-                      showSearch={{ optionFilterProp: 'label' }}
-                      options={projectOptions}
-                    />
-                  </Form.Item>
-                  <Form.Item name="serviceId" label={localeText(localeCode, '服务', 'Service')}>
-                    <Select
-                      allowClear
-                      showSearch={{ optionFilterProp: 'label' }}
-                      options={serviceOptions}
-                    />
-                  </Form.Item>
-                </div>
-              </>
-            ),
-          },
-          {
-            title: localeText(localeCode, '访问配置', 'Access configuration'),
-            children: (
-              <>
-                <div className="grid gap-3 md:grid-cols-[1fr_160px_120px]">
-                  <Form.Item
-                    name="domainName"
-                    label={localeText(localeCode, '访问域名', 'Domain name')}
-                  >
-                    <Input placeholder="preview.internal.example.com" />
-                  </Form.Item>
-                  <Form.Item
-                    name="domainScheme"
-                    label={localeText(localeCode, '域名协议', 'Scheme')}
-                  >
-                    <Select
-                      options={[
-                        { value: 'http', label: 'http' },
-                        { value: 'https', label: 'https' },
-                      ]}
-                    />
-                  </Form.Item>
-                  <Form.Item name="domainTlsEnabled" label="TLS" valuePropName="checked">
-                    <Switch />
-                  </Form.Item>
-                </div>
-                <Form.Item
-                  name="accessUrl"
-                  label={localeText(localeCode, '访问地址', 'Access URL')}
-                >
-                  <Input placeholder="http://10.0.0.10:8080" />
-                </Form.Item>
-                <Form.Item
-                  name="expiresAt"
-                  label={localeText(localeCode, '到期时间', 'Expires at')}
-                >
-                  <Input placeholder="2026-06-01T10:00:00Z" />
-                </Form.Item>
-              </>
-            ),
-          },
-        ]}
-        submitText={localeText(localeCode, '保存', 'Save')}
-      />
+        onCancel={() => setDrawerOpen(false)}
+        onOk={() => form.submit()}
+        confirmLoading={saveMutation.isPending}
+        okText={localeText(localeCode, '保存', 'Save')}
+        cancelText={localeText(localeCode, '取消', 'Cancel')}
+        width={720}
+        destroyOnHidden
+        mask={{ closable: false }}
+        style={{ top: 32 }}
+        styles={{ body: { ...scrollableModalBodyStyle, maxHeight: 'calc(100dvh - 180px)' } }}
+      >
+        <Form<DockerPortFormValues>
+          form={form}
+          layout="vertical"
+          preserve={false}
+          initialValues={
+            editing ?? {
+              hostId: fixedHostId,
+              projectId: fixedProjectId,
+              protocol: 'tcp',
+              exposureScope: 'internal',
+              status: 'active',
+              domainScheme: 'http',
+              domainTlsEnabled: false,
+            }
+          }
+          onFinish={(values) => saveMutation.mutate(values)}
+        >
+          <Form.Item
+            name="name"
+            label={localeText(localeCode, '名称', 'Name')}
+            rules={[{ required: true }]}
+          >
+            <Input />
+          </Form.Item>
+          <div className="soha-docker-form-grid">
+            <Form.Item
+              name="hostId"
+              label={localeText(localeCode, 'Docker 主机', 'Docker host')}
+              rules={[{ required: true }]}
+              hidden={Boolean(fixedHostId)}
+            >
+              <Select showSearch={{ optionFilterProp: 'label' }} options={hostOptions} />
+            </Form.Item>
+            <Form.Item name="hostIp" label={localeText(localeCode, '监听 IP', 'Listen IP')}>
+              <Input placeholder="0.0.0.0" />
+            </Form.Item>
+            <Form.Item
+              name="hostPort"
+              label={localeText(localeCode, '主机端口', 'Host port')}
+              rules={[{ required: true }]}
+            >
+              <InputNumber min={1} max={65535} style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item
+              name="containerPort"
+              label={localeText(localeCode, '容器端口', 'Container port')}
+              rules={[{ required: true }]}
+            >
+              <InputNumber min={1} max={65535} style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item name="protocol" label={localeText(localeCode, '协议', 'Protocol')}>
+              <Select
+                options={[
+                  { value: 'tcp', label: 'tcp' },
+                  { value: 'udp', label: 'udp' },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item name="exposureScope" label={localeText(localeCode, '暴露范围', 'Exposure')}>
+              <Select
+                options={['internal', 'vpn', 'public'].map((item) => ({
+                  value: item,
+                  label:
+                    item === 'internal'
+                      ? localeText(localeCode, '内部', 'Internal')
+                      : item === 'vpn'
+                        ? 'VPN'
+                        : localeText(localeCode, '公网', 'Public'),
+                }))}
+              />
+            </Form.Item>
+            <Form.Item name="status" label={localeText(localeCode, '状态', 'Status')}>
+              <Select
+                options={['active', 'reserved', 'released', 'expired'].map((item) => ({
+                  value: item,
+                  label: formatStatusLabel(item, localeCode),
+                }))}
+              />
+            </Form.Item>
+            <Form.Item name="owner" label={localeText(localeCode, '负责人', 'Owner')}>
+              <Input />
+            </Form.Item>
+            <Form.Item
+              name="projectId"
+              label={localeText(localeCode, '项目', 'Project')}
+              hidden={Boolean(fixedProjectId)}
+            >
+              <Select
+                allowClear
+                showSearch={{ optionFilterProp: 'label' }}
+                options={projectOptions}
+              />
+            </Form.Item>
+            <Form.Item name="serviceId" label={localeText(localeCode, '服务', 'Service')}>
+              <Select
+                allowClear
+                showSearch={{ optionFilterProp: 'label' }}
+                options={serviceOptions}
+              />
+            </Form.Item>
+          </div>
+
+          <div className="soha-docker-form-grid is-access">
+            <Form.Item name="domainName" label={localeText(localeCode, '访问域名', 'Domain name')}>
+              <Input placeholder="preview.internal.example.com" />
+            </Form.Item>
+            <Form.Item name="domainScheme" label={localeText(localeCode, '域名协议', 'Scheme')}>
+              <Select
+                options={[
+                  { value: 'http', label: 'http' },
+                  { value: 'https', label: 'https' },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item name="domainTlsEnabled" label="TLS" valuePropName="checked">
+              <Switch />
+            </Form.Item>
+          </div>
+          <Form.Item name="accessUrl" label={localeText(localeCode, '访问地址', 'Access URL')}>
+            <Input placeholder="http://10.0.0.10:8080" />
+          </Form.Item>
+          <Form.Item name="expiresAt" label={localeText(localeCode, '到期时间', 'Expires at')}>
+            <Input placeholder="2026-06-01T10:00:00Z" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </>
   )
 }

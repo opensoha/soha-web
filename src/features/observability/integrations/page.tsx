@@ -39,8 +39,14 @@ export function AlertIntegrationsPage() {
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const permissionSnapshot = permissionSnapshotQuery.data?.data
-  const canCreateIntegration = hasPermission(permissionSnapshot, 'observe.alert-integrations.create')
-  const canUpdateIntegration = hasPermission(permissionSnapshot, 'observe.alert-integrations.update')
+  const canCreateIntegration = hasPermission(
+    permissionSnapshot,
+    'observe.alert-integrations.create',
+  )
+  const canUpdateIntegration = hasPermission(
+    permissionSnapshot,
+    'observe.alert-integrations.update',
+  )
   const canTestIntegration = hasPermission(permissionSnapshot, 'observe.alert-integrations.test')
   const [editorForm] = Form.useForm<AlertIntegrationFormValues>()
   const [testForm] = Form.useForm<AlertIntegrationTestFormValues>()
@@ -268,8 +274,12 @@ export function AlertIntegrationsPage() {
 
   return (
     <div className="soha-page">
+      <h1 className="soha-observability-page-heading">告警集成</h1>
       <AdminTable
-        title="告警集成"
+        enableDensity
+        error={integrationsQuery.error}
+        refreshing={integrationsQuery.isFetching}
+        onRefresh={() => void integrationsQuery.refetch()}
         headerExtra={
           canCreateIntegration || canTestIntegration ? (
             <ManagementTableToolbar>
@@ -299,10 +309,27 @@ export function AlertIntegrationsPage() {
       />
 
       <Modal
+        className="soha-observability-modal"
+        style={{ top: 32 }}
+        classNames={{
+          body: 'soha-observability-modal-body',
+          header: 'soha-observability-modal-header',
+        }}
         title={editingIntegration ? '编辑告警集成' : '新建告警集成'}
         open={editorOpen}
         onCancel={() => setEditorOpen(false)}
-        footer={null}
+        footer={
+          <Space>
+            <Button onClick={() => setEditorOpen(false)}>取消</Button>
+            <Button
+              type="primary"
+              onClick={() => editorForm.submit()}
+              loading={createIntegration.isPending || updateIntegration.isPending}
+            >
+              保存
+            </Button>
+          </Space>
+        }
         destroyOnHidden
         width={820}
       >
@@ -315,19 +342,14 @@ export function AlertIntegrationsPage() {
           <Form.Item name="name" label="名称" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Space size={16} style={{ width: '100%' }}>
-            <Form.Item name="id" label="集成 ID" style={{ flex: 1 }}>
+          <div className="soha-observability-form-grid">
+            <Form.Item name="id" label="集成 ID">
               <Input disabled={Boolean(editingIntegration)} placeholder="留空自动生成" />
             </Form.Item>
-            <Form.Item
-              name="integrationType"
-              label="来源类型"
-              rules={[{ required: true }]}
-              style={{ flex: 1 }}
-            >
+            <Form.Item name="integrationType" label="来源类型" rules={[{ required: true }]}>
               <Select options={alertIntegrationTypeOptions} />
             </Form.Item>
-          </Space>
+          </div>
           <Form.Item name="description" label="描述">
             <Input.TextArea rows={2} />
           </Form.Item>
@@ -343,24 +365,31 @@ export function AlertIntegrationsPage() {
           <Form.Item name="enabled" label="启用" valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Space>
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={createIntegration.isPending || updateIntegration.isPending}
-            >
-              保存
-            </Button>
-            <Button onClick={() => setEditorOpen(false)}>取消</Button>
-          </Space>
         </Form>
       </Modal>
 
       <Modal
+        className="soha-observability-modal"
+        style={{ top: 32 }}
+        classNames={{
+          body: 'soha-observability-modal-body',
+          header: 'soha-observability-modal-header',
+        }}
         title="测试 Payload"
         open={testOpen}
         onCancel={() => setTestOpen(false)}
-        footer={null}
+        footer={
+          <Space>
+            <Button onClick={() => setTestOpen(false)}>关闭</Button>
+            <Button
+              type="primary"
+              onClick={() => testForm.submit()}
+              loading={testIntegration.isPending}
+            >
+              归一化测试
+            </Button>
+          </Space>
+        }
         destroyOnHidden
         width={920}
       >
@@ -378,23 +407,17 @@ export function AlertIntegrationsPage() {
               }
             />
           </Form.Item>
-          <Space size={16} style={{ width: '100%' }} align="start">
-            <Form.Item name="labelMapping" label="标签映射(JSON)" style={{ flex: 1 }}>
+          <div className="soha-observability-form-grid">
+            <Form.Item name="labelMapping" label="标签映射(JSON)">
               <Input.TextArea rows={5} />
             </Form.Item>
-            <Form.Item name="dedupeConfig" label="去重配置(JSON)" style={{ flex: 1 }}>
+            <Form.Item name="dedupeConfig" label="去重配置(JSON)">
               <Input.TextArea rows={5} />
             </Form.Item>
-          </Space>
+          </div>
           <Form.Item name="payload" label="Payload(JSON)" rules={[{ required: true }]}>
             <Input.TextArea rows={10} />
           </Form.Item>
-          <Space>
-            <Button type="primary" htmlType="submit" loading={testIntegration.isPending}>
-              归一化测试
-            </Button>
-            <Button onClick={() => setTestOpen(false)}>关闭</Button>
-          </Space>
         </Form>
         {testResult ? (
           <Input.TextArea
@@ -407,6 +430,12 @@ export function AlertIntegrationsPage() {
       </Modal>
 
       <Modal
+        className="soha-observability-modal"
+        style={{ top: 32 }}
+        classNames={{
+          body: 'soha-observability-modal-body',
+          header: 'soha-observability-modal-header',
+        }}
         title="集成 Token"
         open={Boolean(createdSecret)}
         onCancel={() => setCreatedSecret(null)}

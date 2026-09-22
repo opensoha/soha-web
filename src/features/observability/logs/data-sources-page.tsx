@@ -1,3 +1,4 @@
+import { StepForm } from '@/components/step-form'
 import { useState } from 'react'
 import type {
   ObservabilityDataSource,
@@ -14,13 +15,13 @@ import {
   Form,
   Input,
   InputNumber,
-  Modal,
   Select,
   Space,
   Switch,
   Tag,
   Typography,
 } from 'antd'
+import { StepFormModal } from '@/components/step-form-modal'
 import { AdminTable } from '@/components/admin-table'
 import {
   ManagementIconButton,
@@ -34,6 +35,7 @@ import { observabilityProviderQueries } from '../provider-queries'
 import { observabilityLogMutations } from './mutations'
 import { observabilityLogQueries } from './queries'
 import './styles.css'
+import '../observability-pages.css'
 
 const { Text } = Typography
 const builtinProviderKeys = ['loki', 'elasticsearch', 'clickhouse'] as const
@@ -206,6 +208,7 @@ export function LogDataSourcesPage() {
   const canValidate = hasPermission(snapshot, 'observe.log-data-sources.validate')
   const [form] = Form.useForm<DataSourceFormValues>()
   const providerKey = Form.useWatch('providerKey', form)
+  const [step, setStep] = useState(0)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<ObservabilityDataSource | null>(null)
   const sourcesQuery = useQuery(observabilityLogQueries.dataSources())
@@ -227,6 +230,7 @@ export function LogDataSourcesPage() {
   const builtIn = selectedProvider?.builtIn ?? builtinProviderKeys.includes(providerKey as never)
 
   function openEditor(item?: ObservabilityDataSource) {
+    setStep(0)
     setEditing(item ?? null)
     form.setFieldsValue(formValues(item))
     setOpen(true)
@@ -360,230 +364,281 @@ export function LogDataSourcesPage() {
 
   return (
     <div className="soha-page">
-      {sourcesQuery.isError ? (
-        <ManagementState
-          kind="error"
-          title="日志数据源加载失败"
-          description={sourcesQuery.error.message}
-        />
-      ) : (
-        <AdminTable
-          title="日志数据源"
-          headerExtra={
-            canCreate ? (
-              <ManagementTableToolbar>
-                <Button icon={<PlusOutlined />} type="primary" onClick={() => openEditor()}>
-                  新建数据源
-                </Button>
-              </ManagementTableToolbar>
-            ) : null
-          }
-          columnSettingIconOnly
-          columnSettingPlacement="header"
-          shellClassName="soha-management-table-shell"
-          columns={columns}
-          dataSource={sourcesQuery.data ?? []}
-          empty={<ManagementState bordered={false} compact description="暂无日志数据源" />}
-          loading={sourcesQuery.isLoading}
-          pageSize={20}
-          rowKey="id"
-          scroll={{ x: 'max-content' }}
-        />
-      )}
+      <h1 className="soha-observability-page-heading">日志数据源</h1>
+      <AdminTable
+        enableDensity
+        error={sourcesQuery.error}
+        refreshing={sourcesQuery.isFetching}
+        onRefresh={() => void sourcesQuery.refetch()}
+        headerExtra={
+          canCreate ? (
+            <ManagementTableToolbar>
+              <Button icon={<PlusOutlined />} type="primary" onClick={() => openEditor()}>
+                新建数据源
+              </Button>
+            </ManagementTableToolbar>
+          ) : null
+        }
+        columnSettingIconOnly
+        columnSettingPlacement="header"
+        shellClassName="soha-management-table-shell"
+        columns={columns}
+        dataSource={sourcesQuery.data ?? []}
+        empty={<ManagementState bordered={false} compact description="暂无日志数据源" />}
+        loading={sourcesQuery.isLoading}
+        pageSize={20}
+        rowKey="id"
+        scroll={{ x: 'max-content' }}
+      />
 
-      <Modal
-        destroyOnHidden
-        footer={null}
+      <StepFormModal
         open={open}
         title={editing ? '编辑日志数据源' : '新建日志数据源'}
         width={860}
-        onCancel={closeEditor}
+        onClose={closeEditor}
       >
-        <Form<DataSourceFormValues>
+        <StepForm
+          contentMaxWidth="100%"
+          onCancel={closeEditor}
           form={form}
-          initialValues={formValues()}
-          layout="vertical"
+          current={step}
+          onCurrentChange={setStep}
           onFinish={submit}
-        >
-          <div className="soha-log-filter-grid">
-            <Form.Item label="名称" name="name" rules={[{ required: true, whitespace: true }]}>
-              <Input />
-            </Form.Item>
-            <Form.Item label="Provider" name="providerKey" rules={[{ required: true }]}>
-              <Select
-                loading={providersQuery.isLoading}
-                options={providerOptions}
-                placeholder="选择日志 Provider"
-              />
-            </Form.Item>
-            <Form.Item label="Endpoint" name="endpoint" rules={[{ required: true, type: 'url' }]}>
-              <Input placeholder="https://logs.example.com" />
-            </Form.Item>
-            <Form.Item label="Tenant ID" name="tenantId">
-              <Input />
-            </Form.Item>
-            {providerKey === 'elasticsearch' ? (
-              <Form.Item label="Index" name="index" rules={[{ required: true, whitespace: true }]}>
-                <Input />
-              </Form.Item>
-            ) : null}
-            {providerKey === 'clickhouse' ? (
-              <Form.Item label="Table" name="table" rules={[{ required: true, whitespace: true }]}>
-                <Input />
-              </Form.Item>
-            ) : null}
-            <Form.Item label="集群范围" name="clusterIds">
-              <Select mode="tags" tokenSeparators={[',']} placeholder="留空表示全部集群" />
-            </Form.Item>
-            <Form.Item label="命名空间范围" name="namespaces">
-              <Select mode="tags" tokenSeparators={[',']} placeholder="留空表示全部命名空间" />
-            </Form.Item>
-            <Form.Item label="每页最大行数" name="maxEntries" rules={[{ required: true }]}>
-              <InputNumber min={1} max={1000} style={{ width: '100%' }} />
-            </Form.Item>
-            <Form.Item
-              label="最大时间范围（秒）"
-              name="maxRangeSeconds"
-              rules={[{ required: true }]}
-            >
-              <InputNumber min={60} max={2592000} style={{ width: '100%' }} />
-            </Form.Item>
-            <Form.Item label="查询超时（秒）" name="timeoutSeconds" rules={[{ required: true }]}>
-              <InputNumber min={1} max={60} style={{ width: '100%' }} />
-            </Form.Item>
-            <Form.Item label="脱敏属性" name="dropAttributeKeys">
-              <Select mode="tags" tokenSeparators={[',']} />
-            </Form.Item>
-            {builtIn ? (
-              <Form.Item label="Bearer Token" name="bearerToken">
-                <Input.Password autoComplete="new-password" placeholder="留空保持不变" />
-              </Form.Item>
-            ) : null}
-            {providerKey === 'clickhouse' ? (
-              <>
-                <Form.Item label="Username" name="username">
-                  <Input autoComplete="off" placeholder="留空保持不变" />
-                </Form.Item>
-                <Form.Item label="Password" name="password">
-                  <Input.Password autoComplete="new-password" placeholder="留空保持不变" />
-                </Form.Item>
-              </>
-            ) : null}
-            {!builtIn ? (
-              <>
-                <Form.List name="configuration">
-                  {(fields, { add, remove }) => (
-                    <Form.Item label="Provider 配置">
-                      <Space orientation="vertical" style={{ width: '100%' }}>
-                        {fields.map((field) => (
-                          <div className="soha-log-provider-field-row" key={field.key}>
-                            <Form.Item name={[field.name, 'key']} noStyle>
-                              <Input placeholder="配置键" />
-                            </Form.Item>
-                            <Form.Item name={[field.name, 'value']} noStyle>
-                              <Input placeholder="配置值" />
-                            </Form.Item>
-                            <Button onClick={() => remove(field.name)}>移除</Button>
-                          </div>
-                        ))}
-                        <Button onClick={() => add()}>添加配置</Button>
-                      </Space>
+          loading={createMutation.isPending || updateMutation.isPending}
+          initialValues={formValues(editing ?? undefined)}
+          steps={[
+            {
+              title: '连接与 Provider',
+              fieldNames: [
+                'name',
+                'providerKey',
+                'endpoint',
+                ...(providerKey === 'elasticsearch'
+                  ? ['index']
+                  : providerKey === 'clickhouse'
+                    ? ['table']
+                    : []),
+              ],
+              children: (
+                <div className="soha-observability-form-grid">
+                  <Form.Item
+                    label="名称"
+                    name="name"
+                    rules={[{ required: true, whitespace: true }]}
+                  >
+                    <Input />
+                  </Form.Item>
+                  <Form.Item label="Provider" name="providerKey" rules={[{ required: true }]}>
+                    <Select
+                      loading={providersQuery.isLoading}
+                      options={providerOptions}
+                      placeholder="选择日志 Provider"
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    label="Endpoint"
+                    name="endpoint"
+                    rules={[{ required: true, type: 'url' }]}
+                  >
+                    <Input placeholder="https://logs.example.com" />
+                  </Form.Item>
+                  <Form.Item label="Tenant ID" name="tenantId">
+                    <Input />
+                  </Form.Item>
+                  {providerKey === 'elasticsearch' ? (
+                    <Form.Item
+                      label="Index"
+                      name="index"
+                      rules={[{ required: true, whitespace: true }]}
+                    >
+                      <Input />
                     </Form.Item>
-                  )}
-                </Form.List>
-                <Form.List name="credentials">
-                  {(fields, { add, remove }) => (
-                    <Form.Item label="Provider 凭据">
-                      <Space orientation="vertical" style={{ width: '100%' }}>
-                        {fields.map((field) => (
-                          <div className="soha-log-provider-field-row" key={field.key}>
-                            <Form.Item name={[field.name, 'key']} noStyle>
-                              <Input placeholder="凭据键" />
-                            </Form.Item>
-                            <Form.Item name={[field.name, 'value']} noStyle>
-                              <Input.Password autoComplete="new-password" placeholder="凭据值" />
-                            </Form.Item>
-                            <Button onClick={() => remove(field.name)}>移除</Button>
-                          </div>
-                        ))}
-                        <Button onClick={() => add()}>添加凭据</Button>
-                      </Space>
+                  ) : null}
+                  {providerKey === 'clickhouse' ? (
+                    <Form.Item
+                      label="Table"
+                      name="table"
+                      rules={[{ required: true, whitespace: true }]}
+                    >
+                      <Input />
                     </Form.Item>
-                  )}
-                </Form.List>
-              </>
-            ) : null}
-            {editing?.credentialKeys.length ? (
-              <Form.Item label="清除认证字段" name="clearCredentialKeys">
-                <Select
-                  mode="multiple"
-                  options={editing.credentialKeys.map((key) => ({ value: key, label: key }))}
-                />
-              </Form.Item>
-            ) : null}
-          </div>
+                  ) : null}
+                  <Form.Item label="启用" name="enabled" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                </div>
+              ),
+            },
+            {
+              title: '范围与查询限制',
+              fieldNames: ['maxEntries', 'maxRangeSeconds', 'timeoutSeconds'],
+              children: (
+                <div className="soha-observability-form-grid">
+                  <Form.Item label="集群范围" name="clusterIds">
+                    <Select mode="tags" tokenSeparators={[',']} placeholder="留空表示全部集群" />
+                  </Form.Item>
+                  <Form.Item label="命名空间范围" name="namespaces">
+                    <Select
+                      mode="tags"
+                      tokenSeparators={[',']}
+                      placeholder="留空表示全部命名空间"
+                    />
+                  </Form.Item>
+                  <Form.Item label="每页最大行数" name="maxEntries" rules={[{ required: true }]}>
+                    <InputNumber min={1} max={1000} style={{ width: '100%' }} />
+                  </Form.Item>
+                  <Form.Item
+                    label="最大时间范围（秒）"
+                    name="maxRangeSeconds"
+                    rules={[{ required: true }]}
+                  >
+                    <InputNumber min={60} max={2592000} style={{ width: '100%' }} />
+                  </Form.Item>
+                  <Form.Item
+                    label="查询超时（秒）"
+                    name="timeoutSeconds"
+                    rules={[{ required: true }]}
+                  >
+                    <InputNumber min={1} max={60} style={{ width: '100%' }} />
+                  </Form.Item>
+                  <Form.Item label="脱敏属性" name="dropAttributeKeys">
+                    <Select mode="tags" tokenSeparators={[',']} />
+                  </Form.Item>
+                </div>
+              ),
+            },
+            {
+              title: '认证与字段映射',
+              children: (
+                <>
+                  <div className="soha-observability-form-grid">
+                    {builtIn ? (
+                      <Form.Item label="Bearer Token" name="bearerToken">
+                        <Input.Password autoComplete="new-password" placeholder="留空保持不变" />
+                      </Form.Item>
+                    ) : null}
+                    {providerKey === 'clickhouse' ? (
+                      <>
+                        <Form.Item label="Username" name="username">
+                          <Input autoComplete="off" placeholder="留空保持不变" />
+                        </Form.Item>
+                        <Form.Item label="Password" name="password">
+                          <Input.Password autoComplete="new-password" placeholder="留空保持不变" />
+                        </Form.Item>
+                      </>
+                    ) : null}
+                    {!builtIn ? (
+                      <>
+                        <Form.List name="configuration">
+                          {(fields, { add, remove }) => (
+                            <Form.Item label="Provider 配置">
+                              <Space orientation="vertical" style={{ width: '100%' }}>
+                                {fields.map((field) => (
+                                  <div className="soha-log-provider-field-row" key={field.key}>
+                                    <Form.Item name={[field.name, 'key']} noStyle>
+                                      <Input placeholder="配置键" />
+                                    </Form.Item>
+                                    <Form.Item name={[field.name, 'value']} noStyle>
+                                      <Input placeholder="配置值" />
+                                    </Form.Item>
+                                    <Button onClick={() => remove(field.name)}>移除</Button>
+                                  </div>
+                                ))}
+                                <Button onClick={() => add()}>添加配置</Button>
+                              </Space>
+                            </Form.Item>
+                          )}
+                        </Form.List>
+                        <Form.List name="credentials">
+                          {(fields, { add, remove }) => (
+                            <Form.Item label="Provider 凭据">
+                              <Space orientation="vertical" style={{ width: '100%' }}>
+                                {fields.map((field) => (
+                                  <div className="soha-log-provider-field-row" key={field.key}>
+                                    <Form.Item name={[field.name, 'key']} noStyle>
+                                      <Input placeholder="凭据键" />
+                                    </Form.Item>
+                                    <Form.Item name={[field.name, 'value']} noStyle>
+                                      <Input.Password
+                                        autoComplete="new-password"
+                                        placeholder="凭据值"
+                                      />
+                                    </Form.Item>
+                                    <Button onClick={() => remove(field.name)}>移除</Button>
+                                  </div>
+                                ))}
+                                <Button onClick={() => add()}>添加凭据</Button>
+                              </Space>
+                            </Form.Item>
+                          )}
+                        </Form.List>
+                      </>
+                    ) : null}
+                    {editing?.credentialKeys.length ? (
+                      <Form.Item label="清除认证字段" name="clearCredentialKeys">
+                        <Select
+                          mode="multiple"
+                          options={editing.credentialKeys.map((key) => ({
+                            value: key,
+                            label: key,
+                          }))}
+                        />
+                      </Form.Item>
+                    ) : null}
+                  </div>
 
-          {builtIn ? (
-            <Collapse
-              ghost
-              items={[
-                {
-                  key: 'mapping',
-                  label: providerKey === 'loki' ? '标签映射' : '字段映射',
-                  children: (
-                    <div className="soha-log-filter-grid">
-                      {providerKey === 'loki'
-                        ? [
-                            ['labelCluster', 'Cluster'],
-                            ['labelNamespace', 'Namespace'],
-                            ['labelService', 'Service'],
-                            ['labelWorkload', 'Workload'],
-                            ['labelSeverity', 'Severity'],
-                            ['labelPod', 'Pod'],
-                            ['labelContainer', 'Container'],
-                          ].map(([name, label]) => (
-                            <Form.Item key={name} label={label} name={name}>
-                              <Input />
-                            </Form.Item>
-                          ))
-                        : builtIn
-                          ? [
-                              ['timestampField', 'Timestamp'],
-                              ['messageField', 'Message'],
-                              ['severityField', 'Severity'],
-                              ['serviceField', 'Service'],
-                              ['workloadField', 'Workload'],
-                              ['namespaceField', 'Namespace'],
-                              ['clusterField', 'Cluster'],
-                              ['podField', 'Pod'],
-                              ['containerField', 'Container'],
-                            ].map(([name, label]) => (
-                              <Form.Item key={name} label={label} name={name}>
-                                <Input placeholder="使用后端默认字段" />
-                              </Form.Item>
-                            ))
-                          : null}
-                    </div>
-                  ),
-                },
-              ]}
-            />
-          ) : null}
-          <Space>
-            <Form.Item name="enabled" noStyle valuePropName="checked">
-              <Switch checkedChildren="启用" unCheckedChildren="停用" />
-            </Form.Item>
-            <Button
-              htmlType="submit"
-              loading={createMutation.isPending || updateMutation.isPending}
-              type="primary"
-            >
-              保存
-            </Button>
-            <Button onClick={closeEditor}>取消</Button>
-          </Space>
-        </Form>
-      </Modal>
+                  {builtIn ? (
+                    <Collapse
+                      ghost
+                      items={[
+                        {
+                          key: 'mapping',
+                          label: providerKey === 'loki' ? '标签映射' : '字段映射',
+                          children: (
+                            <div className="soha-observability-form-grid">
+                              {providerKey === 'loki'
+                                ? [
+                                    ['labelCluster', 'Cluster'],
+                                    ['labelNamespace', 'Namespace'],
+                                    ['labelService', 'Service'],
+                                    ['labelWorkload', 'Workload'],
+                                    ['labelSeverity', 'Severity'],
+                                    ['labelPod', 'Pod'],
+                                    ['labelContainer', 'Container'],
+                                  ].map(([name, label]) => (
+                                    <Form.Item key={name} label={label} name={name}>
+                                      <Input />
+                                    </Form.Item>
+                                  ))
+                                : builtIn
+                                  ? [
+                                      ['timestampField', 'Timestamp'],
+                                      ['messageField', 'Message'],
+                                      ['severityField', 'Severity'],
+                                      ['serviceField', 'Service'],
+                                      ['workloadField', 'Workload'],
+                                      ['namespaceField', 'Namespace'],
+                                      ['clusterField', 'Cluster'],
+                                      ['podField', 'Pod'],
+                                      ['containerField', 'Container'],
+                                    ].map(([name, label]) => (
+                                      <Form.Item key={name} label={label} name={name}>
+                                        <Input placeholder="使用后端默认字段" />
+                                      </Form.Item>
+                                    ))
+                                  : null}
+                            </div>
+                          ),
+                        },
+                      ]}
+                    />
+                  ) : null}
+                </>
+              ),
+            },
+          ]}
+        />
+      </StepFormModal>
     </div>
   )
 }

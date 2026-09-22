@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from 'react'
-import { Button, Card, Pagination, Select, Space, Typography } from 'antd'
+import { Button, Card, Form, Pagination, Select, Space, Typography } from 'antd'
 import {
   HistoryOutlined,
   PlayCircleOutlined,
@@ -11,7 +11,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ManagementIconButton,
   ManagementState,
-  ManagementToolbarSearch,
+  ManagementKeywordField,
+  ManagementQueryField,
+  ManagementQueryGrid,
+  ManagementRefreshButton,
 } from '@/components/management-list'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
@@ -210,36 +213,52 @@ export function WorkflowCatalog() {
       ) : editId && requestedWorkflow.isPending ? (
         <ManagementState compact kind="loading" />
       ) : null}
-      <div className="soha-workflow-catalog__filters">
-        <Select
-          aria-label="筛选应用"
-          allowClear
-          showSearch={{ optionFilterProp: 'label' }}
-          placeholder={english ? 'All applications' : '全部应用'}
-          value={applicationId}
-          options={catalog.data?.applications ?? []}
-          onChange={(value) => {
-            updateSearch({ applicationId: value, environmentId: undefined })
-          }}
-        />
-        <Select
-          aria-label="筛选环境"
-          allowClear
-          placeholder={english ? 'All environments' : '全部环境'}
-          value={environmentId}
-          options={catalog.data?.environments ?? []}
-          onChange={(value) => {
-            updateSearch({ environmentId: value })
-          }}
-        />
-        <ManagementToolbarSearch
-          aria-label="搜索工作流"
-          value={search}
-          placeholder={english ? 'Search name or application' : '搜索名称或应用'}
-          onChange={(value) => {
-            updateSearch({ search: value })
-          }}
-        />
+      <Form className="soha-management-query-form" layout="horizontal">
+        <ManagementQueryGrid
+          actions={
+            <Button
+              onClick={() =>
+                updateSearch({
+                  search: undefined,
+                  applicationId: undefined,
+                  environmentId: undefined,
+                })
+              }
+            >
+              {english ? 'Reset' : '重置'}
+            </Button>
+          }
+        >
+          <ManagementKeywordField
+            inputProps={{ 'aria-label': '搜索工作流' }}
+            value={search}
+            placeholder={english ? 'Search name or application' : '搜索名称或应用'}
+            onChange={(value) => updateSearch({ search: value })}
+          />
+          <ManagementQueryField label={english ? 'Application' : '应用'} width={220}>
+            <Select
+              aria-label="筛选应用"
+              allowClear
+              showSearch={{ optionFilterProp: 'label' }}
+              placeholder={english ? 'All applications' : '全部应用'}
+              value={applicationId}
+              options={catalog.data?.applications ?? []}
+              onChange={(value) => updateSearch({ applicationId: value, environmentId: undefined })}
+            />
+          </ManagementQueryField>
+          <ManagementQueryField label={english ? 'Environment' : '环境'} width={220}>
+            <Select
+              aria-label="筛选环境"
+              allowClear
+              placeholder={english ? 'All environments' : '全部环境'}
+              value={environmentId}
+              options={catalog.data?.environments ?? []}
+              onChange={(value) => updateSearch({ environmentId: value })}
+            />
+          </ManagementQueryField>
+        </ManagementQueryGrid>
+      </Form>
+      <div className="soha-workflow-catalog__toolbar">
         {canManage ? (
           <Space wrap className="soha-workflow-catalog__actions">
             <TemplateSourcesButton />
@@ -265,6 +284,12 @@ export function WorkflowCatalog() {
             </Button>
           </Space>
         ) : null}
+        <ManagementRefreshButton
+          tooltip="刷新"
+          aria-label={english ? 'Refresh workflows' : '刷新工作流'}
+          loading={catalog.isFetching}
+          onClick={() => void catalog.refetch()}
+        />
       </div>
       <div
         className="soha-execution-trend__legend"

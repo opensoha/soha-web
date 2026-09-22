@@ -1,3 +1,4 @@
+import { ManagementQueryField } from '@/components/management-list'
 import type {
   ObservabilityMetricKey,
   ObservabilityMetricSeries,
@@ -123,9 +124,9 @@ export function ObservabilityMetricsPage({ embedded = false }: { embedded?: bool
         submitLabel="查询指标"
         onFinish={submit}
       >
-        <Form.Item label="指标" name="metricKey">
+        <ManagementQueryField width={240} label="指标" name="metricKey">
           <Select loading={catalog.isLoading} options={metricOptions} />
-        </Form.Item>
+        </ManagementQueryField>
       </SignalQueryForm>
       {catalog.error ? (
         <ManagementState

@@ -2,7 +2,11 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Button, Checkbox, Popover, Table, Typography } from 'antd'
 import { SettingOutlined } from '@ant-design/icons'
-import { ManagementState } from '@/components/management-list'
+import {
+  ManagementDensityButton,
+  ManagementRefreshButton,
+  ManagementState,
+} from '@/components/management-list'
 import { useI18n } from '@/i18n'
 import type { LocaleCode } from '@/i18n'
 import './admin-table.css'
@@ -31,7 +35,9 @@ export interface AdminTableProps {
   currentPageSelectionLabel?: ReactNode
   dataSource: any[]
   empty?: ReactNode
+  error?: Error | null
   enableColumnSelection?: boolean
+  enableDensity?: boolean
   expandable?: any
   expandedRowRender?: (record: any, index?: number) => ReactNode
   headerExtra?: ReactNode
@@ -40,6 +46,8 @@ export interface AdminTableProps {
   loading?: boolean
   onChange?: any
   onRow?: any
+  onRefresh?: () => void
+  refreshing?: boolean
   pageSize?: number
   pagination?: any
   paginationSummary?: ReactNode | ((total: number, range: [number, number]) => ReactNode)
@@ -64,20 +72,29 @@ export interface AdminTableProps {
 
 function getColumnId(column: any, index: number) {
   if (typeof column?.key === 'string' && column.key) return column.key
-  if (typeof column?.dataIndex === 'string' && column.dataIndex) return `${column.dataIndex}:${index}`
-  if (Array.isArray(column?.dataIndex) && column.dataIndex.length > 0) return `${column.dataIndex.join('.')}:${index}`
+  if (typeof column?.dataIndex === 'string' && column.dataIndex)
+    return `${column.dataIndex}:${index}`
+  if (Array.isArray(column?.dataIndex) && column.dataIndex.length > 0)
+    return `${column.dataIndex.join('.')}:${index}`
   if (typeof column?.title === 'string' && column.title) return `${column.title}:${index}`
   return `column:${index}`
 }
 
 function isActionColumn(column: any) {
-  const key = String(column?.key ?? '').trim().toLowerCase()
+  const key = String(column?.key ?? '')
+    .trim()
+    .toLowerCase()
   const dataIndex = Array.isArray(column?.dataIndex)
     ? column.dataIndex.join('.').toLowerCase()
-    : String(column?.dataIndex ?? '').trim().toLowerCase()
+    : String(column?.dataIndex ?? '')
+        .trim()
+        .toLowerCase()
   const title = typeof column?.title === 'string' ? column.title.trim().toLowerCase() : ''
   return (
     key === 'actions' ||
+    String(column?.className ?? '')
+      .split(/\s+/)
+      .includes(ACTION_COLUMN_CLASS_NAME) ||
     dataIndex === '__actions' ||
     (column?.fixed === 'right' && (title === '操作' || title === 'actions'))
   )
@@ -91,9 +108,14 @@ function mergeClassNames(...values: unknown[]) {
     .join(' ')
 }
 
-function normalizeTableColumn(column: any): any {
+function normalizeTableColumn(column: any, path: string, iconWidths: Record<string, number>): any {
   if (Array.isArray(column?.children)) {
-    return { ...column, children: column.children.map(normalizeTableColumn) }
+    return {
+      ...column,
+      children: column.children.map((child: any, index: number) =>
+        normalizeTableColumn(child, `${path}.${index}`, iconWidths),
+      ),
+    }
   }
   if (!isActionColumn(column)) return column
 
@@ -104,27 +126,42 @@ function normalizeTableColumn(column: any): any {
     typeof originalHeaderCell === 'function' ? originalHeaderCell(column)?.className : '',
   )
   const usesExplicitActionContract = declaredClasses.includes(ACTION_COLUMN_CLASS_NAME)
+  const iconWidth = iconWidths[path]
   const actionClasses = mergeClassNames(
     declaredClasses,
     ACTION_COLUMN_CLASS_NAME,
-    usesExplicitActionContract ? '' : AUTO_ACTION_COLUMN_CLASS_NAME,
+    usesExplicitActionContract || iconWidth ? '' : AUTO_ACTION_COLUMN_CLASS_NAME,
   )
+  const cellStyle = (style: any) =>
+    iconWidth ? { ...style, '--soha-table-actions-column-width': `${iconWidth}px` } : style
 
   return {
     ...column,
     title: '',
     fixed: 'right',
     align: 'center',
-    width: usesExplicitActionContract ? column.width : undefined,
-    minWidth: usesExplicitActionContract ? column.minWidth : 52,
+    sorter: false,
+    sortOrder: null,
+    defaultSortOrder: undefined,
+    width: iconWidth ?? (usesExplicitActionContract ? column.width : undefined),
+    minWidth: iconWidth ?? (usesExplicitActionContract ? column.minWidth : 52),
     className: actionClasses,
     onHeaderCell: (...args: any[]) => {
       const props = typeof originalHeaderCell === 'function' ? originalHeaderCell(...args) : {}
-      return { ...props, className: mergeClassNames(props?.className, actionClasses) }
+      return {
+        ...props,
+        style: cellStyle(props?.style),
+        className: mergeClassNames(props?.className, actionClasses),
+      }
     },
     onCell: (...args: any[]) => {
       const props = typeof originalCell === 'function' ? originalCell(...args) : {}
-      return { ...props, className: mergeClassNames(props?.className, actionClasses) }
+      return {
+        ...props,
+        style: cellStyle(props?.style),
+        'data-soha-action-column': path,
+        className: mergeClassNames(props?.className, actionClasses),
+      }
     },
   }
 }
@@ -187,7 +224,8 @@ function getColumnLabel(column: any, index: number) {
   if (isActionColumn(column)) return '操作'
   if (typeof column?.title === 'string' && column.title) return column.title
   if (typeof column?.dataIndex === 'string' && column.dataIndex) return column.dataIndex
-  if (Array.isArray(column?.dataIndex) && column.dataIndex.length > 0) return column.dataIndex.join('.')
+  if (Array.isArray(column?.dataIndex) && column.dataIndex.length > 0)
+    return column.dataIndex.join('.')
   return `列 ${index + 1}`
 }
 
@@ -210,10 +248,14 @@ export function AdminTable({
   currentPageSelectionLabel,
   dataSource,
   empty,
+  error,
   enableColumnSelection = true,
+  enableDensity = false,
   headerExtra,
   localSorting = false,
   loading,
+  onRefresh,
+  refreshing,
   pageSize = 15,
   pagination,
   paginationSummary,
@@ -232,6 +274,9 @@ export function AdminTable({
   ...rest
 }: AdminTableProps) {
   const { localeCode, t } = useI18n()
+  const [density, setDensity] = useState<AdminTableProps['tableSize']>()
+  const resolvedTableSize = enableDensity ? (density ?? tableSize) : tableSize
+  const [iconActionWidths, setIconActionWidths] = useState<Record<string, number>>({})
   const localSortCollator = useMemo(
     () =>
       new Intl.Collator(localeCode === 'zh_CN' ? 'zh-CN' : 'en-US', {
@@ -241,14 +286,20 @@ export function AdminTable({
     [localeCode],
   )
   const normalizedColumns = useMemo(() => {
-    const nextColumns = columns.map(normalizeTableColumn)
+    const nextColumns = columns.map((column, index) =>
+      normalizeTableColumn(column, String(index), iconActionWidths),
+    )
     return localSorting ? addLocalSorters(nextColumns, dataSource, localSortCollator) : nextColumns
-  }, [columns, dataSource, localSortCollator, localSorting])
-  const columnOptions = useMemo(() => normalizedColumns.map((column, index) => ({
-    id: getColumnId(column, index),
-    label: getColumnLabel(column, index),
-    column,
-  })), [normalizedColumns])
+  }, [columns, dataSource, iconActionWidths, localSortCollator, localSorting])
+  const columnOptions = useMemo(
+    () =>
+      normalizedColumns.map((column, index) => ({
+        id: getColumnId(column, index),
+        label: getColumnLabel(column, index),
+        column,
+      })),
+    [normalizedColumns],
+  )
   const selectableColumnOptions = useMemo(
     () => columnOptions.filter((option) => !isActionColumn(option.column)),
     [columnOptions],
@@ -259,6 +310,42 @@ export function AdminTable({
   const [currentPageSize, setCurrentPageSize] = useState(pageSize)
   const [viewportScrollY, setViewportScrollY] = useState<number>()
   const tableShellRef = useRef<HTMLDivElement>(null)
+
+  // Measure the rendered icon group: permissions and row state can change its size.
+  // Keep explicit sizing for text actions; never infer a button count from a render callback.
+  useLayoutEffect(() => {
+    const shell = tableShellRef.current
+    if (!shell) return
+    const groups = Array.from(
+      shell.querySelectorAll<HTMLElement>(
+        '[data-soha-action-column] .soha-row-action-icons, [data-soha-action-column] .ant-space:has(.ant-btn-icon-only), [data-soha-action-column] > .ant-btn-icon-only',
+      ),
+    ).filter(
+      (group) =>
+        group.classList.contains('soha-row-action-icons') ||
+        !group.querySelector('.ant-btn:not(.ant-btn-icon-only)'),
+    )
+    const measure = () => {
+      const widths: Record<string, number> = {}
+      groups.forEach((group) => {
+        const cell = group.closest<HTMLElement>('[data-soha-action-column]')!
+        const width = group.getBoundingClientRect().width
+        if (!width) return
+        const style = window.getComputedStyle(cell)
+        const padding =
+          (Number.parseFloat(style.paddingLeft) || 0) + (Number.parseFloat(style.paddingRight) || 0)
+        const key = cell.dataset.sohaActionColumn!
+        widths[key] = Math.max(widths[key] ?? 0, Math.ceil(width + padding + 1), 40)
+      })
+      setIconActionWidths((current) =>
+        JSON.stringify(current) === JSON.stringify(widths) ? current : widths,
+      )
+    }
+    measure()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
+    groups.forEach((group) => observer?.observe(group))
+    return () => observer?.disconnect()
+  }, [columns, dataSource, currentPage, currentPageSize, pagination?.current])
 
   useEffect(() => {
     const nextIds = selectableColumnOptions.map((option) => option.id)
@@ -275,92 +362,113 @@ export function AdminTable({
   }, [pagination])
 
   useEffect(() => {
-    const nextPageSize = pagination && pagination !== false && typeof pagination.pageSize === 'number'
-      ? pagination.pageSize
-      : pageSize
+    const nextPageSize =
+      pagination && pagination !== false && typeof pagination.pageSize === 'number'
+        ? pagination.pageSize
+        : pageSize
     setCurrentPageSize(nextPageSize)
   }, [pageSize, pagination])
 
-  const activeColumnIds = visibleColumnIds.length > 0
-    ? visibleColumnIds
-    : selectableColumnOptions.map((option) => option.id)
+  const activeColumnIds =
+    visibleColumnIds.length > 0
+      ? visibleColumnIds
+      : selectableColumnOptions.map((option) => option.id)
   const activeColumns = columnOptions
     .filter((option) => isActionColumn(option.column) || activeColumnIds.includes(option.id))
     .map((option) => option.column)
   const estimatedScrollWidth = useMemo(() => {
-    const columnWidth = activeColumns.reduce((total, column) => total + (getColumnWidth(column) ?? 168), 0)
+    const columnWidth = activeColumns.reduce(
+      (total, column) => total + (getColumnWidth(column) ?? 168),
+      0,
+    )
     const selectionWidth = rowSelection ? 56 : 0
     return Math.max(960, columnWidth + selectionWidth)
   }, [activeColumns, rowSelection])
 
-  const getRowKeyValue = (record: any) => (typeof rowKey === 'function' ? rowKey(record) : record?.[rowKey])
-  const activeRowSelection = rowSelection && typeof rowSelection === 'object' ? rowSelection : undefined
-  const currentPageRows = !selectCurrentPageOnly || pagination === false
-    ? dataSource
-    : dataSource.slice((currentPage - 1) * currentPageSize, currentPage * currentPageSize)
+  const getRowKeyValue = (record: any) =>
+    typeof rowKey === 'function' ? rowKey(record) : record?.[rowKey]
+  const activeRowSelection =
+    rowSelection && typeof rowSelection === 'object' ? rowSelection : undefined
+  const currentPageRows =
+    !selectCurrentPageOnly || pagination === false
+      ? dataSource
+      : dataSource.slice((currentPage - 1) * currentPageSize, currentPage * currentPageSize)
   const pageSelectableRows = activeRowSelection
     ? currentPageRows.filter((record) => !activeRowSelection.getCheckboxProps?.(record)?.disabled)
     : []
   const pageSelectableKeys = pageSelectableRows.map((record) => getRowKeyValue(record))
   const selectedKeySet = new Set(activeRowSelection?.selectedRowKeys ?? [])
-  const pageAllSelected = pageSelectableKeys.length > 0 && pageSelectableKeys.every((key) => selectedKeySet.has(key))
-  const pageIndeterminate = pageSelectableKeys.some((key) => selectedKeySet.has(key)) && !pageAllSelected
+  const pageAllSelected =
+    pageSelectableKeys.length > 0 && pageSelectableKeys.every((key) => selectedKeySet.has(key))
+  const pageIndeterminate =
+    pageSelectableKeys.some((key) => selectedKeySet.has(key)) && !pageAllSelected
 
-  const resolvedRowSelection = selectCurrentPageOnly && activeRowSelection
-    ? {
-        ...activeRowSelection,
-        columnTitle: currentPageSelectionLabel ? <span className="soha-admin-table-selection-label">{currentPageSelectionLabel}</span> : activeRowSelection.columnTitle,
-        title: currentPageSelectionLabel ? <span className="soha-admin-table-selection-label">{currentPageSelectionLabel}</span> : undefined,
-        getTitleCheckboxProps: () => ({
-          checked: pageAllSelected,
-          indeterminate: pageIndeterminate,
-        }),
-        onSelectAll: (selected: boolean) => {
-          const selectedRowKeys = Array.isArray(activeRowSelection.selectedRowKeys) ? [...activeRowSelection.selectedRowKeys] : []
-          const pageKeySet = new Set(pageSelectableKeys)
-          const nextSelectedRowKeys = selected
-            ? Array.from(new Set(selectedRowKeys.concat(pageSelectableKeys)))
-            : selectedRowKeys.filter((key) => !pageKeySet.has(key))
-          const nextSelectedKeySet = new Set(nextSelectedRowKeys)
-          const nextSelectedRows = dataSource.filter((record) => nextSelectedKeySet.has(getRowKeyValue(record)))
-          activeRowSelection.onChange?.(nextSelectedRowKeys, nextSelectedRows)
-        },
-      }
-    : rowSelection
+  const resolvedRowSelection =
+    selectCurrentPageOnly && activeRowSelection
+      ? {
+          ...activeRowSelection,
+          columnTitle: currentPageSelectionLabel ? (
+            <span className="soha-admin-table-selection-label">{currentPageSelectionLabel}</span>
+          ) : (
+            activeRowSelection.columnTitle
+          ),
+          title: currentPageSelectionLabel ? (
+            <span className="soha-admin-table-selection-label">{currentPageSelectionLabel}</span>
+          ) : undefined,
+          getTitleCheckboxProps: () => ({
+            checked: pageAllSelected,
+            indeterminate: pageIndeterminate,
+          }),
+          onSelectAll: (selected: boolean) => {
+            const selectedRowKeys = Array.isArray(activeRowSelection.selectedRowKeys)
+              ? [...activeRowSelection.selectedRowKeys]
+              : []
+            const pageKeySet = new Set(pageSelectableKeys)
+            const nextSelectedRowKeys = selected
+              ? Array.from(new Set(selectedRowKeys.concat(pageSelectableKeys)))
+              : selectedRowKeys.filter((key) => !pageKeySet.has(key))
+            const nextSelectedKeySet = new Set(nextSelectedRowKeys)
+            const nextSelectedRows = dataSource.filter((record) =>
+              nextSelectedKeySet.has(getRowKeyValue(record)),
+            )
+            activeRowSelection.onChange?.(nextSelectedRowKeys, nextSelectedRows)
+          },
+        }
+      : rowSelection
 
   const inheritedPagination = pagination && pagination !== false ? pagination : undefined
-  const resolvedPagination = pagination === false
-    ? false
-    : {
-        pageSize: currentPageSize,
-        current: currentPage,
-        size: 'small' as const,
-        showLessItems: true,
-        showSizeChanger: true,
-        pageSizeOptions: DEFAULT_PAGE_SIZE_OPTIONS,
-        ...inheritedPagination,
-        showTotal: paginationSummary
-          ? (total: number, range: [number, number]) => (
-              typeof paginationSummary === 'function'
-                ? paginationSummary(total, range)
-                : paginationSummary
-            )
-          : (inheritedPagination?.showTotal ??
-            ((total: number, range: [number, number]) =>
-              DEFAULT_PAGINATION_SUMMARY(localeCode, total, range))),
-        onChange: (nextPage: number, nextPageSize: number) => {
-          inheritedPagination?.onChange?.(nextPage, nextPageSize)
-          if (nextPageSize !== currentPageSize) {
+  const resolvedPagination =
+    pagination === false
+      ? false
+      : {
+          pageSize: currentPageSize,
+          current: currentPage,
+          size: 'small' as const,
+          showLessItems: true,
+          showSizeChanger: true,
+          pageSizeOptions: DEFAULT_PAGE_SIZE_OPTIONS,
+          ...inheritedPagination,
+          showTotal: paginationSummary
+            ? (total: number, range: [number, number]) =>
+                typeof paginationSummary === 'function'
+                  ? paginationSummary(total, range)
+                  : paginationSummary
+            : (inheritedPagination?.showTotal ??
+              ((total: number, range: [number, number]) =>
+                DEFAULT_PAGINATION_SUMMARY(localeCode, total, range))),
+          onChange: (nextPage: number, nextPageSize: number) => {
+            inheritedPagination?.onChange?.(nextPage, nextPageSize)
+            if (nextPageSize !== currentPageSize) {
+              setCurrentPage(nextPage)
+              setCurrentPageSize(nextPageSize)
+              inheritedPagination?.onPageSizeChange?.(nextPageSize)
+              return
+            }
+            if (nextPage === currentPage) return
             setCurrentPage(nextPage)
-            setCurrentPageSize(nextPageSize)
-            inheritedPagination?.onPageSizeChange?.(nextPageSize)
-            return
-          }
-          if (nextPage === currentPage) return
-          setCurrentPage(nextPage)
-          inheritedPagination?.onPageChange?.(nextPage)
-        },
-      }
+            inheritedPagination?.onPageChange?.(nextPage)
+          },
+        }
 
   useLayoutEffect(() => {
     if (!viewportScroll) {
@@ -408,66 +516,117 @@ export function AdminTable({
     }
   }, [dataSource.length, viewportScroll])
 
-  const resolvedScroll = useMemo(() => ({
-    x: scroll?.x ?? estimatedScrollWidth,
-    y: scroll?.y ?? viewportScrollY,
-  }), [estimatedScrollWidth, scroll?.x, scroll?.y, viewportScrollY])
+  const resolvedScroll = useMemo(
+    () => ({
+      x: scroll?.x ?? estimatedScrollWidth,
+      y: scroll?.y ?? viewportScrollY,
+    }),
+    [estimatedScrollWidth, scroll?.x, scroll?.y, viewportScrollY],
+  )
 
-  const columnSetting = enableColumnSelection && columnSettingPlacement !== 'hidden' && selectableColumnOptions.length > 1 ? (
-    <Popover
-      trigger="click"
-      placement="bottomRight"
-      content={
-        <div className="soha-admin-table-column-popover">
-          <div className="soha-admin-table-column-actions">
-            <Button size="small" type="text" onClick={() => setVisibleColumnIds(selectableColumnOptions.map((option) => option.id))}>
-              {t('table.columns.selectAll', '全选')}
-            </Button>
+  const columnSetting =
+    enableColumnSelection &&
+    columnSettingPlacement !== 'hidden' &&
+    selectableColumnOptions.length > 1 ? (
+      <Popover
+        trigger="click"
+        placement="bottomRight"
+        content={
+          <div className="soha-admin-table-column-popover">
+            <div className="soha-admin-table-column-actions">
+              <Button
+                size="small"
+                type="text"
+                onClick={() =>
+                  setVisibleColumnIds(selectableColumnOptions.map((option) => option.id))
+                }
+              >
+                {t('table.columns.selectAll', '全选')}
+              </Button>
+            </div>
+            <Checkbox.Group
+              className="soha-admin-table-column-options"
+              options={selectableColumnOptions.map((option) => ({
+                label: option.label,
+                value: option.id,
+              }))}
+              value={activeColumnIds}
+              onChange={(value) => {
+                const next = value as string[]
+                if (next.length === 0) return
+                setVisibleColumnIds(next)
+              }}
+            />
+            <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
+              {t('table.columns.sessionHint', '列设置仅影响当前页面会话。')}
+            </Text>
           </div>
-          <Checkbox.Group
-            className="soha-admin-table-column-options"
-            options={selectableColumnOptions.map((option) => ({ label: option.label, value: option.id }))}
-            value={activeColumnIds}
-            onChange={(value) => {
-              const next = value as string[]
-              if (next.length === 0) return
-              setVisibleColumnIds(next)
-            }}
-          />
-          <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
-            {t('table.columns.sessionHint', '列设置仅影响当前页面会话。')}
-          </Text>
-        </div>
-      }
-    >
-      <Button
-        aria-label={t('table.columns.title', '列设置')}
-        className={columnSettingIconOnly ? 'soha-admin-table-column-setting-button is-icon-only' : 'soha-admin-table-column-setting-button'}
-        icon={<SettingOutlined />}
-        size="small"
-        title={t('table.columns.title', '列设置')}
-        type={columnSettingIconOnly ? 'text' : 'default'}
+        }
       >
-        {columnSettingIconOnly ? null : t('table.columns.title', '列设置')}
-      </Button>
-    </Popover>
-  ) : null
+        <Button
+          aria-label={t('table.columns.title', '列设置')}
+          className={
+            columnSettingIconOnly
+              ? 'soha-admin-table-column-setting-button is-icon-only'
+              : 'soha-admin-table-column-setting-button'
+          }
+          icon={<SettingOutlined />}
+          size="small"
+          title={t('table.columns.title', '列设置')}
+          type={columnSettingIconOnly ? 'text' : 'default'}
+        >
+          {columnSettingIconOnly ? null : t('table.columns.title', '列设置')}
+        </Button>
+      </Popover>
+    ) : null
 
   const toolbarColumnSetting = columnSettingPlacement === 'toolbar' ? columnSetting : null
   const headerColumnSetting = columnSettingPlacement === 'header' ? columnSetting : null
   const outsideColumnSetting = columnSettingPlacement === 'outside' ? columnSetting : null
-  const resolvedHeaderExtra = headerExtra || headerColumnSetting ? (
-    <>
-      {headerExtra}
-      {headerColumnSetting}
-    </>
-  ) : null
-  const resolvedToolbarExtra = toolbarExtra || toolbarColumnSetting ? (
-    <>
-      {toolbarExtra}
-      {toolbarColumnSetting}
-    </>
-  ) : null
+  const listControls =
+    enableDensity || onRefresh ? (
+      <>
+        {enableDensity ? (
+          <ManagementDensityButton
+            aria-label={t('table.density.toggle', '切换表格密度')}
+            size="small"
+            tooltip={
+              resolvedTableSize === 'small'
+                ? t('table.density.relaxed', '切换为宽松密度')
+                : t('table.density.compact', '切换为紧凑密度')
+            }
+            onClick={() => setDensity(resolvedTableSize === 'small' ? 'middle' : 'small')}
+          />
+        ) : null}
+        {onRefresh ? (
+          <ManagementRefreshButton
+            aria-label={t('table.refresh', '刷新列表')}
+            size="small"
+            tooltip={t('table.refresh', '刷新列表')}
+            loading={refreshing}
+            onClick={onRefresh}
+          />
+        ) : null}
+      </>
+    ) : null
+  const headerControls = columnSettingPlacement === 'header' ? listControls : null
+  const toolbarControls = columnSettingPlacement !== 'header' ? listControls : null
+  const resolvedHeaderExtra =
+    headerExtra || headerControls || headerColumnSetting ? (
+      <>
+        {headerExtra}
+        {headerControls}
+        {headerColumnSetting}
+      </>
+    ) : null
+  const resolvedToolbarExtra =
+    toolbarExtra || toolbarControls || toolbarColumnSetting ? (
+      <>
+        {toolbarExtra}
+        {toolbarControls}
+        {toolbarColumnSetting}
+      </>
+    ) : null
 
   const hasHeader = Boolean(title || resolvedHeaderExtra)
   const hasToolbar = Boolean(toolbar || resolvedToolbarExtra)
@@ -476,7 +635,9 @@ export function AdminTable({
     shellClassName,
     hasHeader || hasToolbar ? 'is-panel' : '',
     viewportScroll ? 'is-viewport-scroll' : '',
-  ].filter(Boolean).join(' ')
+  ]
+    .filter(Boolean)
+    .join(' ')
   const resolvedTableClassName = ['soha-admin-table', className].filter(Boolean).join(' ')
 
   const tableShell = (
@@ -484,28 +645,42 @@ export function AdminTable({
       {hasHeader ? (
         <div className="soha-admin-table-header">
           <div className="soha-admin-table-header-main">{title}</div>
-          {resolvedHeaderExtra ? <div className="soha-admin-table-header-extra">{resolvedHeaderExtra}</div> : null}
+          {resolvedHeaderExtra ? (
+            <div className="soha-admin-table-header-extra">{resolvedHeaderExtra}</div>
+          ) : null}
         </div>
       ) : null}
       {hasToolbar ? (
         <div className="soha-admin-table-toolbar">
           {toolbar ? <div className="soha-admin-table-toolbar-main">{toolbar}</div> : null}
-          {resolvedToolbarExtra ? <div className="soha-admin-table-toolbar-extra">{resolvedToolbarExtra}</div> : null}
+          {resolvedToolbarExtra ? (
+            <div className="soha-admin-table-toolbar-extra">{resolvedToolbarExtra}</div>
+          ) : null}
         </div>
       ) : null}
-      <Table
-        {...rest}
-        className={resolvedTableClassName}
-        columns={activeColumns}
-        dataSource={dataSource}
-        loading={loading}
-        locale={{ emptyText: empty ?? <ManagementState bordered={false} compact /> }}
-        pagination={resolvedPagination}
-        rowKey={rowKey}
-        rowSelection={resolvedRowSelection}
-        scroll={resolvedScroll}
-        size={tableSize}
-      />
+      {error ? (
+        <ManagementState
+          compact
+          kind="error"
+          title={t('table.loadFailed', '列表加载失败')}
+          description={error.message}
+        />
+      ) : null}
+      {!error || dataSource.length > 0 ? (
+        <Table
+          {...rest}
+          className={resolvedTableClassName}
+          columns={activeColumns}
+          dataSource={dataSource}
+          loading={loading}
+          locale={{ emptyText: empty ?? <ManagementState bordered={false} compact /> }}
+          pagination={resolvedPagination}
+          rowKey={rowKey}
+          rowSelection={resolvedRowSelection}
+          scroll={resolvedScroll}
+          size={resolvedTableSize}
+        />
+      ) : null}
     </div>
   )
 

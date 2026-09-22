@@ -1,4 +1,7 @@
 import {
+  ArrowRightOutlined,
+  AuditOutlined,
+  HistoryOutlined,
   FileProtectOutlined,
   SafetyCertificateOutlined,
   TeamOutlined,
@@ -6,9 +9,9 @@ import {
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { Button, Card } from 'antd'
+import { Link } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
 import {
-  OverviewChip,
   OverviewMetricCard,
   type OverviewChipItem,
   type OverviewMetricItem,
@@ -16,6 +19,7 @@ import {
 import { accessQueries } from '@/features/access'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { systemQueries } from '@/features/system'
+import './styles.css'
 
 export function SettingsOverviewPage() {
   const permissionQuery = usePermissionSnapshot()
@@ -141,13 +145,9 @@ export function SettingsOverviewPage() {
             value: onlineUsers,
             helper: `${sessions.length} 个活跃会话`,
             tone: 'success' as const,
-          },
-          {
-            key: 'sessions',
-            label: '活跃会话',
-            value: sessions.length,
-            helper: `${onlineUsers} 个用户在线`,
-            tone: 'default' as const,
+            icon: <TeamOutlined />,
+            path: '/system/online-users',
+            action: '查看会话',
           },
         ]
       : []),
@@ -159,6 +159,9 @@ export function SettingsOverviewPage() {
             value: operationSummaryQuery.data?.total ?? 0,
             helper: `失败 ${operationSummaryQuery.data?.failureCount ?? 0}`,
             tone: (operationSummaryQuery.data?.failureCount ?? 0) > 0 ? 'warning' : 'default',
+            icon: <HistoryOutlined />,
+            path: '/system/operations',
+            action: '查看操作',
           } as const,
         ]
       : []),
@@ -170,10 +173,13 @@ export function SettingsOverviewPage() {
             value: auditSummaryQuery.data?.total ?? 0,
             helper: `保留 ${auditSummaryQuery.data?.retentionDays ?? 0} 天`,
             tone: 'default' as const,
+            icon: <AuditOutlined />,
+            path: '/system/audit',
+            action: '查看审计',
           },
         ]
       : []),
-  ] satisfies OverviewChipItem[]
+  ]
 
   if (permissionQuery.isError) {
     return (
@@ -228,18 +234,45 @@ export function SettingsOverviewPage() {
         ))}
       </div>
 
-      <div className="soha-overview-summary-grid">
+      <div className="soha-settings-overview-panels">
         <Card
           className="soha-overview-panel-card"
-          title="用户状态"
+          title="账户与权限"
+          extra={
+            canViewUsers ? (
+              <Link to="/access/users">
+                查看用户 <ArrowRightOutlined />
+              </Link>
+            ) : null
+          }
           loading={permissionLoading || (canViewUsers && usersQuery.isLoading)}
         >
           {canViewUsers && !usersQuery.isError ? (
-            <div className="soha-overview-chip-grid">
-              {userStatus.map(({ key, ...item }) => (
-                <OverviewChip key={key} {...item} />
-              ))}
-            </div>
+            <>
+              <div className="soha-settings-account-summary">
+                {userStatus.slice(0, 2).map((item) => (
+                  <div key={item.key} className={`soha-settings-account-stat is-${item.tone}`}>
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                    <small>{item.helper}</small>
+                  </div>
+                ))}
+              </div>
+              <div className="soha-settings-account-membership">
+                {userStatus.slice(2).map((item) => (
+                  <div key={item.key} className="soha-settings-account-row">
+                    <div>
+                      <span>{item.label}</span>
+                      <small>{item.helper}</small>
+                    </div>
+                    <strong>
+                      {item.value}
+                      <small> 人</small>
+                    </strong>
+                  </div>
+                ))}
+              </div>
+            </>
           ) : usersQuery.isError ? (
             <ManagementState compact bordered={false} kind="error" title="用户状态加载失败" />
           ) : (
@@ -277,9 +310,21 @@ export function SettingsOverviewPage() {
             />
           ) : null}
           {systemActivity.length ? (
-            <div className="soha-overview-chip-grid">
-              {systemActivity.map(({ key, ...item }) => (
-                <OverviewChip key={key} {...item} />
+            <div className="soha-settings-activity-list">
+              {systemActivity.map((item) => (
+                <div key={item.key} className={`soha-settings-activity-row is-${item.tone}`}>
+                  <span className="soha-settings-activity-icon">{item.icon}</span>
+                  <div className="soha-settings-activity-copy">
+                    <span>
+                      {item.label}
+                      <strong>{item.value}</strong>
+                    </span>
+                    <small>{item.helper}</small>
+                  </div>
+                  <Link to={item.path}>
+                    {item.action} <ArrowRightOutlined />
+                  </Link>
+                </div>
               ))}
             </div>
           ) : !hasSystemActivityError ? (

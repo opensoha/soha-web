@@ -72,6 +72,9 @@ describe('compute api', () => {
   it('uses typed provider, relation, and action endpoints', async () => {
     apiMocks.getEnvelope.mockResolvedValue({ items: [] })
     apiMocks.postWithHeaders.mockResolvedValue({ data: {} })
+    apiMocks.postWithHeaders.mockResolvedValueOnce({
+      data: { healthy: true, status: 'healthy', checkedAt: '2026-09-22T00:00:00Z' },
+    })
 
     await computeApi.providerInstances({ domain: 'virtualization', providerKey: 'pve', limit: 15 })
     await computeApi.resourceRelations('container_runtime', 'runtime_host', 'host/one')
@@ -102,5 +105,12 @@ describe('compute api', () => {
       { reason: 'operator request' },
       expect.objectContaining({ 'Idempotency-Key': expect.stringMatching(/^compute-resource-action-/) }),
     )
+  })
+
+  it('rejects legacy asynchronous health responses', async () => {
+    apiMocks.postWithHeaders.mockResolvedValue({ data: { id: 'old-task', status: 'queued' } })
+    await expect(
+      computeApi.checkProviderHealth('virtualization', 'pve', 'connection-1', { expectedGeneration: 1 }),
+    ).rejects.toThrow('server upgrade')
   })
 })

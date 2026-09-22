@@ -5,6 +5,7 @@ import type { TableColumnsType } from 'antd'
 import { Form, Input, InputNumber, Typography } from 'antd'
 import { useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { ManagementQueryField } from '@/components/management-list'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementIconButton, ManagementState } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
@@ -181,19 +182,24 @@ export function ObservabilityTracesPage({ embedded = false }: { embedded?: boole
           runTraces(input)
         }}
       >
-        <Form.Item label="Trace ID" name="traceId">
+        <ManagementQueryField width={240} label="Trace ID" name="traceId">
           <Input allowClear placeholder="精确 Trace ID" />
-        </Form.Item>
-        <Form.Item label="最小耗时 (ms)" name="minDurationMs">
+        </ManagementQueryField>
+        <ManagementQueryField width={240} label="最小耗时 (ms)" name="minDurationMs">
           <InputNumber min={0} max={3_600_000} step={100} style={{ width: '100%' }} />
-        </Form.Item>
-        <Form.Item label="最大 Span" name="limit">
+        </ManagementQueryField>
+        <ManagementQueryField width={240} label="最大 Span" name="limit">
           <InputNumber min={1} max={500} style={{ width: '100%' }} />
-        </Form.Item>
+        </ManagementQueryField>
       </SignalQueryForm>
       <SignalState error={traces.error} idle={traces.isIdle} loading={traces.isPending} />
       {traces.data ? (
         <AdminTable
+          enableDensity
+          refreshing={traces.isPending}
+          onRefresh={() => {
+            if (traces.variables) runTraces(traces.variables)
+          }}
           columnSettingIconOnly
           columnSettingPlacement="header"
           columns={columns}

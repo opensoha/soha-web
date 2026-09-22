@@ -153,7 +153,6 @@ function CronJobEventsTab({ detail, enabled }: { detail: CronJobDetail; enabled:
 
   return (
     <ResourceEventsTimeline
-      title={localeCode === 'zh_CN' ? 'CronJob 事件时间线' : 'CronJob Event Timeline'}
       events={eventsQuery.data ?? []}
       loading={eventsQuery.isLoading}
       emptyDescription={localeCode === 'zh_CN' ? '当前 CronJob 暂无事件' : 'No CronJob events'}

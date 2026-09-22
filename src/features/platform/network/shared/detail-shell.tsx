@@ -221,7 +221,7 @@ export function NetworkDetailShell({
         items={items}
         onChange={onTabChange}
         size="small"
-        tabBarGutter={18}
+        tabBarGutter={32}
       />
     </div>
   )

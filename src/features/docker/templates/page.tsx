@@ -1,10 +1,22 @@
 import { useState } from 'react'
-import { App, Button, Form, Input, Popconfirm, Select, Space, Switch, Tabs, Typography } from 'antd'
+import {
+  App,
+  Button,
+  Form,
+  Input,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Switch,
+  Tabs,
+  Typography,
+} from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementDataPage } from '@/components/management-data-page'
-import { StepFormModal } from '@/components/step-form-modal'
+import { scrollableModalBodyStyle } from '@/components/modal-styles'
 import {
   ManagementIconButton,
   ManagementKeywordField,
@@ -45,7 +57,6 @@ function TemplatesTable() {
   const [filterForm] = Form.useForm<DockerFilterState>()
   const [form] = Form.useForm<DockerTemplateInput>()
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [currentStep, setCurrentStep] = useState(0)
   const [editing, setEditing] = useState<DockerTemplate | null>(null)
   const { dockerModuleEnabled, canCreateTemplates, canUpdateTemplates, canDeleteTemplates } =
     useDockerPermissions()
@@ -133,7 +144,6 @@ function TemplatesTable() {
                 onClick={() => {
                   setEditing(record)
                   form.setFieldsValue(record)
-                  setCurrentStep(0)
                   setDrawerOpen(true)
                 }}
               />
@@ -224,7 +234,6 @@ function TemplatesTable() {
                     composeContent: DEFAULT_COMPOSE,
                     enabled: true,
                   })
-                  setCurrentStep(0)
                   setDrawerOpen(true)
                 }}
               >
@@ -236,82 +245,80 @@ function TemplatesTable() {
         refreshing={templatesQuery.isFetching}
         onRefresh={() => templatesQuery.refetch()}
       />
-      <StepFormModal
+      <Modal
         title={
           editing
             ? localeText(localeCode, '编辑模板', 'Edit template')
             : localeText(localeCode, '新增模板', 'Add template')
         }
-        current={currentStep}
-        form={form}
-        loading={saveMutation.isPending}
         open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        onCurrentChange={setCurrentStep}
-        onFinish={(values) => saveMutation.mutate(values)}
-        steps={[
-          {
-            title: localeText(localeCode, '基本信息', 'Basic information'),
-            fieldNames: ['name', 'templateKind'],
-            children: (
-              <>
-                <Form.Item
-                  name="name"
-                  label={localeText(localeCode, '名称', 'Name')}
-                  rules={[{ required: true }]}
-                >
-                  <Input />
-                </Form.Item>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <Form.Item name="templateKind" label={localeText(localeCode, '类型', 'Type')}>
-                    <Select options={[{ value: 'compose', label: 'compose' }]} />
-                  </Form.Item>
-                  <Form.Item
-                    name="enabled"
-                    label={localeText(localeCode, '启用', 'Enabled')}
-                    valuePropName="checked"
-                  >
-                    <Switch />
-                  </Form.Item>
-                </div>
-                <Form.Item name="description" label={localeText(localeCode, '描述', 'Description')}>
-                  <Input />
-                </Form.Item>
-              </>
-            ),
-          },
-          {
-            title: localeText(localeCode, '模板内容', 'Template content'),
-            fieldNames: ['composeContent'],
-            children: (
-              <Tabs
-                items={[
-                  {
-                    key: 'compose',
-                    label: 'Compose',
-                    children: (
-                      <Form.Item name="composeContent" rules={[{ required: true }]}>
-                        <TextArea rows={16} spellCheck={false} />
-                      </Form.Item>
-                    ),
-                  },
-                  {
-                    key: 'env',
-                    label: '.env',
-                    children: (
-                      <Form.Item name="envContent">
-                        <TextArea rows={10} spellCheck={false} />
-                      </Form.Item>
-                    ),
-                  },
-                ]}
-              />
-            ),
-          },
-        ]}
-        submitText={localeText(localeCode, '保存', 'Save')}
+        onCancel={() => setDrawerOpen(false)}
+        onOk={() => form.submit()}
+        confirmLoading={saveMutation.isPending}
+        okText={localeText(localeCode, '保存', 'Save')}
+        cancelText={localeText(localeCode, '取消', 'Cancel')}
         width={760}
-      />
+        destroyOnHidden
+        mask={{ closable: false }}
+        style={{ top: 32 }}
+        styles={{ body: { ...scrollableModalBodyStyle, maxHeight: 'calc(100dvh - 180px)' } }}
+      >
+        <Form<DockerTemplateInput>
+          form={form}
+          layout="vertical"
+          preserve={false}
+          initialValues={
+            editing ?? { templateKind: 'compose', composeContent: DEFAULT_COMPOSE, enabled: true }
+          }
+          onFinish={(values) => saveMutation.mutate(values)}
+        >
+          <Form.Item
+            name="name"
+            label={localeText(localeCode, '名称', 'Name')}
+            rules={[{ required: true }]}
+          >
+            <Input />
+          </Form.Item>
+          <div className="soha-docker-form-grid">
+            <Form.Item name="templateKind" label={localeText(localeCode, '类型', 'Type')}>
+              <Select options={[{ value: 'compose', label: 'compose' }]} />
+            </Form.Item>
+            <Form.Item
+              name="enabled"
+              label={localeText(localeCode, '启用', 'Enabled')}
+              valuePropName="checked"
+            >
+              <Switch />
+            </Form.Item>
+          </div>
+          <Form.Item name="description" label={localeText(localeCode, '描述', 'Description')}>
+            <Input />
+          </Form.Item>
+
+          <Tabs
+            items={[
+              {
+                key: 'compose',
+                label: 'Compose',
+                children: (
+                  <Form.Item name="composeContent" rules={[{ required: true }]}>
+                    <TextArea rows={16} spellCheck={false} />
+                  </Form.Item>
+                ),
+              },
+              {
+                key: 'env',
+                label: '.env',
+                children: (
+                  <Form.Item name="envContent">
+                    <TextArea rows={10} spellCheck={false} />
+                  </Form.Item>
+                ),
+              },
+            ]}
+          />
+        </Form>
+      </Modal>
     </>
   )
 }

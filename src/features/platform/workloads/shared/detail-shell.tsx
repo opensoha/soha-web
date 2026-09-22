@@ -174,7 +174,7 @@ export function WorkloadDetailShell({
         }}
         indicator={{ size: (origin) => Math.max(16, origin - 16), align: 'center' }}
         size="small"
-        tabBarGutter={18}
+        tabBarGutter={32}
         items={[
           {
             key: 'overview',

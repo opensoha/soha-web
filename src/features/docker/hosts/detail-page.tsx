@@ -21,7 +21,7 @@ import {
   statusTag,
   useDockerPermissions,
 } from '../shared/ui'
-import { RuntimeHostStepModal } from './create-page'
+import { RuntimeHostModal } from './create-page'
 
 export function DockerHostDetailPage() {
   const { id = '' } = useParams()
@@ -194,11 +194,7 @@ export function DockerHostDetailPage() {
           ]}
         />
       )}
-      <RuntimeHostStepModal
-        editing={host ?? null}
-        open={editing}
-        onClose={() => setEditing(false)}
-      />
+      <RuntimeHostModal editing={host ?? null} open={editing} onClose={() => setEditing(false)} />
     </div>
   )
 }

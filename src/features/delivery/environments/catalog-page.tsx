@@ -90,7 +90,6 @@ export function EnvironmentCatalogPage() {
   return (
     <div className="soha-page">
       <DeliveryTable
-        title="环境目录"
         pagination={false}
         columns={columns}
         dataSource={environmentsQuery.data ?? []}

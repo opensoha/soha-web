@@ -14,6 +14,7 @@ import {
 } from '@/features/auth/auth-api'
 import { authKeys } from '@/features/auth/keys'
 import { useAuthStore } from '@/stores/auth-store'
+import { usePreferencesStore } from '@/stores/preferences-store'
 import type { User } from '@/types'
 
 vi.mock('@/features/auth/auth-api', async () => {
@@ -48,7 +49,8 @@ vi.mock('@/stores/preferences-store', () => {
   }
 })
 
-vi.mock('@/utils/branding', () => ({
+vi.mock('@/utils/branding', async () => ({
+  ...(await vi.importActual<typeof import('@/utils/branding')>('@/utils/branding')),
   applyBrandingSettings: vi.fn(),
   persistBrandingSettings: vi.fn(),
   readStoredBrandingSettings: () => ({
@@ -177,6 +179,7 @@ describe('login page', () => {
   })
 
   beforeEach(() => {
+    usePreferencesStore.getState().themeMode = 'light'
     vi.useFakeTimers()
     document.documentElement.dataset.themeMode = 'light'
     vi.mocked(fetchLoginOptions).mockResolvedValue({
@@ -241,34 +244,48 @@ describe('login page', () => {
     expect(container.textContent).not.toContain('虚拟化资源')
   })
 
-  it('uses public server branding before login', async () => {
-    vi.mocked(fetchLoginOptions).mockResolvedValue({
-      branding: {
-        appTitle: 'shanchui',
-        collapsedLogoUrl: 'https://cdn.example.com/icon.svg',
-        expandedLogoUrl: 'https://cdn.example.com/sidebar-logo.svg',
-        faviconUrl: '',
-        loginLogoUrl: 'https://cdn.example.com/login-logo.svg',
-        sidebarTitle: 'shanchui',
-        slogan: 'shanshui',
-      },
-      verification: { sliderEnabled: false },
-    })
+  it.each(['light', 'dark'] as const)(
+    'uses public server branding in %s mode before login',
+    async (mode) => {
+      usePreferencesStore.getState().themeMode = mode
+      vi.mocked(fetchLoginOptions).mockResolvedValue({
+        branding: {
+          appTitle: 'shanchui',
+          collapsedLogoUrl: 'https://cdn.example.com/icon.svg',
+          expandedLogoUrl: 'https://cdn.example.com/sidebar-logo.svg',
+          darkExpandedLogoUrl: 'https://cdn.example.com/sidebar-dark.svg',
+          darkCollapsedLogoUrl: 'https://cdn.example.com/icon-dark.svg',
+          faviconUrl: '',
+          loginLogoUrl: 'https://cdn.example.com/login-logo.svg',
+          sidebarTitle: 'shanchui',
+          slogan: 'shanshui',
+        },
+        verification: { sliderEnabled: false },
+      })
 
-    const container = await renderLoginPage({ prefetchLoginOptions: true })
+      const container = await renderLoginPage({ prefetchLoginOptions: true })
 
-    expect(fetchLoginOptions).toHaveBeenCalledOnce()
-    expect(container.querySelector('.soha-auth-flow-title')).toBeNull()
-    expect(container.querySelector<HTMLImageElement>('.soha-auth-hero-logo-img')).toMatchObject({
-      alt: 'shanchui',
-      src: 'https://cdn.example.com/sidebar-logo.svg',
-    })
-    expect(container.querySelector<HTMLImageElement>('.soha-auth-brand-logo-img')).toMatchObject({
-      alt: '',
-      src: 'https://cdn.example.com/icon.svg',
-    })
-    expect(container.querySelector('img[src="https://cdn.example.com/login-logo.svg"]')).toBeNull()
-  })
+      expect(fetchLoginOptions).toHaveBeenCalledOnce()
+      expect(container.querySelector('.soha-auth-flow-title')).toBeNull()
+      expect(container.querySelector<HTMLImageElement>('.soha-auth-hero-logo-img')).toMatchObject({
+        alt: 'shanchui',
+        src:
+          mode === 'dark'
+            ? 'https://cdn.example.com/sidebar-dark.svg'
+            : 'https://cdn.example.com/sidebar-logo.svg',
+      })
+      expect(container.querySelector<HTMLImageElement>('.soha-auth-brand-logo-img')).toMatchObject({
+        alt: '',
+        src:
+          mode === 'dark'
+            ? 'https://cdn.example.com/icon-dark.svg'
+            : 'https://cdn.example.com/icon.svg',
+      })
+      expect(
+        container.querySelector('img[src="https://cdn.example.com/login-logo.svg"]'),
+      ).toBeNull()
+    },
+  )
 
   it('restores an existing browser session from the login page', async () => {
     vi.mocked(restoreAuthSession)

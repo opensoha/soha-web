@@ -14,6 +14,19 @@ vi.mock('@/services/api-client', () => ({ api: apiMocks }))
 describe('virtualizationApi', () => {
   beforeEach(() => vi.clearAllMocks())
 
+  it('returns connection diagnostics and rejects legacy task responses', async () => {
+    const result = {
+      healthy: false,
+      status: 'unavailable',
+      checkedAt: '2026-09-22T00:00:00Z',
+      message: 'Connection refused',
+    }
+    apiMocks.post.mockResolvedValueOnce({ data: result })
+    await expect(virtualizationApi.testCluster('cluster-1')).resolves.toBe(result)
+    apiMocks.post.mockResolvedValueOnce({ data: { id: 'old-task', status: 'queued' } })
+    await expect(virtualizationApi.testCluster('cluster-1')).rejects.toThrow('server upgrade')
+  })
+
   it('unwraps collection endpoints and tolerates empty envelopes', async () => {
     apiMocks.get
       .mockResolvedValueOnce({})

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { App, Button, Card, Popconfirm, Progress, Space, Typography } from 'antd'
+import { App, Button, Card, Form, Popconfirm, Progress, Space, Typography } from 'antd'
 import { ReloadOutlined, RightOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
@@ -7,7 +7,8 @@ import {
   ManagementIconButton,
   ManagementQueryScope,
   ManagementState,
-  ManagementToolbarSearch,
+  ManagementKeywordField,
+  ManagementQueryGrid,
 } from '@/components/management-list'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
@@ -432,44 +433,51 @@ export function ExecutionHistoryPage() {
         className="soha-release-board__runs"
         aria-label={english ? 'Execution history' : '执行记录'}
       >
-        <div className="soha-release-board__filters">
-          <HistoryScopeFilters />
-          <ManagementIconButton
-            className="soha-release-board__refresh"
-            aria-label={english ? 'Refresh executions' : '刷新执行记录'}
-            icon={<ReloadOutlined />}
-            loading={history.isFetching}
-            size="small"
-            tooltip={english ? 'Refresh' : '刷新'}
-            onClick={() => void history.refetch()}
-          />
-        </div>
-        <div className="soha-release-board__filters">
-          <ManagementQueryScope
-            aria-label={english ? 'Filter executions by status' : '按状态筛选执行记录'}
-            label={english ? 'Status' : '状态'}
-            value={params.status || 'all'}
-            options={[
-              { value: 'all', label: english ? 'All' : '全部' },
-              { value: 'running', label: english ? 'Running' : '运行中' },
-              { value: 'approval', label: english ? 'Approval' : '待审批' },
-              { value: 'succeeded', label: english ? 'Succeeded' : '成功' },
-              { value: 'failed', label: english ? 'Failed' : '失败' },
-              { value: 'canceled', label: english ? 'Canceled' : '已取消' },
-            ]}
-            onChange={(value) => updateFilter('status', String(value))}
-          />
-          <ManagementToolbarSearch
-            aria-label={english ? 'Search executions' : '搜索执行记录'}
-            placeholder={
-              english
-                ? 'Search application, service, workflow or build'
-                : '搜索应用、服务、工作流或构建'
+        <Form className="soha-management-query-form" layout="horizontal">
+          <ManagementQueryGrid
+            actions={
+              <>
+                <Button onClick={() => setSearch({}, { replace: true, state: null })}>
+                  {english ? 'Reset' : '重置'}
+                </Button>
+                <ManagementIconButton
+                  aria-label={english ? 'Refresh executions' : '刷新执行记录'}
+                  icon={<ReloadOutlined />}
+                  loading={history.isFetching}
+                  tooltip={english ? 'Refresh' : '刷新'}
+                  onClick={() => void history.refetch()}
+                />
+              </>
             }
-            value={params.search || ''}
-            onChange={(value) => updateFilter('search', value)}
-          />
-        </div>
+          >
+            <ManagementKeywordField
+              inputProps={{ 'aria-label': english ? 'Search executions' : '搜索执行记录' }}
+              placeholder={
+                english
+                  ? 'Search application, service, workflow or build'
+                  : '搜索应用、服务、工作流或构建'
+              }
+              value={params.search || ''}
+              onChange={(value) => updateFilter('search', value)}
+            />
+            <ManagementQueryScope
+              aria-label={english ? 'Filter executions by status' : '按状态筛选执行记录'}
+              label={english ? 'Status' : '状态'}
+              value={params.status || 'all'}
+              options={[
+                { value: 'all', label: english ? 'All' : '全部' },
+                { value: 'running', label: english ? 'Running' : '运行中' },
+                { value: 'approval', label: english ? 'Approval' : '待审批' },
+                { value: 'succeeded', label: english ? 'Succeeded' : '成功' },
+                { value: 'failed', label: english ? 'Failed' : '失败' },
+                { value: 'canceled', label: english ? 'Canceled' : '已取消' },
+              ]}
+              onChange={(value) => updateFilter('status', String(value))}
+            />
+            <HistoryScopeFilters />
+          </ManagementQueryGrid>
+        </Form>
+
         {history.isError ? (
           <ManagementState
             bordered={false}

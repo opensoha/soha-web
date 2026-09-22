@@ -1,3 +1,4 @@
+import '../observability-pages.css'
 import { Typography } from 'antd'
 import type { TableProps } from 'antd'
 import { useQuery } from '@tanstack/react-query'
@@ -57,11 +58,15 @@ export function EventsPage() {
 
   return (
     <div className="soha-page">
+      <h1 className="soha-observability-page-heading">事件流</h1>
       <AdminTable
+        enableDensity
+        error={eventsQuery.error}
+        refreshing={eventsQuery.isFetching}
+        onRefresh={() => void eventsQuery.refetch()}
         columnSettingIconOnly
         columnSettingPlacement="header"
         shellClassName="soha-management-table-shell"
-        title="事件流"
         columns={columns}
         dataSource={eventsQuery.data ?? []}
         rowKey="id"

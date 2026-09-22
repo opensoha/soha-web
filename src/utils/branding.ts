@@ -9,6 +9,8 @@ export const defaultBrandingSettings: BrandingSettings = {
   loginLogoUrl: '/logo.svg',
   expandedLogoUrl: '/logo.svg',
   collapsedLogoUrl: '/logo.svg',
+  darkExpandedLogoUrl: '',
+  darkCollapsedLogoUrl: '',
   faviconUrl: '/logo.svg',
 }
 
@@ -35,9 +37,22 @@ export function normalizeBrandingSettings(
     collapsedLogoUrl:
       String(value?.collapsedLogoUrl ?? defaultBrandingSettings.collapsedLogoUrl).trim() ||
       defaultBrandingSettings.collapsedLogoUrl,
+    darkExpandedLogoUrl: String(value?.darkExpandedLogoUrl ?? '').trim(),
+    darkCollapsedLogoUrl: String(value?.darkCollapsedLogoUrl ?? '').trim(),
     faviconUrl:
       String(value?.faviconUrl ?? defaultBrandingSettings.faviconUrl).trim() ||
       defaultBrandingSettings.faviconUrl,
+  }
+}
+
+export function resolveBrandingLogos(branding: BrandingSettings, themeMode: 'light' | 'dark') {
+  const expandedLogoUrl = branding.expandedLogoUrl || branding.loginLogoUrl
+  const collapsedLogoUrl = branding.collapsedLogoUrl
+  return {
+    expandedLogoUrl:
+      themeMode === 'dark' ? branding.darkExpandedLogoUrl || expandedLogoUrl : expandedLogoUrl,
+    collapsedLogoUrl:
+      themeMode === 'dark' ? branding.darkCollapsedLogoUrl || collapsedLogoUrl : collapsedLogoUrl,
   }
 }
 

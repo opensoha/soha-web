@@ -256,7 +256,7 @@ export function ConfigurationDetailShell<TDetail extends ConfigurationDetailBase
         items={items}
         onChange={setActiveTabKey}
         size="small"
-        tabBarGutter={18}
+        tabBarGutter={32}
       />
     </div>
   )

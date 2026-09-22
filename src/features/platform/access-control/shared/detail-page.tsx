@@ -238,7 +238,7 @@ export function AccessControlResourceDetailPage<TDetail extends AccessControlDet
         items={items}
         onChange={setActiveTabKey}
         size="small"
-        tabBarGutter={18}
+        tabBarGutter={32}
       />
     </div>
   )

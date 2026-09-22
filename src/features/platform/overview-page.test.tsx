@@ -255,10 +255,10 @@ describe('OverviewPage error states', () => {
     expect(container.textContent).toContain('Pod restart rate is high')
     expect(container.textContent).toContain('集群：Cluster A · 命名空间：prod')
     expect(container.querySelector('[role="status"]')?.getAttribute('aria-label')).toContain('实时')
-    expect(container.textContent).toContain('总数 1')
+    expect(container.textContent).toContain('最近记录 1')
     expect(container.textContent).not.toContain('Governance audit success')
     expect(container.textContent).not.toContain('删除身份提供商')
-    expect(container.textContent).not.toContain('总数 22')
+    expect(container.textContent).not.toContain('最近记录 22')
   })
 
   it('keeps overflowing pod runtime lists keyboard accessible', async () => {
@@ -296,6 +296,7 @@ describe('OverviewPage error states', () => {
 
     await renderPage()
 
+    expect(container.querySelector('.soha-overview-attention-main a')?.getAttribute('href')).toBe('/workloads/pods/pod-0?clusterId=cluster-a&namespace=namespace-0')
     expect(container.querySelector('.soha-overview-attention-list')?.getAttribute('tabindex')).toBe(
       '0',
     )

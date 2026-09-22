@@ -32,9 +32,7 @@ export function DeliveryTestingPage() {
   const canViewBundles = hasPermission(permissionSnapshot, 'delivery.release-bundles.view')
   const canViewTasks = hasPermission(permissionSnapshot, 'delivery.execution-tasks.view')
   const canViewReleaseBoard = hasPermission(permissionSnapshot, 'delivery.release-board.view')
-  const bundlesQuery = useQuery(
-    deliveryQueries.releaseBundles.list({ enabled: canViewBundles }),
-  )
+  const bundlesQuery = useQuery(deliveryQueries.releaseBundles.list({ enabled: canViewBundles }))
   const tasksQuery = useQuery(deliveryQueries.executionTasks.list({ enabled: canViewTasks }))
   const releaseBoardQuery = useQuery(
     deliveryQueries.releaseBoard.list({ enabled: canViewReleaseBoard }),
@@ -202,12 +200,17 @@ export function DeliveryTestingPage() {
         </Card>
       </div>
       <DeliveryTable
-        title="候选版本与验证判断"
+        aria-label="候选版本与验证判断"
         rowKey="id"
         dataSource={latestBundles}
         empty={
           canViewBundles ? undefined : (
-            <ManagementState bordered={false} compact kind="no-permission" title="无版本包查看权限" />
+            <ManagementState
+              bordered={false}
+              compact
+              kind="no-permission"
+              title="无版本包查看权限"
+            />
           )
         }
         isError={canViewBundles && bundlesQuery.isError}
@@ -223,14 +226,16 @@ export function DeliveryTestingPage() {
           void releaseBoardQuery.refetch()
         }}
         columns={columns}
-        actions={canViewTasks ? (
-          <Button
-            icon={<ExperimentOutlined />}
-            onClick={() => navigate('/delivery/execution-tasks')}
-          >
-            查看验证任务
-          </Button>
-        ) : undefined}
+        actions={
+          canViewTasks ? (
+            <Button
+              icon={<ExperimentOutlined />}
+              onClick={() => navigate('/delivery/execution-tasks')}
+            >
+              查看验证任务
+            </Button>
+          ) : undefined
+        }
       />
     </div>
   )

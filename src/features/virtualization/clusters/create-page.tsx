@@ -77,6 +77,13 @@ export function VirtualizationConnectionStepModal({
   const [pveAuthMode, setPveAuthMode] = useState<PVEAuthMode>('password')
   const [replaceCredential, setReplaceCredential] = useState(false)
   const [form] = Form.useForm<VirtualizationClusterFormValues>()
+  const initialValues = useMemo(
+    () =>
+      editing
+        ? connectionFormValues(editing)
+        : { ...connectionFormValues(), provider: initialProvider },
+    [editing, initialProvider],
+  )
   const provider = Form.useWatch('provider', form) ?? 'kubevirt'
   const selectedKubernetesClusterId = Form.useWatch('kubernetesClusterId', form)
   const { virtualizationModuleEnabled, canCreateClusters, canUpdateClusters } =
@@ -118,12 +125,8 @@ export function VirtualizationConnectionStepModal({
     setPveAuthMode('password')
     setReplaceCredential(!editing)
     form.resetFields()
-    form.setFieldsValue(
-      editing
-        ? connectionFormValues(editing)
-        : { ...connectionFormValues(), provider: initialProvider },
-    )
-  }, [editing, form, initialProvider, open])
+    form.setFieldsValue(initialValues)
+  }, [editing, form, initialValues, open])
 
   const pveCredentialFields =
     pveAuthMode === 'token'
@@ -452,6 +455,7 @@ export function VirtualizationConnectionStepModal({
     <StepFormModal
       current={current}
       form={form}
+      initialValues={initialValues}
       loading={createMutation.isPending || updateMutation.isPending}
       onClose={onClose}
       onCurrentChange={setCurrent}

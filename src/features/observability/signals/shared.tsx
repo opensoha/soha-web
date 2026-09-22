@@ -5,8 +5,12 @@ import type {
 } from '@opensoha/contracts/gen/ts/sohaapi'
 import { SearchOutlined } from '@ant-design/icons'
 import type { FormInstance } from 'antd'
-import { Button, Card, Flex, Form, Input, Select } from 'antd'
-import { ManagementState } from '@/components/management-list'
+import { Button, Form, Input, Select } from 'antd'
+import {
+  ManagementQueryPanel,
+  ManagementQueryField,
+  ManagementState,
+} from '@/components/management-list'
 import { PlatformScopeToolbar } from '@/components/platform-scope-toolbar'
 import { observabilityScope } from './model'
 import './styles.css'
@@ -62,50 +66,45 @@ export function SignalQueryForm({
   submitLabel: string
 }) {
   return (
-    <Card className="soha-signal-query-card" size="small">
-      <Form<SignalFilters>
-        form={form}
-        initialValues={{ limit: 100, minDurationMs: 0, rangeMinutes: 15, ...initialValues }}
-        layout="vertical"
-        onValuesChange={(changed) => {
-          if ('rangeMinutes' in changed)
-            form.setFieldsValue({ timeFrom: undefined, timeTo: undefined })
-        }}
-        onFinish={onFinish}
-      >
-        <Form.Item hidden name="timeFrom">
-          <Input />
-        </Form.Item>
-        <Form.Item hidden name="timeTo">
-          <Input />
-        </Form.Item>
-        <Form.Item hidden name="dataSourceId">
-          <Input />
-        </Form.Item>
-        <Flex align="center" className="soha-signal-scope-row" gap={8} justify="space-between" wrap>
-          <PlatformScopeToolbar embedded showLabel={false} />
-          <Form.Item name="rangeMinutes" noStyle>
-            <Select aria-label="时间范围" options={timeOptions} style={{ width: 150 }} />
-          </Form.Item>
-        </Flex>
-        <div className="soha-signal-query-grid">
-          <Form.Item label="服务" name="service">
-            <Input allowClear placeholder="service.name" />
-          </Form.Item>
-          {showWorkload ? (
-            <Form.Item label="工作负载" name="workload">
-              <Input allowClear placeholder="可选" />
-            </Form.Item>
-          ) : null}
-          {children}
-        </div>
-        <Flex justify="flex-end">
-          <Button htmlType="submit" icon={<SearchOutlined />} loading={loading} type="primary">
-            {submitLabel}
-          </Button>
-        </Flex>
-      </Form>
-    </Card>
+    <ManagementQueryPanel
+      form={form}
+      initialValues={{ limit: 100, minDurationMs: 0, rangeMinutes: 15, ...initialValues }}
+      onFinish={onFinish}
+      actions={
+        <Button htmlType="submit" icon={<SearchOutlined />} loading={loading} type="primary">
+          {submitLabel}
+        </Button>
+      }
+    >
+      <Form.Item hidden name="timeFrom">
+        <Input />
+      </Form.Item>
+      <Form.Item hidden name="timeTo">
+        <Input />
+      </Form.Item>
+      <Form.Item hidden name="dataSourceId">
+        <Input />
+      </Form.Item>
+      <ManagementQueryField label="服务" name="service" width={240}>
+        <Input allowClear placeholder="service.name" />
+      </ManagementQueryField>
+      <ManagementQueryField label="时间范围" name="rangeMinutes" width={220}>
+        <Select
+          aria-label="时间范围"
+          options={timeOptions}
+          onChange={() => form.setFieldsValue({ timeFrom: undefined, timeTo: undefined })}
+        />
+      </ManagementQueryField>
+      <div className="soha-management-query-field soha-signal-scope-field">
+        <PlatformScopeToolbar embedded showLabel={false} />
+      </div>
+      {showWorkload ? (
+        <ManagementQueryField label="工作负载" name="workload" width={240}>
+          <Input allowClear placeholder="可选" />
+        </ManagementQueryField>
+      ) : null}
+      {children}
+    </ManagementQueryPanel>
   )
 }
 

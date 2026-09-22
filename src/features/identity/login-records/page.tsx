@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import '../shared/application-access.css'
 import { Alert, Button, DatePicker, Select } from 'antd'
 import { InfoCircleOutlined } from '@ant-design/icons'
 import type { TableColumnsType } from 'antd'
@@ -156,6 +157,7 @@ export function IdentityLoginRecordsPage() {
   const error = logsQuery.error
   return (
     <ManagementDataPage
+      className="soha-identity-access-page soha-identity-login-records-page"
       query={{
         onFinish: () => setFilters({ ...draft }),
         actions: (
@@ -175,7 +177,11 @@ export function IdentityLoginRecordsPage() {
               value={draft.keyword}
               onChange={(keyword) => setDraft({ ...draft, keyword })}
             />
-            <ManagementQueryField label={t('identity.loginRecords.application')}>
+            <ManagementQueryField
+              label={t('identity.loginRecords.application')}
+              width={200}
+              minWidth={180}
+            >
               <Select
                 allowClear
                 showSearch={{ optionFilterProp: 'label' }}
@@ -200,10 +206,11 @@ export function IdentityLoginRecordsPage() {
             />
             <ManagementQueryField
               label={t('identity.loginRecords.time')}
-              minWidth={240}
-              width={270}
+              minWidth={300}
+              width={320}
             >
               <DatePicker.RangePicker
+                style={{ width: '100%' }}
                 value={draft.dates}
                 onChange={(dates) => setDraft({ ...draft, dates })}
               />

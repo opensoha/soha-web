@@ -1,3 +1,4 @@
+import { StepForm } from '@/components/step-form'
 import { useMemo, useState } from 'react'
 import { EditOutlined, PlusOutlined } from '@ant-design/icons'
 import {
@@ -20,11 +21,9 @@ import {
 } from 'antd'
 import type { TableProps } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { StepFormModal } from '@/components/step-form-modal'
 import { AdminTable } from '@/components/admin-table'
-import {
-  ManagementIconButton,
-  ManagementTableToolbar,
-} from '@/components/management-list'
+import { ManagementIconButton } from '@/components/management-list'
 import { BooleanTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { formatDateTime } from '@/utils/time'
@@ -99,6 +98,7 @@ export function OnCallSettingsPage() {
   const [scheduleOpen, setScheduleOpen] = useState(false)
   const [rotationOpen, setRotationOpen] = useState(false)
   const [policyOpen, setPolicyOpen] = useState(false)
+  const [assignmentStep, setAssignmentStep] = useState(0)
   const [assignmentOpen, setAssignmentOpen] = useState(false)
   const [editingSchedule, setEditingSchedule] = useState<OnCallSchedule | null>(null)
   const [editingRotation, setEditingRotation] = useState<OnCallRotation | null>(null)
@@ -216,6 +216,7 @@ export function OnCallSettingsPage() {
 
   function openAssignmentEditor(record: OnCallAssignmentRule | null) {
     setEditingAssignment(record)
+    setAssignmentStep(0)
     setAssignmentOpen(true)
     assignmentForm.setFieldsValue(
       record
@@ -273,6 +274,7 @@ export function OnCallSettingsPage() {
     { title: '更新时间', dataIndex: 'updatedAt', render: formatDateTime },
     {
       title: '操作',
+      key: 'actions',
       dataIndex: 'id',
       render: (_: string, record) =>
         canUpdateOnCall ? (
@@ -322,6 +324,7 @@ export function OnCallSettingsPage() {
     { title: '更新时间', dataIndex: 'updatedAt', render: formatDateTime },
     {
       title: '操作',
+      key: 'actions',
       dataIndex: 'id',
       render: (_: string, record) =>
         canUpdateOnCall ? (
@@ -355,6 +358,7 @@ export function OnCallSettingsPage() {
     { title: '更新时间', dataIndex: 'updatedAt', render: formatDateTime },
     {
       title: '操作',
+      key: 'actions',
       dataIndex: 'id',
       render: (_: string, record) =>
         canUpdateOnCall ? (
@@ -442,6 +446,7 @@ export function OnCallSettingsPage() {
     { title: '更新时间', dataIndex: 'updatedAt', render: formatDateTime },
     {
       title: '操作',
+      key: 'actions',
       dataIndex: 'id',
       render: (_: string, record) =>
         canUpdateOnCall ? (
@@ -459,58 +464,32 @@ export function OnCallSettingsPage() {
   return (
     <div className="soha-page">
       <Tabs
-        tabBarExtraContent={
-          <ManagementTableToolbar>
-            {canCreateOnCall ? (
-              <>
-                <Button icon={<PlusOutlined />} onClick={() => openAssignmentEditor(null)}>
-                  新增分派规则
-                </Button>
-                <Button
-                  icon={<PlusOutlined />}
-                  onClick={() => {
-                    setEditingPolicy(null)
-                    policyForm.setFieldsValue({
-                      name: '',
-                      steps: [defaultEscalationStep()],
-                      enabled: true,
-                    })
-                    setPolicyOpen(true)
-                  }}
-                >
-                  新增升级链
-                </Button>
-                <Button
-                  icon={<PlusOutlined />}
-                  onClick={() => {
-                    setEditingRotation(null)
-                    rotationForm.setFieldsValue(defaultOnCallRotationFormValues())
-                    setRotationOpen(true)
-                  }}
-                >
-                  新增轮值
-                </Button>
-                <Button
-                  icon={<PlusOutlined />}
-                  onClick={() => {
-                    setEditingSchedule(null)
-                    scheduleForm.resetFields()
-                    setScheduleOpen(true)
-                  }}
-                >
-                  新增排班
-                </Button>
-              </>
-            ) : null}
-          </ManagementTableToolbar>
-        }
         items={[
           {
             key: 'assignments',
             label: '告警分派',
             children: (
               <AdminTable
+                enableDensity
+                error={assignmentsQuery.error}
+                refreshing={assignmentsQuery.isFetching}
+                onRefresh={() => void assignmentsQuery.refetch()}
+                columnSettingPlacement="header"
+                columnSettingIconOnly
                 shellClassName="soha-management-table-shell"
+                headerExtra={
+                  canCreateOnCall ? (
+                    <Button
+                      icon={<PlusOutlined />}
+                      type="primary"
+                      onClick={() => {
+                        openAssignmentEditor(null)
+                      }}
+                    >
+                      新增分派规则
+                    </Button>
+                  ) : null
+                }
                 columns={assignmentColumns}
                 dataSource={assignmentsQuery.data ?? []}
                 rowKey="id"
@@ -523,7 +502,28 @@ export function OnCallSettingsPage() {
             label: '排班',
             children: (
               <AdminTable
+                enableDensity
+                error={schedulesQuery.error}
+                refreshing={schedulesQuery.isFetching}
+                onRefresh={() => void schedulesQuery.refetch()}
+                columnSettingPlacement="header"
+                columnSettingIconOnly
                 shellClassName="soha-management-table-shell"
+                headerExtra={
+                  canCreateOnCall ? (
+                    <Button
+                      icon={<PlusOutlined />}
+                      type="primary"
+                      onClick={() => {
+                        setEditingSchedule(null)
+                        scheduleForm.resetFields()
+                        setScheduleOpen(true)
+                      }}
+                    >
+                      新增排班
+                    </Button>
+                  ) : null
+                }
                 columns={scheduleColumns}
                 dataSource={schedules}
                 rowKey="id"
@@ -536,7 +536,28 @@ export function OnCallSettingsPage() {
             label: '轮值',
             children: (
               <AdminTable
+                enableDensity
+                error={rotationsQuery.error}
+                refreshing={rotationsQuery.isFetching}
+                onRefresh={() => void rotationsQuery.refetch()}
+                columnSettingPlacement="header"
+                columnSettingIconOnly
                 shellClassName="soha-management-table-shell"
+                headerExtra={
+                  canCreateOnCall ? (
+                    <Button
+                      icon={<PlusOutlined />}
+                      type="primary"
+                      onClick={() => {
+                        setEditingRotation(null)
+                        rotationForm.setFieldsValue(defaultOnCallRotationFormValues())
+                        setRotationOpen(true)
+                      }}
+                    >
+                      新增轮值
+                    </Button>
+                  ) : null
+                }
                 columns={rotationColumns}
                 dataSource={rotationsQuery.data ?? []}
                 rowKey="id"
@@ -549,7 +570,32 @@ export function OnCallSettingsPage() {
             label: '升级链',
             children: (
               <AdminTable
+                enableDensity
+                error={policiesQuery.error}
+                refreshing={policiesQuery.isFetching}
+                onRefresh={() => void policiesQuery.refetch()}
+                columnSettingPlacement="header"
+                columnSettingIconOnly
                 shellClassName="soha-management-table-shell"
+                headerExtra={
+                  canCreateOnCall ? (
+                    <Button
+                      icon={<PlusOutlined />}
+                      type="primary"
+                      onClick={() => {
+                        setEditingPolicy(null)
+                        policyForm.setFieldsValue({
+                          name: '',
+                          steps: [defaultEscalationStep()],
+                          enabled: true,
+                        })
+                        setPolicyOpen(true)
+                      }}
+                    >
+                      新增升级链
+                    </Button>
+                  ) : null
+                }
                 columns={escalationColumns}
                 dataSource={policiesQuery.data ?? []}
                 rowKey="id"
@@ -561,10 +607,23 @@ export function OnCallSettingsPage() {
       />
 
       <Modal
+        className="soha-observability-modal"
+        style={{ top: 32 }}
+        classNames={{
+          body: 'soha-observability-modal-body',
+          header: 'soha-observability-modal-header',
+        }}
         title={editingSchedule ? '编辑排班' : '新建排班'}
         open={scheduleOpen}
         onCancel={() => setScheduleOpen(false)}
-        footer={null}
+        footer={
+          <Space>
+            <Button onClick={() => setScheduleOpen(false)}>取消</Button>
+            <Button type="primary" onClick={() => scheduleForm.submit()}>
+              保存
+            </Button>
+          </Space>
+        }
         destroyOnHidden
       >
         <Form
@@ -585,120 +644,130 @@ export function OnCallSettingsPage() {
           <Form.Item name="enabled" label="启用" valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Space>
-            <Button type="primary" htmlType="submit">
-              保存
-            </Button>
-            <Button onClick={() => setScheduleOpen(false)}>取消</Button>
-          </Space>
         </Form>
       </Modal>
 
-      <Modal
+      <StepFormModal
         title={editingAssignment ? '编辑告警分派规则' : '新建告警分派规则'}
         open={assignmentOpen}
-        onCancel={() => setAssignmentOpen(false)}
-        footer={null}
-        destroyOnHidden
-        width={960}
+        onClose={() => setAssignmentOpen(false)}
+        width={860}
       >
-        <Form layout="vertical" form={assignmentForm} onFinish={submitAssignment}>
-          <Space size={16} style={{ width: '100%' }}>
-            <Form.Item
-              name="name"
-              label="规则名称"
-              rules={[{ required: true }]}
-              style={{ flex: 1 }}
-            >
-              <Input />
-            </Form.Item>
-            <Form.Item name="routeOrder" label="匹配顺序" style={{ width: 160 }}>
-              <InputNumber min={1} style={{ width: '100%' }} />
-            </Form.Item>
-          </Space>
-          <Space size={16} style={{ width: '100%' }}>
-            <Form.Item name="integrationType" label="集成类型" style={{ flex: 1 }}>
-              <Select allowClear options={integrationTypeOptions} />
-            </Form.Item>
-            <Form.Item name="integrationId" label="集成ID" style={{ flex: 1 }}>
-              <Input placeholder="grafana-prod / am-main" />
-            </Form.Item>
-            <Form.Item name="severity" label="严重度" style={{ flex: 1 }}>
-              <Select allowClear options={severityOptions} />
-            </Form.Item>
-          </Space>
-          <Space size={16} style={{ width: '100%' }}>
-            <Form.Item name="service" label="服务/应用" style={{ flex: 1 }}>
-              <Input />
-            </Form.Item>
-            <Form.Item name="alertName" label="告警名称包含" style={{ flex: 1 }}>
-              <Input />
-            </Form.Item>
-            <Form.Item name="alertCategory" label="告警类型标签" style={{ flex: 1 }}>
-              <Input />
-            </Form.Item>
-          </Space>
-          <Space size={16} style={{ width: '100%' }}>
-            <Form.Item name="businessLineId" label="范围标签" style={{ flex: 1 }}>
-              <Input allowClear />
-            </Form.Item>
-            <Form.Item name="role" label="响应角色标签" style={{ flex: 1 }}>
-              <Select allowClear options={roleOptions} />
-            </Form.Item>
-            <Form.Item name="groupBy" label="分组键" style={{ flex: 1 }}>
-              <Select mode="tags" options={groupByOptions} />
-            </Form.Item>
-          </Space>
-          <Form.Item name="matchers" label="扩展匹配器(JSON)">
-            <Input.TextArea rows={4} />
-          </Form.Item>
-          <Space size={16} style={{ width: '100%' }}>
-            <Form.Item
-              name="targetType"
-              label="目标类型"
-              rules={[{ required: true }]}
-              style={{ width: 180 }}
-            >
-              <Select
-                options={[
-                  { value: 'escalation', label: '升级链' },
-                  { value: 'schedule', label: '排班' },
-                ]}
-              />
-            </Form.Item>
-            <Form.Item
-              name="targetRef"
-              label="升级目标"
-              rules={[{ required: true }]}
-              style={{ flex: 1 }}
-            >
-              <Select showSearch options={targetOptions} />
-            </Form.Item>
-            <Form.Item name="priority" label="兼容优先级" style={{ width: 160 }}>
-              <InputNumber min={0} style={{ width: '100%' }} />
-            </Form.Item>
-          </Space>
-          <Form.Item name="enabled" label="启用" valuePropName="checked">
-            <Switch />
-          </Form.Item>
-          <Space>
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={createAssignment.isPending || updateAssignment.isPending}
-            >
-              保存
-            </Button>
-            <Button onClick={() => setAssignmentOpen(false)}>取消</Button>
-          </Space>
-        </Form>
-      </Modal>
+        <StepForm
+          onCancel={() => setAssignmentOpen(false)}
+          contentMaxWidth="100%"
+          form={assignmentForm}
+          current={assignmentStep}
+          onCurrentChange={setAssignmentStep}
+          onFinish={submitAssignment}
+          loading={createAssignment.isPending || updateAssignment.isPending}
+          steps={[
+            {
+              title: '匹配条件',
+              fieldNames: ['name'],
+              children: (
+                <>
+                  {' '}
+                  <div className="soha-observability-form-grid">
+                    <Form.Item name="name" label="规则名称" rules={[{ required: true }]}>
+                      <Input />
+                    </Form.Item>
+                    <Form.Item name="routeOrder" label="匹配顺序">
+                      <InputNumber min={1} style={{ width: '100%' }} />
+                    </Form.Item>
+                  </div>
+                  <div className="soha-observability-form-grid">
+                    <Form.Item name="integrationType" label="集成类型">
+                      <Select allowClear options={integrationTypeOptions} />
+                    </Form.Item>
+                    <Form.Item name="integrationId" label="集成ID">
+                      <Input placeholder="grafana-prod / am-main" />
+                    </Form.Item>
+                    <Form.Item name="severity" label="严重度">
+                      <Select allowClear options={severityOptions} />
+                    </Form.Item>
+                  </div>
+                  <div className="soha-observability-form-grid">
+                    <Form.Item name="service" label="服务/应用">
+                      <Input />
+                    </Form.Item>
+                    <Form.Item name="alertName" label="告警名称包含">
+                      <Input />
+                    </Form.Item>
+                    <Form.Item name="alertCategory" label="告警类型标签">
+                      <Input />
+                    </Form.Item>
+                  </div>
+                  <div className="soha-observability-form-grid">
+                    <Form.Item name="businessLineId" label="范围标签">
+                      <Input allowClear />
+                    </Form.Item>
+                    <Form.Item name="role" label="响应角色标签">
+                      <Select allowClear options={roleOptions} />
+                    </Form.Item>
+                    <Form.Item name="groupBy" label="分组键">
+                      <Select mode="tags" options={groupByOptions} />
+                    </Form.Item>
+                  </div>
+                  <Form.Item name="matchers" label="扩展匹配器(JSON)">
+                    <Input.TextArea rows={4} />
+                  </Form.Item>
+                </>
+              ),
+            },
+            {
+              title: '分派目标',
+              children: (
+                <>
+                  {' '}
+                  <div className="soha-observability-form-grid">
+                    <Form.Item name="targetType" label="目标类型" rules={[{ required: true }]}>
+                      <Select
+                        options={[
+                          { value: 'escalation', label: '升级链' },
+                          { value: 'schedule', label: '排班' },
+                        ]}
+                      />
+                    </Form.Item>
+                    <Form.Item name="targetRef" label="升级目标" rules={[{ required: true }]}>
+                      <Select showSearch options={targetOptions} />
+                    </Form.Item>
+                    <Form.Item name="priority" label="兼容优先级">
+                      <InputNumber min={0} style={{ width: '100%' }} />
+                    </Form.Item>
+                  </div>
+                  <Form.Item name="enabled" label="启用" valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                </>
+              ),
+            },
+          ]}
+        />
+      </StepFormModal>
 
       <Modal
+        className="soha-observability-modal"
+        style={{ top: 32 }}
+        classNames={{
+          body: 'soha-observability-modal-body',
+          header: 'soha-observability-modal-header',
+        }}
         title={editingRotation ? '编辑轮值' : '新建轮值'}
         open={rotationOpen}
         onCancel={() => setRotationOpen(false)}
-        footer={null}
+        footer={
+          <Space>
+            <Button onClick={() => setRotationOpen(false)}>取消</Button>
+            <Button
+              type="primary"
+              onClick={() => rotationForm.submit()}
+              loading={createRotation.isPending || updateRotation.isPending}
+            >
+              保存
+            </Button>
+          </Space>
+        }
         destroyOnHidden
         width={720}
       >
@@ -757,24 +826,31 @@ export function OnCallSettingsPage() {
           <Form.Item name="enabled" label="启用" valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Space>
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={createRotation.isPending || updateRotation.isPending}
-            >
-              保存
-            </Button>
-            <Button onClick={() => setRotationOpen(false)}>取消</Button>
-          </Space>
         </Form>
       </Modal>
 
       <Modal
+        className="soha-observability-modal"
+        style={{ top: 32 }}
+        classNames={{
+          body: 'soha-observability-modal-body',
+          header: 'soha-observability-modal-header',
+        }}
         title={editingPolicy ? '编辑升级链' : '新建升级链'}
         open={policyOpen}
         onCancel={() => setPolicyOpen(false)}
-        footer={null}
+        footer={
+          <Space>
+            <Button onClick={() => setPolicyOpen(false)}>取消</Button>
+            <Button
+              type="primary"
+              onClick={() => policyForm.submit()}
+              loading={createPolicy.isPending || updatePolicy.isPending}
+            >
+              保存
+            </Button>
+          </Space>
+        }
         destroyOnHidden
         width={840}
       >
@@ -805,7 +881,7 @@ export function OnCallSettingsPage() {
                     }
                   >
                     <Row gutter={12}>
-                      <Col span={12}>
+                      <Col xs={24} sm={12}>
                         <Form.Item
                           {...rest}
                           name={[name, 'scheduleId']}
@@ -821,12 +897,12 @@ export function OnCallSettingsPage() {
                           />
                         </Form.Item>
                       </Col>
-                      <Col span={6}>
+                      <Col xs={12} sm={6}>
                         <Form.Item {...rest} name={[name, 'delayMinutes']} label="延迟(分钟)">
                           <InputNumber min={0} style={{ width: '100%' }} />
                         </Form.Item>
                       </Col>
-                      <Col span={6}>
+                      <Col xs={12} sm={6}>
                         <Form.Item {...rest} name={[name, 'role']} label="响应角色">
                           <Select allowClear options={roleOptions} />
                         </Form.Item>
@@ -853,16 +929,6 @@ export function OnCallSettingsPage() {
           <Form.Item name="enabled" label="启用" valuePropName="checked" style={{ marginTop: 16 }}>
             <Switch />
           </Form.Item>
-          <Space>
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={createPolicy.isPending || updatePolicy.isPending}
-            >
-              保存
-            </Button>
-            <Button onClick={() => setPolicyOpen(false)}>取消</Button>
-          </Space>
         </Form>
       </Modal>
     </div>

@@ -54,6 +54,17 @@ vi.mock('antd', () => ({
       <div data-testid="table-proxy">
         <table>
           <thead className="ant-table-thead" />
+          <tbody>
+            {props.dataSource.map((record: any, rowIndex: number) => (
+              <tr key={rowIndex}>
+                {props.columns.map((column: any, columnIndex: number) => (
+                  <td key={columnIndex} {...column.onCell?.(record, rowIndex)}>
+                    {column.render?.(record[column.dataIndex], record, rowIndex)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
         </table>
         <ul className="ant-table-pagination" />
       </div>
@@ -84,6 +95,51 @@ async function renderNode(node: ReactNode) {
 }
 
 describe('AdminTable', () => {
+  it('keeps opt-in density, refresh and column controls on one header row', async () => {
+    const refresh = vi.fn()
+    const container = await renderNode(
+      <AdminTable
+        columns={[
+          { title: '名称', dataIndex: 'name' },
+          { title: '标识', dataIndex: 'id' },
+        ]}
+        dataSource={[{ id: 'one', name: 'One' }]}
+        rowKey="id"
+        enableDensity
+        onRefresh={refresh}
+        columnSettingPlacement="header"
+        columnSettingIconOnly
+        headerExtra={<button>新增</button>}
+      />,
+    )
+    expect(container.querySelector('.soha-admin-table-toolbar')).toBeNull()
+    expect(container.querySelectorAll('.soha-admin-table-header button')).toHaveLength(4)
+    await act(async () =>
+      (container.querySelector('[aria-label="切换表格密度"]') as HTMLButtonElement).click(),
+    )
+    expect(captured.tableProps.size).toBe('middle')
+    await act(async () =>
+      (container.querySelector('[aria-label="刷新列表"]') as HTMLButtonElement).click(),
+    )
+    expect(refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves refresh access on failures without reporting an empty successful list', async () => {
+    const container = await renderNode(
+      <AdminTable
+        columns={[{ title: '名称', dataIndex: 'name' }]}
+        dataSource={[]}
+        rowKey="id"
+        error={new Error('请求失败')}
+        onRefresh={() => {}}
+        columnSettingPlacement="header"
+      />,
+    )
+    expect(container.textContent).toContain('请求失败')
+    expect(container.querySelector('[data-testid="table-proxy"]')).toBeNull()
+    expect(container.querySelector('[aria-label="刷新列表"]')).not.toBeNull()
+  })
+
   it('forwards native pagination events when migrating an embedded table', async () => {
     const onChange = vi.fn()
     await renderNode(
@@ -211,9 +267,9 @@ describe('AdminTable', () => {
     const header = container.querySelector<HTMLElement>('.ant-table-thead')!
     const pagination = container.querySelector<HTMLElement>('.ant-table-pagination')!
     Object.defineProperty(content, 'clientHeight', { configurable: true, value: 923 })
-    content.getBoundingClientRect = () => ({ bottom: 979, top: 56 } as DOMRect)
-    header.getBoundingClientRect = () => ({ bottom: 230 } as DOMRect)
-    pagination.getBoundingClientRect = () => ({ height: 36 } as DOMRect)
+    content.getBoundingClientRect = () => ({ bottom: 979, top: 56 }) as DOMRect
+    header.getBoundingClientRect = () => ({ bottom: 230 }) as DOMRect
+    pagination.getBoundingClientRect = () => ({ height: 36 }) as DOMRect
 
     await act(async () => window.dispatchEvent(new Event('resize')))
 
@@ -307,6 +363,81 @@ describe('AdminTable', () => {
     expect(tableColumnPresets.action.width).toBe(140)
   })
 
+  it('keeps normalized name-backed actions unsortable, including explicit sort state', async () => {
+    await renderNode(
+      <AdminTable
+        columns={[
+          { title: '名称', dataIndex: 'name' },
+          {
+            ...tableColumnPresets.action,
+            title: '操作',
+            dataIndex: 'name',
+            sorter: true,
+            sortOrder: 'ascend',
+            defaultSortOrder: 'descend',
+          },
+        ]}
+        dataSource={[{ id: '1', name: 'demo' }]}
+        rowKey="id"
+        localSorting
+      />,
+    )
+    expect(captured.tableProps.columns[0].sorter).toBeTypeOf('function')
+    expect(captured.tableProps.columns[1]).toMatchObject({
+      title: '',
+      sorter: false,
+      sortOrder: null,
+      defaultSortOrder: undefined,
+    })
+  })
+
+  it('sizes icon actions to the widest visible group and shrinks when permissions change', async () => {
+    const bounds = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        return {
+          width: this.classList.contains('soha-row-action-icons') ? this.children.length * 24 : 0,
+        } as DOMRect
+      })
+    const columns = [
+      {
+        ...tableColumnPresets.action,
+        title: '操作',
+        render: (_: unknown, record: { actions: number }) => (
+          <span className="soha-row-action-icons">
+            {Array.from({ length: record.actions }, (_, index) => (
+              <button key={index}>Action</button>
+            ))}
+          </span>
+        ),
+      },
+    ]
+    try {
+      await renderNode(
+        <AdminTable
+          columns={columns}
+          dataSource={[
+            { id: '1', actions: 1 },
+            { id: '2', actions: 4 },
+          ]}
+          rowKey="id"
+        />,
+      )
+      expect(captured.tableProps.columns[0].width).toBe(97)
+      expect(
+        captured.tableProps.columns[0].onCell().style['--soha-table-actions-column-width'],
+      ).toBe('97px')
+      await act(async () =>
+        roots[0].render(
+          <AdminTable columns={columns} dataSource={[{ id: '1', actions: 1 }]} rowKey="id" />,
+        ),
+      )
+      expect(captured.tableProps.columns[0].width).toBe(40)
+    } finally {
+      bounds.mockRestore()
+    }
+  })
+
   it('preserves the explicit width from the shared action preset', async () => {
     await renderNode(
       <AdminTable
@@ -355,7 +486,10 @@ describe('AdminTable', () => {
   it('keeps business action data as a regular visible column', async () => {
     await renderNode(
       <AdminTable
-        columns={[{ title: '动作', dataIndex: 'actions', render: () => null }]}
+        columns={[
+          { title: '动作', dataIndex: 'actions', render: () => null },
+          { title: '方式', key: 'action', width: 130, render: () => '滚动发布' },
+        ]}
         dataSource={[{ id: '1', actions: ['view'] }]}
         rowKey="id"
       />,
@@ -366,6 +500,12 @@ describe('AdminTable', () => {
       dataIndex: 'actions',
     })
     expect(captured.tableProps.columns[0].fixed).toBeUndefined()
+    expect(captured.tableProps.columns[1]).toMatchObject({
+      title: '方式',
+      key: 'action',
+      width: 130,
+    })
+    expect(captured.tableProps.columns[1].fixed).toBeUndefined()
   })
 
   it('keeps action columns visible and out of column selection', async () => {

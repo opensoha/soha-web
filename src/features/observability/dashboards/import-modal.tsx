@@ -1,3 +1,4 @@
+import '../observability-pages.css'
 import type {
   ObservabilityDashboardImportResult,
   ObservabilityGrafanaDashboardImportInput,
@@ -90,6 +91,12 @@ export function ImportDashboardModal({
 
   return (
     <Modal
+      className="soha-observability-modal"
+      style={{ top: 32 }}
+      classNames={{
+        body: 'soha-observability-modal-body',
+        header: 'soha-observability-modal-header',
+      }}
       destroyOnHidden
       open={open}
       title="添加仪表盘"

@@ -14,7 +14,7 @@ building the embedded Go binary.
 - `public/`: static browser assets copied by Vite, including `/logo.svg`.
 - `.github/workflows/ci.yml`: pull request and main branch verification.
 - `.github/workflows/release.yml`: tagged release artifact packaging.
-- `../soha-contracts`: local file dependency used by `@opensoha/contracts`.
+- `@opensoha/contracts`: exact published npm dependency recorded in the lockfile.
 
 ## Development
 
@@ -22,9 +22,7 @@ Prerequisites:
 
 - Node.js 22, matching CI.
 - npm 10+.
-- The sibling repository `../soha-contracts` checked out next to this
-  repository, because `package.json` depends on
-  `@opensoha/contracts: file:../soha-contracts`.
+- Registry access to the exact `@opensoha/contracts` version in `package-lock.json`.
 
 ```sh
 npm ci
@@ -100,8 +98,9 @@ Tagged releases and manual workflow dispatches run `.github/workflows/release.ym
 The workflow:
 
 1. Checks out `soha-web`.
-2. Pins `@opensoha/contracts` to the requested npm release version and verifies
-   the lockfile does not resolve it from a local `file:` dependency.
+2. Verifies the exact reviewed `@opensoha/contracts` version and registry
+   integrity in the lockfile, then installs with `npm ci`. An optional manual
+   version assertion must match the lockfile; it never rewrites dependencies.
 3. Runs lint, format, tests, coverage, and build.
 4. Packages `dist` as `soha-web-dist-${GITHUB_REF_NAME}.tar.gz`.
 5. Writes `soha-web-dist-${GITHUB_REF_NAME}.tar.gz.sha256` and verifies it with

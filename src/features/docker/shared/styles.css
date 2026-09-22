@@ -390,7 +390,26 @@
   width: 100%;
 }
 
+.soha-docker-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 12px;
+}
+
+.soha-docker-form-grid.is-access {
+  grid-template-columns: minmax(0, 1fr) 160px 120px;
+}
+
+.soha-docker-form-grid > .ant-form-item {
+  min-width: 0;
+}
+
 @media (max-width: 576px) {
+  .soha-docker-form-grid,
+  .soha-docker-form-grid.is-access {
+    grid-template-columns: 1fr;
+  }
+
   .soha-runtime-host-ownership-grid {
     grid-template-columns: 1fr;
   }

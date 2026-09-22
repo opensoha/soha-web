@@ -16,14 +16,14 @@
 }
 
 .soha-compute-overview-page {
-  gap: 16px;
+  gap: 12px;
 }
 
 .soha-compute-priority-grid,
 .soha-compute-infrastructure-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-  gap: 16px;
+  gap: 12px;
   align-items: start;
 }
 
@@ -44,25 +44,24 @@
 .soha-compute-overview-page
   :is(.soha-overview-panel-card, .soha-overview-runtime-card)
   .soha-compute-panel-header {
-  min-height: 52px;
-  padding-inline: var(--soha-card-padding);
-  border-bottom: 0;
+  min-height: 48px;
+  padding-inline: 14px;
+  border-bottom: 1px solid var(--soha-border-color);
 }
 
 .soha-compute-overview-page
   :is(.soha-overview-panel-card, .soha-overview-runtime-card)
   .soha-compute-panel-body {
-  padding: 4px var(--soha-card-padding) var(--soha-card-padding);
+  padding: 14px;
 }
 
 .soha-compute-overview-page .soha-overview-attention-row {
   flex-direction: row;
   flex-wrap: wrap;
-  padding: 12px 0;
-  border: 0;
-  border-bottom: 1px solid var(--soha-border-color);
-  border-radius: 0;
-  background: transparent;
+  padding: 12px;
+  border: 1px solid var(--soha-border-color);
+  border-radius: var(--soha-radius-control);
+  background: var(--soha-bg-surface);
   box-shadow: none;
 }
 
@@ -92,24 +91,13 @@
   border-color: var(--soha-border-color);
 }
 
-.soha-compute-overview-page .soha-overview-attention-row:first-child {
-  padding-top: 0;
+.soha-compute-attention-row.is-critical,
+.soha-compute-attention-row.is-warning {
+  border-inline-start: 3px solid var(--soha-warning);
 }
 
-.soha-compute-overview-page .soha-overview-attention-row:last-child {
-  border-bottom: 0;
-  padding-bottom: 0;
-}
-
-.soha-compute-overview-page .soha-overview-chip {
-  padding: 10px 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
-
-.soha-compute-overview-page .soha-overview-chip::before {
-  display: none;
+.soha-compute-attention-row.is-critical {
+  border-inline-start-color: var(--soha-danger);
 }
 
 .soha-compute-overview-page .soha-overview-chip.is-danger .soha-overview-chip-value {
@@ -134,7 +122,7 @@
 }
 
 .soha-compute-task-grid .soha-overview-chip-head {
-  min-height: 40px;
+  min-height: 28px;
 }
 
 .soha-compute-task-footer {
@@ -142,7 +130,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 12px;
-  margin-top: 24px;
+  margin-top: 16px;
 }
 
 .soha-compute-data-notes {
@@ -171,16 +159,7 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-/* These are resource counts, not a health result. Category color follows the metric identity. */
-.soha-compute-overview-page .soha-overview-metric-card {
-  background: var(--soha-bg-surface);
-  box-shadow: none;
-}
-
-.soha-compute-overview-page .soha-overview-metric-card::after {
-  display: none;
-}
-
+/* Counts use category accents; health is expressed by the status breakdown. */
 .soha-compute-overview-page .soha-compute-metric-vms {
   --soha-overview-accent: var(--soha-accent-blue);
 }
@@ -321,7 +300,7 @@
 }
 
 .soha-compute-snapshot .soha-overview-metric-card .soha-compute-metric-body {
-  padding: var(--soha-card-padding);
+  padding: 14px;
 }
 
 .soha-compute-metric-content {
@@ -335,8 +314,9 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  margin-bottom: 8px;
   color: var(--soha-text-secondary);
-  font-size: var(--soha-font-size-control);
+  font-size: var(--soha-font-size-supporting);
 }
 
 .soha-compute-metric-label > .anticon {
@@ -347,7 +327,7 @@
   display: block;
   min-width: 0;
   color: var(--soha-text-primary);
-  font-size: var(--soha-font-size-metric);
+  font-size: 30px;
   font-weight: 650;
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
@@ -380,7 +360,7 @@
   text-align: center;
 }
 
-@media (max-width: 1199px) {
+@media (max-width: 1099px) {
   .soha-compute-overview-page .soha-overview-metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -405,15 +385,9 @@
   color: var(--soha-text-tertiary);
 }
 
-.soha-compute-task-grid > .soha-overview-card-link + .soha-overview-card-link {
-  padding-left: 16px;
-  border-left: 1px solid var(--soha-border-color);
-  border-radius: 0;
-}
-
 .soha-compute-task-grid .soha-overview-chip-value {
-  font-size: 32px;
-  line-height: 40px;
+  font-size: 26px;
+  line-height: 32px;
 }
 
 .soha-compute-task-grid .soha-overview-chip-label::before {
