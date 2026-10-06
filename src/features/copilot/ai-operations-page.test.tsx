@@ -468,7 +468,8 @@ describe('AIOperationsPage delete actions', () => {
     const createSessionButton = findButtonByLabel(container, '创建 AI 会话')
     expect(createSessionButton).toBeTruthy()
     expect(createSessionButton?.disabled).toBe(true)
-    expect(createSessionButton?.getAttribute('title')).toBe('缺少 observe.ai.view 权限')
+    expect(createSessionButton?.getAttribute('aria-description')).toBe('缺少 observe.ai.view 权限')
+    expect(createSessionButton?.hasAttribute('title')).toBe(false)
   })
 
   it('opens directly on a linked inspection run from an artifact context link', async () => {

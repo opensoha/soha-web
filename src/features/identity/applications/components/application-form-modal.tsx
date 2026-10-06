@@ -122,7 +122,6 @@ function ApplicationIconInput({ id, value = '', onChange }: ApplicationIconInput
         <Button
           aria-label={clearLabel}
           icon={<DeleteOutlined />}
-          title={clearLabel}
           type="text"
           onClick={() => onChange?.('')}
         />

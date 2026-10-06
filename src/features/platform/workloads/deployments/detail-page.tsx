@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, useMemo } from 'react'
-import { Tag, Card, Spin, Tooltip, Typography } from 'antd'
+import { Tag, Card, Pagination, Spin, Typography } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
@@ -7,7 +7,7 @@ import { useAIPageContext } from '@/features/copilot'
 import { deliveryQueries, type ApplicationEnvironment } from '@/features/delivery'
 import { useI18n } from '@/i18n'
 import { ResourceEventsTimeline } from '@/components/resource-events-timeline'
-import { StatusTag } from '@/components/status-tag'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { formatDateTime } from '@/utils/time'
 import {
   conditionToTimelineEvent,
@@ -72,7 +72,19 @@ export function DeploymentDetailPage() {
   )
 
   const rolloutStatus = rolloutStatusQuery.data
-  const rolloutHistory = rolloutHistoryQuery.data ?? []
+  const rolloutHistory = useMemo(
+    () =>
+      [...(rolloutHistoryQuery.data ?? [])].sort((a, b) =>
+        b.revision.localeCompare(a.revision, undefined, { numeric: true }),
+      ),
+    [rolloutHistoryQuery.data],
+  )
+  const historyScope = JSON.stringify([clusterId, detailNamespace, deploymentName])
+  const [historyPagination, setHistoryPagination] = useState({ scope: historyScope, page: 1 })
+  const historyPage = Math.min(
+    historyPagination.scope === historyScope ? historyPagination.page : 1,
+    Math.max(1, Math.ceil(rolloutHistory.length / 3)),
+  )
   const deploymentPods = deploymentDetailQuery.data?.pods ?? []
   useAIPageContext({
     sourceWorkbench: 'platform',
@@ -114,80 +126,173 @@ export function DeploymentDetailPage() {
       >
         <div className="soha-rollout-status-section">
           {rolloutStatus ? (
-            <div className="soha-rollout-status-compact">
-              <span className="soha-rollout-status-chip">
-                <Text type="secondary">{localeCode === 'zh_CN' ? '版本' : 'Revision'}</Text>
-                <Text strong>{rolloutStatus.revision || '-'}</Text>
-              </span>
-              <span className="soha-rollout-status-chip">
-                <Text type="secondary">{localeCode === 'zh_CN' ? '状态' : 'Status'}</Text>
+            <>
+              <div className="soha-rollout-current-heading">
+                <Text
+                  strong
+                >{`${localeCode === 'zh_CN' ? '当前版本' : 'Current revision'} ${rolloutStatus.revision || '-'}`}</Text>
                 <StatusTag value={rolloutStatus.status} />
-              </span>
-              <Tooltip title={rolloutStatus.message || '-'}>
-                <span className="soha-rollout-status-chip soha-rollout-status-chip-message">
-                  <Text type="secondary">{localeCode === 'zh_CN' ? '消息' : 'Message'}</Text>
-                  <Text className="soha-rollout-status-message">
-                    {rolloutStatus.message || '-'}
-                  </Text>
-                </span>
-              </Tooltip>
-              <span className="soha-rollout-status-chip">
-                <Text type="secondary">{localeCode === 'zh_CN' ? '副本' : 'Desired'}</Text>
-                <Text>{rolloutStatus.desiredReplicas}</Text>
-              </span>
-              <span className="soha-rollout-status-chip">
-                <Text type="secondary">{localeCode === 'zh_CN' ? '更新' : 'Updated'}</Text>
-                <Text>{rolloutStatus.updatedReplicas}</Text>
-              </span>
-              <span className="soha-rollout-status-chip">
-                <Text type="secondary">{localeCode === 'zh_CN' ? '就绪' : 'Ready'}</Text>
-                <Text>{rolloutStatus.readyReplicas}</Text>
-              </span>
-              <span className="soha-rollout-status-chip">
-                <Text type="secondary">{localeCode === 'zh_CN' ? '可用' : 'Available'}</Text>
-                <Text>{rolloutStatus.availableReplicas}</Text>
-              </span>
-            </div>
+              </div>
+              <dl className="soha-rollout-counts">
+                {[
+                  [localeCode === 'zh_CN' ? '期望副本' : 'Desired', rolloutStatus.desiredReplicas],
+                  [localeCode === 'zh_CN' ? '已更新' : 'Updated', rolloutStatus.updatedReplicas],
+                  [localeCode === 'zh_CN' ? '已就绪' : 'Ready', rolloutStatus.readyReplicas],
+                  [
+                    localeCode === 'zh_CN' ? '可用副本' : 'Available',
+                    rolloutStatus.availableReplicas,
+                  ],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <dt>{label}</dt>
+                    <dd>{value ?? '-'}</dd>
+                  </div>
+                ))}
+              </dl>
+              {rolloutStatus.message ? (
+                <Text type="secondary" className="soha-rollout-status-message">
+                  {rolloutStatus.message}
+                </Text>
+              ) : null}
+            </>
           ) : (
             <ManagementState
               bordered={false}
               compact
-              title={localeCode === 'zh_CN' ? '暂无滚动状态' : 'No rollout status'}
+              kind={
+                rolloutStatusQuery.isPending
+                  ? 'loading'
+                  : rolloutStatusQuery.isError
+                    ? 'error'
+                    : 'empty'
+              }
+              title={
+                localeCode === 'zh_CN'
+                  ? rolloutStatusQuery.isPending
+                    ? '正在加载滚动状态'
+                    : rolloutStatusQuery.isError
+                      ? '滚动状态加载失败'
+                      : '暂无滚动状态'
+                  : rolloutStatusQuery.isPending
+                    ? 'Loading rollout status'
+                    : rolloutStatusQuery.isError
+                      ? 'Failed to load rollout status'
+                      : 'No rollout status'
+              }
             />
           )}
         </div>
-        <div className="soha-rollout-history-section">
+        <section
+          className="soha-rollout-history-section"
+          aria-label={localeCode === 'zh_CN' ? '版本历史' : 'Revision history'}
+        >
+          <div className="soha-rollout-history-heading">
+            <Text strong>{localeCode === 'zh_CN' ? '版本历史' : 'Revision history'}</Text>
+            <Text type="secondary">
+              {localeCode === 'zh_CN'
+                ? `共 ${rolloutHistory.length} 个版本`
+                : `${rolloutHistory.length} revisions`}
+            </Text>
+          </div>
           {rolloutHistory.length === 0 ? (
             <ManagementState
               bordered={false}
               compact
-              title={localeCode === 'zh_CN' ? '暂无滚动历史' : 'No rollout history'}
+              kind={
+                rolloutHistoryQuery.isPending
+                  ? 'loading'
+                  : rolloutHistoryQuery.isError
+                    ? 'error'
+                    : 'empty'
+              }
+              title={
+                localeCode === 'zh_CN'
+                  ? rolloutHistoryQuery.isPending
+                    ? '正在加载版本历史'
+                    : rolloutHistoryQuery.isError
+                      ? '版本历史加载失败'
+                      : '暂无滚动历史'
+                  : rolloutHistoryQuery.isPending
+                    ? 'Loading revision history'
+                    : rolloutHistoryQuery.isError
+                      ? 'Failed to load revision history'
+                      : 'No rollout history'
+              }
             />
           ) : (
-            <div className="soha-rollout-history-list">
-              {rolloutHistory.map((record) => (
-                <div key={record.revision} className="soha-rollout-history-row">
-                  <Text type="secondary" className="soha-rollout-history-time">
-                    {record.createdAt ? formatDateTime(record.createdAt) : '-'}
+            <>
+              <div className="soha-rollout-history-list" role="list">
+                {rolloutHistory.slice((historyPage - 1) * 3, historyPage * 3).map((record) => (
+                  <div key={record.revision} className="soha-rollout-history-row" role="listitem">
+                    <div className="soha-rollout-history-row-heading">
+                      <Text
+                        strong
+                        className="soha-rollout-history-revision"
+                      >{`${localeCode === 'zh_CN' ? '版本' : 'Revision'} ${record.revision || '-'}`}</Text>
+                      {record.revision === rolloutStatus?.revision ? (
+                        <MetadataTag
+                          label={localeCode === 'zh_CN' ? '当前版本' : 'Current'}
+                          tone="blue"
+                        />
+                      ) : null}
+                      <Text type="secondary" className="soha-rollout-history-time">
+                        {record.createdAt ? formatDateTime(record.createdAt) : '-'}
+                      </Text>
+                    </div>
+                    <div className="soha-rollout-history-meta">
+                      <span className="soha-rollout-history-name" title={record.name}>
+                        {record.name}
+                      </span>
+                      <span>{`${localeCode === 'zh_CN' ? '副本' : 'Replicas'} ${record.replicas ?? '-'}`}</span>
+                      <span>{`${localeCode === 'zh_CN' ? '就绪' : 'Ready'} ${record.readyReplicas ?? '-'}`}</span>
+                    </div>
+                    {record.images?.length ? (
+                      <details className="soha-rollout-images">
+                        <summary>
+                          <span>
+                            {localeCode === 'zh_CN'
+                              ? `镜像 ${record.images.length}`
+                              : `Images ${record.images.length}`}
+                          </span>
+                          <span className="soha-rollout-image-preview">{record.images[0]}</span>
+                        </summary>
+                        <ul>
+                          {record.images.map((image, index) => (
+                            <li key={`${index}:${image}`}>{image}</li>
+                          ))}
+                        </ul>
+                      </details>
+                    ) : (
+                      <Text type="secondary">
+                        {localeCode === 'zh_CN' ? '未记录镜像' : 'No image recorded'}
+                      </Text>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {rolloutHistory.length > 3 ? (
+                <nav
+                  className="soha-rollout-history-pagination"
+                  aria-label={
+                    localeCode === 'zh_CN' ? '版本历史分页' : 'Revision history pagination'
+                  }
+                >
+                  <Text type="secondary">
+                    {localeCode === 'zh_CN' ? '每页 3 个版本' : '3 revisions per page'}
                   </Text>
-                  <Text
-                    strong
-                    className="soha-rollout-history-revision"
-                  >{`${localeCode === 'zh_CN' ? '版本' : 'Revision'} ${record.revision || '-'}`}</Text>
-                  <Tag className="soha-rollout-history-tag">{`${localeCode === 'zh_CN' ? '副本' : 'Replicas'} ${record.replicas ?? '-'}`}</Tag>
-                  <Tag className="soha-rollout-history-tag">{`${localeCode === 'zh_CN' ? '就绪' : 'Ready'} ${record.readyReplicas ?? '-'}`}</Tag>
-                  <Text type="secondary" className="soha-rollout-history-image">
-                    {record.images?.length
-                      ? record.images.join(', ')
-                      : localeCode === 'zh_CN'
-                        ? '未记录镜像'
-                        : 'No image recorded'}
-                  </Text>
-                </div>
-              ))}
-            </div>
+                  <Pagination
+                    current={historyPage}
+                    pageSize={3}
+                    total={rolloutHistory.length}
+                    showSizeChanger={false}
+                    simple={{ readOnly: true }}
+                    onChange={(page) => setHistoryPagination({ scope: historyScope, page })}
+                  />
+                </nav>
+              ) : null}
+            </>
           )}
-        </div>
+        </section>
       </Card>
       <Card
         className="soha-detail-card"
@@ -269,10 +374,7 @@ export function DeploymentDetailPage() {
           </Card>
         }
       >
-        <ResourceMetricsPanel
-          data={metricsQuery.data}
-          loading={metricsQuery.isLoading}
-        />
+        <ResourceMetricsPanel data={metricsQuery.data} loading={metricsQuery.isLoading} />
       </Suspense>
     ),
   }

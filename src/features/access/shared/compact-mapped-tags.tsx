@@ -1,6 +1,7 @@
 import { Button, Popover, Space } from 'antd'
 import { MetadataTag, type MetadataTagTone } from '@/components/status-tag'
 import { useI18n } from '@/i18n'
+import { TableCellText } from '@/components/table-cell-content'
 
 interface CompactMappedTagsProps {
   emptyText: string
@@ -30,9 +31,8 @@ function CompactMappedTags({
       <MetadataTag
         key={value}
         className={className}
-        title={label}
         tone={tone}
-        label={<span className="soha-access-compact-tag-text">{label}</span>}
+        label={<TableCellText className="soha-access-compact-tag-text" value={label} />}
       />
     )
   }

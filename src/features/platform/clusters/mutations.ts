@@ -16,6 +16,7 @@ import {
   enableClusterLogCollection,
   preflightClusterLogCollection,
   updateCluster,
+  upgradeAgent,
 } from './api'
 import { clusterKeys } from './keys'
 import type {
@@ -34,6 +35,12 @@ async function invalidateClusterTarget(queryClient: QueryClient, target: Cluster
 }
 
 export const clusterMutations = {
+  upgradeAgent: (queryClient: QueryClient) =>
+    mutationOptions({
+      mutationKey: [...clusterKeys.all, 'agent-upgrade'] as const,
+      mutationFn: upgradeAgent,
+      onSuccess: (_data, variables) => invalidateClusterTarget(queryClient, variables),
+    }),
   createAgentInstallation: () =>
     mutationOptions<AgentInstallation, Error, ClusterTarget>({
       mutationKey: [...clusterKeys.all, 'agent-installation'] as const,

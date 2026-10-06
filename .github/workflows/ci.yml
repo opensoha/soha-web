@@ -6,22 +6,27 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout web
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           path: soha-web
           fetch-depth: 0
+          persist-credentials: false
       - name: Checkout contracts
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: opensoha/soha-contracts
           path: soha-contracts
-          token: ${{ secrets.OPENSOHA_CI_TOKEN || github.token }}
-      - uses: actions/setup-node@v6
+          token: ${{ github.token }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '22'
           cache: npm
@@ -32,6 +37,15 @@ jobs:
       - name: Release workflow guard
         working-directory: soha-web
         run: npm run check:release-workflow
+      - name: Enhanced workflow trust guard
+        working-directory: soha-web
+        run: npm run check:quality-workflows
+      - name: Install deterministic browser
+        working-directory: soha-web
+        run: npx playwright install --with-deps chromium
+      - name: E2E typecheck
+        working-directory: soha-web
+        run: npm run typecheck:e2e
       - name: Route architecture guard
         working-directory: soha-web
         run: npm run check:routes
@@ -66,13 +80,13 @@ jobs:
       - name: Bundle budget
         working-directory: soha-web
         run: npm run check:bundle-budget
-      - name: Kubernetes browser regression
+      - name: Browser regression including migrated Kubernetes baseline
         working-directory: soha-web
-        env:
-          CHROME_PATH: google-chrome
-        run: npm run browser:baseline
+        run: |
+          npm run check:auth-artifacts
+          npm run test:e2e
       - name: Upload bundle manifest
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: soha-web-vite-manifest
           path: soha-web/dist/.vite/manifest.json

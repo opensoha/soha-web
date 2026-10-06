@@ -1061,24 +1061,22 @@ export function AIWorkbenchController() {
               <span className="soha-ai-workbench__conversation-label-meta">{timeText}</span>
             </span>
             <span className="soha-ai-workbench__conversation-label-actions">
-              <Tooltip title="重命名">
-                <Button
-                  aria-label={`重命名 ${title}`}
-                  className="soha-ai-workbench__conversation-action"
-                  icon={<EditOutlined />}
-                  size="small"
-                  type="text"
-                  onClick={(event) => {
-                    event.preventDefault()
-                    event.stopPropagation()
-                    setRenameTargetId(item.id)
-                    setRenameValue(title)
-                    setRenameProject(sessionProject(item))
-                    setRenamePinned(item.metadata?.tags?.includes(PINNED_SESSION_TAG) ?? false)
-                    setRenameOpen(true)
-                  }}
-                />
-              </Tooltip>
+              <Button
+                aria-label={`重命名 ${title}`}
+                className="soha-ai-workbench__conversation-action"
+                icon={<EditOutlined />}
+                size="small"
+                type="text"
+                onClick={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  setRenameTargetId(item.id)
+                  setRenameValue(title)
+                  setRenameProject(sessionProject(item))
+                  setRenamePinned(item.metadata?.tags?.includes(PINNED_SESSION_TAG) ?? false)
+                  setRenameOpen(true)
+                }}
+              />
               <span onClick={(event) => event.stopPropagation()}>
                 <Popconfirm
                   title="确认归档此会话？"
@@ -1521,16 +1519,14 @@ export function AIWorkbenchController() {
                   </Text>
                 </span>
               </div>
-              <Tooltip title="模型设置">
-                <Button
-                  aria-label="模型设置"
-                  className="soha-ai-workbench__header-menu-button"
-                  icon={<ControlOutlined />}
-                  size="small"
-                  type="text"
-                  onClick={() => navigate(getAIModelSettingsPath(location.search))}
-                />
-              </Tooltip>
+              <Button
+                aria-label="模型设置"
+                className="soha-ai-workbench__header-menu-button"
+                icon={<ControlOutlined />}
+                size="small"
+                type="text"
+                onClick={() => navigate(getAIModelSettingsPath(location.search))}
+              />
             </div>
 
             <Input

@@ -2,6 +2,7 @@ import { queryOptions } from '@tanstack/react-query'
 import type { ScopeKey } from '@/types'
 import {
   getClusterDetail,
+  getAgentUpgradeStatus,
   getClusterLogCollection,
   listClusterCapabilities,
   listClusterLogDataSources,
@@ -16,6 +17,14 @@ function hasCluster(scope: ScopeKey) {
 }
 
 export const clusterQueries = {
+  agentUpgrade: (scope: ScopeKey) =>
+    queryOptions({
+      queryKey: clusterKeys.agentUpgrade(scope),
+      queryFn: () => getAgentUpgradeStatus({ scope }),
+      enabled: hasCluster(scope),
+      staleTime: 0,
+      retry: false,
+    }),
   list: (enabled = true) =>
     queryOptions<Cluster[]>({
       queryKey: clusterKeys.list(),

@@ -63,7 +63,6 @@ export function MessageActivity({
               size="small"
               type="text"
               aria-label="有帮助"
-              title="有帮助"
               icon={<LikeOutlined />}
               onClick={() => onFeedback('accepted')}
             />
@@ -71,7 +70,6 @@ export function MessageActivity({
               size="small"
               type="text"
               aria-label="有问题"
-              title="有问题"
               icon={<DislikeOutlined />}
               onClick={() => onFeedback('rejected')}
             />
@@ -82,7 +80,6 @@ export function MessageActivity({
             size="small"
             type="text"
             aria-label="保存为个人记忆"
-            title="保存为个人记忆"
             icon={<BookOutlined />}
             onClick={onSaveMemory}
           />
@@ -92,7 +89,6 @@ export function MessageActivity({
             size="small"
             type="text"
             aria-label="从此处分支"
-            title="从此处分支"
             icon={<BranchesOutlined />}
             onClick={onBranch}
           />

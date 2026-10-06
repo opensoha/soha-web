@@ -1388,7 +1388,7 @@ describe('app layout workspace navigation', () => {
       const toggle = container.querySelector<HTMLButtonElement>('.soha-header-sider-toggle')!
 
       expect(switcher.getAttribute('aria-label')).toBe(name)
-      expect(switcher.getAttribute('title')).toBe(collapsed ? name : null)
+      expect(switcher.hasAttribute('title')).toBe(false)
       expect(toggle.getAttribute('aria-label')).toBe(toggleLabel)
       expect(toggle.getAttribute('aria-expanded')).toBe(String(!collapsed))
       expect(testState.prefs.setSidebarCollapsed).not.toHaveBeenCalled()

@@ -2,6 +2,7 @@ import { Avatar, Space } from 'antd'
 import { AppstoreOutlined } from '@ant-design/icons'
 import { Link } from 'react-router-dom'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { TableCellText } from '@/components/table-cell-content'
 import type { IdentityApplication, IdentityApplicationStatus } from '../shared/types'
 
 const statusLabels: Record<IdentityApplicationStatus, string> = {
@@ -38,9 +39,10 @@ export function IdentityApplicationNameCell({ application }: { application: Iden
       <Link
         className="soha-identity-app-name-copy"
         to={'?application=' + encodeURIComponent(application.id)}
-        title={application.name}
       >
-        <strong>{application.name}</strong>
+        <strong>
+          <TableCellText value={application.name} />
+        </strong>
       </Link>
     </div>
   )

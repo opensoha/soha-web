@@ -1,8 +1,9 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import type { ReactNode } from 'react'
 import { App, Card, Spin, Tabs, Typography } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams, useSearchParams } from 'react-router-dom'
+import { useYamlDraft } from '@/components/use-yaml-draft'
 import { ManagementState } from '@/components/management-list'
 import { useAIPageContext } from '@/features/copilot'
 import { useClusterCapability } from '@/features/platform/cluster-capabilities'
@@ -46,12 +47,11 @@ function AccessControlYAMLTab({
   const queryClient = useQueryClient()
   const yamlQuery = useQuery(accessControlQueries.yaml(kind, target.scope, target.name))
   const updateMutation = useMutation(accessControlMutations.updateYAML(kind, queryClient))
-  const serverValue = yamlQuery.data?.content ?? ''
-  const [draft, setDraft] = useState('')
-
-  useEffect(() => {
-    setDraft(serverValue)
-  }, [serverValue])
+  const yamlState = useYamlDraft(
+    JSON.stringify([kind, target.scope.clusterId, target.scope.namespace, target.name]),
+    yamlQuery.data?.content,
+  )
+  const { value: draft, setValue: setDraft } = yamlState
 
   return (
     <Suspense
@@ -62,13 +62,19 @@ function AccessControlYAMLTab({
       }
     >
       <K8sYamlEditor
+        key={yamlState.resourceKey}
         value={draft}
+        original={yamlState.original}
+        serverChanged={yamlState.serverChanged}
+        onCompareLatest={yamlState.compareLatest}
+        loading={yamlQuery.isPending}
+        error={yamlQuery.error}
         onApply={() =>
           updateMutation.mutate(
             { ...target, content: draft },
             {
               onSuccess: (yaml) => {
-                setDraft(yaml.content ?? draft)
+                yamlState.applied(yaml.content)
                 void message.success(t('yamlEditor.applySuccess', 'YAML applied'))
               },
               onError: (error) => void message.error(error.message),
@@ -76,7 +82,7 @@ function AccessControlYAMLTab({
           )
         }
         onChange={setDraft}
-        onReset={() => setDraft(serverValue)}
+        onReset={yamlState.reset}
         onSave={() =>
           void message.info(
             localeCode === 'zh_CN' ? '暂不支持本地草稿' : 'Local draft save disabled here',

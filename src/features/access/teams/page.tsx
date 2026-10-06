@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Button, Col, Form, Input, Modal, Popconfirm, Row, Select, Space, Typography } from 'antd'
 import { MetadataTag } from '@/components/status-tag'
+import { TableCellText } from '@/components/table-cell-content'
 import { DeleteOutlined, EditOutlined, FolderOpenOutlined, PlusOutlined } from '@ant-design/icons'
 import type { TableColumnsType } from 'antd'
 import { useQuery } from '@tanstack/react-query'
@@ -102,7 +103,7 @@ export function AccessTeamsPage() {
       title: '组织路径',
       key: 'displayPath',
       render: (_value: unknown, record: AccessTeam) => (
-        <Text title={record.path}>{getOrganizationDisplayPath(crud.data, record)}</Text>
+        <TableCellText value={getOrganizationDisplayPath(crud.data, record)} />
       ),
     },
     {

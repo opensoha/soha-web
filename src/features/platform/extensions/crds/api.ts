@@ -17,6 +17,16 @@ export async function listCRDs(clusterId: string): Promise<CRD[]> {
   return response.data ?? []
 }
 
+export async function deleteCRDDefinition(target: {
+  clusterId: string
+  name: string
+  expectedUid: string
+}): Promise<void> {
+  if (!target.expectedUid.trim()) throw new Error('CRD deletion identity is required')
+  const path = `${buildCRDCatalogPath(target.clusterId)}/${encodeURIComponent(target.name)}`
+  await api.delete(`${path}?${new URLSearchParams({ expectedUid: target.expectedUid })}`)
+}
+
 export async function listCustomResources(
   clusterId: string,
   crd: CRD,
@@ -84,4 +94,17 @@ export async function deleteCustomResource(target: CustomResourceTarget): Promis
     ? `${path.includes('?') ? '&' : '?'}${new URLSearchParams({ expectedUid: target.expectedUid })}`
     : ''
   await api.delete(`${path}${identity}`)
+}
+
+export async function getCustomResourceAccess(
+  clusterId: string,
+  crd: CRD,
+  namespace?: string | null,
+): Promise<{ allowedActions: string[] }> {
+  const path = buildCustomResourceCollectionPath(clusterId, crd, namespace).replace(
+    '/resources',
+    '/access',
+  )
+  const response = await api.get<ApiResponse<{ allowedActions: string[] }>>(path)
+  return response.data
 }

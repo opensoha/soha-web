@@ -12,6 +12,7 @@ export const clusterKeys = {
   details: () => [...clusterKeys.all, 'detail'] as const,
   detail: (scope: ScopeKey) => [...clusterKeys.details(), normalizeClusterScope(scope)] as const,
   nodes: (scope: ScopeKey) => [...clusterKeys.detail(scope), 'nodes'] as const,
+  agentUpgrade: (scope: ScopeKey) => [...clusterKeys.detail(scope), 'agent-upgrade'] as const,
   logCollection: (scope: ScopeKey) => [...clusterKeys.detail(scope), 'log-collection'] as const,
   logDataSources: () => [...clusterKeys.all, 'log-data-sources'] as const,
 }

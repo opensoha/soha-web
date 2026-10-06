@@ -263,7 +263,7 @@ export function HelmChartsPage() {
           currentPage: page,
           pageSize,
           pageSizeOptions: PAGE_SIZE_OPTIONS,
-          showQuickJumper: total > pageSize,
+          showQuickJumper: false,
           total,
           onPageChange: setPage,
           onPageSizeChange: (nextPageSize: number) => {

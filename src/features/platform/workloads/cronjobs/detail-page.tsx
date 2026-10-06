@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { Button, Card, Descriptions, Tag, Tooltip } from 'antd'
+import { Button, Card, Descriptions, Tag } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
 import { ResourceEventsTimeline } from '@/components/resource-events-timeline'
 import { BooleanTag } from '@/components/status-tag'
+import { TableCellText } from '@/components/table-cell-content'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
@@ -94,10 +95,11 @@ function CronJobOverview({ detail }: { detail: CronJobDetail }) {
                 role="listitem"
               >
                 <div className="soha-related-pod-line">
-                <Tooltip title={job.name}>
                   <Button
                     type="link"
                     className="soha-related-pod-name"
+                    style={{ maxWidth: '100%' }}
+                    styles={{ content: { minWidth: 0 } }}
                     onClick={() =>
                       navigate(
                         buildWorkloadDetailPath(
@@ -110,30 +112,29 @@ function CronJobOverview({ detail }: { detail: CronJobDetail }) {
                       )
                     }
                   >
-                    {job.name}
+                    <TableCellText value={job.name} />
                   </Button>
-                </Tooltip>
-                <Tag color="blue" className="soha-related-pod-tag">
-                  {job.namespace || detail.namespace || '-'}
-                </Tag>
-                <Tag color="success" className="soha-related-pod-tag">
-                  {`${localeCode === 'zh_CN' ? '成功' : 'Succeeded'} ${job.succeeded ?? 0}`}
-                </Tag>
-                <Tag
-                  color={(job.failed ?? 0) > 0 ? 'error' : 'default'}
-                  className="soha-related-pod-tag"
-                >
-                  {`${localeCode === 'zh_CN' ? '失败' : 'Failed'} ${job.failed ?? 0}`}
-                </Tag>
-                <Tag
-                  color={(job.active ?? 0) > 0 ? 'processing' : 'default'}
-                  className="soha-related-pod-tag"
-                >
-                  {`${localeCode === 'zh_CN' ? '活跃' : 'Active'} ${job.active ?? 0}`}
-                </Tag>
-                <Tag color="geekblue" className="soha-related-pod-tag">
-                  {formatAgeSeconds(job.ageSeconds)}
-                </Tag>
+                  <Tag color="blue" className="soha-related-pod-tag">
+                    {job.namespace || detail.namespace || '-'}
+                  </Tag>
+                  <Tag color="success" className="soha-related-pod-tag">
+                    {`${localeCode === 'zh_CN' ? '成功' : 'Succeeded'} ${job.succeeded ?? 0}`}
+                  </Tag>
+                  <Tag
+                    color={(job.failed ?? 0) > 0 ? 'error' : 'default'}
+                    className="soha-related-pod-tag"
+                  >
+                    {`${localeCode === 'zh_CN' ? '失败' : 'Failed'} ${job.failed ?? 0}`}
+                  </Tag>
+                  <Tag
+                    color={(job.active ?? 0) > 0 ? 'processing' : 'default'}
+                    className="soha-related-pod-tag"
+                  >
+                    {`${localeCode === 'zh_CN' ? '活跃' : 'Active'} ${job.active ?? 0}`}
+                  </Tag>
+                  <Tag color="geekblue" className="soha-related-pod-tag">
+                    {formatAgeSeconds(job.ageSeconds)}
+                  </Tag>
                 </div>
               </div>
             ))}

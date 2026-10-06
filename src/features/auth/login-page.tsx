@@ -521,7 +521,7 @@ export function LoginPage() {
 
   useEffect(() => {
     let cancelled = false
-    let retryTimer: ReturnType<typeof window.setTimeout> | undefined
+    let retryTimer: number | undefined
 
     const navigateWithCurrentSession = async () => {
       const currentUser = useAuthStore.getState().user

@@ -3,6 +3,8 @@
 import {
   act,
   isValidElement,
+  StrictMode,
+  type ComponentProps,
   type InputHTMLAttributes,
   type ReactNode,
   type TextareaHTMLAttributes,
@@ -19,6 +21,7 @@ const formLifecycleMocks = vi.hoisted(() => ({
   destroyOnHidden: undefined as boolean | undefined,
   preserve: undefined as boolean | undefined,
   submit: undefined as ((values: Record<string, unknown>) => void) | undefined,
+  realForm: false,
 }))
 const selectMocks = vi.hoisted(() => ({ setAgentMode: undefined as (() => void) | undefined }))
 const apiGetMock = vi.hoisted(() =>
@@ -143,14 +146,36 @@ vi.mock('antd', async (importOriginal) => {
   const FormMock = ({
     children,
     onFinish,
-  }: {
-    children?: ReactNode
-    onFinish?: (values: Record<string, unknown>) => void
-  }) => {
+    ...props
+  }: Omit<import('antd').FormProps, 'children'> & { children?: ReactNode }) => {
     formLifecycleMocks.submit = onFinish
+    if (formLifecycleMocks.realForm) {
+      return (
+        <actual.Form {...props} onFinish={onFinish}>
+          {children}
+        </actual.Form>
+      )
+    }
     return <div>{children}</div>
   }
-  FormMock.Item = ({ children }: { children?: ReactNode }) => <div>{children}</div>
+  FormMock.List = (props: ComponentProps<typeof actual.Form.List>) =>
+    formLifecycleMocks.realForm ? (
+      <actual.Form.List {...props} />
+    ) : (
+      <>
+        {props.children(
+          [],
+          { add: vi.fn(), remove: vi.fn(), move: vi.fn() },
+          { errors: [], warnings: [] },
+        )}
+      </>
+    )
+  FormMock.Item = (props: import('antd').FormItemProps) =>
+    formLifecycleMocks.realForm ? (
+      <actual.Form.Item {...props} />
+    ) : (
+      <div>{props.children as ReactNode}</div>
+    )
   const InputMock = Object.assign(
     (props: InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
     {
@@ -201,11 +226,14 @@ vi.mock('antd', async (importOriginal) => {
     Select: ({
       onChange,
       options = [],
+      ...props
     }: {
       onChange?: (value: string) => void
       options?: Array<{ label: ReactNode; value: string }>
-    }) => {
-      const isConnectionMode = options.some((option) => option.value === 'agent')
+    } & import('antd').SelectProps) => {
+      if (formLifecycleMocks.realForm)
+        return <actual.Select {...props} options={options} onChange={onChange} />
+      const isConnectionMode = options.some((option) => option.value === 'direct_kubeconfig')
       if (isConnectionMode) {
         selectMocks.setAgentMode = () => onChange?.('agent')
         return (
@@ -229,7 +257,18 @@ vi.mock('antd', async (importOriginal) => {
 
 const mountedRoots: Root[] = []
 
-beforeAll(() => vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true))
+beforeAll(() => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn(() => ({
+      matches: false,
+      media: '',
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  })
+})
 beforeEach(() => {
   vi.clearAllMocks()
   authMocks.permissions = new Set([
@@ -241,6 +280,7 @@ beforeEach(() => {
   formLifecycleMocks.destroyOnHidden = undefined
   formLifecycleMocks.preserve = undefined
   formLifecycleMocks.submit = undefined
+  formLifecycleMocks.realForm = false
   selectMocks.setAgentMode = undefined
 })
 afterEach(async () => {
@@ -267,11 +307,13 @@ async function renderPage() {
   })
   await act(async () => {
     root.render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <ClustersPage />
-        </MemoryRouter>
-      </QueryClientProvider>,
+      <StrictMode>
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter>
+            <ClustersPage />
+          </MemoryRouter>
+        </QueryClientProvider>
+      </StrictMode>,
     )
   })
   await flushAsyncWork()
@@ -279,6 +321,28 @@ async function renderPage() {
 }
 
 describe('clusters list page boundaries', () => {
+  it('keeps new custom resource grants read-only through StrictMode field mounting', async () => {
+    formLifecycleMocks.realForm = true
+    const container = await renderPage()
+    await act(async () =>
+      container
+        .querySelector('button[aria-label="编辑集群"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true })),
+    )
+    await flushAsyncWork()
+    const addButton = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('添加授权'),
+    )
+    expect(addButton).toBeDefined()
+    await act(async () => addButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    await flushAsyncWork()
+    const labels = Array.from(container.querySelectorAll('.ant-select-selection-item')).map(
+      (item) => item.getAttribute('title'),
+    )
+    expect(labels).toEqual(expect.arrayContaining(['get', 'list', 'watch']))
+    expect(labels).not.toEqual(expect.arrayContaining(['create', 'update', 'patch', 'delete']))
+  })
+
   it('discards create form state when the modal closes', async () => {
     await renderPage()
 
@@ -352,10 +416,7 @@ describe('clusters list page boundaries', () => {
       '/clusters',
       expect.objectContaining({ connectionMode: 'agent', name: 'cluster-created' }),
     )
-    expect(apiPostMock).toHaveBeenNthCalledWith(
-      2,
-      '/clusters/cluster-created/agent-installation',
-    )
+    expect(apiPostMock).toHaveBeenNthCalledWith(2, '/clusters/cluster-created/agent-installation')
     expect(container.textContent).toContain('Agent 安装命令')
     expect(container.querySelector('textarea')?.value).toBe(command)
 
@@ -371,15 +432,10 @@ describe('clusters list page boundaries', () => {
       (button) => button.textContent === '刷新命令',
     )
     expect(refreshButton).toBeDefined()
-    await act(async () =>
-      refreshButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })),
-    )
+    await act(async () => refreshButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     await flushAsyncWork()
 
-    expect(apiPostMock).toHaveBeenNthCalledWith(
-      3,
-      '/clusters/cluster-created/agent-installation',
-    )
+    expect(apiPostMock).toHaveBeenNthCalledWith(3, '/clusters/cluster-created/agent-installation')
     expect(container.querySelector('textarea')?.value).toBe(refreshedCommand)
   })
 

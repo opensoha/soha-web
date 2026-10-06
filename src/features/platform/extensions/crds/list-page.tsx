@@ -1,18 +1,21 @@
 import { useDeferredValue, useMemo, useState } from 'react'
 import { Button, Space, Tag, Typography } from 'antd'
-import { RightOutlined } from '@ant-design/icons'
+import { DeleteOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
 import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import {
   ManagementDensityButton,
+  ManagementIconButton,
   ManagementRefreshButton,
   ManagementState,
   ManagementTableToolbar,
 } from '@/components/management-list'
 import { useI18n } from '@/i18n'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { tableColumnPresets } from '@/utils/table-columns'
 import type { TableColumnsType } from 'antd'
 import { ResourceQueryPanel } from '../shared/resource-query-panel'
 import { includesSearch, normalizeSearchKeyword } from '../shared/search'
@@ -20,6 +23,7 @@ import { buildCRDApiGroupDetailPath } from './paths'
 import { crdQueries } from './queries'
 import type { CRDApiGroupSummary } from './types'
 import { groupCRDsByApi } from './utils'
+import { DeleteCRDDefinitionModal } from './delete-definition-modal'
 import '@/features/platform/extensions/styles.css'
 
 const { Text } = Typography
@@ -28,7 +32,33 @@ export function CRDPage() {
   const { t, localeCode } = useI18n()
   const { clusterId } = usePlatformScopeStore()
   const navigate = useNavigate()
-  const [searchKeyword, setSearchKeyword] = useState('')
+  const permissionSnapshot = usePermissionSnapshot().data?.data
+  const canDelete = hasPermission(permissionSnapshot, 'platform.extensions.crds.delete')
+  const [deleteTarget, setDeleteTarget] = useState<{ clusterId: string; group: string } | null>(
+    null,
+  )
+  const [params, setParams] = useSearchParams()
+  const searchKeyword = params.get('q') ?? ''
+  const page = Math.max(1, Number.parseInt(params.get('page') ?? '1', 10) || 1)
+  const pageSize = Math.min(
+    100,
+    Math.max(
+      1,
+      Number.parseInt(params.get('pageSize') ?? String(K8S_TABLE_PAGE_SIZE), 10) ||
+        K8S_TABLE_PAGE_SIZE,
+    ),
+  )
+  const setSearchKeyword = (keyword: string) =>
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current)
+        if (keyword) next.set('q', keyword)
+        else next.delete('q')
+        next.set('page', '1')
+        return next
+      },
+      { replace: true },
+    )
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const normalizedKeyword = normalizeSearchKeyword(useDeferredValue(searchKeyword))
   const catalogQuery = useQuery(crdQueries.catalog(clusterId))
@@ -126,22 +156,36 @@ export function CRDPage() {
       ),
     },
     {
+      ...tableColumnPresets.action,
       title: '',
       key: 'actions',
-      width: 132,
-      align: 'right',
       render: (_value, record) => (
-        <Button
-          type="link"
-          icon={<RightOutlined />}
-          iconPlacement="end"
+        <ManagementIconButton
+          icon={<DeleteOutlined />}
+          danger
+          aria-label={localeCode === 'zh_CN' ? '删除 CRD 定义' : 'Delete CRD definition'}
+          disabled={
+            !clusterId ||
+            !record.crds.some(
+              (item) => item.uid && !item.deletingAt && item.allowedActions?.includes('delete'),
+            )
+          }
+          tooltip={
+            record.crds.some(
+              (item) => item.uid && !item.deletingAt && item.allowedActions?.includes('delete'),
+            )
+              ? localeCode === 'zh_CN'
+                ? '删除 CRD 定义'
+                : 'Delete CRD definition'
+              : localeCode === 'zh_CN'
+                ? '需要删除授权和包含 UID 的最新目录；Agent 需启用 platform.crds.delete'
+                : 'Requires deletion access and a current catalog with UIDs; enable platform.crds.delete on the agent'
+          }
           onClick={(event) => {
             event.stopPropagation()
-            openGroup(record.group)
+            if (clusterId) setDeleteTarget({ clusterId, group: record.group })
           }}
-        >
-          {t('page.extensions.crd.openDetail', localeCode === 'zh_CN' ? '查看详情' : 'Open')}
-        </Button>
+        />
       ),
     },
   ]
@@ -162,12 +206,26 @@ export function CRDPage() {
         columnSettingIconOnly
         columnSettingPlacement="header"
         shellClassName="soha-management-table-shell"
-        columns={columns}
+        columns={canDelete ? columns : columns.filter((column) => column.key !== 'actions')}
         dataSource={clusterId ? filteredApiGroups : []}
         rowKey="group"
         loading={catalogQuery.isLoading}
         localSorting
-        pageSize={K8S_TABLE_PAGE_SIZE}
+        pageSize={pageSize}
+        pagination={{
+          current: page,
+          pageSize,
+          onChange: (nextPage: number, size: number) =>
+            setParams(
+              (current) => {
+                const next = new URLSearchParams(current)
+                next.set('page', String(nextPage))
+                next.set('pageSize', String(size))
+                return next
+              },
+              { replace: true },
+            ),
+        }}
         tableSize={tableSize}
         scroll={{ x: 'max-content' }}
         viewportScroll
@@ -209,6 +267,14 @@ export function CRDPage() {
           />
         }
       />
+      {deleteTarget && deleteTarget.clusterId === clusterId ? (
+        <DeleteCRDDefinitionModal
+          key={`${deleteTarget.clusterId}/${deleteTarget.group}`}
+          clusterId={deleteTarget.clusterId}
+          definitions={apiGroups.find((item) => item.group === deleteTarget.group)?.crds ?? []}
+          onClose={() => setDeleteTarget(null)}
+        />
+      ) : null}
     </div>
   )
 }

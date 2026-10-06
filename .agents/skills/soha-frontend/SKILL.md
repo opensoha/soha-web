@@ -10,14 +10,10 @@ description: Implement or review soha-web React and Ant Design UI, shared tables
 1. Read the user task and actual affected implementation, callers, tests, styles and worktree
    state. Classify the work: maintenance (local fixes, copy or fields) stays scoped; explicitly
    authorized product redesign may reorganize the shell, layout, hierarchy and composition.
-2. For UI work, read [product-experience.md](references/product-experience.md) for product choices
-   and review criteria, then [theme-system.md](references/theme-system.md) for tokens and styling.
-   Read [architecture-development.md](references/architecture-development.md) for route, data,
-   state, feature, CSS or loading boundaries. Rules are targets, not proof of current compliance.
-3. Describe the user task, object, important state, primary action and secondary information;
-   identify unsuitable old structures and behaviors to preserve. Choose information organization
-   before choosing Card/Table/Form. Compare against the effective, explicitly identified design
-   reference; an unapproved reference image is not an approved implementation baseline.
+2. For UI organization and design review, load [soha-design](../soha-design/SKILL.md).
+   Read [theme-system.md](references/theme-system.md) for styling/token ownership and
+   [architecture-development.md](references/architecture-development.md) for route/data/state/CSS boundaries.
+3. Preserve the task's API, permissions, state and engine lifecycle when implementing the design.
 4. Reuse or adjust mature controls for that composition. Maintenance must not grow into an
    unsolicited redesign; authorized redesign must not shrink into color/radius/spacing changes
    because an old management template exists. Follow the `antd` skill for APIs: check the installed
@@ -55,7 +51,7 @@ description: Implement or review soha-web React and Ant Design UI, shared tables
   and Antd; no dependency migration or engine replacement without separate authorization.
 - Navigation may already identify a collection: avoid repeating its large title/copy/icon in
   content, while preserving a semantic accessible heading. A useful resource identity/action
-  region remains valid. Follow product-experience.md for the distinction and real branding.
+  region remains valid. Follow soha-design for the distinction and real branding.
 
 ## Table task contract
 
@@ -94,7 +90,7 @@ description: Implement or review soha-web React and Ant Design UI, shared tables
 
 - Run targeted tests and lint; after antd changes, run
   `antd lint <changed-path> --format json` (one path per invocation).
-- Verify actual visual changes against product-experience.md, including themes, viewports,
+- Verify actual visual changes against soha-design, including themes, viewports,
   long values, zoom, keyboard/IME, data/console truthfulness and error/permission states.
   Test/build success does not establish visual acceptance; report unavailable checks explicitly.
 - `package.json` and `.github/workflows/*.yml` are the executable gate source. Code completion

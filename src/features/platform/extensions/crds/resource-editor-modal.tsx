@@ -1,8 +1,10 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
-import { Alert, App, Button, Modal, Spin } from 'antd'
+import { lazy, Suspense, useEffect, type ReactNode } from 'react'
+import { Alert, App, Button, Card, Modal, Spin } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useYamlDraft } from '@/components/use-yaml-draft'
 import { ManagementState } from '@/components/management-list'
 import { useI18n } from '@/i18n'
+import { hasAllowedAction } from '@/features/auth'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { crdMutations } from './mutations'
 import { crdQueries } from './queries'
@@ -23,19 +25,31 @@ export interface CRDResourceEditorModalProps {
   resource?: CRDResourceInstance | null
 }
 
-export function CRDResourceEditorModal({
+export function CRDResourceEditor({
   crd,
   customResourceCapabilityReason,
   customResourceMutationsDisabled = false,
   mode,
   onClose,
   resource,
-}: CRDResourceEditorModalProps) {
+  editable = true,
+  header,
+  onStateChange,
+}: Omit<CRDResourceEditorModalProps, 'onClose'> & {
+  onClose?: () => void
+  editable?: boolean
+  header?: ReactNode
+  onStateChange?: (state: { dirty: boolean; busy: boolean }) => void
+}) {
   const { t, localeCode } = useI18n()
   const { message } = App.useApp()
   const { clusterId, namespace } = usePlatformScopeStore()
   const queryClient = useQueryClient()
-  const [draft, setDraft] = useState('')
+  const readOnly =
+    mode === 'edit' &&
+    (!editable ||
+      !hasAllowedAction(resource?.allowedActions, 'update') ||
+      Boolean(resource?.deletingAt))
   const effectiveNamespace = isNamespacedCRD(crd) ? (resource?.namespace ?? namespace ?? '') : ''
   const target: CustomResourceTarget | null =
     clusterId && mode === 'edit' && resource
@@ -46,29 +60,39 @@ export function CRDResourceEditorModal({
           resourceName: resource.name,
         }
       : null
-  const draftStorageKey = target
-    ? `soha:crd-yaml:${target.clusterId}:${crd.name}:${effectiveNamespace}:${target.resourceName}`
-    : null
+  const draftStorageKey =
+    target && !readOnly
+      ? `soha:crd-yaml:${target.clusterId}:${crd.name}:${effectiveNamespace}:${target.resourceName}`
+      : null
   const yamlQuery = useQuery(crdQueries.yaml(target, mode === 'edit'))
   const applyMutation = useMutation(crdMutations.apply(queryClient))
 
+  const yamlState = useYamlDraft(
+    JSON.stringify([mode, clusterId, crd.name, effectiveNamespace, resource?.name]),
+    mode === 'create'
+      ? buildDefaultCustomResourceTemplate(crd, namespace)
+      : yamlQuery.data?.content,
+    draftStorageKey,
+  )
+  const { value: draft, setValue: setDraft } = yamlState
   useEffect(() => {
-    if (mode === 'create') {
-      setDraft(buildDefaultCustomResourceTemplate(crd, namespace))
-      return
-    }
-    if (draftStorageKey && typeof window !== 'undefined') {
-      const savedDraft = window.localStorage.getItem(draftStorageKey)
-      if (savedDraft) {
-        setDraft(savedDraft)
-        return
-      }
-    }
-    setDraft(yamlQuery.data?.content ?? '')
-  }, [crd, draftStorageKey, mode, namespace, yamlQuery.data?.content])
+    onStateChange?.({
+      dirty: !readOnly && yamlState.original !== undefined && draft !== yamlState.original,
+      busy: applyMutation.isPending,
+    })
+  }, [onStateChange, readOnly, draft, yamlState.original, applyMutation.isPending])
 
   const apply = () => {
-    if (!clusterId) return
+    if (
+      !clusterId ||
+      readOnly ||
+      customResourceMutationsDisabled ||
+      applyMutation.isPending ||
+      (mode === 'edit' && yamlQuery.isError) ||
+      yamlState.serverChanged ||
+      !draft.trim()
+    )
+      return
     applyMutation.mutate(
       {
         clusterId,
@@ -79,7 +103,7 @@ export function CRDResourceEditorModal({
         resourceName: resource?.name,
       },
       {
-        onSuccess: () => {
+        onSuccess: (yaml) => {
           if (draftStorageKey && typeof window !== 'undefined') {
             window.localStorage.removeItem(draftStorageKey)
           }
@@ -92,7 +116,8 @@ export function CRDResourceEditorModal({
                 ? `${crd.kind} created`
                 : `${crd.kind} YAML updated`,
           )
-          onClose()
+          yamlState.applied(yaml.content)
+          onClose?.()
         },
         onError: (error) => void message.error(error.message),
       },
@@ -112,19 +137,7 @@ export function CRDResourceEditorModal({
       : 'This resource is cluster-scoped, so the namespace selector is ignored for requests.'
 
   return (
-    <Modal
-      title={
-        localeCode === 'zh_CN'
-          ? `${mode === 'create' ? '新建' : '编辑'} ${crd.kind}`
-          : `${mode === 'create' ? 'Create' : 'Edit'} ${crd.kind}`
-      }
-      open
-      onCancel={onClose}
-      footer={null}
-      width={1080}
-      destroyOnHidden
-      mask={{ closable: false }}
-    >
+    <>
       {!clusterId ? (
         <ManagementState
           bordered={false}
@@ -133,18 +146,27 @@ export function CRDResourceEditorModal({
           title={localeCode === 'zh_CN' ? '请先选择集群' : 'Select a cluster first'}
         />
       ) : mode === 'edit' && yamlQuery.isLoading ? (
-        <div
-          style={{ height: 520, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        >
-          <Spin size="large" />
-        </div>
-      ) : mode === 'edit' && yamlQuery.isError ? (
-        <Alert
-          type="error"
-          showIcon
-          title={localeCode === 'zh_CN' ? 'YAML 加载失败' : 'Failed to load YAML'}
-          description={yamlQuery.error.message}
-        />
+        <Card className="soha-detail-card">
+          {header}
+          <div style={{ height: 520, display: 'grid', placeItems: 'center' }}>
+            <Spin size="large" />
+          </div>
+        </Card>
+      ) : mode === 'edit' && yamlQuery.isError && !yamlQuery.data ? (
+        <Card className="soha-detail-card">
+          {header}
+          <ManagementState
+            bordered={false}
+            kind="error"
+            title={localeCode === 'zh_CN' ? 'YAML 加载失败' : 'Failed to load YAML'}
+            description={yamlQuery.error.message}
+            actions={
+              <Button onClick={() => void yamlQuery.refetch()}>
+                {localeCode === 'zh_CN' ? '重试' : 'Retry'}
+              </Button>
+            }
+          />
+        </Card>
       ) : (
         <Suspense
           fallback={
@@ -160,20 +182,29 @@ export function CRDResourceEditorModal({
             </div>
           }
         >
-          <Alert banner showIcon type="info" description={bannerDescription} />
-          <div style={{ height: 560, marginTop: 12 }}>
+          {mode === 'create' ? (
+            <Alert banner showIcon type="info" description={bannerDescription} />
+          ) : null}
+          <div>
             <K8sYamlEditor
-              value={draft}
+              header={
+                <>
+                  {header}
+                  {applyMutation.isError ? (
+                    <Alert showIcon type="error" title={applyMutation.error.message} />
+                  ) : null}
+                </>
+              }
+              key={yamlState.resourceKey}
+              value={readOnly ? (yamlQuery.data?.content ?? '') : draft}
+              original={mode === 'edit' && !readOnly ? yamlState.original : undefined}
+              readOnly={readOnly}
+              error={mode === 'edit' && yamlQuery.isError ? yamlQuery.error : undefined}
+              serverChanged={mode === 'edit' && yamlState.serverChanged}
+              onCompareLatest={yamlState.compareLatest}
               onChange={setDraft}
               onReset={() => {
-                if (mode === 'create') {
-                  setDraft(buildDefaultCustomResourceTemplate(crd, namespace))
-                  return
-                }
-                if (draftStorageKey && typeof window !== 'undefined') {
-                  window.localStorage.removeItem(draftStorageKey)
-                }
-                setDraft(yamlQuery.data?.content ?? '')
+                yamlState.reset()
                 void message.success(t('yamlEditor.resetSuccess', 'YAML draft reset'))
               }}
               onSave={() => {
@@ -202,11 +233,36 @@ export function CRDResourceEditorModal({
               description={customResourceCapabilityReason}
             />
           ) : null}
-          <div style={{ marginTop: 12, textAlign: 'right' }}>
-            <Button onClick={onClose}>{t('common.cancel', 'Cancel')}</Button>
-          </div>
+          {onClose && !header ? (
+            <div style={{ marginTop: 12, textAlign: 'right' }}>
+              <Button disabled={applyMutation.isPending} onClick={onClose}>
+                {t('common.cancel', 'Cancel')}
+              </Button>
+            </div>
+          ) : null}
         </Suspense>
       )}
+    </>
+  )
+}
+
+export function CRDResourceEditorModal(props: CRDResourceEditorModalProps) {
+  const { localeCode } = useI18n()
+  const readOnly =
+    props.mode === 'edit' &&
+    (!hasAllowedAction(props.resource?.allowedActions, 'update') ||
+      Boolean(props.resource?.deletingAt))
+  return (
+    <Modal
+      title={`${localeCode === 'zh_CN' ? (readOnly ? '查看' : props.mode === 'create' ? '新建' : '编辑') : readOnly ? 'View' : props.mode === 'create' ? 'Create' : 'Edit'} ${props.crd.kind}`}
+      open
+      onCancel={props.onClose}
+      footer={null}
+      width={1080}
+      destroyOnHidden
+      mask={{ closable: false }}
+    >
+      <CRDResourceEditor {...props} />
     </Modal>
   )
 }

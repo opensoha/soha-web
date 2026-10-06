@@ -1,8 +1,9 @@
-import { lazy, Suspense, useState, useEffect, useMemo } from 'react'
+import { lazy, Suspense, useState, useMemo } from 'react'
 import type { ReactNode } from 'react'
 import { App, Tabs, Card, Spin } from 'antd'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
+import { useYamlDraft } from '@/components/use-yaml-draft'
 import { ManagementState } from '@/components/management-list'
 import { useAIPageContext } from '@/features/copilot'
 import { PlatformResourceOverview } from '@/features/platform/shared/resource-overview'
@@ -94,7 +95,6 @@ export function WorkloadDetailShell({
     ...yamlQueryOptions,
     enabled: Boolean(yamlQueryOptions.enabled) && resolvedActiveTabKey === 'yaml',
   })
-  const yamlServerValue = yamlQuery.data?.content ?? ''
   const yamlDraftStorageKey = useMemo(
     () =>
       clusterId
@@ -102,7 +102,8 @@ export function WorkloadDetailShell({
         : '',
     [clusterId, detailNamespace, name, resource],
   )
-  const [yamlDraft, setYamlDraft] = useState('')
+  const yamlState = useYamlDraft(yamlDraftStorageKey, yamlQuery.data?.content, yamlDraftStorageKey)
+  const { value: yamlDraft, setValue: setYamlDraft } = yamlState
   const yamlApplyCapability = useClusterCapability('resource.yaml.apply', localeCode)
   const yamlApplyDisabledReason = yamlApplyCapability.disabled
     ? yamlApplyCapability.reason
@@ -123,10 +124,7 @@ export function WorkloadDetailShell({
         content: yamlDraft,
       }),
     onSuccess: (resourceYAML) => {
-      if (yamlDraftStorageKey) {
-        window.localStorage.removeItem(yamlDraftStorageKey)
-      }
-      setYamlDraft(resourceYAML.content ?? yamlDraft)
+      yamlState.applied(resourceYAML.content)
       void message.success(t('yamlEditor.applySuccess', 'YAML applied'))
       yamlQuery.refetch()
       detailQuery.refetch()
@@ -135,12 +133,6 @@ export function WorkloadDetailShell({
   })
 
   const detail = detailQuery.data
-
-  useEffect(() => {
-    if (!yamlDraftStorageKey) return
-    const draft = yamlDraftStorageKey ? window.localStorage.getItem(yamlDraftStorageKey) : null
-    setYamlDraft(draft ?? yamlServerValue)
-  }, [yamlDraftStorageKey, yamlServerValue])
 
   if (detailQuery.isLoading)
     return (
@@ -224,13 +216,16 @@ export function WorkloadDetailShell({
                 }
               >
                 <K8sYamlEditor
+                  key={yamlState.resourceKey}
                   value={yamlDraft}
+                  original={yamlState.original}
+                  serverChanged={yamlState.serverChanged}
+                  onCompareLatest={yamlState.compareLatest}
+                  loading={yamlQuery.isPending}
+                  error={yamlQuery.error}
                   onChange={setYamlDraft}
                   onReset={() => {
-                    if (yamlDraftStorageKey) {
-                      window.localStorage.removeItem(yamlDraftStorageKey)
-                    }
-                    setYamlDraft(yamlServerValue)
+                    yamlState.reset()
                     void message.success(t('yamlEditor.resetSuccess', 'YAML draft reset'))
                   }}
                   onSave={() => {

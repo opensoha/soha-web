@@ -23,3 +23,5 @@
 - 视觉完成需要实际页面与交互状态验证，构建和类型成功不能替代设计验收。共享组件通过也不代表页面接入通过；不自行代签用户认可。
 - 按仓库记录本次修改、验证命令与对应提交/差异，区分通过、失败、跳过和未运行。成功结果只在相关代码、依赖及环境未变化时复用；不得为了变绿放宽断言、更新违规基线或隐藏失败。
 - 文档和技能改动只检查元数据、链接、内容一致性及差异，不机械构建应用。保留用户未提交改动，不手改 `dist/` 等生成物；仅提交任务所属变更。
+
+- UI 设计读取 [soha-design](.agents/skills/soha-design/SKILL.md)；UI/HTTP/视觉/Midscene 验收读取 [soha-web-testing](.agents/skills/soha-web-testing/SKILL.md)。实施仍遵循 soha-frontend；权限、模型外发与 CI 边界在多仓环境按需读取 Core 的 soha-security，独立 clone 保留本仓门禁，不自动安装相邻仓库。

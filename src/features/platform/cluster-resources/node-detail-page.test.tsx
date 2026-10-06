@@ -212,7 +212,7 @@ describe('node detail lazy YAML boundary', () => {
     expect(container.querySelector('[data-testid="yaml-editor"]')).not.toBeNull()
   })
 
-  it('does not request node YAML when Agent support is only partial', async () => {
+  it('requests node YAML when Agent support is partial but not disabled', async () => {
     testState.capability.disabled = false
     testState.capability.reason =
       'Built-in generic and custom-resource YAML is supported; node YAML still needs parity cleanup.'
@@ -227,9 +227,8 @@ describe('node detail lazy YAML boundary', () => {
     await act(async () => yamlTab?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     await flushAsyncWork()
 
-    expect(container.textContent).toContain('节点 YAML 暂不可用')
-    expect(container.textContent).toContain('node YAML still needs parity cleanup')
-    expect(requestedPaths().some((path) => path.endsWith('/yaml'))).toBe(false)
-    expect(testState.runtimeLoads.yaml).toBe(0)
+    expect(container.textContent).not.toContain('节点 YAML 暂不可用')
+    expect(requestedPaths().some((path) => path.endsWith('/yaml'))).toBe(true)
+    expect(container.querySelector('[data-testid="yaml-editor"]')).not.toBeNull()
   })
 })

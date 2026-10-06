@@ -17,7 +17,9 @@ export function ConfigurationMutatingWebhookConfigurationDetailPage() {
         },
       ]}
       renderOverview={(detail) =>
-        Array.isArray(detail.webhooks) ? <AdmissionWebhooks webhooks={detail.webhooks} /> : null
+        Array.isArray(detail.webhooks) ? (
+          <AdmissionWebhooks key={detail.name} webhooks={detail.webhooks} />
+        ) : null
       }
       scopeMode="cluster"
     />

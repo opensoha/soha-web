@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { App, Card, Spin, Typography } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useYamlDraft } from '@/components/use-yaml-draft'
 import { K8sYamlEditor } from '@/components/k8s-yaml-editor'
 import { useI18n } from '@/i18n'
 import { nodeMutations } from './mutations'
@@ -21,18 +22,12 @@ export default function NodeYAMLPanel({
   const queryClient = useQueryClient()
   const yamlQuery = useQuery(nodeQueries.yaml(scope, nodeName))
   const applyYAMLMutation = useMutation(nodeMutations.applyYAML(queryClient))
-  const serverValue = yamlQuery.data?.content ?? ''
   const draftStorageKey = useMemo(
     () => (scope.clusterId && nodeName ? `kc:yaml-draft:${scope.clusterId}:node:${nodeName}` : ''),
     [nodeName, scope.clusterId],
   )
-  const [draft, setDraft] = useState('')
-
-  useEffect(() => {
-    if (!yamlQuery.data) return
-    const savedDraft = draftStorageKey ? window.localStorage.getItem(draftStorageKey) : null
-    setDraft(savedDraft ?? serverValue)
-  }, [draftStorageKey, serverValue, yamlQuery.data])
+  const yamlState = useYamlDraft(draftStorageKey, yamlQuery.data?.content, draftStorageKey)
+  const { value: draft, setValue: setDraft } = yamlState
 
   if (yamlQuery.isLoading) {
     return (
@@ -57,11 +52,14 @@ export default function NodeYAMLPanel({
 
   return (
     <K8sYamlEditor
+      key={yamlState.resourceKey}
       value={draft}
+      original={yamlState.original}
+      serverChanged={yamlState.serverChanged}
+      onCompareLatest={yamlState.compareLatest}
       onChange={setDraft}
       onReset={() => {
-        if (draftStorageKey) window.localStorage.removeItem(draftStorageKey)
-        setDraft(serverValue)
+        yamlState.reset()
         void message.success(t('yamlEditor.resetSuccess', 'YAML draft reset'))
       }}
       onSave={() => {
@@ -74,8 +72,7 @@ export default function NodeYAMLPanel({
           { scope, name: nodeName, content: draft },
           {
             onSuccess: (response) => {
-              if (draftStorageKey) window.localStorage.removeItem(draftStorageKey)
-              setDraft(response.content ?? draft)
+              yamlState.applied(response.content)
               void message.success(t('yamlEditor.applySuccess', 'YAML applied'))
             },
             onError: (error) => void message.error(error.message),

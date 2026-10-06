@@ -15,19 +15,7 @@ import {
   UserOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  App,
-  Badge,
-  Button,
-  Dropdown,
-  Empty,
-  Input,
-  Menu,
-  Spin,
-  Tag,
-  Tooltip,
-  Typography,
-} from 'antd'
+import { App, Badge, Button, Dropdown, Empty, Input, Menu, Spin, Tag, Typography } from 'antd'
 import { Link, useNavigate } from 'react-router-dom'
 import { ManagementDensityButton } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
@@ -155,15 +143,13 @@ function ApplicationCard({
           <PortalApplicationAvatar application={application} />
           {launchLoading ? <LoadingOutlined className="soha-portal-app-loading" spin /> : null}
         </span>
-        <Tooltip title={application.name}>
-          <span className="soha-portal-app-title">{application.name}</span>
-        </Tooltip>
+        <Text className="soha-portal-app-title" ellipsis={{ tooltip: application.name }}>
+          {application.name}
+        </Text>
         {viewMode === 'small' ? null : (
-          <Tooltip title={application.description}>
-            <span className="soha-portal-app-description">
-              {application.description || t('providerPortal.home.noDescription', 'No description')}
-            </span>
-          </Tooltip>
+          <Text className="soha-portal-app-description" ellipsis={{ tooltip: true }}>
+            {application.description || t('providerPortal.home.noDescription', 'No description')}
+          </Text>
         )}
       </button>
       {!isEnabled || application.featured ? (
@@ -528,24 +514,17 @@ export function SohaProviderPortalPage() {
                 </span>
                 <span className="soha-portal-group-nav-heading-actions">
                   <Text type="secondary">{applicationTags.length}</Text>
-                  <Tooltip
-                    title={t(
+                  <Button
+                    aria-label={t(
                       'providerPortal.home.collapseApplicationGroups',
                       'Collapse application groups',
                     )}
-                  >
-                    <Button
-                      aria-label={t(
-                        'providerPortal.home.collapseApplicationGroups',
-                        'Collapse application groups',
-                      )}
-                      className="soha-portal-group-nav-toggle"
-                      icon={<MenuFoldOutlined />}
-                      size="small"
-                      type="text"
-                      onClick={() => updatePortalLayout({ isGroupCollapsed: true })}
-                    />
-                  </Tooltip>
+                    className="soha-portal-group-nav-toggle"
+                    icon={<MenuFoldOutlined />}
+                    size="small"
+                    type="text"
+                    onClick={() => updatePortalLayout({ isGroupCollapsed: true })}
+                  />
                 </span>
               </div>
               <Menu
@@ -574,34 +553,25 @@ export function SohaProviderPortalPage() {
               />
               <div className="soha-portal-view-actions">
                 {isGroupCollapsed ? (
-                  <Tooltip
-                    title={t(
+                  <Button
+                    aria-label={t(
                       'providerPortal.home.expandApplicationGroups',
                       'Expand application groups',
                     )}
-                  >
-                    <Button
-                      aria-label={t(
-                        'providerPortal.home.expandApplicationGroups',
-                        'Expand application groups',
-                      )}
-                      icon={<RightOutlined />}
-                      size="small"
-                      type="text"
-                      onClick={() => updatePortalLayout({ isGroupCollapsed: false })}
-                    />
-                  </Tooltip>
+                    icon={<RightOutlined />}
+                    size="small"
+                    type="text"
+                    onClick={() => updatePortalLayout({ isGroupCollapsed: false })}
+                  />
                 ) : null}
                 {isSideCollapsed ? (
-                  <Tooltip title={t('providerPortal.home.expandSidebar', 'Expand sidebar')}>
-                    <Button
-                      aria-label={t('providerPortal.home.expandSidebar', 'Expand sidebar')}
-                      icon={<LeftOutlined />}
-                      size="small"
-                      type="text"
-                      onClick={() => updatePortalLayout({ isSideCollapsed: false })}
-                    />
-                  </Tooltip>
+                  <Button
+                    aria-label={t('providerPortal.home.expandSidebar', 'Expand sidebar')}
+                    icon={<LeftOutlined />}
+                    size="small"
+                    type="text"
+                    onClick={() => updatePortalLayout({ isSideCollapsed: false })}
+                  />
                 ) : null}
                 <ManagementDensityButton
                   aria-label={t(
@@ -667,16 +637,14 @@ export function SohaProviderPortalPage() {
 
           {isSideCollapsed ? null : (
             <aside className="soha-portal-side">
-              <Tooltip title={t('providerPortal.home.collapseSidebar', 'Collapse sidebar')}>
-                <Button
-                  aria-label={t('providerPortal.home.collapseSidebar', 'Collapse sidebar')}
-                  className="soha-portal-side-toggle"
-                  icon={<RightOutlined />}
-                  size="small"
-                  type="text"
-                  onClick={() => updatePortalLayout({ isSideCollapsed: true })}
-                />
-              </Tooltip>
+              <Button
+                aria-label={t('providerPortal.home.collapseSidebar', 'Collapse sidebar')}
+                className="soha-portal-side-toggle"
+                icon={<RightOutlined />}
+                size="small"
+                type="text"
+                onClick={() => updatePortalLayout({ isSideCollapsed: true })}
+              />
               <section className="soha-portal-side-panel">
                 <div className="soha-portal-side-title">
                   <UserOutlined />

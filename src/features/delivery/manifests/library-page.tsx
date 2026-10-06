@@ -546,7 +546,7 @@ export function ManifestLibraryWorkspace({
                                   danger
                                   type="text"
                                   icon={<DeleteOutlined />}
-                                  title="删除文件"
+                                  aria-label="删除文件"
                                   onClick={() => remove(field.name)}
                                 />
                               ) : null}
@@ -643,7 +643,7 @@ export function ManifestLibraryWorkspace({
                               danger
                               type="text"
                               icon={<DeleteOutlined />}
-                              title={`删除环境绑定 ${index + 1}`}
+                              aria-label={`删除环境绑定 ${index + 1}`}
                               onClick={() => remove(field.name)}
                             />
                           </div>

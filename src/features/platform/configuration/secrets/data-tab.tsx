@@ -1,112 +1,45 @@
-import { useState } from 'react'
-import { App, Button, Card, Space } from 'antd'
-import { CopyOutlined } from '@ant-design/icons'
-import { TableCellText } from '@/components/table-cell-content'
 import { useI18n } from '@/i18n'
-import type { TableColumnsType } from 'antd'
-import {
-  ConfigurationDataPreview,
-  ConfigurationDataTable,
-  ConfigurationDataToolbar,
-  EditConfigurationDataModal,
-  configurationDataRows,
-  configurationDataSize,
-  copyConfigurationValue,
-  type ConfigurationDataRow,
-} from '../shared/data-primitives'
+import { ConfigurationDataWorkspace } from '../shared/data-workspace'
 import type { SecretDetail } from './types'
 
 export function SecretDataTab({
   applying,
+  canEdit,
   detail,
   onApply,
 }: {
   applying?: boolean
+  canEdit: boolean
   detail: SecretDetail
-  onApply: (decodedData: Record<string, string>) => void
+  onApply: (decodedData: Record<string, string>) => void | Promise<unknown>
 }) {
   const { localeCode } = useI18n()
-  const { message } = App.useApp()
-  const rows = configurationDataRows(detail.data, true)
-  const [editorOpen, setEditorOpen] = useState(false)
-  const decodedData = Object.fromEntries(rows.map((row) => [row.key, row.decoded ?? '']))
-  const columns: TableColumnsType<ConfigurationDataRow> = [
-    {
-      title: 'Key',
-      dataIndex: 'key',
-      width: 220,
-      ellipsis: { showTitle: false },
-      render: (value: string) => <TableCellText value={value} />,
-    },
-    {
-      title: 'Base64',
-      dataIndex: 'value',
-      ellipsis: { showTitle: false },
-      render: (value: string) => <ConfigurationDataPreview value={value} />,
-    },
-    {
-      title: localeCode === 'zh_CN' ? '解码后内容' : 'Decoded',
-      dataIndex: 'decoded',
-      ellipsis: { showTitle: false },
-      render: (value?: string) => <ConfigurationDataPreview value={value ?? ''} />,
-    },
-    {
-      title: localeCode === 'zh_CN' ? '大小' : 'Size',
-      dataIndex: 'value',
-      width: 96,
-      render: configurationDataSize,
-    },
-    {
-      title: localeCode === 'zh_CN' ? '操作' : 'Actions',
-      key: 'actions',
-      width: 156,
-      render: (_value, record) => (
-        <Space size={4}>
-          <Button
-            size="small"
-            type="text"
-            icon={<CopyOutlined />}
-            onClick={() => copyConfigurationValue(record.value, localeCode, message)}
-          >
-            Base64
-          </Button>
-          <Button
-            size="small"
-            type="text"
-            icon={<CopyOutlined />}
-            onClick={() => copyConfigurationValue(record.decoded ?? '', localeCode, message)}
-          >
-            {localeCode === 'zh_CN' ? '解码' : 'Decoded'}
-          </Button>
-        </Space>
-      ),
-    },
-  ]
-
+  const data: Record<string, string> = Object.create(null)
+  const binaryData: Record<string, string> = Object.create(null)
+  for (const [key, value] of Object.entries(detail.data ?? {})) {
+    try {
+      const bytes = Uint8Array.from(atob(value), (character) => character.charCodeAt(0))
+      data[key] = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes)
+    } catch {
+      binaryData[key] = value
+    }
+  }
+  // ponytail: the text endpoint replaces all keys; binary edits stay in YAML until it accepts raw bytes.
+  const hasBinary = Object.keys(binaryData).length > 0
   return (
-    <Card className="soha-detail-card">
-      <ConfigurationDataToolbar
-        count={rows.length}
-        disabled={detail.immutable}
-        loading={applying}
-        onEdit={() => setEditorOpen(true)}
-      />
-      <ConfigurationDataTable
-        columns={columns}
-        emptyDescription={localeCode === 'zh_CN' ? '暂无 data 键' : 'No data keys'}
-        rows={rows}
-      />
-      <EditConfigurationDataModal
-        confirmLoading={applying}
-        onCancel={() => setEditorOpen(false)}
-        onSubmit={(next) => {
-          onApply(next)
-          setEditorOpen(false)
-        }}
-        open={editorOpen}
-        title={localeCode === 'zh_CN' ? '编辑 Secret 解码后数据' : 'Edit Secret Decoded Data'}
-        value={decodedData}
-      />
-    </Card>
+    <ConfigurationDataWorkspace
+      applying={applying}
+      canEdit={canEdit && !hasBinary}
+      detail={{ data, binaryData, immutable: detail.immutable }}
+      encodedData={detail.data ?? {}}
+      readOnlyReason={
+        hasBinary
+          ? localeCode === 'zh_CN'
+            ? '此 Secret 含无法无损解码的二进制值。请在 YAML 页编辑，以保留原始字节。'
+            : 'This Secret contains binary values. Edit its YAML to preserve the original bytes.'
+          : undefined
+      }
+      onApply={onApply}
+    />
   )
 }

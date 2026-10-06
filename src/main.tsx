@@ -66,7 +66,18 @@ function AppProviders() {
   const antdTheme = React.useMemo(() => getAntdTheme(resolvedThemeMode), [resolvedThemeMode])
 
   return (
-    <ConfigProvider locale={localeCode === 'en_US' ? enUS : zhCN} theme={antdTheme}>
+    <ConfigProvider
+      locale={localeCode === 'en_US' ? enUS : zhCN}
+      theme={antdTheme}
+      tooltip={{
+        styles: {
+          container: {
+            border: '1px solid var(--soha-border-color)',
+            boxShadow: 'var(--soha-shadow-soft)',
+          },
+        },
+      }}
+    >
       <AntdApp>
         <GlobalApiErrorHandler />
         <I18nProvider>

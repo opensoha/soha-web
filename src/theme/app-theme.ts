@@ -470,6 +470,15 @@ export function getAntdTheme(themeMode: ThemeMode | ResolvedThemeMode): ThemeCon
       boxShadowSecondary: palette.boxShadowSecondary,
     },
     components: {
+      Tooltip: {
+        colorBgSpotlight: palette.colorBgElevated,
+        colorTextLightSolid: palette.colorText,
+        fontSize: APP_SUPPORTING_FONT_SIZE,
+        lineHeight: APP_SUPPORTING_LINE_HEIGHT_PX / APP_SUPPORTING_FONT_SIZE,
+        controlHeight: 28,
+        paddingSM: 8,
+        paddingXS: 8,
+      },
       Breadcrumb: {
         fontSize: APP_SUPPORTING_FONT_SIZE,
         lineHeight: 20 / APP_SUPPORTING_FONT_SIZE,
@@ -735,6 +744,21 @@ export function applyAppTheme(_themeId: AppThemeId, themeMode: ThemeMode) {
   root.style.setProperty('--soha-success', palette.colorSuccess)
   root.style.setProperty('--soha-warning', palette.colorWarning)
   root.style.setProperty('--soha-info', palette.colorInfo)
+  // Quantitative resource bars use yellow between request and limit, with readable labels.
+  root.style.setProperty('--soha-resource-success', resolvedMode === 'dark' ? '#73d13d' : '#237804')
+  root.style.setProperty('--soha-resource-warning', resolvedMode === 'dark' ? '#d4b106' : '#fadb14')
+  root.style.setProperty('--soha-resource-danger', resolvedMode === 'dark' ? '#ff7875' : '#cf1322')
+  root.style.setProperty('--soha-resource-on-fill', resolvedMode === 'dark' ? '#101c2d' : '#ffffff')
+  root.style.setProperty('--soha-resource-on-warning', '#101c2d')
+  root.style.setProperty(
+    '--soha-resource-request-on-fill',
+    resolvedMode === 'dark' ? '#237804' : '#b7eb8f',
+  )
+  root.style.setProperty('--soha-resource-request-on-warning', '#237804')
+  root.style.setProperty(
+    '--soha-resource-limit-on-fill',
+    resolvedMode === 'dark' ? '#a8071a' : '#ffccc7',
+  )
   root.style.setProperty('--soha-table-header-bg', palette.colorBgMuted)
   root.style.setProperty('--soha-table-header-sort-bg', palette.colorFillSecondary)
   root.style.setProperty('--soha-table-row-hover-bg', palette.colorFillQuaternary)

@@ -314,30 +314,26 @@ export function ObjectStorageConfig({ storage }: { storage?: SoftwareStorage }) 
                   width: 108,
                   render: (_, item) => (
                     <Space size={0}>
-                      <Tooltip title="测试连接">
-                        <Button
-                          aria-label={`测试 ${item.name} 连接`}
-                          disabled={!canTest || !item.enabled}
-                          icon={<ThunderboltOutlined />}
-                          loading={testMutation.isPending && testMutation.variables === item.id}
-                          size="small"
-                          type="text"
-                          onClick={() => testConnection(item)}
-                        />
-                      </Tooltip>
-                      <Tooltip title="编辑">
-                        <Button
-                          aria-label={`编辑 ${item.name}`}
-                          disabled={!canUpdate}
-                          icon={<EditOutlined />}
-                          size="small"
-                          type="text"
-                          onClick={() => {
-                            setEditing(item)
-                            setModalOpen(true)
-                          }}
-                        />
-                      </Tooltip>
+                      <Button
+                        aria-label={`测试 ${item.name} 连接`}
+                        disabled={!canTest || !item.enabled}
+                        icon={<ThunderboltOutlined />}
+                        loading={testMutation.isPending && testMutation.variables === item.id}
+                        size="small"
+                        type="text"
+                        onClick={() => testConnection(item)}
+                      />
+                      <Button
+                        aria-label={`编辑 ${item.name}`}
+                        disabled={!canUpdate}
+                        icon={<EditOutlined />}
+                        size="small"
+                        type="text"
+                        onClick={() => {
+                          setEditing(item)
+                          setModalOpen(true)
+                        }}
+                      />
                       <Popconfirm
                         cancelText="取消"
                         disabled={!canDelete}
@@ -351,16 +347,14 @@ export function ObjectStorageConfig({ storage }: { storage?: SoftwareStorage }) 
                           })
                         }
                       >
-                        <Tooltip title="删除">
-                          <Button
-                            aria-label={`删除 ${item.name}`}
-                            danger
-                            disabled={!canDelete}
-                            icon={<DeleteOutlined />}
-                            size="small"
-                            type="text"
-                          />
-                        </Tooltip>
+                        <Button
+                          aria-label={`删除 ${item.name}`}
+                          danger
+                          disabled={!canDelete}
+                          icon={<DeleteOutlined />}
+                          size="small"
+                          type="text"
+                        />
                       </Popconfirm>
                     </Space>
                   ),

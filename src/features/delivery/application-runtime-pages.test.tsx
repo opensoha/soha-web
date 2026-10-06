@@ -2449,6 +2449,8 @@ describe('ApplicationDetailPage workbench', () => {
     'deploys a Manifest without a build and gates confirmation on %s preflight',
     async (status) => {
       testState.manifestTarget = true
+      testState.deliveryClusterConnectionMode = 'agent'
+      testState.deliveryActionsAgentStatus = 'partial'
       testState.preflightStatus = status
       testState.detailWithoutWorkflow = true
       testState.detailWithoutImageTagDefaults = true

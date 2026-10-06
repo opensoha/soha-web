@@ -203,8 +203,10 @@ export function PlatformManifestsPage() {
     <>
       <ManagementDataPage
         className="soha-platform-manifests"
+        beforeQuery={
+          <h1 className="soha-platform-manifests-heading">{t('common.manifest', '应用清单')}</h1>
+        }
         table={{
-          title: <Text strong>{t('common.manifest', '应用清单')}</Text>,
           headerExtra: (
             <ManagementTableToolbar>
               <ManagementDensityButton

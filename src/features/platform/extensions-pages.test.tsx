@@ -10,6 +10,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { I18nProvider } from '@/i18n'
 import { CRDApiGroupDetailPage } from './extensions/crds/api-group-detail-page'
 import { CRDPage } from './extensions/crds/list-page'
+import { CRDKindWorkspace } from './extensions/crds/kind-workspace'
+import type { CRD } from './extensions/crds/types'
 import { HelmChartsPage } from './extensions/helm/charts/page'
 import { HelmReleasesPage } from './extensions/helm/releases/list-page'
 
@@ -45,6 +47,7 @@ const apiGetMock = vi.hoisted(() =>
     return Promise.resolve({ data: payload })
   }),
 )
+const apiPutMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/stores/platform-scope-store', () => ({
   usePlatformScopeStore: () => testState.scope,
@@ -54,7 +57,7 @@ vi.mock('@/services/api-client', () => ({
   api: {
     get: apiGetMock,
     post: vi.fn(),
-    put: vi.fn(),
+    put: apiPutMock,
     delete: vi.fn(),
   },
 }))
@@ -71,13 +74,57 @@ vi.mock('@/components/platform-scope-toolbar', () => ({
   PlatformScopeToolbar: () => <div data-testid="scope-toolbar">scope-toolbar</div>,
 }))
 
+vi.mock('@/components/k8s-yaml-editor', () => ({
+  K8sYamlEditor: ({
+    value,
+    original,
+    readOnly,
+    header,
+    onChange,
+    onApply,
+    onSave,
+    applyDisabled,
+  }: {
+    value: string
+    original?: string
+    readOnly?: boolean
+    header?: ReactNode
+    onChange: (value: string) => void
+    onApply: () => void
+    onSave: () => void
+    applyDisabled?: boolean
+  }) => (
+    <div data-testid="crd-yaml-editor" data-read-only={String(readOnly)}>
+      {header}
+      <pre data-testid="baseline">{original}</pre>
+      <textarea
+        aria-label="YAML content"
+        value={value}
+        readOnly={readOnly}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {readOnly ? null : (
+        <>
+          <button disabled={applyDisabled} onClick={onApply}>
+            Apply
+          </button>
+          <button onClick={onSave}>Save Draft</button>
+        </>
+      )}
+    </div>
+  ),
+}))
+
 vi.mock('@/components/admin-table', () => ({
   AdminTable: ({
     columns,
     dataSource,
+    error,
     empty,
     headerExtra,
     onRow,
+    onChange,
+    pagination,
     paginationSummary,
     title,
     toolbar,
@@ -85,15 +132,19 @@ vi.mock('@/components/admin-table', () => ({
   }: {
     columns: Array<Record<string, any>>
     dataSource: Array<Record<string, any>>
+    error?: Error | null
     empty?: ReactNode
     headerExtra?: ReactNode
     onRow?: (record: Record<string, any>, index: number) => Record<string, any>
+    onChange?: (...args: any[]) => void
+    pagination?: { current: number; pageSize: number; total: number }
     paginationSummary?: ReactNode | ((total: number, range: [number, number]) => ReactNode)
     title?: ReactNode
     toolbar?: ReactNode
     toolbarExtra?: ReactNode
   }) => (
     <div data-testid="admin-table">
+      {error ? <div data-testid="table-error">{error.message}</div> : null}
       {title ? <div data-testid="table-title">{title}</div> : null}
       {headerExtra ? <div data-testid="header-extra">{headerExtra}</div> : null}
       {toolbar ? <div data-testid="table-toolbar">{toolbar}</div> : null}
@@ -106,7 +157,24 @@ vi.mock('@/components/admin-table', () => ({
         </div>
       ) : null}
       <div data-testid="row-count">{dataSource.length}</div>
-      {dataSource.length === 0 ? <div data-testid="empty">{empty}</div> : null}
+      {pagination ? (
+        <div data-testid="pagination" data-current={pagination.current}>
+          <button
+            disabled={pagination.current * pagination.pageSize >= pagination.total}
+            onClick={() =>
+              onChange?.(
+                { ...pagination, current: pagination.current + 1 },
+                {},
+                {},
+                { action: 'paginate' },
+              )
+            }
+          >
+            Next page
+          </button>
+        </div>
+      ) : null}
+      {dataSource.length === 0 && !error ? <div data-testid="empty">{empty}</div> : null}
       <div data-testid="column-titles">
         {columns.map((column, index) => (
           <div key={`title-${index}`} data-testid={`column-title-${index}`}>
@@ -114,7 +182,13 @@ vi.mock('@/components/admin-table', () => ({
           </div>
         ))}
       </div>
-      {dataSource.map((record, rowIndex) => (
+      {(pagination
+        ? dataSource.slice(
+            (pagination.current - 1) * pagination.pageSize,
+            pagination.current * pagination.pageSize,
+          )
+        : dataSource
+      ).map((record, rowIndex) => (
         <div
           key={`${record.group || record.name || 'row'}-${rowIndex}`}
           data-testid={`row-${rowIndex}`}
@@ -150,7 +224,7 @@ function setResponses(responses: Record<string, unknown>) {
   })
 }
 
-function setNativeInputValue(element: HTMLInputElement, value: string) {
+function setNativeInputValue(element: HTMLInputElement | HTMLTextAreaElement, value: string) {
   const prototype = Object.getPrototypeOf(element)
   const descriptor = Object.getOwnPropertyDescriptor(prototype, 'value')
   descriptor?.set?.call(element, value)
@@ -201,6 +275,74 @@ async function renderExtensionsRoutes(route = '/extensions') {
     </Routes>,
     route,
   )
+}
+
+const widgetCRD: CRD = {
+  name: 'widgets.example.io',
+  group: 'example.io',
+  kind: 'Widget',
+  plural: 'widgets',
+  version: 'v1',
+  versions: ['v1'],
+  scope: 'Namespaced',
+}
+const widgetYAMLPath =
+  '/clusters/cluster-a/extensions/crds/widgets.example.io/resources/widget-a/yaml?namespace=team-a&version=v1'
+const widgetYAML =
+  'apiVersion: example.io/v1\nkind: Widget\nmetadata:\n  name: widget-a\nspec:\n  replicas: 1'
+function widgetResponses(actions: string[] = ['view', 'update']) {
+  setResponses({
+    '/clusters': [
+      {
+        id: 'cluster-a',
+        name: 'Test cluster',
+        connectionMode: 'agent',
+        health: { status: 'healthy' },
+      },
+    ],
+    '/clusters/capabilities': [
+      { key: 'custom.resources', direct: { status: 'available' }, agent: { status: 'available' } },
+    ],
+    '/clusters/cluster-a/extensions/crds/widgets.example.io/resources?namespace=team-a&version=v1':
+      [
+        {
+          name: 'widget-a',
+          namespace: 'team-a',
+          allowedActions: actions,
+          summary: { fullField: 'complete summary' },
+        },
+        { name: 'widget-b', namespace: 'team-a', allowedActions: ['view'] },
+      ],
+    [widgetYAMLPath]: { content: widgetYAML },
+    '/clusters/cluster-a/extensions/crds/widgets.example.io/resources/widget-b/yaml?namespace=team-a&version=v1':
+      { content: 'kind: Widget\nmetadata:\n  name: widget-b' },
+  })
+}
+async function waitForEditor(container: HTMLElement) {
+  await vi.waitFor(async () => {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+    expect(container.querySelector('[data-testid="crd-yaml-editor"]')).not.toBeNull()
+  })
+}
+
+async function openInstance(container: HTMLElement, name: string) {
+  await vi.waitFor(async () => {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+    expect(
+      [...container.querySelectorAll<HTMLButtonElement>('.soha-crd-instance-name')].some(
+        (button) => button.textContent === name,
+      ),
+    ).toBe(true)
+  })
+  await act(async () => {
+    ;[...container.querySelectorAll<HTMLButtonElement>('.soha-crd-instance-name')]
+      .find((button) => button.textContent === name)!
+      .click()
+  })
 }
 
 describe('CRD catalog page', () => {
@@ -452,74 +594,327 @@ describe('CRD catalog page', () => {
     expect(container.querySelector('[data-testid="column-titles"]')?.children).toHaveLength(7)
   })
 
-  it('keeps CRD discovery visible but blocks custom-resource instance calls for agent partial support', async () => {
-    setResponses({
-      '/clusters': [
-        {
-          id: 'cluster-a',
-          name: 'Agent Cluster',
-          connectionMode: 'agent',
-          region: 'dev',
-          environment: 'test',
-          labels: {},
-          version: 'v1.30.0',
-          health: { status: 'healthy' },
-        },
-      ],
-      '/clusters/capabilities': [
-        {
-          key: 'custom.resources',
-          label: 'Custom resources',
-          category: 'extensions',
-          direct: { status: 'available' },
-          agent: {
-            status: 'partial',
-            notes: [
-              'CRD discovery is available through the agent; custom-resource list, YAML, create, apply, and delete remain direct-only',
-            ],
-          },
-        },
-      ],
-      '/clusters/cluster-a/extensions/crds': [
-        {
-          name: 'widgets.example.io',
-          group: 'example.io',
-          kind: 'Widget',
-          plural: 'widgets',
-          version: 'v1',
-          versions: ['v1'],
-          scope: 'Namespaced',
-        },
-      ],
-      '/clusters/cluster-a/extensions/crds/widgets.example.io/resources?namespace=team-a&version=v1':
-        [
+  it.each([
+    { userCreate: false, runtimeCreate: true, empty: false, enabled: false },
+    { userCreate: true, runtimeCreate: false, empty: true, enabled: false },
+    { userCreate: true, runtimeCreate: true, empty: true, enabled: true },
+  ])(
+    'keeps Agent custom resource creation scoped to both permissions: %j',
+    async ({ userCreate, runtimeCreate, empty, enabled }) => {
+      testState.permissions = userCreate ? ['platform.extensions.custom-resources.create'] : []
+      setResponses({
+        '/clusters': [
           {
-            name: 'should-not-load',
-            namespace: 'team-a',
-            kind: 'Widget',
-            apiVersion: 'example.io/v1',
+            id: 'cluster-a',
+            name: 'Agent Cluster',
+            connectionMode: 'agent',
+            region: 'dev',
+            environment: 'test',
+            labels: {},
+            version: 'v1.30.0',
+            health: { status: 'healthy' },
           },
         ],
-    })
+        '/clusters/capabilities': [
+          {
+            key: 'custom.resources',
+            label: 'Custom resources',
+            category: 'extensions',
+            direct: { status: 'available' },
+            agent: {
+              status: 'partial',
+              notes: ['custom resources require explicit Agent grants and Kubernetes RBAC'],
+            },
+          },
+        ],
+        '/clusters/cluster-a/extensions/crds/widgets.example.io/access?namespace=team-a&version=v1':
+          {
+            allowedActions: runtimeCreate ? ['list', 'view', 'create'] : ['list', 'view'],
+          },
+        '/clusters/cluster-a/extensions/crds': [
+          {
+            name: 'widgets.example.io',
+            group: 'example.io',
+            kind: 'Widget',
+            plural: 'widgets',
+            version: 'v1',
+            versions: ['v1'],
+            scope: 'Namespaced',
+          },
+        ],
+        '/clusters/cluster-a/extensions/crds/widgets.example.io/resources?namespace=team-a&version=v1':
+          empty
+            ? []
+            : [
+                {
+                  name: 'agent-widget',
+                  namespace: 'team-a',
+                  kind: 'Widget',
+                  apiVersion: 'example.io/v1',
+                  allowedActions: ['view'],
+                },
+              ],
+        '/clusters/cluster-a/extensions/crds/widgets.example.io/resources/agent-widget/yaml?namespace=team-a&version=v1':
+          {
+            content: 'apiVersion: example.io/v1\nkind: Widget\nmetadata:\n  name: agent-widget',
+          },
+      })
 
-    const container = await renderExtensionsRoutes('/extensions/apis/example.io')
+      const container = await renderExtensionsRoutes('/extensions/apis/example.io')
 
-    await act(async () => {
-      await Promise.resolve()
-      await new Promise((resolve) => window.setTimeout(resolve, 20))
-    })
+      await act(async () => {
+        await Promise.resolve()
+        await new Promise((resolve) => window.setTimeout(resolve, 20))
+      })
 
-    expect(apiGetMock.mock.calls.map(([path]) => path)).toContain('/clusters')
-    expect(apiGetMock.mock.calls.map(([path]) => path)).toContain('/clusters/capabilities')
-    expect(container.textContent).toContain('widgets.example.io')
-    expect(container.textContent).toContain(
-      '自定义资源读取和变更需要为目标 API 组与资源配置明确的 Kubernetes RBAC',
+      expect(apiGetMock.mock.calls.map(([path]) => path)).toContain('/clusters')
+      expect(apiGetMock.mock.calls.map(([path]) => path)).toContain('/clusters/capabilities')
+      expect(container.querySelector('.soha-crd-kind-directory')?.textContent).toContain('Widget')
+      expect(apiGetMock.mock.calls.map(([path]) => testState.normalizePath(path))).toContain(
+        '/clusters/cluster-a/extensions/crds/widgets.example.io/resources?namespace=team-a&version=v1',
+      )
+      await act(async () => {
+        await new Promise((resolve) => window.setTimeout(resolve, 20))
+      })
+      expect(container.textContent?.includes('agent-widget')).toBe(!empty)
+      const createButton = container.querySelector<HTMLButtonElement>(
+        'button[aria-label="新建实例"]',
+      )
+      expect(createButton?.disabled).toBe(!enabled)
+      if (!empty) {
+        expect(container.querySelector('[data-testid="crd-yaml-editor"]')).toBeNull()
+        expect(apiGetMock.mock.calls.some(([path]) => path.includes('/yaml'))).toBe(false)
+        await openInstance(container, 'agent-widget')
+        await vi.waitFor(async () => {
+          await act(async () => {
+            await new Promise((resolve) => window.setTimeout(resolve, 0))
+          })
+          expect(
+            document.body
+              .querySelector('[data-testid="crd-yaml-editor"]')
+              ?.getAttribute('data-read-only'),
+          ).toBe('true')
+          expect(container.querySelector<HTMLTextAreaElement>('textarea')?.value).toContain(
+            'apiVersion: example.io/v1',
+          )
+          expect(
+            container.querySelector<HTMLButtonElement>('button[aria-label="编辑"]')?.disabled,
+          ).toBe(true)
+          expect(container.textContent).not.toContain('Apply')
+        })
+      }
+    },
+  )
+
+  it('preserves CRD drafts and the diff baseline, confirms switching, and retries failed updates', async () => {
+    window.localStorage.clear()
+    widgetResponses()
+    const container = await renderWithProviders(
+      <CRDKindWorkspace crd={widgetCRD} kinds={[widgetCRD]} onKindSelect={vi.fn()} />,
     )
-    expect(container.textContent).not.toContain('should-not-load')
-    const createButton = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent?.trim() === '创建',
-    ) as HTMLButtonElement | undefined
-    expect(createButton?.disabled).toBe(true)
+    await openInstance(container, 'widget-a')
+    await waitForEditor(container)
+    expect(container.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe(widgetYAML)
+    expect(
+      container.querySelector('[data-testid="crd-yaml-editor"]')?.getAttribute('data-read-only'),
+    ).toBe('true')
+    expect(container.textContent).toContain('complete summary')
+    expect(apiGetMock.mock.calls.some(([path]) => path.includes('widget-b/yaml'))).toBe(false)
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('button[aria-label="编辑"]')!.click(),
+    )
+    await waitForEditor(container)
+    const changed = widgetYAML.replace('replicas: 1', 'replicas: 2')
+    await act(async () => {
+      const input = container.querySelector<HTMLTextAreaElement>('textarea')!
+      setNativeInputValue(input, changed)
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(container.querySelector('[data-testid="baseline"]')?.textContent).toBe(widgetYAML)
+    const button = (label: string, within: ParentNode = container) =>
+      [...within.querySelectorAll('button')].find(
+        (item) => item.textContent?.replace(/\s/g, '') === label.replace(/\s/g, ''),
+      )!
+    await act(async () => button('Save Draft').click())
+    const draftKey = 'soha:crd-yaml:cluster-a:widgets.example.io:team-a:widget-a'
+    expect(window.localStorage.getItem(draftKey)).toBe(changed)
+    await act(async () => button('返回实例列表').click())
+    expect(document.body.textContent).toContain('离开当前资源？')
+    expect(container.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe(changed)
+    await act(async () => button('取消', document.body).click())
+    apiPutMock
+      .mockRejectedValueOnce(new Error('update denied'))
+      .mockImplementationOnce(async () => {
+        testState.responses[widgetYAMLPath] = { content: changed }
+        return { data: { content: changed } }
+      })
+    await act(async () => button('Apply').click())
+    await vi.waitFor(async () => {
+      await act(async () => {
+        await Promise.resolve()
+      })
+      expect(container.textContent).toContain('update denied')
+    })
+    expect(container.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe(changed)
+    expect(button('Apply').disabled).toBe(false)
+    await act(async () => button('Apply').click())
+    await vi.waitFor(async () => {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      })
+      expect(
+        container.querySelector('[data-testid="crd-yaml-editor"]')?.getAttribute('data-read-only'),
+      ).toBe('true')
+    })
+    expect(apiPutMock).toHaveBeenLastCalledWith(widgetYAMLPath, {
+      content: changed,
+      namespace: 'team-a',
+    })
+    expect(window.localStorage.getItem(draftKey)).toBeNull()
+    expect(container.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe(changed)
+  })
+
+  it('does not request YAML for an instance without view or update permission', async () => {
+    widgetResponses([])
+    const container = await renderWithProviders(
+      <CRDKindWorkspace crd={widgetCRD} kinds={[widgetCRD]} onKindSelect={vi.fn()} />,
+    )
+    await openInstance(container, 'widget-a')
+    await vi.waitFor(async () => {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      })
+      expect(container.textContent).toContain('当前授权不允许查看此实例内容')
+    })
+    expect(apiGetMock.mock.calls.some(([path]) => path.includes('/yaml'))).toBe(false)
+    expect(container.querySelector('[data-testid="crd-yaml-editor"]')).toBeNull()
+  })
+
+  it('keeps CRD types visible, loads only the selected type, and preserves instance search and pagination on return', async () => {
+    widgetResponses(['view'])
+    const otherCRD = {
+      ...widgetCRD,
+      name: 'gadgets.example.io',
+      kind: 'Zadget',
+      plural: 'gadgets',
+      scope: 'Cluster',
+    }
+    testState.responses['/clusters/cluster-a/extensions/crds'] = [widgetCRD, otherCRD]
+    testState.responses[
+      '/clusters/cluster-a/extensions/crds/widgets.example.io/resources?namespace=team-a&version=v1'
+    ] = [
+      ...Array.from({ length: 20 }, (_, index) => ({
+        name: `sample-${String(index + 1).padStart(2, '0')}`,
+        namespace: 'team-a',
+        allowedActions: ['view'],
+      })),
+      { name: 'unrelated', namespace: 'team-a', allowedActions: ['view'] },
+    ]
+    testState.responses[
+      '/clusters/cluster-a/extensions/crds/widgets.example.io/resources/sample-16/yaml?namespace=team-a&version=v1'
+    ] = { content: 'kind: Widget\nmetadata:\n  name: sample-16' }
+    const container = await renderExtensionsRoutes('/extensions/apis/example.io')
+    await vi.waitFor(async () => {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      })
+      expect(container.querySelector('[data-testid="row-count"]')?.textContent).toBe('21')
+    })
+    const directory = container.querySelector('.soha-crd-kind-directory')!
+    expect(directory.textContent).toContain('Widget')
+    expect(directory.textContent).toContain('Zadget')
+    expect(container.querySelector('input[aria-label="Kind"]')).toBeNull()
+    expect(apiGetMock.mock.calls.some(([path]) => path.includes('/gadgets.example.io/'))).toBe(
+      false,
+    )
+    expect(apiGetMock.mock.calls.some(([path]) => path.includes('/yaml'))).toBe(false)
+    await act(async () => {
+      const input = container.querySelector<HTMLInputElement>(
+        'input[placeholder="搜索实例 / 命名空间 / 摘要"]',
+      )!
+      setNativeInputValue(input, 'sample-')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(container.querySelector('[data-testid="row-count"]')?.textContent).toBe('20')
+    await act(async () => {
+      ;[...container.querySelectorAll('button')]
+        .find((button) => button.textContent === 'Next page')!
+        .click()
+    })
+    expect(
+      container.querySelector('[data-testid="pagination"]')?.getAttribute('data-current'),
+    ).toBe('2')
+    await openInstance(container, 'sample-16')
+    await waitForEditor(container)
+    expect(directory.isConnected).toBe(true)
+    expect(
+      container.querySelector('[data-testid="admin-table"]')?.closest('[hidden]'),
+    ).not.toBeNull()
+    await act(async () => {
+      ;[...container.querySelectorAll('button')]
+        .find((button) => button.textContent?.includes('返回实例列表'))!
+        .click()
+    })
+    expect(container.querySelector('[data-testid="crd-yaml-editor"]')).toBeNull()
+    expect(
+      container.querySelector<HTMLInputElement>('input[placeholder="搜索实例 / 命名空间 / 摘要"]')
+        ?.value,
+    ).toBe('sample-')
+    expect(
+      container.querySelector('[data-testid="pagination"]')?.getAttribute('data-current'),
+    ).toBe('2')
+    expect(container.querySelector('.soha-crd-instance-name')?.textContent).toBe('sample-16')
+    await act(async () => {
+      const input = directory.querySelector<HTMLInputElement>('input')!
+      setNativeInputValue(input, 'Zadget')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () =>
+      directory
+        .querySelector<HTMLButtonElement>('.soha-management-searchable-list-pane__item-select')!
+        .click(),
+    )
+    await vi.waitFor(async () => {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      })
+      expect(
+        apiGetMock.mock.calls.some(([path]) => path.includes('/gadgets.example.io/resources')),
+      ).toBe(true)
+    })
+    expect(container.querySelector('.soha-crd-kind-directory')).toBe(directory)
+    expect(directory.querySelector<HTMLInputElement>('input')?.value).toBe('Zadget')
+    expect(
+      container.querySelector<HTMLInputElement>('input[placeholder="搜索实例 / 命名空间 / 摘要"]')
+        ?.value,
+    ).toBe('')
+    expect(
+      container.querySelector('[data-testid="pagination"]')?.getAttribute('data-current'),
+    ).toBe('1')
+    expect(container.querySelector('[data-testid="column-titles"]')?.textContent).not.toContain(
+      '命名空间',
+    )
+  })
+
+  it('shows a persistent instance-list error instead of treating it as an empty collection', async () => {
+    widgetResponses()
+    testState.responses[
+      '/clusters/cluster-a/extensions/crds/widgets.example.io/resources?namespace=team-a&version=v1'
+    ] = new Error('Agent list unavailable')
+    const container = await renderWithProviders(
+      <CRDKindWorkspace crd={widgetCRD} kinds={[widgetCRD]} onKindSelect={vi.fn()} />,
+    )
+    await vi.waitFor(async () => {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      })
+      expect(container.querySelector('[data-testid="table-error"]')?.textContent).toContain(
+        'Agent list unavailable',
+      )
+    })
+    expect(container.querySelector('.soha-crd-kind-directory')?.textContent).toContain('Widget')
+    expect(container.querySelector('[data-testid="empty"]')).toBeNull()
+    expect(apiGetMock.mock.calls.some(([path]) => path.includes('/yaml'))).toBe(false)
   })
 
   it('renders Helm charts from the backend catalog and filters within the table shell', async () => {

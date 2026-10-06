@@ -1078,7 +1078,12 @@ export function ApplicationDetailPage() {
   }
   const deliveryTargetActionsDisabled =
     deliveryActionsCapability.status !== 'unknown' &&
-    deliveryActionsCapability.status !== 'available'
+    deliveryActionsCapability.status !== 'available' &&
+    !(
+      deliveryActionsCapability.status === 'partial' &&
+      deliveryActionKind === 'deploy' &&
+      ['manifest_ssa', 'helm_sdk'].includes(selectedDeliveryTarget?.executorKind ?? '')
+    )
   const deliveryTargetCapabilityReason = deliveryTargetActionsDisabled
     ? deliveryActionsCapability.reason
     : ''

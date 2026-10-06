@@ -1,9 +1,10 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import type { ReactNode } from 'react'
 import { App, Card, Spin, Tabs } from 'antd'
 import { AdminTable } from '@/components/admin-table'
 import { MetadataTag } from '@/components/status-tag'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useYamlDraft } from '@/components/use-yaml-draft'
 import { ManagementState } from '@/components/management-list'
 import { TableCellText } from '@/components/table-cell-content'
 import { useAIPageContext } from '@/features/copilot'
@@ -122,12 +123,11 @@ function ConfigurationYAMLTab({
   const queryClient = useQueryClient()
   const yamlQuery = useQuery(configurationQueries.yaml(kind, target.scope, target.name, scopeMode))
   const updateMutation = useMutation(configurationMutations.updateYAML(kind, queryClient))
-  const serverValue = yamlQuery.data?.content ?? ''
-  const [draft, setDraft] = useState('')
-
-  useEffect(() => {
-    setDraft(serverValue)
-  }, [serverValue])
+  const yamlState = useYamlDraft(
+    JSON.stringify([kind, target.scope.clusterId, target.scope.namespace, target.name]),
+    yamlQuery.data?.content,
+  )
+  const { value: draft, setValue: setDraft } = yamlState
 
   return (
     <Suspense
@@ -137,33 +137,37 @@ function ConfigurationYAMLTab({
         </Card>
       }
     >
-      <div style={{ height: 620 }}>
-        <K8sYamlEditor
-          value={draft}
-          onChange={setDraft}
-          onReset={() => setDraft(serverValue)}
-          onSave={() =>
-            void message.info(
-              localeCode === 'zh_CN' ? '暂不支持本地草稿' : 'Local draft save disabled here',
-            )
-          }
-          onApply={() =>
-            updateMutation.mutate(
-              { ...target, content: draft },
-              {
-                onSuccess: (yaml) => {
-                  setDraft(yaml.content ?? draft)
-                  void message.success(t('yamlEditor.applySuccess', 'YAML applied'))
-                },
-                onError: (error) => void message.error(error.message),
+      <K8sYamlEditor
+        key={yamlState.resourceKey}
+        value={draft}
+        original={yamlState.original}
+        serverChanged={yamlState.serverChanged}
+        onCompareLatest={yamlState.compareLatest}
+        loading={yamlQuery.isPending}
+        error={yamlQuery.error}
+        onChange={setDraft}
+        onReset={yamlState.reset}
+        onSave={() =>
+          void message.info(
+            localeCode === 'zh_CN' ? '暂不支持本地草稿' : 'Local draft save disabled here',
+          )
+        }
+        onApply={() =>
+          updateMutation.mutate(
+            { ...target, content: draft },
+            {
+              onSuccess: (yaml) => {
+                yamlState.applied(yaml.content)
+                void message.success(t('yamlEditor.applySuccess', 'YAML applied'))
               },
-            )
-          }
-          saveDisabled
-          applyDisabled={!draft.trim() || updateMutation.isPending}
-          applying={updateMutation.isPending}
-        />
-      </div>
+              onError: (error) => void message.error(error.message),
+            },
+          )
+        }
+        saveDisabled
+        applyDisabled={!draft.trim() || updateMutation.isPending}
+        applying={updateMutation.isPending}
+      />
     </Suspense>
   )
 }

@@ -213,6 +213,27 @@
   font-weight: 600;
 }
 
+/* AdminTable owns sorter spacing; Antd has no semantic title/icon layout hook. */
+.soha-admin-table .ant-table-column-sorters {
+  justify-content: flex-start;
+  gap: 6px;
+}
+
+.soha-admin-table .ant-table-column-title {
+  flex: initial;
+}
+
+.soha-admin-table .ant-table-column-sort .ant-table-column-title {
+  color: var(--soha-primary);
+}
+
+.soha-table-sort-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--soha-primary);
+  font-size: var(--soha-font-size-supporting);
+}
+
 .soha-admin-table-shell.is-panel .soha-admin-table .ant-table-container,
 .soha-admin-table-shell.is-panel .soha-admin-table .ant-table-content,
 .soha-admin-table-shell.is-panel .soha-admin-table .ant-table-body {
@@ -293,19 +314,35 @@
 .soha-admin-table .ant-table-tbody a.ant-typography.ant-typography-link:focus-visible,
 .soha-admin-table
   .ant-table-tbody
-  .ant-btn-link:not(.ant-btn-dangerous):not(.ant-btn-color-dangerous):hover,
+  .ant-btn-link:not(.ant-btn-icon-only):not(.ant-btn-dangerous):not(.ant-btn-color-dangerous):hover,
 .soha-admin-table
   .ant-table-tbody
-  .ant-btn-link:not(.ant-btn-dangerous):not(.ant-btn-color-dangerous):focus-visible,
+  .ant-btn-link:not(.ant-btn-icon-only):not(.ant-btn-dangerous):not(
+    .ant-btn-color-dangerous
+  ):focus-visible,
 .soha-admin-table
   .ant-table-tbody
-  .ant-btn-text:not(.ant-btn-dangerous):not(.ant-btn-color-dangerous):hover,
+  .ant-btn-text:not(.ant-btn-icon-only):not(.ant-btn-dangerous):not(.ant-btn-color-dangerous):hover,
 .soha-admin-table
   .ant-table-tbody
-  .ant-btn-text:not(.ant-btn-dangerous):not(.ant-btn-color-dangerous):focus-visible {
+  .ant-btn-text:not(.ant-btn-icon-only):not(.ant-btn-dangerous):not(
+    .ant-btn-color-dangerous
+  ):focus-visible {
   color: var(--soha-table-link-hover-color) !important;
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+/* Row icon actions keep button feedback instead of the text-link treatment above. */
+.soha-admin-table
+  .ant-table-tbody
+  .ant-btn-icon-only:is(.ant-btn-text, .ant-btn-link):not(.ant-btn-dangerous):not(
+    .ant-btn-color-dangerous
+  ):not(:disabled):not(.ant-btn-loading):is(:hover, :focus-visible) {
+  background: var(--soha-primary-light-default);
+  color: var(--soha-table-link-hover-color);
+  border-radius: var(--soha-radius-control);
+  text-decoration: none;
 }
 
 .soha-admin-table .ant-table-cell-fix-end,

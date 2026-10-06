@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
-import { Tooltip, Typography } from 'antd'
+import { Typography } from 'antd'
+import { TableCellText } from '@/components/table-cell-content'
 import {
   ManagementDensityButton,
   ManagementKeywordField,
@@ -215,10 +216,8 @@ export function useWorkloadTableDensity(localeCode: WorkloadLocaleCode) {
 
 export function renderWorkloadNameLink(name: string, onClick: () => void) {
   return (
-    <Tooltip title={name} placement="topLeft">
-      <Link className="soha-workload-name-link" onClick={onClick}>
-        {name}
-      </Link>
-    </Tooltip>
+    <Link className="soha-workload-name-link" onClick={onClick}>
+      <TableCellText value={name} />
+    </Link>
   )
 }

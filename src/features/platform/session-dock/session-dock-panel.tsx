@@ -18,7 +18,7 @@ import {
   ReloadOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { Button, Select, Spin, Tabs, Tooltip, Typography } from 'antd'
+import { Button, Select, Spin, Tabs, Typography } from 'antd'
 import { ManagementState } from '@/components/management-list'
 import { hasAllowedAction, hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useClusterCapabilityForCluster } from '../cluster-capabilities'
@@ -152,17 +152,15 @@ function TerminalSessionContent({
                 <Text type="danger" className="text-xs">
                   {containerLoadError}
                 </Text>
-                <Tooltip title={reloadContainersLabel}>
-                  <Button
-                    aria-label={reloadContainersLabel}
-                    danger
-                    icon={<ReloadOutlined />}
-                    loading={podDetailQuery.isFetching}
-                    size="small"
-                    type="text"
-                    onClick={() => void podDetailQuery.refetch()}
-                  />
-                </Tooltip>
+                <Button
+                  aria-label={reloadContainersLabel}
+                  danger
+                  icon={<ReloadOutlined />}
+                  loading={podDetailQuery.isFetching}
+                  size="small"
+                  type="text"
+                  onClick={() => void podDetailQuery.refetch()}
+                />
               </>
             ) : null}
           </div>
@@ -448,8 +446,8 @@ export function RealtimeSessionDockPanel({
           ) : null}
         </div>
         <div className="soha-realtime-session-dock__actions">
-          <Tooltip
-            title={
+          <Button
+            aria-label={
               maximized
                 ? localeCode === 'zh_CN'
                   ? '还原实时会话'
@@ -458,32 +456,18 @@ export function RealtimeSessionDockPanel({
                   ? '最大化实时会话'
                   : 'Maximize live sessions'
             }
-          >
-            <Button
-              aria-label={
-                maximized
-                  ? localeCode === 'zh_CN'
-                    ? '还原实时会话'
-                    : 'Restore live sessions'
-                  : localeCode === 'zh_CN'
-                    ? '最大化实时会话'
-                    : 'Maximize live sessions'
-              }
-              icon={maximized ? <CompressOutlined /> : <ExpandOutlined />}
-              size="small"
-              type="text"
-              onClick={onMaximize}
-            />
-          </Tooltip>
-          <Tooltip title={localeCode === 'zh_CN' ? '收起实时会话' : 'Minimize live sessions'}>
-            <Button
-              aria-label={localeCode === 'zh_CN' ? '收起实时会话' : 'Minimize live sessions'}
-              icon={<DownOutlined />}
-              size="small"
-              type="text"
-              onClick={onMinimize}
-            />
-          </Tooltip>
+            icon={maximized ? <CompressOutlined /> : <ExpandOutlined />}
+            size="small"
+            type="text"
+            onClick={onMaximize}
+          />
+          <Button
+            aria-label={localeCode === 'zh_CN' ? '收起实时会话' : 'Minimize live sessions'}
+            icon={<DownOutlined />}
+            size="small"
+            type="text"
+            onClick={onMinimize}
+          />
         </div>
       </div>
       <div className="soha-realtime-session-dock__body">

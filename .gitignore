@@ -9,3 +9,6 @@ graphify-out/
 .env
 .env.local
 .env.production
+playwright-report/
+midscene_run/
+.auth/

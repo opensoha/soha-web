@@ -53,14 +53,14 @@
     ]
   },
   "summary": {
-    "runtimePaths": 281,
-    "metadataPaths": 281,
-    "overlappingPaths": 281,
+    "runtimePaths": 282,
+    "metadataPaths": 282,
+    "overlappingPaths": 282,
     "runtimeOnlyPaths": 0,
     "metadataOnlyPaths": 0,
     "inlineJsxPaths": 0,
-    "lazyRouteLoads": 222,
-    "lazySourceModules": 218
+    "lazyRouteLoads": 225,
+    "lazySourceModules": 221
   },
   "paths": {
     "runtime": [
@@ -224,6 +224,7 @@
       "/network-access/nas-bindings",
       "/network-access/policy",
       "/network-access/proxy-connections",
+      "/network-access/proxy-instances",
       "/network-access/proxy-overview",
       "/network-access/radius-services",
       "/network-access/resources",
@@ -507,6 +508,7 @@
       "/network-access/nas-bindings",
       "/network-access/policy",
       "/network-access/proxy-connections",
+      "/network-access/proxy-instances",
       "/network-access/proxy-overview",
       "/network-access/radius-services",
       "/network-access/resources",
@@ -790,6 +792,7 @@
       "/network-access/nas-bindings",
       "/network-access/policy",
       "/network-access/proxy-connections",
+      "/network-access/proxy-instances",
       "/network-access/proxy-overview",
       "/network-access/radius-services",
       "/network-access/resources",
@@ -1069,6 +1072,11 @@
         "source": "@/features/system/announcements/page"
       },
       {
+        "exportName": "ApplicationCreateRedirect",
+        "moduleExport": "ApplicationCreateRedirect",
+        "source": "@/features/delivery/applications/legacy-redirect"
+      },
+      {
         "exportName": "ApplicationDetailPage",
         "moduleExport": "ApplicationDetailPage",
         "source": "@/features/delivery/applications/detail-page"
@@ -1309,11 +1317,6 @@
         "source": "@/features/delivery/blueprints/page"
       },
       {
-        "exportName": "DeliveryOnboardingPage",
-        "moduleExport": "DeliveryOnboardingPage",
-        "source": "@/features/delivery/workbench/onboarding-page"
-      },
-      {
         "exportName": "DeliveryOverviewPage",
         "moduleExport": "DeliveryOverviewPage",
         "source": "@/features/delivery/workbench/overview-page"
@@ -1552,6 +1555,21 @@
         "exportName": "MonitoringPage",
         "moduleExport": "MonitoringPage",
         "source": "@/features/observability/overview/page"
+      },
+      {
+        "exportName": "network-access-proxy-connections:default",
+        "moduleExport": "default",
+        "source": "@/features/network-access/proxy-runtime/connections-page"
+      },
+      {
+        "exportName": "network-access-proxy-instances:default",
+        "moduleExport": "default",
+        "source": "@/features/network-access/proxy-runtime/instances-page"
+      },
+      {
+        "exportName": "network-access-proxy-overview:default",
+        "moduleExport": "default",
+        "source": "@/features/network-access/proxy-runtime/overview-page"
       },
       {
         "exportName": "network-access-vpn-dashboard:default",
@@ -2075,6 +2093,7 @@
       "@/features/copilot/workbench/pages/performance-page",
       "@/features/copilot/workbench/pages/root-cause-page",
       "@/features/delivery/applications/detail-page",
+      "@/features/delivery/applications/legacy-redirect",
       "@/features/delivery/applications/list-page",
       "@/features/delivery/applications/workflow-designer-page",
       "@/features/delivery/batches/detail-page",
@@ -2097,7 +2116,6 @@
       "@/features/delivery/releases/list-page",
       "@/features/delivery/runtime/workload-detail-page",
       "@/features/delivery/workbench/analysis-page",
-      "@/features/delivery/workbench/onboarding-page",
       "@/features/delivery/workbench/overview-page",
       "@/features/delivery/workbench/testing-page",
       "@/features/delivery/workflow-templates/page",
@@ -2114,6 +2132,9 @@
       "@/features/identity/overview/page",
       "@/features/identity/providers/list-page",
       "@/features/identity/software/page",
+      "@/features/network-access/proxy-runtime/connections-page",
+      "@/features/network-access/proxy-runtime/instances-page",
+      "@/features/network-access/proxy-runtime/overview-page",
       "@/features/network-access/vpn-dashboard-page",
       "@/features/network-access/vpn-documents-page",
       "@/features/observability/alerts/detail-page",
@@ -2295,6 +2316,7 @@
       "@/features/copilot/workbench/pages/performance-page": ["AIWorkbenchPerformancePage"],
       "@/features/copilot/workbench/pages/root-cause-page": ["AIWorkbenchRootCausePage"],
       "@/features/delivery/applications/detail-page": ["ApplicationDetailPage"],
+      "@/features/delivery/applications/legacy-redirect": ["ApplicationCreateRedirect"],
       "@/features/delivery/applications/list-page": ["ApplicationsPage"],
       "@/features/delivery/applications/workflow-designer-page": [
         "ApplicationWorkflowDesignerPage"
@@ -2319,7 +2341,6 @@
       "@/features/delivery/releases/list-page": ["ReleasesPage"],
       "@/features/delivery/runtime/workload-detail-page": ["ApplicationWorkloadDetailPage"],
       "@/features/delivery/workbench/analysis-page": ["DeliveryAnalysisPage"],
-      "@/features/delivery/workbench/onboarding-page": ["DeliveryOnboardingPage"],
       "@/features/delivery/workbench/overview-page": ["DeliveryOverviewPage"],
       "@/features/delivery/workbench/testing-page": ["DeliveryTestingPage"],
       "@/features/delivery/workflow-templates/page": ["WorkflowTemplatesPage"],
@@ -2336,6 +2357,15 @@
       "@/features/identity/overview/page": ["IdentityOverviewPage"],
       "@/features/identity/providers/list-page": ["IdentityProvidersPage"],
       "@/features/identity/software/page": ["SoftwareLibraryPage"],
+      "@/features/network-access/proxy-runtime/connections-page": [
+        "network-access-proxy-connections:default"
+      ],
+      "@/features/network-access/proxy-runtime/instances-page": [
+        "network-access-proxy-instances:default"
+      ],
+      "@/features/network-access/proxy-runtime/overview-page": [
+        "network-access-proxy-overview:default"
+      ],
       "@/features/network-access/vpn-dashboard-page": ["network-access-vpn-dashboard:default"],
       "@/features/network-access/vpn-documents-page": [
         "network-access-vpn-profiles:default",
@@ -2547,5 +2577,5 @@
       "@/features/virtualization/virtual-machines/list-page": ["VirtualizationVmsPage"]
     }
   },
-  "generatedAt": "2026-09-15T09:23:04.424Z"
+  "generatedAt": "2026-09-26T20:02:36.389Z"
 }
