@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { podQueries } from '@/features/platform/workloads/pods/queries'
 import { toScopeKey } from '@/types'
 import { getResourceFormDefinition } from './definitions'
@@ -12,7 +12,7 @@ import type { ServiceFormValues } from './types'
 async function flushAsyncWork() {
   await act(async () => {
     await Promise.resolve()
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await vi.advanceTimersByTimeAsync(0)
   })
 }
 
@@ -62,11 +62,23 @@ describe('resource step form', () => {
     }))
   })
 
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
   afterEach(async () => {
-    await act(async () => root?.unmount())
-    document.body.innerHTML = ''
-    root = undefined
-    container = undefined
+    try {
+      await act(async () => {
+        root?.unmount()
+        await vi.runOnlyPendingTimersAsync()
+      })
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+      document.body.innerHTML = ''
+      root = undefined
+      container = undefined
+    }
   })
 
   it('renders shared steps and navigation for a workload definition', async () => {
@@ -86,9 +98,7 @@ describe('resource step form', () => {
         }),
       )
     })
-    await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 0))
-    })
+    await flushAsyncWork()
 
     expect(container.textContent).toContain('基本信息')
     expect(container.textContent).toContain('工作负载')
