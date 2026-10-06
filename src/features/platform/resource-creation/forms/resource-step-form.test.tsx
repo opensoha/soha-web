@@ -67,15 +67,18 @@ describe('resource step form', () => {
   })
 
   afterEach(async () => {
-    await act(async () => {
-      root?.unmount()
-      await vi.runOnlyPendingTimersAsync()
-    })
-    expect(vi.getTimerCount()).toBe(0)
-    vi.useRealTimers()
-    document.body.innerHTML = ''
-    root = undefined
-    container = undefined
+    try {
+      await act(async () => {
+        root?.unmount()
+        await vi.runOnlyPendingTimersAsync()
+      })
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+      document.body.innerHTML = ''
+      root = undefined
+      container = undefined
+    }
   })
 
   it('renders shared steps and navigation for a workload definition', async () => {
