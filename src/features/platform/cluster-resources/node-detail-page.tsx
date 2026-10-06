@@ -52,7 +52,7 @@ export function NodeDetailPage() {
   const nodeDetailQuery = useQuery(nodeQueries.detail(scope, nodeName))
   const updateNodeMutation = useMutation(nodeMutations.update(queryClient))
   const yamlCapability = useClusterCapabilityForCluster('resource.yaml.view', localeCode, clusterId)
-  const yamlAvailable = yamlCapability.status === 'available'
+  const yamlAvailable = !yamlCapability.disabled && !yamlCapability.isLoading
   useAIPageContext({
     sourceWorkbench: 'platform',
     sourceTitle: localeCode === 'zh_CN' ? '节点详情' : 'Node Detail',

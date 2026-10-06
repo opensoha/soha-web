@@ -1,22 +1,13 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { Alert, App, Button, Card, Descriptions, Space, Spin, Tabs } from 'antd'
-import {
-  ArrowLeftOutlined,
-  DiffOutlined,
-  HistoryOutlined,
-  RollbackOutlined,
-} from '@ant-design/icons'
+import { DiffOutlined, HistoryOutlined, RollbackOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
 import { OperationalPlanModal } from '@/components/operational-plan-modal'
 import { YamlDraftDiffEditor } from '@/components/yaml-draft-diff-editor'
 import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
-import {
-  ManagementDetailHeader,
-  ManagementState,
-  ManagementTableToolbar,
-} from '@/components/management-list'
+import { ManagementState } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
 import { hasAllowedAction, hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useAIPageContext } from '@/features/copilot'
@@ -43,7 +34,6 @@ export function HelmReleaseDetailPage() {
   const { clusterId, namespace } = usePlatformScopeStore()
   const { releaseName = '' } = useParams()
   const [searchParams] = useSearchParams()
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const canViewValues = hasPermission(
@@ -273,22 +263,6 @@ export function HelmReleaseDetailPage() {
 
   return (
     <div className="soha-page">
-      <ManagementDetailHeader
-        title={detail?.name || releaseName}
-        description={detailNamespace}
-        actions={
-          <ManagementTableToolbar>
-            <Button
-              autoInsertSpace={false}
-              size="small"
-              icon={<ArrowLeftOutlined />}
-              onClick={() => navigate('/helm/releases')}
-            >
-              {t('common.back', 'Back')}
-            </Button>
-          </ManagementTableToolbar>
-        }
-      />
       {!clusterId || !detailNamespace ? (
         <Card className="soha-detail-card" style={{ marginTop: 0 }}>
           <ManagementState compact kind="select-scope" />

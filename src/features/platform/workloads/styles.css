@@ -293,100 +293,215 @@
   min-width: 0;
 }
 
-.soha-rollout-status-compact {
+.soha-related-pod-cards .soha-related-pod-list {
+  gap: 8px;
+}
+
+.soha-related-pod-cards .soha-related-pod-item,
+.soha-rollout-history-row {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--soha-border-color);
+  border-radius: var(--soha-radius-control);
+}
+
+.soha-related-pod-heading,
+.soha-rollout-current-heading,
+.soha-rollout-history-heading,
+.soha-rollout-history-row-heading {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   min-width: 0;
 }
 
-.soha-rollout-status-chip {
-  display: inline-flex;
-  align-items: center;
+.soha-related-pod-heading {
+  flex-wrap: nowrap;
+}
+
+.soha-related-pod-link.ant-btn {
+  justify-content: flex-start;
   min-width: 0;
-  gap: 6px;
-  height: 26px;
-  padding: 0 9px;
-  border: 1px solid var(--soha-border-color);
-  border-radius: 6px;
-  background: var(--soha-fill-weak);
+  height: 32px;
+  padding: 0;
+  font-weight: 600;
+}
+
+.soha-related-pod-link.ant-btn > span,
+.soha-rollout-history-name,
+.soha-rollout-image-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.soha-rollout-status-chip .ant-typography {
-  line-height: 18px;
-}
-
-.soha-rollout-status-chip .ant-tag {
+.soha-related-pod-heading .ant-tag {
+  flex-shrink: 0;
   margin-inline-end: 0;
-  line-height: 18px;
 }
 
-.soha-rollout-status-chip-message {
-  flex: 1 1 260px;
-  max-width: 420px;
+.soha-related-pod-facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 1fr) repeat(3, minmax(0, 0.6fr));
+  gap: 8px 20px;
+  margin: 4px 0 0;
+}
+
+.soha-related-pod-facts > div,
+.soha-rollout-counts > div {
+  min-width: 0;
+}
+
+.soha-related-pod-facts dt,
+.soha-rollout-counts dt {
+  color: var(--soha-text-secondary);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.soha-related-pod-facts dd,
+.soha-rollout-counts dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.soha-related-pod-facts .has-restarts {
+  color: var(--soha-warning);
+}
+
+.soha-rollout-counts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin: 12px 0;
+}
+
+.soha-rollout-counts dd {
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
 }
 
 .soha-rollout-status-message {
   display: block;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--soha-text-primary);
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .soha-rollout-history-section {
   min-width: 0;
-  padding-top: 10px;
+  padding-top: 12px;
   border-top: 1px solid var(--soha-border-color);
+}
+
+.soha-rollout-history-heading {
+  margin-bottom: 12px;
 }
 
 .soha-rollout-history-list {
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  gap: 6px;
+  gap: 8px;
 }
 
-.soha-rollout-history-row {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  min-width: 0;
-  gap: 8px;
-  padding: 4px 0;
-  white-space: nowrap;
+.soha-rollout-history-row-heading .ant-tag {
+  margin-inline-end: 0;
 }
 
 .soha-rollout-history-time {
-  flex: 0 0 auto;
+  margin-inline-start: auto;
   font-size: 12px;
-  line-height: 20px;
 }
 
-.soha-rollout-history-revision {
-  flex: 0 0 auto;
-  min-width: 0;
-  line-height: 20px;
-  white-space: nowrap;
+.soha-rollout-history-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  margin: 6px 0;
+  color: var(--soha-text-secondary);
+  font-size: 12px;
 }
 
-.soha-rollout-history-tag.ant-tag {
-  flex: 0 0 auto;
-  margin-inline-end: 0;
-  line-height: 20px;
-}
-
-.soha-rollout-history-image {
-  display: block;
-  flex: 1 1 auto;
+.soha-rollout-history-name {
   min-width: 0;
   max-width: 100%;
-  overflow: hidden;
-  line-height: 20px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.soha-rollout-images {
+  padding: 6px 8px;
+  background: var(--soha-fill-weak);
+  border-radius: var(--soha-radius-control);
+  font-size: 12px;
+}
+
+.soha-rollout-images summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 24px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.soha-rollout-images summary::-webkit-details-marker {
+  display: none;
+}
+
+.soha-rollout-images summary::before {
+  content: '›';
+  font-size: 18px;
+  line-height: 16px;
+}
+
+.soha-rollout-images[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.soha-rollout-images summary > span:first-of-type {
+  flex-shrink: 0;
+  color: var(--soha-text-secondary);
+}
+
+.soha-rollout-images ul {
+  max-height: 180px;
+  margin: 8px 0 0;
+  padding-inline-start: 20px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+
+.soha-rollout-images li + li {
+  margin-top: 6px;
+}
+
+.soha-rollout-history-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+@media (max-width: 1100px) {
+  .soha-related-pod-facts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .soha-related-pod-facts,
+  .soha-rollout-counts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .soha-rollout-history-time {
+    flex-basis: 100%;
+    margin-inline-start: 0;
+  }
 }
 
 @media (max-width: 768px) {
@@ -525,54 +640,102 @@
 }
 
 .soha-pod-resource-limit-cell {
+  --soha-pod-resource-fill: var(--soha-resource-success);
+  --soha-pod-resource-value-color: var(--soha-resource-on-fill);
   display: flex;
   align-items: center;
-  min-height: 22px;
+  min-height: 24px;
   min-width: 0;
   width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: calc(var(--soha-radius-control) / 2);
+  background: transparent;
+  color: var(--soha-text-primary);
+  font: inherit;
+  cursor: help;
+}
+
+.soha-pod-resource-limit-cell:focus-visible {
+  outline: 2px solid var(--soha-primary);
+  outline-offset: 2px;
+}
+
+.soha-pod-resource-limit-cell.is-warning {
+  --soha-pod-resource-fill: var(--soha-resource-warning);
+  --soha-pod-resource-value-color: var(--soha-resource-on-warning);
+}
+
+.soha-pod-resource-limit-cell.is-danger {
+  --soha-pod-resource-fill: var(--soha-resource-danger);
+}
+
+.soha-pod-resource-limit-cell.is-unknown {
+  --soha-pod-resource-fill: transparent;
 }
 
 .soha-pod-resource-progress-wrap {
   position: relative;
   width: 100%;
   min-width: 0;
-  padding-block: 5px;
+  height: 24px;
+  overflow: hidden;
+  border-radius: calc(var(--soha-radius-control) / 2);
 }
 
-.soha-pod-resource-limit-cell .ant-progress {
-  display: block;
-  line-height: 1;
+.soha-pod-resource-value {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  font-size: var(--soha-font-size-supporting);
+  line-height: var(--soha-line-height-supporting);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
-.soha-pod-resource-limit-cell .ant-progress-line {
-  margin-bottom: 0;
-}
-
-.soha-pod-resource-limit-cell .ant-progress.is-without-baseline .ant-progress-bg {
-  opacity: 0;
+.soha-pod-resource-value.is-on-fill {
+  color: var(--soha-pod-resource-value-color);
+  clip-path: inset(0 calc(100% - var(--soha-pod-resource-usage-percent)) 0 0);
 }
 
 .soha-pod-resource-marker {
   position: absolute;
-  top: 3px;
-  bottom: 3px;
+  top: 0;
+  bottom: 0;
   z-index: 1;
   width: 2px;
-  border-radius: 2px;
   pointer-events: none;
-  transform: translateX(-1px);
 }
 
 .soha-pod-resource-marker.is-request {
-  left: var(--soha-pod-resource-request-percent);
-  background: var(--soha-text-primary);
-  opacity: 0.62;
+  left: clamp(0px, calc(var(--soha-pod-resource-request-percent) - 1px), calc(100% - 2px));
+  background: var(--soha-resource-success);
+}
+
+.soha-pod-resource-marker.is-request.is-passed {
+  background: var(--soha-resource-request-on-fill);
+}
+
+.soha-pod-resource-limit-cell.is-warning .soha-pod-resource-marker.is-request {
+  background: var(--soha-resource-request-on-warning);
 }
 
 .soha-pod-resource-marker.is-limit {
-  left: var(--soha-pod-resource-limit-percent);
-  background: var(--soha-danger);
-  opacity: 0.72;
+  right: 0;
+  background: var(--soha-resource-danger);
+}
+
+.soha-pod-resource-marker.is-limit.is-passed {
+  background: var(--soha-resource-limit-on-fill);
+}
+
+@media (pointer: coarse) {
+  .soha-pod-resource-limit-cell {
+    min-height: 44px;
+  }
 }
 
 .soha-pod-actions-column.soha-table-actions-column {

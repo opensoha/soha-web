@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import type { ComponentProps, ReactNode } from 'react'
 import { Button, Checkbox, Popover, Table, Typography } from 'antd'
-import { SettingOutlined } from '@ant-design/icons'
+import { ArrowDownOutlined, ArrowUpOutlined, SettingOutlined } from '@ant-design/icons'
 import {
   ManagementDensityButton,
   ManagementRefreshButton,
@@ -28,6 +28,11 @@ const DEFAULT_PAGINATION_SUMMARY = (
 const ACTION_COLUMN_CLASS_NAME = 'soha-table-actions-column'
 const AUTO_ACTION_COLUMN_CLASS_NAME = 'soha-table-actions-column--auto'
 const { Text } = Typography
+
+// Antd adds a native title to ellipsis headers even when sorter tooltips are disabled.
+function TableHeaderCell(props: ComponentProps<'th'>) {
+  return <th {...props} title={undefined} />
+}
 
 export interface AdminTableProps {
   className?: string
@@ -572,7 +577,6 @@ export function AdminTable({
           }
           icon={<SettingOutlined />}
           size="small"
-          title={t('table.columns.title', '列设置')}
           type={columnSettingIconOnly ? 'text' : 'default'}
         >
           {columnSettingIconOnly ? null : t('table.columns.title', '列设置')}
@@ -670,6 +674,15 @@ export function AdminTable({
         <Table
           {...rest}
           className={resolvedTableClassName}
+          components={{ header: { cell: TableHeaderCell } }}
+          column={{
+            sortIcon: ({ sortOrder }) =>
+              sortOrder ? (
+                <span aria-hidden className="soha-table-sort-icon">
+                  {sortOrder === 'ascend' ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
+                </span>
+              ) : null,
+          }}
           columns={activeColumns}
           dataSource={dataSource}
           loading={loading}
@@ -678,6 +691,7 @@ export function AdminTable({
           rowKey={rowKey}
           rowSelection={resolvedRowSelection}
           scroll={resolvedScroll}
+          showSorterTooltip={false}
           size={resolvedTableSize}
         />
       ) : null}

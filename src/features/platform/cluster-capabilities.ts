@@ -13,6 +13,11 @@ type CapabilityMode = 'direct' | 'agent'
 type LocaleCode = 'zh_CN' | 'en_US'
 
 const AGENT_CAPABILITY_REASONS_ZH: Partial<Record<string, string>> = {
+  'namespace.lifecycle': '升级后的 Agent 支持命名空间查询、创建、元数据编辑和删除。',
+  'configuration.inventory':
+    '升级后的 Agent 支持 ConfigMap 和 Secret 详情、数据编辑与引用查询；Secret 数据需要独立查看权限。',
+  'storage.inventory': 'Agent 支持 PVC、PV 和 StorageClass 的查询与详情，创建由资源创建能力控制。',
+  'rbac.inventory': 'Agent 支持 RBAC 查询与权限检查，创建由资源创建能力控制。',
   'custom.resources':
     'Agent 模式支持 CRD 发现；自定义资源读取和变更需要为目标 API 组与资源配置明确的 Kubernetes RBAC。',
   'helm.releases': 'Agent 模式支持 Helm Release 的查询、安装、更新和删除。',
@@ -20,11 +25,10 @@ const AGENT_CAPABILITY_REASONS_ZH: Partial<Record<string, string>> = {
   'pod.logs': 'Agent 模式支持 Pod 日志快照和流式日志。',
   'port.forward': 'Agent 模式支持实时端口转发。',
   'resource.yaml.apply':
-    'Agent 模式支持内置资源和自定义资源的 YAML 应用与删除；部分直连专用接口仍待能力对齐。',
+    'Agent 模式支持内置资源和自定义资源的 YAML 应用与删除；需要升级 Agent 并配置对应动作与 Kubernetes RBAC。',
   'resource.yaml.view':
-    'Agent 模式支持读取内置资源和自定义资源 YAML；部分直连专用接口仍待能力对齐。',
-  'workload.mutations':
-    'Agent 模式支持 Deployment 重启、回滚和扩缩容、StatefulSet 重启和扩缩容以及 DaemonSet 重启；Pod 删除和 YAML 应用仍仅支持直连模式。',
+    'Agent 模式支持读取内置资源和自定义资源 YAML；需要升级 Agent 并配置对应动作与 Kubernetes RBAC。',
+  'workload.mutations': '升级后的 Agent 支持工作负载快捷操作、Pod 删除以及 CronJob 暂停和恢复。',
 }
 
 export interface ClusterCapabilityDecision {
@@ -84,7 +88,10 @@ function capabilityReason(
     )
   }
   if (mode === 'direct') {
-    return sourceReason || (support.status === 'unsupported' ? fallbackUnsupportedReason(localeCode) : '')
+    return (
+      sourceReason ||
+      (support.status === 'unsupported' ? fallbackUnsupportedReason(localeCode) : '')
+    )
   }
   return (
     (mode === 'agent' && support.status !== 'unsupported'
@@ -93,7 +100,9 @@ function capabilityReason(
     (sourceReason
       ? support.status === 'partial'
         ? '当前集群连接模式仅部分支持该能力。'
-        : fallbackUnsupportedReason(localeCode)
+        : support.status === 'available'
+          ? sourceReason
+          : fallbackUnsupportedReason(localeCode)
       : support.status === 'unsupported'
         ? fallbackUnsupportedReason(localeCode)
         : '')

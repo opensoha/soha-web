@@ -1,18 +1,6 @@
 import { forwardRef, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
-import {
-  Alert,
-  Button,
-  Card,
-  Empty,
-  Form,
-  Input,
-  Segmented,
-  Space,
-  Spin,
-  Tooltip,
-  Typography,
-} from 'antd'
+import { Alert, Button, Card, Empty, Form, Input, Segmented, Space, Spin, Typography } from 'antd'
 import type { AlertProps, ButtonProps, FormProps } from 'antd'
 import {
   ColumnHeightOutlined,
@@ -60,6 +48,7 @@ interface ManagementBatchBarProps {
 }
 
 interface ManagementIconButtonProps extends Omit<ButtonProps, 'children' | 'type'> {
+  /** Retained as accessible text; icon actions do not show hover hints. */
   tooltip: ReactNode
 }
 
@@ -765,17 +754,17 @@ export function ManagementBatchBar({
 
 export const ManagementIconButton = forwardRef<HTMLButtonElement, ManagementIconButtonProps>(
   function ManagementIconButton({ tooltip, ...buttonProps }, ref) {
-    const nativeTitle = typeof tooltip === 'string' ? tooltip : undefined
+    const description = typeof tooltip === 'string' ? tooltip : undefined
     return (
-      <Tooltip title={tooltip}>
-        <Button
-          {...buttonProps}
-          ref={ref}
-          className={classNames('soha-management-icon-action', buttonProps.className)}
-          title={buttonProps.title ?? nativeTitle}
-          type="text"
-        />
-      </Tooltip>
+      <Button
+        {...buttonProps}
+        ref={ref}
+        aria-label={buttonProps['aria-label'] ?? description ?? buttonProps.title}
+        aria-description={buttonProps['aria-description'] ?? buttonProps.title ?? description}
+        className={classNames('soha-management-icon-action', buttonProps.className)}
+        title={undefined}
+        type="text"
+      />
     )
   },
 )

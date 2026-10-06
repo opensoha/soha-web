@@ -4,11 +4,14 @@ import { act } from 'react'
 import { App as AntdApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot, type Root } from 'react-dom/client'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { RolloutHistory } from '@/types'
 import { DeploymentDetailPage } from './detail-page'
 
 const testState = vi.hoisted(() => ({
+  history: [] as RolloutHistory[],
+  historyError: false,
   scope: {
     clusterId: 'cluster-a' as string | null,
     namespace: 'monitoring' as string | null,
@@ -31,6 +34,8 @@ const apiGetMock = vi.hoisted(() =>
               name: 'prometheus-0',
               namespace: 'monitoring',
               phase: 'Running',
+              podIp: '10.20.0.1',
+              nodeName: 'worker-a',
               readyContainers: '1/1',
               restarts: 0,
               ageSeconds: 60,
@@ -51,6 +56,7 @@ const apiGetMock = vi.hoisted(() =>
       return {
         data: {
           status: 'ready',
+          revision: '12',
           desiredReplicas: 1,
           updatedReplicas: 1,
           readyReplicas: 1,
@@ -59,7 +65,10 @@ const apiGetMock = vi.hoisted(() =>
         },
       }
     }
-    if (path.includes('/rollouts?')) return { data: [] }
+    if (path.includes('/rollouts?')) {
+      if (testState.historyError) throw new Error('History unavailable')
+      return { data: testState.history }
+    }
     if (path.includes('/metrics?')) return { data: { rangeMinutes: 60, series: [] } }
     if (path.includes('/yaml?')) {
       return { data: { kind: 'Deployment', name: 'prometheus', content: 'kind: Deployment' } }
@@ -78,7 +87,8 @@ vi.mock('@/services/api-client', () => ({
 }))
 
 vi.mock('@/stores/platform-scope-store', () => ({
-  usePlatformScopeStore: () => testState.scope,
+  usePlatformScopeStore: (selector?: (state: typeof testState.scope) => unknown) =>
+    selector ? selector(testState.scope) : testState.scope,
 }))
 
 vi.mock('@/i18n', () => ({
@@ -111,6 +121,7 @@ vi.mock('@/components/k8s-yaml-editor', () => ({
 
 vi.mock('@/components/status-tag', () => ({
   StatusTag: ({ value }: { value?: string }) => <span>{value}</span>,
+  MetadataTag: ({ label }: { label: string }) => <span>{label}</span>,
 }))
 
 const mountedRoots: Root[] = []
@@ -144,6 +155,14 @@ beforeEach(() => {
   vi.clearAllMocks()
   testState.scope.clusterId = 'cluster-a'
   testState.scope.namespace = 'monitoring'
+  testState.history = []
+  testState.historyError = false
+  testState.scope.setClusterId.mockImplementation((value: string) => {
+    testState.scope.clusterId = value
+  })
+  testState.scope.setNamespace.mockImplementation((value: string) => {
+    testState.scope.namespace = value
+  })
 })
 
 afterEach(async () => {
@@ -158,6 +177,16 @@ async function flushAsyncWork() {
     await Promise.resolve()
     await new Promise((resolve) => setTimeout(resolve, 0))
   })
+}
+
+function LocationProbe() {
+  const location = useLocation()
+  return (
+    <div data-testid="destination">
+      {location.pathname}
+      {location.search}
+    </div>
+  )
 }
 
 async function renderDetail() {
@@ -183,6 +212,7 @@ async function renderDetail() {
                 path="/workloads/deployments/:deploymentName"
                 element={<DeploymentDetailPage />}
               />
+              <Route path="*" element={<LocationProbe />} />
             </Routes>
           </MemoryRouter>
         </AntdApp>
@@ -248,5 +278,89 @@ describe('deployment detail page boundaries', () => {
       true,
     )
     expect(container.querySelector('[data-testid="yaml-editor"]')).not.toBeNull()
+  })
+
+  it('paginates revisions numerically with the current marker and expandable images', async () => {
+    testState.history = [9, 10, 2, 8, 11, 1, 12].map((revision) => ({
+      name: `prometheus-rs-${revision}`,
+      namespace: 'monitoring',
+      revision: String(revision),
+      replicas: revision === 12 ? 1 : 0,
+      readyReplicas: revision === 12 ? 1 : 0,
+      images: [`registry.example/prometheus:v${revision}`, 'registry.example/sidecar:v1'],
+      createdAt: '2026-01-01T00:00:00Z',
+    }))
+    const container = await renderDetail()
+    const section = container.querySelector<HTMLElement>('.soha-rollout-history-section')!
+    const visibleRevisions = () =>
+      Array.from(section.querySelectorAll('.soha-rollout-history-revision')).map(
+        (item) => item.textContent,
+      )
+    expect(visibleRevisions()).toEqual(['版本 12', '版本 11', '版本 10'])
+    expect(section.textContent).toContain('共 7 个版本')
+    expect(section.querySelectorAll('[role="listitem"]')).toHaveLength(3)
+    expect(section.querySelector('[role="listitem"]')?.textContent).toContain('当前版本')
+    const images = section.querySelector('details')!
+    expect(images.open).toBe(false)
+    await act(async () => images.querySelector('summary')!.click())
+    expect(images.open).toBe(true)
+    expect(images.querySelectorAll('li')).toHaveLength(2)
+    expect(images.textContent).toContain('registry.example/sidecar:v1')
+
+    const next = () =>
+      section.querySelector<HTMLButtonElement>('.ant-pagination-next button')!.click()
+    await act(async () => next())
+    expect(visibleRevisions()).toEqual(['版本 9', '版本 8', '版本 2'])
+    expect(section.textContent).not.toContain('当前版本')
+    await act(async () => next())
+    expect(visibleRevisions()).toEqual(['版本 1'])
+    expect(section.querySelector('.ant-pagination-next')?.getAttribute('aria-disabled')).toBe(
+      'true',
+    )
+    await act(async () =>
+      section.querySelector<HTMLButtonElement>('.ant-pagination-prev button')!.click(),
+    )
+    expect(visibleRevisions()).toEqual(['版本 9', '版本 8', '版本 2'])
+    expect(apiGetMock.mock.calls.filter(([path]) => path.includes('/rollouts?'))).toHaveLength(1)
+    expect(testState.history.map((item) => item.revision)).toEqual([
+      '9',
+      '10',
+      '2',
+      '8',
+      '11',
+      '1',
+      '12',
+    ])
+  })
+
+  it('distinguishes empty history from a failed history request', async () => {
+    testState.historyError = true
+    const container = await renderDetail()
+    expect(container.textContent).toContain('版本历史加载失败')
+    expect(container.textContent).not.toContain('暂无滚动历史')
+    expect(container.querySelector('.soha-rollout-history-pagination')).toBeNull()
+  })
+
+  it('keeps Pod facts together and preserves the detail cluster and namespace when navigating', async () => {
+    const container = await renderDetail()
+    const row = container.querySelector('.soha-related-pod-cards [role="listitem"]')!
+    expect(row.textContent).toContain('Running')
+    const facts = Object.fromEntries(
+      Array.from(row.querySelectorAll('dl > div')).map((item) => [
+        item.querySelector('dt')?.textContent,
+        item.querySelector('dd')?.textContent,
+      ]),
+    )
+    expect(facts).toMatchObject({
+      命名空间: 'monitoring',
+      节点: 'worker-a',
+      'Pod IP': '10.20.0.1',
+      就绪: '1/1',
+      重启: '0',
+    })
+    await act(async () => row.querySelector<HTMLButtonElement>('.soha-related-pod-link')!.click())
+    expect(container.querySelector('[data-testid="destination"]')?.textContent).toBe(
+      '/workloads/pods/prometheus-0?clusterId=url-cluster&namespace=url-namespace',
+    )
   })
 })

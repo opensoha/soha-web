@@ -1,7 +1,8 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense } from 'react'
 import { App, Card, Spin, Tabs } from 'antd'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useParams, useSearchParams } from 'react-router-dom'
+import { useYamlDraft } from '@/components/use-yaml-draft'
 import { ManagementState } from '@/components/management-list'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
@@ -37,23 +38,22 @@ export function WorkloadYAMLOnlyDetailPage({
   const scope = toScopeKey(clusterId, detailNamespace)
   const yamlQueryOptions = workloadQueries.yaml(resource, scope, name)
   const yamlQuery = useQuery(yamlQueryOptions)
-  const yamlServerValue = yamlQuery.data?.content ?? ''
-  const [yamlDraft, setYamlDraft] = useState('')
+  const yamlState = useYamlDraft(
+    JSON.stringify([clusterId, resource, detailNamespace, name]),
+    yamlQuery.data?.content,
+  )
+  const { value: yamlDraft, setValue: setYamlDraft } = yamlState
   const yamlApplyCapability = useClusterCapability('resource.yaml.apply', localeCode)
 
   const applyYamlMutation = useMutation({
     mutationFn: () => updateWorkloadYAML(resource, scope, name, { content: yamlDraft }),
     onSuccess: (resourceYAML) => {
-      setYamlDraft(resourceYAML.content ?? yamlDraft)
+      yamlState.applied(resourceYAML.content)
       void message.success(t('yamlEditor.applySuccess', 'YAML applied'))
       void yamlQuery.refetch()
     },
     onError: (error: Error) => void message.error(error.message),
   })
-
-  useEffect(() => {
-    setYamlDraft(yamlServerValue)
-  }, [yamlServerValue])
 
   return (
     <div className="soha-page soha-workload-detail-page">
@@ -86,10 +86,14 @@ export function WorkloadYAMLOnlyDetailPage({
                 }
               >
                 <K8sYamlEditor
+                  key={yamlState.resourceKey}
                   value={yamlDraft}
+                  original={yamlState.original}
+                  serverChanged={yamlState.serverChanged}
+                  onCompareLatest={yamlState.compareLatest}
                   onChange={setYamlDraft}
                   onReset={() => {
-                    setYamlDraft(yamlServerValue)
+                    yamlState.reset()
                     void message.success(t('yamlEditor.resetSuccess', 'YAML draft reset'))
                   }}
                   onSave={() =>

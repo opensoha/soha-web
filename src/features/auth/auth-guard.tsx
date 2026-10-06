@@ -44,7 +44,7 @@ export function AuthGuard() {
     }
 
     let cancelled = false
-    let retryTimer: ReturnType<typeof window.setTimeout> | undefined
+    let retryTimer: number | undefined
 
     const restore = async () => {
       setIsRestoringAuth(true)

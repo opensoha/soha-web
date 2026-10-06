@@ -43,6 +43,7 @@ import {
 import { virtualizationQueries } from '@/features/virtualization/queries'
 import { useVirtualizationPermissions } from '@/features/virtualization/shared/use-virtualization-permissions'
 import { VirtualizationAdminTable } from '@/features/virtualization/shared/ui'
+import { TableCellText } from '@/components/table-cell-content'
 import {
   ENABLED_FILTER_OPTIONS,
   VIRTUALIZATION_PROVIDER_FILTER_OPTIONS,
@@ -80,30 +81,16 @@ function statusTag(value?: string) {
 
 function tableTooltipText(value: unknown) {
   const text = String(value ?? '').trim() || '-'
-  const content = <span className="soha-vrt-table-tooltip-text">{text}</span>
-  if (text === '-') return content
-  return (
-    <Tooltip
-      placement="topLeft"
-      title={<span className="soha-vrt-table-tooltip-content">{text}</span>}
-    >
-      {content}
-    </Tooltip>
-  )
+  return <TableCellText className="soha-vrt-table-tooltip-text" value={text} />
 }
 
 function tableTooltipTextButton(value: unknown, onClick: () => void) {
   const text = String(value ?? '').trim() || '-'
   if (text === '-') return <span className="soha-vrt-table-tooltip-text">-</span>
   return (
-    <Tooltip
-      placement="topLeft"
-      title={<span className="soha-vrt-table-tooltip-content">{text}</span>}
-    >
-      <button className="soha-vrt-table-text-button" type="button" onClick={onClick}>
-        {text}
-      </button>
-    </Tooltip>
+    <button className="soha-vrt-table-text-button" type="button" onClick={onClick}>
+      <TableCellText value={text} />
+    </button>
   )
 }
 

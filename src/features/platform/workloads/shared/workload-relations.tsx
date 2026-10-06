@@ -1,8 +1,9 @@
-import { Button, Card, Table, Tag, Tooltip } from 'antd'
+import { Button, Card, Table, Tag } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
+import { TableCellText } from '@/components/table-cell-content'
 import {
   buildRelatedResourcePath,
   buildWorkloadDetailPath,
@@ -21,11 +22,11 @@ export function WorkloadPodsCard({ pods = [], namespace }: { pods?: Pod[]; names
 
   return (
     <Card
-      className="soha-detail-card soha-related-pod-card"
+      className="soha-detail-card soha-related-pod-card soha-related-pod-cards"
       size="small"
       title={localeCode === 'zh_CN' ? '关联 Pods' : 'Related Pods'}
     >
-      <div className="soha-related-pod-list">
+      <div className="soha-related-pod-list" role="list">
         {pods.length === 0 ? (
           <ManagementState
             bordered={false}
@@ -34,52 +35,55 @@ export function WorkloadPodsCard({ pods = [], namespace }: { pods?: Pod[]; names
           />
         ) : null}
         {pods.map((pod) => (
-          <div className="soha-related-pod-item" key={`${pod.namespace}/${pod.name}`}>
-            <div className="soha-related-pod-line">
-              <Tooltip title={pod.name}>
-                <Button
-                  type="link"
-                  className="soha-related-pod-name"
-                  onClick={() =>
-                    navigate(
-                      buildWorkloadDetailPath(
-                        'pods',
-                        pod.name,
-                        namespace,
-                        pod.namespace,
-                        clusterId,
-                      ),
-                    )
-                  }
-                >
-                  {pod.name}
-                </Button>
-              </Tooltip>
-              <StatusTag value={pod.phase} />
-              <Tag color="blue" className="soha-related-pod-tag">
-                {pod.namespace || namespace || '-'}
-              </Tag>
-              <Tag color="cyan" className="soha-related-pod-tag">
-                {pod.podIp || '-'}
-              </Tag>
-              <Tag color="success" className="soha-related-pod-tag">
-                {`${localeCode === 'zh_CN' ? '就绪' : 'Ready'} ${pod.readyContainers || '-'}`}
-              </Tag>
-              <Tag
-                color={(pod.restarts ?? 0) > 0 ? 'warning' : 'default'}
-                className="soha-related-pod-tag"
+          <div
+            className="soha-related-pod-item"
+            role="listitem"
+            key={`${pod.namespace}/${pod.name}`}
+          >
+            <div className="soha-related-pod-heading">
+              <Button
+                type="link"
+                className="soha-related-pod-link"
+                style={{ maxWidth: '100%' }}
+                styles={{ content: { minWidth: 0 } }}
+                onClick={() =>
+                  navigate(
+                    buildWorkloadDetailPath('pods', pod.name, namespace, pod.namespace, clusterId),
+                  )
+                }
               >
-                {`${localeCode === 'zh_CN' ? '重启' : 'Restarts'} ${pod.restarts ?? 0}`}
-              </Tag>
-              <Tooltip title={pod.nodeName || '-'}>
-                <Tag color="purple" className="soha-related-pod-tag soha-related-pod-tag-node">
-                  {pod.nodeName || '-'}
-                </Tag>
-              </Tooltip>
-              <Tag color="geekblue" className="soha-related-pod-tag">
-                {formatAgeSeconds(pod.ageSeconds)}
-              </Tag>
+                <TableCellText value={pod.name} />
+              </Button>
+              <StatusTag value={pod.phase} />
             </div>
+            <dl className="soha-related-pod-facts">
+              <div>
+                <dt>{localeCode === 'zh_CN' ? '命名空间' : 'Namespace'}</dt>
+                <dd>{pod.namespace || namespace || '-'}</dd>
+              </div>
+              <div>
+                <dt>{localeCode === 'zh_CN' ? '节点' : 'Node'}</dt>
+                <dd>{pod.nodeName || '-'}</dd>
+              </div>
+              <div>
+                <dt>Pod IP</dt>
+                <dd>{pod.podIp || '-'}</dd>
+              </div>
+              <div>
+                <dt>{localeCode === 'zh_CN' ? '就绪' : 'Ready'}</dt>
+                <dd>{pod.readyContainers || '-'}</dd>
+              </div>
+              <div>
+                <dt>{localeCode === 'zh_CN' ? '重启' : 'Restarts'}</dt>
+                <dd className={pod.restarts > 0 ? 'has-restarts' : undefined}>
+                  {pod.restarts ?? '-'}
+                </dd>
+              </div>
+              <div>
+                <dt>{localeCode === 'zh_CN' ? '运行时长' : 'Age'}</dt>
+                <dd>{formatAgeSeconds(pod.ageSeconds)}</dd>
+              </div>
+            </dl>
           </div>
         ))}
       </div>

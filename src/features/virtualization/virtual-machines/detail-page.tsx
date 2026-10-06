@@ -13,7 +13,6 @@ import {
   Space,
   Spin,
   Tabs,
-  Tooltip,
   Typography,
 } from 'antd'
 import {
@@ -38,6 +37,7 @@ import {
 } from '@/features/virtualization/mutations'
 import { useVirtualizationPermissions } from '@/features/virtualization/shared/use-virtualization-permissions'
 import { VirtualizationAdminTable } from '@/features/virtualization/shared/ui'
+import { TableCellText } from '@/components/table-cell-content'
 import {
   isAbnormalOperation,
   isStaleVirtualMachine,
@@ -105,16 +105,7 @@ function metadataValues(
 
 function tableTooltipText(value: unknown) {
   const text = String(value ?? '').trim() || '-'
-  const content = <span className="soha-vrt-table-tooltip-text">{text}</span>
-  if (text === '-') return content
-  return (
-    <Tooltip
-      placement="topLeft"
-      title={<span className="soha-vrt-table-tooltip-content">{text}</span>}
-    >
-      {content}
-    </Tooltip>
-  )
+  return <TableCellText className="soha-vrt-table-tooltip-text" value={text} />
 }
 
 function buildInvestigationPath(params: {

@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import type { FormInstance } from 'antd'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
-import { Button, Collapse, Form, Input, InputNumber, Modal, Select, Switch, Tooltip } from 'antd'
+import { Button, Collapse, Form, Input, InputNumber, Modal, Select, Switch } from 'antd'
 import {
   defaultOIDCClientValues,
   oidcClientInputFromValues,
@@ -161,16 +161,14 @@ export function OIDCClientFields({
                   >
                     <Input placeholder="https://app.example.com/oauth/callback" />
                   </Form.Item>
-                  <Tooltip title="删除规则">
-                    <Button
-                      aria-label="删除重定向规则"
-                      danger
-                      disabled={fields.length === 1}
-                      icon={<DeleteOutlined />}
-                      onClick={() => remove(field.name)}
-                      type="text"
-                    />
-                  </Tooltip>
+                  <Button
+                    aria-label="删除重定向规则"
+                    danger
+                    disabled={fields.length === 1}
+                    icon={<DeleteOutlined />}
+                    onClick={() => remove(field.name)}
+                    type="text"
+                  />
                 </div>
               ))}
               <Button

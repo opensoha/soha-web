@@ -284,11 +284,7 @@ export function PodDetailPage() {
       title: localeCode === 'zh_CN' ? '镜像' : 'Image',
       dataIndex: 'image',
       ellipsis: { showTitle: false },
-      render: (value?: string) => (
-        <Tooltip title={value || '-'} placement="topLeft">
-          <Text>{value || '-'}</Text>
-        </Tooltip>
-      ),
+      render: (value?: string) => <TableCellText value={value} />,
     },
     { title: localeCode === 'zh_CN' ? '重启次数' : 'Restarts', dataIndex: 'restartCount' },
     {
@@ -347,11 +343,7 @@ export function PodDetailPage() {
       title: 'Container ID',
       dataIndex: 'containerId',
       ellipsis: { showTitle: false },
-      render: (value?: string) => (
-        <Tooltip title={value || '-'} placement="topLeft">
-          <Text>{value || '-'}</Text>
-        </Tooltip>
-      ),
+      render: (value?: string) => <TableCellText value={value} />,
     },
   ]
 
@@ -582,9 +574,7 @@ export function PodDetailPage() {
     key: 'volumes',
     label: localeCode === 'zh_CN' ? '卷' : 'Volumes',
     children: (
-      <Card
-        className="soha-detail-card"
-      >
+      <Card className="soha-detail-card">
         <AdminTable
           className="soha-pod-volumes-table"
           shellClassName="soha-management-table-shell"
@@ -609,9 +599,7 @@ export function PodDetailPage() {
     key: 'related-resources',
     label: localeCode === 'zh_CN' ? '相关资源' : 'Related Resources',
     children: (
-      <Card
-        className="soha-detail-card"
-      >
+      <Card className="soha-detail-card">
         <AdminTable
           shellClassName="soha-management-table-shell"
           columns={relatedResourceColumns}

@@ -1,4 +1,7 @@
 export interface CRD {
+  uid?: string
+  deletingAt?: string
+  allowedActions?: string[]
   name: string
   group: string
   kind: string

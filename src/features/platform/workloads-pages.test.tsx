@@ -219,7 +219,11 @@ vi.mock('@/components/admin-table', () => ({
                   <div
                     key={`${String(column.key ?? column.dataIndex ?? columnIndex)}-${columnIndex}`}
                     data-testid={`cell-${rowIndex}-${columnIndex}`}
-                    data-column={Array.isArray(column.dataIndex) ? column.dataIndex.join('.') : column.dataIndex}
+                    data-column={
+                      Array.isArray(column.dataIndex)
+                        ? column.dataIndex.join('.')
+                        : column.dataIndex
+                    }
                   >
                     {content as ReactNode}
                   </div>
@@ -479,7 +483,7 @@ describe('workloads pods page refresh controls', () => {
     expect(container.textContent).toContain('worker-b')
   })
 
-  it('renders pod CPU and memory resources as compact progress markers', async () => {
+  it('keeps pod usage values inside resource bars with request and limit markers', async () => {
     setResponses({
       '/clusters/cluster-a/workloads/pods?namespace=monitoring': [
         {
@@ -509,13 +513,158 @@ describe('workloads pods page refresh controls', () => {
     const resourceCells = Array.from(container.querySelectorAll('.soha-pod-resource-limit-cell'))
 
     expect(resourceCells).toHaveLength(2)
-    for (const cell of resourceCells) {
-      expect(cell.textContent?.trim()).toBe('')
+    for (const [index, cell] of resourceCells.entries()) {
+      expect(cell.querySelector('.soha-pod-resource-value')?.textContent).toBe(
+        index === 0 ? '50m' : '64Mi',
+      )
+      expect(cell.tagName).toBe('BUTTON')
       expect(cell.querySelectorAll('.ant-progress')).toHaveLength(1)
+      expect(cell.querySelector('.ant-progress')?.getAttribute('aria-hidden')).toBe('true')
       expect(cell.querySelectorAll('.soha-pod-resource-marker.is-request')).toHaveLength(1)
       expect(cell.querySelectorAll('.soha-pod-resource-marker.is-limit')).toHaveLength(1)
       expect(cell.getAttribute('aria-label')).toContain('使用')
+      expect(cell.getAttribute('aria-label')).toContain('请求以内')
     }
+  })
+
+  it('uses actual request and limit thresholds without turning missing metrics into zero', async () => {
+    const cases = [
+      {
+        name: 'zero',
+        cpu: '0',
+        request: '100m',
+        limit: '500m',
+        tone: 'success',
+        usage: '0m',
+        percent: 0,
+      },
+      {
+        name: 'at-request',
+        cpu: '100m',
+        request: '100m',
+        limit: '500m',
+        tone: 'success',
+        usage: '100m',
+        percent: 20,
+      },
+      {
+        name: 'above-request',
+        cpu: '101m',
+        request: '100m',
+        limit: '500m',
+        tone: 'warning',
+        usage: '101m',
+        percent: 20.2,
+      },
+      {
+        name: 'below-danger',
+        cpu: '449m',
+        request: '100m',
+        limit: '500m',
+        tone: 'warning',
+        usage: '449m',
+        percent: 89.8,
+      },
+      {
+        name: 'at-danger',
+        cpu: '450m',
+        request: '100m',
+        limit: '500m',
+        tone: 'danger',
+        usage: '450m',
+        percent: 90,
+      },
+      {
+        name: 'above-limit',
+        cpu: '600m',
+        request: '100m',
+        limit: '500m',
+        tone: 'danger',
+        usage: '600m',
+        percent: 100,
+      },
+      {
+        name: 'no-limit',
+        cpu: '150m',
+        request: '100m',
+        tone: 'warning',
+        usage: '150m',
+        percent: 100,
+      },
+      {
+        name: 'zero-request',
+        cpu: '10m',
+        request: '0',
+        limit: '500m',
+        tone: 'warning',
+        usage: '10m',
+        percent: 2,
+      },
+      { name: 'no-request', cpu: '50m', limit: '500m', tone: 'success', usage: '50m', percent: 10 },
+      { name: 'no-baseline', cpu: '50m', tone: 'unknown', usage: '50m', percent: 0 },
+      {
+        name: 'missing',
+        cpu: '-',
+        request: '100m',
+        limit: '500m',
+        tone: 'unknown',
+        usage: '—',
+        percent: 0,
+      },
+      {
+        name: 'invalid',
+        cpu: 'Infinity',
+        request: '100m',
+        limit: '500m',
+        tone: 'unknown',
+        usage: '—',
+        percent: 0,
+      },
+    ]
+    setResponses({
+      '/clusters/cluster-a/workloads/pods?namespace=monitoring': cases.map((item) => ({
+        name: item.name,
+        namespace: 'monitoring',
+        phase: 'Running',
+        readyContainers: '1/1',
+        restarts: 0,
+        ageSeconds: 60,
+        cpu: item.cpu,
+        requests: { cpu: item.request },
+        limits: { cpu: item.limit },
+      })),
+    })
+    const container = await renderWithProviders(<WorkloadsPodsPage />)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    await flushAsyncWork()
+
+    for (const item of cases) {
+      const cell = Array.from(container.querySelectorAll('.soha-pod-resource-limit-cell')).find(
+        (node) => node.getAttribute('aria-label')?.startsWith(`${item.name} · CPU`),
+      )!
+      expect(cell, item.name).toBeDefined()
+      expect(cell.classList.contains(`is-${item.tone}`), item.name).toBe(true)
+      expect(cell.querySelector('.soha-pod-resource-value')?.textContent, item.name).toBe(
+        item.usage,
+      )
+      const renderedPercent = (
+        cell.querySelector('.soha-pod-resource-progress-wrap') as HTMLElement
+      ).style.getPropertyValue('--soha-pod-resource-usage-percent')
+      expect(Number.parseFloat(renderedPercent), item.name).toBeCloseTo(item.percent)
+      expect(cell.querySelectorAll('.is-limit'), item.name).toHaveLength(item.limit ? 1 : 0)
+      expect(cell.querySelectorAll('.is-request'), item.name).toHaveLength(item.request ? 1 : 0)
+    }
+    const missing = container.querySelector('[aria-label^="missing · CPU"]')!
+    expect(missing.getAttribute('aria-label')).toContain('暂无指标')
+    const unbounded = container.querySelector('[aria-label^="no-baseline · CPU"]')!
+    expect(unbounded.getAttribute('aria-label')).toContain('无比例基准')
+    const noLimit = container.querySelector('[aria-label^="no-limit · CPU"]')!
+    expect(noLimit.getAttribute('aria-label')).toContain('以请求为比例基准')
+    expect(
+      container.querySelector('[aria-label^="above-limit · CPU"] .is-limit.is-passed'),
+    ).not.toBeNull()
   })
 
   it('opens pod logs and terminal from row actions in the realtime dock', async () => {

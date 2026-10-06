@@ -20,6 +20,10 @@ import { ConfigurationValidatingWebhookConfigurationDetailPage } from '../valida
 
 const testState = vi.hoisted(() => ({
   responses: {} as Record<string, unknown>,
+  permissions: [
+    'platform.configuration.config-maps.update',
+    'platform.configuration.secrets.update',
+  ] as string[],
   scope: {
     clusterId: 'cluster-a' as string | null,
     namespace: 'team-a' as string | null,
@@ -27,7 +31,17 @@ const testState = vi.hoisted(() => ({
 }))
 
 const apiGetMock = vi.hoisted(() =>
-  vi.fn(async (path: string) => ({ data: testState.responses[path] ?? [] })),
+  vi.fn(async (path: string) => {
+    const value = testState.responses[path]
+    if (value instanceof Error) throw value
+    return { data: value ?? [] }
+  }),
+)
+
+const apiPutMock = vi.hoisted(() =>
+  vi.fn(async (_path: string, _payload: unknown) => ({
+    data: { content: '' } as Record<string, unknown>,
+  })),
 )
 
 vi.mock('@/services/api-client', () => ({
@@ -35,8 +49,14 @@ vi.mock('@/services/api-client', () => ({
     delete: vi.fn(async () => ({ data: null })),
     get: apiGetMock,
     post: vi.fn(async () => ({ data: { content: '' } })),
-    put: vi.fn(async () => ({ data: { content: '' } })),
+    put: apiPutMock,
   },
+}))
+
+vi.mock('@/features/auth', () => ({
+  hasAllowedAction: (actions: string[] | undefined, key: string) => actions?.includes(key) ?? false,
+  hasPermission: (_snapshot: unknown, key: string) => testState.permissions.includes(key),
+  usePermissionSnapshot: () => ({ data: { data: {} } }),
 }))
 
 vi.mock('@/stores/platform-scope-store', () => ({
@@ -60,6 +80,10 @@ vi.mock('@/components/status-tag', () => ({
 
 vi.mock('@/components/k8s-yaml-editor', () => ({
   K8sYamlEditor: () => <div data-testid="yaml-editor">yaml-editor</div>,
+}))
+
+vi.mock('./value-editor', () => ({
+  default: ({ value }: { value: string }) => <pre>{value}</pre>,
 }))
 
 vi.mock('@/components/admin-table', async (importOriginal) => {
@@ -146,6 +170,10 @@ beforeAll(() => {
 })
 
 beforeEach(() => {
+  testState.permissions = [
+    'platform.configuration.config-maps.update',
+    'platform.configuration.secrets.update',
+  ]
   vi.clearAllMocks()
   testState.scope.clusterId = 'cluster-a'
   testState.scope.namespace = 'team-a'
@@ -207,6 +235,64 @@ async function clickTab(container: HTMLElement, label: string) {
 }
 
 describe('configuration leaf pages', () => {
+  it.each([
+    ['configmaps', ConfigMapDetailPage, 'configMapName'],
+    ['secrets', SecretDetailPage, 'secretName'],
+  ] as const)(
+    'shows request failures and retry for %s instead of a missing-resource state',
+    async (kind, Page, param) => {
+      testState.responses[
+        `/clusters/cluster-a/configuration/${kind}/demo/detail?namespace=team-a`
+      ] = Object.assign(new Error('Agent action or Kubernetes RBAC denied'), { status: 403 })
+      const container = await renderPage(
+        <Page />,
+        `/configuration/${kind}/demo`,
+        `/configuration/${kind}/:${param}`,
+      )
+      expect(container.textContent).toContain('Agent action or Kubernetes RBAC denied')
+      expect(container.textContent).not.toContain('未找到')
+      const retry = Array.from(container.querySelectorAll('button')).find(
+        (button) => button.textContent?.replace(/\s/g, '') === '重试',
+      )
+      expect(retry).toBeDefined()
+      const calls = apiGetMock.mock.calls.length
+      await act(async () => retry?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+      await flushAsyncWork()
+      expect(apiGetMock.mock.calls.length).toBeGreaterThan(calls)
+    },
+  )
+
+  it.each([
+    ['configmaps', ConfigMapDetailPage, 'configMapName'],
+    ['secrets', SecretDetailPage, 'secretName'],
+  ] as const)(
+    'disables data editing for %s without update permission',
+    async (kind, Page, param) => {
+      testState.permissions = []
+      testState.responses[
+        `/clusters/cluster-a/configuration/${kind}/demo/detail?namespace=team-a`
+      ] = {
+        name: 'demo',
+        namespace: 'team-a',
+        type: 'Opaque',
+        data: { key: 'dmFsdWU=' },
+        immutable: false,
+        ageSeconds: 60,
+      }
+      const container = await renderPage(
+        <Page />,
+        `/configuration/${kind}/demo`,
+        `/configuration/${kind}/:${param}`,
+      )
+      await clickTab(container, '数据')
+      const edit = Array.from(container.querySelectorAll('button')).find((button) =>
+        button.textContent?.includes('编辑数据'),
+      )
+      expect(edit).toBeDefined()
+      expect(edit?.disabled).toBe(true)
+    },
+  )
+
   it('keeps ConfigMaps and Secrets list wire paths and management controls', async () => {
     testState.responses['/clusters/cluster-a/configuration/configmaps?namespace=team-a'] = [
       {
@@ -300,6 +386,47 @@ describe('configuration leaf pages', () => {
     expect(container.querySelector('[data-testid="yaml-editor"]')).not.toBeNull()
   })
 
+  it('applies text edits through the existing mutation and preserves binaryData byte-for-byte', async () => {
+    const detail = {
+      name: 'app-config',
+      namespace: 'team-a',
+      data: { feature: 'enabled' },
+      binaryData: { 'blob.bin': 'AP8=' },
+      immutable: false,
+      ageSeconds: 60,
+    }
+    testState.responses[
+      '/clusters/cluster-a/configuration/configmaps/app-config/detail?namespace=team-a'
+    ] = detail
+    apiPutMock.mockImplementationOnce(async (_path, payload) => ({
+      data: { ...detail, ...(payload as object) },
+    }))
+    const container = await renderPage(
+      <ConfigMapDetailPage />,
+      '/configuration/configmaps/app-config',
+      '/configuration/configmaps/:configMapName',
+    )
+    await clickTab(container, '数据')
+    const findButton = (label: string) =>
+      [...container.querySelectorAll('button')].find((item) => item.textContent === label)!
+    await act(async () => findButton('编辑数据').click())
+    const key = container.querySelector<HTMLInputElement>('input[aria-label="数据键"]')!
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+        key,
+        'renamed',
+      )
+      key.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => findButton('应用更改').click())
+    await flushAsyncWork()
+    expect(apiPutMock).toHaveBeenCalledWith(
+      '/clusters/cluster-a/configuration/configmaps/app-config/data?namespace=team-a',
+      { data: { renamed: 'enabled' }, binaryData: { 'blob.bin': 'AP8=' } },
+    )
+    expect(container.querySelector('input[aria-label="数据键"]')).toBeNull()
+  })
+
   it('renders decoded Secret data from the typed detail endpoint', async () => {
     testState.responses[
       '/clusters/cluster-a/configuration/secrets/registry-secret/detail?namespace=team-a'
@@ -319,17 +446,149 @@ describe('configuration leaf pages', () => {
     )
     await clickTab(container, '数据')
 
-    expect(container.textContent).toContain('aGVsbG8=')
+    expect(container.textContent).toContain('内容已隐藏')
+    expect(container.textContent).not.toContain('hello')
+    expect(container.querySelectorAll('.soha-configuration-data-layout > .ant-card')).toHaveLength(
+      2,
+    )
+    const reveal = container.querySelector<HTMLButtonElement>('button[aria-label="显示内容"]')!
+    await act(async () => reveal.click())
     expect(container.textContent).toContain('hello')
-
-    const expandButton = container.querySelector<HTMLElement>('.ant-table-row-expand-icon')
-    expect(expandButton).not.toBeNull()
-    await act(async () => expandButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
-
-    expect(container.textContent).toContain('Base64 编码值')
-    expect(container.textContent).toContain('解码后内容')
-    expect(container.querySelectorAll('.soha-config-data-value')).toHaveLength(2)
+    await act(async () =>
+      container.querySelectorAll<HTMLInputElement>('input[type="radio"]')[1].click(),
+    )
+    expect(container.textContent).toContain('aGVsbG8=')
   })
+
+  it('sends decoded Secret drafts through the existing data mutation and remasks after success', async () => {
+    const detail = {
+      name: 'registry-secret',
+      namespace: 'team-a',
+      type: 'Opaque',
+      data: { token: 'aGVsbG8=' },
+      immutable: false,
+      ageSeconds: 60,
+    }
+    testState.responses[
+      '/clusters/cluster-a/configuration/secrets/registry-secret/detail?namespace=team-a'
+    ] = detail
+    apiPutMock.mockImplementationOnce(async () => ({
+      data: { ...detail, data: { renamed: 'aGVsbG8=' } },
+    }))
+    const container = await renderPage(
+      <SecretDetailPage />,
+      '/configuration/secrets/registry-secret',
+      '/configuration/secrets/:secretName',
+    )
+    await clickTab(container, '数据')
+    const findButton = (label: string) =>
+      [...container.querySelectorAll('button')].find((item) => item.textContent === label)!
+    await act(async () => findButton('编辑数据').click())
+    const key = container.querySelector<HTMLInputElement>('input[aria-label="数据键"]')!
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+        key,
+        'renamed',
+      )
+      key.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => findButton('应用更改').click())
+    await flushAsyncWork()
+    expect(apiPutMock).toHaveBeenCalledWith(
+      '/clusters/cluster-a/configuration/secrets/registry-secret/data?namespace=team-a',
+      { data: { renamed: 'hello' } },
+    )
+    expect(container.querySelector('input[aria-label="数据键"]')).toBeNull()
+    expect(container.textContent).toContain('内容已隐藏')
+    expect(container.textContent).not.toContain('hello')
+  })
+
+  it.each([
+    ['mutatingwebhookconfigurations', ConfigurationMutatingWebhookConfigurationDetailPage],
+    ['validatingwebhookconfigurations', ConfigurationValidatingWebhookConfigurationDetailPage],
+  ] as const)(
+    'browses complete %s connection, rules and selectors in two independent panels',
+    async (kind, Page) => {
+      testState.responses[`/clusters/cluster-a/configuration/${kind}/demo/detail`] = {
+        name: 'demo',
+        ageSeconds: 60,
+        webhooks: [
+          {
+            name: 'first.demo',
+            clientTarget: 'team-a/admission',
+            serviceNamespace: 'team-a',
+            serviceName: 'admission',
+            servicePath: '/validate/full/path',
+            servicePort: 9443,
+            caBundleConfigured: true,
+            failurePolicy: 'Fail',
+            matchPolicy: 'Equivalent',
+            sideEffects: 'None',
+            timeoutSeconds: 15,
+            admissionReviewVersions: ['v1', 'v1beta1'],
+            namespaceSelector: 'environment=production',
+            objectSelector: 'app=api',
+            rules: [
+              {
+                operations: ['CREATE', 'UPDATE'],
+                apiGroups: ['', 'apps'],
+                apiVersions: ['v1'],
+                resources: ['pods', 'deployments/status'],
+                scope: 'Namespaced',
+              },
+            ],
+          },
+          {
+            name: 'second.demo',
+            clientTarget: 'https://admission.example.test/hook',
+            url: 'https://admission.example.test/hook',
+            caBundleConfigured: false,
+            rules: [],
+          },
+        ],
+      }
+      const container = await renderPage(
+        <Page />,
+        `/configuration/${kind}/demo`,
+        `/configuration/${kind}/:name`,
+      )
+      const workspace = container.querySelector<HTMLElement>('.soha-webhook-workspace')!
+      expect(workspace.children).toHaveLength(2)
+      expect(workspace.querySelector('.soha-webhook-content-card')?.textContent).toContain(
+        '/validate/full/path',
+      )
+      expect(workspace.textContent).toContain('9443')
+      expect(workspace.textContent).toContain('15s')
+      await clickTab(workspace, '规则')
+      expect(workspace.textContent).toContain('CREATE, UPDATE')
+      expect(workspace.textContent).toContain('(core), apps')
+      expect(workspace.textContent).toContain('deployments/status')
+      await clickTab(workspace, '选择器')
+      expect(workspace.textContent).toContain('environment=production')
+      expect(workspace.textContent).toContain('app=api')
+      const second = [
+        ...workspace.querySelectorAll<HTMLButtonElement>(
+          '.soha-management-searchable-list-pane__item-select',
+        ),
+      ].find((button) => button.textContent?.includes('second.demo'))!
+      await act(async () => second.click())
+      expect(workspace.querySelector('.soha-webhook-content-card')?.textContent).toContain(
+        'https://admission.example.test/hook',
+      )
+      await clickTab(workspace, '规则')
+      expect(workspace.textContent).toContain('未配置规则')
+      const search = workspace.querySelector<HTMLInputElement>('input')!
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+          search,
+          'no-match',
+        )
+        search.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+      expect(workspace.textContent).toContain('暂无匹配的 Webhook')
+      expect(apiPutMock).not.toHaveBeenCalled()
+    },
+  )
 
   it('shows scope selection before resolving list-backed details', async () => {
     testState.scope.clusterId = null
@@ -447,6 +706,7 @@ describe('configuration leaf pages', () => {
     ]
     for (const [page, route, routePath, expected] of cases) {
       const container = await renderPage(page, route, routePath)
+      if (expected === 'CREATE') await clickTab(container, '规则')
       expect(container.textContent).toContain(expected)
     }
 

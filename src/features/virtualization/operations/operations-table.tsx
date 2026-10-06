@@ -11,7 +11,6 @@ import {
   Popconfirm,
   Segmented,
   Space,
-  Tooltip,
   Typography,
 } from 'antd'
 import type { DrawerProps } from 'antd'
@@ -41,6 +40,7 @@ import {
 import { virtualizationQueries } from '@/features/virtualization/queries'
 import { useVirtualizationPermissions } from '@/features/virtualization/shared/use-virtualization-permissions'
 import { VirtualizationAdminTable } from '@/features/virtualization/shared/ui'
+import { TableCellText } from '@/components/table-cell-content'
 import {
   OPERATION_FILTER_PRESETS,
   buildOperationFilter,
@@ -78,16 +78,7 @@ function statusTag(value?: string) {
 
 function tableTooltipText(value: unknown) {
   const text = String(value ?? '').trim() || '-'
-  const content = <span className="soha-vrt-table-tooltip-text">{text}</span>
-  if (text === '-') return content
-  return (
-    <Tooltip
-      placement="topLeft"
-      title={<span className="soha-vrt-table-tooltip-content">{text}</span>}
-    >
-      {content}
-    </Tooltip>
-  )
+  return <TableCellText className="soha-vrt-table-tooltip-text" value={text} />
 }
 
 function buildInvestigationPath(params: {

@@ -15,7 +15,6 @@ import {
   Space,
   Spin,
   Switch,
-  Tooltip,
   Typography,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -58,6 +57,7 @@ import {
 import { virtualizationQueries } from '@/features/virtualization/queries'
 import { useVirtualizationPermissions } from '@/features/virtualization/shared/use-virtualization-permissions'
 import { VirtualizationAdminTable } from '@/features/virtualization/shared/ui'
+import { TableCellText } from '@/components/table-cell-content'
 import {
   buildCreateVmPayload,
   buildRuntimeHostProvisionPayload,
@@ -129,16 +129,7 @@ function statusTag(value?: string) {
 
 function tableTooltipText(value: unknown) {
   const text = String(value ?? '').trim() || '-'
-  const content = <span className="soha-vrt-table-tooltip-text">{text}</span>
-  if (text === '-') return content
-  return (
-    <Tooltip
-      placement="topLeft"
-      title={<span className="soha-vrt-table-tooltip-content">{text}</span>}
-    >
-      {content}
-    </Tooltip>
-  )
+  return <TableCellText className="soha-vrt-table-tooltip-text" value={text} />
 }
 
 function providerTag(provider?: string) {
@@ -149,14 +140,12 @@ function vmIdentity(record: VirtualMachine) {
   const hostname = virtualMachineObservation(record).hostname
   return (
     <span className="soha-vrt-vm-identity-copy">
-      <Tooltip title={record.name} placement="topLeft">
-        <Link
-          className="soha-vrt-vm-name"
-          to={`/compute/virtualization/vms/${encodeURIComponent(record.id)}`}
-        >
-          {record.name}
-        </Link>
-      </Tooltip>
+      <Link
+        className="soha-vrt-vm-name"
+        to={`/compute/virtualization/vms/${encodeURIComponent(record.id)}`}
+      >
+        <TableCellText value={record.name} />
+      </Link>
       {hostname && hostname !== record.name ? <Text type="secondary">{hostname}</Text> : null}
     </span>
   )

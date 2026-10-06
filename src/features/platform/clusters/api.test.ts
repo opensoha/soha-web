@@ -7,6 +7,8 @@ import {
   listClusterNodes,
   listClusters,
   updateCluster,
+  getAgentUpgradeStatus,
+  upgradeAgent,
 } from './api'
 
 const apiMocks = vi.hoisted(() => ({
@@ -60,6 +62,24 @@ describe('cluster api', () => {
       clusterId: 'cluster/a',
     })
     expect(apiMocks.post).toHaveBeenCalledWith('/clusters/cluster%2Fa/agent-installation')
+  })
+
+  it('reads and updates the Agent only in the selected cluster', async () => {
+    apiMocks.get.mockResolvedValueOnce({ data: { version: 'v0.1.6', canUpgrade: false } })
+    apiMocks.post.mockResolvedValueOnce({
+      data: { targetImage: 'ghcr.io/opensoha/soha-agent:v0.1.7' },
+    })
+    await expect(getAgentUpgradeStatus({ scope })).resolves.toMatchObject({
+      version: 'v0.1.6',
+      canUpgrade: false,
+    })
+    await expect(upgradeAgent({ scope, input: { version: 'v0.1.7' } })).resolves.toMatchObject({
+      targetImage: 'ghcr.io/opensoha/soha-agent:v0.1.7',
+    })
+    expect(apiMocks.get).toHaveBeenCalledWith('/clusters/cluster%2Fa/agent-upgrade')
+    expect(apiMocks.post).toHaveBeenCalledWith('/clusters/cluster%2Fa/agent-upgrade', {
+      version: 'v0.1.7',
+    })
   })
 
   it('returns void for deletes and rejects an empty cluster scope', async () => {

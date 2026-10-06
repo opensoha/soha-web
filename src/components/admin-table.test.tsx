@@ -318,11 +318,33 @@ describe('AdminTable', () => {
     )
 
     const [name, namespace, age, selector, status] = captured.tableProps.columns
+    expect(captured.tableProps.showSorterTooltip).toBe(false)
     expect(name.sorter({ name: 'service-10' }, { name: 'service-2' })).toBeGreaterThan(0)
     expect(namespace.sorter({ namespace: 'zeta' }, { namespace: 'alpha' })).toBeGreaterThan(0)
     expect(age.sorter({ ageSeconds: 2 }, { ageSeconds: 10 })).toBeLessThan(0)
     expect(selector.sorter).toBeUndefined()
     expect(status.sorter).toBe(explicitSorter)
+  })
+
+  it('removes native header hints while preserving sorting accessibility', async () => {
+    await renderNode(<AdminTable columns={[]} dataSource={[]} rowKey="id" />)
+    const HeaderCell = captured.tableProps.components.header.cell
+    const container = await renderNode(
+      <table>
+        <thead>
+          <tr>
+            <HeaderCell title="Pod" aria-label="Pod" aria-sort="ascending" tabIndex={0}>
+              Pod
+            </HeaderCell>
+          </tr>
+        </thead>
+      </table>,
+    )
+    const header = container.querySelector('th')
+    expect(header?.hasAttribute('title')).toBe(false)
+    expect(header?.getAttribute('aria-label')).toBe('Pod')
+    expect(header?.getAttribute('aria-sort')).toBe('ascending')
+    expect(header?.tabIndex).toBe(0)
   })
 
   it('separates server page and page-size callbacks', async () => {

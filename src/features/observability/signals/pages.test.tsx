@@ -226,7 +226,9 @@ describe('observability signal evidence links', () => {
       '/monitoring-workbench/traces?dataSourceId=jaeger-main&cluster=cluster-a&namespace=apps&application=shop&environment=prod&service=checkout&workload=api&traceId=trace-1&from=2026-08-30T00%3A00%3A00Z&to=2026-08-30T00%3A15%3A00Z',
     )
 
-    const relatedLogs = container.querySelector<HTMLButtonElement>('button[title="查看关联日志"]')
+    const relatedLogs = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="查看关联日志"]',
+    )
     expect(relatedLogs).not.toBeNull()
     await act(async () => relatedLogs?.click())
 
@@ -349,7 +351,9 @@ describe('observability signal evidence links', () => {
     })
 
     await renderPage(<ObservabilityServicesPage />, '/monitoring-workbench/services')
-    const detailButton = container.querySelector<HTMLButtonElement>('button[title="查看服务详情"]')
+    const detailButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="查看服务详情"]',
+    )
     expect(detailButton).not.toBeNull()
     await act(async () => detailButton?.click())
     await act(async () => {

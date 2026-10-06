@@ -489,12 +489,7 @@ function WorkbenchSwitcher({
   }))
 
   const trigger = (
-    <Button
-      aria-label={current.label}
-      title={collapsed ? current.label : undefined}
-      className="soha-workbench-switcher"
-      type="text"
-    >
+    <Button aria-label={current.label} className="soha-workbench-switcher" type="text">
       <span className="soha-workbench-switcher__icon">{current.icon}</span>
       {!collapsed ? (
         <span className="soha-workbench-switcher__copy">

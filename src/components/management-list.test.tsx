@@ -8,6 +8,7 @@ import {
   ManagementQueryGrid,
   ManagementQueryScope,
   ManagementSearchableListPane,
+  ManagementIconButton,
 } from './management-list'
 
 describe('ManagementQueryScope', () => {
@@ -58,6 +59,39 @@ describe('ManagementQueryScope', () => {
     expect(field?.textContent).toContain('访问控制')
     expect(field?.textContent).toContain('交付')
 
+    await act(async () => root.unmount())
+  })
+
+  it('keeps icon actions named and disabled reasons accessible without hover hints', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    const onClick = vi.fn()
+    await act(async () => {
+      root.render(
+        <ManagementIconButton icon={<span />} tooltip="编辑" title="编辑" onClick={onClick} />,
+      )
+    })
+    const button = container.querySelector('button')!
+    expect(button.getAttribute('aria-label')).toBe('编辑')
+    expect(button.hasAttribute('title')).toBe(false)
+    await act(async () => button.click())
+    expect(onClick).toHaveBeenCalledOnce()
+    await act(async () => {
+      root.render(
+        <ManagementIconButton
+          aria-label="编辑"
+          disabled
+          icon={<span />}
+          tooltip="编辑: 当前集群不支持此操作"
+        />,
+      )
+    })
+    expect(button.disabled).toBe(true)
+    expect(button.getAttribute('aria-label')).toBe('编辑')
+    expect(button.getAttribute('aria-description')).toContain('当前集群不支持此操作')
+    expect(button.hasAttribute('title')).toBe(false)
+    expect(document.querySelector('[role="tooltip"]')).toBeNull()
     await act(async () => root.unmount())
   })
 

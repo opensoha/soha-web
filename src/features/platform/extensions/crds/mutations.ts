@@ -1,5 +1,5 @@
 import { mutationOptions, type QueryClient } from '@tanstack/react-query'
-import { applyCustomResource, deleteCustomResource } from './api'
+import { applyCustomResource, deleteCRDDefinition, deleteCustomResource } from './api'
 import { crdKeys } from './keys'
 import type { ApplyCustomResourceVariables, CustomResourceTarget } from './types'
 
@@ -13,6 +13,12 @@ async function invalidateCustomResource(queryClient: QueryClient, target: Custom
 }
 
 export const crdMutations = {
+  removeDefinition: (queryClient: QueryClient) =>
+    mutationOptions({
+      mutationKey: [...crdKeys.all, 'delete-definition'] as const,
+      mutationFn: deleteCRDDefinition,
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: crdKeys.all }),
+    }),
   apply: (queryClient: QueryClient) =>
     mutationOptions({
       mutationKey: [...crdKeys.all, 'apply'] as const,

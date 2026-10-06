@@ -82,8 +82,10 @@
   cursor: pointer;
 }
 
-.soha-platform-table .ant-btn-link:not(.ant-btn-dangerous):not(.ant-btn-color-dangerous),
-.soha-platform-table .ant-btn-text:not(.ant-btn-dangerous):not(.ant-btn-color-dangerous) {
+.soha-platform-table
+  .ant-btn-link:not(.ant-btn-icon-only):not(.ant-btn-dangerous):not(.ant-btn-color-dangerous),
+.soha-platform-table
+  .ant-btn-text:not(.ant-btn-icon-only):not(.ant-btn-dangerous):not(.ant-btn-color-dangerous) {
   display: inline-flex;
   align-items: center;
   padding: 0;
@@ -93,8 +95,12 @@
 
 .soha-platform-table .ant-typography-link:hover,
 .soha-platform-table a.ant-typography-link:hover,
-.soha-platform-table .ant-btn-link:not(.ant-btn-dangerous):not(.ant-btn-color-dangerous):hover,
-.soha-platform-table .ant-btn-text:not(.ant-btn-dangerous):not(.ant-btn-color-dangerous):hover {
+.soha-platform-table
+  .ant-btn-link:not(.ant-btn-icon-only):not(.ant-btn-dangerous):not(.ant-btn-color-dangerous):hover,
+.soha-platform-table
+  .ant-btn-text:not(.ant-btn-icon-only):not(.ant-btn-dangerous):not(
+    .ant-btn-color-dangerous
+  ):hover {
   color: var(--soha-table-link-hover-color);
   text-decoration: underline;
   text-underline-offset: 2px;

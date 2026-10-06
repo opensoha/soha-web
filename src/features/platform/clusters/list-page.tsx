@@ -16,6 +16,7 @@ import {
 } from 'antd'
 import {
   CopyOutlined,
+  CloudUploadOutlined,
   DeleteOutlined,
   DownloadOutlined,
   EditOutlined,
@@ -58,6 +59,7 @@ import {
 } from './presentation'
 import type { Cluster, ClusterFormValues, ConnectionMode } from './types'
 import './styles.css'
+import { AgentUpgradeModal } from './agent-upgrade-modal'
 
 const { Text } = Typography
 
@@ -68,6 +70,7 @@ export function ClustersPage() {
   const queryClient = useQueryClient()
   const [modalVisible, setModalVisible] = useState(false)
   const [agentInstallation, setAgentInstallation] = useState<AgentInstallation | null>(null)
+  const [upgradingCluster, setUpgradingCluster] = useState<Cluster | null>(null)
   const [editingCluster, setEditingCluster] = useState<Cluster | null>(null)
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>('direct_kubeconfig')
   const [searchText, setSearchText] = useState('')
@@ -283,6 +286,15 @@ export function ClustersPage() {
               }}
             />
           ) : null}
+          {canUpdate && record.connectionMode === 'agent' ? (
+            <ManagementIconButton
+              aria-label={localeCode === 'zh_CN' ? '更新 Agent' : 'Update Agent'}
+              icon={<CloudUploadOutlined />}
+              size="small"
+              tooltip={localeCode === 'zh_CN' ? '更新 Agent' : 'Update Agent'}
+              onClick={() => setUpgradingCluster(record)}
+            />
+          ) : null}
           {canDelete ? (
             <Popconfirm
               title={
@@ -346,6 +358,8 @@ export function ClustersPage() {
     if (!editingCluster) {
       return {
         connectionMode: 'direct_kubeconfig',
+        prometheusTransport: 'direct',
+        agentCustomResourceRules: [],
         provider: 'standard_kubernetes',
       }
     }
@@ -357,6 +371,8 @@ export function ClustersPage() {
       connectionMode:
         ((detail?.connection.mode || editingCluster.connectionMode) as ConnectionMode) ||
         'direct_kubeconfig',
+      prometheusTransport: detail?.monitoring.prometheus.transport || 'direct',
+      agentCustomResourceRules: detail?.connection.customResourceRules || [],
       prometheusBaseUrl: detail?.monitoring.prometheus.baseUrl || '',
     }
   }, [editingCluster, clusterDetailQuery.data])
@@ -375,6 +391,8 @@ export function ClustersPage() {
     }
     const payload = {
       ...values,
+      prometheusTransport:
+        values.connectionMode === 'agent' ? values.prometheusTransport : 'direct',
       labels,
     }
     delete (payload as Record<string, unknown>).provider
@@ -592,6 +610,13 @@ export function ClustersPage() {
   return (
     <div className="soha-page soha-clusters-page">
       {queryPanel}
+      {upgradingCluster ? (
+        <AgentUpgradeModal
+          key={upgradingCluster.id}
+          cluster={upgradingCluster}
+          onClose={() => setUpgradingCluster(null)}
+        />
+      ) : null}
       <AdminTable
         columnSettingIconOnly
         columnSettingPlacement="header"
@@ -678,6 +703,7 @@ export function ClustersPage() {
         title={editingCluster ? '编辑集群' : '添加集群'}
         open={modalVisible}
         width={760}
+        styles={{ body: { maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' } }}
         onCancel={() => {
           setModalVisible(false)
           setEditingCluster(null)
@@ -754,6 +780,24 @@ export function ClustersPage() {
               <div className="soha-detail-meta">
                 <Text strong>Prometheus</Text>
               </div>
+              <Form.Item
+                name="prometheusTransport"
+                label="访问方式"
+                extra={
+                  connectionMode === 'agent'
+                    ? '选择 Agent 时，保存后请重新应用 Agent 安装清单，以同步 Prometheus 地址和凭据。'
+                    : undefined
+                }
+              >
+                <Select
+                  options={[
+                    { value: 'direct', label: 'Core 直连' },
+                    ...(connectionMode === 'agent'
+                      ? [{ value: 'agent', label: 'Agent 代理' }]
+                      : []),
+                  ]}
+                />
+              </Form.Item>
               <Form.Item name="prometheusBaseUrl" label="Prometheus URL">
                 <Input placeholder="http://prometheus:9090" />
               </Form.Item>
@@ -761,6 +805,88 @@ export function ClustersPage() {
                 <Input.Password placeholder={editingCluster ? '留空则沿用现有 token' : ''} />
               </Form.Item>
             </Card>
+
+            {connectionMode === 'agent' ? (
+              <Card className="soha-detail-card" title="自定义资源授权">
+                <Text type="secondary">
+                  按 API Group 和资源名称授权。保存后重新应用 Agent
+                  安装清单；移除命名空间授权时，还需删除旧的 Role 和 RoleBinding。
+                </Text>
+                <Form.List name="agentCustomResourceRules">
+                  {(fields, { add, remove }) => (
+                    <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+                      {fields.map(({ key, name, ...rest }) => (
+                        <div key={key}>
+                          <Form.Item
+                            {...rest}
+                            preserve
+                            name={[name, 'apiGroup']}
+                            label="API Group"
+                            rules={[{ required: true }]}
+                          >
+                            <Input placeholder="example.io" />
+                          </Form.Item>
+                          <Form.Item
+                            {...rest}
+                            preserve
+                            name={[name, 'resources']}
+                            label="资源名称（复数）"
+                            rules={[{ required: true }]}
+                          >
+                            <Select mode="tags" placeholder="widgets" />
+                          </Form.Item>
+                          <Form.Item
+                            {...rest}
+                            preserve
+                            name={[name, 'verbs']}
+                            label="权限"
+                            rules={[{ required: true }]}
+                          >
+                            <Select
+                              mode="multiple"
+                              options={[
+                                'get',
+                                'list',
+                                'watch',
+                                'create',
+                                'update',
+                                'patch',
+                                'delete',
+                              ].map((value) => ({ value, label: value }))}
+                            />
+                          </Form.Item>
+                          <Form.Item
+                            {...rest}
+                            preserve
+                            name={[name, 'namespaces']}
+                            label="命名空间"
+                            extra="留空表示整个集群，包括集群级资源；填写后只授权指定命名空间。"
+                          >
+                            <Select mode="tags" placeholder="apps" />
+                          </Form.Item>
+                          <Button onClick={() => remove(name)} danger>
+                            移除授权
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        icon={<PlusOutlined />}
+                        onClick={() =>
+                          add({
+                            apiGroup: '',
+                            resources: [],
+                            verbs: ['get', 'list', 'watch'],
+                            namespaces: [],
+                          })
+                        }
+                      >
+                        添加授权
+                      </Button>
+                    </Space>
+                  )}
+                </Form.List>
+              </Card>
+            ) : null}
 
             <div className="soha-form-actions">
               <Button onClick={() => setModalVisible(false)}>取消</Button>

@@ -18,6 +18,8 @@ export const crdKeys = {
       crd.version,
       resourceScope(crd, namespace),
     ] as const,
+  access: (clusterId: string, crd: CRD, namespace?: string | null) =>
+    [...crdKeys.resources(clusterId, crd, namespace), 'access'] as const,
   yaml: (target: CustomResourceTarget) =>
     [
       ...crdKeys.resources(target.clusterId, target.crd, target.namespace),

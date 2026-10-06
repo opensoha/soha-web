@@ -382,6 +382,10 @@ describe('network access page', () => {
 
     expect(apiMocks.listNetworkMihomoProfiles).toHaveBeenCalledWith({ limit: 200 })
     expect(apiMocks.listNetworkSites).not.toHaveBeenCalled()
+    expect(container.querySelector('.soha-management-query-card')).not.toBeNull()
+    expect(
+      container.querySelector('.soha-management-table-shell .soha-admin-table-header'),
+    ).not.toBeNull()
   })
 
   it('separates proxy sources and execution policy in the tunnel editor', async () => {
@@ -390,6 +394,8 @@ describe('network access page', () => {
       'network_access.mihomo_profiles.create',
     ]
     await renderPage('/network-access/mihomo-profiles')
+
+    expect(container.textContent).not.toContain('独立启动的代理服务不会自动出现')
 
     const create = Array.from(document.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('新增代理隧道'),
@@ -436,15 +442,69 @@ describe('network access page', () => {
       downloadBytes: 4096,
       activeConnections: 2,
       producers: [],
-      proxyFlows: [],
+      proxyFlows: [
+        {
+          producerId: 'runtime-1',
+          engine: 'mihomo',
+          profileId: 'profile-1',
+          profileRevision: 1,
+          mode: 'managed_follow',
+          selectedProxy: '上海节点',
+          uploadBytes: 1024,
+          downloadBytes: 1024,
+          activeConnections: 1,
+          lastOccurredAt: '2026-09-02T00:59:00Z',
+        },
+        {
+          producerId: 'runtime-2',
+          engine: 'mihomo',
+          profileId: 'profile-2',
+          profileRevision: 1,
+          mode: 'managed_follow',
+          selectedProxy: '东京节点',
+          uploadBytes: 0,
+          downloadBytes: 3072,
+          activeConnections: 1,
+          lastOccurredAt: '2026-09-02T00:59:00Z',
+        },
+      ],
     })
 
     await renderPage('/network-access/proxy-overview')
 
-    expect(container.textContent).toContain('代理上报')
-    expect(container.textContent).toContain('活动连接')
+    expect(container.textContent).toContain('代理上报事件')
+    expect(container.textContent).toContain('采样连接数')
+    expect(container.textContent).toContain('5.0 KB')
+    expect(container.textContent).toContain('列表最多展示 100 组汇总')
     expect(container.textContent).toContain('代理流量')
+    expect(container.querySelector('.soha-management-query-card')).not.toBeNull()
+    expect(container.querySelectorAll('.soha-proxy-flow-list > li')).toHaveLength(2)
+    expect(container.querySelector('.soha-proxy-flow-list > li strong')?.textContent).toBe(
+      '东京节点',
+    )
+    expect(container.querySelector('.soha-proxy-list-panel')).not.toBeNull()
+    expect(container.querySelector('.soha-management-table-shell')).toBeNull()
     expect(apiMocks.getNetworkTelemetrySummary).toHaveBeenCalledWith({ limit: 100 })
+  })
+
+  it('shows an actionable error instead of zero traffic when telemetry is unavailable', async () => {
+    state.snapshot.permissionKeys = ['network_access.telemetry.view']
+    apiMocks.getNetworkTelemetrySummary.mockRejectedValueOnce(new Error('unavailable'))
+
+    await renderPage('/network-access/proxy-overview')
+
+    expect(container.textContent).toContain('代理遥测暂不可用')
+    expect(container.textContent).not.toContain('总传输量')
+    expect(container.querySelector('.soha-management-query-card')).toBeNull()
+    expect(container.querySelector('.soha-proxy-list-panel')).not.toBeNull()
+    const refresh = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.replace(/\s/g, '').includes('刷新'),
+    )
+    expect(refresh).toBeDefined()
+    await act(async () => refresh?.click())
+    expect(apiMocks.getNetworkTelemetrySummary).toHaveBeenCalledTimes(2)
+    await act(async () => new Promise((resolve) => window.setTimeout(resolve, 0)))
+    expect(container.textContent).toContain('总传输量')
   })
 
   it('joins proxy flows to their user and endpoint without raw connection data', async () => {
@@ -523,7 +583,43 @@ describe('network access page', () => {
     expect(container.textContent).toContain('张三的 MacBook')
     expect(container.textContent).toContain('办公代理')
     expect(container.textContent).toContain('上海节点')
+    expect(container.textContent).toContain('采样连接数')
+    expect(container.textContent).not.toContain('连接中')
     expect(container.textContent).not.toContain('destination')
+    expect(container.querySelector('.soha-management-query-card')).not.toBeNull()
+    expect(container.querySelectorAll('.soha-proxy-connection-list > li')).toHaveLength(1)
+    expect(container.querySelector('.soha-management-table-shell')).toBeNull()
+
+    const input = container.querySelector('.soha-management-query-card input') as HTMLInputElement
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    await act(async () => {
+      setter?.call(input, 'no-such-user')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await act(async () => {
+      container
+        .querySelector('form.soha-management-query-form')
+        ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    })
+    expect(container.textContent).not.toContain('user-zhangsan')
+    expect(container.querySelectorAll('.soha-proxy-connection-list > li')).toHaveLength(0)
+    expect(container.textContent).toContain('没有符合查询条件的连接采样组')
+  })
+
+  it('keeps the connection query and retry visible when telemetry is unavailable', async () => {
+    state.snapshot.permissionKeys = [
+      'network_access.telemetry.view',
+      'network_access.mihomo_profiles.view',
+      'network_access.endpoint_devices.view',
+    ]
+    apiMocks.getNetworkTelemetrySummary.mockRejectedValueOnce(new Error('unavailable'))
+
+    await renderPage('/network-access/proxy-connections')
+
+    expect(container.textContent).toContain('无法读取代理汇总')
+    expect(container.querySelector('.soha-management-query-card')).toBeNull()
+    expect(container.querySelector('.soha-proxy-list-panel')).not.toBeNull()
   })
 
   it('shows hub-and-spoke gateway fields and management actions', async () => {

@@ -2,6 +2,9 @@ import { api } from '@/services/api-client'
 import type { ApiResponse, ClusterCapabilityMatrixEntry, ScopeKey } from '@/types'
 import type {
   AgentInstallation,
+  ClusterAgentUpgradeInput,
+  ClusterAgentUpgradeStatus,
+  ClusterAgentUpgradeResult,
   LogCollectionDisableInput,
   LogCollectionEnableInput,
   LogCollectionPlan,
@@ -115,6 +118,26 @@ export async function createCluster(values: ClusterPayload): Promise<Cluster> {
 export async function createAgentInstallation(target: ClusterTarget): Promise<AgentInstallation> {
   const response = await api.post<ApiResponse<AgentInstallation>>(
     clusterPath(target.scope, '/agent-installation'),
+  )
+  return response.data
+}
+
+export async function getAgentUpgradeStatus(
+  target: ClusterTarget,
+): Promise<ClusterAgentUpgradeStatus> {
+  const response = await api.get<ApiResponse<ClusterAgentUpgradeStatus>>(
+    clusterPath(target.scope, '/agent-upgrade'),
+  )
+  return response.data
+}
+
+export async function upgradeAgent({
+  scope,
+  input,
+}: ClusterTarget & { input: ClusterAgentUpgradeInput }): Promise<ClusterAgentUpgradeResult> {
+  const response = await api.post<ApiResponse<ClusterAgentUpgradeResult>>(
+    clusterPath(scope, '/agent-upgrade'),
+    input,
   )
   return response.data
 }

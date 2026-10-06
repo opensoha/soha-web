@@ -42,6 +42,7 @@ const apiGetMock = vi.hoisted(() =>
     return Promise.resolve({ data: payload ?? [] })
   }),
 )
+const apiDeleteMock = vi.hoisted(() => vi.fn(() => Promise.resolve()))
 
 vi.mock('@/stores/platform-scope-store', () => ({
   usePlatformScopeStore: () => testState.scope,
@@ -56,7 +57,7 @@ vi.mock('@/features/auth', async (importOriginal) => ({
 
 vi.mock('@/services/api-client', () => ({
   api: {
-    delete: vi.fn(),
+    delete: apiDeleteMock,
     get: apiGetMock,
     post: vi.fn(),
     put: vi.fn(),
@@ -163,11 +164,7 @@ async function renderPage(node: ReactNode, route: string) {
       <AntdApp>
         <QueryClientProvider client={queryClient}>
           <I18nProvider>
-            <MemoryRouter
-              initialEntries={[route]}
-            >
-              {node}
-            </MemoryRouter>
+            <MemoryRouter initialEntries={[route]}>{node}</MemoryRouter>
           </I18nProvider>
         </QueryClientProvider>
       </AntdApp>,
@@ -204,6 +201,7 @@ describe('extensions capability pages', () => {
     testState.editorLoaded = false
     testState.permissionKeys = ['platform.helm.view', 'platform.helm.values.view']
     setResponses({})
+    apiDeleteMock.mockReset().mockResolvedValue(undefined)
   })
 
   afterEach(async () => {
@@ -249,6 +247,76 @@ describe('extensions capability pages', () => {
     expect(container.querySelector('[data-testid="row-count"]')?.textContent).toBe('1')
     expect(container.textContent).toContain('widgets.example.io')
     expect(container.textContent).toContain('gadgets.example.io')
+    expect(container.querySelector('button[aria-label="查看详情"]')).toBeNull()
+    expect(container.querySelector('button[aria-label="删除 CRD 定义"]')).toBeNull()
+  })
+
+  it('requires one definition and its full name, preserves deletion errors and observed UID', async () => {
+    testState.permissionKeys.push('platform.extensions.crds.delete')
+    const definition = {
+      name: 'widgets.example.io',
+      uid: 'observed-uid',
+      group: 'example.io',
+      kind: 'Widget',
+      plural: 'widgets',
+      version: 'v1',
+      scope: 'Namespaced',
+      allowedActions: ['delete'],
+    }
+    setResponses({ '/clusters/cluster-a/extensions/crds': [definition] })
+    const container = await renderPage(<CRDPage />, '/extensions')
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="删除 CRD 定义"]')!.click()
+    })
+    expect(document.body.textContent).toContain('所有命名空间')
+    const confirmButton = () =>
+      Array.from(document.querySelectorAll<HTMLButtonElement>('.ant-modal button')).find(
+        (button) => button.textContent === '删除定义及实例',
+      )!
+    expect(confirmButton().disabled).toBe(true)
+    await act(async () => {
+      document
+        .querySelector('.ant-modal .ant-select')!
+        .dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      await flush()
+    })
+    await act(async () => {
+      document.querySelector<HTMLElement>('.ant-select-item-option')!.click()
+      await flush()
+    })
+    const input = document.querySelector<HTMLInputElement>('#crd-definition-confirmation')!
+    const setValue = async (value: string) =>
+      act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+          input,
+          value,
+        )
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    await setValue('widgets')
+    expect(confirmButton().disabled).toBe(true)
+    await setValue(definition.name)
+    expect(confirmButton().disabled).toBe(false)
+    apiDeleteMock.mockRejectedValueOnce(new Error('Kubernetes denied deletion'))
+    await act(async () => {
+      confirmButton().click()
+      await flush()
+    })
+    expect(document.body.textContent).toContain('Kubernetes denied deletion')
+    expect(input.value).toBe(definition.name)
+    expect(apiDeleteMock).toHaveBeenCalledWith(
+      '/clusters/cluster-a/extensions/crds/widgets.example.io?expectedUid=observed-uid',
+    )
+    setResponses({
+      '/clusters/cluster-a/extensions/crds': [{ ...definition, uid: 'replacement-uid' }],
+    })
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="刷新"]')!.click()
+      await flush()
+    })
+    expect(confirmButton().disabled).toBe(true)
+    expect(document.body.textContent).toContain('定义或权限已变化')
+    expect(apiDeleteMock).toHaveBeenCalledTimes(1)
   })
 
   it('keeps CRD YAML code and requests unloaded before an editor action', async () => {

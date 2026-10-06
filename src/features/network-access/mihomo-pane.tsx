@@ -13,7 +13,6 @@ import {
   Select,
   Space,
   Switch,
-  Tag,
 } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
@@ -27,10 +26,12 @@ import type {
   NetworkMihomoSourceType,
 } from '@opensoha/contracts/gen/ts/sohaapi'
 import { ManagementIconButton } from '@/components/management-list'
+import { StatusTag } from '@/components/status-tag'
 import { useI18n } from '@/i18n'
 import { networkAccessMutations } from './mutations'
 import { networkAccessQueries } from './queries'
 import { TablePane } from './table-pane'
+import './proxy.css'
 
 interface NetworkMihomoPaneProps {
   canCreate: boolean
@@ -199,7 +200,7 @@ export function NetworkMihomoPane({ canCreate, canDelete, canUpdate }: NetworkMi
       title: t('networkAccess.mihomo.engine', '引擎'),
       key: 'engine',
       width: 100,
-      render: () => <Tag color="blue">mihomo</Tag>,
+      render: () => 'mihomo',
     },
     { title: t('networkAccess.deviceId', '设备 ID'), dataIndex: 'deviceId' },
     {
@@ -213,7 +214,14 @@ export function NetworkMihomoPane({ canCreate, canDelete, canUpdate }: NetworkMi
       dataIndex: 'status',
       width: 100,
       render: (value: string) => (
-        <Tag color={value === 'active' ? 'green' : 'default'}>{value}</Tag>
+        <StatusTag
+          value={value}
+          label={
+            value === 'active'
+              ? t('networkAccess.mihomo.active', '启用')
+              : t('networkAccess.mihomo.disabled', '停用')
+          }
+        />
       ),
     },
     {
@@ -275,7 +283,8 @@ export function NetworkMihomoPane({ canCreate, canDelete, canUpdate }: NetworkMi
   ]
 
   return (
-    <>
+    <div className="soha-proxy-page">
+      <h1 className="soha-proxy-sr-only">{t('networkAccess.mihomo.pageTitle', '代理隧道')}</h1>
       <TablePane
         columns={columns}
         items={profiles.data}
@@ -283,6 +292,7 @@ export function NetworkMihomoPane({ canCreate, canDelete, canUpdate }: NetworkMi
         refreshing={profiles.isFetching}
         error={profiles.isError}
         onRefresh={() => void profiles.refetch()}
+        queryCard
         searchPlaceholder={t('networkAccess.mihomo.search', '搜索名称、设备或节点')}
         getSearchValues={(item) => [
           item.name,
@@ -301,7 +311,9 @@ export function NetworkMihomoPane({ canCreate, canDelete, canUpdate }: NetworkMi
         }
       />
       <Modal
-        centered
+        width={680}
+        style={{ top: 32 }}
+        styles={{ body: { maxHeight: 'calc(100vh - 190px)', overflowY: 'auto' } }}
         destroyOnHidden
         mask={{ closable: false }}
         open={editor !== null}
@@ -384,9 +396,7 @@ export function NetworkMihomoPane({ canCreate, canDelete, canUpdate }: NetworkMi
                   </Form.Item>
                   <Form.Item
                     noStyle
-                    shouldUpdate={(previous, current) =>
-                      previous.sourceType !== current.sourceType
-                    }
+                    shouldUpdate={(previous, current) => previous.sourceType !== current.sourceType}
                   >
                     {({ getFieldValue: getSourceFieldValue }) =>
                       getSourceFieldValue('sourceType') === 'manual_node' ? (
@@ -410,7 +420,10 @@ export function NetworkMihomoPane({ canCreate, canDelete, canUpdate }: NetworkMi
                               label={t('networkAccess.mihomo.server', '地址')}
                               extra={
                                 editor !== 'create' && editor?.manualNodeConfigured
-                                  ? t('networkAccess.mihomo.manualPreserve', '全部留空即保留现有节点')
+                                  ? t(
+                                      'networkAccess.mihomo.manualPreserve',
+                                      '全部留空即保留现有节点',
+                                    )
                                   : undefined
                               }
                               rules={[{ validator: (_, value) => validateManualRequired(value) }]}
@@ -588,6 +601,6 @@ export function NetworkMihomoPane({ canCreate, canDelete, canUpdate }: NetworkMi
           </Form.Item>
         </Form>
       </Modal>
-    </>
+    </div>
   )
 }

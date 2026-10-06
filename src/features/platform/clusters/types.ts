@@ -10,6 +10,8 @@ export interface ClusterFormValues {
   kubeconfig?: string
   agentEndpoint?: string
   agentToken?: string
+  prometheusTransport?: 'direct' | 'agent'
+  agentCustomResourceRules?: import('@opensoha/contracts/gen/ts/sohaapi').components['schemas']['KubernetesAgentCustomResourceRule'][]
   prometheusBaseUrl?: string
   prometheusBearerToken?: string
 }

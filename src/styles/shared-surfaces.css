@@ -77,7 +77,6 @@
 }
 
 .soha-table-actions-column--auto {
-  width: 1% !important;
   min-width: 52px !important;
   max-width: none !important;
   white-space: nowrap !important;

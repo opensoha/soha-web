@@ -49,6 +49,7 @@ export interface ClusterDiagnostics {
 }
 
 export interface ClusterConnectionDetail {
+  customResourceRules?: import('@opensoha/contracts/gen/ts/sohaapi').components['schemas']['KubernetesAgentCustomResourceRule'][]
   mode: string
   credentialType: string
   sourceType: string
@@ -62,6 +63,7 @@ export interface ClusterConnectionDetail {
 
 export interface ClusterMonitoringDetail {
   prometheus: {
+    transport?: 'direct' | 'agent'
     baseUrl?: string
     clusterLabel?: string
     grafanaBaseUrl?: string

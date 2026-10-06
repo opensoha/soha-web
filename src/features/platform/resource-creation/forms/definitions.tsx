@@ -241,7 +241,6 @@ function ServicePortFields({ showNodePort }: { showNodePort: boolean }) {
                   aria-label="删除端口"
                   icon={<MinusCircleOutlined />}
                   onClick={() => remove(field.name)}
-                  title="删除端口"
                 />
               </Space>
             ))}

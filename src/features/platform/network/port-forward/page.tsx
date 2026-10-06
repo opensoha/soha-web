@@ -195,17 +195,15 @@ export function NetworkPortForwardPage() {
               )
             }
           >
-            <Tooltip title={localeCode === 'zh_CN' ? '停止' : 'Stop'}>
-              <Button
-                aria-label={stopPortForwardLabel}
-                size="small"
-                type="text"
-                danger
-                disabled={portForwardUnsupported}
-                icon={<DeleteOutlined />}
-                loading={stopMutation.isPending && stopMutation.variables?.sessionId === value}
-              />
-            </Tooltip>
+            <Button
+              aria-label={stopPortForwardLabel}
+              size="small"
+              type="text"
+              danger
+              disabled={portForwardUnsupported}
+              icon={<DeleteOutlined />}
+              loading={stopMutation.isPending && stopMutation.variables?.sessionId === value}
+            />
           </Popconfirm>
         ) : null,
     },
