@@ -17,7 +17,7 @@ vi.mock('@/features/auth', () => ({
 vi.mock('@/services/api-client', () => ({
   api: {
     delete: vi.fn(),
-    get: apiGet,
+    getEnvelope: apiGet,
     patch: vi.fn(),
     post: vi.fn(),
   },

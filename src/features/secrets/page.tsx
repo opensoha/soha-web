@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type {
   SecretBinding,
+  SecretKind,
   SecretCreateRequest,
   SecretMetadata,
   SecretScopeType,
@@ -61,12 +62,15 @@ const { Text } = Typography
 type SecretSource = 'local' | 'vault_kv2'
 
 interface SecretValueValues {
+  sshPassphrase?: string
   source: SecretSource
   value?: string
   vaultKv2?: Partial<SecretVaultKV2Reference>
 }
 
 interface SecretEditorValues extends SecretValueValues {
+  kind?: SecretKind
+  keyMode?: 'import' | 'generate'
   bindings?: SecretBinding[]
   description?: string
   name: string
@@ -89,12 +93,16 @@ const bindingOptions = [
   { value: 'capability', label: 'AI / 工具能力' },
   { value: 'project', label: '项目' },
   { value: 'connection', label: '连接' },
+  { value: 'vm', label: 'VM 连接 / 执行' },
+  { value: 'vm_create', label: 'VM 首次初始化' },
 ] satisfies Array<{ value: SecretBinding['targetType']; label: string }>
 
 const bindingTargetPlaceholders: Record<SecretBinding['targetType'], string> = {
   capability: '工具名称，例如 docker.projects.deploy.plan',
   connection: '连接 ID',
   project: '项目 ID',
+  vm: 'Soha VM ID（不是 PVE VMID）',
+  vm_create: '虚拟化连接 ID',
 }
 
 const vaultPathPattern = /^[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/
@@ -110,10 +118,21 @@ function toSecretValueInput(values: SecretValueValues) {
       },
     }
   }
-  return { value: values.value ?? '' }
+  return {
+    value: values.value ?? '',
+    ...(values.sshPassphrase ? { sshPassphrase: values.sshPassphrase } : {}),
+  }
 }
 
-function SecretValueFields({ label, source }: { label: string; source: SecretSource }) {
+function SecretValueFields({
+  label,
+  source,
+  kind = 'opaque',
+}: {
+  label: string
+  source: SecretSource
+  kind?: SecretKind
+}) {
   return (
     <>
       <Form.Item name="source" label="来源" rules={[{ required: true }]}>
@@ -181,9 +200,26 @@ function SecretValueFields({ label, source }: { label: string; source: SecretSou
         </Space>
       ) : (
         <Form.Item name="value" label={label} rules={[{ required: true }]}>
-          <Input.Password autoComplete="new-password" />
+          {kind === 'ssh_keypair' || kind === 'ssh_public_key' ? (
+            <Input.TextArea
+              autoComplete="off"
+              rows={5}
+              placeholder={
+                kind === 'ssh_keypair'
+                  ? '粘贴完整 SSH 私钥；提交后不会返回私钥'
+                  : '粘贴一条 SSH 公钥'
+              }
+            />
+          ) : (
+            <Input.Password autoComplete="new-password" />
+          )}
         </Form.Item>
       )}
+      {kind === 'ssh_keypair' && source === 'local' ? (
+        <Form.Item name="sshPassphrase" label="私钥口令（可选）">
+          <Input.Password autoComplete="new-password" />
+        </Form.Item>
+      ) : null}
     </>
   )
 }
@@ -196,6 +232,8 @@ export function SecretsPage() {
   const [rotateForm] = Form.useForm<SecretValueValues>()
   const editorSource = (Form.useWatch('source', editorForm) ?? 'local') as SecretSource
   const editorBindings = (Form.useWatch('bindings', editorForm) ?? []) as SecretBinding[]
+  const editorKind = (Form.useWatch('kind', editorForm) ?? 'opaque') as SecretKind
+  const editorKeyMode = Form.useWatch('keyMode', editorForm) ?? 'import'
   const rotateSource = (Form.useWatch('source', rotateForm) ?? 'local') as SecretSource
   const [filters, setFilters] = useState<SecretPageFilters>({})
   const [editorOpen, setEditorOpen] = useState(false)
@@ -220,8 +258,10 @@ export function SecretsPage() {
   const secretsQuery = useQuery(
     secretQueries.list({ scopeId: filters.scopeId, scopeType: filters.scopeType }),
   )
+  const referencesQuery = useQuery(secretQueries.references(usageSecret?.id ?? ''))
   const versionsQuery = useQuery(secretQueries.versions(versionSecret?.id ?? ''))
   const createMutation = useMutation(secretMutations.create(queryClient))
+  const generateMutation = useMutation(secretMutations.generateSSHKey(queryClient))
   const updateMutation = useMutation(secretMutations.update(queryClient))
   const disableMutation = useMutation(secretMutations.disable(queryClient))
   const rotateMutation = useMutation(secretMutations.rotate(queryClient))
@@ -248,6 +288,9 @@ export function SecretsPage() {
   function openCreate() {
     setEditing(null)
     editorForm.setFieldsValue({
+      kind: 'opaque',
+      keyMode: 'import',
+      sshPassphrase: '',
       bindings: [{ targetType: 'capability', targetRef: '' }],
       description: '',
       name: '',
@@ -264,6 +307,7 @@ export function SecretsPage() {
     setEditing(secret)
     editorForm.setFieldsValue({
       bindings: secret.bindings,
+      kind: secret.kind ?? 'opaque',
       description: secret.description ?? '',
       name: secret.name,
       scopeId: secret.scopeId,
@@ -277,6 +321,7 @@ export function SecretsPage() {
     const bindings = (values.bindings ?? []).map((binding) => ({
       targetType: binding.targetType,
       targetRef: binding.targetRef.trim(),
+      ...(binding.purpose ? { purpose: binding.purpose } : {}),
     }))
     if (editing) {
       const input: SecretUpdateRequest = {
@@ -299,12 +344,33 @@ export function SecretsPage() {
     }
 
     const input: SecretCreateRequest = {
+      kind: values.kind ?? 'opaque',
       bindings,
       description: values.description?.trim() || undefined,
       name: values.name.trim(),
       scopeId: values.scopeId.trim(),
       scopeType: values.scopeType,
       ...toSecretValueInput(values),
+    }
+    if (values.kind === 'ssh_keypair' && values.keyMode === 'generate') {
+      generateMutation.mutate(
+        {
+          name: input.name,
+          scopeType: input.scopeType,
+          scopeId: input.scopeId,
+          description: input.description,
+          bindings,
+        },
+        {
+          onError: (error) => message.error(error.message),
+          onSuccess: (created) => {
+            message.success('SSH 密钥已生成并加密保存')
+            closeEditor()
+            setUsageSecret(created)
+          },
+        },
+      )
+      return
     }
     createMutation.mutate(input, {
       onError: (error) => message.error(error.message),
@@ -331,6 +397,17 @@ export function SecretsPage() {
 
   const columns = useMemo<TableColumnsType<SecretMetadata>>(
     () => [
+      {
+        title: '类型 / 公钥指纹',
+        key: 'kind',
+        width: 240,
+        render: (_, secret) => (
+          <Space orientation="vertical">
+            <Text>{secret.kind ?? 'opaque'}</Text>
+            {secret.publicKey ? <Text copyable>{secret.publicKey.fingerprint}</Text> : null}
+          </Space>
+        ),
+      },
       {
         title: 'Secret',
         dataIndex: 'name',
@@ -363,8 +440,8 @@ export function SecretsPage() {
           <Space size={4} wrap>
             {bindings.slice(0, 3).map((binding) => (
               <MetadataTag
-                key={`${binding.targetType}:${binding.targetRef}`}
-                label={`${binding.targetType}:${binding.targetRef}`}
+                key={`${binding.targetType}:${binding.targetRef}:${binding.purpose ?? ''}`}
+                label={`${binding.targetType}:${binding.targetRef}${binding.purpose ? ` · ${binding.purpose}` : ''}`}
                 tone="cyan"
               />
             ))}
@@ -594,7 +671,9 @@ export function SecretsPage() {
       />
 
       <Modal
-        confirmLoading={createMutation.isPending || updateMutation.isPending}
+        confirmLoading={
+          createMutation.isPending || updateMutation.isPending || generateMutation.isPending
+        }
         destroyOnHidden
         open={editorOpen}
         title={editing ? '编辑 Secret' : '新建 Secret'}
@@ -606,7 +685,44 @@ export function SecretsPage() {
           <Form.Item name="name" label="名称" rules={[{ required: true, whitespace: true }]}>
             <Input maxLength={128} />
           </Form.Item>
-          {!editing ? <SecretValueFields label="值" source={editorSource} /> : null}
+          <Form.Item name="kind" label="凭证类型">
+            <Select
+              disabled={Boolean(editing)}
+              options={[
+                { value: 'opaque', label: '通用 Secret' },
+                { value: 'ssh_keypair', label: 'SSH 密钥对' },
+                { value: 'ssh_public_key', label: 'SSH 公钥（仅初始化）' },
+                { value: 'ssh_password', label: 'SSH 密码' },
+              ]}
+              onChange={(kind) =>
+                editorForm.setFieldValue(
+                  'bindings',
+                  kind === 'opaque'
+                    ? [{ targetType: 'capability', targetRef: '' }]
+                    : [
+                        {
+                          targetType: kind === 'ssh_public_key' ? 'vm_create' : 'vm',
+                          targetRef: '',
+                          purpose: kind === 'ssh_public_key' ? 'vm_cloud_init' : 'vm_auth',
+                        },
+                      ],
+                )
+              }
+            />
+          </Form.Item>
+          {!editing && editorKind === 'ssh_keypair' ? (
+            <Form.Item name="keyMode" label="密钥来源">
+              <Select
+                options={[
+                  { value: 'import', label: '导入现有密钥' },
+                  { value: 'generate', label: '生成 Ed25519 密钥' },
+                ]}
+              />
+            </Form.Item>
+          ) : null}
+          {!editing && !(editorKind === 'ssh_keypair' && editorKeyMode === 'generate') ? (
+            <SecretValueFields label="值" source={editorSource} kind={editorKind} />
+          ) : null}
           <Form.Item name="description" label="描述">
             <Input.TextArea maxLength={1024} rows={3} />
           </Form.Item>
@@ -653,8 +769,48 @@ export function SecretsPage() {
                         name={[field.name, 'targetType']}
                         rules={[{ required: true }]}
                       >
-                        <Select options={bindingOptions} style={{ width: 170 }} />
+                        <Select
+                          options={bindingOptions.filter((option) =>
+                            editorKind === 'opaque'
+                              ? !['vm', 'vm_create'].includes(option.value)
+                              : editorKind === 'ssh_public_key'
+                                ? option.value === 'vm_create'
+                                : editorKind === 'ssh_password'
+                                  ? option.value === 'vm'
+                                  : ['vm', 'vm_create'].includes(option.value),
+                          )}
+                          style={{ width: 170 }}
+                          onChange={(type) =>
+                            editorForm.setFieldValue(
+                              ['bindings', field.name, 'purpose'],
+                              type === 'vm_create'
+                                ? 'vm_cloud_init'
+                                : type === 'vm'
+                                  ? 'vm_auth'
+                                  : undefined,
+                            )
+                          }
+                        />
                       </Form.Item>
+                      {editorKind !== 'opaque' ? (
+                        <Form.Item
+                          noStyle
+                          name={[field.name, 'purpose']}
+                          rules={[{ required: true }]}
+                        >
+                          <Select
+                            style={{ width: 150 }}
+                            options={
+                              editorBindings[field.name]?.targetType === 'vm_create'
+                                ? [{ value: 'vm_cloud_init', label: '首次初始化' }]
+                                : [
+                                    { value: 'vm_auth', label: '交互登录' },
+                                    { value: 'vm_exec', label: '获批命令' },
+                                  ]
+                            }
+                          />
+                        </Form.Item>
+                      ) : null}
                       <Form.Item
                         noStyle
                         name={[field.name, 'targetRef']}
@@ -680,7 +836,18 @@ export function SecretsPage() {
                   <Button
                     block
                     icon={<PlusOutlined />}
-                    onClick={() => add({ targetType: 'capability', targetRef: '' })}
+                    onClick={() =>
+                      add(
+                        editorKind === 'opaque'
+                          ? { targetType: 'capability', targetRef: '' }
+                          : {
+                              targetType: editorKind === 'ssh_public_key' ? 'vm_create' : 'vm',
+                              targetRef: '',
+                              purpose:
+                                editorKind === 'ssh_public_key' ? 'vm_cloud_init' : 'vm_auth',
+                            },
+                      )
+                    }
                   >
                     添加使用位置
                   </Button>
@@ -733,6 +900,29 @@ export function SecretsPage() {
                 配置已安装插件
               </Button>
             </Space>
+            <Space orientation="vertical" style={{ width: '100%' }}>
+              <Text strong>实际 VM 引用</Text>
+              {referencesQuery.isPending ? (
+                <ManagementState title="正在读取引用…" />
+              ) : referencesQuery.isError ? (
+                <ManagementState
+                  title="引用查询失败"
+                  actions={<Button onClick={() => void referencesQuery.refetch()}>重试</Button>}
+                />
+              ) : referencesQuery.data?.length ? (
+                referencesQuery.data.map((reference) => (
+                  <div key={`${reference.usage}/${reference.targetId}/${reference.version}`}>
+                    <Text copyable>{reference.vmId || reference.targetId}</Text> · v
+                    {reference.version} · {reference.usage} · {reference.status}
+                  </div>
+                ))
+              ) : (
+                <Text type="secondary">当前权限下没有可见 VM 引用。</Text>
+              )}
+              <Text type="secondary">
+                初始化记录是历史引用；轮换或撤销 Soha 凭证不会修改 guest 中已有的公钥。
+              </Text>
+            </Space>
             <Space orientation="vertical" size={6} style={{ width: '100%' }}>
               <Text type="secondary">允许使用位置</Text>
               <Space size={4} wrap>
@@ -774,7 +964,7 @@ export function SecretsPage() {
             )
           }
         >
-          <SecretValueFields label="新值" source={rotateSource} />
+          <SecretValueFields label="新值" source={rotateSource} kind={rotating?.kind} />
         </Form>
       </Modal>
 

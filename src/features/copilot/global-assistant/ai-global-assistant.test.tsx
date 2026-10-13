@@ -23,6 +23,7 @@ import { clampFloatPosition, snapFloatPosition } from './draggable-float-shell'
 
 vi.mock('@/services/api-client', () => ({
   api: {
+    serviceScope: () => new URL('/api/v1', window.location.origin).toString(),
     get: vi.fn(),
     delete: vi.fn(),
     post: vi.fn(),

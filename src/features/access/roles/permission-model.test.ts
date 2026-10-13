@@ -235,6 +235,8 @@ describe('role permission tree model', () => {
 
   it.each([
     ['virtualization.vms.power', 'virtualization-workbench-vms'],
+    ['virtualization.vms.connect', 'virtualization-workbench-vms'],
+    ['virtualization.vm_access.update', 'virtualization-workbench-vms'],
     ['virtualization.operations.retry', 'compute-workbench-tasks-operations'],
     ['virtualization.sync.sync', 'compute-workbench-tasks-operations'],
     ['docker.services.logs', 'docker-workbench-projects'],

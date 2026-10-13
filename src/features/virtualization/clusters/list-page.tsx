@@ -61,6 +61,7 @@ import {
 import type { EnabledFilter, ProviderFilter } from '@/features/virtualization/virtualization-model'
 import { VirtualizationConnectionStepModal } from './create-page'
 import { WorkerPoolsDrawer } from './worker-pools'
+import { CapacityPolicyDrawer } from './capacity-policy'
 import '@/features/virtualization/virtualization-workbench.css'
 import type {
   VirtualizationCluster,
@@ -154,6 +155,7 @@ function ConnectionDeletePreview({
 
 export function VirtualizationClustersPage() {
   const navigate = useNavigate()
+  const [capacityConnection,setCapacityConnection]=useState<VirtualizationCluster|null>(null)
   const [workerPoolConnection, setWorkerPoolConnection] = useState<VirtualizationCluster | null>(
     null,
   )
@@ -382,6 +384,7 @@ export function VirtualizationClustersPage() {
       width: 168,
       render: (_value, record) => (
         <Space className="soha-row-action-icons">
+          {record.provider==='pve'?<ManagementIconButton size="small" aria-label="容量与超分" tooltip="容量与超分" icon={<ClusterOutlined/>} onClick={()=>setCapacityConnection(record)}/>:null}
           {canViewWorkerPools && record.provider === 'pve' ? (
             <ManagementIconButton
               size="small"
@@ -455,6 +458,7 @@ export function VirtualizationClustersPage() {
           onClose={() => setWorkerPoolConnection(null)}
         />
       )}
+      {capacityConnection?<CapacityPolicyDrawer connection={capacityConnection} canUpdate={canUpdateClusters} onClose={()=>setCapacityConnection(null)}/>:null}
       <div className="soha-vrt-query">
         <ManagementQueryPanel
           collapsible

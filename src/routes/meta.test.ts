@@ -77,6 +77,14 @@ function getRoute(id: string): RouteMeta {
 }
 
 describe('access route authorization', () => {
+  it('allows Heya access management without granting chat access', () => {
+    const manager = buildSnapshot({ permissionKeys: ['ai.environments.update'] })
+    const chatter = buildSnapshot({ permissionKeys: ['observe.ai.chat'] })
+    expect(canAccessRoute(getRoute('heya-access'), manager)).toBe(true)
+    expect(canAccessRoute(getRoute('heya'), manager)).toBe(false)
+    expect(canAccessRoute(getRoute('heya-access'), chatter)).toBe(false)
+    expect(canAccessRoute(getRoute('heya'), chatter)).toBe(true)
+  })
   it('prefers an exact route over a dynamic sibling', () => {
     expect(getRouteMeta('/settings/source-control/new').id).toBe('settings-source-control-create')
   })

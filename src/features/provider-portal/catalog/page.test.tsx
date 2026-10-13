@@ -231,6 +231,18 @@ async function openApplicationMenu(container: HTMLElement, name = application.na
 }
 
 describe('Provider Portal catalog page', () => {
+  it.each([true, false])(
+    'keeps the Heya shortcut separate and permission gated (chat=%s)',
+    async (chat) => {
+      if (chat) permissionMocks.snapshot.permissionKeys.push('observe.ai.chat')
+      const container = await renderPage()
+      const link = container.querySelector<HTMLAnchorElement>('a[aria-label="Open Heya"]')
+      if (chat) {
+        expect(link?.getAttribute('href')).toBe('/heya')
+        expect(link?.textContent).toBe('Heya')
+      } else expect(link).toBeNull()
+    },
+  )
   it('renders the application workspace without legacy portal chrome', async () => {
     const container = await renderPage()
 

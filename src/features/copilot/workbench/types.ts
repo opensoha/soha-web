@@ -1,9 +1,44 @@
 import type {
   WorkbenchModelPreferences,
   WorkbenchModelOption,
+  WorkbenchAgentRun as ContractWorkbenchAgentRun,
 } from '@opensoha/contracts/gen/ts/sohaapi'
 
 export type WorkbenchMode = NonNullable<NonNullable<WorkbenchSession['metadata']>['mode']>
+
+// API adapter stays compatible with the currently published contracts package.
+export interface PersonalAssistant {
+  id: string
+  name: string
+  avatarUrl?: string
+  avatarPosterUrl?: string
+  avatarMotion?: 'auto' | 'off'
+  mainSessionId: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PersonalAssistantAvatarInput {
+  avatarUrl: string
+  avatarPosterUrl?: string
+  avatarMotion?: 'auto' | 'off'
+}
+// Optional wire extension; compatible with the currently published SDK.
+export interface AssistantChatTask {
+  kind: 'avatar' | 'undo'
+  image?: PersonalAssistantAvatarInput
+  useCurrentAvatar?: boolean
+  publicModel?: string
+  messageId?: string
+}
+export interface PersonalArtifact {
+  id: string
+  sessionId?: string
+  messageId?: string
+  taskId?: string
+  artifact: WorkbenchArtifact
+  createdAt: string
+}
 
 export interface WorkbenchSessionScope {
   clusterId?: string
@@ -39,6 +74,7 @@ export interface WorkbenchSession {
   updatedAt: string
   createdAt?: string
   metadata?: {
+    conversationKind?: 'main' | 'side' | 'personal_main' | 'personal_side'
     modelPreferences?: WorkbenchModelPreferences
     mode?: 'general' | 'root_cause' | 'performance' | 'trace' | 'inspection_review'
     status?: string
@@ -158,7 +194,10 @@ export interface WorkbenchAgentSkillBinding {
   config?: Record<string, unknown>
 }
 
-export interface WorkbenchAgentRun {
+export interface WorkbenchAgentRun extends Pick<
+  ContractWorkbenchAgentRun,
+  'executionOwner' | 'phase' | 'stopReason' | 'eventSequence' | 'usageKnown'
+> {
   parentRunId?: string
   id: string
   providerId: string

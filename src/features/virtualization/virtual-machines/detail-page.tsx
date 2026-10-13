@@ -50,6 +50,7 @@ import {
 } from '@/features/virtualization/virtualization-model'
 import '@/features/virtualization/virtualization-workbench.css'
 import type { VirtualizationOperation } from '@/features/virtualization/virtualization-types'
+import { VMAccessPanel } from './access-panel'
 
 const { Text } = Typography
 
@@ -138,6 +139,7 @@ export function VirtualizationVmDetailPage() {
   const {
     virtualizationModuleEnabled,
     canAccessConsole,
+    canConnectVMs,canManageVMAccess,
     canCreateVMs,
     canDeleteVMs,
     canPowerVMs,
@@ -731,6 +733,7 @@ export function VirtualizationVmDetailPage() {
                 ),
               }
             : null,
+          (canConnectVMs||canManageVMAccess)&&vm?{key:'ssh',label:'SSH 登录',children:<VMAccessPanel vm={vm}/>} : null,
           canAccessConsole
             ? {
                 key: 'console',

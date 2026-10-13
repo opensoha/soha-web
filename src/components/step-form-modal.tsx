@@ -19,6 +19,7 @@ interface ManagedStepFormModalProps<Values> extends StepFormModalBaseProps {
   current: number
   disabled?: FormProps<Values>['disabled']
   form: FormInstance<Values>
+  name?: FormProps<Values>['name']
   initialValues?: FormProps<Values>['initialValues']
   loading?: boolean
   onCurrentChange: (current: number) => void
@@ -70,6 +71,7 @@ export function StepFormModal<Values>(props: StepFormModalProps<Values>) {
           form={props.form}
           initialValues={props.initialValues}
           loading={props.loading}
+          name={props.name}
           onCancel={onClose}
           onCurrentChange={props.onCurrentChange}
           onFinish={props.onFinish}

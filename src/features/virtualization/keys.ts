@@ -69,6 +69,9 @@ function normalizeId(id: string) {
 }
 
 export const virtualizationKeys = {
+  capacityPolicy: (id: string) => [...virtualizationKeys.clusters(),'capacity-policy',normalizeId(id)] as const,
+  accessBinding: (id: string) => [...virtualizationKeys.vmDetail(id),'access-binding'] as const,
+  sshSession: (id: string) => [...virtualizationKeys.all,'ssh-session',normalizeId(id)] as const,
   all: ['virtualization'] as const,
   workerPools: (connectionId: string) =>
     [...virtualizationKeys.all, 'worker-pools', normalizeId(connectionId)] as const,

@@ -47,6 +47,7 @@ export const CHAT_COMMANDS = [
   { value: 'context', label: '查看上下文', icon: <LinkOutlined />, action: 'context' },
   { value: 'settings', label: '会话设置', icon: <SettingOutlined />, action: 'settings' },
   { value: 'session', label: '引用其他会话', icon: <CommentOutlined />, action: 'session' },
+  { value: 'analysis', label: '专业分析任务', icon: <FileSearchOutlined />, action: 'analysis' },
   ...CHAT_STARTERS,
 ] as const
 

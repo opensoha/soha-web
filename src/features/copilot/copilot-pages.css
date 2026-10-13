@@ -1009,6 +1009,41 @@
   min-width: 0;
 }
 
+.soha-ai-workbench__composer-context {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 10px 0;
+}
+
+.soha-ai-workbench__composer-context > .ant-btn {
+  height: 28px;
+  padding-inline: 8px;
+  font-size: 12px;
+}
+
+.soha-ai-workbench__composer-context > .ant-btn:not(:disabled) {
+  color: var(--soha-text-secondary);
+}
+
+.soha-ai-workbench__composer-context > .ant-tag {
+  max-width: 100%;
+  margin: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.soha-ai-workbench__context-alert {
+  width: 100%;
+}
+
+@media (max-width: 991px) {
+  .soha-ai-workbench__composer-context > .ant-btn {
+    height: 44px;
+  }
+}
+
 .soha-ai-workbench__conversations .ant-conversations-icon {
   font-size: 16px;
 }
@@ -1062,33 +1097,141 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--soha-primary) 10%, transparent);
 }
 
-.soha-ai-workbench__composer-footer {
+.soha-ai-workbench__composer .ant-sender {
+  border-radius: 28px;
+}
+.soha-ai-workbench__composer .ant-sender-content {
+  padding: 8px;
+  align-items: flex-end;
+  gap: 8px;
+}
+.soha-ai-workbench__composer .ant-sender-input {
+  min-width: 0;
+}
+.soha-ai-workbench__composer-context:empty {
+  display: none;
+}
+.soha-ai-workbench__composer-actions {
   display: flex;
-  justify-content: flex-end;
   align-items: center;
   gap: 4px;
-  flex-wrap: wrap;
 }
-.soha-ai-workbench__model-select {
-  max-width: min(280px, 45vw);
+.soha-ai-workbench__model-trigger {
+  max-width: 240px;
+  color: var(--soha-text-secondary);
+  gap: 6px;
+  padding-inline: 8px;
+}
+.soha-ai-workbench__model-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.soha-ai-workbench__model-effort {
+  flex: none;
+  color: var(--soha-text-secondary);
+  font-size: 12px;
+}
+.soha-ai-workbench__model-trigger > .anticon-down {
+  flex: none;
+  font-size: 9px;
+}
+.soha-ai-workbench__context-trigger {
+  flex: none;
+  width: 28px;
+  min-width: 28px;
+  padding: 0;
+  color: var(--soha-text-secondary);
+}
+.soha-ai-workbench__context-trigger .ant-progress {
+  display: flex;
+}
+.soha-ai-workbench__context-trigger.is-unknown .ant-progress {
+  opacity: 0.5;
+}
+.soha-ai-workbench__model-menu {
+  width: min(280px, calc(100vw - 48px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.soha-ai-workbench__menu-label {
+  font-size: 12px;
+  color: var(--soha-text-secondary);
+}
+.soha-ai-workbench__menu-label:not(:first-child) {
+  margin-top: 6px;
+}
+.soha-ai-workbench__add-menu {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 200px;
+  max-width: calc(100vw - 48px);
+  gap: 4px;
+}
+.soha-ai-workbench__add-menu > .ant-btn {
+  justify-content: flex-start;
+  min-height: 36px;
+  padding-inline: 12px;
+  gap: 8px;
+  font-size: var(--soha-font-size-control);
+}
+/* The add menu aligns its compact background controls with its regular actions. */
+.soha-ai-workbench__add-menu > .ant-btn > .ant-btn-icon {
+  inline-size: 16px;
+  flex-shrink: 0;
+  font-size: 14px;
+}
+@media (max-width: 640px) {
+  .soha-ai-workbench__composer .ant-sender-content {
+    gap: 4px;
+    padding: 6px;
+  }
+  .soha-ai-workbench__composer .ant-sender-prefix .ant-btn,
+  .soha-ai-workbench__model-trigger,
+  .soha-ai-workbench__composer-actions > .ant-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .soha-ai-workbench__model-trigger {
+    max-width: 128px;
+    padding-inline: 4px;
+  }
+  .soha-ai-workbench__composer .soha-ai-workbench__context-trigger {
+    width: 44px;
+    min-inline-size: 44px;
+    min-height: 44px;
+  }
+  .soha-ai-workbench__add-menu > .ant-btn {
+    min-height: 44px;
+  }
+}
+@media (max-width: 380px) {
+  .soha-ai-workbench__model-trigger {
+    max-width: 104px;
+  }
 }
 .soha-ai-workbench__context-popover {
   width: min(320px, 75vw);
+  max-height: min(640px, 75vh);
+  overflow-y: auto;
 }
-.soha-ai-workbench__context-popover dl {
+.soha-ai-context-rows {
   margin: 8px 0;
 }
-.soha-ai-workbench__context-popover dl > div {
+.soha-ai-context-rows > div {
   display: flex;
   justify-content: space-between;
   gap: 16px;
   margin: 10px 0;
 }
-.soha-ai-workbench__context-popover dt {
+.soha-ai-context-rows dt {
   color: var(--soha-text-secondary);
   flex-shrink: 0;
 }
-.soha-ai-workbench__context-popover dd {
+.soha-ai-context-rows dd {
   margin: 0;
   overflow-wrap: anywhere;
   text-align: right;
@@ -1149,4 +1292,14 @@
 .soha-ai-static-artifact .soha-yaml-pane + .soha-yaml-pane {
   border-top: 1px solid var(--soha-border-color);
   border-left: 0;
+}
+
+.soha-ai-context-usage p,
+.soha-ai-task-usage p {
+  color: var(--soha-text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.soha-ai-task-usage h4 {
+  margin-bottom: 8px;
 }

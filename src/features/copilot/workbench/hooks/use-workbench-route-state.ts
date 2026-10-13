@@ -42,6 +42,10 @@ export function useWorkbenchRouteState() {
   }
 
   return {
+    personal: location.pathname.startsWith('/heya'),
+    feedView: location.pathname.startsWith('/heya') && searchParams.get('view') === 'feed',
+    messageAnchor: searchParams.get('message') || '',
+    messageSearchQuery: searchParams.get('q') || '',
     draftScope,
     isExplicitRouteMode,
     location,

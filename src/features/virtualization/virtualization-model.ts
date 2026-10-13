@@ -92,6 +92,13 @@ function configNumber(value: unknown) {
   return Number.isFinite(number) && number > 0 ? number : undefined
 }
 
+export function virtualMachineRootDiskGiB(record?: Pick<VirtualMachine, 'diskGiB' | 'config'>) {
+  const root = configNumber(record?.config?.rootDiskGiB)
+  if (root) return root
+  if ((configNumber(record?.config?.diskCount) ?? 1) <= 1) return record?.diskGiB
+  return undefined
+}
+
 export function virtualMachineObservation(record?: VirtualMachine) {
   const config = record?.config
   return {
@@ -404,7 +411,9 @@ export function nextOperationSearch(
 
 export function buildVmPayload(values: CreateVirtualMachineInput): CreateVirtualMachineInput {
   return {
+    requireCapacity: values.requireCapacity,
     name: values.name,
+    guestAccess: values.guestAccess,
     connectionId: values.connectionId,
     flavorId: values.flavorId,
     namespace: values.namespace || undefined,
@@ -427,6 +436,9 @@ export function buildVmPayload(values: CreateVirtualMachineInput): CreateVirtual
 }
 
 export interface VirtualMachineFormValues extends CreateVirtualMachineInput {
+  managedGuestAccess?: boolean
+  guestUsername?: string
+  guestPublicKeyRefs?: string[]
   provider?: string
   sourceMode?: string
   enableCloudInit?: boolean
@@ -460,15 +472,17 @@ export interface VirtualMachineFormValues extends CreateVirtualMachineInput {
 
 export function buildCreateVmPayload(values: VirtualMachineFormValues): CreateVirtualMachineInput {
   const cloudInitEnabled = values.enableCloudInit === true
+  const managedAccess =
+    (cloudInitEnabled || values.registerRuntimeHost === true) && values.managedGuestAccess === true
   const providerParams = compactRecord<VirtualizationVmProviderParams>({
     storage: values.pveStorage,
     bridge: values.pveBridge,
     iso: values.pveIso,
     osType: values.pveOsType,
-    ciuser: cloudInitEnabled ? values.pveCloudInitUser : undefined,
-    sshkeys: cloudInitEnabled ? values.pveCloudInitSSHKeys : undefined,
+    ciuser: cloudInitEnabled && !managedAccess ? values.pveCloudInitUser : undefined,
+    sshkeys: cloudInitEnabled && !managedAccess ? values.pveCloudInitSSHKeys : undefined,
     snippetStorage: cloudInitEnabled ? values.pveSnippetStorage : undefined,
-    cicustom: cloudInitEnabled ? values.pveCICustom : undefined,
+    cicustom: cloudInitEnabled && !managedAccess ? values.pveCICustom : undefined,
     storageClass: values.kubevirtStorageClass,
     dataVolumeName: values.kubevirtDataVolumeName,
     networkType: values.kubevirtNetworkType,
@@ -483,7 +497,10 @@ export function buildCreateVmPayload(values: VirtualMachineFormValues): CreateVi
   return buildVmPayload({
     ...values,
     bootImageId: vmClone ? undefined : values.bootImageId,
-    cloudInit: cloudInitEnabled ? values.cloudInit : undefined,
+    cloudInit: cloudInitEnabled && !managedAccess ? values.cloudInit : undefined,
+    guestAccess: managedAccess
+      ? { username: values.guestUsername ?? '', publicKeyRefs: values.guestPublicKeyRefs ?? [] }
+      : undefined,
     sourceMode,
     sourceId: vmClone ? values.templateId : values.bootImageId,
     templateId: vmClone ? values.templateId : undefined,
@@ -510,6 +527,8 @@ export function buildRuntimeHostProvisionPayload(
   })
   return {
     name: vm.name,
+    requireCapacity: vm.requireCapacity,
+    guestAccess: vm.guestAccess,
     environment: values.runtimeEnvironment,
     owner: values.runtimeOwner,
     team: values.runtimeTeam,
@@ -539,6 +558,7 @@ export function buildImagePayload(values: VirtualizationImageInput): Virtualizat
     source: values.source || undefined,
     osType: values.osType || undefined,
     sizeGiB: values.sizeGiB,
+    config: values.config,
     description: values.description || undefined,
   }
 }

@@ -19,6 +19,8 @@ import { isApiError } from '@/services/api-error'
 import { formatDateTime } from '@/utils/time'
 import { runtimeDetailQueries } from '../queries'
 import { ExecutionRolloutPanel } from './rollout-panel'
+import { WorkflowExecutionDetail } from './workflow-execution-detail'
+import { workflowExecutionIsLive } from './workflow-execution-model'
 import type {
   ApplicationEnvironment,
   BuildRecord,
@@ -656,7 +658,18 @@ export function RuntimeDetailContent({
   onEvidence?: (kind: RuntimeKind, id: string) => void
 }) {
   const navigate = useNavigate()
-  const runtimeDetailQuery = useQuery(runtimeDetailQueries.detail(kind, recordId))
+  const runtimeDetailQuery = useQuery({
+    ...runtimeDetailQueries.detail(kind, recordId),
+    refetchInterval:
+      kind === 'workflow' && !embedded
+        ? (query) =>
+            query.state.status !== 'error' &&
+            workflowExecutionIsLive(query.state.data?.object.status)
+              ? 4000
+              : false
+        : false,
+  })
+  const retainWorkflowEvidence = kind === 'workflow' && !embedded && !!runtimeDetailQuery.data
 
   if (!recordId) {
     return (
@@ -675,7 +688,11 @@ export function RuntimeDetailContent({
       </div>
     )
   }
-  if (runtimeDetailQuery.isError && isNotFoundError(runtimeDetailQuery.error)) {
+  if (
+    runtimeDetailQuery.isError &&
+    !retainWorkflowEvidence &&
+    isNotFoundError(runtimeDetailQuery.error)
+  ) {
     return (
       <div className="soha-page">
         <ManagementState
@@ -685,7 +702,7 @@ export function RuntimeDetailContent({
       </div>
     )
   }
-  if (runtimeDetailQuery.isError) {
+  if (runtimeDetailQuery.isError && !retainWorkflowEvidence) {
     return (
       <div className="soha-page">
         <ManagementState
@@ -728,6 +745,83 @@ export function RuntimeDetailContent({
     : undefined
   const links = runtimeDetail?.links
   const permissions = runtimeDetail?.permissions ?? DEFAULT_RUNTIME_PERMISSIONS
+  const relatedInfo = (
+    <>
+      <Descriptions
+        column={{ xs: 1, sm: 2 }}
+        items={runtimeSummaryItems(kind, record, applicationDetail, runtimeDetail)}
+      />
+      <Space wrap size={[8, 8]} style={{ marginTop: 16 }}>
+        <Button
+          icon={<LinkOutlined />}
+          onClick={() =>
+            navigate(
+              links?.application ||
+                runtimeApplicationPath(
+                  record.applicationId,
+                  kind === 'build'
+                    ? { buildId: record.id }
+                    : kind === 'workflow'
+                      ? { workflowRunId: record.id }
+                      : kind === 'release'
+                        ? { releaseId: record.id }
+                        : kind === 'release_bundle'
+                          ? { releaseBundleId: record.id }
+                          : { executionTaskId: record.id },
+                ),
+            )
+          }
+        >
+          打开应用运行态
+        </Button>
+        <Button
+          disabled={!permissions.canViewAudit}
+          icon={<LinkOutlined />}
+          onClick={() => navigate(links?.audit || runtimeAuditPath(kind, record.id))}
+        >
+          审计日志
+        </Button>
+        <Button
+          disabled={!permissions.canViewOperations}
+          icon={<LinkOutlined />}
+          onClick={() => navigate(links?.operations || runtimeOperationPath(kind, record.id))}
+        >
+          操作日志
+        </Button>
+        <Button
+          disabled={!permissions.canViewArtifacts || !links?.artifacts}
+          icon={<LinkOutlined />}
+          onClick={() => links?.artifacts && navigate(links.artifacts)}
+        >
+          Artifacts
+        </Button>
+      </Space>
+    </>
+  )
+
+  if (kind === 'workflow' && !embedded) {
+    return (
+      <WorkflowExecutionDetail
+        key={record.id}
+        record={record as WorkflowRun}
+        applicationName={compactApplicationName(applicationDetail)}
+        environmentName={runtimeEnvironmentLabel(applicationDetail, record, kind)}
+        sourceName={runtimeTemplateLabel(applicationDetail, record, kind)}
+        refreshing={runtimeDetailQuery.isFetching}
+        refreshError={runtimeDetailQuery.isError ? runtimeDetailQuery.error : undefined}
+        onRefresh={async () => {
+          const result = await runtimeDetailQuery.refetch()
+          if (result.error) throw result.error
+          return result.data?.object as WorkflowRun | undefined
+        }}
+        onBack={() => navigate(runtimeListPath(kind))}
+        onEvidence={onEvidence}
+        relatedInfo={relatedInfo}
+        artifacts={renderArtifactTimeline(runtimeArtifacts, '该工作流没有返回制品明细。')}
+        artifactCount={runtimeDetail?.artifacts?.length}
+      />
+    )
+  }
 
   return (
     <div className="soha-page">
@@ -780,11 +874,7 @@ export function RuntimeDetailContent({
               children: formatDateTime(
                 (
                   record as
-                    | BuildRecord
-                    | ReleaseRecord
-                    | ReleaseBundle
-                    | ExecutionTask
-                    | WorkflowRun
+                    BuildRecord | ReleaseRecord | ReleaseBundle | ExecutionTask | WorkflowRun
                 ).createdAt,
               ),
             },
@@ -803,61 +893,7 @@ export function RuntimeDetailContent({
         />
       </Card>
       <Card className="soha-detail-card" title="关联信息" size="small">
-        <Descriptions
-          column={{ xs: 1, sm: 2 }}
-          items={runtimeSummaryItems(kind, record, applicationDetail, runtimeDetail).map(
-            (item) => ({
-              key: item.key,
-              label: item.label,
-              children: item.children,
-            }),
-          )}
-        />
-        <Space wrap size={[8, 8]} style={{ marginTop: 16 }}>
-          <Button
-            icon={<LinkOutlined />}
-            onClick={() =>
-              navigate(
-                links?.application ||
-                  runtimeApplicationPath(
-                    record.applicationId,
-                    kind === 'build'
-                      ? { buildId: record.id }
-                      : kind === 'workflow'
-                        ? { workflowRunId: record.id }
-                        : kind === 'release'
-                          ? { releaseId: record.id }
-                          : kind === 'release_bundle'
-                            ? { releaseBundleId: record.id }
-                            : { executionTaskId: record.id },
-                  ),
-              )
-            }
-          >
-            打开应用运行态
-          </Button>
-          <Button
-            disabled={!permissions.canViewAudit}
-            icon={<LinkOutlined />}
-            onClick={() => navigate(links?.audit || runtimeAuditPath(kind, record.id))}
-          >
-            审计日志
-          </Button>
-          <Button
-            disabled={!permissions.canViewOperations}
-            icon={<LinkOutlined />}
-            onClick={() => navigate(links?.operations || runtimeOperationPath(kind, record.id))}
-          >
-            操作日志
-          </Button>
-          <Button
-            disabled={!permissions.canViewArtifacts || !links?.artifacts}
-            icon={<LinkOutlined />}
-            onClick={() => links?.artifacts && navigate(links.artifacts)}
-          >
-            Artifacts
-          </Button>
-        </Space>
+        {relatedInfo}
       </Card>
       {kind === 'execution_task' ? <ExecutionRolloutPanel task={record as ExecutionTask} /> : null}
       <RuntimeEvidenceCard

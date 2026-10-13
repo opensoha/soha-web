@@ -6,6 +6,27 @@ export type ConversationMessage = WorkbenchMessage & {
   deliveryStatus?: WorkbenchBubbleStatus
 }
 
+export function assistantReactionForMessage(
+  messages: ConversationMessage[],
+  target: ConversationMessage,
+) {
+  if (target.role !== 'user') return undefined
+  const reply = [...messages]
+    .reverse()
+    .find(
+      (item) =>
+        item.role === 'assistant' &&
+        item.sessionId === target.sessionId &&
+        item.metadata?.requestMessageId === target.id &&
+        !['loading', 'updating', 'error', 'abort'].includes(item.deliveryStatus || ''),
+    )
+  const emoji = reply?.metadata?.assistantReaction
+  return typeof emoji === 'string' &&
+    ['👋', '👍', '❤️', '😊', '🎉', '💡', '👀', '🤔', '✅', '🙏'].includes(emoji)
+    ? emoji
+    : undefined
+}
+
 export function bubbleItems(messages: ConversationMessage[]) {
   return messages.map((item) => ({
     key: item.id,
@@ -126,7 +147,7 @@ export function pendingConversationMessages(
       id: `local:assistant:${sessionId}:${now}`,
       sessionId,
       role: 'assistant',
-      content: '正在思考...',
+      content: '',
       metadata: { source: 'model-thinking' },
       createdAt: new Date(now + 1).toISOString(),
       deliveryStatus: 'loading',

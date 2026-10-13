@@ -19,6 +19,9 @@ function hasId(id: string) {
 }
 
 export const virtualizationQueries = {
+  capacityPolicy: (id: string, enabled=true) => queryOptions({queryKey:virtualizationKeys.capacityPolicy(id),queryFn:()=>virtualizationApi.capacityPolicy(id),enabled:enabled&&hasId(id)}),
+  accessBinding: (id: string, enabled=true) => queryOptions({queryKey:virtualizationKeys.accessBinding(id),queryFn:()=>virtualizationApi.accessBinding(id),enabled:enabled&&hasId(id),retry:false}),
+  sshSession: (id: string, enabled=true) => queryOptions({queryKey:virtualizationKeys.sshSession(id),queryFn:()=>virtualizationApi.sshSession(id),enabled:enabled&&hasId(id),refetchInterval:2_000}),
   workerPools: (connectionId: string, enabled = true) =>
     queryOptions({
       queryKey: virtualizationKeys.workerPools(connectionId),

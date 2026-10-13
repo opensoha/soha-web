@@ -545,6 +545,46 @@ export const copilotObserveRoutes = defineRoutes([
       return { default: module.AIProductionOperationsPage }
     },
   },
+  {
+    meta: {
+      id: 'heya',
+      path: '/heya',
+      title: 'Heya',
+      description: '独立个人 Agent',
+      icon: 'IconComment',
+      group: 'observe',
+      requiresAuth: true,
+      tabbar: false,
+      navVisible: false,
+      permissionKey: 'observe.ai.chat',
+      scopeMode: 'passive',
+    },
+    shell: 'focus',
+    load: async () => {
+      const module = await import('../workbench/pages/heya-page')
+      return { default: module.HeyaPage }
+    },
+  },
+  {
+    meta: {
+      id: 'heya-access',
+      path: '/heya/access',
+      title: 'Heya 开通管理',
+      description: '独立个人 Agent',
+      icon: 'IconComment',
+      group: 'observe',
+      requiresAuth: true,
+      tabbar: false,
+      navVisible: false,
+      permissionKey: 'ai.environments.update',
+      scopeMode: 'passive',
+    },
+    shell: 'focus',
+    load: async () => {
+      const module = await import('../workbench/pages/heya-page')
+      return { default: module.HeyaPage }
+    },
+  },
 ] as const)
 
 export const copilotObserveRouteManifests = [copilotObserveRoutes] as const

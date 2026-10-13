@@ -22,6 +22,8 @@ export function useVirtualizationPermissions() {
     hasVirtualizationPermission('virtualization.images.view')
 
   return {
+    canConnectVMs:hasVirtualizationPermission('virtualization.vms.connect')&&hasVirtualizationPermission('secret.use'),
+    canManageVMAccess:hasVirtualizationPermission('virtualization.vm_access.update')&&hasVirtualizationPermission('secret.use'),
     virtualizationModuleEnabled,
     canViewWorkerPools,
     canCreateWorkers: canSupplyWorkers && canCreateVMs,

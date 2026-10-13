@@ -28,6 +28,8 @@ import {
   findFirstAccessiblePathForWorkbench,
   getAccessibleWorkbenchIds,
   getMenuWorkbenchId,
+  canAccessRoute,
+  getRouteMeta,
 } from '@/routes/meta'
 import { useAuthStore } from '@/stores/auth-store'
 import { providerPortalMutations } from '../mutations'
@@ -662,6 +664,21 @@ export function SohaProviderPortalPage() {
                     <span>{t('providerPortal.home.workbenches', 'Workbenches')}</span>
                   </div>
                   <div className="soha-portal-workbench-list">
+                    {canAccessRoute(getRouteMeta('/heya'), permissionSnapshot) ? (
+                      <Link
+                        aria-label={localeCode === 'en_US' ? 'Open Heya' : '打开 Heya'}
+                        className="soha-portal-recent-item soha-portal-workbench-link"
+                        to="/heya"
+                      >
+                        <span className="soha-portal-workbench-icon">
+                          <img src="/heya-avatar.svg" width={24} height={24} alt="" />
+                        </span>
+                        <Text className="soha-portal-workbench-label" strong>
+                          Heya
+                        </Text>
+                        <RightOutlined className="soha-portal-workbench-arrow" />
+                      </Link>
+                    ) : null}
                     {workbenches.map((workbench) => (
                       <Link
                         aria-label={`${t('providerPortal.home.open', 'Open')} ${workbench.label}`}

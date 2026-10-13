@@ -25,3 +25,9 @@
 - 文档和技能改动只检查元数据、链接、内容一致性及差异，不机械构建应用。保留用户未提交改动，不手改 `dist/` 等生成物；仅提交任务所属变更。
 
 - UI 设计读取 [soha-design](.agents/skills/soha-design/SKILL.md)；UI/HTTP/视觉/Midscene 验收读取 [soha-web-testing](.agents/skills/soha-web-testing/SKILL.md)。实施仍遵循 soha-frontend；权限、模型外发与 CI 边界在多仓环境按需读取 Core 的 soha-security，独立 clone 保留本仓门禁，不自动安装相邻仓库。
+
+## Graphify
+
+- 跨模块依赖、共享能力影响、模块迁移或跨仓任务，先查询已有图谱并核对源码；在已确认的多仓工作区按 [Graphify 开发手册](../docs/graphify-development/runbook.md)检查新鲜度、查询和刷新。
+- 结构变更稳定后显式刷新受影响仓库及跨仓图；普通小修改、文案和局部样式不自动建图。刷新失败先诊断，不默认使用 `--force`。
+- 独立克隆时使用本仓 `graphify-out/graph.json` 与原生 Graphify 命令；缺少工具或图谱时直接查源码并说明缺口，不要求补齐相邻仓库。

@@ -125,6 +125,7 @@ const ROUTE_PERMISSION_OWNERS: Record<string, string> = {
   'docker.services.view': 'docker-workbench-projects',
   'virtualization.operations.cancel': 'compute-workbench-tasks-operations',
   'virtualization.operations.retry': 'compute-workbench-tasks-operations',
+  'virtualization.vm_access.update': 'virtualization-workbench-vms',
   'virtualization.overview.view': 'compute-workbench-overview',
   'virtualization.sync.sync': 'compute-workbench-tasks-operations',
   'secret.create': 'settings-secrets',

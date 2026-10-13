@@ -6,6 +6,7 @@ import {
   disableSecret,
   isSecretReference,
   listSecrets,
+  listSecretReferences,
   listSecretVersions,
   revokeSecretVersion,
   rotateSecret,
@@ -15,6 +16,7 @@ import {
 const apiMocks = vi.hoisted(() => ({
   delete: vi.fn(),
   get: vi.fn(),
+  getEnvelope: vi.fn(),
   patch: vi.fn(),
   post: vi.fn(),
 }))
@@ -46,12 +48,12 @@ describe('secret store api', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('lists metadata with normalized scope filters and never expects a value', async () => {
-    apiMocks.get.mockResolvedValueOnce({ items: [secret] })
+    apiMocks.getEnvelope.mockResolvedValueOnce({ items: [secret] })
 
     await expect(listSecrets({ scopeType: 'project', scopeId: ' demo ' })).resolves.toEqual([
       secret,
     ])
-    expect(apiMocks.get).toHaveBeenCalledWith('/secrets?scopeType=project&scopeId=demo')
+    expect(apiMocks.getEnvelope).toHaveBeenCalledWith('/secrets?scopeType=project&scopeId=demo')
     expect(JSON.stringify(secret)).not.toContain('opaque-secret')
   })
 
@@ -99,7 +101,7 @@ describe('secret store api', () => {
   it('encodes management paths and unwraps metadata-only responses', async () => {
     apiMocks.patch.mockResolvedValueOnce({ data: secret })
     apiMocks.delete.mockResolvedValueOnce({ data: { ...secret, status: 'disabled' } })
-    apiMocks.get.mockResolvedValueOnce({ items: [version] })
+    apiMocks.getEnvelope.mockResolvedValueOnce({ items: [version] })
     apiMocks.post.mockResolvedValueOnce({ data: { ...version, status: 'revoked' } })
 
     await expect(
@@ -113,8 +115,24 @@ describe('secret store api', () => {
       description: 'rotated',
     })
     expect(apiMocks.delete).toHaveBeenCalledWith('/secrets/secret%2Fid')
-    expect(apiMocks.get).toHaveBeenCalledWith('/secrets/secret%2Fid/versions')
+    expect(apiMocks.getEnvelope).toHaveBeenCalledWith('/secrets/secret%2Fid/versions')
     expect(apiMocks.post).toHaveBeenCalledWith('/secrets/secret%2Fid/versions/2/revoke')
+  })
+
+  it('retains actual VM reference envelopes without normalizing items into data', async () => {
+    const usage = {
+      targetId: 'vm-one',
+      vmId: 'vm-one',
+      usage: 'login_binding',
+      version: 1,
+      bindingRevision: 2,
+      status: 'active',
+    }
+    apiMocks.get.mockResolvedValue({ data: [] })
+    apiMocks.getEnvelope.mockResolvedValueOnce({ items: [usage] })
+    await expect(listSecretReferences('secret-1')).resolves.toEqual([usage])
+    expect(apiMocks.getEnvelope).toHaveBeenCalledWith('/secrets/secret-1/references')
+    expect(apiMocks.get).not.toHaveBeenCalled()
   })
 
   it('builds only canonical latest or pinned references', () => {

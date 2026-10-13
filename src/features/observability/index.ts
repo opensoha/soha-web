@@ -1,4 +1,5 @@
 export { observabilityKeys, observabilityMutationKeys } from './keys'
+export { observabilitySignalQueries } from './signals/queries'
 export { observabilityAlertQueries, useAlertEventStream } from './alerts'
 export type { AlertEventStreamStatus } from './alerts'
 export type { AlertEvent } from './alerts'

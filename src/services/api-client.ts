@@ -118,12 +118,7 @@ async function throwApiError(response: Response, path: string, method: string): 
   throw error
 }
 
-async function request<T>(
-  path: string,
-  options: RequestInit = {},
-  normalizeBody = true,
-  responseFormat: 'json' | 'text' = 'json',
-): Promise<T> {
+async function requestResponse(path: string, options: RequestInit): Promise<Response> {
   const accessToken = getStoredAccessToken()
   const method = getRequestMethod(options)
 
@@ -142,14 +137,26 @@ async function request<T>(
   if (!res.ok) {
     await throwApiError(res, path, method)
   }
+  return res
+}
 
+async function request<T>(
+  path: string,
+  options: RequestInit = {},
+  normalizeBody = true,
+  responseFormat: 'json' | 'text' = 'json',
+): Promise<T> {
+  const res = await requestResponse(path, options)
   if (res.status === 204) return undefined as T
   if (responseFormat === 'text') return (await res.text()) as T
-  const body = await parseJsonStrictly<unknown>(res, path, method)
+  const body = await parseJsonStrictly<unknown>(res, path, getRequestMethod(options))
   return normalizeBody ? normalizeResponseBody<T>(body) : (body as T)
 }
 
 export const api = {
+  serviceScope: () => new URL(API_BASE_URL, window.location.origin).toString(),
+  postResponse: (path: string, body: unknown, signal: AbortSignal) =>
+    requestResponse(path, { method: 'POST', body: JSON.stringify(body), signal }),
   getText: (path: string) => request<string>(path, {}, false, 'text'),
   get: <T>(path: string) => request<T>(path),
   getEnvelope: <T>(path: string) => request<T>(path, {}, false),

@@ -598,8 +598,8 @@ export function GlobalAIAssistantProvider({
     )
     if (currentSession?.id) params.set('session', currentSession.id)
     recordGlobalAssistantEvent('open-workbench', activeContext, currentSession?.id)
-    navigate(getAIWorkbenchPathForMode(currentSession?.metadata?.mode || 'general', params))
-  }, [activeContext, currentSession?.id, currentSession?.metadata?.mode, navigate])
+    navigate(getAIWorkbenchPathForMode('general', params))
+  }, [activeContext, currentSession?.id, navigate])
 
   const cancelStream = useCallback(() => {
     const active = externalRunRef.current

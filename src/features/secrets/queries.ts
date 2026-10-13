@@ -1,5 +1,5 @@
 import { queryOptions } from '@tanstack/react-query'
-import { listSecrets, listSecretVersions, type SecretFilters } from './api'
+import { listSecrets, listSecretVersions, listSecretReferences, type SecretFilters } from './api'
 import { normalizeSecretFilters, secretKeys } from './keys'
 
 export const secretQueries = {
@@ -11,6 +11,12 @@ export const secretQueries = {
       enabled,
     })
   },
+  references: (secretId: string) =>
+    queryOptions({
+      queryKey: secretKeys.references(secretId),
+      queryFn: () => listSecretReferences(secretId),
+      enabled: Boolean(secretId),
+    }),
   versions: (secretId: string) => {
     const normalizedId = secretId.trim()
     return queryOptions({

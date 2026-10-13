@@ -1,6 +1,8 @@
 import { api } from '@/services/api-client'
 import type { ApiResponse, Cluster } from '@/types'
 import type {
+  VirtualizationCapacityPolicy, VirtualizationCapacityPolicyInput, VirtualizationCapacityInput, VirtualizationCapacityResult,
+  VirtualMachineAccessBinding, VirtualMachineAccessBindingInput, VirtualMachineSSHSession, VirtualMachineSSHSessionInput,
   ConnectionCheckResult,
   OperationalPlan,
   VirtualizationWorkerPool,
@@ -44,6 +46,14 @@ function withQuery(path: string, params: Array<[string, string | number | undefi
 }
 
 export const virtualizationApi = {
+  capacityPolicy: async (id: string) => (await api.get<ApiResponse<VirtualizationCapacityPolicy>>(`${BASE}/clusters/${encodeURIComponent(id)}/capacity-policy`)).data,
+  saveCapacityPolicy: async (id: string, input: VirtualizationCapacityPolicyInput) => (await api.put<ApiResponse<VirtualizationCapacityPolicy>>(`${BASE}/clusters/${encodeURIComponent(id)}/capacity-policy`,input)).data,
+  checkCapacity: async (input: VirtualizationCapacityInput) => (await api.post<ApiResponse<VirtualizationCapacityResult>>(`${BASE}/capacity/check`,input)).data,
+  accessBinding: async (id: string) => (await api.get<ApiResponse<VirtualMachineAccessBinding>>(`${BASE}/vms/${encodeURIComponent(id)}/access-binding`)).data,
+  saveAccessBinding: async (id: string, input: VirtualMachineAccessBindingInput) => (await api.put<ApiResponse<VirtualMachineAccessBinding>>(`${BASE}/vms/${encodeURIComponent(id)}/access-binding`,input)).data,
+  createSSHSession: async (id: string, input: VirtualMachineSSHSessionInput) => (await api.post<ApiResponse<VirtualMachineSSHSession>>(`${BASE}/vms/${encodeURIComponent(id)}/ssh-sessions`,input)).data,
+  sshSession: async (id: string) => (await api.get<ApiResponse<VirtualMachineSSHSession>>(`${BASE}/ssh-sessions/${encodeURIComponent(id)}`)).data,
+  closeSSHSession: async (id: string) => (await api.delete<ApiResponse<VirtualMachineSSHSession>>(`${BASE}/ssh-sessions/${encodeURIComponent(id)}`)).data,
   workerPools: async (connectionId: string) => {
     const response = await api.get<ApiResponse<VirtualizationWorkerPool[]>>(
       withQuery(`${BASE}/worker-pools`, [['connectionId', connectionId]]),

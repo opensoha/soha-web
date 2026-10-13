@@ -53,14 +53,14 @@
     ]
   },
   "summary": {
-    "runtimePaths": 282,
-    "metadataPaths": 282,
-    "overlappingPaths": 282,
+    "runtimePaths": 284,
+    "metadataPaths": 284,
+    "overlappingPaths": 284,
     "runtimeOnlyPaths": 0,
     "metadataOnlyPaths": 0,
     "inlineJsxPaths": 0,
-    "lazyRouteLoads": 225,
-    "lazySourceModules": 221
+    "lazyRouteLoads": 227,
+    "lazySourceModules": 222
   },
   "paths": {
     "runtime": [
@@ -180,6 +180,8 @@
       "/helm/charts",
       "/helm/releases",
       "/helm/releases/:releaseName",
+      "/heya",
+      "/heya/access",
       "/identity",
       "/identity/applications",
       "/identity/audit",
@@ -464,6 +466,8 @@
       "/helm/charts",
       "/helm/releases",
       "/helm/releases/:releaseName",
+      "/heya",
+      "/heya/access",
       "/identity",
       "/identity/applications",
       "/identity/audit",
@@ -748,6 +752,8 @@
       "/helm/charts",
       "/helm/releases",
       "/helm/releases/:releaseName",
+      "/heya",
+      "/heya/access",
       "/identity",
       "/identity/applications",
       "/identity/audit",
@@ -1452,6 +1458,16 @@
         "source": "@/features/platform/extensions/helm/releases/list-page"
       },
       {
+        "exportName": "HeyaPage",
+        "moduleExport": "HeyaPage",
+        "source": "@/features/copilot/workbench/pages/heya-page"
+      },
+      {
+        "exportName": "HeyaPage",
+        "moduleExport": "HeyaPage",
+        "source": "@/features/copilot/workbench/pages/heya-page"
+      },
+      {
         "exportName": "HTTPRouteDetailPage",
         "moduleExport": "HTTPRouteDetailPage",
         "source": "@/features/platform/network/gateway-api/httproute-detail-page"
@@ -2090,6 +2106,7 @@
       "@/features/copilot/production-operations/page",
       "@/features/copilot/provider-fleet/page",
       "@/features/copilot/workbench/pages/chat-page",
+      "@/features/copilot/workbench/pages/heya-page",
       "@/features/copilot/workbench/pages/performance-page",
       "@/features/copilot/workbench/pages/root-cause-page",
       "@/features/delivery/applications/detail-page",
@@ -2313,6 +2330,7 @@
       "@/features/copilot/production-operations/page": ["AIProductionOperationsPage"],
       "@/features/copilot/provider-fleet/page": ["ProviderFleetPage"],
       "@/features/copilot/workbench/pages/chat-page": ["AIWorkbenchChatPage"],
+      "@/features/copilot/workbench/pages/heya-page": ["HeyaPage", "HeyaPage"],
       "@/features/copilot/workbench/pages/performance-page": ["AIWorkbenchPerformancePage"],
       "@/features/copilot/workbench/pages/root-cause-page": ["AIWorkbenchRootCausePage"],
       "@/features/delivery/applications/detail-page": ["ApplicationDetailPage"],
@@ -2577,5 +2595,5 @@
       "@/features/virtualization/virtual-machines/list-page": ["VirtualizationVmsPage"]
     }
   },
-  "generatedAt": "2026-09-26T20:02:36.389Z"
+  "generatedAt": "2026-10-09T16:33:25.669Z"
 }

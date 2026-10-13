@@ -15,5 +15,6 @@ export const secretKeys = {
     [...secretKeys.lists(), normalizeSecretFilters(filters)] as const,
   details: () => [...secretKeys.all, 'detail'] as const,
   detail: (secretId: string) => [...secretKeys.details(), secretId.trim()] as const,
+  references: (secretId: string) => [...secretKeys.detail(secretId), 'references'] as const,
   versions: (secretId: string) => [...secretKeys.detail(secretId), 'versions'] as const,
 }

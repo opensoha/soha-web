@@ -4,6 +4,9 @@ export type AIWorkbenchMode = NonNullable<WorkbenchSession['metadata']>['mode']
 
 const AI_WORKBENCH_CONTEXT_KEYS = [
   'session',
+  'message',
+  'q',
+  'view',
   'clusterId',
   'namespace',
   'workload',
@@ -90,7 +93,9 @@ export function getAIWorkbenchPathForSession(
 ) {
   const next = buildAIWorkbenchContextSearch(search)
   next.set('session', session.id)
-  return getAIWorkbenchPathForMode(session.metadata?.mode, next)
+  if (session.metadata?.conversationKind?.startsWith('personal_'))
+    return pathWithSearch('/heya', next)
+  return getAIWorkbenchPathForMode('general', next)
 }
 
 export function getAIOperationsPath(search?: string | URLSearchParams | null) {

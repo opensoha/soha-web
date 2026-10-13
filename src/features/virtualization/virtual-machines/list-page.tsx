@@ -65,11 +65,13 @@ import {
   normalizePage,
   virtualMachineDisplayStatus,
   virtualMachineObservation,
+  virtualMachineRootDiskGiB,
   virtualizationPageSummary,
   providerLabel,
 } from '@/features/virtualization/virtualization-model'
 import type { VirtualMachineFormValues } from '@/features/virtualization/virtualization-model'
 import { useTaskStream } from '@/features/virtualization/use-task-stream'
+import { secretQueries, buildSecretReference } from '@/features/secrets'
 import '@/features/virtualization/virtualization-workbench.css'
 import type {
   VirtualMachine,
@@ -266,6 +268,10 @@ export function VirtualizationVmsPage() {
     Form.useWatch('sourceMode', form) ??
     (createProvider === 'pve' ? 'template_clone' : 'datasource_clone')
   const enableCloudInit = Form.useWatch('enableCloudInit', form) ?? false
+  const managedGuestAccess = Form.useWatch('managedGuestAccess', form) ?? false
+  const guestSecretsQuery = useQuery(
+    secretQueries.list({}, hasPermission(permissionSnapshotQuery.data?.data, 'secret.view')),
+  )
   const registerRuntimeHost = Form.useWatch('registerRuntimeHost', form) ?? false
   const kubevirtNetworkType = Form.useWatch('kubevirtNetworkType', form) ?? 'pod'
   const selectedConnectionId = Form.useWatch('connectionId', form)
@@ -437,11 +443,11 @@ export function VirtualizationVmsPage() {
     if (!resizeTarget || discoveredDisks.length === 0 || resizeForm.getFieldValue('rootDiskId')) {
       return
     }
-    const disk = defaultRootDisk(discoveredDisks, resizeTarget.diskGiB)
+    const disk = defaultRootDisk(discoveredDisks, virtualMachineRootDiskGiB(resizeTarget))
     if (!disk) return
     resizeForm.setFieldsValue({
       rootDiskId: disk.id,
-      rootDiskSizeGiB: disk.sizeGiB ?? resizeTarget.diskGiB,
+      rootDiskSizeGiB: disk.sizeGiB,
     })
   }, [discoveredDisks, resizeForm, resizeTarget])
   const clusters = clustersQuery.data ?? []
@@ -741,6 +747,7 @@ export function VirtualizationVmsPage() {
       width: 156,
       render: (_value, record) => {
         const canPower = (action: string) => hasAllowedAction(record.allowedActions, action)
+
         return (
           <Space className="soha-row-action-icons">
             {canPower('start') ? (
@@ -788,14 +795,6 @@ export function VirtualizationVmsPage() {
                 onClick={() => {
                   setResizeTarget(record)
                   setResizeStep(0)
-                  resizeForm.setFieldsValue({
-                    cpu: record.cpu,
-                    memoryMiB: record.memoryMiB,
-                    rootDiskId: undefined,
-                    rootDiskSizeGiB: undefined,
-                    disks: [],
-                    networks: [],
-                  })
                 }}
               />
             ) : null}
@@ -814,6 +813,63 @@ export function VirtualizationVmsPage() {
       },
     },
   ]
+
+  const guestCredentialFields = (
+    <>
+      <Form.Item name="managedGuestAccess" label="引用受管 SSH 公钥" valuePropName="checked">
+        <Switch />
+      </Form.Item>
+      {managedGuestAccess ? (
+        <>
+          <Alert
+            showIcon
+            type="info"
+            title="首次启动公钥初始化"
+            description="需要已确认支持 cloud-init 的目录镜像。只注入公钥；不会向旧 VM 写入密钥。未知支持状态时服务端拒绝创建。"
+          />
+          <Form.Item
+            name="guestUsername"
+            label="登录账号"
+            rules={[
+              {
+                required: true,
+                pattern: /^(?!root$)[a-z_][a-z0-9_-]{0,31}$/,
+              },
+            ]}
+          >
+            <Input placeholder="soha" />
+          </Form.Item>
+          <Form.Item
+            name="guestPublicKeyRefs"
+            label="SSH 公钥版本引用"
+            rules={[{ required: true, type: 'array', min: 1, max: 16 }]}
+          >
+            <Select
+              mode="tags"
+              tokenSeparators={['\n']}
+              placeholder="选择凭证或粘贴 soha://secrets/…/versions/1"
+              options={(guestSecretsQuery.data ?? [])
+                .filter(
+                  (secret) =>
+                    secret.status === 'active' &&
+                    ['ssh_keypair', 'ssh_public_key'].includes(secret.kind ?? '') &&
+                    secret.bindings.some(
+                      (binding) =>
+                        binding.targetType === 'vm_create' &&
+                        binding.targetRef === selectedConnectionId &&
+                        binding.purpose === 'vm_cloud_init',
+                    ),
+                )
+                .map((secret) => ({
+                  value: buildSecretReference(secret.id, secret.currentVersion),
+                  label: `${secret.name} · v${secret.currentVersion}`,
+                }))}
+            />
+          </Form.Item>
+        </>
+      ) : null}
+    </>
+  )
 
   return (
     <>
@@ -948,6 +1004,7 @@ export function VirtualizationVmsPage() {
         }
         afterTable={
           <StepFormModal
+            name="virtual-machine-create"
             title={localeText(localeCode, '创建虚拟机', 'Create virtual machine')}
             current={currentStep}
             form={form}
@@ -1059,6 +1116,10 @@ export function VirtualizationVmsPage() {
                           createProvider === 'pve'
                             ? [
                                 {
+                                  value: 'cloud_image',
+                                  label: localeText(localeCode, 'Cloud image 创建', 'Cloud image'),
+                                },
+                                {
                                   value: 'template_clone',
                                   label: localeText(localeCode, '模板克隆', 'Template clone'),
                                 },
@@ -1121,7 +1182,9 @@ export function VirtualizationVmsPage() {
                             ? localeText(localeCode, '安装 ISO', 'Install ISO')
                             : createSourceMode === 'vm_clone'
                               ? localeText(localeCode, '源虚拟机', 'Source VM')
-                              : localeText(localeCode, '模板', 'Template')
+                              : createSourceMode === 'cloud_image'
+                                ? localeText(localeCode, 'Cloud image', 'Cloud image')
+                                : localeText(localeCode, '模板', 'Template')
                           : localeText(localeCode, '启动镜像', 'Boot image')
                       }
                       rules={[{ required: true }]}
@@ -1165,8 +1228,10 @@ export function VirtualizationVmsPage() {
                                     createProvider !== 'pve' ||
                                     (createSourceMode === 'iso_install'
                                       ? item.assetKind === 'iso' || item.sourceKind === 'iso'
-                                      : item.assetKind === 'template' ||
-                                        item.sourceKind === 'template'),
+                                      : createSourceMode === 'cloud_image'
+                                        ? item.sourceKind === 'cloud_image'
+                                        : item.assetKind === 'template' ||
+                                          item.sourceKind === 'template'),
                                 )
                                 .map((item) => ({
                                   value: item.id,
@@ -1557,6 +1622,9 @@ export function VirtualizationVmsPage() {
                 title: 'Cloud-Init',
                 fieldNames: [
                   'enableCloudInit',
+                  'managedGuestAccess',
+                  'guestUsername',
+                  'guestPublicKeyRefs',
                   'pveCloudInitUser',
                   'pveSnippetStorage',
                   'pveCloudInitSSHKeys',
@@ -1596,13 +1664,16 @@ export function VirtualizationVmsPage() {
                         disabled={!canCreateRuntimeHosts}
                         onChange={(checked) => {
                           if (checked) {
-                            form.setFieldsValue({ enableCloudInit: false, startAfterCreate: true })
+                            form.setFieldsValue({
+                              startAfterCreate: true,
+                            })
                           }
                         }}
                       />
                     </Form.Item>
                     {registerRuntimeHost ? (
                       <>
+                        {guestCredentialFields}
                         <Form.Item
                           name="runtimeControlPlaneBaseURL"
                           label={localeText(
@@ -1738,58 +1809,63 @@ export function VirtualizationVmsPage() {
                         </Form.Item>
                         {enableCloudInit ? (
                           <>
-                            {createProvider === 'pve' ? (
-                              <div className="soha-vrt-form-grid soha-vrt-form-grid--2">
-                                <Form.Item
-                                  name="pveCloudInitUser"
-                                  label={localeText(
-                                    localeCode,
-                                    'Cloud-Init 用户名',
-                                    'Cloud-Init username',
-                                  )}
-                                >
-                                  <Input placeholder="ubuntu" />
-                                </Form.Item>
-                                <Form.Item name="pveSnippetStorage" label="Snippet Storage">
-                                  {pveSnippetStorageOptions.length > 0 ? (
-                                    <Select
-                                      allowClear
-                                      options={pveSnippetStorageOptions}
-                                      placeholder={localeText(
+                            {guestCredentialFields}
+                            {!managedGuestAccess ? (
+                              <>
+                                {createProvider === 'pve' ? (
+                                  <div className="soha-vrt-form-grid soha-vrt-form-grid--2">
+                                    <Form.Item
+                                      name="pveCloudInitUser"
+                                      label={localeText(
                                         localeCode,
-                                        '选择支持 snippets 的存储',
-                                        'Select storage with snippets support',
+                                        'Cloud-Init 用户名',
+                                        'Cloud-Init username',
                                       )}
-                                    />
-                                  ) : (
-                                    <Input placeholder="local" />
-                                  )}
-                                </Form.Item>
-                                <Form.Item name="pveCloudInitSSHKeys" label="SSH Keys">
-                                  <Input.TextArea rows={3} placeholder="ssh-rsa AAAA..." />
-                                </Form.Item>
+                                    >
+                                      <Input placeholder="ubuntu" />
+                                    </Form.Item>
+                                    <Form.Item name="pveSnippetStorage" label="Snippet Storage">
+                                      {pveSnippetStorageOptions.length > 0 ? (
+                                        <Select
+                                          allowClear
+                                          options={pveSnippetStorageOptions}
+                                          placeholder={localeText(
+                                            localeCode,
+                                            '选择支持 snippets 的存储',
+                                            'Select storage with snippets support',
+                                          )}
+                                        />
+                                      ) : (
+                                        <Input placeholder="local" />
+                                      )}
+                                    </Form.Item>
+                                    <Form.Item name="pveCloudInitSSHKeys" label="SSH Keys">
+                                      <Input.TextArea rows={3} placeholder="ssh-rsa AAAA..." />
+                                    </Form.Item>
+                                    <Form.Item
+                                      name="pveCICustom"
+                                      label={localeText(
+                                        localeCode,
+                                        'cicustom 引用',
+                                        'cicustom reference',
+                                      )}
+                                    >
+                                      <Input placeholder="user=local:snippets/bootstrap.yaml" />
+                                    </Form.Item>
+                                  </div>
+                                ) : null}
                                 <Form.Item
-                                  name="pveCICustom"
-                                  label={localeText(
-                                    localeCode,
-                                    'cicustom 引用',
-                                    'cicustom reference',
-                                  )}
+                                  name="cloudInit"
+                                  label={
+                                    createProvider === 'pve'
+                                      ? 'Raw Cloud-Init user-data'
+                                      : 'Cloud-Init userData'
+                                  }
                                 >
-                                  <Input placeholder="user=local:snippets/bootstrap.yaml" />
+                                  <Input.TextArea rows={6} placeholder="#cloud-config" />
                                 </Form.Item>
-                              </div>
+                              </>
                             ) : null}
-                            <Form.Item
-                              name="cloudInit"
-                              label={
-                                createProvider === 'pve'
-                                  ? 'Raw Cloud-Init user-data'
-                                  : 'Cloud-Init userData'
-                              }
-                            >
-                              <Input.TextArea rows={6} placeholder="#cloud-config" />
-                            </Form.Item>
                           </>
                         ) : (
                           <Alert
@@ -1952,6 +2028,12 @@ export function VirtualizationVmsPage() {
         )}
         current={resizeStep}
         form={resizeForm}
+        initialValues={{
+          cpu: resizeTarget?.cpu,
+          memoryMiB: resizeTarget?.memoryMiB,
+          disks: [],
+          networks: [],
+        }}
         loading={resizeMutation.isPending}
         open={Boolean(resizeTarget)}
         onClose={() => setResizeTarget(null)}
@@ -1961,7 +2043,8 @@ export function VirtualizationVmsPage() {
             resizeTarget?.capabilities?.includes(VM_CAPABILITIES.diskResize) &&
             payload.rootDiskId &&
             payload.rootDiskSizeGiB &&
-            payload.rootDiskSizeGiB > (selectedRootDisk?.sizeGiB ?? resizeTarget?.diskGiB ?? 0)
+            selectedRootDisk?.sizeGiB &&
+            payload.rootDiskSizeGiB > selectedRootDisk.sizeGiB
               ? [{ id: payload.rootDiskId, sizeGiB: payload.rootDiskSizeGiB, add: false }]
               : []
           const diskChanges = [
@@ -2069,10 +2152,7 @@ export function VirtualizationVmsPage() {
                     }))}
                     onChange={(id) => {
                       const disk = discoveredDisks.find((item) => item.id === id)
-                      resizeForm.setFieldValue(
-                        'rootDiskSizeGiB',
-                        disk?.sizeGiB ?? resizeTarget?.diskGiB,
-                      )
+                      resizeForm.setFieldValue('rootDiskSizeGiB', disk?.sizeGiB)
                     }}
                   />
                 </Form.Item>
@@ -2081,10 +2161,13 @@ export function VirtualizationVmsPage() {
                   label={localeText(localeCode, '系统盘目标容量 GiB', 'Target root disk size GiB')}
                 >
                   <InputNumber
-                    min={selectedRootDisk?.sizeGiB ?? resizeTarget?.diskGiB ?? 1}
+                    min={selectedRootDisk?.sizeGiB ?? 1}
                     precision={0}
                     className="soha-vrt-fill"
-                    disabled={!resizeTarget?.capabilities?.includes(VM_CAPABILITIES.diskResize)}
+                    disabled={
+                      !resizeTarget?.capabilities?.includes(VM_CAPABILITIES.diskResize) ||
+                      !selectedRootDisk?.sizeGiB
+                    }
                   />
                 </Form.Item>
                 <Form.List name="disks">

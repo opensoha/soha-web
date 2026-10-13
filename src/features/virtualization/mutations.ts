@@ -8,6 +8,7 @@ import { computeKeys } from '@/features/compute'
 import { virtualizationApi } from './virtualization-api'
 import { virtualizationKeys, virtualizationMutationKeys } from './keys'
 import type {
+  VirtualizationCapacityPolicyInput, VirtualizationCapacityInput, VirtualMachineAccessBindingInput, VirtualMachineSSHSessionInput,
   VirtualizationWorkerPoolInput,
   VirtualizationWorkerCreateInput,
 } from '@opensoha/contracts/gen/ts/sohaapi'
@@ -114,6 +115,11 @@ function invalidateOperationCaches(queryClient: QueryClient, operations: Operati
 }
 
 export const virtualizationMutations = {
+  saveCapacityPolicy: (queryClient: QueryClient) => mutationOptions({mutationKey:virtualizationMutationKeys.cluster('capacity-policy'),mutationFn:({id,input}:{id:string;input:VirtualizationCapacityPolicyInput})=>virtualizationApi.saveCapacityPolicy(id,input),onSuccess:(_response,{id})=>invalidateVirtualizationQueries(queryClient,[virtualizationKeys.capacityPolicy(id)])}),
+  checkCapacity: () => mutationOptions({mutationKey:virtualizationMutationKeys.vm('capacity-check'),mutationFn:(input:VirtualizationCapacityInput)=>virtualizationApi.checkCapacity(input)}),
+  saveAccessBinding: (queryClient: QueryClient) => mutationOptions({mutationKey:virtualizationMutationKeys.vm('access-binding'),mutationFn:({id,input}:{id:string;input:VirtualMachineAccessBindingInput})=>virtualizationApi.saveAccessBinding(id,input),onSuccess:(_response,{id})=>invalidateVirtualizationQueries(queryClient,[virtualizationKeys.accessBinding(id)])}),
+  createSSHSession: () => mutationOptions({mutationKey:virtualizationMutationKeys.vm('ssh-session'),mutationFn:({id,input}:{id:string;input:VirtualMachineSSHSessionInput})=>virtualizationApi.createSSHSession(id,input)}),
+  closeSSHSession: (queryClient: QueryClient) => mutationOptions({mutationKey:virtualizationMutationKeys.vm('ssh-close'),mutationFn:(id:string)=>virtualizationApi.closeSSHSession(id),onSuccess:(_response,id)=>invalidateVirtualizationQueries(queryClient,[virtualizationKeys.sshSession(id)])}),
   saveWorkerPool: (queryClient: QueryClient) =>
     mutationOptions({
       mutationKey: virtualizationMutationKeys.cluster('save-worker-pool'),

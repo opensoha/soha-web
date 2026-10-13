@@ -65,6 +65,7 @@ import {
   getRouteWorkbenchId,
   getRouteWorkspace,
   resolveRouteMenuId,
+  canAccessRoute,
   type WorkbenchId,
 } from '@/routes/meta'
 import { getNormalizedBranding, useBrandingSettings } from '@/features/settings'
@@ -397,7 +398,7 @@ function buildWorkbenchOptions(localeCode: 'zh_CN' | 'en_US'): WorkbenchOption[]
         key: 'ai',
         label: 'AI Workbench',
         description: 'Investigation, automation, tools, and skills',
-        icon: <RobotOutlined />,
+        icon: <img src="/heya-avatar.svg" width={24} height={24} alt="" />,
       },
       {
         key: 'security',
@@ -470,11 +471,15 @@ function WorkbenchSwitcher({
   current,
   onSelect,
   options,
+  onAssistant,
+  assistantLabel,
 }: {
   collapsed: boolean
   current: WorkbenchOption
   onSelect: (workbench: WorkbenchOption['key']) => void
   options: WorkbenchOption[]
+  onAssistant?: () => void
+  assistantLabel?: string
 }) {
   const dropdownItems: MenuProps['items'] = options.map((option) => ({
     key: option.key,
@@ -487,6 +492,20 @@ function WorkbenchSwitcher({
       </div>
     ),
   }))
+  if (onAssistant)
+    dropdownItems.splice(Math.max(0, options.findIndex((option) => option.key === 'home') + 1), 0, {
+      key: 'ai-assistant',
+      label: (
+        <div className="soha-workspace-option">
+          <span className="soha-workspace-option__icon">
+            <RobotOutlined />
+          </span>
+          <span className="soha-workspace-option__copy">
+            <span className="soha-workspace-option__label">{assistantLabel}</span>
+          </span>
+        </div>
+      ),
+    })
 
   const trigger = (
     <Button aria-label={current.label} className="soha-workbench-switcher" type="text">
@@ -497,13 +516,13 @@ function WorkbenchSwitcher({
           <span className="soha-workbench-switcher__desc">{current.description}</span>
         </span>
       ) : null}
-      {!collapsed && options.length > 1 ? (
+      {!collapsed && (options.length > 1 || onAssistant) ? (
         <DownOutlined className="soha-workbench-switcher__arrow" />
       ) : null}
     </Button>
   )
 
-  if (options.length <= 1) {
+  if (options.length <= 1 && !onAssistant) {
     return trigger
   }
 
@@ -513,7 +532,10 @@ function WorkbenchSwitcher({
         items: dropdownItems,
         selectable: true,
         selectedKeys: [current.key],
-        onClick: ({ key }) => onSelect(String(key) as WorkbenchOption['key']),
+        onClick: ({ key }) =>
+          key === 'ai-assistant'
+            ? onAssistant?.()
+            : onSelect(String(key) as WorkbenchOption['key']),
       }}
       placement="bottomLeft"
       trigger={['click']}
@@ -1067,6 +1089,12 @@ export function AppLayout() {
                       <WorkbenchSwitcher
                         collapsed={sidebarCollapsed}
                         current={accountWorkbenchOption}
+                        assistantLabel="Heya"
+                        onAssistant={
+                          canAccessRoute(getRouteMeta('/heya'), snapshot)
+                            ? () => navigate('/heya')
+                            : undefined
+                        }
                         options={[...workbenchOptions, accountWorkbenchOption]}
                         onSelect={(workbench) => {
                           if (workbench === 'account') {
@@ -1101,6 +1129,12 @@ export function AppLayout() {
                         <WorkbenchSwitcher
                           collapsed={sidebarCollapsed}
                           current={currentWorkbenchOption}
+                          assistantLabel="Heya"
+                          onAssistant={
+                            canAccessRoute(getRouteMeta('/heya'), snapshot)
+                              ? () => navigate('/heya')
+                              : undefined
+                          }
                           options={workbenchOptions}
                           onSelect={(workbench) => {
                             if (workbench === 'account') return

@@ -3,9 +3,22 @@ import {
   replayArtifactsForMessage,
   thoughtChainStatus,
   toolCallSummaryText,
+  toolExecutionLabel,
+  toolExecutionSummary,
 } from './stream-presentation'
 
 describe('tool execution presentation', () => {
+  it('names built-in actions consistently and preserves unknown tool identities', () => {
+    expect(toolExecutionLabel('knowledge.search')).toBe('检索知识库')
+    expect(toolExecutionLabel('agent.delegate')).toBe('专业只读核验')
+    expect(toolExecutionLabel('custom.read')).toBe('custom.read')
+    expect(
+      toolExecutionSummary({ toolName: 'knowledge.search', summary: 'knowledge.search executed' }),
+    ).toBe('')
+    expect(toolExecutionSummary({ toolName: 'knowledge.search', summary: '找到维护窗口' })).toBe(
+      '找到维护窗口',
+    )
+  })
   it('counts persisted and streamed outcomes consistently without treating unknown outcomes as success', () => {
     const statuses = [
       'completed',

@@ -21,7 +21,15 @@ const EXTERNAL_AGENT_REPLAY_SOURCE = 'agent-run-replay'
 export function isExternalAgentRun(run: WorkbenchAgentRun) {
   const providerKind = run.providerKind.trim().toLowerCase()
   const providerId = run.providerId.trim().toLowerCase()
-  return providerKind !== 'internal' && providerId !== 'internal'
+  return !isNativeAgentRun(run) && providerKind !== 'internal' && providerId !== 'internal'
+}
+
+export function isNativeAgentRun(run: WorkbenchAgentRun) {
+  return run.providerKind.trim().toLowerCase() === 'native' || run.executionOwner === 'native'
+}
+
+export function isDurableAgentRun(run: WorkbenchAgentRun) {
+  return isNativeAgentRun(run) || isExternalAgentRun(run)
 }
 
 export function isAwaitingAgentCancellation(run: WorkbenchAgentRun) {
@@ -33,6 +41,19 @@ export function isRunningExternalAgentRun(run: WorkbenchAgentRun) {
     isExternalAgentRun(run) &&
     (isRunningWorkbenchAgentStatus(run.status) || isAwaitingAgentCancellation(run))
   )
+}
+
+export function isRunningAgentRun(run: WorkbenchAgentRun) {
+  return (
+    isDurableAgentRun(run) &&
+    (isRunningWorkbenchAgentStatus(run.status) || isAwaitingAgentCancellation(run))
+  )
+}
+
+export function isFinalAgentRunMessage(item: WorkbenchMessage | ConversationMessage) {
+  if (item.role === 'user') return false
+  const status = metadataAgentStatus(item.metadata)
+  return !status || !isRunningWorkbenchAgentStatus(status.status)
 }
 
 export function isExternalAgentRunReplayMessage(item: ConversationMessage) {
@@ -62,7 +83,13 @@ export function agentRunTimestamp(run: WorkbenchAgentRun) {
 }
 
 function agentRunMessageCreatedAt(run: WorkbenchAgentRun) {
-  return run.startedAt || run.queuedAt || run.createdAt || run.updatedAt || new Date().toISOString()
+  const createdAt =
+    run.startedAt || run.queuedAt || run.createdAt || run.updatedAt || new Date().toISOString()
+  const queued = new Date(run.queuedAt ?? '').getTime()
+  if (Number.isFinite(queued) && new Date(createdAt).getTime() <= queued) {
+    return new Date(queued + 1).toISOString()
+  }
+  return createdAt
 }
 
 export function messageAgentRunRefs(item: WorkbenchMessage | ConversationMessage) {
@@ -128,7 +155,10 @@ function agentRunStatusReplayEvent(
 }
 
 export function sortedAgentRunReplayEvents(run: WorkbenchAgentRun, sessionId: string) {
-  return [agentRunStatusReplayEvent(run, sessionId), ...agentRunWorkbenchEvents(run)].sort(
+  return [
+    agentRunStatusReplayEvent(run, sessionId),
+    ...(isNativeAgentRun(run) ? [] : agentRunWorkbenchEvents(run)),
+  ].sort(
     (left, right) =>
       left.sequence - right.sequence ||
       left.createdAt.localeCompare(right.createdAt) ||
@@ -175,6 +205,8 @@ function agentRunReplayMetadata(run: WorkbenchAgentRun, state: WorkbenchStreamSt
     agentRunId: run.id,
     externalRunId: run.externalRunId,
     agentProviderId: run.providerId,
+    agentPhase: isAwaitingAgentCancellation(run) ? 'cancelling' : run.phase,
+    agentStopReason: run.stopReason,
     agentStatus: isAwaitingAgentCancellation(run)
       ? agentRunStatusSnapshot(run, state)
       : (metadataAgentStatus(metadata) ?? agentRunStatusSnapshot(run, state)),
@@ -183,18 +215,9 @@ function agentRunReplayMetadata(run: WorkbenchAgentRun, state: WorkbenchStreamSt
 }
 
 function agentRunReplayContent(run: WorkbenchAgentRun, state: WorkbenchStreamState) {
-  if (isAwaitingAgentCancellation(run)) return '正在等待执行端确认停止…'
   if (state.message.content) return state.message.content
   if (state.error) return state.error.message
-  if (state.thinking?.summary) return state.thinking.summary
-  switch (canonicalWorkbenchAgentStatus(run.status)) {
-    case 'queued':
-      return '外部 Agent 已排队，等待 runner 接收。'
-    case 'running':
-      return '助手正在处理当前请求。'
-    default:
-      return '正在思考...'
-  }
+  return isRunningAgentRun(run) ? '' : state.thinking?.summary || ''
 }
 
 export function agentRunReplayMessage(

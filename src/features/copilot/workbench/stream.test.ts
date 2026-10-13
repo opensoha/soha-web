@@ -401,6 +401,56 @@ describe('workbench stream helpers', () => {
     )
   })
 
+  it('accepts a durable Native run handoff without treating it as completion', async () => {
+    const event: WorkbenchStreamEvent = {
+      id: 'evt-queued',
+      sessionId: 'session-1',
+      runId: 'native-1',
+      sequence: 1,
+      createdAt,
+      type: 'agent.status',
+      providerId: 'internal',
+      providerKind: 'native',
+      status: 'queued',
+    }
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`))
+        controller.close()
+      },
+    })
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response(body)))
+    authMocks.getStoredAccessToken.mockReturnValue(null)
+    const received = vi.fn()
+    await streamWorkbenchMessage('/stream', { content: 'hello', requestId: 'request-1' }, received)
+    expect(received).toHaveBeenCalledWith(event)
+    const state = reduceWorkbenchStreamState(createWorkbenchStreamState(), event)
+    expect(state.done).toBe(false)
+    expect(state.agentStatus?.runId).toBe('native-1')
+  })
+
+  it('replaces an interrupted model attempt when a new message ID begins', () => {
+    const delta: WorkbenchStreamEvent = {
+      id: 'delta-1',
+      sessionId: 'session-1',
+      messageId: 'run:model:1',
+      sequence: 1,
+      createdAt,
+      type: 'message.delta',
+      role: 'assistant',
+      contentDelta: 'partial attempt',
+    }
+    const state = reduceWorkbenchStreamState(createWorkbenchStreamState(), delta)
+    const resumed = reduceWorkbenchStreamState(state, {
+      ...delta,
+      id: 'delta-2',
+      messageId: 'run:model:2',
+      sequence: 2,
+      contentDelta: 'new answer',
+    })
+    expect(resumed.message.content).toBe('new answer')
+  })
+
   it('classifies malformed SSE data as a retryable transport error', async () => {
     const body = new ReadableStream<Uint8Array>({
       start(controller) {

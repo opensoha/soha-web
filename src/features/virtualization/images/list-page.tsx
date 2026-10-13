@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   App,
   Button,
+  Checkbox,
   Descriptions,
   Form,
   Input,
@@ -74,6 +75,7 @@ function imageResourceType(record: VirtualizationImage, localeCode: 'zh_CN' | 'e
     .trim()
     .toLowerCase()
   if (sourceKind === 'template') return localeText(localeCode, 'VM 模板', 'VM template')
+  if (sourceKind === 'cloud_image') return 'Cloud image'
   if (sourceKind === 'lxc_template' || contentType === 'vztmpl')
     return localeText(localeCode, 'CT 模板', 'CT template')
   if (sourceKind === 'iso' || contentType === 'iso')
@@ -128,6 +130,7 @@ function imageFormValues(record?: VirtualizationImage | null) {
         source: record.source,
         osType: record.osType,
         sizeGiB: record.sizeGiB,
+        config: record.config,
         description: record.description,
       }
     : { provider: 'kubevirt', sourceKind: 'datasource' }
@@ -492,6 +495,7 @@ export function VirtualizationImagesPage({
                   options={
                     imageProvider === 'pve'
                       ? [
+                          { value: 'cloud_image', label: 'PVE cloud image (QCOW2)' },
                           { value: 'template', label: 'PVE template' },
                           { value: 'iso', label: 'PVE ISO' },
                         ]
@@ -519,6 +523,11 @@ export function VirtualizationImagesPage({
                 <Input />
               </Form.Item>
             ) : null}
+            <Form.Item name={['config', 'cloudInitSupported']} valuePropName="checked">
+              <Checkbox>
+                {localeText(localeCode, '已确认镜像支持 cloud-init', 'Cloud-init support verified')}
+              </Checkbox>
+            </Form.Item>
             <div className="soha-vrt-form-grid soha-vrt-form-grid--2">
               <Form.Item
                 name="osType"

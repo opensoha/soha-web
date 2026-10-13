@@ -1,5 +1,12 @@
 import { mutationOptions, type QueryClient } from '@tanstack/react-query'
-import { createSecret, disableSecret, revokeSecretVersion, rotateSecret, updateSecret } from './api'
+import {
+  createSecret,
+  generateSSHKey,
+  disableSecret,
+  revokeSecretVersion,
+  rotateSecret,
+  updateSecret,
+} from './api'
 import { secretKeys } from './keys'
 
 function invalidateSecret(queryClient: QueryClient, secretId?: string) {
@@ -15,6 +22,12 @@ function invalidateSecret(queryClient: QueryClient, secretId?: string) {
 }
 
 export const secretMutations = {
+  generateSSHKey: (queryClient: QueryClient) =>
+    mutationOptions({
+      mutationKey: [...secretKeys.all, 'generate-ssh-key'] as const,
+      mutationFn: generateSSHKey,
+      onSuccess: () => invalidateSecret(queryClient),
+    }),
   create: (queryClient: QueryClient) =>
     mutationOptions({
       mutationKey: [...secretKeys.all, 'create'] as const,

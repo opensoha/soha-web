@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { App, Button, Space, Tag, Typography } from 'antd'
+import { App, Button, Popover, Space, Tag, Typography } from 'antd'
 import type { WorkbenchSource } from '@opensoha/contracts/gen/ts/sohaapi'
 import {
   CopyOutlined,
@@ -7,12 +7,17 @@ import {
   DislikeOutlined,
   BookOutlined,
   BranchesOutlined,
+  SmileOutlined,
+  RollbackOutlined,
 } from '@ant-design/icons'
 import type { ConversationMessage } from '../conversation'
 import {
   metadataAgentStatus,
   metadataSources,
   metadataToolExecutions,
+  toolApprovalId,
+  toolExecutionLabel,
+  toolExecutionSummary,
 } from '../stream-presentation'
 import { MessageApproval } from './message-approval'
 import { MessageSpecialist } from './message-specialist'
@@ -24,6 +29,9 @@ export function MessageActivity({
   onBranch,
   onSaveMemory,
   onFeedback,
+  onReply,
+  reaction,
+  onReaction,
 }: {
   message: ConversationMessage
   hasArtifact: boolean
@@ -31,78 +39,129 @@ export function MessageActivity({
   onBranch?: () => void
   onSaveMemory?: () => void
   onFeedback?: (disposition: 'accepted' | 'rejected') => void
+  onReply?: () => void
+  reaction?: string
+  onReaction?: (emoji: string) => void
 }) {
   const { message } = App.useApp()
   const [view, setView] = useState<'sources' | null>(null)
+  const [reactionOpen, setReactionOpen] = useState(false)
   const sources = metadataSources(item.metadata)
   const tools = metadataToolExecutions(item.metadata)
+  const pending = ['loading', 'updating'].includes(item.deliveryStatus ?? '')
   const terminal = ['succeeded', 'failed', 'cancelled'].includes(
     metadataAgentStatus(item.metadata)?.status ?? '',
   )
   if (item.role !== 'assistant' || item.metadata?.source === 'agent-runtime-queued') return null
+  if (pending && tools.length === 0) return null
   return (
     <div className="soha-ai-workbench__message-activity">
-      <Space size={4} wrap>
-        <Button
-          size="small"
-          type="text"
-          icon={<CopyOutlined />}
-          aria-label="复制回复"
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(item.content)
-              void message.success('已复制回复')
-            } catch {
-              void message.error('复制失败，请手动选择正文。')
-            }
-          }}
-        />
-        {onFeedback ? (
-          <>
+      {!pending ? (
+        <Space size={4} wrap>
+          <Button
+            size="small"
+            type="text"
+            icon={<CopyOutlined />}
+            aria-label="复制回复"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(item.content)
+                void message.success('已复制回复')
+              } catch {
+                void message.error('复制失败，请手动选择正文。')
+              }
+            }}
+          />
+          {onReply ? (
             <Button
               size="small"
               type="text"
-              aria-label="有帮助"
-              icon={<LikeOutlined />}
-              onClick={() => onFeedback('accepted')}
+              icon={<RollbackOutlined />}
+              aria-label="引用回复"
+              onClick={onReply}
             />
+          ) : null}
+          {onReaction ? (
+            <Popover
+              trigger="click"
+              open={reactionOpen}
+              onOpenChange={setReactionOpen}
+              content={
+                <Space size={2}>
+                  {['❤️', '👍', '🎉', '💡', '😂'].map((emoji) => (
+                    <Button
+                      key={emoji}
+                      type="text"
+                      aria-label={`标记 ${emoji}`}
+                      aria-pressed={reaction === emoji}
+                      onClick={() => {
+                        onReaction(emoji)
+                        setReactionOpen(false)
+                      }}
+                    >
+                      {emoji}
+                    </Button>
+                  ))}
+                </Space>
+              }
+            >
+              <Button
+                size="small"
+                type="text"
+                icon={reaction ? undefined : <SmileOutlined />}
+                aria-label="回复表情"
+              >
+                {reaction}
+              </Button>
+            </Popover>
+          ) : null}
+          {onFeedback ? (
+            <>
+              <Button
+                size="small"
+                type="text"
+                aria-label="有帮助"
+                icon={<LikeOutlined />}
+                onClick={() => onFeedback('accepted')}
+              />
+              <Button
+                size="small"
+                type="text"
+                aria-label="有问题"
+                icon={<DislikeOutlined />}
+                onClick={() => onFeedback('rejected')}
+              />
+            </>
+          ) : null}
+          {onSaveMemory ? (
             <Button
               size="small"
               type="text"
-              aria-label="有问题"
-              icon={<DislikeOutlined />}
-              onClick={() => onFeedback('rejected')}
+              aria-label="保存为个人记忆"
+              icon={<BookOutlined />}
+              onClick={onSaveMemory}
             />
-          </>
-        ) : null}
-        {onSaveMemory ? (
-          <Button
-            size="small"
-            type="text"
-            aria-label="保存为个人记忆"
-            icon={<BookOutlined />}
-            onClick={onSaveMemory}
-          />
-        ) : null}
-        {onBranch ? (
-          <Button
-            size="small"
-            type="text"
-            aria-label="从此处分支"
-            icon={<BranchesOutlined />}
-            onClick={onBranch}
-          />
-        ) : null}
-        {sources.length > 0 ? (
-          <Button
-            size="small"
-            type="text"
-            onClick={() => setView(view === 'sources' ? null : 'sources')}
-          >
-            来源
-          </Button>
-        ) : null}
-      </Space>
+          ) : null}
+          {onBranch ? (
+            <Button
+              size="small"
+              type="text"
+              aria-label="从此处开旁聊"
+              icon={<BranchesOutlined />}
+              onClick={onBranch}
+            />
+          ) : null}
+          {sources.length > 0 ? (
+            <Button
+              size="small"
+              type="text"
+              onClick={() => setView(view === 'sources' ? null : 'sources')}
+            >
+              来源
+            </Button>
+          ) : null}
+        </Space>
+      ) : null}
       {view === 'sources' ? (
         <div>
           {sources.map((source) => (
@@ -132,11 +191,7 @@ export function MessageActivity({
           </summary>
           {tools.map((tool) => {
             const related = tool.output?.relatedIds as Record<string, unknown> | undefined
-            const requestId = related?.approvalRequestId ?? related?.confirmationRequestId
-            const approvalId =
-              tool.toolName === 'change.request' && typeof requestId === 'string'
-                ? requestId
-                : undefined
+            const approvalId = toolApprovalId(tool)
             const interrupted = terminal && tool.status === 'running'
             const failed = interrupted || ['failed', 'error'].includes(tool.status)
             const running = !terminal && tool.status === 'running'
@@ -161,18 +216,7 @@ export function MessageActivity({
             ]
               .filter((value): value is string => typeof value === 'string' && !!value)
               .join(' / ')
-            const label =
-              (
-                {
-                  'knowledge.search': '检索知识库',
-                  'k8s.workloads.overview': '读取工作负载概览',
-                  'k8s.nodes.detail': '读取节点详情',
-                  'k8s.services.backends': '检查服务后端',
-                  'artifact.preview': '生成静态草稿',
-                  'change.request': '提交变更申请',
-                  'agent.delegate': '专业只读核验',
-                } as Record<string, string>
-              )[tool.toolName] || tool.toolName
+            const label = toolExecutionLabel(tool.toolName)
             return (
               <details key={tool.id} open={running || failed || !!approvalId}>
                 <summary>
@@ -199,9 +243,9 @@ export function MessageActivity({
                 {target ? (
                   <Typography.Paragraph type="secondary">{target}</Typography.Paragraph>
                 ) : null}
-                {!approvalId ? (
+                {!approvalId && (interrupted || toolExecutionSummary(tool)) ? (
                   <Typography.Paragraph type={failed ? 'danger' : 'secondary'}>
-                    {interrupted ? '任务已结束，未收到该步骤的结果。' : tool.summary}
+                    {interrupted ? '任务已结束，未收到该步骤的结果。' : toolExecutionSummary(tool)}
                   </Typography.Paragraph>
                 ) : null}
                 {approvalId ? <MessageApproval id={approvalId} /> : null}

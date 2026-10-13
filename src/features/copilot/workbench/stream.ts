@@ -28,6 +28,7 @@ export interface WorkbenchStreamAgentStatusState {
   providerId: string
   providerKind: string
   status: string
+  runId?: string
 }
 
 export interface WorkbenchStreamErrorState {
@@ -141,6 +142,15 @@ function isTerminalWorkbenchStreamEvent(event: WorkbenchStreamEvent) {
   )
 }
 
+export function isNativeRunHandoff(event: WorkbenchStreamEvent) {
+  return (
+    event.type === 'agent.status' &&
+    event.providerKind === 'native' &&
+    Boolean(event.runId) &&
+    isRunningWorkbenchAgentStatus(event.status)
+  )
+}
+
 export function workbenchStreamEventKey(
   event: Pick<WorkbenchStreamEvent, 'id' | 'sessionId' | 'sequence'> & { runId?: string },
 ) {
@@ -202,7 +212,7 @@ export function reduceWorkbenchStreamState(
           ...state.message,
           id: event.messageId ?? state.message.id,
           sessionId: event.sessionId,
-          content: `${state.message.content}${event.contentDelta}`,
+          content: `${event.messageId && state.message.id && event.messageId !== state.message.id ? '' : state.message.content}${event.contentDelta}`,
           done: false,
         },
       }
@@ -265,6 +275,7 @@ export function reduceWorkbenchStreamState(
           providerId: event.providerId,
           providerKind: event.providerKind,
           status: canonicalWorkbenchAgentStatus(event.status),
+          ...(event.runId ? { runId: event.runId } : {}),
         },
       }
     case 'error':
@@ -327,9 +338,11 @@ export async function streamWorkbenchMessage(
   const decoder = new TextDecoder()
   let rest = ''
   let terminalReceived = false
+  let nativeRunHandedOff = false
 
   const dispatch = async (event: WorkbenchStreamEvent) => {
     terminalReceived ||= isTerminalWorkbenchStreamEvent(event)
+    nativeRunHandedOff ||= isNativeRunHandoff(event)
     await onEvent(event)
   }
 
@@ -361,7 +374,7 @@ export async function streamWorkbenchMessage(
     for (const event of parsed.events) {
       await dispatch(event)
     }
-    if (!terminalReceived) {
+    if (!terminalReceived && !nativeRunHandedOff) {
       throw new WorkbenchStreamTransportError(
         'Workbench stream ended before a terminal event.',
         'stream_incomplete',

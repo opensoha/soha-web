@@ -1,4 +1,10 @@
-import { test as base, expect, type Page, type BrowserContext } from '@playwright/test'
+import {
+  test as base,
+  expect,
+  type Page,
+  type BrowserContext,
+  type Request,
+} from '@playwright/test'
 import { baselineResponse } from './baseline-data'
 
 export type BrowserEvidence = {
@@ -8,7 +14,7 @@ export type BrowserEvidence = {
   requests: string[]
 }
 type MockResponse = { body: unknown; status?: number } | undefined
-export type MockResolver = (url: URL, method: string) => MockResponse
+export type MockResolver = (url: URL, method: string, request: Request) => MockResponse
 
 export async function installMocks(context: BrowserContext, page: Page, resolve?: MockResolver) {
   const evidence: BrowserEvidence = { fatal: [], failures: [], missing: [], requests: [] }
@@ -35,7 +41,7 @@ export async function installMocks(context: BrowserContext, page: Page, resolve?
     }
     if (!url.pathname.startsWith('/api/')) return route.continue()
     evidence.requests.push(url.pathname + url.search)
-    const selected = resolve?.(url, request.method())
+    const selected = resolve?.(url, request.method(), request)
     const body = baselineResponse(url.pathname)
     const scoped =
       !url.pathname.includes('/workloads/deployments/api/') ||

@@ -5,7 +5,13 @@ import { gatewayApi } from '../../gateway/api'
 import { gatewayQueries } from '../../gateway/queries'
 import { gatewayKeys } from '../../gateway/keys'
 
-export function MessageApproval({ id }: { id: string }) {
+export function MessageApproval({
+  id,
+  continuesTask = false,
+}: {
+  id: string
+  continuesTask?: boolean
+}) {
   const { message, modal } = App.useApp()
   const client = useQueryClient()
   const snapshot = usePermissionSnapshot().data?.data
@@ -136,7 +142,9 @@ export function MessageApproval({ id }: { id: string }) {
       ) : null}
       <Typography.Paragraph type="secondary">
         批准仅执行以上参数。回滚需单独发起申请；本步骤不会自动重试变更。
-        助手本轮已结束，审批结果在此更新；需要后续分析时，请发送新消息。
+        {continuesTask
+          ? '审批结果会继续推进原任务；助手等待领域执行与验收回执后再回答。'
+          : '助手本轮已结束，审批结果在此更新；需要后续分析时，请发送新消息。'}
       </Typography.Paragraph>
     </div>
   )

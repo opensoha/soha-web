@@ -141,6 +141,8 @@ export interface VirtualMachineDevice {
 }
 
 export interface CreateVirtualMachineInput {
+  requireCapacity?: boolean
+  guestAccess?: import('@opensoha/contracts/gen/ts/sohaapi').VirtualMachineGuestAccessInput
   name: string
   connectionId: string
   flavorId?: string

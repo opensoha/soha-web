@@ -211,8 +211,8 @@ The Soha Web graph lives in `graphify-out/` relative to the `soha-web` repositor
 - Use the existing graph when it helps cross-module analysis; ordinary lookup does not require it.
 - Refresh the graph only for broad structural or dependency changes after source edits are
   stable and the worktree contents are understood.
-- Use `graphify update . --force` after intentional deletions or large moves so stale nodes are
-  pruned.
+- Follow the Graphify workflow in the repository AGENTS.md after intentional deletions or
+  large moves. Verify pruning and diagnose shrink guards; do not use `--force` by default.
 - Run graph diagnostics after rebuilding: missing/duplicate node IDs, missing endpoints,
   self-loops, and duplicate/collapsed edges must be visible.
 - Audit new high-degree nodes. Shared contracts and explicit coordinators are acceptable;

@@ -11,6 +11,26 @@ import type { WorkbenchArtifactEntry } from './artifacts'
 
 export type ThoughtChainStatus = 'loading' | 'success' | 'error' | 'abort'
 
+export function toolExecutionSummary(tool: Pick<WorkbenchToolCall, 'toolName' | 'summary'>) {
+  return tool.summary === `${tool.toolName} executed` ? '' : tool.summary || ''
+}
+
+export function toolExecutionLabel(name: string) {
+  return (
+    (
+      {
+        'knowledge.search': '检索知识库',
+        'k8s.workloads.overview': '读取工作负载概览',
+        'k8s.nodes.detail': '读取节点详情',
+        'k8s.services.backends': '检查服务后端',
+        'artifact.preview': '生成静态草稿',
+        'change.request': '提交变更申请',
+        'agent.delegate': '专业只读核验',
+      } as Record<string, string>
+    )[name] || name
+  )
+}
+
 function recordPreview(value: unknown): Record<string, unknown> | undefined {
   if (!value) return undefined
   if (typeof value === 'object' && !Array.isArray(value)) {
@@ -267,7 +287,7 @@ export function streamFallbackContent(state: WorkbenchStreamState, currentConten
   if (state.error) return state.error.message
   if (state.agentStatus?.status === 'failed') return 'Agent 执行失败。'
   if (state.agentStatus?.status === 'cancelled') return '已取消本次回复。'
-  if (state.agentStatus?.status === 'succeeded' && currentContent === '正在思考...')
+  if (state.agentStatus?.status === 'succeeded' && !currentContent)
     return '分析已完成，正在刷新会话。'
   return currentContent
 }
@@ -300,4 +320,9 @@ export function toolCallSummaryText(toolCalls: WorkbenchToolCall[]) {
   ).length
   const failedCount = toolCalls.filter((item) => thoughtChainStatus(item.status) === 'error').length
   return `${toolCalls.length} 个工具调用，${successCount} 成功，${failedCount} 失败`
+}
+export function toolApprovalId(tool: { toolName: string; output?: Record<string, unknown> }) {
+  const related = tool.output?.relatedIds as Record<string, unknown> | undefined
+  const id = related?.approvalRequestId ?? related?.confirmationRequestId
+  return tool.toolName === 'change.request' && typeof id === 'string' ? id : undefined
 }

@@ -1,8 +1,8 @@
 import { expect, it } from 'vitest'
-import { organizationTags, PINNED_SESSION_TAG, sessionProject } from './session-organization'
-it('updates personal organization while preserving unrelated tags and allows removal', () => {
-  const tags = organizationTags(['user-tag', 'soha:project:Old'], ' New ', true)
-  expect(tags).toEqual(['user-tag', PINNED_SESSION_TAG, 'soha:project:New'])
-  expect(sessionProject({ id: '1', title: '', updatedAt: '', metadata: { tags } })).toBe('New')
-  expect(organizationTags(tags, '', false)).toEqual(['user-tag'])
+import { sessionTagsWithPin, PINNED_SESSION_TAG } from './session-organization'
+it('retires project labels while preserving pinning and unrelated tags', () => {
+  const tags = sessionTagsWithPin(['user-tag', 'soha:project:Old', PINNED_SESSION_TAG], true)
+  expect(tags).toEqual(['user-tag', PINNED_SESSION_TAG])
+  expect(sessionTagsWithPin(tags, false)).toEqual(['user-tag'])
+  expect(sessionTagsWithPin(['soha:project:Old', PINNED_SESSION_TAG, 'P1'], false)).toEqual(['P1'])
 })

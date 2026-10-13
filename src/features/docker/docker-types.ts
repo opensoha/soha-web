@@ -123,6 +123,8 @@ export interface DockerHostAgentInstallation {
 }
 
 export interface DockerQuickCreateHostInput {
+  requireCapacity?: boolean
+  guestAccess?: import('@opensoha/contracts/gen/ts/sohaapi').VirtualMachineGuestAccessInput
   name: string
   architecture?: string
   environment?: string

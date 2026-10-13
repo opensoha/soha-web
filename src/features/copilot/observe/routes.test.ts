@@ -4,6 +4,7 @@ import { copilotObserveRouteManifests, copilotObserveRoutes } from './routes'
 
 const routePages = vi.hoisted(() => ({
   chat: () => null,
+  heya: () => null,
   rootCause: () => null,
   performance: () => null,
   operations: () => null,
@@ -27,6 +28,7 @@ const routePages = vi.hoisted(() => ({
 }))
 
 vi.mock('../workbench/pages/chat-page', () => ({ AIWorkbenchChatPage: routePages.chat }))
+vi.mock('../workbench/pages/heya-page', () => ({ HeyaPage: routePages.heya }))
 vi.mock('../workbench/pages/root-cause-page', () => ({
   AIWorkbenchRootCausePage: routePages.rootCause,
 }))
@@ -66,9 +68,15 @@ describe('Copilot Observe route manifests', () => {
       '/ai-workbench/chat',
       '/ai-workbench/root-cause',
       '/ai-workbench/performance',
+      '/heya',
+      '/heya/access',
     ])
     for (const route of focused) {
-      expect(route.meta).toMatchObject({ requiresAuth: true, permissionKey: 'observe.ai.chat' })
+      expect(route.meta).toMatchObject({
+        requiresAuth: true,
+        permissionKey:
+          route.meta.path === '/heya/access' ? 'ai.environments.update' : 'observe.ai.chat',
+      })
     }
   })
   it('loads each canonical UI from its leaf module', async () => {
@@ -91,6 +99,8 @@ describe('Copilot Observe route manifests', () => {
     expect(loaded.get('/ai-workbench/memory')).toBe(routePages.memory)
     expect(loaded.get('/ai-workbench/production-operations')).toBe(routePages.productionOperations)
     expect(loaded.get('/ai-workbench/chat')).toBe(routePages.chat)
+    expect(loaded.get('/heya')).toBe(routePages.heya)
+    expect(loaded.get('/heya/access')).toBe(routePages.heya)
     expect(loaded.get('/ai-workbench/root-cause')).toBe(routePages.rootCause)
     expect(loaded.get('/ai-workbench/performance')).toBe(routePages.performance)
     expect(loaded.get('/ai-workbench/inspection')).toBe(routePages.operations)
@@ -103,7 +113,7 @@ describe('Copilot Observe route manifests', () => {
 
   it('has unique, valid route definitions', () => {
     const routes = copilotObserveRouteManifests.flatMap((manifest) => [...manifest])
-    expect(routes).toHaveLength(23)
+    expect(routes).toHaveLength(25)
     expect(validateRouteDefinitions(routes)).toEqual([])
   })
 })

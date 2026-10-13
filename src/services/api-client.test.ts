@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { clearAuthSession, restoreAuthSession } from '@/features/auth/auth-api'
 import { usePreferencesStore } from '@/stores/preferences-store'
+import { useAuthStore } from '@/stores/auth-store'
 import { api } from './api-client'
 import { API_ERROR_EVENT, type ApiErrorEventDetail } from './api-error'
 
@@ -48,6 +49,77 @@ describe('api client error handling', () => {
     window.removeEventListener(API_ERROR_EVENT, apiErrorListener)
     vi.unstubAllGlobals()
     vi.clearAllMocks()
+  })
+
+  it('refreshes an expired token before returning an unread download response', async () => {
+    const archive = new Response('archive-bytes', {
+      status: 200,
+      headers: { 'content-type': 'application/x-tar', 'x-content-sha256': 'receipt' },
+    })
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ error: { message: 'expired' } }, { status: 401 }))
+      .mockResolvedValueOnce(archive)
+    vi.stubGlobal('fetch', fetchMock)
+    vi.mocked(restoreAuthSession).mockImplementationOnce(async () => {
+      useAuthStore.setState({ accessToken: 'refreshed-token' })
+      return 'authenticated'
+    })
+    const controller = new AbortController()
+    const body = { assistantId: 'assistant', environmentVersion: 2 }
+    const response = await api.postResponse(
+      '/copilot/assistant/environment/export',
+      body,
+      controller.signal,
+    )
+    expect(response).toBe(archive)
+    expect(response.bodyUsed).toBe(false)
+    expect(response.headers.get('x-content-sha256')).toBe('receipt')
+    expect(await response.text()).toBe('archive-bytes')
+    expect(restoreAuthSession).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
+      method: 'POST',
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+    expect(new Headers(fetchMock.mock.calls[1]?.[1]?.headers).get('Authorization')).toBe(
+      'Bearer refreshed-token',
+    )
+    expect(clearAuthSession).not.toHaveBeenCalled()
+  })
+
+  it.each(['unavailable', 'unauthenticated'] as const)(
+    'retains shared download error handling when refresh is %s',
+    async (status) => {
+      vi.mocked(restoreAuthSession).mockResolvedValueOnce(status)
+      const fetchMock = vi.fn(async () =>
+        jsonResponse({ error: { message: 'expired' } }, { status: 401 }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      await expect(
+        api.postResponse('/export', {}, new AbortController().signal),
+      ).rejects.toMatchObject({
+        status: status === 'unavailable' ? 0 : 401,
+      })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      expect(restoreAuthSession).toHaveBeenCalledTimes(1)
+      expect(clearAuthSession).toHaveBeenCalledTimes(status === 'unavailable' ? 0 : 1)
+    },
+  )
+
+  it('does not retry or clear authentication when a download is aborted', async () => {
+    const aborted = new DOMException('Aborted', 'AbortError')
+    const fetchMock = vi.fn(async () => {
+      throw aborted
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(api.postResponse('/export', {}, new AbortController().signal)).rejects.toBe(
+      aborted,
+    )
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(restoreAuthSession).not.toHaveBeenCalled()
+    expect(clearAuthSession).not.toHaveBeenCalled()
   })
 
   it('reads XML as text while retaining shared authentication and errors', async () => {

@@ -8,7 +8,7 @@ import {
   ThunderboltOutlined,
   ToolOutlined,
 } from '@ant-design/icons'
-import type { WorkbenchMode, WorkbenchSession } from './types'
+import type { WorkbenchMode } from './types'
 
 export const WORKBENCH_MODE_OPTIONS = [
   { value: 'general', label: '通用聊天' },
@@ -56,9 +56,7 @@ export function modeDescription(mode?: string) {
   }
 }
 
-export function defaultAnalysisQuestion(mode: WorkbenchMode, session?: WorkbenchSession) {
-  const summary = session?.metadata?.summary?.trim()
-  if (summary) return summary
+export function defaultAnalysisQuestion(mode: WorkbenchMode) {
   switch (mode) {
     case 'root_cause':
       return '请基于当前会话范围执行一次根因分析，输出证据、假设、影响面和下一步动作。'
@@ -71,18 +69,6 @@ export function defaultAnalysisQuestion(mode: WorkbenchMode, session?: Workbench
     default:
       return '请把当前会话上下文转成结构化分析，输出证据、结论和下一步建议。'
   }
-}
-
-export function defaultAnalysisProfileIdForMode(
-  mode: WorkbenchMode,
-  profiles: Array<{ id: string; mode: string; enabled: boolean }>,
-) {
-  const expectedMode = mode === 'inspection_review' ? 'inspection' : mode
-  return (
-    profiles.find((item) => item.enabled && item.mode === expectedMode)?.id ??
-    profiles.find((item) => item.enabled)?.id ??
-    ''
-  )
 }
 
 export function modeIcon(mode?: string) {

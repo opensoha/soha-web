@@ -1,21 +1,27 @@
+import { PersonalFeed } from './components/personal-feed'
+import { MessageSearch, rememberChatVisit } from './components/message-search'
+import type { BubbleListRef } from '@ant-design/x/es/bubble/interface'
+import type { WorkbenchMessageWindow } from '@opensoha/contracts/gen/ts/sohaapi'
 import { evaluationLifecycleApi } from '../evaluation-lifecycle/api'
 import { ChatMemory } from './components/chat-memory'
-import { PINNED_SESSION_TAG, sessionProject, organizationTags } from './session-organization'
+import { PINNED_SESSION_TAG, sessionTagsWithPin } from './session-organization'
 import { MessageActivity } from './components/message-activity'
+import { MessageProgress } from './components/message-progress'
 import { WorkbenchMarkdown, safeSourceURL } from './components/markdown'
 import { StaticArtifactView } from './components/static-artifact'
-import { ChatContextSelection } from './components/context-selection'
+import { ChatContextSelection, ChatContextTags } from './components/context-selection'
 import { contextSnapshotSummary } from './context-selection'
 import { workbenchApi } from './api'
-import { agentUnavailableReason, preferredExternalAgent } from './agent-selection'
+import { agentUnavailableReason, taskAgentUnavailableReason } from './agent-selection'
+import { observeQueries } from '../observe/queries'
+import { observabilitySignalQueries } from '@/features/observability'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  BookOutlined,
   CommentOutlined,
   CopyOutlined,
-  ControlOutlined,
   DeleteOutlined,
   PlusOutlined,
-  SettingOutlined,
   EditOutlined,
   LinkOutlined,
   ReloadOutlined,
@@ -23,6 +29,15 @@ import {
 import { Bubble, Conversations, Prompts, Sources, ThoughtChain, Welcome } from '@ant-design/x'
 import type { SenderRef } from '@ant-design/x/es/sender'
 import '../copilot-pages.css'
+import './assistant.css'
+import { useChatDraft } from './hooks/use-chat-draft'
+import { useNativeRequestRecovery } from './hooks/use-native-request-recovery'
+import { AssistantPanel, type AssistantTab } from './components/assistant-panel'
+import { AssistantAvatar } from './components/assistant-avatar'
+import { AssistantChatResult, UserMessageContent } from './components/assistant-chat-result'
+import type { AssistantChatTask } from './types'
+import { useAuthStore } from '@/stores/auth-store'
+import { downloadBlob } from '@/utils/download'
 import {
   Alert,
   App,
@@ -41,17 +56,17 @@ import {
   Tooltip,
   Typography,
 } from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { systemKeys } from '@/features/system'
 import type {
-  WorkbenchModelPreferences,
   WorkbenchSendMessageStreamRequest,
-  WorkbenchContextSelection,
   WorkbenchSource,
+  AgentRunEventPage,
+  WorkbenchTaskIntent,
 } from '@opensoha/contracts/gen/ts/sohaapi'
 import {
   getAIModelSettingsPath,
@@ -64,9 +79,11 @@ import { observeKeys } from '../observe/keys'
 import {
   agentRunReplayMessage,
   agentRunTimestamp,
-  isExternalAgentRun,
+  isDurableAgentRun,
+  isNativeAgentRun,
+  isFinalAgentRunMessage,
   isExternalAgentRunReplayMessage,
-  isRunningExternalAgentRun,
+  isRunningAgentRun,
   messageAgentRunRefs,
   sortedAgentRunReplayEvents,
 } from './agent-run-replay'
@@ -83,6 +100,7 @@ import {
 } from './artifacts'
 import {
   bubbleItems,
+  assistantReactionForMessage,
   isLegacyPlatformContextMessage,
   mergeConversationMessages,
   modelStatusDetail,
@@ -95,16 +113,14 @@ import { useWorkbenchRouteState } from './hooks/use-workbench-route-state'
 import { workbenchKeys } from './keys'
 import {
   RUNNABLE_ANALYSIS_MODE_OPTIONS,
-  WORKBENCH_MODE_OPTIONS,
-  defaultAnalysisProfileIdForMode,
   defaultAnalysisQuestion,
   modeDescription,
-  modeIcon,
   modeLabel,
 } from './mode'
 import { workbenchMutations } from './mutations'
 import { workbenchQueries } from './queries'
-import { WorkbenchPanel, WorkbenchShell } from './components/shell'
+import { MobileAssistantNav, WorkbenchPanel, WorkbenchShell } from './components/shell'
+import { AnimatedAssistantIcon } from './components/animated-icon'
 import { WorkbenchComposer } from './components/composer'
 import { SessionReferenceReader } from './components/session-reference-reader'
 import { CHAT_STARTERS } from './composer-commands'
@@ -144,18 +160,32 @@ import {
   workbenchStreamEventKey,
   type WorkbenchStreamState,
 } from './stream'
-import type { WorkbenchMode, WorkbenchSession, WorkbenchSessionScope } from './types'
+import type { WorkbenchMode, WorkbenchSessionScope } from './types'
 
 const { Paragraph, Text } = Typography
 
-type InspectorView = 'context' | 'evidence' | 'hypotheses' | 'actions'
+function combineNativeEventPages(
+  results: Array<{
+    data?: { runId: string; afterSequence: number; page: AgentRunEventPage }
+    isError: boolean
+  }>,
+) {
+  return {
+    pages: results.flatMap((result) => (result.data ? [result.data] : [])),
+    isError: results.some((result) => result.isError),
+  }
+}
+
+type InspectorView = 'evidence' | 'hypotheses' | 'actions'
+type TaskCapability = NonNullable<WorkbenchTaskIntent['capabilities']>[number]
 type WorkbenchStreamRetryInput = {
   sessionId: string
-  request: WorkbenchSendMessageStreamRequest
+  request: WorkbenchSendMessageStreamRequest & { assistantTask?: AssistantChatTask }
   closeAnalysisOnSuccess?: boolean
   navigateMode?: WorkbenchMode
 }
 type WorkbenchStreamSubmission = WorkbenchStreamRetryInput & {
+  controller: AbortController
   pendingMessages: { user: ConversationMessage; assistant: ConversationMessage }
 }
 function formatSessionTimestamp(value?: string) {
@@ -184,18 +214,15 @@ function buildScopeSummary(scope?: WorkbenchSessionScope) {
   )
 }
 
-function isSyntheticSession(item: WorkbenchSession) {
-  const title = String(item.title || '')
-    .trim()
-    .toLowerCase()
-  return title === 'new chat' || title === '新对话' || title.startsWith('e2e-')
-}
-
 export function AIWorkbenchController() {
   const { message, modal } = App.useApp()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const {
+    personal,
+    feedView,
+    messageAnchor,
+    messageSearchQuery,
     draftScope,
     isExplicitRouteMode,
     location,
@@ -216,12 +243,33 @@ export function AIWorkbenchController() {
     permissionSnapshotQuery.data?.data,
     'observe.ai.root-cause.run',
   )
+  const canViewMonitoring = hasPermission(
+    permissionSnapshotQuery.data?.data,
+    'observe.monitoring.view',
+  )
+  const canViewAI = hasPermission(permissionSnapshotQuery.data?.data, 'observe.ai.view')
+  const canInvokeGateway = hasPermission(permissionSnapshotQuery.data?.data, 'ai.gateway.invoke')
   const autoSessionScopeKeyRef = useRef<string>('')
-  const routeModePatchKeyRef = useRef<string>('')
+  const profileFocusPending = useRef(false)
   const senderRef = useRef<SenderRef>(null)
-  const streamAbortRef = useRef<AbortController | null>(null)
+  const focusAfterFeed = useRef(false)
+  useEffect(() => {
+    if (feedView || !focusAfterFeed.current) return
+    focusAfterFeed.current = false
+    senderRef.current?.focus()
+  }, [feedView])
+  const activeSessionRef = useRef(requestedSessionId)
+  useEffect(() => {
+    activeSessionRef.current = requestedSessionId
+  }, [requestedSessionId])
+  const streamAbortRef = useRef<Record<string, AbortController>>({})
+  const [streamingSessions, setStreamingSessions] = useState<string[]>([])
+  const currentStreamPending = streamingSessions.includes(requestedSessionId ?? '')
   const externalRunReplayRef = useRef<
-    Record<string, { state: WorkbenchStreamState; seenEventKeys: Set<string> }>
+    Record<
+      string,
+      { state: WorkbenchStreamState; seenEventKeys: Set<string>; afterSequence?: number }
+    >
   >({})
   const terminalRunRefreshRef = useRef<Record<string, string>>({})
 
@@ -229,26 +277,46 @@ export function AIWorkbenchController() {
 
   const [renameOpen, setRenameOpen] = useState(false)
   const [renameValue, setRenameValue] = useState('')
-  const [renameProject, setRenameProject] = useState('')
   const [renamePinned, setRenamePinned] = useState(false)
-  const [projectFilter, setProjectFilter] = useState<string | undefined>()
   const [renameTargetId, setRenameTargetId] = useState<string>()
   const [panel, setPanel] = useState<
-    'settings' | 'toolset' | 'thinking' | 'inspector' | 'history' | 'reference' | 'source' | null
-  >(null)
+    | 'assistant'
+    | 'settings'
+    | 'toolset'
+    | 'thinking'
+    | 'inspector'
+    | 'history'
+    | 'reference'
+    | 'source'
+    | null
+  >(() => (window.matchMedia('(min-width: 992px)').matches && personal ? 'assistant' : null))
+  const [assistantTab, setAssistantTab] = useState<AssistantTab>('activity')
+  const [sideOpen, setSideOpen] = useState(false)
+  const [sideTitle, setSideTitle] = useState('')
+  // ponytail: reactions stay in this page; add durable storage when cross-device sync is needed.
+  const [reactions, setReactions] = useState<Record<string, string>>({})
   const [selectedSource, setSelectedSource] = useState<WorkbenchSource>()
   const openSource = useCallback((source: WorkbenchSource) => {
     setSelectedSource(source)
     setPanel('source')
   }, [])
-  const [sessionSearch, setSessionSearch] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const bubbleRef = useRef<BubbleListRef>(null)
+  const historyKey = `${requestedSessionId}:${messageAnchor}`
+  const [history, setHistory] = useState<{
+    key: string
+    before: WorkbenchMessageWindow[]
+    after: WorkbenchMessageWindow[]
+  }>({ key: '', before: [], after: [] })
   const [referenceSessionId, setReferenceSessionId] = useState('')
-  const [inspectorView, setInspectorView] = useState<InspectorView>('context')
+  const [inspectorView, setInspectorView] = useState<InspectorView>('evidence')
   const [draftMode, setDraftMode] = useState<WorkbenchMode>(initialMode)
   const [analysisOpen, setAnalysisOpen] = useState(false)
-  const [analysisMode, setAnalysisMode] = useState<WorkbenchMode>(initialMode)
+  const [analysisCapabilities, setAnalysisCapabilities] = useState<TaskCapability[]>([])
+  const analysisMode: WorkbenchMode = analysisCapabilities[0] ?? 'root_cause'
+  const [analysisIntent, setAnalysisIntent] = useState<WorkbenchTaskIntent>({})
+  const [analysisAgentProviderId, setAnalysisAgentProviderId] = useState('internal')
   const [analysisQuestion, setAnalysisQuestion] = useState('')
-  const [selectedAnalysisProfileId, setSelectedAnalysisProfileId] = useState('')
   const [selectedAgentProviderId, setSelectedAgentProviderId] = useState('internal')
   const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([])
   const [selectedAdapterIds, setSelectedAdapterIds] = useState<string[]>([])
@@ -256,22 +324,38 @@ export function AIWorkbenchController() {
   const [budgetOverrides, setBudgetOverrides] = useState<Record<string, number>>({})
   const [scopeOverrides, setScopeOverrides] = useState<Partial<WorkbenchSessionScope>>({})
   const [memoryDraft, setMemoryDraft] = useState<{ fact?: string; sourceRefs?: string[] }>()
-  const [contextSelection, setContextSelection] = useState<WorkbenchContextSelection>({})
-  const [knowledgeBaseIds, setKnowledgeBaseIds] = useState<string[]>([])
+  const {
+    heldValue,
+    assistantTask,
+    senderValue,
+    contextSelection,
+    knowledgeBaseIds,
+    modelDraft,
+    setSenderValue,
+    setContextSelection,
+    setKnowledgeBaseIds,
+    updateDraft,
+  } = useChatDraft(requestedSessionId)
+  const owner = useAuthStore((state) => state.user?.userId)
   const [contextParsing, setContextParsing] = useState(false)
   const [selectedArtifactKey, setSelectedArtifactKey] = useState<string>()
+  const [personalArtifactEntry, setPersonalArtifactEntry] = useState<WorkbenchArtifactEntry>()
+  const selectArtifact = (key: string) => {
+    setPersonalArtifactEntry(undefined)
+    setSelectedArtifactKey(key)
+  }
   const [selectedGraphNodeId, setSelectedGraphNodeId] = useState<string | null>(null)
-  const [senderValue, setSenderValue] = useState('')
   const [senderResetVersion, setSenderResetVersion] = useState(0)
   const [localMessages, setLocalMessages] = useState<ConversationMessage[]>([])
-  const [lastRetryableInput, setLastRetryableInput] = useState<WorkbenchStreamRetryInput | null>(
-    null,
-  )
+  const [retryInputs, setRetryInputs] = useState<
+    Record<string, WorkbenchStreamRetryInput | undefined>
+  >({})
+  const lastRetryableInput = retryInputs[requestedSessionId ?? '']
 
   useEffect(
     () => () => {
-      streamAbortRef.current?.abort()
-      streamAbortRef.current = null
+      Object.values(streamAbortRef.current).forEach((controller) => controller.abort())
+      streamAbortRef.current = {}
     },
     [],
   )
@@ -281,47 +365,121 @@ export function AIWorkbenchController() {
     terminalRunRefreshRef.current = {}
   }, [requestedSessionId])
 
-  const sessionsQuery = useQuery({ ...workbenchQueries.sessions.all(), refetchInterval: 5000 })
+  const sessionsQuery = useQuery({
+    ...workbenchQueries.sessions.all(canUseChat, personal, owner),
+    refetchInterval: 5000,
+  })
   const catalogQuery = useQuery({ ...workbenchQueries.catalog(), refetchInterval: 15000 })
-  const sessionDetailQuery = useQuery(workbenchQueries.sessions.detail(requestedSessionId))
-  const messagesQuery = useQuery(workbenchQueries.sessions.messages(requestedSessionId))
+  const metricCatalogQuery = useQuery({
+    ...observabilitySignalQueries.metricCatalog(),
+    enabled:
+      analysisOpen &&
+      analysisAgentProviderId === 'internal' &&
+      canViewMonitoring &&
+      analysisCapabilities.includes('performance'),
+  })
+  const inspectionRunsQuery = useQuery({
+    ...observeQueries.operations.runs(),
+    enabled:
+      analysisOpen &&
+      analysisAgentProviderId === 'internal' &&
+      canViewAI &&
+      analysisCapabilities.includes('inspection_review'),
+  })
+  const sessionDetailQuery = useQuery(workbenchQueries.sessions.detail(requestedSessionId, owner))
+  const matchesWorkspace = Boolean(
+    sessionDetailQuery.data?.data &&
+    personal ===
+      Boolean(sessionDetailQuery.data.data.metadata?.conversationKind?.startsWith('personal_')),
+  )
+  const requestRecovery = useNativeRequestRecovery(
+    owner,
+    requestedSessionId,
+    canUseChat && matchesWorkspace && !currentStreamPending,
+  )
+  const messagesQuery = useQuery({
+    ...workbenchQueries.sessions.messages(requestedSessionId, owner),
+    enabled: matchesWorkspace && !!requestedSessionId && !messageAnchor,
+  })
+  const messageWindowQuery = useQuery(
+    workbenchQueries.messageWindow(
+      owner,
+      matchesWorkspace ? requestedSessionId : undefined,
+      messageAnchor,
+    ),
+  )
+  const feedReferenceQuery = useQuery(
+    workbenchQueries.feedItem(owner, contextSelection.feedItemId || ''),
+  )
+  const historyWindows = history.key === historyKey ? history : undefined
+  const beforeCursor = historyWindows?.before.length
+    ? historyWindows.before[0].beforeCursor
+    : messageWindowQuery.data?.data?.beforeCursor
+  const afterCursor = historyWindows?.after.length
+    ? historyWindows.after.at(-1)?.afterCursor
+    : messageWindowQuery.data?.data?.afterCursor
+  const windowMutation = useMutation({
+    ...workbenchMutations.messageWindow(),
+    onSuccess: (response, input) =>
+      setHistory((current) => {
+        if (input.historyKey !== historyKey) return current
+        const base =
+          current.key === historyKey ? current : { key: historyKey, before: [], after: [] }
+        if (!response.data) return base
+        return input.selector.before
+          ? { ...base, before: [response.data, ...base.before] }
+          : { ...base, after: [...base.after, response.data] }
+      }),
+    onError: (error) => void message.error(error.message || '历史消息加载失败'),
+  })
   const agentRunsQuery = useQuery({
     ...workbenchQueries.agentRuns.session(requestedSessionId),
-    enabled: Boolean(requestedSessionId),
+    enabled: matchesWorkspace && Boolean(requestedSessionId),
     refetchInterval: (query) => {
       const runs = query.state.data?.data ?? []
       return runs.some(
-        (run) =>
-          run.sessionId === requestedSessionId &&
-          !run.parentRunId &&
-          isRunningExternalAgentRun(run),
+        (run) => run.sessionId === requestedSessionId && !run.parentRunId && isRunningAgentRun(run),
       )
         ? 2500
         : false
     },
   })
 
-  const visibleSessions = useMemo(
-    () => (sessionsQuery.data?.data ?? []).filter((item) => !isSyntheticSession(item)),
-    [sessionsQuery.data?.data],
-  )
+  const visibleSessions = useMemo(() => sessionsQuery.data?.data ?? [], [sessionsQuery.data?.data])
   const currentSession =
-    (sessionDetailQuery.data?.data && !isSyntheticSession(sessionDetailQuery.data.data)
-      ? sessionDetailQuery.data.data
-      : undefined) ?? visibleSessions.find((item) => item.id === requestedSessionId)
-  const [modelDraft, setModelDraft] = useState<{
-    sessionId: string
-    value: WorkbenchModelPreferences
-  }>()
-  const modelPreferences =
-    modelDraft?.sessionId === currentSession?.id
-      ? (modelDraft?.value ?? {})
-      : (currentSession?.metadata?.modelPreferences ?? {})
-  const currentSessionTitle = displayWorkbenchSessionTitle(currentSession?.title)
-  const serverMessages = messagesQuery.data?.data ?? []
+    sessionDetailQuery.data?.data ?? visibleSessions.find((item) => item.id === requestedSessionId)
+  const modelPreferences = modelDraft ?? currentSession?.metadata?.modelPreferences ?? {}
+  const isMainChat = ['main', 'personal_main'].includes(
+    currentSession?.metadata?.conversationKind || '',
+  )
+  const currentAlertId = currentSession?.metadata?.scope?.alertId
+  const currentSessionTitle =
+    isMainChat || !currentSession ? '主要聊天' : displayWorkbenchSessionTitle(currentSession.title)
+  const serverMessages = useMemo(
+    () =>
+      messageAnchor
+        ? [
+            ...(historyWindows?.before.flatMap((page) => page.messages) ?? []),
+            ...(messageWindowQuery.data?.data?.messages ?? []),
+            ...(historyWindows?.after.flatMap((page) => page.messages) ?? []),
+          ]
+        : (messagesQuery.data?.data ?? []),
+    [messageAnchor, historyWindows, messageWindowQuery.data?.data, messagesQuery.data?.data],
+  )
+  useEffect(() => {
+    if (owner && currentSession?.id) rememberChatVisit(owner, currentSession.id, personal)
+  }, [owner, currentSession?.id, personal])
+  useEffect(() => {
+    if (!messageAnchor || feedView || !messageWindowQuery.data?.data) return
+    const frame = requestAnimationFrame(() =>
+      bubbleRef.current?.scrollTo({ key: messageAnchor, block: 'center', behavior: 'instant' }),
+    )
+    return () => cancelAnimationFrame(frame)
+  }, [messageAnchor, requestedSessionId, messageWindowQuery.data?.data, feedView])
   const finalAgentRunIds = useMemo(
     () =>
       serverMessages.reduce((ids, item) => {
+        if (!isFinalAgentRunMessage(item)) return ids
         for (const runId of messageAgentRunRefs(item)) {
           ids.add(runId)
         }
@@ -329,13 +487,13 @@ export function AIWorkbenchController() {
       }, new Set<string>()),
     [serverMessages],
   )
-  const runningExternalAgentRuns = useMemo(() => {
+  const runningAgentRuns = useMemo(() => {
     return (agentRunsQuery.data?.data ?? [])
       .filter(
         (run) =>
           run.sessionId === requestedSessionId &&
           !run.parentRunId &&
-          isRunningExternalAgentRun(run) &&
+          isRunningAgentRun(run) &&
           !finalAgentRunIds.has(run.id),
       )
       .sort(
@@ -343,6 +501,17 @@ export function AIWorkbenchController() {
           agentRunTimestamp(left) - agentRunTimestamp(right) || left.id.localeCompare(right.id),
       )
   }, [agentRunsQuery.data?.data, finalAgentRunIds, requestedSessionId])
+  const nativeEventPages = useQueries({
+    queries: runningAgentRuns
+      .filter(isNativeAgentRun)
+      .map((run) =>
+        workbenchQueries.agentRuns.events(
+          run.id,
+          externalRunReplayRef.current[run.id]?.afterSequence ?? 0,
+        ),
+      ),
+    combine: combineNativeEventPages,
+  })
   const legacyPlatformMessages = useMemo(
     () => serverMessages.filter(isLegacyPlatformContextMessage),
     [serverMessages],
@@ -377,7 +546,7 @@ export function AIWorkbenchController() {
   )
   const defaultAgentProviderId = useMemo(() => {
     return (
-      preferredExternalAgent(agentProviders)?.id ??
+      agentProviders.find((item) => item.id === 'internal' && item.enabled)?.id ??
       agentProviders.find((item) => item.default && item.enabled)?.id ??
       agentProviders.find((item) => item.enabled)?.id ??
       'internal'
@@ -389,25 +558,39 @@ export function AIWorkbenchController() {
 
   useEffect(() => {
     if (!requestedSessionId) return
-    if (
-      runningExternalAgentRuns.length === 0 &&
-      Object.keys(externalRunReplayRef.current).length === 0
-    ) {
+    if (runningAgentRuns.length === 0 && Object.keys(externalRunReplayRef.current).length === 0) {
       return
     }
-    const activeRunIds = new Set(runningExternalAgentRuns.map((run) => run.id))
-    const replayMessages = runningExternalAgentRuns.map((run) => {
+    const activeRunIds = new Set(runningAgentRuns.map((run) => run.id))
+    const replayMessages = runningAgentRuns.map((run) => {
       const replay = externalRunReplayRef.current[run.id] ?? {
         state: createWorkbenchStreamState(),
         seenEventKeys: new Set<string>(),
+        afterSequence: 0,
       }
       let state = replay.state
-      for (const event of sortedAgentRunReplayEvents(run, requestedSessionId)) {
+      const page = nativeEventPages.pages.find(
+        (item) => item.runId === run.id && item.afterSequence === (replay.afterSequence ?? 0),
+      )
+      if (page?.page.resyncRequired) {
+        state = createWorkbenchStreamState()
+        replay.seenEventKeys.clear()
+        replay.afterSequence = 0
+        void queryClient.invalidateQueries({
+          queryKey: workbenchKeys.sessions.messages(requestedSessionId, owner),
+        })
+      }
+      const events = [
+        ...sortedAgentRunReplayEvents(run, requestedSessionId),
+        ...(page && !page.page.resyncRequired ? page.page.items : []),
+      ]
+      for (const event of events) {
         const eventKey = workbenchStreamEventKey(event)
         if (replay.seenEventKeys.has(eventKey)) continue
         replay.seenEventKeys.add(eventKey)
         state = reduceWorkbenchStreamState(state, event)
       }
+      if (page && !page.page.resyncRequired) replay.afterSequence = page.page.nextSequence
       replay.state = state
       externalRunReplayRef.current[run.id] = replay
       return agentRunReplayMessage(run, state)
@@ -452,7 +635,7 @@ export function AIWorkbenchController() {
       }
       return changed ? next : items
     })
-  }, [requestedSessionId, runningExternalAgentRuns])
+  }, [requestedSessionId, runningAgentRuns, nativeEventPages.pages, queryClient])
 
   useEffect(() => {
     if (!requestedSessionId) return
@@ -460,7 +643,7 @@ export function AIWorkbenchController() {
       (run) =>
         run.sessionId === requestedSessionId &&
         !run.parentRunId &&
-        isExternalAgentRun(run) &&
+        isDurableAgentRun(run) &&
         isTerminalWorkbenchAgentStatus(run.status) &&
         !finalAgentRunIds.has(run.id),
     )
@@ -476,67 +659,151 @@ export function AIWorkbenchController() {
     }
     if (!shouldRefresh) return
     void queryClient.invalidateQueries({
-      queryKey: workbenchKeys.sessions.messages(requestedSessionId),
+      queryKey: workbenchKeys.sessions.messages(requestedSessionId, owner),
     })
-    void queryClient.invalidateQueries({ queryKey: workbenchKeys.sessions.all() })
+    void queryClient.invalidateQueries({ queryKey: workbenchKeys.sessions.all(personal) })
     void queryClient.invalidateQueries({
-      queryKey: workbenchKeys.sessions.detail(requestedSessionId),
+      queryKey: workbenchKeys.sessions.detail(requestedSessionId, owner),
     })
     void queryClient.invalidateQueries({ queryKey: systemKeys.audit.all })
   }, [agentRunsQuery.data?.data, finalAgentRunIds, queryClient, requestedSessionId])
 
+  const mainSessionQuery = useQuery(
+    workbenchQueries.sessions.main(
+      defaultAgentProviderId,
+      owner,
+      canUseChat && !personal && !catalogQuery.isPending,
+    ),
+  )
+  const assistantQuery = useQuery(workbenchQueries.assistant(owner, canUseChat && personal))
+  const personalMainQuery = useQuery(
+    workbenchQueries.sessions.detail(
+      personal ? assistantQuery.data?.data?.mainSessionId : undefined,
+      owner,
+    ),
+  )
+  const mainSession = personal ? personalMainQuery.data?.data : mainSessionQuery.data?.data
+  const personalTasksQuery = useQuery(workbenchQueries.personalTasks(owner, canUseChat && personal))
+  const personalEnvironmentQuery = useQuery(
+    workbenchQueries.personalEnvironment(
+      owner,
+      assistantQuery.data?.data?.id,
+      canUseChat && personal && panel === 'assistant' && assistantTab === 'identity',
+    ),
+  )
+  const personalArtifactsQuery = useQuery(
+    workbenchQueries.personalArtifacts(
+      owner,
+      canUseChat && personal && panel === 'assistant' && assistantTab === 'results',
+    ),
+  )
+  const environmentTemplatesQuery = useQuery(
+    workbenchQueries.personalEnvironmentTemplates(
+      owner,
+      assistantQuery.data?.data?.id,
+      canUseChat &&
+        personal &&
+        panel === 'assistant' &&
+        assistantTab === 'identity' &&
+        !personalEnvironmentQuery.isError &&
+        personalEnvironmentQuery.data?.data?.state === 'unprovisioned',
+    ),
+  )
+  const [deletionReconciled, setDeletionReconciled] = useState('')
+  const environmentMutation = useMutation({
+    mutationFn: (input: Parameters<typeof workbenchApi.assistant.changeEnvironment>[1]) =>
+      workbenchApi.assistant.changeEnvironment(assistantQuery.data!.data!.id, input),
+    retry: false,
+    onSuccess: (result, input) => {
+      if (input.action === 'reconcile' && result.data?.state === 'deletion_unknown') {
+        setDeletionReconciled(`${result.data.assistantId}:${result.data.version}`)
+      }
+    },
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: workbenchKeys.personalEnvironmentRoot() }),
+    onError: () => void message.error('环境操作未确认，请核对最新状态；不会自动重试。'),
+  })
+  const environmentDeletion = useMutation({
+    mutationFn: workbenchApi.assistant.deleteEnvironmentData,
+    retry: false,
+    onSettled: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: workbenchKeys.personalEnvironmentRoot() }),
+        queryClient.invalidateQueries({ queryKey: workbenchKeys.assistant(owner) }),
+      ])
+    },
+    onError: () => void message.error('数据删除结果未确认，请核对最新状态；不会自动重试。'),
+  })
+  const environmentExportAbort = useRef<AbortController | null>(null)
+  useEffect(
+    () => () => environmentExportAbort.current?.abort(),
+    [owner, assistantQuery.data?.data?.id],
+  )
+  const environmentExport = useMutation({
+    mutationFn: (input: Parameters<typeof workbenchApi.assistant.exportEnvironmentData>[0]) => {
+      const controller = new AbortController()
+      environmentExportAbort.current = controller
+      return workbenchApi.assistant.exportEnvironmentData(input, controller.signal)
+    },
+    retry: false,
+    onSuccess: (blob) => {
+      if (!environmentExportAbort.current?.signal.aborted) downloadBlob('personal-data.tar', blob)
+    },
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: workbenchKeys.personalEnvironmentRoot() }),
+    onError: () => void message.error('数据导出未完成，请核对环境后再试；不会自动重试。'),
+  })
+
+  const hasScopedEntry = Boolean(
+    draftScope.alertId ||
+    draftScope.clusterId ||
+    draftScope.namespace ||
+    draftScope.workload ||
+    draftScope.service ||
+    draftScope.pod ||
+    draftScope.node,
+  )
   useEffect(() => {
-    if (!requestedSessionId && visibleSessions[0]?.id) {
-      updateSearchParams({ session: visibleSessions[0].id })
+    if (requestedSessionId || hasScopedEntry) return
+    if (isExplicitRouteMode) {
+      if (visibleSessions[0]?.id) updateSearchParams({ session: visibleSessions[0].id })
+    } else if (mainSession?.id) {
+      updateSearchParams({ session: mainSession.id })
     }
-  }, [requestedSessionId, searchParams, setSearchParams, visibleSessions])
+  }, [
+    requestedSessionId,
+    hasScopedEntry,
+    isExplicitRouteMode,
+    mainSession?.id,
+    visibleSessions,
+    searchParams,
+    setSearchParams,
+  ])
 
   useEffect(() => {
-    setDraftMode(isExplicitRouteMode ? pathMode : currentSession?.metadata?.mode || pathMode)
-  }, [currentSession?.id, currentSession?.metadata?.mode, isExplicitRouteMode, pathMode])
+    setDraftMode(pathMode)
+  }, [pathMode])
 
   const patchSessionMutation = useMutation({
     ...workbenchMutations.sessions.patch(),
     onSuccess: async (_response, payload) => {
-      await queryClient.invalidateQueries({ queryKey: workbenchKeys.sessions.all() })
+      await queryClient.invalidateQueries({ queryKey: workbenchKeys.sessions.all(personal) })
       await queryClient.invalidateQueries({
-        queryKey: workbenchKeys.sessions.detail(payload.sessionId),
+        queryKey: workbenchKeys.sessions.detail(payload.sessionId, owner),
       })
     },
     onError: (err: Error) => void message.error(err.message),
   })
 
-  useEffect(() => {
-    if (!currentSession || !isExplicitRouteMode || currentSession.metadata?.mode === pathMode) {
-      routeModePatchKeyRef.current = ''
-      return
-    }
-    const patchKey = `${currentSession.id}:${pathMode}`
-    if (patchSessionMutation.isPending || routeModePatchKeyRef.current === patchKey) {
-      return
-    }
-    routeModePatchKeyRef.current = patchKey
-    patchSessionMutation.mutate({ sessionId: currentSession.id, body: { mode: pathMode } })
-  }, [
-    currentSession?.id,
-    currentSession?.metadata?.mode,
-    isExplicitRouteMode,
-    pathMode,
-    patchSessionMutation.isPending,
-    patchSessionMutation.mutate,
-  ])
-
   const createSessionMutation = useMutation({
     ...workbenchMutations.sessions.create(),
+    mutationFn: personal ? workbenchApi.personalAgent.create : workbenchApi.sessions.create,
     onSuccess: async (response) => {
-      await queryClient.invalidateQueries({ queryKey: workbenchKeys.sessions.all() })
-      navigate(
-        getAIWorkbenchPathForMode(
-          response.data.metadata?.mode || 'general',
-          new URLSearchParams({ session: response.data.id }),
-        ),
-      )
-      void message.success('已创建会话')
+      await queryClient.invalidateQueries({ queryKey: workbenchKeys.sessions.all(personal) })
+      navigate(getAIWorkbenchPathForSession(response.data))
+      setSideOpen(false)
+      setSideTitle('')
+      void message.success('旁聊已开启')
     },
     onError: (err: Error) => void message.error(err.message),
   })
@@ -573,11 +840,11 @@ export function AIWorkbenchController() {
       .slice(-20)
       .map((item) => item.id)
     createSessionMutation.mutate({
-      title: `分支 · ${displayWorkbenchSessionTitle(currentSession.title)}`,
+      title: `旁聊 · ${displayWorkbenchSessionTitle(currentSession.title)}`,
       mode: 'general',
       agentProviderId: currentSession.metadata?.agentProviderId ?? selectedAgentProviderId,
       scope: {},
-      tags: (currentSession.metadata?.tags ?? []).filter((tag) => tag !== PINNED_SESSION_TAG),
+      tags: sessionTagsWithPin(currentSession.metadata?.tags, false),
       pinnedContext: {
         branchReference: {
           kind: 'session',
@@ -590,15 +857,10 @@ export function AIWorkbenchController() {
   }
   const createSession = (payload?: { title?: string; scope?: WorkbenchSessionScope }) => {
     if (catalogQuery.isPending) return
-    const provider = preferredExternalAgent(agentProviders)
-    if (!provider) {
-      void message.warning('没有就绪的外部助手，请先安装并配置 Agent 插件。')
-      return
-    }
     createSessionMutation.mutate({
-      title: payload?.title || '',
+      title: payload?.title?.trim() || '新的旁聊',
       mode: 'general',
-      agentProviderId: provider.id,
+      agentProviderId: currentSession?.metadata?.agentProviderId || defaultAgentProviderId,
       scope: payload?.scope || draftScope,
       tags: [],
     })
@@ -625,7 +887,7 @@ export function AIWorkbenchController() {
     ) {
       return
     }
-    const provider = preferredExternalAgent(agentProviders, draftMode)
+    const provider = agentProviders.find((item) => item.id === defaultAgentProviderId)
     if (!provider) return
     autoSessionScopeKeyRef.current = scopeKey
     createSessionMutation.mutate({
@@ -655,7 +917,7 @@ export function AIWorkbenchController() {
       if (requestedSessionId === sessionId) {
         updateSearchParams({ session: undefined })
       }
-      await queryClient.invalidateQueries({ queryKey: workbenchKeys.sessions.all() })
+      await queryClient.invalidateQueries({ queryKey: workbenchKeys.sessions.all(personal) })
       void message.success('会话已归档')
     },
     onError: (err: Error) => void message.error(err.message),
@@ -664,21 +926,26 @@ export function AIWorkbenchController() {
   const buildWorkbenchStreamRequest = (
     content: string,
     mode: WorkbenchMode,
-  ): WorkbenchSendMessageStreamRequest => {
+    agentProviderId = selectedAgentProviderId || defaultAgentProviderId,
+    taskIntent?: WorkbenchTaskIntent,
+  ): WorkbenchSendMessageStreamRequest & { assistantTask?: AssistantChatTask } => {
     const requestScopeOverrides = scopeOverrideState(scopeOverrides)
     return {
+      requestId: crypto.randomUUID(),
+      assistantTask,
       content,
       mode,
-      ...(mode === 'general'
+      ...(agentProviderId === 'internal'
+        ? { taskIntent: taskIntent ?? { capabilities: mode === 'general' ? [] : [mode] } }
+        : {}),
+      ...(mode === 'general' || agentProviderId === 'internal'
         ? {
             contextSelection,
             knowledgeContext: { enabled: knowledgeBaseIds.length > 0, knowledgeBaseIds },
           }
         : {}),
-      ...(mode === 'general' && (selectedAgentProviderId || defaultAgentProviderId) === 'internal'
-        ? { modelPreferences }
-        : {}),
-      agentProviderId: selectedAgentProviderId || defaultAgentProviderId,
+      ...(agentProviderId === 'internal' ? { modelPreferences } : {}),
+      agentProviderId,
       toolset: cleanToolsetPayload({
         enabledAdapterIds: selectedAdapterIds,
         enabledSkillIds: selectedSkillIds,
@@ -692,10 +959,9 @@ export function AIWorkbenchController() {
 
   const sendMessageMutation = useMutation({
     mutationFn: async (payload: WorkbenchStreamSubmission) => {
-      const controller = new AbortController()
+      const controller = payload.controller
       const seenEvents = new Set<string>()
       let streamState = createWorkbenchStreamState()
-      streamAbortRef.current = controller
       await streamWorkbenchMessage(
         `/copilot/sessions/${payload.sessionId}/messages/stream`,
         payload.request,
@@ -733,14 +999,53 @@ export function AIWorkbenchController() {
       return streamState
     },
     onSuccess: async (streamState, payload) => {
-      streamAbortRef.current = null
-      setLastRetryableInput(null)
+      if (
+        payload.request.requestId &&
+        streamState.agentStatus &&
+        streamState.agentStatus.providerKind !== 'native' &&
+        isTerminalWorkbenchAgentStatus(streamState.agentStatus.status)
+      )
+        requestRecovery.acknowledge(payload.sessionId, payload.request.requestId)
+      if (
+        streamState.toolCalls.some(
+          (call) => call.toolName === 'assistant.avatar' && call.status === 'error',
+        )
+      )
+        updateDraft(
+          (draft) => ({
+            value: draft.value || payload.request.content,
+            context: {
+              ...draft.context,
+              images: draft.context.images || payload.request.contextSelection?.images,
+            },
+            task:
+              draft.task ||
+              (payload.request as { assistantTask?: AssistantChatTask }).assistantTask,
+          }),
+          payload.sessionId,
+        )
+      if (
+        streamState.toolCalls.some(
+          (call) =>
+            ['assistant.rename', 'assistant.avatar'].includes(call.toolName) &&
+            call.status === 'success',
+        )
+      ) {
+        await queryClient.invalidateQueries({ queryKey: workbenchKeys.assistant(owner) })
+        updateDraft(
+          (draft) => ({ value: draft.value || draft.heldValue || '', heldValue: undefined }),
+          payload.sessionId,
+        )
+      }
+      delete streamAbortRef.current[payload.sessionId]
+      setStreamingSessions((current) => current.filter((id) => id !== payload.sessionId))
+      setRetryInputs((current) => ({ ...current, [payload.sessionId]: undefined }))
       await queryClient.invalidateQueries({
-        queryKey: workbenchKeys.sessions.messages(payload.sessionId),
+        queryKey: workbenchKeys.sessions.messages(payload.sessionId, owner),
       })
-      await queryClient.invalidateQueries({ queryKey: workbenchKeys.sessions.all() })
+      await queryClient.invalidateQueries({ queryKey: workbenchKeys.sessions.all(personal) })
       await queryClient.invalidateQueries({
-        queryKey: workbenchKeys.sessions.detail(payload.sessionId),
+        queryKey: workbenchKeys.sessions.detail(payload.sessionId, owner),
       })
       await queryClient.invalidateQueries({ queryKey: workbenchKeys.agentRuns.all() })
       await queryClient.invalidateQueries({ queryKey: systemKeys.audit.all })
@@ -752,10 +1057,11 @@ export function AIWorkbenchController() {
               item.sessionId === payload.sessionId &&
               item.metadata?.source === 'agent-runtime-queued'
             ) &&
-            (item.id !== payload.pendingMessages.assistant.id || !streamState.message.id),
+            (item.id !== payload.pendingMessages.assistant.id ||
+              (!streamState.message.id && streamState.agentStatus?.providerKind !== 'native')),
         ),
       )
-      if (payload.navigateMode) {
+      if (payload.navigateMode && payload.sessionId === activeSessionRef.current) {
         navigate(
           getAIWorkbenchPathForMode(
             payload.navigateMode,
@@ -763,24 +1069,38 @@ export function AIWorkbenchController() {
           ),
         )
       }
-      if (payload.closeAnalysisOnSuccess) {
+      if (payload.closeAnalysisOnSuccess && payload.sessionId === activeSessionRef.current) {
         setAnalysisOpen(false)
       }
     },
     onError: (err: Error, payload) => {
-      streamAbortRef.current = null
-      const aborted = err.name === 'AbortError'
-      const errorMessage = aborted ? '已取消本次回复。' : workbenchStreamErrorMessage(err)
-      setLastRetryableInput(
-        !aborted && isRetryableWorkbenchStreamError(err)
-          ? {
-              sessionId: payload.sessionId,
-              request: payload.request,
-              closeAnalysisOnSuccess: payload.closeAnalysisOnSuccess,
-              navigateMode: payload.navigateMode,
-            }
-          : null,
+      if (
+        payload.request.agentProviderId === 'internal' &&
+        payload.request.requestId &&
+        err instanceof WorkbenchStreamEventError &&
+        err.code === 'agent_unsupported'
       )
+        requestRecovery.acknowledge(payload.sessionId, payload.request.requestId)
+      if ((payload.request as { assistantTask?: AssistantChatTask }).assistantTask)
+        void queryClient.invalidateQueries({ queryKey: workbenchKeys.assistant(owner) })
+      delete streamAbortRef.current[payload.sessionId]
+      setStreamingSessions((current) => current.filter((id) => id !== payload.sessionId))
+      const aborted = err.name === 'AbortError'
+      const errorMessage = aborted
+        ? '已停止接收回复，后台任务停止状态待确认。'
+        : workbenchStreamErrorMessage(err)
+      setRetryInputs((current) => ({
+        ...current,
+        [payload.sessionId]:
+          !aborted && isRetryableWorkbenchStreamError(err)
+            ? {
+                sessionId: payload.sessionId,
+                request: payload.request,
+                closeAnalysisOnSuccess: payload.closeAnalysisOnSuccess,
+                navigateMode: payload.navigateMode,
+              }
+            : undefined,
+      }))
       setLocalMessages((items) =>
         items.map((item) =>
           item.id === payload.pendingMessages.user.id
@@ -808,18 +1128,62 @@ export function AIWorkbenchController() {
               : item,
         ),
       )
-      if (!aborted) {
-        setSenderValue((draft) => draft || payload.request.content)
-        void message.error(errorMessage)
+      if (!aborted || (payload.request as { assistantTask?: AssistantChatTask }).assistantTask) {
+        updateDraft(
+          (draft) => ({
+            value: draft.value || payload.request.content,
+            context: {
+              ...draft.context,
+              images: draft.context.images || payload.request.contextSelection?.images,
+            },
+            task:
+              draft.task ||
+              (payload.request as { assistantTask?: AssistantChatTask }).assistantTask,
+          }),
+          payload.sessionId,
+        )
+        if (!aborted) void message.error(errorMessage)
       }
     },
   })
 
   const submitWorkbenchStream = (input: WorkbenchStreamRetryInput) => {
-    setLastRetryableInput(null)
+    if (streamAbortRef.current[input.sessionId]) return
+    if (
+      input.sessionId === requestedSessionId &&
+      (requestRecovery.error || !requestRecovery.canRetry(input.request.requestId))
+    )
+      return
+    if (
+      input.request.agentProviderId === 'internal' &&
+      !input.request.assistantTask &&
+      input.request.requestId
+    ) {
+      try {
+        requestRecovery.remember(input.sessionId, input.request.requestId)
+      } catch (error) {
+        void message.error(error instanceof Error ? error.message : '无法保存任务恢复标识')
+        return
+      }
+    }
+    const controller = new AbortController()
+    streamAbortRef.current[input.sessionId] = controller
+    setStreamingSessions((current) => [...current, input.sessionId])
+    setRetryInputs((current) => ({ ...current, [input.sessionId]: undefined }))
     const pendingMessages = pendingConversationMessages(input.sessionId, input.request.content)
+    if (input.request.contextSelection?.images?.length)
+      pendingMessages.user.metadata = {
+        ...pendingMessages.user.metadata,
+        images: input.request.contextSelection.images,
+      }
+    const appearance = (input.request as { assistantTask?: AssistantChatTask }).assistantTask
+    if (appearance?.image)
+      pendingMessages.user.metadata = {
+        ...pendingMessages.user.metadata,
+        assistantImage: appearance.image,
+      }
     setLocalMessages((items) => [...items, pendingMessages.user, pendingMessages.assistant])
-    sendMessageMutation.mutate({ ...input, pendingMessages })
+    sendMessageMutation.mutate({ ...input, pendingMessages, controller })
   }
 
   const submitMessage = (value: string) => {
@@ -829,61 +1193,68 @@ export function AIWorkbenchController() {
       !canUseChat ||
       !currentSession ||
       !requestedSessionId ||
-      sendMessageMutation.isPending ||
-      runningExternalAgentRuns.length > 0
+      currentStreamPending ||
+      requestRecovery.pending ||
+      requestRecovery.error ||
+      runningAgentRuns.length > 0
     ) {
       return
     }
     const reason = agentUnavailableReason(
       agentProviders.find((item) => item.id === selectedAgentProviderId),
-      isExplicitRouteMode ? pathMode : currentSession.metadata?.mode || 'general',
+      pathMode,
     )
     if (reason) {
       void message.warning(reason)
       return
     }
-    setSenderValue('')
+    updateSearchParams({ message: undefined, q: undefined })
+    updateDraft({
+      value: '',
+      task: undefined,
+      context: { ...contextSelection, images: undefined, feedItemId: undefined },
+    })
     senderRef.current?.clear()
     setSenderResetVersion((version) => version + 1)
     submitWorkbenchStream({
       sessionId: requestedSessionId,
-      request: buildWorkbenchStreamRequest(
-        content,
-        isExplicitRouteMode ? pathMode : currentSession.metadata?.mode || draftMode,
-      ),
+      request: buildWorkbenchStreamRequest(content, pathMode),
     })
   }
 
   const cancelAgentRunsMutation = useMutation({
-    mutationFn: async () => {
-      if (!requestedSessionId) return
-      const response = await workbenchApi.agentRuns.session(requestedSessionId)
+    mutationFn: async (sessionId: string) => {
+      const response = await workbenchApi.agentRuns.session(sessionId)
       await Promise.all(
-        response.data
-          .filter(isRunningExternalAgentRun)
-          .map((run) => workbenchApi.agentRuns.cancel(run.id)),
+        response.data.filter(isRunningAgentRun).map((run) => workbenchApi.agentRuns.cancel(run.id)),
       )
     },
-    onSuccess: async () => {
+    onSuccess: async (_, sessionId) => {
       await queryClient.invalidateQueries({ queryKey: workbenchKeys.agentRuns.all() })
-      if (requestedSessionId)
-        await queryClient.invalidateQueries({
-          queryKey: workbenchKeys.sessions.messages(requestedSessionId),
-        })
+      await queryClient.invalidateQueries({
+        queryKey: workbenchKeys.sessions.messages(sessionId, owner),
+      })
     },
     onError: (error: Error) => void message.error(error.message),
   })
   const cancelMessageStream = () => {
+    const sessionId = requestedSessionId
+    if (!sessionId) return
     modal.confirm({
       title: '停止当前任务？',
       content: '将终止当前回答及其专业子任务。已提交的审批申请保持原状态。',
       okText: '停止任务',
       cancelText: '返回',
-      onOk: async () => {
-        if (selectedAgentProviderId !== 'internal' || runningExternalAgentRuns.length > 0)
-          await cancelAgentRunsMutation.mutateAsync()
-        streamAbortRef.current?.abort()
-        streamAbortRef.current = null
+      onOk: () => {
+        try {
+          requestRecovery.cancel(sessionId)
+        } catch (error) {
+          void message.error(
+            error instanceof Error ? error.message : '取消意图保存失败，请保持页面打开并重试',
+          )
+        }
+        streamAbortRef.current[sessionId]?.abort()
+        cancelAgentRunsMutation.mutate(sessionId)
       },
     })
   }
@@ -921,10 +1292,8 @@ export function AIWorkbenchController() {
   }
 
   useEffect(() => {
-    setContextSelection({})
-    setKnowledgeBaseIds([])
     setContextParsing(false)
-  }, [currentSession?.id])
+  }, [requestedSessionId])
 
   useEffect(() => {
     setSelectedSkillIds(currentSession?.metadata?.toolset?.enabledSkillIds ?? [])
@@ -993,10 +1362,17 @@ export function AIWorkbenchController() {
   }, [artifactEntries, selectedArtifactKey])
 
   const activeArtifactEntry =
-    artifactEntries.find((item) => item.key === selectedArtifactKey) ?? artifactEntries[0]
+    personalArtifactEntry ??
+    artifactEntries.find((item) => item.key === selectedArtifactKey) ??
+    artifactEntries[0]
   const activeArtifact = activeArtifactEntry?.artifact
   const activeArtifactLinks = activeArtifactEntry
-    ? artifactContextLinks(activeArtifactEntry, currentSession)
+    ? artifactContextLinks(
+        activeArtifactEntry,
+        personalArtifactEntry
+          ? visibleSessions.find((item) => item.id === personalArtifactEntry.message.sessionId)
+          : currentSession,
+      )
     : []
   const chainArtifactEntry = activeArtifactEntry
   const toolCalls = chainArtifactEntry?.artifact.toolExecutions ?? []
@@ -1008,8 +1384,12 @@ export function AIWorkbenchController() {
   const chainToolCallSummary = toolCallSummaryText(toolCalls)
   const activeGraph = activeArtifact?.graph
   const queryError =
-    sessionsQuery.error || sessionDetailQuery.error || messagesQuery.error || catalogQuery.error
-  const activeMode = isExplicitRouteMode ? pathMode : currentSession?.metadata?.mode || draftMode
+    sessionsQuery.error ||
+    sessionDetailQuery.error ||
+    messagesQuery.error ||
+    messageWindowQuery.error ||
+    catalogQuery.error
+  const activeMode = pathMode
   const latestAssistantMessage = [...messages].reverse().find((item) => item.role === 'assistant')
   const promptItems = CHAT_STARTERS.map((item) => ({
     key: item.value,
@@ -1017,19 +1397,14 @@ export function AIWorkbenchController() {
     description: item.description,
     icon: <span className="soha-ai-workbench__starter-icon">{item.icon}</span>,
   }))
-  const projectOptions = [...new Set(visibleSessions.map(sessionProject).filter(Boolean))]
   const conversationItems = visibleSessions
-    .filter((item) => projectFilter === undefined || sessionProject(item) === projectFilter)
+    .filter((item) => !['main', 'personal_main'].includes(item.metadata?.conversationKind || ''))
     .sort(
       (left, right) =>
         Number(right.metadata?.tags?.includes(PINNED_SESSION_TAG) ?? false) -
         Number(left.metadata?.tags?.includes(PINNED_SESSION_TAG) ?? false),
     )
-    .filter((item) =>
-      displayWorkbenchSessionTitle(item.title)
-        .toLowerCase()
-        .includes(sessionSearch.trim().toLowerCase()),
-    )
+
     .map((item) => {
       const title = displayWorkbenchSessionTitle(item.title)
       const scopeSummary = buildScopeSummary(item.metadata?.scope)
@@ -1072,7 +1447,6 @@ export function AIWorkbenchController() {
                   event.stopPropagation()
                   setRenameTargetId(item.id)
                   setRenameValue(title)
-                  setRenameProject(sessionProject(item))
                   setRenamePinned(item.metadata?.tags?.includes(PINNED_SESSION_TAG) ?? false)
                   setRenameOpen(true)
                 }}
@@ -1110,10 +1484,10 @@ export function AIWorkbenchController() {
     label: `${item.name}${item.supportsAsync ? ' / async' : ' / inline'}`,
   }))
   const analysisProfileOptions = analysisProfiles
-    .filter((item) => item.enabled)
-    .map((item) => ({ value: item.id, label: `${item.name} / ${item.mode}` }))
+    .filter((item) => item.enabled && item.mode === 'root_cause')
+    .map((item) => ({ value: item.id, label: item.name }))
   const selectedAnalysisProfile = analysisProfiles.find(
-    (item) => item.id === selectedAnalysisProfileId,
+    (item) => item.id === analysisIntent.rootCauseProfileId,
   )
   const activeAgentProvider =
     agentProviders.find((item) => item.id === selectedAgentProviderId) ??
@@ -1121,9 +1495,6 @@ export function AIWorkbenchController() {
     agentProviders.find((item) => item.id === defaultAgentProviderId)
   const activeCapability = agentCapabilities.find(
     (item) => (item.analysisKinds ?? []).includes(activeMode) || item.id === activeMode,
-  )
-  const analysisCapability = agentCapabilities.find(
-    (item) => (item.analysisKinds ?? []).includes(analysisMode) || item.id === analysisMode,
   )
   const disabledToolOptions = useMemo(() => buildDisabledToolOptions(adapters), [adapters])
   const cleanedBudgetOverrides = useMemo(() => numberRecord(budgetOverrides), [budgetOverrides])
@@ -1182,12 +1553,12 @@ export function AIWorkbenchController() {
           : '沿用会话固定范围。',
     },
   ]
-  const canRunExplicitAnalysis = canUseChat && (activeMode !== 'root_cause' || canRunRootCause)
+  const canRunExplicitAnalysis = canUseChat && (canRunRootCause || canViewMonitoring || canViewAI)
   const explicitAnalysisTitle = canRunExplicitAnalysis
     ? undefined
-    : activeMode === 'root_cause'
-      ? '缺少 observe.ai.root-cause.run 权限'
-      : '缺少 observe.ai.chat 权限'
+    : !canUseChat
+      ? '缺少 observe.ai.chat 权限'
+      : '缺少专业分析权限'
   const createInspectionTitle = canCreateInspectionTask
     ? undefined
     : !canUseChat
@@ -1207,21 +1578,73 @@ export function AIWorkbenchController() {
     setSelectedGraphNodeId(activeGraph?.focusNodeId ?? activeGraph?.nodes?.[0]?.id ?? null)
   }, [activeGraph?.focusNodeId, activeGraph?.nodes])
 
-  const canSubmitExplicitAnalysis = canUseChat && (analysisMode !== 'root_cause' || canRunRootCause)
-  const handleModeChange = (next: WorkbenchMode) => {
-    setDraftMode(next)
-    navigate(getAIWorkbenchPathForMode(next, searchParams))
-    if (currentSession && currentSession.metadata?.mode !== next) {
-      patchSessionMutation.mutate({ sessionId: currentSession.id, body: { mode: next } })
-    }
-  }
+  const hasAnalysisParameters = Object.values(analysisIntent).some(
+    (value) => value !== undefined && value !== '',
+  )
+  const analysisUnavailableReason = taskAgentUnavailableReason(
+    agentProviders.find((item) => item.id === analysisAgentProviderId),
+    analysisCapabilities,
+    hasAnalysisParameters,
+  )
+  const nativeAnalysis = analysisAgentProviderId === 'internal'
+  const analysisCapabilityAllowed = (kind: WorkbenchMode) =>
+    (kind === 'root_cause'
+      ? canRunRootCause
+      : kind === 'inspection_review'
+        ? canViewAI
+        : canViewMonitoring) &&
+    (!nativeAnalysis || canInvokeGateway)
+  const analysisSources = (kind: string) =>
+    enabledDataSources.filter(
+      (source) =>
+        source.sourceKind === kind &&
+        source.mcpAdapter === `${kind}.v1` &&
+        (!currentSession?.metadata?.toolset?.enabledAdapterIds?.length ||
+          currentSession.metadata.toolset.enabledAdapterIds.includes(source.mcpAdapter)) &&
+        (!selectedAdapterIds.length || selectedAdapterIds.includes(source.mcpAdapter)),
+    )
+  const performanceSources = analysisSources('metrics')
+  const traceSources = analysisSources('traces')
+  const completedInspectionRuns = (inspectionRunsQuery.data ?? []).filter(
+    (run) => run.completedAt && run.status !== 'running',
+  )
+  const analysisInputReason = !nativeAnalysis
+    ? ''
+    : analysisCapabilities.includes('performance') &&
+        (!analysisIntent.metricKey ||
+          !(metricCatalogQuery.data ?? []).some(
+            (metric) => metric.key === analysisIntent.metricKey && metric.available,
+          ) ||
+          !performanceSources.some(
+            (source) => source.id === analysisIntent.performanceDataSourceId,
+          ))
+      ? '请选择可用指标和指标数据源。'
+      : analysisCapabilities.includes('trace') &&
+          !traceSources.some((source) => source.id === analysisIntent.traceDataSourceId)
+        ? '请选择链路数据源。'
+        : analysisCapabilities.includes('inspection_review') &&
+            (!analysisIntent.inspectionRunIds?.length ||
+              !analysisIntent.inspectionRunIds.every((id) =>
+                completedInspectionRuns.some((run) => run.id === id),
+              ))
+          ? '请选择已完成的真实巡检记录。'
+          : ''
+  const canSubmitExplicitAnalysis =
+    canUseChat &&
+    analysisCapabilities.length > 0 &&
+    analysisCapabilities.every(analysisCapabilityAllowed) &&
+    !analysisUnavailableReason &&
+    !analysisInputReason
   const handleSessionChange = (sessionId: string) => {
+    setPersonalArtifactEntry(undefined)
     const selected = visibleSessions.find((item) => item.id === sessionId)
     if (selected) {
-      navigate(getAIWorkbenchPathForSession(selected, searchParams))
+      const params = new URLSearchParams(searchParams)
+      for (const key of ['view', 'message', 'q']) params.delete(key)
+      navigate(getAIWorkbenchPathForSession(selected, params))
       return
     }
-    updateSearchParams({ session: sessionId })
+    updateSearchParams({ session: sessionId, view: undefined, message: undefined, q: undefined })
   }
   const openArtifactLink = (link: ArtifactContextLink) => {
     navigate(link.path)
@@ -1235,25 +1658,51 @@ export function AIWorkbenchController() {
   const openExplicitAnalysis = () => {
     if (!currentSession || !canRunExplicitAnalysis) return
     const nextMode = activeMode
-    const runnableMode = RUNNABLE_ANALYSIS_MODE_OPTIONS.some((item) => item.value === nextMode)
-      ? nextMode
-      : 'root_cause'
-    setAnalysisMode(runnableMode)
-    setSelectedAgentProviderId(currentSession.metadata?.agentProviderId || 'internal')
-    setSelectedAnalysisProfileId(defaultAnalysisProfileIdForMode(runnableMode, analysisProfiles))
-    setAnalysisQuestion(defaultAnalysisQuestion(runnableMode, currentSession))
+    const runnableMode =
+      RUNNABLE_ANALYSIS_MODE_OPTIONS.some((item) => item.value === nextMode) &&
+      analysisCapabilityAllowed(nextMode)
+        ? nextMode
+        : canRunRootCause
+          ? 'root_cause'
+          : canViewMonitoring
+            ? 'performance'
+            : 'inspection_review'
+    setAnalysisCapabilities([runnableMode as TaskCapability])
+    setAnalysisIntent({})
+    setAnalysisAgentProviderId(selectedAgentProviderId || defaultAgentProviderId)
+    setAnalysisQuestion(defaultAnalysisQuestion(runnableMode))
     setPanel(null)
     setAnalysisOpen(true)
   }
   const submitExplicitAnalysis = () => {
-    if (!currentSession || !canSubmitExplicitAnalysis || sendMessageMutation.isPending) return
-    const question =
-      analysisQuestion.trim() || defaultAnalysisQuestion(analysisMode, currentSession)
+    if (!currentSession || !canSubmitExplicitAnalysis || currentStreamPending) return
+    const question = analysisQuestion.trim() || defaultAnalysisQuestion(analysisMode)
     submitWorkbenchStream({
       sessionId: currentSession.id,
-      request: buildWorkbenchStreamRequest(question, analysisMode),
+      request: buildWorkbenchStreamRequest(question, analysisMode, analysisAgentProviderId, {
+        capabilities: analysisCapabilities,
+        ...(analysisCapabilities.includes('root_cause') && analysisIntent.rootCauseProfileId
+          ? { rootCauseProfileId: analysisIntent.rootCauseProfileId }
+          : {}),
+        ...(analysisCapabilities.includes('performance')
+          ? {
+              performanceDataSourceId: analysisIntent.performanceDataSourceId,
+              metricKey: analysisIntent.metricKey,
+            }
+          : {}),
+        ...(analysisCapabilities.includes('trace')
+          ? {
+              traceDataSourceId: analysisIntent.traceDataSourceId,
+              traceId: analysisIntent.traceId,
+              minDurationMs: analysisIntent.minDurationMs ?? 0,
+            }
+          : {}),
+        ...(analysisCapabilities.includes('inspection_review')
+          ? { inspectionRunIds: analysisIntent.inspectionRunIds }
+          : {}),
+      }),
       closeAnalysisOnSuccess: true,
-      navigateMode: analysisMode,
+      navigateMode: isExplicitRouteMode ? analysisMode : undefined,
     })
   }
   const openInspector = (view: InspectorView) => {
@@ -1336,71 +1785,43 @@ export function AIWorkbenchController() {
     setScopeOverrides({})
   }
 
+  const latestContextMessage = [...serverMessages].reverse().find((item) => item.role !== 'user')
+  const usedContextSummary = contextSnapshotSummary(
+    latestContextMessage?.metadata?.contextSnapshot ??
+      latestContextMessage?.metadata?.contextEnvelope,
+  )
+  const contextUsage = latestContextMessage?.metadata?.contextUsage
+  const nextContextSummary = [
+    {
+      label: '已选背景',
+      value:
+        [
+          ...(contextSelection.memoryIds ?? []).map((id) => `记忆 ${id}`),
+          ...knowledgeBaseIds.map((id) => `知识库 ${id}`),
+          ...(contextSelection.references ?? []).map((item) => item.name),
+          ...(contextSelection.attachments ?? []).map((item) => item.name),
+        ].join('、') || '无',
+    },
+    {
+      label: '资源范围',
+      value: buildScopeSummary(currentSession?.metadata?.scope) || '未限定',
+    },
+    { label: '可用历史消息', value: `${serverMessages.length} 条` },
+    {
+      label: '已选工具适配器',
+      value: selectedAdapterIds.length ? selectedAdapterIds.join('、') : '默认',
+    },
+    {
+      label: '已选技能',
+      value: selectedSkillIds.length ? selectedSkillIds.join('、') : '默认',
+    },
+    {
+      label: '固定背景',
+      value: Object.keys(currentSession?.metadata?.pinnedContext ?? {}).join('、') || '无',
+    },
+  ]
+
   const renderInspectorBody = () => {
-    if (!currentSession && inspectorView === 'context') {
-      return (
-        <ManagementState
-          bordered={false}
-          compact
-          kind="select-scope"
-          title="未选择会话"
-          description="选择一个 AI 会话后查看上下文范围、证据和建议。"
-        />
-      )
-    }
-
-    if (inspectorView === 'context') {
-      return currentSession ? (
-        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-          <Card size="small" title="上下文范围">
-            <Paragraph style={{ marginBottom: 0 }}>
-              {buildScopeSummary(currentSession.metadata?.scope)}
-            </Paragraph>
-            {currentSession.metadata?.scope?.alertId ? (
-              <Button
-                style={{ marginTop: 12 }}
-                size="small"
-                onClick={() =>
-                  navigate(
-                    `/monitoring-workbench/alerts/${currentSession.metadata?.scope?.alertId}`,
-                  )
-                }
-              >
-                查看原始告警详情
-              </Button>
-            ) : null}
-          </Card>
-          <Card size="small" title="关联运行">
-            {(currentSession.metadata?.analysisRunRefs ?? []).length === 0 ? (
-              <ManagementState
-                bordered={false}
-                compact
-                title="暂无运行记录"
-                description="当前会话还没有关联的分析运行。"
-              />
-            ) : (
-              <Space orientation="vertical" size={8} style={{ width: '100%' }}>
-                {(currentSession.metadata?.analysisRunRefs ?? []).map((item) => (
-                  <Flex key={item.id} justify="space-between">
-                    <Text>{item.kind}</Text>
-                    <StatusTag value={item.status || 'completed'} />
-                  </Flex>
-                ))}
-              </Space>
-            )}
-          </Card>
-        </Space>
-      ) : (
-        <ManagementState
-          bordered={false}
-          compact
-          kind="select-scope"
-          title="未选择会话"
-          description="选择一个 AI 会话后查看上下文。"
-        />
-      )
-    }
-
     if (inspectorView === 'evidence') {
       const sources = sourceItemsForArtifactEntry(activeArtifactEntry)
       return activeArtifact ? (
@@ -1500,102 +1921,207 @@ export function AIWorkbenchController() {
     )
   }
 
+  if (
+    currentSession &&
+    personal !== Boolean(currentSession.metadata?.conversationKind?.startsWith('personal_'))
+  ) {
+    return (
+      <ManagementState
+        title="此会话属于另一个入口"
+        description="普通聊天与 Heya 个人会话分别管理。"
+        actions={
+          <Button onClick={() => navigate(getAIWorkbenchPathForSession(currentSession))}>
+            打开所属会话
+          </Button>
+        }
+      />
+    )
+  }
+
   return (
     <>
+      <h1 className="soha-ai-sr-only">
+        {personal ? assistantQuery.data?.data?.name || 'heya' : 'AI 工作台'} ·{' '}
+        {currentSessionTitle || '主要聊天'}
+      </h1>
       <WorkbenchShell
+        personal={personal}
+        onSearch={() => setSearchOpen(true)}
+        chatActive={!feedView}
+        onChat={() => updateSearchParams({ view: undefined })}
         panelOpen={panel !== null}
+        assistantPanelOpen={panel === 'assistant'}
+        mobileTab={
+          feedView
+            ? 'feed'
+            : panel === 'assistant'
+              ? assistantTab === 'activity'
+                ? 'tasks'
+                : assistantTab === 'results'
+                  ? 'results'
+                  : 'me'
+              : 'chat'
+        }
+        onMobileTab={
+          personal
+            ? (value) => {
+                if (value === 'chat' || value === 'feed') {
+                  setPanel(null)
+                  updateSearchParams({ view: value === 'feed' ? 'feed' : undefined })
+                } else {
+                  setAssistantTab(
+                    value === 'tasks' ? 'activity' : value === 'results' ? 'results' : 'identity',
+                  )
+                  setPanel('assistant')
+                }
+              }
+            : undefined
+        }
+        railActions={
+          personal ? (
+            <>
+              <Tooltip title="动态" placement="right">
+                <Button
+                  type="text"
+                  aria-label="动态"
+                  className="soha-ai-rail-action soha-ai-icon-trigger"
+                  aria-pressed={feedView}
+                  icon={<AnimatedAssistantIcon name="tasks" />}
+                  onClick={() => {
+                    setPanel(null)
+                    updateSearchParams({ view: 'feed' })
+                  }}
+                />
+              </Tooltip>
+              <Tooltip title="成果" placement="right">
+                <Button
+                  type="text"
+                  aria-label="成果"
+                  className="soha-ai-rail-action soha-ai-icon-trigger"
+                  aria-pressed={panel === 'assistant' && assistantTab === 'results'}
+                  icon={<AnimatedAssistantIcon name="results" />}
+                  onClick={() => {
+                    setAssistantTab('results')
+                    setPanel('assistant')
+                  }}
+                />
+              </Tooltip>
+              <Tooltip title="即将到来" placement="right">
+                <Button
+                  type="text"
+                  aria-label="即将到来"
+                  className="soha-ai-rail-action soha-ai-icon-trigger"
+                  aria-pressed={panel === 'assistant' && assistantTab === 'upcoming'}
+                  icon={<AnimatedAssistantIcon name="calendar" />}
+                  onClick={() => {
+                    setAssistantTab('upcoming')
+                    setPanel('assistant')
+                  }}
+                />
+              </Tooltip>
+              <Tooltip title="助手身份" placement="right">
+                <Button
+                  type="text"
+                  aria-label="助手身份"
+                  className="soha-ai-rail-action soha-ai-icon-trigger"
+                  aria-pressed={panel === 'assistant' && assistantTab === 'identity'}
+                  icon={<AnimatedAssistantIcon name="identity" />}
+                  onClick={() => {
+                    setAssistantTab('identity')
+                    setPanel('assistant')
+                  }}
+                />
+              </Tooltip>
+            </>
+          ) : undefined
+        }
         onClosePanel={() => setPanel(null)}
         sidebar={
           <aside className="soha-ai-workbench-sidebar">
-            <div className="soha-ai-workbench__tools-header">
-              <div className="soha-ai-workbench__tools-title">
-                <img src="/logo.svg" alt="" className="soha-ai-workbench__brand-logo" />
-                <span>
-                  <Text strong>Soha AI</Text>
-                  <Text type="secondary">
-                    {visibleSessions.length > 0
-                      ? `${visibleSessions.length} 个会话`
-                      : '从这里切换当前会话'}
-                  </Text>
-                </span>
-              </div>
+            <Button
+              type="text"
+              block
+              icon={<AnimatedAssistantIcon name="search" />}
+              onClick={() => setSearchOpen(true)}
+            >
+              搜索对话
+            </Button>
+            <Button
+              aria-label="主要聊天"
+              className={`soha-ai-main-chat soha-ai-icon-trigger${isMainChat ? ' is-active' : ''}`}
+              type="text"
+              icon={<AnimatedAssistantIcon name="chat" />}
+              disabled={!mainSession}
+              onClick={() => mainSession && navigate(getAIWorkbenchPathForSession(mainSession))}
+            >
+              主要聊天
+            </Button>
+            <div className="soha-ai-side-heading">
+              <Text type="secondary">旁聊</Text>
               <Button
-                aria-label="模型设置"
-                className="soha-ai-workbench__header-menu-button"
-                icon={<ControlOutlined />}
-                size="small"
                 type="text"
-                onClick={() => navigate(getAIModelSettingsPath(location.search))}
+                size="small"
+                aria-label="新增旁聊"
+                icon={<PlusOutlined />}
+                disabled={!canUseChat || createSessionMutation.isPending}
+                onClick={() => setSideOpen(true)}
               />
             </div>
 
-            <Input
-              aria-label="搜索会话"
-              placeholder="搜索会话"
-              allowClear
-              value={sessionSearch}
-              onChange={(event) => setSessionSearch(event.target.value)}
-            />
-
-            {projectOptions.length > 0 ? (
-              <Select
-                aria-label="个人项目集合"
-                placeholder="全部个人会话"
-                allowClear
-                value={projectFilter}
-                onChange={setProjectFilter}
-                options={[
-                  { value: '', label: '未分类' },
-                  ...projectOptions.map((value) => ({ value, label: value })),
-                ]}
-              />
-            ) : null}
             <Conversations
               items={conversationItems}
               activeKey={currentSession?.id}
               onActiveChange={(value) => handleSessionChange(String(value))}
               className="soha-ai-workbench__conversations"
-              creation={{
-                icon: <PlusOutlined />,
-                label: '新建会话',
-                onClick: () => createSession({ scope: {} }),
-                disabled: !canUseChat || createSessionMutation.isPending,
-              }}
             />
           </aside>
         }
-        toolbar={
-          <>
-            <div className="soha-ai-workbench__session-heading">
-              <Text strong>{currentSessionTitle || '新的对话'}</Text>
-            </div>
-            <div className="soha-ai-workbench__toolbar-actions">
-              {currentSession ? (
-                <Button
-                  type="text"
-                  aria-label="复制会话 ID"
-                  icon={<CopyOutlined />}
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(currentSession.id)
-                      void message.success('会话 ID 已复制')
-                    } catch {
-                      setPanel('settings')
-                      void message.warning('无法访问剪贴板，请在会话设置中手动复制 ID。')
-                    }
-                  }}
-                >
-                  会话 ID
-                </Button>
-              ) : null}
-              <Button icon={<SettingOutlined />} onClick={() => setPanel('settings')}>
-                会话设置
-              </Button>
-            </div>
-          </>
+        railFooter={
+          <Tooltip title="会话设置" placement="right">
+            <Button
+              type="text"
+              className="soha-ai-rail-action soha-ai-icon-trigger"
+              aria-label="会话设置"
+              aria-pressed={panel === 'settings'}
+              icon={<AnimatedAssistantIcon name="settings" />}
+              onClick={() => setPanel('settings')}
+            />
+          </Tooltip>
         }
         alerts={
           <>
+            {requestRecovery.pending && !currentStreamPending ? (
+              <Alert
+                type="warning"
+                title={
+                  requestRecovery.cancelling
+                    ? '正在停止任务，等待后台确认'
+                    : runningAgentRuns.length > 0
+                      ? '后台任务正在执行'
+                      : '任务提交结果未确认'
+                }
+                description={
+                  requestRecovery.cancelling
+                    ? '正在查回原任务并请求停止。请保持页面打开；关闭后将在返回时继续确认，未确认前后台任务可能仍在运行。'
+                    : '正在读取原任务状态。关闭页面不会停止已经接收的任务。'
+                }
+                action={<Button onClick={requestRecovery.recheck}>重新读取</Button>}
+              />
+            ) : null}
+            {requestRecovery.error ? (
+              <Alert
+                type="error"
+                title={requestRecovery.error}
+                action={<Button onClick={cancelMessageStream}>重试停止</Button>}
+              />
+            ) : null}
+            {assistantQuery.isError ? (
+              <Alert
+                type="error"
+                title="个人助手加载失败"
+                action={<Button onClick={() => void assistantQuery.refetch()}>重试</Button>}
+              />
+            ) : null}
             {!canUseChat ? (
               <Alert
                 type="warning"
@@ -1630,7 +2156,7 @@ export function AIWorkbenchController() {
                       size="small"
                       icon={<ReloadOutlined />}
                       onClick={() => submitWorkbenchStream(lastRetryableInput)}
-                      disabled={sendMessageMutation.isPending}
+                      disabled={currentStreamPending}
                     >
                       重试
                     </Button>
@@ -1641,28 +2167,42 @@ export function AIWorkbenchController() {
           </>
         }
       >
-        <main className="soha-ai-workbench__canvas">
+        {feedView ? (
+          <main className="soha-ai-workbench__canvas is-feed">
+            <PersonalFeed
+              owner={owner}
+              onDiscuss={(item) => {
+                focusAfterFeed.current = true
+                setContextSelection((current) => ({ ...current, feedItemId: item.id }))
+                queryClient.setQueryData(workbenchKeys.feedItem(owner, item.id), { data: item })
+                setPanel(null)
+                updateSearchParams({ view: undefined, message: undefined, q: undefined })
+              }}
+            />
+          </main>
+        ) : null}
+        <main className="soha-ai-workbench__canvas" hidden={feedView}>
           <div className="soha-ai-workbench__dialog-shell">
             {!currentSession ? (
               <div className="soha-ai-workbench__empty-state">
                 <Welcome
                   variant="borderless"
                   icon={<img src="/logo.svg" alt="" className="soha-ai-workbench__welcome-logo" />}
-                  title={visibleSessions.length > 0 ? '正在准备会话' : '开始新的对话'}
+                  title={mainSessionQuery.isError ? '主要聊天加载失败' : '正在准备对话'}
                   description={
-                    visibleSessions.length > 0
-                      ? '正在同步当前会话，请稍候。'
-                      : '从左侧会话记录选择已有会话，或直接新建一个会话开始聊天和分析。'
+                    mainSessionQuery.isError
+                      ? '请重试，或从左侧打开已有旁聊。'
+                      : '正在同步你的会话，请稍候。'
                   }
                   extra={
                     <Space wrap>
                       <Button
                         type="primary"
-                        loading={createSessionMutation.isPending}
-                        onClick={() => createSession({ scope: {} })}
+                        loading={mainSessionQuery.isFetching}
+                        onClick={() => void mainSessionQuery.refetch()}
                         disabled={!canUseChat}
                       >
-                        新建会话
+                        重试
                       </Button>
                     </Space>
                   }
@@ -1670,7 +2210,51 @@ export function AIWorkbenchController() {
               </div>
             ) : (
               <div className="soha-ai-workbench__conversation-card">
+                {messageAnchor ? (
+                  <div className="soha-message-history" aria-label="搜索定位">
+                    <Typography.Text type="secondary">正在查看搜索命中的消息</Typography.Text>
+                    <Button
+                      size="small"
+                      onClick={() => updateSearchParams({ message: undefined, q: undefined })}
+                    >
+                      回到最新消息
+                    </Button>
+                    {beforeCursor ? (
+                      <Button
+                        size="small"
+                        loading={windowMutation.isPending}
+                        onClick={() =>
+                          windowMutation.mutate({
+                            sessionId: requestedSessionId!,
+                            selector: { before: beforeCursor },
+                            historyKey,
+                          })
+                        }
+                      >
+                        更早消息
+                      </Button>
+                    ) : null}
+                    {afterCursor ? (
+                      <Button
+                        size="small"
+                        loading={windowMutation.isPending}
+                        onClick={() =>
+                          windowMutation.mutate({
+                            sessionId: requestedSessionId!,
+                            selector: { after: afterCursor },
+                            historyKey,
+                          })
+                        }
+                      >
+                        后续消息
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
                 <div className="soha-ai-workbench__conversation-scroll">
+                  {messageWindowQuery.isLoading && messageAnchor ? (
+                    <Typography.Text>正在定位消息…</Typography.Text>
+                  ) : null}
                   {messages.length === 0 ? (
                     <div className="soha-ai-workbench__welcome">
                       <Welcome
@@ -1678,8 +2262,12 @@ export function AIWorkbenchController() {
                         icon={
                           <img src="/logo.svg" alt="" className="soha-ai-workbench__welcome-logo" />
                         }
-                        title="从一个问题开始，连接你的工作"
-                        description="围绕 Soha 中的资源、应用与知识展开对话，也可以直接讨论任何问题。"
+                        title={isMainChat ? '今天，想一起完成什么？' : currentSessionTitle}
+                        description={
+                          isMainChat
+                            ? '聊想法、查资源，或把一件事交给 Soha。需要专注讨论时，可以开启旁聊。'
+                            : '这是一个独立话题。消息和背景单独保存，也可以随时回到主要聊天。'
+                        }
                         styles={{ title: { fontSize: 24 }, description: { fontSize: 14 } }}
                       />
                       <Prompts
@@ -1700,22 +2288,67 @@ export function AIWorkbenchController() {
                     </div>
                   ) : (
                     <Bubble.List
-                      autoScroll
+                      ref={bubbleRef}
+                      autoScroll={!messageAnchor}
                       items={bubbleItems(messages).map((item, index) => ({
                         ...item,
+                        className:
+                          String(item.key) === messageAnchor ? 'soha-message-hit' : undefined,
                         content:
                           item.role === 'ai' ? (
-                            <WorkbenchMarkdown
-                              content={item.content}
-                              streaming={['loading', 'updating'].includes(item.status)}
-                              sources={metadataSources(messages[index].metadata)}
-                              onSource={openSource}
+                            <>
+                              {item.content ? (
+                                <WorkbenchMarkdown
+                                  content={item.content}
+                                  searchQuery={
+                                    String(item.key) === messageAnchor
+                                      ? messageSearchQuery
+                                      : undefined
+                                  }
+                                  streaming={['loading', 'updating'].includes(item.status)}
+                                  sources={metadataSources(messages[index].metadata)}
+                                  onSource={openSource}
+                                />
+                              ) : null}
+                              <MessageProgress message={messages[index]} />
+                            </>
+                          ) : item.role === 'user' ? (
+                            <UserMessageContent
+                              message={messages[index]}
+                              searchQuery={
+                                String(item.key) === messageAnchor ? messageSearchQuery : undefined
+                              }
+                              reaction={assistantReactionForMessage(messages, messages[index])}
                             />
                           ) : (
                             item.content
                           ),
                         footer: (
                           <>
+                            {personal && (
+                              <AssistantChatResult
+                                metadata={messages[index].metadata}
+                                loading={currentStreamPending}
+                                onContinue={() => {
+                                  updateDraft((draft) => ({
+                                    value: draft.value
+                                      ? `${draft.value}\n调整你的头像：`
+                                      : '调整你的头像：',
+                                    task: { kind: 'avatar', useCurrentAvatar: true },
+                                  }))
+                                  senderRef.current?.focus({ cursor: 'end' })
+                                }}
+                                onUndo={() =>
+                                  submitWorkbenchStream({
+                                    sessionId: requestedSessionId!,
+                                    request: {
+                                      ...buildWorkbenchStreamRequest('撤销这次形象更改', 'general'),
+                                      assistantTask: { kind: 'undo', messageId: String(item.key) },
+                                    },
+                                  })
+                                }
+                              />
+                            )}
                             <MessageActivity
                               onFeedback={
                                 hasPermission(
@@ -1731,6 +2364,7 @@ export function AIWorkbenchController() {
                                   : undefined
                               }
                               onSaveMemory={
+                                serverMessages.some((message) => message.id === String(item.key)) &&
                                 hasPermission(
                                   permissionSnapshotQuery.data?.data,
                                   'ai.memory.update',
@@ -1739,7 +2373,7 @@ export function AIWorkbenchController() {
                                       setMemoryDraft({
                                         fact: messages[index].content,
                                         sourceRefs: [
-                                          'session:' + currentSession.id + '#message=' + item.key,
+                                          `soha://session/${encodeURIComponent(currentSession.id)}/message/${encodeURIComponent(String(item.key))}`,
                                         ],
                                       })
                                   : undefined
@@ -1747,6 +2381,37 @@ export function AIWorkbenchController() {
                               onBranch={
                                 serverMessages.some((message) => message.id === String(item.key))
                                   ? () => branchFromMessage(String(item.key))
+                                  : undefined
+                              }
+                              reaction={reactions[String(item.key)]}
+                              onReaction={(emoji) =>
+                                setReactions((current) => ({
+                                  ...current,
+                                  [String(item.key)]:
+                                    current[String(item.key)] === emoji ? '' : emoji,
+                                }))
+                              }
+                              onReply={
+                                serverMessages.some((message) => message.id === String(item.key))
+                                  ? () => {
+                                      if ((contextSelection.references?.length ?? 0) >= 20) {
+                                        void message.warning('最多添加 20 个引用。')
+                                        return
+                                      }
+                                      setContextSelection((current) => ({
+                                        ...current,
+                                        references: [
+                                          ...(current.references ?? []),
+                                          {
+                                            kind: 'session',
+                                            sessionId: currentSession.id,
+                                            messageIds: [String(item.key)],
+                                            name: `回复 · ${messages[index].content.slice(0, 48)}`,
+                                          },
+                                        ],
+                                      }))
+                                      senderRef.current?.focus()
+                                    }
                                   : undefined
                               }
                               message={messages[index]}
@@ -1768,7 +2433,7 @@ export function AIWorkbenchController() {
                                       <Button
                                         size="small"
                                         onClick={() => {
-                                          setSelectedArtifactKey(entry.key)
+                                          selectArtifact(entry.key)
                                           setPanel('history')
                                         }}
                                       >
@@ -1778,7 +2443,7 @@ export function AIWorkbenchController() {
                                         <Button
                                           size="small"
                                           onClick={() => {
-                                            setSelectedArtifactKey(entry.key)
+                                            selectArtifact(entry.key)
                                             openInspector('evidence')
                                           }}
                                         >
@@ -1789,7 +2454,7 @@ export function AIWorkbenchController() {
                                         <Button
                                           size="small"
                                           onClick={() => {
-                                            setSelectedArtifactKey(entry.key)
+                                            selectArtifact(entry.key)
                                             openInspector('hypotheses')
                                           }}
                                         >
@@ -1800,7 +2465,7 @@ export function AIWorkbenchController() {
                                         <Button
                                           size="small"
                                           onClick={() => {
-                                            setSelectedArtifactKey(entry.key)
+                                            selectArtifact(entry.key)
                                             openInspector('actions')
                                           }}
                                         >
@@ -1811,7 +2476,7 @@ export function AIWorkbenchController() {
                                         <Button
                                           size="small"
                                           onClick={() => {
-                                            setSelectedArtifactKey(entry.key)
+                                            selectArtifact(entry.key)
                                             setPanel('thinking')
                                           }}
                                         >
@@ -1829,7 +2494,13 @@ export function AIWorkbenchController() {
                       role={{
                         ai: {
                           placement: 'start',
-                          avatar: <img src="/logo.svg" alt="Soha AI" width={24} height={24} />,
+                          avatar: (
+                            <AssistantAvatar
+                              assistant={assistantQuery.data?.data}
+                              personal={personal}
+                              className="soha-ai-message-avatar"
+                            />
+                          ),
                           variant: 'borderless',
                         },
                         user: { placement: 'end', variant: 'filled' },
@@ -1842,6 +2513,24 @@ export function AIWorkbenchController() {
 
                 <WorkbenchComposer
                   key={currentSession.id}
+                  heldValue={heldValue}
+                  onRestoreDraft={() =>
+                    updateDraft({ value: heldValue || '', heldValue: undefined, task: undefined })
+                  }
+                  assistantTask={assistantTask}
+                  images={contextSelection.images}
+                  onImagesChange={(images) =>
+                    setContextSelection((current) => ({ ...current, images }))
+                  }
+                  onAssistantTaskChange={(task) =>
+                    task
+                      ? updateDraft({ task })
+                      : updateDraft({
+                          task: undefined,
+                          value: heldValue ?? senderValue,
+                          heldValue: undefined,
+                        })
+                  }
                   agentProviders={agentProviders}
                   agentProviderId={selectedAgentProviderId}
                   agentMode={activeMode}
@@ -1850,17 +2539,17 @@ export function AIWorkbenchController() {
                     patchSessionMutation.mutate(
                       { sessionId: currentSession.id, body: { agentProviderId } },
                       {
-                        onError: () =>
-                          setSelectedAgentProviderId(
-                            currentSession.metadata?.agentProviderId || 'internal',
-                          ),
+                        onError: () => {
+                          if (activeSessionRef.current === currentSession.id)
+                            setSelectedAgentProviderId(
+                              currentSession.metadata?.agentProviderId || 'internal',
+                            )
+                        },
                       },
                     )
                   }}
                   preferences={modelPreferences}
-                  onPreferencesChange={(value) =>
-                    setModelDraft({ sessionId: currentSession.id, value })
-                  }
+                  onPreferencesChange={(value) => updateDraft({ model: value })}
                   modelOptions={catalogQuery.data?.data?.modelOptions ?? []}
                   defaultPublicModel={catalogQuery.data?.data?.defaultPublicModel}
                   modelError={
@@ -1870,52 +2559,80 @@ export function AIWorkbenchController() {
                   modelSelectionEnabled={
                     activeMode === 'general' && selectedAgentProviderId === 'internal'
                   }
-                  contextSummary={[
-                    {
-                      label: '已选背景',
-                      value:
-                        [
-                          ...knowledgeBaseIds.map((id) => `知识库 ${id}`),
-                          ...(contextSelection.references ?? []).map((item) => item.name),
-                          ...(contextSelection.attachments ?? []).map((item) => item.name),
-                        ].join('、') || '无',
-                    },
-                    {
-                      label: '资源范围',
-                      value: buildScopeSummary(currentSession.metadata?.scope) || '未限定',
-                    },
-                    { label: '历史消息', value: `${serverMessages.length} 条` },
-                    {
-                      label: '已选工具适配器',
-                      value: selectedAdapterIds.length ? selectedAdapterIds.join('、') : '默认',
-                    },
-                    {
-                      label: '已选技能',
-                      value: selectedSkillIds.length ? selectedSkillIds.join('、') : '默认',
-                    },
-                    {
-                      label: '固定背景',
-                      value:
-                        Object.keys(currentSession.metadata?.pinnedContext ?? {}).join('、') ||
-                        '无',
-                    },
-                  ]}
-                  usedContextSummary={contextSnapshotSummary(
-                    [...serverMessages].reverse().find((item) => item.metadata?.contextSnapshot)
-                      ?.metadata?.contextSnapshot,
-                    [...serverMessages].reverse().find((item) => item.metadata?.contextSnapshot)
-                      ?.metadata?.usage,
-                  )}
+                  contextSummary={nextContextSummary}
+                  usedContextSummary={usedContextSummary}
+                  contextUsage={contextUsage}
+                  contextSource={
+                    currentAlertId ? (
+                      <Button
+                        type="link"
+                        onClick={() =>
+                          navigate(
+                            `/monitoring-workbench/alerts/${encodeURIComponent(currentAlertId)}`,
+                          )
+                        }
+                      >
+                        查看原始告警详情
+                      </Button>
+                    ) : undefined
+                  }
                   contextControls={
                     activeMode === 'general' ? (
                       <>
                         {hasPermission(permissionSnapshotQuery.data?.data, 'ai.memory.view') ? (
-                          <Button size="small" type="text" onClick={() => setMemoryDraft({})}>
-                            个人记忆
+                          <Button
+                            size="small"
+                            type="text"
+                            icon={<BookOutlined />}
+                            aria-label="个人记忆"
+                            onClick={() => setMemoryDraft({})}
+                          >
+                            记忆
                             {contextSelection.memoryIds?.length
                               ? ' · ' + contextSelection.memoryIds.length
                               : ''}
                           </Button>
+                        ) : null}
+                        <ChatContextSelection
+                          showSelection={false}
+                          selection={contextSelection}
+                          onChange={setContextSelection}
+                          knowledgeBaseIds={knowledgeBaseIds}
+                          onKnowledgeChange={setKnowledgeBaseIds}
+                          initialClusterId={currentSession.metadata?.scope?.clusterId}
+                          disabled={
+                            !canUseChat ||
+                            contextParsing ||
+                            currentStreamPending ||
+                            runningAgentRuns.length > 0
+                          }
+                          onParsingChange={setContextParsing}
+                          onSession={() => {
+                            setReferenceSessionId('')
+                            setPanel('reference')
+                          }}
+                        />
+                      </>
+                    ) : undefined
+                  }
+                  selectedContext={
+                    activeMode === 'general' ? (
+                      <>
+                        {contextSelection.feedItemId ? (
+                          <Tag
+                            closable
+                            onClose={() =>
+                              setContextSelection((current) => ({
+                                ...current,
+                                feedItemId: undefined,
+                              }))
+                            }
+                          >
+                            讨论动态 · {feedReferenceQuery.data?.data?.title || '正在读取内容'}
+                          </Tag>
+                        ) : null}
+                        {contextSelection.memoryIds?.length ? (
+                          <Tag>记忆 · {contextSelection.memoryIds.length}</Tag>
                         ) : null}
                         {currentSession.metadata?.pinnedContext?.branchReference ? (
                           <Tag
@@ -1932,23 +2649,17 @@ export function AIWorkbenchController() {
                             分支背景 · 仅引用分支时选定的消息
                           </Tag>
                         ) : null}
-                        <ChatContextSelection
+                        <ChatContextTags
                           selection={contextSelection}
                           onChange={setContextSelection}
                           knowledgeBaseIds={knowledgeBaseIds}
                           onKnowledgeChange={setKnowledgeBaseIds}
-                          initialClusterId={currentSession.metadata?.scope?.clusterId}
                           disabled={
                             !canUseChat ||
                             contextParsing ||
-                            sendMessageMutation.isPending ||
-                            runningExternalAgentRuns.length > 0
+                            currentStreamPending ||
+                            runningAgentRuns.length > 0
                           }
-                          onParsingChange={setContextParsing}
-                          onSession={() => {
-                            setReferenceSessionId('')
-                            setPanel('reference')
-                          }}
                         />
                       </>
                     ) : undefined
@@ -1956,18 +2667,20 @@ export function AIWorkbenchController() {
                   resetVersion={senderResetVersion}
                   senderRef={senderRef}
                   loading={
-                    sendMessageMutation.isPending ||
-                    runningExternalAgentRuns.length > 0 ||
+                    currentStreamPending ||
+                    runningAgentRuns.length > 0 ||
+                    requestRecovery.pending ||
                     cancelAgentRunsMutation.isPending
                   }
+                  readOnly={requestRecovery.pending || Boolean(requestRecovery.error)}
                   disabled={!canUseChat || !currentSession || contextParsing}
                   value={senderValue}
                   onChange={setSenderValue}
                   onCancel={cancelMessageStream}
                   onSubmit={submitMessage}
                   onTools={() => setPanel('toolset')}
-                  onContext={() => openInspector('context')}
                   onSettings={() => setPanel('settings')}
+                  onAnalysis={openExplicitAnalysis}
                   onSession={(id = '') => {
                     setReferenceSessionId(id)
                     setPanel('reference')
@@ -1977,6 +2690,148 @@ export function AIWorkbenchController() {
             )}
           </div>
         </main>
+        <WorkbenchPanel
+          title="Soha 助手"
+          onAfterClose={() => {
+            if (profileFocusPending.current) {
+              profileFocusPending.current = false
+              requestAnimationFrame(() => senderRef.current?.focus({ cursor: 'end' }))
+            }
+          }}
+          variant="assistant"
+          open={personal && panel === 'assistant'}
+          onClose={() => setPanel(null)}
+          footer={
+            <MobileAssistantNav
+              value={
+                assistantTab === 'activity'
+                  ? 'tasks'
+                  : assistantTab === 'results'
+                    ? 'results'
+                    : 'me'
+              }
+              onChange={(value) => {
+                if (value === 'chat' || value === 'feed') {
+                  setPanel(null)
+                  updateSearchParams({ view: value === 'feed' ? 'feed' : undefined })
+                } else
+                  setAssistantTab(
+                    value === 'tasks' ? 'activity' : value === 'results' ? 'results' : 'identity',
+                  )
+              }}
+            />
+          }
+        >
+          <AssistantPanel
+            assistant={assistantQuery.data?.data}
+            connectionState={
+              catalogQuery.isPaused ||
+              assistantQuery.isPaused ||
+              catalogQuery.isError ||
+              assistantQuery.isError
+                ? 'unknown'
+                : catalogQuery.isPending || assistantQuery.isPending
+                  ? 'checking'
+                  : assistantQuery.data?.data
+                    ? 'connected'
+                    : 'unknown'
+            }
+            environment={personalEnvironmentQuery.data?.data}
+            workspaceOwner={owner}
+            environmentError={personalEnvironmentQuery.isError}
+            environmentLoading={personalEnvironmentQuery.isPending}
+            onRetryEnvironment={() => void personalEnvironmentQuery.refetch()}
+            environmentTemplates={environmentTemplatesQuery.data?.data ?? []}
+            environmentTemplatesError={environmentTemplatesQuery.isError}
+            environmentTemplatesLoading={environmentTemplatesQuery.isFetching}
+            onRetryEnvironmentTemplates={() => void environmentTemplatesQuery.refetch()}
+            environmentChanging={
+              environmentMutation.isPending ||
+              environmentDeletion.isPending ||
+              environmentExport.isPending
+            }
+            environmentExporting={environmentExport.isPending}
+            onExportEnvironment={(input) => environmentExport.mutate(input)}
+            onCancelEnvironmentExport={() => environmentExportAbort.current?.abort()}
+            onChangeEnvironment={(input) => environmentMutation.mutate(input)}
+            canRetryDeletion={
+              deletionReconciled ===
+              `${personalEnvironmentQuery.data?.data?.assistantId}:${personalEnvironmentQuery.data?.data?.version}`
+            }
+            onDeleteEnvironment={(input) => environmentDeletion.mutateAsync(input)}
+            personalRuns={personalTasksQuery.data?.data ?? []}
+            personalArtifacts={personalArtifactsQuery.data?.data ?? []}
+            artifactsError={personalArtifactsQuery.isError}
+            artifactsLoading={personalArtifactsQuery.isFetching}
+            onRetryArtifacts={() => void personalArtifactsQuery.refetch()}
+            onPersonalArtifact={(entry) => {
+              setPersonalArtifactEntry({
+                key: entry.id,
+                artifact: entry.artifact,
+                index: 0,
+                message: {
+                  id: entry.messageId || entry.id,
+                  sessionId: entry.sessionId || '',
+                  role: 'assistant',
+                  content: '',
+                  createdAt: entry.createdAt,
+                  metadata: entry.taskId ? { agentRunId: entry.taskId } : undefined,
+                },
+              })
+              setPanel('history')
+            }}
+            tasksError={
+              personalTasksQuery.isError || agentRunsQuery.isError || nativeEventPages.isError
+            }
+            onRetryTasks={() => {
+              void personalTasksQuery.refetch()
+              void queryClient.invalidateQueries({ queryKey: workbenchKeys.agentRuns.all() })
+            }}
+            onSession={(id) => {
+              handleSessionChange(id)
+              setPanel(null)
+            }}
+            onProfilePrompt={(kind) => {
+              if (feedView) {
+                focusAfterFeed.current = true
+                updateSearchParams({ view: undefined })
+              }
+              const prefix = kind === 'name' ? '把你的名称改为 ' : '把虚拟形象改成 '
+              updateDraft((draft) => ({
+                value: prefix,
+                heldValue: draft.heldValue ?? draft.value,
+                task: kind === 'avatar' ? { kind: 'avatar' } : undefined,
+              }))
+              if (window.matchMedia('(max-width: 991px)').matches) {
+                profileFocusPending.current = true
+                setPanel(null)
+              } else if (!feedView)
+                requestAnimationFrame(() => senderRef.current?.focus({ cursor: 'end' }))
+            }}
+            avatarBusy={streamingSessions.length > 0}
+            renaming={currentStreamPending}
+            tab={assistantTab}
+            onTabChange={setAssistantTab}
+            provider={activeAgentProvider}
+            session={currentSession}
+            messages={messages}
+            runs={agentRunsQuery.data?.data ?? []}
+            artifacts={artifactEntries}
+            loading={
+              messagesQuery.isLoading ||
+              agentRunsQuery.isLoading ||
+              personalTasksQuery.isLoading ||
+              personalArtifactsQuery.isLoading
+            }
+            onArtifact={(key) => {
+              selectArtifact(key)
+              setPanel('history')
+            }}
+            onSettings={() => setPanel('settings')}
+            onTools={() => setPanel('toolset')}
+            onSource={openSource}
+          />
+        </WorkbenchPanel>
         <WorkbenchPanel
           title={selectedSource?.title || '来源'}
           open={panel === 'source'}
@@ -2030,18 +2885,34 @@ export function AIWorkbenchController() {
         <WorkbenchPanel title="会话设置" open={panel === 'settings'} onClose={() => setPanel(null)}>
           <Space orientation="vertical" size={16} style={{ width: '100%' }}>
             {currentSession ? (
-              <Typography.Paragraph code>会话 ID：{currentSession.id}</Typography.Paragraph>
+              <Space orientation="vertical">
+                <Typography.Paragraph code>会话 ID：{currentSession.id}</Typography.Paragraph>
+                <Button
+                  size="small"
+                  aria-label="复制会话 ID"
+                  icon={<CopyOutlined />}
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(currentSession.id)
+                      void message.success('会话 ID 已复制')
+                    } catch {
+                      void message.warning('无法访问剪贴板，请手动复制上方 ID。')
+                    }
+                  }}
+                >
+                  复制编号
+                </Button>
+              </Space>
             ) : null}
             <Card size="small" title="模型与工具">
               <Paragraph>
-                {modelStatusDetail(latestAssistantMessage, sendMessageMutation.isPending)}
+                {modelStatusDetail(latestAssistantMessage, currentStreamPending)}
               </Paragraph>
               <Space wrap>
                 <Button onClick={() => navigate(getAIModelSettingsPath(location.search))}>
                   模型设置
                 </Button>
                 <Button onClick={() => setPanel('toolset')}>工具装配</Button>
-                <Button onClick={() => openInspector('context')}>查看上下文</Button>
               </Space>
             </Card>
             {legacyPlatformMessages.length > 0 ? (
@@ -2052,42 +2923,17 @@ export function AIWorkbenchController() {
                 description="这些历史兜底回复不是模型输出。"
               />
             ) : null}
-            <details className="soha-ai-workbench__advanced">
-              <summary>高级分析能力</summary>
-              <div className="soha-ai-workbench__session-mode">
-                <Text type="secondary">对话类型</Text>
-                <Select<WorkbenchMode>
-                  className="soha-ai-workbench__mode-select"
-                  size="small"
-                  value={activeMode}
-                  prefix={modeIcon(activeMode)}
-                  options={WORKBENCH_MODE_OPTIONS.map((item) => ({
-                    value: item.value,
-                    label: item.label,
-                  }))}
-                  onChange={handleModeChange}
-                  optionRender={(option) => {
-                    const mode = option.value as WorkbenchMode
-                    return (
-                      <div className="soha-ai-workbench__mode-option">
-                        <span>{modeLabel(mode)}</span>
-                        <small>{modeDescription(mode)}</small>
-                      </div>
-                    )
-                  }}
-                />
-                <Paragraph className="soha-ai-workbench__mode-description">
-                  {modeDescription(activeMode)}
-                </Paragraph>
-              </div>
-
+            <Card size="small" title="专业任务">
+              <Paragraph type="secondary">
+                按本次任务选择分析能力，结果保存在当前对话与成果中。
+              </Paragraph>
               <Space wrap>
                 <Tooltip title={explicitAnalysisTitle}>
                   <Button
                     onClick={openExplicitAnalysis}
                     disabled={!currentSession || !canRunExplicitAnalysis}
                   >
-                    显式分析
+                    专业分析任务
                   </Button>
                 </Tooltip>
                 <Button
@@ -2098,7 +2944,7 @@ export function AIWorkbenchController() {
                   生成巡检任务
                 </Button>
               </Space>
-            </details>
+            </Card>
           </Space>
         </WorkbenchPanel>
         <WorkbenchPanel
@@ -2106,7 +2952,7 @@ export function AIWorkbenchController() {
           open={panel === 'history'}
           onClose={() => setPanel(null)}
         >
-          {artifactEntries.length > 0 ? (
+          {!personalArtifactEntry && artifactEntries.length > 0 ? (
             <div className="soha-ai-workbench__artifact-strip">
               <div className="soha-ai-workbench__artifact-strip-head">
                 <Text type="secondary">会话结果 · {artifactEntries.length}</Text>
@@ -2120,7 +2966,7 @@ export function AIWorkbenchController() {
                       key={entry.key}
                       type="button"
                       className={`soha-ai-workbench__artifact-item ${selected ? 'is-active' : ''}`}
-                      onClick={() => setSelectedArtifactKey(entry.key)}
+                      onClick={() => selectArtifact(entry.key)}
                     >
                       <span className="soha-ai-workbench__artifact-title">
                         {artifactTitle(entry)}
@@ -2346,34 +3192,26 @@ export function AIWorkbenchController() {
         </WorkbenchPanel>
 
         <WorkbenchPanel
-          title={
-            inspectorView === 'context'
-              ? '会话上下文'
-              : activeArtifactEntry
-                ? artifactTitle(activeArtifactEntry)
-                : '消息详情'
-          }
+          title={activeArtifactEntry ? artifactTitle(activeArtifactEntry) : '消息详情'}
           open={panel === 'inspector'}
           onClose={() => setPanel(null)}
           extra={
-            inspectorView !== 'context' ? (
-              <Segmented
-                size="small"
-                value={inspectorView}
-                options={[
-                  ...(sourceItemsForArtifactEntry(activeArtifactEntry).length
-                    ? [{ value: 'evidence', label: '来源' }]
-                    : []),
-                  ...(activeArtifact?.hypotheses?.length
-                    ? [{ value: 'hypotheses', label: '假设' }]
-                    : []),
-                  ...(activeArtifact?.recommendations?.length
-                    ? [{ value: 'actions', label: '建议' }]
-                    : []),
-                ]}
-                onChange={(value) => setInspectorView(value as InspectorView)}
-              />
-            ) : undefined
+            <Segmented
+              size="small"
+              value={inspectorView}
+              options={[
+                ...(sourceItemsForArtifactEntry(activeArtifactEntry).length
+                  ? [{ value: 'evidence', label: '来源' }]
+                  : []),
+                ...(activeArtifact?.hypotheses?.length
+                  ? [{ value: 'hypotheses', label: '假设' }]
+                  : []),
+                ...(activeArtifact?.recommendations?.length
+                  ? [{ value: 'actions', label: '建议' }]
+                  : []),
+              ]}
+              onChange={(value) => setInspectorView(value as InspectorView)}
+            />
           }
         >
           {renderInspectorBody()}
@@ -2625,11 +3463,31 @@ export function AIWorkbenchController() {
         </WorkbenchPanel>
       </WorkbenchShell>
 
+      {searchOpen ? (
+        <MessageSearch
+          owner={owner}
+          personal={personal}
+          sessions={visibleSessions}
+          onClose={() => setSearchOpen(false)}
+          onSelect={(sessionId, messageId, query) => {
+            setSearchOpen(false)
+            updateSearchParams({
+              session: sessionId,
+              message: messageId,
+              q: query,
+              view: undefined,
+              mode: undefined,
+            })
+          }}
+        />
+      ) : null}
       <Modal
-        title="显式分析设置"
+        title="专业分析任务"
+        centered
+        styles={{ body: { maxHeight: 'calc(100dvh - 220px)', overflowY: 'auto' } }}
         open={analysisOpen}
         onCancel={() => {
-          if (sendMessageMutation.isPending) {
+          if (currentStreamPending) {
             cancelMessageStream()
           }
           setAnalysisOpen(false)
@@ -2637,9 +3495,9 @@ export function AIWorkbenchController() {
         onOk={submitExplicitAnalysis}
         okText="开始分析"
         cancelText="取消"
-        confirmLoading={sendMessageMutation.isPending}
+        confirmLoading={currentStreamPending}
         okButtonProps={{
-          disabled: !currentSession || !canSubmitExplicitAnalysis || sendMessageMutation.isPending,
+          disabled: !currentSession || !canSubmitExplicitAnalysis || currentStreamPending,
         }}
         width={680}
       >
@@ -2648,59 +3506,215 @@ export function AIWorkbenchController() {
             <Alert
               type="info"
               showIcon
-              title="本次分析会写回当前会话"
-              description="分析结果会追加为 assistant 消息，并进入分析工件历史、图谱、证据和建议面板。"
+              title="选择本次任务需要的能力"
+              description="结果会保存在当前对话与成果中，主要聊天和旁聊继续保持自然对话。"
             />
             <Space orientation="vertical" size={8} style={{ width: '100%' }}>
-              <Text strong>分析模式</Text>
-              <Segmented
-                block
-                value={analysisMode}
+              <Text strong>任务能力</Text>
+              <Select<TaskCapability[]>
+                aria-label="任务能力"
+                mode="multiple"
+                style={{ width: '100%' }}
+                value={analysisCapabilities}
                 options={RUNNABLE_ANALYSIS_MODE_OPTIONS.map((item) => ({
                   value: item.value,
                   label: item.label,
+                  disabled: !analysisCapabilityAllowed(item.value),
                 }))}
                 onChange={(value) => {
-                  const next = value as WorkbenchMode
-                  const currentDefault = defaultAnalysisQuestion(analysisMode, currentSession)
-                  setAnalysisMode(next)
-                  setSelectedAnalysisProfileId(
-                    defaultAnalysisProfileIdForMode(next, analysisProfiles),
-                  )
+                  const next = value
+                  const currentDefault = defaultAnalysisQuestion(analysisMode)
+                  setAnalysisCapabilities(next)
+                  setAnalysisIntent((current) => {
+                    const intent = { ...current }
+                    if (!next.includes('root_cause')) delete intent.rootCauseProfileId
+                    if (!next.includes('performance')) {
+                      delete intent.performanceDataSourceId
+                      delete intent.metricKey
+                    }
+                    if (!next.includes('trace')) {
+                      delete intent.traceDataSourceId
+                      delete intent.traceId
+                      delete intent.minDurationMs
+                    }
+                    if (!next.includes('inspection_review')) delete intent.inspectionRunIds
+                    return intent
+                  })
                   if (!analysisQuestion.trim() || analysisQuestion === currentDefault) {
-                    setAnalysisQuestion(defaultAnalysisQuestion(next, currentSession))
+                    setAnalysisQuestion(defaultAnalysisQuestion(next[0] ?? 'general'))
                   }
                 }}
               />
+              <Text type="secondary">{analysisCapabilities.map(modeDescription).join(' ')}</Text>
             </Space>
             <Space orientation="vertical" size={8} style={{ width: '100%' }}>
-              <Text strong>Agent Provider</Text>
+              <Text strong>执行助手</Text>
               <Select
-                value={selectedAgentProviderId || defaultAgentProviderId}
-                options={providerOptions}
-                onChange={(value: string) => setSelectedAgentProviderId(value)}
+                aria-label="任务执行助手"
+                value={analysisAgentProviderId}
+                options={enabledAgentProviders.map((item) => {
+                  const reason = taskAgentUnavailableReason(
+                    item,
+                    analysisCapabilities,
+                    hasAnalysisParameters,
+                  )
+                  return {
+                    value: item.id,
+                    label: `${item.name}${reason ? ` · ${reason}` : ''}`,
+                    disabled: !!reason,
+                  }
+                })}
+                onChange={(value: string) => setAnalysisAgentProviderId(value)}
               />
               <Text type="secondary">
-                {agentProviders.find((item) => item.id === selectedAgentProviderId)?.description ||
+                {agentProviders.find((item) => item.id === analysisAgentProviderId)?.description ||
                   '选择本次分析使用内置分析还是外部 agent runner。'}
               </Text>
+              {!nativeAnalysis ? (
+                <Text type="secondary">
+                  此助手支持单项专业任务；需要组合能力或指定查询参数时请选择内置助手。
+                </Text>
+              ) : null}
             </Space>
-            <Space orientation="vertical" size={8} style={{ width: '100%' }}>
-              <Text strong>分析模板</Text>
-              <Select
-                allowClear
-                showSearch={{ optionFilterProp: 'label' }}
-                value={selectedAnalysisProfileId || undefined}
-                placeholder="使用当前模式的默认 profile"
-                options={analysisProfileOptions}
-                onChange={(value?: string) => setSelectedAnalysisProfileId(value || '')}
-              />
-              <Text type="secondary">
-                {selectedAnalysisProfile
-                  ? `${selectedAnalysisProfile.name} 会约束数据源、playbook、预算和输出风格。`
-                  : '未选择时由后端使用会话和 provider 默认策略。'}
-              </Text>
-            </Space>
+            {nativeAnalysis && analysisCapabilities.includes('root_cause') ? (
+              <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+                <Text strong>根因分析模板</Text>
+                <Select
+                  aria-label="根因分析模板"
+                  allowClear
+                  showSearch={{ optionFilterProp: 'label' }}
+                  value={analysisIntent.rootCauseProfileId || undefined}
+                  placeholder="使用已启用的默认根因模板"
+                  options={analysisProfileOptions}
+                  onChange={(value?: string) =>
+                    setAnalysisIntent((current) => ({ ...current, rootCauseProfileId: value }))
+                  }
+                />
+                <Text type="secondary">
+                  {selectedAnalysisProfile
+                    ? `${selectedAnalysisProfile.name} 会约束根因分析的数据源和调查策略。`
+                    : '未选择时由后端使用会话和 provider 默认策略。'}
+                </Text>
+              </Space>
+            ) : null}
+            {nativeAnalysis && analysisCapabilities.includes('performance') ? (
+              <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+                <Text strong>性能分析参数</Text>
+                <Select
+                  aria-label="指标数据源"
+                  placeholder="选择指标数据源"
+                  style={{ width: '100%' }}
+                  showSearch={{ optionFilterProp: 'label' }}
+                  value={analysisIntent.performanceDataSourceId}
+                  options={performanceSources.map((source) => ({
+                    value: source.id,
+                    label: source.name,
+                  }))}
+                  onChange={(value: string) =>
+                    setAnalysisIntent((current) => ({ ...current, performanceDataSourceId: value }))
+                  }
+                />
+                <Select
+                  aria-label="性能指标"
+                  placeholder="选择实际查询的指标"
+                  style={{ width: '100%' }}
+                  showSearch={{ optionFilterProp: 'label' }}
+                  loading={metricCatalogQuery.isFetching}
+                  value={analysisIntent.metricKey}
+                  options={(metricCatalogQuery.data ?? []).map((metric) => ({
+                    value: metric.key,
+                    label: metric.label,
+                    disabled: !metric.available,
+                  }))}
+                  onChange={(value: string) =>
+                    setAnalysisIntent((current) => ({ ...current, metricKey: value }))
+                  }
+                />
+                {metricCatalogQuery.isError ? (
+                  <Alert
+                    type="error"
+                    showIcon
+                    title="指标目录加载失败"
+                    description={metricCatalogQuery.error.message}
+                  />
+                ) : null}
+              </Space>
+            ) : null}
+            {nativeAnalysis && analysisCapabilities.includes('trace') ? (
+              <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+                <Text strong>链路分析参数</Text>
+                <Select
+                  aria-label="链路数据源"
+                  placeholder="选择链路数据源"
+                  style={{ width: '100%' }}
+                  showSearch={{ optionFilterProp: 'label' }}
+                  value={analysisIntent.traceDataSourceId}
+                  options={traceSources.map((source) => ({ value: source.id, label: source.name }))}
+                  onChange={(value: string) =>
+                    setAnalysisIntent((current) => ({ ...current, traceDataSourceId: value }))
+                  }
+                />
+                <Input
+                  aria-label="Trace ID"
+                  placeholder="Trace ID（可选，留空查询当前范围）"
+                  maxLength={256}
+                  value={analysisIntent.traceId ?? ''}
+                  onChange={(event) =>
+                    setAnalysisIntent((current) => ({
+                      ...current,
+                      traceId: event.target.value.trim() || undefined,
+                    }))
+                  }
+                />
+                <Text>最短耗时（毫秒，0 表示不按耗时过滤）</Text>
+                <InputNumber
+                  aria-label="链路最短耗时"
+                  min={0}
+                  max={86400000}
+                  precision={0}
+                  value={analysisIntent.minDurationMs ?? 0}
+                  onChange={(value: number | null) =>
+                    setAnalysisIntent((current) => ({ ...current, minDurationMs: value ?? 0 }))
+                  }
+                />
+              </Space>
+            ) : null}
+            {nativeAnalysis && analysisCapabilities.includes('inspection_review') ? (
+              <Space orientation="vertical" size={8} style={{ width: '100%' }}>
+                <Text strong>巡检执行记录</Text>
+                <Select<string[]>
+                  aria-label="巡检执行记录"
+                  mode="multiple"
+                  maxCount={20}
+                  style={{ width: '100%' }}
+                  showSearch={{ optionFilterProp: 'label' }}
+                  placeholder="选择已完成的真实巡检记录"
+                  loading={inspectionRunsQuery.isFetching}
+                  value={analysisIntent.inspectionRunIds ?? []}
+                  options={completedInspectionRuns.map((run) => ({
+                    value: run.id,
+                    label: `${run.summary || run.id} · ${formatSessionTimestamp(run.completedAt)}`,
+                  }))}
+                  onChange={(value: string[]) =>
+                    setAnalysisIntent((current) => ({
+                      ...current,
+                      inspectionRunIds: value.length ? value : undefined,
+                    }))
+                  }
+                />
+                <Text type="secondary">
+                  仅显示最近的已完成记录，执行前会重新核对当前权限和会话范围。
+                </Text>
+                {inspectionRunsQuery.isError ? (
+                  <Alert
+                    type="error"
+                    showIcon
+                    title="巡检记录加载失败"
+                    description={inspectionRunsQuery.error.message}
+                  />
+                ) : null}
+              </Space>
+            ) : null}
             <Space orientation="vertical" size={8} style={{ width: '100%' }}>
               <Text strong>分析目标</Text>
               <Input.TextArea
@@ -2714,31 +3728,40 @@ export function AIWorkbenchController() {
             </Space>
             <Card size="small" title="执行上下文">
               <Space size={[8, 8]} wrap>
-                <Tag color="blue">{modeLabel(analysisMode)}</Tag>
+                {analysisCapabilities.map((kind) => (
+                  <Tag color="blue" key={kind}>
+                    {modeLabel(kind)}
+                  </Tag>
+                ))}
                 <Tag
                   color={
-                    agentProviders.find((item) => item.id === selectedAgentProviderId)
+                    agentProviders.find((item) => item.id === analysisAgentProviderId)
                       ?.supportsAsync
                       ? 'purple'
                       : 'default'
                   }
                 >
-                  {agentProviders.find((item) => item.id === selectedAgentProviderId)?.name ||
-                    selectedAgentProviderId ||
+                  {agentProviders.find((item) => item.id === analysisAgentProviderId)?.name ||
+                    analysisAgentProviderId ||
                     '内置分析'}
                 </Tag>
-                {analysisCapability ? <Tag>{analysisCapability.name}</Tag> : null}
                 {selectedAnalysisProfile ? <Tag>{selectedAnalysisProfile.name}</Tag> : null}
                 <Tag>{buildScopeSummary(currentSession.metadata?.scope)}</Tag>
                 <Tag>{currentSession.metadata?.toolset ? '会话级工具集' : '全局工具集'}</Tag>
               </Space>
             </Card>
-            {analysisMode === 'root_cause' && !canRunRootCause ? (
+            {analysisCapabilities.some((kind) => !analysisCapabilityAllowed(kind)) ? (
               <Alert
                 type="warning"
                 showIcon
-                title="缺少 observe.ai.root-cause.run 权限，无法运行根因分析。"
+                title="缺少所选专业能力或工具执行权限，无法开始分析。"
               />
+            ) : null}
+            {analysisUnavailableReason ? (
+              <Alert type="warning" showIcon title={analysisUnavailableReason} />
+            ) : null}
+            {analysisInputReason ? (
+              <Alert type="info" showIcon title={analysisInputReason} />
             ) : null}
           </Space>
         ) : (
@@ -2747,7 +3770,7 @@ export function AIWorkbenchController() {
             compact
             kind="select-scope"
             title="未选择会话"
-            description="先选择会话，再运行显式分析。"
+            description="先打开一个对话，再启动专业分析任务。"
           />
         )}
       </Modal>
@@ -2762,6 +3785,31 @@ export function AIWorkbenchController() {
         />
       ) : null}
       <Modal
+        title="开启旁聊"
+        open={sideOpen}
+        onCancel={() => setSideOpen(false)}
+        okText="开启旁聊"
+        cancelText="取消"
+        confirmLoading={createSessionMutation.isPending}
+        okButtonProps={{ disabled: !sideTitle.trim() || !canUseChat || catalogQuery.isPending }}
+        onOk={() => createSession({ title: sideTitle, scope: {} })}
+      >
+        <Paragraph type="secondary">
+          给这个独立话题取个名字。你可以随时在主要聊天与旁聊之间切换。
+        </Paragraph>
+        <Input
+          aria-label="旁聊名称"
+          placeholder="例如：发布方案、一个新想法"
+          maxLength={120}
+          value={sideTitle}
+          onChange={(event) => setSideTitle(event.target.value)}
+          onPressEnter={() => {
+            if (sideTitle.trim() && !createSessionMutation.isPending)
+              createSession({ title: sideTitle, scope: {} })
+          }}
+        />
+      </Modal>
+      <Modal
         title="重命名会话"
         open={renameOpen}
         onCancel={() => setRenameOpen(false)}
@@ -2771,15 +3819,13 @@ export function AIWorkbenchController() {
             sessionId: renameTargetId,
             body: {
               title: renameValue,
-              tags: organizationTags(
+              tags: sessionTagsWithPin(
                 visibleSessions.find((item) => item.id === renameTargetId)?.metadata?.tags,
-                renameProject,
                 renamePinned,
               ),
             },
           })
           setRenameOpen(false)
-          setProjectFilter(undefined)
         }}
       >
         <Space orientation="vertical" style={{ width: '100%' }}>
@@ -2788,20 +3834,10 @@ export function AIWorkbenchController() {
             value={renameValue}
             onChange={(event) => setRenameValue(event.target.value)}
           />
-          <Input
-            aria-label="个人项目名称"
-            placeholder="个人项目名称（可选）"
-            maxLength={64}
-            value={renameProject}
-            onChange={(event) => setRenameProject(event.target.value)}
-          />
           <Space>
             <Switch aria-label="置顶会话" checked={renamePinned} onChange={setRenamePinned} />
             置顶会话
           </Space>
-          <Text type="secondary">
-            项目仅整理个人会话，不继承背景。需要复用的内容请显式添加引用。
-          </Text>
         </Space>
       </Modal>
     </>

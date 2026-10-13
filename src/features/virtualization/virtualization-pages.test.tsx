@@ -18,6 +18,7 @@ import {
   buildCreateVmPayload,
   buildRuntimeHostProvisionPayload,
   filterVmCreateFlavors,
+  virtualMachineRootDiskGiB,
 } from './virtualization-model'
 import type { CreateVirtualMachineInput, VirtualizationClusterInput } from './virtualization-types'
 
@@ -122,6 +123,11 @@ const testState = vi.hoisted(() => ({
               diskGiB: 40,
               ipAddresses: ['10.0.0.8'],
               allowedActions: testState.vmAllowedActions,
+              capabilities: [
+                'vm.resource.cpu.resize',
+                'vm.resource.memory.resize',
+                'vm.resource.disk.resize',
+              ],
               config: {
                 hostname: 'build-vm',
                 fqdn: 'build-vm.apps.svc.cluster.local',
@@ -153,6 +159,9 @@ const testState = vi.hoisted(() => ({
           pageSize: 15,
         },
       }
+    }
+    if (path === '/virtualization/vms/vm-1/devices') {
+      return { data: [{ id: 'scsi0', kind: 'disk', sizeGiB: 40 }] }
     }
     if (path === '/virtualization/vms/vm-1/detail') {
       return {
@@ -703,6 +712,37 @@ function hasButtonByLabel(container: ParentNode, label: string) {
 }
 
 describe('virtualization pages', () => {
+  it('initializes resize values on first open and after the modal is destroyed', async () => {
+    testState.vmAllowedActions = ['resize']
+    const container = await renderWithProviders(
+      <StrictMode>
+        <VirtualizationVmsPage />
+      </StrictMode>,
+    )
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await clickButtonByLabel(container, '调整虚拟机规格')
+      await waitForGetCall('/virtualization/vms/vm-1/devices')
+      const dialog = document.body.querySelector('[role="dialog"]')!
+      expect(dialog.querySelector<HTMLInputElement>('#cpu')?.value).toBe('2')
+      expect(dialog.querySelector<HTMLInputElement>('#memoryMiB')?.value).toBe('4096')
+      await clickButtonByText(dialog, '下一步')
+      await waitForText('系统盘设备')
+      expect(dialog.querySelector<HTMLInputElement>('#rootDiskSizeGiB')?.value).toBe('40')
+      await clickButtonByText(dialog, '取 消')
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 400))
+      })
+    }
+    expect(testState.apiPost).not.toHaveBeenCalled()
+    expect(testState.apiPostWithHeaders).not.toHaveBeenCalled()
+  })
+  it('uses root capacity rather than the multi-disk total for resize defaults', () => {
+    expect(
+      virtualMachineRootDiskGiB({ diskGiB: 48, config: { diskCount: 2, rootDiskGiB: '40' } }),
+    ).toBe(40)
+    expect(virtualMachineRootDiskGiB({ diskGiB: 48, config: { diskCount: 2 } })).toBeUndefined()
+    expect(virtualMachineRootDiskGiB({ diskGiB: 40, config: { diskCount: 1 } })).toBe(40)
+  })
   it('selects the real zero-slot boot disk across PVE bus types', () => {
     const disks = [
       { id: 'sata0', kind: 'disk', sizeGiB: 40 },
@@ -1021,6 +1061,33 @@ describe('virtualization pages', () => {
     expect(payload.imageId).toBeUndefined()
   })
 
+  it('creates from a catalog cloud image with managed credential references', () => {
+    const payload = buildCreateVmPayload({
+      provider: 'pve',
+      connectionId: 'conn-pve',
+      name: 'cloud-vm',
+      sourceMode: 'cloud_image',
+      bootImageId: 'verified-cloud-image',
+      cpu: 2,
+      memoryMiB: 2048,
+      diskGiB: 20,
+      enableCloudInit: true,
+      managedGuestAccess: true,
+      guestUsername: 'soha',
+      guestPublicKeyRefs: ['secret://key@1'],
+    })
+    expect(payload).toMatchObject({
+      sourceMode: 'cloud_image',
+      imageId: 'verified-cloud-image',
+      sourceId: 'verified-cloud-image',
+      cpu: 2,
+      memoryMiB: 2048,
+      diskGiB: 20,
+      guestAccess: { username: 'soha', publicKeyRefs: ['secret://key@1'] },
+    })
+    expect(payload.templateId).toBeUndefined()
+  })
+
   it('maps VM creation to runtime-host onboarding without replacing Agent bootstrap', () => {
     const values = {
       provider: 'kubevirt',
@@ -1058,6 +1125,23 @@ describe('virtualization pages', () => {
           controlPlaneBaseURL: 'http://soha.internal:8080',
         },
       },
+    })
+    expect(payload).not.toHaveProperty('cloudInit')
+  })
+
+  it('keeps managed public key references when onboarding a runtime host', () => {
+    const payload = buildRuntimeHostProvisionPayload({
+      connectionId: 'pve-one',
+      name: 'runtime-vm',
+      registerRuntimeHost: true,
+      enableCloudInit: false,
+      managedGuestAccess: true,
+      guestUsername: 'soha',
+      guestPublicKeyRefs: ['soha://secrets/key/versions/1'],
+    })
+    expect(payload.guestAccess).toEqual({
+      username: 'soha',
+      publicKeyRefs: ['soha://secrets/key/versions/1'],
     })
     expect(payload).not.toHaveProperty('cloudInit')
   })

@@ -1373,6 +1373,32 @@ describe('app layout workspace navigation', () => {
     expect(workbenchShell?.nextElementSibling).toBe(businessNav)
   })
 
+  it.each([true, false])(
+    'keeps AI Assistant as a permission-gated shortcut beside the workbenches (chat=%s)',
+    async (chat) => {
+      testState.snapshot.permissionKeys.push(
+        'workbench.home.view',
+        'identity.portal.view',
+        'workbench.ai.view',
+        'observe.ai.view',
+      )
+      if (chat) testState.snapshot.permissionKeys.push('observe.ai.chat')
+      const container = await renderWithProviders('/')
+      await act(async () =>
+        container.querySelector<HTMLButtonElement>('.soha-workbench-switcher')?.click(),
+      )
+      const labels = Array.from(document.querySelectorAll('.ant-dropdown-menu-item')).map(
+        (item) => item.textContent,
+      )
+      expect(labels.some((label) => label?.includes('Heya'))).toBe(chat)
+      expect(labels.some((label) => label?.includes('AI工作台'))).toBe(true)
+      if (chat)
+        expect(labels.findIndex((label) => label?.includes('Heya'))).toBe(
+          labels.findIndex((label) => label?.includes('门户')) + 1,
+        )
+    },
+  )
+
   it.each([
     ['zh_CN', false, 'k8s工作台', '收起侧栏'],
     ['zh_CN', true, 'k8s工作台', '展开侧栏'],
