@@ -359,6 +359,7 @@ export function OnCallBoardPage() {
                   enableDensity
                   refreshing={rotationsQuery.isFetching}
                   error={rotationsQuery.error}
+                  hasReadData={rotationsQuery.data !== undefined}
                   onRefresh={() => void rotationsQuery.refetch()}
                   columnSettingPlacement="header"
                   columnSettingIconOnly
@@ -400,6 +401,7 @@ export function OnCallBoardPage() {
             title="待响应任务"
             enableDensity
             error={tasksQuery.error}
+            hasReadData={tasksQuery.data !== undefined}
             refreshing={tasksQuery.isFetching}
             onRefresh={() => void tasksQuery.refetch()}
             columnSettingPlacement="header"

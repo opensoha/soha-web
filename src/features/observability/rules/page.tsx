@@ -229,6 +229,7 @@ export function AlertRulesPage() {
       <AdminTable
         enableDensity
         error={rulesQuery.error}
+        hasReadData={rulesQuery.data !== undefined}
         refreshing={rulesQuery.isFetching}
         onRefresh={() => void rulesQuery.refetch()}
         columnSettingPlacement="header"
@@ -551,6 +552,7 @@ export function AlertRulesPage() {
         <AdminTable
           enableDensity
           error={ruleRunsQuery.error}
+          hasReadData={ruleRunsQuery.data !== undefined}
           refreshing={ruleRunsQuery.isFetching}
           onRefresh={() => void ruleRunsQuery.refetch()}
           columnSettingPlacement="header"

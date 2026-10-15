@@ -472,6 +472,7 @@ export function OnCallSettingsPage() {
               <AdminTable
                 enableDensity
                 error={assignmentsQuery.error}
+                hasReadData={assignmentsQuery.data !== undefined}
                 refreshing={assignmentsQuery.isFetching}
                 onRefresh={() => void assignmentsQuery.refetch()}
                 columnSettingPlacement="header"
@@ -504,6 +505,7 @@ export function OnCallSettingsPage() {
               <AdminTable
                 enableDensity
                 error={schedulesQuery.error}
+                hasReadData={schedulesQuery.data !== undefined}
                 refreshing={schedulesQuery.isFetching}
                 onRefresh={() => void schedulesQuery.refetch()}
                 columnSettingPlacement="header"
@@ -538,6 +540,7 @@ export function OnCallSettingsPage() {
               <AdminTable
                 enableDensity
                 error={rotationsQuery.error}
+                hasReadData={rotationsQuery.data !== undefined}
                 refreshing={rotationsQuery.isFetching}
                 onRefresh={() => void rotationsQuery.refetch()}
                 columnSettingPlacement="header"
@@ -572,6 +575,7 @@ export function OnCallSettingsPage() {
               <AdminTable
                 enableDensity
                 error={policiesQuery.error}
+                hasReadData={policiesQuery.data !== undefined}
                 refreshing={policiesQuery.isFetching}
                 onRefresh={() => void policiesQuery.refetch()}
                 columnSettingPlacement="header"

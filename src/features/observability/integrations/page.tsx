@@ -278,6 +278,7 @@ export function AlertIntegrationsPage() {
       <AdminTable
         enableDensity
         error={integrationsQuery.error}
+        hasReadData={integrationsQuery.data !== undefined}
         refreshing={integrationsQuery.isFetching}
         onRefresh={() => void integrationsQuery.refetch()}
         headerExtra={

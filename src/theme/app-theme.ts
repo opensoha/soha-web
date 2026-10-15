@@ -359,6 +359,7 @@ export function getAntdTheme(themeMode: ThemeMode | ResolvedThemeMode): ThemeCon
   return {
     algorithm: resolvedMode === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
     token: {
+      motion: !prefersReducedMotion(),
       colorPrimary: palette.primary,
       colorSuccess: palette.colorSuccess,
       colorWarning: palette.colorWarning,
@@ -687,6 +688,22 @@ export function applyAppTheme(_themeId: AppThemeId, themeMode: ThemeMode) {
   const resolvedMode = resolveThemeMode(themeMode)
   const palette = getThemePalette(resolvedMode)
   const root = document.documentElement
+  const motion = antdTheme.getDesignToken(getAntdTheme(resolvedMode))
+  root.style.setProperty(
+    '--soha-motion-duration-fast',
+    motion.motion ? motion.motionDurationFast : '0s',
+  )
+  root.style.setProperty(
+    '--soha-motion-duration-mid',
+    motion.motion ? motion.motionDurationMid : '0s',
+  )
+  root.style.setProperty(
+    '--soha-motion-duration-slow',
+    motion.motion ? motion.motionDurationSlow : '0s',
+  )
+  root.style.setProperty('--soha-motion-ease', motion.motionEaseInOut)
+  root.style.setProperty('--soha-motion-ease-out', motion.motionEaseOut)
+  root.style.setProperty('--soha-motion-activity', 'calc(var(--soha-motion-duration-mid) * 9)')
 
   root.style.setProperty('--soha-primary-rgb', palette.primaryRgb)
   root.style.setProperty('--soha-primary', palette.primary)
@@ -836,6 +853,21 @@ export function watchSystemThemeMode(onChange: () => void) {
   }
   media.addListener(handler)
   return () => media.removeListener(handler)
+}
+
+function prefersReducedMotion() {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+}
+
+export function watchSystemMotion(onChange: () => void) {
+  if (typeof window === 'undefined') return () => {}
+  const media = window.matchMedia('(prefers-reduced-motion: reduce)')
+  media.addEventListener('change', onChange)
+  return () => media.removeEventListener('change', onChange)
 }
 
 export function readStoredThemePreference(): {

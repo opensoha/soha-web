@@ -446,6 +446,7 @@ function CRDInstancesWorkspace({
           refreshing={resourcesQuery.isFetching}
           loading={resourcesQuery.isLoading || capability.isLoading}
           error={resourcesQuery.error}
+          hasReadData={resourcesQuery.data !== undefined}
           shellClassName="soha-management-table-shell"
           title={
             <span>

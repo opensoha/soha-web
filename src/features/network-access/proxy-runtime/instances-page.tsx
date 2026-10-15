@@ -249,6 +249,7 @@ export default function ProxyInstancesPage() {
         loading={instances.isLoading}
         refreshing={instances.isFetching}
         error={instances.error ?? undefined}
+        hasReadData={instances.data !== undefined}
         onRefresh={() => void instances.refetch()}
         localSorting
         pagination={{ pageSize: 15, showSizeChanger: false }}

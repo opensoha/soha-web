@@ -368,6 +368,7 @@ export function LogDataSourcesPage() {
       <AdminTable
         enableDensity
         error={sourcesQuery.error}
+        hasReadData={sourcesQuery.data !== undefined}
         refreshing={sourcesQuery.isFetching}
         onRefresh={() => void sourcesQuery.refetch()}
         headerExtra={

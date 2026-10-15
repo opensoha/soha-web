@@ -17,6 +17,7 @@ import {
   readStoredThemePreference,
   resolveThemeMode,
   watchSystemThemeMode,
+  watchSystemMotion,
 } from './theme/app-theme'
 import {
   applyBrandingSettings,
@@ -59,11 +60,23 @@ function AppProviders() {
     return watchSystemThemeMode(() => setSystemThemeVersion((current) => current + 1))
   }, [themeMode])
 
+  React.useEffect(
+    () =>
+      watchSystemMotion(() => {
+        applyAppTheme(DEFAULT_APP_THEME_ID, themeMode)
+        setSystemThemeVersion((current) => current + 1)
+      }),
+    [themeMode],
+  )
+
   const resolvedThemeMode = React.useMemo(
     () => resolveThemeMode(themeMode),
     [themeMode, systemThemeVersion],
   )
-  const antdTheme = React.useMemo(() => getAntdTheme(resolvedThemeMode), [resolvedThemeMode])
+  const antdTheme = React.useMemo(
+    () => getAntdTheme(resolvedThemeMode),
+    [resolvedThemeMode, systemThemeVersion],
+  )
 
   return (
     <ConfigProvider

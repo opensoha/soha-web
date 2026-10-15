@@ -2,13 +2,14 @@ import { useEffect, useRef } from 'react'
 import { App } from 'antd'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { ApiErrorEventDetail } from '@/services/api-error'
-import { API_ERROR_EVENT } from '@/services/api-error'
+import {
+  API_ERROR_EVENT,
+  API_ERROR_PRESENTED_EVENT,
+  apiErrorNotificationKey,
+  isApiErrorPresented,
+} from '@/services/api-error'
 
 const NOTIFICATION_DEDUP_WINDOW_MS = 8_000
-
-function notificationKey(error: ApiErrorEventDetail) {
-  return `${error.kind}:${error.status}:${error.method ?? 'GET'}:${error.path ?? ''}:${error.message}`
-}
 
 function requestLabel(error: ApiErrorEventDetail) {
   const method = error.method ?? 'GET'
@@ -27,11 +28,11 @@ export function GlobalApiErrorHandler() {
   const lastShownAt = useRef(new Map<string, number>())
 
   useEffect(() => {
-    const handleApiError = (event: Event) => {
-      const error = (event as CustomEvent<ApiErrorEventDetail>).detail
-      if (!error) return
+    const queuedFrames = new Map<string, number>()
+    const showApiError = (error: ApiErrorEventDetail) => {
+      if (isApiErrorPresented(error)) return
 
-      const key = notificationKey(error)
+      const key = apiErrorNotificationKey(error)
       const now = Date.now()
       const last = lastShownAt.current.get(key)
       if (last && now - last < NOTIFICATION_DEDUP_WINDOW_MS) {
@@ -81,8 +82,42 @@ export function GlobalApiErrorHandler() {
       }
     }
 
+    const handleApiError = (event: Event) => {
+      const error = (event as CustomEvent<ApiErrorEventDetail>).detail
+      if (!error || isApiErrorPresented(error)) return
+      if (error.kind === 'auth') return showApiError(error)
+      const key = apiErrorNotificationKey(error)
+      if (queuedFrames.has(key)) return
+      // Let the query result commit before choosing a fallback notification.
+      queuedFrames.set(
+        key,
+        window.requestAnimationFrame(() => {
+          queuedFrames.set(
+            key,
+            window.requestAnimationFrame(() => {
+              queuedFrames.delete(key)
+              showApiError(error)
+            }),
+          )
+        }),
+      )
+    }
+
+    const handleInlinePresentation = (event: Event) => {
+      const key = (event as CustomEvent<string>).detail
+      const frame = queuedFrames.get(key)
+      if (frame !== undefined) window.cancelAnimationFrame(frame)
+      queuedFrames.delete(key)
+      notification.destroy(key)
+      lastShownAt.current.delete(key)
+    }
     window.addEventListener(API_ERROR_EVENT, handleApiError)
-    return () => window.removeEventListener(API_ERROR_EVENT, handleApiError)
+    window.addEventListener(API_ERROR_PRESENTED_EVENT, handleInlinePresentation)
+    return () => {
+      window.removeEventListener(API_ERROR_EVENT, handleApiError)
+      window.removeEventListener(API_ERROR_PRESENTED_EVENT, handleInlinePresentation)
+      queuedFrames.forEach((frame) => window.cancelAnimationFrame(frame))
+    }
   }, [location, navigate, notification])
 
   return null

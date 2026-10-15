@@ -259,6 +259,7 @@ export function HealingPage() {
               <AdminTable
                 enableDensity
                 error={policiesQuery.error}
+                hasReadData={policiesQuery.data !== undefined}
                 refreshing={policiesQuery.isFetching}
                 onRefresh={() => void policiesQuery.refetch()}
                 columnSettingPlacement="header"
@@ -285,6 +286,7 @@ export function HealingPage() {
               <AdminTable
                 enableDensity
                 error={runsQuery.error}
+                hasReadData={runsQuery.data !== undefined}
                 refreshing={runsQuery.isFetching}
                 onRefresh={() => void runsQuery.refetch()}
                 columnSettingPlacement="header"

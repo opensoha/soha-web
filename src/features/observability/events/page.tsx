@@ -62,6 +62,7 @@ export function EventsPage() {
       <AdminTable
         enableDensity
         error={eventsQuery.error}
+        hasReadData={eventsQuery.data !== undefined}
         refreshing={eventsQuery.isFetching}
         onRefresh={() => void eventsQuery.refetch()}
         columnSettingIconOnly

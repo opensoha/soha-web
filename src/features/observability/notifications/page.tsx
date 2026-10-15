@@ -628,6 +628,7 @@ export function NotificationsPage() {
               <AdminTable
                 enableDensity
                 error={policiesQuery.error}
+                hasReadData={policiesQuery.data !== undefined}
                 refreshing={policiesQuery.isFetching}
                 onRefresh={() => void policiesQuery.refetch()}
                 columnSettingPlacement="header"
@@ -658,6 +659,7 @@ export function NotificationsPage() {
               <AdminTable
                 enableDensity
                 error={templatesQuery.error}
+                hasReadData={templatesQuery.data !== undefined}
                 refreshing={templatesQuery.isFetching}
                 onRefresh={() => void templatesQuery.refetch()}
                 columnSettingPlacement="header"
@@ -688,6 +690,7 @@ export function NotificationsPage() {
               <AdminTable
                 enableDensity
                 error={channelsQuery.error}
+                hasReadData={channelsQuery.data !== undefined}
                 refreshing={channelsQuery.isFetching}
                 onRefresh={() => void channelsQuery.refetch()}
                 columnSettingPlacement="header"
@@ -718,6 +721,7 @@ export function NotificationsPage() {
               <AdminTable
                 enableDensity
                 error={routesQuery.error}
+                hasReadData={routesQuery.data !== undefined}
                 refreshing={routesQuery.isFetching}
                 onRefresh={() => void routesQuery.refetch()}
                 columnSettingPlacement="header"
@@ -753,6 +757,7 @@ export function NotificationsPage() {
               <AdminTable
                 enableDensity
                 error={silencesQuery.error}
+                hasReadData={silencesQuery.data !== undefined}
                 refreshing={silencesQuery.isFetching}
                 onRefresh={() => void silencesQuery.refetch()}
                 columnSettingPlacement="header"

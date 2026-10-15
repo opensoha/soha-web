@@ -2,6 +2,8 @@ import { z } from 'zod'
 import type { ErrorEnvelope } from '@/types'
 
 export const API_ERROR_EVENT = 'soha:api-error'
+export const API_ERROR_PRESENTED_EVENT = 'soha:api-error-presented'
+const inlinePresentations = new Map<string, number>()
 
 export type ApiErrorKind = 'auth' | 'forbidden' | 'server' | 'network' | 'client'
 
@@ -54,6 +56,26 @@ export interface ApiErrorEventDetail {
   path?: string
   requestId?: string
   status: number
+}
+
+export function apiErrorNotificationKey(error: ApiErrorEventDetail) {
+  return `${error.kind}:${error.status}:${error.method ?? 'GET'}:${error.path ?? ''}:${error.message}`
+}
+
+export function isApiErrorPresented(error: ApiErrorEventDetail) {
+  return error.kind !== 'auth' && inlinePresentations.has(apiErrorNotificationKey(error))
+}
+
+export function claimApiErrorPresentation(error?: Error | null) {
+  if (!(error instanceof ApiError) || error.kind === 'auth' || typeof window === 'undefined') return
+  const key = apiErrorNotificationKey(error)
+  inlinePresentations.set(key, (inlinePresentations.get(key) ?? 0) + 1)
+  window.dispatchEvent(new CustomEvent(API_ERROR_PRESENTED_EVENT, { detail: key }))
+  return () => {
+    const count = (inlinePresentations.get(key) ?? 1) - 1
+    if (count > 0) inlinePresentations.set(key, count)
+    else inlinePresentations.delete(key)
+  }
 }
 
 export function classifyApiStatus(status: number): ApiErrorKind {

@@ -1,3 +1,5 @@
+import { ReadFeedback } from '@/components/request-feedback'
+import { readableQueryData } from '@/utils/query-feedback'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ComponentProps, ReactNode } from 'react'
 import { Button, Checkbox, Popover, Table, Typography } from 'antd'
@@ -7,7 +9,7 @@ import {
   ManagementRefreshButton,
   ManagementState,
 } from '@/components/management-list'
-import { useI18n } from '@/i18n'
+import { localeText, useI18n } from '@/i18n'
 import type { LocaleCode } from '@/i18n'
 import './admin-table.css'
 
@@ -28,6 +30,7 @@ const DEFAULT_PAGINATION_SUMMARY = (
 const ACTION_COLUMN_CLASS_NAME = 'soha-table-actions-column'
 const AUTO_ACTION_COLUMN_CLASS_NAME = 'soha-table-actions-column--auto'
 const { Text } = Typography
+const EMPTY_TABLE_RECORDS: AdminTableProps['dataSource'] = []
 
 // Antd adds a native title to ellipsis headers even when sorter tooltips are disabled.
 function TableHeaderCell(props: ComponentProps<'th'>) {
@@ -41,6 +44,7 @@ export interface AdminTableProps {
   dataSource: any[]
   empty?: ReactNode
   error?: Error | null
+  hasReadData?: boolean
   enableColumnSelection?: boolean
   enableDensity?: boolean
   expandable?: any
@@ -52,6 +56,7 @@ export interface AdminTableProps {
   onChange?: any
   onRow?: any
   onRefresh?: () => void
+  onRetry?: () => void
   refreshing?: boolean
   pageSize?: number
   pagination?: any
@@ -251,15 +256,17 @@ export function AdminTable({
   className,
   columns,
   currentPageSelectionLabel,
-  dataSource,
+  dataSource: sourceRecords,
   empty,
   error,
+  hasReadData,
   enableColumnSelection = true,
   enableDensity = false,
   headerExtra,
   localSorting = false,
   loading,
   onRefresh,
+  onRetry,
   refreshing,
   pageSize = 15,
   pagination,
@@ -278,6 +285,11 @@ export function AdminTable({
   viewportScroll = false,
   ...rest
 }: AdminTableProps) {
+  const cachedRecords = readableQueryData({
+    data: (hasReadData ?? sourceRecords.length > 0) ? sourceRecords : undefined,
+    error: error ?? null,
+  })
+  const dataSource = error ? (cachedRecords ?? EMPTY_TABLE_RECORDS) : sourceRecords
   const { localeCode, t } = useI18n()
   const [density, setDensity] = useState<AdminTableProps['tableSize']>()
   const resolvedTableSize = enableDensity ? (density ?? tableSize) : tableSize
@@ -663,14 +675,18 @@ export function AdminTable({
         </div>
       ) : null}
       {error ? (
-        <ManagementState
-          compact
-          kind="error"
-          title={t('table.loadFailed', '列表加载失败')}
-          description={error.message}
+        <ReadFeedback
+          label={localeText(localeCode, '列表', 'List')}
+          query={{
+            data: (hasReadData ?? sourceRecords.length > 0) ? sourceRecords : undefined,
+            error,
+            isError: true,
+            isFetching: Boolean(refreshing),
+            refetch: onRetry ?? onRefresh,
+          }}
         />
       ) : null}
-      {!error || dataSource.length > 0 ? (
+      {!error || cachedRecords !== undefined ? (
         <Table
           {...rest}
           className={resolvedTableClassName}

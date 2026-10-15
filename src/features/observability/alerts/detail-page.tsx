@@ -213,6 +213,7 @@ function AlertEventDetailBody({
               <AdminTable
                 enableDensity
                 error={detail.ruleRunsQuery.error}
+                hasReadData={detail.ruleRunsQuery.data !== undefined}
                 refreshing={detail.ruleRunsQuery.isFetching}
                 onRefresh={() => void detail.ruleRunsQuery.refetch()}
                 columnSettingPlacement="header"
@@ -251,6 +252,7 @@ function AlertEventDetailBody({
               <AdminTable
                 enableDensity
                 error={detail.healingRunsQuery.error}
+                hasReadData={detail.healingRunsQuery.data !== undefined}
                 refreshing={detail.healingRunsQuery.isFetching}
                 onRefresh={() => void detail.healingRunsQuery.refetch()}
                 columnSettingPlacement="header"
@@ -301,6 +303,7 @@ function AlertEventDetailBody({
               <AdminTable
                 enableDensity
                 error={detail.previewQuery.error}
+                hasReadData={detail.previewQuery.data !== undefined}
                 refreshing={detail.previewQuery.isFetching}
                 onRefresh={() => void detail.previewQuery.refetch()}
                 columnSettingPlacement="header"
@@ -348,6 +351,7 @@ function AlertEventDetailBody({
               <AdminTable
                 enableDensity
                 error={detail.deliveryLogsQuery.error}
+                hasReadData={detail.deliveryLogsQuery.data !== undefined}
                 refreshing={detail.deliveryLogsQuery.isFetching}
                 onRefresh={() => void detail.deliveryLogsQuery.refetch()}
                 columnSettingPlacement="header"

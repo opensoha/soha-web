@@ -196,6 +196,7 @@ export function AlertsPage() {
       <AdminTable
         enableDensity
         error={alertsQuery.error}
+        hasReadData={alertsQuery.data !== undefined}
         refreshing={alertsQuery.isFetching}
         onRefresh={() => void alertsQuery.refetch()}
         columnSettingIconOnly

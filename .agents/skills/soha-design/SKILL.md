@@ -9,6 +9,10 @@ Read [product experience](references/product-experience.md) for the affected sce
 [theme ownership](../soha-frontend/references/theme-system.md) for tokens. Actual values live
 in `src/theme/app-theme.ts`; existing pages and screenshots are evidence, not approved samples.
 
+For state changes, operations, metrics/session continuity or relationship exploration, also read
+[interaction feedback](references/interaction-feedback.md); keep those semantics independent of
+the scene's layout.
+
 Identify the task, object, important state, main action and supporting facts before composing
 controls. Keep Ant Design and reuse mature capabilities while preserving API, permissions,
 query and professional engine lifecycle. The current task determines scope; no fixed pilot pages.
