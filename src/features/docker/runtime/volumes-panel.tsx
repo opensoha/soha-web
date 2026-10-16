@@ -1,3 +1,6 @@
+import { readableQueryData } from '@/utils/query-feedback'
+import { ReadFeedback } from '@/components/request-feedback'
+
 import { useEffect, useState } from 'react'
 import { DownloadOutlined, FileOutlined, FolderOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Button, Card, Input, Select, Space, Spin, Typography } from 'antd'
@@ -21,17 +24,21 @@ export function DockerProjectVolumesPanel({
   serviceName,
   serviceOptions,
   servicesLoading,
+  servicesError,
   onServiceChange,
 }: DockerRuntimePanelProps) {
   const { localeCode } = useI18n()
   const [target, setTarget] = useState('')
   const [currentPath, setCurrentPath] = useState('/')
   const [previewPath, setPreviewPath] = useState('')
-  const canBrowseRuntime = enabled && Boolean(projectId && serviceName)
+  const canBrowseRuntime =
+    enabled &&
+    Boolean(projectId && serviceName) &&
+    serviceOptions.some((item) => item.value === serviceName)
   const volumesQuery = useQuery(
     dockerQueries.projectVolumes(projectId, { serviceName }, canBrowseRuntime),
   )
-  const volumes = volumesQuery.data ?? []
+  const volumes = readableQueryData(volumesQuery) ?? []
   const filesQuery = useQuery(
     dockerQueries.projectVolumeFiles(
       projectId,
@@ -48,19 +55,19 @@ export function DockerProjectVolumesPanel({
   )
 
   useEffect(() => {
+    setTarget('')
+    setCurrentPath('/')
+    setPreviewPath('')
+  }, [projectId, serviceName])
+
+  useEffect(() => {
     const firstTarget = volumes[0]?.target || ''
     setTarget((current) => current || firstTarget)
   }, [volumes])
 
-  useEffect(() => {
-    setTarget('')
-    setCurrentPath('/')
-    setPreviewPath('')
-  }, [serviceName])
-
   const selectedVolume = volumes.find((item) => item.target === target)
-  const entries = filesQuery.data?.items ?? []
-  const preview = fileQuery.data
+  const entries = readableQueryData(filesQuery)?.items ?? []
+  const preview = readableQueryData(fileQuery)
   const goParent = () => {
     const clean = currentPath.replace(/\/+$/, '')
     const parent = clean.includes('/') ? clean.slice(0, clean.lastIndexOf('/')) || '/' : '/'
@@ -93,6 +100,37 @@ export function DockerProjectVolumesPanel({
     )
   }
 
+  if (serviceOptions.length === 0) {
+    return (
+      <Card className="soha-detail-card" size="small">
+        <ManagementState
+          compact
+          kind={servicesLoading ? 'loading' : servicesError ? 'error' : 'empty'}
+          title={
+            servicesLoading
+              ? localeText(localeCode, '正在读取服务', 'Loading services')
+              : servicesError
+                ? localeText(localeCode, '服务列表读取失败', 'Service list could not be read')
+                : localeText(localeCode, '没有可用服务', 'No available services')
+          }
+          description={
+            servicesLoading
+              ? undefined
+              : localeText(
+                  localeCode,
+                  servicesError
+                    ? '请通过页面上方的“重试读取”刷新项目服务。'
+                    : '该项目还没有同步到可用于运行时访问的服务记录。',
+                  servicesError
+                    ? 'Retry reading project services using the action above.'
+                    : 'No service records are available for runtime access yet.',
+                )
+          }
+        />
+      </Card>
+    )
+  }
+
   return (
     <Card
       className="soha-detail-card"
@@ -109,7 +147,7 @@ export function DockerProjectVolumesPanel({
             onChange: onServiceChange,
           })}
           <Select
-            disabled={!enabled || volumes.length === 0}
+            disabled={!canBrowseRuntime || volumes.length === 0}
             loading={volumesQuery.isFetching}
             options={volumes.map((volume) => ({ label: volume.target, value: volume.target }))}
             placeholder={localeText(localeCode, '选择卷', 'Select volume')}
@@ -124,7 +162,7 @@ export function DockerProjectVolumesPanel({
             }}
           />
           <Button
-            disabled={!enabled}
+            disabled={!canBrowseRuntime}
             icon={<ReloadOutlined />}
             loading={filesQuery.isFetching || volumesQuery.isFetching}
             size="small"
@@ -138,7 +176,30 @@ export function DockerProjectVolumesPanel({
         </Space>
       }
     >
-      {volumes.length === 0 && !volumesQuery.isFetching ? (
+      <ReadFeedback
+        query={volumesQuery}
+        label={localeText(localeCode, '卷挂载', 'Volume mounts')}
+      />
+      {target ? (
+        <ReadFeedback
+          query={filesQuery}
+          label={localeText(localeCode, '卷目录', 'Volume directory')}
+        />
+      ) : null}
+      {previewPath ? (
+        <ReadFeedback
+          query={fileQuery}
+          label={localeText(localeCode, '文件预览', 'File preview')}
+        />
+      ) : null}
+      {!canBrowseRuntime ? (
+        <ManagementState
+          compact
+          kind="empty"
+          title={localeText(localeCode, '请选择可用服务', 'Select an available service')}
+        />
+      ) : volumesQuery.isError && !readableQueryData(volumesQuery) ? null : volumes.length === 0 &&
+        !volumesQuery.isFetching ? (
         <ManagementState
           compact
           kind="empty"
@@ -173,13 +234,19 @@ export function DockerProjectVolumesPanel({
           </div>
           <div className="soha-docker-volume-browser">
             <div className="soha-docker-volume-list">
-              {filesQuery.isFetching ? (
+              {filesQuery.isFetching && !readableQueryData(filesQuery) ? (
                 <div className="soha-docker-volume-list-state">
                   <Spin size="small" />
                 </div>
               ) : entries.length === 0 ? (
                 <div className="soha-docker-volume-list-state">
-                  <Text type="secondary">{localeText(localeCode, '暂无文件', 'No files')}</Text>
+                  <Text type="secondary">
+                    {localeText(
+                      localeCode,
+                      filesQuery.isError ? '目录读取失败' : '暂无文件',
+                      filesQuery.isError ? 'Directory read failed' : 'No files',
+                    )}
+                  </Text>
                 </div>
               ) : (
                 entries.map((entry) => (

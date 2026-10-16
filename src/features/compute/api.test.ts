@@ -69,6 +69,17 @@ describe('compute api', () => {
     )
   })
 
+  it('forwards opaque relation cursors without changing resource identity', async () => {
+    apiMocks.getEnvelope.mockResolvedValue({ data: {} })
+    await computeApi.resourceRelations('container_runtime', 'runtime_host', 'host/one', {
+      cursor: 'next+/=',
+      limit: 30,
+    })
+    expect(apiMocks.getEnvelope).toHaveBeenCalledWith(
+      '/compute/resources/container_runtime/runtime_host/host%2Fone/relations?cursor=next%2B%2F%3D&limit=30',
+    )
+  })
+
   it('uses typed provider, relation, and action endpoints', async () => {
     apiMocks.getEnvelope.mockResolvedValue({ items: [] })
     apiMocks.postWithHeaders.mockResolvedValue({ data: {} })
@@ -97,20 +108,26 @@ describe('compute api', () => {
       1,
       '/compute/provider-instances/virtualization/pve/connection%2Fone/health-checks',
       { expectedGeneration: 1 },
-      expect.objectContaining({ 'Idempotency-Key': expect.stringMatching(/^compute-provider-health-/) }),
+      expect.objectContaining({
+        'Idempotency-Key': expect.stringMatching(/^compute-provider-health-/),
+      }),
     )
     expect(apiMocks.postWithHeaders).toHaveBeenNthCalledWith(
       2,
       '/compute/resources/virtualization/vm/vm%2Fone/actions/restart',
       { reason: 'operator request' },
-      expect.objectContaining({ 'Idempotency-Key': expect.stringMatching(/^compute-resource-action-/) }),
+      expect.objectContaining({
+        'Idempotency-Key': expect.stringMatching(/^compute-resource-action-/),
+      }),
     )
   })
 
   it('rejects legacy asynchronous health responses', async () => {
     apiMocks.postWithHeaders.mockResolvedValue({ data: { id: 'old-task', status: 'queued' } })
     await expect(
-      computeApi.checkProviderHealth('virtualization', 'pve', 'connection-1', { expectedGeneration: 1 }),
+      computeApi.checkProviderHealth('virtualization', 'pve', 'connection-1', {
+        expectedGeneration: 1,
+      }),
     ).rejects.toThrow('server upgrade')
   })
 })

@@ -1,3 +1,5 @@
+import { readableQueryData } from '@/utils/query-feedback'
+import { ReadFeedback } from '@/components/request-feedback'
 import { App, Button, Card, Space, Typography } from 'antd'
 import { ReloadOutlined, SyncOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -6,28 +8,31 @@ import { ManagementRefreshButton, ManagementState } from '@/components/managemen
 import { StatusTag } from '@/components/status-tag'
 import { formatDateTime } from '@/utils/time'
 import { computeMutations } from '../mutations'
+import { ComputeMutationFeedback } from '../feedback'
 import { computeQueries } from '../queries'
 
 const { Text } = Typography
 
 export function ProviderInstancesPanel({
+  canViewTask = false,
   canDiscover,
   canTest,
   enabled,
   localeCode,
 }: {
+  canViewTask?: boolean
   canDiscover: boolean
   canTest: boolean
   enabled: boolean
   localeCode: 'zh_CN' | 'en_US'
 }) {
-  const { message, modal } = App.useApp()
+  const { modal } = App.useApp()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const instancesQuery = useQuery(computeQueries.providerInstances({ limit: 50 }, enabled))
   const healthMutation = useMutation(computeMutations.checkProviderHealth(queryClient))
   const discoveryMutation = useMutation(computeMutations.discoverProvider(queryClient))
-  const items = instancesQuery.data?.items ?? []
+  const items = readableQueryData(instancesQuery)?.items ?? []
 
   const openTask = (domain: string, taskId: string) => {
     navigate(
@@ -53,28 +58,41 @@ export function ProviderInstancesPanel({
         />
       }
     >
+      <ReadFeedback
+        query={instancesQuery}
+        label={localeCode === 'zh_CN' ? '提供方实例' : 'Provider instances'}
+      />
+      <ComputeMutationFeedback
+        operations={[
+          {
+            label: localeCode === 'zh_CN' ? '连接检查' : 'Connection check',
+            mutation: healthMutation,
+            readOnly: true,
+            target: healthMutation.variables?.instanceRef,
+            receipt: {
+              message:
+                localeCode === 'zh_CN'
+                  ? `检查结果：${healthMutation.data?.data.healthy ? '连接正常' : '连接异常'}`
+                  : `Check result: ${healthMutation.data?.data.healthy ? 'connected' : 'connection failed'}`,
+            },
+          },
+          {
+            label: localeCode === 'zh_CN' ? '资源发现与同步' : 'Resource discovery',
+            mutation: discoveryMutation,
+            target: discoveryMutation.variables?.instanceRef,
+            receipt: {
+              message: localeCode === 'zh_CN' ? '发现任务已提交' : 'Discovery task submitted',
+              taskId: discoveryMutation.data?.data.id,
+              domain: discoveryMutation.data?.data.domain,
+              canViewTask,
+            },
+          },
+        ]}
+      />
       {instancesQuery.isLoading ? (
         <ManagementState bordered={false} compact kind="loading" />
-      ) : instancesQuery.isError ? (
-        <ManagementState
-          bordered={false}
-          compact
-          kind="error"
-          title={localeCode === 'zh_CN' ? '提供方实例加载失败' : 'Provider instances unavailable'}
-          actions={
-            <Button
-              aria-label={
-                localeCode === 'zh_CN' ? '重试加载提供方实例' : 'Retry provider instances'
-              }
-              loading={instancesQuery.isFetching}
-              size="small"
-              onClick={() => void instancesQuery.refetch()}
-            >
-              {localeCode === 'zh_CN' ? '重试' : 'Retry'}
-            </Button>
-          }
-        />
-      ) : items.length === 0 ? (
+      ) : instancesQuery.isError && !readableQueryData(instancesQuery) ? null : items.length ===
+        0 ? (
         <ManagementState
           bordered={false}
           compact
@@ -127,6 +145,7 @@ export function ProviderInstancesPanel({
                           localeCode === 'zh_CN' ? '检查连接健康' : 'Check connection health'
                         }
                         icon={<ReloadOutlined />}
+                        disabled={healthMutation.isPending || discoveryMutation.isPending}
                         loading={busy}
                         size="small"
                         onClick={() =>
@@ -147,7 +166,6 @@ export function ProviderInstancesPanel({
                                     .join(' · '),
                                 })
                               },
-                              onError: (error) => void message.error(error.message),
                             },
                           )
                         }
@@ -162,6 +180,7 @@ export function ProviderInstancesPanel({
                           localeCode === 'zh_CN' ? '发现并同步资源' : 'Discover resources'
                         }
                         icon={<SyncOutlined />}
+                        disabled={healthMutation.isPending || discoveryMutation.isPending}
                         loading={busy}
                         size="small"
                         onClick={() =>
@@ -176,8 +195,9 @@ export function ProviderInstancesPanel({
                               },
                             },
                             {
-                              onSuccess: (result) => openTask(result.data.domain, result.data.id),
-                              onError: (error) => void message.error(error.message),
+                              onSuccess: (result) => {
+                                if (canViewTask) openTask(result.data.domain, result.data.id)
+                              },
                             },
                           )
                         }

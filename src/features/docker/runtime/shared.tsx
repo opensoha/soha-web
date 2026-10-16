@@ -15,6 +15,7 @@ export interface DockerRuntimePanelProps {
   serviceName?: string
   serviceOptions: DockerRuntimeServiceOption[]
   servicesLoading?: boolean
+  servicesError?: boolean
   onServiceChange: (serviceName: string) => void
 }
 

@@ -1,3 +1,6 @@
+import { readableQueryData, writeOutcomeUnknown } from '@/utils/query-feedback'
+import { ReadFeedback } from '@/components/request-feedback'
+import { ComputeOperationFeedback, ComputeMutationFeedback } from '@/features/compute'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Key, ReactNode } from 'react'
 import {
@@ -377,7 +380,6 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
       form.resetFields()
       refreshDocker(queryClient)
     },
-    onError: (error) => void message.error(error.message),
   })
   const containerStartMutation = useMutation({
     mutationFn: (values: ContainerStartFormValues) =>
@@ -399,7 +401,6 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
   const deployPlanMutation = useMutation({
     mutationFn: ({ id, action }: { id: string; action: string }) =>
       dockerApi.planProjectDeploy(id, action),
-    onError: (error) => void message.error(error.message),
   })
   const deployMutation = useMutation({
     mutationFn: ({
@@ -435,7 +436,7 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
     },
   })
   const page = normalizePage(
-    projectsQuery.data,
+    readableQueryData(projectsQuery),
     filters.page ?? 1,
     filters.pageSize ?? (embedded ? 5 : 15),
   )
@@ -488,11 +489,12 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
   const servicesByProject = useMemo(() => {
     const grouped = new Map<string, DockerService[]>()
     page.items.forEach((project, index) => {
-      const services = projectServiceQueries[index]?.data?.items ?? []
+      const query = projectServiceQueries[index]
+      const services = canViewServices && query ? (readableQueryData(query)?.items ?? []) : []
       if (services.length > 0) grouped.set(project.id, services)
     })
     return grouped
-  }, [page.items, projectServiceQueries])
+  }, [canViewServices, page.items, projectServiceQueries])
   const treeRows = useMemo<DockerProjectTreeRow[]>(
     () =>
       page.items.map((project) => {
@@ -616,7 +618,11 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
           <Text type="secondary">-</Text>
         ) : (
           <ResourceTaskActions
-            task={latestTaskForResource(tasksQuery.data?.items ?? [], 'project', record.project.id)}
+            task={latestTaskForResource(
+              canViewOperations ? (readableQueryData(tasksQuery)?.items ?? []) : [],
+              'project',
+              record.project.id,
+            )}
             resourceKind="project"
             resourceId={record.project.id}
           />
@@ -709,6 +715,8 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                 tooltip={localeText(localeCode, '编辑', 'Edit')}
                 icon={<EditOutlined />}
                 onClick={() => {
+                  if (saveMutation.isPending) return
+                  if (!writeOutcomeUnknown(saveMutation.error)) saveMutation.reset()
                   setEditing(project)
                   setCurrentStep(0)
                   setDrawerOpen(true)
@@ -823,7 +831,101 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
           </ManagementQueryPanel>
         </div>
       ) : null}
+      {canViewServices
+        ? projectServiceQueries.map((query, index) => (
+            <ReadFeedback
+              key={page.items[index].id}
+              query={query}
+              label={localeText(
+                localeCode,
+                `${page.items[index].name} 的服务`,
+                `${page.items[index].name} services`,
+              )}
+            />
+          ))
+        : null}
+      <ReadFeedback
+        query={projectsQuery}
+        label={localeText(localeCode, '容器项目', 'Container projects')}
+      />
+      <ReadFeedback
+        query={tasksQuery}
+        label={localeText(localeCode, '容器任务', 'Container tasks')}
+      />
+      <ComputeMutationFeedback
+        operations={[
+          {
+            label: localeText(localeCode, '保存项目', 'Save project'),
+            mutation: saveMutation,
+            target: saveMutation.variables?.name,
+            receipt: { message: localeText(localeCode, '项目记录已保存', 'Project record saved') },
+          },
+          {
+            label: localeText(localeCode, '删除项目记录', 'Delete project record'),
+            mutation: deleteMutation,
+            target: deleteMutation.variables,
+            receipt: {
+              message: localeText(localeCode, '项目记录已删除', 'Project record deleted'),
+            },
+          },
+          {
+            label: localeText(localeCode, '容器启动', 'Container start'),
+            mutation: containerStartMutation,
+            receipt: {
+              message: localeText(
+                localeCode,
+                '容器启动任务已提交，请核对执行结果',
+                'Container start task submitted; check the result',
+              ),
+              taskId: containerStartMutation.data?.id,
+              domain: 'container_runtime',
+              canViewTask: canViewOperations,
+            },
+          },
+          {
+            readOnly: true,
+            label: localeText(localeCode, '项目操作计划', 'Project operation plan'),
+            mutation: deployPlanMutation,
+            target: deployPlanMutation.variables?.id,
+          },
+          {
+            label: localeText(localeCode, '项目操作', 'Project operation'),
+            mutation: deployMutation,
+            target: deployMutation.variables?.id,
+            receipt: {
+              message: localeText(
+                localeCode,
+                '项目操作任务已提交，请核对执行结果',
+                'Project task submitted; check the result',
+              ),
+              taskId: deployMutation.data?.id,
+              domain: 'container_runtime',
+              canViewTask: canViewOperations,
+            },
+          },
+          {
+            label: localeText(localeCode, '服务操作', 'Service operation'),
+            mutation: serviceActionMutation,
+            target: serviceActionMutation.variables?.id,
+            receipt: {
+              message: localeText(
+                localeCode,
+                '服务操作任务已提交，请核对执行结果',
+                'Service task submitted; check the result',
+              ),
+              taskId: serviceActionMutation.data?.id,
+              domain: 'container_runtime',
+              canViewTask: canViewOperations,
+            },
+          },
+        ]}
+      />
       <DockerAdminTable
+        empty={
+          projectsQuery.isError
+            ? localeText(localeCode, '数据读取失败，请先重试', 'Read failed; retry first')
+            : undefined
+        }
         rowKey="key"
         expandable={{
           expandedRowKeys,
@@ -857,6 +959,8 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
                   type="primary"
                   icon={<PlusOutlined />}
                   onClick={() => {
+                    if (saveMutation.isPending) return
+                    if (!writeOutcomeUnknown(saveMutation.error)) saveMutation.reset()
                     setEditing(null)
                     setCurrentStep(0)
                     setDrawerOpen(true)
@@ -901,6 +1005,14 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
         }
       />
       <StepFormModal
+        feedback={
+          <ComputeOperationFeedback
+            label={localeText(localeCode, '保存项目', 'Save project')}
+            pending={saveMutation.isPending}
+            error={saveMutation.error}
+            target={saveMutation.variables?.name}
+          />
+        }
         title={
           editing
             ? localeText(localeCode, '编辑 Compose 项目', 'Edit Compose project')
@@ -921,7 +1033,9 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
         }
         loading={saveMutation.isPending}
         open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+        onClose={() => {
+          if (!saveMutation.isPending) setDrawerOpen(false)
+        }}
         onCurrentChange={setCurrentStep}
         onFinish={(values) => saveMutation.mutate(values)}
         steps={[
@@ -1180,6 +1294,14 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
         width={780}
       />
       <StepFormModal
+        feedback={
+          <ComputeOperationFeedback
+            label={localeText(localeCode, '启动容器', 'Start container')}
+            pending={containerStartMutation.isPending}
+            error={containerStartMutation.error}
+            target={containerStartMutation.variables?.name}
+          />
+        }
         title={localeText(localeCode, '快速启动 Docker 应用', 'Quick start Docker application')}
         current={containerStep}
         form={containerForm}
@@ -1202,7 +1324,9 @@ function ProjectsTable({ embedded = false }: { embedded?: boolean }) {
         }}
         loading={containerStartMutation.isPending}
         open={containerDrawerOpen}
-        onClose={() => setContainerDrawerOpen(false)}
+        onClose={() => {
+          if (!containerStartMutation.isPending) setContainerDrawerOpen(false)
+        }}
         onCurrentChange={(nextStep) => {
           if (nextStep === 3) {
             setContainerReviewValues(containerForm.getFieldsValue(true))

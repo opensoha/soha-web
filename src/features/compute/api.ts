@@ -85,9 +85,14 @@ export const computeApi = {
       input,
       'provider-discovery',
     ),
-  resourceRelations: (domain: ComputeDomain, kind: ComputeResourceKind, id: string) =>
+  resourceRelations: (
+    domain: ComputeDomain,
+    kind: ComputeResourceKind,
+    id: string,
+    filters: { cursor?: string; limit?: number } = {},
+  ) =>
     api.getEnvelope<ComputeResourceRelationListEnvelope>(
-      `${resourcePath(domain, kind, id)}/relations`,
+      `${resourcePath(domain, kind, id)}/relations${queryString(filters)}`,
     ),
   executeResourceAction: (
     domain: ComputeDomain,

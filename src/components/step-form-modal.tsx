@@ -6,6 +6,7 @@ import { StepForm } from './step-form'
 import type { StepFormStep } from './step-form'
 
 interface StepFormModalBaseProps {
+  feedback?: ReactNode
   bodyClassName?: string
   onClose: () => void
   open: boolean
@@ -61,6 +62,7 @@ export function StepFormModal<Values>(props: StepFormModalProps<Values>) {
       width={width}
       onCancel={onClose}
     >
+      {props.feedback}
       {'children' in props ? (
         props.children
       ) : (

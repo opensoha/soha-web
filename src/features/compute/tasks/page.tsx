@@ -1,3 +1,5 @@
+import { readableQueryData } from '@/utils/query-feedback'
+import { ReadFeedback } from '@/components/request-feedback'
 import { useEffect, useMemo, useState } from 'react'
 import {
   App,
@@ -44,6 +46,7 @@ import { formatDateTime } from '@/utils/time'
 import type { ComputeTaskFilters } from '../api'
 import { computeMutations } from '../mutations'
 import { computeQueries } from '../queries'
+import { ComputeMutationFeedback } from '../feedback'
 import { ComputeStreamStatus } from '../stream-status'
 import { useComputeTaskStream } from './use-compute-task-stream'
 import '../compute.css'
@@ -205,7 +208,8 @@ export function ComputeTasksPage() {
   const [form] = Form.useForm<ComputeTaskFilters>()
   const queryClient = useQueryClient()
   const tasksQuery = useQuery(computeQueries.tasks(filters))
-  const items = tasksQuery.data?.items ?? []
+  const taskPage = readableQueryData(tasksQuery)
+  const items = taskPage?.items ?? []
   const selectedTaskId = searchParams.get('view') === 'logs' ? searchParams.get('taskId') || '' : ''
   const selectedDomain =
     (searchParams.get('domain') as ComputeTaskDomain | null) ?? 'virtualization'
@@ -218,16 +222,15 @@ export function ComputeTasksPage() {
   const logsQuery = useQuery(computeQueries.taskLogs(selectedDomain, selectedTaskId))
   const cancelMutation = useMutation(computeMutations.cancelTask(queryClient))
   const retryMutation = useMutation(computeMutations.retryTask(queryClient))
-  const selectedTask =
-    items.find((item) => item.domain === selectedDomain && item.id === selectedTaskId) ??
-    taskQuery.data
+  const selectedTask = readableQueryData(taskQuery)
+  const logs = readableQueryData(logsQuery)
   const pageSize = filters.limit ?? DEFAULT_TASK_PAGE_SIZE
   const currentPage = cursorHistory.length + 1
   const paginationTotal = computeTaskPaginationTotal(
     currentPage,
     pageSize,
     items.length,
-    Boolean(tasksQuery.data?.nextCursor),
+    Boolean(taskPage?.nextCursor),
   )
 
   useEffect(() => {
@@ -272,9 +275,9 @@ export function ComputeTasksPage() {
       setFilters((current) => ({ ...current, cursor }))
       return
     }
-    if (nextPage === currentPage + 1 && tasksQuery.data?.nextCursor) {
+    if (nextPage === currentPage + 1 && taskPage?.nextCursor) {
       setCursorHistory((current) => [...current, filters.cursor ?? ''])
-      setFilters((current) => ({ ...current, cursor: tasksQuery.data.nextCursor }))
+      setFilters((current) => ({ ...current, cursor: taskPage.nextCursor }))
     }
   }
 
@@ -294,6 +297,7 @@ export function ComputeTasksPage() {
   const closeLogs = () => setSearchParams(searchFromTaskFilters(filters), { replace: true })
 
   const mutateTask = (action: 'cancel' | 'retry', task: ComputeTaskView) => {
+    if (cancelMutation.isPending || retryMutation.isPending) return
     const mutation = action === 'cancel' ? cancelMutation : retryMutation
     mutation.mutate(
       { domain: task.domain, taskId: task.id },
@@ -301,8 +305,8 @@ export function ComputeTasksPage() {
         onSuccess: () =>
           void message.success(
             action === 'cancel'
-              ? localeText(localeCode, '任务已取消', 'Task canceled')
-              : localeText(localeCode, '任务已重新排队', 'Task queued for retry'),
+              ? localeText(localeCode, '取消请求已提交', 'Cancellation requested')
+              : localeText(localeCode, '重试请求已提交', 'Retry requested'),
           ),
       },
     )
@@ -437,6 +441,7 @@ export function ComputeTasksPage() {
               <ManagementIconButton
                 aria-label={localeText(localeCode, '取消任务', 'Cancel task')}
                 danger
+                disabled={cancelMutation.isPending || retryMutation.isPending}
                 icon={<StopOutlined />}
                 size="small"
                 loading={cancelMutation.isPending && cancelMutation.variables?.taskId === record.id}
@@ -451,6 +456,7 @@ export function ComputeTasksPage() {
             >
               <ManagementIconButton
                 aria-label={localeText(localeCode, '重试任务', 'Retry task')}
+                disabled={cancelMutation.isPending || retryMutation.isPending}
                 icon={<RedoOutlined />}
                 size="small"
                 loading={retryMutation.isPending && retryMutation.variables?.taskId === record.id}
@@ -468,90 +474,124 @@ export function ComputeTasksPage() {
       <ManagementDataPage
         className="soha-compute-page"
         beforeQuery={
-          <ManagementQueryPanel
-            form={form}
-            initialValues={filters}
-            expanded={queryExpanded}
-            onExpandedChange={setQueryExpanded}
-            onFinish={(values) => updateFilters({ ...filters, ...values })}
-            actions={
-              <ManagementQueryActions
-                onReset={() => {
-                  setQueryExpanded(false)
-                  form.resetFields()
-                  form.setFieldsValue({
-                    domain: undefined,
-                    providerKey: undefined,
-                    status: undefined,
-                    category: undefined,
-                  })
-                  updateFilters({ limit: DEFAULT_TASK_PAGE_SIZE })
-                }}
-                submitLabel={localeText(localeCode, '筛选', 'Filter')}
-              />
-            }
-          >
-            <ManagementQueryScope
-              label={localeText(localeCode, '任务领域', 'Task domain')}
-              options={[
-                { label: localeText(localeCode, '全部', 'All'), value: 'all' },
+          <>
+            <ReadFeedback
+              query={tasksQuery}
+              label={localeText(localeCode, '任务列表', 'Task list')}
+            />
+            <ComputeMutationFeedback
+              operations={[
                 {
-                  label: localeText(localeCode, '虚拟化', 'Virtualization'),
-                  value: 'virtualization',
+                  label: localeText(localeCode, '取消任务', 'Cancel task'),
+                  mutation: cancelMutation,
+                  target: cancelMutation.variables?.taskId,
+                  receipt: {
+                    message: localeText(
+                      localeCode,
+                      '取消请求已提交，请以任务状态为准',
+                      'Cancellation requested; check task status',
+                    ),
+                  },
                 },
                 {
-                  label: localeText(localeCode, '容器运行时', 'Container runtime'),
-                  value: 'container_runtime',
+                  label: localeText(localeCode, '重试任务', 'Retry task'),
+                  mutation: retryMutation,
+                  target: retryMutation.variables?.taskId,
+                  receipt: {
+                    message: localeText(
+                      localeCode,
+                      '重试请求已提交，请以任务状态为准',
+                      'Retry requested; check task status',
+                    ),
+                  },
                 },
               ]}
-              value={filters.domain ?? 'all'}
-              onChange={(value) => {
-                const domain = value === 'all' ? undefined : (value as ComputeTaskDomain)
-                form.setFieldValue('domain', domain)
-                updateFilters({ ...filters, domain })
-              }}
             />
-            <Form.Item name="domain" hidden>
-              <Input />
-            </Form.Item>
-            <ManagementQueryField label={localeText(localeCode, '状态', 'Status')} name="status">
-              <Select
-                allowClear
-                placeholder={localeText(localeCode, '全部状态', 'All statuses')}
+            <ManagementQueryPanel
+              form={form}
+              initialValues={filters}
+              expanded={queryExpanded}
+              onExpandedChange={setQueryExpanded}
+              onFinish={(values) => updateFilters({ ...filters, ...values })}
+              actions={
+                <ManagementQueryActions
+                  onReset={() => {
+                    setQueryExpanded(false)
+                    form.resetFields()
+                    form.setFieldsValue({
+                      domain: undefined,
+                      providerKey: undefined,
+                      status: undefined,
+                      category: undefined,
+                    })
+                    updateFilters({ limit: DEFAULT_TASK_PAGE_SIZE })
+                  }}
+                  submitLabel={localeText(localeCode, '筛选', 'Filter')}
+                />
+              }
+            >
+              <ManagementQueryScope
+                label={localeText(localeCode, '任务领域', 'Task domain')}
                 options={[
-                  'queued',
-                  'running',
-                  'succeeded',
-                  'failed',
-                  'canceled',
-                  'timeout',
-                  'unknown',
-                ].map((value) => ({ value, label: formatStatusLabel(value, localeCode) }))}
+                  { label: localeText(localeCode, '全部', 'All'), value: 'all' },
+                  {
+                    label: localeText(localeCode, '虚拟化', 'Virtualization'),
+                    value: 'virtualization',
+                  },
+                  {
+                    label: localeText(localeCode, '容器运行时', 'Container runtime'),
+                    value: 'container_runtime',
+                  },
+                ]}
+                value={filters.domain ?? 'all'}
+                onChange={(value) => {
+                  const domain = value === 'all' ? undefined : (value as ComputeTaskDomain)
+                  form.setFieldValue('domain', domain)
+                  updateFilters({ ...filters, domain })
+                }}
               />
-            </ManagementQueryField>
-            <ManagementQueryField
-              label={localeText(localeCode, '提供方', 'Provider')}
-              name="providerKey"
-            >
-              <Input
-                allowClear
-                placeholder={localeText(localeCode, '提供方标识', 'Provider key')}
-              />
-            </ManagementQueryField>
-            <ManagementQueryField
-              label={localeText(localeCode, '类别', 'Category')}
-              name="category"
-            >
-              <Select
-                allowClear
-                placeholder={localeText(localeCode, '全部类别', 'All categories')}
-                options={Object.keys(TASK_CATEGORY_LABELS).map((value) => ({
-                  value,
-                  label: taskCategoryLabel(value as ComputeTaskCategory, localeCode),
-                }))}
-              />
-            </ManagementQueryField>
-          </ManagementQueryPanel>
+              <Form.Item name="domain" hidden>
+                <Input />
+              </Form.Item>
+              <ManagementQueryField label={localeText(localeCode, '状态', 'Status')} name="status">
+                <Select
+                  allowClear
+                  placeholder={localeText(localeCode, '全部状态', 'All statuses')}
+                  options={[
+                    'queued',
+                    'running',
+                    'succeeded',
+                    'failed',
+                    'canceled',
+                    'timeout',
+                    'unknown',
+                  ].map((value) => ({ value, label: formatStatusLabel(value, localeCode) }))}
+                />
+              </ManagementQueryField>
+              <ManagementQueryField
+                label={localeText(localeCode, '提供方', 'Provider')}
+                name="providerKey"
+              >
+                <Input
+                  allowClear
+                  placeholder={localeText(localeCode, '提供方标识', 'Provider key')}
+                />
+              </ManagementQueryField>
+              <ManagementQueryField
+                label={localeText(localeCode, '类别', 'Category')}
+                name="category"
+              >
+                <Select
+                  allowClear
+                  placeholder={localeText(localeCode, '全部类别', 'All categories')}
+                  options={Object.keys(TASK_CATEGORY_LABELS).map((value) => ({
+                    value,
+                    label: taskCategoryLabel(value as ComputeTaskCategory, localeCode),
+                  }))}
+                />
+              </ManagementQueryField>
+            </ManagementQueryPanel>
+          </>
         }
         table={{
           rowKey: (record: ComputeTaskView) => `${record.domain}:${record.id}`,
@@ -607,8 +647,8 @@ export function ComputeTasksPage() {
             <Text type="secondary">
               {localeText(
                 localeCode,
-                `当前第 ${currentPage} 页，本页 ${items.length} 条${tasksQuery.data?.nextCursor ? '，还有更多' : ''}`,
-                `Page ${currentPage}, ${items.length} items${tasksQuery.data?.nextCursor ? ', more available' : ''}`,
+                `当前第 ${currentPage} 页，本页 ${items.length} 条${taskPage?.nextCursor ? '，还有更多' : ''}`,
+                `Page ${currentPage}, ${items.length} items${taskPage?.nextCursor ? ', more available' : ''}`,
               )}
             </Text>
           ),
@@ -635,6 +675,11 @@ export function ComputeTasksPage() {
         }
         onClose={closeLogs}
       >
+        <ReadFeedback
+          query={taskQuery}
+          label={localeText(localeCode, '任务详情', 'Task details')}
+        />
+        <ReadFeedback query={logsQuery} label={localeText(localeCode, '任务日志', 'Task logs')} />
         {selectedTask ? (
           <Space orientation="vertical" size={16} style={{ width: '100%' }}>
             {selectedTask.failure ? (
@@ -693,9 +738,9 @@ export function ComputeTasksPage() {
               <Spin
                 description={localeText(localeCode, '正在加载任务日志...', 'Loading task logs...')}
               />
-            ) : logsQuery.data?.length ? (
+            ) : logs?.length ? (
               <div className="soha-compute-task-log-list">
-                {logsQuery.data.map((log) => (
+                {logs.map((log) => (
                   <div className="soha-compute-task-log-row" key={log.id}>
                     <Space orientation="vertical" size={2} style={{ width: '100%' }}>
                       <Space wrap>
@@ -711,11 +756,17 @@ export function ComputeTasksPage() {
             ) : (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={localeText(localeCode, '暂无日志', 'No logs')}
+                description={
+                  logsQuery.isError
+                    ? localeText(localeCode, '日志读取失败', 'Logs unavailable')
+                    : localeText(localeCode, '暂无日志', 'No logs')
+                }
               />
             )}
           </Space>
-        ) : taskQuery.isLoading ? null : (
+        ) : taskQuery.isLoading ? (
+          <Spin />
+        ) : taskQuery.isError ? null : (
           <Empty
             description={localeText(
               localeCode,

@@ -112,6 +112,7 @@ describe('StepFormModal lifecycle', () => {
   it('hosts an existing StepForm without rendering a second form', () => {
     const html = renderToStaticMarkup(
       <StepFormModal
+        feedback={<span>request failure persists here</span>}
         bodyClassName="feature-step-form"
         onClose={() => undefined}
         open
@@ -122,6 +123,7 @@ describe('StepFormModal lifecycle', () => {
     )
 
     expect(html).toContain('existing step form')
+    expect(html).toContain('request failure persists here')
     expect(lifecycle.contentMaxWidth).toBeUndefined()
     expect(lifecycle.bodyClassName).toBe('soha-step-form-modal__body feature-step-form')
     expect(lifecycle.title).toBe('Composed form')

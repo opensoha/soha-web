@@ -1,3 +1,6 @@
+import { readableQueryData } from '@/utils/query-feedback'
+import { ReadFeedback } from '@/components/request-feedback'
+import { ComputeMutationFeedback } from '@/features/compute'
 import { useState } from 'react'
 import { App, Drawer, Form, Select, Space, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -58,6 +61,7 @@ export function ServicesTable({
     canStopServices,
     canRestartServices,
     canViewServiceLogs,
+    canViewOperations,
   } = useDockerPermissions()
   const { hostOptions, projectOptions } = useDockerOptions({ includeServices: false })
   const queryClient = useQueryClient()
@@ -79,7 +83,7 @@ export function ServicesTable({
     },
   })
   const page = normalizePage(
-    servicesQuery.data,
+    readableQueryData(servicesQuery),
     filters.page ?? 1,
     filters.pageSize ?? (embedded ? 5 : 15),
   )
@@ -281,7 +285,35 @@ export function ServicesTable({
           </ManagementQueryPanel>
         </div>
       ) : null}
+      <ReadFeedback
+        query={servicesQuery}
+        label={localeText(localeCode, '容器服务', 'Container services')}
+      />
+      <ComputeMutationFeedback
+        operations={[
+          {
+            label: localeText(localeCode, '容器服务操作', 'Container service operation'),
+            mutation: actionMutation,
+            target: actionMutation.variables?.id,
+            receipt: {
+              message: localeText(
+                localeCode,
+                '服务操作任务已提交，请核对执行结果',
+                'Service task submitted; check the execution result',
+              ),
+              taskId: actionMutation.data?.id,
+              domain: 'container_runtime',
+              canViewTask: canViewOperations,
+            },
+          },
+        ]}
+      />
       <DockerAdminTable
+        empty={
+          servicesQuery.isError
+            ? localeText(localeCode, '数据读取失败，请先重试', 'Read failed; retry first')
+            : undefined
+        }
         rowKey="id"
         enableColumnSelection={!embedded}
         loading={servicesQuery.isLoading}

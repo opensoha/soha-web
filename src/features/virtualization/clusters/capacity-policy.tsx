@@ -1,3 +1,6 @@
+import { readableQueryData } from '@/utils/query-feedback'
+import { ReadFeedback } from '@/components/request-feedback'
+import { ComputeMutationFeedback } from '@/features/compute'
 import {
   Alert,
   App,
@@ -40,7 +43,6 @@ function PolicyForm({
   const { message } = App.useApp()
   const save = useMutation({
     ...virtualizationMutations.saveCapacityPolicy(client),
-    onError: (error) => message.error(error.message),
     onSuccess: async () => {
       await client.invalidateQueries({
         queryKey: virtualizationQueries.capacityPolicy(connectionId).queryKey,
@@ -71,6 +73,16 @@ function PolicyForm({
         })
       }
     >
+      <ComputeMutationFeedback
+        operations={[
+          {
+            label: '保存容量策略',
+            mutation: save,
+            target: connectionId,
+            receipt: { message: '容量策略记录已保存' },
+          },
+        ]}
+      />
       <Typography.Paragraph type="secondary">
         同一物理 PVE source 的连接共享策略和预留。保存会影响后续创建、启动与扩容；不会修改或停止已有
         VM。
@@ -151,7 +163,6 @@ export function CapacityPolicyDrawer({
   const policy = useQuery(virtualizationQueries.capacityPolicy(connection.id))
   const preview = useMutation(virtualizationMutations.checkCapacity())
   const [form] = Form.useForm<VirtualizationCapacityInput>()
-  const { message } = App.useApp()
   const rows = (preview.data?.diagnostics ?? []).flatMap((node) =>
     node.checks.map((check, index) => ({
       key: `${node.node}/${index}`,
@@ -169,34 +180,29 @@ export function CapacityPolicyDrawer({
       destroyOnHidden
     >
       <Space orientation="vertical" size="large" style={{ width: '100%' }}>
+        <ReadFeedback query={policy} label="容量策略" />
         {policy.isPending ? (
           <Spin />
-        ) : policy.error ? (
-          <Alert
-            type="error"
-            title="容量策略加载失败"
-            description={policy.error.message}
-            action={<Button onClick={() => void policy.refetch()}>重试</Button>}
-          />
-        ) : policy.data ? (
+        ) : readableQueryData(policy) ? (
           <PolicyForm
-            key={policy.data.revision}
+            key={policy.data?.revision}
             connectionId={connection.id}
-            policy={policy.data}
+            policy={readableQueryData(policy)!}
             canUpdate={canUpdate}
           />
         ) : null}
+        <ComputeMutationFeedback
+          operations={[{ readOnly: true, label: '创建前预检', mutation: preview }]}
+        />
         <Typography.Title level={5}>创建前预检</Typography.Title>
         <Form
           form={form}
           layout="vertical"
           initialValues={{ cpu: 2, memoryMiB: 4096, diskGiB: 40, startAfterCreate: true }}
+          onValuesChange={() => preview.reset()}
           onFinish={(input) => {
             preview.reset()
-            preview.mutate(
-              { ...input, connectionId: connection.id },
-              { onError: (error) => message.error(error.message) },
-            )
+            preview.mutate({ ...input, connectionId: connection.id })
           }}
         >
           <Space align="start" wrap>

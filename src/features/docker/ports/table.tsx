@@ -1,3 +1,6 @@
+import { readableQueryData } from '@/utils/query-feedback'
+import { ReadFeedback } from '@/components/request-feedback'
+import { ComputeMutationFeedback, ComputeOperationFeedback } from '@/features/compute'
 import { useState } from 'react'
 import {
   App,
@@ -112,7 +115,7 @@ export function PortsTable({
     },
   })
   const page = normalizePage(
-    portsQuery.data,
+    readableQueryData(portsQuery),
     filters.page ?? 1,
     filters.pageSize ?? (embedded ? 5 : 15),
   )
@@ -249,6 +252,30 @@ export function PortsTable({
   ]
   return (
     <>
+      <ReadFeedback
+        query={portsQuery}
+        label={localeText(localeCode, '端口映射', 'Port mappings')}
+      />
+      <ComputeMutationFeedback
+        operations={[
+          {
+            label: localeText(localeCode, '保存端口映射', 'Save port mapping'),
+            mutation: saveMutation,
+            target: saveMutation.variables?.name,
+            receipt: {
+              message: localeText(localeCode, '端口映射记录已保存', 'Port mapping saved'),
+            },
+          },
+          {
+            label: localeText(localeCode, '删除端口映射', 'Delete port mapping'),
+            mutation: deleteMutation,
+            target: deleteMutation.variables,
+            receipt: {
+              message: localeText(localeCode, '端口映射记录已删除', 'Port mapping deleted'),
+            },
+          },
+        ]}
+      />
       {!embedded && !fixedProjectId ? (
         <div className="soha-vrt-query">
           <ManagementQueryPanel
@@ -389,6 +416,11 @@ export function PortsTable({
         style={{ top: 32 }}
         styles={{ body: { ...scrollableModalBodyStyle, maxHeight: 'calc(100dvh - 180px)' } }}
       >
+        <ComputeOperationFeedback
+          label={localeText(localeCode, '保存端口映射', 'Save port mapping')}
+          pending={saveMutation.isPending}
+          error={saveMutation.error}
+        />
         <Form<DockerPortFormValues>
           form={form}
           layout="vertical"
