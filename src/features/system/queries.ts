@@ -14,7 +14,7 @@ export const systemQueries = {
       queryKey: systemKeys.sessions.list(),
       queryFn: systemApi.sessions.list,
       enabled,
-      refetchInterval: 10_000,
+      refetchInterval: (query) => (query.state.status === 'error' ? false : 10_000),
     }),
   announcements: () =>
     queryOptions({

@@ -1,17 +1,20 @@
-import { useMemo } from 'react'
-import { CloudDownloadOutlined, SettingOutlined } from '@ant-design/icons'
+import { ManagementState } from '@/components/management-list'
+import { ReadFeedback, useInlineApiError } from '@/components/request-feedback'
+import { usePermissionSnapshot } from '@/features/auth'
+import { isApiError } from '@/services/api-error'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { CloudDownloadOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { Button, Card, Descriptions, Space, Tag, Typography } from 'antd'
+import { useMemo } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ManagementState } from '@/components/management-list'
-import { usePermissionSnapshot } from '@/features/auth'
 import { manifestAssetCount, manifestExtensionCount } from '../plugin-model'
 import { pluginQueries } from '../queries'
 import { compactPluginTags, pluginRiskTag } from '../shared/formatters'
 import { PluginManifestSections } from '../shared/manifest-sections'
-import { PluginNameCell } from '../shared/plugin-name-cell'
 import { PluginPageShell } from '../shared/page-shell'
 import { canInstallPlugin } from '../shared/permissions'
+import { PluginNameCell } from '../shared/plugin-name-cell'
 import { useInstallPluginAction } from './install-action'
 
 const { Text } = Typography
@@ -31,7 +34,9 @@ export function PluginMarketplaceDetailPage() {
     [searchParams],
   )
   const detailQuery = useQuery(pluginQueries.marketplaceDetail(pluginId, filters))
-  const plugin = detailQuery.data
+  const plugin = readableQueryData(detailQuery)
+  const notFound = isApiError(detailQuery.error) && detailQuery.error.status === 404
+  useInlineApiError(notFound ? detailQuery.error : null)
 
   if (detailQuery.isLoading) {
     return (
@@ -43,7 +48,12 @@ export function PluginMarketplaceDetailPage() {
   if (!plugin) {
     return (
       <PluginPageShell>
-        <ManagementState kind="not-found" />
+        {!queryAccessDenied(detailQuery) ? installAction.feedback : null}
+        {notFound || !detailQuery.isError ? (
+          <ManagementState kind="not-found" />
+        ) : (
+          <ReadFeedback query={detailQuery} label="插件详情" />
+        )}
       </PluginPageShell>
     )
   }
@@ -53,6 +63,12 @@ export function PluginMarketplaceDetailPage() {
       extra={
         <Space>
           <Button onClick={() => navigate('/plugins/marketplace')}>返回市场</Button>
+          <Button
+            aria-label="刷新插件详情"
+            icon={<ReloadOutlined />}
+            loading={detailQuery.isFetching}
+            onClick={() => void detailQuery.refetch()}
+          />
           {plugin.installed ? (
             <Button
               icon={<SettingOutlined />}
@@ -63,7 +79,7 @@ export function PluginMarketplaceDetailPage() {
             </Button>
           ) : (
             <Button
-              disabled={!canInstallPlugin(snapshot)}
+              disabled={installAction.blocked || !canInstallPlugin(snapshot)}
               icon={<CloudDownloadOutlined />}
               loading={installAction.loading}
               type="primary"
@@ -75,6 +91,9 @@ export function PluginMarketplaceDetailPage() {
         </Space>
       }
     >
+      <ReadFeedback query={detailQuery} label="插件详情" />
+      {installAction.feedback}
+      {installAction.dialog}
       <Card size="small">
         <PluginNameCell
           id={plugin.id}

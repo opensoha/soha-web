@@ -1,9 +1,13 @@
-import { Button, Descriptions, Drawer, Space, Typography } from 'antd'
-import type { TableColumnsType } from 'antd'
-import { RollbackOutlined } from '@ant-design/icons'
+import { ReadFeedback } from '@/components/request-feedback'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { readableQueryData } from '@/utils/query-feedback'
 import { formatDateTime } from '@/utils/time'
+import { ReloadOutlined, RollbackOutlined } from '@ant-design/icons'
+import { useQuery } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
+import { Button, Descriptions, Drawer, Space, Typography } from 'antd'
 import { SettingsAdminTable } from '../../shared/components'
+import { runtimeConfigurationQueries } from '../queries'
 import type { RuntimeConfigItem, RuntimeConfigRevision } from '../types'
 
 const { Text } = Typography
@@ -16,6 +20,7 @@ function displayValue(value: unknown, sensitive: boolean) {
 }
 
 export function RuntimeConfigurationHistoryDrawer({
+  applicationId,
   canRollback,
   items,
   onClose,
@@ -24,6 +29,7 @@ export function RuntimeConfigurationHistoryDrawer({
   revision,
   rollingBack,
 }: {
+  applicationId?: string
   canRollback: boolean
   items: RuntimeConfigItem[]
   onClose: () => void
@@ -32,6 +38,11 @@ export function RuntimeConfigurationHistoryDrawer({
   revision: RuntimeConfigRevision | null
   rollingBack: boolean
 }) {
+  const applicationQuery = useQuery({
+    ...runtimeConfigurationQueries.application(applicationId),
+    enabled: open && Boolean(applicationId),
+  })
+  const application = open ? readableQueryData(applicationQuery) : undefined
   const itemByKey = new Map(items.map((item) => [item.key, item]))
   const columns: TableColumnsType<RuntimeConfigRevision['changes'][number]> = [
     { title: '配置键', dataIndex: 'key', width: 280 },
@@ -79,6 +90,29 @@ export function RuntimeConfigurationHistoryDrawer({
     >
       {revision ? (
         <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+          {applicationId ? (
+            <div className="soha-runtime-config-application">
+              <Space wrap>
+                <Text strong>应用记录</Text>
+                <Text code>{applicationId}</Text>
+                <Button
+                  aria-label="刷新配置应用记录"
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  loading={applicationQuery.isFetching}
+                  onClick={() => void applicationQuery.refetch()}
+                />
+              </Space>
+              <ReadFeedback query={applicationQuery} label="配置应用记录" canRead={open} />
+              {application ? (
+                <Space orientation="vertical">
+                  <StatusTag value={application.status} label={application.status} />
+                  {application.error ? <Text type="danger">{application.error}</Text> : null}
+                  <Text type="secondary">更新于 {formatDateTime(application.updatedAt)}</Text>
+                </Space>
+              ) : null}
+            </div>
+          ) : null}
           <Descriptions
             bordered
             column={1}

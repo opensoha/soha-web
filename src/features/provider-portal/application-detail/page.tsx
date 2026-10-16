@@ -1,28 +1,23 @@
+import { ReadFeedback, useInlineApiError } from '@/components/request-feedback'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import type { IdentityApplication } from '@/features/identity'
+import { useI18n } from '@/i18n'
+import { isApiError } from '@/services/api-error'
+import { readableQueryData } from '@/utils/query-feedback'
 import {
   ArrowLeftOutlined,
   InfoCircleOutlined,
   KeyOutlined,
   LinkOutlined,
+  ReloadOutlined,
   StarFilled,
   StarOutlined,
 } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  Alert,
-  App,
-  Button,
-  Descriptions,
-  Result,
-  Space,
-  Spin,
-  Tag,
-  Tooltip,
-  Typography,
-} from 'antd'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Alert, Button, Descriptions, Result, Space, Spin, Tag, Tooltip, Typography } from 'antd'
 import { useNavigate, useParams } from 'react-router-dom'
-import type { IdentityApplication } from '@/features/identity'
-import { useI18n } from '@/i18n'
 import { providerPortalMutations } from '../mutations'
+import '../provider-portal-pages.css'
 import { providerPortalQueries } from '../queries'
 import {
   PortalApplicationAvatar,
@@ -31,7 +26,6 @@ import {
   portalStatusLabels,
 } from '../shared/application-ui'
 import { formatPortalDateTime, portalMetadataValue } from '../shared/formatters'
-import '../provider-portal-pages.css'
 
 const { Paragraph, Text, Title } = Typography
 
@@ -39,31 +33,47 @@ export function PortalApplicationDetailPage() {
   const { t, localeCode } = useI18n()
   const navigate = useNavigate()
   const { applicationId = '' } = useParams()
-  const { message } = App.useApp()
   const queryClient = useQueryClient()
 
   const applicationQuery = useQuery(providerPortalQueries.application(applicationId))
-  const launchMutation = useMutation(providerPortalMutations.launch(queryClient))
-  const favoriteMutation = useMutation(providerPortalMutations.toggleFavorite(queryClient))
-
-  const launchApplication = (application: IdentityApplication) => {
-    launchMutation.mutate(application, {
-      onSuccess: (decision) => {
-        if (!decision.launchUrl) {
-          message.warning(
+  const launchMutation = useOperationMutation(providerPortalMutations.launch(queryClient), {
+    label: ['打开应用', 'Open application'],
+    target: (v) => v.name,
+    resultError: (decision) =>
+      decision.launchUrl
+        ? undefined
+        : new Error(
             t(
               'providerPortal.home.launchUrlNotConfigured',
               'Application launch URL is not configured',
             ),
-          )
-          return
-        }
-        window.location.assign(decision.launchUrl)
+          ),
+    receipt: () => ({
+      message: '已收到应用入口',
+      evidence: '目标系统是否登录成功由目标系统确认。',
+    }),
+  })
+  const favoriteMutation = useOperationMutation(
+    providerPortalMutations.toggleFavorite(queryClient),
+    {
+      label: ['更新应用收藏', 'Update favorite'],
+      target: (v) => v.name,
+      receipt: (_, v) => ({ message: v.favorite ? '已取消收藏' : '已收藏' }),
+    },
+  )
+
+  const launchApplication = (application: IdentityApplication) => {
+    launchMutation.mutate(application, {
+      onSuccess: (decision) => {
+        if (decision.launchUrl) window.location.assign(decision.launchUrl)
       },
     })
   }
 
-  const application = applicationQuery.data
+  const application = readableQueryData(applicationQuery)
+  const notFound = isApiError(applicationQuery.error) && applicationQuery.error.status === 404
+  useInlineApiError(notFound ? applicationQuery.error : null)
+  const blocked = launchMutation.blocked || favoriteMutation.blocked
   const status = application
     ? (portalStatusLabels[application.status] ?? portalStatusLabels.draft)
     : portalStatusLabels.draft
@@ -94,23 +104,32 @@ export function PortalApplicationDetailPage() {
     return (
       <div className="soha-provider-portal">
         <main className="soha-portal-main">
-          <Result
-            status="403"
-            title={t('providerPortal.detail.unavailable', 'Application not available')}
-            subTitle={t(
-              'providerPortal.detail.unavailableDescription',
-              'The application is disabled, hidden, or not assigned to your identity.',
-            )}
-            extra={
-              <Button
-                icon={<ArrowLeftOutlined />}
-                type="primary"
-                onClick={() => navigate('/portal')}
-              >
-                {t('providerPortal.detail.backToPortal', 'Back to Portal')}
-              </Button>
-            }
-          />
+          {applicationQuery.isError && !notFound ? (
+            <ReadFeedback query={applicationQuery} label="门户应用" />
+          ) : (
+            <Result
+              status="404"
+              title={t('providerPortal.detail.unavailable', 'Application not available')}
+              subTitle={t(
+                'providerPortal.detail.unavailableDescription',
+                'The application is disabled, hidden, or not assigned to your identity.',
+              )}
+              extra={
+                <Button
+                  icon={<ArrowLeftOutlined />}
+                  type="primary"
+                  onClick={() => navigate('/portal')}
+                >
+                  {t('providerPortal.detail.backToPortal', 'Back to Portal')}
+                </Button>
+              }
+            />
+          )}
+          {applicationQuery.isError && !notFound ? (
+            <Button onClick={() => navigate('/portal')}>
+              {t('providerPortal.detail.backToPortal', 'Back to Portal')}
+            </Button>
+          ) : null}
         </main>
       </div>
     )
@@ -126,6 +145,12 @@ export function PortalApplicationDetailPage() {
           </div>
         </div>
         <Space wrap>
+          <Button
+            aria-label="刷新应用详情"
+            icon={<ReloadOutlined />}
+            loading={applicationQuery.isFetching}
+            onClick={() => void applicationQuery.refetch()}
+          />
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/portal')}>
             {t('providerPortal.detail.backToPortal', 'Back to Portal')}
           </Button>
@@ -133,6 +158,7 @@ export function PortalApplicationDetailPage() {
             <Button
               icon={application.favorite ? <StarFilled /> : <StarOutlined />}
               loading={favoriteMutation.isPending}
+              disabled={blocked}
               aria-label={favoriteLabel}
               onClick={() => favoriteMutation.mutate(application)}
             >
@@ -142,7 +168,7 @@ export function PortalApplicationDetailPage() {
             </Button>
           </Tooltip>
           <Button
-            disabled={application.status !== 'enabled'}
+            disabled={blocked || application.status !== 'enabled'}
             icon={<LinkOutlined />}
             loading={launchMutation.isPending}
             type="primary"
@@ -154,6 +180,9 @@ export function PortalApplicationDetailPage() {
       </header>
 
       <main className="soha-portal-main">
+        <ReadFeedback query={applicationQuery} label="门户应用" />
+        {launchMutation.feedback}
+        {favoriteMutation.feedback}
         <section className="soha-portal-detail-layout">
           <div className="soha-portal-detail-main">
             <section className="soha-portal-side-panel">

@@ -1,9 +1,3 @@
-import { useState } from 'react'
-import { App, Button, Popconfirm, Space, Switch, Typography } from 'antd'
-import type { TableColumnsType } from 'antd'
-import { DeleteOutlined, EditOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementDensityButton,
@@ -12,32 +6,61 @@ import {
   ManagementState,
   ManagementTableToolbar,
 } from '@/components/management-list'
+import { OperationFeedback } from '@/components/request-feedback'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
 import { formatDateTime } from '@/utils/time'
+import { DeleteOutlined, EditOutlined, PlusOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
+import { Button, Popconfirm, Space, Switch, Typography } from 'antd'
+import { useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { systemIntegrationMutations } from './mutations'
 import { systemIntegrationQueries } from './queries'
-import type { SystemIntegration } from './types'
 import './styles.css'
+import type { SystemIntegration } from './types'
 
 const { Text } = Typography
 
 export function SourceConnectionsPage() {
-  const { message } = App.useApp()
+  const location = useLocation()
+  const savedSource = location.state?.savedSource as string | undefined
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const permissionQuery = usePermissionSnapshot()
-  const permissionSnapshot = permissionQuery.data?.data
+  const permissionSnapshot = readableQueryData(permissionQuery)?.data
   const canView = hasPermission(permissionSnapshot, 'settings.system-integrations.view')
   const canCreate = hasPermission(permissionSnapshot, 'settings.system-integrations.create')
   const canUpdate = hasPermission(permissionSnapshot, 'settings.system-integrations.update')
   const canDelete = hasPermission(permissionSnapshot, 'settings.system-integrations.delete')
   const canTest = hasPermission(permissionSnapshot, 'settings.system-integrations.test')
   const listQuery = useQuery(systemIntegrationQueries.list({ category: 'source_control' }, canView))
-  const updateMutation = useMutation(systemIntegrationMutations.update(queryClient))
-  const testMutation = useMutation(systemIntegrationMutations.test(queryClient))
-  const deleteMutation = useMutation(systemIntegrationMutations.remove(queryClient))
+  const updateMutation = useOperationMutation(systemIntegrationMutations.update(queryClient), {
+    label: ['更新代码源连接', 'Update source connection'],
+    target: (v) => v.id,
+  })
+  const testMutation = useOperationMutation(systemIntegrationMutations.test(queryClient), {
+    label: ['测试代码源连接', 'Test source connection'],
+    target: (id) => id,
+    readOnly: true,
+    resultError: (r) =>
+      r.status === 'failed' ? new Error(r.message || '连接测试失败') : undefined,
+    receipt: (r) => ({ message: r.message || '连接测试已返回' }),
+  })
+  const deleteMutation = useOperationMutation(systemIntegrationMutations.remove(queryClient), {
+    label: ['删除代码源连接', 'Delete source connection'],
+    target: (id) => id,
+  })
+  const records = canView ? readableQueryData(listQuery) : undefined
+  const blocked =
+    updateMutation.blocked ||
+    testMutation.blocked ||
+    deleteMutation.blocked ||
+    queryAccessDenied(listQuery)
 
   if (!permissionQuery.isLoading && !canView) {
     return (
@@ -84,7 +107,7 @@ export function SourceConnectionsPage() {
         <Switch
           aria-label={`启用 ${row.name}`}
           checked={enabled}
-          disabled={!canUpdate || updateMutation.isPending}
+          disabled={!canUpdate || blocked}
           loading={updateMutation.isPending}
           size="small"
           onChange={(checked) =>
@@ -106,7 +129,7 @@ export function SourceConnectionsPage() {
         <Space className="soha-row-action-icons" size={4}>
           <ManagementIconButton
             aria-label={`测试 ${row.name}`}
-            disabled={!canTest || !row.enabled}
+            disabled={!canTest || !row.enabled || blocked}
             icon={<ThunderboltOutlined />}
             loading={testMutation.isPending && testMutation.variables === row.id}
             tooltip="测试连接"
@@ -124,15 +147,13 @@ export function SourceConnectionsPage() {
               description="删除后使用此连接的代码源访问将不可用。"
               okText="删除"
               cancelText="取消"
-              okButtonProps={{ danger: true }}
-              onConfirm={() =>
-                deleteMutation.mutate(row.id, {
-                  onSuccess: () => void message.success('代码源连接已删除'),
-                })
-              }
+              disabled={blocked}
+              okButtonProps={{ danger: true, disabled: blocked }}
+              onConfirm={() => deleteMutation.mutate(row.id)}
             >
               <ManagementIconButton
                 aria-label={`删除 ${row.name}`}
+                disabled={blocked}
                 danger
                 icon={<DeleteOutlined />}
                 loading={deleteMutation.isPending && deleteMutation.variables === row.id}
@@ -147,10 +168,34 @@ export function SourceConnectionsPage() {
 
   return (
     <ManagementDataPage
+      beforeQuery={
+        <div className="soha-page-feedback">
+          {canView && !queryAccessDenied(listQuery) ? (
+            <>
+              {savedSource ? (
+                <OperationFeedback
+                  label="保存代码源连接"
+                  target={savedSource}
+                  receipt={{
+                    message: '代码源连接已保存',
+                    evidence: '运行健康状态请通过测试连接核对。',
+                  }}
+                />
+              ) : null}
+              {updateMutation.feedback}
+              {testMutation.feedback}
+              {deleteMutation.feedback}
+            </>
+          ) : null}
+        </div>
+      }
       className="soha-system-integrations-page"
       table={{
         columns,
-        dataSource: listQuery.data ?? [],
+        dataSource: records ?? [],
+        error: canView ? listQuery.error : null,
+        hasReadData: records !== undefined,
+        onRetry: canView ? () => void listQuery.refetch() : undefined,
         empty: (
           <ManagementState
             bordered={false}

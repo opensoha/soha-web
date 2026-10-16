@@ -1,7 +1,26 @@
-import { useEffect, useMemo, useState } from 'react'
+import { AdminTable } from '@/components/admin-table'
+import { ManagementDataPage } from '@/components/management-data-page'
+import {
+  ManagementDensityButton,
+  ManagementIconButton,
+  ManagementQueryActions,
+  ManagementQueryField,
+  ManagementQueryScope,
+  ManagementRefreshButton,
+  ManagementTableToolbar,
+} from '@/components/management-list'
+import { operationModalStyles } from '@/components/modal-styles'
+import { ReadFeedback } from '@/components/request-feedback'
+import { BooleanTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { tableColumnPresets } from '@/utils/table-columns'
+import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
 import {
   Alert,
-  App,
   Button,
   Form,
   Input,
@@ -15,22 +34,7 @@ import {
   Tooltip,
   Typography,
 } from 'antd'
-import type { TableColumnsType } from 'antd'
-import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AdminTable } from '@/components/admin-table'
-import { ManagementDataPage } from '@/components/management-data-page'
-import {
-  ManagementIconButton,
-  ManagementDensityButton,
-  ManagementQueryActions,
-  ManagementQueryField,
-  ManagementQueryScope,
-  ManagementRefreshButton,
-  ManagementTableToolbar,
-} from '@/components/management-list'
-import { BooleanTag } from '@/components/status-tag'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { useEffect, useMemo, useState } from 'react'
 import { MENU_ICON_OPTIONS, isKnownMenuIcon, resolveMenuIcon } from '../menu-icons'
 import { normalizeMenuSection, resolveMenuSectionLabel } from '../menu-schema'
 import { systemMutations } from '../mutations'
@@ -53,7 +57,6 @@ import {
   type MenuItem,
   type MenuWorkbenchSurface,
 } from '../system-model'
-import { tableColumnPresets } from '@/utils/table-columns'
 
 const { Text } = Typography
 const MODAL_FORM_LAYOUT = {
@@ -142,7 +145,6 @@ function formatSyntheticChildCount(record: MenuItem) {
 }
 
 export function MenusPage() {
-  const { message } = App.useApp()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const [form] = Form.useForm()
@@ -156,43 +158,61 @@ export function MenusPage() {
   >('all')
   const [treeView, setTreeView] = useState<'workbench' | 'top' | 'all'>('workbench')
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
-  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const permissionSnapshot = readableQueryData(permissionSnapshotQuery)?.data
   const canCreateMenu = hasPermission(permissionSnapshot, 'system.menus.create')
   const canUpdateMenu = hasPermission(permissionSnapshot, 'system.menus.update')
   const canDeleteMenu = hasPermission(permissionSnapshot, 'system.menus.delete')
   const canEditMenu = editing ? canUpdateMenu : canCreateMenu
 
-  const { data: menuTree = [], isFetching, isLoading, refetch } = useQuery(systemQueries.menus())
-  const { data: roleRecords = [] } = useQuery(
+  const menuQuery = useQuery(systemQueries.menus())
+  const menuTree = readableQueryData(menuQuery) ?? []
+  const { isFetching, isLoading, refetch } = menuQuery
+  const rolesQuery = useQuery(
     systemQueries.menuAccessRoles((canCreateMenu || canUpdateMenu) && modalVisible),
   )
-  const createMutation = useMutation(systemMutations.menus.create(queryClient))
-  const updateMutation = useMutation(systemMutations.menus.update(queryClient))
-  const deleteMutation = useMutation(systemMutations.menus.remove(queryClient))
+  const createMutation = useOperationMutation(systemMutations.menus.create(queryClient), {
+    label: ['创建菜单', '创建菜单'],
+    target: (v) => String(v.title || v.labelZh || '新记录'),
+  })
+  const updateMutation = useOperationMutation(systemMutations.menus.update(queryClient), {
+    label: ['保存菜单', '保存菜单'],
+    target: (v) => v.id,
+  })
+  const deleteMutation = useOperationMutation(systemMutations.menus.remove(queryClient), {
+    label: ['删除菜单', '删除菜单'],
+    target: (id) => id,
+  })
 
+  const roleRecords = readableQueryData(rolesQuery) ?? []
+  const denied = queryAccessDenied(menuQuery)
+  const blocked =
+    denied || createMutation.blocked || updateMutation.blocked || deleteMutation.blocked
+  useEffect(() => {
+    if (!denied) return
+    form.resetFields()
+    setModalVisible(false)
+    setEditing(null)
+  }, [denied, form])
   const handleSubmit = (values: Record<string, unknown>) => {
+    if (blocked || !canEditMenu) return
     const normalizedValues = normalizeMenuSubmitValues(values)
     if (editing) {
       updateMutation.mutate(
         { id: editing.id, values: normalizedValues },
         {
           onSuccess: () => {
-            void message.success('菜单更新成功')
             form.resetFields()
             setModalVisible(false)
             setEditing(null)
           },
-          onError: (error) => void message.error(error.message),
         },
       )
     } else {
       createMutation.mutate(normalizedValues, {
         onSuccess: () => {
-          void message.success('菜单创建成功')
           form.resetFields()
           setModalVisible(false)
         },
-        onError: (error) => void message.error(error.message),
       })
     }
   }
@@ -359,6 +379,7 @@ export function MenusPage() {
           {canUpdateMenu && !record.syntheticKind ? (
             <ManagementIconButton
               aria-label="编辑菜单"
+              disabled={blocked}
               icon={<EditOutlined />}
               size="small"
               tooltip="编辑"
@@ -371,15 +392,13 @@ export function MenusPage() {
           {canDeleteMenu && !record.syntheticKind ? (
             <Popconfirm
               title="确认删除？"
-              onConfirm={() =>
-                deleteMutation.mutate(record.id, {
-                  onSuccess: () => void message.success('菜单已删除'),
-                  onError: (error) => void message.error(error.message),
-                })
-              }
+              disabled={blocked}
+              okButtonProps={{ disabled: blocked }}
+              onConfirm={() => deleteMutation.mutate(record.id)}
             >
               <ManagementIconButton
                 aria-label="删除菜单"
+                disabled={blocked}
                 danger
                 icon={<DeleteOutlined />}
                 size="small"
@@ -395,6 +414,17 @@ export function MenusPage() {
 
   return (
     <ManagementDataPage
+      beforeQuery={
+        <div className="soha-page-feedback">
+          {!modalVisible && !denied ? (
+            <>
+              {createMutation.feedback}
+              {updateMutation.feedback}
+              {deleteMutation.feedback}
+            </>
+          ) : null}
+        </div>
+      }
       query={{
         collapsible: true,
         onFinish: () => undefined,
@@ -480,6 +510,9 @@ export function MenusPage() {
           columnSettingIconOnly
           columnSettingPlacement="header"
           shellClassName="soha-management-table-shell"
+          error={menuQuery.error}
+          hasReadData={readableQueryData(menuQuery) !== undefined}
+          onRetry={() => void refetch()}
           columns={columns}
           dataSource={filteredMenuTree}
           rowKey="id"
@@ -493,6 +526,7 @@ export function MenusPage() {
                 <Button
                   size="small"
                   icon={<PlusOutlined />}
+                  disabled={blocked}
                   type="primary"
                   onClick={() => {
                     setEditing(null)
@@ -529,7 +563,12 @@ export function MenusPage() {
       afterTable={
         <Modal
           title={editing ? '编辑菜单' : '新建菜单'}
-          open={modalVisible}
+          open={modalVisible && !denied}
+          style={{ top: 32 }}
+          styles={operationModalStyles}
+          closable={!blocked}
+          keyboard={!blocked}
+          mask={{ closable: false }}
           onCancel={() => {
             setModalVisible(false)
             setEditing(null)
@@ -538,11 +577,15 @@ export function MenusPage() {
           footer={null}
           destroyOnHidden
         >
+          <ReadFeedback query={rolesQuery} label="可选角色" canRead={rolesQuery.isEnabled} />
+          {createMutation.feedback}
+          {updateMutation.feedback}
           <Form
+            disabled={blocked || !canEditMenu}
             form={form}
             {...MODAL_FORM_LAYOUT}
             onFinish={(values) => {
-              if (!canEditMenu) return
+              if (!canEditMenu || blocked) return
               handleSubmit(values as Record<string, unknown>)
             }}
           >
@@ -726,6 +769,7 @@ export function MenusPage() {
             </Form.Item>
             <div className="soha-form-actions">
               <Button
+                disabled={blocked}
                 onClick={() => {
                   setModalVisible(false)
                   setEditing(null)

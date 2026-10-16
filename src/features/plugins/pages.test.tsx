@@ -1,8 +1,8 @@
 /** @vitest-environment jsdom */
 
-import { act, type ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { App as AntdApp } from 'antd'
+import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -224,11 +224,11 @@ describe('plugin list page data boundaries', () => {
 
     const container = await renderPage(<PluginMarketplacePage />, '/plugins/marketplace')
 
-    expect(container.textContent).toContain('无法连接插件市场')
-    expect(container.textContent).toContain('请确认本地插件市场已启动')
+    expect(container.textContent).toContain('插件市场读取失败')
+    expect(container.textContent).toContain('network unavailable')
     expect(
       Array.from(container.querySelectorAll('button')).some(
-        (button) => button.textContent === '重试',
+        (button) => button.textContent === '重试读取',
       ),
     ).toBe(true)
   })

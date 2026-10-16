@@ -1,16 +1,18 @@
 /** @vitest-environment jsdom */
 
-import { act } from 'react'
+import { ApiError } from '@/services/api-error'
+
+import { useAuthStore } from '@/stores/auth-store'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { App as AntdApp } from 'antd'
+import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAuthStore } from '@/stores/auth-store'
 import { PortalSecurityPage } from './page'
 
 const apiMocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), delete: vi.fn() }))
-const capabilityState = vi.hoisted(() => ({ webauthn: false, stepUp: false }))
+const capabilityState = vi.hoisted(() => ({ webauthn: false, stepUp: false, totp: false }))
 
 vi.mock('@/services/api-client', () => ({ api: apiMocks }))
 
@@ -68,6 +70,7 @@ beforeEach(() => {
       tags: ['on-call'],
     },
   })
+  capabilityState.totp = false
   capabilityState.webauthn = false
   capabilityState.stepUp = false
   Object.defineProperty(window, 'PublicKeyCredential', {
@@ -85,7 +88,7 @@ beforeEach(() => {
         data: {
           samlApplicationProvider: { available: false, status: 'unavailable' },
           samlLoginSource: { available: false, status: 'unavailable' },
-          totp: { available: false, status: 'unavailable' },
+          totp: { available: capabilityState.totp, status: 'available' },
           webauthn: {
             available: capabilityState.webauthn,
             status: capabilityState.webauthn ? 'available' : 'unavailable',
@@ -158,6 +161,104 @@ describe('Provider Portal security page', () => {
         ?.getAttribute('src'),
     ).toBe('https://example.test/avatar.png')
     expect(container.querySelector('button[aria-label="Account menu"]')).not.toBeNull()
+  })
+
+  it.each(['/identity/capabilities', '/identity/mfa/credentials'])(
+    'keeps a visible explanation when MFA dependency %s is denied',
+    async (path) => {
+      capabilityState.totp = true
+      const original = apiMocks.get.getMockImplementation()!
+      apiMocks.get.mockImplementation((p: string) =>
+        p === path
+          ? Promise.reject(new ApiError(403, 'MFA dependency refused', { method: 'GET' }))
+          : original(p),
+      )
+      const container = document.createElement('div')
+      document.body.appendChild(container)
+      const root = createRoot(container)
+      mountedRoots.push(root)
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      await act(async () =>
+        root.render(
+          <AntdApp>
+            <QueryClientProvider client={queryClient}>
+              <MemoryRouter>
+                <PortalSecurityPage />
+              </MemoryRouter>
+            </QueryClientProvider>
+          </AntdApp>,
+        ),
+      )
+      await flushAsyncWork()
+      await vi.waitFor(async () => {
+        await flushAsyncWork()
+        expect(container.textContent).toContain('MFA dependency refused')
+      })
+      expect(container.textContent).toContain(
+        path.endsWith('capabilities') ? 'MFA 运行能力无访问权限' : 'MFA 凭据无访问权限',
+      )
+      expect(container.textContent).toContain(security.principal.email)
+    },
+  )
+
+  it('does not reveal a late TOTP challenge after a denied security read', async () => {
+    capabilityState.totp = true
+    let resolveChallenge!: (value: unknown) => void
+    apiMocks.post.mockReturnValue(
+      new Promise((resolve) => {
+        resolveChallenge = resolve
+      }),
+    )
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    mountedRoots.push(root)
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    await act(async () =>
+      root.render(
+        <AntdApp>
+          <QueryClientProvider client={queryClient}>
+            <MemoryRouter>
+              <PortalSecurityPage />
+            </MemoryRouter>
+          </QueryClientProvider>
+        </AntdApp>,
+      ),
+    )
+    await flushAsyncWork()
+    const button = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Add authenticator',
+    )
+    expect(button).toBeDefined()
+    await act(async () => button?.click())
+    apiMocks.get.mockImplementation(async () => {
+      throw new ApiError(403, 'Access denied', { method: 'GET' })
+    })
+    await act(async () => {
+      await queryClient.refetchQueries()
+    })
+    await flushAsyncWork()
+    await act(async () =>
+      resolveChallenge({
+        data: {
+          challengeId: 'late-challenge',
+          secret: 'private-totp-canary',
+          provisioningUri: 'otpauth://private-totp-canary',
+        },
+      }),
+    )
+    await flushAsyncWork()
+    expect(document.body.querySelector('.ant-modal')).toBeNull()
+    expect(document.body.textContent).not.toContain('private-totp-canary')
+    expect(
+      JSON.stringify(
+        queryClient
+          .getMutationCache()
+          .getAll()
+          .map((m) => m.state.data),
+      ),
+    ).not.toContain('private-totp-canary')
+    expect(apiMocks.post).toHaveBeenCalledOnce()
   })
 
   it('authenticates a step-up assertion with exact server WebAuthn options', async () => {

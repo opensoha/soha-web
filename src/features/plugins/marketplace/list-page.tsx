@@ -1,4 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import {
+  ManagementKeywordField,
+  ManagementQueryActions,
+  ManagementQueryField,
+  ManagementQueryPanel,
+  ManagementState,
+  ManagementTableToolbar,
+} from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { usePermissionSnapshot } from '@/features/auth'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
 import {
   AppstoreAddOutlined,
   CloudDownloadOutlined,
@@ -21,16 +31,8 @@ import {
   Tooltip,
   Typography,
 } from 'antd'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import {
-  ManagementKeywordField,
-  ManagementQueryActions,
-  ManagementQueryField,
-  ManagementQueryPanel,
-  ManagementState,
-  ManagementTableToolbar,
-} from '@/components/management-list'
-import { usePermissionSnapshot } from '@/features/auth'
 import type { InstalledPlugin, MarketplacePlugin, PluginMarketplaceFilters } from '../plugin-model'
 import {
   manifestAssetCount,
@@ -42,8 +44,8 @@ import {
 import { pluginQueries } from '../queries'
 import { pluginRiskTag, pluginStatusBadge } from '../shared/formatters'
 import { canInstallPlugin } from '../shared/permissions'
-import { marketplaceDetailPath, useInstallPluginAction } from './install-action'
 import '../shared/styles.css'
+import { marketplaceDetailPath, useInstallPluginAction } from './install-action'
 
 const { Text, Title } = Typography
 const PAGE_SIZE = 12
@@ -68,11 +70,13 @@ const installationOptions = [
 function PluginMarketplaceCard({
   installedPlugin,
   installLoading,
+  installBlocked,
   plugin,
   onInstall,
 }: {
   installedPlugin?: InstalledPlugin
   installLoading: boolean
+  installBlocked: boolean
   plugin: MarketplacePlugin
   onInstall: (plugin: MarketplacePlugin) => void
 }) {
@@ -115,7 +119,7 @@ function PluginMarketplaceCard({
           <Button
             key="install"
             type="text"
-            disabled={!canInstallPlugin(snapshot)}
+            disabled={installBlocked || !canInstallPlugin(snapshot)}
             icon={<CloudDownloadOutlined />}
             loading={installLoading}
             onClick={() => onInstall(plugin)}
@@ -190,18 +194,20 @@ export function PluginMarketplacePage() {
   const installAction = useInstallPluginAction()
   const marketplaceQuery = useQuery(pluginQueries.marketplace(filters))
   const installedQuery = useQuery(pluginQueries.installed())
+  const marketplaceData = readableQueryData(marketplaceQuery)
+  const installedData = readableQueryData(installedQuery)
   const installedById = useMemo(
-    () => new Map((installedQuery.data ?? []).map((plugin) => [plugin.id, plugin])),
-    [installedQuery.data],
+    () => new Map((installedData ?? []).map((plugin) => [plugin.id, plugin])),
+    [installedData],
   )
   const marketplacePlugins = useMemo(
     () =>
-      (marketplaceQuery.data ?? []).filter((plugin) => {
+      (marketplaceData ?? []).filter((plugin) => {
         if (installationFilter === 'installed') return plugin.installed
         if (installationFilter === 'available') return !plugin.installed
         return true
       }),
-    [installationFilter, marketplaceQuery.data],
+    [installationFilter, marketplaceData],
   )
   const isLoading =
     marketplaceQuery.isLoading ||
@@ -222,7 +228,9 @@ export function PluginMarketplacePage() {
       <div className="soha-plugin-market-heading">
         <div>
           <Title level={4}>插件市场</Title>
-          <Text type="secondary">{marketplacePlugins.length} 个插件</Text>
+          <Text type="secondary">
+            {marketplaceData ? `${marketplacePlugins.length} 个插件` : '插件数量暂不可用'}
+          </Text>
         </div>
       </div>
 
@@ -294,18 +302,11 @@ export function PluginMarketplacePage() {
         </ManagementTableToolbar>
       </div>
 
-      {marketplaceQuery.isError ? (
-        <ManagementState
-          kind="error"
-          title="无法连接插件市场"
-          description="请确认本地插件市场已启动，或检查后端插件市场地址配置后重试。"
-          actions={
-            <Button icon={<ReloadOutlined />} onClick={() => void marketplaceQuery.refetch()}>
-              重试
-            </Button>
-          }
-        />
-      ) : isLoading ? (
+      <ReadFeedback query={marketplaceQuery} label="插件市场" />
+      <ReadFeedback query={installedQuery} label="安装记录" />
+      {!queryAccessDenied(marketplaceQuery) ? installAction.feedback : null}
+      {!queryAccessDenied(marketplaceQuery) ? installAction.dialog : null}
+      {marketplaceQuery.isError && !marketplaceData ? null : marketplaceQuery.isLoading ? (
         <div className="soha-plugin-market-grid" aria-label="正在加载插件">
           {Array.from({ length: 6 }, (_, index) => (
             <Card key={index} loading className="soha-plugin-market-card" />
@@ -319,6 +320,9 @@ export function PluginMarketplacePage() {
                 key={`${plugin.sourceId || 'static'}:${plugin.id}:${plugin.version}`}
                 installedPlugin={installedById.get(plugin.id)}
                 installLoading={installAction.loading}
+                installBlocked={
+                  installAction.blocked || !installedData || queryAccessDenied(marketplaceQuery)
+                }
                 plugin={plugin}
                 onInstall={installAction.confirmInstall}
               />

@@ -1,3 +1,7 @@
+import { ManagementIconButton } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { readableQueryData } from '@/utils/query-feedback'
+import { formatAgeSeconds, formatDateTime } from '@/utils/time'
 import {
   ApartmentOutlined,
   CloudServerOutlined,
@@ -7,11 +11,9 @@ import {
   ReloadOutlined,
   UploadOutlined,
 } from '@ant-design/icons'
-import { Progress, Skeleton, Typography } from 'antd'
 import type { UseQueryResult } from '@tanstack/react-query'
+import { Progress, Skeleton, Typography } from 'antd'
 import type { ReactNode } from 'react'
-import { ManagementIconButton } from '@/components/management-list'
-import { formatAgeSeconds, formatDateTime } from '@/utils/time'
 import type { RuntimeResourceSnapshot } from '../types'
 
 const { Text } = Typography
@@ -79,7 +81,7 @@ export function RuntimeResourceOverview({
 }: {
   query: UseQueryResult<RuntimeResourceSnapshot, Error>
 }) {
-  const snapshot = query.data
+  const snapshot = readableQueryData(query)
 
   return (
     <section className="soha-runtime-resource-overview" aria-label="Soha 服务资源">
@@ -100,12 +102,11 @@ export function RuntimeResourceOverview({
           onClick={() => void query.refetch()}
         />
       </div>
+      <ReadFeedback query={query} label="服务资源" canRead={query.isEnabled} />
       {query.isLoading && !snapshot ? (
         <div className="soha-runtime-resource-overview__loading">
           <Skeleton active paragraph={{ rows: 2 }} title={false} />
         </div>
-      ) : query.isError && !snapshot ? (
-        <div className="soha-runtime-resource-overview__empty">服务资源暂不可用</div>
       ) : snapshot ? (
         <div className="soha-runtime-resource-grid">
           <Metric

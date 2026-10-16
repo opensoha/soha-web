@@ -1,13 +1,23 @@
-import { useEffect, useState } from 'react'
-import { Navigate, Outlet, useLocation } from 'react-router-dom'
-import { Spin } from 'antd'
 import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { restoreAuthSession } from '@/features/auth/auth-api'
-import { permissionSnapshotQueryKey, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
-import { canAccessRoute, findFirstAccessiblePath, findPreferredWorkspace, getRouteMeta } from '@/routes/meta'
+import {
+  permissionSnapshotQueryKey,
+  usePermissionSnapshot,
+} from '@/features/auth/permission-snapshot'
+import {
+  canAccessRoute,
+  findFirstAccessiblePath,
+  findPreferredWorkspace,
+  getRouteMeta,
+} from '@/routes/meta'
 import { useAuthStore } from '@/stores/auth-store'
 import { usePreferencesStore } from '@/stores/preferences-store'
+import { queryAccessDenied } from '@/utils/query-feedback'
 import { useQueryClient } from '@tanstack/react-query'
+import { Spin } from 'antd'
+import { useEffect, useState } from 'react'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
 
 const EMPTY_ROLES: string[] = []
 const AUTH_RESTORE_RETRY_MS = 2_000
@@ -87,12 +97,26 @@ export function AuthGuard() {
   }
 
   if (permissionSnapshotQuery.isLoading) {
-    return <div className="flex items-center justify-center h-screen"><Spin size="large" /></div>
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Spin size="large" />
+      </div>
+    )
+  }
+
+  if (queryAccessDenied(permissionSnapshotQuery)) {
+    return (
+      <div className="soha-page">
+        <ReadFeedback query={permissionSnapshotQuery} label="权限" />
+      </div>
+    )
   }
 
   const snapshot =
-    permissionSnapshotQuery.data?.data
-    ?? queryClient.getQueryData<{ data?: import('@/types').PermissionSnapshot }>(permissionSnapshotQueryKey)?.data
+    permissionSnapshotQuery.data?.data ??
+    queryClient.getQueryData<{ data?: import('@/types').PermissionSnapshot }>(
+      permissionSnapshotQueryKey,
+    )?.data
   const currentRoute = getRouteMeta(location.pathname)
   if (!canAccessRoute(currentRoute, snapshot)) {
     const preferredWorkspace = findPreferredWorkspace(snapshot, currentWorkspace, roles)
@@ -102,7 +126,11 @@ export function AuthGuard() {
     }
     return (
       <div className="flex items-center justify-center h-screen">
-        <ManagementState className="max-w-[520px]" kind="no-permission" description="当前账号没有可访问的页面权限" />
+        <ManagementState
+          className="max-w-[520px]"
+          kind="no-permission"
+          description="当前账号没有可访问的页面权限"
+        />
       </div>
     )
   }

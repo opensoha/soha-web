@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react'
-import type { MouseEvent } from 'react'
-import { App, Button, Form, Input, Spin } from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { useOperationMutation } from '@/components/use-operation-mutation'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import type { BrandingSettings } from '@/types'
 import { defaultBrandingSettings } from '@/utils/branding'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { App, Button, Form, Input, Spin } from 'antd'
+import type { MouseEvent } from 'react'
+import { useEffect, useState } from 'react'
 import { settingsMutations } from '../mutations'
 import { settingsQueries } from '../queries'
 import { SettingsCard, WIDE_FORM_LAYOUT } from '../shared/components'
@@ -13,20 +16,38 @@ import type { SettingsPageProps } from '../types'
 import './styles.css'
 
 export function BrandingSettingsPage({ embedded = false }: SettingsPageProps = {}) {
-  const { message } = App.useApp()
   const queryClient = useQueryClient()
+  const [form] = Form.useForm<BrandingSettings>()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const canViewBrandingSettings = hasPermission(
-    permissionSnapshotQuery.data?.data,
+    readableQueryData(permissionSnapshotQuery)?.data,
     'settings.branding.view',
   )
-  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const permissionSnapshot = readableQueryData(permissionSnapshotQuery)?.data
   const canCreateBrandingSettings = hasPermission(permissionSnapshot, 'settings.branding.create')
   const canUpdateBrandingSettings = hasPermission(permissionSnapshot, 'settings.branding.update')
 
   const brandingQuery = useQuery(settingsQueries.branding(canViewBrandingSettings))
-  const { data, isLoading } = brandingQuery
-  const saveMutation = useMutation(settingsMutations.branding.save(queryClient))
+  const data = canViewBrandingSettings ? readableQueryData(brandingQuery) : undefined
+  const isLoading = brandingQuery.isLoading
+  const saveMutation = useOperationMutation(settingsMutations.branding.save(queryClient), {
+    label: ['保存品牌设置', 'Save branding settings'],
+    target: () => '产品品牌',
+    receipt: () => ({ message: '品牌设置已保存' }),
+  })
+  const uploadMutation = useOperationMutation(settingsMutations.branding.upload(), {
+    label: ['上传品牌图片', 'Upload brand asset'],
+    target: (v) => (v.get('file') as File | null)?.name || '品牌图片',
+    receipt: () => ({ message: '图片已上传', evidence: '请保存品牌设置以使用此图片。' }),
+  })
+  const blocked = saveMutation.blocked || uploadMutation.blocked
+  const uploadAsset = async (field: keyof BrandingSettings, data: FormData) => {
+    const result = await uploadMutation.mutateAsync(data)
+    form.setFields([{ name: field, value: result.url, touched: true }])
+  }
+  useEffect(() => {
+    if (!canViewBrandingSettings || queryAccessDenied(brandingQuery)) form.resetFields()
+  }, [canViewBrandingSettings, brandingQuery.error, form])
 
   if (permissionSnapshotQuery.isLoading || isLoading) {
     return (
@@ -36,24 +57,14 @@ export function BrandingSettingsPage({ embedded = false }: SettingsPageProps = {
     )
   }
 
-  if (permissionSnapshotQuery.isError || brandingQuery.isError) {
+  if (
+    (permissionSnapshotQuery.isError && !readableQueryData(permissionSnapshotQuery)) ||
+    (brandingQuery.isError && !data)
+  ) {
     return (
       <div className="soha-page">
-        <ManagementState
-          kind="error"
-          actions={
-            <Button
-              onClick={() => {
-                void permissionSnapshotQuery.refetch()
-                if (canViewBrandingSettings) {
-                  void brandingQuery.refetch()
-                }
-              }}
-            >
-              重试
-            </Button>
-          }
-        />
+        <ReadFeedback query={permissionSnapshotQuery} label="权限" />
+        <ReadFeedback query={brandingQuery} label="品牌设置" canRead={canViewBrandingSettings} />
       </div>
     )
   }
@@ -70,14 +81,17 @@ export function BrandingSettingsPage({ embedded = false }: SettingsPageProps = {
   const canManageBrandingSettings = settings ? canUpdateBrandingSettings : canCreateBrandingSettings
   const content = (
     <SettingsCard>
+      <ReadFeedback query={permissionSnapshotQuery} label="权限" />
+      <ReadFeedback query={brandingQuery} label="品牌设置" canRead={canViewBrandingSettings} />
+      {saveMutation.feedback}
+      {uploadMutation.feedback}
       <Form
+        form={form}
+        disabled={blocked || !canManageBrandingSettings}
         {...WIDE_FORM_LAYOUT}
         onFinish={(values) => {
           if (!canManageBrandingSettings) return
-          saveMutation.mutate(values as BrandingSettings, {
-            onSuccess: () => void message.success('品牌设置已保存'),
-            onError: (err) => void message.error(err.message),
-          })
+          if (!blocked) saveMutation.mutate(values as BrandingSettings)
         }}
         initialValues={{ ...defaultBrandingSettings, ...settings }}
       >
@@ -103,7 +117,8 @@ export function BrandingSettingsPage({ embedded = false }: SettingsPageProps = {
             hint="用于登录页左侧主视觉和展开侧边栏；支持 JPG、PNG、SVG、ICO、WebP；建议尺寸 200 × 60 px；单个文件不超过 2 MB"
             previewWidth={200}
             previewHeight={60}
-            disabled={!canManageBrandingSettings}
+            disabled={blocked || !canManageBrandingSettings}
+            onUpload={uploadAsset}
           />
           <BrandingUploadField
             field="collapsedLogoUrl"
@@ -111,7 +126,8 @@ export function BrandingSettingsPage({ embedded = false }: SettingsPageProps = {
             hint="用于登录卡片和收起侧边栏；支持 JPG、PNG、SVG、ICO、WebP；建议尺寸 60 × 60 px；单个文件不超过 2 MB"
             previewWidth={60}
             previewHeight={60}
-            disabled={!canManageBrandingSettings}
+            disabled={blocked || !canManageBrandingSettings}
+            onUpload={uploadAsset}
           />
           <BrandingUploadField
             field="faviconUrl"
@@ -119,7 +135,8 @@ export function BrandingSettingsPage({ embedded = false }: SettingsPageProps = {
             hint="支持 JPG、PNG、SVG、ICO、WebP；建议尺寸 16 × 16、32 × 32 或 64 × 64 px；单个文件不超过 2 MB"
             previewWidth={64}
             previewHeight={64}
-            disabled={!canManageBrandingSettings}
+            disabled={blocked || !canManageBrandingSettings}
+            onUpload={uploadAsset}
           />
         </div>
 
@@ -132,7 +149,8 @@ export function BrandingSettingsPage({ embedded = false }: SettingsPageProps = {
             previewWidth={200}
             previewHeight={60}
             darkPreview
-            disabled={!canManageBrandingSettings}
+            disabled={blocked || !canManageBrandingSettings}
+            onUpload={uploadAsset}
           />
           <BrandingUploadField
             field="darkCollapsedLogoUrl"
@@ -141,13 +159,19 @@ export function BrandingSettingsPage({ embedded = false }: SettingsPageProps = {
             previewWidth={60}
             previewHeight={60}
             darkPreview
-            disabled={!canManageBrandingSettings}
+            disabled={blocked || !canManageBrandingSettings}
+            onUpload={uploadAsset}
           />
         </div>
 
         <div className="soha-form-actions">
           {canManageBrandingSettings ? (
-            <Button htmlType="submit" type="primary" loading={saveMutation.isPending}>
+            <Button
+              disabled={blocked}
+              htmlType="submit"
+              type="primary"
+              loading={saveMutation.isPending}
+            >
               保存设置
             </Button>
           ) : null}
@@ -176,13 +200,14 @@ function BrandingFormSync({ settings }: { settings?: BrandingSettings }) {
 }
 
 interface BrandingUploadFieldProps {
-  field: string
+  field: keyof BrandingSettings
   label: string
   hint: string
   previewWidth: number
   previewHeight: number
   darkPreview?: boolean
   disabled?: boolean
+  onUpload: (field: keyof BrandingSettings, data: FormData) => Promise<void>
 }
 
 function BrandingUploadField({
@@ -193,10 +218,10 @@ function BrandingUploadField({
   previewHeight,
   darkPreview = false,
   disabled,
+  onUpload,
 }: BrandingUploadFieldProps) {
   const { message } = App.useApp()
   const [uploading, setUploading] = useState(false)
-  const uploadMutation = useMutation(settingsMutations.branding.upload())
   const form = Form.useFormInstance()
   const currentValue = Form.useWatch(field, form) as string | undefined
 
@@ -216,11 +241,9 @@ function BrandingUploadField({
       try {
         const formData = new FormData()
         formData.append('file', file)
-        const result = await uploadMutation.mutateAsync(formData)
-        form.setFieldValue(field, result.url)
-        void message.success('图片上传成功')
-      } catch (err: any) {
-        void message.error(err?.message ?? '上传失败')
+        await onUpload(field, formData)
+      } catch {
+        // The page owns persistent upload feedback.
       } finally {
         setUploading(false)
       }
@@ -230,7 +253,7 @@ function BrandingUploadField({
 
   const handleRemove = (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation()
-    form.setFieldValue(field, '')
+    if (!disabled) form.setFields([{ name: field, value: '', touched: true }])
   }
 
   return (

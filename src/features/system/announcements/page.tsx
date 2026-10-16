@@ -1,7 +1,41 @@
-import { useMemo, useState } from 'react'
+import {
+  ManagementIconButton,
+  ManagementRefreshButton,
+  ManagementToolbarSearch,
+} from '@/components/management-list'
+import {
+  hiddenModalHeaderStyle,
+  operationModalStyles,
+  viewportModalStyle,
+  visuallyHiddenModalTitleStyle,
+} from '@/components/modal-styles'
+import { OverviewMetricCard, type OverviewMetricItem } from '@/components/overview-visuals'
+import { ReadFeedback } from '@/components/request-feedback'
+import { StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { formatDateTime } from '@/utils/time'
+import {
+  ClockCircleOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  EyeOutlined,
+  FileTextOutlined,
+  NotificationOutlined,
+  PauseCircleOutlined,
+  PlusOutlined,
+  PushpinOutlined,
+  SendOutlined,
+  TeamOutlined,
+} from '@ant-design/icons'
+import type {
+  AnnouncementReceipt,
+  AnnouncementReceiptState,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Alert,
-  App,
   Button,
   Card,
   DatePicker,
@@ -17,44 +51,12 @@ import {
   Space,
   Spin,
   Switch,
-  Tag,
   Tabs,
+  Tag,
   Typography,
 } from 'antd'
-import {
-  ClockCircleOutlined,
-  DeleteOutlined,
-  EditOutlined,
-  EyeOutlined,
-  FileTextOutlined,
-  NotificationOutlined,
-  PauseCircleOutlined,
-  PlusOutlined,
-  PushpinOutlined,
-  SendOutlined,
-  TeamOutlined,
-} from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type {
-  AnnouncementReceipt,
-  AnnouncementReceiptState,
-} from '@opensoha/contracts/gen/ts/sohaapi'
 import dayjs from 'dayjs'
-import {
-  ManagementIconButton,
-  ManagementRefreshButton,
-  ManagementToolbarSearch,
-} from '@/components/management-list'
-import {
-  hiddenModalHeaderStyle,
-  scrollableModalBodyStyle,
-  viewportModalStyle,
-  visuallyHiddenModalTitleStyle,
-} from '@/components/modal-styles'
-import { OverviewMetricCard, type OverviewMetricItem } from '@/components/overview-visuals'
-import { StatusTag } from '@/components/status-tag'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { formatDateTime } from '@/utils/time'
+import { useEffect, useMemo, useState } from 'react'
 import { systemMutations } from '../mutations'
 import { systemQueries } from '../queries'
 import {
@@ -82,7 +84,6 @@ const ANNOUNCEMENT_DURATION_OPTIONS = [
 const RECEIPT_PAGE_SIZE = 15
 
 export function AnnouncementsPage() {
-  const { message } = App.useApp()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const [modalVisible, setModalVisible] = useState(false)
@@ -95,7 +96,7 @@ export function AnnouncementsPage() {
   const [receiptKeyword, setReceiptKeyword] = useState('')
   const [receiptPage, setReceiptPage] = useState(1)
   const [statusView, setStatusView] = useState('all')
-  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const permissionSnapshot = readableQueryData(permissionSnapshotQuery)?.data
   const canCreateAnnouncement = hasPermission(permissionSnapshot, 'system.announcements.create')
   const canUpdateAnnouncement = hasPermission(permissionSnapshot, 'system.announcements.update')
   const canDeleteAnnouncement = hasPermission(permissionSnapshot, 'system.announcements.delete')
@@ -104,7 +105,9 @@ export function AnnouncementsPage() {
   const canSaveAnnouncement = editing ? canUpdateAnnouncement : canCreateAnnouncement
   const [announcementForm] = Form.useForm()
 
-  const { data: announcements = [], isLoading } = useQuery(systemQueries.announcements())
+  const announcementQuery = useQuery(systemQueries.announcements())
+  const announcements = readableQueryData(announcementQuery) ?? []
+  const { isLoading } = announcementQuery
   const receiptQuery = useQuery(
     systemQueries.announcementReceipts(
       receiptTarget?.id ?? '',
@@ -117,12 +120,42 @@ export function AnnouncementsPage() {
       Boolean(receiptTarget),
     ),
   )
-  const createMutation = useMutation(systemMutations.announcements.create(queryClient))
-  const updateMutation = useMutation(systemMutations.announcements.update(queryClient))
-  const publishMutation = useMutation(systemMutations.announcements.publish(queryClient))
-  const withdrawMutation = useMutation(systemMutations.announcements.withdraw(queryClient))
-  const deleteMutation = useMutation(systemMutations.announcements.remove(queryClient))
+  const createMutation = useOperationMutation(systemMutations.announcements.create(queryClient), {
+    label: ['创建公告', '创建公告'],
+    target: (v) => String(v.title || v.labelZh || '新记录'),
+  })
+  const updateMutation = useOperationMutation(systemMutations.announcements.update(queryClient), {
+    label: ['保存公告', '保存公告'],
+    target: (v) => v.id,
+  })
+  const publishMutation = useOperationMutation(systemMutations.announcements.publish(queryClient), {
+    label: ['发布公告', '发布公告'],
+    target: (id) => id,
+  })
+  const withdrawMutation = useOperationMutation(
+    systemMutations.announcements.withdraw(queryClient),
+    { label: ['撤回公告', '撤回公告'], target: (id) => id },
+  )
+  const deleteMutation = useOperationMutation(systemMutations.announcements.remove(queryClient), {
+    label: ['删除公告', '删除公告'],
+    target: (id) => id,
+  })
 
+  const receiptData = readableQueryData(receiptQuery)
+  const denied = queryAccessDenied(announcementQuery)
+  const blocked =
+    denied ||
+    [createMutation, updateMutation, publishMutation, withdrawMutation, deleteMutation].some(
+      (m) => m.blocked,
+    )
+  useEffect(() => {
+    if (!denied) return
+    announcementForm.resetFields()
+    setModalVisible(false)
+    setEditing(null)
+    setPreviewing(null)
+    setReceiptTarget(null)
+  }, [denied, announcementForm])
   const normalizeAnnouncementFormValues = (values: Record<string, unknown>) => {
     const { activeRange, ...payload } = values
     const [startsAt, endsAt] = (activeRange as AnnouncementDateRange | undefined) ?? []
@@ -135,30 +168,27 @@ export function AnnouncementsPage() {
   }
 
   const handleSubmit = (values: Record<string, unknown>) => {
+    if (blocked || !canSaveAnnouncement) return
     const payload = normalizeAnnouncementFormValues(values)
     if (editing) {
       updateMutation.mutate(
         { id: editing.id, values: payload },
         {
           onSuccess: () => {
-            void message.success('公告更新成功')
             setModalVisible(false)
             setRangePickerOpen(false)
             setEditing(null)
             setDurationPreset('custom')
           },
-          onError: (error) => void message.error(error.message),
         },
       )
     } else {
       createMutation.mutate(payload, {
         onSuccess: () => {
-          void message.success('公告创建成功')
           setModalVisible(false)
           setRangePickerOpen(false)
           setDurationPreset('custom')
         },
-        onError: (error) => void message.error(error.message),
       })
     }
   }
@@ -186,7 +216,7 @@ export function AnnouncementsPage() {
     {
       key: 'published',
       label: '已发布',
-      value: announcementSummary.published,
+      value: readableQueryData(announcementQuery) ? announcementSummary.published : '-',
       helper: '当前对用户可见的公告',
       icon: <NotificationOutlined />,
       tone: 'success',
@@ -194,14 +224,14 @@ export function AnnouncementsPage() {
     {
       key: 'draft',
       label: '草稿',
-      value: announcementSummary.draft,
+      value: readableQueryData(announcementQuery) ? announcementSummary.draft : '-',
       helper: '仍在编辑，尚未推送',
       icon: <FileTextOutlined />,
     },
     {
       key: 'scheduled',
       label: '待生效',
-      value: announcementSummary.scheduled,
+      value: readableQueryData(announcementQuery) ? announcementSummary.scheduled : '-',
       helper: '已配置时间窗，等待生效',
       icon: <ClockCircleOutlined />,
       tone: 'warning',
@@ -209,7 +239,7 @@ export function AnnouncementsPage() {
     {
       key: 'sticky',
       label: '置顶公告',
-      value: announcementSummary.sticky,
+      value: readableQueryData(announcementQuery) ? announcementSummary.sticky : '-',
       helper: '优先出现在用户端弹窗与铃铛中',
       icon: <PushpinOutlined />,
     },
@@ -246,6 +276,7 @@ export function AnnouncementsPage() {
       {canUpdateAnnouncement ? (
         <ManagementIconButton
           aria-label="编辑公告"
+          disabled={blocked}
           icon={<EditOutlined />}
           size="small"
           tooltip="编辑"
@@ -259,45 +290,35 @@ export function AnnouncementsPage() {
       {canPublishAnnouncement && buildAnnouncementLifecycle(record) !== 'published' ? (
         <ManagementIconButton
           aria-label="发布公告"
+          disabled={blocked}
           icon={<SendOutlined />}
           size="small"
           tooltip="发布"
-          onClick={() =>
-            publishMutation.mutate(record.id, {
-              onSuccess: () => void message.success('公告已发布'),
-              onError: (error) => void message.error(error.message),
-            })
-          }
+          onClick={() => publishMutation.mutate(record.id)}
           loading={publishMutation.isPending && publishMutation.variables === record.id}
         />
       ) : null}
       {canWithdrawAnnouncement && buildAnnouncementLifecycle(record) === 'published' ? (
         <ManagementIconButton
           aria-label="撤回公告"
+          disabled={blocked}
           icon={<PauseCircleOutlined />}
           size="small"
           tooltip="撤回"
-          onClick={() =>
-            withdrawMutation.mutate(record.id, {
-              onSuccess: () => void message.success('公告已撤回'),
-              onError: (error) => void message.error(error.message),
-            })
-          }
+          onClick={() => withdrawMutation.mutate(record.id)}
           loading={withdrawMutation.isPending && withdrawMutation.variables === record.id}
         />
       ) : null}
       {canDeleteAnnouncement ? (
         <Popconfirm
           title="确认删除？"
-          onConfirm={() =>
-            deleteMutation.mutate(record.id, {
-              onSuccess: () => void message.success('公告已删除'),
-              onError: (error) => void message.error(error.message),
-            })
-          }
+          disabled={blocked}
+          okButtonProps={{ disabled: blocked }}
+          onConfirm={() => deleteMutation.mutate(record.id)}
         >
           <ManagementIconButton
             aria-label="删除公告"
+            disabled={blocked}
             danger
             icon={<DeleteOutlined />}
             size="small"
@@ -310,6 +331,22 @@ export function AnnouncementsPage() {
 
   return (
     <div className="soha-page">
+      <ReadFeedback query={announcementQuery} label="公告" />
+      {!modalVisible && !denied ? (
+        <>
+          {createMutation.feedback}
+          {updateMutation.feedback}
+          {publishMutation.feedback}
+          {withdrawMutation.feedback}
+          {deleteMutation.feedback}
+        </>
+      ) : null}
+      <ManagementRefreshButton
+        aria-label="刷新公告"
+        tooltip="刷新"
+        loading={announcementQuery.isFetching}
+        onClick={() => void announcementQuery.refetch()}
+      />
       <div className="soha-overview-metric-grid">
         {overviewMetrics.map(({ key, ...item }) => (
           <OverviewMetricCard key={key} {...item} loading={isLoading} />
@@ -323,6 +360,7 @@ export function AnnouncementsPage() {
           canCreateAnnouncement ? (
             <Button
               icon={<PlusOutlined />}
+              disabled={blocked}
               type="primary"
               onClick={() => {
                 setEditing(null)
@@ -382,7 +420,7 @@ export function AnnouncementsPage() {
                   )
                 })}
               </ul>
-            ) : (
+            ) : announcementQuery.isError && !readableQueryData(announcementQuery) ? null : (
               <Alert type="info" showIcon title="当前分组下暂无公告" />
             ),
           }))}
@@ -390,7 +428,10 @@ export function AnnouncementsPage() {
       </Card>
       <Modal
         title={editing ? '编辑公告' : '新建公告'}
-        open={modalVisible}
+        open={modalVisible && !denied}
+        closable={!blocked}
+        keyboard={!blocked}
+        cancelButtonProps={{ disabled: blocked }}
         onCancel={() => {
           setModalVisible(false)
           setRangePickerOpen(false)
@@ -401,23 +442,26 @@ export function AnnouncementsPage() {
         okText={editing ? '更新' : '创建'}
         cancelText="取消"
         confirmLoading={createMutation.isPending || updateMutation.isPending}
-        okButtonProps={{ disabled: !canSaveAnnouncement }}
+        okButtonProps={{ disabled: blocked || !canSaveAnnouncement }}
         width={720}
         mask={{ closable: false }}
         style={viewportModalStyle}
         styles={{
-          body: scrollableModalBodyStyle,
+          ...operationModalStyles,
           header: hiddenModalHeaderStyle,
           title: visuallyHiddenModalTitleStyle,
         }}
         destroyOnHidden
       >
+        {createMutation.feedback}
+        {updateMutation.feedback}
         <Form
+          disabled={blocked || !canSaveAnnouncement}
           {...MODAL_FORM_LAYOUT}
           form={announcementForm}
           preserve={false}
           onFinish={(values) => {
-            if (!canSaveAnnouncement) return
+            if (!canSaveAnnouncement || blocked) return
             handleSubmit(values as Record<string, unknown>)
           }}
           initialValues={
@@ -481,6 +525,7 @@ export function AnnouncementsPage() {
               popupClassName="soha-system-announcement-range-popup"
               renderExtraFooter={() => (
                 <Segmented<AnnouncementDurationOption>
+                  disabled={blocked}
                   block
                   aria-label="快捷时长"
                   className="soha-form-segmented"
@@ -493,7 +538,8 @@ export function AnnouncementsPage() {
                       return
                     }
                     const currentRange = announcementForm.getFieldValue('activeRange') as
-                      AnnouncementDateRange | undefined
+                      | AnnouncementDateRange
+                      | undefined
                     announcementForm.setFieldValue(
                       'activeRange',
                       buildAnnouncementDateRange(preset, currentRange?.[0] ?? dayjs()),
@@ -514,7 +560,7 @@ export function AnnouncementsPage() {
       </Modal>
       <Drawer
         title={previewing?.title || '公告详情'}
-        open={Boolean(previewing)}
+        open={!denied && Boolean(previewing)}
         onClose={() => setPreviewing(null)}
         size={560}
         destroyOnHidden
@@ -564,7 +610,7 @@ export function AnnouncementsPage() {
       </Drawer>
       <Drawer
         title="阅读情况"
-        open={Boolean(receiptTarget)}
+        open={!denied && Boolean(receiptTarget)}
         onClose={() => setReceiptTarget(null)}
         size={560}
         destroyOnHidden
@@ -574,11 +620,11 @@ export function AnnouncementsPage() {
             block
             options={[
               {
-                label: `全部 ${(receiptQuery.data?.readCount ?? 0) + (receiptQuery.data?.unreadCount ?? 0)}`,
+                label: `全部 ${(receiptData?.readCount ?? 0) + (receiptData?.unreadCount ?? 0)}`,
                 value: 'all',
               },
-              { label: `已读 ${receiptQuery.data?.readCount ?? 0}`, value: 'read' },
-              { label: `未读 ${receiptQuery.data?.unreadCount ?? 0}`, value: 'unread' },
+              { label: `已读 ${receiptData?.readCount ?? 0}`, value: 'read' },
+              { label: `未读 ${receiptData?.unreadCount ?? 0}`, value: 'unread' },
             ]}
             size="small"
             value={receiptState}
@@ -604,18 +650,16 @@ export function AnnouncementsPage() {
               onClick={() => void receiptQuery.refetch()}
             />
           </div>
-          <Spin spinning={receiptQuery.isFetching}>
-            {receiptQuery.isError ? (
-              <Alert
-                showIcon
-                type="error"
-                title="阅读情况加载失败"
-                description={receiptQuery.error.message}
-              />
-            ) : receiptQuery.data?.items.length ? (
+          <ReadFeedback
+            query={receiptQuery}
+            label="公告阅读情况"
+            canRead={Boolean(receiptTarget)}
+          />
+          <Spin spinning={receiptQuery.isLoading}>
+            {receiptData?.items.length ? (
               <Space orientation="vertical" size={12} style={{ width: '100%' }}>
                 <ul className="soha-list-panel soha-system-announcement-receipt-list">
-                  {receiptQuery.data.items.map((record: AnnouncementReceipt) => (
+                  {receiptData.items.map((record: AnnouncementReceipt) => (
                     <li
                       key={record.userId}
                       className="soha-list-row soha-system-announcement-receipt-row"
@@ -639,7 +683,7 @@ export function AnnouncementsPage() {
                     </li>
                   ))}
                 </ul>
-                {(receiptQuery.data.total ?? 0) > RECEIPT_PAGE_SIZE ? (
+                {(receiptData.total ?? 0) > RECEIPT_PAGE_SIZE ? (
                   <Pagination
                     align="end"
                     current={receiptPage}
@@ -647,12 +691,12 @@ export function AnnouncementsPage() {
                     showSizeChanger={false}
                     simple
                     size="small"
-                    total={receiptQuery.data.total}
+                    total={receiptData.total}
                     onChange={setReceiptPage}
                   />
                 ) : null}
               </Space>
-            ) : (
+            ) : receiptQuery.isError ? null : (
               <Alert showIcon type="info" title="暂无符合条件的用户" />
             )}
           </Spin>

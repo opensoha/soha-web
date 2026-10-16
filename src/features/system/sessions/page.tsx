@@ -1,8 +1,3 @@
-import { useMemo, useState } from 'react'
-import { App, Button, Popconfirm, Select } from 'antd'
-import type { TableColumnsType } from 'antd'
-import { DeleteOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementDensityButton,
@@ -15,10 +10,17 @@ import {
   useManagementTextFilter,
 } from '@/components/management-list'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { formatDateTime, formatRelativeTime } from '@/utils/time'
-import { tableColumnPresets } from '@/utils/table-columns'
 import { loginProviderLabel, loginProviderTagColor } from '@/utils/login-provider'
+import { queryAccessDenied, readableQueryData, writeOutcomeUnknown } from '@/utils/query-feedback'
+import { tableColumnPresets } from '@/utils/table-columns'
+import { formatDateTime, formatRelativeTime } from '@/utils/time'
+import { DeleteOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
+import { Button, Popconfirm, Select } from 'antd'
+import { useEffect, useMemo, useState } from 'react'
 import { systemMutations } from '../mutations'
 import { systemQueries } from '../queries'
 import type { OnlineUser } from '../system-model'
@@ -29,7 +31,6 @@ function SourceTag({ value }: { value?: string }) {
 }
 
 export function OnlineUsersPage() {
-  const { message } = App.useApp()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([])
@@ -37,13 +38,42 @@ export function OnlineUsersPage() {
   const [searchKeyword, setSearchKeyword] = useState('')
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const canManageOnlineUsers = hasPermission(
-    permissionSnapshotQuery.data?.data,
+    readableQueryData(permissionSnapshotQuery)?.data,
     'system.online-users.revoke',
   )
 
-  const { data: sessions = [], isFetching, isLoading, refetch } = useQuery(systemQueries.sessions())
-  const revokeMutation = useMutation(systemMutations.sessions.revoke(queryClient))
-  const batchRevokeMutation = useMutation(systemMutations.sessions.revokeMany(queryClient))
+  const sessionsQuery = useQuery(systemQueries.sessions())
+  const sessions = readableQueryData(sessionsQuery) ?? []
+  const { isFetching, isLoading, refetch } = sessionsQuery
+  const revokeMutation = useOperationMutation(systemMutations.sessions.revoke(queryClient), {
+    label: ['下线会话', 'Revoke session'],
+    target: (id) => id,
+  })
+  const batchRevokeMutation = useOperationMutation(
+    systemMutations.sessions.revokeMany(queryClient),
+    {
+      label: ['批量下线会话', 'Revoke sessions'],
+      target: (ids) => ids.join('、'),
+      resultError: (results) => {
+        const failed = results.filter((r) => r.status === 'rejected')
+        return (
+          failed.find((r) => writeOutcomeUnknown(r.reason))?.reason ||
+          (failed.length
+            ? new Error(`部分会话下线失败：${failed.length} 个，请核对保留的选中项。`)
+            : undefined)
+        )
+      },
+      receipt: (results) => ({
+        message: '批量下线请求已返回',
+        evidence: `成功 ${results.filter((r) => r.status === 'fulfilled').length}，失败 ${results.filter((r) => r.status === 'rejected').length}；失败目标保留在选中项中。`,
+      }),
+    },
+  )
+  const blocked =
+    revokeMutation.blocked || batchRevokeMutation.blocked || queryAccessDenied(sessionsQuery)
+  useEffect(() => {
+    if (queryAccessDenied(sessionsQuery)) setSelectedSessionIds([])
+  }, [sessionsQuery.error])
   const providerOptions = useMemo(
     () =>
       Array.from(new Set(sessions.map((item: OnlineUser) => item.providerType).filter(Boolean)))
@@ -151,13 +181,13 @@ export function OnlineUsersPage() {
         canManageOnlineUsers ? (
           <Popconfirm
             title="确认下线该用户会话？"
+            disabled={blocked}
+            okButtonProps={{ disabled: blocked }}
             onConfirm={() =>
               revokeMutation.mutate(record.id, {
                 onSuccess: () => {
-                  void message.success('用户会话已下线')
                   setSelectedSessionIds((current) => current.filter((id) => id !== record.id))
                 },
-                onError: (error) => void message.error(error.message),
               })
             }
           >
@@ -166,6 +196,7 @@ export function OnlineUsersPage() {
               danger
               icon={<DeleteOutlined />}
               aria-label="下线用户"
+              disabled={blocked}
               loading={revokeMutation.isPending}
               tooltip="下线用户"
             />
@@ -178,6 +209,16 @@ export function OnlineUsersPage() {
 
   return (
     <ManagementDataPage
+      beforeQuery={
+        <div className="soha-page-feedback">
+          {!queryAccessDenied(sessionsQuery) ? (
+            <>
+              {revokeMutation.feedback}
+              {batchRevokeMutation.feedback}
+            </>
+          ) : null}
+        </div>
+      }
       query={{
         onFinish: () => undefined,
         actions: (
@@ -219,25 +260,17 @@ export function OnlineUsersPage() {
                 size="small"
                 danger
                 variant="outlined"
-                disabled={selectedSessions.length === 0}
+                disabled={blocked || selectedSessions.length === 0}
                 loading={batchRevokeMutation.isPending}
                 onClick={() =>
                   batchRevokeMutation.mutate(
                     selectedSessions.map((item: OnlineUser) => item.id),
                     {
-                      onSuccess: (results) => {
-                        const successCount = results.filter(
-                          (item) => item.status === 'fulfilled',
-                        ).length
-                        const failureCount = results.length - successCount
-                        void message.success(
-                          failureCount > 0
-                            ? `批量下线完成，成功 ${successCount}，失败 ${failureCount}`
-                            : `已批量下线 ${successCount} 个会话`,
+                      onSuccess: (results, submitted) => {
+                        setSelectedSessionIds(
+                          submitted.filter((_, index) => results[index]?.status === 'rejected'),
                         )
-                        setSelectedSessionIds([])
                       },
-                      onError: (error) => void message.error(error.message),
                     },
                   )
                 }
@@ -260,6 +293,9 @@ export function OnlineUsersPage() {
             />
           </ManagementTableToolbar>
         ),
+        error: sessionsQuery.error,
+        hasReadData: readableQueryData(sessionsQuery) !== undefined,
+        onRetry: () => void refetch(),
         columns,
         dataSource: filteredSessions,
         rowKey: 'id',
