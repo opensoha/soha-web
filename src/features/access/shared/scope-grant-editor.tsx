@@ -1,4 +1,7 @@
-import { useEffect, useMemo } from 'react'
+import { ReadFeedback } from '@/components/request-feedback'
+import { readableQueryData, writeOutcomeUnknown } from '@/utils/query-feedback'
+import { AccessMutationFooter, accessMutationModalStyles } from './mutation-footer'
+import { useEffect, useMemo, type ReactNode } from 'react'
 import { Form, Modal, Segmented, Select, Switch } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { visuallyHiddenModalTitleStyle } from '@/components/modal-styles'
@@ -27,6 +30,11 @@ interface ScopeGrantEditorProps {
   onSubmit: (values: AccessMutationValues) => void
   open: boolean
   pending?: boolean
+  blocked?: boolean
+  error?: Error | null
+  onCheck?: () => void
+  readBlocked?: boolean
+  readFeedback?: ReactNode
 }
 
 function optionLabel(name: string, id: string) {
@@ -97,6 +105,11 @@ export function ScopeGrantEditor({
   onSubmit,
   open,
   pending = false,
+  blocked = false,
+  error = null,
+  onCheck,
+  readBlocked = false,
+  readFeedback,
 }: ScopeGrantEditorProps) {
   const [form] = Form.useForm<ScopeGrantFormValues>()
   const permissionSnapshotQuery = usePermissionSnapshot()
@@ -129,9 +142,10 @@ export function ScopeGrantEditor({
     Form.useWatch('subjectType', form) ?? editing?.subjectType ?? defaultSubjectType
   const businessLineId = Form.useWatch('businessLineId', form)
   const applicationIds = Form.useWatch('applicationIds', form) ?? []
+  const preserveDraft = writeOutcomeUnknown(error)
 
   useEffect(() => {
-    if (!open) return
+    if (!open || preserveDraft) return
     form.resetFields()
     form.setFieldsValue(
       editing
@@ -162,6 +176,7 @@ export function ScopeGrantEditor({
           },
     )
   }, [
+    preserveDraft,
     defaultScopeType,
     defaultSubjectType,
     editing,
@@ -174,33 +189,38 @@ export function ScopeGrantEditor({
   ])
 
   const roleOptions = withFallback(
-    (rolesQuery.data ?? []).map((role) => ({
+    ((canViewRoles ? readableQueryData(rolesQuery) : undefined) ?? []).map((role) => ({
       label: optionLabel(role.name, role.id),
       value: role.id,
     })),
     editing?.role ? [editing.role] : [],
   )
   const userOptions = withFallback(
-    (usersQuery.data ?? []).map((user) => ({
+    ((canViewUsers ? readableQueryData(usersQuery) : undefined) ?? []).map((user) => ({
       label: optionLabel(user.displayName || user.username, user.id),
       value: user.id,
     })),
     editing?.subjectType === 'user' ? [editing.subjectId] : [],
   )
   const teamOptions = withFallback(
-    (teamsQuery.data ?? []).map((team) => ({
+    ((canViewTeams ? readableQueryData(teamsQuery) : undefined) ?? []).map((team) => ({
       label: optionLabel(team.name, team.id),
       value: team.id,
     })),
     editing?.subjectType === 'team' ? [editing.subjectId] : [],
   )
 
-  const bindings = applicationEnvironmentsQuery.data ?? []
+  const bindings =
+    (canViewApplicationEnvironments
+      ? readableQueryData(applicationEnvironmentsQuery)
+      : undefined) ?? []
   const businessLineOptions = withFallback(
     Array.from(
       new Set(
         [
-          ...(applicationsQuery.data ?? []).map((item) => item.businessLineId || item.group),
+          ...((canViewApplications ? readableQueryData(applicationsQuery) : undefined) ?? []).map(
+            (item) => item.businessLineId || item.group,
+          ),
           ...bindings.map((item) => item.businessLineId || item.applicationGroup),
         ].filter((value): value is string => Boolean(value?.trim())),
       ),
@@ -214,7 +234,7 @@ export function ScopeGrantEditor({
         : [],
   )
   const applicationOptions = withFallback(
-    (applicationsQuery.data ?? [])
+    ((canViewApplications ? readableQueryData(applicationsQuery) : undefined) ?? [])
       .filter(
         (application) =>
           fixedApplication?.id === application.id ||
@@ -258,7 +278,7 @@ export function ScopeGrantEditor({
     editing?.environmentIds,
   )
   const clusterOptions = withFallback(
-    (clustersQuery.data ?? []).map((cluster) => ({
+    ((canViewClusters ? readableQueryData(clustersQuery) : undefined) ?? []).map((cluster) => ({
       label: optionLabel(cluster.name, cluster.id),
       value: cluster.id,
     })),
@@ -286,7 +306,20 @@ export function ScopeGrantEditor({
     [canViewClusters, canViewDelivery, editing?.scopeType],
   )
 
+  const requiredQueries = [
+    ...(canViewRoles ? [rolesQuery] : []),
+    ...(!fixedSubject ? [subjectType === 'team' ? teamsQuery : usersQuery] : []),
+    ...(scopeType === 'platform'
+      ? canViewClusters
+        ? [clustersQuery]
+        : []
+      : canViewDelivery
+        ? [applicationsQuery, applicationEnvironmentsQuery]
+        : []),
+  ]
+  const dependenciesBlocked = requiredQueries.some((query) => query.isPending || query.isError)
   const submit = async () => {
+    if (pending || blocked || readBlocked || dependenciesBlocked) return
     try {
       const values = await form.validateFields()
       onSubmit(buildScopeGrantPayload(values, editing, fixedSubject, fixedApplication))
@@ -298,18 +331,47 @@ export function ScopeGrantEditor({
   return (
     <Modal
       title={editing ? '编辑授权项' : '新建授权项'}
-      styles={{ header: { minHeight: 32 }, title: visuallyHiddenModalTitleStyle }}
+      styles={{ ...accessMutationModalStyles, title: visuallyHiddenModalTitleStyle }}
       open={open}
       onCancel={onCancel}
       onOk={() => void submit()}
       okText={editing ? '更新' : '创建'}
       cancelText="取消"
       confirmLoading={pending}
+      okButtonProps={{
+        disabled: blocked || readBlocked || dependenciesBlocked,
+        'aria-label': editing ? '更新' : '创建',
+      }}
+      cancelButtonProps={{ disabled: pending, 'aria-label': '取消' }}
+      closable={{ disabled: pending }}
+      keyboard={!pending}
+      style={{ top: 32, marginTop: 0 }}
+      footer={(buttons) => (
+        <AccessMutationFooter
+          error={error}
+          saving={pending}
+          target={editing?.id ?? fixedSubject?.id}
+          onCheck={onCheck}
+        >
+          {buttons}
+        </AccessMutationFooter>
+      )}
       width={680}
-      destroyOnHidden
+      destroyOnHidden={!preserveDraft}
       mask={{ closable: false }}
     >
-      <Form form={form} layout="vertical">
+      {readFeedback}
+      <ReadFeedback query={rolesQuery} label="角色目录" />
+      <ReadFeedback query={usersQuery} label="用户目录" />
+      <ReadFeedback query={teamsQuery} label="组织目录" />
+      <ReadFeedback query={applicationsQuery} label="应用目录" />
+      <ReadFeedback query={applicationEnvironmentsQuery} label="环境目录" />
+      <ReadFeedback query={clustersQuery} label="集群目录" />
+      <Form
+        form={form}
+        layout="vertical"
+        disabled={pending || blocked || readBlocked || dependenciesBlocked}
+      >
         {!fixedSubject ? (
           <>
             <Form.Item name="subjectType" label="授权主体">

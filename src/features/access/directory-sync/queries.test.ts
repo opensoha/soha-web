@@ -1,3 +1,4 @@
+import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
 import { directorySyncKeys, directorySyncQueries } from './queries'
 
@@ -16,6 +17,21 @@ describe('directory sync queries', () => {
       'dir-1',
     ])
     expect(directorySyncQueries.runtimeStatus('').enabled).toBe(false)
-    expect(directorySyncQueries.events('dir-1').refetchInterval).toBe(5000)
+    for (const options of [
+      directorySyncQueries.events('dir-1'),
+      directorySyncQueries.runtimeStatus('dir-1'),
+    ]) {
+      const client = new QueryClient()
+      client.setQueryData(options.queryKey, [])
+      const query = client.getQueryCache().find({ queryKey: options.queryKey })!
+      expect(
+        typeof options.refetchInterval === 'function' && options.refetchInterval(query as never),
+      ).toBe(5000)
+      query.setState({ status: 'error' })
+      expect(
+        typeof options.refetchInterval === 'function' && options.refetchInterval(query as never),
+      ).toBe(false)
+      client.clear()
+    }
   })
 })

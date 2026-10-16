@@ -106,7 +106,7 @@ async function renderWithProviders(node: React.ReactNode, route: string) {
   })
 
   await act(async () => {
-    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(1)
   })
 
   return container
@@ -378,7 +378,7 @@ describe('frontend access authorization splits', () => {
         await vi.advanceTimersByTimeAsync(300)
       })
       expect(apiPostMock).toHaveBeenCalledTimes(1)
-      expect(dialog.textContent).toContain('正在保存')
+      expect(dialog.textContent).toContain('保存：正在提交请求')
       expect(field.disabled).toBe(true)
       expect(dialog.querySelector<HTMLButtonElement>('.ant-modal-close')?.disabled).toBe(true)
       const cancel = Array.from(dialog.querySelectorAll('button')).find(
@@ -396,7 +396,7 @@ describe('frontend access authorization splits', () => {
         rejectSave(new ApiError(409, '名称已存在', { requestId: 'req-save' }))
         await vi.advanceTimersByTimeAsync(300)
       })
-      expect(dialog.textContent).toContain('保存未完成')
+      expect(dialog.textContent).toContain('保存：操作请求失败')
       expect(dialog.textContent).toContain('名称已存在')
       expect(dialog.textContent).toContain('req-save')
       expect(field.value).toBe('Test resource')

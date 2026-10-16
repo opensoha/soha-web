@@ -1,3 +1,5 @@
+import { MutationFeedback, ReadFeedback } from '@/components/request-feedback'
+import { readableQueryData, writeOutcomeUnknown } from '@/utils/query-feedback'
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Button, Form, Input, Modal, Popconfirm, Select, Space } from 'antd'
@@ -39,8 +41,12 @@ export function AccessRolesPage() {
   const permissionCatalogQuery = useQuery(accessQueries.permissionCatalog(canViewRoles))
   const permissionDefinitions = useMemo(
     () =>
-      localizePermissionDefinitions(permissionCatalogQuery.data?.permissions ?? [], localeCode, t),
-    [localeCode, permissionCatalogQuery.data?.permissions, t],
+      localizePermissionDefinitions(
+        readableQueryData(permissionCatalogQuery)?.permissions ?? [],
+        localeCode,
+        t,
+      ),
+    [localeCode, permissionCatalogQuery.data?.permissions, t, permissionCatalogQuery.error],
   )
   const permissionLabelMap = Object.fromEntries(
     permissionDefinitions.map((permission) => [permission.key, permission.displayName]),
@@ -87,6 +93,7 @@ export function AccessRolesPage() {
               {canUpdateRoles ? (
                 <ManagementIconButton
                   aria-label={t('access.roles.edit', '编辑角色')}
+                  disabled={crud.saveBlocked && crud.editing?.id !== record.id}
                   icon={<EditOutlined />}
                   size="small"
                   tooltip={t('common.edit', '编辑')}
@@ -95,11 +102,12 @@ export function AccessRolesPage() {
               ) : null}
               {canDeleteRoles ? (
                 <Popconfirm
-                  title={t('access.roles.confirmDelete', '确认删除？')}
-                  onConfirm={() => crud.deleteMutation.mutate(record.id)}
+                  title={`${t('access.roles.confirmDelete', '确认删除？')} ${record.name}`}
+                  onConfirm={() => crud.deleteRecord(record.id)}
                 >
                   <ManagementIconButton
                     aria-label={t('access.roles.delete', '删除角色')}
+                    disabled={crud.deleteBlocked}
                     danger
                     icon={<DeleteOutlined />}
                     size="small"
@@ -139,11 +147,22 @@ export function AccessRolesPage() {
       columns={columns}
       createAction={
         canCreateRoles ? (
-          <Button size="small" icon={<PlusOutlined />} type="primary" onClick={crud.openCreate}>
-            {t('access.roles.add', '添加角色')}
+          <Button
+            aria-label={crud.saveBlocked ? '查看待核对草稿' : '添加角色'}
+            disabled={readableQueryData(crud.query) === undefined}
+            size="small"
+            icon={<PlusOutlined />}
+            type="primary"
+            onClick={crud.openCreate}
+          >
+            {crud.saveBlocked
+              ? t('access.reviewDraft', '查看待核对草稿')
+              : t('access.roles.add', '添加角色')}
           </Button>
         ) : null
       }
+      error={crud.query.error}
+      hasReadData={crud.query.data !== undefined}
       dataSource={filteredRoles}
       rowKey="id"
       loading={crud.isLoading}
@@ -153,13 +172,43 @@ export function AccessRolesPage() {
       searchKeyword={searchKeyword}
       setSearchKeyword={setSearchKeyword}
     >
+      <ReadFeedback query={permissionCatalogQuery} label="权限目录" />
+      <MutationFeedback
+        operations={[
+          {
+            mutation: crud.createMutation,
+            label: '创建角色',
+            target: String(crud.createMutation.variables?.name ?? ''),
+            receipt: { message: '角色已创建' },
+          },
+          {
+            mutation: crud.updateMutation,
+            label: '更新角色',
+            target: String(
+              crud.updateMutation.variables?.values.name ?? crud.updateMutation.variables?.id ?? '',
+            ),
+            receipt: { message: '角色已更新' },
+          },
+          {
+            mutation: crud.deleteMutation,
+            label: '删除角色',
+            target: crud.deleteMutation.variables,
+            receipt: { message: '角色已删除' },
+          },
+        ]}
+      />
+      {writeOutcomeUnknown(crud.deleteMutation.error) ? (
+        <Button size="small" onClick={() => void crud.refetch()}>
+          重读角色记录（不会重发删除）
+        </Button>
+      ) : null}
       <Modal
         title={
           crud.editing
             ? `${t('access.roles.edit', '编辑角色')}: ${crud.editing.name}`
             : t('access.roles.add', '添加角色')
         }
-        open={crud.modalVisible}
+        open={crud.modalVisible && readableQueryData(crud.query) !== undefined}
         onCancel={crud.closeModal}
         onOk={async () => {
           try {
@@ -178,23 +227,37 @@ export function AccessRolesPage() {
         okText={crud.editing ? t('common.update', '更新') : t('common.create', '创建')}
         cancelText={t('common.cancel', '取消')}
         confirmLoading={crud.isSaving}
-        cancelButtonProps={{ disabled: crud.isSaving }}
+        okButtonProps={{
+          'aria-label': crud.editing ? t('common.update', '更新') : t('common.create', '创建'),
+          disabled:
+            crud.saveBlocked ||
+            crud.query.isError ||
+            permissionCatalogQuery.isPending ||
+            permissionCatalogQuery.isError,
+        }}
+        cancelButtonProps={{ disabled: crud.isSaving, 'aria-label': '取消' }}
         closable={{ disabled: crud.isSaving }}
         keyboard={!crud.isSaving}
         styles={accessMutationModalStyles}
         footer={(buttons) => (
-          <AccessMutationFooter error={crud.saveError} saving={crud.isSaving}>
+          <AccessMutationFooter
+            error={crud.saveError}
+            saving={crud.isSaving}
+            target={crud.editing?.name ?? String(crud.createMutation.variables?.name ?? '')}
+            onCheck={() => void crud.refetch()}
+          >
             {buttons}
           </AccessMutationFooter>
         )}
         style={{ top: 32, marginTop: 0 }}
         width={1000}
-        destroyOnHidden
+        destroyOnHidden={!crud.saveBlocked}
         mask={{ closable: false }}
       >
+        <ReadFeedback query={crud.query} label="角色列表" />
         <Form
           form={form}
-          disabled={crud.isSaving}
+          disabled={crud.isSaving || crud.saveBlocked || crud.query.isError}
           key={crud.editing?.id ?? 'create-role'}
           layout="vertical"
           initialValues={

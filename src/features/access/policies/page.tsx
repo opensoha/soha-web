@@ -1,3 +1,5 @@
+import { MutationFeedback, ReadFeedback } from '@/components/request-feedback'
+import { readableQueryData, writeOutcomeUnknown } from '@/utils/query-feedback'
 import { useMemo, useState } from 'react'
 import {
   Button,
@@ -71,32 +73,38 @@ export function AccessPoliciesPage() {
   const roleMap = useMemo(
     () =>
       Object.fromEntries(
-        (canViewRoles ? (rolesQuery.data ?? []) : []).map((item) => [item.id, item.name]),
+        (canViewRoles ? (readableQueryData(rolesQuery) ?? []) : []).map((item) => [
+          item.id,
+          item.name,
+        ]),
       ),
-    [canViewRoles, rolesQuery.data],
+    [canViewRoles, rolesQuery.data, rolesQuery.error],
   )
   const teamMap = useMemo(
     () =>
       Object.fromEntries(
-        (canViewTeams ? (teamsQuery.data ?? []) : []).map((item) => [item.id, item.name]),
+        (canViewTeams ? (readableQueryData(teamsQuery) ?? []) : []).map((item) => [
+          item.id,
+          item.name,
+        ]),
       ),
-    [canViewTeams, teamsQuery.data],
+    [canViewTeams, teamsQuery.data, teamsQuery.error],
   )
   const roleOptions = useMemo(
     () =>
-      (canViewRoles ? (rolesQuery.data ?? []) : []).map((item) => ({
+      (canViewRoles ? (readableQueryData(rolesQuery) ?? []) : []).map((item) => ({
         value: item.id,
         label: item.name,
       })),
-    [canViewRoles, rolesQuery.data],
+    [canViewRoles, rolesQuery.data, rolesQuery.error],
   )
   const teamOptions = useMemo(
     () =>
-      (canViewTeams ? (teamsQuery.data ?? []) : []).map((item) => ({
+      (canViewTeams ? (readableQueryData(teamsQuery) ?? []) : []).map((item) => ({
         value: item.id,
         label: item.path ? `${item.name} (${item.path})` : item.name,
       })),
-    [canViewTeams, teamsQuery.data],
+    [canViewTeams, teamsQuery.data, teamsQuery.error],
   )
   const columns: ColumnProps<AccessPolicy>[] = [
     { title: '策略名称', dataIndex: 'name' },
@@ -134,6 +142,7 @@ export function AccessPoliciesPage() {
               {canUpdatePolicies ? (
                 <ManagementIconButton
                   aria-label="编辑策略"
+                  disabled={crud.saveBlocked && crud.editing?.id !== record.id}
                   icon={<EditOutlined />}
                   size="small"
                   tooltip="编辑"
@@ -142,11 +151,12 @@ export function AccessPoliciesPage() {
               ) : null}
               {canDeletePolicies ? (
                 <Popconfirm
-                  title="确认删除？"
-                  onConfirm={() => crud.deleteMutation.mutate(record.id)}
+                  title={`确认删除 ${record.name}？`}
+                  onConfirm={() => crud.deleteRecord(record.id)}
                 >
                   <ManagementIconButton
                     aria-label="删除策略"
+                    disabled={crud.deleteBlocked}
                     danger
                     icon={<DeleteOutlined />}
                     size="small"
@@ -247,11 +257,20 @@ export function AccessPoliciesPage() {
       columns={columns}
       createAction={
         canCreatePolicies ? (
-          <Button size="small" icon={<PlusOutlined />} type="primary" onClick={crud.openCreate}>
-            添加策略
+          <Button
+            aria-label={crud.saveBlocked ? '查看待核对草稿' : '添加策略'}
+            disabled={readableQueryData(crud.query) === undefined}
+            size="small"
+            icon={<PlusOutlined />}
+            type="primary"
+            onClick={crud.openCreate}
+          >
+            {crud.saveBlocked ? '查看待核对草稿' : '添加策略'}
           </Button>
         ) : null
       }
+      error={crud.query.error}
+      hasReadData={crud.query.data !== undefined}
       dataSource={filteredPolicies}
       rowKey="id"
       loading={crud.isLoading}
@@ -269,9 +288,40 @@ export function AccessPoliciesPage() {
       searchKeyword={searchKeyword}
       setSearchKeyword={setSearchKeyword}
     >
+      <ReadFeedback query={rolesQuery} label="角色目录" />
+      <ReadFeedback query={teamsQuery} label="组织目录" />
+      <MutationFeedback
+        operations={[
+          {
+            mutation: crud.createMutation,
+            label: '创建策略',
+            target: String(crud.createMutation.variables?.name ?? ''),
+            receipt: { message: '策略已创建' },
+          },
+          {
+            mutation: crud.updateMutation,
+            label: '更新策略',
+            target: String(
+              crud.updateMutation.variables?.values.name ?? crud.updateMutation.variables?.id ?? '',
+            ),
+            receipt: { message: '策略已更新' },
+          },
+          {
+            mutation: crud.deleteMutation,
+            label: '删除策略',
+            target: crud.deleteMutation.variables,
+            receipt: { message: '策略已删除' },
+          },
+        ]}
+      />
+      {writeOutcomeUnknown(crud.deleteMutation.error) ? (
+        <Button size="small" onClick={() => void crud.refetch()}>
+          重读策略记录（不会重发删除）
+        </Button>
+      ) : null}
       <Modal
         title={crud.editing ? `编辑策略: ${crud.editing.name}` : '添加策略'}
-        open={crud.modalVisible}
+        open={crud.modalVisible && readableQueryData(crud.query) !== undefined}
         onCancel={crud.closeModal}
         onOk={async () => {
           try {
@@ -283,23 +333,39 @@ export function AccessPoliciesPage() {
         okText={crud.editing ? '更新' : '创建'}
         cancelText="取消"
         confirmLoading={crud.isSaving}
-        cancelButtonProps={{ disabled: crud.isSaving }}
+        okButtonProps={{
+          'aria-label': crud.editing ? '更新' : '创建',
+          disabled:
+            crud.saveBlocked ||
+            crud.query.isError ||
+            (canViewRoles && (rolesQuery.isPending || rolesQuery.isError)) ||
+            (canViewTeams && (teamsQuery.isPending || teamsQuery.isError)),
+        }}
+        cancelButtonProps={{ disabled: crud.isSaving, 'aria-label': '取消' }}
         closable={{ disabled: crud.isSaving }}
         keyboard={!crud.isSaving}
         styles={accessMutationModalStyles}
         style={{ top: 32, marginTop: 0 }}
         footer={(buttons) => (
-          <AccessMutationFooter error={crud.saveError} saving={crud.isSaving}>
+          <AccessMutationFooter
+            error={crud.saveError}
+            saving={crud.isSaving}
+            target={crud.editing?.name ?? String(crud.createMutation.variables?.name ?? '')}
+            onCheck={() => void crud.refetch()}
+          >
             {buttons}
           </AccessMutationFooter>
         )}
         width={920}
-        destroyOnHidden
+        destroyOnHidden={!crud.saveBlocked}
         mask={{ closable: false }}
       >
+        <ReadFeedback query={crud.query} label="策略列表" />
+        <ReadFeedback query={rolesQuery} label="角色目录" />
+        <ReadFeedback query={teamsQuery} label="组织目录" />
         <Form
           form={form}
-          disabled={crud.isSaving}
+          disabled={crud.isSaving || crud.saveBlocked || crud.query.isError}
           key={crud.editing?.id ?? 'create-policy'}
           layout="vertical"
           initialValues={

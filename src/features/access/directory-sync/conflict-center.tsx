@@ -11,11 +11,13 @@ export function DirectoryConflictCenter({
   conflicts,
   loading,
   onResolve,
+  unavailable = false,
 }: {
   canManagePeople: boolean
   conflicts: DirectoryConflict[]
   loading: boolean
   onResolve: (id: string, resolution: 'ignore' | 'retry') => void
+  unavailable?: boolean
 }) {
   const columns: TableColumnsType<DirectoryConflict> = [
     { title: '对象', dataIndex: 'objectType', width: 100 },
@@ -53,6 +55,7 @@ export function DirectoryConflictCenter({
     },
   ]
 
+  if (unavailable) return null
   if (!loading && conflicts.length === 0) {
     return (
       <ManagementState

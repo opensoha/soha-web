@@ -1,10 +1,16 @@
 import type { ReactNode } from 'react'
-import { Alert, type ModalProps } from 'antd'
-import { LoadingOutlined } from '@ant-design/icons'
+import { Button, type ModalProps } from 'antd'
+import { OperationFeedback } from '@/components/request-feedback'
 import { localeText, useI18n } from '@/i18n'
-import { isApiError } from '@/services/api-error'
+import { writeOutcomeUnknown } from '@/utils/query-feedback'
 
 export const accessMutationModalStyles: ModalProps['styles'] = {
+  container: {
+    display: 'flex',
+    flexDirection: 'column',
+    maxHeight: 'calc(100dvh - 64px)',
+    overflow: 'hidden',
+  },
   header: {
     minHeight: 32,
     display: 'flex',
@@ -13,11 +19,15 @@ export const accessMutationModalStyles: ModalProps['styles'] = {
     paddingBottom: 0,
   },
   body: {
+    minHeight: 0,
     maxHeight: 'calc(100dvh - 300px)',
     overflowY: 'auto',
     scrollbarGutter: 'stable',
   },
   footer: {
+    flexShrink: 0,
+    maxHeight: '50dvh',
+    overflowY: 'auto',
     marginTop: 16,
     paddingTop: 0,
   },
@@ -27,54 +37,48 @@ interface AccessMutationFooterProps {
   children: ReactNode
   error: Error | null
   saving: boolean
+  target?: string
+  onCheck?: () => void
 }
 
-export function AccessMutationFooter({ children, error, saving }: AccessMutationFooterProps) {
+export function AccessMutationFooter({
+  children,
+  error,
+  saving,
+  target,
+  onCheck,
+}: AccessMutationFooterProps) {
   const { localeCode } = useI18n()
-  const uncertain = isApiError(error) && (error.kind === 'network' || error.kind === 'server')
-
   return (
     <div className="soha-access-mutation-footer">
-      {error ? (
-        <Alert
-          showIcon
-          type="error"
-          title={localeText(
+      <OperationFeedback
+        pending={saving}
+        error={error}
+        label={localeText(localeCode, '保存', 'Save')}
+        target={target}
+        receipt={
+          error && onCheck
+            ? {
+                message: '',
+                evidence: (
+                  <Button size="small" onClick={onCheck}>
+                    {localeText(localeCode, '核对列表记录', 'Check list records')}
+                  </Button>
+                ),
+              }
+            : undefined
+        }
+      />
+      {writeOutcomeUnknown(error) ? (
+        <p>
+          {localeText(
             localeCode,
-            uncertain ? '保存结果未确认' : '保存未完成',
-            uncertain ? 'Save result not confirmed' : 'Unable to save',
+            '输入已保留。重读列表不会确认原请求；结果未确认前继续暂停提交。',
+            'Your input is preserved. Reading the list does not confirm the original request; submission remains paused until it is verified.',
           )}
-          description={
-            <div className="soha-access-mutation-error">
-              <span>{error.message}</span>
-              <span>
-                {localeText(
-                  localeCode,
-                  uncertain
-                    ? '输入已保留。请先核对列表中的结果，再决定是否重新提交。'
-                    : '输入已保留，检查后可重新提交。',
-                  uncertain
-                    ? 'Your input is preserved. Check the list before submitting again.'
-                    : 'Your input is preserved. Review it and submit again.',
-                )}
-              </span>
-              {isApiError(error) && error.requestId ? (
-                <span>
-                  {localeText(localeCode, '请求 ID', 'Request ID')}: {error.requestId}
-                </span>
-              ) : null}
-            </div>
-          }
-        />
+        </p>
       ) : null}
       <div className="soha-access-mutation-actions">
-        <span className="soha-access-mutation-status" role="status">
-          {saving ? (
-            <>
-              <LoadingOutlined /> {localeText(localeCode, '正在保存…', 'Saving…')}
-            </>
-          ) : null}
-        </span>
         <div className="soha-access-mutation-buttons">{children}</div>
       </div>
     </div>
