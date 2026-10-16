@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Alert, App, Button, Card, Descriptions, Popconfirm, Space, Typography } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type {
@@ -8,6 +8,8 @@ import type {
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { StatusTag } from '@/components/status-tag'
 import { ManagementState } from '@/components/management-list'
+import { OperationFeedback, ReadFeedback } from '@/components/request-feedback'
+import { readableQueryData, writeOutcomeUnknown } from '@/utils/query-feedback'
 import { formatDateTime } from '@/utils/time'
 import { deliveryQueries } from '../queries'
 import { deliveryMutations } from '../mutations'
@@ -46,21 +48,29 @@ function RolloutPanel({ task }: { task: ExecutionTask }) {
   const query = useQuery(deliveryQueries.executionTasks.rollout(task.id, active))
   const mutation = useMutation(deliveryMutations.executionTasks.controlRollout(queryClient))
   const saved = task.result?.rollout as ProgressiveRolloutStatus | undefined
-  const state = active ? query.data : saved
+  const [precheckError, setPrecheckError] = useState<Error | null>(null)
+  const submitting = useRef(false)
+  const state = active ? readableQueryData(query) : saved
   const canControl =
     active &&
     hasPermission(snapshot, 'delivery.manifest-deployments.trigger') &&
     Boolean(state?.uid && state.resourceVersion) &&
     !state?.aborted &&
     !query.isError &&
-    !controlling
+    !controlling &&
+    !writeOutcomeUnknown(mutation.error)
 
   async function control(action: ProgressiveRolloutControlInput['action']) {
+    if (submitting.current || !canControl) return
+    submitting.current = true
+    setPrecheckError(null)
     setControlling(true)
     try {
       const fresh = await query.refetch()
-      if (fresh.error || !fresh.data?.uid || !fresh.data.resourceVersion)
-        throw fresh.error ?? new Error('无法确认当前发布状态，请刷新后重试')
+      if (fresh.error || !fresh.data?.uid || !fresh.data.resourceVersion) {
+        setPrecheckError(fresh.error ?? new Error('无法确认当前发布状态，请刷新后重试'))
+        return
+      }
       await mutation.mutateAsync({
         id: task.id,
         payload: { action, uid: fresh.data.uid, resourceVersion: fresh.data.resourceVersion },
@@ -68,9 +78,10 @@ function RolloutPanel({ task }: { task: ExecutionTask }) {
       void message.success(
         action === 'abort' ? '停止请求已受理，正在确认稳定流量' : '发布控制已受理',
       )
-    } catch (error) {
-      void message.error(error instanceof Error ? error.message : '发布控制失败')
+    } catch {
+      // Keep the submitted control visible until its outcome is checked.
     } finally {
+      submitting.current = false
       setControlling(false)
     }
   }
@@ -89,14 +100,25 @@ function RolloutPanel({ task }: { task: ExecutionTask }) {
       }
     >
       <Space orientation="vertical" size={16} style={{ width: '100%' }}>
-        {query.isError && active ? (
-          <Alert
-            type="error"
-            showIcon
-            title="无法读取原生发布状态"
-            description={query.error.message}
-          />
-        ) : null}
+        {active ? <ReadFeedback query={query} label="原生发布状态" /> : null}
+        <OperationFeedback
+          pending={controlling}
+          error={mutation.error || precheckError}
+          readOnly={!!precheckError}
+          label={
+            mutation.variables?.payload.action === 'abort'
+              ? '停止发布'
+              : mutation.variables?.payload.action === 'promote'
+                ? '提升阶段'
+                : '发布控制'
+          }
+          target={`${task.id} · ${state?.namespace || ''}/${state?.name || ''}`}
+          receipt={
+            mutation.isSuccess
+              ? { message: '发布控制已受理，请核对原生状态和任务结果。' }
+              : undefined
+          }
+        />
         {!active ? (
           <Typography.Text type="secondary">本次任务结束时的发布证据</Typography.Text>
         ) : null}
@@ -236,7 +258,7 @@ function RolloutPanel({ task }: { task: ExecutionTask }) {
           <ManagementState
             compact
             bordered={false}
-            kind={query.isLoading ? 'loading' : 'empty'}
+            kind={query.isLoading ? 'loading' : query.isError ? 'error' : 'empty'}
             description="尚未取得本次发布的原生证据"
           />
         )}

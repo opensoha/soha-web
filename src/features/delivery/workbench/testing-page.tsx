@@ -1,9 +1,11 @@
 import { ExperimentOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { Button, Card, Space, Steps, Typography, type TableColumnsType } from 'antd'
+import { Button, Card, Popover, Space, Steps, Typography, type TableColumnsType } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { OverviewMetricCard, type OverviewMetricItem } from '@/components/overview-visuals'
 import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { readableQueryData } from '@/utils/query-feedback'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { formatDateTime } from '@/utils/time'
@@ -38,9 +40,9 @@ export function DeliveryTestingPage() {
     deliveryQueries.releaseBoard.list({ enabled: canViewReleaseBoard }),
   )
 
-  const bundles = bundlesQuery.data ?? []
-  const tasks = tasksQuery.data ?? []
-  const board = releaseBoardQuery.data ?? []
+  const bundles = readableQueryData(bundlesQuery) ?? []
+  const tasks = readableQueryData(tasksQuery) ?? []
+  const board = readableQueryData(releaseBoardQuery) ?? []
   const verifyTasks = tasks.filter((task) => {
     const taskKind = String(task.taskKind || '').toLowerCase()
     return (
@@ -126,7 +128,13 @@ export function DeliveryTestingPage() {
       dataIndex: 'id',
       render: (_: string, record: ReleaseBundle) => {
         const result = governanceByBundle.get(record.id)
-        return result ? <StatusTag value={result.label} /> : <StatusTag value="未验证" />
+        return tasksQuery.isError ? (
+          <StatusTag value="unknown" label="任务证据待核对" />
+        ) : result ? (
+          <StatusTag value={result.label} />
+        ) : (
+          <StatusTag value="未验证" />
+        )
       },
     },
     {
@@ -147,10 +155,52 @@ export function DeliveryTestingPage() {
               <MetadataTag label={`回滚:${result.rollbackTaskCount}`} tone="blue" />
             ) : null}
             {result.evidenceRefs.length ? (
-              <MetadataTag label={`报告:${result.evidenceRefs.length}`} tone="cyan" />
+              <Popover
+                title="报告引用"
+                content={
+                  <Space orientation="vertical">
+                    {result.evidenceRefs.map((ref) => (
+                      <Text
+                        key={ref}
+                        code
+                        copyable
+                        style={{ maxWidth: 400, overflowWrap: 'anywhere' }}
+                      >
+                        {ref}
+                      </Text>
+                    ))}
+                  </Space>
+                }
+                trigger="click"
+              >
+                <Button size="small" type="link">
+                  报告 {result.evidenceRefs.length}
+                </Button>
+              </Popover>
             ) : null}
             {result.aiAuditRefs.length ? (
-              <MetadataTag label={`AI审计:${result.aiAuditRefs.length}`} tone="purple" />
+              <Popover
+                title="AI 审计引用"
+                content={
+                  <Space orientation="vertical">
+                    {result.aiAuditRefs.map((ref) => (
+                      <Text
+                        key={ref}
+                        code
+                        copyable
+                        style={{ maxWidth: 400, overflowWrap: 'anywhere' }}
+                      >
+                        {ref}
+                      </Text>
+                    ))}
+                  </Space>
+                }
+                trigger="click"
+              >
+                <Button size="small" type="link">
+                  AI 审计 {result.aiAuditRefs.length}
+                </Button>
+              </Popover>
             ) : null}
             {result.reason ? <Text type="danger">{result.reason}</Text> : null}
           </Space>
@@ -167,6 +217,8 @@ export function DeliveryTestingPage() {
 
   return (
     <div className="soha-page soha-delivery-workbench-page">
+      <ReadFeedback query={tasksQuery} label="验证任务" />
+      <ReadFeedback query={releaseBoardQuery} label="发布看板" />
       <div className="soha-overview-metric-grid">
         {testingStats.map(({ key, ...item }) => (
           <OverviewMetricCard key={key} {...item} />
@@ -189,7 +241,7 @@ export function DeliveryTestingPage() {
         />
         <Card className="soha-management-panel-card" title="验证证据来源" size="small">
           <Steps
-            current={2}
+            current={-1}
             orientation="vertical"
             items={[
               { title: '版本包', content: '固定版本号、镜像、digest 和来源。' },

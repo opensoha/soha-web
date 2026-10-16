@@ -2148,6 +2148,56 @@ describe('ApplicationsPage workspace layout', () => {
     expect(testState.apiGet).not.toHaveBeenCalledWith('/builds?limit=200')
   })
 
+  it.each([401, 403, 503])(
+    'keeps history evidence only for transient read failures (HTTP %s)',
+    async (status) => {
+      const view = await renderWithProviders(<ExecutionHistoryPage />, '/execution-history')
+      expect(view.textContent).toContain('build-release-main')
+      testState.apiGet.mockRejectedValueOnce(
+        new ApiError(status, 'history read rejected', {
+          method: 'GET',
+          requestId: 'req-history-read',
+        }),
+      )
+      await clickButton(findButton(view, '刷新执行记录'))
+      await waitForText(view, 'req-history-read')
+      if (status === 503) {
+        expect(view.textContent).toContain('build-release-main')
+        expect(view.textContent).toContain('上次读取结果')
+      } else expect(view.textContent).not.toContain('build-release-main')
+    },
+  )
+
+  it('keeps an unknown history approval on its original workflow and blocks a second decision', async () => {
+    testState.permissionSnapshot.permissionKeys = [
+      ...defaultPermissionKeys,
+      'delivery.application-environments.approve',
+    ]
+    const view = await renderWithProviders(<ExecutionHistoryPage />, '/execution-history')
+    testState.apiPost.mockRejectedValueOnce(
+      new ApiError(503, 'history approval response lost', {
+        method: 'POST',
+        requestId: 'req-history-approval',
+      }),
+    )
+    await clickButton(
+      view.querySelector<HTMLButtonElement>('[aria-label="批准工作流 deploy-prod"]')!,
+    )
+    await clickButton(
+      document.querySelector<HTMLButtonElement>('.ant-popconfirm-buttons .ant-btn-primary')!,
+    )
+    await waitForText(view, '请求结果不明')
+    expect(view.querySelector('.soha-operation-feedback')?.textContent).toContain('workflow-1')
+    expect(view.textContent).toContain('req-history-approval')
+    await clickButton(findButton(view, '刷新执行记录'))
+    expect(
+      view.querySelector<HTMLButtonElement>('[aria-label="批准工作流 deploy-prod"]')?.disabled,
+    ).toBe(true)
+    expect(testState.apiPost.mock.calls.filter(([path]) => path.endsWith('/approve'))).toHaveLength(
+      1,
+    )
+  })
+
   it('renders permission-scoped workflow runs as a release card board', async () => {
     testState.permissionSnapshot.permissionKeys = [
       ...defaultPermissionKeys,
@@ -2274,11 +2324,11 @@ describe('ApplicationsPage workspace layout', () => {
     testState.workflowsError = true
     const failed = await renderWithProviders(<ExecutionHistoryPage />, '/execution-history')
 
-    expect(failed.textContent).toContain('执行记录加载失败')
+    expect(failed.textContent).toContain('执行记录读取失败')
     expect(failed.textContent).not.toContain('暂无匹配的执行记录')
 
     testState.workflowsError = false
-    await clickButton(failed.querySelector('[aria-label="重试执行记录"]') as HTMLButtonElement)
+    await clickButton(failed.querySelector('[aria-label="重试读取执行记录"]') as HTMLButtonElement)
     expect(failed.textContent).toContain('build-release-main')
 
     testState.workflowsEmpty = true

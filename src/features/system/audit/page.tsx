@@ -14,6 +14,7 @@ import {
   ManagementRefreshButton,
   ManagementTableToolbar,
 } from '@/components/management-list'
+import { readableQueryData } from '@/utils/query-feedback'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
@@ -165,10 +166,23 @@ function AuditLogDrawer({
 }
 
 export function AuditLogsPage() {
+  const [params] = useSearchParams()
+  const filters = usageSnapshotFilterParams(params)
+  return (
+    <AuditLogsPageContent
+      key={JSON.stringify([filters.metadataKey, filters.metadataValue])}
+      initialUsageFilters={filters}
+    />
+  )
+}
+
+function AuditLogsPageContent({
+  initialUsageFilters,
+}: {
+  initialUsageFilters: ReturnType<typeof usageSnapshotFilterParams>
+}) {
   const location = useLocation()
   const endpointScope = resolveSystemEndpointScope(location.pathname)
-  const [searchParams] = useSearchParams()
-  const initialUsageFilters = useMemo(() => usageSnapshotFilterParams(searchParams), [searchParams])
   const [actionFilter, setActionFilter] = useState<string>('')
   const [resultFilter, setResultFilter] = useState<string>('')
   const [requestMethodFilter, setRequestMethodFilter] = useState<string>('')
@@ -182,7 +196,7 @@ export function AuditLogsPage() {
   const [viewMode, setViewMode] = useState<'all' | 'abnormal' | 'today'>('all')
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const [activeRecord, setActiveRecord] = useState<AuditLog | null>(null)
-  const { data: rawLogs = [], isFetching, isLoading, refetch } = useQuery(
+  const query = useQuery(
     systemQueries.audit(endpointScope, {
       action: actionFilter,
       requestMethod: requestMethodFilter,
@@ -192,14 +206,17 @@ export function AuditLogsPage() {
       metadataValue: metadataValueFilter,
     }),
   )
+  const { isFetching, isLoading, refetch } = query
+  const rawLogs = readableQueryData(query)
   const filteredLogs = useMemo(() => {
+    const logs = rawLogs ?? []
     if (viewMode === 'abnormal') {
-      return rawLogs.filter((item) => !['success', 'published'].includes(item.result))
+      return logs.filter((item) => !['success', 'published'].includes(item.result))
     }
     if (viewMode === 'today') {
-      return rawLogs.filter((item) => isTodayDate(item.createdAt))
+      return logs.filter((item) => isTodayDate(item.createdAt))
     }
-    return rawLogs
+    return logs
   }, [rawLogs, viewMode])
 
   const columns: TableColumnsType<AuditLog> = [
@@ -256,9 +273,7 @@ export function AuditLogsPage() {
       render: (_: string, record: AuditLog) =>
         record.requestPath ? (
           <div className="soha-log-request-cell">
-            {record.requestMethod ? (
-              <MetadataTag label={record.requestMethod} tone="blue" />
-            ) : null}
+            {record.requestMethod ? <MetadataTag label={record.requestMethod} tone="blue" /> : null}
             <Text className="soha-log-request-path" ellipsis={{ tooltip: record.requestPath }}>
               {record.requestPath}
             </Text>
@@ -387,7 +402,7 @@ export function AuditLogsPage() {
             <ManagementQueryField minWidth={180} width={220} label="字段">
               <Select
                 allowClear
-                placeholder="usageSnapshot 字段"
+                placeholder="元数据 字段"
                 value={metadataKeyFilter || undefined}
                 onChange={(value) => setMetadataKeyFilter(value || '')}
                 options={[
@@ -403,7 +418,7 @@ export function AuditLogsPage() {
             <ManagementQueryField grow minWidth={180} width={220} label="字段值">
               <Input
                 allowClear
-                placeholder="usageSnapshot 值"
+                placeholder="元数据 值"
                 value={metadataValueFilter}
                 onChange={(event) => setMetadataValueFilter(event.target.value)}
               />
@@ -433,6 +448,10 @@ export function AuditLogsPage() {
         ),
         columns,
         dataSource: filteredLogs,
+        hasReadData: rawLogs !== undefined,
+        error: query.error,
+        onRetry: () => void refetch(),
+        refreshing: isFetching,
         rowKey: 'id',
         loading: isLoading,
         pageSize: 50,
@@ -445,8 +464,8 @@ export function AuditLogsPage() {
       }}
       afterTable={
         <AuditLogDrawer
-          record={activeRecord}
-          open={Boolean(activeRecord)}
+          record={rawLogs?.find((item) => item.id === activeRecord?.id) ?? null}
+          open={!!rawLogs?.some((item) => item.id === activeRecord?.id)}
           onClose={() => setActiveRecord(null)}
         />
       }

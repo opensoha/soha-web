@@ -1,3 +1,5 @@
+import { OperationFeedback, ReadFeedback } from '@/components/request-feedback'
+import { readableQueryData, writeOutcomeUnknown } from '@/utils/query-feedback'
 import { lazy, Suspense, useRef, useState } from 'react'
 import {
   Alert,
@@ -109,6 +111,8 @@ export function DeliveryBatchEditor({
   const startRequest = useRef<{ signature: string; key: string } | undefined>(undefined)
   const save = useMutation(deliveryMutations.deliveryWorkflows.save(queryClient))
   const create = useMutation(deliveryMutations.batches.create(queryClient))
+  const submitting = useRef(false)
+  const unknown = writeOutcomeUnknown(save.error) || writeOutcomeUnknown(create.error)
   const busy = save.isPending || create.isPending || selectingRecipe
   const templates = useQuery(
     deliveryQueries.workflowTemplates.list(
@@ -161,7 +165,9 @@ export function DeliveryBatchEditor({
     setSelectingRecipe(true)
     try {
       const selectedVersion =
-        version ?? templates.data?.find((item) => item.id === id)?.publishedVersion ?? 0
+        version ??
+        readableQueryData(templates)?.find((item) => item.id === id)?.publishedVersion ??
+        0
       const template = await queryClient.fetchQuery(
         deliveryQueries.workflowTemplates.version(id, selectedVersion),
       )
@@ -181,13 +187,14 @@ export function DeliveryBatchEditor({
     }
   }
   const submit = async (execute: boolean) => {
-    if (sourceDirty || (!execute && !canEdit)) return
+    if (submitting.current || unknown || busy || sourceDirty || (!execute && !canEdit)) return
     const validation = validateDeliveryEditor(definition)
     if (validation) {
       setError(validation)
       return
     }
     setError(undefined)
+    submitting.current = true
     try {
       if (!execute) {
         const result = await save.mutateAsync({
@@ -213,8 +220,10 @@ export function DeliveryBatchEditor({
       const batch = await create.mutateAsync({ ...input, idempotencyKey: startRequest.current.key })
       onClose()
       navigate(`/delivery/batches/${encodeURIComponent(batch.id)}`)
-    } catch (failure) {
-      setError((failure as Error).message)
+    } catch {
+      /* Mutation feedback retains the submitted definition. */
+    } finally {
+      submitting.current = false
     }
   }
   const close = () => {
@@ -245,7 +254,7 @@ export function DeliveryBatchEditor({
           {!quick && canTrigger ? (
             <Button
               loading={save.isPending}
-              disabled={busy || sourceDirty || !canEdit}
+              disabled={busy || unknown || sourceDirty || !canEdit}
               onClick={() => void submit(false)}
             >
               保存工作流
@@ -268,7 +277,7 @@ export function DeliveryBatchEditor({
             <Button
               type="primary"
               loading={create.isPending}
-              disabled={busy || sourceDirty}
+              disabled={busy || unknown || sourceDirty}
               onClick={() => void submit(true)}
             >
               开始交付
@@ -277,6 +286,37 @@ export function DeliveryBatchEditor({
         </Space>
       }
     >
+      <ReadFeedback query={source} label="工作流来源" />
+      <ReadFeedback query={templates} label="流程模板" />
+      <ReadFeedback query={versions} label="模板版本" />
+      <OperationFeedback
+        pending={save.isPending || create.isPending}
+        error={create.error || save.error}
+        label={create.submittedAt > save.submittedAt ? '开始交付' : '保存工作流'}
+        target={definition.name}
+        receipt={
+          unknown
+            ? {
+                message: '',
+                evidence: (
+                  <Button
+                    onClick={() =>
+                      navigate(
+                        writeOutcomeUnknown(create.error)
+                          ? '/execution-history'
+                          : saved?.id
+                            ? `/release-board?workflowId=${encodeURIComponent(saved.id)}`
+                            : '/release-board',
+                      )
+                    }
+                  >
+                    {writeOutcomeUnknown(create.error) ? '核对执行记录' : '核对工作流'}
+                  </Button>
+                ),
+              }
+            : undefined
+        }
+      />
       {!quick ? (
         <Tabs
           activeKey={tab}
@@ -333,7 +373,7 @@ export function DeliveryBatchEditor({
             value={workflowDocument(definition, saved?.id)}
             targetId={saved?.id}
             expectedRevision={saved?.version}
-            disabled={busy || !canEdit}
+            disabled={busy || unknown || !canEdit}
             onDirtyChange={setSourceDirty}
             onValidated={(document) => {
               if (document.kind === 'Workflow') setDefinition(document.spec.definition)
@@ -359,7 +399,7 @@ export function DeliveryBatchEditor({
             title="创建新的交付记录，重新检查当前配置和环境；保留原记录。"
           />
         ) : null}
-        <Form layout="vertical" disabled={busy || !canEdit}>
+        <Form layout="vertical" disabled={busy || unknown || !canEdit}>
           <Form.Item label="名称" required>
             <Input
               aria-label="工作流名称"
@@ -379,7 +419,7 @@ export function DeliveryBatchEditor({
                     placeholder="自定义配置"
                     value={definition.workflowTemplateId}
                     loading={templates.isLoading || selectingRecipe}
-                    options={templates.data
+                    options={readableQueryData(templates)
                       ?.filter(
                         (item) =>
                           item.enabled &&
@@ -398,7 +438,7 @@ export function DeliveryBatchEditor({
                       style={{ width: 140 }}
                       value={definition.workflowTemplateVersion}
                       loading={versions.isLoading}
-                      options={versions.data?.map((item) => ({
+                      options={readableQueryData(versions)?.map((item) => ({
                         value: item.publishedVersion,
                         label: `v${item.publishedVersion}`,
                       }))}
@@ -490,7 +530,7 @@ export function DeliveryBatchEditor({
                     <Typography.Text type="secondary">{label.application}</Typography.Text>
                     <Button
                       type="link"
-                      disabled={busy || !canEdit}
+                      disabled={busy || unknown || !canEdit}
                       onClick={() => setEditing(item)}
                     >
                       {label.service}
@@ -524,7 +564,7 @@ export function DeliveryBatchEditor({
                         min={1}
                         max={200}
                         precision={0}
-                        disabled={busy || !canEdit}
+                        disabled={busy || unknown || !canEdit}
                         value={(item.group ?? 0) + 1}
                         onChange={(group) => updateTarget({ ...item, group: (group ?? 1) - 1 })}
                       />
@@ -544,7 +584,7 @@ export function DeliveryBatchEditor({
                         mode="multiple"
                         style={{ width: '100%' }}
                         value={item.dependsOn ?? []}
-                        disabled={busy || !canEdit}
+                        disabled={busy || unknown || !canEdit}
                         placeholder="无"
                         options={definition.targets
                           .filter((other) => other.id !== item.id)
@@ -565,7 +605,7 @@ export function DeliveryBatchEditor({
               render: (_: unknown, item: DeliveryTargetInput, index: number) => (
                 <Space>
                   {quick ? (
-                    <Button disabled={busy || !canEdit} onClick={() => setEditing(item)}>
+                    <Button disabled={busy || unknown || !canEdit} onClick={() => setEditing(item)}>
                       调整
                     </Button>
                   ) : (
@@ -608,7 +648,7 @@ export function DeliveryBatchEditor({
                       <Button
                         icon={<DeleteOutlined />}
                         aria-label={`移除第 ${index + 1} 项`}
-                        disabled={busy || !canEdit}
+                        disabled={busy || unknown || !canEdit}
                         onClick={() =>
                           update({
                             targets: definition.targets

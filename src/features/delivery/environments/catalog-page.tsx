@@ -2,6 +2,8 @@ import { useMemo } from 'react'
 import { Space, Typography } from 'antd'
 import type { TableColumnsType } from 'antd'
 import { useQuery } from '@tanstack/react-query'
+import { ReadFeedback } from '@/components/request-feedback'
+import { readableQueryData } from '@/utils/query-feedback'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
@@ -17,16 +19,19 @@ export function EnvironmentCatalogPage() {
   const applicationsQuery = useQuery(deliveryQueries.applications.list())
   const usageByEnvironment = useMemo(() => {
     const applicationNames = new Map(
-      (applicationsQuery.data ?? []).map((application) => [application.id, application.name]),
+      (readableQueryData(applicationsQuery) ?? []).map((application) => [
+        application.id,
+        application.name,
+      ]),
     )
     const usage = new Map<string, Set<string>>()
-    for (const binding of bindingsQuery.data ?? []) {
+    for (const binding of readableQueryData(bindingsQuery) ?? []) {
       const names = usage.get(binding.environmentId) ?? new Set<string>()
       names.add(applicationNames.get(binding.applicationId) || binding.applicationId)
       usage.set(binding.environmentId, names)
     }
     return usage
-  }, [applicationsQuery.data, bindingsQuery.data])
+  }, [applicationsQuery.data, applicationsQuery.error, bindingsQuery.data, bindingsQuery.error])
 
   const columns: TableColumnsType<DeliveryEnvironment> = [
     {
@@ -63,6 +68,10 @@ export function EnvironmentCatalogPage() {
       title: '应用使用',
       dataIndex: 'id',
       render: (id: string) => {
+        if (bindingsQuery.isLoading || applicationsQuery.isLoading)
+          return <Text type="secondary">读取使用关系…</Text>
+        if (!readableQueryData(bindingsQuery) || !readableQueryData(applicationsQuery))
+          return <Text type="secondary">使用关系不可用</Text>
         const names = [...(usageByEnvironment.get(id) ?? [])]
         return names.length > 0 ? (
           <Space wrap>
@@ -89,6 +98,8 @@ export function EnvironmentCatalogPage() {
 
   return (
     <div className="soha-page">
+      <ReadFeedback query={bindingsQuery} label="环境绑定关系" />
+      <ReadFeedback query={applicationsQuery} label="应用名称" />
       <DeliveryTable
         pagination={false}
         columns={columns}

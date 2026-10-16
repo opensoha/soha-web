@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { App, Button, Form, Input, Modal, Popconfirm, Select, Space, Switch } from 'antd'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import type { TableColumnsType } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementIconButton } from '@/components/management-list'
+import { ReadFeedback, MutationFeedback } from '@/components/request-feedback'
+import { writeOutcomeUnknown } from '@/utils/query-feedback'
 import { BooleanTag, MetadataTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { tableColumnPresets } from '@/utils/table-columns'
@@ -31,34 +33,28 @@ export function RegistriesPage() {
   const updateMutation = useMutation(deliveryMutations.registries.update(queryClient))
   const deleteMutation = useMutation(deliveryMutations.registries.delete(queryClient))
 
+  const submitting = useRef(false)
+  const locked = [createMutation, updateMutation, deleteMutation].some(
+    (mutation) => mutation.isPending || writeOutcomeUnknown(mutation.error),
+  )
   const closeModal = () => {
     setModalVisible(false)
     setEditing(null)
   }
 
-  const handleSubmit = (payload: RegistryInput) => {
-    if (editing) {
-      updateMutation.mutate(
-        { id: editing.id, payload },
-        {
-          onSuccess: () => {
-            message.success('仓库更新成功')
-            closeModal()
-          },
-          onError: (error) =>
-            message.error(error instanceof Error ? error.message : '仓库更新失败'),
-        },
-      )
-      return
+  const handleSubmit = async (payload: RegistryInput) => {
+    if (submitting.current || locked || (editing ? !canUpdateRegistry : !canCreateRegistry)) return
+    submitting.current = true
+    try {
+      if (editing) await updateMutation.mutateAsync({ id: editing.id, payload })
+      else await createMutation.mutateAsync(payload)
+      message.success(editing ? '仓库更新成功' : '仓库创建成功')
+      closeModal()
+    } catch {
+      /* Keep credential errors on the form without echoing submitted secrets. */
+    } finally {
+      submitting.current = false
     }
-
-    createMutation.mutate(payload, {
-      onSuccess: () => {
-        message.success('仓库创建成功')
-        closeModal()
-      },
-      onError: (error) => message.error(error instanceof Error ? error.message : '仓库创建失败'),
-    })
   }
 
   const columns: ColumnProps<RegistryRecord>[] = [
@@ -111,19 +107,26 @@ export function RegistriesPage() {
           {canDeleteRegistry ? (
             <Popconfirm
               title="确认删除？"
-              onConfirm={() =>
-                deleteMutation.mutate(record.id, {
-                  onSuccess: () => message.success('仓库已删除'),
-                  onError: (error) =>
-                    message.error(error instanceof Error ? error.message : '仓库删除失败'),
-                })
-              }
+              disabled={locked}
+              onConfirm={async () => {
+                if (submitting.current || locked || !canDeleteRegistry) return
+                submitting.current = true
+                try {
+                  await deleteMutation.mutateAsync(record.id)
+                  message.success('仓库已删除')
+                } catch {
+                  /* The list retains the deletion feedback. */
+                } finally {
+                  submitting.current = false
+                }
+              }}
               placement="topRight"
             >
               <ManagementIconButton
                 aria-label="删除仓库"
                 danger
                 icon={<DeleteOutlined />}
+                disabled={locked}
                 loading={deleteMutation.isPending}
                 size="small"
                 tooltip="删除"
@@ -138,6 +141,11 @@ export function RegistriesPage() {
 
   return (
     <div className="soha-page">
+      <MutationFeedback
+        operations={[
+          { mutation: deleteMutation, label: '删除镜像仓库', target: deleteMutation.variables },
+        ]}
+      />
       <DeliveryTable
         actions={
           canCreateRegistry ? (
@@ -173,6 +181,46 @@ export function RegistriesPage() {
         footer={null}
         destroyOnHidden
       >
+        <MutationFeedback
+          operations={[
+            {
+              mutation: createMutation,
+              label: '创建镜像仓库',
+              target: createMutation.variables?.name,
+            },
+            {
+              mutation: updateMutation,
+              label: '更新镜像仓库',
+              target: updateMutation.variables?.id,
+            },
+          ]}
+        />
+        {writeOutcomeUnknown(createMutation.error) || writeOutcomeUnknown(updateMutation.error) ? (
+          <>
+            <Button
+              loading={registriesQuery.isFetching}
+              onClick={() => void registriesQuery.refetch()}
+            >
+              读取仓库记录核对
+            </Button>
+            <ReadFeedback query={registriesQuery} label="镜像仓库记录" />
+            <Space orientation="vertical" style={{ width: '100%', marginTop: 12 }}>
+              {registriesQuery.isSuccess
+                ? registriesQuery.data
+                    ?.filter((item) =>
+                      editing
+                        ? item.id === editing.id
+                        : item.name === createMutation.variables?.name,
+                    )
+                    .map((item) => (
+                      <span key={item.id}>
+                        {item.name} · {item.endpoint} · {item.id}
+                      </span>
+                    ))
+                : null}
+            </Space>
+          </>
+        ) : null}
         <Form
           form={form}
           key={editing?.id ?? 'create-registry'}
@@ -261,6 +309,7 @@ export function RegistriesPage() {
             <Button
               htmlType="submit"
               type="primary"
+              disabled={locked}
               loading={createMutation.isPending || updateMutation.isPending}
             >
               {editing ? '更新' : '创建'}

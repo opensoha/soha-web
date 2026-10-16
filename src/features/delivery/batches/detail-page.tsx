@@ -1,9 +1,11 @@
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useRef, useState } from 'react'
 import { Alert, Button, Descriptions, Drawer, Popconfirm, Space, Typography } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementState } from '@/components/management-list'
+import { OperationFeedback, ReadFeedback } from '@/components/request-feedback'
+import { readableQueryData, writeOutcomeUnknown } from '@/utils/query-feedback'
 import { StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { formatDateTime } from '@/utils/time'
@@ -194,7 +196,9 @@ export function DeliveryBatchDetailPage() {
   const selectedTarget = search.get('targetId') || ''
 
   const [retry, setRetry] = useState(false)
-  const batch = query.data
+  const cancelSubmitting = useRef(false)
+  const cancelLocked = cancel.isPending || writeOutcomeUnknown(cancel.error)
+  const batch = readableQueryData(query)
   if (!canView)
     return (
       <ManagementState
@@ -231,23 +235,43 @@ export function DeliveryBatchDetailPage() {
             <Popconfirm
               title="停止本次交付？"
               description="停止新派发，并等待在途任务确认取消；已完成目标保留结果。"
-              onConfirm={() =>
-                cancel.mutateAsync({
-                  id: batch.id,
-                  input: { reason: '用户从交付记录停止本次发布' },
-                })
-              }
+              disabled={cancelLocked}
+              onConfirm={async () => {
+                if (cancelSubmitting.current || cancelLocked || query.isError) return
+                cancelSubmitting.current = true
+                try {
+                  await cancel.mutateAsync({
+                    id: batch.id,
+                    input: { reason: '用户从交付记录停止本次发布' },
+                  })
+                } catch {
+                  /* Mutation feedback keeps the original request visible. */
+                } finally {
+                  cancelSubmitting.current = false
+                }
+              }}
             >
-              <Button danger disabled={batch.status === 'canceling'} loading={cancel.isPending}>
+              <Button
+                danger
+                disabled={batch.status === 'canceling' || cancelLocked || query.isError}
+                loading={cancel.isPending}
+              >
                 停止交付
               </Button>
             </Popconfirm>
           ) : null}
         </Space>
       </Space>
-      {query.isError || cancel.isError ? (
-        <Alert type="error" showIcon title={query.error?.message || cancel.error?.message} />
-      ) : null}
+      <ReadFeedback query={query} label="交付记录" />
+      <OperationFeedback
+        pending={cancel.isPending}
+        error={cancel.error}
+        label="停止交付"
+        target={batch.definition.name || batch.id}
+        receipt={
+          cancel.isSuccess ? { message: '停止请求已受理，以交付记录的最终状态为准。' } : undefined
+        }
+      />
       {batch.partialView ? (
         <Alert type="info" showIcon title="当前仅显示可查看的目标，状态和计数对应这些目标。" />
       ) : null}

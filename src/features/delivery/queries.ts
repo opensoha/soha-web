@@ -110,7 +110,7 @@ export const deliveryQueries = {
       queryKey: deliveryKeys.executionHistory(params),
       queryFn: () => deliveryApi.executionHistory.list(params),
       enabled,
-      refetchInterval: 5000,
+      refetchInterval: (query) => (query.state.status === 'error' ? false : 5000),
     }),
   workflowCatalog: (params: WorkflowCatalogParams = {}, enabled = true) =>
     queryOptions({
@@ -124,7 +124,8 @@ export const deliveryQueries = {
         queryKey: deliveryKeys.plans.detail(id),
         queryFn: () => deliveryApi.plans.detail(id),
         enabled: enabled && hasValue(id),
-        refetchInterval: (query) => (query.state.data?.status === 'confirmed' ? false : 2000),
+        refetchInterval: (query) =>
+          query.state.status === 'error' || query.state.data?.status === 'confirmed' ? false : 2000,
       }),
   },
   deliveryWorkflows: {
@@ -156,6 +157,7 @@ export const deliveryQueries = {
         queryFn: () => deliveryApi.batches.detail(id),
         enabled: enabled && hasValue(id),
         refetchInterval: (query) =>
+          query.state.status === 'error' ||
           ['completed', 'partially_completed', 'failed', 'canceled'].includes(
             query.state.data?.status ?? '',
           )
@@ -461,7 +463,7 @@ export const deliveryQueries = {
         queryKey: deliveryKeys.executionTasks.rollout(id),
         queryFn: () => deliveryApi.executionTasks.rollout(id),
         enabled: enabled && hasValue(id),
-        refetchInterval: enabled ? 3000 : false,
+        refetchInterval: (query) => (enabled && query.state.status !== 'error' ? 3000 : false),
         retry: false,
       }),
     detail: (id: string, enabled = true) =>

@@ -1,6 +1,9 @@
+import { useRef } from 'react'
 import { Alert, Button, Card, Descriptions, Drawer, Space, Typography } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
+import { OperationFeedback, ReadFeedback } from '@/components/request-feedback'
+import { readableQueryData, writeOutcomeUnknown } from '@/utils/query-feedback'
 import { StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { deliveryQueries } from '../queries'
@@ -21,7 +24,27 @@ export function DeliveryBatchPlanDrawer({ id, onClose }: { id: string; onClose: 
     permissions.data?.data,
     'delivery.application-environments.approve',
   )
-  const plan = query.data
+  const submitting = useRef(false)
+  const locked = decision.isPending || writeOutcomeUnknown(decision.error)
+  const plan = readableQueryData(query)
+  const decide = async (action: 'approve' | 'reject') => {
+    if (
+      submitting.current ||
+      locked ||
+      query.isError ||
+      !canApprove ||
+      plan?.status !== 'waiting_approval'
+    )
+      return
+    submitting.current = true
+    try {
+      await decision.mutateAsync({ id, action })
+    } catch {
+      /* The persistent receipt owns this failure. */
+    } finally {
+      submitting.current = false
+    }
+  }
   const history = Array.isArray(plan?.impact?.approval)
     ? (plan.impact.approval as Record<string, unknown>[])
     : []
@@ -38,15 +61,16 @@ export function DeliveryBatchPlanDrawer({ id, onClose }: { id: string; onClose: 
             <>
               <Button
                 danger
-                disabled={decision.isPending}
-                onClick={() => decision.mutate({ id, action: 'reject' })}
+                disabled={locked || query.isError}
+                onClick={() => void decide('reject')}
               >
                 拒绝
               </Button>
               <Button
                 type="primary"
                 loading={decision.isPending}
-                onClick={() => decision.mutate({ id, action: 'approve' })}
+                disabled={locked || query.isError}
+                onClick={() => void decide('approve')}
               >
                 批准此计划
               </Button>
@@ -56,9 +80,21 @@ export function DeliveryBatchPlanDrawer({ id, onClose }: { id: string; onClose: 
       }
     >
       <Space orientation="vertical" size={16} style={{ width: '100%' }}>
-        {query.isError || decision.isError ? (
-          <Alert type="error" showIcon title={query.error?.message || decision.error?.message} />
-        ) : null}
+        <ReadFeedback query={query} label="部署计划" />
+        <Button loading={query.isFetching} onClick={() => void query.refetch()}>
+          刷新计划
+        </Button>
+        <OperationFeedback
+          pending={decision.isPending}
+          error={decision.error}
+          label={decision.variables?.action === 'reject' ? '拒绝计划' : '批准计划'}
+          target={id}
+          receipt={
+            decision.isSuccess
+              ? { message: '审批请求已受理，以计划状态和审批记录为准。' }
+              : undefined
+          }
+        />
         {query.isLoading ? <Typography.Text>正在读取计划…</Typography.Text> : null}
         {plan ? (
           <>

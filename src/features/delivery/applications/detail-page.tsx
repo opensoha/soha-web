@@ -1,7 +1,7 @@
 import { ManifestDeploymentState } from './manifest-deployment-state'
 import { WorkflowProgress, WorkloadProgress } from './delivery-progress'
 import { EnvironmentNotice } from './environment-notice'
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import './styles.css'
 import './workspace.css'
@@ -46,6 +46,8 @@ import {
 import { visuallyHiddenModalTitleStyle } from '@/components/modal-styles'
 import { OverviewMetricCard, OverviewSectionBar } from '@/components/overview-visuals'
 import { analyzeReleaseDagDefinition } from '@/components/release-flow-dag-definition'
+import { MutationFeedback, ReadFeedback } from '@/components/request-feedback'
+import { readableQueryData, writeOutcomeUnknown } from '@/utils/query-feedback'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { ScopeGrantManager } from '@/features/access'
@@ -565,9 +567,12 @@ export function ApplicationDetailPage() {
   const repositoriesQuery = useQuery(
     deliveryQueries.repositories.list({ applicationId }, Boolean(applicationId)),
   )
-  const runtime = runtimeQuery.data
-  const detail = detailQuery.data
-  const application = runtime?.application ?? detail?.application
+  const runtime = readableQueryData(runtimeQuery)
+  const detail = readableQueryData(detailQuery)
+  const accessDenied = [runtimeQuery, detailQuery].some(
+    (query) => isApiError(query.error) && [401, 403].includes(query.error.status),
+  )
+  const application = accessDenied ? undefined : (runtime?.application ?? detail?.application)
   const runtimePending = !runtime && runtimeQuery.isLoading
   const runtimeUnavailable = !runtime && runtimeQuery.isError
   const managementState = useApplicationCenterState({
@@ -728,7 +733,6 @@ export function ApplicationDetailPage() {
       void queryClient.invalidateQueries({ queryKey: deliveryKeys.builds.all })
       navigate('/builds/' + encodeURIComponent(build.id))
     },
-    onError: (err: Error) => message.error(err.message),
   })
   const createDeliveryPlanMutation = useMutation({
     ...createDeliveryPlanOptions,
@@ -740,7 +744,6 @@ export function ApplicationDetailPage() {
       setDeliveryPlanModalVisible(true)
       message.success('交付计划已生成')
     },
-    onError: (err: Error) => message.error(err.message),
   })
 
   const confirmDeliveryPlanOptions = deliveryMutations.plans.confirm(queryClient)
@@ -756,7 +759,6 @@ export function ApplicationDetailPage() {
           : `${DELIVERY_ACTION_LABELS[result.plan.action]}已触发`,
       )
     },
-    onError: (err: Error) => message.error(err.message),
   })
   const approvalOptions = deliveryMutations.plans.approval(queryClient)
   const approvalMutation = useMutation({
@@ -768,8 +770,37 @@ export function ApplicationDetailPage() {
         variables.action === 'approve' ? '交付计划已批准，可再次确认执行' : '交付计划已拒绝',
       )
     },
-    onError: (err: Error) => message.error(err.message),
   })
+
+  const appConfigSubmitting = useRef(false)
+  const deliverySubmitting = useRef(false)
+  const planSubmitting = useRef(false)
+  const deliveryUnknown =
+    writeOutcomeUnknown(directBuildMutation.error) ||
+    writeOutcomeUnknown(createDeliveryPlanMutation.error)
+  const planLocked =
+    confirmDeliveryPlanMutation.isPending ||
+    approvalMutation.isPending ||
+    writeOutcomeUnknown(confirmDeliveryPlanMutation.error) ||
+    writeOutcomeUnknown(approvalMutation.error)
+  const planRead = useQuery({
+    ...deliveryQueries.plans.detail(pendingDeliveryPlan?.id || ''),
+    enabled: false,
+  })
+  const actOnPlan = async (action: 'confirm' | 'approve' | 'reject') => {
+    if (planSubmitting.current || planLocked || !pendingDeliveryPlan) return
+    if (action !== 'confirm' && !canApproveDelivery) return
+    planSubmitting.current = true
+    try {
+      if (action === 'confirm')
+        await confirmDeliveryPlanMutation.mutateAsync(pendingDeliveryPlan.id)
+      else await approvalMutation.mutateAsync({ id: pendingDeliveryPlan.id, action })
+    } catch {
+      /* Keep the request and plan visible for reconciliation. */
+    } finally {
+      planSubmitting.current = false
+    }
+  }
 
   const deleteServiceOptions = deliveryMutations.applications.deleteService(queryClient)
   const deleteServiceMutation = useMutation({
@@ -1089,6 +1120,13 @@ export function ApplicationDetailPage() {
     : ''
   const triggerDeliveryAction = async (action: ApplicationDeliveryActionKind) => {
     if (
+      deliverySubmitting.current ||
+      deliveryUnknown ||
+      directBuildMutation.isPending ||
+      createDeliveryPlanMutation.isPending
+    )
+      return
+    if (
       action === 'deploy'
         ? !canTriggerRelease
         : action === 'build'
@@ -1097,11 +1135,12 @@ export function ApplicationDetailPage() {
     )
       return
     try {
+      deliverySubmitting.current = true
       const values = await deliveryForm.validateFields()
       if (!applicationId) return
       if (action === 'build' && !values.applicationEnvironmentId) {
         const payload = buildDeliveryActionPayload(action, values)
-        directBuildMutation.mutate({
+        await directBuildMutation.mutateAsync({
           applicationId,
           buildSourceId: payload.buildSourceId,
           refType: payload.refType || 'branch',
@@ -1111,9 +1150,13 @@ export function ApplicationDetailPage() {
         })
         return
       }
-      createDeliveryPlanMutation.mutate(buildDeliveryPlanPayload(applicationId, action, values))
+      await createDeliveryPlanMutation.mutateAsync(
+        buildDeliveryPlanPayload(applicationId, action, values),
+      )
     } catch {
-      // antd Form has already marked the invalid fields.
+      // Field validation and operation feedback retain the submitted form.
+    } finally {
+      deliverySubmitting.current = false
     }
   }
   const deliveryActionPending =
@@ -1765,6 +1808,19 @@ export function ApplicationDetailPage() {
 
   return (
     <div className="soha-page soha-application-workbench">
+      {!buildSourceModalVisible && !managementState.appModalVisible ? (
+        <MutationFeedback
+          operations={[
+            {
+              mutation: managementState.updateAppMutation,
+              label: '更新构建配置',
+              target: managementState.updateAppMutation.variables?.id,
+            },
+          ]}
+        />
+      ) : null}
+      <ReadFeedback query={runtimeQuery} label="应用运行状态" />
+      <ReadFeedback query={detailQuery} label="应用配置" />
       <Modal
         width={820}
         title={planProduction ? '生产环境交付计划确认' : '交付计划确认'}
@@ -1774,25 +1830,23 @@ export function ApplicationDetailPage() {
           <Button key="close" onClick={() => setDeliveryPlanModalVisible(false)}>
             关闭
           </Button>,
-          ...(pendingDeliveryPlan?.status === 'waiting_approval'
+          ...(pendingDeliveryPlan?.status === 'waiting_approval' && canApproveDelivery
             ? [
                 <Button
                   key="reject"
                   danger
+                  disabled={planLocked}
                   loading={approvalMutation.isPending}
-                  onClick={() =>
-                    approvalMutation.mutate({ id: pendingDeliveryPlan.id, action: 'reject' })
-                  }
+                  onClick={() => void actOnPlan('reject')}
                 >
                   拒绝
                 </Button>,
                 <Button
                   key="approve"
                   type="primary"
+                  disabled={planLocked}
                   loading={approvalMutation.isPending}
-                  onClick={() =>
-                    approvalMutation.mutate({ id: pendingDeliveryPlan.id, action: 'approve' })
-                  }
+                  onClick={() => void actOnPlan('approve')}
                 >
                   批准
                 </Button>,
@@ -1802,19 +1856,44 @@ export function ApplicationDetailPage() {
             key="confirm"
             type="primary"
             disabled={
+              planLocked ||
               !pendingDeliveryPlan ||
               pendingDeliveryPlan.status !== 'draft' ||
               !manifestPreflightReady
             }
             loading={confirmDeliveryPlanMutation.isPending}
-            onClick={() =>
-              pendingDeliveryPlan && confirmDeliveryPlanMutation.mutate(pendingDeliveryPlan.id)
-            }
+            onClick={() => void actOnPlan('confirm')}
           >
             {planProduction ? '确认执行生产交付' : '确认执行'}
           </Button>,
         ]}
       >
+        <ReadFeedback query={planRead} label="交付计划" />
+        <MutationFeedback
+          operations={[
+            {
+              mutation: confirmDeliveryPlanMutation,
+              label: '确认交付计划',
+              target: confirmDeliveryPlanMutation.variables,
+            },
+            {
+              mutation: approvalMutation,
+              label: approvalMutation.variables?.action === 'reject' ? '拒绝计划' : '批准计划',
+              target: approvalMutation.variables?.id,
+            },
+          ]}
+        />
+        {pendingDeliveryPlan ? (
+          <Button
+            loading={planRead.isFetching}
+            onClick={async () => {
+              const result = await planRead.refetch()
+              if (!result.error && result.data) setPendingDeliveryPlan(result.data)
+            }}
+          >
+            刷新计划记录
+          </Button>
+        ) : null}
         {confirmedDeliveryPlan ? (
           <Alert
             showIcon
@@ -2352,7 +2431,16 @@ export function ApplicationDetailPage() {
                                   />
                                   <Popconfirm
                                     title="确认删除该构建源？"
-                                    onConfirm={() =>
+                                    disabled={
+                                      managementState.updateAppMutation.isPending ||
+                                      writeOutcomeUnknown(managementState.updateAppMutation.error)
+                                    }
+                                    onConfirm={() => {
+                                      if (
+                                        managementState.updateAppMutation.isPending ||
+                                        writeOutcomeUnknown(managementState.updateAppMutation.error)
+                                      )
+                                        return
                                       managementState.updateAppMutation.mutate({
                                         id: application.id,
                                         payload: {
@@ -2362,7 +2450,7 @@ export function ApplicationDetailPage() {
                                           ),
                                         },
                                       })
-                                    }
+                                    }}
                                   >
                                     <ManagementIconButton
                                       aria-label="删除构建源"
@@ -2731,6 +2819,39 @@ export function ApplicationDetailPage() {
                   footer={null}
                   onCancel={() => setDeliveryActionModalVisible(false)}
                 >
+                  <MutationFeedback
+                    operations={[
+                      {
+                        mutation: directBuildMutation,
+                        label: '触发构建',
+                        target: directBuildMutation.variables?.applicationId,
+                      },
+                      {
+                        mutation: createDeliveryPlanMutation,
+                        label: '生成交付计划',
+                        target: createDeliveryPlanMutation.variables?.applicationId,
+                      },
+                    ]}
+                  />
+                  {writeOutcomeUnknown(directBuildMutation.error) ? (
+                    <Button
+                      onClick={() =>
+                        navigate(
+                          `/execution-history?${new URLSearchParams({ applicationId: directBuildMutation.variables?.applicationId || createDeliveryPlanMutation.variables?.applicationId || applicationId || '', ...(directBuildMutation.variables?.buildSourceId ? { buildSourceId: directBuildMutation.variables.buildSourceId } : {}) })}`,
+                        )
+                      }
+                    >
+                      核对执行记录
+                    </Button>
+                  ) : null}
+                  {writeOutcomeUnknown(createDeliveryPlanMutation.error) ? (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      title="未收到计划标识，当前无法直接重读该计划"
+                      description="请先核对审计记录中的请求 ID；确认结果前暂停再次生成计划。生成计划本身不会启动交付。"
+                    />
+                  ) : null}
                   <Form
                     form={deliveryForm}
                     layout="vertical"
@@ -2970,7 +3091,7 @@ export function ApplicationDetailPage() {
                           <Button
                             type="primary"
                             icon={<PlayCircleOutlined />}
-                            disabled={!!buildDeployDisabledReason}
+                            disabled={deliveryUnknown || !!buildDeployDisabledReason}
                             loading={deliveryActionPending}
                             onClick={() => void triggerDeliveryAction(deliveryActionKind)}
                           >
@@ -3314,11 +3435,27 @@ export function ApplicationDetailPage() {
           buildSourceForm.resetFields()
         }}
       >
+        <MutationFeedback
+          operations={[
+            {
+              mutation: managementState.updateAppMutation,
+              label: '保存构建配置',
+              target: managementState.updateAppMutation.variables?.id,
+            },
+          ]}
+        />
         <Form
           form={buildSourceForm}
           layout="vertical"
           initialValues={buildSourceDraft ?? undefined}
           onFinish={() => {
+            if (
+              appConfigSubmitting.current ||
+              managementState.updateAppMutation.isPending ||
+              writeOutcomeUnknown(managementState.updateAppMutation.error)
+            )
+              return
+            appConfigSubmitting.current = true
             const values = buildSourceForm.getFieldsValue(true) as BuildSourceFormValues
             const snapshot = buildSourceApplication ?? application
             const sources = [...(snapshot.buildSources ?? [])]
@@ -3347,6 +3484,9 @@ export function ApplicationDetailPage() {
                 },
               },
               {
+                onSettled: () => {
+                  appConfigSubmitting.current = false
+                },
                 onSuccess: () => {
                   setBuildSourceModalVisible(false)
                   setEditingBuildSourceId('')
@@ -3358,10 +3498,15 @@ export function ApplicationDetailPage() {
           }}
         >
           {isApiError(managementState.updateAppMutation.error) &&
-          managementState.updateAppMutation.error.status === 409 ? (
+          (managementState.updateAppMutation.error.status === 409 ||
+            writeOutcomeUnknown(managementState.updateAppMutation.error)) ? (
             <Alert
               type="warning"
-              title="应用配置已被其他人更新"
+              title={
+                writeOutcomeUnknown(managementState.updateAppMutation.error)
+                  ? '保存结果待核对'
+                  : '应用配置已被其他人更新'
+              }
               description="当前草稿已保留。重新加载会放弃本次修改并载入最新配置。"
               action={
                 <Button
@@ -3385,6 +3530,7 @@ export function ApplicationDetailPage() {
             <Button
               htmlType="submit"
               type="primary"
+              disabled={writeOutcomeUnknown(managementState.updateAppMutation.error)}
               loading={managementState.updateAppMutation.isPending}
             >
               保存

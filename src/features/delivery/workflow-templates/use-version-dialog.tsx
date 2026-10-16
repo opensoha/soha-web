@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Button, Form, Modal, Select } from 'antd'
+import { Form, Modal, Select } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { readableQueryData } from '@/utils/query-feedback'
 import { deliveryQueries } from '../queries'
 import type { WorkflowTemplate } from '../types'
 
@@ -23,32 +24,27 @@ export function UseWorkflowTemplateVersion({
       open
       title={`使用 ${template.name} · v${template.publishedVersion}`}
       okText="配置环境工作流"
-      okButtonProps={{ disabled: !applicationId || !bindingId || detail.isError }}
+      okButtonProps={{
+        disabled: !applicationId || !bindingId || applications.isError || detail.isError,
+      }}
       onCancel={onClose}
       onOk={() => {
-        if (applicationId && bindingId)
+        if (
+          applicationId &&
+          bindingId &&
+          !applications.isError &&
+          !detail.isError &&
+          readableQueryData(detail)?.bindings?.some(
+            (item) => item.applicationEnvironmentId === bindingId,
+          )
+        )
           navigate(
             `/applications/${encodeURIComponent(applicationId)}/workflows/design?${new URLSearchParams({ bindingId, source: 'template', templateId: template.id, templateVersion: String(template.publishedVersion) })}`,
           )
       }}
     >
-      {applications.isError || detail.isError ? (
-        <ManagementState
-          compact
-          kind="error"
-          title="应用环境读取失败"
-          actions={
-            <Button
-              onClick={() => {
-                void applications.refetch()
-                if (applicationId) void detail.refetch()
-              }}
-            >
-              重试
-            </Button>
-          }
-        />
-      ) : null}
+      <ReadFeedback query={applications} label="应用选项" />
+      <ReadFeedback query={detail} label="应用环境" />
       <Form layout="vertical">
         <Form.Item label="应用" required>
           <Select
@@ -56,7 +52,7 @@ export function UseWorkflowTemplateVersion({
             showSearch={{ optionFilterProp: 'label' }}
             value={applicationId}
             loading={applications.isLoading}
-            options={applications.data
+            options={readableQueryData(applications)
               ?.filter((app) => app.enabled)
               .map((app) => ({ value: app.id, label: app.name }))}
             onChange={(value) => {
@@ -71,7 +67,7 @@ export function UseWorkflowTemplateVersion({
             value={bindingId}
             loading={detail.isLoading}
             disabled={!applicationId}
-            options={detail.data?.bindings?.map((binding) => ({
+            options={readableQueryData(detail)?.bindings?.map((binding) => ({
               value: binding.applicationEnvironmentId,
               label: binding.environmentName || binding.environmentKey || binding.environmentId,
             }))}

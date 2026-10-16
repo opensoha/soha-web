@@ -18,6 +18,7 @@ async function executionMocks(
     refreshFails: false,
     refreshStatus: 503,
     approvalFails: false,
+    approvalFailureStatus: 409,
     decisions: [] as string[],
     reads: 0,
     empty: false,
@@ -178,8 +179,8 @@ async function executionMocks(
       state.decisions.push(path.endsWith('/approve') ? 'approve' : 'reject')
       if (state.approvalFails)
         return {
-          status: 503,
-          body: { error: { code: 'unavailable', message: '审批服务暂不可用' } },
+          status: state.approvalFailureStatus,
+          body: { error: { code: 'decision_rejected', message: '审批服务暂不可用' } },
         }
       // The accepted request intentionally leaves the runtime state waiting until a later read.
       return { body: { data: {} } }
@@ -348,6 +349,30 @@ test('approval requires confirmation and preserves failure/retry and accepted-bu
   state.status = 'running'
   await page.getByRole('button', { name: /刷新证据/ }).click()
   await expect(page.getByText('审批已提交，等待执行记录确认')).toHaveCount(0)
+  verifyBrowserEvidence(evidence)
+})
+
+test('approval with an unknown POST outcome cannot be repeated after a successful read', async ({
+  context,
+  page,
+}) => {
+  const { state, evidence } = await executionMocks(context, page, 'waiting_approval')
+  state.approvalFails = true
+  state.approvalFailureStatus = 503
+  await page.goto(pagePath)
+  await page.getByRole('button', { name: '批准执行', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '确认批准', exact: true }).click()
+  await expect(page.getByRole('dialog')).toContainText('审批请求结果不明')
+  await expect(
+    page.getByRole('dialog').getByRole('button', { name: '确认批准', exact: true }),
+  ).toBeDisabled()
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: /^返\s*回$/ })
+    .click()
+  await page.getByRole('button', { name: /刷新证据/ }).click()
+  await expect(page.getByRole('button', { name: '批准执行', exact: true })).toBeDisabled()
+  expect(state.decisions).toEqual(['approve'])
   verifyBrowserEvidence(evidence)
 })
 

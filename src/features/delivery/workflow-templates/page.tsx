@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useRef, useState } from 'react'
 import {
   Alert,
   App,
@@ -22,6 +22,8 @@ import {
   TemplateDesignerShell,
 } from '@/components/management-list'
 import { normalizeReleaseDagDefinition } from '@/components/release-flow-dag-definition'
+import { MutationFeedback, ReadFeedback } from '@/components/request-feedback'
+import { readableQueryData, writeOutcomeUnknown } from '@/utils/query-feedback'
 import { MetadataTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useI18n } from '@/i18n'
@@ -79,8 +81,11 @@ export function WorkflowTemplatesPage() {
   const [usingVersion, setUsingVersion] = useState<WorkflowTemplate>()
   const [tab, setTab] = useState('definition')
   const [importing, setImporting] = useState(false)
+  const [draftGeneration, setDraftGeneration] = useState(0)
   const templates = useQuery(deliveryQueries.workflowTemplates.list(canView))
-  const items = (templates.data ?? []).filter((item) => !item.category?.startsWith('application:'))
+  const items = (readableQueryData(templates) ?? []).filter(
+    (item) => !item.category?.startsWith('application:'),
+  )
   const requestedId = search.get('templateId')
   const selected = requestedId ? items.find((item) => item.id === requestedId) : items[0]
   const source = useQuery(deliveryQueries.documents.source('WorkflowTemplate', selected?.id ?? ''))
@@ -108,7 +113,33 @@ export function WorkflowTemplatesPage() {
   )
   const publish = useMutation(deliveryMutations.workflowTemplates.publish(client))
   const deprecate = useMutation(deliveryMutations.workflowTemplates.delete(client))
-  const shown = selectedVersion > 0 ? version.data : selected
+  const submitting = useRef(false)
+  const locked =
+    publish.isPending ||
+    deprecate.isPending ||
+    writeOutcomeUnknown(publish.error) ||
+    writeOutcomeUnknown(deprecate.error)
+  const submit = async (action: 'publish' | 'deprecate') => {
+    if (submitting.current || locked || !selected || templates.isError || source.isError) return
+    if (
+      (action === 'publish' && (!canUpdate || !selected.revision)) ||
+      (action === 'deprecate' && !canDelete)
+    )
+      return
+    submitting.current = true
+    try {
+      if (action === 'publish') {
+        await publish.mutateAsync({ id: selected.id, expectedRevision: selected.revision! })
+        updateSearch({ version: undefined })
+        void message.success('版本已发布')
+      } else await deprecate.mutateAsync(selected.id)
+    } catch {
+      /* Persistent feedback keeps the submitted target. */
+    } finally {
+      submitting.current = false
+    }
+  }
+  const shown = selectedVersion > 0 ? readableQueryData(version) : selected
   const recipe =
     shown?.definition?.mode === 'delivery_batch'
       ? (shown.definition as unknown as DeliveryBatchTemplateDefinition)
@@ -138,7 +169,7 @@ export function WorkflowTemplatesPage() {
   if (!canView) return <ManagementState kind="no-permission" title="无权查看流程模板" />
   const content = templates.isLoading ? (
     <ManagementState kind="loading" />
-  ) : templates.isError ? (
+  ) : templates.isError && !readableQueryData(templates) ? (
     <ManagementState
       kind="error"
       title="模板读取失败"
@@ -153,7 +184,7 @@ export function WorkflowTemplatesPage() {
     />
   ) : selectedVersion > 0 && version.isLoading ? (
     <ManagementState kind="loading" />
-  ) : version.isError ? (
+  ) : version.isError && !readableQueryData(version) ? (
     <ManagementState
       kind="error"
       title="模板版本读取失败"
@@ -290,15 +321,15 @@ export function WorkflowTemplatesPage() {
             label: '版本',
             children: versions.isLoading ? (
               <ManagementState compact kind="loading" />
-            ) : versions.isError ? (
+            ) : versions.isError && !readableQueryData(versions) ? (
               <ManagementState
                 compact
                 kind="error"
                 actions={<Button onClick={() => void versions.refetch()}>重试</Button>}
               />
-            ) : versions.data?.length ? (
+            ) : readableQueryData(versions)?.length ? (
               <Space orientation="vertical" style={{ width: '100%' }}>
-                {versions.data.map((item) => (
+                {readableQueryData(versions)!.map((item) => (
                   <Card key={item.publishedVersion} size="small">
                     <Space wrap>
                       <Button
@@ -342,7 +373,7 @@ export function WorkflowTemplatesPage() {
                     在应用的环境工作流中选择此模板和固定版本。
                   </Typography.Paragraph>
                 ) : null}
-                {usage.isError ? (
+                {usage.isError && !readableQueryData(usage) ? (
                   <ManagementState
                     compact
                     kind="error"
@@ -353,7 +384,7 @@ export function WorkflowTemplatesPage() {
                   <TemplateUsageImpactPanel
                     localeCode={localeCode}
                     loading={usage.isLoading}
-                    usage={usage.data}
+                    usage={readableQueryData(usage)}
                     onNavigate={navigate}
                   />
                 )}
@@ -382,7 +413,7 @@ export function WorkflowTemplatesPage() {
                 .includes(text.toLowerCase()),
             )}
             isLoading={templates.isLoading}
-            isError={templates.isError}
+            isError={templates.isError && !readableQueryData(templates)}
             onRetry={() => void templates.refetch()}
             emptyDescription="暂无模板"
             searchPlaceholder="搜索模板"
@@ -477,22 +508,18 @@ export function WorkflowTemplatesPage() {
                 <Popconfirm
                   title="发布当前草稿为新版本？"
                   description="已有服务继续使用固定版本。"
-                  onConfirm={() => {
-                    if (selected?.revision)
-                      publish.mutate(
-                        { id: selected.id, expectedRevision: selected.revision },
-                        {
-                          onSuccess: () => {
-                            updateSearch({ version: undefined })
-                            message.success('版本已发布')
-                          },
-                          onError: (error) => message.error(error.message),
-                        },
-                      )
-                  }}
+                  disabled={locked}
+                  onConfirm={() => submit('publish')}
                 >
                   <Button
-                    disabled={!selected || !canUpdate || selected.publicationState !== 'draft'}
+                    disabled={
+                      locked ||
+                      templates.isError ||
+                      source.isError ||
+                      !selected ||
+                      !canUpdate ||
+                      selected.publicationState !== 'draft'
+                    }
                     loading={publish.isPending}
                   >
                     发布版本
@@ -500,22 +527,46 @@ export function WorkflowTemplatesPage() {
                 </Popconfirm>
                 <Popconfirm
                   title="废弃模板？已有绑定和历史版本将保留。"
-                  onConfirm={() => {
-                    if (selected)
-                      deprecate.mutate(selected.id, {
-                        onError: (error) => message.error(error.message),
-                      })
-                  }}
+                  disabled={locked}
+                  onConfirm={() => submit('deprecate')}
                 >
                   <Button
                     danger
-                    disabled={!selected || !canDelete || selected.publicationState === 'deprecated'}
+                    disabled={
+                      locked ||
+                      templates.isError ||
+                      source.isError ||
+                      !selected ||
+                      !canDelete ||
+                      selected.publicationState === 'deprecated'
+                    }
                   >
                     废弃
                   </Button>
                 </Popconfirm>
               </Space>
             </header>
+            <ReadFeedback query={templates} label="流程模板" />
+            <ReadFeedback query={source} label="模板来源" />
+            <ReadFeedback query={version} label="固定版本" />
+            {tab === 'versions' ? <ReadFeedback query={versions} label="版本记录" /> : null}
+            {tab === 'usage' ? <ReadFeedback query={usage} label="引用与使用" /> : null}
+            <MutationFeedback
+              operations={[
+                {
+                  mutation: publish,
+                  label: '发布模板版本',
+                  target: publish.variables?.id,
+                  receipt: { message: '模板版本已发布，已有服务保留固定版本。' },
+                },
+                {
+                  mutation: deprecate,
+                  label: '废弃模板',
+                  target: deprecate.variables,
+                  receipt: { message: '模板已废弃，已有绑定和历史版本保留。' },
+                },
+              ]}
+            />
             {content}
           </>
         }
@@ -534,6 +585,11 @@ export function WorkflowTemplatesPage() {
       {draft ? (
         <Suspense fallback={<ManagementState kind="loading" />}>
           <DraftEditor
+            key={draftGeneration}
+            onReload={(template) => {
+              setDraft({ template })
+              setDraftGeneration((value) => value + 1)
+            }}
             template={draft.template}
             copiedFrom={draft.copiedFrom}
             onClose={() => setDraft(undefined)}

@@ -821,6 +821,98 @@ describe('delivery runtime detail pages', () => {
     },
   )
 
+  it.each(['build', 'release', 'release_bundle', 'execution_task'] as const)(
+    'preserves %s evidence on 503 and hides it on 403 in full and embedded views',
+    async (kind) => {
+      for (const embedded of [false, true]) {
+        const data = {
+          kind,
+          object: {
+            id: `cached-${kind}`,
+            applicationId: 'app',
+            version: 'v1',
+            status: 'cancelled',
+            metadata: {},
+            createdAt: '2026-10-16T00:00:00Z',
+          },
+          artifacts: [
+            {
+              id: 'image',
+              kind: 'image',
+              ref: 'protected/image:v1',
+              digest: 'sha256:protected',
+              workflowRunId: 'origin/run',
+              executionTaskId: 'origin/task',
+              releaseBundleId: 'origin/bundle',
+            },
+          ],
+        }
+        testState.apiGet.mockResolvedValueOnce({ data } as never)
+        const view = await renderWithProviders(
+          <RuntimeDetailContent kind={kind} recordId={`cached-${kind}`} embedded={embedded} />,
+          '/builds/read-cache',
+        )
+        expect(view.textContent).toContain('protected/image:v1')
+        expect(view.textContent).toContain('sha256:protected')
+        expect([...view.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toContain(
+          '/workflows/origin%2Frun',
+        )
+        const headerTag = view.querySelector('.soha-management-detail-header .soha-status-tag')
+        if (headerTag) expect(headerTag.className).not.toContain('success')
+        testState.apiGet.mockRejectedValueOnce(
+          new ApiError(503, 'temporary evidence failure', {
+            method: 'GET',
+            requestId: 'req-evidence-503',
+          }),
+        )
+        await act(async () => {
+          await queryClients.at(-1)!.refetchQueries()
+        })
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 10))
+        })
+        expect(view.textContent).toContain('protected/image:v1')
+        expect(view.textContent).toContain('上次读取结果')
+        expect(view.textContent).toContain('req-evidence-503')
+        testState.apiGet.mockRejectedValueOnce(
+          new ApiError(403, 'evidence denied', { method: 'GET', requestId: 'req-evidence-403' }),
+        )
+        await act(async () => {
+          await queryClients.at(-1)!.refetchQueries()
+        })
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 10))
+        })
+        expect(view.textContent).not.toContain('protected/image:v1')
+        expect(view.textContent).not.toContain('sha256:protected')
+        expect(view.textContent).toContain('req-evidence-403')
+      }
+    },
+  )
+
+  it('shows not-found when a cached build is deleted instead of retaining its artifacts', async () => {
+    testState.apiGet.mockResolvedValueOnce({
+      data: {
+        kind: 'build',
+        object: { id: 'deleted-build', status: 'completed', metadata: {} },
+        artifacts: [{ kind: 'image', ref: 'deleted/image:v1' }],
+      },
+    } as never)
+    const view = await renderWithProviders(
+      <RuntimeDetailContent kind="build" recordId="deleted-build" />,
+      '/builds/deleted-build',
+    )
+    expect(view.textContent).toContain('deleted/image:v1')
+    testState.apiGet.mockRejectedValueOnce(new ApiError(404, 'build not found', { method: 'GET' }))
+    await act(async () => {
+      await queryClients.at(-1)!.refetchQueries()
+    })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+    expect(view.textContent).not.toContain('deleted/image:v1')
+    expect(view.textContent).toContain('未找到')
+  })
   const base = '/applications/app-1/application-environments/binding-1/workloads/checkout-api'
   const ref = {
     applicationEnvironmentId: 'binding-1',

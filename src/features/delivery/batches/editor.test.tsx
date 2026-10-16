@@ -5,6 +5,7 @@ import { App, ConfigProvider } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { ApiError } from '@/services/api-error'
 import { deliveryApi } from '../api'
 import type { DeliveryBatch, DeliveryWorkflow, DeliveryWorkflowDefinition } from '../types'
 import { DeliveryBatchEditor } from './editor'
@@ -427,4 +428,18 @@ it('allows an embedded pure build without an environment', async () => {
   expect(onSave).toHaveBeenCalledWith(
     expect.objectContaining({ action: 'build', applicationEnvironmentId: undefined }),
   )
+})
+
+it('retains the original idempotency receipt and locks a batch with an unknown POST outcome', async () => {
+  vi.mocked(deliveryApi.batches.create).mockRejectedValueOnce(
+    new ApiError(503, 'batch response lost', { method: 'POST', requestId: 'req-batch-unknown' }),
+  )
+  await renderEditor(workflow)
+  await click('开始交付')
+  expect(document.body.textContent).toContain('请求结果不明')
+  expect(document.body.textContent).toContain('req-batch-unknown')
+  expect(document.body.textContent).toContain('核对执行记录')
+  await click('开始交付')
+  expect(deliveryApi.batches.create).toHaveBeenCalledTimes(1)
+  expect(vi.mocked(deliveryApi.batches.create).mock.calls[0][0].idempotencyKey).toBeTruthy()
 })
