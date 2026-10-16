@@ -1,32 +1,24 @@
-import { useState, type ReactNode } from 'react'
+import { AdminTable } from '@/components/admin-table'
+import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { BooleanTag, StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { getAIWorkbenchPathForMode, useAIPageContext } from '@/features/copilot'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { formatDateTime } from '@/utils/time'
 import {
   ApartmentOutlined,
   DashboardOutlined,
   FileSearchOutlined,
   LineChartOutlined,
 } from '@ant-design/icons'
-import {
-  App,
-  Button,
-  Card,
-  Descriptions,
-  Drawer,
-  Modal,
-  Select,
-  Space,
-  Tabs,
-  Typography,
-} from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Button, Card, Descriptions, Drawer, Modal, Select, Space, Tabs, Typography } from 'antd'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { AdminTable } from '@/components/admin-table'
-import { ManagementState } from '@/components/management-list'
-import { BooleanTag, StatusTag } from '@/components/status-tag'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { getAIWorkbenchPathForMode, useAIPageContext } from '@/features/copilot'
-import { formatDateTime } from '@/utils/time'
-import { observabilityRuleQueries } from '../rules'
 import '../observability-pages.css'
+import { observabilityRuleQueries } from '../rules'
 import { alertDiagnosticPaths, alertDisplayStatus, stringifyAlertPayload } from './model'
 import { observabilityAlertMutations } from './mutations'
 import { observabilityAlertQueries } from './queries'
@@ -35,7 +27,6 @@ import type { AlertDeliveryMetadata, HealingRun } from './types'
 const { Paragraph } = Typography
 
 function useAlertEventDetailController(eventId: string, enabled: boolean) {
-  const { message } = App.useApp()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const canAcknowledge = hasPermission(permissionSnapshotQuery.data?.data, 'observe.alerts.ack')
@@ -47,7 +38,7 @@ function useAlertEventDetailController(eventId: string, enabled: boolean) {
     ...observabilityAlertQueries.detail(eventId),
     enabled: enabled && eventId !== '',
   })
-  const ruleId = eventQuery.data?.ruleId ?? ''
+  const ruleId = readableQueryData(eventQuery)?.ruleId ?? ''
   const ruleQuery = useQuery({
     ...observabilityRuleQueries.detail(ruleId),
     enabled: enabled && ruleId !== '',
@@ -58,73 +49,102 @@ function useAlertEventDetailController(eventId: string, enabled: boolean) {
   })
   const healingRunsQuery = useQuery({
     ...observabilityAlertQueries.healingRuns(eventId),
-    enabled: enabled && eventId !== '',
+    enabled: enabled && !queryAccessDenied(eventQuery) && eventId !== '',
   })
-  const notificationPolicyId = ruleQuery.data?.notificationPolicyId ?? ''
+  const notificationPolicyId = readableQueryData(ruleQuery)?.notificationPolicyId ?? ''
   const previewQuery = useQuery({
     ...observabilityAlertQueries.preview(eventId, notificationPolicyId),
     enabled: enabled && eventId !== '' && notificationPolicyId !== '',
   })
   const deliveryLogsQuery = useQuery({
     ...observabilityAlertQueries.deliveryLogs(eventId),
-    enabled: enabled && eventId !== '',
+    enabled: enabled && !queryAccessDenied(eventQuery) && eventId !== '',
   })
   const healingPoliciesQuery = useQuery({
     ...observabilityAlertQueries.healingPolicies(),
-    enabled,
+    enabled: enabled && canHeal && !queryAccessDenied(eventQuery),
   })
-  const mutationError = (error: Error) => message.error(error.message)
-  const acknowledgeMutation = useMutation({
-    ...observabilityAlertMutations.acknowledge(queryClient),
-    onError: mutationError,
+  const acknowledgeMutation = useOperationMutation(
+    observabilityAlertMutations.acknowledge(queryClient),
+    {
+      label: ['确认告警', 'Acknowledge alert'],
+      target: (id) => id,
+      receipt: () => ({ message: '告警确认记录已返回' }),
+    },
+  )
+  const resolveMutation = useOperationMutation(observabilityAlertMutations.resolve(queryClient), {
+    label: ['恢复告警', 'Resolve alert'],
+    target: (id) => id,
+    receipt: () => ({ message: '告警恢复记录已返回' }),
   })
-  const resolveMutation = useMutation({
-    ...observabilityAlertMutations.resolve(queryClient),
-    onError: mutationError,
+  const healMutation = useOperationMutation(observabilityAlertMutations.heal(queryClient), {
+    label: ['发起自愈', 'Start healing'],
+    target: ({ eventId, policyId }) => `${eventId} · ${policyId}`,
+    receipt: (result) => ({
+      message: '自愈请求已返回',
+      evidence: (
+        <Space>
+          <span>运行 {result.id}</span>
+          <a href="/monitoring-workbench/healing">查看执行记录</a>
+        </Space>
+      ),
+    }),
   })
-  const healMutation = useMutation({
-    ...observabilityAlertMutations.heal(queryClient),
-    onError: mutationError,
-  })
+  const denied = queryAccessDenied(eventQuery)
+  const blocked =
+    !readableQueryData(eventQuery) ||
+    acknowledgeMutation.blocked ||
+    resolveMutation.blocked ||
+    healMutation.blocked
+  useEffect(() => {
+    if (denied || !enabled) {
+      setHealOpen(false)
+      setHealingPolicyId('')
+    }
+  }, [denied, enabled, eventId])
 
   return {
-    acknowledge: () =>
-      acknowledgeMutation.mutate(eventId, {
-        onSuccess: () => message.success('告警已确认'),
-      }),
+    acknowledge: () => {
+      if (!blocked && canAcknowledge) acknowledgeMutation.mutate(eventId)
+    },
     acknowledgeMutation,
     canAcknowledge,
     canHeal,
     canResolve,
     deliveryLogsQuery,
-    event: eventQuery.data,
+    event: readableQueryData(eventQuery),
+    blocked,
+    ruleQuery,
     eventQuery,
-    heal: () =>
+    heal: () => {
+      if (blocked || !canHeal || !healingPolicyId || !readableQueryData(healingPoliciesQuery))
+        return
       healMutation.mutate(
         { eventId, policyId: healingPolicyId },
         {
           onSuccess: () => {
-            message.success('自愈运行已创建')
             setHealOpen(false)
           },
         },
-      ),
+      )
+    },
     healMutation,
     healOpen,
     healingPoliciesQuery,
     healingPolicyId,
     healingRunsQuery,
     openHealModal: () => {
-      setHealingPolicyId(ruleQuery.data?.healingPolicyIds?.[0] || '')
+      if (blocked || !canHeal) return
+      healMutation.reset()
+      setHealingPolicyId(readableQueryData(ruleQuery)?.healingPolicyIds?.[0] || '')
       setHealOpen(true)
     },
     previewQuery,
-    resolve: () =>
-      resolveMutation.mutate(eventId, {
-        onSuccess: () => message.success('告警已恢复'),
-      }),
+    resolve: () => {
+      if (!blocked && canResolve) resolveMutation.mutate(eventId)
+    },
     resolveMutation,
-    rule: ruleQuery.data,
+    rule: readableQueryData(ruleQuery),
     ruleRunsQuery,
     setHealOpen,
     setHealingPolicyId,
@@ -143,8 +163,30 @@ function AlertEventDetailBody({
   inDrawer?: boolean
 }) {
   const { event, rule } = detail
+  const operationFeedback = (
+    <>
+      {detail.acknowledgeMutation.feedback}
+      {detail.resolveMutation.feedback}
+      {!detail.healOpen ? detail.healMutation.feedback : null}
+    </>
+  )
+  if (!event)
+    return (
+      <>
+        <ReadFeedback label="告警事件" query={detail.eventQuery} />
+        {operationFeedback}
+        {actions}
+        {detail.eventQuery.isLoading ? (
+          <ManagementState kind="loading" title="正在读取告警事件" />
+        ) : !detail.eventQuery.isError ? (
+          <ManagementState description="未读取到告警事件" />
+        ) : null}
+      </>
+    )
   return (
     <div data-testid={inDrawer ? 'alert-event-drawer-content' : 'alert-event-page-content'}>
+      <ReadFeedback label="告警事件" query={detail.eventQuery} />
+      {operationFeedback}
       <Card title="事件摘要" extra={actions} loading={detail.eventQuery.isLoading}>
         <Descriptions bordered size="small" column={inDrawer ? 1 : 2}>
           <Descriptions.Item label="事件ID">{event?.id || '-'}</Descriptions.Item>
@@ -180,6 +222,7 @@ function AlertEventDetailBody({
         </Descriptions>
       </Card>
       <Card title="规则与通知上下文" style={{ marginTop: 16 }}>
+        <ReadFeedback label="告警规则上下文" query={detail.ruleQuery} />
         <Descriptions bordered size="small" column={inDrawer ? 1 : 2}>
           <Descriptions.Item label="规则名称">{rule?.name || '-'}</Descriptions.Item>
           <Descriptions.Item label="规则类型">{rule?.ruleType || '-'}</Descriptions.Item>
@@ -417,21 +460,34 @@ function AlertEventDetailBody({
           header: 'soha-observability-modal-header',
         }}
         title="发起自愈"
-        open={detail.healOpen}
-        onCancel={() => detail.setHealOpen(false)}
+        open={detail.healOpen && Boolean(event)}
+        closable={!detail.healMutation.blocked}
+        keyboard={!detail.healMutation.blocked}
+        cancelButtonProps={{ disabled: detail.healMutation.blocked }}
+        mask={{ closable: false }}
+        onCancel={() => {
+          if (!detail.healMutation.blocked) detail.setHealOpen(false)
+        }}
         onOk={detail.heal}
         okButtonProps={{
-          disabled: !detail.healingPolicyId,
+          disabled:
+            detail.blocked ||
+            !detail.healingPolicyId ||
+            !readableQueryData(detail.healingPoliciesQuery),
           loading: detail.healMutation.isPending,
         }}
         destroyOnHidden
       >
+        {detail.healMutation.feedback}
+        <ReadFeedback label="自愈策略选项" query={detail.healingPoliciesQuery} />
+        <p>告警：{event.id}</p>
         <Select
           style={{ width: '100%' }}
+          disabled={detail.blocked || !readableQueryData(detail.healingPoliciesQuery)}
           placeholder="选择自愈策略"
           value={detail.healingPolicyId || undefined}
           onChange={(value) => detail.setHealingPolicyId(String(value))}
-          options={(detail.healingPoliciesQuery.data ?? [])
+          options={(readableQueryData(detail.healingPoliciesQuery) ?? [])
             .filter((item) => item.enabled && rule?.healingPolicyIds?.includes(item.id))
             .map((item) => ({ value: item.id, label: item.name }))}
         />
@@ -451,7 +507,7 @@ function AlertEventDetailActions({
   const { event, rule } = detail
   const snapshot =
     event?.querySnapshot ??
-    detail.ruleRunsQuery.data?.find((run) => run.querySnapshot)?.querySnapshot
+    readableQueryData(detail.ruleRunsQuery)?.find((run) => run.querySnapshot)?.querySnapshot
   const diagnosticPaths = event ? alertDiagnosticPaths(event, snapshot) : undefined
   const search = new URLSearchParams()
   search.set('timeRangeMinutes', '60')
@@ -469,7 +525,28 @@ function AlertEventDetailActions({
   return (
     <Space wrap>
       {extra}
-      <Button onClick={() => navigate(getAIWorkbenchPathForMode('root_cause', search))}>
+      <Button
+        aria-label="刷新告警详情"
+        loading={detail.eventQuery.isFetching || detail.ruleQuery.isFetching}
+        onClick={() => {
+          void detail.eventQuery.refetch()
+          if (event?.ruleId) {
+            void detail.ruleQuery.refetch()
+            void detail.ruleRunsQuery.refetch()
+          }
+          if (event) {
+            void detail.healingRunsQuery.refetch()
+            void detail.deliveryLogsQuery.refetch()
+            if (rule?.notificationPolicyId) void detail.previewQuery.refetch()
+          }
+        }}
+      >
+        刷新
+      </Button>
+      <Button
+        disabled={!event}
+        onClick={() => navigate(getAIWorkbenchPathForMode('root_cause', search))}
+      >
         AI 调查
       </Button>
       {diagnosticPaths ? (
@@ -489,17 +566,25 @@ function AlertEventDetailActions({
         </>
       ) : null}
       {detail.canAcknowledge && alertDisplayStatus(event) !== 'acknowledged' ? (
-        <Button loading={detail.acknowledgeMutation.isPending} onClick={detail.acknowledge}>
+        <Button
+          disabled={detail.blocked}
+          loading={detail.acknowledgeMutation.isPending}
+          onClick={detail.acknowledge}
+        >
           确认
         </Button>
       ) : null}
       {detail.canResolve && alertDisplayStatus(event) !== 'resolved' ? (
-        <Button loading={detail.resolveMutation.isPending} onClick={detail.resolve}>
+        <Button
+          disabled={detail.blocked}
+          loading={detail.resolveMutation.isPending}
+          onClick={detail.resolve}
+        >
           恢复
         </Button>
       ) : null}
       {detail.canHeal && (rule?.healingPolicyIds?.length ?? 0) > 0 ? (
-        <Button type="primary" onClick={detail.openHealModal}>
+        <Button disabled={detail.blocked} type="primary" onClick={detail.openHealModal}>
           发起自愈
         </Button>
       ) : null}
@@ -562,6 +647,7 @@ export function AlertEventDetailPage() {
   const navigate = useNavigate()
   return (
     <AlertEventDetailPageContent
+      key={eventId}
       eventId={eventId}
       onBack={() => navigate('/monitoring-workbench/alerts')}
     />

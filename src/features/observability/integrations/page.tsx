@@ -1,8 +1,3 @@
-import { useState } from 'react'
-import { CopyOutlined, EditOutlined, ExperimentOutlined, PlusOutlined } from '@ant-design/icons'
-import { App, Button, Form, Input, Modal, Select, Space, Switch, Tag, Typography } from 'antd'
-import type { TableProps } from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
 import {
   ManagementIconButton,
@@ -10,9 +5,16 @@ import {
   ManagementTableToolbar,
 } from '@/components/management-list'
 import { BooleanTag, StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { queryAccessDenied } from '@/utils/query-feedback'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { formatDateTime } from '@/utils/time'
+import { CopyOutlined, EditOutlined, ExperimentOutlined, PlusOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableProps } from 'antd'
+import { App, Button, Form, Input, Modal, Select, Space, Switch, Tag, Typography } from 'antd'
+import { useEffect, useRef, useState } from 'react'
 import '../observability-pages.css'
 import {
   alertIntegrationSamplePayload,
@@ -23,7 +25,7 @@ import {
   buildWebhookURL,
   prettyObservabilityJson,
 } from './model'
-import { invalidateAlertIntegrations, observabilityIntegrationMutations } from './mutations'
+import { observabilityIntegrationMutations } from './mutations'
 import { observabilityIntegrationQueries } from './queries'
 import type {
   AlertIntegration,
@@ -57,36 +59,135 @@ export function AlertIntegrationsPage() {
   const [testResult, setTestResult] = useState<AlertIntegrationTestResult | null>(null)
 
   const integrationsQuery = useQuery(observabilityIntegrationQueries.list())
-  const createIntegration = useMutation({
-    ...observabilityIntegrationMutations.create(queryClient),
-    onSuccess: async (integration) => {
-      await invalidateAlertIntegrations(queryClient)
-      message.success('告警集成已创建')
+  const denied = queryAccessDenied(integrationsQuery)
+  const secretGeneration = useRef(0)
+  const secretAllowed = useRef({ create: false, update: false })
+  secretAllowed.current = {
+    create: !denied && canCreateIntegration,
+    update: !denied && canUpdateIntegration,
+  }
+  useEffect(
+    () => () => {
+      secretGeneration.current += 1
+    },
+    [],
+  )
+  const createOptions = observabilityIntegrationMutations.create(queryClient)
+  const updateOptions = observabilityIntegrationMutations.update(queryClient)
+  const createIntegration = useOperationMutation(
+    {
+      ...createOptions,
+      gcTime: 0,
+      mutationFn: async (input, context) => {
+        const generation = secretGeneration.current
+        const integration = await createOptions.mutationFn!(input, context)
+        if (
+          generation === secretGeneration.current &&
+          secretAllowed.current.create &&
+          integration.token
+        )
+          setCreatedSecret(integration)
+        return { ...integration, token: undefined }
+      },
+      onSuccess: async (...args) => {
+        await createOptions.onSuccess?.(...args)
+        setEditorOpen(false)
+        setEditingIntegration(null)
+        editorForm.resetFields()
+      },
+    },
+    {
+      label: ['创建告警集成', 'Create alert integration'],
+      target: (input) => input.name || input.id,
+      receipt: (result) => ({ message: '告警集成记录已创建', evidence: result.id }),
+    },
+  )
+  const updateIntegration = useOperationMutation(
+    {
+      ...updateOptions,
+      gcTime: 0,
+      mutationFn: async (input, context) => {
+        const generation = secretGeneration.current
+        const integration = await updateOptions.mutationFn!(input, context)
+        if (
+          generation === secretGeneration.current &&
+          secretAllowed.current.update &&
+          integration.token
+        )
+          setCreatedSecret(integration)
+        return { ...integration, token: undefined }
+      },
+      onSuccess: async (...args) => {
+        await updateOptions.onSuccess?.(...args)
+        setEditorOpen(false)
+        setEditingIntegration(null)
+        editorForm.resetFields()
+      },
+    },
+    {
+      label: ['更新告警集成', 'Update alert integration'],
+      target: ({ id }) => id,
+      receipt: (result) => ({ message: '告警集成记录已更新', evidence: result.id }),
+    },
+  )
+  const testIntegration = useOperationMutation(
+    {
+      ...observabilityIntegrationMutations.test(),
+      onSuccess: (result) => setTestResult(result),
+    },
+    {
+      label: ['归一化测试', 'Normalize payload'],
+      target: (input) => input.integrationType,
+      readOnly: true,
+      receipt: (result) => ({
+        message: 'Payload 已归一化',
+        evidence: `返回 ${result.acceptedCount} 项；未投递通知。`,
+      }),
+    },
+  )
+  const writeBlocked = createIntegration.blocked || updateIntegration.blocked
+  const blocked = writeBlocked || denied
+  useEffect(() => {
+    if (
+      denied ||
+      queryAccessDenied(createIntegration) ||
+      queryAccessDenied(updateIntegration) ||
+      !(canCreateIntegration || canUpdateIntegration)
+    ) {
+      secretGeneration.current += 1
+      setCreatedSecret(null)
       setEditorOpen(false)
       setEditingIntegration(null)
-      if (integration.token) setCreatedSecret(integration)
-    },
-    onError: (error) => message.error(error.message),
-  })
-  const updateIntegration = useMutation({
-    ...observabilityIntegrationMutations.update(queryClient),
-    onSuccess: async (integration) => {
-      await invalidateAlertIntegrations(queryClient)
-      message.success('告警集成已更新')
-      setEditorOpen(false)
-      setEditingIntegration(null)
-      if (integration.token) setCreatedSecret(integration)
-    },
-    onError: (error) => message.error(error.message),
-  })
-  const testIntegration = useMutation({
-    ...observabilityIntegrationMutations.test(),
-    onSuccess: (result) => {
-      setTestResult(result)
-      message.success('Payload 已归一化')
-    },
-    onError: (error) => message.error(error.message),
-  })
+      editorForm.resetFields()
+    }
+  }, [
+    denied,
+    createIntegration.error,
+    updateIntegration.error,
+    canCreateIntegration,
+    canUpdateIntegration,
+    editorForm,
+  ])
+  useEffect(() => {
+    if (denied || !canTestIntegration || queryAccessDenied(testIntegration)) {
+      setTestOpen(false)
+      setTestResult(null)
+      testForm.resetFields()
+    }
+  }, [denied, canTestIntegration, testIntegration.error, testForm])
+  function closeEditor() {
+    if (writeBlocked) return
+    setEditorOpen(false)
+    setEditingIntegration(null)
+    editorForm.resetFields()
+  }
+  function closeTest() {
+    if (testIntegration.isPending) return
+    setTestOpen(false)
+    setTestResult(null)
+    testForm.resetFields()
+    testIntegration.reset()
+  }
 
   function copyText(value: string, label: string) {
     const text = value.trim()
@@ -101,6 +202,11 @@ export function AlertIntegrationsPage() {
   }
 
   function openEditor(record: AlertIntegration | null) {
+    if (blocked) return
+    secretGeneration.current += 1
+    createIntegration.reset()
+    updateIntegration.reset()
+    editorForm.resetFields()
     setEditingIntegration(record)
     setEditorOpen(true)
     editorForm.setFieldsValue(
@@ -131,6 +237,9 @@ export function AlertIntegrationsPage() {
   }
 
   function openTest(record?: AlertIntegration) {
+    if (!canTestIntegration || testIntegration.isPending || denied) return
+    testIntegration.reset()
+    testForm.resetFields()
     const integrationType = record?.integrationType || 'alertmanager_v1'
     setTestResult(null)
     setTestOpen(true)
@@ -143,6 +252,7 @@ export function AlertIntegrationsPage() {
   }
 
   function submitEditor(values: AlertIntegrationFormValues) {
+    if (blocked || !(editingIntegration ? canUpdateIntegration : canCreateIntegration)) return
     try {
       const payload = buildAlertIntegrationPayload(values)
       if (editingIntegration?.id) {
@@ -156,6 +266,13 @@ export function AlertIntegrationsPage() {
   }
 
   function submitTest(values: AlertIntegrationTestFormValues) {
+    if (
+      !canTestIntegration ||
+      denied ||
+      testIntegration.isPending ||
+      queryAccessDenied(testIntegration)
+    )
+      return
     try {
       testIntegration.mutate(buildAlertIntegrationTestPayload(values))
     } catch (error) {
@@ -245,7 +362,7 @@ export function AlertIntegrationsPage() {
         <Space className="soha-row-action-icons" size={2}>
           <ManagementIconButton
             aria-label="测试告警集成"
-            disabled={!canTestIntegration}
+            disabled={!canTestIntegration || testIntegration.isPending || denied}
             icon={<ExperimentOutlined />}
             size="small"
             tooltip="测试"
@@ -261,6 +378,7 @@ export function AlertIntegrationsPage() {
           {canUpdateIntegration ? (
             <ManagementIconButton
               aria-label="编辑告警集成"
+              disabled={blocked}
               icon={<EditOutlined />}
               size="small"
               tooltip="编辑"
@@ -274,6 +392,13 @@ export function AlertIntegrationsPage() {
 
   return (
     <div className="soha-page">
+      {!testOpen ? testIntegration.feedback : null}
+      {!editorOpen ? (
+        <>
+          {createIntegration.feedback}
+          {updateIntegration.feedback}
+        </>
+      ) : null}
       <h1 className="soha-observability-page-heading">告警集成</h1>
       <AdminTable
         enableDensity
@@ -285,12 +410,21 @@ export function AlertIntegrationsPage() {
           canCreateIntegration || canTestIntegration ? (
             <ManagementTableToolbar>
               {canTestIntegration ? (
-                <Button icon={<ExperimentOutlined />} onClick={() => openTest()}>
+                <Button
+                  disabled={testIntegration.isPending || denied || !canTestIntegration}
+                  icon={<ExperimentOutlined />}
+                  onClick={() => openTest()}
+                >
                   测试 Payload
                 </Button>
               ) : null}
               {canCreateIntegration ? (
-                <Button icon={<PlusOutlined />} type="primary" onClick={() => openEditor(null)}>
+                <Button
+                  disabled={blocked}
+                  icon={<PlusOutlined />}
+                  type="primary"
+                  onClick={() => openEditor(null)}
+                >
                   新建集成
                 </Button>
               ) : null}
@@ -317,13 +451,19 @@ export function AlertIntegrationsPage() {
           header: 'soha-observability-modal-header',
         }}
         title={editingIntegration ? '编辑告警集成' : '新建告警集成'}
-        open={editorOpen}
-        onCancel={() => setEditorOpen(false)}
+        open={editorOpen && !denied}
+        closable={!writeBlocked}
+        keyboard={!writeBlocked}
+        mask={{ closable: false }}
+        onCancel={closeEditor}
         footer={
           <Space>
-            <Button onClick={() => setEditorOpen(false)}>取消</Button>
+            <Button disabled={writeBlocked} onClick={closeEditor}>
+              取消
+            </Button>
             <Button
               type="primary"
+              disabled={blocked}
               onClick={() => editorForm.submit()}
               loading={createIntegration.isPending || updateIntegration.isPending}
             >
@@ -334,8 +474,11 @@ export function AlertIntegrationsPage() {
         destroyOnHidden
         width={820}
       >
+        {createIntegration.feedback}
+        {updateIntegration.feedback}
         <Form
           layout="vertical"
+          disabled={blocked}
           form={editorForm}
           onFinish={submitEditor}
           initialValues={{ integrationType: 'alertmanager_v1', enabled: true }}
@@ -377,13 +520,19 @@ export function AlertIntegrationsPage() {
           header: 'soha-observability-modal-header',
         }}
         title="测试 Payload"
-        open={testOpen}
-        onCancel={() => setTestOpen(false)}
+        open={testOpen && !denied && canTestIntegration && !queryAccessDenied(testIntegration)}
+        closable={!testIntegration.isPending}
+        keyboard={!testIntegration.isPending}
+        mask={{ closable: false }}
+        onCancel={closeTest}
         footer={
           <Space>
-            <Button onClick={() => setTestOpen(false)}>关闭</Button>
+            <Button disabled={testIntegration.isPending} onClick={closeTest}>
+              关闭
+            </Button>
             <Button
               type="primary"
+              disabled={!canTestIntegration || testIntegration.isPending || denied}
               onClick={() => testForm.submit()}
               loading={testIntegration.isPending}
             >
@@ -394,8 +543,14 @@ export function AlertIntegrationsPage() {
         destroyOnHidden
         width={920}
       >
+        {testIntegration.feedback}
         <Form
           layout="vertical"
+          disabled={testIntegration.isPending || denied || !canTestIntegration}
+          onValuesChange={() => {
+            setTestResult(null)
+            testIntegration.reset()
+          }}
           form={testForm}
           onFinish={submitTest}
           initialValues={{ integrationType: 'alertmanager_v1' }}
@@ -438,7 +593,7 @@ export function AlertIntegrationsPage() {
           header: 'soha-observability-modal-header',
         }}
         title="集成 Token"
-        open={Boolean(createdSecret)}
+        open={Boolean(createdSecret) && !denied && (canCreateIntegration || canUpdateIntegration)}
         onCancel={() => setCreatedSecret(null)}
         footer={
           <Button type="primary" onClick={() => setCreatedSecret(null)}>

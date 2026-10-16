@@ -1,6 +1,16 @@
+import { AdminTable } from '@/components/admin-table'
+import { ManagementIconButton } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { BooleanTag, StatusTag } from '@/components/status-tag'
 import { StepForm } from '@/components/step-form'
-import { useMemo, useState } from 'react'
+import { StepFormModal } from '@/components/step-form-modal'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { formatDateTime } from '@/utils/time'
 import { EditOutlined, PlusOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableProps } from 'antd'
 import {
   App,
   Button,
@@ -19,14 +29,7 @@ import {
   Tabs,
   Tag,
 } from 'antd'
-import type { TableProps } from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { StepFormModal } from '@/components/step-form-modal'
-import { AdminTable } from '@/components/admin-table'
-import { ManagementIconButton } from '@/components/management-list'
-import { BooleanTag, StatusTag } from '@/components/status-tag'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { formatDateTime } from '@/utils/time'
+import { useEffect, useMemo, useState } from 'react'
 import '../observability-pages.css'
 import {
   buildOnCallAssignmentPayload,
@@ -110,60 +113,172 @@ export function OnCallSettingsPage() {
   const rotationsQuery = useQuery(observabilityOncallQueries.rotations())
   const policiesQuery = useQuery(observabilityOncallQueries.escalationPolicies())
   const assignmentsQuery = useQuery(observabilityOncallQueries.routes())
-  const mutationError = (error: Error) => message.error(error.message)
-  const createSchedule = useMutation({
-    ...observabilityOncallMutations.createSchedule(queryClient),
-    onError: mutationError,
-  })
-  const updateSchedule = useMutation({
-    ...observabilityOncallMutations.updateSchedule(queryClient),
-    onError: mutationError,
-  })
-  const createRotation = useMutation({
-    ...observabilityOncallMutations.createRotation(queryClient),
-    onError: mutationError,
-  })
-  const updateRotation = useMutation({
-    ...observabilityOncallMutations.updateRotation(queryClient),
-    onError: mutationError,
-  })
-  const createPolicy = useMutation({
-    ...observabilityOncallMutations.createEscalationPolicy(queryClient),
-    onError: mutationError,
-  })
-  const updatePolicy = useMutation({
-    ...observabilityOncallMutations.updateEscalationPolicy(queryClient),
-    onError: mutationError,
-  })
-  const createAssignment = useMutation({
-    ...observabilityOncallMutations.createRoute(queryClient),
-    onError: mutationError,
-  })
-  const updateAssignment = useMutation({
-    ...observabilityOncallMutations.updateRoute(queryClient),
-    onError: mutationError,
-  })
-
-  const schedules = schedulesQuery.data ?? []
+  const createSchedule = useOperationMutation(
+    observabilityOncallMutations.createSchedule(queryClient),
+    {
+      label: ['创建排班', 'Create schedule'],
+      target: (input) => input.name,
+      receipt: () => ({ message: '排班记录已保存' }),
+    },
+  )
+  const updateSchedule = useOperationMutation(
+    observabilityOncallMutations.updateSchedule(queryClient),
+    {
+      label: ['更新排班', 'Update schedule'],
+      target: ({ id }) => id,
+      receipt: () => ({ message: '排班记录已保存' }),
+    },
+  )
+  const scheduleDenied = queryAccessDenied(schedulesQuery)
+  const scheduleWriteBlocked = createSchedule.blocked || updateSchedule.blocked
+  const scheduleBlocked = scheduleWriteBlocked || scheduleDenied
+  function closeScheduleEditor() {
+    if (scheduleWriteBlocked) return
+    setScheduleOpen(false)
+    setEditingSchedule(null)
+    scheduleForm.resetFields()
+  }
+  useEffect(() => {
+    if (scheduleDenied || queryAccessDenied(createSchedule) || queryAccessDenied(updateSchedule)) {
+      setScheduleOpen(false)
+      setEditingSchedule(null)
+      scheduleForm.resetFields()
+    }
+  }, [scheduleDenied, createSchedule.error, updateSchedule.error, scheduleForm])
+  const createRotation = useOperationMutation(
+    observabilityOncallMutations.createRotation(queryClient),
+    {
+      label: ['创建轮值', 'Create rotation'],
+      target: (input) => input.name,
+      receipt: () => ({ message: '轮值记录已保存' }),
+    },
+  )
+  const updateRotation = useOperationMutation(
+    observabilityOncallMutations.updateRotation(queryClient),
+    {
+      label: ['更新轮值', 'Update rotation'],
+      target: ({ id }) => id,
+      receipt: () => ({ message: '轮值记录已保存' }),
+    },
+  )
+  const rotationDenied = queryAccessDenied(rotationsQuery)
+  const rotationWriteBlocked = createRotation.blocked || updateRotation.blocked
+  const rotationBlocked =
+    rotationWriteBlocked ||
+    rotationDenied ||
+    !readableQueryData(usersQuery) ||
+    !readableQueryData(schedulesQuery)
+  function closeRotationEditor() {
+    if (rotationWriteBlocked) return
+    setRotationOpen(false)
+    setEditingRotation(null)
+    rotationForm.resetFields()
+  }
+  useEffect(() => {
+    if (rotationDenied || queryAccessDenied(createRotation) || queryAccessDenied(updateRotation)) {
+      setRotationOpen(false)
+      setEditingRotation(null)
+      rotationForm.resetFields()
+    }
+  }, [rotationDenied, createRotation.error, updateRotation.error, rotationForm])
+  const createPolicy = useOperationMutation(
+    observabilityOncallMutations.createEscalationPolicy(queryClient),
+    {
+      label: ['创建升级链', 'Create policy'],
+      target: (input) => input.name,
+      receipt: () => ({ message: '升级链记录已保存' }),
+    },
+  )
+  const updatePolicy = useOperationMutation(
+    observabilityOncallMutations.updateEscalationPolicy(queryClient),
+    {
+      label: ['更新升级链', 'Update policy'],
+      target: ({ id }) => id,
+      receipt: () => ({ message: '升级链记录已保存' }),
+    },
+  )
+  const policyDenied = queryAccessDenied(policiesQuery)
+  const policyWriteBlocked = createPolicy.blocked || updatePolicy.blocked
+  const policyBlocked = policyWriteBlocked || policyDenied || !readableQueryData(schedulesQuery)
+  function closePolicyEditor() {
+    if (policyWriteBlocked) return
+    setPolicyOpen(false)
+    setEditingPolicy(null)
+    policyForm.resetFields()
+  }
+  useEffect(() => {
+    if (policyDenied || queryAccessDenied(createPolicy) || queryAccessDenied(updatePolicy)) {
+      setPolicyOpen(false)
+      setEditingPolicy(null)
+      policyForm.resetFields()
+    }
+  }, [policyDenied, createPolicy.error, updatePolicy.error, policyForm])
+  const createAssignment = useOperationMutation(
+    observabilityOncallMutations.createRoute(queryClient),
+    {
+      label: ['创建分派规则', 'Create assignment'],
+      target: (input) => input.name,
+      receipt: () => ({ message: '分派规则记录已保存' }),
+    },
+  )
+  const updateAssignment = useOperationMutation(
+    observabilityOncallMutations.updateRoute(queryClient),
+    {
+      label: ['更新分派规则', 'Update assignment'],
+      target: ({ id }) => id,
+      receipt: () => ({ message: '分派规则记录已保存' }),
+    },
+  )
+  const assignmentDenied = queryAccessDenied(assignmentsQuery)
+  const assignmentWriteBlocked = createAssignment.blocked || updateAssignment.blocked
+  const assignmentBlocked =
+    assignmentWriteBlocked ||
+    assignmentDenied ||
+    !readableQueryData(policiesQuery) ||
+    !readableQueryData(schedulesQuery)
+  function closeAssignmentEditor() {
+    if (assignmentWriteBlocked) return
+    setAssignmentOpen(false)
+    setEditingAssignment(null)
+    assignmentForm.resetFields()
+  }
+  useEffect(() => {
+    if (
+      assignmentDenied ||
+      queryAccessDenied(createAssignment) ||
+      queryAccessDenied(updateAssignment)
+    ) {
+      setAssignmentOpen(false)
+      setEditingAssignment(null)
+      assignmentForm.resetFields()
+    }
+  }, [assignmentDenied, createAssignment.error, updateAssignment.error, assignmentForm])
+  const schedules = readableQueryData(schedulesQuery) ?? []
   const scheduleMap = useMemo(
     () => Object.fromEntries(schedules.map((item) => [item.id, item.name])),
     [schedules],
   )
   const escalationMap = useMemo(
-    () => Object.fromEntries((policiesQuery.data ?? []).map((item) => [item.id, item.name])),
-    [policiesQuery.data],
+    () =>
+      Object.fromEntries(
+        (readableQueryData(policiesQuery) ?? []).map((item) => [item.id, item.name]),
+      ),
+    [policiesQuery.data, policiesQuery.error],
   )
   const targetOptions = useMemo(
     () => [
-      ...(policiesQuery.data ?? []).map((item) => ({
+      ...(readableQueryData(policiesQuery) ?? []).map((item) => ({
         value: item.id,
         label: `升级链 · ${item.name}`,
       })),
       ...schedules.map((item) => ({ value: item.id, label: `排班 · ${item.name}` })),
     ],
-    [policiesQuery.data, schedules],
+    [policiesQuery.data, policiesQuery.error, schedules],
   )
-  const userOptions = useMemo(() => onCallUserOptions(usersQuery.data ?? []), [usersQuery.data])
+  const userOptions = useMemo(
+    () => onCallUserOptions(readableQueryData(usersQuery) ?? []),
+    [usersQuery.data, usersQuery.error],
+  )
 
   function targetLabel(type?: string, ref?: string) {
     if (!ref) return '-'
@@ -173,17 +288,18 @@ export function OnCallSettingsPage() {
     return scheduleMap[ref] ? `排班 · ${scheduleMap[ref]}` : ref
   }
 
-  function success(label: string, close: () => void) {
-    message.success(label)
+  function success(close: () => void) {
     close()
   }
 
   function submitSchedule(values: OnCallScheduleFormValues) {
+    if (scheduleBlocked || !(editingSchedule ? canUpdateOnCall : canCreateOnCall)) return
     const payload = buildOnCallSchedulePayload(values)
     const onSuccess = () =>
-      success(editingSchedule ? '排班已更新' : '排班已保存', () => {
+      success(() => {
         setScheduleOpen(false)
         setEditingSchedule(null)
+        scheduleForm.resetFields()
       })
     if (editingSchedule) {
       updateSchedule.mutate({ id: editingSchedule.id, payload }, { onSuccess })
@@ -191,11 +307,13 @@ export function OnCallSettingsPage() {
   }
 
   function submitRotation(values: OnCallRotationFormValues) {
+    if (rotationBlocked || !(editingRotation ? canUpdateOnCall : canCreateOnCall)) return
     const payload = buildOnCallRotationPayload(values, editingRotation?.rotationConfig)
     const onSuccess = () =>
-      success(editingRotation ? '轮值已更新' : '轮值已保存', () => {
+      success(() => {
         setRotationOpen(false)
         setEditingRotation(null)
+        rotationForm.resetFields()
       })
     if (editingRotation) {
       updateRotation.mutate({ id: editingRotation.id, payload }, { onSuccess })
@@ -203,11 +321,13 @@ export function OnCallSettingsPage() {
   }
 
   function submitPolicy(values: OnCallEscalationPolicyFormValues) {
+    if (policyBlocked || !(editingPolicy ? canUpdateOnCall : canCreateOnCall)) return
     const payload = buildOnCallEscalationPolicyPayload(values, editingPolicy?.steps)
     const onSuccess = () =>
-      success(editingPolicy ? '升级链已更新' : '升级链已保存', () => {
+      success(() => {
         setPolicyOpen(false)
         setEditingPolicy(null)
+        policyForm.resetFields()
       })
     if (editingPolicy) {
       updatePolicy.mutate({ id: editingPolicy.id, payload }, { onSuccess })
@@ -215,6 +335,10 @@ export function OnCallSettingsPage() {
   }
 
   function openAssignmentEditor(record: OnCallAssignmentRule | null) {
+    if (assignmentWriteBlocked || assignmentDenied) return
+    createAssignment.reset()
+    updateAssignment.reset()
+    assignmentForm.resetFields()
     setEditingAssignment(record)
     setAssignmentStep(0)
     setAssignmentOpen(true)
@@ -247,10 +371,11 @@ export function OnCallSettingsPage() {
   }
 
   function submitAssignment(values: OnCallAssignmentFormValues) {
+    if (assignmentBlocked || !(editingAssignment ? canUpdateOnCall : canCreateOnCall)) return
     try {
       const payload = buildOnCallAssignmentPayload(values)
       const onSuccess = () =>
-        success(editingAssignment ? '分派规则已更新' : '分派规则已保存', () => {
+        success(() => {
           setAssignmentOpen(false)
           setEditingAssignment(null)
         })
@@ -280,10 +405,15 @@ export function OnCallSettingsPage() {
         canUpdateOnCall ? (
           <ManagementIconButton
             aria-label="编辑排班"
+            disabled={scheduleWriteBlocked || scheduleDenied}
             size="small"
             tooltip="编辑"
             icon={<EditOutlined />}
             onClick={() => {
+              if (scheduleWriteBlocked || scheduleDenied) return
+              createSchedule.reset()
+              updateSchedule.reset()
+              scheduleForm.resetFields()
               setEditingSchedule(record)
               scheduleForm.setFieldsValue({
                 name: record.name,
@@ -330,10 +460,15 @@ export function OnCallSettingsPage() {
         canUpdateOnCall ? (
           <ManagementIconButton
             aria-label="编辑轮值"
+            disabled={rotationWriteBlocked || rotationDenied}
             size="small"
             tooltip="编辑"
             icon={<EditOutlined />}
             onClick={() => {
+              if (rotationWriteBlocked || rotationDenied) return
+              createRotation.reset()
+              updateRotation.reset()
+              rotationForm.resetFields()
               setEditingRotation(record)
               rotationForm.setFieldsValue(toOnCallRotationFormValues(record))
               setRotationOpen(true)
@@ -364,10 +499,15 @@ export function OnCallSettingsPage() {
         canUpdateOnCall ? (
           <ManagementIconButton
             aria-label="编辑升级策略"
+            disabled={policyWriteBlocked || policyDenied}
             size="small"
             tooltip="编辑"
             icon={<EditOutlined />}
             onClick={() => {
+              if (policyWriteBlocked || policyDenied) return
+              createPolicy.reset()
+              updatePolicy.reset()
+              policyForm.resetFields()
               setEditingPolicy(record)
               policyForm.setFieldsValue({
                 name: record.name,
@@ -452,6 +592,7 @@ export function OnCallSettingsPage() {
         canUpdateOnCall ? (
           <ManagementIconButton
             aria-label="编辑分派规则"
+            disabled={assignmentWriteBlocked || assignmentDenied}
             size="small"
             tooltip="编辑"
             icon={<EditOutlined />}
@@ -463,6 +604,30 @@ export function OnCallSettingsPage() {
 
   return (
     <div className="soha-page">
+      {!scheduleOpen ? (
+        <>
+          {createSchedule.feedback}
+          {updateSchedule.feedback}
+        </>
+      ) : null}
+      {!rotationOpen ? (
+        <>
+          {createRotation.feedback}
+          {updateRotation.feedback}
+        </>
+      ) : null}
+      {!policyOpen ? (
+        <>
+          {createPolicy.feedback}
+          {updatePolicy.feedback}
+        </>
+      ) : null}
+      {!assignmentOpen ? (
+        <>
+          {createAssignment.feedback}
+          {updateAssignment.feedback}
+        </>
+      ) : null}
       <Tabs
         items={[
           {
@@ -517,6 +682,10 @@ export function OnCallSettingsPage() {
                       icon={<PlusOutlined />}
                       type="primary"
                       onClick={() => {
+                        if (scheduleWriteBlocked || scheduleDenied) return
+                        createSchedule.reset()
+                        updateSchedule.reset()
+                        scheduleForm.resetFields()
                         setEditingSchedule(null)
                         scheduleForm.resetFields()
                         setScheduleOpen(true)
@@ -552,6 +721,10 @@ export function OnCallSettingsPage() {
                       icon={<PlusOutlined />}
                       type="primary"
                       onClick={() => {
+                        if (rotationWriteBlocked || rotationDenied) return
+                        createRotation.reset()
+                        updateRotation.reset()
+                        rotationForm.resetFields()
                         setEditingRotation(null)
                         rotationForm.setFieldsValue(defaultOnCallRotationFormValues())
                         setRotationOpen(true)
@@ -587,6 +760,10 @@ export function OnCallSettingsPage() {
                       icon={<PlusOutlined />}
                       type="primary"
                       onClick={() => {
+                        if (policyWriteBlocked || policyDenied) return
+                        createPolicy.reset()
+                        updatePolicy.reset()
+                        policyForm.resetFields()
                         setEditingPolicy(null)
                         policyForm.setFieldsValue({
                           name: '',
@@ -601,7 +778,7 @@ export function OnCallSettingsPage() {
                   ) : null
                 }
                 columns={escalationColumns}
-                dataSource={policiesQuery.data ?? []}
+                dataSource={readableQueryData(policiesQuery) ?? []}
                 rowKey="id"
                 loading={policiesQuery.isLoading}
               />
@@ -618,20 +795,33 @@ export function OnCallSettingsPage() {
           header: 'soha-observability-modal-header',
         }}
         title={editingSchedule ? '编辑排班' : '新建排班'}
-        open={scheduleOpen}
-        onCancel={() => setScheduleOpen(false)}
+        open={scheduleOpen && !scheduleDenied}
+        closable={!scheduleWriteBlocked}
+        keyboard={!scheduleWriteBlocked}
+        mask={{ closable: false }}
+        onCancel={closeScheduleEditor}
         footer={
           <Space>
-            <Button onClick={() => setScheduleOpen(false)}>取消</Button>
-            <Button type="primary" onClick={() => scheduleForm.submit()}>
+            <Button disabled={scheduleWriteBlocked} onClick={closeScheduleEditor}>
+              取消
+            </Button>
+            <Button
+              type="primary"
+              loading={createSchedule.isPending || updateSchedule.isPending}
+              disabled={scheduleBlocked}
+              onClick={() => scheduleForm.submit()}
+            >
               保存
             </Button>
           </Space>
         }
         destroyOnHidden
       >
+        {createSchedule.feedback}
+        {updateSchedule.feedback}
         <Form
           layout="vertical"
+          disabled={scheduleBlocked}
           form={scheduleForm}
           onFinish={submitSchedule}
           initialValues={{ enabled: true }}
@@ -653,13 +843,23 @@ export function OnCallSettingsPage() {
 
       <StepFormModal
         title={editingAssignment ? '编辑告警分派规则' : '新建告警分派规则'}
-        open={assignmentOpen}
-        onClose={() => setAssignmentOpen(false)}
+        open={assignmentOpen && !assignmentDenied}
+        closeDisabled={assignmentWriteBlocked}
+        feedback={
+          <>
+            {createAssignment.feedback}
+            {updateAssignment.feedback}
+            <ReadFeedback label="排班选项" query={schedulesQuery} />
+            <ReadFeedback label="升级链选项" query={policiesQuery} />
+          </>
+        }
+        onClose={closeAssignmentEditor}
         width={860}
       >
         <StepForm
-          onCancel={() => setAssignmentOpen(false)}
+          onCancel={closeAssignmentEditor}
           contentMaxWidth="100%"
+          disabled={assignmentBlocked}
           form={assignmentForm}
           current={assignmentStep}
           onCurrentChange={setAssignmentStep}
@@ -758,13 +958,19 @@ export function OnCallSettingsPage() {
           header: 'soha-observability-modal-header',
         }}
         title={editingRotation ? '编辑轮值' : '新建轮值'}
-        open={rotationOpen}
-        onCancel={() => setRotationOpen(false)}
+        open={rotationOpen && !rotationDenied}
+        closable={!rotationWriteBlocked}
+        keyboard={!rotationWriteBlocked}
+        mask={{ closable: false }}
+        onCancel={closeRotationEditor}
         footer={
           <Space>
-            <Button onClick={() => setRotationOpen(false)}>取消</Button>
+            <Button disabled={rotationWriteBlocked} onClick={closeRotationEditor}>
+              取消
+            </Button>
             <Button
               type="primary"
+              disabled={rotationBlocked}
               onClick={() => rotationForm.submit()}
               loading={createRotation.isPending || updateRotation.isPending}
             >
@@ -775,8 +981,13 @@ export function OnCallSettingsPage() {
         destroyOnHidden
         width={720}
       >
+        {createRotation.feedback}
+        {updateRotation.feedback}
+        <ReadFeedback label="排班选项" query={schedulesQuery} />
+        <ReadFeedback label="值班人员选项" query={usersQuery} />
         <Form
           layout="vertical"
+          disabled={rotationBlocked}
           form={rotationForm}
           onFinish={submitRotation}
           initialValues={defaultOnCallRotationFormValues()}
@@ -841,13 +1052,19 @@ export function OnCallSettingsPage() {
           header: 'soha-observability-modal-header',
         }}
         title={editingPolicy ? '编辑升级链' : '新建升级链'}
-        open={policyOpen}
-        onCancel={() => setPolicyOpen(false)}
+        open={policyOpen && !policyDenied}
+        closable={!policyWriteBlocked}
+        keyboard={!policyWriteBlocked}
+        mask={{ closable: false }}
+        onCancel={closePolicyEditor}
         footer={
           <Space>
-            <Button onClick={() => setPolicyOpen(false)}>取消</Button>
+            <Button disabled={policyWriteBlocked} onClick={closePolicyEditor}>
+              取消
+            </Button>
             <Button
               type="primary"
+              disabled={policyBlocked}
               onClick={() => policyForm.submit()}
               loading={createPolicy.isPending || updatePolicy.isPending}
             >
@@ -858,8 +1075,12 @@ export function OnCallSettingsPage() {
         destroyOnHidden
         width={840}
       >
+        {createPolicy.feedback}
+        {updatePolicy.feedback}
+        <ReadFeedback label="排班选项" query={schedulesQuery} />
         <Form
           layout="vertical"
+          disabled={policyBlocked}
           form={policyForm}
           onFinish={submitPolicy}
           initialValues={{ enabled: true, steps: [defaultEscalationStep()] }}
@@ -878,7 +1099,12 @@ export function OnCallSettingsPage() {
                     title={`步骤 ${index + 1}`}
                     extra={
                       fields.length > 1 ? (
-                        <Button size="small" danger onClick={() => remove(name)}>
+                        <Button
+                          disabled={policyBlocked}
+                          size="small"
+                          danger
+                          onClick={() => remove(name)}
+                        >
                           删除
                         </Button>
                       ) : null
@@ -921,6 +1147,7 @@ export function OnCallSettingsPage() {
                 ))}
                 <Button
                   type="dashed"
+                  disabled={policyBlocked}
                   onClick={() => add(defaultEscalationStep())}
                   icon={<PlusOutlined />}
                   block

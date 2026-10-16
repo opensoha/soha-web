@@ -33,6 +33,6 @@ export const observabilityOncallQueries = {
     queryOptions({
       queryKey: observabilityKeys.oncall.tasks(),
       queryFn: observabilityOncallApi.listTasks,
-      refetchInterval: 30_000,
+      refetchInterval: (query) => (query.state.status === 'error' ? false : 30_000),
     }),
 }

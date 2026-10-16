@@ -15,7 +15,7 @@ import { buildWorkloadDetailPath } from '@/features/platform/workloads-model'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import type { Cluster } from '@/types'
-import { readableQueryData } from '@/utils/query-feedback'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
 import { formatAgeSeconds, formatDateTime } from '@/utils/time'
 import {
   AppstoreOutlined,
@@ -106,7 +106,7 @@ export function OverviewPage() {
   }
   const alertStream = useAlertEventStream({
     clusterId,
-    enabled: canViewAlerts && Boolean(clusterId),
+    enabled: canViewAlerts && Boolean(clusterId) && !queryAccessDenied(alertEventsQuery),
     onSignal: refreshAlertOverview,
     onFallback: refreshAlertOverview,
   })
@@ -650,6 +650,20 @@ export function OverviewPage() {
                   {localeCode === 'zh_CN' ? '最近记录' : 'Recent records'} {effectiveAlertCount} ·{' '}
                   {localeCode === 'zh_CN' ? '最近接收' : 'Last received'}: {lastReceivedText}
                 </Text>
+                <ReadFeedback
+                  label="告警事件流"
+                  query={{
+                    error: alertStream.error ?? null,
+                    isError: Boolean(alertStream.error),
+                    isFetching:
+                      alertStream.status === 'connecting' || alertStream.status === 'reconnecting',
+                  }}
+                />
+                {alertStream.error ? (
+                  <Button size="small" onClick={alertStream.reconnect}>
+                    重新连接事件流
+                  </Button>
+                ) : null}
                 <ResourceStreamStatus
                   status={alertStream.status}
                   lastEventAt={alertStream.lastEventAt}

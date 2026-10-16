@@ -1,4 +1,17 @@
-import { lazy, Suspense, useState } from 'react'
+import { AdminTable } from '@/components/admin-table'
+import { ManagementIconButton } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import {
+  encodeAIContextForElement,
+  getAIWorkbenchPathForMode,
+  useAIPageContext,
+} from '@/features/copilot'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { tableColumnPresets } from '@/utils/table-columns'
+import { formatDateTime } from '@/utils/time'
 import {
   AlertOutlined,
   BellOutlined,
@@ -6,21 +19,11 @@ import {
   FireOutlined,
   ReloadOutlined,
 } from '@ant-design/icons'
-import { App, Modal, Select, Space } from 'antd'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { TableProps } from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Modal, Select, Space } from 'antd'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AdminTable } from '@/components/admin-table'
-import { ManagementIconButton } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import {
-  encodeAIContextForElement,
-  getAIWorkbenchPathForMode,
-  useAIPageContext,
-} from '@/features/copilot'
-import { tableColumnPresets } from '@/utils/table-columns'
-import { formatDateTime } from '@/utils/time'
 import '../observability-pages.css'
 import { alertDisplayStatus } from './model'
 import { observabilityAlertMutations } from './mutations'
@@ -34,7 +37,6 @@ const AlertEventDetailDrawer = lazy(async () => {
 
 export function AlertsPage() {
   const navigate = useNavigate()
-  const { message } = App.useApp()
   const queryClient = useQueryClient()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const canAcknowledge = hasPermission(permissionSnapshotQuery.data?.data, 'observe.alerts.ack')
@@ -51,7 +53,7 @@ export function AlertsPage() {
     ...observabilityAlertQueries.healingPolicies(),
     enabled: canHeal,
   })
-  const alerts = alertsQuery.data ?? []
+  const alerts = readableQueryData(alertsQuery) ?? []
   useAIPageContext({
     sourceWorkbench: 'monitoring',
     sourceTitle: '活跃告警',
@@ -59,24 +61,48 @@ export function AlertsPage() {
     entityName: 'Alerts',
     timeRangeMinutes: 60,
     pinnedData: {
-      total: alerts.length,
-      firing: alerts.filter((item) => alertDisplayStatus(item) !== 'resolved').length,
+      total: readableQueryData(alertsQuery) ? alerts.length : undefined,
+      firing: readableQueryData(alertsQuery)
+        ? alerts.filter((item) => alertDisplayStatus(item) !== 'resolved').length
+        : undefined,
     },
     promptHint: '分析当前活跃告警的严重程度、范围、来源系统和最近命中趋势。',
   })
-  const mutationError = (error: Error) => message.error(error.message)
-  const acknowledgeMutation = useMutation({
-    ...observabilityAlertMutations.acknowledge(queryClient),
-    onError: mutationError,
+  const acknowledgeMutation = useOperationMutation(
+    observabilityAlertMutations.acknowledge(queryClient),
+    {
+      label: ['确认告警', 'Acknowledge alert'],
+      target: (id) => id,
+      receipt: () => ({ message: '告警确认记录已返回' }),
+    },
+  )
+  const resolveMutation = useOperationMutation(observabilityAlertMutations.resolve(queryClient), {
+    label: ['恢复告警', 'Resolve alert'],
+    target: (id) => id,
+    receipt: () => ({ message: '告警恢复记录已返回' }),
   })
-  const resolveMutation = useMutation({
-    ...observabilityAlertMutations.resolve(queryClient),
-    onError: mutationError,
+  const healMutation = useOperationMutation(observabilityAlertMutations.heal(queryClient), {
+    label: ['发起自愈', 'Start healing'],
+    target: ({ eventId, policyId }) => `${eventId} · ${policyId}`,
+    receipt: (result) => ({
+      message: '自愈请求已返回',
+      evidence: (
+        <Space>
+          <span>运行 {result.id}</span>
+          <a href="/monitoring-workbench/healing">查看执行记录</a>
+        </Space>
+      ),
+    }),
   })
-  const healMutation = useMutation({
-    ...observabilityAlertMutations.heal(queryClient),
-    onError: mutationError,
-  })
+  const denied = queryAccessDenied(alertsQuery)
+  const blocked =
+    denied || acknowledgeMutation.blocked || resolveMutation.blocked || healMutation.blocked
+  useEffect(() => {
+    if (denied) {
+      setHealOpen(false)
+      setHealingPolicyId('')
+    }
+  }, [denied])
 
   const columns: TableProps<AlertEvent>['columns'] = [
     { title: '名称', dataIndex: 'title' },
@@ -149,10 +175,13 @@ export function AlertsPage() {
           {canHeal ? (
             <ManagementIconButton
               aria-label="触发自愈"
+              disabled={blocked}
               icon={<FireOutlined />}
               size="small"
               tooltip="自愈"
               onClick={() => {
+                if (blocked) return
+                healMutation.reset()
                 setSelectedAlertId(record.id)
                 setHealingPolicyId('')
                 setHealOpen(true)
@@ -162,27 +191,21 @@ export function AlertsPage() {
           {canAcknowledge && alertDisplayStatus(record) !== 'acknowledged' ? (
             <ManagementIconButton
               aria-label="确认告警"
+              disabled={blocked}
               icon={<BellOutlined />}
               size="small"
               tooltip="确认"
-              onClick={() =>
-                acknowledgeMutation.mutate(record.id, {
-                  onSuccess: () => message.success('告警已确认'),
-                })
-              }
+              onClick={() => acknowledgeMutation.mutate(record.id)}
             />
           ) : null}
           {canResolve && alertDisplayStatus(record) !== 'resolved' ? (
             <ManagementIconButton
               aria-label="恢复告警"
+              disabled={blocked}
               icon={<ReloadOutlined />}
               size="small"
               tooltip="恢复"
-              onClick={() =>
-                resolveMutation.mutate(record.id, {
-                  onSuccess: () => message.success('告警已恢复'),
-                })
-              }
+              onClick={() => resolveMutation.mutate(record.id)}
             />
           ) : null}
         </Space>
@@ -192,6 +215,9 @@ export function AlertsPage() {
 
   return (
     <div className="soha-page">
+      {acknowledgeMutation.feedback}
+      {resolveMutation.feedback}
+      {!healOpen ? healMutation.feedback : null}
       <h1 className="soha-observability-page-heading">活跃告警</h1>
       <AdminTable
         enableDensity
@@ -230,28 +256,45 @@ export function AlertsPage() {
           header: 'soha-observability-modal-header',
         }}
         title="发起自愈"
-        open={healOpen}
-        onCancel={() => setHealOpen(false)}
-        onOk={() =>
+        open={healOpen && !denied}
+        closable={!healMutation.blocked}
+        keyboard={!healMutation.blocked}
+        cancelButtonProps={{ disabled: healMutation.blocked }}
+        mask={{ closable: false }}
+        onCancel={() => {
+          if (!healMutation.blocked) {
+            setHealOpen(false)
+            setHealingPolicyId('')
+          }
+        }}
+        onOk={() => {
+          if (blocked || !canHeal || !healingPolicyId || !readableQueryData(healingPoliciesQuery))
+            return
           healMutation.mutate(
             { eventId: selectedAlertId, policyId: healingPolicyId },
             {
               onSuccess: () => {
-                message.success('自愈运行已创建')
                 setHealOpen(false)
               },
             },
           )
-        }
-        okButtonProps={{ disabled: !healingPolicyId, loading: healMutation.isPending }}
+        }}
+        okButtonProps={{
+          disabled: blocked || !healingPolicyId || !readableQueryData(healingPoliciesQuery),
+          loading: healMutation.isPending,
+        }}
         destroyOnHidden
       >
+        {healMutation.feedback}
+        <ReadFeedback label="自愈策略选项" query={healingPoliciesQuery} />
+        <p>告警：{selectedAlertId}</p>
         <Select
           style={{ width: '100%' }}
+          disabled={blocked || !readableQueryData(healingPoliciesQuery)}
           placeholder="选择自愈策略"
           value={healingPolicyId || undefined}
           onChange={(value) => setHealingPolicyId(String(value))}
-          options={(healingPoliciesQuery.data ?? [])
+          options={(readableQueryData(healingPoliciesQuery) ?? [])
             .filter((item) => item.enabled)
             .map((item) => ({ value: item.id, label: item.name }))}
         />
@@ -259,6 +302,7 @@ export function AlertsPage() {
       {detailOpen ? (
         <Suspense fallback={null}>
           <AlertEventDetailDrawer
+            key={detailEventId}
             eventId={detailEventId}
             open={detailOpen}
             onClose={() => setDetailOpen(false)}

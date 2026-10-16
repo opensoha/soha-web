@@ -3,6 +3,12 @@ import { observabilityKeys } from '../keys'
 import { observabilityNotificationApi } from './api'
 
 export const observabilityNotificationQueries = {
+  preview: (policyId: string, eventId: string, enabled = true) =>
+    queryOptions({
+      queryKey: observabilityKeys.notifications.preview(policyId, eventId),
+      queryFn: () => observabilityNotificationApi.preview({ policyId, eventId }),
+      enabled: enabled && Boolean(policyId && eventId),
+    }),
   channels: () =>
     queryOptions({
       queryKey: observabilityKeys.notifications.channels(),

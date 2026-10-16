@@ -8,6 +8,11 @@ describe('on-call queries', () => {
       observabilityKeys.oncall.schedules(),
     )
     expect(observabilityOncallQueries.routes().queryKey).toEqual(observabilityKeys.oncall.routes())
-    expect(observabilityOncallQueries.tasks().refetchInterval).toBe(30_000)
+    const interval = observabilityOncallQueries.tasks().refetchInterval as (query: {
+      state: { status: string }
+    }) => number | false
+    expect(interval({ state: { status: 'success' } })).toBe(30_000)
+    expect(interval({ state: { status: 'error' } })).toBe(false)
+    expect(interval({ state: { status: 'success' } })).toBe(30_000)
   })
 })

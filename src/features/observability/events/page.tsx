@@ -1,10 +1,11 @@
-import '../observability-pages.css'
-import { Typography } from 'antd'
-import type { TableProps } from 'antd'
-import { useQuery } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
 import { StatusTag } from '@/components/status-tag'
 import { tableColumnPresets } from '@/utils/table-columns'
+import { formatDateTime } from '@/utils/time'
+import { useQuery } from '@tanstack/react-query'
+import type { TableProps } from 'antd'
+import { Typography } from 'antd'
+import '../observability-pages.css'
 import { observabilityEventQueries } from './queries'
 import type { EventStreamEntry } from './types'
 
@@ -14,6 +15,12 @@ export function EventsPage() {
   const eventsQuery = useQuery(observabilityEventQueries.list())
 
   const columns: TableProps<EventStreamEntry>['columns'] = [
+    {
+      ...tableColumnPresets.datetime,
+      title: '发生时间',
+      dataIndex: 'occurredAt',
+      render: formatDateTime,
+    },
     {
       title: '来源',
       dataIndex: 'source',

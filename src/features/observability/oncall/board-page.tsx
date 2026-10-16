@@ -1,5 +1,14 @@
-import { useMemo, useState } from 'react'
-import { EditOutlined } from '@ant-design/icons'
+import { AdminTable } from '@/components/admin-table'
+import { ManagementIconButton, ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { formatDateTime } from '@/utils/time'
+import { EditOutlined, ReloadOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { CalendarProps, TableProps } from 'antd'
 import {
   App,
   Avatar,
@@ -22,16 +31,10 @@ import {
   Tooltip,
   Typography,
 } from 'antd'
-import type { CalendarProps, TableProps } from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
+import dayjs from 'dayjs'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AdminTable } from '@/components/admin-table'
-import { ManagementIconButton, ManagementState } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { formatDateTime } from '@/utils/time'
 import '../observability-pages.css'
 import {
   assignmentForDate,
@@ -47,7 +50,7 @@ import {
 } from './model'
 import { observabilityOncallMutations } from './mutations'
 import { observabilityOncallQueries } from './queries'
-import type { OnCallBoardView, OnCallRotationPayload, OnCallTask } from './types'
+import type { OnCallBoardView, OnCallRotation, OnCallRotationPayload, OnCallTask } from './types'
 
 const { Text } = Typography
 
@@ -65,25 +68,47 @@ export function OnCallBoardPage() {
   const [selectedScheduleId, setSelectedScheduleId] = useState('')
   const [drawerDate, setDrawerDate] = useState<Dayjs | null>(null)
   const [overrideOpen, setOverrideOpen] = useState(false)
+  const [overrideRotation, setOverrideRotation] = useState<OnCallRotation | null>(null)
   const [overrideDate, setOverrideDate] = useState<Dayjs | null>(null)
 
   const schedulesQuery = useQuery(observabilityOncallQueries.schedules())
   const rotationsQuery = useQuery(observabilityOncallQueries.rotations())
   const tasksQuery = useQuery(observabilityOncallQueries.tasks())
   const usersQuery = useQuery(observabilityOncallQueries.users(canUpdateOnCall))
-  const updateRotationOverride = useMutation({
-    ...observabilityOncallMutations.updateRotation(queryClient),
-    onError: (error) => message.error(error.message),
-  })
+  const updateRotationOverride = useOperationMutation(
+    observabilityOncallMutations.updateRotation(queryClient),
+    {
+      label: ['更新值班覆盖', 'Update duty override'],
+      target: ({ id }) => id,
+      receipt: () => ({ message: '值班覆盖记录已保存' }),
+    },
+  )
+  const denied = queryAccessDenied(schedulesQuery) || queryAccessDenied(rotationsQuery)
+  const blocked = updateRotationOverride.blocked || denied || !readableQueryData(usersQuery)
+  function closeOverride() {
+    if (updateRotationOverride.blocked) return
+    setOverrideOpen(false)
+    setOverrideRotation(null)
+    overrideForm.resetFields()
+  }
+  useEffect(() => {
+    if (denied || queryAccessDenied(updateRotationOverride)) {
+      setOverrideOpen(false)
+      setOverrideRotation(null)
+      overrideForm.resetFields()
+    }
+  }, [denied, updateRotationOverride.error, overrideForm])
 
-  const schedules = schedulesQuery.data ?? []
-  const rotations = rotationsQuery.data ?? []
-  const tasks = tasksQuery.data ?? []
+  const schedules = readableQueryData(schedulesQuery) ?? []
+  const rotations = readableQueryData(rotationsQuery) ?? []
+  const tasks = readableQueryData(tasksQuery) ?? []
   const scheduleOptions = useMemo(
     () => schedules.map((item) => ({ value: item.id, label: item.name })),
     [schedules],
   )
-  const effectiveScheduleId = selectedScheduleId || schedules[0]?.id || ''
+  const effectiveScheduleId = schedules.some((item) => item.id === selectedScheduleId)
+    ? selectedScheduleId
+    : schedules[0]?.id || ''
   const selectedSchedule = useMemo(
     () => schedules.find((item) => item.id === effectiveScheduleId) ?? null,
     [effectiveScheduleId, schedules],
@@ -108,7 +133,16 @@ export function OnCallBoardPage() {
   const tomorrowAssignment = assignmentForDate(selectedRotation, today.add(1, 'day'))
 
   function openOverride(date: Dayjs) {
-    if (!canUpdateOnCall) return
+    if (
+      !canUpdateOnCall ||
+      updateRotationOverride.blocked ||
+      denied ||
+      !readableQueryData(rotationsQuery)
+    )
+      return
+    updateRotationOverride.reset()
+    overrideForm.resetFields()
+    setOverrideRotation(selectedRotation)
     if (!selectedRotation) {
       message.warning('当前排班尚未配置轮值，请先到值班设置中创建')
       return
@@ -121,24 +155,25 @@ export function OnCallBoardPage() {
   }
 
   function updateOverride(participants: string[]) {
-    if (!selectedRotation || !overrideDate) return
+    if (!overrideRotation || !overrideDate || blocked || !canUpdateOnCall) return
     const payload: OnCallRotationPayload = {
-      scheduleId: selectedRotation.scheduleId,
-      name: selectedRotation.name,
-      participants: normalizeParticipantList(selectedRotation.participants),
+      scheduleId: overrideRotation.scheduleId,
+      name: overrideRotation.name,
+      participants: normalizeParticipantList(overrideRotation.participants),
       rotationConfig: buildRotationConfigWithOverride(
-        selectedRotation.rotationConfig,
+        overrideRotation.rotationConfig,
         overrideDate.format(ONCALL_DATE_FORMAT),
         participants,
       ),
-      enabled: selectedRotation.enabled,
+      enabled: overrideRotation.enabled,
     }
     updateRotationOverride.mutate(
-      { id: selectedRotation.id, payload },
+      { id: overrideRotation.id, payload },
       {
         onSuccess: () => {
-          message.success('值班覆盖已保存')
           setOverrideOpen(false)
+          setOverrideRotation(null)
+          overrideForm.resetFields()
         },
       },
     )
@@ -208,15 +243,25 @@ export function OnCallBoardPage() {
 
   return (
     <div className="soha-page">
+      {!overrideOpen ? updateRotationOverride.feedback : null}
+      <Space wrap>
+        <ManagementIconButton
+          aria-label="刷新值班板"
+          tooltip="刷新值班板"
+          icon={<ReloadOutlined />}
+          loading={schedulesQuery.isFetching || rotationsQuery.isFetching}
+          onClick={() => {
+            void schedulesQuery.refetch()
+            void rotationsQuery.refetch()
+            void tasksQuery.refetch()
+          }}
+        />
+      </Space>
+      <ReadFeedback label="排班" query={schedulesQuery} />
+      <ReadFeedback label="轮值" query={rotationsQuery} />
       {schedulesQuery.isLoading ? (
         <ManagementState kind="loading" title="正在加载排班" />
-      ) : schedulesQuery.isError ? (
-        <ManagementState
-          kind="error"
-          description={schedulesQuery.error.message}
-          actions={<Button onClick={() => void schedulesQuery.refetch()}>重试</Button>}
-        />
-      ) : schedules.length === 0 ? (
+      ) : !readableQueryData(schedulesQuery) ? null : schedules.length === 0 ? (
         <Card>
           <ManagementState
             bordered={false}
@@ -242,7 +287,11 @@ export function OnCallBoardPage() {
               <Card>
                 <Statistic
                   title="今日值班"
-                  value={formatParticipantSummary(todayAssignment.participants)}
+                  value={
+                    readableQueryData(rotationsQuery)
+                      ? formatParticipantSummary(todayAssignment.participants)
+                      : '—'
+                  }
                   styles={{ content: { fontSize: 18 } }}
                 />
               </Card>
@@ -251,7 +300,11 @@ export function OnCallBoardPage() {
               <Card>
                 <Statistic
                   title="明日值班"
-                  value={formatParticipantSummary(tomorrowAssignment.participants)}
+                  value={
+                    readableQueryData(rotationsQuery)
+                      ? formatParticipantSummary(tomorrowAssignment.participants)
+                      : '—'
+                  }
                   styles={{ content: { fontSize: 18 } }}
                 />
               </Card>
@@ -261,7 +314,11 @@ export function OnCallBoardPage() {
                 <Statistic
                   title="轮换节奏"
                   value={
-                    selectedRotation ? rotationModeLabel(selectedRotation.rotationConfig) : '未配置'
+                    !readableQueryData(rotationsQuery)
+                      ? '—'
+                      : selectedRotation
+                        ? rotationModeLabel(selectedRotation.rotationConfig)
+                        : '未配置'
                   }
                   styles={{ content: { fontSize: 18 } }}
                 />
@@ -271,7 +328,7 @@ export function OnCallBoardPage() {
               <Card>
                 <Statistic
                   title="待响应任务"
-                  value={tasks.length}
+                  value={readableQueryData(tasksQuery) ? tasks.length : '—'}
                   suffix={
                     overrideEntries.length > 0 ? (
                       <Tag color="orange">覆盖 {overrideEntries.length}</Tag>
@@ -289,7 +346,7 @@ export function OnCallBoardPage() {
                 {selectedRotation ? (
                   <Tag color="blue">{selectedRotation.name}</Tag>
                 ) : (
-                  <Tag>暂无轮值</Tag>
+                  <Tag>{readableQueryData(rotationsQuery) ? '暂无轮值' : '轮值暂不可用'}</Tag>
                 )}
                 {todayAssignment.override ? <Tag color="orange">今日已覆盖</Tag> : null}
               </Space>
@@ -299,6 +356,7 @@ export function OnCallBoardPage() {
                 <Select
                   style={{ minWidth: 220 }}
                   placeholder="选择排班"
+                  disabled={overrideOpen}
                   value={effectiveScheduleId || undefined}
                   options={scheduleOptions}
                   onChange={setSelectedScheduleId}
@@ -318,7 +376,9 @@ export function OnCallBoardPage() {
               </Space>
             }
           >
-            {view === 'calendar' ? (
+            {!readableQueryData(rotationsQuery) ? (
+              <ManagementState description="轮值数据暂不可用" />
+            ) : view === 'calendar' ? (
               <Calendar
                 value={calendarValue}
                 onPanelChange={setCalendarValue}
@@ -329,7 +389,7 @@ export function OnCallBoardPage() {
                 cellRender={cellRender}
               />
             ) : null}
-            {view === 'timeline' ? (
+            {readableQueryData(rotationsQuery) && view === 'timeline' ? (
               <Timeline
                 className="soha-oncall-timeline"
                 items={Array.from({ length: 14 }).map((_, index) => {
@@ -351,15 +411,13 @@ export function OnCallBoardPage() {
                 })}
               />
             ) : null}
-            {view === 'list' ? (
+            {readableQueryData(rotationsQuery) && view === 'list' ? (
               overrideEntries.length === 0 ? (
                 <ManagementState bordered={false} compact description="暂无覆盖记录" />
               ) : (
                 <AdminTable
                   enableDensity
                   refreshing={rotationsQuery.isFetching}
-                  error={rotationsQuery.error}
-                  hasReadData={rotationsQuery.data !== undefined}
                   onRefresh={() => void rotationsQuery.refetch()}
                   columnSettingPlacement="header"
                   columnSettingIconOnly
@@ -379,6 +437,7 @@ export function OnCallBoardPage() {
                         canUpdateOnCall ? (
                           <ManagementIconButton
                             aria-label="编辑覆盖记录"
+                            disabled={updateRotationOverride.blocked || denied}
                             size="small"
                             tooltip="编辑"
                             icon={<EditOutlined />}
@@ -418,7 +477,7 @@ export function OnCallBoardPage() {
 
       <Drawer
         title={drawerDate ? `${drawerDate.format('YYYY-MM-DD ddd')} 值班详情` : '值班详情'}
-        open={Boolean(drawerDate)}
+        open={Boolean(drawerDate) && !denied}
         onClose={() => setDrawerDate(null)}
         size={420}
       >
@@ -458,6 +517,9 @@ export function OnCallBoardPage() {
                 <Button
                   type="primary"
                   icon={<EditOutlined />}
+                  disabled={
+                    updateRotationOverride.blocked || denied || !readableQueryData(rotationsQuery)
+                  }
                   onClick={() => openOverride(drawerDate)}
                 >
                   覆盖当日
@@ -479,13 +541,19 @@ export function OnCallBoardPage() {
           header: 'soha-observability-modal-header',
         }}
         title={overrideDate ? `${overrideDate.format(ONCALL_DATE_FORMAT)} 值班覆盖` : '值班覆盖'}
-        open={overrideOpen}
-        onCancel={() => setOverrideOpen(false)}
+        open={overrideOpen && !denied}
+        closable={!updateRotationOverride.blocked}
+        keyboard={!updateRotationOverride.blocked}
+        mask={{ closable: false }}
+        onCancel={closeOverride}
         footer={
           <Space>
-            <Button onClick={() => setOverrideOpen(false)}>取消</Button>
+            <Button disabled={updateRotationOverride.blocked} onClick={closeOverride}>
+              取消
+            </Button>
             <Button
               type="primary"
+              disabled={blocked}
               onClick={() => overrideForm.submit()}
               loading={updateRotationOverride.isPending}
             >
@@ -493,7 +561,13 @@ export function OnCallBoardPage() {
             </Button>
             <Button
               danger
-              disabled={!overrideDate || !overrides[overrideDate.format(ONCALL_DATE_FORMAT)]}
+              disabled={
+                blocked ||
+                !overrideDate ||
+                !readRotationOverrides(overrideRotation?.rotationConfig)[
+                  overrideDate.format(ONCALL_DATE_FORMAT)
+                ]
+              }
               loading={updateRotationOverride.isPending}
               onClick={() => updateOverride([])}
             >
@@ -503,8 +577,11 @@ export function OnCallBoardPage() {
         }
         destroyOnHidden
       >
+        {updateRotationOverride.feedback}
+        <ReadFeedback label="值班人员选项" query={usersQuery} />
         <Form
           layout="vertical"
+          disabled={blocked}
           form={overrideForm}
           onFinish={({ participants }) => updateOverride(normalizeParticipantList(participants))}
         >
@@ -514,7 +591,7 @@ export function OnCallBoardPage() {
               allowClear
               showSearch={{ optionFilterProp: 'label' }}
               placeholder="选择当日值班人员"
-              options={onCallUserOptions(usersQuery.data ?? [])}
+              options={onCallUserOptions(readableQueryData(usersQuery) ?? [])}
             />
           </Form.Item>
         </Form>
