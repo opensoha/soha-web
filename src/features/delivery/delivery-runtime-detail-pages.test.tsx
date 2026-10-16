@@ -18,6 +18,8 @@ import { ReleaseDetailPage } from './releases/detail-page'
 import { ApplicationWorkloadDetailPage } from './runtime/workload-detail-page'
 import { I18nProvider } from '@/i18n'
 import { api } from '@/services/api-client'
+import { ApiError } from '@/services/api-error'
+import { RuntimeDetailContent } from './runtime-detail/shared-page'
 import { usePreferencesStore } from '@/stores/preferences-store'
 
 const testState = vi.hoisted(() => ({
@@ -39,6 +41,20 @@ const testState = vi.hoisted(() => ({
   workloadLinkedService: false,
   workloadServiceError: false,
   apiGet: vi.fn(async (path: string) => {
+    if (path === '/delivery/runtime/workflows/workflow-cache')
+      return {
+        data: {
+          kind: 'workflow',
+          id: 'workflow-cache',
+          object: {
+            id: 'workflow-cache',
+            workflowName: 'protected cached workflow',
+            status: 'completed',
+            nodeRuns: [],
+            steps: [],
+          },
+        },
+      }
     if (path.includes('/workloads/pods/') && path.includes('/detail?'))
       return {
         data: {
@@ -560,7 +576,8 @@ vi.mock('@/services/api-client', () => ({
   },
 }))
 
-vi.mock('@/services/api-error', () => ({
+vi.mock('@/services/api-error', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/services/api-error')>()),
   isApiError: (error: unknown) => Boolean(error && typeof error === 'object' && 'status' in error),
 }))
 
@@ -779,6 +796,30 @@ describe('delivery runtime detail pages', () => {
     expect(container.textContent).toContain('未找到')
     expect(container.textContent).toContain('Release')
   })
+
+  it.each([401, 403])(
+    'hides cached workflow evidence after HTTP %s rejects the read',
+    async (status) => {
+      const container = await renderWithProviders(
+        <RuntimeDetailContent kind="workflow" recordId="workflow-cache" />,
+        '/workflows/workflow-cache',
+      )
+      expect(container.textContent).toContain('protected cached workflow')
+      testState.apiGet.mockImplementationOnce(async () => {
+        throw new ApiError(status, 'execution access denied', { requestId: 'req-runtime-denied' })
+      })
+      await act(async () => {
+        await queryClients.at(-1)!.refetchQueries()
+      })
+      for (let i = 0; i < 3; i++)
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0))
+        })
+      expect(container.textContent).not.toContain('protected cached workflow')
+      expect(container.textContent).toContain('execution access denied')
+      expect(container.textContent).toContain('req-runtime-denied')
+    },
+  )
 
   const base = '/applications/app-1/application-environments/binding-1/workloads/checkout-api'
   const ref = {

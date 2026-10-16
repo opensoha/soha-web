@@ -96,6 +96,8 @@ export function EnvironmentCatalogPage() {
         rowKey="id"
         loading={environmentsQuery.isLoading}
         isError={environmentsQuery.isError}
+        error={environmentsQuery.error}
+        hasReadData={environmentsQuery.data !== undefined}
         errorDescription="暂时无法读取环境目录。"
         onRetry={() => void environmentsQuery.refetch()}
         localSorting

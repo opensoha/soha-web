@@ -214,6 +214,8 @@ export function DeliveryTestingPage() {
           )
         }
         isError={canViewBundles && bundlesQuery.isError}
+        error={canViewBundles ? bundlesQuery.error : null}
+        hasReadData={bundlesQuery.data !== undefined}
         errorDescription="暂时无法读取候选版本。"
         onRetry={() => void bundlesQuery.refetch()}
         loading={canViewBundles && bundlesQuery.isLoading}

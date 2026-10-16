@@ -179,6 +179,8 @@ export function DeliveryAnalysisPage() {
           )
         }
         isError={canViewTasks && tasksQuery.isError}
+        error={canViewTasks ? tasksQuery.error : null}
+        hasReadData={tasksQuery.data !== undefined}
         errorDescription="暂时无法读取最近任务。"
         onRetry={() => void tasksQuery.refetch()}
         loading={canViewTasks && tasksQuery.isLoading}

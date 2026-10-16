@@ -14,6 +14,8 @@ import { LinkOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ManagementDetailHeader, ManagementState } from '@/components/management-list'
+import { requestErrorMessage, useInlineApiError } from '@/components/request-feedback'
+import { readableQueryData } from '@/utils/query-feedback'
 import { StatusTag } from '@/components/status-tag'
 import { isApiError } from '@/services/api-error'
 import { formatDateTime } from '@/utils/time'
@@ -669,7 +671,9 @@ export function RuntimeDetailContent({
               : false
         : false,
   })
-  const retainWorkflowEvidence = kind === 'workflow' && !embedded && !!runtimeDetailQuery.data
+  useInlineApiError(runtimeDetailQuery.isError ? runtimeDetailQuery.error : null)
+  const runtimeDetail = readableQueryData(runtimeDetailQuery)
+  const retainWorkflowEvidence = kind === 'workflow' && !embedded && !!runtimeDetail
 
   if (!recordId) {
     return (
@@ -714,7 +718,7 @@ export function RuntimeDetailContent({
           }
           description={
             runtimeDetailQuery.error instanceof Error
-              ? runtimeDetailQuery.error.message
+              ? requestErrorMessage(runtimeDetailQuery.error, 'zh_CN')
               : '加载运行态详情失败'
           }
         />
@@ -722,7 +726,6 @@ export function RuntimeDetailContent({
     )
   }
 
-  const runtimeDetail = runtimeDetailQuery.data
   const record = runtimeDetail?.object
   if (!record) {
     return (
@@ -874,7 +877,11 @@ export function RuntimeDetailContent({
               children: formatDateTime(
                 (
                   record as
-                    BuildRecord | ReleaseRecord | ReleaseBundle | ExecutionTask | WorkflowRun
+                    | BuildRecord
+                    | ReleaseRecord
+                    | ReleaseBundle
+                    | ExecutionTask
+                    | WorkflowRun
                 ).createdAt,
               ),
             },

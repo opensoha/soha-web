@@ -1,11 +1,13 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import './styles.css'
 import { App, Button, Input, Space, Tag, Typography } from 'antd'
 import { ArrowLeftOutlined, SaveOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ManagementState, TemplateDesignerShell } from '@/components/management-list'
-import { useI18n } from '@/i18n'
+import { OperationFeedback, ReadFeedback } from '@/components/request-feedback'
+import { readableQueryData, writeOutcomeUnknown } from '@/utils/query-feedback'
+import { localeText, useI18n } from '@/i18n'
 import {
   analyzeReleaseDagDefinition,
   normalizeReleaseDagDefinition,
@@ -43,39 +45,65 @@ function ApplicationWorkflowCanvas({
   boundTemplate,
   initialName,
   sourceTemplate,
+  draftSource: initialDraftSource,
+  onVerify,
+  verifying,
 }: {
   applicationId: string
   binding: ApplicationEnvironment
   boundTemplate?: WorkflowTemplate
   initialName: string
   sourceTemplate?: WorkflowTemplate
+  draftSource: boolean
+  onVerify: () => unknown
+  verifying: boolean
 }) {
-  const { t } = useI18n()
+  const { t, localeCode } = useI18n()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const [name, setName] = useState(initialName)
+  const [originalName] = useState(initialName)
+  const [draftSource] = useState(initialDraftSource)
+  const [templateName] = useState(sourceTemplate?.name)
+  const [environmentName] = useState(
+    binding.alias || binding.environmentKey || binding.environmentId,
+  )
   const [expectedRevision] = useState(boundTemplate?.revision)
   const [initialDefinition] = useState<ReleaseDagDefinition>(
     sourceTemplate ? normalizeReleaseDagDefinition(sourceTemplate.definition) : EMPTY_WORKFLOW,
   )
   const [definition, setDefinition] = useState<ReleaseDagDefinition>(initialDefinition)
   const dirty =
-    name !== initialName || JSON.stringify(definition) !== JSON.stringify(initialDefinition)
+    draftSource ||
+    name !== originalName ||
+    JSON.stringify(definition) !== JSON.stringify(initialDefinition)
   const saveMutation = useMutation(deliveryMutations.environments.saveWorkflow(queryClient))
+  const submitting = useRef(false)
+  const uncertain = writeOutcomeUnknown(saveMutation.error)
 
   useEffect(() => {
-    if (!dirty) return
+    if (!dirty && !uncertain && !saveMutation.isPending) return
     const warn = (event: BeforeUnloadEvent) => event.preventDefault()
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
-  }, [dirty])
+  }, [dirty, uncertain, saveMutation.isPending])
 
   const returnToApplication = () => {
+    if (saveMutation.isPending) return
     if (
-      dirty &&
+      (dirty || uncertain) &&
       !window.confirm(
-        t('page.applicationWorkflowDesigner.unsavedConfirm', '当前工作流有未保存更改，确认离开？'),
+        uncertain
+          ? localeText(
+              localeCode,
+              '保存结果尚未确认，请先核对环境记录。确认离开？',
+              'The save outcome is unknown. Check the environment record before leaving. Leave now?',
+            )
+          : t(
+              'page.applicationWorkflowDesigner.unsavedConfirm',
+              '当前工作流有未保存更改，确认离开？',
+            ),
       )
     )
       return
@@ -83,6 +111,7 @@ function ApplicationWorkflowCanvas({
   }
 
   const save = async () => {
+    if (submitting.current || uncertain) return
     const trimmedName = name.trim()
     if (!trimmedName) {
       message.error(t('page.applicationWorkflowDesigner.nameRequired', '请输入工作流名称'))
@@ -100,6 +129,8 @@ function ApplicationWorkflowCanvas({
       )
       return
     }
+    submitting.current = true
+    let outcomeUnknown = false
     try {
       await saveMutation.mutateAsync({
         applicationId,
@@ -117,11 +148,9 @@ function ApplicationWorkflowCanvas({
       message.success(t('page.applicationWorkflowDesigner.saved', '工作流已保存'))
       navigate(`/applications/${encodeURIComponent(applicationId)}?tab=delivery`)
     } catch (error) {
-      message.error(
-        error instanceof Error
-          ? error.message
-          : t('page.applicationWorkflowDesigner.saveFailed', '工作流保存失败'),
-      )
+      outcomeUnknown = writeOutcomeUnknown(error instanceof Error ? error : undefined)
+    } finally {
+      submitting.current = outcomeUnknown
     }
   }
 
@@ -129,30 +158,73 @@ function ApplicationWorkflowCanvas({
     <TemplateDesignerShell
       className="soha-page soha-application-workflow-designer"
       designer={
-        <Suspense
-          fallback={
-            <ManagementState
-              kind="loading"
-              title={t('page.applicationWorkflowDesigner.canvasLoading', '正在加载画布')}
-            />
-          }
-        >
-          <ReleaseFlowDagEditor
-            className="soha-application-workflow-designer__canvas"
-            height="calc(100vh - 190px)"
-            initialDefinition={initialDefinition}
-            layout="palette-right-floating-inspector"
-            variant="embedded"
-            onChange={setDefinition}
+        <>
+          <OperationFeedback
+            pending={saveMutation.isPending}
+            error={saveMutation.error}
+            label={t('page.applicationWorkflowDesigner.save', '保存工作流')}
+            target={`${environmentName} · ${saveMutation.variables?.payload.name || name}`}
+            receipt={
+              uncertain
+                ? {
+                    message: localeText(
+                      localeCode,
+                      '工作流保存结果待核对',
+                      'Workflow save outcome requires verification',
+                    ),
+                    evidence: (
+                      <Space orientation="vertical">
+                        <Text>
+                          {localeText(localeCode, '环境当前记录', 'Current environment record')}:{' '}
+                          {binding.workflowTemplate?.name || '—'} ·{' '}
+                          {localeText(localeCode, '修订', 'Revision')}{' '}
+                          {binding.workflowTemplate?.revision ?? '—'}
+                        </Text>
+                        <Button loading={verifying} onClick={() => void onVerify()}>
+                          {localeText(localeCode, '核对环境记录', 'Check environment record')}
+                        </Button>
+                      </Space>
+                    ),
+                  }
+                : undefined
+            }
           />
-        </Suspense>
+          <div
+            aria-busy={saveMutation.isPending}
+            ref={(node) => {
+              if (node) node.inert = saveMutation.isPending
+            }}
+          >
+            <Suspense
+              fallback={
+                <ManagementState
+                  kind="loading"
+                  title={t('page.applicationWorkflowDesigner.canvasLoading', '正在加载画布')}
+                />
+              }
+            >
+              <ReleaseFlowDagEditor
+                className="soha-application-workflow-designer__canvas"
+                height="calc(100vh - 190px)"
+                initialDefinition={initialDefinition}
+                layout="palette-right-floating-inspector"
+                variant="embedded"
+                onChange={setDefinition}
+              />
+            </Suspense>
+          </div>
+        </>
       }
       designerClassName="soha-application-workflow-designer__designer"
       list={null}
       toolbar={
         <>
-          <Space>
-            <Button icon={<ArrowLeftOutlined />} onClick={returnToApplication}>
+          <Space wrap>
+            <Button
+              icon={<ArrowLeftOutlined />}
+              disabled={saveMutation.isPending}
+              onClick={returnToApplication}
+            >
               {t('page.applicationWorkflowDesigner.back', '返回工作流')}
             </Button>
             <span>
@@ -160,18 +232,19 @@ function ApplicationWorkflowCanvas({
               <br />
               <Text type="secondary">
                 {binding.alias || binding.environmentKey || binding.environmentId}
-                {sourceTemplate
-                  ? ` · ${t('page.applicationWorkflowDesigner.basedOn', '基于')} ${sourceTemplate.name}`
+                {templateName
+                  ? ` · ${t('page.applicationWorkflowDesigner.basedOn', '基于')} ${templateName}`
                   : ` · ${t('page.applicationWorkflowDesigner.blankCanvas', '空白画布')}`}
               </Text>
             </span>
           </Space>
-          <Space>
+          <Space wrap>
             <Input
               aria-label={t('page.applicationWorkflowDesigner.nameLabel', '工作流名称')}
               maxLength={80}
-              style={{ width: 280 }}
+              style={{ width: 'clamp(160px, 35vw, 280px)' }}
               value={name}
+              disabled={saveMutation.isPending}
               onChange={(event) => setName(event.target.value)}
             />
             <Tag color={dirty ? 'gold' : undefined}>
@@ -181,8 +254,10 @@ function ApplicationWorkflowCanvas({
             </Tag>
             <Button
               type="primary"
+              aria-label={t('page.applicationWorkflowDesigner.save', '保存工作流')}
               icon={<SaveOutlined />}
               loading={saveMutation.isPending}
+              disabled={uncertain}
               onClick={() => void save()}
             >
               {t('page.applicationWorkflowDesigner.save', '保存工作流')}
@@ -195,95 +270,150 @@ function ApplicationWorkflowCanvas({
   )
 }
 
-export function ApplicationWorkflowDesignerPage() {
-  const { t } = useI18n()
-  const { applicationId = '' } = useParams()
-  const [searchParams] = useSearchParams()
+function ApplicationWorkflowDesignerSession({
+  applicationId,
+  searchParams,
+}: {
+  applicationId: string
+  searchParams: URLSearchParams
+}) {
+  const { t, localeCode } = useI18n()
   const bindingId = searchParams.get('bindingId')?.trim() || ''
   const requestedTemplateId = searchParams.get('templateId')?.trim() || ''
   const source = searchParams.get('source')
   const applicationsQuery = useQuery(deliveryQueries.applications.list(Boolean(applicationId)))
   const bindingsQuery = useQuery(deliveryQueries.environments.list(Boolean(applicationId)))
   const templatesQuery = useQuery(deliveryQueries.workflowTemplates.list(Boolean(applicationId)))
-  const requestedTemplate = templatesQuery.data?.find((item) => item.id === requestedTemplateId)
-  const requestedVersion =
-    Number(searchParams.get('templateVersion')) || requestedTemplate?.publishedVersion || 0
+  const applications = readableQueryData(applicationsQuery)
+  const bindings = readableQueryData(bindingsQuery)
+  const templates = readableQueryData(templatesQuery)
+  const requestedTemplate = templates?.find((item) => item.id === requestedTemplateId)
+  const [requestedVersion, setRequestedVersion] = useState(
+    () => Number(searchParams.get('templateVersion')) || requestedTemplate?.publishedVersion || 0,
+  )
+  const requiresTemplate = source === 'template' && Boolean(requestedTemplateId)
+  useEffect(() => {
+    if (requiresTemplate && !requestedVersion && requestedTemplate?.publishedVersion) {
+      setRequestedVersion(requestedTemplate.publishedVersion)
+    }
+  }, [requiresTemplate, requestedVersion, requestedTemplate?.publishedVersion])
   const sourceTemplateQuery = useQuery(
     deliveryQueries.workflowTemplates.version(
       requestedTemplateId,
       requestedVersion,
-      source === 'template' && Boolean(requestedTemplateId),
+      requiresTemplate && Boolean(requestedVersion),
     ),
   )
 
-  if (
+  const sourceTemplateData = readableQueryData(sourceTemplateQuery)
+  const feedback = (
+    <>
+      <ReadFeedback
+        query={applicationsQuery}
+        label={localeText(localeCode, '应用', 'Application')}
+      />
+      <ReadFeedback
+        query={bindingsQuery}
+        label={localeText(localeCode, '应用环境', 'Application environment')}
+      />
+      <ReadFeedback
+        query={templatesQuery}
+        label={localeText(localeCode, '工作流模板', 'Workflow templates')}
+      />
+      {requiresTemplate ? (
+        <ReadFeedback
+          query={sourceTemplateQuery}
+          label={localeText(localeCode, '模板版本', 'Template version')}
+        />
+      ) : null}
+    </>
+  )
+  const loading =
     applicationsQuery.isLoading ||
     bindingsQuery.isLoading ||
     templatesQuery.isLoading ||
-    sourceTemplateQuery.isLoading
-  ) {
-    return (
-      <ManagementState
-        kind="loading"
-        title={t('page.applicationWorkflowDesigner.loading', '正在加载工作流')}
-      />
-    )
-  }
+    (requiresTemplate &&
+      (sourceTemplateQuery.isLoading ||
+        (!requestedVersion && Boolean(requestedTemplate?.publishedVersion))))
   if (
-    applicationsQuery.isError ||
-    bindingsQuery.isError ||
-    templatesQuery.isError ||
-    sourceTemplateQuery.isError
+    !applications ||
+    !bindings ||
+    !templates ||
+    (requiresTemplate && !sourceTemplateData && (requestedVersion > 0 || loading))
   ) {
     return (
-      <ManagementState
-        kind="error"
-        title={t('page.applicationWorkflowDesigner.loadFailed', '工作流加载失败')}
-      />
+      <>
+        {feedback}
+        {loading ? (
+          <ManagementState
+            kind="loading"
+            title={t('page.applicationWorkflowDesigner.loading', '正在加载工作流')}
+          />
+        ) : null}
+      </>
     )
   }
 
-  const application = (applicationsQuery.data ?? []).find((item) => item.id === applicationId)
-  const binding = (bindingsQuery.data ?? []).find(
+  const application = applications.find((item) => item.id === applicationId)
+  const binding = bindings.find(
     (item) => item.id === bindingId && item.applicationId === applicationId,
   )
   if (!application || !binding) {
     return (
-      <ManagementState
-        kind="not-found"
-        title={t('page.applicationWorkflowDesigner.environmentNotFound', '未找到应用环境')}
-      />
+      <>
+        {feedback}
+        <ManagementState
+          kind="not-found"
+          title={t('page.applicationWorkflowDesigner.environmentNotFound', '未找到应用环境')}
+        />
+      </>
     )
   }
 
   const boundTemplate = binding.workflowTemplate
-  if (source === 'template' && !sourceTemplateQuery.data) {
+  if (source === 'template' && !sourceTemplateData) {
     return (
-      <ManagementState
-        kind="not-found"
-        title={t('page.applicationWorkflowDesigner.templateNotFound', '未找到所选工作流模板版本')}
-      />
+      <>
+        {feedback}
+        <ManagementState
+          kind="not-found"
+          title={t('page.applicationWorkflowDesigner.templateNotFound', '未找到所选工作流模板版本')}
+        />
+      </>
     )
   }
   const sourceTemplate =
-    source === 'blank'
-      ? undefined
-      : source === 'template'
-        ? sourceTemplateQuery.data
-        : boundTemplate
+    source === 'blank' ? undefined : source === 'template' ? sourceTemplateData : boundTemplate
   const initialName =
     searchParams.get('name')?.trim() ||
     boundTemplate?.name ||
     `${application.name}${t('page.applicationWorkflowDesigner.defaultNameSuffix', '工作流')}`
 
   return (
-    <ApplicationWorkflowCanvas
-      key={`${binding.id}:${source || 'edit'}:${sourceTemplate?.id || 'blank'}:${sourceTemplate?.publishedVersion || 0}`}
+    <>
+      {feedback}
+      <ApplicationWorkflowCanvas
+        applicationId={applicationId}
+        binding={binding}
+        boundTemplate={boundTemplate}
+        initialName={initialName}
+        sourceTemplate={sourceTemplate}
+        draftSource={source === 'blank' || source === 'template' || !boundTemplate}
+        onVerify={() => bindingsQuery.refetch()}
+        verifying={bindingsQuery.isFetching}
+      />
+    </>
+  )
+}
+
+export function ApplicationWorkflowDesignerPage() {
+  const { applicationId = '' } = useParams()
+  const [searchParams] = useSearchParams()
+  return (
+    <ApplicationWorkflowDesignerSession
+      key={`${applicationId}:${searchParams.toString()}`}
       applicationId={applicationId}
-      binding={binding}
-      boundTemplate={boundTemplate}
-      initialName={initialName}
-      sourceTemplate={sourceTemplate}
+      searchParams={searchParams}
     />
   )
 }

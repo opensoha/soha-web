@@ -1716,6 +1716,8 @@ export function ApplicationDetailPage() {
         showColumnSettings={false}
         loading={detailQuery.isLoading}
         isError={detailQuery.isError}
+        error={detailQuery.error}
+        hasReadData={detailQuery.data !== undefined}
         onRetry={() => void detailQuery.refetch()}
         dataSource={bindings.filter((binding) => binding.workflowTemplateId)}
         empty={

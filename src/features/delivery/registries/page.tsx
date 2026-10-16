@@ -156,6 +156,8 @@ export function RegistriesPage() {
         refreshing={registriesQuery.isFetching}
         onRefresh={() => void registriesQuery.refetch()}
         isError={registriesQuery.isError}
+        error={registriesQuery.error}
+        hasReadData={registriesQuery.data !== undefined}
         errorDescription="暂时无法读取镜像仓库。"
         onRetry={() => void registriesQuery.refetch()}
         localSorting

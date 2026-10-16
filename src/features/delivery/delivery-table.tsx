@@ -1,11 +1,9 @@
 import { useState } from 'react'
 import type { ComponentProps, ReactNode } from 'react'
-import { Button } from 'antd'
 import { AdminTable } from '@/components/admin-table'
 import {
   ManagementDensityButton,
   ManagementRefreshButton,
-  ManagementState,
   ManagementTableToolbar,
 } from '@/components/management-list'
 import './styles/shared.css'
@@ -53,6 +51,7 @@ export function DeliveryTable({
   enableDensity = true,
   errorDescription,
   isError = false,
+  error,
   onRetry,
   pagination,
   paginationSummary,
@@ -94,26 +93,16 @@ export function DeliveryTable({
       columnSettingIconOnly
       columnSettingPlacement={showColumnSettings ? 'header' : 'hidden'}
       enableColumnSelection={showColumnSettings && enableColumnSelection !== false}
-      empty={
-        isError ? (
-          <ManagementState
-            bordered={false}
-            compact
-            actions={
-              onRetry ? (
-                <Button size="small" onClick={onRetry}>
-                  重试
-                </Button>
-              ) : undefined
-            }
-            description={errorDescription}
-            kind="error"
-            title="加载失败"
-          />
-        ) : (
-          tableProps.empty
-        )
+      error={
+        error ??
+        (isError
+          ? new Error(
+              typeof errorDescription === 'string' ? errorDescription : '暂时无法读取列表。',
+            )
+          : null)
       }
+      onRetry={onRetry}
+      empty={tableProps.empty}
       headerExtra={utilityToolbar}
       pagination={pagination}
       paginationSummary={

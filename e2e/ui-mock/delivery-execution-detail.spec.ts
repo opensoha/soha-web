@@ -16,14 +16,23 @@ async function executionMocks(
   const state = {
     status: initial,
     refreshFails: false,
+    refreshStatus: 503,
     approvalFails: false,
     decisions: [] as string[],
     reads: 0,
     empty: false,
     scope: 'application',
+    taskListStatus: 200,
   }
   const evidence = await installMocks(context, page, (url, method) => {
     const path = url.pathname
+    if (path === '/api/v1/delivery/execution-tasks')
+      return state.taskListStatus === 200
+        ? { body: { data: [] } }
+        : {
+            status: state.taskListStatus,
+            body: { error: { code: 'read_failed', message: '执行任务读取失败' } },
+          }
     if (path === '/api/v1/access/permission-snapshot')
       return {
         body: {
@@ -52,7 +61,7 @@ async function executionMocks(
       state.reads++
       if (state.refreshFails)
         return {
-          status: 503,
+          status: state.refreshStatus,
           body: { error: { code: 'unavailable', message: '暂时无法更新执行证据' } },
         }
       const complete = state.status === 'completed'
@@ -373,11 +382,16 @@ for (const theme of ['light', 'dark'] as const)
     await expect(node).toHaveAttribute('aria-pressed', 'true')
     await expect(node).toBeFocused()
     await verifyGeometry(page, node)
+    await expect(page.locator('.soha-workflow-execution')).toHaveAttribute(
+      'data-motion-disabled',
+      'true',
+    )
+    await expect(page.locator('.soha-execution-live-dot')).toHaveCount(0)
     expect(
       await page
-        .locator('.soha-execution-live-dot')
-        .evaluate((el) => getComputedStyle(el).animationName),
-    ).toBe('none')
+        .locator('html')
+        .evaluate((el) => getComputedStyle(el).getPropertyValue('--soha-motion-duration-mid')),
+    ).toBe('0s')
     await page.getByRole('button', { name: '构建明细', exact: true }).scrollIntoViewIfNeeded()
     await verifyGeometry(page, page.getByRole('button', { name: '构建明细', exact: true }))
     await page.screenshot({
@@ -420,10 +434,34 @@ test('first-load failure can retry into the actual execution page', async ({ con
   state.refreshFails = true
   await page.goto(pagePath)
   await expect(page.getByRole('button', { name: '重试执行证据' })).toBeVisible()
+  await expect(page.locator('.ant-notification-notice')).toHaveCount(0)
   await expect(page.locator('.soha-workflow-execution')).toHaveCount(0)
   state.refreshFails = false
   await page.getByRole('button', { name: '重试执行证据' }).click()
   await expect(page.getByRole('button', { name: '更新服务，执行中' })).toBeVisible()
+  verifyBrowserEvidence(evidence)
+})
+
+test('global table feedback preserves an empty cached result and removes denied evidence', async ({
+  context,
+  page,
+}, info) => {
+  const { state, evidence } = await executionMocks(context, page)
+  await page.goto('/delivery/execution-tasks')
+  await expect(page.getByText('当前筛选条件下没有可展示的记录。')).toBeVisible()
+  state.taskListStatus = 503
+  await page.getByRole('button', { name: '刷新', exact: true }).click()
+  await expect(page.getByText('列表未更新，正在展示上次读取结果')).toBeVisible()
+  await expect(page.getByText('当前筛选条件下没有可展示的记录。')).toBeVisible()
+  await expect(page.locator('.ant-notification-notice')).toHaveCount(0)
+  await page.screenshot({ path: info.outputPath('global-table-cached-empty.png'), fullPage: true })
+  state.taskListStatus = 403
+  await page.getByRole('button', { name: '重试读取列表', exact: true }).click()
+  await expect(page.getByText('列表无访问权限')).toBeVisible()
+  await expect(page.getByText('执行状态不可用')).toBeVisible()
+  await expect(page.getByText('重试状态不可用')).toBeVisible()
+  await expect(page.getByText('当前筛选条件下没有可展示的记录。')).toHaveCount(0)
+  await expect(page.locator('.ant-notification-notice')).toHaveCount(0)
   verifyBrowserEvidence(evidence)
 })
 
@@ -443,5 +481,26 @@ test('batch scope and an approval state change block workflow decisions', async 
   await page.getByRole('dialog').getByRole('button', { name: '确认批准', exact: true }).click()
   await expect(page.getByRole('dialog')).toContainText('执行状态已变化')
   expect(state.decisions).toEqual([])
+  verifyBrowserEvidence(evidence)
+})
+
+test('delivery detail removes cached evidence after access is revoked', async ({
+  context,
+  page,
+}) => {
+  const { state, evidence } = await executionMocks(context, page, 'completed')
+  await page.goto(pagePath)
+  await expect(
+    page.getByRole('heading', { name: '订单服务 · 标准发布', exact: true }),
+  ).toBeVisible()
+  state.refreshFails = true
+  state.refreshStatus = 403
+  await page.getByRole('button', { name: /刷新证据/ }).click()
+  await expect(page.getByRole('button', { name: '重试执行证据' })).toBeVisible()
+  await expect(page.locator('.soha-workflow-execution')).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: '订单服务 · 标准发布', exact: true })).toHaveCount(
+    0,
+  )
+  await expect(page.locator('.ant-notification-notice')).toHaveCount(0)
   verifyBrowserEvidence(evidence)
 })
