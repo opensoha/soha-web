@@ -1,15 +1,26 @@
+import { AdminTable } from '@/components/admin-table'
+import {
+  ManagementIconButton,
+  ManagementState,
+  ManagementTableToolbar,
+} from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { BooleanTag, StatusTag } from '@/components/status-tag'
 import { StepForm } from '@/components/step-form'
-import { useState } from 'react'
+import { StepFormModal } from '@/components/step-form-modal'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { formatDateTime } from '@/utils/time'
+import { EditOutlined, ExperimentOutlined, PlusOutlined } from '@ant-design/icons'
 import type {
   ObservabilityDataSource,
   ObservabilityDataSourceBackendType,
   ObservabilityDataSourceInput,
 } from '@opensoha/contracts/gen/ts/sohaapi'
-import { EditOutlined, ExperimentOutlined, PlusOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
 import {
-  App,
   Button,
   Collapse,
   Form,
@@ -21,21 +32,12 @@ import {
   Tag,
   Typography,
 } from 'antd'
-import { StepFormModal } from '@/components/step-form-modal'
-import { AdminTable } from '@/components/admin-table'
-import {
-  ManagementIconButton,
-  ManagementState,
-  ManagementTableToolbar,
-} from '@/components/management-list'
-import { BooleanTag, StatusTag } from '@/components/status-tag'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { formatDateTime } from '@/utils/time'
+import { useEffect, useState } from 'react'
+import '../observability-pages.css'
 import { observabilityProviderQueries } from '../provider-queries'
 import { observabilityLogMutations } from './mutations'
 import { observabilityLogQueries } from './queries'
 import './styles.css'
-import '../observability-pages.css'
 
 const { Text } = Typography
 const builtinProviderKeys = ['loki', 'elasticsearch', 'clickhouse'] as const
@@ -200,7 +202,6 @@ export function buildDataSourceInput(values: DataSourceFormValues): Observabilit
 }
 
 export function LogDataSourcesPage() {
-  const { message } = App.useApp()
   const queryClient = useQueryClient()
   const snapshot = usePermissionSnapshot().data?.data
   const canCreate = hasPermission(snapshot, 'observe.log-data-sources.create')
@@ -213,10 +214,46 @@ export function LogDataSourcesPage() {
   const [editing, setEditing] = useState<ObservabilityDataSource | null>(null)
   const sourcesQuery = useQuery(observabilityLogQueries.dataSources())
   const providersQuery = useQuery(observabilityProviderQueries.providers())
-  const createMutation = useMutation(observabilityLogMutations.createDataSource(queryClient))
-  const updateMutation = useMutation(observabilityLogMutations.updateDataSource(queryClient))
-  const validateMutation = useMutation(observabilityLogMutations.validateDataSource(queryClient))
-  const providers = (providersQuery.data ?? []).filter(
+  const createMutation = useOperationMutation(
+    observabilityLogMutations.createDataSource(queryClient),
+    {
+      label: ['创建日志数据源', 'Create log data source'],
+      target: (input) => input.name,
+      receipt: (result) => ({ message: '数据源记录已创建', evidence: result.id }),
+    },
+  )
+  const updateMutation = useOperationMutation(
+    observabilityLogMutations.updateDataSource(queryClient),
+    {
+      label: ['更新日志数据源', 'Update log data source'],
+      target: ({ id }) => id,
+      receipt: (result) => ({ message: '数据源记录已更新', evidence: result.id }),
+    },
+  )
+  const validateMutation = useOperationMutation(
+    observabilityLogMutations.validateDataSource(queryClient),
+    {
+      label: ['验证日志数据源', 'Validate log data source'],
+      target: (id) => id,
+      resultError: (result) =>
+        result.validationStatus === 'healthy'
+          ? undefined
+          : new Error(result.validationMessage || '连接验证未通过'),
+      receipt: (result) => ({ message: '连接验证记录已返回', evidence: result.validationStatus }),
+    },
+  )
+  const denied = queryAccessDenied(sourcesQuery)
+  const writeBlocked = createMutation.blocked || updateMutation.blocked || denied
+  const blocked =
+    writeBlocked || queryAccessDenied(providersQuery) || !readableQueryData(providersQuery)
+  useEffect(() => {
+    if (denied || queryAccessDenied(createMutation) || queryAccessDenied(updateMutation)) {
+      setOpen(false)
+      setEditing(null)
+      form.resetFields()
+    }
+  }, [denied, createMutation.error, updateMutation.error, form])
+  const providers = (readableQueryData(providersQuery) ?? []).filter(
     (provider) =>
       provider.status !== 'unsupported' &&
       provider.signals.includes('logs') &&
@@ -230,6 +267,9 @@ export function LogDataSourcesPage() {
   const builtIn = selectedProvider?.builtIn ?? builtinProviderKeys.includes(providerKey as never)
 
   function openEditor(item?: ObservabilityDataSource) {
+    if (writeBlocked) return
+    createMutation.reset()
+    updateMutation.reset()
     setStep(0)
     setEditing(item ?? null)
     form.setFieldsValue(formValues(item))
@@ -237,32 +277,34 @@ export function LogDataSourcesPage() {
   }
 
   function closeEditor() {
+    if (writeBlocked) return
+    clearEditor()
+  }
+
+  function clearEditor() {
     setOpen(false)
     setEditing(null)
     form.resetFields()
   }
 
   function submit(values: DataSourceFormValues) {
+    if (blocked) return
     const input = buildDataSourceInput(values)
     if (editing) {
       updateMutation.mutate(
         { id: editing.id, input },
         {
           onSuccess: () => {
-            void message.success('日志数据源已更新')
-            closeEditor()
+            clearEditor()
           },
-          onError: (error) => void message.error(error.message),
         },
       )
       return
     }
     createMutation.mutate(input, {
       onSuccess: () => {
-        void message.success('日志数据源已创建')
-        closeEditor()
+        clearEditor()
       },
-      onError: (error) => void message.error(error.message),
     })
   }
 
@@ -336,23 +378,15 @@ export function LogDataSourcesPage() {
         <Space size={2}>
           <ManagementIconButton
             aria-label="验证日志数据源"
-            disabled={!canValidate}
+            disabled={!canValidate || validateMutation.blocked || denied}
             icon={<ExperimentOutlined />}
             loading={validateMutation.isPending && validateMutation.variables === item.id}
             tooltip="验证连接"
-            onClick={() =>
-              validateMutation.mutate(item.id, {
-                onSuccess: (result) =>
-                  void message[result.validationStatus === 'healthy' ? 'success' : 'error'](
-                    result.validationStatus === 'healthy' ? '连接验证通过' : '连接验证失败',
-                  ),
-                onError: (error) => void message.error(error.message),
-              })
-            }
+            onClick={() => validateMutation.mutate(item.id)}
           />
           <ManagementIconButton
             aria-label="编辑日志数据源"
-            disabled={!canUpdate}
+            disabled={!canUpdate || writeBlocked}
             icon={<EditOutlined />}
             tooltip="编辑"
             onClick={() => openEditor(item)}
@@ -365,6 +399,13 @@ export function LogDataSourcesPage() {
   return (
     <div className="soha-page">
       <h1 className="soha-observability-page-heading">日志数据源</h1>
+      {!open ? (
+        <>
+          {createMutation.feedback}
+          {updateMutation.feedback}
+        </>
+      ) : null}
+      {validateMutation.feedback}
       <AdminTable
         enableDensity
         error={sourcesQuery.error}
@@ -374,7 +415,12 @@ export function LogDataSourcesPage() {
         headerExtra={
           canCreate ? (
             <ManagementTableToolbar>
-              <Button icon={<PlusOutlined />} type="primary" onClick={() => openEditor()}>
+              <Button
+                disabled={writeBlocked}
+                icon={<PlusOutlined />}
+                type="primary"
+                onClick={() => openEditor()}
+              >
                 新建数据源
               </Button>
             </ManagementTableToolbar>
@@ -393,12 +439,21 @@ export function LogDataSourcesPage() {
       />
 
       <StepFormModal
-        open={open}
+        open={open && !denied}
+        closeDisabled={writeBlocked}
+        feedback={
+          <>
+            <ReadFeedback label="日志 Provider" query={providersQuery} />
+            {createMutation.feedback}
+            {updateMutation.feedback}
+          </>
+        }
         title={editing ? '编辑日志数据源' : '新建日志数据源'}
         width={860}
         onClose={closeEditor}
       >
         <StepForm
+          disabled={blocked}
           contentMaxWidth="100%"
           onCancel={closeEditor}
           form={form}

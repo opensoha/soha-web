@@ -357,7 +357,8 @@ vi.mock('@/features/auth', () => ({
   }),
 }))
 
-vi.mock('@/services/api-client', () => ({
+vi.mock('@/services/api-client', async () => ({
+  ApiError: (await import('@/services/api-error')).ApiError,
   api: {
     get: (path: string) => testState.apiGet(path),
     post: (path: string, body?: unknown) => testState.apiPost(path, body),

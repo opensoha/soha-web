@@ -1,9 +1,10 @@
 /** @vitest-environment jsdom */
 
-import { act, useState } from 'react'
-import { App as AntdApp } from 'antd'
+import { ApiError } from '@/services/api-error'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { App as AntdApp } from 'antd'
 import dayjs from 'dayjs'
+import { act, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -137,6 +138,44 @@ async function renderExplorer(element: React.ReactNode, initialEntry = '/') {
 }
 
 describe('LogExplorer', () => {
+  it('clears snapshot entries and stops automatic reconnect after a refused stream ticket', async () => {
+    apiMocks.issueLogStreamTicket.mockRejectedValueOnce(
+      new ApiError(403, 'Ticket refused', { method: 'POST' }),
+    )
+    const container = await renderExplorer(
+      <LogExplorer autoStart clusterId="cluster-a" embedded namespace="apps" />,
+    )
+    expect(container.textContent).toContain('实时日志连接无访问权限')
+    expect(container.textContent).not.toContain('server ready')
+    expect(WebSocketMock.instances).toHaveLength(0)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1100))
+    })
+    expect(apiMocks.issueLogStreamTicket).toHaveBeenCalledOnce()
+    const reconnect = container.querySelector<HTMLButtonElement>('[aria-label="重新连接实时日志"]')
+    expect(reconnect).not.toBeNull()
+    await act(async () => {
+      reconnect!.click()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(WebSocketMock.instances).toHaveLength(1)
+    expect(container.textContent).not.toContain('server ready')
+    await act(async () => {
+      WebSocketMock.instances[0].onmessage?.({
+        data: JSON.stringify({
+          type: 'entry',
+          entry: {
+            timestamp: '2026-10-16T00:00:00Z',
+            message: 'new authorized event',
+            source: { domain: 'kubernetes', podName: 'api-0' },
+            sourceMode: 'runtime',
+          },
+        }),
+      })
+    })
+    expect(container.textContent).toContain('new authorized event')
+  })
+
   it('loads an authorized snapshot and opens a query-bound live stream', async () => {
     const container = await renderExplorer(
       <LogExplorer

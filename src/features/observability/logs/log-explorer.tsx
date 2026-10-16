@@ -1,8 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
-import type { LogEntry, LogQuery, LogStreamEvent } from '@opensoha/contracts/gen/ts/sohaapi'
-import dayjs from 'dayjs'
-import type { Dayjs } from 'dayjs'
+import { ManagementIconButton, ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { podQueries } from '@/features/platform'
+import { ApiError } from '@/services/api-client'
+import { toScopeKey } from '@/types'
+import { downloadText } from '@/utils/download'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { formatDateTime } from '@/utils/time'
 import {
   ClockCircleOutlined,
   CodeOutlined,
@@ -18,6 +23,7 @@ import {
   SearchOutlined,
   StopOutlined,
 } from '@ant-design/icons'
+import type { LogEntry, LogQuery, LogStreamEvent } from '@opensoha/contracts/gen/ts/sohaapi'
 import { useQuery } from '@tanstack/react-query'
 import {
   Alert,
@@ -37,20 +43,16 @@ import {
   Switch,
   Typography,
 } from 'antd'
+import type { Dayjs } from 'dayjs'
+import dayjs from 'dayjs'
+import type { ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ManagementIconButton, ManagementState } from '@/components/management-list'
-import { MetadataTag, StatusTag } from '@/components/status-tag'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { podQueries } from '@/features/platform'
-import { ApiError } from '@/services/api-client'
-import { toScopeKey } from '@/types'
-import { downloadText } from '@/utils/download'
-import { formatDateTime } from '@/utils/time'
 import { buildLogStreamURL, issueLogStreamTicket, logTargetKey, type LogTarget } from './api'
 import {
-  buildLogExplorerPath,
-  buildDurableLogQuery,
   buildDockerRuntimeLogQuery,
+  buildDurableLogQuery,
+  buildLogExplorerPath,
   buildRuntimeLogQuery,
   buildSohaQLExpression,
   formatLogExport,
@@ -268,9 +270,10 @@ export function LogExplorer({
   const [timePopoverOpen, setTimePopoverOpen] = useState(false)
   const [absoluteTimeOpen, setAbsoluteTimeOpen] = useState(false)
   const [submitted, setSubmitted] = useState<SubmittedLogQuery | null>(null)
-  const [entries, setEntries] = useState<LogEntry[]>([])
+  const [cachedEntries, setEntries] = useState<LogEntry[]>([])
   const [streamState, setStreamState] = useState('idle')
   const [streamMessage, setStreamMessage] = useState('')
+  const [streamError, setStreamError] = useState<Error | null>(null)
   const [streamEnabled, setStreamEnabled] = useState(false)
   const [streamGeneration, setStreamGeneration] = useState(0)
   const [sourceErrors, setSourceErrors] = useState(0)
@@ -298,7 +301,7 @@ export function LogExplorer({
     for (const value of selectedContainers ?? []) {
       if (value.trim()) names.add(value.trim())
     }
-    for (const container of podContainersQuery.data?.containers ?? []) {
+    for (const container of readableQueryData(podContainersQuery)?.containers ?? []) {
       if (container.name.trim()) names.add(container.name.trim())
     }
     return [
@@ -307,7 +310,7 @@ export function LogExplorer({
         .sort((left, right) => left.localeCompare(right))
         .map((value) => ({ value, label: value })),
     ]
-  }, [podContainersQuery.data?.containers, selectedContainers])
+  }, [podContainersQuery.data?.containers, podContainersQuery.error, selectedContainers])
   const scrollerRef = useRef<HTMLDivElement>(null)
   const reconnectAttemptRef = useRef(0)
   const autoStartedRef = useRef('')
@@ -327,6 +330,16 @@ export function LogExplorer({
       Boolean(submitted),
     ),
   )
+
+  const refusedSnapshotAt = useRef<number | null>(null)
+  const streamDenied = queryAccessDenied({ error: streamError })
+  const entries = queryAccessDenied(snapshotQuery) || streamDenied ? [] : cachedEntries
+  useEffect(() => {
+    if (!queryAccessDenied(snapshotQuery) && !streamDenied) return
+    if (streamDenied) refusedSnapshotAt.current = snapshotQuery.dataUpdatedAt
+    setEntries((current) => (current.length ? [] : current))
+    setStreamEnabled(false)
+  }, [snapshotQuery.error, snapshotQuery.dataUpdatedAt, streamDenied])
 
   function syncSearch(filters: RuntimeLogFilters) {
     if (!syncURL) return
@@ -467,6 +480,15 @@ export function LogExplorer({
       }
       try {
         const query = buildDurableLogQuery(resolvedTarget.namespace ?? '', resolvedFilters)
+        if (
+          submitted?.mode === 'history' &&
+          logTargetKey(submitted.target) === targetIdentity &&
+          JSON.stringify(submitted.query) === JSON.stringify(query)
+        ) {
+          void snapshotQuery.refetch()
+          syncSearch(resolvedFilters)
+          return
+        }
         setEntries([])
         setSourceErrors(0)
         setStreamMessage('')
@@ -538,8 +560,15 @@ export function LogExplorer({
   }, [autoStart, targetIdentity, targetReady])
 
   useEffect(() => {
-    const page = snapshotQuery.data
-    if (!page) return
+    const page = readableQueryData(snapshotQuery)
+    // Reconnecting must not refill the cleared buffer from the refused snapshot.
+    if (
+      !page ||
+      streamDenied ||
+      (refusedSnapshotAt.current !== null &&
+        snapshotQuery.dataUpdatedAt <= refusedSnapshotAt.current)
+    )
+      return
     setEntries((current) => {
       const existing = mode === 'history' ? [...current].reverse() : current
       const merged = mergeLogEntries(
@@ -549,7 +578,7 @@ export function LogExplorer({
       )
       return mode === 'history' ? merged.reverse() : merged
     })
-  }, [snapshotQuery.data, snapshotQuery.dataUpdatedAt])
+  }, [snapshotQuery.data, snapshotQuery.dataUpdatedAt, snapshotQuery.error, streamDenied])
 
   useEffect(() => {
     if (snapshotQuery.isFetching) return
@@ -590,6 +619,7 @@ export function LogExplorer({
     void issueLogStreamTicket(submitted.target, submitted.query)
       .then((ticket) => {
         if (cancelled) return
+        setStreamError(null)
         socket = new WebSocket(buildLogStreamURL(submitted.target, ticket.ticket))
         socket.onopen = () => {
           reconnectAttemptRef.current = 0
@@ -627,7 +657,19 @@ export function LogExplorer({
         }
         socket.onclose = () => scheduleReconnect()
       })
-      .catch(() => scheduleReconnect())
+      .catch((error) => {
+        if (cancelled) return
+        if (error instanceof ApiError && [401, 403].includes(error.status)) {
+          endedByServer = true
+          setEntries([])
+          setStreamEnabled(false)
+          setStreamState('denied')
+          setStreamError(error)
+          setStreamMessage('')
+          return
+        }
+        scheduleReconnect()
+      })
 
     return () => {
       cancelled = true
@@ -650,7 +692,7 @@ export function LogExplorer({
     if (
       !submitted ||
       submitted.mode !== 'history' ||
-      !snapshotQuery.data?.nextCursor ||
+      !readableQueryData(snapshotQuery)?.nextCursor ||
       snapshotQuery.isFetching ||
       loadingMoreRef.current
     )
@@ -659,7 +701,7 @@ export function LogExplorer({
     setLoadingMore(true)
     setSubmitted({
       ...submitted,
-      query: { ...submitted.query, cursor: snapshotQuery.data.nextCursor },
+      query: { ...submitted.query, cursor: readableQueryData(snapshotQuery)?.nextCursor },
     })
   }
 
@@ -699,7 +741,7 @@ export function LogExplorer({
     )
   }
 
-  const page = snapshotQuery.data
+  const page = readableQueryData(snapshotQuery)
   const logFieldOptions = useMemo(
     () => [
       ...LOG_FIELDS,
@@ -1039,9 +1081,11 @@ export function LogExplorer({
                 mode === 'history'
                   ? snapshotQuery.isFetching
                     ? 'querying'
-                    : submitted
-                      ? 'ready'
-                      : 'idle'
+                    : snapshotQuery.isError
+                      ? 'error'
+                      : submitted
+                        ? 'ready'
+                        : 'idle'
                   : streamState
               }
             />
@@ -1049,7 +1093,14 @@ export function LogExplorer({
               <span className="soha-log-status-announcement">{streamMessage}</span>
             ) : null}
           </span>
-          <MetadataTag label={`${entries.length} 行`} tone="blue" />
+          <MetadataTag
+            label={
+              queryAccessDenied(snapshotQuery) || streamDenied
+                ? '日志不可用'
+                : `${entries.length} 行`
+            }
+            tone="blue"
+          />
           {page?.coverage ? (
             <MetadataTag
               label={`来源 ${page.coverage.successfulSources}/${page.coverage.resolvedSources}`}
@@ -1125,14 +1176,22 @@ export function LogExplorer({
             description="已保留成功来源的结果；请检查对应 Pod、容器和集群连接状态。"
           />
         ) : null}
-        {snapshotQuery.isError ? (
-          <ManagementState
-            bordered={false}
-            compact
-            kind="error"
-            title="日志查询失败"
-            description={queryErrorDescription(snapshotQuery.error, mode)}
-          />
+        <ReadFeedback
+          label="实时日志连接"
+          query={{
+            data: undefined,
+            error: streamError,
+            isError: Boolean(streamError),
+            isFetching: streamState === 'connecting',
+            refetch: handleReconnect,
+          }}
+        />
+        <ReadFeedback label="日志查询" query={snapshotQuery} />
+        {snapshotQuery.error instanceof ApiError &&
+        [422, 503].includes(snapshotQuery.error.status) ? (
+          <Text type="secondary">
+            范围/能力提示：{queryErrorDescription(snapshotQuery.error, mode)}
+          </Text>
         ) : null}
 
         {mode === 'history' ? (

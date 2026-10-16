@@ -92,6 +92,8 @@ export const observabilityKeys = {
   signals: {
     all: signalRoot,
     metricCatalog: () => [...signalRoot, 'metric-catalog'] as const,
+    metrics: (input: unknown) => [...signalRoot, 'metrics', input] as const,
+    traces: (input: unknown) => [...signalRoot, 'traces', input] as const,
     services: (query: unknown) => [...signalRoot, 'services', query] as const,
     service: (serviceId: string, query: unknown) =>
       [...signalRoot, 'service', normalizedId(serviceId), query] as const,

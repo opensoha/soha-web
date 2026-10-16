@@ -1,22 +1,6 @@
-import type {
-  ObservabilityDashboardPanel,
-  ObservabilityDashboardPanelQueryInput,
-  ObservabilityMetricSeries,
-} from '@opensoha/contracts/gen/ts/sohaapi'
-import {
-  AlertOutlined,
-  LeftOutlined,
-  PauseCircleOutlined,
-  PlayCircleOutlined,
-  RightOutlined,
-} from '@ant-design/icons'
-import { LineChart } from '@visactor/react-vchart'
-import { useQuery } from '@tanstack/react-query'
-import { Alert, Card, Flex, Select, Space, Table, Typography } from 'antd'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ManagementDataPage } from '@/components/management-data-page'
 import { ManagementIconButton, ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import {
   buildCompactChartSpec,
   compactMetricColors,
@@ -26,7 +10,26 @@ import {
 import { MetadataTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useAIPageContext } from '@/features/copilot'
+import { readableQueryData } from '@/utils/query-feedback'
 import { formatDateTime } from '@/utils/time'
+import {
+  AlertOutlined,
+  LeftOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined,
+  ReloadOutlined,
+  RightOutlined,
+} from '@ant-design/icons'
+import type {
+  ObservabilityDashboardPanel,
+  ObservabilityDashboardPanelQueryInput,
+  ObservabilityMetricSeries,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+import { useQuery } from '@tanstack/react-query'
+import { LineChart } from '@visactor/react-vchart'
+import { Alert, Card, Flex, Select, Space, Table, Typography } from 'antd'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   dashboardPanelAlertRulePath,
   dashboardPanelQueryInput,
@@ -57,16 +60,21 @@ const lineColors = [
 export function ObservabilityDashboardDetailPage() {
   const dashboardId = decodeURIComponent(useParams<{ dashboardId: string }>().dashboardId ?? '')
   const navigate = useNavigate()
+  const imported = useLocation().state?.importedDashboard as
+    | { id: string; panelCount: number; warnings: string[] }
+    | undefined
   const [searchParams, setSearchParams] = useSearchParams()
   const [playing, setPlaying] = useState(false)
+  const pausePlayback = useCallback(() => setPlaying(false), [])
   const dashboardQuery = useQuery(observabilityDashboardQueries.detail(dashboardId))
   const dataSourcesQuery = useQuery(observabilityDashboardQueries.metricDataSources())
   const permissionQuery = usePermissionSnapshot()
+  const dashboardData = readableQueryData(dashboardQuery)
   const canManageRules = hasPermission(permissionQuery.data?.data, 'observe.alert-rules.manage')
   const playback = useMemo(() => readDashboardPlayback(searchParams), [searchParams])
   const variables = useMemo(
-    () => dashboardVariableValues(dashboardQuery.data?.variables ?? [], searchParams),
-    [dashboardQuery.data?.variables, searchParams],
+    () => dashboardVariableValues(dashboardData?.variables ?? [], searchParams),
+    [dashboardData?.variables, searchParams],
   )
   const variableSignature = JSON.stringify(variables)
   const panelQuery = useMemo(
@@ -77,18 +85,18 @@ export function ObservabilityDashboardDetailPage() {
     sourceWorkbench: 'monitoring',
     sourceTitle: '仪表盘调查',
     entityKind: 'monitoring.dashboard',
-    entityName: dashboardQuery.data?.name || dashboardId || '仪表盘',
+    entityName: dashboardData?.name || dashboardId || '仪表盘',
     timeRangeMinutes: playback.rangeMinutes,
     visibleFilters: {
       timeFrom: playback.from,
       timeTo: playback.to,
       ...variables,
     },
-    pinnedData: dashboardQuery.data
+    pinnedData: dashboardData
       ? {
-          dashboardId: dashboardQuery.data.id,
-          dataSourceId: dashboardQuery.data.dataSourceId,
-          panelCount: dashboardQuery.data.panels.length,
+          dashboardId: dashboardData.id,
+          dataSourceId: dashboardData.dataSourceId,
+          panelCount: dashboardData.panels.length,
         }
       : { dashboardId },
     promptHint: '分析当前仪表盘时间窗、变量和面板趋势，并给出可打开的查询证据。',
@@ -103,39 +111,61 @@ export function ObservabilityDashboardDetailPage() {
   )
 
   useEffect(() => {
-    if (!dashboardQuery.data) return
+    if (!dashboardData) return
     const next = dashboardPlaybackParams(searchParams, playback, variables)
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true })
-  }, [dashboardQuery.data, playback, searchParams, setSearchParams, variableSignature, variables])
+  }, [dashboardData, playback, searchParams, setSearchParams, variableSignature, variables])
 
   useEffect(() => {
-    if (!playing) return
+    if (!playing || dashboardQuery.isError || !dashboardData) return
     const timer = window.setInterval(
       () => updatePlayback(shiftDashboardPlayback(playback, 1), variables),
       5_000,
     )
     return () => window.clearInterval(timer)
-  }, [playback, playing, updatePlayback, variableSignature, variables])
+  }, [
+    playback,
+    playing,
+    updatePlayback,
+    variableSignature,
+    variables,
+    dashboardQuery.isError,
+    dashboardData,
+  ])
+
+  useEffect(() => {
+    if (dashboardQuery.isError) pausePlayback()
+  }, [dashboardQuery.isError, pausePlayback])
 
   if (dashboardQuery.isLoading) {
     return <ManagementState kind="loading" title="正在加载仪表盘" />
   }
-  if (dashboardQuery.isError || !dashboardQuery.data) {
-    return (
-      <ManagementState
-        kind="error"
-        title="仪表盘加载失败"
-        description={dashboardQuery.error?.message}
-      />
-    )
+  if (!dashboardData) {
+    return <ReadFeedback label="仪表盘" query={dashboardQuery} />
   }
-  const dashboard = dashboardQuery.data
-  const dataSourceName = dataSourcesQuery.data?.find(
+  const dashboard = dashboardData
+  const dataSourceName = readableQueryData(dataSourcesQuery)?.find(
     (item) => item.id === dashboard.dataSourceId,
   )?.name
   return (
     <ManagementDataPage
       className="soha-dashboard-detail-page"
+      beforeQuery={
+        <>
+          {imported?.id === dashboardId ? (
+            <Alert
+              showIcon
+              type={imported.warnings.length ? 'warning' : 'success'}
+              title={`已导入 ${imported.panelCount} 个面板`}
+              description={
+                imported.warnings.join('；') || '仪表盘记录已保存，面板数据仍以实际查询结果为准。'
+              }
+            />
+          ) : null}
+          <ReadFeedback label="仪表盘" query={dashboardQuery} />
+          <ReadFeedback label="指标数据源" query={dataSourcesQuery} />
+        </>
+      }
       header={{
         title: dashboard.name,
         meta: (
@@ -155,6 +185,12 @@ export function ObservabilityDashboardDetailPage() {
         ),
         actions: (
           <Space wrap>
+            <ManagementIconButton
+              aria-label="刷新仪表盘记录"
+              tooltip="刷新仪表盘记录"
+              icon={<ReloadOutlined spin={dashboardQuery.isFetching} />}
+              onClick={() => void dashboardQuery.refetch()}
+            />
             {(dashboard.variables ?? []).map((variable) => (
               <Select
                 aria-label={variable.label || variable.name}
@@ -187,6 +223,7 @@ export function ObservabilityDashboardDetailPage() {
                 onClick={() => updatePlayback(shiftDashboardPlayback(playback, -1))}
               />
               <ManagementIconButton
+                disabled={dashboardQuery.isError}
                 aria-label={playing ? '暂停播放' : '播放时间窗'}
                 aria-pressed={playing}
                 icon={playing ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
@@ -201,7 +238,7 @@ export function ObservabilityDashboardDetailPage() {
               />
             </Flex>
             <Text aria-atomic="true" aria-live="polite" role="status" type="secondary">
-              自动播放：{playing ? '进行中' : '已暂停'}
+              自动播放：{playing && !dashboardQuery.isError ? '进行中' : '已暂停'}
             </Text>
           </Space>
         ),
@@ -226,6 +263,7 @@ export function ObservabilityDashboardDetailPage() {
             {dashboard.panels.map((panel) => (
               <DashboardPanel
                 key={panel.id}
+                onReadError={pausePlayback}
                 canManageRules={canManageRules}
                 dashboardId={dashboard.id}
                 dashboardName={dashboard.name}
@@ -243,6 +281,7 @@ export function ObservabilityDashboardDetailPage() {
 }
 
 function DashboardPanel({
+  onReadError,
   canManageRules,
   dashboardId,
   dashboardName,
@@ -251,6 +290,7 @@ function DashboardPanel({
   onNavigate,
   panel,
 }: {
+  onReadError: () => void
   canManageRules: boolean
   dashboardId: string
   dashboardName: string
@@ -299,7 +339,12 @@ function DashboardPanel({
           description={`暂不支持 Grafana ${panel.sourcePanelType || 'plugin'} renderer；原始 JSON 已保留。`}
         />
       ) : panel.queryable ? (
-        <DashboardMetricPanel dashboardId={dashboardId} input={input} panel={panel} />
+        <DashboardMetricPanel
+          onReadError={onReadError}
+          dashboardId={dashboardId}
+          input={input}
+          panel={panel}
+        />
       ) : (
         <ManagementState bordered={false} compact description="没有可执行的 Prometheus 查询" />
       )}
@@ -308,34 +353,42 @@ function DashboardPanel({
 }
 
 function DashboardMetricPanel({
+  onReadError,
   dashboardId,
   input,
   panel,
 }: {
+  onReadError: () => void
   dashboardId: string
   input: ObservabilityDashboardPanelQueryInput
   panel: ObservabilityDashboardPanel
 }) {
   const panelQuery = useQuery(observabilityDashboardQueries.panel(dashboardId, panel.id, input))
+  useEffect(() => {
+    if (panelQuery.isError) onReadError()
+  }, [panelQuery.isError, onReadError])
   if (panelQuery.isLoading) {
     return <ManagementState bordered={false} compact kind="loading" title="正在查询" />
   }
-  if (panelQuery.isError) {
-    return (
-      <ManagementState
-        bordered={false}
-        compact
-        kind="error"
-        title="查询失败"
-        description={panelQuery.error.message}
+  const series = readableQueryData(panelQuery)?.series
+  return (
+    <>
+      <ReadFeedback label="面板查询" query={panelQuery} />
+      <ManagementIconButton
+        aria-label={`刷新 ${panel.title} 指标`}
+        tooltip="刷新指标"
+        icon={<ReloadOutlined spin={panelQuery.isFetching} />}
+        onClick={() => void panelQuery.refetch()}
       />
-    )
-  }
-  const series = panelQuery.data?.series ?? []
-  if (series.length === 0) {
-    return <ManagementState bordered={false} compact description="当前范围暂无指标数据" />
-  }
-  return <DashboardMetricSeries panelType={panel.type} series={series} />
+      {series ? (
+        series.length ? (
+          <DashboardMetricSeries panelType={panel.type} series={series} />
+        ) : (
+          <ManagementState bordered={false} compact description="当前范围暂无指标数据" />
+        )
+      ) : null}
+    </>
+  )
 }
 
 export function DashboardMetricSeries({
@@ -381,7 +434,12 @@ export function DashboardMetricSeries({
   return (
     <>
       <div aria-hidden="true" className="soha-dashboard-chart">
-        <LineChart spec={buildCompactChartSpec(lines, series[0]?.unit ?? '', 'zh_CN')} />
+        <LineChart
+          spec={{
+            ...buildCompactChartSpec(lines, series[0]?.unit ?? '', 'zh_CN'),
+            background: 'transparent',
+          }}
+        />
       </div>
       <details
         className="soha-dashboard-data-details"
